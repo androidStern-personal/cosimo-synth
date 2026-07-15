@@ -40,12 +40,18 @@ export function SourceShelf({
   const effectiveDraggedSourceId = draggedSourceId || internalDraggedSourceId;
   const undoneSource = deletionUndo?.source || deletionUndo;
 
-  useEffect(() => () => window.clearTimeout(press.current?.timer), []);
-
   const clearPress = () => {
-    window.clearTimeout(press.current?.timer);
+    const current = press.current;
+    window.clearTimeout(current?.timer);
+    if (current?.listeners) {
+      window.removeEventListener("pointermove", current.listeners.move);
+      window.removeEventListener("pointerup", current.listeners.up);
+      window.removeEventListener("pointercancel", current.listeners.cancel);
+    }
     press.current = null;
   };
+
+  useEffect(() => () => clearPress(), []);
 
   const beginPress = (event, source) => {
     if (event.pointerType === "mouse" && event.button !== 0) return;
@@ -62,14 +68,24 @@ export function SourceShelf({
       setContextSourceId(source.id);
       onHaptic?.("light");
     }, LONG_PRESS_DELAY);
+    const listeners = {
+      move: (pointerEvent) => movePress(pointerEvent),
+      up: (pointerEvent) => finishPress(pointerEvent),
+      cancel: (pointerEvent) => finishPress(pointerEvent, true),
+    };
     press.current = {
       timer,
+      listeners,
       source,
+      captureTarget: event.currentTarget,
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
       dragging: false,
     };
+    window.addEventListener("pointermove", listeners.move);
+    window.addEventListener("pointerup", listeners.up);
+    window.addEventListener("pointercancel", listeners.cancel);
   };
 
   const movePress = (event) => {
@@ -88,7 +104,7 @@ export function SourceShelf({
       window.clearTimeout(current.timer);
       current.dragging = true;
       suppressClick.current = true;
-      event.currentTarget.setPointerCapture?.(event.pointerId);
+      current.captureTarget?.setPointerCapture?.(event.pointerId);
       setContextSourceId(null);
       setInternalDraggedSourceId(current.source.id);
       onHaptic?.("light");
@@ -124,8 +140,8 @@ export function SourceShelf({
       });
       setInternalDraggedSourceId(null);
     }
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (current?.captureTarget?.hasPointerCapture?.(event.pointerId)) {
+      current.captureTarget.releasePointerCapture(event.pointerId);
     }
     clearPress();
   };
@@ -163,13 +179,6 @@ export function SourceShelf({
                 },
                 onPointerDown(event) {
                   beginPress(event, source);
-                },
-                onPointerMove: movePress,
-                onPointerUp(event) {
-                  finishPress(event);
-                },
-                onPointerCancel(event) {
-                  finishPress(event, true);
                 },
               }}
               selected={focusedSourceId === source.id}
@@ -233,7 +242,9 @@ export function SourceShelf({
             type="button"
           >
             <Trash aria-hidden="true" size={17} />
-            <span>Delete</span>
+            <span>
+              Delete · {attachmentCounts[contextSource.id] || 0} mapping{attachmentCounts[contextSource.id] === 1 ? "" : "s"}
+            </span>
           </button>
           <button
             aria-label="Close source actions"

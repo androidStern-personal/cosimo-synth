@@ -49,6 +49,10 @@ export function useMockCosimoAdapter({
       dispatch({ type: "REORDER_EFFECT", effectId, overEffectId });
     },
 
+    restoreEffectOrder(effectOrder) {
+      dispatch({ type: "RESTORE_EFFECT_ORDER", effectOrder });
+    },
+
     setCompoundSetting(targetId, patch) {
       dispatch({ type: "SET_COMPOUND_SETTING", targetId, patch });
     },

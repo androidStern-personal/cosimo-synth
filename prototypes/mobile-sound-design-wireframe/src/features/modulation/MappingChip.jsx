@@ -1,4 +1,5 @@
 import { useAxisDrag } from "../../interactions/useAxisDrag.js";
+import { ArrowsVertical } from "@phosphor-icons/react";
 import { SourceIdentity } from "../../design-system/IdentityMark.jsx";
 import { formatSignedPercent } from "../../domain/formatting.js";
 
@@ -7,6 +8,7 @@ export function MappingChip({
   isSelected,
   mapping,
   onAmountChange,
+  onHaptic,
   onSelect,
   onShowReadout,
   source,
@@ -15,9 +17,13 @@ export function MappingChip({
   const drag = useAxisDrag({
     xValue: 0,
     yValue: mapping.amount,
+    onBegin: onSelect,
     onYChange(amount) {
       onAmountChange(mapping.id, amount);
       onShowReadout(`${source.label} → ${targetLabel}  ${formatSignedPercent(amount)}`);
+    },
+    onAxisLock(axis) {
+      if (axis === "y") onHaptic?.("light");
     },
   });
 
@@ -35,6 +41,7 @@ export function MappingChip({
       <output className="cosimo-value" data-value-kind="signed">
         {formatSignedPercent(mapping.amount)}
       </output>
+      <ArrowsVertical aria-hidden="true" className="mapping-chip__scrub-cue" size={11} />
     </button>
   );
 }

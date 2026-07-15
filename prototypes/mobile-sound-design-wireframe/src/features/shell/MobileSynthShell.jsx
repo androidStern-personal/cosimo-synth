@@ -4,6 +4,7 @@ import {
   List,
   WaveSine,
 } from "@phosphor-icons/react";
+import { TransientValueHUD } from "../../design-system/TransientValueHUD.jsx";
 
 const WORKSPACE_ICONS = {
   effects: FadersHorizontal,
@@ -25,6 +26,7 @@ export function MobileSynthShell({
   className = "",
   header,
   rack,
+  readout = "",
   sourceShelf,
   style,
 }) {
@@ -34,6 +36,7 @@ export function MobileSynthShell({
       data-cosimo-ui
       style={style}
     >
+      <TransientValueHUD className="cosimo-global-hud" value={readout} />
       <div className="cosimo-shell-region cosimo-synth-shell__header" data-shell-region="header">
         {header}
       </div>

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-export function useTransientReadout(duration = 1400) {
+export function useTransientReadout(duration = 2200) {
   const [readout, setReadout] = useState("");
   const timer = useRef(null);
 

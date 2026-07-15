@@ -115,6 +115,18 @@ export function mockCosimoReducer(state, action) {
       return { ...state, patch: { ...state.patch, effectOrder } };
     }
 
+    case "RESTORE_EFFECT_ORDER": {
+      if (
+        !Array.isArray(action.effectOrder)
+        || action.effectOrder.length !== state.patch.effectOrder.length
+        || action.effectOrder.some((id) => !state.patch.effectOrder.includes(id))
+      ) return state;
+      return {
+        ...state,
+        patch: { ...state.patch, effectOrder: [...action.effectOrder] },
+      };
+    }
+
     case "SET_COMPOUND_SETTING":
       if (!TARGETS[action.targetId]) return state;
       return {

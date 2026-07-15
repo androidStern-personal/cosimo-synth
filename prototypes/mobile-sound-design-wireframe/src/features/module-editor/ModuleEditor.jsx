@@ -1,6 +1,5 @@
 import { CompoundControls } from "./CompoundControls.jsx";
 import { ArrowLeft } from "@phosphor-icons/react";
-import { TransientValueHUD } from "../../design-system/TransientValueHUD.jsx";
 import { ModuleGraphicSurface } from "./graphics/index.js";
 import { ParameterMatrix } from "./ParameterMatrix.jsx";
 
@@ -12,9 +11,9 @@ export function ModuleEditor({
   onChangeBase,
   onChangeCompound,
   onChangeMappingAmount,
+  onHaptic,
   onSelectTarget,
   onShowReadout,
-  readout,
   returnAction = null,
   selectedTargetId,
 }) {
@@ -32,7 +31,6 @@ export function ModuleEditor({
           </p>
         </div>
         <div className="module-editor__context">
-          <TransientValueHUD className="module-editor__hud" value={readout} />
           {returnAction && (
             <button className="module-editor__return" onClick={returnAction.onReturn} type="button">
               <ArrowLeft aria-hidden="true" size={15} />
@@ -59,6 +57,7 @@ export function ModuleEditor({
             if (phase === "start") onSelectTarget(`${module.id}.${parameterId}`);
           }}
           onGraphicFocus={({ parameterId }) => onSelectTarget(`${module.id}.${parameterId}`)}
+          onHaptic={onHaptic}
           values={values}
         />
         {compoundControl && (
@@ -76,6 +75,7 @@ export function ModuleEditor({
         dropTargetId={dropTargetId}
         onChangeBase={onChangeBase}
         onChangeMappingAmount={onChangeMappingAmount}
+        onHaptic={onHaptic}
         onSelect={onSelectTarget}
         onShowReadout={onShowReadout}
         selectedTargetId={selectedTargetId}

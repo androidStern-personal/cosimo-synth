@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef } from "react";
 import { DotsSixVertical } from "@phosphor-icons/react";
 import { WireRange } from "../../design-system/WireRange.jsx";
+import { ArticulationIcon } from "../../design-system/IdentityMark.jsx";
 
 const REORDER_THRESHOLD = 8;
 
@@ -45,11 +46,21 @@ function RackQuickControl({ item, onChange, onFocus, onReadout }) {
         >
           {quick.formattedValue}
         </output>
+        {quick.articulationOverride && (
+          <span
+            className="cosimo-rack__quick-articulation"
+            style={{ "--cosimo-articulation-color": quick.articulationColor }}
+          >
+            <ArticulationIcon articulation={quick.articulationOverride.articulationId} size={12} />
+          </span>
+        )}
       </span>
       <WireRange
         accent="var(--cosimo-color-accent)"
         ariaLabel={`${item.label} ${quick.label} quick control`}
         defaultValue={quick.defaultValue}
+        secondaryMarker={quick.articulationOverride ? quick.patchBaseValue : null}
+        secondaryMarkerColor={quick.articulationColor}
         onChange={(event) => {
           const value = Number(event.target.value);
           onFocus?.(item.id);
@@ -74,19 +85,57 @@ function RackTile({
   onQuickChange,
   onReadout,
   onReorder,
+  onRestoreOrder,
+  onHaptic,
+  order,
   selectedRef,
 }) {
   const reorderGesture = useRef(null);
 
+  const clearReorderListeners = () => {
+    const current = reorderGesture.current;
+    if (current?.listeners) {
+      window.removeEventListener("pointermove", current.listeners.move);
+      window.removeEventListener("pointerup", current.listeners.up);
+      window.removeEventListener("pointercancel", current.listeners.cancel);
+    }
+  };
+
   const finishReorder = (event, cancelled = false) => {
     const current = reorderGesture.current;
     if (!current || current.pointerId !== event.pointerId) return;
-    if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-      event.currentTarget.releasePointerCapture(event.pointerId);
+    if (current.captureTarget?.hasPointerCapture?.(event.pointerId)) {
+      current.captureTarget.releasePointerCapture(event.pointerId);
     }
+    clearReorderListeners();
     reorderGesture.current = null;
-    if (!cancelled) current.onCommit?.();
+    if (cancelled && current.started) onRestoreOrder?.(current.originalOrder);
+    if (!cancelled && current.started) onHaptic?.("success");
   };
+
+  const moveReorder = (event) => {
+    const current = reorderGesture.current;
+    if (!current || current.pointerId !== event.pointerId) return;
+    if (!current.started) {
+      const distance = Math.hypot(
+        event.clientX - current.startX,
+        event.clientY - current.startY,
+      );
+      if (distance < REORDER_THRESHOLD) return;
+      current.started = true;
+      onHaptic?.("light");
+    }
+    const overTile = document
+      .elementFromPoint(event.clientX, event.clientY)
+      ?.closest?.("[data-effect-id]");
+    const overId = overTile?.getAttribute("data-effect-id");
+    if (!overId || overId === current.lastOverId) return;
+    onReorder?.(item.id, overId);
+    onHaptic?.("light");
+    current.lastOverId = overId;
+  };
+
+  useEffect(() => () => clearReorderListeners(), []);
 
   return (
     <article
@@ -124,38 +173,28 @@ function RackTile({
       <button
         aria-label={`Reorder ${item.label}`}
         className="cosimo-rack__handle"
-        onPointerCancel={(event) => finishReorder(event, true)}
         onPointerDown={(event) => {
           if (event.pointerType === "mouse" && event.button !== 0) return;
+          const listeners = {
+            move: (pointerEvent) => moveReorder(pointerEvent),
+            up: (pointerEvent) => finishReorder(pointerEvent),
+            cancel: (pointerEvent) => finishReorder(pointerEvent, true),
+          };
           reorderGesture.current = {
+            captureTarget: event.currentTarget,
+            listeners,
             pointerId: event.pointerId,
             lastOverId: item.id,
+            originalOrder: [...order],
             startX: event.clientX,
             startY: event.clientY,
             started: false,
           };
           event.currentTarget.setPointerCapture?.(event.pointerId);
+          window.addEventListener("pointermove", listeners.move);
+          window.addEventListener("pointerup", listeners.up);
+          window.addEventListener("pointercancel", listeners.cancel);
         }}
-        onPointerMove={(event) => {
-          const current = reorderGesture.current;
-          if (!current || current.pointerId !== event.pointerId) return;
-          if (!current.started) {
-            const distance = Math.hypot(
-              event.clientX - current.startX,
-              event.clientY - current.startY,
-            );
-            if (distance < REORDER_THRESHOLD) return;
-            current.started = true;
-          }
-          const overTile = document
-            .elementFromPoint(event.clientX, event.clientY)
-            ?.closest?.("[data-effect-id]");
-          const overId = overTile?.getAttribute("data-effect-id");
-          if (!overId || overId === current.lastOverId) return;
-          onReorder?.(item.id, overId);
-          current.lastOverId = overId;
-        }}
-        onPointerUp={finishReorder}
         type="button"
       >
         <DotsSixVertical aria-hidden="true" size={18} weight="bold" />
@@ -176,6 +215,8 @@ export function EffectRack({
   onQuickChange,
   onReadout,
   onReorder,
+  onRestoreOrder,
+  onHaptic,
 }) {
   const selectedTile = useSelectedRackTile(items);
 
@@ -195,6 +236,9 @@ export function EffectRack({
             onQuickChange={onQuickChange}
             onReadout={onReadout}
             onReorder={onReorder}
+            onRestoreOrder={onRestoreOrder}
+            onHaptic={onHaptic}
+            order={items.map((entry) => entry.id)}
             selectedRef={selectedTile}
           />
         ))}

@@ -3,6 +3,28 @@ import { useRef } from "react";
 const clamp = (value, minimum, maximum) =>
   Math.max(minimum, Math.min(maximum, value));
 
+export function resolveDragAxis(deltaX, deltaY, threshold = 5) {
+  if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < threshold) return null;
+  return Math.abs(deltaX) >= Math.abs(deltaY) ? "x" : "y";
+}
+
+export function calculateDragValue({
+  startValue,
+  delta,
+  extent,
+  minimum,
+  maximum,
+  inverted = false,
+}) {
+  const range = maximum - minimum;
+  const direction = inverted ? -1 : 1;
+  return clamp(
+    startValue + direction * (delta / Math.max(extent, 44)) * range,
+    minimum,
+    maximum,
+  );
+}
+
 /**
  * Shared pointer contract for Cosimo's two-axis parameter surfaces.
  * Presentation components provide semantic callbacks; this hook owns pointer
@@ -20,7 +42,9 @@ export function useAxisDrag({
   onXChange,
   onYChange,
   onCommit,
+  onCancel,
   onAxisLock,
+  onUnsupportedAxis,
 }) {
   const gesture = useRef(null);
   const suppressClick = useRef(false);
@@ -32,6 +56,7 @@ export function useAxisDrag({
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
     if (!cancelled && current.axis) onCommit?.(current.axis);
+    if (cancelled) onCancel?.(current.axis);
     suppressClick.current = Boolean(current.axis);
     gesture.current = null;
   };
@@ -44,6 +69,7 @@ export function useAxisDrag({
       suppressClick.current = false;
     },
     onPointerDown(event) {
+      if (event.pointerType === "mouse" && event.button !== 0) return;
       const bounds = event.currentTarget.getBoundingClientRect();
       gesture.current = {
         pointerId: event.pointerId,
@@ -65,20 +91,36 @@ export function useAxisDrag({
       const deltaX = event.clientX - current.startX;
       const deltaY = event.clientY - current.startY;
       if (!current.axis) {
-        if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < threshold) return;
-        const preferredAxis = Math.abs(deltaX) >= Math.abs(deltaY) ? "x" : "y";
+        const preferredAxis = resolveDragAxis(deltaX, deltaY, threshold);
+        if (!preferredAxis) return;
         const preferredAxisIsSupported = preferredAxis === "x" ? onXChange : onYChange;
-        if (!preferredAxisIsSupported) return;
+        if (!preferredAxisIsSupported) {
+          current.axis = preferredAxis;
+          onAxisLock?.(current.axis);
+          onUnsupportedAxis?.(current.axis);
+          return;
+        }
         current.axis = preferredAxis;
         onAxisLock?.(current.axis);
       }
       if (current.axis === "x" && onXChange) {
-        const range = xMaximum - xMinimum;
-        onXChange(clamp(current.xValue + (deltaX / current.width) * range, xMinimum, xMaximum));
+        onXChange(calculateDragValue({
+          startValue: current.xValue,
+          delta: deltaX,
+          extent: current.width,
+          minimum: xMinimum,
+          maximum: xMaximum,
+        }));
       }
       if (current.axis === "y" && onYChange) {
-        const range = yMaximum - yMinimum;
-        onYChange(clamp(current.yValue - (deltaY / current.height) * range, yMinimum, yMaximum));
+        onYChange(calculateDragValue({
+          startValue: current.yValue,
+          delta: deltaY,
+          extent: current.height,
+          minimum: yMinimum,
+          maximum: yMaximum,
+          inverted: true,
+        }));
       }
     },
     onPointerUp(event) {

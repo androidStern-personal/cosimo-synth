@@ -808,21 +808,21 @@ This snapshot does not redefine the product contract.
 | Area | Status | Evidence / discrepancy |
 |---|---|---|
 | React component model | PASS directionally | `CosimoMobileExperience` composes feature components behind a mock adapter. |
-| Voice/Effects workspace switcher | PASS directionally | Sibling workspaces and centered icon carousel exist. |
-| Persistent shell regions | PARTIAL | Header, rack, source shelf, and audition are stable, but content region transitions still violate the no-shift contract. |
-| Parameter X/Y direct manipulation | FAIL as experienced | Handlers exist in code, but the current visible design obscures/regresses the accepted interaction and presents sliders as the dominant control. |
-| Mapping chip Y-drag | FAIL as experienced | A handler exists, but the user reports it was effectively replaced by slider-centric behavior. |
-| Mapping detail geometry | FAIL | Mapping selection enters `MappingFocusEditor`, replacing the module and producing the rejected layout/focus change. |
-| Base + modulation + articulation layers | PARTIAL | Effective value, factory-default tick, mapping range, and articulation identity exist, but an overridden control does not currently render the accepted inherited patch-base marker. |
-| Source-first target rows | PARTIAL | Direct X/Y rows and open-target actions exist; dense-state layout and production data fidelity are not accepted. |
-| Source drag-to-target | PARTIAL | Basic drag targeting exists; dropping onto an already-related target is rejected rather than focusing the existing mapping, and physical-device behavior is unverified. |
-| Articulation override UI | PARTIAL | Sparse markers/reset are represented, but production data architecture conflicts remain. |
-| Audition/capture | PARTIAL | Persistent controls and semantic target ownership exist; Repeat only changes state text, and actual retrigger scheduling and sample capture do not exist. |
-| Effects rack UX | FAIL | User rejected the current card composition, spacing, borders, values, and polish. |
-| Rack enable/reorder undo | NOT PROTOTYPED | The accepted one-command Undo boundaries do not exist in the mock adapter. |
-| Ulm visual system | FAIL | The selected direction is not yet faithfully or consistently implemented. |
-| Responsive stability | FAIL pending proof | User observed overlap and layout shifts; no accepted same-state reference comparison exists. |
-| Velocity / Pressure / Slide | PARTIAL | Pressure exists in the fixture; Velocity and Slide are absent and fixed expressive sources are not available through Add Source. |
+| Voice/Effects workspace switcher | PASS | Sibling workspaces are reachable by neighbor tap and horizontal swipe, and restore their focused module. |
+| Persistent shell regions | PASS | Header, rack, workspace, source shelf, and audition keep fixed ownership at 375×667 and 390×844. |
+| Parameter X/Y direct manipulation | PASS | Parameter tiles use dominant-axis lock: X edits the base/current layer, Y edits the selected mapping, and a drag never becomes a synthetic tap. |
+| Mapping chip Y-drag | PASS | Vertical scrub edits the chip's signed amount directly and reports through the global HUD. |
+| Mapping detail geometry | PASS | One relationship detail surface is allocated from first render; chip selection swaps its content without replacing the module or changing the boundary. |
+| Base + modulation + articulation layers | PASS in prototype | Controls render effective value, factory-default tick, mapping range, articulation identity, inherited patch-base marker, and targeted reset. |
+| Source-first target rows | PASS in prototype | Rows reflect the selected source's actual mappings, support X base/Y amount, disclose one detail row, and expose a separate open-target action. |
+| Source drag-to-target | PASS in browser prototype | Window-tracked lift/drop survives React rerenders; new drops create/select, duplicate drops focus the existing mapping, and eligible targets become visible. Physical-device feel remains to validate. |
+| Articulation override UI | PASS in prototype | Sparse absolute override identity, inherited base marker, and per-parameter reset are present; production model reconciliation remains open. |
+| Audition/capture | PASS for agreed UI semantics | Audition persists; capture stays owned by the parameter physically moved during Trigger and opens the resulting MSEG/target. Actual sampled motion, release semantics, and Repeat scheduling remain production work. |
+| Effects rack UX | PASS in prototype | Rack tiles share one component grammar with stable values, quick control, enable state, selected inversion, and a distinct reorder handle. |
+| Rack reorder recovery | PASS for gesture cancellation | Pointer cancellation restores the original order. A separate after-the-fact command Undo remains open production scope. |
+| Ulm visual system | PASS directionally | The prototype uses shared surfaces, alignment-led parameter matrices, sparse semantic color, and single border ownership. |
+| Responsive stability | PASS | Browser geometry shows zero document overflow at 375×667 and 390×844; the stress fixture has no region overflow or value-driven reflow. |
+| Velocity / Pressure / Slide | PASS in target-side mapping | All three fixed expressive sources are available through Add Source; reducers appear only for per-note-to-global crossings. |
 | Renameable macros | NOT PROTOTYPED | Macro slots exist, but no rename command or UI exists. |
 | Production parameter fidelity | NOT PROTOTYPED | Effect/voice descriptors remain illustrative and differ from real endpoints. |
 
@@ -855,9 +855,10 @@ before the React prototype can be connected to the real synth:
 
 ### 22.2 Repository safety finding
 
-The componentized React refactor is currently largely untracked in Git. The latest
-commits do not provide a complete rollback point for the current feature tree,
-controller, adapter, domain, interaction, CSS, and test files. Before any further
+The componentized React refactor now has a rollback checkpoint at `03d4b39`.
+The interaction restoration is covered by the prototype's parity matrix and test
+suite; future production-port work should continue to commit the component tree,
+controller, adapter, domain, interaction, CSS, and tests together. Before any further
 prototype refactor, preserve the current state in an intentional checkpoint so a
 visual or interaction pass cannot silently discard working behavior again.
 
@@ -869,11 +870,11 @@ Until those files are reconciled, this later transcript ledger takes precedence:
   representation as open and describes a chip expanding an inline card. The later
   decision is a permanently allocated relationship surface whose selected content
   swaps without insertion or collapse. `[U74]`
-- `INTERACTION_MATRIX.md` and prototype `AGENTS.md` currently say a routine mapping
-  chip tap replaces the fixed workspace and collapses the primary module to a live
-  target strip. That is the stale behavior the user rejected. A deep contextual
-  takeover remains possible only through a distinct, explicit deep-edit action—not
-  the ordinary mapping-chip tap.
+- `INTERACTION_MATRIX.md` and prototype `AGENTS.md` previously described the stale
+  behavior where a routine mapping-chip tap replaced the fixed workspace. They now
+  record the later fixed-detail decision. A deep contextual takeover remains
+  possible only through a distinct, explicit deep-edit action—not an ordinary chip
+  tap.
 - The constraints document still treats top-level navigation method as broadly open.
   Voice and Effects now have an accepted carousel interaction; only the additional
   workspace inventory remains open. `[U49] [U58]`

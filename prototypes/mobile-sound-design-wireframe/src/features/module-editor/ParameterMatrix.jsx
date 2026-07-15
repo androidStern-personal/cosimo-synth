@@ -5,6 +5,7 @@ export function ParameterMatrix({
   dropTargetId,
   onChangeBase,
   onChangeMappingAmount,
+  onHaptic,
   onSelect,
   onShowReadout,
   selectedTargetId,
@@ -26,6 +27,7 @@ export function ParameterMatrix({
           ordinal={index + 1}
           onChangeBase={(value) => onChangeBase(control.targetId, value)}
           onChangeMappingAmount={onChangeMappingAmount}
+          onHaptic={onHaptic}
           onSelect={() => onSelect(control.targetId)}
           onShowReadout={onShowReadout}
         />

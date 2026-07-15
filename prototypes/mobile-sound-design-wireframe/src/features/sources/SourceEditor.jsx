@@ -1,6 +1,5 @@
 import { ArrowLeft } from "@phosphor-icons/react";
 import { SourceIcon } from "../../design-system/IdentityMark.jsx";
-import { TransientValueHUD } from "../../design-system/TransientValueHUD.jsx";
 import { SourceShapeEditor } from "./SourceShapeEditor.jsx";
 import { SourceTargetList } from "./SourceTargetList.jsx";
 
@@ -8,12 +7,12 @@ export function SourceEditor({
   source,
   settings,
   semanticColor,
-  readout,
   returnLabel,
   capturedSummary = null,
   targetRows,
   availableTargets,
   selectedMappingId,
+  draggedSourceId,
   dropTargetId,
   addTargetOpen,
   restoreScrollTop,
@@ -24,6 +23,7 @@ export function SourceEditor({
   onOpenTarget,
   onBaseValueChange,
   onMappingAmountChange,
+  onClearArticulationOverride,
   onPolarityChange,
   onReducerChange,
   onRemoveMapping,
@@ -45,11 +45,9 @@ export function SourceEditor({
           </span>
           <span className="cosimo-source-editor__title">
             <strong className="cosimo-type-navigation">{source.label}</strong>
-            <TransientValueHUD
-              className="cosimo-type-micro"
-              fallback={capturedSummary || `${targetRows.length} target${targetRows.length === 1 ? "" : "s"}`}
-              value={readout}
-            />
+            <span className="cosimo-type-micro">
+              {capturedSummary || `${targetRows.length} target${targetRows.length === 1 ? "" : "s"}`}
+            </span>
           </span>
           <button
             aria-label={`Back to ${returnLabel}`}
@@ -75,11 +73,13 @@ export function SourceEditor({
         addOpen={addTargetOpen}
         availableTargets={availableTargets}
         dropTargetId={dropTargetId}
+        draggedSourceId={draggedSourceId}
         onAddOpenChange={onAddTargetOpenChange}
         onAddTarget={onAddTarget}
         onBaseValueChange={onBaseValueChange}
         onHaptic={onHaptic}
         onMappingAmountChange={onMappingAmountChange}
+        onClearArticulationOverride={onClearArticulationOverride}
         onOpenTarget={onOpenTarget}
         onPolarityChange={onPolarityChange}
         onReducerChange={onReducerChange}

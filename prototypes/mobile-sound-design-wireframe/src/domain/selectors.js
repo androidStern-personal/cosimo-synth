@@ -67,7 +67,9 @@ export function selectAvailableSourcesForTarget(patch, targetId) {
   const mappedSourceIds = new Set(
     selectMappingsForTarget(patch, targetId).map((item) => item.sourceId),
   );
-  return patch.sources.filter((source) => !mappedSourceIds.has(source.id));
+  return Object.values(selectSourceLookup(patch)).filter(
+    (source) => !mappedSourceIds.has(source.id),
+  );
 }
 
 export function selectSourceSettings(patch, sourceId) {

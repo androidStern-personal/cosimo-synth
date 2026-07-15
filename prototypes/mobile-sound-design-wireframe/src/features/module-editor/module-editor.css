@@ -12,6 +12,7 @@
   }
 
   .module-editor__header {
+    position: relative;
     display: flex;
     min-inline-size: 0;
     align-items: center;
@@ -174,7 +175,13 @@
     opacity: 0.42;
   }
 
+  .is-dragging-source .parameter-control[data-drop-relation="existing"] {
+    opacity: 0.48;
+    outline-color: var(--cosimo-color-rule);
+  }
+
   .is-dragging-source .parameter-control[data-drop-target="true"] {
+    opacity: 1;
     outline-style: solid;
     outline-width: var(--cosimo-stroke-active);
     outline-offset: calc(var(--cosimo-stroke-active) * -1);
@@ -189,8 +196,18 @@
     gap: var(--cosimo-space-1);
   }
 
+  .parameter-control__axis {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cosimo-space-micro);
+  }
+
   .parameter-control__foot .cosimo-value {
+    display: inline-flex;
     inline-size: var(--cosimo-value-width-mod-status);
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--cosimo-space-micro);
   }
 
   .parameter-control__identities {
@@ -233,7 +250,7 @@
 
   .parameter-control__base {
     inline-size: var(--parameter-base);
-    background: var(--cosimo-color-accent);
+    background: var(--parameter-edit-color, var(--cosimo-color-accent));
   }
 
   .parameter-control__mapping {
@@ -243,6 +260,7 @@
   }
 
   .parameter-control__default,
+  .parameter-control__patch-base,
   .parameter-control__handle {
     position: absolute;
     inset-block-start: 50%;
@@ -256,11 +274,17 @@
     background: var(--cosimo-color-ink);
   }
 
+  .parameter-control__patch-base {
+    inline-size: var(--cosimo-stroke-hairline);
+    block-size: var(--cosimo-track-height);
+    border-inline-start: var(--cosimo-stroke-hairline) dashed var(--cosimo-semantic-color);
+  }
+
   .parameter-control__handle {
     inset-inline-start: var(--parameter-base);
     inline-size: var(--cosimo-marker-size);
     block-size: var(--cosimo-marker-size);
-    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    border: var(--cosimo-stroke-hairline) solid var(--parameter-edit-color, var(--cosimo-color-ink));
     background: var(--cosimo-color-paper);
   }
 

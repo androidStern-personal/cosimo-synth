@@ -90,6 +90,13 @@ function TriggerControl({
         if (event.pointerType === "mouse" && event.button !== 0) return;
         begin("pointer", event);
       }}
+      onPointerLeave={(event) => {
+        if (
+          event.buttons
+          && activeInput.current
+          && !event.currentTarget.hasPointerCapture?.(event.pointerId)
+        ) finish("pointer", event);
+      }}
       onPointerUp={(event) => finish("pointer", event)}
       type="button"
     >
@@ -243,7 +250,7 @@ export function AuditionTransport({
           </span>
           <span aria-hidden="true" className="cosimo-audition__status-compact">
             {captureContext
-              ? `${captureContext.phase} · ${captureContext.target}`
+              ? `${captureContext.phase} · ${captureContext.articulation} · ${captureContext.target} · ${captureContext.layer}`
               : status}
           </span>
         </output>

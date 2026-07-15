@@ -37,7 +37,9 @@
     --cosimo-color-source-mseg-1: #d85b36;
     --cosimo-color-source-mseg-2: #d2a12e;
     --cosimo-color-source-mseg-3: #795ca3;
+    --cosimo-color-source-velocity: #4b826e;
     --cosimo-color-source-pressure: #c34f55;
+    --cosimo-color-source-slide: #4776a5;
     --cosimo-color-articulation-default: #716e68;
     --cosimo-color-articulation-pluck: #d2a128;
     --cosimo-color-articulation-bowed: #2f8f82;
@@ -107,10 +109,9 @@
     --cosimo-shell-rack-master: 96px;
     --cosimo-shell-sources-master: 48px;
     --cosimo-shell-audition-master: 80px;
-    --cosimo-shell-inspector-master: 40px;
+    --cosimo-shell-inspector-master: 136px;
     --cosimo-module-header-master: 54px;
-    --cosimo-module-graphic-master: 275px;
-    --cosimo-mapping-detail-focus-master: 112px;
+    --cosimo-module-graphic-master: 250px;
 
     /* 375 x 667 compact shell */
     --cosimo-shell-width-compact: 375px;
@@ -119,15 +120,15 @@
     --cosimo-shell-rack-compact: 88px;
     --cosimo-shell-sources-compact: 44px;
     --cosimo-shell-audition-compact: 88px;
-    --cosimo-shell-inspector-compact: 44px;
+    --cosimo-shell-inspector-compact: 124px;
     --cosimo-module-header-compact: 36px;
-    --cosimo-module-graphic-compact: 195px;
+    --cosimo-module-graphic-compact: 155px;
     --cosimo-inspector-chips-compact: 44px;
-    --cosimo-mapping-detail-focus-compact: 96px;
 
     /* Product-component geometry */
     --cosimo-rack-tile-width: 128px;
     --cosimo-rack-tile-width-compact: 120px;
+    --cosimo-rack-strip-tile-width-compact: 144px;
     --cosimo-parameter-cell-min: 44px;
     --cosimo-source-chip-width: 48px;
     --cosimo-rack-title-size: 18px;

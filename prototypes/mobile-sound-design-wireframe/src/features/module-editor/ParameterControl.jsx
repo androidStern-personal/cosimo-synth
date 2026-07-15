@@ -1,4 +1,5 @@
 import { useAxisDrag } from "../../interactions/useAxisDrag.js";
+import { ArrowsHorizontal, ArrowsVertical } from "@phosphor-icons/react";
 import { ArticulationIcon, SourceIdentity } from "../../design-system/IdentityMark.jsx";
 
 function percent(value) {
@@ -12,6 +13,7 @@ export function ParameterControl({
   isSelected = false,
   onChangeBase,
   onChangeMappingAmount,
+  onHaptic,
   onSelect,
   onShowReadout,
   ordinal,
@@ -38,6 +40,12 @@ export function ParameterControl({
           onShowReadout(`${activeMapping.source.label} → ${control.label}  ${percent(amount)}`);
         }
       : undefined,
+    onAxisLock() {
+      onHaptic?.("light");
+    },
+    onUnsupportedAxis(axis) {
+      if (axis === "y") onShowReadout(`${control.label} · choose a source mapping below`);
+    },
   });
 
   return (
@@ -46,10 +54,20 @@ export function ParameterControl({
       aria-label={`Edit ${control.label}`}
       className="parameter-control"
       data-drop-eligible={isDropEligible ? "true" : "false"}
+      data-drop-relation={control.dropRelation || "available"}
       data-modulation-target={isDropEligible ? control.targetId : undefined}
       data-state={isSelected ? "selected" : undefined}
       data-drop-target={isDropTarget ? "true" : undefined}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+        event.preventDefault();
+        const direction = event.key === "ArrowRight" ? 1 : -1;
+        const value = Math.max(0, Math.min(100, control.value + direction));
+        onSelect?.();
+        onChangeBase(value);
+        onShowReadout(`${control.label}  ${control.formatValue(value)}`);
+      }}
       type="button"
     >
       <span className="parameter-control__heading">
@@ -82,18 +100,30 @@ export function ParameterControl({
           "--parameter-mapping-start": `${mappingStart}%`,
           "--parameter-mapping-width": `${mappingWidth}%`,
           "--cosimo-semantic-color": control.activeSourceColor,
+          "--parameter-edit-color": control.articulationOverride
+            ? control.articulationColor
+            : "var(--cosimo-color-accent)",
         }}
       >
         <span className="parameter-control__base" />
         {activeMapping && <span className="parameter-control__mapping" />}
         <span className="parameter-control__default" />
+        {control.articulationOverride && (
+          <span
+            className="parameter-control__patch-base"
+            style={{
+              borderColor: control.articulationColor,
+              insetInlineStart: `${control.patchBaseValue}%`,
+            }}
+          />
+        )}
         <span className="parameter-control__handle" />
       </span>
 
       <span className="parameter-control__foot">
-        <span>X BASE</span>
+        <span className="parameter-control__axis"><ArrowsHorizontal aria-hidden="true" size={10} /> X BASE</span>
         <output className="cosimo-value" data-value-kind="signed">
-          {activeMapping ? `Y ${percent(mappingAmount)}` : "Y NO SOURCE"}
+          <ArrowsVertical aria-hidden="true" size={10} />{activeMapping ? `Y ${percent(mappingAmount)}` : "Y NO SOURCE"}
         </output>
       </span>
     </button>

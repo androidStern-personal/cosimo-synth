@@ -383,6 +383,23 @@
     padding: 0 var(--cosimo-gutter-screen) var(--cosimo-space-2);
   }
 
+  .is-dragging-source .cosimo-source-target[data-modulation-target] {
+    outline: var(--cosimo-stroke-hairline) dashed var(--drag-source-color, var(--cosimo-color-accent));
+    outline-offset: calc(var(--cosimo-stroke-hairline) * -1);
+  }
+
+  .is-dragging-source .cosimo-source-target[data-drop-relation="existing"] {
+    opacity: 0.48;
+    outline-color: var(--cosimo-color-rule);
+  }
+
+  .is-dragging-source .cosimo-source-target[data-drop-active] {
+    opacity: 1;
+    outline-style: solid;
+    outline-width: var(--cosimo-stroke-active);
+    outline-offset: calc(var(--cosimo-stroke-active) * -1);
+  }
+
   .cosimo-source-target {
     position: relative;
     display: grid;
@@ -439,6 +456,11 @@
     color: var(--cosimo-source-color, var(--cosimo-color-accent));
   }
 
+  .cosimo-source-target__articulation {
+    display: inline-flex;
+    color: var(--cosimo-articulation-color);
+  }
+
   .cosimo-source-target__track {
     position: relative;
     display: block;
@@ -463,11 +485,19 @@
     background: var(--cosimo-source-color, var(--cosimo-color-accent));
   }
 
-  .cosimo-source-target__default {
+  .cosimo-source-target__default,
+  .cosimo-source-target__patch-base {
     position: absolute;
     inset-block: calc(var(--cosimo-space-micro) * -1);
     inline-size: var(--cosimo-stroke-active);
     background: var(--cosimo-color-ink);
+    transform: translateX(-50%);
+  }
+
+  .cosimo-source-target__patch-base {
+    inset-block: calc(var(--cosimo-space-micro) * -1);
+    inline-size: var(--cosimo-stroke-hairline);
+    border-inline-start: var(--cosimo-stroke-hairline) dashed var(--cosimo-articulation-color);
     transform: translateX(-50%);
   }
 
@@ -505,13 +535,18 @@
     border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
+  .cosimo-source-target[data-articulation-override="true"] .cosimo-source-target__detail {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
+  }
+
   .cosimo-source-target__detail > label {
     display: grid;
     min-inline-size: 0;
     gap: var(--cosimo-space-micro);
   }
 
-  .cosimo-source-target__remove {
+  .cosimo-source-target__remove,
+  .cosimo-source-target__clear-override {
     display: inline-flex;
     min-inline-size: var(--cosimo-hit-min);
     min-block-size: var(--cosimo-control-small);
@@ -520,6 +555,10 @@
     gap: var(--cosimo-space-1);
     padding-inline: var(--cosimo-space-2);
     border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+  }
+
+  .cosimo-source-target__clear-override {
+    color: var(--cosimo-articulation-color);
   }
 
   .cosimo-source-targets__empty {
@@ -571,7 +610,8 @@
       padding-block-end: var(--cosimo-space-1);
     }
 
-    .cosimo-source-target__remove > span {
+    .cosimo-source-target__remove > span,
+    .cosimo-source-target__clear-override > span {
       position: absolute;
       inline-size: var(--cosimo-stroke-hairline);
       block-size: var(--cosimo-stroke-hairline);

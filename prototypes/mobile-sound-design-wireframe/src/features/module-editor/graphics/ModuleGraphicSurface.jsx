@@ -37,6 +37,7 @@ export function ModuleGraphicSurface({
   moduleId,
   onAxesChange,
   onGraphicFocus,
+  onHaptic,
   values,
 }) {
   const gesture = useRef(null);
@@ -88,6 +89,7 @@ export function ModuleGraphicSurface({
             const deltaY = event.clientY - current.startY;
             if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < AXIS_LOCK_THRESHOLD) return;
             current.axis = Math.abs(deltaX) >= Math.abs(deltaY) ? "horizontal" : "vertical";
+            onHaptic?.("light");
             const parameterId = current.axis === "horizontal" ? axes[0] : axes[1];
             onGraphicFocus?.({ moduleId, axes: [...axes], activeAxis: current.axis, parameterId });
           }

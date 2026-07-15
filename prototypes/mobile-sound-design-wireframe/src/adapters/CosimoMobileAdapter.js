@@ -25,6 +25,7 @@
  * @property {(targetId: TargetId, articulationId: string) => void} clearArticulationOverride
  * @property {(effectId: EffectId, enabled: boolean) => void} setEffectEnabled
  * @property {(effectId: EffectId, overEffectId: EffectId) => void} reorderEffect
+ * @property {(effectOrder: EffectId[]) => void} restoreEffectOrder
  * @property {(targetId: TargetId, patch: Object) => void} setCompoundSetting
  * @property {(type: SourceType) => SourceId | null} createSource
  * @property {(sourceId: SourceId, patch: Object) => void} setSourceSettings

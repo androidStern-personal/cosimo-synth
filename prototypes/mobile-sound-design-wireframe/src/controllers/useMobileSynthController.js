@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ALL_MODULES,
   ARTICULATIONS,
@@ -21,6 +21,7 @@ import {
 } from "../domain/selectors.js";
 import { useDragToTarget } from "../interactions/useDragToTarget.js";
 import { useTransientReadout } from "../interactions/useTransientReadout.js";
+import { triggerHaptic } from "../platform/haptics.js";
 
 const DEFAULT_TARGET_BY_MODULE = Object.freeze(Object.fromEntries(
   ALL_MODULES.map((module) => [module.id, `${module.id}.${module.quick}`]),
@@ -75,16 +76,24 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const [sourceTargetAddOpen, setSourceTargetAddOpen] = useState(false);
   const [sourceMappingId, setSourceMappingId] = useState(null);
   const [sourceScrollTop, setSourceScrollTop] = useState(0);
-  const [mappingFocusId, setMappingFocusId] = useState(null);
+  const triggerFallbackTimer = useRef(null);
 
-  const clearContextNavigation = () => {
+  const clearTriggerFallback = () => {
+    window.clearTimeout(triggerFallbackTimer.current);
+    triggerFallbackTimer.current = null;
+  };
+
+  useEffect(() => clearTriggerFallback, []);
+
+  const clearContextNavigation = ({ preserveSourceReturn = false } = {}) => {
     setSourceFocusId(null);
-    setReturnContext(null);
-    setSourceReturn(null);
+    if (!preserveSourceReturn) {
+      setReturnContext(null);
+      setSourceReturn(null);
+    }
     setSourceMappingId(null);
     setSourceAddOpen(false);
     setSourceTargetAddOpen(false);
-    setMappingFocusId(null);
   };
 
   const activeModuleId = moduleByWorkspace[workspace];
@@ -107,7 +116,6 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     if (!target) return;
     setTargetByModule((current) => ({ ...current, [target.moduleId]: targetId }));
     setLastTweakedByModule((current) => ({ ...current, [target.moduleId]: target.id }));
-    setMappingFocusId(null);
     const mappings = selectMappingsForTarget(patch, targetId);
     if (mappings.length > 0 && !mappings.some((item) => item.id === activeMappingByTarget[targetId])) {
       setActiveMappingByTarget((current) => ({ ...current, [targetId]: mappings[0].id }));
@@ -120,13 +128,13 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     setWorkspace(module.workspace);
     setModuleByWorkspace((current) => ({ ...current, [module.workspace]: moduleId }));
     selectTarget(targetByModule[moduleId] || `${moduleId}.${module.quick}`);
-    clearContextNavigation();
+    clearContextNavigation({ preserveSourceReturn: Boolean(sourceReturn) });
   };
 
   const chooseWorkspace = (nextWorkspace) => {
     if (nextWorkspace !== "voice" && nextWorkspace !== "effects") return;
     setWorkspace(nextWorkspace);
-    clearContextNavigation();
+    clearContextNavigation({ preserveSourceReturn: Boolean(sourceReturn) });
   };
 
   const setParameter = (targetId, value) => {
@@ -158,13 +166,11 @@ export function useMobileSynthController(adapter, initialSession = {}) {
 
   const openSource = (sourceId, { allowPending = false } = {}) => {
     if ((!allowPending && !sourceLookup[sourceId]) || sourceId === "pressure") return;
-    if (!sourceReturn) {
+    if (!sourceFocusId) {
       setReturnContext({ workspace, moduleId: activeModuleId, targetId: selectedTargetId });
     }
     setSourceFocusId(sourceId);
-    setSourceMappingId(
-      selectMappingsForSource(patch, sourceId)[0]?.id || null,
-    );
+    setSourceMappingId(null);
     setSourceTargetAddOpen(false);
     setSourceReturn(null);
   };
@@ -215,14 +221,23 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         ?.closest?.("[data-modulation-target]")
         ?.getAttribute("data-modulation-target") || null;
       if (!targetId) return null;
-      const duplicate = patch.mappings.some(
-        (mapping) => mapping.targetKey === targetId && mapping.sourceId === sourceId,
-      );
-      return duplicate ? null : targetId;
+      return targetId;
     },
     onDrop(sourceId, targetId) {
       selectTarget(targetId);
-      addMapping(targetId, sourceId);
+      const existing = patch.mappings.find(
+        (mapping) => mapping.targetKey === targetId && mapping.sourceId === sourceId,
+      );
+      if (existing) {
+        setActiveMappingByTarget((current) => ({ ...current, [targetId]: existing.id }));
+        showReadout(`${sourceLookup[sourceId]?.label || "Source"} → ${TARGETS[targetId]?.label || "Target"}`);
+      } else {
+        addMapping(targetId, sourceId);
+      }
+      triggerHaptic("success");
+    },
+    onTargetChange(targetId) {
+      if (targetId) triggerHaptic("light");
     },
   });
 
@@ -234,9 +249,6 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const activeMappingId = activeMappingByTarget[selectedTargetId]
     || mappingsForSelectedTarget[0]?.id
     || null;
-  const mappingFocus = mappingFocusId
-    ? mappingsForSelectedTarget.find((item) => item.id === mappingFocusId) || null
-    : null;
 
   const parameterControls = activeModule.params.map((parameter) => {
     const targetId = `${activeModule.id}.${parameter.id}`;
@@ -256,12 +268,10 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         : null,
       articulationColor: ARTICULATIONS[audition.articulation]?.color,
       formatValue: (value) => formatValue(viewModel.target, value),
-      isDropEligible: !sourceDrag.draggedId || !patch.mappings.some(
-        (mapping) => (
-          mapping.targetKey === targetId
-          && mapping.sourceId === sourceDrag.draggedId
-        ),
-      ),
+      isDropEligible: true,
+      dropRelation: sourceDrag.draggedId && patch.mappings.some(
+        (item) => item.targetKey === targetId && item.sourceId === sourceDrag.draggedId,
+      ) ? "existing" : "available",
     };
   });
 
@@ -291,6 +301,9 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     const parameterId = lastTweakedByModule[module.id] || module.quick;
     const target = TARGETS[`${module.id}.${parameterId}`];
     const value = selectEffectiveParameterValue(patch, target.key, audition.articulation);
+    const override = audition.articulation === "Default"
+      ? null
+      : patch.articulationOverrides[audition.articulation]?.[target.key];
     return {
       id: module.id,
       label: module.label,
@@ -304,6 +317,11 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         targetId: target.key,
         value,
         valueKind: target.format,
+        patchBaseValue: patch.parameterValues[target.key],
+        articulationColor: ARTICULATIONS[audition.articulation]?.color,
+        articulationOverride: override == null
+          ? null
+          : { articulationId: audition.articulation, value: override },
       },
     };
   });
@@ -326,25 +344,28 @@ export function useMobileSynthController(adapter, initialSession = {}) {
 
   const focusedSource = sourceFocusId ? sourceLookup[sourceFocusId] : null;
   const focusedSourceMappings = focusedSource
-    ? selectMappingsForSource(patch, focusedSource.id).map((mapping) => ({
-        baseValue: selectEffectiveParameterValue(
+    ? selectMappingsForSource(patch, focusedSource.id).map((mapping) => {
+        const control = selectParameterControlViewModel(
           patch,
+          audition,
           mapping.targetKey,
-          audition.articulation,
-        ),
-        formatValue: (value) => formatValue(TARGETS[mapping.targetKey], value),
-        formattedBaseValue: formatValue(
-          TARGETS[mapping.targetKey],
-          selectEffectiveParameterValue(
-            patch,
-            mapping.targetKey,
-            audition.articulation,
+          focusedSource.id,
+        );
+        return {
+          articulationColor: ARTICULATIONS[audition.articulation]?.color,
+          articulationOverride: control.articulationOverride,
+          baseValue: control.value,
+          formatValue: (value) => formatValue(TARGETS[mapping.targetKey], value),
+          formattedBaseValue: formatValue(
+            TARGETS[mapping.targetKey],
+            control.value,
           ),
-        ),
-        mapping,
-        needsReducer: selectReducerRequirement(patch, mapping.id),
-        target: TARGETS[mapping.targetKey],
-      }))
+          mapping,
+          needsReducer: selectReducerRequirement(patch, mapping.id),
+          patchBaseValue: control.patchBaseValue,
+          target: TARGETS[mapping.targetKey],
+        };
+      })
     : [];
 
   return {
@@ -363,18 +384,6 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       focusedSourceMappings,
       isDraggingSource: Boolean(sourceDrag.draggedId),
       mappingsForSelectedTarget,
-      mappingFocus: mappingFocus ? {
-        control: parameterControls.find((control) => control.targetId === selectedTargetId),
-        mapping: mappingFocus,
-        source: sourceLookup[mappingFocus.sourceId],
-        sourceSettings: patch.sourceSettings[mappingFocus.sourceId],
-        target: {
-          ...selectedTarget,
-          ordinal: activeModule.params.findIndex(
-            (parameter) => parameter.id === selectedTarget.id,
-          ) + 1,
-        },
-      } : null,
       parameterControls,
       patch,
       rackTiles: workspace === "effects" ? rackTiles : voiceTiles,
@@ -421,32 +430,81 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         if (mappingId) setSourceMappingId(mappingId);
       },
       captureMotion() {
+        const targetId = audition.captureCandidate?.targetKey;
         const sourceId = commands.captureMotion();
-        if (!sourceId) return;
+        if (!sourceId) return null;
         setDeletedSource(null);
-        setReturnContext({ workspace, moduleId: activeModuleId, targetId: selectedTargetId });
-        setSourceFocusId(sourceId);
-        setSourceMappingId(null);
+        if (targetId) {
+          const target = TARGETS[targetId];
+          const mappingId = `${targetId}::${sourceId}`;
+          setActiveMappingByTarget((current) => ({
+            ...current,
+            [targetId]: mappingId,
+          }));
+          setWorkspace(target.workspace);
+          setModuleByWorkspace((current) => ({
+            ...current,
+            [target.workspace]: target.moduleId,
+          }));
+          setTargetByModule((current) => ({
+            ...current,
+            [target.moduleId]: targetId,
+          }));
+          setReturnContext({
+            workspace: target.workspace,
+            moduleId: target.moduleId,
+            targetId,
+          });
+          setSourceFocusId(sourceId);
+          setSourceMappingId(mappingId);
+          setSourceScrollTop(0);
+          setSourceReturn(null);
+        }
+        return sourceId;
       },
-      cancelTrigger: commands.cancelTrigger,
+      cancelTrigger() {
+        clearTriggerFallback();
+        commands.cancelTrigger();
+      },
       changeMappingAmount: commands.setMappingAmount,
-      closeMappingFocus: () => setMappingFocusId(null),
       chooseWorkspace,
-      clearArticulationOverride: () => commands.clearArticulationOverride(
-        selectedTargetId,
-        audition.articulation,
-      ),
+      clearArticulationOverride(targetId = selectedTargetId) {
+        const target = TARGETS[targetId];
+        if (!target) return;
+        commands.clearArticulationOverride(targetId, audition.articulation);
+        showReadout(`${audition.articulation} · ${target.label} override cleared`);
+        triggerHaptic("success");
+      },
       closeSource,
       deleteSource(sourceId) {
         const source = sourceLookup[sourceId];
+        const uiContext = {
+          activeMappingByTarget,
+          moduleByWorkspace,
+          returnContext,
+          sourceFocusId,
+          sourceMappingId,
+          sourceReturn,
+          sourceScrollTop,
+          targetByModule,
+          workspace,
+        };
         commands.deleteSource(sourceId);
-        setDeletedSource(source || null);
+        setDeletedSource(source ? { source, uiContext } : null);
         if (sourceFocusId === sourceId) closeSource();
       },
-      endTrigger: commands.endTrigger,
+      endTrigger() {
+        clearTriggerFallback();
+        commands.endTrigger();
+      },
       fallbackTrigger() {
+        clearTriggerFallback();
         commands.beginTrigger();
-        window.setTimeout(commands.endTrigger, 180);
+        if (audition.latch) return;
+        triggerFallbackTimer.current = window.setTimeout(() => {
+          triggerFallbackTimer.current = null;
+          commands.endTrigger();
+        }, 180);
       },
       focusModule,
       moveSourceDrag: sourceDrag.move,
@@ -454,13 +512,13 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       openTargetFromSource,
       removeMapping,
       reorderEffect: commands.reorderEffect,
+      restoreEffectOrder: commands.restoreEffectOrder,
       returnToSource,
       selectMapping(mappingId) {
         setActiveMappingByTarget((current) => ({
           ...current,
           [selectedTargetId]: mappingId,
         }));
-        setMappingFocusId(mappingId);
       },
       selectSourceMapping: setSourceMappingId,
       selectTarget,
@@ -478,11 +536,27 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       setSourceScrollTop,
       setSourceTargetAddOpen,
       showReadout,
-      startTrigger: commands.beginTrigger,
+      startTrigger() {
+        clearTriggerFallback();
+        commands.beginTrigger();
+      },
       stopSourceDrag: () => sourceDrag.finish(false),
       undoDelete() {
         commands.undoDeleteSource();
+        const uiContext = deletedSource?.uiContext;
+        if (uiContext) {
+          setActiveMappingByTarget(uiContext.activeMappingByTarget);
+          setModuleByWorkspace(uiContext.moduleByWorkspace);
+          setReturnContext(uiContext.returnContext);
+          setSourceFocusId(uiContext.sourceFocusId);
+          setSourceMappingId(uiContext.sourceMappingId);
+          setSourceReturn(uiContext.sourceReturn);
+          setSourceScrollTop(uiContext.sourceScrollTop);
+          setTargetByModule(uiContext.targetByModule);
+          setWorkspace(uiContext.workspace);
+        }
         setDeletedSource(null);
+        triggerHaptic("success");
       },
     },
   };

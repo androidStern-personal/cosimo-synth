@@ -1,6 +1,7 @@
 @layer cosimo.modulation-inspector {
   .modulation-inspector {
-    display: block;
+    display: grid;
+    grid-template-rows: var(--cosimo-hit-min) minmax(0, 1fr);
     min-inline-size: 0;
     min-block-size: 0;
     border-block-start: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
@@ -12,21 +13,24 @@
     min-inline-size: 0;
     min-block-size: 0;
     align-items: stretch;
-    block-size: 100%;
+    block-size: var(--cosimo-hit-min);
+    overflow-x: auto;
+    overflow-y: clip;
   }
 
   .mapping-chip {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto auto;
     flex: 0 0 auto;
     min-inline-size: var(--cosimo-rack-tile-width);
-    min-block-size: 100%;
+    min-block-size: var(--cosimo-hit-min);
     align-items: center;
     gap: var(--cosimo-space-1);
     padding-inline: var(--cosimo-space-2);
     border-inline-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
     border-block-end: var(--cosimo-stroke-semantic) solid var(--cosimo-semantic-color);
     touch-action: none;
+    position: relative;
   }
 
   .articulation-override-chip {
@@ -54,6 +58,14 @@
   .mapping-chip[data-state="selected"] {
     color: var(--cosimo-color-paper);
     background: var(--cosimo-color-ink);
+  }
+
+  .mapping-chip__scrub-cue {
+    color: var(--cosimo-color-ink-muted);
+  }
+
+  .mapping-chip[data-state="selected"] .mapping-chip__scrub-cue {
+    color: currentColor;
   }
 
   .mapping-chip[data-state="selected"] .cosimo-value {
@@ -89,70 +101,6 @@
     border-inline-start: var(--cosimo-stroke-semantic) solid var(--cosimo-semantic-color);
   }
 
-  .mapping-focus-editor {
-    display: grid;
-    grid-template-rows:
-      var(--cosimo-module-header-master)
-      calc(var(--cosimo-hit-min) + var(--cosimo-space-5))
-      minmax(0, 1fr)
-      var(--cosimo-mapping-detail-focus-master);
-    min-inline-size: 0;
-    min-block-size: 0;
-    block-size: 100%;
-    padding-inline: var(--cosimo-space-3);
-    overflow: clip;
-  }
-
-  .mapping-focus-editor__header {
-    display: flex;
-    min-inline-size: 0;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--cosimo-space-2);
-  }
-
-  .mapping-focus-editor__header > button {
-    display: inline-flex;
-    min-block-size: var(--cosimo-control-medium);
-    align-items: center;
-    gap: var(--cosimo-space-1);
-  }
-
-  .mapping-focus-editor__header > div {
-    display: grid;
-    text-align: end;
-  }
-
-  .mapping-focus-editor__target {
-    min-inline-size: 0;
-    min-block-size: 0;
-    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
-  }
-
-  .mapping-focus-editor__target .parameter-control {
-    block-size: 100%;
-  }
-
-  .mapping-focus-editor__source {
-    min-inline-size: 0;
-    min-block-size: 0;
-    padding-block: var(--cosimo-space-2);
-  }
-
-  .mapping-focus-editor__source .cosimo-source-shape {
-    block-size: 100%;
-  }
-
-  .mapping-focus-editor__detail {
-    min-inline-size: 0;
-    min-block-size: 0;
-    border-inline: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
-  }
-
-  .mapping-focus-editor__detail .mapping-detail {
-    block-size: 100%;
-  }
-
   .mapping-detail--empty {
     display: grid;
     border-inline-start-color: var(--cosimo-color-rule);
@@ -172,9 +120,9 @@
     border-inline-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
-  .mapping-detail__amount {
+  .mapping-detail__relationship {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    grid-template-columns: minmax(0, 1fr) auto;
     min-inline-size: 0;
     min-block-size: 0;
     align-items: center;
@@ -182,21 +130,15 @@
     padding-inline: var(--cosimo-space-2);
   }
 
-  .mapping-detail__amount > .cosimo-type-label {
-    grid-column: 1;
-  }
-
-  .mapping-detail__amount > .wire-range {
-    grid-column: 2;
-  }
-
-  .mapping-detail__amount > .cosimo-value {
-    grid-column: 3;
+  .mapping-detail__relationship > .cosimo-type-micro {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .mapping-detail__settings {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     min-inline-size: 0;
     min-block-size: 0;
     border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
@@ -206,6 +148,10 @@
     min-inline-size: 0;
     min-block-size: 100%;
     padding-inline: var(--cosimo-space-2);
+  }
+
+  .mapping-detail[data-needs-reducer="true"] .mapping-detail__settings {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .mapping-detail__settings > :not(:first-child) {
@@ -240,18 +186,9 @@
       display: none;
     }
 
-    .mapping-detail__remove span,
-    .mapping-detail__amount .cosimo-type-label {
+    .mapping-detail__remove span {
       display: none;
     }
 
-    .mapping-focus-editor {
-      grid-template-rows:
-        var(--cosimo-module-header-compact)
-        calc(var(--cosimo-hit-min) + var(--cosimo-space-4))
-        minmax(0, 1fr)
-        var(--cosimo-mapping-detail-focus-compact);
-      padding-inline: var(--cosimo-space-2);
-    }
   }
 }

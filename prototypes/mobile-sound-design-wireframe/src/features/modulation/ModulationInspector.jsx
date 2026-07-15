@@ -1,6 +1,7 @@
 import { Plus } from "@phosphor-icons/react";
 import { ArticulationIcon } from "../../design-system/IdentityMark.jsx";
 import { MappingChip } from "./MappingChip.jsx";
+import { MappingDetail } from "./MappingDetail.jsx";
 
 export function ModulationInspector({
   activeMappingId,
@@ -11,6 +12,7 @@ export function ModulationInspector({
   onAddMapping,
   onChangeAmount,
   onClearArticulationOverride,
+  onHaptic,
   onOpenSource,
   onRemoveMapping,
   onSelectMapping,
@@ -49,6 +51,7 @@ export function ModulationInspector({
               key={mapping.id}
               mapping={mapping}
               onAmountChange={onChangeAmount}
+              onHaptic={onHaptic}
               onSelect={() => onSelectMapping(mapping.id)}
               onShowReadout={onShowReadout}
               source={source}
@@ -57,9 +60,9 @@ export function ModulationInspector({
           );
         })}
         <div className="modulation-inspector__add">
-          <button aria-label="Add modulation source" type="button">
+          <span aria-hidden="true" className="modulation-inspector__add-glyph">
             <Plus aria-hidden="true" size={18} />
-          </button>
+          </span>
           {availableSources.length > 0 && (
             <select
               aria-label="Choose modulation source"
@@ -77,7 +80,17 @@ export function ModulationInspector({
           )}
         </div>
       </div>
-
+      <MappingDetail
+        color={activeMapping ? sourceLookup[activeMapping.sourceId]?.color : undefined}
+        mapping={activeMapping}
+        needsReducer={activeMapping?.needsReducer}
+        onOpenSource={onOpenSource}
+        onRemove={onRemoveMapping}
+        onSetPolarity={onSetPolarity}
+        onSetReducer={onSetReducer}
+        source={activeMapping ? sourceLookup[activeMapping.sourceId] : null}
+        targetLabel={target.label}
+      />
     </section>
   );
 }

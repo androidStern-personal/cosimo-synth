@@ -36,6 +36,15 @@
     background: var(--cosimo-color-ink);
   }
 
+  .wire-range__secondary {
+    position: absolute;
+    inset-block-start: 0;
+    inline-size: var(--cosimo-stroke-hairline);
+    block-size: 100%;
+    border-inline-start: var(--cosimo-stroke-hairline) dashed var(--range-secondary);
+    transform: translateX(-50%);
+  }
+
   .wire-range__handle {
     position: absolute;
     inset-block-start: 50%;

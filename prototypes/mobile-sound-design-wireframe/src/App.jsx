@@ -13,7 +13,6 @@ import {
 import { EffectRack, VoiceModuleStrip } from "./features/rack/index.js";
 import { ModuleEditor } from "./features/module-editor/ModuleEditor.jsx";
 import { ModulationInspector } from "./features/modulation/ModulationInspector.jsx";
-import { MappingFocusEditor } from "./features/modulation/MappingFocusEditor.jsx";
 import { SourceEditor, SourceShelf } from "./features/sources/index.js";
 import { AuditionTransport } from "./features/audition/index.js";
 import { triggerHaptic } from "./platform/haptics.js";
@@ -56,6 +55,8 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
       onQuickChange={actions.setParameter}
       onReadout={({ label, formattedValue }) => actions.showReadout(`${label}  ${formattedValue}`)}
       onReorder={actions.reorderEffect}
+      onRestoreOrder={actions.restoreEffectOrder}
+      onHaptic={triggerHaptic}
     />
   ) : (
     <VoiceModuleStrip
@@ -98,21 +99,32 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
       captureContext={state.audition.captureCandidate
         ? {
             phase: state.audition.triggerActive ? "REC" : "READY",
+            articulation: state.audition.captureCandidate.articulation,
+            layer: state.audition.captureCandidate.layer,
             target: `${TARGETS[state.audition.captureCandidate.targetKey]?.moduleLabel || "Target"} ${TARGETS[state.audition.captureCandidate.targetKey]?.label || ""}`.trim(),
           }
         : null}
       latch={state.audition.latch}
       note={state.audition.note}
       onArticulationChange={actions.setArticulation}
-      onCapture={actions.captureMotion}
+      onCapture={() => {
+        const sourceId = actions.captureMotion();
+        triggerHaptic(sourceId ? "success" : "error");
+      }}
       onDefaultArticulation={() => actions.setArticulation("Default")}
       onLatchChange={actions.setLatch}
       onNoteChange={actions.setNote}
       onRepeatChange={actions.setRepeat}
       onTriggerCancel={actions.cancelTrigger}
       onTriggerEnd={actions.endTrigger}
-      onTriggerFallback={actions.fallbackTrigger}
-      onTriggerStart={actions.startTrigger}
+      onTriggerFallback={() => {
+        triggerHaptic("light");
+        actions.fallbackTrigger();
+      }}
+      onTriggerStart={() => {
+        triggerHaptic("light");
+        actions.startTrigger();
+      }}
       repeat={state.audition.repeat}
       status={state.audition.status}
       triggerActive={state.audition.triggerActive}
@@ -124,6 +136,7 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
       audition={audition}
       className={state.isDraggingSource ? "is-dragging-source" : ""}
       header={header}
+      readout={state.readout}
       rack={rack}
       sourceShelf={sourceShelf}
       style={{
@@ -134,6 +147,10 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
         <SourceEditor
           addTargetOpen={state.sourceTargetAddOpen}
           availableTargets={state.availableTargets}
+          capturedSummary={state.focusedSource.capturedMotion
+            ? `Captured · ${TARGETS[state.focusedSource.capturedMotion.targetKey]?.moduleLabel || "Target"} ${TARGETS[state.focusedSource.capturedMotion.targetKey]?.label || ""} · ${state.focusedSource.capturedMotion.layer}`
+            : null}
+          draggedSourceId={state.draggedSourceId}
           dropTargetId={state.dropTargetId}
           onAddTarget={actions.addSourceTarget}
           onAddTargetOpenChange={actions.setSourceTargetAddOpen}
@@ -141,6 +158,7 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
           onBaseValueChange={({ targetId, value }) => actions.setParameter(targetId, value)}
           onHaptic={triggerHaptic}
           onMappingAmountChange={({ mappingId, amount }) => actions.changeMappingAmount(mappingId, amount)}
+          onClearArticulationOverride={actions.clearArticulationOverride}
           onOpenTarget={({ targetId, mappingId, scrollTop }) => (
             actions.openTargetFromSource(targetId, mappingId, scrollTop)
           )}
@@ -152,34 +170,12 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
           onSourceSettingsChange={({ sourceId, patch }) => actions.setSourceSettings(sourceId, patch)}
           onTransientValue={({ label, formattedValue }) => actions.showReadout(`${label}  ${formattedValue}`)}
           restoreScrollTop={state.sourceScrollTop}
-          readout={state.readout}
           returnLabel={state.sourceCloseLabel}
           selectedMappingId={state.sourceMappingId}
           semanticColor={state.focusedSource.color}
           settings={state.sourceSettings}
           source={state.focusedSource}
           targetRows={state.focusedSourceMappings}
-        />
-      ) : state.mappingFocus ? (
-        <MappingFocusEditor
-          mapping={state.mappingFocus.mapping}
-          onBack={actions.closeMappingFocus}
-          onChangeBase={(value) => actions.setParameter(state.mappingFocus.target.key, value)}
-          onChangeAmount={actions.changeMappingAmount}
-          onOpenSource={actions.openSource}
-          onRemoveMapping={(mappingId) => {
-            actions.removeMapping(mappingId);
-            actions.closeMappingFocus();
-          }}
-          onSetPolarity={actions.setMappingPolarity}
-          onSetReducer={actions.setMappingReducer}
-          onShowReadout={actions.showReadout}
-          onSourceSettingsChange={actions.setSourceSettings}
-          parameterControl={state.mappingFocus.control}
-          readout={state.readout}
-          source={state.mappingFocus.source}
-          sourceSettings={state.mappingFocus.sourceSettings}
-          target={state.mappingFocus.target}
         />
       ) : (
         <div className="cosimo-workspace-stack">
@@ -191,9 +187,9 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
             onChangeBase={actions.setParameter}
             onChangeCompound={actions.setCompound}
             onChangeMappingAmount={actions.changeMappingAmount}
+            onHaptic={triggerHaptic}
             onSelectTarget={actions.selectTarget}
             onShowReadout={actions.showReadout}
-            readout={state.readout}
             returnAction={state.returnToSource ? {
               label: `Back to ${state.sourceLookup[state.returnToSource.sourceId]?.label || "source"}`,
               onReturn: actions.returnToSource,
@@ -209,6 +205,7 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
             onAddMapping={actions.addMapping}
             onChangeAmount={actions.changeMappingAmount}
             onClearArticulationOverride={actions.clearArticulationOverride}
+            onHaptic={triggerHaptic}
             onOpenSource={actions.openSource}
             onRemoveMapping={actions.removeMapping}
             onSelectMapping={actions.selectMapping}

@@ -1,18 +1,15 @@
 import { ArrowSquareOut, Trash } from "@phosphor-icons/react";
 import { SourceIdentity } from "../../design-system/IdentityMark.jsx";
-import { WireRange } from "../../design-system/WireRange.jsx";
 import { formatSignedPercent } from "../../domain/formatting.js";
 
 export function MappingDetail({
   color,
   mapping,
   needsReducer,
-  onAmountChange,
   onOpenSource,
   onRemove,
   onSetPolarity,
   onSetReducer,
-  onShowReadout,
   source,
   targetLabel,
 }) {
@@ -25,7 +22,11 @@ export function MappingDetail({
   }
 
   return (
-    <div className="mapping-detail" style={{ "--cosimo-semantic-color": color }}>
+    <div
+      className="mapping-detail"
+      data-needs-reducer={needsReducer ? "true" : "false"}
+      style={{ "--cosimo-semantic-color": color }}
+    >
       {source.type === "fixed" ? (
         <div className="mapping-detail__source" data-navigable="false">
           <SourceIdentity color={color} includeName source={source} size={21} />
@@ -41,25 +42,12 @@ export function MappingDetail({
         </button>
       )}
 
-      <label className="mapping-detail__amount">
-        <span className="cosimo-type-label">AMOUNT</span>
-        <WireRange
-          accent={color}
-          ariaLabel={`${source.label} modulation amount`}
-          defaultValue={0}
-          maximum={100}
-          minimum={-100}
-          onChange={(event) => {
-            const amount = Number(event.target.value);
-            onAmountChange(mapping.id, amount);
-            onShowReadout(`${source.label} → ${targetLabel}  ${formatSignedPercent(amount)}`);
-          }}
-          value={mapping.amount}
-        />
+      <div className="mapping-detail__relationship">
+        <span className="cosimo-type-micro">TO {targetLabel}</span>
         <output className="cosimo-value" data-value-kind="signed">
           {formatSignedPercent(mapping.amount)}
         </output>
-      </label>
+      </div>
 
       <div className="mapping-detail__settings">
         <select

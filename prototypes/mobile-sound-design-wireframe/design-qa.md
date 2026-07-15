@@ -3,16 +3,16 @@
 ## Evidence
 
 - Source visual truth: `/Users/winterfell/.codex/generated_images/019f51fe-8cad-74e0-af19-5afb4e44104e/exec-576250f4-f394-424a-9e76-9bba8ad81fe4.png`
-- Canonical browser render: `/tmp/cosimo-final-canonical-390x844.png`
-- Compact browser render: `/tmp/cosimo-final-canonical-375x667.png`
+- Canonical browser render: `/tmp/cosimo-parity-390.png`
+- Compact browser render: `/tmp/cosimo-parity-final-375.png`
 - Same-input comparison: `/tmp/cosimo-final-reference-comparison-390x844.png`
 - Independent final comparison: `/tmp/cosimo-readonly-audit-comparison-390x844.png`
 - Same-input overlay: `/tmp/cosimo-final-reference-overlay-390x844.png`
 - Focused upper/lower comparisons: `/tmp/cosimo-final-reference-top-390x430.png`, `/tmp/cosimo-final-reference-bottom-390x414.png`
 - Responsive state matrix: `/tmp/cosimo-final-state-matrix-375x667.png`
-- Stress fixture: `/tmp/cosimo-final-stress-375x667.png`
+- Stress fixture: `/tmp/cosimo-parity-stress-390.png`
 - Mapping, override, orphan, attached-source, and bypass states: `/tmp/cosimo-final-mapping-focus-375x667.png`, `/tmp/cosimo-final-override-375x667.png`, `/tmp/cosimo-final-orphan-375x667.png`, `/tmp/cosimo-final-attached-375x667.png`, `/tmp/cosimo-delay-bypassed-375x667.png`
-- Canonical comparison state: Effects workspace, Phaser focused, Depth selected, Macro 1 mapping focused, Pluck articulation active. The rack quick control independently remains Frequency.
+- Canonical interaction state: Effects workspace, Phaser focused, Depth selected, Macro 1 mapping focused, Pluck articulation active. The rack quick control independently remains Frequency.
 
 ## Findings
 
@@ -34,9 +34,9 @@
 2. Compact rack tiles clipped quick controls and confused reordering with parameter adjustment.
    - Added a dedicated drag handle, fixed-width live-value tracks, and separate quick-control, enable, focus, and reorder gestures.
 3. Opening a relationship inserted a large card and shifted the interface.
-   - Reserved the secondary workspace and made relationship detail swap in place; only one mapping focus is expanded at a time.
-4. Source drag capture failed for mouse input and duplicate mapping drops appeared successful.
-   - Added pointer capture, visible eligible targets, and adapter/controller duplicate rejection.
+   - Reserved the secondary workspace and made one permanently mounted relationship detail surface swap in place without changing the primary/secondary boundary.
+4. Source and rack drags lost pointer ownership after their first React rerender.
+   - Moved their active-gesture tracking to window pointer listeners, retained axis arbitration, and verified complete source drop and rack reorder gestures in the live browser.
 5. Releasing a latched Trigger could restart the note and clear its retrospective capture candidate.
    - Added lifecycle-safe release/cancel behavior and reducer contract coverage.
 6. The product controller imported prototype fixture constants.
@@ -45,6 +45,8 @@
    - Compound labels are parameter-derived and the compact HUD retains a full accessible capture description.
 8. Source colors and obsolete tokens drifted outside the design system.
    - Semantic values now live in CSS tokens only; every declared token has a current consumer.
+9. Source target rows selected on pointer-down and then immediately deselected on the ensuing click.
+   - Separated drag ownership from click disclosure, so the first tap stays expanded, a second tap collapses, and vertical scrubbing continues to own the intended mapping.
 
 ## Interaction and responsive verification
 
@@ -58,12 +60,12 @@
 - Trigger, Repeat, Latch, note/articulation choice, and retrospective capture preserve the parameter moved while Trigger was held.
 - Mean/Max appears only when a per-note source crosses into a global destination.
 - The deterministic `?fixture=stress` state covers maximum and signed values, bypass, override, orphan/attached sources, and an active capture candidate.
-- Browser geometry checks found zero document overflow or element intersections in the reviewed states. Browser console checks found no warnings or errors.
-- Independent visual, responsive, and React-interaction reviewers found no remaining high- or medium-severity defect.
+- Browser geometry checks found zero document overflow at 375×667 and 390×844. The stress fixture keeps every fixed shell region within bounds; long audition status is intentionally clipped inside its reserved output rather than reflowing the shell.
+- The live browser pass verified parameter X/Y, graphic X/Y, mapping-chip Y scrub, source lift/drop and duplicate drop, source-row disclosure/reset, source-to-target return, retrospective capture ownership, source delete/Undo, effect reorder, and workspace swipe.
 
 ## Verification commands
 
-- `npm test` — 9/9 passed.
+- `npm test` — 28/28 passed.
 - `npm run check:styles` — 10 CSS files passed the style contract.
 - `npm run build` — Vite production build passed.
 - `git diff --check` — passed.

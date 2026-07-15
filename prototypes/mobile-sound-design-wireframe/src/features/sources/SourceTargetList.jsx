@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowSquareOut, CaretDown, Plus, Trash } from "@phosphor-icons/react";
-import { SourceIcon } from "../../design-system/IdentityMark.jsx";
+import { ArticulationIcon, SourceIcon } from "../../design-system/IdentityMark.jsx";
 import { useAxisDrag } from "../../interactions/useAxisDrag.js";
 
 const clamp = (value, minimum = 0, maximum = 100) =>
@@ -16,10 +16,13 @@ export function SourceTargetRow({
   semanticColor,
   selected,
   dropActive,
+  dropRelation = "available",
   onSelect,
+  onToggle,
   onOpenTarget,
   onBaseValueChange,
   onMappingAmountChange,
+  onClearArticulationOverride,
   onPolarityChange,
   onReducerChange,
   onRemove,
@@ -27,14 +30,19 @@ export function SourceTargetRow({
   onHaptic,
 }) {
   const { target, mapping } = row;
+  const pointerSelection = useRef(null);
   const targetId = target.key || target.id;
-  const mappingEnd = clamp(row.baseValue + mapping.amount);
+  const mappingEnd = clamp(row.baseValue + mapping.amount / 2);
   const rangeStart = Math.min(row.baseValue, mappingEnd);
   const rangeWidth = Math.abs(mappingEnd - row.baseValue);
   const dragHandlers = useAxisDrag({
     xValue: row.baseValue,
     yValue: mapping.amount,
-    onBegin: () => onHaptic?.("light"),
+    onBegin: () => {
+      pointerSelection.current = { wasSelected: selected };
+      onSelect?.(mapping.id);
+    },
+    onAxisLock: () => onHaptic?.("light"),
     onXChange(value) {
       onBaseValueChange?.({ targetId, value });
       onTransientValue?.({
@@ -61,6 +69,9 @@ export function SourceTargetRow({
     <article
       className="cosimo-source-target"
       data-drop-active={dropActive || undefined}
+      data-drop-relation={dropRelation}
+      data-modulation-target={targetId}
+      data-articulation-override={row.articulationOverride ? "true" : undefined}
       data-expanded={selected || undefined}
       style={{ "--cosimo-source-color": semanticColor }}
     >
@@ -68,13 +79,44 @@ export function SourceTargetRow({
         aria-label={`Edit ${target.moduleLabel} ${target.label}; horizontal changes base, vertical changes ${source.label} amount`}
         aria-pressed={selected}
         className="cosimo-source-target__control"
-        onClick={() => onSelect?.(mapping.id)}
+        onClick={() => {
+          const pointer = pointerSelection.current;
+          pointerSelection.current = null;
+          // Pointer-down already selects an unselected row so a vertical drag
+          // owns the intended mapping. Do not immediately toggle it closed
+          // when that same tap produces its click. Keyboard/programmatic
+          // clicks have no pointer record and still toggle normally.
+          if (!pointer || pointer.wasSelected) onToggle?.(mapping.id);
+        }}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+          event.preventDefault();
+          const direction = event.key === "ArrowRight" ? 1 : -1;
+          const value = clamp(row.baseValue + direction);
+          onSelect?.(mapping.id);
+          onBaseValueChange?.({ targetId, value });
+          onTransientValue?.({
+            targetId,
+            field: "base",
+            label: `${target.moduleLabel} · ${target.label}`,
+            value,
+            formattedValue: row.formatValue?.(value) || `${Math.round(value)}%`,
+          });
+        }}
         type="button"
         {...dragHandlers}
       >
         <span className="cosimo-source-target__heading">
           <span className="cosimo-type-label">{target.moduleLabel} · {target.label}</span>
           <span className="cosimo-source-target__source-mark">
+            {row.articulationOverride && (
+              <span
+                className="cosimo-source-target__articulation"
+                style={{ "--cosimo-articulation-color": row.articulationColor }}
+              >
+                <ArticulationIcon articulation={row.articulationOverride.articulationId} size={13} />
+              </span>
+            )}
             <SourceIcon source={source} size={14} />
             <span className="cosimo-value" data-value-kind="signed">{signedPercent(mapping.amount)}</span>
           </span>
@@ -82,6 +124,15 @@ export function SourceTargetRow({
         <span aria-hidden="true" className="cosimo-source-target__track">
           <span className="cosimo-source-target__base-fill" style={{ inlineSize: `${row.baseValue}%` }} />
           <span className="cosimo-source-target__default" style={{ insetInlineStart: `${target.defaultValue}%` }} />
+          {row.articulationOverride && (
+            <span
+              className="cosimo-source-target__patch-base"
+              style={{
+                "--cosimo-articulation-color": row.articulationColor,
+                insetInlineStart: `${row.patchBaseValue}%`,
+              }}
+            />
+          )}
           <span
             className="cosimo-source-target__mapping-range"
             style={{ insetInlineStart: `${rangeStart}%`, inlineSize: `${rangeWidth}%` }}
@@ -145,6 +196,17 @@ export function SourceTargetRow({
             <Trash aria-hidden="true" size={16} />
             <span>Remove</span>
           </button>
+          {row.articulationOverride && (
+            <button
+              aria-label={`Clear ${row.articulationOverride.articulationId} override for ${target.moduleLabel} ${target.label}`}
+              className="cosimo-source-target__clear-override"
+              onClick={() => onClearArticulationOverride?.(targetId)}
+              type="button"
+            >
+              <ArticulationIcon articulation={row.articulationOverride.articulationId} size={14} />
+              <span>Reset override</span>
+            </button>
+          )}
         </div>
       )}
     </article>
@@ -157,6 +219,7 @@ export function SourceTargetList({
   rows,
   availableTargets = [],
   selectedMappingId = null,
+  draggedSourceId = null,
   dropTargetId = null,
   addOpen = false,
   restoreScrollTop = null,
@@ -166,6 +229,7 @@ export function SourceTargetList({
   onOpenTarget,
   onBaseValueChange,
   onMappingAmountChange,
+  onClearArticulationOverride,
   onPolarityChange,
   onReducerChange,
   onRemoveMapping,
@@ -243,10 +307,12 @@ export function SourceTargetList({
         {rows.map((row) => (
           <SourceTargetRow
             dropActive={dropTargetId === (row.target.key || row.target.id)}
+            dropRelation={draggedSourceId && row.mapping.sourceId === draggedSourceId ? "existing" : "available"}
             key={row.mapping.id}
             onBaseValueChange={onBaseValueChange}
             onHaptic={onHaptic}
             onMappingAmountChange={onMappingAmountChange}
+            onClearArticulationOverride={onClearArticulationOverride}
             onOpenTarget={(intent) => onOpenTarget?.({
               ...intent,
               scrollTop: listRef.current?.scrollTop || 0,
@@ -254,7 +320,8 @@ export function SourceTargetList({
             onPolarityChange={onPolarityChange}
             onReducerChange={onReducerChange}
             onRemove={onRemoveMapping}
-            onSelect={(mappingId) => onSelectMapping?.(
+            onSelect={onSelectMapping}
+            onToggle={(mappingId) => onSelectMapping?.(
               mappingId === selectedMappingId ? null : mappingId,
             )}
             onTransientValue={onTransientValue}

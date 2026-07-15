@@ -53,6 +53,12 @@
     gap: var(--cosimo-space-1);
   }
 
+  .cosimo-rack__quick-articulation {
+    display: inline-flex;
+    flex: 0 0 auto;
+    color: var(--cosimo-articulation-color);
+  }
+
   .cosimo-rack__quick-meta > span:first-child {
     overflow: hidden;
     text-overflow: ellipsis;
@@ -131,7 +137,7 @@
     .cosimo-rack__tile {
       grid-template-columns: minmax(0, 1fr) var(--cosimo-hit-min);
       grid-template-rows: repeat(2, var(--cosimo-hit-min));
-      flex-basis: calc(var(--cosimo-shell-width-compact) / 3);
+      flex-basis: var(--cosimo-rack-strip-tile-width-compact);
     }
 
     .cosimo-rack__identity {
@@ -146,10 +152,6 @@
       grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-track-height);
       align-self: end;
       gap: var(--cosimo-space-1);
-    }
-
-    .cosimo-rack__quick-meta output {
-      display: none;
     }
 
     .cosimo-rack__enabled {

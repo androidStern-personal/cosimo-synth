@@ -18,7 +18,9 @@ export const SOURCE_COLORS = Object.freeze({
   "mseg-1": "var(--cosimo-color-source-mseg-1)",
   "mseg-2": "var(--cosimo-color-source-mseg-2)",
   "mseg-3": "var(--cosimo-color-source-mseg-3)",
+  velocity: "var(--cosimo-color-source-velocity)",
   pressure: "var(--cosimo-color-source-pressure)",
+  slide: "var(--cosimo-color-source-slide)",
 });
 
 // Icon names deliberately remain presentation-neutral. The React layer maps
@@ -215,5 +217,7 @@ export const TARGETS = Object.freeze(
 );
 
 export const FIXED_SOURCES = Object.freeze([
+  { id: "velocity", type: "fixed", slot: null, label: "Velocity" },
   { id: "pressure", type: "fixed", slot: null, label: "Pressure" },
+  { id: "slide", type: "fixed", slot: null, label: "Slide" },
 ]);
