@@ -1,0 +1,1013 @@
+:root {
+  font-family: system-ui, sans-serif;
+  color: #171717;
+  background: #fff;
+  --paper: #fff;
+  --ink: #171717;
+  --muted-ink: #716e68;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+}
+
+button,
+select,
+input {
+  font: inherit;
+}
+
+button,
+select {
+  border: 1px solid currentColor;
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+input {
+  accent-color: var(--ink);
+}
+
+button {
+  min-height: 28px;
+}
+
+button:active,
+button[data-selected="true"],
+.rack-tile[data-active="true"] {
+  outline: 2px solid currentColor;
+  outline-offset: -3px;
+}
+
+small,
+.section-label,
+.drag-label {
+  font-size: 10px;
+}
+
+.mobile-prototype {
+  width: min(100vw, 390px);
+  height: min(100dvh, 844px);
+  margin-inline: auto;
+  overflow: hidden;
+  position: relative;
+  display: grid;
+  grid-template-rows: 42px 82px minmax(0, 1fr) 42px 90px;
+  border-inline: 1px solid currentColor;
+}
+
+.global-header {
+  position: relative;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid currentColor;
+  padding: 5px;
+}
+
+.global-header > button {
+  border: 0;
+}
+
+.workspace-carousel {
+  width: 116px;
+  height: 36px;
+  display: grid;
+  grid-template-columns: 30px 48px 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  touch-action: pan-y;
+  overflow: hidden;
+}
+
+.workspace-carousel button {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  transform: translateX(var(--workspace-drag));
+  transition: transform 120ms ease;
+}
+
+.workspace-neighbor {
+  width: 30px;
+  height: 28px;
+  opacity: 0.55;
+}
+
+.workspace-current {
+  width: 48px;
+  height: 36px;
+  border-width: 2px;
+  opacity: 1;
+}
+
+.module-strip {
+  min-width: 0;
+  overflow: hidden;
+  border-bottom: 1px solid currentColor;
+  padding-block: 4px;
+}
+
+.section-label {
+  display: block;
+  padding: 0 5px 3px;
+  text-transform: uppercase;
+}
+
+.rack-list,
+.source-list,
+.mapping-chips {
+  display: flex;
+  gap: 5px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 2px 5px 4px;
+}
+
+.rack-list::-webkit-scrollbar,
+.source-list::-webkit-scrollbar,
+.mapping-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.rack-tile {
+  flex: 0 0 126px;
+  height: 72px;
+  border: 1px solid currentColor;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: 18px 31px 16px;
+  padding: 3px;
+}
+
+.rack-focus {
+  grid-column: 1;
+  grid-row: 1;
+  min-height: 0;
+  border: 0;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  text-align: left;
+  padding: 2px;
+}
+
+.rack-quick-control {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  column-gap: 3px;
+  font-size: 9px;
+}
+
+.rack-quick-control span,
+.rack-quick-control output {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rack-quick-control output {
+  max-width: 54px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rack-quick-control .wire-range {
+  grid-column: 1 / -1;
+}
+
+.rack-enabled {
+  grid-column: 1;
+  grid-row: 3;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+}
+
+.rack-enabled input {
+  margin: 0 3px 0 0;
+}
+
+.rack-drag-handle {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: center;
+  width: 24px;
+  min-height: 20px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  touch-action: none;
+  cursor: grab;
+}
+
+.rack-drag-handle:active {
+  cursor: grabbing;
+}
+
+.voice-module-list {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  padding: 2px 5px;
+}
+
+.voice-module-list button {
+  min-width: 0;
+  height: 70px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: start;
+  padding: 6px;
+  text-align: left;
+}
+
+.voice-module-list small {
+  font-weight: normal;
+}
+
+.workspace-stack {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.primary-editor,
+.context-editor {
+  min-height: 0;
+  padding: 6px;
+}
+
+.primary-editor {
+  flex: 1 1 auto;
+  overflow: auto;
+  border-bottom: 1px solid currentColor;
+}
+
+.workspace-stack:not(.source-workspace) .primary-editor {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-stack:not(.source-workspace) .graphic-pad {
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 150px;
+}
+
+.workspace-stack:not(.source-workspace) .parameter-grid {
+  flex: 0 0 auto;
+}
+
+.editor-heading,
+.context-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+}
+
+.editor-heading > div,
+.context-heading > div {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-heading output {
+  max-width: 190px;
+  font-size: 11px;
+  text-align: right;
+}
+
+.editor-heading-actions {
+  min-width: 0;
+  display: flex;
+  flex-direction: row !important;
+  align-items: end;
+  gap: 4px;
+}
+
+.source-return-button {
+  flex: 0 0 auto;
+  min-height: 25px;
+  font-size: 10px;
+}
+
+.graphic-pad,
+.source-shape {
+  width: 100%;
+  height: 180px;
+  border: 1px solid currentColor;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  touch-action: none;
+  user-select: none;
+}
+
+.graphic-position {
+  width: 12px;
+  height: 12px;
+  border: 2px solid currentColor;
+  position: absolute;
+  transform: translate(-50%, 50%);
+  background: var(--paper);
+}
+
+.module-graphic {
+  display: block;
+  width: 100%;
+  height: 100%;
+  color: var(--ink);
+}
+
+.graphic-mode-control {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 5px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  border: 1px solid currentColor;
+  padding: 3px;
+  background: var(--paper);
+  font-size: 9px;
+  touch-action: auto;
+}
+
+.graphic-mode-control button,
+.graphic-mode-control select {
+  min-height: 22px;
+  max-width: 62px;
+  padding: 1px 4px;
+  font-size: 9px;
+}
+
+.parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.parameter-control {
+  min-width: 0;
+  min-height: 54px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  padding: 5px;
+  text-align: left;
+  touch-action: none;
+  user-select: none;
+}
+
+.parameter-control-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.parameter-control-heading > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: 9px;
+  color: var(--source-color, currentColor);
+}
+
+.parameter-control-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.articulation-mark {
+  display: inline-grid;
+  place-items: center;
+  color: var(--articulation-color);
+}
+
+.parameter-track {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 12px;
+  border: 1px solid currentColor;
+}
+
+.base-fill {
+  position: absolute;
+  inset: 3px auto 3px 0;
+  border-top: 4px solid currentColor;
+}
+
+.modulation-band {
+  position: absolute;
+  top: 1px;
+  bottom: 1px;
+  border-block: 2px solid var(--source-color, currentColor);
+}
+
+.default-tick {
+  position: absolute;
+  top: -4px;
+  width: 1px;
+  height: 18px;
+  border-left: 2px solid currentColor;
+  transform: translateX(-1px);
+}
+
+.base-position {
+  position: absolute;
+  top: 2px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  background: var(--paper);
+  transform: translateX(-3px);
+}
+
+.patch-base-position {
+  position: absolute;
+  top: 3px;
+  width: 4px;
+  height: 4px;
+  border: 1px solid var(--articulation-color);
+  background: var(--paper);
+  transform: translateX(-2px);
+}
+
+.parameter-control[data-articulation-override="true"] .base-position {
+  border-color: var(--articulation-color);
+  background: var(--articulation-color);
+}
+
+.mobile-prototype[data-source-dragging="true"] [data-modulation-target] {
+  border-color: var(--drag-source-color);
+  box-shadow: inset 0 0 0 1px var(--drag-source-color);
+}
+
+.mobile-prototype[data-source-dragging="true"] [data-modulation-target][data-drop-active="true"] {
+  outline: 3px solid var(--drag-source-color);
+  outline-offset: -4px;
+}
+
+.wire-range {
+  min-width: 0;
+  height: 14px;
+  position: relative;
+  display: block;
+}
+
+.wire-range .parameter-track {
+  position: absolute;
+  inset: 1px 0;
+  height: 12px;
+  color: var(--range-color, var(--ink));
+}
+
+.wire-range input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: ew-resize;
+}
+
+.parameter-gesture-hint {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.parameter-target {
+  min-height: 58px;
+}
+
+.parameter-wide {
+  min-height: 58px;
+}
+
+.context-editor {
+  flex: 0 0 auto;
+  max-height: 38%;
+  overflow: auto;
+}
+
+.context-heading button {
+  min-height: 26px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.mapping-chips {
+  min-width: 0;
+  padding: 2px 0;
+}
+
+.mapping-chips button {
+  flex: 0 0 auto;
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  touch-action: none;
+  user-select: none;
+  border-color: var(--source-color, currentColor);
+}
+
+.mapping-chips button[data-selected="true"] {
+  outline-color: var(--source-color, currentColor);
+}
+
+.mapping-chips .articulation-override-chip {
+  color: var(--articulation-color);
+  border-color: var(--articulation-color);
+}
+
+.mapping-chips button[aria-label="Add modulation source mapping"] {
+  width: 30px;
+  justify-content: center;
+  border-color: currentColor;
+}
+
+.mapping-chips output {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.mapping-chip-label {
+  font-size: 10px;
+}
+
+.mapping-add-menu {
+  border: 1px solid currentColor;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 4px;
+  margin-bottom: 4px;
+}
+
+.mapping-add-menu button {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.mapping-card {
+  border: 1px solid currentColor;
+  border-left: 3px solid var(--source-color);
+  padding: 5px;
+  display: grid;
+  grid-template-columns: 105px 1fr;
+  gap: 6px;
+  min-height: 92px;
+}
+
+.source-preview {
+  border: 1px solid currentColor;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 10px;
+  text-align: center;
+  padding: 4px;
+  color: var(--source-color);
+}
+
+.mapping-settings {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.mapping-settings label {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 4px;
+  align-items: center;
+}
+
+.mapping-settings input {
+  width: 100%;
+}
+
+.mapping-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));
+  gap: 3px;
+}
+
+.mapping-options select,
+.mapping-options button {
+  min-width: 0;
+  font-size: 10px;
+}
+
+.empty-card {
+  border: 1px dashed currentColor;
+  min-height: 70px;
+  display: grid;
+  place-items: center;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+}
+
+.source-primary {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+
+.source-header-actions {
+  align-items: end;
+  gap: 3px;
+}
+
+.source-header-actions output {
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-shape {
+  height: 178px;
+  margin-block: 4px 0;
+  color: var(--source-color);
+}
+
+.source-shape canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.source-stage-readouts {
+  position: absolute;
+  inset: auto 5px 4px;
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  color: var(--source-color);
+  font-size: 9px;
+}
+
+.source-stage-readouts span {
+  background: var(--paper);
+  padding-inline: 2px;
+}
+
+.target-context {
+  flex: 1 1 auto;
+  max-height: none;
+  position: relative;
+  overflow: auto;
+}
+
+.target-add-control {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px;
+  margin-block: 3px;
+}
+
+.target-add-control select {
+  min-width: 0;
+}
+
+.target-list {
+  display: grid;
+  gap: 5px;
+}
+
+.target-mapping-row {
+  border: 1px solid currentColor;
+  border-left: 3px solid var(--source-color);
+  padding: 4px;
+  display: grid;
+  gap: 4px;
+  position: relative;
+}
+
+.target-mapping-row .parameter-control {
+  border: 0;
+  padding: 2px 32px 2px 2px;
+}
+
+.target-mapping-row[data-expanded="false"] .parameter-control {
+  min-height: 50px;
+}
+
+.target-open-button {
+  position: absolute;
+  z-index: 2;
+  top: 5px;
+  right: 5px;
+  width: 26px;
+  min-height: 25px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: var(--source-color);
+}
+
+.target-mapping-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(66px, 1fr));
+  gap: 3px;
+}
+
+.target-mapping-options select,
+.target-mapping-options button {
+  min-width: 0;
+  min-height: 25px;
+  font-size: 10px;
+}
+
+.source-shelf {
+  min-width: 0;
+  position: relative;
+  overflow: visible;
+  border-top: 1px solid currentColor;
+  border-bottom: 1px solid currentColor;
+  padding-block: 4px;
+}
+
+.source-list {
+  padding-block: 0;
+}
+
+.source-list button {
+  position: relative;
+  flex: 0 0 44px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  color: var(--source-color, currentColor);
+  border-color: var(--source-color, currentColor);
+}
+
+.source-list button[data-orphan="true"] {
+  color: #8a8882;
+  border-color: #8a8882;
+  opacity: 0.58;
+}
+
+.source-list button[data-dragging="true"] {
+  outline: 3px solid var(--source-color);
+  outline-offset: -3px;
+}
+
+.source-list button[aria-label="Add modulation source"] {
+  color: var(--ink);
+  border-color: var(--ink);
+}
+
+.source-list button span {
+  font-size: 10px;
+}
+
+.source-attachment-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 15px;
+  border: 1px solid currentColor;
+  background: var(--paper);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding-inline: 2px;
+  font-size: 8px;
+}
+
+.source-add-menu,
+.source-context-menu,
+.source-undo-toast {
+  position: absolute;
+  z-index: 7;
+  right: 4px;
+  bottom: 54px;
+  border: 1px solid currentColor;
+  padding: 5px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 4px;
+  background: var(--paper);
+}
+
+.source-add-menu button,
+.source-context-menu button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.source-context-menu {
+  left: 4px;
+  right: auto;
+  grid-template-columns: auto auto auto;
+  align-items: center;
+}
+
+.source-undo-toast {
+  left: 4px;
+  right: 4px;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+}
+
+.audition-bar {
+  padding: 5px;
+  display: grid;
+  gap: 4px;
+  font-size: 10px;
+}
+
+.audition-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.audition-row label {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.articulation-picker {
+  color: var(--ink);
+}
+
+.articulation-picker-icon {
+  display: inline-grid;
+  place-items: center;
+  color: var(--articulation-color);
+}
+
+.articulation-picker select {
+  border-color: var(--articulation-color);
+  box-shadow: inset 3px 0 0 var(--articulation-color);
+}
+
+.audition-row select,
+.audition-row button {
+  min-height: 27px;
+  font-size: 10px;
+}
+
+.audition-row output {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.trigger-button {
+  margin-left: auto;
+}
+
+@media (max-height: 720px) {
+  .mobile-prototype {
+    grid-template-rows: 38px 70px minmax(0, 1fr) 42px 82px;
+  }
+
+  .workspace-stack {
+    grid-template-rows: minmax(0, 1fr) 174px;
+  }
+
+  .rack-tile,
+  .voice-module-list button {
+    height: 61px;
+  }
+
+  .rack-tile {
+    grid-template-rows: 15px 24px 14px;
+  }
+
+  .rack-focus {
+    font-size: 11px;
+  }
+
+  .rack-quick-control input {
+    height: 9px;
+  }
+
+  .graphic-pad {
+    height: 78px;
+  }
+
+  .workspace-stack:not(.source-workspace) .graphic-pad {
+    min-height: 90px;
+  }
+
+  .source-shape {
+    height: 112px;
+  }
+
+  .parameter-control {
+    min-height: 43px;
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .parameter-track {
+    height: 9px;
+  }
+
+  .default-tick {
+    top: -4px;
+    height: 15px;
+  }
+
+  .parameter-control-heading {
+    font-size: 10px;
+  }
+
+  .graphic-mode-control {
+    top: 3px;
+    right: 3px;
+    padding: 2px;
+  }
+
+  .graphic-mode-control strong {
+    display: none;
+  }
+
+  .graphic-mode-control button,
+  .graphic-mode-control select {
+    min-height: 20px;
+    max-width: 52px;
+    padding-inline: 2px;
+  }
+
+  .editor-heading,
+  .context-heading {
+    min-height: 27px;
+  }
+
+  .mapping-card {
+    min-height: 90px;
+  }
+
+  .source-controls {
+    gap: 3px;
+    font-size: 11px;
+  }
+}
