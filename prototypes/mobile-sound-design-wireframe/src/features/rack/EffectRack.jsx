@@ -56,7 +56,6 @@ function RackQuickControl({ item, onChange, onFocus, onReadout }) {
         )}
       </span>
       <WireRange
-        accent="var(--cosimo-color-accent)"
         ariaLabel={`${item.label} ${quick.label} quick control`}
         defaultValue={quick.defaultValue}
         secondaryMarker={quick.articulationOverride ? quick.patchBaseValue : null}
@@ -145,60 +144,63 @@ function RackTile({
       data-state={item.isSelected ? "selected" : item.enabled ? "idle" : "bypassed"}
       ref={item.isSelected ? selectedRef : null}
     >
-      <button
-        aria-current={item.isSelected ? "page" : undefined}
-        aria-label={`Open ${item.label} editor`}
-        className="cosimo-rack__identity cosimo-type-navigation"
-        onClick={() => onFocus?.(item.id)}
-        type="button"
-      >
-        {item.label}
-      </button>
-      <RackQuickControl
-        item={item}
-        onChange={onQuickChange}
-        onFocus={onFocus}
-        onReadout={onReadout}
-      />
-      <label className="cosimo-rack__enabled cosimo-type-micro">
-        <input
-          aria-label={`${item.label} enabled`}
-          checked={item.enabled}
-          onChange={(event) => onEnableChange?.(item.id, event.target.checked)}
-          type="checkbox"
+      <div className="cosimo-rack__body">
+        <button
+          aria-current={item.isSelected ? "page" : undefined}
+          aria-label={`Open ${item.label} editor`}
+          className="cosimo-rack__identity cosimo-type-navigation"
+          onClick={() => onFocus?.(item.id)}
+          type="button"
+        >
+          {item.label}
+        </button>
+        <RackQuickControl
+          item={item}
+          onChange={onQuickChange}
+          onFocus={onFocus}
+          onReadout={onReadout}
         />
-        <span aria-hidden="true" className="cosimo-rack__enabled-mark" />
-        <span>{item.enabled ? "On" : "Off"}</span>
-      </label>
-      <button
-        aria-label={`Reorder ${item.label}`}
-        className="cosimo-rack__handle"
-        onPointerDown={(event) => {
-          if (event.pointerType === "mouse" && event.button !== 0) return;
-          const listeners = {
-            move: (pointerEvent) => moveReorder(pointerEvent),
-            up: (pointerEvent) => finishReorder(pointerEvent),
-            cancel: (pointerEvent) => finishReorder(pointerEvent, true),
-          };
-          reorderGesture.current = {
-            captureTarget: event.currentTarget,
-            listeners,
-            pointerId: event.pointerId,
-            lastOverId: item.id,
-            originalOrder: [...order],
-            startX: event.clientX,
-            startY: event.clientY,
-            started: false,
-          };
-          event.currentTarget.setPointerCapture?.(event.pointerId);
-          window.addEventListener("pointermove", listeners.move);
-          window.addEventListener("pointerup", listeners.up);
-          window.addEventListener("pointercancel", listeners.cancel);
-        }}
-        type="button"
-      >
-        <DotsSixVertical aria-hidden="true" size={18} weight="bold" />
-      </button>
+      </div>
+      <div className="cosimo-rack__rail">
+        <label className="cosimo-rack__enabled">
+          <input
+            aria-label={`${item.label} enabled`}
+            checked={item.enabled}
+            onChange={(event) => onEnableChange?.(item.id, event.target.checked)}
+            type="checkbox"
+          />
+          <span aria-hidden="true" className="cosimo-rack__enabled-mark" />
+        </label>
+        <button
+          aria-label={`Reorder ${item.label}`}
+          className="cosimo-rack__handle"
+          onPointerDown={(event) => {
+            if (event.pointerType === "mouse" && event.button !== 0) return;
+            const listeners = {
+              move: (pointerEvent) => moveReorder(pointerEvent),
+              up: (pointerEvent) => finishReorder(pointerEvent),
+              cancel: (pointerEvent) => finishReorder(pointerEvent, true),
+            };
+            reorderGesture.current = {
+              captureTarget: event.currentTarget,
+              listeners,
+              pointerId: event.pointerId,
+              lastOverId: item.id,
+              originalOrder: [...order],
+              startX: event.clientX,
+              startY: event.clientY,
+              started: false,
+            };
+            event.currentTarget.setPointerCapture?.(event.pointerId);
+            window.addEventListener("pointermove", listeners.move);
+            window.addEventListener("pointerup", listeners.up);
+            window.addEventListener("pointercancel", listeners.cancel);
+          }}
+          type="button"
+        >
+          <DotsSixVertical aria-hidden="true" size={16} weight="bold" />
+        </button>
+      </div>
     </article>
   );
 }
@@ -264,21 +266,23 @@ export function VoiceModuleStrip({ items, onModuleFocus, onQuickChange, onReadou
             key={item.id}
             ref={item.isSelected ? selectedTile : null}
           >
-            <button
-              aria-current={item.isSelected ? "page" : undefined}
-              aria-label={`Open ${item.label} editor`}
-              className="cosimo-rack__identity cosimo-type-navigation"
-              onClick={() => onModuleFocus?.(item.id)}
-              type="button"
-            >
-              {item.label}
-            </button>
-            <RackQuickControl
-              item={item}
-              onChange={onQuickChange}
-              onFocus={onModuleFocus}
-              onReadout={onReadout}
-            />
+            <div className="cosimo-rack__body">
+              <button
+                aria-current={item.isSelected ? "page" : undefined}
+                aria-label={`Open ${item.label} editor`}
+                className="cosimo-rack__identity cosimo-type-navigation"
+                onClick={() => onModuleFocus?.(item.id)}
+                type="button"
+              >
+                {item.label}
+              </button>
+              <RackQuickControl
+                item={item}
+                onChange={onQuickChange}
+                onFocus={onModuleFocus}
+                onReadout={onReadout}
+              />
+            </div>
           </article>
         ))}
       </div>

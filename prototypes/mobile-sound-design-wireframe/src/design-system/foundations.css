@@ -12,6 +12,8 @@
     color: var(--cosimo-color-ink);
     background: var(--cosimo-color-paper);
     font-family: var(--cosimo-font-label);
+    font-size: var(--cosimo-type-label-size);
+    line-height: var(--cosimo-type-label-line);
   }
 
   :where(.cosimo-ui, [data-cosimo-ui]) :where(button, input, select, output) {
@@ -46,6 +48,13 @@
     --cosimo-shell-sources: var(--cosimo-shell-sources-master);
     --cosimo-shell-audition: var(--cosimo-shell-audition-master);
     --cosimo-shell-inspector: var(--cosimo-shell-inspector-master);
+    --cosimo-inspector-chips: var(--cosimo-inspector-chips-master);
+    --cosimo-inspector-detail: var(--cosimo-inspector-detail-master);
+    --cosimo-module-header: var(--cosimo-module-header-master);
+    --cosimo-matrix-row: var(--cosimo-matrix-row-master);
+    --cosimo-rack-tile: var(--cosimo-rack-tile-width);
+    --cosimo-source-chip: var(--cosimo-source-chip-width);
+    --cosimo-gutter: var(--cosimo-gutter-screen);
 
     position: relative;
     isolation: isolate;
@@ -116,23 +125,77 @@
     touch-action: manipulation;
   }
 
-  .cosimo-control-frame {
-    min-block-size: var(--cosimo-control-medium);
-    padding-inline: var(--cosimo-space-2);
-    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+  /*
+   * Segmented mode control: one frame, equal-height segments, hairline
+   * separators, black/white inversion for the current mode. Segments whose
+   * visual height is below the touch minimum extend their hit area with a
+   * transparent overlay instead of growing the frame.
+   */
+  .cosimo-segmented {
+    display: inline-grid;
+    grid-auto-columns: auto;
+    grid-auto-flow: column;
+    align-items: stretch;
+    min-inline-size: 0;
+    block-size: var(--cosimo-control-small);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
     background: var(--cosimo-color-paper);
   }
 
-  .cosimo-control-frame[data-state="selected"] {
+  .cosimo-segmented > * {
+    position: relative;
+    display: inline-grid;
+    min-inline-size: 0;
+    padding-inline: var(--cosimo-space-2);
+    place-items: center;
+    white-space: nowrap;
+  }
+
+  .cosimo-segmented > :not(:first-child) {
+    border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .cosimo-segmented > button::after {
+    position: absolute;
+    inset-block: calc((var(--cosimo-hit-min) - var(--cosimo-control-small)) / -2);
+    inset-inline: 0;
+    content: "";
+  }
+
+  .cosimo-segmented > [data-state="selected"] {
     color: var(--cosimo-color-paper);
     background: var(--cosimo-color-ink);
   }
 
-  .cosimo-type-module {
+  .cosimo-segmented > [data-state="muted"] {
+    color: var(--cosimo-color-ink-muted);
+  }
+
+  /*
+   * Labeled field: a muted caption line over a fixed-height control. Every
+   * composite row built from fields shares one label baseline and one
+   * control height, so neighboring controls always align.
+   */
+  .cosimo-field {
+    display: grid;
+    grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-control-small);
+    min-inline-size: 0;
+    align-content: center;
+    row-gap: var(--cosimo-space-micro);
+  }
+
+  .cosimo-field > .cosimo-field__label {
+    overflow: hidden;
+    color: var(--cosimo-color-ink-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cosimo-type-display {
     font-family: var(--cosimo-font-label);
-    font-size: var(--cosimo-type-module-size);
+    font-size: var(--cosimo-type-display-size);
     font-weight: var(--cosimo-type-weight-emphasis);
-    line-height: var(--cosimo-type-module-line);
+    line-height: var(--cosimo-type-display-line);
     letter-spacing: var(--cosimo-type-tracking-navigation);
     text-transform: uppercase;
   }
@@ -178,7 +241,7 @@
   }
 
   .cosimo-type-micro {
-    font-family: var(--cosimo-font-label);
+    font-family: var(--cosimo-font-value);
     font-size: var(--cosimo-type-micro-size);
     font-weight: var(--cosimo-type-weight-regular);
     line-height: var(--cosimo-type-micro-line);
@@ -252,6 +315,13 @@
       --cosimo-shell-sources: var(--cosimo-shell-sources-compact);
       --cosimo-shell-audition: var(--cosimo-shell-audition-compact);
       --cosimo-shell-inspector: var(--cosimo-shell-inspector-compact);
+      --cosimo-inspector-chips: var(--cosimo-inspector-chips-compact);
+      --cosimo-inspector-detail: var(--cosimo-inspector-detail-compact);
+      --cosimo-module-header: var(--cosimo-module-header-compact);
+      --cosimo-matrix-row: var(--cosimo-matrix-row-compact);
+      --cosimo-rack-tile: var(--cosimo-rack-tile-width-compact);
+      --cosimo-source-chip: var(--cosimo-source-chip-width-compact);
+      --cosimo-gutter: var(--cosimo-gutter-compact);
 
       inline-size: min(100%, var(--cosimo-shell-width-compact));
       block-size: min(var(--cosimo-viewport-block), var(--cosimo-shell-height-compact));

@@ -1,4 +1,9 @@
 @layer cosimo.features.sources {
+  /*
+   * The source shelf reads as a graph legend: borderless glyph chips whose
+   * identity color is confined to the mark and a short underline. The
+   * attachment count is a raised plain numeral, and orphans are quiet.
+   */
   .cosimo-source-shelf {
     position: relative;
     z-index: var(--cosimo-z-sticky);
@@ -12,18 +17,15 @@
     display: flex;
     align-items: stretch;
     block-size: 100%;
-    padding-inline: var(--cosimo-space-2);
+    padding-inline: var(--cosimo-space-1);
   }
 
   .cosimo-source-chip {
-    --cosimo-source-chip-width: calc(var(--cosimo-hit-min) + var(--cosimo-space-3));
-
     position: relative;
     display: grid;
-    flex: 0 0 var(--cosimo-source-chip-width);
-    grid-template-columns: 1fr;
-    min-inline-size: var(--cosimo-source-chip-width);
-    min-block-size: var(--cosimo-hit-min);
+    flex: 0 0 var(--cosimo-source-chip);
+    min-inline-size: var(--cosimo-source-chip);
+    min-block-size: 0;
     place-items: center;
     overflow: clip;
     color: var(--cosimo-color-ink);
@@ -67,13 +69,8 @@
   .cosimo-source-chip__count {
     position: absolute;
     inset-block-start: var(--cosimo-space-1);
-    inset-inline-end: var(--cosimo-space-1);
-    display: grid;
-    min-inline-size: var(--cosimo-space-3);
-    block-size: var(--cosimo-space-3);
-    place-items: center;
-    color: var(--cosimo-color-paper);
-    background: var(--cosimo-color-ink);
+    inset-inline-end: var(--cosimo-space-2);
+    color: var(--cosimo-color-ink-muted);
     font-family: var(--cosimo-font-value);
     font-size: var(--cosimo-type-micro-size);
     font-variant-numeric: tabular-nums;
@@ -81,14 +78,13 @@
   }
 
   .cosimo-source-chip[data-selected] .cosimo-source-chip__count {
-    color: var(--cosimo-color-ink);
-    background: var(--cosimo-color-paper);
+    color: var(--cosimo-color-paper);
   }
 
   .cosimo-source-chip__semantic-rule {
     position: absolute;
-    inset-block-end: 0;
-    inset-inline: var(--cosimo-space-1);
+    inset-block-end: var(--cosimo-space-1);
+    inset-inline: var(--cosimo-space-4);
     block-size: var(--cosimo-stroke-semantic);
     background: var(--cosimo-source-color, var(--cosimo-color-accent));
   }
@@ -97,8 +93,8 @@
     display: grid;
     flex: 0 0 var(--cosimo-hit-min);
     min-inline-size: var(--cosimo-hit-min);
-    min-block-size: var(--cosimo-hit-min);
     place-items: center;
+    color: var(--cosimo-color-ink-muted);
     border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
@@ -123,6 +119,8 @@
     gap: var(--cosimo-space-1);
     padding-inline: var(--cosimo-space-2);
     border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    letter-spacing: var(--cosimo-type-tracking-label);
+    text-transform: uppercase;
   }
 
   .cosimo-source-shelf__popover > button:first-child {
@@ -167,6 +165,10 @@
     border: var(--cosimo-stroke-hairline) solid currentColor;
   }
 
+  /*
+   * Source editor: the source graphic keeps the same focal weight as a
+   * module graphic; the target list is the fixed secondary surface.
+   */
   .cosimo-source-editor {
     display: grid;
     grid-template-rows: 56% 44%;
@@ -178,17 +180,17 @@
 
   .cosimo-source-editor__primary {
     display: grid;
-    grid-template-rows: var(--cosimo-hit-min) minmax(0, 1fr);
+    grid-template-rows: var(--cosimo-module-header) minmax(0, 1fr);
     min-inline-size: 0;
     min-block-size: 0;
-    padding: 0 var(--cosimo-gutter-screen) var(--cosimo-space-2);
+    padding: 0 var(--cosimo-gutter) var(--cosimo-space-2);
   }
 
   .cosimo-source-editor__header {
     display: grid;
-    grid-template-columns: var(--cosimo-control-small) minmax(0, 1fr) auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
-    gap: var(--cosimo-space-1);
+    column-gap: var(--cosimo-space-2);
   }
 
   .cosimo-source-editor__identity {
@@ -206,6 +208,12 @@
     align-content: center;
   }
 
+  .cosimo-source-editor__title > strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .cosimo-source-editor__title > span {
     overflow: clip;
     color: var(--cosimo-color-ink-muted);
@@ -215,13 +223,18 @@
 
   .cosimo-source-editor__back {
     display: inline-flex;
-    min-inline-size: var(--cosimo-hit-min);
-    min-block-size: var(--cosimo-control-medium);
+    min-inline-size: 0;
+    min-block-size: var(--cosimo-control-small);
     align-items: center;
-    justify-content: center;
     gap: var(--cosimo-space-1);
     padding-inline: var(--cosimo-space-2);
-    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+  }
+
+  .cosimo-source-editor__back > span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .cosimo-source-shape {
@@ -230,7 +243,7 @@
     min-block-size: 0;
     overflow: clip;
     border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
-    background: var(--cosimo-color-paper-raised);
+    background: var(--cosimo-color-paper);
     touch-action: none;
   }
 
@@ -252,13 +265,13 @@
     stroke: var(--cosimo-source-color, var(--cosimo-color-accent));
     stroke-linecap: square;
     stroke-linejoin: miter;
-    stroke-width: var(--cosimo-stroke-semantic);
+    stroke-width: var(--cosimo-stroke-active);
     vector-effect: non-scaling-stroke;
   }
 
   .cosimo-source-shape__track {
     fill: none;
-    stroke: var(--cosimo-color-ink);
+    stroke: color-mix(in srgb, var(--cosimo-color-ink) 42%, transparent);
     stroke-width: var(--cosimo-stroke-hairline);
     vector-effect: non-scaling-stroke;
   }
@@ -286,8 +299,12 @@
     gap: var(--cosimo-space-1);
   }
 
+  .cosimo-source-shape__readouts .cosimo-type-label {
+    color: var(--cosimo-color-ink-muted);
+  }
+
   .cosimo-source-shape__readouts .cosimo-value {
-    inline-size: var(--cosimo-value-width-compact-percent);
+    inline-size: var(--cosimo-value-width-phase);
     text-align: start;
   }
 
@@ -303,11 +320,11 @@
 
   .cosimo-source-targets__toolbar {
     display: grid;
-    grid-template-columns: auto 1fr var(--cosimo-control-medium);
+    grid-template-columns: auto 1fr var(--cosimo-hit-min);
     align-items: center;
-    gap: var(--cosimo-space-1);
+    gap: var(--cosimo-space-2);
     min-block-size: var(--cosimo-control-medium);
-    padding-inline-start: var(--cosimo-gutter-screen);
+    padding-inline-start: var(--cosimo-gutter);
     border-block-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
@@ -318,9 +335,10 @@
 
   .cosimo-source-targets__toolbar > button {
     display: grid;
-    min-inline-size: var(--cosimo-control-medium);
+    min-inline-size: var(--cosimo-hit-min);
     min-block-size: var(--cosimo-control-medium);
     place-items: center;
+    color: var(--cosimo-color-ink-muted);
     border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
@@ -331,13 +349,11 @@
     inset-inline-end: var(--cosimo-space-2);
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--cosimo-hit-min);
-    min-inline-size: calc(
-      var(--cosimo-hit-min) + var(--cosimo-hit-min) + var(--cosimo-hit-min) +
-      var(--cosimo-hit-min) + var(--cosimo-hit-min)
-    );
+    min-inline-size: calc(var(--cosimo-hit-min) * 5);
     min-block-size: var(--cosimo-hit-min);
     border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
     background: var(--cosimo-color-paper-raised);
+    box-shadow: var(--cosimo-space-1) var(--cosimo-space-1) 0 color-mix(in srgb, var(--cosimo-color-ink) 16%, transparent);
   }
 
   .cosimo-source-targets__select,
@@ -358,6 +374,8 @@
     padding-inline: var(--cosimo-space-2) var(--cosimo-control-small);
     border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
     background: transparent;
+    font-family: var(--cosimo-font-value);
+    font-size: var(--cosimo-type-value-size);
   }
 
   .cosimo-source-targets__select > svg,
@@ -380,7 +398,7 @@
     align-content: start;
     min-inline-size: 0;
     min-block-size: 0;
-    padding: 0 var(--cosimo-gutter-screen) var(--cosimo-space-2);
+    padding: 0 var(--cosimo-gutter) var(--cosimo-space-2);
   }
 
   .is-dragging-source .cosimo-source-target[data-modulation-target] {
@@ -405,7 +423,6 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--cosimo-hit-min);
     min-inline-size: 0;
-    min-block-size: var(--cosimo-hit-min);
     border-block-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
     background: var(--cosimo-color-paper);
   }
@@ -427,7 +444,7 @@
     min-block-size: var(--cosimo-hit-min);
     grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-track-height) var(--cosimo-type-micro-line);
     align-content: center;
-    gap: var(--cosimo-space-micro);
+    row-gap: var(--cosimo-space-micro);
     padding-inline: var(--cosimo-space-2);
     touch-action: none;
     user-select: none;
@@ -452,7 +469,7 @@
     display: inline-flex;
     flex: 0 0 auto;
     align-items: center;
-    gap: var(--cosimo-space-micro);
+    gap: var(--cosimo-space-1);
     color: var(--cosimo-source-color, var(--cosimo-color-accent));
   }
 
@@ -466,36 +483,43 @@
     display: block;
     min-inline-size: 0;
     block-size: var(--cosimo-track-height);
-    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
   }
 
-  .cosimo-source-target__base-fill,
-  .cosimo-source-target__mapping-range {
+  .cosimo-source-target__track::before {
     position: absolute;
-    inset-block: calc(50% - (var(--cosimo-stroke-active) / 2));
-    block-size: var(--cosimo-stroke-active);
+    inset-block-start: 50%;
+    inset-inline: 0;
+    block-size: var(--cosimo-stroke-hairline);
+    background: color-mix(in srgb, var(--cosimo-color-ink) 42%, transparent);
+    content: "";
   }
 
   .cosimo-source-target__base-fill {
+    position: absolute;
+    inset-block: calc(50% - (var(--cosimo-stroke-active) / 2));
     inset-inline-start: 0;
+    block-size: var(--cosimo-stroke-active);
     background: var(--cosimo-color-ink);
   }
 
   .cosimo-source-target__mapping-range {
+    position: absolute;
+    inset-block: calc(50% - (var(--cosimo-stroke-semantic) / 2));
+    block-size: var(--cosimo-stroke-semantic);
     background: var(--cosimo-source-color, var(--cosimo-color-accent));
   }
 
-  .cosimo-source-target__default,
-  .cosimo-source-target__patch-base {
+  .cosimo-source-target__default {
     position: absolute;
-    inset-block: calc(var(--cosimo-space-micro) * -1);
-    inline-size: var(--cosimo-stroke-active);
-    background: var(--cosimo-color-ink);
+    inset-block: 0;
+    inline-size: var(--cosimo-stroke-hairline);
+    background: color-mix(in srgb, var(--cosimo-color-ink) 62%, transparent);
     transform: translateX(-50%);
   }
 
   .cosimo-source-target__patch-base {
-    inset-block: calc(var(--cosimo-space-micro) * -1);
+    position: absolute;
+    inset-block: 0;
     inline-size: var(--cosimo-stroke-hairline);
     border-inline-start: var(--cosimo-stroke-hairline) dashed var(--cosimo-articulation-color);
     transform: translateX(-50%);
@@ -506,13 +530,20 @@
     inset-block-start: 50%;
     inline-size: var(--cosimo-marker-size);
     block-size: var(--cosimo-marker-size);
-    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
-    background: var(--cosimo-color-paper);
+    background: var(--cosimo-color-ink);
     transform: translate(-50%, -50%);
+  }
+
+  .cosimo-source-target__values {
+    color: var(--cosimo-color-ink-muted);
   }
 
   .cosimo-source-target__values .cosimo-value:first-child {
     text-align: start;
+  }
+
+  .cosimo-source-target__values .cosimo-value:last-child {
+    color: var(--cosimo-source-color, var(--cosimo-color-accent));
   }
 
   .cosimo-source-target__open {
@@ -520,41 +551,38 @@
     min-inline-size: var(--cosimo-hit-min);
     min-block-size: var(--cosimo-hit-min);
     place-items: center;
+    color: var(--cosimo-color-ink-muted);
     border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
   .cosimo-source-target__detail {
-    display: grid;
+    display: flex;
     grid-column: 1 / -1;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
     min-block-size: var(--cosimo-hit-min);
-    align-items: end;
-    gap: var(--cosimo-space-1);
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--cosimo-space-2);
     padding: var(--cosimo-space-1) var(--cosimo-space-2) var(--cosimo-space-2);
     border-inline-start: var(--cosimo-stroke-semantic) solid var(--cosimo-source-color, var(--cosimo-color-accent));
     border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
-  .cosimo-source-target[data-articulation-override="true"] .cosimo-source-target__detail {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto auto;
-  }
-
-  .cosimo-source-target__detail > label {
-    display: grid;
-    min-inline-size: 0;
-    gap: var(--cosimo-space-micro);
-  }
-
   .cosimo-source-target__remove,
   .cosimo-source-target__clear-override {
     display: inline-flex;
-    min-inline-size: var(--cosimo-hit-min);
     min-block-size: var(--cosimo-control-small);
     align-items: center;
     justify-content: center;
     gap: var(--cosimo-space-1);
     padding-inline: var(--cosimo-space-2);
     border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    letter-spacing: var(--cosimo-type-tracking-label);
+    text-transform: uppercase;
+  }
+
+  .cosimo-source-target__remove {
+    margin-inline-start: auto;
+    color: var(--cosimo-color-ink-muted);
   }
 
   .cosimo-source-target__clear-override {
@@ -569,40 +597,23 @@
   }
 
   @media (max-width: 380px), (max-height: 720px) { /* style-contract-allow-raw: named compact viewport breakpoint */
-    .cosimo-source-shelf__scroller {
-      padding-inline: var(--cosimo-gutter-compact);
-    }
-
-    .cosimo-source-chip {
-      --cosimo-source-chip-width: calc(var(--cosimo-hit-min) + var(--cosimo-space-2));
-    }
-
     .cosimo-source-editor {
-      grid-template-rows: 51% 49%;
+      grid-template-rows: 52% 48%;
     }
 
     .cosimo-source-editor__primary {
-      padding-inline: var(--cosimo-gutter-compact);
       padding-block-end: var(--cosimo-space-1);
+    }
+
+    .cosimo-source-editor__title > span {
+      display: none;
     }
 
     .cosimo-source-editor__back {
       max-inline-size: calc(var(--cosimo-hit-min) * 3);
-      padding-inline: var(--cosimo-space-1);
-    }
-
-    .cosimo-source-editor__back > span {
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .cosimo-source-targets__toolbar {
-      padding-inline-start: var(--cosimo-gutter-compact);
     }
 
     .cosimo-source-targets__list {
-      padding-inline: var(--cosimo-gutter-compact);
       padding-block-end: var(--cosimo-space-1);
     }
 

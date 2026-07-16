@@ -7,7 +7,7 @@ export function readGraphicValue(values, parameterId, fallback = 50) {
 }
 
 export function createPlotFrame(width, height) {
-  const left = 24;
+  const left = 32;
   const right = width - 12;
   const top = 24;
   const bottom = height - 26;
@@ -22,7 +22,7 @@ export function createPlotFrame(width, height) {
   };
 }
 
-export function drawPlotGrid(context, frame, { accent, graph, gridLabels = false, ink } = {}) {
+export function drawPlotGrid(context, frame, { graph, gridLabels = false, muted } = {}) {
   context.save();
   context.strokeStyle = graph || context.strokeStyle;
   context.lineWidth = 1;
@@ -44,15 +44,14 @@ export function drawPlotGrid(context, frame, { accent, graph, gridLabels = false
   }
 
   context.setLineDash([]);
-  context.strokeStyle = accent || context.strokeStyle;
   context.beginPath();
   context.moveTo(frame.left, frame.top + frame.height / 2);
   context.lineTo(frame.right, frame.top + frame.height / 2);
   context.stroke();
 
   if (gridLabels) {
-    context.fillStyle = ink || context.fillStyle;
-    context.font = "9px monospace";
+    context.fillStyle = muted || context.fillStyle;
+    context.font = '10px "Cosimo Instrument Mono", monospace';
     context.textAlign = "right";
     context.fillText("+1.0", frame.left - 4, frame.top + 3);
     context.fillText("0", frame.left - 4, frame.top + frame.height / 2 + 3);

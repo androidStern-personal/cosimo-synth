@@ -36,7 +36,7 @@ export function ModuleGraphicCanvas({
       );
       const ink = readToken("--cosimo-color-ink", computedStyle.color);
       const paper = readToken("--cosimo-color-paper", computedStyle.backgroundColor);
-      const accent = readToken("--cosimo-color-accent", ink);
+      const muted = readToken("--cosimo-color-ink-muted", ink);
       const graph = readToken("--cosimo-color-graph", ink);
 
       context.setTransform(ratio, 0, 0, ratio, 0, 0);
@@ -47,8 +47,8 @@ export function ModuleGraphicCanvas({
       context.lineJoin = "round";
 
       const frame = createPlotFrame(bounds.width, bounds.height);
-      drawPlotGrid(context, frame, { accent, graph, gridLabels, ink });
-      draw({ context, frame, values, colors: { accent, graph, ink, paper } });
+      drawPlotGrid(context, frame, { graph, gridLabels, muted });
+      draw({ context, frame, values, colors: { graph, ink, muted, paper } });
     };
 
     render();

@@ -6,7 +6,6 @@ export function WireRange({
   defaultValue = minimum,
   secondaryMarker = null,
   secondaryMarkerColor = "currentColor",
-  accent = "currentColor",
   onChange,
 }) {
   const span = maximum - minimum || 1;
@@ -17,7 +16,7 @@ export function WireRange({
     : ((secondaryMarker - minimum) / span) * 100;
 
   return (
-    <span className="wire-range" style={{ "--range-accent": accent }}>
+    <span className="wire-range">
       <span aria-hidden="true" className="wire-range__track">
         <span className="wire-range__fill" style={{ width: `${position}%` }} />
         <span className="wire-range__default" style={{ left: `${defaultPosition}%` }} />

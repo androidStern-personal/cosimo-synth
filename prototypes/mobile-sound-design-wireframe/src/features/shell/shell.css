@@ -1,28 +1,45 @@
 @layer cosimo.features {
+  /*
+   * Rule ownership: the header and rack own their block-end structural
+   * rules; the source shelf and audition transport own their block-start
+   * rules. No region draws a rule another region already owns.
+   */
   .cosimo-synth-shell__header,
-  .cosimo-synth-shell__rack,
-  .cosimo-synth-shell__sources,
-  .cosimo-synth-shell__audition {
+  .cosimo-synth-shell__rack {
     border-block-end: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
   }
 
+  .cosimo-synth-shell__sources,
   .cosimo-synth-shell__audition {
-    border-block-end: 0;
+    border-block-start: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
   }
 
   .cosimo-synth-shell__workspace {
     background: var(--cosimo-color-paper);
   }
 
+  .cosimo-synth-shell__sources {
+    overflow: visible;
+  }
+
+  /*
+   * The transient value readout floats over the top of the workspace where
+   * the eye already rests during a drag. It is an overlay: it can never
+   * displace layout, and it is silent when no edit is in flight.
+   */
   .cosimo-global-hud {
     position: absolute;
     z-index: var(--cosimo-z-popover);
-    inset-block-start: var(--cosimo-space-1);
+    inset-block-start: calc(
+      var(--cosimo-shell-header)
+      + var(--cosimo-shell-rack)
+      + var(--cosimo-module-header)
+      + var(--cosimo-space-2)
+    );
     inset-inline-start: 50%;
     inline-size: max-content;
     max-inline-size: calc(100% - var(--cosimo-space-5));
-    min-block-size: var(--cosimo-control-small);
-    padding: var(--cosimo-space-2);
+    padding: var(--cosimo-space-1) var(--cosimo-space-2);
     overflow: visible;
     color: var(--cosimo-color-paper);
     background: var(--cosimo-color-ink);
@@ -42,11 +59,6 @@
     max-inline-size: calc(100% - var(--cosimo-space-5));
   }
 
-  .cosimo-synth-shell__sources {
-    border-block-start: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
-    overflow: visible;
-  }
-
   .cosimo-instrument-header {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -60,11 +72,9 @@
   .cosimo-instrument-header__menu {
     display: flex;
     min-inline-size: 0;
-    min-block-size: var(--cosimo-control-large);
     align-items: center;
     gap: var(--cosimo-space-1);
     padding-inline: var(--cosimo-space-2);
-    font-size: var(--cosimo-header-type-size);
     white-space: nowrap;
   }
 
@@ -86,6 +96,7 @@
     grid-template-columns: repeat(3, var(--cosimo-hit-min));
     block-size: 100%;
     align-items: center;
+    justify-items: center;
     touch-action: pan-y;
     transform: translateX(calc(var(--cosimo-workspace-drag, 0) * 0.15));
   }
@@ -93,14 +104,21 @@
   .cosimo-workspace-carousel__neighbor,
   .cosimo-workspace-carousel__current {
     display: grid;
-    inline-size: var(--cosimo-hit-min);
-    block-size: var(--cosimo-hit-min);
+    inline-size: var(--cosimo-carousel-cell);
+    block-size: var(--cosimo-carousel-cell);
     place-items: center;
   }
 
   .cosimo-workspace-carousel__neighbor {
+    position: relative;
     color: var(--cosimo-color-ink-muted);
-    border-inline: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .cosimo-workspace-carousel__neighbor::after {
+    position: absolute;
+    inset: calc((var(--cosimo-hit-min) - var(--cosimo-carousel-cell)) / -2);
+    content: "";
   }
 
   .cosimo-workspace-carousel__current {
@@ -109,19 +127,8 @@
   }
 
   @media (max-width: 380px), (max-height: 720px) { /* style-contract-allow-raw: named compact viewport breakpoint */
-    .cosimo-instrument-header__patch,
-    .cosimo-instrument-header__menu {
-      padding-inline: var(--cosimo-gutter-compact);
-    }
-
     .cosimo-instrument-header__menu span {
       display: none;
-    }
-
-    .cosimo-workspace-carousel__neighbor,
-    .cosimo-workspace-carousel__current {
-      inline-size: var(--cosimo-hit-min);
-      block-size: 100%;
     }
   }
 }

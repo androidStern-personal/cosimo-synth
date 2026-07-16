@@ -1,5 +1,4 @@
 import { useAxisDrag } from "../../interactions/useAxisDrag.js";
-import { ArrowsHorizontal, ArrowsVertical } from "@phosphor-icons/react";
 import { ArticulationIcon, SourceIdentity } from "../../design-system/IdentityMark.jsx";
 
 function percent(value) {
@@ -100,9 +99,9 @@ export function ParameterControl({
           "--parameter-mapping-start": `${mappingStart}%`,
           "--parameter-mapping-width": `${mappingWidth}%`,
           "--cosimo-semantic-color": control.activeSourceColor,
-          "--parameter-edit-color": control.articulationOverride
-            ? control.articulationColor
-            : "var(--cosimo-color-accent)",
+          ...(control.articulationOverride
+            ? { "--parameter-edit-color": control.articulationColor }
+            : null),
         }}
       >
         <span className="parameter-control__base" />
@@ -121,9 +120,14 @@ export function ParameterControl({
       </span>
 
       <span className="parameter-control__foot">
-        <span className="parameter-control__axis"><ArrowsHorizontal aria-hidden="true" size={10} /> X BASE</span>
+        <span className="parameter-control__axis">X BASE</span>
         <output className="cosimo-value" data-value-kind="signed">
-          <ArrowsVertical aria-hidden="true" size={10} />{activeMapping ? `Y ${percent(mappingAmount)}` : "Y NO SOURCE"}
+          {activeMapping ? `Y ${percent(mappingAmount)}` : (
+            <>
+              <span className="parameter-control__y-full">Y NO SOURCE</span>
+              <span className="parameter-control__y-compact">Y —</span>
+            </>
+          )}
         </output>
       </span>
     </button>

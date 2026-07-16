@@ -1,6 +1,25 @@
-import { ArrowSquareOut, Trash } from "@phosphor-icons/react";
+import { ArrowSquareOut, X } from "@phosphor-icons/react";
 import { SourceIdentity } from "../../design-system/IdentityMark.jsx";
 import { formatSignedPercent } from "../../domain/formatting.js";
+
+function SegmentedSetting({ ariaLabel, onChoose, options, value }) {
+  return (
+    <div aria-label={ariaLabel} className="cosimo-segmented" role="group">
+      {options.map((option) => (
+        <button
+          aria-pressed={option === value}
+          className="cosimo-type-label"
+          data-state={option === value ? "selected" : undefined}
+          key={option}
+          onClick={() => onChoose(option)}
+          type="button"
+        >
+          {option}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 export function MappingDetail({
   color,
@@ -16,7 +35,14 @@ export function MappingDetail({
   if (!mapping || !source) {
     return (
       <div className="mapping-detail mapping-detail--empty">
-        <span className="cosimo-type-micro">SELECT A SOURCE OR ADD A MAPPING</span>
+        <div className="mapping-detail__source">
+          <span className="cosimo-type-micro">NO SOURCE</span>
+        </div>
+        <div className="mapping-detail__relationship">
+          <span className="cosimo-type-micro">TO {targetLabel}</span>
+          <output className="cosimo-value" data-value-kind="signed">—</output>
+        </div>
+        <div className="mapping-detail__settings" />
       </div>
     );
   }
@@ -29,16 +55,17 @@ export function MappingDetail({
     >
       {source.type === "fixed" ? (
         <div className="mapping-detail__source" data-navigable="false">
-          <SourceIdentity color={color} includeName source={source} size={21} />
+          <SourceIdentity color={color} includeName source={source} size={16} />
         </div>
       ) : (
         <button
+          aria-label={`Open ${source.label} editor`}
           className="mapping-detail__source"
           onClick={() => onOpenSource(source.id)}
           type="button"
         >
-          <SourceIdentity color={color} includeName source={source} size={21} />
-          <ArrowSquareOut aria-hidden="true" size={15} />
+          <SourceIdentity color={color} includeName source={source} size={16} />
+          <ArrowSquareOut aria-hidden="true" size={13} />
         </button>
       )}
 
@@ -47,38 +74,31 @@ export function MappingDetail({
         <output className="cosimo-value" data-value-kind="signed">
           {formatSignedPercent(mapping.amount)}
         </output>
-      </div>
-
-      <div className="mapping-detail__settings">
-        <select
-          aria-label="Mapping polarity"
-          className="mapping-detail__select"
-          onChange={(event) => onSetPolarity(mapping.id, event.target.value)}
-          value={mapping.polarity}
-        >
-          <option>Bipolar</option>
-          <option>Unipolar</option>
-        </select>
-        {needsReducer && (
-          <select
-            aria-label="Per-note reducer"
-            className="mapping-detail__select"
-            onChange={(event) => onSetReducer(mapping.id, event.target.value)}
-            value={mapping.reducer}
-          >
-            <option>Max</option>
-            <option>Mean</option>
-          </select>
-        )}
         <button
           aria-label={`Remove ${source.label} mapping`}
           className="mapping-detail__remove"
           onClick={() => onRemove(mapping.id)}
           type="button"
         >
-          <Trash aria-hidden="true" size={17} />
-          <span>REMOVE</span>
+          <X aria-hidden="true" size={14} />
         </button>
+      </div>
+
+      <div className="mapping-detail__settings">
+        <SegmentedSetting
+          ariaLabel="Mapping polarity"
+          onChoose={(polarity) => onSetPolarity(mapping.id, polarity)}
+          options={["Bipolar", "Unipolar"]}
+          value={mapping.polarity}
+        />
+        {needsReducer && (
+          <SegmentedSetting
+            ariaLabel="Per-note reducer"
+            onChoose={(reducer) => onSetReducer(mapping.id, reducer)}
+            options={["Max", "Mean"]}
+            value={mapping.reducer}
+          />
+        )}
       </div>
     </div>
   );

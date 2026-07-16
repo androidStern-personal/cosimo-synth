@@ -1,4 +1,10 @@
 @layer cosimo.foundation {
+  /*
+   * The shared continuous-control language: a quiet full-width baseline, a
+   * strong fill up to the current value, a filled square handle, and a
+   * default tick. Everything derives from currentColor so black/white
+   * inversion needs no per-surface overrides.
+   */
   .wire-range {
     position: relative;
     display: block;
@@ -16,24 +22,25 @@
     inset-block-start: 50%;
     inset-inline: 0;
     block-size: var(--cosimo-stroke-hairline);
-    background: var(--cosimo-color-ink);
+    background: color-mix(in srgb, currentColor 42%, transparent);
     content: "";
   }
 
   .wire-range__fill {
     position: absolute;
-    inset-block-start: calc(50% - var(--cosimo-stroke-semantic) / 2);
+    inset-block-start: calc(50% - var(--cosimo-stroke-active) / 2);
     inset-inline-start: 0;
-    block-size: var(--cosimo-stroke-semantic);
-    background: var(--range-accent);
+    block-size: var(--cosimo-stroke-active);
+    background: currentColor;
   }
 
   .wire-range__default {
     position: absolute;
     inset-block-start: 0;
-    inline-size: var(--cosimo-stroke-active);
+    inline-size: var(--cosimo-stroke-hairline);
     block-size: 100%;
-    background: var(--cosimo-color-ink);
+    background: color-mix(in srgb, currentColor 62%, transparent);
+    transform: translateX(-50%);
   }
 
   .wire-range__secondary {
@@ -51,15 +58,15 @@
     inline-size: var(--cosimo-marker-size);
     block-size: var(--cosimo-marker-size);
     translate: -50% -50%;
-    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
-    background: var(--cosimo-color-paper);
+    background: currentColor;
   }
 
   .wire-range input {
     position: absolute;
-    inset: 0;
+    inset-block: calc((var(--cosimo-hit-min) - var(--cosimo-track-height)) / -2);
+    inset-inline: 0;
     inline-size: 100%;
-    block-size: 100%;
+    block-size: auto;
     cursor: ew-resize;
     opacity: 0;
   }

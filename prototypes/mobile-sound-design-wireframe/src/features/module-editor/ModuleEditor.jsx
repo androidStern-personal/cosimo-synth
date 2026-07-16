@@ -24,8 +24,8 @@ export function ModuleEditor({
   return (
     <section className="module-editor" aria-labelledby="module-editor-title">
       <header className="module-editor__header">
-        <div>
-          <h1 className="cosimo-type-module" id="module-editor-title">{module.label}</h1>
+        <div className="module-editor__title">
+          <h1 className="cosimo-type-display" id="module-editor-title">{module.label}</h1>
           <p className="cosimo-type-micro">
             {module.workspace === "effects" ? "GLOBAL EFFECT · PATCH BASE" : "PER-NOTE VOICE"}
           </p>
@@ -33,7 +33,7 @@ export function ModuleEditor({
         <div className="module-editor__context">
           {returnAction && (
             <button className="module-editor__return" onClick={returnAction.onReturn} type="button">
-              <ArrowLeft aria-hidden="true" size={15} />
+              <ArrowLeft aria-hidden="true" size={13} />
               <span className="cosimo-type-label">{returnAction.label}</span>
             </button>
           )}

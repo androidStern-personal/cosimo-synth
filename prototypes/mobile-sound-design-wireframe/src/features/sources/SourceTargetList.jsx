@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowSquareOut, CaretDown, Plus, Trash } from "@phosphor-icons/react";
-import { ArticulationIcon, SourceIcon } from "../../design-system/IdentityMark.jsx";
+import { ArrowSquareOut, CaretDown, Plus, X } from "@phosphor-icons/react";
+import { ArticulationIcon } from "../../design-system/IdentityMark.jsx";
 import { useAxisDrag } from "../../interactions/useAxisDrag.js";
 
 const clamp = (value, minimum = 0, maximum = 100) =>
@@ -108,18 +108,14 @@ export function SourceTargetRow({
       >
         <span className="cosimo-source-target__heading">
           <span className="cosimo-type-label">{target.moduleLabel} · {target.label}</span>
-          <span className="cosimo-source-target__source-mark">
-            {row.articulationOverride && (
-              <span
-                className="cosimo-source-target__articulation"
-                style={{ "--cosimo-articulation-color": row.articulationColor }}
-              >
-                <ArticulationIcon articulation={row.articulationOverride.articulationId} size={13} />
-              </span>
-            )}
-            <SourceIcon source={source} size={14} />
-            <span className="cosimo-value" data-value-kind="signed">{signedPercent(mapping.amount)}</span>
-          </span>
+          {row.articulationOverride && (
+            <span
+              className="cosimo-source-target__articulation"
+              style={{ "--cosimo-articulation-color": row.articulationColor }}
+            >
+              <ArticulationIcon articulation={row.articulationOverride.articulationId} size={13} />
+            </span>
+          )}
         </span>
         <span aria-hidden="true" className="cosimo-source-target__track">
           <span className="cosimo-source-target__base-fill" style={{ inlineSize: `${row.baseValue}%` }} />
@@ -157,45 +153,36 @@ export function SourceTargetRow({
 
       {selected && (
         <div className="cosimo-source-target__detail">
-          <label>
-            <span className="cosimo-type-label">Polarity</span>
-            <span className="cosimo-source-target__select">
-              <select
-                aria-label={`${target.label} polarity`}
-                onChange={(event) => onPolarityChange?.({ mappingId: mapping.id, polarity: event.target.value })}
-                value={mapping.polarity}
+          <div aria-label={`${target.label} polarity`} className="cosimo-segmented" role="group">
+            {["Bipolar", "Unipolar"].map((polarity) => (
+              <button
+                aria-pressed={mapping.polarity === polarity}
+                className="cosimo-type-label"
+                data-state={mapping.polarity === polarity ? "selected" : undefined}
+                key={polarity}
+                onClick={() => onPolarityChange?.({ mappingId: mapping.id, polarity })}
+                type="button"
               >
-                <option>Bipolar</option>
-                <option>Unipolar</option>
-              </select>
-              <CaretDown aria-hidden="true" size={13} />
-            </span>
-          </label>
+                {polarity}
+              </button>
+            ))}
+          </div>
           {row.needsReducer && (
-            <label>
-              <span className="cosimo-type-label">Reducer</span>
-              <span className="cosimo-source-target__select">
-                <select
-                  aria-label={`${target.label} reducer`}
-                  onChange={(event) => onReducerChange?.({ mappingId: mapping.id, reducer: event.target.value })}
-                  value={mapping.reducer}
+            <div aria-label={`${target.label} reducer`} className="cosimo-segmented" role="group">
+              {["Max", "Mean"].map((reducer) => (
+                <button
+                  aria-pressed={mapping.reducer === reducer}
+                  className="cosimo-type-label"
+                  data-state={mapping.reducer === reducer ? "selected" : undefined}
+                  key={reducer}
+                  onClick={() => onReducerChange?.({ mappingId: mapping.id, reducer })}
+                  type="button"
                 >
-                  <option>Max</option>
-                  <option>Mean</option>
-                </select>
-                <CaretDown aria-hidden="true" size={13} />
-              </span>
-            </label>
+                  {reducer}
+                </button>
+              ))}
+            </div>
           )}
-          <button
-            aria-label={`Remove ${source.label} mapping from ${target.moduleLabel} ${target.label}`}
-            className="cosimo-source-target__remove"
-            onClick={() => onRemove?.(mapping.id)}
-            type="button"
-          >
-            <Trash aria-hidden="true" size={16} />
-            <span>Remove</span>
-          </button>
           {row.articulationOverride && (
             <button
               aria-label={`Clear ${row.articulationOverride.articulationId} override for ${target.moduleLabel} ${target.label}`}
@@ -207,6 +194,15 @@ export function SourceTargetRow({
               <span>Reset override</span>
             </button>
           )}
+          <button
+            aria-label={`Remove ${source.label} mapping from ${target.moduleLabel} ${target.label}`}
+            className="cosimo-source-target__remove"
+            onClick={() => onRemove?.(mapping.id)}
+            type="button"
+          >
+            <X aria-hidden="true" size={14} />
+            <span>Remove</span>
+          </button>
         </div>
       )}
     </article>

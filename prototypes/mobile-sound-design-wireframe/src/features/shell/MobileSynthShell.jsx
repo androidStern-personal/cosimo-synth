@@ -125,7 +125,7 @@ export function WorkspaceCarousel({
         onClick={() => onWorkspaceChange?.(previousWorkspace.id)}
         type="button"
       >
-        <WorkspaceGlyph size={18} workspace={previousWorkspace} />
+        <WorkspaceGlyph size={15} workspace={previousWorkspace} />
       </button>
       <div
         aria-current="page"
@@ -133,7 +133,7 @@ export function WorkspaceCarousel({
         className="cosimo-workspace-carousel__current"
         role="img"
       >
-        <WorkspaceGlyph size={27} workspace={activeWorkspace} />
+        <WorkspaceGlyph size={20} workspace={activeWorkspace} />
       </div>
       <button
         aria-label={`Next workspace: ${nextWorkspace.label}`}
@@ -141,7 +141,7 @@ export function WorkspaceCarousel({
         onClick={() => onWorkspaceChange?.(nextWorkspace.id)}
         type="button"
       >
-        <WorkspaceGlyph size={18} workspace={nextWorkspace} />
+        <WorkspaceGlyph size={15} workspace={nextWorkspace} />
       </button>
     </div>
   );
@@ -182,7 +182,7 @@ export function InstrumentHeader({
         type="button"
       >
         <span>Menu</span>
-        <List aria-hidden="true" size={22} weight="regular" />
+        <List aria-hidden="true" size={20} weight="regular" />
       </button>
     </header>
   );

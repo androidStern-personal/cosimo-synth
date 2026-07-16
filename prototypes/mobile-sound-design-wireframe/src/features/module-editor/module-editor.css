@@ -2,17 +2,17 @@
   .module-editor {
     display: grid;
     grid-template-rows:
-      var(--cosimo-module-header-master)
-      var(--cosimo-module-graphic-master)
-      minmax(var(--cosimo-space-0), 1fr);
+      var(--cosimo-module-header)
+      minmax(var(--cosimo-graphic-min-block), 1fr)
+      auto;
     min-inline-size: 0;
     min-block-size: 0;
-    padding-inline: var(--cosimo-space-3);
+    padding-inline: var(--cosimo-gutter);
+    padding-block-end: var(--cosimo-space-2);
     overflow: clip;
   }
 
   .module-editor__header {
-    position: relative;
     display: flex;
     min-inline-size: 0;
     align-items: center;
@@ -20,23 +20,33 @@
     gap: var(--cosimo-space-2);
   }
 
-  .module-editor__header h1,
-  .module-editor__header p {
-    margin: 0;
+  .module-editor__title {
+    display: grid;
+    min-inline-size: 0;
+    align-content: center;
   }
 
-  .module-editor__hud {
-    inline-size: min(var(--cosimo-value-width-mod-status), 100%);
-    min-block-size: var(--cosimo-type-value-line);
+  .module-editor__title h1 {
+    margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .module-editor__title p {
+    margin: 0;
+    overflow: hidden;
     color: var(--cosimo-color-ink-muted);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .module-editor__context {
     display: flex;
     min-inline-size: 0;
+    flex: 0 1 auto;
     align-items: center;
     justify-content: flex-end;
-    gap: var(--cosimo-space-1);
   }
 
   .module-editor__return {
@@ -46,6 +56,7 @@
     align-items: center;
     gap: var(--cosimo-space-1);
     padding-inline: var(--cosimo-space-2);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
   }
 
   .module-editor__return > span {
@@ -58,6 +69,7 @@
     position: relative;
     min-inline-size: 0;
     min-block-size: 0;
+    margin-block-end: var(--cosimo-space-2);
     overflow: clip;
   }
 
@@ -69,25 +81,35 @@
     touch-action: none;
   }
 
+  /*
+   * Persistent compound settings live inside the graphic in a reserved
+   * overlay lane so parameter selection never moves the editor.
+   */
   .compound-controls {
     position: absolute;
     z-index: var(--cosimo-z-content);
     inset-block-start: var(--cosimo-space-2);
     inset-inline-end: var(--cosimo-space-2);
     display: grid;
-    grid-template-columns: repeat(3, var(--cosimo-hit-min)) var(--cosimo-compound-division-width);
-    min-block-size: var(--cosimo-control-small);
+    grid-auto-flow: column;
+    grid-auto-columns: auto;
+    block-size: var(--cosimo-control-small);
     align-items: stretch;
-    border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
     background: var(--cosimo-color-paper);
   }
 
   .compound-controls > * {
     position: relative;
-    display: grid;
+    display: inline-grid;
     min-inline-size: 0;
-    padding-inline: var(--cosimo-space-1);
+    padding-inline: var(--cosimo-space-2);
     place-items: center;
+    white-space: nowrap;
+  }
+
+  .compound-controls > span:first-child {
+    color: var(--cosimo-color-ink-muted);
   }
 
   .compound-controls > button::after {
@@ -108,6 +130,7 @@
 
   .compound-controls__division {
     position: relative;
+    inline-size: var(--cosimo-compound-division-width);
     padding: 0;
     background: var(--cosimo-color-paper);
   }
@@ -117,9 +140,11 @@
     inset-block: calc((var(--cosimo-hit-min) - var(--cosimo-control-small)) / -2);
     inset-inline: 0;
     inline-size: 100%;
-    block-size: 100%;
+    block-size: auto;
     padding-inline: var(--cosimo-space-2) var(--cosimo-space-4);
     background: transparent;
+    font-family: var(--cosimo-font-value);
+    font-size: var(--cosimo-type-value-size);
     text-align: start;
   }
 
@@ -131,24 +156,30 @@
     translate: 0 -50%;
   }
 
+  /*
+   * One borderless calibration matrix: a single hairline boundary, internal
+   * hairline separators, and aligned typography do the grouping. Cells are
+   * large invisible touch surfaces.
+   */
   .parameter-matrix {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: minmax(var(--cosimo-parameter-cell-min), 1fr);
+    grid-auto-rows: var(--cosimo-matrix-row);
     min-inline-size: 0;
     min-block-size: 0;
-    border-inline: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
     overflow: clip;
   }
 
   .parameter-control {
     position: relative;
     display: grid;
-    grid-template-rows: auto var(--cosimo-track-height) auto;
+    grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-track-lane) var(--cosimo-type-micro-line);
+    align-content: center;
+    row-gap: var(--cosimo-space-micro);
     min-inline-size: 0;
-    min-block-size: var(--cosimo-parameter-cell-min);
-    padding: var(--cosimo-space-2);
-    border-block-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    min-block-size: 0;
+    padding-inline: var(--cosimo-space-3);
     touch-action: none;
   }
 
@@ -156,8 +187,13 @@
     border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
+  .parameter-control:nth-child(n + 3) {
+    border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
   .parameter-control[data-state="selected"] {
-    box-shadow: inset var(--cosimo-stroke-active) 0 0 var(--cosimo-color-ink);
+    outline: var(--cosimo-stroke-active) solid var(--cosimo-color-ink);
+    outline-offset: calc(var(--cosimo-stroke-active) * -1);
   }
 
   .parameter-control[data-drop-target="true"] {
@@ -196,23 +232,16 @@
     gap: var(--cosimo-space-1);
   }
 
-  .parameter-control__axis {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--cosimo-space-micro);
-  }
-
-  .parameter-control__foot .cosimo-value {
-    display: inline-flex;
-    inline-size: var(--cosimo-value-width-mod-status);
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--cosimo-space-micro);
+  .parameter-control__heading > .cosimo-type-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .parameter-control__identities {
     display: inline-flex;
     min-inline-size: 0;
+    flex: 0 0 auto;
     align-items: center;
     gap: var(--cosimo-space-1);
   }
@@ -228,7 +257,7 @@
     display: block;
     align-self: center;
     inline-size: 100%;
-    block-size: var(--cosimo-track-height);
+    block-size: var(--cosimo-track-lane);
   }
 
   .parameter-control__track::before {
@@ -236,26 +265,25 @@
     inset-block-start: 50%;
     inset-inline: 0;
     block-size: var(--cosimo-stroke-hairline);
-    background: var(--cosimo-color-ink);
+    background: color-mix(in srgb, var(--cosimo-color-ink) 42%, transparent);
     content: "";
   }
 
-  .parameter-control__base,
+  .parameter-control__base {
+    position: absolute;
+    inset-block-start: calc(50% - var(--cosimo-stroke-active) / 2);
+    inset-inline-start: 0;
+    inline-size: var(--parameter-base);
+    block-size: var(--cosimo-stroke-active);
+    background: var(--parameter-edit-color, var(--cosimo-color-ink));
+  }
+
   .parameter-control__mapping {
     position: absolute;
     inset-block-start: calc(50% - var(--cosimo-stroke-semantic) / 2);
-    inset-inline-start: 0;
-    block-size: var(--cosimo-stroke-semantic);
-  }
-
-  .parameter-control__base {
-    inline-size: var(--parameter-base);
-    background: var(--parameter-edit-color, var(--cosimo-color-accent));
-  }
-
-  .parameter-control__mapping {
     inset-inline-start: var(--parameter-mapping-start);
     inline-size: var(--parameter-mapping-width);
+    block-size: var(--cosimo-stroke-semantic);
     background: var(--cosimo-semantic-color);
   }
 
@@ -269,9 +297,9 @@
 
   .parameter-control__default {
     inset-inline-start: var(--parameter-default);
-    inline-size: var(--cosimo-stroke-active);
+    inline-size: var(--cosimo-stroke-hairline);
     block-size: var(--cosimo-track-height);
-    background: var(--cosimo-color-ink);
+    background: color-mix(in srgb, var(--cosimo-color-ink) 62%, transparent);
   }
 
   .parameter-control__patch-base {
@@ -284,14 +312,32 @@
     inset-inline-start: var(--parameter-base);
     inline-size: var(--cosimo-marker-size);
     block-size: var(--cosimo-marker-size);
-    border: var(--cosimo-stroke-hairline) solid var(--parameter-edit-color, var(--cosimo-color-ink));
-    background: var(--cosimo-color-paper);
+    background: var(--parameter-edit-color, var(--cosimo-color-ink));
   }
 
   .parameter-control__foot {
+    color: var(--cosimo-color-ink-muted);
     font-family: var(--cosimo-font-value);
     font-size: var(--cosimo-type-micro-size);
     line-height: var(--cosimo-type-micro-line);
+  }
+
+  .parameter-control__foot .cosimo-value {
+    display: inline-flex;
+    inline-size: var(--cosimo-value-width-mod-status);
+    align-items: center;
+    justify-content: flex-end;
+    color: inherit;
+    font-size: inherit;
+    line-height: inherit;
+  }
+
+  .parameter-control[data-state="selected"] .parameter-control__foot {
+    color: var(--cosimo-color-ink);
+  }
+
+  .parameter-control__y-compact {
+    display: none;
   }
 
   .source-identity {
@@ -312,18 +358,11 @@
   .source-identity__name {
     overflow: hidden;
     text-overflow: ellipsis;
+    text-transform: uppercase;
   }
 
   @media (max-width: 380px), (max-height: 720px) { /* style-contract-allow-raw: named compact viewport breakpoint */
-    .module-editor {
-      grid-template-rows:
-        var(--cosimo-module-header-compact)
-        var(--cosimo-module-graphic-compact)
-        minmax(var(--cosimo-space-0), 1fr);
-      padding-inline: var(--cosimo-space-2);
-    }
-
-    .module-editor__header .cosimo-type-micro {
+    .module-editor__title p {
       display: none;
     }
 
@@ -331,16 +370,8 @@
       max-inline-size: 70%;
     }
 
-    .module-editor__hud:not([data-active="true"]) {
-      display: none;
-    }
-
     .parameter-matrix {
       grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .parameter-matrix[data-control-count="4"] {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .parameter-control:nth-child(2n) {
@@ -351,21 +382,53 @@
       border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
     }
 
-    .parameter-matrix[data-control-count="4"] .parameter-control {
-      border-inline-start: 0;
+    .parameter-control:nth-child(n + 3) {
+      border-block-start: 0;
     }
 
+    .parameter-control:nth-child(n + 4) {
+      border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    }
+
+    .parameter-matrix[data-control-count="3"],
+    .parameter-matrix[data-control-count="4"] {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .parameter-matrix[data-control-count="3"] .parameter-control,
+    .parameter-matrix[data-control-count="4"] .parameter-control {
+      border-inline-start: 0;
+      border-block-start: 0;
+    }
+
+    .parameter-matrix[data-control-count="3"] .parameter-control:nth-child(2n),
     .parameter-matrix[data-control-count="4"] .parameter-control:nth-child(2n) {
       border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
     }
 
-    .parameter-control {
-      padding: var(--cosimo-space-1);
+    .parameter-matrix[data-control-count="3"] .parameter-control:nth-child(n + 3),
+    .parameter-matrix[data-control-count="4"] .parameter-control:nth-child(n + 3) {
+      border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
     }
 
-    .parameter-control__heading .source-identity__slot,
-    .parameter-control__foot .cosimo-value {
+    .parameter-control {
+      padding-inline: var(--cosimo-space-2);
+    }
+
+    .parameter-control__heading .source-identity__slot {
       display: none;
+    }
+
+    .parameter-control__foot .cosimo-value {
+      inline-size: var(--cosimo-value-width-mod-compact);
+    }
+
+    .parameter-control__y-full {
+      display: none;
+    }
+
+    .parameter-control__y-compact {
+      display: inline;
     }
 
     .compound-controls {

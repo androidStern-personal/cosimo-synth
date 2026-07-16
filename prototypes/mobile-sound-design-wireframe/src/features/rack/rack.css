@@ -1,4 +1,10 @@
 @layer cosimo.features {
+  /*
+   * The rack is one continuous instrument strip: tiles share a surface and
+   * are divided by hairlines, never boxed. The focused module inverts.
+   * Identity, quick scrub, enable, and reorder are four distinct regions
+   * with stable metrics in every state.
+   */
   .cosimo-rack {
     block-size: 100%;
     background: var(--cosimo-color-paper);
@@ -12,37 +18,49 @@
 
   .cosimo-rack__tile {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) var(--cosimo-hit-min);
-    grid-template-rows: var(--cosimo-control-medium) var(--cosimo-control-medium) calc(var(--cosimo-space-4) + var(--cosimo-space-1));
-    flex: 0 0 calc(var(--cosimo-shell-width-master) / 3);
+    grid-template-columns: minmax(0, 1fr) var(--cosimo-rack-rail-width);
+    flex: 0 0 var(--cosimo-rack-tile);
     block-size: 100%;
     min-inline-size: 0;
     border-inline-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
+  .cosimo-rack__body {
+    position: relative;
+    display: grid;
+    grid-template-rows: auto minmax(var(--cosimo-space-0), 1fr) auto;
+    min-inline-size: 0;
+    min-block-size: 0;
+    padding: var(--cosimo-space-2) var(--cosimo-space-2) var(--cosimo-space-3);
+  }
+
   .cosimo-rack__identity {
-    grid-column: 1;
+    display: block;
     grid-row: 1;
     overflow: hidden;
-    align-self: stretch;
-    padding-inline: var(--cosimo-space-1);
+    min-inline-size: 0;
     text-overflow: ellipsis;
     white-space: nowrap;
-    font-size: var(--cosimo-rack-title-size);
+  }
+
+  /*
+   * The whole body is the focus target; the quick control sits above it in
+   * the stacking order so scrubbing never competes with focusing.
+   */
+  .cosimo-rack__identity::after {
+    position: absolute;
+    inset: 0;
+    content: "";
   }
 
   .cosimo-rack__quick {
     position: relative;
+    z-index: var(--cosimo-z-content);
     display: grid;
-    grid-column: 1 / -1;
-    grid-row: 2;
+    grid-row: 3;
     grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-track-height);
-    align-content: center;
-    align-self: center;
-    gap: var(--cosimo-space-2);
-    min-block-size: var(--cosimo-hit-min);
+    row-gap: var(--cosimo-space-1);
     min-inline-size: 0;
-    padding-inline: var(--cosimo-space-1);
   }
 
   .cosimo-rack__quick-meta {
@@ -53,36 +71,33 @@
     gap: var(--cosimo-space-1);
   }
 
-  .cosimo-rack__quick-articulation {
-    display: inline-flex;
-    flex: 0 0 auto;
-    color: var(--cosimo-articulation-color);
-  }
-
   .cosimo-rack__quick-meta > span:first-child {
     overflow: hidden;
+    color: var(--cosimo-color-ink-muted);
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .cosimo-rack__quick .wire-range__track::before,
-  .cosimo-rack__quick .wire-range__default {
-    background: currentColor;
+  .cosimo-rack__quick-articulation {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-self: center;
+    color: var(--cosimo-articulation-color);
   }
 
-  .cosimo-rack__quick .wire-range__handle {
-    border-color: currentColor;
+  .cosimo-rack__rail {
+    display: grid;
+    grid-template-rows: repeat(2, minmax(0, 1fr));
+    min-block-size: 0;
+    border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
   .cosimo-rack__enabled {
     position: relative;
-    display: flex;
-    grid-column: 1 / -1;
-    grid-row: 3;
-    min-block-size: var(--cosimo-space-5);
-    align-items: center;
-    gap: var(--cosimo-space-1);
-    padding-inline: var(--cosimo-space-1);
+    display: grid;
+    min-block-size: 0;
+    place-items: center;
+    border-block-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
   .cosimo-rack__enabled input {
@@ -92,15 +107,13 @@
   }
 
   .cosimo-rack__enabled-mark {
-    inline-size: var(--cosimo-space-2);
-    block-size: var(--cosimo-space-2);
-    border: 0;
-    border-radius: 50%;
-    background: var(--cosimo-color-rule);
+    inline-size: var(--cosimo-toggle-mark);
+    block-size: var(--cosimo-toggle-mark);
+    border: var(--cosimo-stroke-hairline) solid currentColor;
   }
 
   .cosimo-rack__enabled input:checked + .cosimo-rack__enabled-mark {
-    background: var(--cosimo-color-accent);
+    background: currentColor;
   }
 
   .cosimo-rack__enabled input:focus-visible + .cosimo-rack__enabled-mark {
@@ -110,12 +123,10 @@
 
   .cosimo-rack__handle {
     display: grid;
-    grid-column: 2;
-    grid-row: 1;
-    min-inline-size: var(--cosimo-hit-min);
-    min-block-size: var(--cosimo-hit-min);
+    min-inline-size: 0;
+    min-block-size: 0;
     place-items: center;
-    border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    color: var(--cosimo-color-ink-muted);
     cursor: grab;
     touch-action: none;
   }
@@ -124,63 +135,40 @@
     cursor: grabbing;
   }
 
-  .cosimo-rack__tile--voice {
-    grid-template-columns: minmax(0, 1fr);
+  /* Inverted focus state: separators step down, muted roles stay legible. */
+  .cosimo-rack__tile[data-state="selected"] {
+    border-inline-end-color: var(--cosimo-color-ink);
   }
 
-  .cosimo-rack__tile--voice .cosimo-rack__identity,
-  .cosimo-rack__tile--voice .cosimo-rack__quick {
-    grid-column: 1;
+  .cosimo-rack__tile[data-state="selected"] .cosimo-rack__rail,
+  .cosimo-rack__tile[data-state="selected"] .cosimo-rack__enabled {
+    border-color: var(--cosimo-color-rule-inverse);
+  }
+
+  .cosimo-rack__tile[data-state="selected"] .cosimo-rack__quick-meta > span:first-child,
+  .cosimo-rack__tile[data-state="selected"] .cosimo-rack__handle {
+    color: color-mix(in srgb, var(--cosimo-color-paper) 62%, transparent);
+  }
+
+  .cosimo-rack__tile[data-bypassed="true"] .cosimo-rack__identity,
+  .cosimo-rack__tile[data-bypassed="true"] .cosimo-rack__quick {
+    color: var(--cosimo-color-disabled);
+  }
+
+  .cosimo-rack__tile[data-bypassed="true"] .cosimo-rack__quick-meta > span:first-child {
+    color: var(--cosimo-color-disabled);
+  }
+
+  /* Voice modules share the strip language without enable or reorder. */
+  .cosimo-rack__tile--voice {
+    grid-template-columns: minmax(0, 1fr);
+    flex: 1 1 0;
   }
 
   @media (max-width: 380px), (max-height: 720px) { /* style-contract-allow-raw: named compact viewport breakpoint */
-    .cosimo-rack__tile {
-      grid-template-columns: minmax(0, 1fr) var(--cosimo-hit-min);
-      grid-template-rows: repeat(2, var(--cosimo-hit-min));
-      flex-basis: var(--cosimo-rack-strip-tile-width-compact);
-    }
-
-    .cosimo-rack__identity {
-      grid-column: 1;
-      grid-row: 1;
-      font-size: var(--cosimo-rack-title-size-compact);
-    }
-
-    .cosimo-rack__quick {
-      grid-column: 1;
-      grid-row: 2;
-      grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-track-height);
-      align-self: end;
-      gap: var(--cosimo-space-1);
-    }
-
-    .cosimo-rack__enabled {
-      grid-column: 2;
-      grid-row: 1;
-      min-block-size: var(--cosimo-hit-min);
-      padding-inline: 0;
-      justify-content: center;
-    }
-
-    .cosimo-rack__enabled span:last-child {
-      display: none;
-    }
-
-    .cosimo-rack__tile[data-bypassed="true"] .cosimo-rack__enabled span:last-child {
-      display: inline;
-    }
-
-    .cosimo-rack__handle {
-      grid-column: 2;
-      grid-row: 2;
-    }
-
-    .cosimo-rack__tile--voice {
-      grid-template-columns: minmax(0, 1fr);
-    }
-
-    .cosimo-rack__tile--voice .cosimo-rack__quick {
-      grid-column: 1;
+    .cosimo-rack__body {
+      padding-block: var(--cosimo-space-2);
+      padding-inline: var(--cosimo-space-1);
     }
   }
 }

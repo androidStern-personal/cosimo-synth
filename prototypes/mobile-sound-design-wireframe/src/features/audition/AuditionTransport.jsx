@@ -100,7 +100,7 @@ function TriggerControl({
       onPointerUp={(event) => finish("pointer", event)}
       type="button"
     >
-      <Circle aria-hidden="true" size={18} weight={active ? "fill" : "regular"} />
+      <Circle aria-hidden="true" size={15} weight={active ? "fill" : "regular"} />
     </button>
   );
 }
@@ -176,18 +176,14 @@ export function AuditionTransport({
         <button
           aria-label="Use Default articulation"
           className="cosimo-audition__default cosimo-type-label"
+          data-quiet={articulationId === "Default" ? "true" : undefined}
           onClick={() => {
             if (onDefaultArticulation) onDefaultArticulation();
             else onArticulationChange?.("Default");
           }}
           type="button"
         >
-          <span className="cosimo-audition__default-full" aria-hidden="true">
-            Default articulation
-          </span>
-          <span className="cosimo-audition__default-compact" aria-hidden="true">
-            Default
-          </span>
+          <span>Default</span>
         </button>
         <label className="cosimo-audition__field cosimo-audition__note">
           <span className="cosimo-audition__label cosimo-type-label">Note</span>

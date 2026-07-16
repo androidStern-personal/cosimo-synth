@@ -44,9 +44,9 @@ export function SourceEditor({
             <SourceIcon source={source} size={18} />
           </span>
           <span className="cosimo-source-editor__title">
-            <strong className="cosimo-type-navigation">{source.label}</strong>
+            <strong className="cosimo-type-display">{source.label}</strong>
             <span className="cosimo-type-micro">
-              {capturedSummary || `${targetRows.length} target${targetRows.length === 1 ? "" : "s"}`}
+              {capturedSummary || `${targetRows.length} TARGET${targetRows.length === 1 ? "" : "S"}`}
             </span>
           </span>
           <button

@@ -51,3 +51,7 @@ When implementing from a selected generated mock, treat that image as the source
 - The transient parameter HUD reserves stable space but is visually silent while idle. Do not show permanent instructional text such as `Exact value appears while dragging`.
 - Parameter matrices adapt to the module's actual control count; do not leave empty cells merely to preserve a fixed six-cell grid.
 - On short iPhones, preserve the stable relationship surface and reduce its internal spacing before shrinking the touchable module or source graphic below a useful editing size.
+- Ink owns every structural graphic: track baselines, base fills, handles, and module visualizations render black on paper. The teal accent is not a structural color; it survives only as the generic fallback where no semantic source color exists.
+- Rack tile anatomy is identity row, quick label plus reserved mono value, and scrub track, beside a 44px full-height rail holding the enable cell above the dedicated reorder handle. Size the tile so the longest label/value pair ("FREQUENCY 20.00 kHz") never truncates; partial tiles at the strip edges are acceptable scroll affordances.
+- Categorical selections (articulation, polarity, reducer, workspace, mode) render uppercase like all captions; mixed case is reserved for mono status strings.
+- The empty relationship detail states the fact in the reserved geometry — muted rail, "NO SOURCE", "TO <parameter> —" — never instructions or a collapsed surface.
