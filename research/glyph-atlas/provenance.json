@@ -1,0 +1,706 @@
+{
+ "generated": "2026-07-16",
+ "specimens": 190,
+ "plugins": [
+  {
+   "name": "JC303",
+   "vendor": "midilab",
+   "category": "bass synth (303)",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/midilab/jc303",
+   "imagery_note": "repo README image"
+  },
+  {
+   "name": "OB-Xd",
+   "vendor": "discoDSP / reales",
+   "category": "synth (VA)",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/reales/OB-Xd",
+   "imagery_note": "README image via GitHub camo (canonical: discodsp.com)"
+  },
+  {
+   "name": "Odin 2",
+   "vendor": "TheWaveWarden",
+   "category": "synth",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/TheWaveWarden/odin2",
+   "imagery_note": "repo README image"
+  },
+  {
+   "name": "Calf Studio Gear",
+   "vendor": "Calf",
+   "category": "channel strip / fx suite",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/calf-studio-gear/calf",
+   "imagery_note": "official manual images in repo"
+  },
+  {
+   "name": "Diva",
+   "vendor": "u-he",
+   "category": "synth (VA)",
+   "style_groups": [
+    "skeuo",
+    "util"
+   ],
+   "status": "facsimile + authentic (custom theme)",
+   "source_page": "https://u-he.com/products/diva/",
+   "imagery_note": "vendor site egress-blocked; stock idiom redrawn; genuine screenshot of community Redux theme from github.com/drzhnn/diva-redux"
+  },
+  {
+   "name": "TAL-U-NO-LX",
+   "vendor": "TAL Software",
+   "category": "synth (VA)",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "facsimile",
+   "source_page": "https://tal-software.com/products/tal-u-no-lx",
+   "imagery_note": "vendor site egress-blocked; no legitimate GitHub-hosted capture found"
+  },
+  {
+   "name": "Teletronix LA-2A Collection",
+   "vendor": "Universal Audio",
+   "category": "fx (compressor)",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.uaudio.com/uad-plugins/compressors-limiters/teletronix-la-2a-collection.html",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "SSL E-Channel",
+   "vendor": "Waves",
+   "category": "channel strip",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.waves.com/plugins/ssl-e-channel",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Nepheton 2",
+   "vendor": "D16 Group",
+   "category": "drum machine",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "facsimile",
+   "source_page": "https://d16.pl/nepheton2",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Tape",
+   "vendor": "Softube",
+   "category": "fx (tape)",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.softube.com/tape",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Mini V",
+   "vendor": "Arturia",
+   "category": "synth (VA)",
+   "style_groups": [
+    "skeuo"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.arturia.com/products/software-instruments/v-collection/overview",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Cardinal",
+   "vendor": "DISTRHO",
+   "category": "modular",
+   "style_groups": [
+    "eurorack"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/DISTRHO/Cardinal",
+   "imagery_note": "repo doc screenshots + res/ panel SVGs"
+  },
+  {
+   "name": "VCV Rack Fundamental",
+   "vendor": "VCV",
+   "category": "modular",
+   "style_groups": [
+    "eurorack"
+   ],
+   "status": "authentic (panel SVGs)",
+   "source_page": "https://github.com/VCVRack/Fundamental",
+   "imagery_note": "res/*.svg faceplates, text outlined"
+  },
+  {
+   "name": "Befaco (VCV ports)",
+   "vendor": "Befaco",
+   "category": "modular",
+   "style_groups": [
+    "eurorack"
+   ],
+   "status": "authentic (panel SVGs)",
+   "source_page": "https://github.com/VCVRack/Befaco",
+   "imagery_note": "res/panels/*.svg faceplates"
+  },
+  {
+   "name": "Audible Instruments",
+   "vendor": "Mutable Instruments / VCV",
+   "category": "modular",
+   "style_groups": [
+    "eurorack"
+   ],
+   "status": "authentic (panel SVGs)",
+   "source_page": "https://github.com/VCVRack/AudibleInstruments",
+   "imagery_note": "res/*.svg faceplates"
+  },
+  {
+   "name": "Pro-Q 3",
+   "vendor": "FabFilter",
+   "category": "fx (EQ)",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "authentic",
+   "source_page": "https://www.fabfilter.com/products/pro-q-3-equalizer-plug-in",
+   "imagery_note": "official fabfilter.com screenshot obtained via GitHub camo proxy (OpGuides page render)"
+  },
+  {
+   "name": "Pro-Q 4",
+   "vendor": "FabFilter",
+   "category": "fx (EQ)",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.fabfilter.com/products/pro-q-4-equalizer-plug-in",
+   "imagery_note": "current version redrawn as study"
+  },
+  {
+   "name": "Supermassive",
+   "vendor": "Valhalla DSP",
+   "category": "fx (reverb)",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "authentic",
+   "source_page": "https://valhalladsp.com/shop/reverb/valhalla-supermassive/",
+   "imagery_note": "official product image via GitHub camo proxy (canonical valhalladsp.com)"
+  },
+  {
+   "name": "VintageVerb",
+   "vendor": "Valhalla DSP",
+   "category": "fx (reverb)",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "facsimile",
+   "source_page": "https://valhalladsp.com/shop/reverb/valhalla-vintage-verb/",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Helm",
+   "vendor": "Matt Tytel",
+   "category": "synth",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/mtytel/helm",
+   "imagery_note": "README image via camo (canonical tytel.org)"
+  },
+  {
+   "name": "OctaSine",
+   "vendor": "Joakim Frosteg\u00e5rd",
+   "category": "synth (FM)",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/greatest-ape/OctaSine",
+   "imagery_note": "repo README images"
+  },
+  {
+   "name": "RipplerX",
+   "vendor": "tiagolr",
+   "category": "synth (physical modeling)",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/tiagolr/ripplerx",
+   "imagery_note": "repo README images"
+  },
+  {
+   "name": "ZL Equalizer",
+   "vendor": "ZL Audio",
+   "category": "fx (EQ)",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/ZL-Audio/ZLEqualizer",
+   "imagery_note": "README image via camo (canonical Google Drive)"
+  },
+  {
+   "name": "Phase Plant",
+   "vendor": "Kilohearts",
+   "category": "synth",
+   "style_groups": [
+    "flat"
+   ],
+   "status": "facsimile",
+   "source_page": "https://kilohearts.com/products/phase_plant",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Serum",
+   "vendor": "Xfer Records",
+   "category": "synth (wavetable)",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "authentic (community skin, stock layout)",
+   "source_page": "https://xferrecords.com/products/serum",
+   "imagery_note": "github.com/andzeil/serum-nord-skin screenshots"
+  },
+  {
+   "name": "Serum 2",
+   "vendor": "Xfer Records",
+   "category": "synth (wavetable)",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "facsimile",
+   "source_page": "https://xferrecords.com/products/serum-2",
+   "imagery_note": "current version redrawn as study"
+  },
+  {
+   "name": "Vital",
+   "vendor": "Vital Audio",
+   "category": "synth (wavetable)",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "authentic (near-stock community skin)",
+   "source_page": "https://vital.audio",
+   "imagery_note": "github.com/Nikug/vital-skins preview"
+  },
+  {
+   "name": "LSP Multiband Compressor",
+   "vendor": "Linux Studio Plugins",
+   "category": "fx + metering",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/lsp-plugins/lsp-plugins",
+   "imagery_note": "official site-repo screenshot (lsp-site)"
+  },
+  {
+   "name": "Omnisphere 2",
+   "vendor": "Spectrasonics",
+   "category": "synth",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.spectrasonics.net/products/omnisphere/",
+   "imagery_note": "vendor site egress-blocked; no legitimate GitHub capture found"
+  },
+  {
+   "name": "Portal",
+   "vendor": "Output",
+   "category": "fx (granular)",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "facsimile",
+   "source_page": "https://output.com/products/portal",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Ozone 11",
+   "vendor": "iZotope",
+   "category": "mastering + metering",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.izotope.com/en/products/ozone.html",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Pigments",
+   "vendor": "Arturia",
+   "category": "synth",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.arturia.com/products/software-instruments/pigments/overview",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Massive X",
+   "vendor": "Native Instruments",
+   "category": "synth",
+   "style_groups": [
+    "hud"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.native-instruments.com/en/products/komplete/synths/massive-x/",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Surge XT",
+   "vendor": "Surge Synth Team",
+   "category": "synth (hybrid)",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/surge-synthesizer/surge",
+   "imagery_note": "site-repo manual image"
+  },
+  {
+   "name": "Geonkick",
+   "vendor": "Geonkick (Iurie Nistor)",
+   "category": "drum synth",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/Geonkick-Synthesizer/geonkick",
+   "imagery_note": "repo README images"
+  },
+  {
+   "name": "Wolf Shaper",
+   "vendor": "Patrick Desaulniers",
+   "category": "fx (waveshaper)",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/pdesaulniers/wolf-shaper",
+   "imagery_note": "repo README image"
+  },
+  {
+   "name": "PaulXStretch",
+   "vendor": "Sonosaurus",
+   "category": "fx (spectral stretch)",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/essej/paulxstretch",
+   "imagery_note": "README image via camo (canonical sonosaurus.com)"
+  },
+  {
+   "name": "Grace",
+   "vendor": "One Small Clue",
+   "category": "sampler",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/s-oram/Grace",
+   "imagery_note": "repo README image"
+  },
+  {
+   "name": "Stochas",
+   "vendor": "Surge Synth Team",
+   "category": "sequencer",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/surge-synthesizer/stochas",
+   "imagery_note": "site-repo screenshot (stochas.org)"
+  },
+  {
+   "name": "Vaporizer2",
+   "vendor": "VAST Dynamics",
+   "category": "synth (wavetable)",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/VASTDynamics/Vaporizer2",
+   "imagery_note": "repo README images"
+  },
+  {
+   "name": "Airwindows Consolidated",
+   "vendor": "Airwindows",
+   "category": "fx suite",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/baconpaul/airwin2rack",
+   "imagery_note": "repo doc image (plugin in Bitwig)"
+  },
+  {
+   "name": "Monique",
+   "vendor": "Surge Synth Team (orig. Monoplugs)",
+   "category": "synth (mono)",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/surge-synthesizer/monique-monosynth",
+   "imagery_note": "repo resources/high_res.png"
+  },
+  {
+   "name": "Kontakt",
+   "vendor": "Native Instruments",
+   "category": "sampler",
+   "style_groups": [
+    "util"
+   ],
+   "status": "authentic (partial header)",
+   "source_page": "https://www.native-instruments.com/en/products/komplete/samplers/kontakt-8/",
+   "imagery_note": "instrument header via github.com/raffadrummer/uimacros4ksp"
+  },
+  {
+   "name": "TDR Kotelnikov",
+   "vendor": "Tokyo Dawn Records",
+   "category": "fx (compressor)",
+   "style_groups": [
+    "util"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.tokyodawn.net/tdr-kotelnikov/",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "SPAN",
+   "vendor": "Voxengo",
+   "category": "metering",
+   "style_groups": [
+    "util"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.voxengo.com/product/span/",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "meters.lv2",
+   "vendor": "Robin Gareus (x42)",
+   "category": "metering",
+   "style_groups": [
+    "vintage",
+    "retro"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/x42/meters.lv2",
+   "imagery_note": "repo doc images (8 meter types)"
+  },
+  {
+   "name": "MJUC",
+   "vendor": "Klanghelm",
+   "category": "fx (compressor)",
+   "style_groups": [
+    "vintage"
+   ],
+   "status": "facsimile",
+   "source_page": "https://klanghelm.com/contents/products/MJUC",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Decapitator",
+   "vendor": "Soundtoys",
+   "category": "fx (saturation)",
+   "style_groups": [
+    "vintage"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.soundtoys.com/product/decapitator/",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Mu",
+   "vendor": "Pulsar Audio",
+   "category": "fx (compressor)",
+   "style_groups": [
+    "vintage"
+   ],
+   "status": "facsimile",
+   "source_page": "https://pulsar.audio/mu/",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Dexed",
+   "vendor": "Digital Suburban",
+   "category": "synth (FM)",
+   "style_groups": [
+    "retro"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/asb2m10/dexed",
+   "imagery_note": "third-party GitHub capture (eldun.github.io repo); official repo/site embed no screenshot"
+  },
+  {
+   "name": "Signalizer",
+   "vendor": "Janus Thorborg",
+   "category": "visual / analyzer",
+   "style_groups": [
+    "retro"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/jthorborg/signalizer",
+   "imagery_note": "README image via camo (canonical jthorborg.com)"
+  },
+  {
+   "name": "chipsynth MD",
+   "vendor": "Plogue",
+   "category": "synth (chip)",
+   "style_groups": [
+    "retro"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.plogue.com/products/chipsynth-md.html",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "KORG Collection M1",
+   "vendor": "KORG",
+   "category": "synth (rompler)",
+   "style_groups": [
+    "retro"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.korg.com/us/products/software/korg_collection/",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Valentine",
+   "vendor": "Tote Bag Labs",
+   "category": "fx (compressor)",
+   "style_groups": [
+    "playful"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/tote-bag-labs/valentine",
+   "imagery_note": "repo README image"
+  },
+  {
+   "name": "Bespoke Synth",
+   "vendor": "Ryan Challinor",
+   "category": "modular environment",
+   "style_groups": [
+    "playful"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/BespokeSynth/BespokeSynth",
+   "imagery_note": "repo README images"
+  },
+  {
+   "name": "CHOW Tape Model",
+   "vendor": "Chowdhury DSP",
+   "category": "fx (tape)",
+   "style_groups": [
+    "playful"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/jatinchowdhury18/AnalogTapeModel",
+   "imagery_note": "repo Plugin/Screenshots/full_gui.png"
+  },
+  {
+   "name": "Dragonfly Reverb",
+   "vendor": "Michael Willis",
+   "category": "fx (reverb)",
+   "style_groups": [
+    "playful"
+   ],
+   "status": "authentic",
+   "source_page": "https://github.com/michaelwillis/dragonfly-reverb",
+   "imagery_note": "repo README image"
+  },
+  {
+   "name": "Microtonic",
+   "vendor": "Sonic Charge",
+   "category": "drum machine",
+   "style_groups": [
+    "playful"
+   ],
+   "status": "authentic (factory skin)",
+   "source_page": "https://soniccharge.com/microtonic",
+   "imagery_note": "github.com/malstrom72/microtonic-skins (developer's own account)"
+  },
+  {
+   "name": "Spaced Out",
+   "vendor": "Baby Audio",
+   "category": "fx (reverb/delay)",
+   "style_groups": [
+    "playful"
+   ],
+   "status": "facsimile",
+   "source_page": "https://babyaud.io/spaced-out",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "Lossy",
+   "vendor": "Goodhertz",
+   "category": "fx (degrade)",
+   "style_groups": [
+    "playful"
+   ],
+   "status": "facsimile",
+   "source_page": "https://goodhertz.com/lossy/",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "XO",
+   "vendor": "XLN Audio",
+   "category": "drum sampler",
+   "style_groups": [
+    "playful"
+   ],
+   "status": "facsimile",
+   "source_page": "https://www.xlnaudio.com/products/xo",
+   "imagery_note": "vendor site egress-blocked"
+  },
+  {
+   "name": "MTurboComp",
+   "vendor": "MeldaProduction",
+   "category": "fx (compressor)",
+   "style_groups": [],
+   "status": "surveyed (discussed)",
+   "source_page": "https://www.meldaproduction.com/MTurboComp",
+   "imagery_note": "community-criticized GUI discussed in field notes; imagery inaccessible"
+  },
+  {
+   "name": "Dumpster Fire",
+   "vendor": "Freakshow Industries",
+   "category": "fx (glitch)",
+   "style_groups": [],
+   "status": "surveyed (discussed)",
+   "source_page": "https://freakshowindustries.com/dumpster-fire",
+   "imagery_note": "divisive collage-illustrative style; facsimile would misrepresent"
+  },
+  {
+   "name": "Drumvolution",
+   "vendor": "Wave Alchemy",
+   "category": "drum machine",
+   "style_groups": [],
+   "status": "surveyed (discussed)",
+   "source_page": "https://www.wavealchemy.co.uk/drumvolution",
+   "imagery_note": "community-praised GUI; imagery inaccessible"
+  }
+ ]
+}
