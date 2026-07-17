@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 
 /**
  * Browser prototype implementation of source-to-target assignment. The future
- * iOS bridge can replace target resolution without changing SourceShelf or
+ * iOS bridge can replace target resolution without changing SourceRail or
  * ParameterControl.
  */
 export function useDragToTarget({ resolveTarget, onDrop, onTargetChange }) {

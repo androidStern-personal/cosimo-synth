@@ -1,6 +1,6 @@
 import { useMemo, useReducer } from "react";
 import { TARGETS } from "../domain/catalog.js";
-import { clamp } from "../domain/formatting.js";
+import { clampModAmount, defaultModAmount } from "../domain/formatting.js";
 import { createInitialMockCosimoState } from "../domain/fixtures.js";
 import {
   createMapping,
@@ -80,7 +80,7 @@ export function useMockCosimoAdapter({
     addMapping({
       targetId,
       sourceId,
-      amount = 25,
+      amount = null,
       polarity = "Unipolar",
       reducer = "Max",
       metadata = {},
@@ -92,7 +92,7 @@ export function useMockCosimoAdapter({
       const item = createMapping(
         targetId,
         sourceId,
-        clamp(amount, -100, 100),
+        clampModAmount(TARGETS[targetId], amount ?? defaultModAmount(TARGETS[targetId])),
         polarity,
         reducer,
         metadata,
@@ -101,13 +101,19 @@ export function useMockCosimoAdapter({
       return item.id;
     },
 
-    setMappingAmount(mappingId, amount) {
+    setMappingAmount(mappingId, amount, layer = null) {
+      const mapping = state.patch.mappings.find((item) => item.id === mappingId);
+      if (!mapping) return;
       dispatch({
-        type: "SET_MAPPING_FIELD",
+        type: "SET_MAPPING_AMOUNT",
         mappingId,
-        field: "amount",
-        value: clamp(amount, -100, 100),
+        amount,
+        layer: layer || resolveParameterEditLayer(mapping.targetKey, state.audition.articulation),
       });
+    },
+
+    setMappingEnabled(mappingId, enabled) {
+      dispatch({ type: "SET_MAPPING_FIELD", mappingId, field: "enabled", value: Boolean(enabled) });
     },
 
     setMappingPolarity(mappingId, polarity) {

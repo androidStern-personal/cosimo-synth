@@ -1,10 +1,11 @@
 @layer cosimo.features.sources {
   /*
-   * The source shelf reads as a graph legend: borderless glyph chips whose
-   * identity color is confined to the mark and a short underline. The
-   * attachment count is a raised plain numeral, and orphans are quiet.
+   * The unified source rail reads as a graph legend: borderless glyph chips
+   * whose identity color is confined to the mark and a short underline. The
+   * attachment count is a raised plain numeral, orphans are quiet, and only
+   * chips attached to the selected parameter show an amount.
    */
-  .cosimo-source-shelf {
+  .cosimo-source-rail {
     position: relative;
     z-index: var(--cosimo-z-sticky);
     min-inline-size: 0;
@@ -13,9 +14,15 @@
     background: var(--cosimo-color-paper);
   }
 
-  .cosimo-source-shelf__scroller {
-    display: flex;
-    align-items: stretch;
+  /*
+   * A fixed 7×2 grid holds the full source capacity (4 macros, 3 envelopes,
+   * 3 MSEGs, 3 fixed, Add = 14 slots) so the rail NEVER scrolls. With no
+   * pan gesture, any drag direction on a chip is unambiguous.
+   */
+  .cosimo-source-rail__grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    grid-template-rows: repeat(2, minmax(0, 1fr));
     block-size: 100%;
     padding-inline: var(--cosimo-space-1);
   }
@@ -23,24 +30,52 @@
   .cosimo-source-chip {
     position: relative;
     display: grid;
-    flex: 0 0 var(--cosimo-source-chip);
-    min-inline-size: var(--cosimo-source-chip);
+    min-inline-size: 0;
     min-block-size: 0;
-    place-items: center;
+    grid-template-rows: auto var(--cosimo-type-value-line);
+    row-gap: var(--cosimo-space-micro);
+    align-content: center;
+    justify-items: center;
+    margin: var(--cosimo-space-micro);
+    border-radius: var(--cosimo-radius);
     overflow: clip;
     color: var(--cosimo-color-ink);
     background: var(--cosimo-color-paper);
-    touch-action: pan-x;
+    touch-action: none;
     user-select: none;
   }
 
-  .cosimo-source-chip[data-selected] {
-    color: var(--cosimo-color-paper);
-    background: var(--cosimo-color-ink);
+  /*
+   * Rail scope is the selected parameter: lit chips carry full identity ink
+   * and their amount; everything not attached to the selected parameter
+   * recedes. Global usage lives only in the raised count numeral.
+   */
+  .cosimo-source-chip:not([data-lit], [data-selected]) .cosimo-source-chip__identity,
+  .cosimo-source-chip:not([data-lit], [data-selected]) .cosimo-source-chip__semantic-rule {
+    opacity: 0.4;
   }
 
-  .cosimo-source-chip[data-orphan] {
-    opacity: 0.44;
+  /* Focus is a calibration frame, never an inverted slab. */
+  .cosimo-source-chip[data-selected] {
+    background: var(--cosimo-color-paper-raised);
+  }
+
+  .cosimo-source-chip[data-selected]::after {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--cosimo-radius);
+    background:
+      linear-gradient(currentColor, currentColor) top left / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) top left / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) top right / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) top right / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) bottom left / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) bottom left / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) bottom right / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) bottom right / var(--cosimo-stroke-active) var(--cosimo-marker-size);
+    background-repeat: no-repeat;
+    content: "";
+    pointer-events: none;
   }
 
   .cosimo-source-chip[data-dragging] {
@@ -56,6 +91,21 @@
     justify-content: center;
     gap: var(--cosimo-space-micro);
     color: var(--cosimo-source-color, var(--cosimo-color-accent));
+  }
+
+  .cosimo-source-chip__amount {
+    inline-size: var(--cosimo-value-width-mod-compact);
+    text-align: center;
+  }
+
+  /* Muted-but-lit: a disabled mapping keeps its amount, struck through. */
+  .cosimo-source-chip[data-disabled] .cosimo-source-chip__amount {
+    color: var(--cosimo-color-ink-muted);
+    text-decoration: line-through;
+  }
+
+  .cosimo-source-chip[data-disabled] .cosimo-source-chip__semantic-rule {
+    opacity: 0.4;
   }
 
   .cosimo-source-chip__slot {
@@ -77,10 +127,6 @@
     line-height: var(--cosimo-type-micro-line);
   }
 
-  .cosimo-source-chip[data-selected] .cosimo-source-chip__count {
-    color: var(--cosimo-color-paper);
-  }
-
   .cosimo-source-chip__semantic-rule {
     position: absolute;
     inset-block-end: var(--cosimo-space-1);
@@ -89,16 +135,19 @@
     background: var(--cosimo-source-color, var(--cosimo-color-accent));
   }
 
-  .cosimo-source-shelf__add {
+  .cosimo-source-rail__add {
     display: grid;
-    flex: 0 0 var(--cosimo-hit-min);
-    min-inline-size: var(--cosimo-hit-min);
+    min-inline-size: 0;
+    min-block-size: 0;
+    margin: var(--cosimo-space-micro);
     place-items: center;
     color: var(--cosimo-color-ink-muted);
-    border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    border: var(--cosimo-stroke-hairline) dashed var(--cosimo-color-rule);
+    border-radius: var(--cosimo-radius);
   }
 
-  .cosimo-source-shelf__popover {
+  .cosimo-source-rail__popover {
+    border-radius: var(--cosimo-radius);
     position: absolute;
     z-index: var(--cosimo-z-popover);
     inset-block-end: calc(100% + var(--cosimo-space-1));
@@ -110,7 +159,7 @@
     box-shadow: var(--cosimo-space-1) var(--cosimo-space-1) 0 color-mix(in srgb, var(--cosimo-color-ink) 16%, transparent);
   }
 
-  .cosimo-source-shelf__popover > button {
+  .cosimo-source-rail__popover > button {
     display: inline-flex;
     min-inline-size: var(--cosimo-hit-min);
     min-block-size: var(--cosimo-hit-min);
@@ -123,28 +172,31 @@
     text-transform: uppercase;
   }
 
-  .cosimo-source-shelf__popover > button:first-child {
+  .cosimo-source-rail__popover > button:first-child {
     border-inline-start: 0;
   }
 
-  .cosimo-source-shelf__popover > button:disabled {
+  .cosimo-source-rail__popover > button:disabled {
     color: var(--cosimo-color-disabled);
   }
 
-  .cosimo-source-shelf__add-menu {
+  .cosimo-source-rail__add-menu {
     inset-inline-start: var(--cosimo-space-3);
   }
 
-  .cosimo-source-shelf__context-menu {
+  .cosimo-source-rail__context-menu {
     align-items: center;
+    flex-wrap: wrap;
+    max-inline-size: calc(100% - var(--cosimo-space-3));
     padding-inline-start: var(--cosimo-space-2);
   }
 
-  .cosimo-source-shelf__context-menu > span {
+  .cosimo-source-rail__context-menu > span {
     min-inline-size: calc(var(--cosimo-hit-min) + var(--cosimo-space-5));
   }
 
-  .cosimo-source-shelf__undo {
+  .cosimo-source-rail__undo {
+    border-radius: var(--cosimo-radius);
     position: absolute;
     z-index: var(--cosimo-z-popover);
     inset-block-end: calc(100% + var(--cosimo-space-1));
@@ -159,10 +211,33 @@
     color: var(--cosimo-color-paper);
   }
 
-  .cosimo-source-shelf__undo > button {
+  .cosimo-source-rail__undo > button {
     min-block-size: var(--cosimo-control-small);
     padding-inline: var(--cosimo-space-2);
     border: var(--cosimo-stroke-hairline) solid currentColor;
+  }
+
+  /* The carried chip: a ghost that follows the pointer during assignment. */
+  .cosimo-source-rail__ghost {
+    position: fixed;
+    z-index: var(--cosimo-z-popover);
+    display: inline-flex;
+    align-items: center;
+    gap: var(--cosimo-space-1);
+    padding: var(--cosimo-space-1) var(--cosimo-space-2);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    border-block-end: var(--cosimo-stroke-semantic) solid var(--cosimo-source-color, var(--cosimo-color-accent));
+    border-radius: var(--cosimo-radius);
+    background: var(--cosimo-color-paper-raised);
+    box-shadow: var(--cosimo-space-1) var(--cosimo-space-1) 0 color-mix(in srgb, var(--cosimo-color-ink) 16%, transparent);
+    color: var(--cosimo-color-ink);
+    pointer-events: none;
+    transform: translate(-50%, -130%);
+    white-space: nowrap;
+  }
+
+  .cosimo-source-rail__ghost > svg {
+    color: var(--cosimo-source-color, var(--cosimo-color-accent));
   }
 
   /*
@@ -238,6 +313,7 @@
   }
 
   .cosimo-source-shape {
+    border-radius: var(--cosimo-radius);
     position: relative;
     min-inline-size: 0;
     min-block-size: 0;
@@ -343,6 +419,7 @@
   }
 
   .cosimo-source-targets__add-menu {
+    border-radius: var(--cosimo-radius);
     position: absolute;
     z-index: var(--cosimo-z-popover);
     inset-block-start: var(--cosimo-control-medium);
@@ -507,6 +584,10 @@
     inset-block: calc(50% - (var(--cosimo-stroke-semantic) / 2));
     block-size: var(--cosimo-stroke-semantic);
     background: var(--cosimo-source-color, var(--cosimo-color-accent));
+  }
+
+  .cosimo-source-target__mapping-range[data-disabled] {
+    opacity: 0.35;
   }
 
   .cosimo-source-target__default {

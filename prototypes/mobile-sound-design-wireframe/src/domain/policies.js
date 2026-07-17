@@ -48,11 +48,13 @@ export function createSourceIdentity(type, slot) {
   };
 }
 
+// Unipolar is the default everywhere, matching the real synth: no Cosimo
+// source rests mid-travel, so bipolar is always an explicit choice.
 export function createMapping(
   targetKey,
   sourceId,
   amount,
-  polarity = "Bipolar",
+  polarity = "Unipolar",
   reducer = "Max",
   metadata = {},
 ) {
@@ -63,6 +65,7 @@ export function createMapping(
     amount,
     polarity,
     reducer,
+    enabled: true,
     ...metadata,
   };
 }

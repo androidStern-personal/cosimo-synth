@@ -1,5 +1,10 @@
 # Cosimo Mobile Interaction Parity Matrix
 
+> **Superseded 2026-07-16.** This checklist validated the restoration of the
+> pre-rail prototype. The mapping-chip row and relationship-detail band it
+> references were removed by the unified source rail amendment; the current
+> behavior contract is `INTERACTION_MATRIX.md`. Kept for history only.
+
 This is the acceptance checklist for restoring the interaction-complete mobile
 prototype after the Ulm visual/component refactor.
 

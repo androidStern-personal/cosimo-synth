@@ -1,5 +1,5 @@
 import { ARTICULATIONS, MODULES_BY_ID, TARGETS } from "../domain/catalog.js";
-import { clamp } from "../domain/formatting.js";
+import { clamp, clampModAmount } from "../domain/formatting.js";
 import { createInitialMockCosimoState } from "../domain/fixtures.js";
 import { createMapping, defaultSourceSettings } from "../domain/policies.js";
 
@@ -30,14 +30,31 @@ function withMotionCandidate(state, targetId, layer) {
   };
 }
 
+function pruneArticulationMappingAmounts(articulationMappingAmounts, keepMappingId) {
+  return Object.fromEntries(
+    Object.entries(articulationMappingAmounts).map(([articulationId, amounts]) => [
+      articulationId,
+      Object.fromEntries(
+        Object.entries(amounts).filter(([mappingId]) => keepMappingId(mappingId)),
+      ),
+    ]),
+  );
+}
+
 function removeSourceFromPatch(patch, sourceId) {
+  const mappings = patch.mappings.filter((item) => item.sourceId !== sourceId);
+  const keptMappingIds = new Set(mappings.map((item) => item.id));
   return {
     ...patch,
     sources: patch.sources.filter((source) => source.id !== sourceId),
     sourceSettings: Object.fromEntries(
       Object.entries(patch.sourceSettings).filter(([id]) => id !== sourceId),
     ),
-    mappings: patch.mappings.filter((item) => item.sourceId !== sourceId),
+    mappings,
+    articulationMappingAmounts: pruneArticulationMappingAmounts(
+      patch.articulationMappingAmounts,
+      (mappingId) => keptMappingIds.has(mappingId),
+    ),
   };
 }
 
@@ -74,7 +91,15 @@ export function mockCosimoReducer(state, action) {
 
     case "CLEAR_ARTICULATION_OVERRIDE": {
       const current = state.patch.articulationOverrides[action.articulationId];
-      if (!current || current[action.targetId] == null) return state;
+      const currentAmounts = state.patch.articulationMappingAmounts[action.articulationId] || {};
+      const targetMappingIds = new Set(
+        state.patch.mappings
+          .filter((item) => item.targetKey === action.targetId)
+          .map((item) => item.id),
+      );
+      const hasAmountOverrides = Object.keys(currentAmounts)
+        .some((mappingId) => targetMappingIds.has(mappingId));
+      if ((!current || current[action.targetId] == null) && !hasAmountOverrides) return state;
       const next = { ...current };
       delete next[action.targetId];
       return {
@@ -84,6 +109,13 @@ export function mockCosimoReducer(state, action) {
           articulationOverrides: {
             ...state.patch.articulationOverrides,
             [action.articulationId]: next,
+          },
+          articulationMappingAmounts: {
+            ...state.patch.articulationMappingAmounts,
+            [action.articulationId]: Object.fromEntries(
+              Object.entries(currentAmounts)
+                .filter(([mappingId]) => !targetMappingIds.has(mappingId)),
+            ),
           },
         },
       };
@@ -263,12 +295,46 @@ export function mockCosimoReducer(state, action) {
         },
       };
 
+    case "SET_MAPPING_AMOUNT": {
+      const mapping = state.patch.mappings.find((item) => item.id === action.mappingId);
+      if (!mapping) return state;
+      const nextAmount = clampModAmount(TARGETS[mapping.targetKey], action.amount);
+      if (action.layer?.kind === "articulationOverride") {
+        return {
+          ...state,
+          patch: {
+            ...state.patch,
+            articulationMappingAmounts: {
+              ...state.patch.articulationMappingAmounts,
+              [action.layer.articulationId]: {
+                ...state.patch.articulationMappingAmounts[action.layer.articulationId],
+                [action.mappingId]: nextAmount,
+              },
+            },
+          },
+        };
+      }
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          mappings: state.patch.mappings.map((item) =>
+            item.id === action.mappingId ? { ...item, amount: nextAmount } : item,
+          ),
+        },
+      };
+    }
+
     case "REMOVE_MAPPING":
       return {
         ...state,
         patch: {
           ...state.patch,
           mappings: state.patch.mappings.filter((item) => item.id !== action.mappingId),
+          articulationMappingAmounts: pruneArticulationMappingAmounts(
+            state.patch.articulationMappingAmounts,
+            (mappingId) => mappingId !== action.mappingId,
+          ),
         },
       };
 
@@ -384,7 +450,7 @@ export function mockCosimoReducer(state, action) {
       const capturedMapping = createMapping(
         candidate.targetKey,
         capturedSource.id,
-        100,
+        clampModAmount(TARGETS[candidate.targetKey], 100),
         "Unipolar",
         "Max",
         {

@@ -19,14 +19,16 @@ export const INITIAL_SOURCES = Object.freeze([
   { id: "mseg-1", type: "mseg", slot: 1, label: "MSEG 1" },
 ]);
 
+// Amounts are in each target's own units: octaves for frequency-shaped
+// targets, percent elsewhere (see modAmountSpec).
 export const INITIAL_MAPPINGS = Object.freeze([
-  createMapping("phaser.frequency", "mseg-1", 62, "Bipolar", "Max"),
-  createMapping("phaser.frequency", "pressure", 18, "Bipolar", "Mean"),
+  createMapping("phaser.frequency", "mseg-1", 2.4, "Bipolar", "Max"),
+  createMapping("phaser.frequency", "pressure", 0.8, "Bipolar", "Mean"),
   createMapping("phaser.depth", "macro-1", 22, "Unipolar", "Max"),
   createMapping("drive.amount", "macro-1", 28, "Unipolar", "Max"),
   createMapping("wavetable.index", "mseg-1", 34, "Unipolar", "Max"),
   createMapping("wavetable.warp", "envelope-1", 40, "Bipolar", "Max"),
-  createMapping("voice-filter.cutoff", "envelope-1", 55, "Unipolar", "Max"),
+  createMapping("voice-filter.cutoff", "envelope-1", 2.2, "Unipolar", "Max"),
 ]);
 
 // This remains a UI-session fixture, not patch state. It is exported so the
@@ -63,6 +65,11 @@ export const INITIAL_PATCH = Object.freeze({
       .filter((id) => id !== "Default")
       .map((id) => [id, {}]),
   ),
+  articulationMappingAmounts: Object.fromEntries(
+    Object.keys(ARTICULATIONS)
+      .filter((id) => id !== "Default")
+      .map((id) => [id, {}]),
+  ),
   sources: INITIAL_SOURCES,
   sourceSettings: INITIAL_SOURCE_SETTINGS,
   mappings: INITIAL_MAPPINGS,
@@ -88,6 +95,10 @@ export function createInitialMockCosimoState() {
       compoundSettings: {},
       articulationOverrides: Object.fromEntries(
         Object.entries(INITIAL_PATCH.articulationOverrides)
+          .map(([id, values]) => [id, { ...values }]),
+      ),
+      articulationMappingAmounts: Object.fromEntries(
+        Object.entries(INITIAL_PATCH.articulationMappingAmounts)
           .map(([id, values]) => [id, { ...values }]),
       ),
       sources: INITIAL_PATCH.sources.map((source) => ({ ...source })),
@@ -138,6 +149,13 @@ export function createStressMockCosimoState() {
       "wavetable.warp": 100,
     },
   };
+  state.patch.articulationMappingAmounts = {
+    ...state.patch.articulationMappingAmounts,
+    Pluck: {
+      ...state.patch.articulationMappingAmounts.Pluck,
+      "wavetable.warp::envelope-1": 80,
+    },
+  };
   state.patch.sources = [...state.patch.sources, orphanSource];
   state.patch.sourceSettings = {
     ...state.patch.sourceSettings,
@@ -145,10 +163,13 @@ export function createStressMockCosimoState() {
   };
   state.patch.mappings = state.patch.mappings.map((mapping) => {
     if (mapping.id === "phaser.frequency::mseg-1") {
-      return { ...mapping, amount: 100 };
+      return { ...mapping, amount: 6 };
     }
     if (mapping.id === "phaser.frequency::pressure") {
-      return { ...mapping, amount: -100 };
+      return { ...mapping, amount: -6 };
+    }
+    if (mapping.id === "drive.amount::macro-1") {
+      return { ...mapping, enabled: false };
     }
     return mapping;
   });

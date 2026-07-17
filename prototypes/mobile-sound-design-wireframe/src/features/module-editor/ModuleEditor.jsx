@@ -1,5 +1,6 @@
 import { CompoundControls } from "./CompoundControls.jsx";
 import { ArrowLeft } from "@phosphor-icons/react";
+import { ArticulationIcon } from "../../design-system/IdentityMark.jsx";
 import { ModuleGraphicSurface } from "./graphics/index.js";
 import { ParameterMatrix } from "./ParameterMatrix.jsx";
 
@@ -11,6 +12,7 @@ export function ModuleEditor({
   onChangeBase,
   onChangeCompound,
   onChangeMappingAmount,
+  onClearArticulationOverride,
   onHaptic,
   onSelectTarget,
   onShowReadout,
@@ -20,6 +22,10 @@ export function ModuleEditor({
   const values = Object.fromEntries(
     controls.map((control) => [control.target.id, control.value]),
   );
+  const selectedControl = controls.find(
+    (control) => control.targetId === selectedTargetId,
+  );
+  const selectedOverride = selectedControl?.articulationOverride || null;
 
   return (
     <section className="module-editor" aria-labelledby="module-editor-title">
@@ -31,6 +37,19 @@ export function ModuleEditor({
           </p>
         </div>
         <div className="module-editor__context">
+          {selectedOverride && (
+            <button
+              aria-label={`Clear ${selectedOverride.articulationId} override for ${selectedControl.label}`}
+              className="module-editor__override"
+              onClick={() => onClearArticulationOverride?.(selectedTargetId)}
+              style={{ "--cosimo-semantic-color": selectedControl.articulationColor }}
+              type="button"
+            >
+              <ArticulationIcon articulation={selectedOverride.articulationId} size={13} />
+              <span className="cosimo-type-label">{selectedOverride.articulationId} override</span>
+              <span aria-hidden="true">×</span>
+            </button>
+          )}
           {returnAction && (
             <button className="module-editor__return" onClick={returnAction.onReturn} type="button">
               <ArrowLeft aria-hidden="true" size={13} />

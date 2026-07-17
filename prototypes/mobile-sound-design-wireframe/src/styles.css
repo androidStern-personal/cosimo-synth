@@ -1,4 +1,4 @@
-@layer cosimo.tokens, cosimo.reset, cosimo.foundation, cosimo.app, cosimo.features, cosimo.module-editor, cosimo.modulation-inspector;
+@layer cosimo.tokens, cosimo.reset, cosimo.foundation, cosimo.app, cosimo.features, cosimo.module-editor;
 
 @import "./design-system/tokens.css";
 @import "./design-system/foundations.css";
@@ -6,7 +6,6 @@
 @import "./features/shell/shell.css";
 @import "./features/rack/rack.css";
 @import "./features/module-editor/module-editor.css";
-@import "./features/modulation/modulation-inspector.css";
 @import "./features/sources/sources.css";
 @import "./features/audition/audition.css";
 
@@ -31,7 +30,7 @@
 
   .cosimo-workspace-stack {
     display: grid;
-    grid-template-rows: minmax(0, 1fr) var(--cosimo-shell-inspector);
+    grid-template-rows: minmax(0, 1fr);
     min-inline-size: 0;
     min-block-size: 0;
     block-size: 100%;

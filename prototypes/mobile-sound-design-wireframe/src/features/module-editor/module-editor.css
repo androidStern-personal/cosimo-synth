@@ -47,6 +47,32 @@
     flex: 0 1 auto;
     align-items: center;
     justify-content: flex-end;
+    gap: var(--cosimo-space-2);
+  }
+
+  .module-editor__override {
+    display: inline-flex;
+    min-inline-size: 0;
+    min-block-size: var(--cosimo-control-small);
+    align-items: center;
+    gap: var(--cosimo-space-1);
+    padding-inline: var(--cosimo-space-2);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    border-block-end: var(--cosimo-stroke-semantic) solid var(--cosimo-semantic-color);
+  }
+
+  .module-editor__override > svg {
+    color: var(--cosimo-semantic-color);
+  }
+
+  .module-editor__override > span:first-of-type {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .module-editor__override > span:last-child {
+    color: var(--cosimo-color-ink-muted);
   }
 
   .module-editor__return {
@@ -86,6 +112,7 @@
    * overlay lane so parameter selection never moves the editor.
    */
   .compound-controls {
+    border-radius: var(--cosimo-radius);
     position: absolute;
     z-index: var(--cosimo-z-content);
     inset-block-start: var(--cosimo-space-2);
@@ -162,6 +189,7 @@
    * large invisible touch surfaces.
    */
   .parameter-matrix {
+    border-radius: var(--cosimo-radius);
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     grid-auto-rows: var(--cosimo-matrix-row);
@@ -287,6 +315,10 @@
     background: var(--cosimo-semantic-color);
   }
 
+  .parameter-control__mapping[data-disabled] {
+    opacity: 0.35;
+  }
+
   .parameter-control__default,
   .parameter-control__patch-base,
   .parameter-control__handle {
@@ -320,6 +352,15 @@
     font-family: var(--cosimo-font-value);
     font-size: var(--cosimo-type-micro-size);
     line-height: var(--cosimo-type-micro-line);
+  }
+
+  /*
+   * Calm-despite-power: only the selected cell speaks its X/Y caption line.
+   * The line's geometry stays reserved on every cell so selection never
+   * reflows the matrix.
+   */
+  .parameter-control:not([data-state="selected"]) .parameter-control__foot {
+    visibility: hidden;
   }
 
   .parameter-control__foot .cosimo-value {

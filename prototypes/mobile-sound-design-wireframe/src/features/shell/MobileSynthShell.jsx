@@ -27,7 +27,7 @@ export function MobileSynthShell({
   header,
   rack,
   readout = "",
-  sourceShelf,
+  sourceRail,
   style,
 }) {
   return (
@@ -47,7 +47,7 @@ export function MobileSynthShell({
         {children}
       </div>
       <div className="cosimo-shell-region cosimo-synth-shell__sources" data-shell-region="sources">
-        {sourceShelf}
+        {sourceRail}
       </div>
       <div className="cosimo-shell-region cosimo-synth-shell__audition" data-shell-region="audition">
         {audition}

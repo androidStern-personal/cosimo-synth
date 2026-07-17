@@ -1,9 +1,12 @@
 import {
+  ArrowsVertical,
   BezierCurve,
   Circle,
   CursorClick,
   Feather,
+  Fingerprint,
   Gauge,
+  HandTap,
   Lightning,
   Pulse,
   Waveform,
@@ -16,6 +19,13 @@ const SOURCE_ICONS = {
   fixed: Waveform,
 };
 
+// Fixed performance sources share a type but are distinct rail identities.
+const FIXED_SOURCE_ICONS = {
+  velocity: HandTap,
+  pressure: Fingerprint,
+  slide: ArrowsVertical,
+};
+
 const ARTICULATION_ICONS = {
   Default: Circle,
   Pluck: CursorClick,
@@ -24,7 +34,9 @@ const ARTICULATION_ICONS = {
 };
 
 export function SourceIcon({ source, size = 18 }) {
-  const Icon = SOURCE_ICONS[source?.type] || Waveform;
+  const Icon = FIXED_SOURCE_ICONS[source?.id]
+    || SOURCE_ICONS[source?.type]
+    || Waveform;
   return <Icon aria-hidden="true" size={size} weight="regular" />;
 }
 

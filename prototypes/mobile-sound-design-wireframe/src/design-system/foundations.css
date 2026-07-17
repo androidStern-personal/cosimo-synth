@@ -27,8 +27,12 @@
     appearance: none;
     padding: var(--cosimo-space-0);
     border: var(--cosimo-space-0);
-    border-radius: var(--cosimo-space-0);
+    border-radius: var(--cosimo-radius);
     background: transparent;
+  }
+
+  :where(.cosimo-ui, [data-cosimo-ui]) :where(input, output) {
+    border-radius: var(--cosimo-radius);
   }
 
   :where(.cosimo-ui, [data-cosimo-ui]) button {
@@ -47,13 +51,9 @@
     --cosimo-shell-rack: var(--cosimo-shell-rack-master);
     --cosimo-shell-sources: var(--cosimo-shell-sources-master);
     --cosimo-shell-audition: var(--cosimo-shell-audition-master);
-    --cosimo-shell-inspector: var(--cosimo-shell-inspector-master);
-    --cosimo-inspector-chips: var(--cosimo-inspector-chips-master);
-    --cosimo-inspector-detail: var(--cosimo-inspector-detail-master);
     --cosimo-module-header: var(--cosimo-module-header-master);
     --cosimo-matrix-row: var(--cosimo-matrix-row-master);
     --cosimo-rack-tile: var(--cosimo-rack-tile-width);
-    --cosimo-source-chip: var(--cosimo-source-chip-width);
     --cosimo-gutter: var(--cosimo-gutter-screen);
 
     position: relative;
@@ -98,6 +98,7 @@
 
   .cosimo-frame {
     border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
+    border-radius: var(--cosimo-radius);
   }
 
   .cosimo-rule-before {
@@ -139,6 +140,7 @@
     min-inline-size: 0;
     block-size: var(--cosimo-control-small);
     border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    border-radius: var(--cosimo-radius);
     background: var(--cosimo-color-paper);
   }
 
@@ -280,13 +282,6 @@
     contain: layout paint;
   }
 
-  .cosimo-inspector-slot {
-    block-size: var(--cosimo-shell-inspector);
-    min-block-size: var(--cosimo-shell-inspector);
-    max-block-size: var(--cosimo-shell-inspector);
-    overflow: clip;
-  }
-
   [data-scroll-surface="horizontal"] {
     min-inline-size: 0;
     overflow-x: auto;
@@ -314,13 +309,9 @@
       --cosimo-shell-rack: var(--cosimo-shell-rack-compact);
       --cosimo-shell-sources: var(--cosimo-shell-sources-compact);
       --cosimo-shell-audition: var(--cosimo-shell-audition-compact);
-      --cosimo-shell-inspector: var(--cosimo-shell-inspector-compact);
-      --cosimo-inspector-chips: var(--cosimo-inspector-chips-compact);
-      --cosimo-inspector-detail: var(--cosimo-inspector-detail-compact);
       --cosimo-module-header: var(--cosimo-module-header-compact);
       --cosimo-matrix-row: var(--cosimo-matrix-row-compact);
       --cosimo-rack-tile: var(--cosimo-rack-tile-width-compact);
-      --cosimo-source-chip: var(--cosimo-source-chip-width-compact);
       --cosimo-gutter: var(--cosimo-gutter-compact);
 
       inline-size: min(100%, var(--cosimo-shell-width-compact));

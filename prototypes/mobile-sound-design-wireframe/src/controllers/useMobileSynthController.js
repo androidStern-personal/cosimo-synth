@@ -6,11 +6,12 @@ import {
   TARGETS,
   VOICE_MODULES,
 } from "../domain/catalog.js";
-import { formatValue, sourceColor } from "../domain/formatting.js";
+import { formatValue, modAmountSpec, sourceColor } from "../domain/formatting.js";
 import { firstAvailableSourceSlot } from "../domain/policies.js";
 import {
-  selectAvailableSourcesForTarget,
+  selectArticulationMappingAmount,
   selectAvailableTargetsForSource,
+  selectEffectiveMappingAmount,
   selectEffectiveParameterValue,
   selectMappingCounts,
   selectMappingsForSource,
@@ -165,7 +166,8 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   };
 
   const openSource = (sourceId, { allowPending = false } = {}) => {
-    if ((!allowPending && !sourceLookup[sourceId]) || sourceId === "pressure") return;
+    // Fixed performance sources (velocity/pressure/slide) have no editor.
+    if ((!allowPending && !sourceLookup[sourceId]) || sourceLookup[sourceId]?.type === "fixed") return;
     if (!sourceFocusId) {
       setReturnContext({ workspace, moduleId: activeModuleId, targetId: selectedTargetId });
     }
@@ -244,6 +246,10 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const mappingsForSelectedTarget = selectMappingsForTarget(patch, selectedTargetId)
     .map((mapping) => ({
       ...mapping,
+      amount: selectEffectiveMappingAmount(patch, mapping, audition.articulation),
+      hasAmountOverride:
+        selectArticulationMappingAmount(patch, mapping, audition.articulation) != null,
+      modSpec: modAmountSpec(TARGETS[mapping.targetKey]),
       needsReducer: selectReducerRequirement(patch, mapping.id),
     }));
   const activeMappingId = activeMappingByTarget[selectedTargetId]
@@ -360,7 +366,13 @@ export function useMobileSynthController(adapter, initialSession = {}) {
             TARGETS[mapping.targetKey],
             control.value,
           ),
-          mapping,
+          mapping: {
+            ...mapping,
+            amount: selectEffectiveMappingAmount(patch, mapping, audition.articulation),
+            hasAmountOverride:
+              selectArticulationMappingAmount(patch, mapping, audition.articulation) != null,
+            modSpec: modAmountSpec(TARGETS[mapping.targetKey]),
+          },
           needsReducer: selectReducerRequirement(patch, mapping.id),
           patchBaseValue: control.patchBaseValue,
           target: TARGETS[mapping.targetKey],
@@ -390,9 +402,6 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       readout,
       returnToSource: sourceReturn,
       selectedTarget,
-      selectedTargetControl: parameterControls.find(
-        (control) => control.targetId === selectedTargetId,
-      ),
       selectedTargetId,
       sourceCounts: selectMappingCounts(patch),
       sourceCloseLabel: MODULES_BY_ID[returnContext?.moduleId]?.label || activeModule.label,
@@ -407,15 +416,12 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       sourceMappingId,
       sourceScrollTop,
       sourceTargetAddOpen,
-      availableSources: selectAvailableSourcesForTarget(patch, selectedTargetId)
-        .map((source) => sourceLookup[source.id]),
       availableTargets: focusedSource
         ? selectAvailableTargetsForSource(patch, focusedSource.id)
         : [],
       workspace,
     },
     actions: {
-      addMapping: (sourceId) => addMapping(selectedTargetId, sourceId),
       addSource(type) {
         const sourceId = commands.createSource(type);
         setSourceAddOpen(false);
@@ -526,6 +532,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       setCompound: commands.setCompoundSetting,
       setEffectEnabled: commands.setEffectEnabled,
       setLatch: commands.setLatchEnabled,
+      setMappingEnabled: commands.setMappingEnabled,
       setMappingPolarity: commands.setMappingPolarity,
       setMappingReducer: commands.setMappingReducer,
       setNote: commands.setAuditionNote,

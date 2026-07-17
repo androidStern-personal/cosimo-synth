@@ -44,6 +44,22 @@ export function selectMappingsForTarget(patch, targetId) {
   return patch.mappings.filter((item) => item.targetKey === targetId);
 }
 
+/*
+ * Articulations override route amounts, mirroring the real engine's
+ * per-articulation routeAmounts. Only per-note voice targets participate;
+ * global effect mappings stay patch-base, like base values.
+ */
+export function selectArticulationMappingAmount(patch, mapping, articulationId) {
+  if (!articulationId || articulationId === "Default") return null;
+  if (TARGETS[mapping.targetKey]?.workspace !== "voice") return null;
+  const override = patch.articulationMappingAmounts[articulationId]?.[mapping.id];
+  return override == null ? null : override;
+}
+
+export function selectEffectiveMappingAmount(patch, mapping, articulationId) {
+  return selectArticulationMappingAmount(patch, mapping, articulationId) ?? mapping.amount;
+}
+
 export function selectMappingsForSource(patch, sourceId) {
   return patch.mappings.filter((item) => item.sourceId === sourceId);
 }
@@ -90,9 +106,17 @@ export function selectParameterControlViewModel(
   if (!target) return null;
   const sourceLookup = selectSourceLookup(patch);
   const targetMappings = selectMappingsForTarget(patch, targetId);
-  const activeMapping = targetMappings.find((item) => item.sourceId === activeSourceId)
+  const rawActiveMapping = targetMappings.find((item) => item.sourceId === activeSourceId)
     || targetMappings[0]
     || null;
+  const activeMapping = rawActiveMapping
+    ? {
+        ...rawActiveMapping,
+        amount: selectEffectiveMappingAmount(patch, rawActiveMapping, audition.articulation),
+        hasAmountOverride:
+          selectArticulationMappingAmount(patch, rawActiveMapping, audition.articulation) != null,
+      }
+    : null;
   const source = activeMapping ? sourceLookup[activeMapping.sourceId] : null;
   const override = selectArticulationOverrides(
     patch,

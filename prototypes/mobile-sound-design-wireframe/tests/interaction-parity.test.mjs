@@ -72,10 +72,8 @@ const vite = await createServer({
 });
 after(async () => vite.close());
 const { ParameterControl } = await vite.ssrLoadModule("/src/features/module-editor/ParameterControl.jsx");
-const { MappingChip } = await vite.ssrLoadModule("/src/features/modulation/MappingChip.jsx");
-const { ModulationInspector } = await vite.ssrLoadModule("/src/features/modulation/ModulationInspector.jsx");
 const { SourceTargetRow } = await vite.ssrLoadModule("/src/features/sources/SourceTargetList.jsx");
-const { SourceShelf } = await vite.ssrLoadModule("/src/features/sources/SourceShelf.jsx");
+const { SourceRail } = await vite.ssrLoadModule("/src/features/sources/SourceRail.jsx");
 const { ModuleGraphicSurface } = await vite.ssrLoadModule("/src/features/module-editor/graphics/ModuleGraphicSurface.jsx");
 const { EffectRack } = await vite.ssrLoadModule("/src/features/rack/EffectRack.jsx");
 const { AuditionTransport } = await vite.ssrLoadModule("/src/features/audition/AuditionTransport.jsx");
@@ -121,7 +119,14 @@ function click(node) {
 function makeControl(overrides = {}) {
   const source = { id: "mseg-1", label: "MSEG 1", slot: 1, type: "mseg" };
   return {
-    activeMapping: { amount: 25, id: "phaser.depth::mseg-1", source, sourceId: source.id },
+    activeMapping: {
+      amount: 25,
+      enabled: true,
+      id: "phaser.depth::mseg-1",
+      polarity: "Unipolar",
+      source,
+      sourceId: source.id,
+    },
     activeSource: source,
     activeSourceColor: "#d85b36",
     articulationColor: "#d2a128",
@@ -130,6 +135,7 @@ function makeControl(overrides = {}) {
     formatValue: (value) => `${Math.round(value)}%`,
     label: "Depth",
     patchBaseValue: 40,
+    target: { key: "phaser.depth", format: "percent" },
     targetId: "phaser.depth",
     value: 50,
     ...overrides,
@@ -258,70 +264,315 @@ test("parameter keyboard nudges and articulation patch-base marker survive refac
   view.unmount();
 });
 
-test("mapping chip vertical drag activates that relationship and never falls through to click", () => {
-  const amounts = [];
-  const haptics = [];
-  let selections = 0;
-  const source = { id: "mseg-1", label: "MSEG 1", slot: 1, type: "mseg" };
-  const mapping = { amount: 20, id: "phaser.frequency::mseg-1", sourceId: source.id };
-  const view = render(React.createElement(MappingChip, {
-    color: "#d85b36",
-    isSelected: false,
-    mapping,
-    onAmountChange: (_id, value) => amounts.push(value),
-    onHaptic: (kind) => haptics.push(kind),
-    onSelect: () => { selections += 1; },
-    onShowReadout: () => {},
-    source,
-    targetLabel: "Frequency",
+const RAIL_SOURCES = Object.freeze([
+  { id: "macro-1", label: "Macro 1", slot: 1, type: "macro" },
+  { id: "envelope-1", label: "Envelope 1", slot: 1, type: "envelope" },
+]);
+const RAIL_FIXED_SOURCES = Object.freeze([
+  { id: "velocity", label: "Velocity", slot: null, type: "fixed" },
+  { id: "pressure", label: "Pressure", slot: null, type: "fixed" },
+]);
+
+const PERCENT_SPEC = Object.freeze({ min: -100, max: 100, unit: "%", digits: 0 });
+
+function litMapping(sourceId, amount, overrides = {}) {
+  return {
+    amount,
+    enabled: true,
+    id: `phaser.depth::${sourceId}`,
+    modSpec: PERCENT_SPEC,
+    polarity: "Unipolar",
+    sourceId,
+    ...overrides,
+  };
+}
+
+function renderRail(overrides = {}) {
+  const calls = {
+    amounts: [],
+    dragStarts: [],
+    enabledChanges: [],
+    focusedMappings: [],
+    focusedSources: [],
+    haptics: [],
+    polarityChanges: [],
+    removedMappings: [],
+  };
+  const view = render(React.createElement(SourceRail, {
+    attachmentCounts: { "macro-1": 1, "envelope-1": 2, velocity: 1 },
+    fixedSources: RAIL_FIXED_SOURCES,
+    litMappings: { "macro-1": litMapping("macro-1", 20) },
+    onDeleteSource: () => {},
+    onFocusMapping: (mappingId) => calls.focusedMappings.push(mappingId),
+    onFocusSource: (sourceId) => calls.focusedSources.push(sourceId),
+    onHaptic: (kind) => calls.haptics.push(kind),
+    onRemoveMapping: (mappingId) => calls.removedMappings.push(mappingId),
+    onScrubMappingAmount: (_id, amount) => calls.amounts.push(amount),
+    onSetMappingEnabled: (mappingId, enabled) => calls.enabledChanges.push([mappingId, enabled]),
+    onSetMappingPolarity: (mappingId, polarity) => calls.polarityChanges.push([mappingId, polarity]),
+    onSourceDragStart: ({ sourceId }) => calls.dragStarts.push(sourceId),
+    sources: RAIL_SOURCES,
+    targetLabel: "Depth",
+    ...overrides,
   }));
-  const chip = view.host.querySelector("button.mapping-chip");
+  const chip = (sourceId) => [...view.host.querySelectorAll("button.cosimo-source-chip")]
+    .find((node) => node.title === ({
+      "macro-1": "Macro 1",
+      "envelope-1": "Envelope 1",
+      velocity: "Velocity",
+      pressure: "Pressure",
+    })[sourceId]);
+  return { ...view, calls, chip };
+}
+
+test("rail lights exactly the selected parameter's attachments with their amounts", () => {
+  const rail = renderRail();
+  const lit = rail.chip("macro-1");
+  assert.equal(lit.dataset.lit, "true");
+  assert.match(lit.textContent, /\+20%/);
+  const unlit = rail.chip("envelope-1");
+  assert.equal(unlit.dataset.lit, undefined);
+  assert.doesNotMatch(unlit.textContent, /%/);
+  assert.ok(rail.chip("velocity"), "fixed performance sources appear on the rail");
+  assert.equal(rail.chip("velocity").dataset.lit, undefined);
+  rail.unmount();
+});
+
+test("lit rail chip vertical scrub doses that mapping, focuses it, and never falls through to tap", () => {
+  const rail = renderRail();
+  const chip = rail.chip("macro-1");
   pointer(chip, "pointerdown", 30, 40);
   pointer(chip, "pointermove", 31, 5);
   pointer(chip, "pointerup", 31, 5);
   click(chip);
-  assert.equal(selections, 1);
-  assert.equal(amounts.at(-1), 100);
-  assert.deepEqual(haptics, ["light"]);
-  view.unmount();
+  assert.deepEqual(rail.calls.focusedMappings, ["phaser.depth::macro-1"]);
+  assert.equal(rail.calls.amounts.at(-1), 100);
+  assert.deepEqual(rail.calls.dragStarts, [], "a scrub must never become an assignment drag");
+  assert.deepEqual(rail.calls.focusedSources, [], "a scrub must never open the source editor");
+  assert.deepEqual(rail.calls.haptics, ["light"]);
+  rail.unmount();
 });
 
-test("mapping selection swaps one permanently mounted detail surface", () => {
-  const sources = {
-    "macro-1": { color: "#9d5ca8", id: "macro-1", label: "Macro 1", slot: 1, type: "macro" },
-    "mseg-1": { color: "#d85b36", id: "mseg-1", label: "MSEG 1", slot: 1, type: "mseg" },
-  };
-  const mappings = [
-    { amount: 22, id: "phaser.depth::macro-1", needsReducer: false, polarity: "Unipolar", reducer: "Max", sourceId: "macro-1" },
-    { amount: 40, id: "phaser.depth::mseg-1", needsReducer: true, polarity: "Bipolar", reducer: "Mean", sourceId: "mseg-1" },
-  ];
-  function Harness() {
-    const [activeId, setActiveId] = React.useState(mappings[0].id);
-    return React.createElement(ModulationInspector, {
-      activeMappingId: activeId,
-      availableSources: [],
-      mappings,
-      onAddMapping: () => {},
-      onChangeAmount: () => {},
-      onClearArticulationOverride: () => {},
-      onOpenSource: () => {},
-      onRemoveMapping: () => {},
-      onSelectMapping: setActiveId,
-      onSetPolarity: () => {},
-      onSetReducer: () => {},
-      onShowReadout: () => {},
-      sourceLookup: sources,
-      target: { label: "Depth" },
-    });
-  }
-  const view = render(React.createElement(Harness));
-  assert.equal(view.host.querySelectorAll(".mapping-detail").length, 1);
-  assert.match(view.host.querySelector(".mapping-detail").textContent, /Macro 1/);
-  click(view.host.querySelectorAll("button.mapping-chip")[1]);
-  assert.equal(view.host.querySelectorAll(".mapping-detail").length, 1);
-  assert.match(view.host.querySelector(".mapping-detail").textContent, /MSEG 1/);
-  assert.equal(view.host.querySelectorAll(".mapping-focus-editor").length, 0);
-  view.unmount();
+test("lit rail chip drag always scrubs — even after a long stationary hold", async () => {
+  const rail = renderRail();
+  const chip = rail.chip("macro-1");
+
+  pointer(chip, "pointerdown", 30, 40, 3);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 300)));
+  pointer(chip, "pointermove", 31, 10, 3);
+  pointer(chip, "pointerup", 31, 10, 3);
+  click(chip);
+  assert.deepEqual(rail.calls.dragStarts, [], "a lit chip must never carry");
+  assert.ok(rail.calls.amounts.length > 0, "the hesitant vertical drag still scrubs");
+  assert.deepEqual(rail.calls.focusedMappings, ["phaser.depth::macro-1"]);
+  assert.deepEqual(rail.calls.focusedSources, []);
+  rail.unmount();
+});
+
+test("long-press on a lit chip manages this mapping: polarity, enable, and remove", async () => {
+  const rail = renderRail({
+    litMappings: {
+      "macro-1": litMapping("macro-1", 20),
+      velocity: litMapping("velocity", 40),
+    },
+  });
+  const macro = rail.chip("macro-1");
+  pointer(macro, "pointerdown", 20, 20, 8);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 540)));
+  pointer(macro, "pointerup", 20, 20, 8);
+  const menu = rail.host.querySelector('[aria-label="Macro 1 actions"]');
+  assert.ok(menu, "long press must expose actions for a lit user chip");
+  assert.match(menu.textContent, /Unipolar/);
+  assert.match(menu.textContent, /Disable/);
+  assert.match(menu.textContent, /Remove from Depth/);
+  assert.match(menu.textContent, /Delete/);
+  click([...menu.querySelectorAll("button")].find((b) => /Unipolar/.test(b.textContent)));
+  assert.deepEqual(rail.calls.polarityChanges, [["phaser.depth::macro-1", "Bipolar"]]);
+  click([...menu.querySelectorAll("button")].find((b) => /Disable/.test(b.textContent)));
+  assert.deepEqual(rail.calls.enabledChanges, [["phaser.depth::macro-1", false]]);
+  click([...menu.querySelectorAll("button")].find((b) => /Remove from Depth/.test(b.textContent)));
+  assert.deepEqual(rail.calls.removedMappings, ["phaser.depth::macro-1"]);
+
+  const velocity = rail.chip("velocity");
+  pointer(velocity, "pointerdown", 20, 20, 9);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 540)));
+  pointer(velocity, "pointerup", 20, 20, 9);
+  const fixedMenu = rail.host.querySelector('[aria-label="Velocity actions"]');
+  assert.ok(fixedMenu, "a lit fixed source is manageable");
+  assert.match(fixedMenu.textContent, /Remove from Depth/);
+  assert.doesNotMatch(fixedMenu.textContent, /Delete/, "fixed sources can never be deleted");
+  rail.unmount();
+});
+
+test("a disabled mapping stays lit with a struck amount and per-target units render on chips", () => {
+  const rail = renderRail({
+    litMappings: {
+      "macro-1": litMapping("macro-1", 20, { enabled: false }),
+      "envelope-1": litMapping("envelope-1", 2.4, {
+        id: "phaser.frequency::envelope-1",
+        modSpec: { min: -6, max: 6, unit: "oct", digits: 1 },
+        polarity: "Bipolar",
+      }),
+    },
+  });
+  const disabled = rail.chip("macro-1");
+  assert.equal(disabled.dataset.lit, "true");
+  assert.equal(disabled.dataset.disabled, "true");
+  assert.match(disabled.textContent, /\+20%/);
+  assert.match(rail.chip("envelope-1").textContent, /±2\.4oct/, "bipolar octave amounts read as ±X oct");
+  rail.unmount();
+});
+
+test("a bipolar mapping's band straddles the base while unipolar pushes one way", () => {
+  const bipolar = render(React.createElement(ParameterControl, {
+    control: makeControl({
+      activeMapping: {
+        amount: 25,
+        enabled: true,
+        id: "phaser.depth::mseg-1",
+        polarity: "Bipolar",
+        source: { id: "mseg-1", label: "MSEG 1", slot: 1, type: "mseg" },
+        sourceId: "mseg-1",
+      },
+    }),
+    onChangeBase: () => {},
+    onChangeMappingAmount: () => {},
+    onSelect: () => {},
+    onShowReadout: () => {},
+    ordinal: 2,
+  }));
+  const bipolarTrack = bipolar.host.querySelector(".parameter-control__track");
+  assert.equal(bipolarTrack.style.getPropertyValue("--parameter-mapping-start"), "25%");
+  assert.equal(bipolarTrack.style.getPropertyValue("--parameter-mapping-width"), "50%");
+  assert.match(bipolar.host.textContent, /±25%/);
+  bipolar.unmount();
+
+  const unipolar = render(React.createElement(ParameterControl, {
+    control: makeControl({
+      activeMapping: {
+        amount: -25,
+        enabled: true,
+        id: "phaser.depth::mseg-1",
+        polarity: "Unipolar",
+        source: { id: "mseg-1", label: "MSEG 1", slot: 1, type: "mseg" },
+        sourceId: "mseg-1",
+      },
+    }),
+    onChangeBase: () => {},
+    onChangeMappingAmount: () => {},
+    onSelect: () => {},
+    onShowReadout: () => {},
+    ordinal: 2,
+  }));
+  const unipolarTrack = unipolar.host.querySelector(".parameter-control__track");
+  assert.equal(unipolarTrack.style.getPropertyValue("--parameter-mapping-start"), "25%");
+  assert.equal(unipolarTrack.style.getPropertyValue("--parameter-mapping-width"), "25%");
+  assert.match(unipolar.host.textContent, /-25%/, "an inverted unipolar amount reads as -X");
+  unipolar.unmount();
+});
+
+test("articulation route amounts override per-note voice mappings and leave the base untouched", () => {
+  const controller = renderController();
+  controller.run(({ actions }) => actions.focusModule("wavetable"));
+  controller.run(({ actions }) => actions.selectTarget("wavetable.warp"));
+  controller.run(({ actions }) => actions.setArticulation("Pluck"));
+  controller.run(({ actions }) => actions.changeMappingAmount("wavetable.warp::envelope-1", 90));
+
+  assert.equal(
+    controller.current().state.patch.articulationMappingAmounts.Pluck["wavetable.warp::envelope-1"],
+    90,
+  );
+  assert.equal(
+    controller.current().state.patch.mappings
+      .find((item) => item.id === "wavetable.warp::envelope-1").amount,
+    40,
+    "the patch-base amount must not move",
+  );
+  let mapping = controller.current().state.mappingsForSelectedTarget[0];
+  assert.equal(mapping.amount, 90);
+  assert.equal(mapping.hasAmountOverride, true);
+
+  controller.run(({ actions }) => actions.setArticulation("Default"));
+  mapping = controller.current().state.mappingsForSelectedTarget[0];
+  assert.equal(mapping.amount, 40, "Default reads the patch-base amount");
+  assert.equal(mapping.hasAmountOverride, false);
+
+  controller.run(({ actions }) => actions.setArticulation("Pluck"));
+  controller.run(({ actions }) => actions.clearArticulationOverride("wavetable.warp"));
+  assert.equal(
+    controller.current().state.patch.articulationMappingAmounts.Pluck["wavetable.warp::envelope-1"],
+    undefined,
+    "Reset clears the route-amount override with the base override",
+  );
+
+  controller.run(({ actions }) => actions.focusModule("phaser"));
+  controller.run(({ actions }) => actions.selectTarget("phaser.depth"));
+  controller.run(({ actions }) => actions.changeMappingAmount("phaser.depth::macro-1", 77));
+  assert.equal(
+    controller.current().state.patch.mappings
+      .find((item) => item.id === "phaser.depth::macro-1").amount,
+    77,
+    "global effect mappings stay patch-base even with an articulation active",
+  );
+  controller.unmount();
+});
+
+test("unlit and fixed chips begin an assignment drag immediately with a ghost chip", () => {
+  const rail = renderRail();
+  const envelope = rail.chip("envelope-1");
+  pointer(envelope, "pointerdown", 30, 40, 4);
+  pointer(envelope, "pointermove", 31, 20, 4);
+  const ghost = rail.host.querySelector(".cosimo-source-rail__ghost");
+  assert.ok(ghost, "a ghost chip must follow the pointer during assignment");
+  assert.match(ghost.textContent, /Envelope 1/);
+  pointer(envelope, "pointerup", 31, 20, 4);
+  click(envelope);
+  assert.equal(rail.host.querySelector(".cosimo-source-rail__ghost"), null, "drop dismisses the ghost");
+  const velocity = rail.chip("velocity");
+  pointer(velocity, "pointerdown", 30, 40, 5);
+  pointer(velocity, "pointermove", 55, 41, 5);
+  pointer(velocity, "pointerup", 55, 41, 5);
+  click(velocity);
+  assert.deepEqual(
+    rail.calls.dragStarts,
+    ["envelope-1", "velocity"],
+    "the rail never scrolls, so a horizontal drag on an unlit chip also assigns",
+  );
+  assert.deepEqual(rail.calls.focusedSources, [], "drags must never fall through to tap");
+  rail.unmount();
+});
+
+test("a horizontal drag on a lit chip is inert — never a scrub, carry, or tap", () => {
+  const rail = renderRail();
+  const chip = rail.chip("macro-1");
+  pointer(chip, "pointerdown", 30, 40, 10);
+  pointer(chip, "pointermove", 60, 42, 10);
+  pointer(chip, "pointerup", 60, 42, 10);
+  click(chip);
+  assert.deepEqual(rail.calls.amounts, []);
+  assert.deepEqual(rail.calls.dragStarts, []);
+  assert.deepEqual(rail.calls.focusedSources, []);
+  rail.unmount();
+});
+
+test("rail tap opens the source editor and fixed sources expose no management menu", async () => {
+  const rail = renderRail();
+  const envelope = rail.chip("envelope-1");
+  pointer(envelope, "pointerdown", 20, 20, 6);
+  pointer(envelope, "pointerup", 20, 20, 6);
+  click(envelope);
+  assert.deepEqual(rail.calls.focusedSources, ["envelope-1"]);
+
+  const pressure = rail.chip("pressure");
+  pointer(pressure, "pointerdown", 20, 20, 7);
+  await act(async () => new Promise((resolve) => setTimeout(resolve, 540)));
+  pointer(pressure, "pointerup", 20, 20, 7);
+  assert.equal(
+    rail.host.querySelector('[aria-label="Pressure actions"]'),
+    null,
+    "long-pressing a fixed source must not open a management menu",
+  );
+  rail.unmount();
 });
 
 test("source target row keeps X-base, Y-source amount, open-target, and drop identity separate", () => {
@@ -338,7 +589,7 @@ test("source target row keeps X-base, Y-source amount, open-target, and drop ide
     articulationOverride: { articulationId: "Pluck", value: 40 },
     formatValue: (value) => `${Math.round(value)}%`,
     formattedBaseValue: "40%",
-    mapping: { amount: 30, id: "wavetable.warp::envelope-1", polarity: "Bipolar", reducer: "Max" },
+    mapping: { amount: 30, enabled: true, id: "wavetable.warp::envelope-1", modSpec: { min: -100, max: 100, unit: "%", digits: 0 }, polarity: "Bipolar", reducer: "Max" },
     needsReducer: false,
     patchBaseValue: 30,
     target: { defaultValue: 50, key: "wavetable.warp", label: "Warp", moduleLabel: "Wavetable" },
@@ -369,7 +620,8 @@ test("source target row keeps X-base, Y-source amount, open-target, and drop ide
   pointer(control, "pointerup", 42, 5, 2);
   assert.equal(amounts.at(-1), 100);
   assert.equal(view.host.querySelector(".cosimo-source-target__patch-base").style.insetInlineStart, "30%");
-  assert.equal(view.host.querySelector(".cosimo-source-target__mapping-range").style.inlineSize, "15%");
+  assert.equal(view.host.querySelector(".cosimo-source-target__mapping-range").style.insetInlineStart, "10%", "a bipolar band straddles the base");
+  assert.equal(view.host.querySelector(".cosimo-source-target__mapping-range").style.inlineSize, "60%");
   act(() => control.dispatchEvent(new dom.window.KeyboardEvent("keydown", {
     bubbles: true,
     cancelable: true,
@@ -395,7 +647,7 @@ test("source target tap remains expanded after pointer-down establishes drag own
     articulationOverride: { articulationId: "Pluck", value: 40 },
     formatValue: (value) => `${Math.round(value)}%`,
     formattedBaseValue: "40%",
-    mapping: { amount: 30, id: "wavetable.warp::envelope-1", polarity: "Bipolar", reducer: "Max" },
+    mapping: { amount: 30, enabled: true, id: "wavetable.warp::envelope-1", modSpec: { min: -100, max: 100, unit: "%", digits: 0 }, polarity: "Bipolar", reducer: "Max" },
     needsReducer: false,
     patchBaseValue: 30,
     target: { defaultValue: 50, key: "wavetable.warp", label: "Warp", moduleLabel: "Wavetable" },
@@ -479,7 +731,7 @@ test("source long press opens management without also opening the source", async
   let focusCount = 0;
   let deletedId = null;
   const source = { id: "envelope-1", label: "Envelope 1", slot: 1, type: "envelope" };
-  const view = render(React.createElement(SourceShelf, {
+  const view = render(React.createElement(SourceRail, {
     attachmentCounts: { "envelope-1": 2 },
     onDeleteSource: (sourceId) => { deletedId = sourceId; },
     onFocusSource: () => { focusCount += 1; },
@@ -678,12 +930,20 @@ test("fallback Trigger timer cannot terminate a newer held note", async () => {
   controller.unmount();
 });
 
-test("target-side Add Source includes Velocity, Pressure, and Slide", () => {
+test("fixed performance sources drop-assign like any source but never open an editor", () => {
   const controller = renderController();
-  controller.run(({ actions }) => actions.selectTarget("phaser.feedback"));
-  const available = new Set(controller.current().state.availableSources.map((source) => source.id));
-  assert.equal(available.has("velocity"), true);
-  assert.equal(available.has("pressure"), true);
-  assert.equal(available.has("slide"), true);
+  const originalElementFromPoint = document.elementFromPoint;
+  document.elementFromPoint = () => ({
+    closest: () => ({ getAttribute: () => "phaser.feedback" }),
+  });
+  controller.run(({ actions }) => actions.beginSourceDrag("velocity"));
+  controller.run(({ actions }) => actions.moveSourceDrag(30, 30));
+  controller.run(({ actions }) => actions.stopSourceDrag());
+  assert.ok(controller.current().state.patch.mappings.some(
+    (mapping) => mapping.targetKey === "phaser.feedback" && mapping.sourceId === "velocity",
+  ));
+  controller.run(({ actions }) => actions.openSource("velocity"));
+  assert.equal(controller.current().state.focusedSource, null);
+  document.elementFromPoint = originalElementFromPoint;
   controller.unmount();
 });

@@ -70,6 +70,9 @@
     --cosimo-stroke-active: 2px;
     --cosimo-stroke-semantic: 3px;
 
+    /* One tiny corner radius everywhere; nothing else may round. */
+    --cosimo-radius: 2px;
+
     /* Typography families */
     --cosimo-font-label: "Cosimo Instrument Sans", "Arial Narrow", system-ui, sans-serif;
     --cosimo-font-value: "Cosimo Instrument Mono", ui-monospace, monospace;
@@ -127,17 +130,9 @@
     --cosimo-shell-width-master: 390px;
     --cosimo-shell-height-master: 844px;
     --cosimo-shell-header-master: 48px;
-    --cosimo-shell-rack-master: 96px;
-    --cosimo-shell-sources-master: 48px;
+    --cosimo-shell-rack-master: 80px;
+    --cosimo-shell-sources-master: 108px;
     --cosimo-shell-audition-master: 88px;
-    --cosimo-inspector-chips-master: 44px;
-    --cosimo-inspector-detail-master: 76px;
-    --cosimo-shell-inspector-master: calc(
-      var(--cosimo-stroke-structural)
-      + var(--cosimo-inspector-chips-master)
-      + var(--cosimo-stroke-hairline)
-      + var(--cosimo-inspector-detail-master)
-    );
     --cosimo-module-header-master: 40px;
     --cosimo-matrix-row-master: 60px;
 
@@ -145,17 +140,9 @@
     --cosimo-shell-width-compact: 375px;
     --cosimo-shell-height-compact: 667px;
     --cosimo-shell-header-compact: 44px;
-    --cosimo-shell-rack-compact: 88px;
-    --cosimo-shell-sources-compact: 44px;
+    --cosimo-shell-rack-compact: 76px;
+    --cosimo-shell-sources-compact: 100px;
     --cosimo-shell-audition-compact: 80px;
-    --cosimo-inspector-chips-compact: 40px;
-    --cosimo-inspector-detail-compact: 64px;
-    --cosimo-shell-inspector-compact: calc(
-      var(--cosimo-stroke-structural)
-      + var(--cosimo-inspector-chips-compact)
-      + var(--cosimo-stroke-hairline)
-      + var(--cosimo-inspector-detail-compact)
-    );
     --cosimo-module-header-compact: 32px;
     --cosimo-matrix-row-compact: 50px;
 
@@ -164,10 +151,6 @@
     --cosimo-rack-tile-width: 192px;
     --cosimo-rack-tile-width-compact: 192px;
     --cosimo-rack-rail-width: 44px;
-    --cosimo-chip-min-width: 128px;
-    --cosimo-detail-source-width: 132px;
-    --cosimo-source-chip-width: 56px;
-    --cosimo-source-chip-width-compact: 52px;
     --cosimo-audition-articulation-width: 148px;
     --cosimo-audition-default-width: 64px;
     --cosimo-audition-note-width: 60px;

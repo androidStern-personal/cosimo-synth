@@ -28,6 +28,7 @@
    * displace layout, and it is silent when no edit is in flight.
    */
   .cosimo-global-hud {
+    border-radius: var(--cosimo-radius);
     position: absolute;
     z-index: var(--cosimo-z-popover);
     inset-block-start: calc(
@@ -103,6 +104,7 @@
 
   .cosimo-workspace-carousel__neighbor,
   .cosimo-workspace-carousel__current {
+    border-radius: var(--cosimo-radius);
     display: grid;
     inline-size: var(--cosimo-carousel-cell);
     block-size: var(--cosimo-carousel-cell);

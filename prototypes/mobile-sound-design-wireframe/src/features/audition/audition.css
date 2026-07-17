@@ -78,6 +78,7 @@
     align-items: center;
     min-block-size: var(--cosimo-control-small);
     border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    border-radius: var(--cosimo-radius);
     background: var(--cosimo-color-paper);
   }
 
@@ -184,6 +185,7 @@
     inline-size: var(--cosimo-toggle-mark);
     block-size: var(--cosimo-toggle-mark);
     border: var(--cosimo-stroke-hairline) solid currentColor;
+    border-radius: var(--cosimo-radius);
   }
 
   .cosimo-audition__toggle input:checked + span {

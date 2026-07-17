@@ -1,14 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowSquareOut, CaretDown, Plus, X } from "@phosphor-icons/react";
 import { ArticulationIcon } from "../../design-system/IdentityMark.jsx";
+import { formatModAmountWithSpec, modulationBand } from "../../domain/formatting.js";
 import { useAxisDrag } from "../../interactions/useAxisDrag.js";
 
 const clamp = (value, minimum = 0, maximum = 100) =>
   Math.max(minimum, Math.min(maximum, value));
-
-function signedPercent(value) {
-  return `${value > 0 ? "+" : ""}${Math.round(value)}%`;
-}
 
 export function SourceTargetRow({
   row,
@@ -32,12 +29,13 @@ export function SourceTargetRow({
   const { target, mapping } = row;
   const pointerSelection = useRef(null);
   const targetId = target.key || target.id;
-  const mappingEnd = clamp(row.baseValue + mapping.amount / 2);
-  const rangeStart = Math.min(row.baseValue, mappingEnd);
-  const rangeWidth = Math.abs(mappingEnd - row.baseValue);
+  const band = modulationBand(target, row.baseValue, mapping);
+  const formatAmount = (amount) => formatModAmountWithSpec(mapping.modSpec, amount, mapping.polarity);
   const dragHandlers = useAxisDrag({
     xValue: row.baseValue,
     yValue: mapping.amount,
+    yMinimum: mapping.modSpec.min,
+    yMaximum: mapping.modSpec.max,
     onBegin: () => {
       pointerSelection.current = { wasSelected: selected };
       onSelect?.(mapping.id);
@@ -60,7 +58,7 @@ export function SourceTargetRow({
         field: "amount",
         label: `${source.label} → ${target.moduleLabel} ${target.label}`,
         value: amount,
-        formattedValue: signedPercent(amount),
+        formattedValue: formatAmount(amount),
       });
     },
   });
@@ -131,13 +129,14 @@ export function SourceTargetRow({
           )}
           <span
             className="cosimo-source-target__mapping-range"
-            style={{ insetInlineStart: `${rangeStart}%`, inlineSize: `${rangeWidth}%` }}
+            data-disabled={mapping.enabled === false || undefined}
+            style={{ insetInlineStart: `${band.start}%`, inlineSize: `${band.width}%` }}
           />
           <span className="cosimo-source-target__handle" style={{ insetInlineStart: `${row.baseValue}%` }} />
         </span>
         <span className="cosimo-source-target__values">
           <span className="cosimo-value">{row.formattedBaseValue}</span>
-          <span className="cosimo-value" data-value-kind="signed">{signedPercent(mapping.amount)}</span>
+          <span className="cosimo-value" data-value-kind="signed">{formatAmount(mapping.amount)}</span>
         </span>
       </button>
 

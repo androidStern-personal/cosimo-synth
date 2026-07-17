@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { useMockCosimoAdapter } from "./adapters/index.js";
-import { ARTICULATIONS, SOURCE_COLORS, TARGETS } from "./domain/catalog.js";
+import { ARTICULATIONS, FIXED_SOURCES, SOURCE_COLORS, TARGETS } from "./domain/catalog.js";
 import {
   createInitialMockCosimoState,
   createStressMockCosimoState,
 } from "./domain/fixtures.js";
+import { formatModAmount } from "./domain/formatting.js";
 import { useMobileSynthController } from "./controllers/useMobileSynthController.js";
 import {
   InstrumentHeader,
@@ -12,8 +13,7 @@ import {
 } from "./features/shell/index.js";
 import { EffectRack, VoiceModuleStrip } from "./features/rack/index.js";
 import { ModuleEditor } from "./features/module-editor/ModuleEditor.jsx";
-import { ModulationInspector } from "./features/modulation/ModulationInspector.jsx";
-import { SourceEditor, SourceShelf } from "./features/sources/index.js";
+import { SourceEditor, SourceRail } from "./features/sources/index.js";
 import { AuditionTransport } from "./features/audition/index.js";
 import { triggerHaptic } from "./platform/haptics.js";
 
@@ -25,9 +25,17 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
   const { state, actions } = useMobileSynthController(adapter, initialSession);
   const sourceColors = useMemo(
     () => Object.fromEntries(
-      state.sources.map((source) => [source.id, SOURCE_COLORS[source.id]]),
+      [...state.sources, ...FIXED_SOURCES].map(
+        (source) => [source.id, SOURCE_COLORS[source.id]],
+      ),
     ),
     [state.sources],
+  );
+  const litMappings = useMemo(
+    () => Object.fromEntries(
+      state.mappingsForSelectedTarget.map((mapping) => [mapping.sourceId, mapping]),
+    ),
+    [state.mappingsForSelectedTarget],
   );
   const articulations = useMemo(
     () => Object.values(ARTICULATIONS).map((item) => ({
@@ -67,19 +75,35 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
     />
   );
 
-  const sourceShelf = (
-    <SourceShelf
+  const sourceRail = (
+    <SourceRail
       addOptions={state.sourceAddOptions}
       addOpen={state.sourceAddOpen}
       attachmentCounts={state.sourceCounts}
       deletionUndo={state.deletedSource}
       draggedSourceId={state.draggedSourceId}
+      fixedSources={FIXED_SOURCES}
       focusedSourceId={state.focusedSource?.id || state.activeMappingSourceId}
+      litMappings={litMappings}
       onAddOpenChange={actions.setSourceAddOpen}
       onAddSource={actions.addSource}
       onDeleteSource={actions.deleteSource}
+      onFocusMapping={actions.selectMapping}
       onFocusSource={actions.openSource}
       onHaptic={triggerHaptic}
+      onRemoveMapping={actions.removeMapping}
+      onScrubMappingAmount={(mappingId, amount) => {
+        actions.changeMappingAmount(mappingId, amount);
+        const mapping = state.mappingsForSelectedTarget.find(
+          (item) => item.id === mappingId,
+        );
+        const sourceLabel = state.sourceLookup[mapping?.sourceId]?.label || "Source";
+        actions.showReadout(
+          `${sourceLabel} → ${state.selectedTarget.label}  ${formatModAmount(state.selectedTarget, amount, mapping?.polarity)}`,
+        );
+      }}
+      onSetMappingEnabled={actions.setMappingEnabled}
+      onSetMappingPolarity={actions.setMappingPolarity}
       onSourceDragEnd={({ cancelled }) => (
         cancelled ? actions.cancelSourceDrag() : actions.stopSourceDrag()
       )}
@@ -88,6 +112,7 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
       onUndoDelete={actions.undoDelete}
       sourceColors={sourceColors}
       sources={state.sources}
+      targetLabel={state.selectedTarget.label}
     />
   );
 
@@ -138,7 +163,7 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
       header={header}
       readout={state.readout}
       rack={rack}
-      sourceShelf={sourceShelf}
+      sourceRail={sourceRail}
       style={{
         "--drag-source-color": state.sourceLookup[state.draggedSourceId]?.color,
       }}
@@ -187,6 +212,7 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
             onChangeBase={actions.setParameter}
             onChangeCompound={actions.setCompound}
             onChangeMappingAmount={actions.changeMappingAmount}
+            onClearArticulationOverride={actions.clearArticulationOverride}
             onHaptic={triggerHaptic}
             onSelectTarget={actions.selectTarget}
             onShowReadout={actions.showReadout}
@@ -195,25 +221,6 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
               onReturn: actions.returnToSource,
             } : null}
             selectedTargetId={state.selectedTargetId}
-          />
-          <ModulationInspector
-            activeMappingId={state.activeMappingId}
-            articulationColor={state.selectedTargetControl.articulationColor}
-            articulationOverride={state.selectedTargetControl.articulationOverride}
-            availableSources={state.availableSources}
-            mappings={state.mappingsForSelectedTarget}
-            onAddMapping={actions.addMapping}
-            onChangeAmount={actions.changeMappingAmount}
-            onClearArticulationOverride={actions.clearArticulationOverride}
-            onHaptic={triggerHaptic}
-            onOpenSource={actions.openSource}
-            onRemoveMapping={actions.removeMapping}
-            onSelectMapping={actions.selectMapping}
-            onSetPolarity={actions.setMappingPolarity}
-            onSetReducer={actions.setMappingReducer}
-            onShowReadout={actions.showReadout}
-            sourceLookup={state.sourceLookup}
-            target={state.selectedTarget}
           />
         </div>
       )}

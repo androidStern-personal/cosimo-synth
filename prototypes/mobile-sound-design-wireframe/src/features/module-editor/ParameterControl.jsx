@@ -1,9 +1,6 @@
 import { useAxisDrag } from "../../interactions/useAxisDrag.js";
 import { ArticulationIcon, SourceIdentity } from "../../design-system/IdentityMark.jsx";
-
-function percent(value) {
-  return `${value > 0 ? "+" : ""}${Math.round(value)}%`;
-}
+import { formatModAmount, modAmountSpec, modulationBand } from "../../domain/formatting.js";
 
 export function ParameterControl({
   control,
@@ -19,15 +16,15 @@ export function ParameterControl({
 }) {
   const activeMapping = control.activeMapping;
   const mappingAmount = activeMapping?.amount ?? 0;
-  const mappedValue = Math.max(
-    0,
-    Math.min(100, control.value + mappingAmount / 2),
-  );
-  const mappingStart = Math.min(control.value, mappedValue);
-  const mappingWidth = Math.abs(mappedValue - control.value);
+  const modSpec = modAmountSpec(control.target);
+  const band = activeMapping
+    ? modulationBand(control.target, control.value, activeMapping)
+    : { start: control.value, width: 0 };
   const drag = useAxisDrag({
     xValue: control.value,
     yValue: mappingAmount,
+    yMinimum: modSpec.min,
+    yMaximum: modSpec.max,
     onBegin: onSelect,
     onXChange(value) {
       onChangeBase(value);
@@ -36,7 +33,7 @@ export function ParameterControl({
     onYChange: activeMapping
       ? (amount) => {
           onChangeMappingAmount(activeMapping.id, amount);
-          onShowReadout(`${activeMapping.source.label} → ${control.label}  ${percent(amount)}`);
+          onShowReadout(`${activeMapping.source.label} → ${control.label}  ${formatModAmount(control.target, amount, activeMapping.polarity)}`);
         }
       : undefined,
     onAxisLock() {
@@ -96,8 +93,8 @@ export function ParameterControl({
         style={{
           "--parameter-base": `${control.value}%`,
           "--parameter-default": `${control.defaultValue}%`,
-          "--parameter-mapping-start": `${mappingStart}%`,
-          "--parameter-mapping-width": `${mappingWidth}%`,
+          "--parameter-mapping-start": `${band.start}%`,
+          "--parameter-mapping-width": `${band.width}%`,
           "--cosimo-semantic-color": control.activeSourceColor,
           ...(control.articulationOverride
             ? { "--parameter-edit-color": control.articulationColor }
@@ -105,7 +102,12 @@ export function ParameterControl({
         }}
       >
         <span className="parameter-control__base" />
-        {activeMapping && <span className="parameter-control__mapping" />}
+        {activeMapping && (
+          <span
+            className="parameter-control__mapping"
+            data-disabled={activeMapping.enabled === false || undefined}
+          />
+        )}
         <span className="parameter-control__default" />
         {control.articulationOverride && (
           <span
@@ -122,7 +124,7 @@ export function ParameterControl({
       <span className="parameter-control__foot">
         <span className="parameter-control__axis">X BASE</span>
         <output className="cosimo-value" data-value-kind="signed">
-          {activeMapping ? `Y ${percent(mappingAmount)}` : (
+          {activeMapping ? `Y ${formatModAmount(control.target, mappingAmount, activeMapping.polarity)}` : (
             <>
               <span className="parameter-control__y-full">Y NO SOURCE</span>
               <span className="parameter-control__y-compact">Y —</span>
