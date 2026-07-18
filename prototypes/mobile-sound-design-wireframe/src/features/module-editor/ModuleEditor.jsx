@@ -73,7 +73,7 @@ export function ModuleEditor({
         </div>
       </header>
 
-      <div className="module-editor__graphic cosimo-frame">
+      <div className="module-editor__graphic">
         <ModuleGraphicSurface
           ariaLabel={module.graphicLabel}
           className="module-editor__canvas"

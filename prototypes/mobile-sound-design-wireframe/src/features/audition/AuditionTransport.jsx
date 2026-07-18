@@ -112,7 +112,6 @@ function TriggerControl({
 export function AuditionTransport({
   articulationId,
   articulations,
-  articulationsManaged = false,
   canCapture,
   captureContext = null,
   captureLabel = "Capture motion",
@@ -159,63 +158,54 @@ export function AuditionTransport({
       style={{ "--cosimo-articulation-color": articulation.color }}
     >
       <div className="cosimo-audition__primary">
-        {articulationsManaged ? (
-          <span className="cosimo-audition__field cosimo-audition__manage-note">
-            <span className="cosimo-audition__label cosimo-type-label">Articulation</span>
-            <span className="cosimo-type-micro">MANAGE IN THE BANK ABOVE</span>
+        <label className="cosimo-audition__field cosimo-audition__articulation">
+          <span className="cosimo-audition__label cosimo-type-label">Articulation</span>
+          <span className="cosimo-audition__articulation-control">
+            <span className="cosimo-audition__articulation-mark">
+              <ArticulationIcon articulation={articulation.id} size={14} />
+            </span>
+            <TransportSelect
+              ariaLabel="Articulation"
+              onChange={(event) => onArticulationChange?.(event.target.value)}
+              value={articulationId}
+            >
+              {articulations.map((item) => (
+                <option key={item.id} value={item.id}>{item.label}</option>
+              ))}
+            </TransportSelect>
           </span>
-        ) : (
-          <>
-            <label className="cosimo-audition__field cosimo-audition__articulation">
-              <span className="cosimo-audition__label cosimo-type-label">Articulation</span>
-              <span className="cosimo-audition__articulation-control">
-                <span className="cosimo-audition__articulation-mark">
-                  <ArticulationIcon articulation={articulation.id} size={14} />
-                </span>
-                <TransportSelect
-                  ariaLabel="Articulation"
-                  onChange={(event) => onArticulationChange?.(event.target.value)}
-                  value={articulationId}
-                >
-                  {articulations.map((item) => (
-                    <option key={item.id} value={item.id}>{item.label}</option>
-                  ))}
-                </TransportSelect>
-              </span>
-            </label>
+        </label>
+        <button
+          aria-label="Use Default articulation"
+          className="cosimo-audition__default cosimo-type-label"
+          data-quiet={articulationId === "Default" ? "true" : undefined}
+          onClick={() => {
+            if (onDefaultArticulation) onDefaultArticulation();
+            else onArticulationChange?.("Default");
+          }}
+          type="button"
+        >
+          <span>Default</span>
+        </button>
+        <span className="cosimo-audition__field cosimo-audition__edit-field">
+          <span className="cosimo-audition__label cosimo-type-label">Edit</span>
+          {articulationId === "Default" ? (
+            <span aria-hidden="true" className="cosimo-audition__edit-empty" />
+          ) : (
             <button
-              aria-label="Use Default articulation"
-              className="cosimo-audition__default cosimo-type-label"
-              data-quiet={articulationId === "Default" ? "true" : undefined}
-              onClick={() => {
-                if (onDefaultArticulation) onDefaultArticulation();
-                else onArticulationChange?.("Default");
-              }}
+              aria-label={wearingArticulationId === articulationId
+                ? `Done editing ${articulation.label}`
+                : `Edit ${articulation.label} overrides`}
+              aria-pressed={wearingArticulationId === articulationId}
+              className="cosimo-audition__edit-latch cosimo-type-label"
+              data-on={wearingArticulationId === articulationId || undefined}
+              onClick={() => onToggleWear?.(articulationId)}
               type="button"
             >
-              <span>Default</span>
+              {wearingArticulationId === articulationId ? "✓" : "Edit"}
             </button>
-            <span className="cosimo-audition__field cosimo-audition__edit-field">
-              <span className="cosimo-audition__label cosimo-type-label">Edit</span>
-              {articulationId === "Default" ? (
-                <span aria-hidden="true" className="cosimo-audition__edit-empty" />
-              ) : (
-                <button
-                  aria-label={wearingArticulationId === articulationId
-                    ? `Done editing ${articulation.label}`
-                    : `Edit ${articulation.label} overrides`}
-                  aria-pressed={wearingArticulationId === articulationId}
-                  className="cosimo-audition__edit-latch cosimo-type-label"
-                  data-on={wearingArticulationId === articulationId || undefined}
-                  onClick={() => onToggleWear?.(articulationId)}
-                  type="button"
-                >
-                  {wearingArticulationId === articulationId ? "✓" : "Edit"}
-                </button>
-              )}
-            </span>
-          </>
-        )}
+          )}
+        </span>
         <label className="cosimo-audition__field cosimo-audition__note">
           <span className="cosimo-audition__label cosimo-type-label">Note</span>
           <TransportSelect

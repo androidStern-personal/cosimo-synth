@@ -135,7 +135,6 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
     <AuditionTransport
       articulationId={state.audition.articulation}
       articulations={state.transportArticulations}
-      articulationsManaged={state.workspace === "artic"}
       canCapture={Boolean(state.audition.captureCandidate)}
       captureContext={state.audition.captureCandidate
         ? {

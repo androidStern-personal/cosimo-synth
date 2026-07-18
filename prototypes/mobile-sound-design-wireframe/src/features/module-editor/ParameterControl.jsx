@@ -18,6 +18,10 @@ export function ParameterControl({
   const activeMapping = control.activeMapping;
   const mappingAmount = activeMapping?.amount ?? 0;
   const modSpec = modAmountSpec(control.target);
+  const articulationMark = control.articulationOverride || control.articulationRouteOverride;
+  // Worn edits on a global (effects) target land on the patch base, never the
+  // articulation — the HUD must say so instead of silently editing base.
+  const globalBaseNotice = control.wornGlobalBase ? " · GLOBAL — EDITS PATCH BASE" : "";
   const band = activeMapping
     ? modulationBand(control.target, control.value, activeMapping)
     : { start: control.value, width: 0 };
@@ -29,12 +33,12 @@ export function ParameterControl({
     onBegin: onSelect,
     onXChange(value) {
       onChangeBase(value);
-      onShowReadout(`${control.label}  ${control.formatValue(value)}`);
+      onShowReadout(`${control.label}  ${control.formatValue(value)}${globalBaseNotice}`);
     },
     onYChange: activeMapping
       ? (amount) => {
           onChangeMappingAmount(activeMapping.id, amount);
-          onShowReadout(`${activeMapping.source.label} → ${control.label}  ${formatModAmount(control.target, amount, activeMapping.polarity)}`);
+          onShowReadout(`${activeMapping.source.label} → ${control.label}  ${formatModAmount(control.target, amount, activeMapping.polarity)}${globalBaseNotice}`);
         }
       : undefined,
     onAxisLock() {
@@ -71,12 +75,12 @@ export function ParameterControl({
       <span className="parameter-control__heading">
         <span className="cosimo-type-label">P{ordinal} {control.label}</span>
         <span className="parameter-control__identities" aria-hidden="true">
-          {control.articulationOverride && (
+          {articulationMark && (
             <span
               className="parameter-control__articulation"
               style={{ "--cosimo-semantic-color": control.articulationColor }}
             >
-              <ArticulationIcon articulation={control.articulationOverride.articulationId} />
+              <ArticulationIcon articulation={articulationMark.articulationId} />
             </span>
           )}
           {control.activeSource && (
@@ -125,7 +129,13 @@ export function ParameterControl({
 
       <span className="parameter-control__foot">
         <span className="parameter-control__axis">X BASE</span>
-        <output className="cosimo-value" data-value-kind="signed">
+        <output
+          className="cosimo-value"
+          data-value-kind="signed"
+          style={control.articulationRouteOverride
+            ? { color: control.articulationColor }
+            : undefined}
+        >
           {activeMapping ? `Y ${formatModAmount(control.target, mappingAmount, activeMapping.polarity)}` : (
             <>
               <span className="parameter-control__y-full">Y NO SOURCE</span>

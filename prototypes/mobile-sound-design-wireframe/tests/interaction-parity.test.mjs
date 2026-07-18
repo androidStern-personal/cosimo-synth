@@ -548,6 +548,48 @@ test("overrides are authored only while wearing; done keeps and cancel restores 
   controller.unmount();
 });
 
+test("a route-amount override marks the cell like a base override; worn global edits announce patch base", () => {
+  const controller = renderController();
+  controller.run(({ actions }) => actions.focusModule("wavetable"));
+  controller.run(({ actions }) => actions.selectTarget("wavetable.warp"));
+  controller.run(({ actions }) => actions.setArticulation("Pluck"));
+  controller.run(({ actions }) => actions.wearArticulation("Pluck"));
+  controller.run(({ actions }) => actions.changeMappingAmount("wavetable.warp::envelope-1", 90));
+
+  let warp = controller.current().state.parameterControls
+    .find((control) => control.targetId === "wavetable.warp");
+  assert.equal(warp.articulationOverride, null, "no base override was authored");
+  assert.deepEqual(
+    warp.articulationRouteOverride,
+    { articulationId: "Pluck", amount: 90 },
+    "the amount override alone must mark the cell",
+  );
+  assert.equal(warp.wornGlobalBase, false, "voice targets edit the worn layer");
+
+  controller.run(({ actions }) => actions.focusModule("phaser"));
+  const depth = controller.current().state.parameterControls
+    .find((control) => control.targetId === "phaser.depth");
+  assert.equal(depth.wornGlobalBase, true, "worn global edits land on patch base and must say so");
+  assert.equal(depth.articulationRouteOverride, null);
+
+  controller.run(({ actions }) => actions.commitWear());
+  controller.run(({ actions }) => actions.focusModule("wavetable"));
+  warp = controller.current().state.parameterControls
+    .find((control) => control.targetId === "wavetable.warp");
+  assert.equal(warp.wornGlobalBase, false, "nothing worn, nothing to announce");
+  assert.deepEqual(
+    warp.articulationRouteOverride,
+    { articulationId: "Pluck", amount: 90 },
+    "auditioning the articulation keeps the informational mark",
+  );
+  assert.equal(
+    warp.activeMapping.amount,
+    40,
+    "with nothing worn the value home shows the base amount",
+  );
+  controller.unmount();
+});
+
 test("keyswitch movement clamps flush against neighbors and reports contact", () => {
   const bank = [
     { id: "Pluck", key: 24 },

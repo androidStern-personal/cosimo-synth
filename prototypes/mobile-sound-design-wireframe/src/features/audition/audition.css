@@ -215,21 +215,6 @@
     color: var(--cosimo-color-paper);
   }
 
-  .cosimo-audition__manage-note {
-    display: grid;
-    flex: 1 1 auto;
-    min-inline-size: 0;
-    grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-control-small);
-    align-content: center;
-    row-gap: var(--cosimo-space-micro);
-    color: var(--cosimo-color-ink-muted);
-  }
-
-  .cosimo-audition__manage-note > .cosimo-type-micro {
-    display: inline-flex;
-    align-items: center;
-  }
-
   .cosimo-audition__toggle input:checked + span {
     background: var(--cosimo-color-ink);
   }

@@ -127,7 +127,11 @@ export function selectParameterControlViewModel(
     : null;
   const source = activeMapping ? sourceLookup[activeMapping.sourceId] : null;
   const override = selectArticulationOverrides(patch, markArticulation)[targetId];
+  const routeOverride = rawActiveMapping
+    ? selectArticulationMappingAmount(patch, rawActiveMapping, markArticulation)
+    : null;
   const value = selectEffectiveParameterValue(patch, targetId, layerArticulation);
+  const editLayer = resolveParameterEditLayer(targetId, wornArticulationId);
 
   return {
     target,
@@ -137,10 +141,14 @@ export function selectParameterControlViewModel(
     formattedValue: formatValue(target, value),
     patchBaseValue: patch.parameterValues[targetId],
     defaultValue: target.defaultValue,
-    editLayer: resolveParameterEditLayer(targetId, wornArticulationId),
+    editLayer,
+    wornGlobalBase: Boolean(wornArticulationId) && editLayer.kind === "patchBase",
     articulationOverride: override == null
       ? null
       : { articulationId: markArticulation, value: override },
+    articulationRouteOverride: routeOverride == null
+      ? null
+      : { articulationId: markArticulation, amount: routeOverride },
     activeMapping,
     activeSource: source,
     activeSourceColor: sourceColor(source),

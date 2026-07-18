@@ -230,9 +230,24 @@
     border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
   }
 
-  .parameter-control[data-state="selected"] {
-    outline: var(--cosimo-stroke-active) solid var(--cosimo-color-ink);
-    outline-offset: calc(var(--cosimo-stroke-active) * -1);
+  /* Selection is a corner-tick calibration frame — the same focus grammar
+     as rail chips; full outlines belong to drag feedback only. */
+  .parameter-control[data-state="selected"]::after {
+    position: absolute;
+    inset: var(--cosimo-space-micro);
+    border-radius: var(--cosimo-radius);
+    background:
+      linear-gradient(currentColor, currentColor) top left / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) top left / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) top right / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) top right / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) bottom left / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) bottom left / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) bottom right / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) bottom right / var(--cosimo-stroke-active) var(--cosimo-marker-size);
+    background-repeat: no-repeat;
+    content: "";
+    pointer-events: none;
   }
 
   .parameter-control[data-drop-target="true"] {
