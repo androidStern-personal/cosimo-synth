@@ -11,15 +11,12 @@ const PIANO_SPAN = 18;
 const BLACK_KEYS = new Set([1, 3, 6, 8, 10]);
 const HANDLE_PX_PER_SEMITONE = 16;
 
-function ScrubField({ label, value, formattedValue, min, max, onChange, onCommitReadout }) {
+function ScrubField({ label, value, formattedValue, min, max, onChange }) {
   const drag = useAxisDrag({
     xValue: value,
     xMinimum: min,
     xMaximum: max,
-    onXChange(next) {
-      onChange(next);
-      onCommitReadout?.(next);
-    },
+    onXChange: onChange,
   });
   return (
     <div className="cosimo-artic-field" {...drag}>
@@ -148,7 +145,6 @@ export function ArticulationWorkspace({
       window.clearTimeout(bumpTimer.current);
       bumpTimer.current = window.setTimeout(() => setBumpArticulationId(null), 260);
     }
-    onShowReadout(`${selected.label} · KEY ${formatMidiNote(walk.key)}${walk.touching ? " · TOUCHING" : ""}`);
   };
 
   const beginHandleDrag = (event) => {
@@ -255,9 +251,7 @@ export function ArticulationWorkspace({
                         inlineSize: `${100 / PIANO_SPAN}%`,
                       }}
                       type="button"
-                    >
-                      {articulation.label.slice(0, 3)}
-                    </button>
+                    />
                   );
                 })}
               </div>
@@ -359,7 +353,6 @@ export function ArticulationWorkspace({
                 max={127}
                 min={0}
                 onChange={(value) => onSetRange(selected.id, triggerMode, "lo", value)}
-                onCommitReadout={(value) => onShowReadout(`${selected.label} · ${triggerMode.toUpperCase()} ${Math.round(value)}–${range[1]}`)}
                 value={range[0]}
               />
               <ScrubField
@@ -368,7 +361,6 @@ export function ArticulationWorkspace({
                 max={127}
                 min={0}
                 onChange={(value) => onSetRange(selected.id, triggerMode, "hi", value)}
-                onCommitReadout={(value) => onShowReadout(`${selected.label} · ${triggerMode.toUpperCase()} ${range[0]}–${Math.round(value)}`)}
                 value={range[1]}
               />
             </div>
@@ -384,7 +376,7 @@ export function ArticulationWorkspace({
             onClick={() => onWear(selected.id)}
             type="button"
           >
-            Wear {selected.label}
+            Edit {selected.label}
           </button>
         </div>
         <div className="cosimo-artic-diff__list" data-scroll-surface="vertical">

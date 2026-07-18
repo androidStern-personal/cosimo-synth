@@ -3,6 +3,7 @@ import { TARGETS } from "../domain/catalog.js";
 import { clampModAmount, defaultModAmount } from "../domain/formatting.js";
 import { createInitialMockCosimoState } from "../domain/fixtures.js";
 import {
+  clampArticulationRange,
   createMapping,
   createSourceIdentity,
   duplicateArticulationIdentity,
@@ -74,7 +75,16 @@ export function useMockCosimoAdapter({
     },
 
     setArticulationRange(articulationId, mode, bound, value) {
-      dispatch({ type: "SET_ARTICULATION_RANGE", articulationId, mode, bound, value });
+      const clamp = clampArticulationRange(
+        state.patch.articulations,
+        articulationId,
+        mode,
+        bound,
+        value,
+      );
+      if (!clamp) return null;
+      dispatch({ type: "SET_ARTICULATION_RANGE", articulationId, mode, bound, value: clamp.value });
+      return clamp;
     },
 
     setArticulationTriggerMode(mode) {

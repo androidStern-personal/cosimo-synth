@@ -23,6 +23,35 @@ export function walkArticulationKey(articulations, articulationId, wantKey) {
   return { key, touching: Boolean(neighbor), neighborId: neighbor ? neighbor.id : null };
 }
 
+/*
+ * Vel/Chain ranges may never overlap. A dragged bound stops flush against
+ * the neighboring range's edge — growing into a neighbor requires
+ * shrinking the neighbor first. Same physics (and haptic) as keyswitches.
+ */
+export function clampArticulationRange(articulations, articulationId, mode, bound, wantValue) {
+  const current = articulations.find((item) => item.id === articulationId);
+  if (!current || (mode !== "vel" && mode !== "chain")) return null;
+  const range = current[mode];
+  const others = articulations.filter((item) => item.id !== articulationId);
+  let value = Math.max(0, Math.min(127, Math.round(wantValue)));
+  let touching = false;
+  let neighborId = null;
+  if (bound === "lo") {
+    const below = others.filter((other) => other[mode][1] < range[1]);
+    const floor = Math.max(-1, ...below.map((other) => other[mode][1]));
+    value = Math.min(Math.max(value, floor + 1), range[1]);
+    touching = floor >= 0 && value === floor + 1;
+    neighborId = touching ? below.find((other) => other[mode][1] === floor).id : null;
+  } else {
+    const above = others.filter((other) => other[mode][0] > range[0]);
+    const ceiling = Math.min(128, ...above.map((other) => other[mode][0]));
+    value = Math.max(Math.min(value, ceiling - 1), range[0]);
+    touching = ceiling <= 127 && value === ceiling - 1;
+    neighborId = touching ? above.find((other) => other[mode][0] === ceiling).id : null;
+  }
+  return { value, touching, neighborId };
+}
+
 export function nextArticulationIdentity(articulations) {
   const selector = articulations.reduce((max, item) => Math.max(max, item.selector), 0) + 1;
   const color = ARTICULATION_SLOT_COLORS[

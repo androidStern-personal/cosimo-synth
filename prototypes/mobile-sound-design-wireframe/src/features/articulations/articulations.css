@@ -239,16 +239,18 @@
     position: absolute;
     z-index: var(--cosimo-z-content);
     inset-block-start: var(--cosimo-space-1);
-    display: grid;
-    block-size: calc(var(--cosimo-control-small) - var(--cosimo-space-1));
-    place-items: center;
+    display: block;
+    block-size: var(--cosimo-space-4);
     border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
     border-radius: var(--cosimo-radius);
     background: var(--cosimo-articulation-color);
-    color: var(--cosimo-color-paper);
-    font-size: var(--cosimo-type-micro-size);
-    letter-spacing: var(--cosimo-type-tracking-label);
-    text-transform: uppercase;
+  }
+
+  /* Markers carry no text — color is the identity, the handle names it. */
+  .cosimo-artic-piano__marker::after {
+    position: absolute;
+    inset: calc(var(--cosimo-space-3) * -1) calc(var(--cosimo-space-1) * -1);
+    content: "";
   }
 
   .cosimo-artic-piano__marker[data-selected] {
@@ -418,6 +420,7 @@
   .cosimo-artic-diff__main {
     min-inline-size: 0;
     padding-block: var(--cosimo-space-2);
+    padding-inline-end: var(--cosimo-space-2);
     cursor: ew-resize;
     touch-action: none;
     user-select: none;
@@ -432,8 +435,8 @@
 
   .cosimo-artic-diff__nav {
     display: inline-flex;
+    flex: 1 1 auto;
     min-inline-size: 0;
-    max-inline-size: 68%;
     align-items: center;
     gap: var(--cosimo-space-1);
   }
@@ -450,7 +453,7 @@
 
   .cosimo-artic-diff__values {
     display: inline-flex;
-    margin-inline-start: auto;
+    flex: 0 0 auto;
     align-items: baseline;
     gap: var(--cosimo-space-2);
   }

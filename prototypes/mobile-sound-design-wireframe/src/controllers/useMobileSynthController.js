@@ -601,7 +601,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
           },
         });
         if (entry === "artic") setWorkspace(lastInstrumentWorkspace);
-        showReadout(`Wearing ${articulationId} · ✓ keeps · ✕ discards`);
+        showReadout(`Editing ${articulationId} · ✓ keeps · ✕ discards`);
         triggerHaptic("light");
       },
       commitWear: () => exitWear(true),
@@ -629,7 +629,11 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         if (walk?.touching) triggerHaptic("light");
         return walk;
       },
-      setArticulationRange: commands.setArticulationRange,
+      setArticulationRange(articulationId, mode, bound, value) {
+        const clamp = commands.setArticulationRange(articulationId, mode, bound, value);
+        if (clamp?.touching) triggerHaptic("light");
+        return clamp;
+      },
       setArticulationTriggerMode: commands.setArticulationTriggerMode,
       setArticulationBaseOverride(targetId, value) {
         if (!selectedArticulation) return;

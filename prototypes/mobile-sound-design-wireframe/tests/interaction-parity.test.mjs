@@ -644,6 +644,15 @@ test("trigger assignments: key walk applies, ranges clamp against their own boun
   controller.run(({ actions }) => actions.setArticulationRange("Pluck", "vel", "hi", -5));
   pluck = controller.current().state.articulations.find((item) => item.id === "Pluck");
   assert.equal(pluck.vel[1], pluck.vel[0], "MAX clamps down to MIN, never past it");
+
+  // Ranges never overlap: a dragged bound stops flush at the neighbor's edge.
+  controller.run(({ actions }) => actions.setArticulationRange("Pluck", "vel", "hi", 120));
+  controller.run(({ actions }) => actions.setArticulationRange("Pluck", "vel", "lo", 30));
+  pluck = controller.current().state.articulations.find((item) => item.id === "Pluck");
+  assert.equal(pluck.vel[0], 64, "MIN stops flush against Bowed's MAX of 63");
+  controller.run(({ actions }) => actions.setArticulationRange("Pluck", "vel", "hi", 127));
+  pluck = controller.current().state.articulations.find((item) => item.id === "Pluck");
+  assert.equal(pluck.vel[1], 109, "MAX stops flush against Accent's MIN of 110");
   controller.unmount();
 });
 
