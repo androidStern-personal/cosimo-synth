@@ -5,6 +5,7 @@ import {
   PianoKeys,
   WaveSine,
 } from "@phosphor-icons/react";
+import { ArticulationIcon } from "../../design-system/IdentityMark.jsx";
 import { TransientValueHUD } from "../../design-system/TransientValueHUD.jsx";
 
 const WORKSPACE_ICONS = {
@@ -152,10 +153,13 @@ export function WorkspaceCarousel({
 export function InstrumentHeader({
   activeWorkspaceId,
   isPatchDirty = false,
+  onCancelWear,
+  onCommitWear,
   onPatchMenu,
   onPatchName,
   onWorkspaceChange,
   patchName,
+  wornArticulation = null,
   workspaces = [
     { id: "voice", label: "Voice / Oscillator" },
     { id: "effects", label: "Effects" },
@@ -177,15 +181,53 @@ export function InstrumentHeader({
         onWorkspaceChange={onWorkspaceChange}
         workspaces={workspaces}
       />
-      <button
-        aria-label="Open patch menu"
-        className="cosimo-instrument-header__menu cosimo-type-navigation"
-        onClick={onPatchMenu}
-        type="button"
-      >
-        <span>Menu</span>
-        <List aria-hidden="true" size={20} weight="regular" />
-      </button>
+      {wornArticulation ? (
+        /*
+         * Wearing is modal: the articulation tab replaces the system menu
+         * and hands it back on exit. Solid colored fill is reserved for
+         * this tab alone — it is the only surface allowed to read as "you
+         * are inside this layer".
+         */
+        <div
+          aria-label={`Editing ${wornArticulation.label}`}
+          className="cosimo-worn-tab"
+          role="group"
+          style={{ "--cosimo-worn-color": wornArticulation.color }}
+        >
+          <span aria-hidden="true" className="cosimo-worn-tab__mark">
+            <ArticulationIcon articulation={wornArticulation.id} size={14} />
+          </span>
+          <span className="cosimo-worn-tab__name cosimo-type-label">
+            {wornArticulation.label}
+          </span>
+          <button
+            aria-label={`Done — keep ${wornArticulation.label} edits`}
+            className="cosimo-worn-tab__action"
+            onClick={onCommitWear}
+            type="button"
+          >
+            ✓
+          </button>
+          <button
+            aria-label={`Cancel — discard ${wornArticulation.label} edits`}
+            className="cosimo-worn-tab__action"
+            onClick={onCancelWear}
+            type="button"
+          >
+            ✕
+          </button>
+        </div>
+      ) : (
+        <button
+          aria-label="Open patch menu"
+          className="cosimo-instrument-header__menu cosimo-type-navigation"
+          onClick={onPatchMenu}
+          type="button"
+        >
+          <span>Menu</span>
+          <List aria-hidden="true" size={20} weight="regular" />
+        </button>
+      )}
     </header>
   );
 }

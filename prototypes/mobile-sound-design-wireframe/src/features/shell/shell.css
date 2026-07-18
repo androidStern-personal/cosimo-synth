@@ -19,15 +19,61 @@
     background: var(--cosimo-color-paper);
   }
 
-  /* The worn edit layer announces itself as an overlay frame; no reflow. */
-  .cosimo-mobile-shell.is-wearing .cosimo-synth-shell__workspace::after {
+  /*
+   * The worn edit layer frames the ENTIRE shell — the mode is modal and
+   * consistent on every screen. The frame and the header tab share one
+   * color and touch the same top edge, so they read as a single object.
+   */
+  .cosimo-mobile-shell.is-wearing::after {
     position: absolute;
-    z-index: var(--cosimo-z-sticky);
+    z-index: var(--cosimo-z-popover);
     inset: 0;
     border: var(--cosimo-stroke-semantic) solid var(--cosimo-worn-color, var(--cosimo-color-accent));
-    border-radius: var(--cosimo-radius);
     content: "";
     pointer-events: none;
+  }
+
+  /*
+   * The worn tab replaces the system menu while the mode is active. Solid
+   * colored fill is reserved for this tab alone, and its contoured bottom
+   * is the one sanctioned departure from the base radius token — both
+   * exist so the mode indicator can never be mistaken for a boxed control.
+   */
+  .cosimo-worn-tab {
+    display: flex;
+    justify-self: end;
+    align-self: start;
+    align-items: center;
+    gap: var(--cosimo-space-1);
+    min-inline-size: 0;
+    min-block-size: calc(var(--cosimo-shell-header) - var(--cosimo-space-2));
+    padding-inline-start: var(--cosimo-space-2);
+    border-end-start-radius: var(--cosimo-worn-tab-radius);
+    border-end-end-radius: var(--cosimo-worn-tab-radius);
+    background: var(--cosimo-worn-color, var(--cosimo-color-accent));
+    color: var(--cosimo-color-ink);
+  }
+
+  .cosimo-worn-tab__mark {
+    display: inline-flex;
+    flex: 0 0 auto;
+  }
+
+  .cosimo-worn-tab__name {
+    overflow: hidden;
+    min-inline-size: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cosimo-worn-tab__action {
+    display: grid;
+    flex: 0 0 auto;
+    inline-size: var(--cosimo-control-small);
+    min-block-size: var(--cosimo-control-medium);
+    place-items: center;
+    border-inline-start: var(--cosimo-stroke-hairline) solid color-mix(in srgb, var(--cosimo-color-ink) 34%, transparent);
+    font-size: var(--cosimo-type-navigation-size);
   }
 
   .cosimo-synth-shell__sources {

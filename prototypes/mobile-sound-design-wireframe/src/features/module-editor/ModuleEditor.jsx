@@ -11,19 +11,16 @@ export function ModuleEditor({
   flashTargetId = null,
   module,
   onBackToArticulations,
-  onCancelWear,
   onChangeBase,
   onChangeCompound,
   onChangeMappingAmount,
   onClearArticulationOverride,
-  onCommitWear,
   onHaptic,
   onSelectTarget,
   onShowReadout,
   returnAction = null,
   selectedTargetId,
   showBackToArticulations = false,
-  wornArticulation = null,
 }) {
   const values = Object.fromEntries(
     controls.map((control) => [control.target.id, control.value]),
@@ -53,32 +50,6 @@ export function ModuleEditor({
               <ArrowLeft aria-hidden="true" size={13} />
               <span className="cosimo-type-label">Artic</span>
             </button>
-          )}
-          {wornArticulation && (
-            <>
-              <span
-                className="module-editor__wearing cosimo-type-label"
-                style={{ "--cosimo-semantic-color": wornArticulation.color }}
-              >
-                Editing {wornArticulation.label}
-              </span>
-              <button
-                aria-label={`Done — keep ${wornArticulation.label} edits`}
-                className="module-editor__wear-done"
-                onClick={onCommitWear}
-                type="button"
-              >
-                ✓
-              </button>
-              <button
-                aria-label={`Cancel — discard ${wornArticulation.label} edits`}
-                className="module-editor__wear-cancel"
-                onClick={onCancelWear}
-                type="button"
-              >
-                ✕
-              </button>
-            </>
           )}
           {selectedOverride && (
             <button

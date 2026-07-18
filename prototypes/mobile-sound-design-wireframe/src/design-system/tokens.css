@@ -73,6 +73,9 @@
     /* One tiny corner radius everywhere; nothing else may round. */
     --cosimo-radius: 2px;
 
+    /* The single sanctioned exception: the worn articulation tab's contour. */
+    --cosimo-worn-tab-radius: 8px;
+
     /* Typography families */
     --cosimo-font-label: "Cosimo Instrument Sans", "Arial Narrow", system-ui, sans-serif;
     --cosimo-font-value: "Cosimo Instrument Mono", ui-monospace, monospace;

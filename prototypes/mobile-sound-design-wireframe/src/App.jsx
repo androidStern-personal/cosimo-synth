@@ -43,8 +43,11 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
     <InstrumentHeader
       activeWorkspaceId={state.workspace}
       isPatchDirty
+      onCancelWear={actions.cancelWear}
+      onCommitWear={actions.commitWear}
       onWorkspaceChange={actions.chooseWorkspace}
       patchName="Glass Pluck"
+      wornArticulation={state.wornArticulation}
       workspaces={[
         { id: "voice", label: "Voice / Oscillator" },
         { id: "effects", label: "Effects" },
@@ -254,12 +257,10 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
             flashTargetId={state.navFlashTargetId}
             module={state.activeModule}
             onBackToArticulations={actions.returnToArticulation}
-            onCancelWear={actions.cancelWear}
             onChangeBase={actions.setParameter}
             onChangeCompound={actions.setCompound}
             onChangeMappingAmount={actions.changeMappingAmount}
             onClearArticulationOverride={actions.clearArticulationOverride}
-            onCommitWear={actions.commitWear}
             onHaptic={triggerHaptic}
             onSelectTarget={actions.selectTarget}
             onShowReadout={actions.showReadout}
@@ -269,7 +270,6 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
             } : null}
             selectedTargetId={state.selectedTargetId}
             showBackToArticulations={state.returnToArtic}
-            wornArticulation={state.wornArticulation}
           />
         </div>
       )}

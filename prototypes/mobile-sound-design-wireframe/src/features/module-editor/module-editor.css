@@ -75,36 +75,6 @@
     color: var(--cosimo-color-ink-muted);
   }
 
-  .module-editor__wearing {
-    display: inline-flex;
-    min-inline-size: 0;
-    min-block-size: var(--cosimo-control-small);
-    align-items: center;
-    padding-inline: var(--cosimo-space-2);
-    overflow: hidden;
-    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
-    border-block-end: var(--cosimo-stroke-semantic) solid var(--cosimo-semantic-color);
-    border-radius: var(--cosimo-radius);
-    background: var(--cosimo-color-paper-raised);
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .module-editor__wear-done,
-  .module-editor__wear-cancel {
-    display: grid;
-    inline-size: var(--cosimo-control-small);
-    min-block-size: var(--cosimo-control-small);
-    place-items: center;
-    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
-    border-radius: var(--cosimo-radius);
-  }
-
-  .module-editor__wear-done {
-    background: var(--cosimo-color-ink);
-    color: var(--cosimo-color-paper);
-  }
-
   .parameter-control[data-flash] {
     animation: cosimo-nav-flash 1.1s;
   }
