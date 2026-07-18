@@ -1,5 +1,9 @@
 # Cosimo Synth Notes
 
+## Icons
+
+- Audio/instrument icons come from fontaudio (https://github.com/fefanto/fontaudio) — decided 2026-07-18. Do not hand-draw or generate instrument glyphs (envelopes, waveforms, filters, modulation, keyboard); use fontaudio's. Generic UI verbs (add, close, carets) may keep the existing generic icon set of the surface you are in. No npm package exists: vendor the webfont/SVG assets. Icons are CC BY 4.0 (attribution goes in CREDITS.md), fonts OFL 1.1, code MIT. Pragmatic choice, upgradeable later — keep icon rendering behind each surface's identity component so a future swap is cheap.
+
 ## iPhone Build And Install
 
 - If `build/ios_device_run/CosimoSynthAUv3.xcodeproj` does not exist yet in the current worktree, generate it with `./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run`.
