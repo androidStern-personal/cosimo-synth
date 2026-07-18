@@ -3,6 +3,7 @@ import { ParameterControl } from "./ParameterControl.jsx";
 export function ParameterMatrix({
   controls,
   dropTargetId,
+  flashTargetId = null,
   onChangeBase,
   onChangeMappingAmount,
   onHaptic,
@@ -22,6 +23,7 @@ export function ParameterMatrix({
           control={control}
           isDropEligible={control.isDropEligible}
           isDropTarget={dropTargetId === control.targetId}
+          isFlashing={flashTargetId === control.targetId}
           isSelected={selectedTargetId === control.targetId}
           key={control.targetId}
           ordinal={index + 1}

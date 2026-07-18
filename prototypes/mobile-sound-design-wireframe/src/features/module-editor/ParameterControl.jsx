@@ -6,6 +6,7 @@ export function ParameterControl({
   control,
   isDropEligible = true,
   isDropTarget = false,
+  isFlashing = false,
   isSelected = false,
   onChangeBase,
   onChangeMappingAmount,
@@ -51,6 +52,7 @@ export function ParameterControl({
       className="parameter-control"
       data-drop-eligible={isDropEligible ? "true" : "false"}
       data-drop-relation={control.dropRelation || "available"}
+      data-flash={isFlashing || undefined}
       data-modulation-target={isDropEligible ? control.targetId : undefined}
       data-state={isSelected ? "selected" : undefined}
       data-drop-target={isDropTarget ? "true" : undefined}

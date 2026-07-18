@@ -338,12 +338,145 @@ export function mockCosimoReducer(state, action) {
         },
       };
 
-    case "SET_AUDITION_ARTICULATION":
-      if (!ARTICULATIONS[action.articulationId]) return state;
+    case "SET_AUDITION_ARTICULATION": {
+      const known = action.articulationId === "Default"
+        || state.patch.articulations.some((item) => item.id === action.articulationId);
+      if (!known) return state;
       return {
         ...state,
         audition: { ...state.audition, articulation: action.articulationId },
       };
+    }
+
+    case "ADD_ARTICULATION": {
+      if (!action.articulation || state.patch.articulations.some((item) => item.id === action.articulation.id)) {
+        return state;
+      }
+      const copyFrom = action.copyOverridesFrom;
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          articulations: [...state.patch.articulations, action.articulation],
+          articulationOverrides: {
+            ...state.patch.articulationOverrides,
+            [action.articulation.id]: { ...(copyFrom ? state.patch.articulationOverrides[copyFrom] : {}) },
+          },
+          articulationMappingAmounts: {
+            ...state.patch.articulationMappingAmounts,
+            [action.articulation.id]: { ...(copyFrom ? state.patch.articulationMappingAmounts[copyFrom] : {}) },
+          },
+        },
+      };
+    }
+
+    case "DELETE_ARTICULATION": {
+      if (!state.patch.articulations.some((item) => item.id === action.articulationId)) return state;
+      const dropKey = (record) => Object.fromEntries(
+        Object.entries(record).filter(([id]) => id !== action.articulationId),
+      );
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          articulations: state.patch.articulations.filter((item) => item.id !== action.articulationId),
+          articulationOverrides: dropKey(state.patch.articulationOverrides),
+          articulationMappingAmounts: dropKey(state.patch.articulationMappingAmounts),
+        },
+        audition: state.audition.articulation === action.articulationId
+          ? { ...state.audition, articulation: "Default" }
+          : state.audition,
+      };
+    }
+
+    case "SET_ARTICULATION_KEY":
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          articulations: state.patch.articulations.map((item) =>
+            item.id === action.articulationId
+              ? { ...item, key: clamp(Math.round(action.key), 0, 127) }
+              : item,
+          ),
+        },
+      };
+
+    case "SET_ARTICULATION_RANGE": {
+      if (action.mode !== "vel" && action.mode !== "chain") return state;
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          articulations: state.patch.articulations.map((item) => {
+            if (item.id !== action.articulationId) return item;
+            const range = [...item[action.mode]];
+            const value = clamp(Math.round(action.value), 0, 127);
+            if (action.bound === "lo") range[0] = Math.min(value, range[1]);
+            else range[1] = Math.max(value, range[0]);
+            return { ...item, [action.mode]: range };
+          }),
+        },
+      };
+    }
+
+    case "SET_ARTICULATION_TRIGGER_MODE":
+      if (!["key", "vel", "chain"].includes(action.mode)) return state;
+      return {
+        ...state,
+        patch: { ...state.patch, articulationTriggerMode: action.mode },
+      };
+
+    case "RESTORE_ARTICULATION_LAYER":
+      if (!state.patch.articulations.some((item) => item.id === action.articulationId)) return state;
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          articulationOverrides: {
+            ...state.patch.articulationOverrides,
+            [action.articulationId]: { ...action.overrides },
+          },
+          articulationMappingAmounts: {
+            ...state.patch.articulationMappingAmounts,
+            [action.articulationId]: { ...action.mappingAmounts },
+          },
+        },
+      };
+
+    case "CLEAR_ARTICULATION_BASE_OVERRIDE": {
+      const current = state.patch.articulationOverrides[action.articulationId];
+      if (!current || current[action.targetId] == null) return state;
+      const next = { ...current };
+      delete next[action.targetId];
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          articulationOverrides: {
+            ...state.patch.articulationOverrides,
+            [action.articulationId]: next,
+          },
+        },
+      };
+    }
+
+    case "CLEAR_ARTICULATION_MAPPING_AMOUNT": {
+      const current = state.patch.articulationMappingAmounts[action.articulationId];
+      if (!current || current[action.mappingId] == null) return state;
+      const next = { ...current };
+      delete next[action.mappingId];
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          articulationMappingAmounts: {
+            ...state.patch.articulationMappingAmounts,
+            [action.articulationId]: next,
+          },
+        },
+      };
+    }
 
     case "SET_AUDITION_NOTE":
       return { ...state, audition: { ...state.audition, note: action.note } };

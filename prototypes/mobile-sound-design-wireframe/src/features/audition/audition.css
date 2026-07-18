@@ -188,6 +188,48 @@
     border-radius: var(--cosimo-radius);
   }
 
+  .cosimo-audition__edit-field {
+    display: grid;
+    inline-size: var(--cosimo-audition-edit-width);
+    grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-control-small);
+    align-content: center;
+    row-gap: var(--cosimo-space-micro);
+  }
+
+  .cosimo-audition__edit-latch,
+  .cosimo-audition__edit-empty {
+    display: grid;
+    min-block-size: var(--cosimo-control-small);
+    place-items: center;
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    border-radius: var(--cosimo-radius);
+  }
+
+  .cosimo-audition__edit-empty {
+    border-color: var(--cosimo-color-rule);
+    border-style: dashed;
+  }
+
+  .cosimo-audition__edit-latch[data-on] {
+    background: var(--cosimo-color-ink);
+    color: var(--cosimo-color-paper);
+  }
+
+  .cosimo-audition__manage-note {
+    display: grid;
+    flex: 1 1 auto;
+    min-inline-size: 0;
+    grid-template-rows: var(--cosimo-type-label-line) var(--cosimo-control-small);
+    align-content: center;
+    row-gap: var(--cosimo-space-micro);
+    color: var(--cosimo-color-ink-muted);
+  }
+
+  .cosimo-audition__manage-note > .cosimo-type-micro {
+    display: inline-flex;
+    align-items: center;
+  }
+
   .cosimo-audition__toggle input:checked + span {
     background: var(--cosimo-color-ink);
   }

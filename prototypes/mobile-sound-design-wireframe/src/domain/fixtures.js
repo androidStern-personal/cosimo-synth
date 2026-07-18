@@ -19,6 +19,15 @@ export const INITIAL_SOURCES = Object.freeze([
   { id: "mseg-1", type: "mseg", slot: 1, label: "MSEG 1" },
 ]);
 
+// The articulation bank: Default stays implicit (the patch itself). Selectors
+// are the realtime selectorA identities; key/vel/chain are trigger
+// assignments for the three playback modes.
+export const INITIAL_ARTICULATIONS = Object.freeze([
+  { id: "Pluck", label: "Pluck", color: ARTICULATIONS.Pluck.color, icon: "cursor-click", selector: 12, key: 24, vel: [64, 109], chain: [0, 42] },
+  { id: "Bowed", label: "Bowed", color: ARTICULATIONS.Bowed.color, icon: "feather", selector: 13, key: 26, vel: [0, 63], chain: [43, 90] },
+  { id: "Accent", label: "Accent", color: ARTICULATIONS.Accent.color, icon: "lightning", selector: 14, key: 28, vel: [110, 127], chain: [91, 127] },
+]);
+
 // Amounts are in each target's own units: octaves for frequency-shaped
 // targets, percent elsewhere (see modAmountSpec).
 export const INITIAL_MAPPINGS = Object.freeze([
@@ -70,6 +79,8 @@ export const INITIAL_PATCH = Object.freeze({
       .filter((id) => id !== "Default")
       .map((id) => [id, {}]),
   ),
+  articulations: INITIAL_ARTICULATIONS,
+  articulationTriggerMode: "key",
   sources: INITIAL_SOURCES,
   sourceSettings: INITIAL_SOURCE_SETTINGS,
   mappings: INITIAL_MAPPINGS,
@@ -101,6 +112,12 @@ export function createInitialMockCosimoState() {
         Object.entries(INITIAL_PATCH.articulationMappingAmounts)
           .map(([id, values]) => [id, { ...values }]),
       ),
+      articulations: INITIAL_PATCH.articulations.map((item) => ({
+        ...item,
+        vel: [...item.vel],
+        chain: [...item.chain],
+      })),
+      articulationTriggerMode: INITIAL_PATCH.articulationTriggerMode,
       sources: INITIAL_PATCH.sources.map((source) => ({ ...source })),
       sourceSettings: Object.fromEntries(
         Object.entries(INITIAL_PATCH.sourceSettings)
@@ -156,6 +173,9 @@ export function createStressMockCosimoState() {
       "wavetable.warp::envelope-1": 80,
     },
   };
+  state.patch.articulations = state.patch.articulations.map((item) => (
+    item.id === "Bowed" ? { ...item, key: 25 } : item
+  ));
   state.patch.sources = [...state.patch.sources, orphanSource];
   state.patch.sourceSettings = {
     ...state.patch.sourceSettings,

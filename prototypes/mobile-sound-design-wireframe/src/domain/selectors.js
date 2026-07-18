@@ -96,14 +96,22 @@ export function selectAvailableSourceSlot(patch, type) {
   return firstAvailableSourceSlot(patch.sources, type);
 }
 
+/*
+ * The display/edit layer follows the WORN articulation. With nothing worn,
+ * cells show the patch base; the audition articulation only contributes the
+ * informational override mark.
+ */
 export function selectParameterControlViewModel(
   patch,
   audition,
   targetId,
   activeSourceId = null,
+  wornArticulationId = null,
 ) {
   const target = TARGETS[targetId];
   if (!target) return null;
+  const layerArticulation = wornArticulationId || "Default";
+  const markArticulation = wornArticulationId || audition.articulation;
   const sourceLookup = selectSourceLookup(patch);
   const targetMappings = selectMappingsForTarget(patch, targetId);
   const rawActiveMapping = targetMappings.find((item) => item.sourceId === activeSourceId)
@@ -112,21 +120,14 @@ export function selectParameterControlViewModel(
   const activeMapping = rawActiveMapping
     ? {
         ...rawActiveMapping,
-        amount: selectEffectiveMappingAmount(patch, rawActiveMapping, audition.articulation),
+        amount: selectEffectiveMappingAmount(patch, rawActiveMapping, layerArticulation),
         hasAmountOverride:
-          selectArticulationMappingAmount(patch, rawActiveMapping, audition.articulation) != null,
+          selectArticulationMappingAmount(patch, rawActiveMapping, layerArticulation) != null,
       }
     : null;
   const source = activeMapping ? sourceLookup[activeMapping.sourceId] : null;
-  const override = selectArticulationOverrides(
-    patch,
-    audition.articulation,
-  )[targetId];
-  const value = selectEffectiveParameterValue(
-    patch,
-    targetId,
-    audition.articulation,
-  );
+  const override = selectArticulationOverrides(patch, markArticulation)[targetId];
+  const value = selectEffectiveParameterValue(patch, targetId, layerArticulation);
 
   return {
     target,
@@ -136,10 +137,10 @@ export function selectParameterControlViewModel(
     formattedValue: formatValue(target, value),
     patchBaseValue: patch.parameterValues[targetId],
     defaultValue: target.defaultValue,
-    editLayer: resolveParameterEditLayer(targetId, audition.articulation),
+    editLayer: resolveParameterEditLayer(targetId, wornArticulationId),
     articulationOverride: override == null
       ? null
-      : { articulationId: audition.articulation, value: override },
+      : { articulationId: markArticulation, value: override },
     activeMapping,
     activeSource: source,
     activeSourceColor: sourceColor(source),

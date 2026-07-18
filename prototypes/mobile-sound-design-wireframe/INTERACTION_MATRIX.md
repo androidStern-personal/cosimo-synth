@@ -22,14 +22,19 @@ and chip focus renders as a corner-tick frame, never black/white inversion.
 
 | Surface | Intent | Required behavior | Geometry invariant |
 | --- | --- | --- | --- |
-| Workspace carousel | Move between Voice and Effects | Tap either neighbor or swipe horizontally; restore the last module and parameter in each workspace | Header height and neighboring controls do not move |
+| Workspace carousel | Move between Voice, Effects, and Articulations | Tap either neighbor or swipe horizontally; instrument workspaces restore their last module and parameter | Header height and neighboring controls do not move |
 | Effect rack | Focus an effect | Tapping the identity opens its editor | Tile width, quick-control lane, enable cell, and reorder cell are stable |
 | Effect rack | Adjust a quick value | Scrub the module's last deliberately touched parameter; keep it selected | All formatted values occupy a reserved value column |
 | Effect rack | Enable or bypass | Toggle the named effect without removing or moving it | Enabled and bypassed tiles have identical metrics |
 | Effect rack | Reorder | Drag only the dedicated reorder handle; preserve effect and mapping identity | Actual handle cell is at least 44px and does not overlap quick adjustment |
 | Module graphic | Shape the focused module | Direct manipulation edits the module's named X/Y parameters and updates the transient HUD | Compound controls remain in a reserved overlay lane |
 | Parameter matrix | Select and edit | Tap selects; horizontal drag edits the effective base layer; vertical drag edits the focused mapping's amount | Every cell has stable tracks, source marks, and value lanes |
-| Articulation override | Edit a non-default voice layer | Editing an eligible voice parameter creates/updates an absolute sparse override; Reset — the override chip in the module-editor header — clears only that target's base-value and route-amount overrides | Override marks appear without changing cell size; the reset chip lives in the module header's reserved context slot |
+| Articulation override | Edit a non-default voice layer | Overrides are authored ONLY while wearing an articulation (see the worn-layer row); with no layer worn, every edit writes patch base regardless of the audition articulation. Reset — the override chip in the module-editor header — clears only that target's base-value and route-amount overrides | Override marks appear without changing cell size; the reset chip lives in the module header's reserved context slot |
+| Articulation strip (transport) | Choose audition articulation / enter the edit layer | The transport articulation control lives on the instrument workspaces only, never on the Articulations workspace; selecting a non-Default articulation exposes an EDIT latch beside it; the latch wears that articulation | Transport row geometry is fixed; the latch occupies reserved space within the articulation group |
+| Worn edit layer | Author an articulation's sparse overrides in context | Entering wear snapshots the layer; while worn, every eligible per-note voice edit (cells, rail scrubs, module graphic) writes that articulation's override, while global effect edits stay patch-base; ✓ commits the session and ✕ restores the snapshot; exit returns to wherever wear began (transport latch → stay in place, Articulations card → back to the workspace) | Worn state renders as an overlay frame in the articulation's color plus an EDITING chip with ✓/✕ in the module header's reserved slot; nothing reflows |
+| Articulations workspace · bank | Manage the articulation bank | Cards show identity (color, name, SEL number), the active trigger mode's assignment, and the override count; press-and-hold ▶ previews the articulation through the audition path; long-press opens Duplicate/Delete (rename deferred); Add creates the next slot with the next selector | Cards occupy the rack region's fixed band |
+| Articulations workspace · trigger lane | Assign playback triggers | One mode visible at a time (Key/Vel/Chain). Key: a ~1.5-octave piano is display only, with octave paddles; a separate labeled drag handle (plus ∓1 nudges) moves the selected articulation's keyswitch so the finger never occludes placement, and movement clamps flush against neighbors with a haptic at first contact. Vel/Chain: partition strips with tap-to-select segments and scrubbed MIN/MAX values. Play-to-set appears only when MIDI input is present and is never required | The lane is display plus chunky controls; no manipulation target may fall below the touch minimum |
+| Articulations workspace · diff | Inventory and edit the layer | The selected card lists every override as a full-width row: a track with base tick and handle (dragging the row edits the override), struck base beside the live value, and a full-height remove; tapping the row's name opens that module with the parameter selected and flashing, and a Back action in the module header returns to the Articulations workspace | Rows are touch-scale and the whole row is the control; no dead space between name and value |
 | Parameter-first modulation | Inspect mappings | Focused module remains visible; the persistent source rail lights the selected parameter's attached sources and shows each amount on its chip | Rail is permanently allocated; lit and unlit chips share identical metrics and never reflow |
 | Source rail (lit chip) | Quick-adjust or focus a relationship | Vertical scrub adjusts that mapping's amount and makes it the focused mapping while the module remains operable | Amount lives only on the chip; scrub feedback is transient and nothing moves |
 | Explicit source navigation | Edit a modulation source deeply | Tapping a user source's rail chip or a source-editor target action opens the source editor; fixed performance sources (Velocity/Pressure/Slide) have no editor and their tap is a quiet no-op; returning restores the module and selected target | Navigation replaces only the workspace and preserves shallow return context |
@@ -58,6 +63,19 @@ Reset clears them with the base-value override. The Max/Mean reducer is a
 deliberate divergence from today's engine (which has no global-effect targets)
 and is specified here as the intended engine addition.
 
+Amended 2026-07-18 (articulation flow, ratified from the interactive models):
+articulations are a bank of slots (id, name, color, selectorA number, trigger
+assignments) plus the implicit Default layer. Editing selection and playback
+selection are distinct: the audition articulation only chooses what audition
+plays, and sparse overrides are authored exclusively inside the explicit worn
+edit layer — deleting the old invisible mode where a non-Default audition
+selection silently rerouted edits. The rows above describe the amended
+contract. Deferred, recorded here so they are not mistaken for omissions:
+slot rename; per-articulation envelope/MSEG-morph overrides (the engine
+supports them — parity gap); card snapshot thumbnails (they visualize the
+per-articulation envelope/morph data the mobile model does not yet carry);
+play-to-set trigger assignment (requires MIDI input).
+
 ## Reducer policy
 
 - Macro to voice/global target: no reducer.
@@ -85,3 +103,6 @@ The final verification pass must cover:
 8. A disabled mapping (struck amount on its lit chip, ghosted band on its cell).
 9. A bipolar mapping at an extreme amount, its band straddling the base.
 10. An articulation route-amount override whose value differs from the patch base.
+11. The Articulations workspace with adjacent keyswitches (flush, post-clamp) and a
+    non-empty diff.
+12. A worn edit layer over the voice matrix, with ✓/✕ visible and one uncommitted edit.

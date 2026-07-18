@@ -1,6 +1,68 @@
-import { ARTICULATIONS, TARGETS } from "./catalog.js";
+import { ARTICULATION_SLOT_COLORS, ARTICULATIONS, TARGETS } from "./catalog.js";
 
 export const SOURCE_LIMITS = Object.freeze({ macro: 4, envelope: 3, mseg: 3 });
+
+/*
+ * Keyswitch movement walks semitone by semitone and stops flush against the
+ * first occupied key, so articulations can touch but never pass through or
+ * stack. Returns the landing key plus contact info for haptics.
+ */
+export function walkArticulationKey(articulations, articulationId, wantKey) {
+  const current = articulations.find((item) => item.id === articulationId);
+  if (!current) return null;
+  const target = Math.max(0, Math.min(127, Math.round(wantKey)));
+  const others = articulations.filter((item) => item.id !== articulationId);
+  const direction = target > current.key ? 1 : -1;
+  let key = current.key;
+  while (key !== target) {
+    const step = key + direction;
+    if (step < 0 || step > 127 || others.some((other) => other.key === step)) break;
+    key = step;
+  }
+  const neighbor = others.find((other) => Math.abs(other.key - key) === 1) || null;
+  return { key, touching: Boolean(neighbor), neighborId: neighbor ? neighbor.id : null };
+}
+
+export function nextArticulationIdentity(articulations) {
+  const selector = articulations.reduce((max, item) => Math.max(max, item.selector), 0) + 1;
+  const color = ARTICULATION_SLOT_COLORS[
+    (articulations.length - 3 + ARTICULATION_SLOT_COLORS.length * 8) % ARTICULATION_SLOT_COLORS.length
+  ];
+  let ordinal = articulations.length + 1;
+  while (articulations.some((item) => item.id === `Artic ${ordinal}`)) ordinal += 1;
+  return {
+    id: `Artic ${ordinal}`,
+    label: `Artic ${ordinal}`,
+    color,
+    icon: "circle",
+    selector,
+    key: freeArticulationKey(articulations, 30),
+    vel: [0, 127],
+    chain: [0, 127],
+  };
+}
+
+export function duplicateArticulationIdentity(articulations, source) {
+  const selector = articulations.reduce((max, item) => Math.max(max, item.selector), 0) + 1;
+  let ordinal = 2;
+  while (articulations.some((item) => item.id === `${source.id} ${ordinal}`)) ordinal += 1;
+  return {
+    ...source,
+    id: `${source.id} ${ordinal}`,
+    label: `${source.label} ${ordinal}`,
+    selector,
+    key: freeArticulationKey(articulations, source.key + 1),
+    vel: [...source.vel],
+    chain: [...source.chain],
+  };
+}
+
+function freeArticulationKey(articulations, from) {
+  const occupied = new Set(articulations.map((item) => item.key));
+  for (let key = from; key <= 127; key += 1) if (!occupied.has(key)) return key;
+  for (let key = from - 1; key >= 0; key -= 1) if (!occupied.has(key)) return key;
+  return from;
+}
 
 export function mappingNeedsReducer(source, target) {
   return target?.workspace === "effects" && source?.type !== "macro";
@@ -14,16 +76,20 @@ export function defaultSourceSettings(source) {
   return { time: 55, scale: 80, curve: 50 };
 }
 
-export function resolveParameterEditLayer(targetId, articulationId) {
+/*
+ * The edit layer is decided by the WORN articulation, never the audition
+ * selection: pass the worn id (or null). Dynamic bank slots are valid layer
+ * ids, so membership in the static ARTICULATIONS map is not required.
+ */
+export function resolveParameterEditLayer(targetId, wornArticulationId) {
   const target = TARGETS[targetId];
   const editsOverride =
     target?.workspace === "voice" &&
-    articulationId &&
-    articulationId !== "Default" &&
-    Boolean(ARTICULATIONS[articulationId]);
+    Boolean(wornArticulationId) &&
+    wornArticulationId !== "Default";
 
   return editsOverride
-    ? { kind: "articulationOverride", articulationId }
+    ? { kind: "articulationOverride", articulationId: wornArticulationId }
     : { kind: "patchBase" };
 }
 

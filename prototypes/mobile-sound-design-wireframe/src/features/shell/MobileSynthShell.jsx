@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import {
   FadersHorizontal,
   List,
+  PianoKeys,
   WaveSine,
 } from "@phosphor-icons/react";
 import { TransientValueHUD } from "../../design-system/TransientValueHUD.jsx";
@@ -9,6 +10,7 @@ import { TransientValueHUD } from "../../design-system/TransientValueHUD.jsx";
 const WORKSPACE_ICONS = {
   effects: FadersHorizontal,
   voice: WaveSine,
+  artic: PianoKeys,
 };
 
 function WorkspaceGlyph({ workspace, size }) {

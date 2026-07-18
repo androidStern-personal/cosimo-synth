@@ -83,6 +83,13 @@ export function modulationBand(target, baseValue, mapping) {
   return { start: lower, width: upper - lower };
 }
 
+const MIDI_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
+
+export function formatMidiNote(note) {
+  const rounded = Math.round(note);
+  return `${MIDI_NOTE_NAMES[((rounded % 12) + 12) % 12]}${Math.floor(rounded / 12) - 2}`;
+}
+
 export function sourceColor(source) {
   return SOURCE_COLORS[source?.id] || "var(--cosimo-color-articulation-default)";
 }

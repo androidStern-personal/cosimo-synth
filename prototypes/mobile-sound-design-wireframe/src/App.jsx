@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useMockCosimoAdapter } from "./adapters/index.js";
-import { ARTICULATIONS, FIXED_SOURCES, SOURCE_COLORS, TARGETS } from "./domain/catalog.js";
+import { FIXED_SOURCES, SOURCE_COLORS, TARGETS } from "./domain/catalog.js";
 import {
   createInitialMockCosimoState,
   createStressMockCosimoState,
@@ -14,6 +14,7 @@ import {
 import { EffectRack, VoiceModuleStrip } from "./features/rack/index.js";
 import { ModuleEditor } from "./features/module-editor/ModuleEditor.jsx";
 import { SourceEditor, SourceRail } from "./features/sources/index.js";
+import { ArticulationCardStrip, ArticulationWorkspace } from "./features/articulations/index.js";
 import { AuditionTransport } from "./features/audition/index.js";
 import { triggerHaptic } from "./platform/haptics.js";
 
@@ -37,14 +38,6 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
     ),
     [state.mappingsForSelectedTarget],
   );
-  const articulations = useMemo(
-    () => Object.values(ARTICULATIONS).map((item) => ({
-      color: item.color,
-      id: item.id,
-      label: item.id,
-    })),
-    [],
-  );
 
   const header = (
     <InstrumentHeader
@@ -52,10 +45,29 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
       isPatchDirty
       onWorkspaceChange={actions.chooseWorkspace}
       patchName="Glass Pluck"
+      workspaces={[
+        { id: "voice", label: "Voice / Oscillator" },
+        { id: "effects", label: "Effects" },
+        { id: "artic", label: "Articulations" },
+      ]}
     />
   );
 
-  const rack = state.workspace === "effects" ? (
+  const rack = state.workspace === "artic" ? (
+    <ArticulationCardStrip
+      articulations={state.articulations}
+      onAdd={actions.addArticulation}
+      onDelete={actions.deleteArticulation}
+      onDuplicate={actions.duplicateArticulation}
+      onHaptic={triggerHaptic}
+      onPreviewEnd={actions.previewArticulationEnd}
+      onPreviewStart={actions.previewArticulationStart}
+      onSelect={actions.selectArticulation}
+      overrideCounts={state.articulationOverrideCounts}
+      selectedArticulationId={state.selectedArticulation?.id || null}
+      triggerMode={state.articulationTriggerMode}
+    />
+  ) : state.workspace === "effects" ? (
     <EffectRack
       items={state.rackTiles}
       onEffectEnabledChange={actions.setEffectEnabled}
@@ -119,7 +131,8 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
   const audition = (
     <AuditionTransport
       articulationId={state.audition.articulation}
-      articulations={articulations}
+      articulations={state.transportArticulations}
+      articulationsManaged={state.workspace === "artic"}
       canCapture={Boolean(state.audition.captureCandidate)}
       captureContext={state.audition.captureCandidate
         ? {
@@ -150,22 +163,32 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
         triggerHaptic("light");
         actions.startTrigger();
       }}
+      onToggleWear={(articulationId) => (
+        state.wornArticulation?.id === articulationId
+          ? actions.commitWear()
+          : actions.wearArticulation(articulationId, "latch")
+      )}
       repeat={state.audition.repeat}
       status={state.audition.status}
       triggerActive={state.audition.triggerActive}
+      wearingArticulationId={state.wornArticulation?.id || null}
     />
   );
 
   return (
     <MobileSynthShell
       audition={audition}
-      className={state.isDraggingSource ? "is-dragging-source" : ""}
+      className={[
+        state.isDraggingSource ? "is-dragging-source" : "",
+        state.wornArticulation ? "is-wearing" : "",
+      ].join(" ").trim()}
       header={header}
       readout={state.readout}
       rack={rack}
       sourceRail={sourceRail}
       style={{
         "--drag-source-color": state.sourceLookup[state.draggedSourceId]?.color,
+        "--cosimo-worn-color": state.wornArticulation?.color,
       }}
     >
       {state.focusedSource ? (
@@ -202,17 +225,41 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
           source={state.focusedSource}
           targetRows={state.focusedSourceMappings}
         />
+      ) : state.workspace === "artic" ? (
+        <ArticulationWorkspace
+          articulations={state.articulations}
+          diffRows={state.articulationDiff}
+          onEditDiffRow={(row, value) => (row.kind === "base"
+            ? actions.setArticulationBaseOverride(row.targetId, value)
+            : actions.setArticulationRouteAmount(row.mappingId, value))}
+          onNavigateToTarget={actions.openTargetFromArticulation}
+          onRemoveDiffRow={(row) => (row.kind === "base"
+            ? actions.removeArticulationBaseOverride(row.targetId)
+            : actions.removeArticulationMappingAmount(row.mappingId))}
+          onSelectArticulation={actions.selectArticulation}
+          onSetKey={actions.setArticulationKey}
+          onSetRange={actions.setArticulationRange}
+          onSetTriggerMode={actions.setArticulationTriggerMode}
+          onShowReadout={actions.showReadout}
+          onWear={(articulationId) => actions.wearArticulation(articulationId, "artic")}
+          selectedArticulation={state.selectedArticulation}
+          triggerMode={state.articulationTriggerMode}
+        />
       ) : (
         <div className="cosimo-workspace-stack">
           <ModuleEditor
             compoundControl={state.compoundControl}
             controls={state.parameterControls}
             dropTargetId={state.dropTargetId}
+            flashTargetId={state.navFlashTargetId}
             module={state.activeModule}
+            onBackToArticulations={actions.returnToArticulation}
+            onCancelWear={actions.cancelWear}
             onChangeBase={actions.setParameter}
             onChangeCompound={actions.setCompound}
             onChangeMappingAmount={actions.changeMappingAmount}
             onClearArticulationOverride={actions.clearArticulationOverride}
+            onCommitWear={actions.commitWear}
             onHaptic={triggerHaptic}
             onSelectTarget={actions.selectTarget}
             onShowReadout={actions.showReadout}
@@ -221,6 +268,8 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
               onReturn: actions.returnToSource,
             } : null}
             selectedTargetId={state.selectedTargetId}
+            showBackToArticulations={state.returnToArtic}
+            wornArticulation={state.wornArticulation}
           />
         </div>
       )}

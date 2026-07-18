@@ -32,6 +32,15 @@ export const ARTICULATIONS = Object.freeze({
   Accent: { id: "Accent", color: "var(--cosimo-color-articulation-accent)", icon: "lightning" },
 });
 
+// Colors for articulation slots created beyond the initial bank.
+export const ARTICULATION_SLOT_COLORS = Object.freeze([
+  "var(--cosimo-color-source-macro-2)",
+  "var(--cosimo-color-source-macro-3)",
+  "var(--cosimo-color-source-envelope-3)",
+  "var(--cosimo-color-source-macro-4)",
+  "var(--cosimo-color-source-mseg-3)",
+]);
+
 export const EFFECTS = Object.freeze([
   {
     id: "filter",

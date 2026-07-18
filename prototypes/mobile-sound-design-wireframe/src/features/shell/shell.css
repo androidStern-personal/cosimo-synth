@@ -15,7 +15,19 @@
   }
 
   .cosimo-synth-shell__workspace {
+    position: relative;
     background: var(--cosimo-color-paper);
+  }
+
+  /* The worn edit layer announces itself as an overlay frame; no reflow. */
+  .cosimo-mobile-shell.is-wearing .cosimo-synth-shell__workspace::after {
+    position: absolute;
+    z-index: var(--cosimo-z-sticky);
+    inset: 0;
+    border: var(--cosimo-stroke-semantic) solid var(--cosimo-worn-color, var(--cosimo-color-accent));
+    border-radius: var(--cosimo-radius);
+    content: "";
+    pointer-events: none;
   }
 
   .cosimo-synth-shell__sources {

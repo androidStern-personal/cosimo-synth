@@ -5,8 +5,10 @@ import { createInitialMockCosimoState } from "../domain/fixtures.js";
 import {
   createMapping,
   createSourceIdentity,
+  duplicateArticulationIdentity,
   firstAvailableSourceSlot,
-  resolveParameterEditLayer,
+  nextArticulationIdentity,
+  walkArticulationKey,
 } from "../domain/policies.js";
 import { selectSourceLookup } from "../domain/selectors.js";
 import { mockCosimoReducer } from "./mockCosimoReducer.js";
@@ -27,18 +29,65 @@ export function useMockCosimoAdapter({
   );
 
   const commands = useMemo(() => ({
-    setParameter({ targetId, value, layer = null }) {
-      if (!TARGETS[targetId]) return;
-      dispatch({
-        type: "SET_PARAMETER",
-        targetId,
-        value,
-        layer: layer || resolveParameterEditLayer(targetId, state.audition.articulation),
-      });
+    // The edit layer is the controller's decision (worn articulation or patch
+    // base) — the adapter never infers it from audition state.
+    setParameter({ targetId, value, layer }) {
+      if (!TARGETS[targetId] || !layer) return;
+      dispatch({ type: "SET_PARAMETER", targetId, value, layer });
     },
 
     clearArticulationOverride(targetId, articulationId) {
       dispatch({ type: "CLEAR_ARTICULATION_OVERRIDE", targetId, articulationId });
+    },
+
+    clearArticulationBaseOverride(targetId, articulationId) {
+      dispatch({ type: "CLEAR_ARTICULATION_BASE_OVERRIDE", targetId, articulationId });
+    },
+
+    clearArticulationMappingAmount(mappingId, articulationId) {
+      dispatch({ type: "CLEAR_ARTICULATION_MAPPING_AMOUNT", mappingId, articulationId });
+    },
+
+    addArticulation() {
+      const articulation = nextArticulationIdentity(state.patch.articulations);
+      dispatch({ type: "ADD_ARTICULATION", articulation });
+      return articulation.id;
+    },
+
+    duplicateArticulation(articulationId) {
+      const source = state.patch.articulations.find((item) => item.id === articulationId);
+      if (!source) return null;
+      const articulation = duplicateArticulationIdentity(state.patch.articulations, source);
+      dispatch({ type: "ADD_ARTICULATION", articulation, copyOverridesFrom: articulationId });
+      return articulation.id;
+    },
+
+    deleteArticulation(articulationId) {
+      dispatch({ type: "DELETE_ARTICULATION", articulationId });
+    },
+
+    setArticulationKey(articulationId, wantKey) {
+      const walk = walkArticulationKey(state.patch.articulations, articulationId, wantKey);
+      if (!walk) return null;
+      dispatch({ type: "SET_ARTICULATION_KEY", articulationId, key: walk.key });
+      return walk;
+    },
+
+    setArticulationRange(articulationId, mode, bound, value) {
+      dispatch({ type: "SET_ARTICULATION_RANGE", articulationId, mode, bound, value });
+    },
+
+    setArticulationTriggerMode(mode) {
+      dispatch({ type: "SET_ARTICULATION_TRIGGER_MODE", mode });
+    },
+
+    restoreArticulationLayer(articulationId, backup) {
+      dispatch({
+        type: "RESTORE_ARTICULATION_LAYER",
+        articulationId,
+        overrides: backup.overrides,
+        mappingAmounts: backup.mappingAmounts,
+      });
     },
 
     setEffectEnabled(effectId, enabled) {
@@ -101,15 +150,9 @@ export function useMockCosimoAdapter({
       return item.id;
     },
 
-    setMappingAmount(mappingId, amount, layer = null) {
-      const mapping = state.patch.mappings.find((item) => item.id === mappingId);
-      if (!mapping) return;
-      dispatch({
-        type: "SET_MAPPING_AMOUNT",
-        mappingId,
-        amount,
-        layer: layer || resolveParameterEditLayer(mapping.targetKey, state.audition.articulation),
-      });
+    setMappingAmount(mappingId, amount, layer) {
+      if (!state.patch.mappings.some((item) => item.id === mappingId) || !layer) return;
+      dispatch({ type: "SET_MAPPING_AMOUNT", mappingId, amount, layer });
     },
 
     setMappingEnabled(mappingId, enabled) {

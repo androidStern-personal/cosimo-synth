@@ -7,7 +7,7 @@ import {
   VOICE_MODULES,
 } from "../domain/catalog.js";
 import { formatValue, modAmountSpec, sourceColor } from "../domain/formatting.js";
-import { firstAvailableSourceSlot } from "../domain/policies.js";
+import { firstAvailableSourceSlot, resolveParameterEditLayer } from "../domain/policies.js";
 import {
   selectArticulationMappingAmount,
   selectAvailableTargetsForSource,
@@ -55,6 +55,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const { patch, audition } = snapshot;
   const { readout, showReadout } = useTransientReadout();
   const [workspace, setWorkspace] = useState("effects");
+  const [lastInstrumentWorkspace, setLastInstrumentWorkspace] = useState("effects");
   const [moduleByWorkspace, setModuleByWorkspace] = useState({
     effects: "phaser",
     voice: "wavetable",
@@ -77,6 +78,14 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const [sourceTargetAddOpen, setSourceTargetAddOpen] = useState(false);
   const [sourceMappingId, setSourceMappingId] = useState(null);
   const [sourceScrollTop, setSourceScrollTop] = useState(0);
+  // Worn edit layer: overrides are authored only while this is set.
+  const [wornArticulation, setWornArticulation] = useState(null);
+  const [selectedArticulationId, setSelectedArticulationId] = useState(
+    patch.articulations[0]?.id || null,
+  );
+  const [returnToArtic, setReturnToArtic] = useState(false);
+  const [navFlashTargetId, setNavFlashTargetId] = useState(null);
+  const previewRestoreArticulation = useRef(null);
   const triggerFallbackTimer = useRef(null);
 
   const clearTriggerFallback = () => {
@@ -97,10 +106,20 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     setSourceTargetAddOpen(false);
   };
 
-  const activeModuleId = moduleByWorkspace[workspace];
+  // The Articulations workspace has no module of its own; instrument context
+  // (rail, selected target) stays on the last instrument workspace.
+  const instrumentWorkspace = workspace === "artic" ? lastInstrumentWorkspace : workspace;
+  const activeModuleId = moduleByWorkspace[instrumentWorkspace];
   const activeModule = MODULES_BY_ID[activeModuleId];
   const selectedTargetId = targetByModule[activeModuleId] || `${activeModuleId}.${activeModule.quick}`;
   const selectedTarget = TARGETS[selectedTargetId];
+  const wornArticulationId = wornArticulation?.id || null;
+  const articulationsById = Object.fromEntries(
+    patch.articulations.map((item) => [item.id, item]),
+  );
+  const selectedArticulation = articulationsById[selectedArticulationId]
+    || patch.articulations[0]
+    || null;
 
   const sourceLookup = useMemo(() => {
     const lookup = selectSourceLookup(patch);
@@ -127,19 +146,29 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     const module = MODULES_BY_ID[moduleId];
     if (!module) return;
     setWorkspace(module.workspace);
+    setLastInstrumentWorkspace(module.workspace);
+    setReturnToArtic(false);
+    setNavFlashTargetId(null);
     setModuleByWorkspace((current) => ({ ...current, [module.workspace]: moduleId }));
     selectTarget(targetByModule[moduleId] || `${moduleId}.${module.quick}`);
     clearContextNavigation({ preserveSourceReturn: Boolean(sourceReturn) });
   };
 
   const chooseWorkspace = (nextWorkspace) => {
-    if (nextWorkspace !== "voice" && nextWorkspace !== "effects") return;
+    if (!["voice", "effects", "artic"].includes(nextWorkspace)) return;
     setWorkspace(nextWorkspace);
+    if (nextWorkspace !== "artic") setLastInstrumentWorkspace(nextWorkspace);
+    setReturnToArtic(false);
+    setNavFlashTargetId(null);
     clearContextNavigation({ preserveSourceReturn: Boolean(sourceReturn) });
   };
 
   const setParameter = (targetId, value) => {
-    commands.setParameter({ targetId, value });
+    commands.setParameter({
+      targetId,
+      value,
+      layer: resolveParameterEditLayer(targetId, wornArticulation?.id || null),
+    });
     selectTarget(targetId);
   };
 
@@ -243,12 +272,16 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     },
   });
 
+  const layerArticulationId = wornArticulationId || "Default";
+  const layerColor = wornArticulationId
+    ? articulationsById[wornArticulationId]?.color
+    : (articulationsById[audition.articulation] || ARTICULATIONS[audition.articulation])?.color;
   const mappingsForSelectedTarget = selectMappingsForTarget(patch, selectedTargetId)
     .map((mapping) => ({
       ...mapping,
-      amount: selectEffectiveMappingAmount(patch, mapping, audition.articulation),
+      amount: selectEffectiveMappingAmount(patch, mapping, layerArticulationId),
       hasAmountOverride:
-        selectArticulationMappingAmount(patch, mapping, audition.articulation) != null,
+        selectArticulationMappingAmount(patch, mapping, layerArticulationId) != null,
       modSpec: modAmountSpec(TARGETS[mapping.targetKey]),
       needsReducer: selectReducerRequirement(patch, mapping.id),
     }));
@@ -263,6 +296,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       audition,
       targetId,
       patch.mappings.find((item) => item.id === activeMappingByTarget[targetId])?.sourceId,
+      wornArticulationId,
     );
     return {
       ...viewModel,
@@ -272,7 +306,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
             source: sourceLookup[viewModel.activeMapping.sourceId],
           }
         : null,
-      articulationColor: ARTICULATIONS[audition.articulation]?.color,
+      articulationColor: layerColor,
       formatValue: (value) => formatValue(viewModel.target, value),
       isDropEligible: true,
       dropRelation: sourceDrag.draggedId && patch.mappings.some(
@@ -306,10 +340,10 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const voiceTiles = VOICE_MODULES.map((module) => {
     const parameterId = lastTweakedByModule[module.id] || module.quick;
     const target = TARGETS[`${module.id}.${parameterId}`];
-    const value = selectEffectiveParameterValue(patch, target.key, audition.articulation);
-    const override = audition.articulation === "Default"
+    const value = selectEffectiveParameterValue(patch, target.key, layerArticulationId);
+    const override = layerArticulationId === "Default"
       ? null
-      : patch.articulationOverrides[audition.articulation]?.[target.key];
+      : patch.articulationOverrides[layerArticulationId]?.[target.key];
     return {
       id: module.id,
       label: module.label,
@@ -324,10 +358,10 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         value,
         valueKind: target.format,
         patchBaseValue: patch.parameterValues[target.key],
-        articulationColor: ARTICULATIONS[audition.articulation]?.color,
+        articulationColor: layerColor,
         articulationOverride: override == null
           ? null
-          : { articulationId: audition.articulation, value: override },
+          : { articulationId: layerArticulationId, value: override },
       },
     };
   });
@@ -358,7 +392,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
           focusedSource.id,
         );
         return {
-          articulationColor: ARTICULATIONS[audition.articulation]?.color,
+          articulationColor: layerColor,
           articulationOverride: control.articulationOverride,
           baseValue: control.value,
           formatValue: (value) => formatValue(TARGETS[mapping.targetKey], value),
@@ -368,9 +402,9 @@ export function useMobileSynthController(adapter, initialSession = {}) {
           ),
           mapping: {
             ...mapping,
-            amount: selectEffectiveMappingAmount(patch, mapping, audition.articulation),
+            amount: selectEffectiveMappingAmount(patch, mapping, layerArticulationId),
             hasAmountOverride:
-              selectArticulationMappingAmount(patch, mapping, audition.articulation) != null,
+              selectArticulationMappingAmount(patch, mapping, layerArticulationId) != null,
             modSpec: modAmountSpec(TARGETS[mapping.targetKey]),
           },
           needsReducer: selectReducerRequirement(patch, mapping.id),
@@ -380,6 +414,62 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       })
     : [];
 
+  const articulationDiff = selectedArticulation
+    ? [
+        ...Object.entries(patch.articulationOverrides[selectedArticulation.id] || {})
+          .map(([targetId, value]) => ({
+            kind: "base",
+            id: `base:${targetId}`,
+            targetId,
+            target: TARGETS[targetId],
+            base: patch.parameterValues[targetId],
+            value,
+          }))
+          .filter((row) => row.target),
+        ...Object.entries(patch.articulationMappingAmounts[selectedArticulation.id] || {})
+          .map(([mappingId, value]) => {
+            const mapping = patch.mappings.find((item) => item.id === mappingId);
+            if (!mapping) return null;
+            const target = TARGETS[mapping.targetKey];
+            return {
+              kind: "route",
+              id: `route:${mappingId}`,
+              mappingId,
+              targetId: mapping.targetKey,
+              target,
+              source: sourceLookup[mapping.sourceId],
+              modSpec: modAmountSpec(target),
+              polarity: mapping.polarity,
+              base: mapping.amount,
+              value,
+            };
+          })
+          .filter(Boolean),
+      ]
+    : [];
+
+  const articulationOverrideCounts = Object.fromEntries(
+    patch.articulations.map((item) => [
+      item.id,
+      Object.keys(patch.articulationOverrides[item.id] || {}).length
+        + Object.keys(patch.articulationMappingAmounts[item.id] || {}).length,
+    ]),
+  );
+
+  const exitWear = (commit) => {
+    if (!wornArticulation) return;
+    if (!commit) {
+      commands.restoreArticulationLayer(wornArticulation.id, wornArticulation.backup);
+    }
+    const fromArtic = wornArticulation.entry === "artic";
+    setWornArticulation(null);
+    if (fromArtic) setWorkspace("artic");
+    showReadout(commit
+      ? `${wornArticulation.id} saved`
+      : `${wornArticulation.id} edits discarded`);
+    triggerHaptic(commit ? "success" : "light");
+  };
+
   return {
     state: {
       activeMappingId,
@@ -387,6 +477,25 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         .find((item) => item.id === activeMappingId)?.sourceId || null,
       activeModule,
       activeModuleId,
+      articulations: patch.articulations,
+      articulationDiff,
+      articulationOverrideCounts,
+      articulationTriggerMode: patch.articulationTriggerMode,
+      selectedArticulation,
+      wornArticulation: wornArticulation
+        ? {
+            id: wornArticulation.id,
+            entry: wornArticulation.entry,
+            label: articulationsById[wornArticulation.id]?.label || wornArticulation.id,
+            color: articulationsById[wornArticulation.id]?.color,
+          }
+        : null,
+      returnToArtic,
+      navFlashTargetId,
+      transportArticulations: [
+        { id: "Default", label: "Default", color: ARTICULATIONS.Default.color },
+        ...patch.articulations.map(({ id, label, color }) => ({ id, label, color })),
+      ],
       audition,
       compoundControl,
       deletedSource,
@@ -472,13 +581,112 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         clearTriggerFallback();
         commands.cancelTrigger();
       },
-      changeMappingAmount: commands.setMappingAmount,
+      changeMappingAmount: (mappingId, amount) => {
+        const mapping = patch.mappings.find((item) => item.id === mappingId);
+        if (!mapping) return;
+        commands.setMappingAmount(mappingId, amount, resolveParameterEditLayer(
+          mapping.targetKey,
+          wornArticulation?.id || null,
+        ));
+      },
       chooseWorkspace,
+      wearArticulation(articulationId, entry = "latch") {
+        if (!articulationsById[articulationId]) return;
+        setWornArticulation({
+          id: articulationId,
+          entry,
+          backup: {
+            overrides: { ...patch.articulationOverrides[articulationId] },
+            mappingAmounts: { ...patch.articulationMappingAmounts[articulationId] },
+          },
+        });
+        if (entry === "artic") setWorkspace(lastInstrumentWorkspace);
+        showReadout(`Wearing ${articulationId} · ✓ keeps · ✕ discards`);
+        triggerHaptic("light");
+      },
+      commitWear: () => exitWear(true),
+      cancelWear: () => exitWear(false),
+      selectArticulation: setSelectedArticulationId,
+      addArticulation() {
+        const articulationId = commands.addArticulation();
+        if (articulationId) setSelectedArticulationId(articulationId);
+      },
+      duplicateArticulation(articulationId) {
+        const nextId = commands.duplicateArticulation(articulationId);
+        if (nextId) setSelectedArticulationId(nextId);
+      },
+      deleteArticulation(articulationId) {
+        commands.deleteArticulation(articulationId);
+        if (selectedArticulationId === articulationId) {
+          setSelectedArticulationId(
+            patch.articulations.find((item) => item.id !== articulationId)?.id || null,
+          );
+        }
+        if (wornArticulation?.id === articulationId) setWornArticulation(null);
+      },
+      setArticulationKey(articulationId, wantKey) {
+        const walk = commands.setArticulationKey(articulationId, wantKey);
+        if (walk?.touching) triggerHaptic("light");
+        return walk;
+      },
+      setArticulationRange: commands.setArticulationRange,
+      setArticulationTriggerMode: commands.setArticulationTriggerMode,
+      setArticulationBaseOverride(targetId, value) {
+        if (!selectedArticulation) return;
+        commands.setParameter({
+          targetId,
+          value,
+          layer: { kind: "articulationOverride", articulationId: selectedArticulation.id },
+        });
+      },
+      setArticulationRouteAmount(mappingId, amount) {
+        if (!selectedArticulation) return;
+        commands.setMappingAmount(mappingId, amount, {
+          kind: "articulationOverride",
+          articulationId: selectedArticulation.id,
+        });
+      },
+      removeArticulationBaseOverride(targetId) {
+        if (!selectedArticulation) return;
+        commands.clearArticulationBaseOverride(targetId, selectedArticulation.id);
+      },
+      removeArticulationMappingAmount(mappingId) {
+        if (!selectedArticulation) return;
+        commands.clearArticulationMappingAmount(mappingId, selectedArticulation.id);
+      },
+      openTargetFromArticulation(targetId) {
+        const target = TARGETS[targetId];
+        if (!target) return;
+        setWorkspace(target.workspace);
+        setLastInstrumentWorkspace(target.workspace);
+        setModuleByWorkspace((current) => ({ ...current, [target.workspace]: target.moduleId }));
+        selectTarget(targetId);
+        setReturnToArtic(true);
+        setNavFlashTargetId(targetId);
+      },
+      returnToArticulation() {
+        setWorkspace("artic");
+        setReturnToArtic(false);
+        setNavFlashTargetId(null);
+      },
+      previewArticulationStart(articulationId) {
+        previewRestoreArticulation.current = audition.articulation;
+        commands.setAuditionArticulation(articulationId);
+        commands.beginTrigger();
+      },
+      previewArticulationEnd() {
+        commands.endTrigger();
+        if (previewRestoreArticulation.current != null) {
+          commands.setAuditionArticulation(previewRestoreArticulation.current);
+          previewRestoreArticulation.current = null;
+        }
+      },
       clearArticulationOverride(targetId = selectedTargetId) {
         const target = TARGETS[targetId];
         if (!target) return;
-        commands.clearArticulationOverride(targetId, audition.articulation);
-        showReadout(`${audition.articulation} · ${target.label} override cleared`);
+        if (layerArticulationId === "Default") return;
+        commands.clearArticulationOverride(targetId, layerArticulationId);
+        showReadout(`${layerArticulationId} · ${target.label} override cleared`);
         triggerHaptic("success");
       },
       closeSource,

@@ -83,6 +83,7 @@ const {
   calculateDragValue,
   resolveDragAxis,
 } = await import("../src/interactions/useAxisDrag.js");
+const { walkArticulationKey } = await vite.ssrLoadModule("/src/domain/policies.js");
 
 function render(element) {
   const host = document.createElement("div");
@@ -471,49 +472,178 @@ test("a bipolar mapping's band straddles the base while unipolar pushes one way"
   unipolar.unmount();
 });
 
-test("articulation route amounts override per-note voice mappings and leave the base untouched", () => {
+test("overrides are authored only while wearing; done keeps and cancel restores the snapshot", () => {
   const controller = renderController();
   controller.run(({ actions }) => actions.focusModule("wavetable"));
   controller.run(({ actions }) => actions.selectTarget("wavetable.warp"));
   controller.run(({ actions }) => actions.setArticulation("Pluck"));
-  controller.run(({ actions }) => actions.changeMappingAmount("wavetable.warp::envelope-1", 90));
 
+  controller.run(({ actions }) => actions.setParameter("wavetable.warp", 61));
+  assert.equal(controller.current().state.patch.parameterValues["wavetable.warp"], 61);
+  assert.equal(
+    controller.current().state.patch.articulationOverrides.Pluck["wavetable.warp"],
+    undefined,
+    "the audition selection alone must never reroute edits",
+  );
+
+  controller.run(({ actions }) => actions.wearArticulation("Pluck"));
+  controller.run(({ actions }) => actions.setParameter("wavetable.warp", 90));
+  controller.run(({ actions }) => actions.changeMappingAmount("wavetable.warp::envelope-1", 90));
+  assert.equal(controller.current().state.patch.articulationOverrides.Pluck["wavetable.warp"], 90);
   assert.equal(
     controller.current().state.patch.articulationMappingAmounts.Pluck["wavetable.warp::envelope-1"],
     90,
   );
   assert.equal(
-    controller.current().state.patch.mappings
-      .find((item) => item.id === "wavetable.warp::envelope-1").amount,
-    40,
-    "the patch-base amount must not move",
+    controller.current().state.patch.parameterValues["wavetable.warp"],
+    61,
+    "the base must not move while worn",
   );
   let mapping = controller.current().state.mappingsForSelectedTarget[0];
   assert.equal(mapping.amount, 90);
   assert.equal(mapping.hasAmountOverride, true);
 
-  controller.run(({ actions }) => actions.setArticulation("Default"));
+  controller.run(({ actions }) => actions.cancelWear());
+  assert.equal(controller.current().state.wornArticulation, null);
+  assert.equal(
+    controller.current().state.patch.articulationOverrides.Pluck["wavetable.warp"],
+    undefined,
+    "cancel restores the wear-enter snapshot",
+  );
+  assert.equal(
+    controller.current().state.patch.articulationMappingAmounts.Pluck["wavetable.warp::envelope-1"],
+    undefined,
+  );
   mapping = controller.current().state.mappingsForSelectedTarget[0];
-  assert.equal(mapping.amount, 40, "Default reads the patch-base amount");
-  assert.equal(mapping.hasAmountOverride, false);
+  assert.equal(mapping.amount, 40, "with nothing worn the base amount shows");
 
-  controller.run(({ actions }) => actions.setArticulation("Pluck"));
+  controller.run(({ actions }) => actions.wearArticulation("Pluck"));
+  controller.run(({ actions }) => actions.setParameter("wavetable.warp", 77));
+  controller.run(({ actions }) => actions.changeMappingAmount("wavetable.warp::envelope-1", 85));
+  controller.run(({ actions }) => actions.commitWear());
+  assert.equal(
+    controller.current().state.patch.articulationOverrides.Pluck["wavetable.warp"],
+    77,
+    "done keeps the session's overrides",
+  );
+
+  controller.run(({ actions }) => actions.wearArticulation("Pluck"));
   controller.run(({ actions }) => actions.clearArticulationOverride("wavetable.warp"));
   assert.equal(
     controller.current().state.patch.articulationMappingAmounts.Pluck["wavetable.warp::envelope-1"],
     undefined,
     "Reset clears the route-amount override with the base override",
   );
+  controller.run(({ actions }) => actions.commitWear());
 
+  controller.run(({ actions }) => actions.wearArticulation("Pluck"));
   controller.run(({ actions }) => actions.focusModule("phaser"));
-  controller.run(({ actions }) => actions.selectTarget("phaser.depth"));
-  controller.run(({ actions }) => actions.changeMappingAmount("phaser.depth::macro-1", 77));
+  controller.run(({ actions }) => actions.setParameter("phaser.depth", 33));
+  assert.equal(controller.current().state.patch.parameterValues["phaser.depth"], 33);
   assert.equal(
-    controller.current().state.patch.mappings
-      .find((item) => item.id === "phaser.depth::macro-1").amount,
-    77,
-    "global effect mappings stay patch-base even with an articulation active",
+    controller.current().state.patch.articulationOverrides.Pluck["phaser.depth"],
+    undefined,
+    "global effects stay patch-base even while worn",
   );
+  controller.unmount();
+});
+
+test("keyswitch movement clamps flush against neighbors and reports contact", () => {
+  const bank = [
+    { id: "Pluck", key: 24 },
+    { id: "Bowed", key: 26 },
+  ];
+  const blocked = walkArticulationKey(bank, "Pluck", 30);
+  assert.equal(blocked.key, 25, "the walk stops flush against the neighbor");
+  assert.equal(blocked.touching, true);
+  assert.equal(blocked.neighborId, "Bowed");
+  const free = walkArticulationKey(bank, "Pluck", 20);
+  assert.equal(free.key, 20);
+  assert.equal(free.touching, false);
+  const clampedLow = walkArticulationKey(bank, "Pluck", -10);
+  assert.equal(clampedLow.key, 0);
+});
+
+test("articulations workspace: navigation to a target flashes it and Back returns", () => {
+  const controller = renderController();
+  controller.run(({ actions }) => actions.chooseWorkspace("artic"));
+  assert.equal(controller.current().state.workspace, "artic");
+  assert.equal(controller.current().state.articulations.length, 3);
+
+  controller.run(({ actions }) => actions.selectArticulation("Pluck"));
+  controller.run(({ actions }) => actions.setArticulationBaseOverride("wavetable.warp", 88));
+  const diff = controller.current().state.articulationDiff;
+  assert.equal(diff.length, 1);
+  assert.equal(diff[0].targetId, "wavetable.warp");
+  assert.equal(diff[0].value, 88);
+
+  controller.run(({ actions }) => actions.openTargetFromArticulation("wavetable.warp"));
+  assert.equal(controller.current().state.workspace, "voice");
+  assert.equal(controller.current().state.selectedTargetId, "wavetable.warp");
+  assert.equal(controller.current().state.returnToArtic, true);
+  assert.equal(controller.current().state.navFlashTargetId, "wavetable.warp");
+
+  controller.run(({ actions }) => actions.returnToArticulation());
+  assert.equal(controller.current().state.workspace, "artic");
+  assert.equal(controller.current().state.returnToArtic, false);
+
+  controller.run(({ actions }) => actions.removeArticulationBaseOverride("wavetable.warp"));
+  assert.equal(controller.current().state.articulationDiff.length, 0);
+  controller.unmount();
+});
+
+test("bank management: add, duplicate carries the diff, delete cleans up", () => {
+  const controller = renderController();
+  controller.run(({ actions }) => actions.selectArticulation("Pluck"));
+  controller.run(({ actions }) => actions.setArticulationBaseOverride("wavetable.warp", 70));
+
+  controller.run(({ actions }) => actions.duplicateArticulation("Pluck"));
+  const copy = controller.current().state.articulations.find((item) => item.id === "Pluck 2");
+  assert.ok(copy, "duplicate mints a unique id");
+  assert.equal(copy.selector, 15, "duplicate takes the next selector");
+  assert.equal(
+    controller.current().state.patch.articulationOverrides["Pluck 2"]["wavetable.warp"],
+    70,
+    "duplicate carries the diff",
+  );
+
+  controller.run(({ actions }) => actions.addArticulation());
+  const added = controller.current().state.articulations.at(-1);
+  assert.equal(added.selector, 16);
+  assert.equal(controller.current().state.selectedArticulation.id, added.id);
+
+  controller.run(({ actions }) => actions.setArticulation(added.id));
+  controller.run(({ actions }) => actions.deleteArticulation(added.id));
+  assert.equal(
+    controller.current().state.articulations.some((item) => item.id === added.id),
+    false,
+  );
+  assert.equal(
+    controller.current().state.audition.articulation,
+    "Default",
+    "deleting the audition articulation falls back to Default",
+  );
+  assert.equal(controller.current().state.patch.articulationOverrides[added.id], undefined);
+  controller.unmount();
+});
+
+test("trigger assignments: key walk applies, ranges clamp against their own bounds", () => {
+  const controller = renderController();
+  controller.run(({ actions }) => actions.setArticulationKey("Pluck", 27));
+  assert.equal(
+    controller.current().state.articulations.find((item) => item.id === "Pluck").key,
+    25,
+    "the key walk stops flush against Bowed at 26",
+  );
+
+  controller.run(({ actions }) => actions.setArticulationTriggerMode("vel"));
+  assert.equal(controller.current().state.articulationTriggerMode, "vel");
+  controller.run(({ actions }) => actions.setArticulationRange("Pluck", "vel", "lo", 200));
+  let pluck = controller.current().state.articulations.find((item) => item.id === "Pluck");
+  assert.equal(pluck.vel[0], pluck.vel[1], "MIN clamps up to MAX, never past it");
+  controller.run(({ actions }) => actions.setArticulationRange("Pluck", "vel", "hi", -5));
+  pluck = controller.current().state.articulations.find((item) => item.id === "Pluck");
+  assert.equal(pluck.vel[1], pluck.vel[0], "MAX clamps down to MIN, never past it");
   controller.unmount();
 });
 
