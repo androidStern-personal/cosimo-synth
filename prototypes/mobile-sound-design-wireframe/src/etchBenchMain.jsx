@@ -10,6 +10,7 @@ import {
   createDefaultWavetableEnergyParams,
   paintWavetableEnergyField,
 } from "../../../ui/shared/wavetable-energy-field.ts";
+import { WAVETABLE_ETCHED_TREATMENT } from "../../../ui/shared/etched-treatment-presets.ts";
 import "./styles.css";
 
 /**
@@ -47,21 +48,16 @@ function synthesizeFrames() {
 
 function EtchBench() {
   const targetRef = useRef(null);
-  const [params, setParams] = useState({
-    grainPx: 2, inkDensity: 14, exposure: 1.6, contrast: 1.25,
-    dither: "stipple", hatchSpacingPx: 7, hatchAngleRad: Math.PI / 4,
-  });
+  const [params, setParams] = useState({ ...WAVETABLE_ETCHED_TREATMENT.etch });
   const [warp, setWarp] = useState({ mode: 0, amount: 0 });
   const [scan, setScan] = useState({ auto: true, position: 0.4 });
   const [sourceMode, setSourceMode] = useState("model");
   const sourceModeRef = useRef(sourceMode);
   sourceModeRef.current = sourceMode;
-  const [energy, setEnergy] = useState({
-    bandEnergy: 0.2, heroWidthPx: 2, heroGlowPx: 5, heroGlowStrength: 0.6, heroEnergy: 1,
-  });
+  const [energy, setEnergy] = useState({ ...WAVETABLE_ETCHED_TREATMENT.energy });
   const energyRef = useRef(energy);
   energyRef.current = energy;
-  const [hybrid, setHybrid] = useState(true);
+  const [hybrid, setHybrid] = useState(false);
   const hybridRef = useRef(hybrid);
   hybridRef.current = hybrid;
   const paramsRef = useRef(params);
