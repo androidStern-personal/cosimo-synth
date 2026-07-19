@@ -10,6 +10,7 @@
 
 import { type ArticulationVoiceParameterId } from "./articulation-image";
 import { type Brand, type NormalizedValue, type TargetId } from "./cosimo-ids";
+import { type ModulationTargetKind } from "./modulation";
 import { casesHandled, err, ok, shouldNeverHappen, type Result } from "./result";
 
 /** The eight fixed rack effects (ADR-006 v1 inventory; identity ≠ position). */
@@ -94,6 +95,13 @@ export type TargetDescriptor = {
      * pending their endpoint).
      */
     readonly articulationParameterId: ArticulationVoiceParameterId | null;
+    /**
+     * The engine modulation-route destination this target maps to, or null
+     * when the engine cannot modulate it (rack targets pending rack DSP).
+     * Wider than `binding`: tune and level are modulatable (pitchSemitones,
+     * ampGainDb) even though they have no base endpoint yet.
+     */
+    readonly modulationTargetKind: ModulationTargetKind | null;
 };
 
 type PrototypeValueFormat = "percent" | "frequency" | "rate" | "phase" | "signed" | "semitone";
@@ -122,7 +130,10 @@ type BoundEndpointId =
     | "filterQ"
     | "pan";
 
-type TargetConnectivity = Pick<TargetDescriptor, "binding" | "articulationParameterId">;
+type TargetConnectivity = Pick<
+    TargetDescriptor,
+    "binding" | "articulationParameterId" | "modulationTargetKind"
+>;
 
 function parameter(
     id: string,
@@ -342,31 +353,49 @@ function connectivityFor(targetId: TargetId, workspace: "voice" | "effects"): Ta
             return {
                 binding: boundEndpoint("wavetablePosition", identityToEngine, identityFromEngine),
                 articulationParameterId: "framePosition",
+                modulationTargetKind: "wavetablePosition",
             };
         case "wavetable.warp":
             return {
                 binding: boundEndpoint("warpAmount", identityToEngine, identityFromEngine),
                 articulationParameterId: "warpAmount",
+                modulationTargetKind: "warpAmount",
             };
         case "wavetable.unison":
             return {
                 binding: boundEndpoint("unisonDetune", identityToEngine, identityFromEngine),
                 articulationParameterId: "unisonDetune",
+                modulationTargetKind: "unisonDetune",
             };
         case "voice-filter.cutoff":
             return {
                 binding: boundEndpoint("filterCutoff", frequencyToEngine, frequencyFromEngine),
                 articulationParameterId: "filterCutoffHz",
+                modulationTargetKind: "filterCutoffOctaves",
             };
         case "voice-filter.resonance":
             return {
                 binding: boundEndpoint("filterQ", resonanceToEngine, resonanceFromEngine),
                 articulationParameterId: "filterQ",
+                modulationTargetKind: "filterQ",
             };
         case "amp-pan.pan":
             return {
                 binding: boundEndpoint("pan", panToEngine, panFromEngine),
                 articulationParameterId: "pan",
+                modulationTargetKind: "pan",
+            };
+        case "wavetable.tune":
+            return {
+                binding: { _tag: "unbacked", reason: "no-endpoint" },
+                articulationParameterId: null,
+                modulationTargetKind: "pitchSemitones",
+            };
+        case "amp-pan.level":
+            return {
+                binding: { _tag: "unbacked", reason: "no-endpoint" },
+                articulationParameterId: null,
+                modulationTargetKind: "ampGainDb",
             };
         default:
             return {
@@ -375,6 +404,7 @@ function connectivityFor(targetId: TargetId, workspace: "voice" | "effects"): Ta
                     reason: workspace === "effects" ? "rack-dsp" : "no-endpoint",
                 },
                 articulationParameterId: null,
+                modulationTargetKind: null,
             };
     }
 }
@@ -435,6 +465,7 @@ function createDescriptor(
         isQuick: moduleDefinition.quickParameterId === parameterDefinition.id,
         compound: parameterDefinition.compound,
         articulationParameterId: connectivity.articulationParameterId,
+        modulationTargetKind: connectivity.modulationTargetKind,
     });
 }
 

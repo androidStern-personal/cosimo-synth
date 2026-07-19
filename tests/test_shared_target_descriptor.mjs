@@ -61,6 +61,18 @@ const EXPECTED_QUICK = new Set([
 
 const EXPECTED_COMPOUND = new Set(["chorus.rate", "flanger.rate", "phaser.rate", "delay.time"]);
 
+/** Engine modulation destinations — wider than base bindings (tune/level modulate). */
+const EXPECTED_MOD_TARGETS = {
+    "wavetable.index": "wavetablePosition",
+    "wavetable.warp": "warpAmount",
+    "wavetable.unison": "unisonDetune",
+    "wavetable.tune": "pitchSemitones",
+    "voice-filter.cutoff": "filterCutoffOctaves",
+    "voice-filter.resonance": "filterQ",
+    "amp-pan.pan": "pan",
+    "amp-pan.level": "ampGainDb",
+};
+
 test("the catalog covers exactly the frozen 42-target surface", async () => {
     const catalog = await catalogPromise;
     const all = catalog.allTargetDescriptors();
@@ -95,6 +107,17 @@ test("binding policy: rack unbacked, voice bound to real endpoints, gaps explici
             assert.equal(descriptor.binding.reason, detail, descriptor.targetId);
         }
         assert.equal(descriptor.articulationParameterId, articulationParameterId, descriptor.targetId);
+    }
+});
+
+test("modulation destinations are catalog-owned and wider than base bindings", async () => {
+    const catalog = await catalogPromise;
+    for (const descriptor of catalog.allTargetDescriptors()) {
+        assert.equal(
+            descriptor.modulationTargetKind,
+            EXPECTED_MOD_TARGETS[descriptor.targetId] ?? null,
+            descriptor.targetId,
+        );
     }
 });
 
