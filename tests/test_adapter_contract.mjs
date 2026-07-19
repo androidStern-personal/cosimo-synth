@@ -4,6 +4,17 @@ import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
+// patch-connection-mock's module graph registers a custom element at import
+// time; a minimal stub keeps the bridge factory loadable under plain node.
+if (typeof globalThis.HTMLElement === "undefined") {
+    globalThis.HTMLElement = class HTMLElementStub {
+        attachShadow() {
+            this.shadowRoot = { innerHTML: "" };
+            return this.shadowRoot;
+        }
+    };
+}
+
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
 const portPromise = loadUIModule(repoRoot, "ui/shared/cosimo-adapter-port.ts");
@@ -11,13 +22,55 @@ const mockFactoryPromise = loadUIModule(
     repoRoot,
     "prototypes/mobile-sound-design-wireframe/src/adapters/createMockCosimoAdapter.ts",
 );
+const fixturesPromise = loadUIModule(
+    repoRoot,
+    "prototypes/mobile-sound-design-wireframe/src/domain/fixtures.js",
+);
+const bridgeFactoryPromise = loadUIModule(repoRoot, "ui/shared/cosimo-bridge-adapter.ts");
+const mockConnectionPromise = loadUIModule(repoRoot, "ui/shared/patch-connection-mock.ts");
+
+function expectOkValue(result, label) {
+    assert.equal(result._tag, "ok", `${label}: ${result._tag === "err" ? result.error.message : ""}`);
+    return result.value;
+}
 
 /**
- * The behavioral contract every adapter must satisfy. Phase 3's bridge runs
- * this exact suite — the factories differ, the assertions never do.
+ * Build the shared demo fixture ENTIRELY through port commands, on top of the
+ * product-initial "new patch" both adapters boot into. Fixture parity across
+ * mock and bridge holds by construction — the same commands run on both.
+ */
+function seedDemoPatch(adapter) {
+    const { commands } = adapter;
+    const a = expectOkValue(commands.addArticulation(), "seed articulation a");
+    const b = expectOkValue(commands.addArticulation(), "seed articulation b");
+    const c = expectOkValue(commands.addArticulation(), "seed articulation c");
+    // Defaults: keys 30/31/32, vel and chain [0,127]. Partition vel and chain
+    // deterministically under the flush-clamp law (order matters).
+    commands.setArticulationRange(a, "vel", "max", 63);
+    commands.setArticulationRange(b, "vel", "min", 64);
+    commands.setArticulationRange(c, "vel", "min", 110);
+    commands.setArticulationRange(b, "vel", "max", 109);
+    commands.setArticulationRange(a, "chain", "max", 41);
+    commands.setArticulationRange(b, "chain", "min", 42);
+    commands.setArticulationRange(c, "chain", "min", 90);
+    commands.setArticulationRange(b, "chain", "max", 89);
+    expectOkValue(commands.addMapping({ targetId: "wavetable.warp", sourceId: "envelope-1" }), "seed warp mapping");
+    commands.setMappingAmount("wavetable.warp::envelope-1", 40, { _tag: "patchBase" });
+    expectOkValue(commands.addMapping({ targetId: "wavetable.index", sourceId: "mseg-1" }), "seed index mapping");
+    expectOkValue(commands.addMapping({ targetId: "phaser.depth", sourceId: "macro-1" }), "seed rack mapping");
+    return { articulationIds: [a, b, c] };
+}
+
+/**
+ * The behavioral contract every adapter must satisfy. The bridge runs this
+ * exact suite — the factories differ, the assertions never do.
  */
 function contractSuite(adapterName, makeAdapter) {
-    const t = (title, fn) => test(`[${adapterName}] ${title}`, async () => fn(await makeAdapter()));
+    const t = (title, fn) => test(`[${adapterName}] ${title}`, async () => {
+        const adapter = await makeAdapter();
+        seedDemoPatch(adapter);
+        return fn(adapter);
+    });
 
     // ── Snapshot & subscription mechanics ─────────────────────────────────
 
@@ -78,7 +131,7 @@ function contractSuite(adapterName, makeAdapter) {
 
     // ── Mappings ──────────────────────────────────────────────────────────
 
-    t("addMapping creates one enabled unipolar mapping with the default amount", (adapter, port) => {
+    t("addMapping creates one enabled unipolar mapping with the default amount", (adapter) => {
         const result = adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "velocity" });
         assert.equal(result._tag, "ok");
         const mapping = adapter.getSnapshot().patch.mappings.find((m) => m.id === result.value);
@@ -177,7 +230,7 @@ function contractSuite(adapterName, makeAdapter) {
             .map((source) => source.slot)
             .sort();
         assert.deepEqual(envelopeSlots, [1, 2, 3], "three envelope slots, no gaps");
-        assert.equal(created.length > 0, true);
+        assert.equal(created.length, 2, "new patch starts with envelope-1 only");
     });
 
     t("deleteSource removes its mappings; undoDeleteSource restores both", (adapter) => {
@@ -286,6 +339,8 @@ function contractSuite(adapterName, makeAdapter) {
 
     t("keyswitch walking stops flush against a neighbor and reports the contact", (adapter) => {
         const [first, second] = adapter.getSnapshot().patch.articulations;
+        assert.equal(first.key, 30, "seeded default keys");
+        assert.equal(second.key, 31);
         const walk = adapter.commands.setArticulationKey(first.id, second.key + 5);
         assert.equal(walk.touching, true);
         assert.equal(walk.neighborId, second.id);
@@ -379,24 +434,58 @@ function contractSuite(adapterName, makeAdapter) {
         const { patch } = adapter.getSnapshot();
         const source = patch.sources.find((s) => s.id === captured);
         assert.equal(source.type, "mseg");
-        assert.equal(
-            patch.mappings.some((m) => m.sourceId === captured && m.targetId === "phaser.frequency"),
-            true,
-            "capture commits to an MSEG mapped to the moved parameter",
+        const capturedMapping = patch.mappings.find(
+            (m) => m.sourceId === captured && m.targetId === "phaser.frequency",
         );
+        assert.notEqual(capturedMapping, undefined, "capture commits to an MSEG mapped to the moved parameter");
+        assert.equal(capturedMapping.amount, 6, "capture commits at FULL spec amount (±6 oct), same on every adapter");
     });
 
-    t("reset returns to the exact initial snapshot", async (adapter) => {
-        const fresh = (await makeAdapter()).getSnapshot();
+    t("reset returns to the product-initial new patch", async (adapter) => {
+        const blank = (await makeAdapter()).getSnapshot();
         adapter.commands.setParameter({ targetId: "wavetable.warp", value: 0.9, layer: { _tag: "patchBase" } });
         adapter.commands.setRepeatEnabled(true);
         adapter.commands.reset();
-        assert.deepEqual(adapter.getSnapshot().patch, fresh.patch);
-        assert.deepEqual(adapter.getSnapshot().audition, fresh.audition);
+        assert.deepEqual(adapter.getSnapshot().patch, blank.patch);
+        assert.deepEqual(adapter.getSnapshot().audition, blank.audition);
     });
+
+    t("the product-initial new patch is identical across adapters by construction", async () => {
+        const blank = (await makeAdapter()).getSnapshot();
+        assert.deepEqual(
+            blank.patch.sources.map((source) => source.id).sort(),
+            ["envelope-1", "macro-1", "mseg-1", "pressure", "slide", "velocity"],
+        );
+        assert.deepEqual(blank.patch.mappings, []);
+        assert.deepEqual(blank.patch.articulations, []);
+        assert.equal(blank.audition.articulation, "Default");
+        assert.equal(blank.patch.articulationTriggerMode, "chain");
+    });
+}
+
+async function waitForReady(adapter) {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+        const { connection } = adapter.getSnapshot();
+        if (connection._tag === "ready") return;
+        if (connection._tag === "detached") {
+            assert.fail(`adapter detached during boot: ${connection.reason}`);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.fail("adapter never became ready");
 }
 
 contractSuite("mock", async () => {
     const { createMockCosimoAdapter } = await mockFactoryPromise;
-    return createMockCosimoAdapter();
+    const { createNewPatchMockCosimoState } = await fixturesPromise;
+    return createMockCosimoAdapter({ createInitialState: createNewPatchMockCosimoState });
+});
+
+contractSuite("bridge", async () => {
+    const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
+    const { MockPatchConnection } = await mockConnectionPromise;
+    const connection = new MockPatchConnection({ name: "Adapter contract", version: 1 });
+    const adapter = createCosimoBridgeAdapter({ connection });
+    await waitForReady(adapter);
+    return adapter;
 });

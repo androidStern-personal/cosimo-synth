@@ -52,8 +52,17 @@ export function clampArticulationRange(articulations, articulationId, mode, boun
   return { value, touching, neighborId };
 }
 
+// ADR-014: selectors are allocated lowest-free from 0 and never reused while
+// occupied — identical policy to the engine bridge's lowestFreeRuntimeSlot.
+function lowestFreeSelector(articulations) {
+  const occupied = new Set(articulations.map((item) => item.selector));
+  let selector = 0;
+  while (occupied.has(selector)) selector += 1;
+  return selector;
+}
+
 export function nextArticulationIdentity(articulations) {
-  const selector = articulations.reduce((max, item) => Math.max(max, item.selector), 0) + 1;
+  const selector = lowestFreeSelector(articulations);
   const color = ARTICULATION_SLOT_COLORS[
     (articulations.length - 3 + ARTICULATION_SLOT_COLORS.length * 8) % ARTICULATION_SLOT_COLORS.length
   ];
@@ -72,7 +81,7 @@ export function nextArticulationIdentity(articulations) {
 }
 
 export function duplicateArticulationIdentity(articulations, source) {
-  const selector = articulations.reduce((max, item) => Math.max(max, item.selector), 0) + 1;
+  const selector = lowestFreeSelector(articulations);
   let ordinal = 2;
   while (articulations.some((item) => item.id === `${source.id} ${ordinal}`)) ordinal += 1;
   return {

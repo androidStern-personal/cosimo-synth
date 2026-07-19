@@ -679,7 +679,7 @@ test("bank management: add, duplicate carries the diff, delete cleans up", () =>
   controller.run(({ actions }) => actions.duplicateArticulation("Pluck"));
   const copy = controller.current().state.articulations.find((item) => item.id === "Pluck 2");
   assert.ok(copy, "duplicate mints a unique id");
-  assert.equal(copy.selector, 15, "duplicate takes the next selector");
+  assert.equal(copy.selector, 0, "ADR-014: selectors allocate lowest-free from 0 (demo occupies 12-14)");
   assert.equal(
     controller.current().state.patch.articulationOverrides["Pluck 2"]["wavetable.warp"],
     70,
@@ -688,7 +688,7 @@ test("bank management: add, duplicate carries the diff, delete cleans up", () =>
 
   controller.run(({ actions }) => actions.addArticulation());
   const added = controller.current().state.articulations.at(-1);
-  assert.equal(added.selector, 16);
+  assert.equal(added.selector, 1, "next lowest free selector");
   assert.equal(controller.current().state.selectedArticulation.id, added.id);
 
   controller.run(({ actions }) => actions.setArticulation(added.id));

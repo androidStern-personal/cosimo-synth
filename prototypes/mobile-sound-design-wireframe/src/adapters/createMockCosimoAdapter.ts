@@ -882,7 +882,12 @@ export function createMockCosimoAdapter({
         },
 
         reset() {
-            dispatch({ type: "RESET" });
+            // Reset returns to THIS adapter's initial state (the composition
+            // root decides what a fresh patch is), not the reducer's baked
+            // demo fixture.
+            state = initialPrototypeState(createInitialState);
+            snapshot = projectSnapshot(state);
+            for (const listener of listeners) listener();
         },
     };
 

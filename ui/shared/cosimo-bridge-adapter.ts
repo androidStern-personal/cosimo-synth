@@ -53,8 +53,8 @@ import {
 } from "./cosimo-ids";
 import {
     MODULATION_MACRO_SLOT_COUNT,
-    MODULATION_MAX_ROUTES,
     MODULATION_SOURCE_OPTIONS,
+    MODULATION_STATE_KEY,
     acquireModulationRuntimeBridge,
     createDefaultEnvelope,
     createDefaultModulationState,
@@ -79,6 +79,7 @@ import {
 } from "./target-descriptor";
 
 const UI_PATCH_VALUES_STATE_KEY = "uiPatchValues.v1";
+const UI_MAPPINGS_STATE_KEY = "uiMappings.v1";
 const RACK_STATE_KEY = "rackState.v1";
 
 const EFFECT_ORDER: ReadonlyArray<EffectModuleId> = [
@@ -120,6 +121,25 @@ type ValidRoute = {
     readonly descriptor: TargetDescriptor;
 };
 
+type PendingUiMapping = ModulationMapping;
+
+type MappingReference =
+    | { readonly _tag: "engine"; readonly validRoute: ValidRoute }
+    | {
+          readonly _tag: "ui";
+          readonly mapping: PendingUiMapping;
+          readonly descriptor: TargetDescriptor;
+      };
+
+type StoredUiMapping = {
+    readonly targetId: TargetId;
+    readonly sourceId: SourceId;
+    readonly amount: number;
+    readonly polarity: ModulationMapping["polarity"];
+    readonly reducer: MappingReducer;
+    readonly enabled: boolean;
+};
+
 type RackState = {
     readonly order: ReadonlyArray<EffectModuleId>;
     readonly enabled: Readonly<Record<EffectModuleId, boolean>>;
@@ -135,6 +155,8 @@ type DeletedSourceBackup = {
     readonly modulationState: ModulationState;
     readonly macroValue: NormalizedValue | null;
     readonly routes: ReadonlyArray<ModulationRoute>;
+    readonly uiMappings: ReadonlyArray<PendingUiMapping>;
+    readonly mappingCreationOrder: ReadonlyArray<string>;
     readonly articulationRouteAmounts: Readonly<Record<string, Readonly<Record<string, number>>>>;
 };
 
@@ -463,6 +485,96 @@ function parseRackState(input: unknown): ParseOutcome<RackState> {
     };
 }
 
+function parseUiMappings(input: unknown): ParseOutcome<Map<MappingId, PendingUiMapping>> {
+    const document = parseJsonDocument(input, UI_MAPPINGS_STATE_KEY);
+    if (document._tag === "err") {
+        return document;
+    }
+    if (!isRecord(document.value)) {
+        return parseError(`${UI_MAPPINGS_STATE_KEY} must be an object`);
+    }
+
+    const mappings = new Map<MappingId, PendingUiMapping>();
+    const requiredFields = new Set(["targetId", "sourceId", "amount", "polarity", "reducer", "enabled"]);
+    for (const mappingKey of Reflect.ownKeys(document.value)) {
+        if (typeof mappingKey !== "string") {
+            return parseError(`${UI_MAPPINGS_STATE_KEY} has a non-string mapping id`);
+        }
+
+        const rawMapping = document.value[mappingKey];
+        if (!isRecord(rawMapping)) {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey} must be an object`);
+        }
+        const mappingFields = Reflect.ownKeys(rawMapping);
+        if (mappingFields.length !== requiredFields.size) {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey} must contain exactly targetId, sourceId, amount, polarity, reducer, enabled`);
+        }
+        for (const field of mappingFields) {
+            if (typeof field !== "string" || !requiredFields.has(field)) {
+                return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey} has unexpected field "${String(field)}"`);
+            }
+        }
+
+        if (typeof rawMapping.targetId !== "string") {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey}.targetId must be a string`);
+        }
+        const parsedTarget = parseTargetId(rawMapping.targetId);
+        if (parsedTarget._tag === "err") {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey} has unknown target "${rawMapping.targetId}"`);
+        }
+        const descriptor = getTargetDescriptor(parsedTarget.value);
+        if (descriptor.modulationTargetKind !== null) {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey} target must be engine-gapped`);
+        }
+
+        if (typeof rawMapping.sourceId !== "string") {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey}.sourceId must be a string`);
+        }
+        const definition = SOURCE_DEFINITION_BY_ID.get(rawMapping.sourceId);
+        if (definition === undefined) {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey} has unknown source "${rawMapping.sourceId}"`);
+        }
+        const sourceId = sourceIdFromDefinition(definition);
+        const mappingId = makeMappingId(parsedTarget.value, sourceId);
+        if (String(mappingId) !== mappingKey) {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey} is not the canonical id for its target and source`);
+        }
+
+        if (typeof rawMapping.amount !== "number"
+            || !Number.isFinite(rawMapping.amount)
+            || rawMapping.amount < descriptor.modAmount.min
+            || rawMapping.amount > descriptor.modAmount.max) {
+            return parseError(
+                `${UI_MAPPINGS_STATE_KEY}.${mappingKey}.amount must be within [${descriptor.modAmount.min}, ${descriptor.modAmount.max}]`,
+            );
+        }
+        if (rawMapping.polarity !== "Unipolar" && rawMapping.polarity !== "Bipolar") {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey}.polarity must be Unipolar or Bipolar`);
+        }
+        if (rawMapping.reducer !== "Max" && rawMapping.reducer !== "Mean") {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey}.reducer must be Max or Mean`);
+        }
+        if (typeof rawMapping.enabled !== "boolean") {
+            return parseError(`${UI_MAPPINGS_STATE_KEY}.${mappingKey}.enabled must be boolean`);
+        }
+
+        mappings.set(mappingId, {
+            id: mappingId,
+            targetId: parsedTarget.value,
+            sourceId,
+            amount: rawMapping.amount,
+            polarity: rawMapping.polarity,
+            reducer: rawMapping.reducer,
+            enabled: rawMapping.enabled,
+        });
+    }
+
+    if (mappings.size > ROUTE_BUDGET) {
+        return parseError(`${UI_MAPPINGS_STATE_KEY} exceeds the shared route budget of ${ROUTE_BUDGET}`);
+    }
+    return { _tag: "ok", value: mappings };
+}
+
 function parseStoredArticulations(input: unknown): ParseOutcome<ArticulationsState> {
     const document = parseJsonDocument(input, "articulations.v3");
     if (document._tag === "err") {
@@ -548,6 +660,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     );
     private readonly visibleSourceIds = new Set<string>(INITIAL_VISIBLE_SOURCE_IDS);
     private readonly routeReducers = new Map<string, MappingReducer>();
+    private uiMappings = new Map<MappingId, PendingUiMapping>();
+    private mappingCreationOrder: Array<string> = [];
     private readonly listeners = new Set<() => void>();
     private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
     private deletedSourceBackup: DeletedSourceBackup | null = null;
@@ -555,15 +669,28 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private snapshot: PatchSnapshot;
     private commandDepth = 0;
     private snapshotDirty = false;
+    private hydrationComplete = false;
     private disposed = false;
 
     private readonly handleModulationState = (state: ModulationState): void => {
         if (this.disposed) {
             return;
         }
+        if (!this.hydrationComplete) {
+            this.markSnapshotDirty();
+            return;
+        }
         const validRoutes = this.collectValidRoutes(state);
         if (validRoutes.length !== state.routes.length) {
             this.modulationBridge.replaceRoutes(validRoutes.map(({ route }) => route));
+            return;
+        }
+        this.adoptValidRoutes(validRoutes);
+    };
+
+    private adoptValidRoutes(validRoutes: ReadonlyArray<ValidRoute>): void {
+        if (validRoutes.length + this.uiMappings.size > ROUTE_BUDGET) {
+            this.detach(`Stored mappings exceed the shared route budget of ${ROUTE_BUDGET}`);
             return;
         }
         for (const validRoute of validRoutes) {
@@ -575,8 +702,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 this.routeReducers.set(validRoute.route.id, "Max");
             }
         }
+        this.synchronizeMappingCreationOrder(validRoutes);
         this.markSnapshotDirty();
-    };
+    }
 
     private readonly handleStoredStateValue = (message: unknown): void => {
         if (this.disposed || !isRecord(message) || typeof message.key !== "string") {
@@ -606,6 +734,23 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     return;
                 }
                 this.rackState = parsed.value;
+                this.markSnapshotDirty();
+                return;
+            }
+            if (message.key === UI_MAPPINGS_STATE_KEY) {
+                const parsed = parseUiMappings(message.value);
+                if (parsed._tag === "err") {
+                    this.detach(parsed.message);
+                    return;
+                }
+                const validRoutes = this.collectValidRoutes(this.modulationBridge.getState());
+                if (validRoutes.length + parsed.value.size > ROUTE_BUDGET) {
+                    this.detach(`Stored mappings exceed the shared route budget of ${ROUTE_BUDGET}`);
+                    return;
+                }
+                this.uiMappings = parsed.value;
+                this.revealMappedSources(this.uiMappings.values());
+                this.synchronizeMappingCreationOrder(validRoutes);
                 this.markSnapshotDirty();
                 return;
             }
@@ -655,19 +800,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             () => this.setMappingAmount(mappingId, amount, layer),
         ),
         setMappingEnabled: (mappingId, enabled) => this.runCommand(
-            () => this.updateRoute(mappingId, (route) => ({ ...route, enabled })),
+            () => this.setMappingEnabled(mappingId, enabled),
         ),
         setMappingPolarity: (mappingId, polarity) => this.runCommand(
-            () => this.updateRoute(mappingId, (route) => ({
-                ...route,
-                polarity: polarity === "Bipolar" ? "bipolar" : "unipolar",
-            })),
+            () => this.setMappingPolarity(mappingId, polarity),
         ),
-        setMappingReducer: (mappingId, reducer) => this.runCommand(() => {
-            this.requireMapping(mappingId);
-            this.routeReducers.set(mappingId, reducer);
-            this.markSnapshotDirty();
-        }),
+        setMappingReducer: (mappingId, reducer) => this.runCommand(
+            () => this.setMappingReducer(mappingId, reducer),
+        ),
         createSource: (type) => this.runCommand(() => this.createSource(type)),
         deleteSource: (sourceId) => this.runCommand(() => this.deleteSource(sourceId)),
         undoDeleteSource: () => this.runCommand(() => this.undoDeleteSource()),
@@ -776,7 +916,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
         const rawArticulations = readFullStoredStateValue(storedState, "articulations.v3");
         const rawParameterValues = readFullStoredStateValue(storedState, UI_PATCH_VALUES_STATE_KEY);
+        const rawUiMappings = readFullStoredStateValue(storedState, UI_MAPPINGS_STATE_KEY);
         const rawRackState = readFullStoredStateValue(storedState, RACK_STATE_KEY);
+        const rawModulationState = readFullStoredStateValue(storedState, MODULATION_STATE_KEY);
 
         const parsedArticulations = rawArticulations === undefined
             ? { _tag: "ok", value: createEmptyArticulationsState() } as const
@@ -794,6 +936,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
 
+        const parsedUiMappings: ParseOutcome<Map<MappingId, PendingUiMapping>> = rawUiMappings === undefined
+            ? { _tag: "ok", value: new Map<MappingId, PendingUiMapping>() }
+            : parseUiMappings(rawUiMappings);
+        if (parsedUiMappings._tag === "err") {
+            this.detach(parsedUiMappings.message);
+            return;
+        }
+
         const parsedRackState = rawRackState === undefined
             ? { _tag: "ok", value: createInitialRackState() } as const
             : parseRackState(rawRackState);
@@ -802,11 +952,28 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
 
+        const validRoutes = this.collectValidRoutes(this.modulationBridge.getState());
+        if (validRoutes.length + parsedUiMappings.value.size > ROUTE_BUDGET) {
+            this.detach(`Stored mappings exceed the shared route budget of ${ROUTE_BUDGET}`);
+            return;
+        }
+
         this.runCommand(() => {
             this.articulations = parsedArticulations.value;
             this.parameterValues = parsedParameterValues.value;
+            this.uiMappings = parsedUiMappings.value;
             this.rackState = parsedRackState.value;
             this.connectionState = { _tag: "ready" };
+            this.visibleSourceIds.clear();
+            for (const sourceId of INITIAL_VISIBLE_SOURCE_IDS) {
+                this.visibleSourceIds.add(sourceId);
+            }
+            this.revealMappedSources(this.uiMappings.values());
+            this.hydrationComplete = true;
+            this.adoptValidRoutes(validRoutes);
+            if (rawModulationState === undefined) {
+                this.modulationBridge.replaceRoutes([]);
+            }
             this.uploadAllBoundBaseValues();
             this.uploadAllArticulationImages();
             this.sendNativeTriggerConfig();
@@ -851,7 +1018,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     private buildSnapshot(): PatchSnapshot {
         const validRoutes = this.collectValidRoutes(this.modulationBridge.getState());
-        const mappings = validRoutes.map((validRoute) => this.projectMapping(validRoute));
+        const mappings = this.projectMappingsInCreationOrder(validRoutes);
         const articulationOverrides: Record<string, Readonly<Record<string, NormalizedValue>>> = {};
         const articulationMappingAmounts: Record<string, Readonly<Record<string, number>>> = {};
 
@@ -881,6 +1048,16 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                         validRoute.route.targetKind,
                         routeAmount,
                     );
+                }
+            }
+            for (const mapping of this.uiMappings.values()) {
+                if (!Object.hasOwn(slot.routeAmounts, mapping.id)) {
+                    continue;
+                }
+                const routeAmount = slot.routeAmounts[mapping.id];
+                if (routeAmount !== undefined) {
+                    const descriptor = getTargetDescriptor(mapping.targetId);
+                    mappingAmounts[mapping.id] = clampSpecAmount(descriptor.modAmount, routeAmount);
                 }
             }
 
@@ -918,6 +1095,31 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     : { ...this.audition.captureCandidate },
             },
         };
+    }
+
+    private projectMappingsInCreationOrder(
+        validRoutes: ReadonlyArray<ValidRoute>,
+    ): ReadonlyArray<ModulationMapping> {
+        const mappingsById = new Map<string, ModulationMapping>();
+        for (const validRoute of validRoutes) {
+            mappingsById.set(validRoute.route.id, this.projectMapping(validRoute));
+        }
+        for (const mapping of this.uiMappings.values()) {
+            mappingsById.set(mapping.id, mapping);
+        }
+
+        const mappings: Array<ModulationMapping> = [];
+        for (const mappingId of this.mappingCreationOrder) {
+            const mapping = mappingsById.get(mappingId);
+            if (mapping !== undefined) {
+                mappings.push(mapping);
+                mappingsById.delete(mappingId);
+            }
+        }
+        for (const mapping of mappingsById.values()) {
+            mappings.push(mapping);
+        }
+        return mappings;
     }
 
     private projectSources(): ReadonlyArray<ModulationSource> {
@@ -1039,6 +1241,36 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         };
     }
 
+    private synchronizeMappingCreationOrder(validRoutes: ReadonlyArray<ValidRoute>): void {
+        const activeMappingIds = new Set<string>([
+            ...validRoutes.map((validRoute) => validRoute.route.id),
+            ...this.uiMappings.keys(),
+        ]);
+        this.mappingCreationOrder = this.mappingCreationOrder.filter((mappingId) => activeMappingIds.has(mappingId));
+        const orderedMappingIds = new Set(this.mappingCreationOrder);
+        for (const validRoute of validRoutes) {
+            if (!orderedMappingIds.has(validRoute.route.id)) {
+                this.mappingCreationOrder.push(validRoute.route.id);
+                orderedMappingIds.add(validRoute.route.id);
+            }
+        }
+        for (const mappingId of this.uiMappings.keys()) {
+            if (!orderedMappingIds.has(mappingId)) {
+                this.mappingCreationOrder.push(mappingId);
+                orderedMappingIds.add(mappingId);
+            }
+        }
+    }
+
+    private revealMappedSources(mappings: Iterable<PendingUiMapping>): void {
+        for (const mapping of mappings) {
+            const definition = SOURCE_DEFINITION_BY_ID.get(String(mapping.sourceId));
+            if (definition !== undefined && definition.type !== "fixed") {
+                this.visibleSourceIds.add(definition.idRaw);
+            }
+        }
+    }
+
     private setParameter(input: Parameters<CosimoCommands["setParameter"]>[0]): void {
         const descriptor = getTargetDescriptor(input.targetId);
         if (input.layer._tag === "patchBase") {
@@ -1087,21 +1319,36 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private addMapping(input: Parameters<CosimoCommands["addMapping"]>[0]): ReturnType<CosimoCommands["addMapping"]> {
         const descriptor = getTargetDescriptor(input.targetId);
         const targetKind = descriptor.modulationTargetKind;
-        if (targetKind === null) {
-            throw new Error(`Target ${descriptor.targetId} has no modulation endpoint`);
-        }
         const source = this.requireSource(input.sourceId);
         const routes = this.collectValidRoutes(this.modulationBridge.getState());
-        if (routes.length >= ROUTE_BUDGET) {
+        if (routes.length + this.uiMappings.size >= ROUTE_BUDGET) {
             return err(new RouteBudgetExceeded(ROUTE_BUDGET));
         }
         const sourceId = sourceIdFromDefinition(source);
         const mappingId = makeMappingId(descriptor.targetId, sourceId);
-        if (routes.some((validRoute) => validRoute.route.id === mappingId)) {
+        if (routes.some((validRoute) => validRoute.route.id === mappingId)
+            || this.uiMappings.has(mappingId)) {
             return err(new MappingAlreadyExists(mappingId));
         }
 
         const amount = input.amount ?? defaultSpecAmount(descriptor.modAmount);
+        if (targetKind === null) {
+            const mapping: PendingUiMapping = {
+                id: mappingId,
+                targetId: descriptor.targetId,
+                sourceId,
+                amount: clampSpecAmount(descriptor.modAmount, amount),
+                polarity: input.polarity ?? "Unipolar",
+                reducer: input.reducer ?? "Max",
+                enabled: true,
+            };
+            this.uiMappings.set(mappingId, mapping);
+            this.mappingCreationOrder.push(mappingId);
+            this.persistUiMappings();
+            this.markSnapshotDirty();
+            return ok(mappingId);
+        }
+
         const route: ModulationRoute = {
             id: mappingId,
             enabled: true,
@@ -1118,9 +1365,15 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private removeMapping(mappingId: MappingId): void {
-        const validRoute = this.requireMapping(mappingId);
-        this.modulationBridge.removeRoute(validRoute.routeIndex);
-        this.routeReducers.delete(mappingId);
+        const mapping = this.requireMapping(mappingId);
+        if (mapping._tag === "engine") {
+            this.modulationBridge.removeRoute(mapping.validRoute.routeIndex);
+            this.routeReducers.delete(mappingId);
+        } else {
+            this.uiMappings.delete(mappingId);
+            this.mappingCreationOrder = this.mappingCreationOrder.filter((candidate) => candidate !== mappingId);
+            this.persistUiMappings();
+        }
         this.articulations = {
             ...this.articulations,
             slots: this.articulations.slots.map((slot) => ({
@@ -1131,7 +1384,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             })),
         };
         this.persistArticulations();
-        this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
+        if (mapping._tag === "engine") {
+            this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
+        }
         this.markSnapshotDirty();
     }
 
@@ -1140,37 +1395,81 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         amount: number,
         layer: Parameters<CosimoCommands["setMappingAmount"]>[2],
     ): void {
-        const validRoute = this.requireMapping(mappingId);
-        const routeAmount = specAmountToRouteAmount(
-            validRoute.descriptor.modAmount,
-            validRoute.route.targetKind,
-            amount,
-        );
+        const mapping = this.requireMapping(mappingId);
+        const routeAmount = mapping._tag === "engine"
+            ? specAmountToRouteAmount(
+                mapping.validRoute.descriptor.modAmount,
+                mapping.validRoute.route.targetKind,
+                amount,
+            )
+            : clampSpecAmount(mapping.descriptor.modAmount, amount);
         if (layer._tag === "patchBase") {
-            this.modulationBridge.setRoute(validRoute.routeIndex, {
-                ...validRoute.route,
-                amount: routeAmount,
-            });
-            this.uploadArticulationSelectors(affectedSelectors({
-                kind: "routeAmount",
-                routeId: validRoute.route.id,
-            }, this.articulations));
+            if (mapping._tag === "engine") {
+                this.modulationBridge.setRoute(mapping.validRoute.routeIndex, {
+                    ...mapping.validRoute.route,
+                    amount: routeAmount,
+                });
+                this.uploadArticulationSelectors(affectedSelectors({
+                    kind: "routeAmount",
+                    routeId: mapping.validRoute.route.id,
+                }, this.articulations));
+            } else {
+                this.replaceUiMapping({ ...mapping.mapping, amount: routeAmount });
+            }
             return;
         }
 
         const slot = this.requireArticulation(layer.articulationId);
         this.replaceArticulationSlot({
             ...slot,
-            routeAmounts: { ...slot.routeAmounts, [validRoute.route.id]: routeAmount },
+            routeAmounts: { ...slot.routeAmounts, [mappingId]: routeAmount },
         });
         this.persistArticulations();
         this.uploadArticulationSelectors([slot.runtimeSlot]);
         this.markSnapshotDirty();
     }
 
-    private updateRoute(mappingId: MappingId, update: (route: ModulationRoute) => ModulationRoute): void {
-        const validRoute = this.requireMapping(mappingId);
-        this.modulationBridge.setRoute(validRoute.routeIndex, update(validRoute.route));
+    private setMappingEnabled(mappingId: MappingId, enabled: boolean): void {
+        const mapping = this.requireMapping(mappingId);
+        if (mapping._tag === "engine") {
+            this.modulationBridge.setRoute(mapping.validRoute.routeIndex, {
+                ...mapping.validRoute.route,
+                enabled,
+            });
+            return;
+        }
+        this.replaceUiMapping({ ...mapping.mapping, enabled });
+    }
+
+    private setMappingPolarity(
+        mappingId: MappingId,
+        polarity: ModulationMapping["polarity"],
+    ): void {
+        const mapping = this.requireMapping(mappingId);
+        if (mapping._tag === "engine") {
+            this.modulationBridge.setRoute(mapping.validRoute.routeIndex, {
+                ...mapping.validRoute.route,
+                polarity: polarity === "Bipolar" ? "bipolar" : "unipolar",
+            });
+            return;
+        }
+        this.replaceUiMapping({ ...mapping.mapping, polarity });
+    }
+
+    private setMappingReducer(mappingId: MappingId, reducer: MappingReducer): void {
+        const mapping = this.requireMapping(mappingId);
+        if (mapping._tag === "engine") {
+            this.routeReducers.set(mappingId, reducer);
+            this.markSnapshotDirty();
+            return;
+        }
+        this.replaceUiMapping({ ...mapping.mapping, reducer });
+    }
+
+    private replaceUiMapping(mapping: PendingUiMapping): void {
+        this.uiMappings.set(mapping.id, mapping);
+        this.persistUiMappings();
+        this.markSnapshotDirty();
     }
 
     private createSource(type: Exclude<SourceType, "fixed">): ReturnType<CosimoCommands["createSource"]> {
@@ -1201,11 +1500,16 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             const validRoute = this.collectValidRoutes({ ...state, routes: [route] })[0];
             return validRoute?.sourceId === sourceId;
         });
-        const removedRouteIds = new Set(removedRoutes.map((route) => route.id));
+        const removedUiMappings = [...this.uiMappings.values()]
+            .filter((mapping) => mapping.sourceId === sourceId);
+        const removedMappingIds = new Set([
+            ...removedRoutes.map((route) => route.id),
+            ...removedUiMappings.map((mapping) => String(mapping.id)),
+        ]);
         const articulationRouteAmounts: Record<string, Readonly<Record<string, number>>> = {};
         for (const slot of this.articulations.slots) {
             articulationRouteAmounts[slot.id] = Object.fromEntries(
-                Object.entries(slot.routeAmounts).filter(([routeId]) => removedRouteIds.has(routeId)),
+                Object.entries(slot.routeAmounts).filter(([routeId]) => removedMappingIds.has(routeId)),
             );
         }
         this.deletedSourceBackup = {
@@ -1215,23 +1519,35 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 ? this.macroValues[this.slotIndex(definition)] ?? clampNormalizedValue(0)
                 : null,
             routes: removedRoutes,
+            uiMappings: removedUiMappings,
+            mappingCreationOrder: [...this.mappingCreationOrder],
             articulationRouteAmounts,
         };
 
         this.visibleSourceIds.delete(definition.idRaw);
-        this.modulationBridge.replaceRoutes(state.routes.filter((route) => !removedRouteIds.has(route.id)));
+        for (const mapping of removedUiMappings) {
+            this.uiMappings.delete(mapping.id);
+        }
+        this.mappingCreationOrder = this.mappingCreationOrder
+            .filter((mappingId) => !removedMappingIds.has(mappingId));
+        if (removedUiMappings.length > 0) {
+            this.persistUiMappings();
+        }
+        this.modulationBridge.replaceRoutes(state.routes.filter((route) => !removedMappingIds.has(route.id)));
         this.articulations = {
             ...this.articulations,
             slots: this.articulations.slots.map((slot) => ({
                 ...slot,
                 routeAmounts: Object.fromEntries(
-                    Object.entries(slot.routeAmounts).filter(([routeId]) => !removedRouteIds.has(routeId)),
+                    Object.entries(slot.routeAmounts).filter(([routeId]) => !removedMappingIds.has(routeId)),
                 ),
             })),
         };
         this.resetSourceSlot(definition);
         this.persistArticulations();
-        this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
+        if (removedRoutes.length > 0) {
+            this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
+        }
         this.markSnapshotDirty();
     }
 
@@ -1273,25 +1589,56 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
 
         const currentRoutes = this.modulationBridge.getState().routes;
-        const currentIds = new Set(currentRoutes.map((route) => route.id));
-        const restoredRoutes = backup.routes.filter((route) => !currentIds.has(route.id));
-        this.modulationBridge.replaceRoutes([
-            ...currentRoutes,
-            ...restoredRoutes,
-        ].slice(0, MODULATION_MAX_ROUTES));
+        const currentIds = new Set([
+            ...currentRoutes.map((route) => route.id),
+            ...this.uiMappings.keys(),
+        ]);
+        const backedUpRoutes = new Map(backup.routes.map((route) => [route.id, route]));
+        const backedUpUiMappings = new Map(backup.uiMappings.map((mapping) => [String(mapping.id), mapping]));
+        const availableMappingSlots = Math.max(0, ROUTE_BUDGET - currentIds.size);
+        const restoredMappingIds: Array<string> = [];
+        for (const mappingId of backup.mappingCreationOrder) {
+            if (restoredMappingIds.length >= availableMappingSlots || currentIds.has(mappingId)) {
+                continue;
+            }
+            if (backedUpRoutes.has(mappingId) || backedUpUiMappings.has(mappingId)) {
+                restoredMappingIds.push(mappingId);
+                currentIds.add(mappingId);
+            }
+        }
+        const restoredMappingIdSet = new Set(restoredMappingIds);
+        const restoredRoutes = backup.routes.filter((route) => restoredMappingIdSet.has(route.id));
+        const restoredUiMappings = backup.uiMappings.filter((mapping) => restoredMappingIdSet.has(mapping.id));
+        for (const mapping of restoredUiMappings) {
+            this.uiMappings.set(mapping.id, mapping);
+        }
+        const originalMappingIds = new Set(backup.mappingCreationOrder);
+        this.mappingCreationOrder = [
+            ...backup.mappingCreationOrder.filter((mappingId) => currentIds.has(mappingId)),
+            ...this.mappingCreationOrder.filter((mappingId) => !originalMappingIds.has(mappingId)),
+        ];
+        if (restoredUiMappings.length > 0) {
+            this.persistUiMappings();
+        }
+        this.modulationBridge.replaceRoutes([...currentRoutes, ...restoredRoutes]);
         this.articulations = {
             ...this.articulations,
             slots: this.articulations.slots.map((slot) => ({
                 ...slot,
                 routeAmounts: {
                     ...slot.routeAmounts,
-                    ...(backup.articulationRouteAmounts[slot.id] ?? {}),
+                    ...Object.fromEntries(
+                        Object.entries(backup.articulationRouteAmounts[slot.id] ?? {})
+                            .filter(([mappingId]) => restoredMappingIdSet.has(mappingId)),
+                    ),
                 },
             })),
         };
         this.deletedSourceBackup = null;
         this.persistArticulations();
-        this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
+        if (restoredRoutes.length > 0) {
+            this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
+        }
         this.markSnapshotDirty();
     }
 
@@ -1493,19 +1840,26 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const descriptor = getTargetDescriptor(targetId);
         const slot = this.requireArticulation(articulationId);
         const parameterId = descriptor.articulationParameterId;
-        if (parameterId === null) {
+        const targetRouteIds = new Set(
+            [
+                ...this.collectValidRoutes(this.modulationBridge.getState())
+                    .filter((validRoute) => validRoute.targetId === targetId)
+                    .map((validRoute) => validRoute.route.id),
+                ...[...this.uiMappings.values()]
+                    .filter((mapping) => mapping.targetId === targetId)
+                    .map((mapping) => String(mapping.id)),
+            ],
+        );
+        if (parameterId === null && targetRouteIds.size === 0) {
             throw new Error(`Target ${targetId} cannot be articulation-overridden`);
         }
-        const targetRouteIds = new Set(
-            this.collectValidRoutes(this.modulationBridge.getState())
-                .filter((validRoute) => validRoute.targetId === targetId)
-                .map((validRoute) => validRoute.route.id),
-        );
         this.replaceArticulationSlot({
             ...slot,
-            overrides: Object.fromEntries(
-                Object.entries(slot.overrides).filter(([key]) => key !== parameterId),
-            ),
+            overrides: parameterId === null
+                ? slot.overrides
+                : Object.fromEntries(
+                    Object.entries(slot.overrides).filter(([key]) => key !== parameterId),
+                ),
             routeAmounts: Object.fromEntries(
                 Object.entries(slot.routeAmounts).filter(([routeId]) => !targetRouteIds.has(routeId)),
             ),
@@ -1566,12 +1920,16 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const routeAmounts: Record<string, number> = {};
         for (const [mappingIdRaw, amount] of Object.entries(backup.mappingAmounts)) {
-            const validRoute = this.requireMapping(mappingIdRaw);
-            routeAmounts[validRoute.route.id] = specAmountToRouteAmount(
-                validRoute.descriptor.modAmount,
-                validRoute.route.targetKind,
-                amount,
-            );
+            const mapping = this.requireMapping(mappingIdRaw);
+            if (mapping._tag === "engine") {
+                routeAmounts[mapping.validRoute.route.id] = specAmountToRouteAmount(
+                    mapping.validRoute.descriptor.modAmount,
+                    mapping.validRoute.route.targetKind,
+                    amount,
+                );
+            } else {
+                routeAmounts[mapping.mapping.id] = clampSpecAmount(mapping.descriptor.modAmount, amount);
+            }
         }
         this.replaceArticulationSlot({ ...slot, overrides, routeAmounts });
         this.persistArticulations();
@@ -1674,34 +2032,26 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return null;
         }
         const descriptor = getTargetDescriptor(candidate.targetId);
-        if (descriptor.modulationTargetKind === null) {
-            throw new Error(`Capture target ${candidate.targetId} has no modulation endpoint`);
-        }
         const msegDefinitions = SOURCE_DEFINITIONS.filter((definition) => definition.type === "mseg");
         const definition = msegDefinitions.find((entry) => !this.visibleSourceIds.has(entry.idRaw));
         if (definition === undefined
-            || this.collectValidRoutes(this.modulationBridge.getState()).length >= ROUTE_BUDGET) {
+            || this.collectValidRoutes(this.modulationBridge.getState()).length + this.uiMappings.size >= ROUTE_BUDGET) {
             return null;
         }
-        const sourceId = sourceIdFromDefinition(definition);
-        const mappingId = makeMappingId(candidate.targetId, sourceId);
         this.visibleSourceIds.add(definition.idRaw);
         this.resetSourceSlot(definition);
-        this.routeReducers.set(mappingId, "Max");
-        this.modulationBridge.addRoute({
-            id: mappingId,
-            enabled: true,
-            sourceKind: definition.sourceKind,
-            sourceSlot: definition.sourceSlot,
-            polarity: "unipolar",
-            targetKind: descriptor.modulationTargetKind,
-            amount: specAmountToRouteAmount(
-                descriptor.modAmount,
-                descriptor.modulationTargetKind,
-                descriptor.modAmount.max,
-            ),
+        const sourceId = sourceIdFromDefinition(definition);
+        // Reuse the one mapping-creation path: engine route or pending
+        // uiMapping is addMapping's decision. Capture commits at FULL spec
+        // amount — the captured motion IS the modulation (mock parity).
+        const added = this.addMapping({
+            targetId: descriptor.targetId,
+            sourceId,
+            amount: descriptor.modAmount.max,
         });
-        this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
+        if (added._tag === "err") {
+            throw added.error;
+        }
         this.audition = {
             ...this.audition,
             triggerActive: false,
@@ -1736,10 +2086,13 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             this.connection.sendEventOrValue?.(`macro${index + 1}`, 0);
         }
         this.routeReducers.clear();
+        this.uiMappings.clear();
+        this.mappingCreationOrder = [];
         this.deletedSourceBackup = null;
         const modulationState = createDefaultModulationState();
         this.modulationBridge.setState({ ...modulationState, routes: [] });
         this.persistParameterValues();
+        this.persistUiMappings();
         this.persistRackState();
         this.persistArticulationsAndTriggerConfig();
         this.uploadAllBoundBaseValues();
@@ -1759,13 +2112,22 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         return definition;
     }
 
-    private requireMapping(mappingId: MappingId | string): ValidRoute {
+    private requireMapping(mappingId: MappingId | string): MappingReference {
         const validRoute = this.collectValidRoutes(this.modulationBridge.getState())
             .find((candidate) => candidate.route.id === mappingId);
-        if (validRoute === undefined) {
-            throw new Error(`Unknown mapping id: ${mappingId}`);
+        if (validRoute !== undefined) {
+            return { _tag: "engine", validRoute };
         }
-        return validRoute;
+        const uiMapping = [...this.uiMappings.values()]
+            .find((candidate) => candidate.id === mappingId);
+        if (uiMapping !== undefined) {
+            return {
+                _tag: "ui",
+                mapping: uiMapping,
+                descriptor: getTargetDescriptor(uiMapping.targetId),
+            };
+        }
+        throw new Error(`Unknown mapping id: ${mappingId}`);
     }
 
     private requireArticulation(articulationId: ArticulationId): ArticulationSlotV3 {
@@ -1959,6 +2321,21 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     private persistParameterValues(): void {
         this.sendStoredStateValue(UI_PATCH_VALUES_STATE_KEY, JSON.stringify(this.parameterValues));
+    }
+
+    private persistUiMappings(): void {
+        const document: Record<string, StoredUiMapping> = {};
+        for (const mapping of this.uiMappings.values()) {
+            document[mapping.id] = {
+                targetId: mapping.targetId,
+                sourceId: mapping.sourceId,
+                amount: mapping.amount,
+                polarity: mapping.polarity,
+                reducer: mapping.reducer,
+                enabled: mapping.enabled,
+            };
+        }
+        this.sendStoredStateValue(UI_MAPPINGS_STATE_KEY, JSON.stringify(document));
     }
 
     private persistRackState(): void {

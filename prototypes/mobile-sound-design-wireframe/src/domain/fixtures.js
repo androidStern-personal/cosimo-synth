@@ -144,6 +144,49 @@ export const INITIAL_AUDITION = Object.freeze({
   status: "Waiting for note",
 });
 
+/**
+ * The product-initial "new patch": fixed performance sources plus Macro 1,
+ * Envelope 1, and MSEG 1 (ADR-010 progressive disclosure), zero mappings,
+ * zero articulations, catalog initial values. The adapter contract suite
+ * boots BOTH adapters from this state and builds its fixture through port
+ * commands, so fixture parity across mock and bridge holds by construction.
+ */
+export function createNewPatchMockCosimoState() {
+  return {
+    patch: {
+      effectOrder: EFFECTS.map((effect) => effect.id),
+      effectEnabled: Object.fromEntries(EFFECTS.map((effect) => [effect.id, true])),
+      parameterValues: { ...INITIAL_BASE_VALUES },
+      compoundSettings: {},
+      articulationOverrides: {},
+      articulationMappingAmounts: {},
+      articulations: [],
+      articulationTriggerMode: "chain",
+      sources: INITIAL_SOURCES.map((source) => ({ ...source })),
+      sourceSettings: Object.fromEntries(
+        INITIAL_SOURCES.map((source) => [source.id, { ...defaultSourceSettings(source) }]),
+      ),
+      sourceStates: Object.fromEntries(
+        [...INITIAL_SOURCES, ...FIXED_SOURCES].map((source) => [
+          source.id,
+          createDefaultSourceState(source),
+        ]),
+      ),
+      mappings: [],
+    },
+    audition: {
+      articulation: "Default",
+      note: "C3",
+      repeat: false,
+      latch: false,
+      triggerActive: false,
+      captureCandidate: null,
+      status: "Waiting for note",
+    },
+    undo: null,
+  };
+}
+
 export function createInitialMockCosimoState() {
   return {
     patch: {
