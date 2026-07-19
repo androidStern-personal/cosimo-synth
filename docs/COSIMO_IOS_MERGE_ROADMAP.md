@@ -1,6 +1,12 @@
 # Cosimo iOS Merge Roadmap — prototype → official iOS synth
 
-Status: ACCEPTED 2026-07-18 (trigger pulled). Companion to `COSIMO_IOS_UI_DECISION_LEDGER.md`.
+Status: ACCEPTED 2026-07-18; **Phases 0-3 COMPLETE 2026-07-19** (ADR-014 + articulation-image
+30b5e67; port+catalog 1833d98/8fe333f; engine macros 700fb03/b197f4a with positive audio proof;
+mock adapter + contract suite 8ec82ce; port adoption + real source editors 15784fe; bridge
+6a303be; contract gate green 8b25313; vertical slice 32f07ee). The merge trigger has fired: the
+prototype shell drives the engine protocol unchanged above the composition root. Remaining:
+Phase 4 feature ports (visual direction with Andrew per feature) and the Phase-5 one-commit
+cutover, gated on the on-device pass. Companion to `COSIMO_IOS_UI_DECISION_LEDGER.md`.
 `TRANSIENT_IOS_REACT_MIGRATION_PLAN.md` is complete and covered only the legacy→React port of the
 old patch view — it is not this plan.
 
