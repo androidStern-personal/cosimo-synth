@@ -14,10 +14,12 @@ import {
 import {
   buildFilterFamilyCurves,
   buildNormalizedResponseCurve,
+  computeStackLayout,
   createSpectrumHistoryRing,
   paintFilterCarvedMountain,
   paintFilterTable,
 } from "../../../ui/shared/filter-depth-concepts.ts";
+import { FILTER_SPECTRUM_RENDER_MODE_OPTIONS } from "../../../ui/shared/filter-spectrum.ts";
 import {
   createDefaultDistortionEnergyParams,
   paintDistortionEnergyField,
@@ -244,14 +246,18 @@ function FilterPanel() {
   const canvasRef = useRef(null);
   const [etch, setEtch] = useState({ ...WAVETABLE_ETCHED_TREATMENT.etch });
   const [concept, setConcept] = useState("mountain");
+  const [renderMode, setRenderMode] = useState("graph");
   const [stackCfg, setStackCfg] = useState({ layers: 12, depth: 0.4 });
-  const [mountain, setMountain] = useState({ frontEnergy: 0.05, depthFade: 1.4 });
-  const [table, setTable] = useState({ familyEnergy: 0.5, floorEnergy: 0.03 });
+  const [spectrum, setSpectrum] = useState({ fillEnergy: 0.05, lineEnergy: 0.08, peakEnergy: 0.5 });
+  const [mountain, setMountain] = useState({ fillLayers: 3, depthFade: 1.4 });
+  const [table, setTable] = useState({ familyEnergy: 0.5 });
   const [hero, setHero] = useState({ widthPx: 2.5, glowPx: 9, glowStrength: 0.05, energy: 0.95 });
   const [values, setValues] = useState({ cutoffHz: 2050, q: 0.707 });
   const etchRef = useRef(etch); etchRef.current = etch;
   const conceptRef = useRef(concept); conceptRef.current = concept;
+  const renderModeRef = useRef(renderMode); renderModeRef.current = renderMode;
   const stackRef = useRef(stackCfg); stackRef.current = stackCfg;
+  const spectrumRef = useRef(spectrum); spectrumRef.current = spectrum;
   const mountainRef = useRef(mountain); mountainRef.current = mountain;
   const tableRef = useRef(table); tableRef.current = table;
   const heroRef = useRef(hero); heroRef.current = hero;
@@ -286,27 +292,33 @@ function FilterPanel() {
       displayState = advanceFilterSpectrumDisplayState(displayState, displayFrame, now);
       if (displayState) {
         const geometry = buildFilterSpectrumRenderGeometry({
-          renderMode: "graph", width: WIDTH, height: HEIGHT, displayState,
+          renderMode: renderModeRef.current, width: WIDTH, height: HEIGHT, displayState,
         });
         const plot = {
           left: geometry.plotLeft, top: geometry.plotTop,
           width: geometry.plotWidth, height: geometry.plotHeight,
         };
         plotRectRef.current = plot;
-        const heights = geometry.points.map(
-          (point) => Math.min(1, Math.max(0, (geometry.plotBottom - point.y) / plot.height)),
-        );
+        const heights = geometry.kind === "graph"
+          ? geometry.points.map(
+              (point) => Math.min(1, Math.max(0, (geometry.plotBottom - point.y) / plot.height)),
+            )
+          : geometry.bars.map(
+              (bar) => Math.min(1, Math.max(0, bar.height / plot.height)),
+            );
         historyRing.push(heights, now);
 
         energyContext.setTransform(1, 0, 0, 1, 0, 0);
         if (conceptRef.current === "mountain") {
           paintFilterCarvedMountain(energyContext, {
             width: WIDTH, height: HEIGHT, plot,
+            frontGeometry: geometry,
             spectrumLayers: historyRing.getLayers(),
             responseCurve: buildNormalizedResponseCurve(cutoffHz, q),
           }, {
             stack,
-            frontEnergy: mountainRef.current.frontEnergy,
+            spectrum: spectrumRef.current,
+            fillLayers: Math.round(mountainRef.current.fillLayers),
             depthFade: mountainRef.current.depthFade,
             hero: heroRef.current,
           });
@@ -320,11 +332,11 @@ function FilterPanel() {
             familyCurves: familyCache.curves,
             heroCurve: buildNormalizedResponseCurve(cutoffHz, q),
             heroDepth: Math.min(1, Math.max(0, cutoffNormalized)),
-            spectrumHeights: heights,
+            floorGeometry: geometry,
           }, {
             stack,
             familyEnergy: tableRef.current.familyEnergy,
-            floorEnergy: tableRef.current.floorEnergy,
+            spectrum: spectrumRef.current,
             hero: heroRef.current,
           });
         }
@@ -339,10 +351,11 @@ function FilterPanel() {
         let handleX = handle.plotX;
         let handleY = handle.plotY;
         if (conceptRef.current === "table") {
+          const layout = computeStackLayout(plot, stack);
           const cutoffNormalized = Math.min(1, Math.max(0, Math.log(cutoffHz / 20) / Math.log(1000)));
-          const depthIndex = cutoffNormalized * (stack.layers - 1);
-          handleX += depthIndex * stack.depth * 7;
-          handleY += -depthIndex * stack.depth * 8.5;
+          const depthIndex = cutoffNormalized * (layout.layers - 1);
+          handleX += depthIndex * layout.dx;
+          handleY += -depthIndex * layout.dy;
         }
         targetContext.strokeStyle = inkHex;
         targetContext.lineWidth = 1.5;
@@ -393,6 +406,14 @@ function FilterPanel() {
           onClick={() => setConcept("mountain")}>Carved mountain</button>
         <button type="button" className="lab-button" aria-pressed={concept === "table"}
           onClick={() => setConcept("table")}>Filter table</button>
+        <span className="lab-status">analyzer:</span>
+        {FILTER_SPECTRUM_RENDER_MODE_OPTIONS.map((option) => (
+          <button key={option.value} type="button" className="lab-button"
+            aria-pressed={renderMode === option.value}
+            onClick={() => setRenderMode(option.value)}>
+            {option.label}
+          </button>
+        ))}
       </div>
       <p className="lab-page__note">
         CUTOFF {formatHz(values.cutoffHz)} · RESO Q {values.q.toFixed(2)} — drag the plot;
@@ -407,20 +428,22 @@ function FilterPanel() {
           onChange={(v) => setStackCfg((s) => ({ ...s, layers: v }))} />
         <LabSlider label="DEPTH" value={stackCfg.depth} min={0} max={1} step={0.01}
           onChange={(v) => setStackCfg((s) => ({ ...s, depth: v }))} format={(v) => v.toFixed(2)} />
+        <LabSlider label="SPECTRUM FILL" value={spectrum.fillEnergy} min={0} max={0.2} step={0.005}
+          onChange={(v) => setSpectrum((s) => ({ ...s, fillEnergy: v }))} format={(v) => v.toFixed(3)} />
+        <LabSlider label="SPECTRUM LINE" value={spectrum.lineEnergy} min={0} max={1} step={0.02}
+          onChange={(v) => setSpectrum((s) => ({ ...s, lineEnergy: v }))} format={(v) => v.toFixed(2)} />
+        <LabSlider label="PEAK HOLD" value={spectrum.peakEnergy} min={0} max={1} step={0.05}
+          onChange={(v) => setSpectrum((s) => ({ ...s, peakEnergy: v }))} format={(v) => v.toFixed(2)} />
         {concept === "mountain" ? (
           <>
-            <LabSlider label="FRONT ENERGY" value={mountain.frontEnergy} min={0} max={0.2} step={0.005}
-              onChange={(v) => setMountain((m) => ({ ...m, frontEnergy: v }))} format={(v) => v.toFixed(3)} />
+            <LabSlider label="FILL LAYERS" value={mountain.fillLayers} min={0} max={8} step={1}
+              onChange={(v) => setMountain((m) => ({ ...m, fillLayers: v }))} />
             <LabSlider label="DEPTH FADE" value={mountain.depthFade} min={0.4} max={3} step={0.05}
               onChange={(v) => setMountain((m) => ({ ...m, depthFade: v }))} format={(v) => v.toFixed(2)} />
           </>
         ) : (
-          <>
-            <LabSlider label="FAMILY ENERGY" value={table.familyEnergy} min={0} max={1} step={0.02}
-              onChange={(v) => setTable((s) => ({ ...s, familyEnergy: v }))} format={(v) => v.toFixed(2)} />
-            <LabSlider label="FLOOR ENERGY" value={table.floorEnergy} min={0} max={0.2} step={0.005}
-              onChange={(v) => setTable((s) => ({ ...s, floorEnergy: v }))} format={(v) => v.toFixed(3)} />
-          </>
+          <LabSlider label="FAMILY ENERGY" value={table.familyEnergy} min={0} max={1} step={0.02}
+            onChange={(v) => setTable((s) => ({ ...s, familyEnergy: v }))} format={(v) => v.toFixed(2)} />
         )}
         <LabSlider label="HERO WIDTH" value={hero.widthPx} min={0.5} max={14} step={0.5}
           onChange={(v) => setHero((h) => ({ ...h, widthPx: v }))} format={(v) => v.toFixed(1)} />
@@ -433,7 +456,8 @@ function FilterPanel() {
       </div>
       <DitherRow etch={etch} setEtch={setEtch} />
       <CopySetup panel="filter" payload={() => ({
-        concept: conceptRef.current, etch: etchRef.current, stack: stackRef.current,
+        concept: conceptRef.current, analyzerMode: renderModeRef.current,
+        etch: etchRef.current, stack: stackRef.current, spectrum: spectrumRef.current,
         mountain: mountainRef.current, table: tableRef.current, hero: heroRef.current,
         values: valuesRef.current,
       })} />
