@@ -217,7 +217,7 @@ export function CosimoMobileExperience({ adapter, initialSession }) {
           onRemoveMapping={actions.removeMapping}
           onScrollPositionChange={actions.setSourceScrollTop}
           onSelectMapping={actions.selectSourceMapping}
-          onSourceSettingsChange={({ sourceId, patch }) => actions.setSourceSettings(sourceId, patch)}
+          onSourceSettingsChange={actions.updateSource}
           onTransientValue={({ label, formattedValue }) => actions.showReadout(`${label}  ${formattedValue}`)}
           restoreScrollTop={state.sourceScrollTop}
           returnLabel={state.sourceCloseLabel}

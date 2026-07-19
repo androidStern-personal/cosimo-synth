@@ -28,6 +28,19 @@ class TestPointerEvent extends dom.window.MouseEvent {
 
 globalThis.PointerEvent = TestPointerEvent;
 dom.window.PointerEvent = TestPointerEvent;
+class TestResizeObserver {
+  constructor(callback) {
+    this.callback = callback;
+  }
+
+  observe(target) {
+    this.callback([{ target }]);
+  }
+
+  disconnect() {}
+}
+globalThis.ResizeObserver = TestResizeObserver;
+dom.window.ResizeObserver = TestResizeObserver;
 dom.window.HTMLCanvasElement.prototype.getContext = function getContext() {
   const canvas = this;
   return new Proxy({}, {
@@ -68,12 +81,14 @@ const { createServer } = await import("vite");
 const vite = await createServer({
   appType: "custom",
   logLevel: "silent",
+  resolve: { dedupe: ["react", "react-dom"] },
   server: { middlewareMode: true },
 });
 after(async () => vite.close());
 const { ParameterControl } = await vite.ssrLoadModule("/src/features/module-editor/ParameterControl.jsx");
 const { SourceTargetRow } = await vite.ssrLoadModule("/src/features/sources/SourceTargetList.jsx");
 const { SourceRail } = await vite.ssrLoadModule("/src/features/sources/SourceRail.jsx");
+const { SourceShapeEditor } = await vite.ssrLoadModule("/src/features/sources/SourceShapeEditor.jsx");
 const { ModuleGraphicSurface } = await vite.ssrLoadModule("/src/features/module-editor/graphics/ModuleGraphicSurface.jsx");
 const { EffectRack } = await vite.ssrLoadModule("/src/features/rack/EffectRack.jsx");
 const { AuditionTransport } = await vite.ssrLoadModule("/src/features/audition/AuditionTransport.jsx");
@@ -157,6 +172,28 @@ function renderController(initialSession = {}) {
     run(callback) {
       act(() => callback(latest));
     },
+  };
+}
+
+function renderSourceEditorController(sourceId) {
+  let latest = null;
+  function Harness() {
+    const adapter = useMockCosimoAdapter();
+    latest = useMobileSynthController(adapter);
+    const source = latest.state.sourceLookup[sourceId];
+    return React.createElement(SourceShapeEditor, {
+      onHaptic: () => {},
+      onSettingsChange: latest.actions.updateSource,
+      onTransientValue: () => {},
+      semanticColor: "var(--cosimo-color-accent)",
+      settings: latest.state.patch.sourceSettings[sourceId],
+      source,
+    });
+  }
+  const view = render(React.createElement(Harness));
+  return {
+    ...view,
+    current: () => latest,
   };
 }
 
@@ -1127,4 +1164,79 @@ test("fixed performance sources drop-assign like any source but never open an ed
   assert.equal(controller.current().state.focusedSource, null);
   document.elementFromPoint = originalElementFromPoint;
   controller.unmount();
+});
+
+test("the 13th controller assignment surfaces the engine route-budget refusal", () => {
+  const haptics = [];
+  globalThis.__COSIMO_MOBILE_HAPTICS__ = (kind) => haptics.push(kind);
+  const controller = renderController();
+  controller.run(({ actions }) => actions.openSource("macro-1"));
+
+  const fillTargets = [
+    "phaser.rate",
+    "phaser.frequency",
+    "phaser.feedback",
+    "phaser.phase",
+    "phaser.mix",
+  ];
+  for (const targetId of fillTargets) {
+    controller.run(({ actions }) => actions.addSourceTarget(targetId));
+  }
+  assert.equal(controller.current().state.patch.mappings.length, 12);
+
+  controller.run(({ actions }) => actions.addSourceTarget("filter.cutoff"));
+  assert.equal(controller.current().state.patch.mappings.length, 12);
+  assert.equal(controller.current().state.readout, "ROUTE BUDGET FULL · 12 OF 12");
+  assert.equal(haptics.at(-1), "light");
+
+  delete globalThis.__COSIMO_MOBILE_HAPTICS__;
+  controller.unmount();
+});
+
+test("the shared MSEG editor writes only the selected shape and morphs through the port", () => {
+  const editor = renderSourceEditorController("mseg-1");
+  const initialSlot = editor.current().state.patch.sourceStates["mseg-1"].slot;
+  assert.equal(initialSlot.shapeA.points.length, 2);
+  assert.equal(initialSlot.shapeB.points.length, 2);
+
+  let surface = editor.host.querySelector('[data-role="mobile-mseg-editor"]');
+  pointer(surface, "pointerdown", 50, 2);
+  pointer(surface, "pointerup", 50, 2);
+  let slot = editor.current().state.patch.sourceStates["mseg-1"].slot;
+  assert.equal(slot.shapeA.points.length, 3);
+  assert.equal(slot.shapeB.points.length, 2, "editing A must not mutate reference shape B");
+
+  const shapeB = editor.host.querySelector('[aria-label="Edit shape B"]');
+  click(shapeB);
+  assert.equal(shapeB.getAttribute("aria-pressed"), "true");
+  surface = editor.host.querySelector('[data-role="mobile-mseg-editor"]');
+  pointer(surface, "pointerdown", 60, 48, 2);
+  pointer(surface, "pointerup", 60, 48, 2);
+  slot = editor.current().state.patch.sourceStates["mseg-1"].slot;
+  assert.equal(slot.shapeA.points.length, 3, "switching to B leaves edited shape A intact");
+  assert.equal(slot.shapeB.points.length, 3);
+
+  const morph = editor.host.querySelector('[aria-label="Edit MORPH"]');
+  pointer(morph, "pointerdown", 10, 20, 3);
+  pointer(morph, "pointermove", 70, 20, 3);
+  pointer(morph, "pointerup", 70, 20, 3);
+  slot = editor.current().state.patch.sourceStates["mseg-1"].slot;
+  assert.ok(slot.morph > 0.5 && slot.morph < 0.7);
+  editor.unmount();
+});
+
+test("envelope attack scrubbing writes logarithmically mapped seconds", () => {
+  const editor = renderSourceEditorController("envelope-1");
+  const attack = editor.host.querySelector('[aria-label="Edit ATTACK"]');
+  pointer(attack, "pointerdown", 10, 20);
+  pointer(attack, "pointermove", 40, 20);
+  pointer(attack, "pointerup", 40, 20);
+
+  const envelope = editor.current().state.patch.sourceStates["envelope-1"].envelope;
+  assert.ok(envelope.attackSeconds > 1 && envelope.attackSeconds <= 10);
+  assert.ok(
+    Math.abs(envelope.attackSeconds - 3.17) < 0.1,
+    `expected a real logarithmic time near 3.17 s, got ${envelope.attackSeconds}`,
+  );
+  editor.unmount();
 });

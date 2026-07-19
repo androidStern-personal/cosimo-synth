@@ -20,6 +20,14 @@ chips (fixed sources included), rail scope is strictly the selected parameter
 (unattached chips recede; global orphan-ness shows only in the count badge),
 and chip focus renders as a corner-tick frame, never black/white inversion.
 
+Amended 2026-07-19 (port-backed source editors): source values now come from
+`CosimoAdapterPort`. Macro value is normalized 0..1 and displayed as percent;
+Envelope A/D/R rows edit logarithmically mapped seconds while Sustain remains
+normalized; MSEG uses the shared real shape editor with A/B selection, morph,
+seconds, loop, and hold-or-drag segment bending on touch. The engine route
+budget is 12; a 13th assignment is refused without mutation and reports
+`ROUTE BUDGET FULL · 12 OF 12` in the transient HUD.
+
 | Surface | Intent | Required behavior | Geometry invariant |
 | --- | --- | --- | --- |
 | Workspace carousel | Move between Voice, Effects, and Articulations | Tap either neighbor or swipe horizontally; instrument workspaces restore their last module and parameter | Header height and neighboring controls do not move |
@@ -40,8 +48,8 @@ and chip focus renders as a corner-tick frame, never black/white inversion.
 | Explicit source navigation | Edit a modulation source deeply | Tapping a user source's rail chip or a source-editor target action opens the source editor; fixed performance sources (Velocity/Pressure/Slide) have no editor and their tap is a quiet no-op; returning restores the module and selected target | Navigation replaces only the workspace and preserves shallow return context |
 | Source rail | Read source identity | Icon, slot, and attachment count remain visible on every chip; chips attached to the selected parameter light with their amounts while every other chip recedes | The rail is a fixed 7×2 grid holding full source capacity; it never scrolls and chip metrics are fixed |
 | Source rail | Assign by drag | Drag an unlit chip in ANY direction onto an eligible parameter (the rail has no pan gesture to conflict with); a ghost chip follows the pointer, drop targets become visible, and drop creates or focuses the mapping. A lit chip's vertical drag always scrubs and its horizontal drag is inert — assign an attached source elsewhere by selecting the destination parameter first (the chip unlights) or via its long-press menu | Ghost and drop targets are overlays and do not reflow controls |
-| Source rail | Manage/add/undo | Long-press a chip for its action menu — for lit chips: polarity toggle (Unipolar/Bipolar), Enable/Disable, and Remove from the selected parameter (fixed sources included); for user sources additionally Delete with mapping count. Add reveals reserved Macro/Envelope/MSEG slots progressively; Undo restores the exact source when possible | Menus and Undo are overlays outside structural flow |
-| Source editor | Edit source and targets | Source graphic remains focused; compact target rows expose relationship values and own polarity, reducer when required, and remove; one row may expose deeper settings inside the target scroll surface | Shell bands remain fixed; target list is a named scroll surface |
+| Source rail | Manage/add/undo | Long-press a chip for its action menu — for lit chips: polarity toggle (Unipolar/Bipolar), Enable/Disable, and Remove from the selected parameter (fixed sources included); for user sources additionally Delete with mapping count. Add reveals reserved Macro/Envelope/MSEG slots progressively; Undo restores the exact source when possible. The 12-route engine budget refuses assignment 13 in the HUD and leaves the graph unchanged (2026-07-19) | Menus, budget HUD, and Undo are overlays outside structural flow |
+| Source editor | Edit source and targets | Source controls edit real port state (2026-07-19): Macro is normalized and displayed as percent; Envelope exposes logarithmic Attack/Decay/Release seconds plus Sustain percent and a real ADSR plot; MSEG uses the shared editable A/B shapes with morph, seconds, loop, and touch hold-or-drag segment bend. Compact target rows retain relationship values, polarity, contextual reducer, and remove | Shell bands remain fixed; source settings use the existing compact row grammar and the target list remains a named scroll surface |
 | Source-to-target navigation | Open a target and return | Open the target module with that relationship selected; Back restores source, expanded target, and scroll position | Navigation replaces the workspace; it is not an inline expansion |
 | Audition transport | Trigger/retrigger | Trigger remains reachable in every focused editor; Repeat and Latch preserve their established behavior | Transport occupies a fixed shell row |
 | Retrospective capture | Capture performed motion | While MIDI note or Trigger is held, remember the parameter actually moved and its patch/articulation layer; Capture creates the next available MSEG already mapped to it | Status text is bounded and cannot resize the transport |
@@ -86,6 +94,7 @@ play-to-set trigger assignment (requires MIDI input).
 ## Capacity policy
 
 - Four Macro slots, three Envelope slots, and three MSEG slots are reserved.
+- The engine accepts at most 12 source-to-target routes; route 13 is a HUD refusal.
 - A new patch exposes only Macro 1, Envelope 1, and MSEG 1 plus Add.
 - There is no separate LFO family.
 

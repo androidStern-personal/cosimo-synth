@@ -122,11 +122,17 @@ type PrototypeAction = Readonly<{
     [field: string]: unknown;
 }>;
 
-function initialPrototypeState(): PrototypeState {
-    // SAFETY: createInitialMockCosimoState is the authoritative constructor for
-    // the reducer state projected by this boundary. This local type lists only
-    // the fields the adapter reads.
-    return createInitialMockCosimoState() as PrototypeState;
+type CreateInitialPrototypeState = typeof createInitialMockCosimoState;
+
+type CreateMockCosimoAdapterOptions = {
+    readonly createInitialState?: CreateInitialPrototypeState;
+};
+
+function initialPrototypeState(createInitialState: CreateInitialPrototypeState): PrototypeState {
+    // SAFETY: this option accepts only the repository's reducer-state fixture
+    // factories. PrototypeState narrows the JS constructors to the fields and
+    // finite variants consumed by this adapter boundary.
+    return createInitialState() as PrototypeState;
 }
 
 function reducePrototypeState(state: PrototypeState, action: PrototypeAction): PrototypeState {
@@ -498,8 +504,10 @@ function availableArticulationSelector(
  * State transitions remain owned by the prototype reducer; this boundary owns
  * port policy, branded identities, real-unit projection, caching, and subscriptions.
  */
-export function createMockCosimoAdapter(): CosimoAdapterPort {
-    let state = initialPrototypeState();
+export function createMockCosimoAdapter({
+    createInitialState = createInitialMockCosimoState,
+}: CreateMockCosimoAdapterOptions = {}): CosimoAdapterPort {
+    let state = initialPrototypeState(createInitialState);
     let snapshot = projectSnapshot(state);
     const listeners = new Set<() => void>();
 

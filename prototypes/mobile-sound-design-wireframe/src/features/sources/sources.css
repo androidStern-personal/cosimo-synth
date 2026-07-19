@@ -315,18 +315,24 @@
   .cosimo-source-shape {
     border-radius: var(--cosimo-radius);
     position: relative;
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
     min-inline-size: 0;
     min-block-size: 0;
     overflow: clip;
     border: var(--cosimo-stroke-structural) solid var(--cosimo-color-ink);
     background: var(--cosimo-color-paper);
-    touch-action: none;
   }
 
-  .cosimo-source-shape__graphic {
+  .cosimo-source-shape__graphic,
+  .cosimo-source-shape__mseg-surface {
     display: block;
     inline-size: 100%;
     block-size: 100%;
+    min-block-size: 0;
+    border-radius: var(--cosimo-radius);
+    background: var(--cosimo-color-paper);
+    touch-action: none;
   }
 
   .cosimo-source-shape__grid {
@@ -359,29 +365,143 @@
     vector-effect: non-scaling-stroke;
   }
 
-  .cosimo-source-shape__readouts {
-    position: absolute;
-    inset-block-end: var(--cosimo-space-1);
-    inset-inline: var(--cosimo-space-2);
+  .cosimo-source-shape__settings {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .cosimo-source-shape__settings.is-single {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .cosimo-source-setting-row {
+    position: relative;
     display: flex;
+    min-inline-size: 0;
+    min-block-size: var(--cosimo-control-small);
+    align-items: center;
     justify-content: space-between;
-    gap: var(--cosimo-space-1);
-    pointer-events: none;
+    gap: var(--cosimo-space-2);
+    padding-inline: var(--cosimo-space-2);
+    border-block-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    border-inline-end: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    border-radius: var(--cosimo-radius);
+    background: var(--cosimo-color-paper);
+    touch-action: none;
+    user-select: none;
   }
 
-  .cosimo-source-shape__readouts > span {
-    display: inline-flex;
-    align-items: baseline;
-    gap: var(--cosimo-space-1);
+  .cosimo-source-setting-row:nth-child(even) {
+    border-inline-end: 0;
   }
 
-  .cosimo-source-shape__readouts .cosimo-type-label {
+  .cosimo-source-shape__settings.is-single .cosimo-source-setting-row {
+    border-inline-end: 0;
+  }
+
+  .cosimo-source-setting-row > .cosimo-type-label {
     color: var(--cosimo-color-ink-muted);
   }
 
-  .cosimo-source-shape__readouts .cosimo-value {
-    inline-size: var(--cosimo-value-width-phase);
-    text-align: start;
+  .cosimo-source-setting-row > .cosimo-value {
+    min-inline-size: var(--cosimo-value-width-phase);
+    text-align: end;
+  }
+
+  .cosimo-source-setting-row:focus-visible,
+  .cosimo-source-setting-row[aria-pressed="true"],
+  .cosimo-source-shape__shape-toggle > button[aria-pressed="true"] {
+    outline: 0;
+  }
+
+  .cosimo-source-setting-row:focus-visible::after,
+  .cosimo-source-setting-row[aria-pressed="true"]::after,
+  .cosimo-source-shape__shape-toggle > button[aria-pressed="true"]::after {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--cosimo-radius);
+    background:
+      linear-gradient(currentColor, currentColor) top left / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) top left / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) top right / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) top right / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) bottom left / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) bottom left / var(--cosimo-stroke-active) var(--cosimo-marker-size),
+      linear-gradient(currentColor, currentColor) bottom right / var(--cosimo-marker-size) var(--cosimo-stroke-active),
+      linear-gradient(currentColor, currentColor) bottom right / var(--cosimo-stroke-active) var(--cosimo-marker-size);
+    background-repeat: no-repeat;
+    content: "";
+    pointer-events: none;
+  }
+
+  .cosimo-source-setting-row.is-toggle {
+    cursor: pointer;
+  }
+
+  .cosimo-source-shape__shape-toggle {
+    display: grid;
+    grid-template-columns: repeat(2, var(--cosimo-control-small));
+    min-block-size: var(--cosimo-control-small);
+  }
+
+  .cosimo-source-shape__shape-toggle > button {
+    position: relative;
+    display: grid;
+    min-inline-size: var(--cosimo-control-small);
+    min-block-size: var(--cosimo-control-small);
+    place-items: center;
+    border-inline-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+    border-radius: var(--cosimo-radius);
+  }
+
+  .cosimo-source-shape__mseg-surface .cosimo-grid-line {
+    stroke: var(--cosimo-color-graph);
+    stroke-width: var(--cosimo-stroke-hairline);
+    vector-effect: non-scaling-stroke;
+  }
+
+  .cosimo-source-shape__mseg-surface .cosimo-curve-fill,
+  .cosimo-source-shape__mseg-surface .cosimo-reference-curve-fill {
+    fill: color-mix(in srgb, var(--cosimo-source-color) 8%, transparent);
+  }
+
+  .cosimo-source-shape__mseg-surface .cosimo-curve-line,
+  .cosimo-source-shape__mseg-surface .cosimo-mseg-effective-curve-line {
+    fill: none;
+    stroke: var(--cosimo-source-color, var(--cosimo-color-accent));
+    stroke-linecap: square;
+    stroke-linejoin: miter;
+    stroke-width: var(--cosimo-stroke-active);
+    vector-effect: non-scaling-stroke;
+  }
+
+  .cosimo-source-shape__mseg-surface .cosimo-reference-curve-line,
+  .cosimo-source-shape__mseg-surface .cosimo-curve-line-muted {
+    fill: none;
+    stroke: var(--cosimo-color-rule);
+    stroke-width: var(--cosimo-stroke-hairline);
+    vector-effect: non-scaling-stroke;
+  }
+
+  .cosimo-source-shape__mseg-surface .cosimo-curve-line-highlight {
+    stroke: var(--cosimo-color-ink);
+  }
+
+  .cosimo-source-shape__mseg-surface .cosimo-mseg-point-default,
+  .cosimo-source-shape__mseg-surface .cosimo-mseg-point-highlight,
+  .cosimo-source-shape__mseg-surface .cosimo-mseg-point-selected {
+    fill: var(--cosimo-color-paper);
+    stroke: var(--cosimo-source-color, var(--cosimo-color-accent));
+    stroke-width: var(--cosimo-stroke-active);
+    vector-effect: non-scaling-stroke;
+  }
+
+  .cosimo-source-shape__mseg-surface .cosimo-mseg-point-muted {
+    fill: var(--cosimo-color-paper);
+    stroke: var(--cosimo-color-rule);
+    stroke-width: var(--cosimo-stroke-hairline);
+    vector-effect: non-scaling-stroke;
   }
 
   .cosimo-source-targets {

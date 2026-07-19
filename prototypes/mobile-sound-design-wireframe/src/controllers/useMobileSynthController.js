@@ -32,6 +32,84 @@ const DEFAULT_LAST_TWEAKED_BY_MODULE = Object.freeze(Object.fromEntries(
   ALL_MODULES.map((module) => [module.id, module.quick]),
 ));
 
+const toDisplay = (value) => Number(value) * 100;
+const toPort = (value) => Math.max(0, Math.min(1, Number(value) / 100));
+
+function projectNormalizedRecord(values) {
+  return Object.fromEntries(
+    Object.entries(values).map(([id, value]) => [id, toDisplay(value)]),
+  );
+}
+
+function projectLegacyPatch(snapshot, capturedMotionBySourceId) {
+  const { patch } = snapshot;
+  const sourceStates = Object.fromEntries(
+    patch.sources.map((source) => [source.id, source.state]),
+  );
+  const sources = patch.sources
+    .filter((source) => source.type !== "fixed")
+    .map((source) => ({
+      id: source.id,
+      type: source.type,
+      slot: source.slot,
+      label: source.label,
+      state: source.state,
+      ...(capturedMotionBySourceId[source.id]
+        ? { capturedMotion: capturedMotionBySourceId[source.id] }
+        : null),
+    }));
+
+  return {
+    parameterValues: projectNormalizedRecord(patch.parameterValues),
+    mappings: patch.mappings.map((mapping) => ({
+      ...mapping,
+      targetKey: mapping.targetId,
+    })),
+    sources,
+    sourceStates,
+    sourceSettings: sourceStates,
+    effectOrder: patch.effectOrder,
+    effectEnabled: patch.effectEnabled,
+    compoundSettings: patch.compoundSettings,
+    articulations: patch.articulations.map((articulation) => ({
+      id: articulation.id,
+      label: articulation.label,
+      color: articulation.color,
+      icon: articulation.icon,
+      selector: articulation.selector,
+      key: articulation.key,
+      vel: [articulation.velRange.min, articulation.velRange.max],
+      chain: [articulation.chainRange.min, articulation.chainRange.max],
+    })),
+    articulationTriggerMode: patch.articulationTriggerMode,
+    articulationOverrides: Object.fromEntries(
+      Object.entries(patch.articulationOverrides).map(([articulationId, values]) => [
+        articulationId,
+        projectNormalizedRecord(values),
+      ]),
+    ),
+    articulationMappingAmounts: patch.articulationMappingAmounts,
+  };
+}
+
+function projectLegacyAudition(audition) {
+  return {
+    ...audition,
+    captureCandidate: audition.captureCandidate === null
+      ? null
+      : {
+          ...audition.captureCandidate,
+          targetKey: audition.captureCandidate.targetId,
+        },
+  };
+}
+
+function toPortLayer(layer) {
+  return layer.kind === "articulationOverride"
+    ? { _tag: "articulationOverride", articulationId: layer.articulationId }
+    : { _tag: "patchBase" };
+}
+
 function deriveActiveMappings(patch) {
   return patch.mappings.reduce((active, mapping) => {
     if (active[mapping.targetKey]) return active;
@@ -48,12 +126,21 @@ const SOURCE_ADD_OPTIONS = Object.freeze([
 /**
  * UI-session controller. Patch/audio state arrives through the adapter so
  * navigation state stays independent from the eventual iOS/Cmajor bridge.
- * @param {import("../adapters/CosimoMobileAdapter.js").CosimoMobileAdapter} adapter
  */
 export function useMobileSynthController(adapter, initialSession = {}) {
   const { snapshot, commands } = adapter;
-  const { patch, audition } = snapshot;
+  const portPatch = snapshot.patch;
+  const portAudition = snapshot.audition;
   const { readout, showReadout } = useTransientReadout();
+  const [capturedMotionBySourceId, setCapturedMotionBySourceId] = useState({});
+  const patch = useMemo(
+    () => projectLegacyPatch(snapshot, capturedMotionBySourceId),
+    [capturedMotionBySourceId, snapshot],
+  );
+  const audition = useMemo(
+    () => projectLegacyAudition(portAudition),
+    [portAudition],
+  );
   const [workspace, setWorkspace] = useState("effects");
   const [lastInstrumentWorkspace, setLastInstrumentWorkspace] = useState("effects");
   const [moduleByWorkspace, setModuleByWorkspace] = useState({
@@ -87,6 +174,7 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const [navFlashTargetId, setNavFlashTargetId] = useState(null);
   const previewRestoreArticulation = useRef(null);
   const triggerFallbackTimer = useRef(null);
+  const captureMetadataRef = useRef(null);
 
   const clearTriggerFallback = () => {
     window.clearTimeout(triggerFallbackTimer.current);
@@ -164,21 +252,46 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   };
 
   const setParameter = (targetId, value) => {
+    const editLayer = resolveParameterEditLayer(targetId, wornArticulation?.id || null);
     commands.setParameter({
       targetId,
-      value,
-      layer: resolveParameterEditLayer(targetId, wornArticulation?.id || null),
+      value: toPort(value),
+      layer: toPortLayer(editLayer),
     });
+    if (portAudition.triggerActive) {
+      captureMetadataRef.current = {
+        targetKey: targetId,
+        layer: editLayer.kind === "articulationOverride"
+          ? `${editLayer.articulationId} override`
+          : "Patch base",
+        articulation: editLayer.kind === "articulationOverride"
+          ? editLayer.articulationId
+          : "Default",
+      };
+    }
     selectTarget(targetId);
   };
 
   const addMapping = (targetId, sourceId) => {
-    const mappingId = commands.addMapping({ targetId, sourceId });
-    if (mappingId) {
-      setActiveMappingByTarget((current) => ({ ...current, [targetId]: mappingId }));
-      showReadout(`${sourceLookup[sourceId]?.label || "Source"} → ${TARGETS[targetId]?.label || "Target"}`);
+    const result = commands.addMapping({ targetId, sourceId });
+    if (result._tag === "err") {
+      if (result.error._tag === "RouteBudgetExceeded") {
+        showReadout(`ROUTE BUDGET FULL · ${result.error.budget} OF ${result.error.budget}`);
+        triggerHaptic("light");
+        return null;
+      }
+      if (result.error._tag === "MappingAlreadyExists") {
+        setActiveMappingByTarget((current) => ({
+          ...current,
+          [targetId]: result.error.mappingId,
+        }));
+        return result.error.mappingId;
+      }
+      return null;
     }
-    return mappingId;
+    setActiveMappingByTarget((current) => ({ ...current, [targetId]: result.value }));
+    showReadout(`${sourceLookup[sourceId]?.label || "Source"} → ${TARGETS[targetId]?.label || "Target"}`);
+    return result.value;
   };
 
   const removeMapping = (mappingId) => {
@@ -262,10 +375,11 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       if (existing) {
         setActiveMappingByTarget((current) => ({ ...current, [targetId]: existing.id }));
         showReadout(`${sourceLookup[sourceId]?.label || "Source"} → ${TARGETS[targetId]?.label || "Target"}`);
+        triggerHaptic("success");
       } else {
-        addMapping(targetId, sourceId);
+        const mappingId = addMapping(targetId, sourceId);
+        if (mappingId) triggerHaptic("success");
       }
-      triggerHaptic("success");
     },
     onTargetChange(targetId) {
       if (targetId) triggerHaptic("light");
@@ -532,10 +646,14 @@ export function useMobileSynthController(adapter, initialSession = {}) {
     },
     actions: {
       addSource(type) {
-        const sourceId = commands.createSource(type);
+        const result = commands.createSource(type);
         setSourceAddOpen(false);
         setDeletedSource(null);
-        if (sourceId) openSource(sourceId, { allowPending: true });
+        if (result._tag === "err") {
+          showReadout(`ALL ${type.toUpperCase()} SLOTS IN USE`);
+          return;
+        }
+        openSource(result.value, { allowPending: true });
       },
       beginSourceDrag: sourceDrag.begin,
       cancelSourceDrag: () => sourceDrag.finish(true),
@@ -545,9 +663,20 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         if (mappingId) setSourceMappingId(mappingId);
       },
       captureMotion() {
-        const targetId = audition.captureCandidate?.targetKey;
+        const targetId = portAudition.captureCandidate?.targetId;
         const sourceId = commands.captureMotion();
         if (!sourceId) return null;
+        const capturedMotion = captureMetadataRef.current?.targetKey === targetId
+          ? captureMetadataRef.current
+          : {
+              targetKey: targetId,
+              layer: "Patch base",
+              articulation: "Default",
+            };
+        setCapturedMotionBySourceId((current) => ({
+          ...current,
+          [sourceId]: capturedMotion,
+        }));
         setDeletedSource(null);
         if (targetId) {
           const target = TARGETS[targetId];
@@ -584,10 +713,14 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       changeMappingAmount: (mappingId, amount) => {
         const mapping = patch.mappings.find((item) => item.id === mappingId);
         if (!mapping) return;
-        commands.setMappingAmount(mappingId, amount, resolveParameterEditLayer(
-          mapping.targetKey,
-          wornArticulation?.id || null,
-        ));
+        commands.setMappingAmount(
+          mappingId,
+          amount,
+          toPortLayer(resolveParameterEditLayer(
+            mapping.targetKey,
+            wornArticulation?.id || null,
+          )),
+        );
       },
       chooseWorkspace,
       wearArticulation(articulationId, entry = "latch") {
@@ -596,8 +729,8 @@ export function useMobileSynthController(adapter, initialSession = {}) {
           id: articulationId,
           entry,
           backup: {
-            overrides: { ...patch.articulationOverrides[articulationId] },
-            mappingAmounts: { ...patch.articulationMappingAmounts[articulationId] },
+            overrides: { ...portPatch.articulationOverrides[articulationId] },
+            mappingAmounts: { ...portPatch.articulationMappingAmounts[articulationId] },
           },
         });
         if (entry === "artic") setWorkspace(lastInstrumentWorkspace);
@@ -608,12 +741,12 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       cancelWear: () => exitWear(false),
       selectArticulation: setSelectedArticulationId,
       addArticulation() {
-        const articulationId = commands.addArticulation();
-        if (articulationId) setSelectedArticulationId(articulationId);
+        const result = commands.addArticulation();
+        if (result._tag === "ok") setSelectedArticulationId(result.value);
       },
       duplicateArticulation(articulationId) {
-        const nextId = commands.duplicateArticulation(articulationId);
-        if (nextId) setSelectedArticulationId(nextId);
+        const result = commands.duplicateArticulation(articulationId);
+        if (result._tag === "ok") setSelectedArticulationId(result.value);
       },
       deleteArticulation(articulationId) {
         commands.deleteArticulation(articulationId);
@@ -630,7 +763,12 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         return walk;
       },
       setArticulationRange(articulationId, mode, bound, value) {
-        const clamp = commands.setArticulationRange(articulationId, mode, bound, value);
+        const clamp = commands.setArticulationRange(
+          articulationId,
+          mode,
+          bound === "lo" ? "min" : "max",
+          value,
+        );
         if (clamp?.touching) triggerHaptic("light");
         return clamp;
       },
@@ -639,14 +777,17 @@ export function useMobileSynthController(adapter, initialSession = {}) {
         if (!selectedArticulation) return;
         commands.setParameter({
           targetId,
-          value,
-          layer: { kind: "articulationOverride", articulationId: selectedArticulation.id },
+          value: toPort(value),
+          layer: {
+            _tag: "articulationOverride",
+            articulationId: selectedArticulation.id,
+          },
         });
       },
       setArticulationRouteAmount(mappingId, amount) {
         if (!selectedArticulation) return;
         commands.setMappingAmount(mappingId, amount, {
-          kind: "articulationOverride",
+          _tag: "articulationOverride",
           articulationId: selectedArticulation.id,
         });
       },
@@ -706,8 +847,12 @@ export function useMobileSynthController(adapter, initialSession = {}) {
           sourceScrollTop,
           targetByModule,
           workspace,
+          capturedMotion: capturedMotionBySourceId[sourceId] || null,
         };
         commands.deleteSource(sourceId);
+        setCapturedMotionBySourceId((current) => Object.fromEntries(
+          Object.entries(current).filter(([id]) => id !== sourceId),
+        ));
         setDeletedSource(source ? { source, uiContext } : null);
         if (sourceFocusId === sourceId) closeSource();
       },
@@ -751,7 +896,38 @@ export function useMobileSynthController(adapter, initialSession = {}) {
       setParameter,
       setRepeat: commands.setRepeatEnabled,
       setSourceAddOpen,
-      setSourceSettings: commands.setSourceSettings,
+      updateSource(intent) {
+        if (intent.kind === "macroValue") {
+          commands.setMacroValue(intent.sourceId, intent.value);
+          return;
+        }
+        if (intent.kind === "envelope") {
+          commands.setEnvelope(intent.sourceId, intent.envelope);
+          return;
+        }
+        if (intent.kind === "msegShape") {
+          commands.setMsegShape({
+            sourceId: intent.sourceId,
+            shapeIndex: intent.shapeIndex,
+            shape: intent.shape,
+          });
+          return;
+        }
+        if (intent.kind === "msegMorph") {
+          commands.setMsegMorph({
+            sourceId: intent.sourceId,
+            morph: intent.morph,
+            layer: { _tag: "patchBase" },
+          });
+          return;
+        }
+        if (intent.kind === "msegPlayback") {
+          commands.setMsegPlayback({
+            sourceId: intent.sourceId,
+            playback: intent.playback,
+          });
+        }
+      },
       setSourceScrollTop,
       setSourceTargetAddOpen,
       showReadout,
@@ -773,6 +949,12 @@ export function useMobileSynthController(adapter, initialSession = {}) {
           setSourceScrollTop(uiContext.sourceScrollTop);
           setTargetByModule(uiContext.targetByModule);
           setWorkspace(uiContext.workspace);
+          if (uiContext.capturedMotion) {
+            setCapturedMotionBySourceId((current) => ({
+              ...current,
+              [deletedSource.source.id]: uiContext.capturedMotion,
+            }));
+          }
         }
         setDeletedSource(null);
         triggerHaptic("success");

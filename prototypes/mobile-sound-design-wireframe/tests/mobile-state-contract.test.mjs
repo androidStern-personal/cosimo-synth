@@ -65,10 +65,10 @@ test("reducer control is required only for per-note sources crossing into global
   assert.equal(mappingNeedsReducer(sources["mseg-1"], TARGETS["wavetable.index"]), false);
 });
 
-test("source delete and undo restore the exact source settings and mappings", () => {
+test("source delete and undo restore the exact real source state and mappings", () => {
   const initial = createInitialMockCosimoState();
   const source = initial.patch.sources.find((item) => item.id === "envelope-1");
-  const settings = initial.patch.sourceSettings["envelope-1"];
+  const sourceState = initial.patch.sourceStates["envelope-1"];
   const mappings = initial.patch.mappings.filter((item) => item.sourceId === "envelope-1");
 
   const deleted = reduce(initial, "DELETE_SOURCE", { sourceId: "envelope-1" });
@@ -80,7 +80,7 @@ test("source delete and undo restore the exact source settings and mappings", ()
     restored.patch.sources.find((item) => item.id === "envelope-1"),
     source,
   );
-  assert.deepEqual(restored.patch.sourceSettings["envelope-1"], settings);
+  assert.deepEqual(restored.patch.sourceStates["envelope-1"], sourceState);
   assert.deepEqual(
     restored.patch.mappings.filter((item) => item.sourceId === "envelope-1"),
     mappings,
