@@ -11,7 +11,7 @@ import {
   paintWavetableEnergyField,
 } from "../../../ui/shared/wavetable-energy-field.ts";
 import { WAVETABLE_ETCHED_TREATMENT } from "../../../ui/shared/etched-treatment-presets.ts";
-import "./styles.css";
+import "./labs/lab.css";
 
 /**
  * Phase-4 etch bench: the REAL desktop CanvasWavetableDisplay (untouched —

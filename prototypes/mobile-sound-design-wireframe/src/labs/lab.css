@@ -1,0 +1,115 @@
+/*
+ * Lab pages (etch bench, etch gallery): ordinary scrolling DOCUMENTS in the
+ * Cosimo grammar. They import tokens + foundations + the wire-range control —
+ * NEVER styles.css, whose body rules (overflow: hidden, ink background) belong
+ * to the fixed phone shell and break document pages.
+ */
+@layer cosimo.tokens, cosimo.reset, cosimo.foundation, cosimo.lab;
+
+@import "../design-system/tokens.css";
+@import "../design-system/foundations.css";
+@import "../design-system/wire-range.css";
+
+@layer cosimo.lab {
+  body {
+    margin: 0;
+    background: var(--cosimo-color-paper);
+    color: var(--cosimo-color-ink);
+  }
+
+  .lab-page {
+    max-inline-size: 460px;
+    margin-inline: auto;
+    padding: var(--cosimo-gutter);
+    padding-block-end: var(--cosimo-space-6);
+    display: grid;
+    gap: var(--cosimo-space-5);
+  }
+
+  .lab-page__title {
+    margin: 0;
+    font-family: var(--cosimo-font-label);
+    font-size: var(--cosimo-type-label-size);
+    letter-spacing: 2px;
+  }
+
+  .lab-page__note {
+    margin: 0;
+    color: var(--cosimo-color-ink-muted);
+    font-size: var(--cosimo-type-micro-size);
+    line-height: var(--cosimo-type-label-line);
+  }
+
+  .lab-panel {
+    display: grid;
+    gap: var(--cosimo-space-3);
+    padding-block-start: var(--cosimo-space-4);
+    border-block-start: var(--cosimo-stroke-hairline) solid var(--cosimo-color-rule);
+  }
+
+  .lab-panel__title {
+    margin: 0;
+    font-family: var(--cosimo-font-label);
+    font-size: var(--cosimo-type-label-size);
+    letter-spacing: 2px;
+  }
+
+  .lab-panel__canvas {
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    border-radius: var(--cosimo-radius);
+    touch-action: none;
+  }
+
+  .lab-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--cosimo-space-3) var(--cosimo-space-4);
+  }
+
+  .lab-field {
+    display: grid;
+    gap: var(--cosimo-space-1);
+    min-inline-size: 0;
+  }
+
+  .lab-field__label {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--cosimo-space-2);
+    color: var(--cosimo-color-ink-muted);
+  }
+
+  .lab-field__value {
+    color: var(--cosimo-color-ink);
+    font-family: var(--cosimo-font-value);
+    white-space: nowrap;
+  }
+
+  .lab-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--cosimo-space-2);
+  }
+
+  .lab-button {
+    padding: var(--cosimo-space-1) var(--cosimo-space-2);
+    border: var(--cosimo-stroke-hairline) solid var(--cosimo-color-ink);
+    border-radius: var(--cosimo-radius);
+    background: transparent;
+    color: inherit;
+    font-family: var(--cosimo-font-label);
+    font-size: var(--cosimo-type-micro-size);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .lab-button[aria-pressed="true"] {
+    background: var(--cosimo-color-ink);
+    color: var(--cosimo-color-paper);
+  }
+
+  .lab-status {
+    color: var(--cosimo-color-ink-muted);
+    font-size: var(--cosimo-type-micro-size);
+  }
+}

@@ -36,13 +36,13 @@ import {
   makeFilterSpectrumFrame,
   synthesizeFrames,
 } from "./etchGalleryData.js";
-import "./styles.css";
+import { WireRange } from "./design-system/WireRange.jsx";
+import "./labs/lab.css";
 
 /**
  * Phase-4 side-by-side: all three module graphics through the etched pass,
- * each with its own tuning surface. The wavetable panel boots from the frozen
- * provisional preset; filter and distortion start from the same etch baseline
- * so consistency is judged from a common origin and tuned per graphic.
+ * each with its own tuning surface. A scrolling DOCUMENT in the lab grammar —
+ * lab.css only, never the fixed-shell stylesheet.
  */
 
 const WIDTH = 372;
@@ -76,26 +76,35 @@ function drawChrome(context, paper) {
   }
 }
 
-function Slider({ label, value, min, max, step, onChange, format = (v) => v }) {
+function LabSlider({ label, value, min, max, step, onChange, format = (v) => v }) {
   return (
-    <label style={{ display: "grid", gap: 3, fontSize: 10, letterSpacing: 1 }}>
-      <span>{label} · {format(value)}</span>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={(event) => onChange(Number(event.target.value))} />
-    </label>
+    <div className="lab-field">
+      <span className="lab-field__label cosimo-type-label">
+        {label}
+        <span className="lab-field__value">{format(value)}</span>
+      </span>
+      <WireRange
+        ariaLabel={label}
+        value={value}
+        minimum={min}
+        maximum={max}
+        step={step}
+        onChange={(event) => onChange(Number(event.target.value))}
+      />
+    </div>
   );
 }
 
 function EtchControls({ etch, setEtch }) {
   return (
     <>
-      <Slider label="GRAIN" value={etch.grainPx} min={1} max={5} step={0.25}
+      <LabSlider label="GRAIN" value={etch.grainPx} min={1} max={5} step={0.25}
         onChange={(v) => setEtch((p) => ({ ...p, grainPx: v }))} format={(v) => v.toFixed(2)} />
-      <Slider label="INK DENSITY" value={etch.inkDensity} min={3} max={28} step={1}
+      <LabSlider label="INK DENSITY" value={etch.inkDensity} min={3} max={28} step={1}
         onChange={(v) => setEtch((p) => ({ ...p, inkDensity: v }))} />
-      <Slider label="EXPOSURE" value={etch.exposure} min={0.4} max={3} step={0.05}
+      <LabSlider label="EXPOSURE" value={etch.exposure} min={0.4} max={3} step={0.05}
         onChange={(v) => setEtch((p) => ({ ...p, exposure: v }))} format={(v) => v.toFixed(2)} />
-      <Slider label="CONTRAST" value={etch.contrast} min={0.6} max={2.4} step={0.05}
+      <LabSlider label="CONTRAST" value={etch.contrast} min={0.6} max={2.4} step={0.05}
         onChange={(v) => setEtch((p) => ({ ...p, contrast: v }))} format={(v) => v.toFixed(2)} />
     </>
   );
@@ -103,12 +112,12 @@ function EtchControls({ etch, setEtch }) {
 
 function DitherRow({ etch, setEtch }) {
   return (
-    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+    <div className="lab-buttons">
       {DITHERS.map((mode) => (
-        <button key={mode} type="button"
-          onClick={() => setEtch((p) => ({ ...p, dither: mode }))}
-          style={{ padding: "5px 10px", fontSize: 10, letterSpacing: 1.5, border: "1px solid var(--cosimo-color-ink)", borderRadius: 2, background: etch.dither === mode ? "var(--cosimo-color-ink)" : "transparent", color: etch.dither === mode ? "var(--cosimo-color-paper)" : "inherit" }}>
-          {mode.toUpperCase()}
+        <button key={mode} type="button" className="lab-button"
+          aria-pressed={etch.dither === mode}
+          onClick={() => setEtch((p) => ({ ...p, dither: mode }))}>
+          {mode}
         </button>
       ))}
     </div>
@@ -118,8 +127,8 @@ function DitherRow({ etch, setEtch }) {
 function CopySetup({ panel, payload }) {
   const [message, setMessage] = useState("");
   return (
-    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-      <button type="button"
+    <div className="lab-buttons">
+      <button type="button" className="lab-button"
         onClick={async () => {
           const text = JSON.stringify({ panel, ...payload() }, null, 1);
           try {
@@ -129,21 +138,19 @@ function CopySetup({ panel, payload }) {
             window.prompt("copy this setup:", text);
           }
           setTimeout(() => setMessage(""), 3000);
-        }}
-        style={{ padding: "5px 10px", fontSize: 10, letterSpacing: 1.5, border: "1px solid var(--cosimo-color-ink)", borderRadius: 2 }}>
-        ⧉ COPY SETUP
+        }}>
+        ⧉ Copy setup
       </button>
-      <span style={{ fontSize: 10, color: "#57544c" }}>{message}</span>
+      <span className="lab-status">{message}</span>
     </div>
   );
 }
 
 function Panel({ title, canvasRef, children, onPointerHandlers = {} }) {
   return (
-    <section style={{ display: "grid", gap: 10 }}>
-      <h2 style={{ fontSize: 12, letterSpacing: 2 }}>{title}</h2>
-      <canvas ref={canvasRef} {...onPointerHandlers}
-        style={{ border: "1px solid var(--cosimo-color-ink)", borderRadius: 2, touchAction: "none" }} />
+    <section className="lab-panel">
+      <h2 className="lab-panel__title">{title}</h2>
+      <canvas ref={canvasRef} className="lab-panel__canvas" {...onPointerHandlers} />
       {children}
     </section>
   );
@@ -208,18 +215,18 @@ function WavetablePanel() {
   }, []);
 
   return (
-    <Panel title="WAVETABLE — frozen provisional preset" canvasRef={canvasRef}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+    <Panel title="Wavetable — frozen provisional preset" canvasRef={canvasRef}>
+      <div className="lab-controls">
         <EtchControls etch={etch} setEtch={setEtch} />
-        <Slider label="BAND ENERGY" value={energy.bandEnergy} min={0} max={0.8} step={0.01}
+        <LabSlider label="BAND ENERGY" value={energy.bandEnergy} min={0} max={0.8} step={0.01}
           onChange={(v) => setEnergy((e) => ({ ...e, bandEnergy: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="HERO WIDTH" value={energy.heroWidthPx} min={0.5} max={14} step={0.5}
+        <LabSlider label="HERO WIDTH" value={energy.heroWidthPx} min={0.5} max={14} step={0.5}
           onChange={(v) => setEnergy((e) => ({ ...e, heroWidthPx: v }))} format={(v) => v.toFixed(1)} />
-        <Slider label="HERO GLOW" value={energy.heroGlowPx} min={0} max={24} step={1}
+        <LabSlider label="HERO GLOW" value={energy.heroGlowPx} min={0} max={24} step={1}
           onChange={(v) => setEnergy((e) => ({ ...e, heroGlowPx: v }))} />
-        <Slider label="HERO GLOW STR" value={energy.heroGlowStrength} min={0} max={1} step={0.05}
+        <LabSlider label="HERO GLOW STR" value={energy.heroGlowStrength} min={0} max={1} step={0.05}
           onChange={(v) => setEnergy((e) => ({ ...e, heroGlowStrength: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="HERO ENERGY" value={energy.heroEnergy} min={0} max={1} step={0.05}
+        <LabSlider label="HERO ENERGY" value={energy.heroEnergy} min={0} max={1} step={0.05}
           onChange={(v) => setEnergy((e) => ({ ...e, heroEnergy: v }))} format={(v) => v.toFixed(2)} />
       </div>
       <DitherRow etch={etch} setEtch={setEtch} />
@@ -342,7 +349,7 @@ function FilterPanel() {
   };
 
   return (
-    <Panel title="VOICE FILTER — tuned drag + live analyzer" canvasRef={canvasRef}
+    <Panel title="Voice filter — tuned drag + live analyzer" canvasRef={canvasRef}
       onPointerHandlers={{
         onPointerDown: (event) => {
           draggingRef.current = true;
@@ -355,23 +362,23 @@ function FilterPanel() {
           event.currentTarget.releasePointerCapture(event.pointerId);
         },
       }}>
-      <p style={{ fontSize: 10, letterSpacing: 1, color: "#57544c" }}>
-        CUTOFF {formatHz(values.cutoffHz)} · RESO Q {values.q.toFixed(2)} — drag the plot
-        (the hand-tuned sigmoid drives the vertical feel)
+      <p className="lab-page__note">
+        CUTOFF {formatHz(values.cutoffHz)} · RESO Q {values.q.toFixed(2)} — drag the plot;
+        the hand-tuned sigmoid drives the vertical feel
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+      <div className="lab-controls">
         <EtchControls etch={etch} setEtch={setEtch} />
-        <Slider label="SPECTRUM ENERGY" value={energy.spectrumEnergy} min={0} max={0.6} step={0.01}
+        <LabSlider label="SPECTRUM ENERGY" value={energy.spectrumEnergy} min={0} max={0.6} step={0.01}
           onChange={(v) => setEnergy((e) => ({ ...e, spectrumEnergy: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="SPECTRUM LINE" value={energy.spectrumLineEnergy} min={0} max={1} step={0.05}
+        <LabSlider label="SPECTRUM LINE" value={energy.spectrumLineEnergy} min={0} max={1} step={0.05}
           onChange={(v) => setEnergy((e) => ({ ...e, spectrumLineEnergy: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="HERO WIDTH" value={energy.responseWidthPx} min={0.5} max={14} step={0.5}
+        <LabSlider label="HERO WIDTH" value={energy.responseWidthPx} min={0.5} max={14} step={0.5}
           onChange={(v) => setEnergy((e) => ({ ...e, responseWidthPx: v }))} format={(v) => v.toFixed(1)} />
-        <Slider label="HERO GLOW" value={energy.responseGlowPx} min={0} max={24} step={1}
+        <LabSlider label="HERO GLOW" value={energy.responseGlowPx} min={0} max={24} step={1}
           onChange={(v) => setEnergy((e) => ({ ...e, responseGlowPx: v }))} />
-        <Slider label="HERO GLOW STR" value={energy.responseGlowStrength} min={0} max={1} step={0.05}
+        <LabSlider label="HERO GLOW STR" value={energy.responseGlowStrength} min={0} max={1} step={0.05}
           onChange={(v) => setEnergy((e) => ({ ...e, responseGlowStrength: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="HERO ENERGY" value={energy.responseEnergy} min={0} max={1} step={0.05}
+        <LabSlider label="HERO ENERGY" value={energy.responseEnergy} min={0} max={1} step={0.05}
           onChange={(v) => setEnergy((e) => ({ ...e, responseEnergy: v }))} format={(v) => v.toFixed(2)} />
       </div>
       <DitherRow etch={etch} setEtch={setEtch} />
@@ -431,26 +438,26 @@ function DistortionPanel() {
   }, []);
 
   return (
-    <Panel title="DISTORTION — transfer + history" canvasRef={canvasRef}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-        <Slider label="DRIVE" value={drive.driveDb} min={0} max={36} step={0.5}
+    <Panel title="Distortion — transfer + history" canvasRef={canvasRef}>
+      <div className="lab-controls">
+        <LabSlider label="DRIVE" value={drive.driveDb} min={0} max={36} step={0.5}
           onChange={(v) => setDrive((d) => ({ ...d, driveDb: v }))} format={(v) => `${v.toFixed(1)} dB`} />
-        <Slider label="KNEE" value={drive.knee} min={0} max={1} step={0.01}
+        <LabSlider label="KNEE" value={drive.knee} min={0} max={1} step={0.01}
           onChange={(v) => setDrive((d) => ({ ...d, knee: v }))} format={(v) => v.toFixed(2)} />
         <EtchControls etch={etch} setEtch={setEtch} />
-        <Slider label="OCCUPANCY" value={energy.occupancyEnergy} min={0} max={1} step={0.05}
+        <LabSlider label="OCCUPANCY" value={energy.occupancyEnergy} min={0} max={1} step={0.01}
           onChange={(v) => setEnergy((e) => ({ ...e, occupancyEnergy: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="HISTORY" value={energy.historyEnergy} min={0} max={1} step={0.05}
+        <LabSlider label="HISTORY" value={energy.historyEnergy} min={0} max={1} step={0.01}
           onChange={(v) => setEnergy((e) => ({ ...e, historyEnergy: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="REMOVED" value={energy.removedEnergy} min={0} max={1} step={0.05}
+        <LabSlider label="REMOVED" value={energy.removedEnergy} min={0} max={1} step={0.05}
           onChange={(v) => setEnergy((e) => ({ ...e, removedEnergy: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="HERO WIDTH" value={energy.curveWidthPx} min={0.5} max={14} step={0.5}
+        <LabSlider label="HERO WIDTH" value={energy.curveWidthPx} min={0.5} max={14} step={0.5}
           onChange={(v) => setEnergy((e) => ({ ...e, curveWidthPx: v }))} format={(v) => v.toFixed(1)} />
-        <Slider label="HERO GLOW" value={energy.curveGlowPx} min={0} max={24} step={1}
+        <LabSlider label="HERO GLOW" value={energy.curveGlowPx} min={0} max={24} step={1}
           onChange={(v) => setEnergy((e) => ({ ...e, curveGlowPx: v }))} />
-        <Slider label="HERO GLOW STR" value={energy.curveGlowStrength} min={0} max={1} step={0.05}
+        <LabSlider label="HERO GLOW STR" value={energy.curveGlowStrength} min={0} max={1} step={0.05}
           onChange={(v) => setEnergy((e) => ({ ...e, curveGlowStrength: v }))} format={(v) => v.toFixed(2)} />
-        <Slider label="HERO ENERGY" value={energy.curveEnergy} min={0} max={1} step={0.05}
+        <LabSlider label="HERO ENERGY" value={energy.curveEnergy} min={0} max={1} step={0.05}
           onChange={(v) => setEnergy((e) => ({ ...e, curveEnergy: v }))} format={(v) => v.toFixed(2)} />
       </div>
       <DitherRow etch={etch} setEtch={setEtch} />
@@ -461,18 +468,16 @@ function DistortionPanel() {
 
 function Gallery() {
   return (
-    <div style={{ minHeight: "100vh", background: "var(--cosimo-color-paper)", padding: 16 }}>
-      <div style={{ maxWidth: 430, margin: "0 auto", display: "grid", gap: 28, fontFamily: "var(--cosimo-font-value, monospace)", color: "var(--cosimo-color-ink)" }}>
-        <header>
-          <h1 style={{ fontSize: 13, letterSpacing: 2 }}>ETCH GALLERY — SIDE BY SIDE</h1>
-          <p style={{ fontSize: 11, color: "#57544c", marginTop: 4 }}>
-            One treatment, three graphics. Tune each panel; COPY SETUP hands me the numbers.
-          </p>
-        </header>
-        <WavetablePanel />
-        <FilterPanel />
-        <DistortionPanel />
-      </div>
+    <div className="cosimo-ui lab-page">
+      <header>
+        <h1 className="lab-page__title">ETCH GALLERY — SIDE BY SIDE</h1>
+        <p className="lab-page__note">
+          One treatment, three graphics. Tune each panel; Copy setup hands me the numbers.
+        </p>
+      </header>
+      <WavetablePanel />
+      <FilterPanel />
+      <DistortionPanel />
     </div>
   );
 }

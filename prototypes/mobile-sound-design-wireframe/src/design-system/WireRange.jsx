@@ -3,6 +3,7 @@ export function WireRange({
   value,
   minimum = 0,
   maximum = 100,
+  step = 1,
   defaultValue = minimum,
   secondaryMarker = null,
   secondaryMarkerColor = "currentColor",
@@ -36,6 +37,7 @@ export function WireRange({
         max={maximum}
         min={minimum}
         onChange={onChange}
+        step={step}
         type="range"
         value={value}
       />
