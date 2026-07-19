@@ -56,7 +56,9 @@ function EtchBench() {
   const [sourceMode, setSourceMode] = useState("model");
   const sourceModeRef = useRef(sourceMode);
   sourceModeRef.current = sourceMode;
-  const [energy, setEnergy] = useState({ bandEnergy: 0.2, heroWidthPx: 5 });
+  const [energy, setEnergy] = useState({
+    bandEnergy: 0.2, heroWidthPx: 2, heroGlowPx: 5, heroGlowStrength: 0.6, heroEnergy: 1,
+  });
   const energyRef = useRef(energy);
   energyRef.current = energy;
   const [hybrid, setHybrid] = useState(true);
@@ -209,7 +211,10 @@ function EtchBench() {
         {slider("WARP AMOUNT", warp.amount, 0, 1, 0.01, (v) => setWarp((w) => ({ ...w, amount: v })), (v) => v.toFixed(2))}
         {slider("SCAN", scan.position, 0, 1, 0.01, (v) => setScan({ auto: false, position: v }), (v) => v.toFixed(2))}
         {slider("BAND ENERGY", energy.bandEnergy, 0, 0.8, 0.01, (v) => setEnergy((e) => ({ ...e, bandEnergy: v })), (v) => v.toFixed(2))}
-        {slider("HERO WIDTH", energy.heroWidthPx, 1, 14, 1, (v) => setEnergy((e) => ({ ...e, heroWidthPx: v })))}
+        {slider("HERO WIDTH", energy.heroWidthPx, 0.5, 14, 0.5, (v) => setEnergy((e) => ({ ...e, heroWidthPx: v })), (v) => v.toFixed(1))}
+        {slider("HERO GLOW", energy.heroGlowPx, 0, 24, 1, (v) => setEnergy((e) => ({ ...e, heroGlowPx: v })))}
+        {slider("HERO GLOW STR", energy.heroGlowStrength, 0, 1, 0.05, (v) => setEnergy((e) => ({ ...e, heroGlowStrength: v })), (v) => v.toFixed(2))}
+        {slider("HERO ENERGY", energy.heroEnergy, 0, 1, 0.05, (v) => setEnergy((e) => ({ ...e, heroEnergy: v })), (v) => v.toFixed(2))}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         {["stipple", "noise", "diffusion", "hatch", "wash"].map((mode) => (

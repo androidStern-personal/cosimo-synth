@@ -26,6 +26,14 @@ export type WavetableEnergyParams = {
     readonly heroWidthPx: number;
     /** Soft glow radius around the hero slice, px (energy halo). */
     readonly heroGlowPx: number;
+    /** Glow intensity 0..1 (shadow alpha) — how far the halo carves. */
+    readonly heroGlowStrength: number;
+    /**
+     * The hero stroke's own energy 0..1. At 1 the slice burns a fully clean
+     * channel; lower values let the dither partially reclaim it, making the
+     * scan line progressively quieter.
+     */
+    readonly heroEnergy: number;
 };
 
 /** Dossier-calibrated defaults. */
@@ -34,8 +42,10 @@ export function createDefaultWavetableEnergyParams(): WavetableEnergyParams {
         bandEnergy: 0.2,
         meshEnergy: 1.35,
         contourEnergy: 0.5,
-        heroWidthPx: 5,
-        heroGlowPx: 10,
+        heroWidthPx: 2,
+        heroGlowPx: 5,
+        heroGlowStrength: 0.6,
+        heroEnergy: 1,
     };
 }
 
@@ -172,11 +182,11 @@ export function paintWavetableEnergyField(
     // It belongs to the TONE field: in the hybrid split its role is carving
     // the stipple, never printing continuous ink of its own (a glow rendered
     // as wash ink reads as a gray smudge).
-    if (paintTone) {
-    context.strokeStyle = "rgba(255,255,255,1)";
-    context.lineWidth = params.heroWidthPx;
-    context.shadowBlur = params.heroGlowPx;
-    context.shadowColor = "rgba(255,255,255,0.85)";
+    if (paintTone && params.heroEnergy > 0) {
+    context.strokeStyle = `rgba(255,255,255,${Math.min(1, Math.max(0, params.heroEnergy))})`;
+    context.lineWidth = Math.max(0.5, params.heroWidthPx);
+    context.shadowBlur = Math.max(0, params.heroGlowPx);
+    context.shadowColor = `rgba(255,255,255,${Math.min(1, Math.max(0, params.heroGlowStrength))})`;
     strokeSegments(context, model.currentSlice.segments);
     }
 
