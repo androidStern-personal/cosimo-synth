@@ -167,9 +167,10 @@ function EtchBench() {
   );
 
   return (
-    <div style={{ maxWidth: 420, margin: "0 auto", padding: 16, display: "grid", gap: 14, fontFamily: "var(--cosimo-font-value, monospace)", color: "var(--cosimo-color-ink)" }}>
+    <div style={{ minHeight: "100vh", background: "var(--cosimo-color-paper)", padding: 16 }}>
+    <div style={{ maxWidth: 420, margin: "0 auto", display: "grid", gap: 14, fontFamily: "var(--cosimo-font-value, monospace)", color: "var(--cosimo-color-ink)" }}>
       <h1 style={{ fontSize: 13, letterSpacing: 2 }}>WAVETABLE — ETCHED TREATMENT BENCH</h1>
-      <p style={{ fontSize: 11, color: "#666" }}>
+      <p style={{ fontSize: 11, color: "#57544c" }}>
         The real desktop 3D display (scan animation + warp intact) → depth-stack ink pass.
       </p>
       <canvas ref={targetRef} data-role="etched-target" style={{ border: "1px solid var(--cosimo-color-ink)", borderRadius: 2 }} />
@@ -208,6 +209,7 @@ function EtchBench() {
           {sourceMode === "model" ? "ENERGY: MODEL" : "ENERGY: LUMA"}
         </button>
       </div>
+    </div>
     </div>
   );
 }
