@@ -6,6 +6,12 @@ import {
   TARGETS,
 } from "./catalog.js";
 import { createMapping, defaultSourceSettings } from "./policies.js";
+// This runtime module is generated directly from ui/shared/mseg.ts. The
+// prototype's plain-Node tests cannot import TypeScript source files.
+import {
+  createDefaultMsegPlayback,
+  createDefaultMsegShape,
+} from "../../../../patch_gui/mseg.js";
 
 export const INITIAL_BASE_VALUES = Object.freeze(
   Object.fromEntries(
@@ -18,6 +24,47 @@ export const INITIAL_SOURCES = Object.freeze([
   { id: "envelope-1", type: "envelope", slot: 1, label: "Envelope 1" },
   { id: "mseg-1", type: "mseg", slot: 1, label: "MSEG 1" },
 ]);
+
+export function createDefaultSourceState(source) {
+  if (source.type === "macro") {
+    return { _tag: "macro", value: 0.45, name: source.label };
+  }
+  if (source.type === "envelope") {
+    return {
+      _tag: "envelope",
+      envelope: {
+        name: source.label,
+        attackSeconds: 0.2,
+        decaySeconds: 0.32,
+        sustain: 0.65,
+        releaseSeconds: 0.35,
+      },
+    };
+  }
+  if (source.type === "mseg") {
+    const shapeA = createDefaultMsegShape(source.label);
+    return {
+      _tag: "mseg",
+      slot: {
+        shapeA,
+        shapeB: createDefaultMsegShape(source.label),
+        morph: 0,
+        playback: createDefaultMsegPlayback(),
+      },
+    };
+  }
+  if (source.type === "fixed") return { _tag: "fixed" };
+  throw new Error(`Unknown source type: ${source.type}`);
+}
+
+export const INITIAL_SOURCE_STATES = Object.freeze(
+  Object.fromEntries(
+    [...INITIAL_SOURCES, ...FIXED_SOURCES].map((source) => [
+      source.id,
+      createDefaultSourceState(source),
+    ]),
+  ),
+);
 
 // The articulation bank: Default stays implicit (the patch itself). Selectors
 // are the realtime selectorA identities; key/vel/chain are trigger
@@ -83,6 +130,7 @@ export const INITIAL_PATCH = Object.freeze({
   articulationTriggerMode: "key",
   sources: INITIAL_SOURCES,
   sourceSettings: INITIAL_SOURCE_SETTINGS,
+  sourceStates: INITIAL_SOURCE_STATES,
   mappings: INITIAL_MAPPINGS,
 });
 
@@ -123,6 +171,7 @@ export function createInitialMockCosimoState() {
         Object.entries(INITIAL_PATCH.sourceSettings)
           .map(([id, settings]) => [id, { ...settings }]),
       ),
+      sourceStates: structuredClone(INITIAL_PATCH.sourceStates),
       mappings: INITIAL_PATCH.mappings.map((item) => ({ ...item })),
     },
     audition: { ...INITIAL_AUDITION },
@@ -180,6 +229,10 @@ export function createStressMockCosimoState() {
   state.patch.sourceSettings = {
     ...state.patch.sourceSettings,
     [orphanSource.id]: defaultSourceSettings(orphanSource),
+  };
+  state.patch.sourceStates = {
+    ...state.patch.sourceStates,
+    [orphanSource.id]: createDefaultSourceState(orphanSource),
   };
   state.patch.mappings = state.patch.mappings.map((mapping) => {
     if (mapping.id === "phaser.frequency::mseg-1") {

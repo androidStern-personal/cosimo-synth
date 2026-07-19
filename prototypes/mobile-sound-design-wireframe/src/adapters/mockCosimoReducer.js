@@ -1,6 +1,9 @@
 import { ARTICULATIONS, MODULES_BY_ID, TARGETS } from "../domain/catalog.js";
 import { clamp, clampModAmount } from "../domain/formatting.js";
-import { createInitialMockCosimoState } from "../domain/fixtures.js";
+import {
+  createDefaultSourceState,
+  createInitialMockCosimoState,
+} from "../domain/fixtures.js";
 import { createMapping, defaultSourceSettings } from "../domain/policies.js";
 
 const sourceTypeOrder = { macro: 0, envelope: 1, mseg: 2 };
@@ -49,6 +52,9 @@ function removeSourceFromPatch(patch, sourceId) {
     sources: patch.sources.filter((source) => source.id !== sourceId),
     sourceSettings: Object.fromEntries(
       Object.entries(patch.sourceSettings).filter(([id]) => id !== sourceId),
+    ),
+    sourceStates: Object.fromEntries(
+      Object.entries(patch.sourceStates).filter(([id]) => id !== sourceId),
     ),
     mappings,
     articulationMappingAmounts: pruneArticulationMappingAmounts(
@@ -190,6 +196,10 @@ export function mockCosimoReducer(state, action) {
             ...state.patch.sourceSettings,
             [action.source.id]: defaultSourceSettings(action.source),
           },
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [action.source.id]: createDefaultSourceState(action.source),
+          },
         },
         undo: null,
       };
@@ -210,6 +220,125 @@ export function mockCosimoReducer(state, action) {
         },
       };
 
+    case "SET_MACRO_VALUE": {
+      const current = state.patch.sourceStates[action.sourceId];
+      if (current?._tag !== "macro") return state;
+      const value = clamp(action.value, 0, 1);
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [action.sourceId]: { ...current, value },
+          },
+          sourceSettings: {
+            ...state.patch.sourceSettings,
+            [action.sourceId]: {
+              ...state.patch.sourceSettings[action.sourceId],
+              value: value * 100,
+            },
+          },
+        },
+      };
+    }
+
+    case "RENAME_MACRO": {
+      const current = state.patch.sourceStates[action.sourceId];
+      if (current?._tag !== "macro") return state;
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [action.sourceId]: { ...current, name: action.name },
+          },
+        },
+      };
+    }
+
+    case "SET_ENVELOPE": {
+      const current = state.patch.sourceStates[action.sourceId];
+      if (current?._tag !== "envelope") return state;
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [action.sourceId]: {
+              ...current,
+              envelope: { ...action.envelope },
+            },
+          },
+        },
+      };
+    }
+
+    case "SET_MSEG_SHAPE": {
+      const current = state.patch.sourceStates[action.sourceId];
+      if (current?._tag !== "mseg" || (action.shapeIndex !== 0 && action.shapeIndex !== 1)) {
+        return state;
+      }
+      const shapeKey = action.shapeIndex === 0 ? "shapeA" : "shapeB";
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [action.sourceId]: {
+              ...current,
+              slot: {
+                ...current.slot,
+                [shapeKey]: { ...action.shape },
+              },
+            },
+          },
+        },
+      };
+    }
+
+    case "SET_MSEG_MORPH": {
+      if (action.layer?.kind === "articulationOverride") {
+        throw new Error("deferred: per-articulation morph overrides");
+      }
+      const current = state.patch.sourceStates[action.sourceId];
+      if (current?._tag !== "mseg") return state;
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [action.sourceId]: {
+              ...current,
+              slot: { ...current.slot, morph: clamp(action.morph, 0, 1) },
+            },
+          },
+        },
+      };
+    }
+
+    case "SET_MSEG_PLAYBACK": {
+      const current = state.patch.sourceStates[action.sourceId];
+      if (current?._tag !== "mseg") return state;
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [action.sourceId]: {
+              ...current,
+              slot: { ...current.slot, playback: { ...action.playback } },
+            },
+          },
+        },
+      };
+    }
+
     case "DELETE_SOURCE": {
       const source = state.patch.sources.find((candidate) => candidate.id === action.sourceId);
       if (!source) return state;
@@ -219,6 +348,7 @@ export function mockCosimoReducer(state, action) {
         undo: {
           source,
           settings: state.patch.sourceSettings[action.sourceId],
+          sourceState: state.patch.sourceStates[action.sourceId],
           mappings: state.patch.mappings.filter((item) => item.sourceId === action.sourceId),
         },
         audition: { ...state.audition, status: `${source.label} deleted` },
@@ -252,6 +382,10 @@ export function mockCosimoReducer(state, action) {
           sourceSettings: {
             ...state.patch.sourceSettings,
             [deleted.source.id]: { ...deleted.settings },
+          },
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [deleted.source.id]: structuredClone(deleted.sourceState),
           },
           mappings: [
             ...state.patch.mappings,
@@ -320,6 +454,37 @@ export function mockCosimoReducer(state, action) {
           ...state.patch,
           mappings: state.patch.mappings.map((item) =>
             item.id === action.mappingId ? { ...item, amount: nextAmount } : item,
+          ),
+        },
+      };
+    }
+
+    // Port values are already expressed in the target's modulation-amount
+    // units. Keep the legacy SET_MAPPING_AMOUNT clamp for the prototype hook.
+    case "SET_PORT_MAPPING_AMOUNT": {
+      const mapping = state.patch.mappings.find((item) => item.id === action.mappingId);
+      if (!mapping) return state;
+      if (action.layer?.kind === "articulationOverride") {
+        return {
+          ...state,
+          patch: {
+            ...state.patch,
+            articulationMappingAmounts: {
+              ...state.patch.articulationMappingAmounts,
+              [action.layer.articulationId]: {
+                ...state.patch.articulationMappingAmounts[action.layer.articulationId],
+                [action.mappingId]: action.amount,
+              },
+            },
+          },
+        };
+      }
+      return {
+        ...state,
+        patch: {
+          ...state.patch,
+          mappings: state.patch.mappings.map((item) =>
+            item.id === action.mappingId ? { ...item, amount: action.amount } : item,
           ),
         },
       };
@@ -600,6 +765,10 @@ export function mockCosimoReducer(state, action) {
           sourceSettings: {
             ...state.patch.sourceSettings,
             [capturedSource.id]: defaultSourceSettings(capturedSource),
+          },
+          sourceStates: {
+            ...state.patch.sourceStates,
+            [capturedSource.id]: createDefaultSourceState(capturedSource),
           },
           mappings: state.patch.mappings.some((item) => item.id === capturedMapping.id)
             ? state.patch.mappings

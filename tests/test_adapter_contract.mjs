@@ -1,0 +1,402 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import path from "node:path";
+
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "..");
+
+const portPromise = loadUIModule(repoRoot, "ui/shared/cosimo-adapter-port.ts");
+const mockFactoryPromise = loadUIModule(
+    repoRoot,
+    "prototypes/mobile-sound-design-wireframe/src/adapters/createMockCosimoAdapter.ts",
+);
+
+/**
+ * The behavioral contract every adapter must satisfy. Phase 3's bridge runs
+ * this exact suite — the factories differ, the assertions never do.
+ */
+function contractSuite(adapterName, makeAdapter) {
+    const t = (title, fn) => test(`[${adapterName}] ${title}`, async () => fn(await makeAdapter()));
+
+    // ── Snapshot & subscription mechanics ─────────────────────────────────
+
+    t("snapshot reference is stable until a command changes state", (adapter) => {
+        const first = adapter.getSnapshot();
+        assert.equal(adapter.getSnapshot(), first);
+        adapter.commands.setRepeatEnabled(true);
+        const second = adapter.getSnapshot();
+        assert.notEqual(second, first);
+        assert.equal(adapter.getSnapshot(), second);
+    });
+
+    t("subscribers fire once per change and stop after unsubscribe", (adapter) => {
+        let calls = 0;
+        const unsubscribe = adapter.subscribe(() => { calls += 1; });
+        adapter.commands.setLatchEnabled(true);
+        assert.equal(calls, 1);
+        adapter.commands.setLatchEnabled(false);
+        assert.equal(calls, 2);
+        unsubscribe();
+        adapter.commands.setLatchEnabled(true);
+        assert.equal(calls, 2);
+    });
+
+    t("the connection reports ready", (adapter) => {
+        assert.deepEqual(adapter.getSnapshot().connection, { _tag: "ready" });
+    });
+
+    t("every parameter value is on the normalized 0..1 scale", (adapter) => {
+        for (const [targetId, value] of Object.entries(adapter.getSnapshot().patch.parameterValues)) {
+            assert.equal(value >= 0 && value <= 1, true, `${targetId} = ${value}`);
+        }
+    });
+
+    // ── Parameters & edit layers ──────────────────────────────────────────
+
+    t("patch-base edits land in parameterValues and only there", (adapter) => {
+        adapter.commands.setParameter({ targetId: "wavetable.warp", value: 0.9, layer: { _tag: "patchBase" } });
+        const { patch } = adapter.getSnapshot();
+        assert.equal(patch.parameterValues["wavetable.warp"], 0.9);
+        for (const overrides of Object.values(patch.articulationOverrides)) {
+            assert.equal(Object.hasOwn(overrides, "wavetable.warp"), false);
+        }
+    });
+
+    t("articulation-layer edits write the override and never move the base", (adapter) => {
+        const articulationId = adapter.getSnapshot().patch.articulations[0].id;
+        const baseBefore = adapter.getSnapshot().patch.parameterValues["wavetable.warp"];
+        adapter.commands.setParameter({
+            targetId: "wavetable.warp",
+            value: 0.77,
+            layer: { _tag: "articulationOverride", articulationId },
+        });
+        const { patch } = adapter.getSnapshot();
+        assert.equal(patch.articulationOverrides[articulationId]["wavetable.warp"], 0.77);
+        assert.equal(patch.parameterValues["wavetable.warp"], baseBefore);
+    });
+
+    // ── Mappings ──────────────────────────────────────────────────────────
+
+    t("addMapping creates one enabled unipolar mapping with the default amount", (adapter, port) => {
+        const result = adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "velocity" });
+        assert.equal(result._tag, "ok");
+        const mapping = adapter.getSnapshot().patch.mappings.find((m) => m.id === result.value);
+        assert.equal(mapping.targetId, "phaser.depth");
+        assert.equal(mapping.sourceId, "velocity");
+        assert.equal(mapping.polarity, "Unipolar");
+        assert.equal(mapping.enabled, true);
+        assert.equal(mapping.amount, 25, "default = 25% of the percent spec magnitude");
+    });
+
+    t("a second mapping for the same pair is MappingAlreadyExists", (adapter) => {
+        const first = adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "velocity" });
+        assert.equal(first._tag, "ok");
+        const second = adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "velocity" });
+        assert.equal(second._tag, "err");
+        assert.equal(second.error._tag, "MappingAlreadyExists");
+    });
+
+    t("the 13th route is refused with RouteBudgetExceeded", async (adapter) => {
+        const port = await portPromise;
+        const snapshot = adapter.getSnapshot();
+        const sources = snapshot.patch.sources.map((source) => source.id);
+        const targets = [
+            "filter.cutoff", "filter.resonance", "filter.drive", "drive.amount", "drive.tone",
+            "drive.mix", "ott.depth", "ott.time", "ott.mix", "chorus.rate", "chorus.depth",
+            "chorus.delay", "chorus.mix", "flanger.rate", "flanger.depth",
+        ];
+        let refused = null;
+        let added = 0;
+        outer: for (const targetId of targets) {
+            for (const sourceId of sources) {
+                const count = adapter.getSnapshot().patch.mappings.length;
+                if (count < port.ROUTE_BUDGET) {
+                    const result = adapter.commands.addMapping({ targetId, sourceId });
+                    if (result._tag === "ok") added += 1;
+                    continue;
+                }
+                refused = adapter.commands.addMapping({ targetId, sourceId });
+                break outer;
+            }
+        }
+        assert.notEqual(refused, null, "the budget was never reached");
+        assert.equal(refused._tag, "err");
+        assert.equal(refused.error._tag, "RouteBudgetExceeded");
+        assert.equal(refused.error.budget, port.ROUTE_BUDGET);
+        assert.equal(adapter.getSnapshot().patch.mappings.length, port.ROUTE_BUDGET);
+    });
+
+    t("mapping setters are reflected verbatim", (adapter) => {
+        const mappingId = adapter.getSnapshot().patch.mappings[0].id;
+        adapter.commands.setMappingEnabled(mappingId, false);
+        adapter.commands.setMappingPolarity(mappingId, "Bipolar");
+        const mapping = adapter.getSnapshot().patch.mappings.find((m) => m.id === mappingId);
+        assert.equal(mapping.enabled, false);
+        assert.equal(mapping.polarity, "Bipolar");
+    });
+
+    t("setMappingAmount respects the edit layer", (adapter) => {
+        const mappingId = adapter.getSnapshot().patch.mappings[0].id;
+        const articulationId = adapter.getSnapshot().patch.articulations[0].id;
+        adapter.commands.setMappingAmount(mappingId, 40, { _tag: "patchBase" });
+        assert.equal(adapter.getSnapshot().patch.mappings.find((m) => m.id === mappingId).amount, 40);
+        adapter.commands.setMappingAmount(mappingId, 80, { _tag: "articulationOverride", articulationId });
+        const { patch } = adapter.getSnapshot();
+        assert.equal(patch.mappings.find((m) => m.id === mappingId).amount, 40, "base amount must not move");
+        assert.equal(patch.articulationMappingAmounts[articulationId][mappingId], 80);
+    });
+
+    t("removeMapping prunes the mapping and every articulation amount override for it", (adapter) => {
+        const mappingId = adapter.getSnapshot().patch.mappings[0].id;
+        const articulationId = adapter.getSnapshot().patch.articulations[0].id;
+        adapter.commands.setMappingAmount(mappingId, 66, { _tag: "articulationOverride", articulationId });
+        adapter.commands.removeMapping(mappingId);
+        const { patch } = adapter.getSnapshot();
+        assert.equal(patch.mappings.some((m) => m.id === mappingId), false);
+        for (const amounts of Object.values(patch.articulationMappingAmounts)) {
+            assert.equal(Object.hasOwn(amounts, mappingId), false, "orphaned amount override");
+        }
+    });
+
+    // ── Sources ───────────────────────────────────────────────────────────
+
+    t("createSource fills the lowest free slot per type and exhausts at the limit", (adapter) => {
+        const created = [];
+        for (;;) {
+            const result = adapter.commands.createSource("envelope");
+            if (result._tag === "err") {
+                assert.equal(result.error._tag, "SourceSlotsExhausted");
+                assert.equal(result.error.sourceType, "envelope");
+                break;
+            }
+            created.push(result.value);
+        }
+        const envelopeSlots = adapter.getSnapshot().patch.sources
+            .filter((source) => source.type === "envelope")
+            .map((source) => source.slot)
+            .sort();
+        assert.deepEqual(envelopeSlots, [1, 2, 3], "three envelope slots, no gaps");
+        assert.equal(created.length > 0, true);
+    });
+
+    t("deleteSource removes its mappings; undoDeleteSource restores both", (adapter) => {
+        const sourceId = "envelope-1";
+        const before = adapter.getSnapshot();
+        const mappingsBefore = before.patch.mappings.filter((m) => m.sourceId === sourceId);
+        assert.equal(mappingsBefore.length > 0, true, "fixture must map envelope-1 somewhere");
+        adapter.commands.deleteSource(sourceId);
+        const afterDelete = adapter.getSnapshot().patch;
+        assert.equal(afterDelete.sources.some((source) => source.id === sourceId), false);
+        assert.equal(afterDelete.mappings.some((m) => m.sourceId === sourceId), false);
+        adapter.commands.undoDeleteSource();
+        const afterUndo = adapter.getSnapshot().patch;
+        assert.equal(afterUndo.sources.some((source) => source.id === sourceId), true);
+        assert.deepEqual(
+            afterUndo.mappings.filter((m) => m.sourceId === sourceId).map((m) => m.id).sort(),
+            mappingsBefore.map((m) => m.id).sort(),
+        );
+    });
+
+    t("macro value and name commands are reflected in the source state", (adapter) => {
+        adapter.commands.setMacroValue("macro-1", 0.31);
+        adapter.commands.renameMacro("macro-1", "Shimmer");
+        const macro = adapter.getSnapshot().patch.sources.find((source) => source.id === "macro-1");
+        assert.equal(macro.state._tag, "macro");
+        assert.equal(macro.state.value, 0.31);
+        assert.equal(macro.state.name, "Shimmer");
+    });
+
+    t("fixed sources exist, are unmapped-deletable never, and typed fixed", (adapter) => {
+        const { sources } = adapter.getSnapshot().patch;
+        for (const id of ["velocity", "pressure", "slide"]) {
+            const fixed = sources.find((source) => source.id === id);
+            assert.equal(fixed.type, "fixed");
+            assert.equal(fixed.state._tag, "fixed");
+            adapter.commands.deleteSource(id);
+            assert.equal(
+                adapter.getSnapshot().patch.sources.some((source) => source.id === id),
+                true,
+                `${id} must survive deleteSource`,
+            );
+        }
+    });
+
+    t("envelope and mseg source state uses real units and accepts writes", (adapter) => {
+        const envelope = adapter.getSnapshot().patch.sources.find((s) => s.id === "envelope-1");
+        assert.equal(envelope.state._tag, "envelope");
+        assert.equal(envelope.state.envelope.attackSeconds > 0, true);
+        adapter.commands.setEnvelope("envelope-1", {
+            name: "Env 1", attackSeconds: 0.5, decaySeconds: 0.2, sustain: 0.8, releaseSeconds: 1.5,
+        });
+        const updated = adapter.getSnapshot().patch.sources.find((s) => s.id === "envelope-1");
+        assert.equal(updated.state.envelope.attackSeconds, 0.5);
+        assert.equal(updated.state.envelope.sustain, 0.8);
+
+        const mseg = adapter.getSnapshot().patch.sources.find((s) => s.id === "mseg-1");
+        assert.equal(mseg.state._tag, "mseg");
+        assert.equal(Array.isArray(mseg.state.slot.shapeA.points), true);
+        adapter.commands.setMsegMorph({ sourceId: "mseg-1", morph: 0.6, layer: { _tag: "patchBase" } });
+        const morphed = adapter.getSnapshot().patch.sources.find((s) => s.id === "mseg-1");
+        assert.equal(morphed.state.slot.morph, 0.6);
+    });
+
+    // ── Articulations ─────────────────────────────────────────────────────
+
+    t("addArticulation mints a unique id and the lowest free selector", (adapter) => {
+        const before = adapter.getSnapshot().patch.articulations;
+        const result = adapter.commands.addArticulation();
+        assert.equal(result._tag, "ok");
+        const after = adapter.getSnapshot().patch.articulations;
+        assert.equal(after.length, before.length + 1);
+        const added = after.find((a) => a.id === result.value);
+        assert.equal(before.some((a) => a.id === added.id), false);
+        assert.equal(before.some((a) => a.selector === added.selector), false);
+    });
+
+    t("duplicateArticulation copies overrides and route amounts to the new slot", (adapter) => {
+        const sourceArticulation = adapter.getSnapshot().patch.articulations[0].id;
+        const mappingId = adapter.getSnapshot().patch.mappings[0].id;
+        adapter.commands.setParameter({
+            targetId: "wavetable.index", value: 0.42,
+            layer: { _tag: "articulationOverride", articulationId: sourceArticulation },
+        });
+        adapter.commands.setMappingAmount(mappingId, 71, { _tag: "articulationOverride", articulationId: sourceArticulation });
+        const result = adapter.commands.duplicateArticulation(sourceArticulation);
+        assert.equal(result._tag, "ok");
+        const { patch } = adapter.getSnapshot();
+        assert.equal(patch.articulationOverrides[result.value]["wavetable.index"], 0.42);
+        assert.equal(patch.articulationMappingAmounts[result.value][mappingId], 71);
+    });
+
+    t("deleteArticulation prunes its layers and audition falls back", (adapter) => {
+        const articulationId = adapter.getSnapshot().patch.articulations[0].id;
+        adapter.commands.setAuditionArticulation(articulationId);
+        adapter.commands.setParameter({
+            targetId: "wavetable.index", value: 0.9,
+            layer: { _tag: "articulationOverride", articulationId },
+        });
+        adapter.commands.deleteArticulation(articulationId);
+        const snapshot = adapter.getSnapshot();
+        assert.equal(snapshot.patch.articulations.some((a) => a.id === articulationId), false);
+        assert.equal(Object.hasOwn(snapshot.patch.articulationOverrides, articulationId), false);
+        assert.equal(Object.hasOwn(snapshot.patch.articulationMappingAmounts, articulationId), false);
+        assert.notEqual(snapshot.audition.articulation, articulationId);
+    });
+
+    t("keyswitch walking stops flush against a neighbor and reports the contact", (adapter) => {
+        const [first, second] = adapter.getSnapshot().patch.articulations;
+        const walk = adapter.commands.setArticulationKey(first.id, second.key + 5);
+        assert.equal(walk.touching, true);
+        assert.equal(walk.neighborId, second.id);
+        assert.equal(Math.abs(walk.key - second.key), 1, "flush = adjacent semitone");
+        assert.equal(adapter.getSnapshot().patch.articulations.find((a) => a.id === first.id).key, walk.key);
+    });
+
+    t("range bounds clamp flush at the neighboring range's edge", (adapter) => {
+        const articulations = adapter.getSnapshot().patch.articulations;
+        const [first, second] = [...articulations].sort((a, b) => a.velRange.min - b.velRange.min);
+        const clamp = adapter.commands.setArticulationRange(second.id, "vel", "min", first.velRange.min);
+        assert.equal(clamp.touching, true);
+        assert.equal(clamp.neighborId, first.id);
+        assert.equal(clamp.value, first.velRange.max + 1, "stops flush above the neighbor");
+    });
+
+    t("clearArticulationOverride removes the base override and the target's route amounts", (adapter) => {
+        const articulationId = adapter.getSnapshot().patch.articulations[0].id;
+        const mapping = adapter.getSnapshot().patch.mappings[0];
+        adapter.commands.setParameter({
+            targetId: mapping.targetId, value: 0.6,
+            layer: { _tag: "articulationOverride", articulationId },
+        });
+        adapter.commands.setMappingAmount(mapping.id, 55, { _tag: "articulationOverride", articulationId });
+        adapter.commands.clearArticulationOverride(mapping.targetId, articulationId);
+        const { patch } = adapter.getSnapshot();
+        assert.equal(Object.hasOwn(patch.articulationOverrides[articulationId] ?? {}, mapping.targetId), false);
+        assert.equal(Object.hasOwn(patch.articulationMappingAmounts[articulationId] ?? {}, mapping.id), false);
+    });
+
+    t("restoreArticulationLayer is a faithful transactional restore", (adapter) => {
+        const articulationId = adapter.getSnapshot().patch.articulations[0].id;
+        const mappingId = adapter.getSnapshot().patch.mappings[0].id;
+        const backup = {
+            overrides: { "wavetable.warp": 0.11 },
+            mappingAmounts: { [mappingId]: 12 },
+        };
+        adapter.commands.setParameter({
+            targetId: "wavetable.index", value: 0.5,
+            layer: { _tag: "articulationOverride", articulationId },
+        });
+        adapter.commands.restoreArticulationLayer(articulationId, backup);
+        const { patch } = adapter.getSnapshot();
+        assert.deepEqual(patch.articulationOverrides[articulationId], backup.overrides);
+        assert.deepEqual(patch.articulationMappingAmounts[articulationId], backup.mappingAmounts);
+    });
+
+    // ── Effects rack ──────────────────────────────────────────────────────
+
+    t("reorderEffect moves identity, restoreEffectOrder restores wholesale", (adapter) => {
+        const originalOrder = [...adapter.getSnapshot().patch.effectOrder];
+        adapter.commands.reorderEffect(originalOrder[0], originalOrder[2]);
+        const moved = adapter.getSnapshot().patch.effectOrder;
+        assert.notDeepEqual(moved, originalOrder);
+        assert.deepEqual([...moved].sort(), [...originalOrder].sort(), "same identities");
+        adapter.commands.restoreEffectOrder(originalOrder);
+        assert.deepEqual(adapter.getSnapshot().patch.effectOrder, originalOrder);
+    });
+
+    t("setEffectEnabled toggles bypass state only", (adapter) => {
+        const order = [...adapter.getSnapshot().patch.effectOrder];
+        adapter.commands.setEffectEnabled("phaser", false);
+        const { patch } = adapter.getSnapshot();
+        assert.equal(patch.effectEnabled.phaser, false);
+        assert.deepEqual(patch.effectOrder, order, "disabling never moves rack position (ADR-009)");
+    });
+
+    // ── Audition & session ────────────────────────────────────────────────
+
+    t("audition state follows its commands", (adapter) => {
+        const articulationId = adapter.getSnapshot().patch.articulations[0].id;
+        adapter.commands.setAuditionArticulation(articulationId);
+        adapter.commands.setAuditionNote("C2");
+        adapter.commands.beginTrigger();
+        let audition = adapter.getSnapshot().audition;
+        assert.equal(audition.articulation, articulationId);
+        assert.equal(audition.note, "C2");
+        assert.equal(audition.triggerActive, true);
+        adapter.commands.endTrigger();
+        audition = adapter.getSnapshot().audition;
+        assert.equal(audition.triggerActive, false);
+    });
+
+    t("captureMotion without a candidate is null, with one it mints a mapped mseg", (adapter) => {
+        assert.equal(adapter.commands.captureMotion(), null);
+        adapter.commands.beginTrigger();
+        adapter.commands.setParameter({ targetId: "phaser.frequency", value: 0.8, layer: { _tag: "patchBase" } });
+        adapter.commands.endTrigger();
+        const captured = adapter.commands.captureMotion();
+        assert.notEqual(captured, null);
+        const { patch } = adapter.getSnapshot();
+        const source = patch.sources.find((s) => s.id === captured);
+        assert.equal(source.type, "mseg");
+        assert.equal(
+            patch.mappings.some((m) => m.sourceId === captured && m.targetId === "phaser.frequency"),
+            true,
+            "capture commits to an MSEG mapped to the moved parameter",
+        );
+    });
+
+    t("reset returns to the exact initial snapshot", async (adapter) => {
+        const fresh = (await makeAdapter()).getSnapshot();
+        adapter.commands.setParameter({ targetId: "wavetable.warp", value: 0.9, layer: { _tag: "patchBase" } });
+        adapter.commands.setRepeatEnabled(true);
+        adapter.commands.reset();
+        assert.deepEqual(adapter.getSnapshot().patch, fresh.patch);
+        assert.deepEqual(adapter.getSnapshot().audition, fresh.audition);
+    });
+}
+
+contractSuite("mock", async () => {
+    const { createMockCosimoAdapter } = await mockFactoryPromise;
+    return createMockCosimoAdapter();
+});
