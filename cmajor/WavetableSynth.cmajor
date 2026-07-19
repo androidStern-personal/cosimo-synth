@@ -1115,6 +1115,10 @@ graph WavetableSynth [[ main ]]
     input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 glideTime [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
     input value float32 pan [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 macro1 [[ name: "Macro 1", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 macro2 [[ name: "Macro 2", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 macro3 [[ name: "Macro 3", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 macro4 [[ name: "Macro 4", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 warpMode [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 warpAmount [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 filterMode [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
@@ -1207,6 +1211,10 @@ graph WavetableSynth [[ main ]]
         wavetableSelect -> desiredTableMonitor.tableSelectIn;
         glideTime -> sharedEngine.glideTimeIn;
         pan -> sharedEngine.panIn;
+        macro1 -> sharedEngine.macro1In;
+        macro2 -> sharedEngine.macro2In;
+        macro3 -> sharedEngine.macro3In;
+        macro4 -> sharedEngine.macro4In;
         warpMode -> sharedEngine.warpModeIn;
         warpAmount -> sharedEngine.warpAmountIn;
         filterMode -> sharedEngine.filterModeIn;

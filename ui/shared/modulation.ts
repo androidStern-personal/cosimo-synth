@@ -35,6 +35,8 @@ export const MOD_SOURCE_ENV = 2;
 export const MOD_SOURCE_VELOCITY = 3;
 export const MOD_SOURCE_PRESSURE = 4;
 export const MOD_SOURCE_SLIDE = 5;
+export const MOD_SOURCE_MACRO = 6;
+export const MODULATION_MACRO_SLOT_COUNT = 4;
 export const MOD_POLARITY_UNIPOLAR = 0;
 export const MOD_POLARITY_BIPOLAR = 1;
 
@@ -52,6 +54,7 @@ export const MOD_TARGET_UNISON_WT_POSITION_SPREAD = 11;
 export const MOD_TARGET_UNISON_WARP_SPREAD = 12;
 
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"] as const;
+const MACRO_SLOT_NAMES = ["Macro 1", "Macro 2", "Macro 3", "Macro 4"] as const;
 const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"] as const;
 const ENV_MIN_SECONDS = 0.001;
 const ENV_MAX_SECONDS = 10.0;
@@ -86,7 +89,7 @@ const ROUTE_AMOUNT_STEPS = {
     unisonWarpSpread: 0.001,
 } as const;
 
-export type ModulationSourceKind = "mseg" | "env" | "velocity" | "pressure" | "slide";
+export type ModulationSourceKind = "mseg" | "env" | "velocity" | "pressure" | "slide" | "macro";
 export type ModulationTargetKind =
     | "wavetablePosition"
     | "warpAmount"
@@ -145,6 +148,8 @@ export type ModulationState = {
     msegSlots: ModulationMsegSlot[];
     envelopeSlots: ModulationEnvelope[];
     routes: ModulationRoute[];
+    /** Renameable macro display names (ADR-010); macro VALUES are host parameters. */
+    macroNames: string[];
 };
 
 export type ModulationMsegBufferUpload = {
@@ -195,6 +200,10 @@ export const MODULATION_SOURCE_OPTIONS: ModulationSourceOption[] = [
     { value: "env-1", label: "ENV 1", sourceKind: "env", sourceSlot: 1 },
     { value: "env-2", label: "ENV 2", sourceKind: "env", sourceSlot: 2 },
     { value: "env-3", label: "ENV 3", sourceKind: "env", sourceSlot: 3 },
+    { value: "macro-1", label: "MACRO 1", sourceKind: "macro", sourceSlot: 1 },
+    { value: "macro-2", label: "MACRO 2", sourceKind: "macro", sourceSlot: 2 },
+    { value: "macro-3", label: "MACRO 3", sourceKind: "macro", sourceSlot: 3 },
+    { value: "macro-4", label: "MACRO 4", sourceKind: "macro", sourceSlot: 4 },
     { value: "velocity", label: "VEL", sourceKind: "velocity", sourceSlot: null },
     { value: "pressure", label: "AT", sourceKind: "pressure", sourceSlot: null },
     { value: "slide", label: "SLIDE", sourceKind: "slide", sourceSlot: null },
@@ -560,7 +569,10 @@ export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
 }
 
 function normalizeSourceKind(value: unknown): ModulationSourceKind {
-    if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide") {
+    if (
+        value === "mseg" || value === "env" || value === "velocity"
+        || value === "pressure" || value === "slide" || value === "macro"
+    ) {
         return value;
     }
 
@@ -588,6 +600,11 @@ function normalizeTargetKind(value: unknown): ModulationTargetKind {
     return "wavetablePosition";
 }
 
+export function normalizeMacroName(value: unknown, slotIndex: number): string {
+    const fallback = MACRO_SLOT_NAMES[slotIndex] ?? `Macro ${slotIndex + 1}`;
+    return typeof value === "string" && value.trim() ? value.trim() : fallback;
+}
+
 function normalizeSourceSlot(sourceKind: ModulationSourceKind, rawSlot: unknown) {
     const numericSlot = Math.round(Number(rawSlot));
 
@@ -595,7 +612,11 @@ function normalizeSourceSlot(sourceKind: ModulationSourceKind, rawSlot: unknown)
         return null;
     }
 
-    const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+    const maxSlot = sourceKind === "mseg"
+        ? MODULATION_MSEG_SLOT_COUNT
+        : sourceKind === "macro"
+            ? MODULATION_MACRO_SLOT_COUNT
+            : MODULATION_ENV_SLOT_COUNT;
     return clamp(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 
@@ -672,6 +693,7 @@ export function createDefaultModulationState(): ModulationState {
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
         routes: [createDefaultRoute({ id: "mod-route-1" })],
+        macroNames: MACRO_SLOT_NAMES.slice(),
     };
 }
 
@@ -680,6 +702,7 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
     const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
     const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
     const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
+    const inputMacroNames = Array.isArray(nextValue.macroNames) ? nextValue.macroNames : [];
 
     return {
         format: "cosimo.modulation",
@@ -687,6 +710,10 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
         routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)),
+        macroNames: Array.from(
+            { length: MODULATION_MACRO_SLOT_COUNT },
+            (_, slotIndex) => normalizeMacroName(inputMacroNames[slotIndex], slotIndex),
+        ),
     };
 }
 
@@ -723,7 +750,8 @@ function sourceKindToCode(sourceKind: ModulationSourceKind) {
     if (sourceKind === "env") return MOD_SOURCE_ENV;
     if (sourceKind === "velocity") return MOD_SOURCE_VELOCITY;
     if (sourceKind === "pressure") return MOD_SOURCE_PRESSURE;
-    return MOD_SOURCE_SLIDE;
+    if (sourceKind === "slide") return MOD_SOURCE_SLIDE;
+    return MOD_SOURCE_MACRO;
 }
 
 function targetKindToCode(targetKind: ModulationTargetKind) {

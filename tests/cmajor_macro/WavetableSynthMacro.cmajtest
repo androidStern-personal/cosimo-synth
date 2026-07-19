@@ -1,0 +1,25 @@
+// Macro modulation-source plumbing tests against the production patch.
+// Both cases must be audio-identical to the identity_sine baseline:
+// sweeping macros with no routes is inert, and an enabled macro route with
+// amount 0 contributes exactly nothing (ADR-010; roadmap Phase 2).
+
+const patchPath = "../../WavetableSynth.cmajorpatch";
+
+function patchRun(subDir)
+{
+    return {
+        patch: patchPath,
+        subDir,
+        frequency: 44100,
+        blockSize: 64,
+        samplesToRender: 4096,
+        sessionID: 1,
+        skipMissingInputs: true,
+        skipMissingOutputs: true,
+        maxDiffDb: -100.0
+    };
+}
+
+## runScript (patchRun("fixtures/macro_inert_when_unrouted"))
+
+## runScript (patchRun("fixtures/macro_neutral_route"))

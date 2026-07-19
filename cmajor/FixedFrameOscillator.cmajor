@@ -34,6 +34,8 @@ namespace wt
     let modulationSourceVelocity = 3;
     let modulationSourcePressure = 4;
     let modulationSourceSlide = 5;
+    let modulationSourceMacro = 6;
+    let macroSlotCount = 4;
     let modulationPolarityUnipolar = 0;
     let modulationPolarityBipolar = 1;
     let modulationTargetWavetablePosition = 1;
@@ -1437,6 +1439,10 @@ namespace wt
         input value float32 filterCutoffIn [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
         input value float32 filterQIn [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
         input value float32 panIn [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 macro1In [[ name: "Macro 1", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 macro2In [[ name: "Macro 2", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 macro3In [[ name: "Macro 3", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 macro4In [[ name: "Macro 4", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 unisonVoicesIn [[ name: "Unison", min: 1.0f, max: 8.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
         input value float32 unisonDetuneIn [[ name: "Unison Detune", min: 0.0f, max: 1.0f, init: 0.10f, rampFrames: 64 ]];
         input value float32 unisonBlendIn [[ name: "Unison Blend", min: 0.0f, max: 1.0f, init: 0.75f, rampFrames: 64 ]];
@@ -2214,6 +2220,19 @@ namespace wt
 
             if (route.sourceKind == modulationSourceSlide)
                 return std::intrinsics::clamp (voiceSlide.at (voice), 0.0f, 1.0f);
+
+            if (route.sourceKind == modulationSourceMacro)
+                return resolveMacroValue (route.sourceSlot);
+
+            return 0.0f;
+        }
+
+        float32 resolveMacroValue (int32 slot)
+        {
+            if (slot == 1) return std::intrinsics::clamp (macro1In, 0.0f, 1.0f);
+            if (slot == 2) return std::intrinsics::clamp (macro2In, 0.0f, 1.0f);
+            if (slot == 3) return std::intrinsics::clamp (macro3In, 0.0f, 1.0f);
+            if (slot == 4) return std::intrinsics::clamp (macro4In, 0.0f, 1.0f);
 
             return 0.0f;
         }
