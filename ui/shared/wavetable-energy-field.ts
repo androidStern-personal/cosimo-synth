@@ -97,10 +97,19 @@ function strokeSegments(
  * @param model - A buildWavetableRenderModel result (CSS-px screen space).
  * @param params - Energy calibration.
  */
+/**
+ * Which primitive classes to paint. The hybrid engraving treatment stipples
+ * the "tone" field (surface bands) at chunky grain while rendering the
+ * "lines" field (mesh, contours, scan slice — where the ripple detail lives)
+ * as crisp continuous ink.
+ */
+export type WavetableEnergyLayers = "all" | "tone" | "lines";
+
 export function paintWavetableEnergyField(
     context: CanvasRenderingContext2D,
     model: WavetableModelLike,
     params: WavetableEnergyParams = createDefaultWavetableEnergyParams(),
+    layers: WavetableEnergyLayers = "all",
 ): void {
     context.save();
     context.globalCompositeOperation = "source-over";
@@ -109,8 +118,12 @@ export function paintWavetableEnergyField(
     context.globalCompositeOperation = "lighter";
     context.shadowBlur = 0;
 
+    const paintTone = layers !== "lines";
+    const paintLines = layers !== "tone";
+
     // Depth-stacked ghost fills: front bands hot, back bands cold — the
     // model's depthNormalized IS the lab's layer-count depth variable.
+    if (paintTone)
     for (const band of model.surfaceBands) {
         if (band.points.length < 3) continue;
         const energy = Math.max(
@@ -126,6 +139,7 @@ export function paintWavetableEnergyField(
     }
 
     context.lineWidth = 1.15;
+    if (paintLines)
     for (const slice of model.surfaceSlices) {
         const energy = Math.min(1, slice.alpha * params.meshEnergy);
         if (energy <= 0.01) continue;
@@ -134,6 +148,7 @@ export function paintWavetableEnergyField(
     }
 
     context.lineWidth = 1.1;
+    if (paintLines)
     for (const rib of model.surfaceRibs) {
         const energy = Math.min(1, rib.alpha * params.meshEnergy);
         if (energy <= 0.01 || rib.points.length < 2) continue;
@@ -143,6 +158,7 @@ export function paintWavetableEnergyField(
         context.stroke();
     }
 
+    if (paintLines)
     for (const contour of model.contours) {
         const energy = Math.min(1, contour.alpha * params.contourEnergy * 6);
         if (energy <= 0.01) continue;
@@ -153,11 +169,16 @@ export function paintWavetableEnergyField(
 
     // Hero scan slice: extra-wide white with glow — prints as the reserved
     // clean-paper channel edged by shading (the lab's front-curve rule).
+    // It belongs to the TONE field: in the hybrid split its role is carving
+    // the stipple, never printing continuous ink of its own (a glow rendered
+    // as wash ink reads as a gray smudge).
+    if (paintTone) {
     context.strokeStyle = "rgba(255,255,255,1)";
     context.lineWidth = params.heroWidthPx;
     context.shadowBlur = params.heroGlowPx;
     context.shadowColor = "rgba(255,255,255,0.85)";
     strokeSegments(context, model.currentSlice.segments);
+    }
 
     context.restore();
 }

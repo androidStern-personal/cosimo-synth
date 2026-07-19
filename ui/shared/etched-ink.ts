@@ -21,14 +21,18 @@
  * `backgroundKey` so covered-but-empty panel area stays clean paper.
  */
 
-export type EtchedDither = "stipple" | "hatch" | "wash";
+export type EtchedDither = "stipple" | "noise" | "diffusion" | "hatch" | "wash";
 
 /** RGB triple 0..255. */
 export type EtchedRGB = readonly [number, number, number];
 
 /** Tunable parameters (defaults mirror the approved lab setup). */
 export type EtchedInkParams = {
-    /** Dither cell size in output px (low-res buffer scale). */
+    /**
+     * Dither cell size in output px (low-res buffer scale). Fractional values
+     * (1.25, 1.5, …) are valid — the legibility middle ground between whole
+     * cells. Ignored by "wash", which always renders at full resolution.
+     */
     readonly grainPx: number;
     /**
      * Pre-gain on source luminance. The lab painted its own field calibrated
@@ -121,9 +125,54 @@ export function ditherThreshold(x: number, y: number, params: EtchedInkParams): 
         const t = (((v % spacing) + spacing) % spacing) / spacing;
         return Math.abs(t * 2 - 1);
     }
+    if (params.dither === "noise") {
+        // Interleaved-gradient noise: aperiodic, organic stipple that does not
+        // beat against fine source detail the way Bayer's 8×8 tile does.
+        const inner = (0.06711056 * x + 0.00583715 * y) % 1;
+        return (52.9829189 * inner) % 1;
+    }
     const bayerIndex = (y & 7) * 8 + (x & 7);
     const bayerValue = BAYER_8[bayerIndex];
     return (bayerValue === undefined ? 0 : bayerValue) / 64;
+}
+
+/**
+ * Serpentine Floyd–Steinberg error diffusion over a density buffer, in place.
+ * Preserves edges and fine structure far better than ordered dithering at the
+ * same grain because quantization error is repaid by neighboring pixels.
+ *
+ * @param density - Row-major densities 0..1; replaced with 0/1 marks.
+ * @param width - Buffer width.
+ * @param height - Buffer height.
+ */
+export function diffuseDensityBuffer(density: Float32Array, width: number, height: number): void {
+    for (let y = 0; y < height; y += 1) {
+        const leftToRight = (y & 1) === 0;
+        for (let step = 0; step < width; step += 1) {
+            const x = leftToRight ? step : width - 1 - step;
+            const index = y * width + x;
+            const value = density[index] ?? 0;
+            const mark = value >= 0.5 ? 1 : 0;
+            density[index] = mark;
+            const error = value - mark;
+            const forward = leftToRight ? 1 : -1;
+            const xForward = x + forward;
+            const xBack = x - forward;
+            if (xForward >= 0 && xForward < width) {
+                density[index + forward] = (density[index + forward] ?? 0) + error * (7 / 16);
+            }
+            if (y + 1 < height) {
+                const below = index + width;
+                if (xBack >= 0 && xBack < width) {
+                    density[below - forward] = (density[below - forward] ?? 0) + error * (3 / 16);
+                }
+                density[below] = (density[below] ?? 0) + error * (5 / 16);
+                if (xForward >= 0 && xForward < width) {
+                    density[below + forward] = (density[below + forward] ?? 0) + error * (1 / 16);
+                }
+            }
+        }
+    }
 }
 
 /** A reusable pass instance (owns its low-res working buffer). */
@@ -159,7 +208,10 @@ export function createEtchedInkPass(initialParams: Partial<EtchedInkParams> = {}
             if (buffer === null || bufferContext === null) {
                 throw new Error("etched-ink requires a DOM canvas environment");
             }
-            const scale = 1 / Math.max(1, params.grainPx);
+            // Wash is continuous tone: grain would only produce blocky NN
+            // upscaling, so it always renders at full resolution.
+            const effectiveGrain = params.dither === "wash" ? 1 : Math.max(1, params.grainPx);
+            const scale = 1 / effectiveGrain;
             const bufferWidth = Math.max(1, Math.round(widthPx * scale));
             const bufferHeight = Math.max(1, Math.round(heightPx * scale));
             if (buffer.width !== bufferWidth || buffer.height !== bufferHeight) {
@@ -175,6 +227,7 @@ export function createEtchedInkPass(initialParams: Partial<EtchedInkParams> = {}
             const [inkR, inkG, inkB] = params.ink;
             const key = params.backgroundKey;
 
+            const density = new Float32Array(bufferWidth * bufferHeight);
             for (let y = 0; y < bufferHeight; y += 1) {
                 let keyLuma = 0;
                 if (key !== null) {
@@ -194,12 +247,26 @@ export function createEtchedInkPass(initialParams: Partial<EtchedInkParams> = {}
                     if (key !== null) {
                         energy = keyLuma >= 1 ? 0 : Math.max(0, (energy - keyLuma) / (1 - keyLuma));
                     }
-                    const density = computeInkDensity(energy, params);
+                    density[y * bufferWidth + x] = computeInkDensity(energy, params);
+                }
+            }
+
+            if (params.dither === "diffusion") {
+                diffuseDensityBuffer(density, bufferWidth, bufferHeight);
+            }
+
+            for (let y = 0; y < bufferHeight; y += 1) {
+                for (let x = 0; x < bufferWidth; x += 1) {
+                    const flat = y * bufferWidth + x;
+                    const index = flat * 4;
+                    const value = density[flat] ?? 0;
                     let inkAlpha: number;
                     if (params.dither === "wash") {
-                        inkAlpha = density * 0.85;
+                        inkAlpha = value * 0.85;
+                    } else if (params.dither === "diffusion") {
+                        inkAlpha = value;
                     } else {
-                        inkAlpha = density > ditherThreshold(x, y, params) ? 1 : 0;
+                        inkAlpha = value > ditherThreshold(x, y, params) ? 1 : 0;
                     }
                     data[index] = inkR;
                     data[index + 1] = inkG;

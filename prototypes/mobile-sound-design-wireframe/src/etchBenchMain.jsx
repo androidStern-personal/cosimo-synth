@@ -59,6 +59,9 @@ function EtchBench() {
   const [energy, setEnergy] = useState({ bandEnergy: 0.2, heroWidthPx: 5 });
   const energyRef = useRef(energy);
   energyRef.current = energy;
+  const [hybrid, setHybrid] = useState(true);
+  const hybridRef = useRef(hybrid);
+  hybridRef.current = hybrid;
   const paramsRef = useRef(params);
   paramsRef.current = params;
   const warpRef = useRef(warp);
@@ -88,6 +91,11 @@ function EtchBench() {
     const ink = [1, 3, 5].map((offset) => parseInt(inkHex.slice(offset, offset + 2), 16));
 
     const pass = createEtchedInkPass({ ink, backgroundKey: SOURCE_BACKGROUND_KEY });
+    const linePass = createEtchedInkPass({ ink, backgroundKey: null });
+    const lineCanvas = document.createElement("canvas");
+    lineCanvas.width = WIDTH;
+    lineCanvas.height = HEIGHT;
+    const lineContext = lineCanvas.getContext("2d");
 
     // Path B: pure geometry builders + native white-on-black energy painter.
     const energyCanvas = document.createElement("canvas");
@@ -109,16 +117,23 @@ function EtchBench() {
         ? 0.5 + 0.46 * Math.sin(t * 0.5)
         : currentScan.position;
       const useModelPath = sourceModeRef.current === "model";
+      const useHybrid = useModelPath && hybridRef.current;
       let etchSource = hidden;
+      let model = null;
       if (useModelPath) {
-        const model = buildWavetableRenderModel({
+        model = buildWavetableRenderModel({
           staticScene,
           position,
           warpMode: warpRef.current.mode,
           warpAmount: warpRef.current.amount,
         });
+        const energyParamsNow = { ...baseEnergyParams, ...energyRef.current };
         energyContext.setTransform(1, 0, 0, 1, 0, 0);
-        paintWavetableEnergyField(energyContext, model, { ...baseEnergyParams, ...energyRef.current });
+        paintWavetableEnergyField(energyContext, model, energyParamsNow, useHybrid ? "tone" : "all");
+        if (useHybrid) {
+          lineContext.setTransform(1, 0, 0, 1, 0, 0);
+          paintWavetableEnergyField(lineContext, model, energyParamsNow, "lines");
+        }
         etchSource = energyCanvas;
       } else {
         display.setPosition(position);
@@ -152,6 +167,18 @@ function EtchBench() {
         targetContext.stroke();
       }
       pass.apply(etchSource, targetContext, WIDTH, HEIGHT);
+      if (useHybrid) {
+        // The engraver's split: stippled shading underneath, crisp continuous
+        // ink for the ripple linework and scan slice on top.
+        linePass.setParams({
+          ...paramsRef.current,
+          dither: "wash",
+          energyGain: 1,
+          energyFloor: 0.02,
+          backgroundKey: null,
+        });
+        linePass.apply(lineCanvas, targetContext, WIDTH, HEIGHT);
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -175,7 +202,7 @@ function EtchBench() {
       </p>
       <canvas ref={targetRef} data-role="etched-target" style={{ border: "1px solid var(--cosimo-color-ink)", borderRadius: 2 }} />
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-        {slider("GRAIN", params.grainPx, 1, 5, 1, (v) => setParams((p) => ({ ...p, grainPx: v })))}
+        {slider("GRAIN", params.grainPx, 1, 5, 0.25, (v) => setParams((p) => ({ ...p, grainPx: v })), (v) => v.toFixed(2))}
         {slider("INK DENSITY", params.inkDensity, 3, 28, 1, (v) => setParams((p) => ({ ...p, inkDensity: v })))}
         {slider("EXPOSURE", params.exposure, 0.4, 3, 0.05, (v) => setParams((p) => ({ ...p, exposure: v })), (v) => v.toFixed(2))}
         {slider("CONTRAST", params.contrast, 0.6, 2.4, 0.05, (v) => setParams((p) => ({ ...p, contrast: v })), (v) => v.toFixed(2))}
@@ -185,7 +212,7 @@ function EtchBench() {
         {slider("HERO WIDTH", energy.heroWidthPx, 1, 14, 1, (v) => setEnergy((e) => ({ ...e, heroWidthPx: v })))}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
-        {["stipple", "hatch", "wash"].map((mode) => (
+        {["stipple", "noise", "diffusion", "hatch", "wash"].map((mode) => (
           <button key={mode} type="button"
             onClick={() => setParams((p) => ({ ...p, dither: mode }))}
             style={{ padding: "6px 12px", fontSize: 11, letterSpacing: 1.5, border: "1px solid var(--cosimo-color-ink)", borderRadius: 2, background: params.dither === mode ? "var(--cosimo-color-ink)" : "transparent", color: params.dither === mode ? "var(--cosimo-color-paper)" : "inherit" }}>
@@ -207,6 +234,11 @@ function EtchBench() {
           onClick={() => setSourceMode((m) => (m === "model" ? "luma" : "model"))}
           style={{ padding: "6px 10px", fontSize: 11, border: "1px solid var(--cosimo-color-ink)", borderRadius: 2 }}>
           {sourceMode === "model" ? "ENERGY: MODEL" : "ENERGY: LUMA"}
+        </button>
+        <button type="button" data-role="hybrid-mode"
+          onClick={() => setHybrid((h) => !h)}
+          style={{ padding: "6px 10px", fontSize: 11, letterSpacing: 1, border: "1px solid var(--cosimo-color-ink)", borderRadius: 2, background: hybrid ? "var(--cosimo-color-ink)" : "transparent", color: hybrid ? "var(--cosimo-color-paper)" : "inherit" }}>
+          HYBRID: {hybrid ? "ON" : "OFF"}
         </button>
       </div>
     </div>

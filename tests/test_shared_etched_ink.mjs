@@ -65,3 +65,26 @@ test("dither thresholds tile correctly for both styles", async () => {
         }),
     );
 });
+
+test("error diffusion preserves mean tone and emits pure 1-bit marks", async () => {
+    const etched = await etchedPromise;
+    const width = 64, height = 64;
+    const density = new Float32Array(width * height).fill(0.5);
+    etched.diffuseDensityBuffer(density, width, height);
+    let sum = 0;
+    for (const value of density) {
+        assert.equal(value === 0 || value === 1, true, "marks are 1-bit");
+        sum += value;
+    }
+    const mean = sum / density.length;
+    assert.equal(Math.abs(mean - 0.5) < 0.05, true, `mean tone preserved (got ${mean})`);
+
+    // A hard edge stays a hard edge: left half empty, right half full.
+    const edge = new Float32Array(width * height);
+    for (let y = 0; y < height; y += 1) for (let x = width / 2; x < width; x += 1) edge[y * width + x] = 1;
+    etched.diffuseDensityBuffer(edge, width, height);
+    for (let y = 0; y < height; y += 1) {
+        for (let x = 0; x < width / 2 - 1; x += 1) assert.equal(edge[y * width + x], 0, "clean side stays clean");
+        for (let x = width / 2 + 1; x < width; x += 1) assert.equal(edge[y * width + x], 1, "full side stays full");
+    }
+});
