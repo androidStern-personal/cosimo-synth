@@ -1,7 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { CanvasWavetableDisplay } from "../../../patch_gui/wavetable-display.js";
+import {
+  CanvasWavetableDisplay,
+  buildWavetableRenderModel,
+  buildWavetableStaticScene,
+} from "../../../patch_gui/wavetable-display.js";
 import { createEtchedInkPass } from "../../../ui/shared/etched-ink.ts";
+import {
+  createDefaultWavetableEnergyParams,
+  paintWavetableEnergyField,
+} from "../../../ui/shared/wavetable-energy-field.ts";
 import "./styles.css";
 
 /**
@@ -45,6 +53,12 @@ function EtchBench() {
   });
   const [warp, setWarp] = useState({ mode: 0, amount: 0 });
   const [scan, setScan] = useState({ auto: true, position: 0.4 });
+  const [sourceMode, setSourceMode] = useState("model");
+  const sourceModeRef = useRef(sourceMode);
+  sourceModeRef.current = sourceMode;
+  const [energy, setEnergy] = useState({ bandEnergy: 0.2, heroWidthPx: 5 });
+  const energyRef = useRef(energy);
+  energyRef.current = energy;
   const paramsRef = useRef(params);
   paramsRef.current = params;
   const warpRef = useRef(warp);
@@ -75,6 +89,17 @@ function EtchBench() {
 
     const pass = createEtchedInkPass({ ink, backgroundKey: SOURCE_BACKGROUND_KEY });
 
+    // Path B: pure geometry builders + native white-on-black energy painter.
+    const energyCanvas = document.createElement("canvas");
+    energyCanvas.width = WIDTH;
+    energyCanvas.height = HEIGHT;
+    const energyContext = energyCanvas.getContext("2d");
+    const staticScene = buildWavetableStaticScene({
+      frames, width: WIDTH, height: HEIGHT, pixelRatio: 1,
+      drawableInsets: { top: 0, right: 0, bottom: 0, left: 0 },
+    });
+    const baseEnergyParams = createDefaultWavetableEnergyParams();
+
     let raf = 0;
     const start = performance.now();
     const tick = (now) => {
@@ -83,11 +108,32 @@ function EtchBench() {
       const position = currentScan.auto
         ? 0.5 + 0.46 * Math.sin(t * 0.5)
         : currentScan.position;
-      display.setPosition(position);
-      display.setWarp(warpRef.current.mode, warpRef.current.amount);
-      display.render();
+      const useModelPath = sourceModeRef.current === "model";
+      let etchSource = hidden;
+      if (useModelPath) {
+        const model = buildWavetableRenderModel({
+          staticScene,
+          position,
+          warpMode: warpRef.current.mode,
+          warpAmount: warpRef.current.amount,
+        });
+        energyContext.setTransform(1, 0, 0, 1, 0, 0);
+        paintWavetableEnergyField(energyContext, model, { ...baseEnergyParams, ...energyRef.current });
+        etchSource = energyCanvas;
+      } else {
+        display.setPosition(position);
+        display.setWarp(warpRef.current.mode, warpRef.current.amount);
+        display.render();
+      }
 
-      pass.setParams(paramsRef.current);
+      pass.setParams({
+        ...paramsRef.current,
+        // The native energy field is pre-calibrated; luma of the colored
+        // render needs gain + background keying.
+        energyGain: useModelPath ? 1 : 2.4,
+        energyFloor: useModelPath ? 0.02 : 0.045,
+        backgroundKey: useModelPath ? null : SOURCE_BACKGROUND_KEY,
+      });
       targetContext.setTransform(dpr, 0, 0, dpr, 0, 0);
       targetContext.fillStyle = paper;
       targetContext.fillRect(0, 0, WIDTH, HEIGHT);
@@ -105,7 +151,7 @@ function EtchBench() {
         targetContext.lineTo(WIDTH, (gy * HEIGHT) / 4);
         targetContext.stroke();
       }
-      pass.apply(hidden, targetContext, WIDTH, HEIGHT);
+      pass.apply(etchSource, targetContext, WIDTH, HEIGHT);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -134,6 +180,8 @@ function EtchBench() {
         {slider("CONTRAST", params.contrast, 0.6, 2.4, 0.05, (v) => setParams((p) => ({ ...p, contrast: v })), (v) => v.toFixed(2))}
         {slider("WARP AMOUNT", warp.amount, 0, 1, 0.01, (v) => setWarp((w) => ({ ...w, amount: v })), (v) => v.toFixed(2))}
         {slider("SCAN", scan.position, 0, 1, 0.01, (v) => setScan({ auto: false, position: v }), (v) => v.toFixed(2))}
+        {slider("BAND ENERGY", energy.bandEnergy, 0, 0.8, 0.01, (v) => setEnergy((e) => ({ ...e, bandEnergy: v })), (v) => v.toFixed(2))}
+        {slider("HERO WIDTH", energy.heroWidthPx, 1, 14, 1, (v) => setEnergy((e) => ({ ...e, heroWidthPx: v })))}
       </div>
       <div style={{ display: "flex", gap: 8 }}>
         {["stipple", "hatch", "wash"].map((mode) => (
@@ -153,6 +201,11 @@ function EtchBench() {
         <button type="button" onClick={() => setScan((s) => ({ ...s, auto: !s.auto }))}
           style={{ padding: "6px 10px", fontSize: 11, border: "1px solid #999", borderRadius: 2 }}>
           {scan.auto ? "AUTO SCAN" : "MANUAL"}
+        </button>
+        <button type="button" data-role="source-mode"
+          onClick={() => setSourceMode((m) => (m === "model" ? "luma" : "model"))}
+          style={{ padding: "6px 10px", fontSize: 11, border: "1px solid var(--cosimo-color-ink)", borderRadius: 2 }}>
+          {sourceMode === "model" ? "ENERGY: MODEL" : "ENERGY: LUMA"}
         </button>
       </div>
     </div>
