@@ -95,6 +95,17 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(calls, 2);
     });
 
+    t("port reads survive detachment from the adapter object", (adapter) => {
+        // useSyncExternalStore passes getSnapshot/subscribe by value — an
+        // implementation relying on `this` via property access breaks only
+        // in React, so the contract pins it here.
+        const { getSnapshot, subscribe } = adapter;
+        const before = getSnapshot();
+        const unsubscribe = subscribe(() => {});
+        unsubscribe();
+        assert.equal(getSnapshot(), before);
+    });
+
     t("the connection reports ready", (adapter) => {
         assert.deepEqual(adapter.getSnapshot().connection, { _tag: "ready" });
     });

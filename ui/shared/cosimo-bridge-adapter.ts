@@ -783,14 +783,16 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
     }
 
-    getSnapshot(): PatchSnapshot {
-        return this.snapshot;
-    }
+    // Bound arrows: useSyncExternalStore detaches these from the instance
+    // (port.getSnapshot passed by value), so prototype methods would lose
+    // `this`. The contract suite calls via property access and cannot catch
+    // that — the harness did.
+    readonly getSnapshot = (): PatchSnapshot => this.snapshot;
 
-    subscribe(onChange: () => void): () => void {
+    readonly subscribe = (onChange: () => void): (() => void) => {
         this.listeners.add(onChange);
         return () => this.listeners.delete(onChange);
-    }
+    };
 
     readonly commands: CosimoCommands = {
         setParameter: (input) => this.runCommand(() => this.setParameter(input)),

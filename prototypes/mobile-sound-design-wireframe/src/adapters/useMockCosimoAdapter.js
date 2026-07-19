@@ -1,6 +1,7 @@
-import { useRef, useSyncExternalStore } from "react";
+import { useRef } from "react";
 import { createInitialMockCosimoState } from "../domain/fixtures.js";
 import { createMockCosimoAdapter } from "./createMockCosimoAdapter.ts";
+import { usePortAdapter } from "./usePortAdapter.js";
 
 /** Subscribe React to one in-memory CosimoAdapterPort fixture instance. */
 export function useMockCosimoAdapter({
@@ -11,12 +12,5 @@ export function useMockCosimoAdapter({
     adapterRef.current = createMockCosimoAdapter({ createInitialState });
   }
 
-  const adapter = adapterRef.current;
-  const snapshot = useSyncExternalStore(
-    adapter.subscribe,
-    adapter.getSnapshot,
-    adapter.getSnapshot,
-  );
-
-  return { snapshot, commands: adapter.commands };
+  return usePortAdapter(adapterRef.current);
 }

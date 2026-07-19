@@ -390,3 +390,29 @@ test("legacy articulations.v2 storage detaches during fail-fast hydration", asyn
     assert.equal(connection._tag, "detached");
     assert.match(connection.reason, /legacy-v2-rejected/);
 });
+
+test("full state roundtrip: a second bridge over the first one's stored state is snapshot-identical", async () => {
+    const first = await createHarness();
+    first.adapter.commands.setParameter({ targetId: "wavetable.index", value: 0.77, layer: { _tag: "patchBase" } });
+    const a1 = first.adapter.commands.addArticulation();
+    assert.equal(a1._tag, "ok");
+    first.adapter.commands.setArticulationKey(a1.value, 40);
+    first.adapter.commands.setParameter({
+        targetId: "wavetable.warp", value: 0.61,
+        layer: { _tag: "articulationOverride", articulationId: a1.value },
+    });
+    const m = first.adapter.commands.addMapping({ targetId: "voice-filter.cutoff", sourceId: "envelope-1" });
+    assert.equal(m._tag, "ok");
+    first.adapter.commands.setMappingAmount(m.value, 3, { _tag: "patchBase" });
+    const rack = first.adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "macro-1" });
+    assert.equal(rack._tag, "ok");
+    first.adapter.commands.setEffectEnabled("delay", false);
+    first.adapter.commands.renameMacro("macro-1", "Shimmer");
+
+    const storedState = { ...first.connection.getDebugSnapshot().storedState };
+    const second = await createHarness({ storedState });
+
+    const before = first.adapter.getSnapshot();
+    const after = second.adapter.getSnapshot();
+    assert.deepEqual(after.patch, before.patch, "the reborn adapter's patch must be identical");
+});
