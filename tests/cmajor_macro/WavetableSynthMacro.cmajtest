@@ -20,6 +20,19 @@ function patchRun(subDir)
     };
 }
 
+function positivePatchRun(subDir, maxDiffDb)
+{
+    let options = patchRun (subDir);
+    options.maxDiffDb = maxDiffDb;
+    return options;
+}
+
 ## runScript (patchRun("fixtures/macro_inert_when_unrouted"))
 
 ## runScript (patchRun("fixtures/macro_neutral_route"))
+
+// POSITIVE proof: the scan_baseline position sweep, reproduced entirely by a
+// macro→wavetablePosition route (base position pinned at 0, macro1 carries the
+// ramp, amount 1.0). Same audio within tolerance = macro modulation WORKS.
+
+## runScript (positivePatchRun("fixtures/macro_drives_scan", -60.0))
