@@ -1,0 +1,14 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.rack-bench-static",
+  "version": "0.0.1",
+  "name": "Rack Bench Static",
+  "isInstrument": false,
+  "source": [
+    "../../../cmajor/Distortion.cmajor",
+    "../../../cmajor/Chorus.cmajor",
+    "../EffectsRackShape.cmajor",
+    "StaticRack.cmajor",
+    "BenchStaticMain.cmajor"
+  ]
+}

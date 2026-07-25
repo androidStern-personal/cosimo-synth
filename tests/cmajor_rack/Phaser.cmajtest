@@ -1,0 +1,1521 @@
+// Behavioural specification for wt::PhaserBus - the rack's cascaded allpass phaser
+// with an LFO-swept notch comb, signed feedback, and a PERSISTENT compound Rate
+// control (Free Hz vs Sync rhythmic division).
+//
+// Every section drives the module directly as a composed child node, using the
+// proven rack idiom `child.in <- signal; child.advance(); read child.out`. That is
+// the only shape that can pin behaviour over more frames than `## testProcessor()`'s
+// single 100-frame render block, and it is exactly how wt::EffectsRack will drive
+// this module in production.
+//
+// `## testProcessor()` renders exactly 100 frames in ONE block and scans the first
+// output endpoint: >0 is a passing assertion, 0 a failing one, <0 stops the section.
+// Each assertion therefore costs one PARENT frame, while the phaser underneath is
+// advanced as many times as the assertion needs.
+//
+// Independent scenarios use independent node instances. An allpass cascade's filter
+// state and its LFO phase are state, so "the same parameters again" is not the same
+// thing as "a fresh module"; comparing one instance against itself across time would
+// prove nothing.
+//
+// ===========================================================================
+// A COMPOSED CHILD DOES NOT GET ITS `init:` VALUES. Measured, not assumed - see
+// section 0, which pins it. An `input value` endpoint on a node driven by a parent
+// PROCESSOR reads 0 until the parent writes it; `init:` and `rampFrames:` are
+// annotations consumed by the patch/host parameter layer at the top-level graph
+// boundary, and neither reaches the composed-node path. Two consequences:
+//
+//   - every scenario below writes EVERY parameter it depends on, explicitly. A test
+//     that leaves one out is silently testing frequencyIn = 0 clamped to 60 Hz, not
+//     the 600 Hz it looks like it is testing;
+//   - the rack must forward every child parameter every frame and must never skip a
+//     forward as "unchanged since init". There is no init to be unchanged from.
+//
+// The upside is that node writes are IMMEDIATE - rampFrames does not smear them - so
+// the bit-exact equivalences in section 5 are reachable at all.
+// ===========================================================================
+//
+// Run with:  cmaj test --singleThread --sessionID=1 tests/cmajor_rack
+
+## global ("../../cmajor/Phaser.cmajor")
+
+
+// ---------------------------------------------------------------------------
+// 0. THE COMPOSED-NODE PARAMETER CONTRACT the rack has to honour.
+//
+//    An unwritten parameter reads 0, not its declared `init:`. This is pinned here
+//    rather than left as folklore because the failure it causes is silent: a rack
+//    that forgets to forward `frequencyIn` produces a phaser stuck at the 60 Hz
+//    clamp floor, which sounds like a phaser and passes every "it does something"
+//    test. If a future Cmajor applies child inits, this section fails and everyone
+//    finds out deliberately.
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserChildInitContractTest [[ main ]]
+{
+    output stream int32 out;
+
+    node unwritten     = wt::PhaserBus;
+    node writtenAsZero = wt::PhaserBus;
+    node writtenAsInit = wt::PhaserBus;
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let measureFrames = 8192;
+
+    float32 inputPhase;
+
+    void main()
+    {
+        // All three fully wet and otherwise identical. Only `frequencyIn` differs:
+        // absent, explicitly 0 (which the module clamps to its 60 Hz floor), and
+        // explicitly the 600 Hz the annotation declares as its init.
+        unwritten.mixIn <- 1.0f;
+        unwritten.depthIn <- 0.0f;
+        unwritten.feedbackIn <- 0.0f;
+        unwritten.phaseIn <- 0.0f;
+        unwritten.rateIn <- 0.02f;
+
+        writtenAsZero.mixIn <- 1.0f;
+        writtenAsZero.depthIn <- 0.0f;
+        writtenAsZero.feedbackIn <- 0.0f;
+        writtenAsZero.phaseIn <- 0.0f;
+        writtenAsZero.rateIn <- 0.02f;
+        writtenAsZero.frequencyIn <- 0.0f;
+
+        writtenAsInit.mixIn <- 1.0f;
+        writtenAsInit.depthIn <- 0.0f;
+        writtenAsInit.feedbackIn <- 0.0f;
+        writtenAsInit.phaseIn <- 0.0f;
+        writtenAsInit.rateIn <- 0.02f;
+        writtenAsInit.frequencyIn <- 600.0f;
+
+        bool unwrittenIsZero = true;
+        float32 differenceFromInit;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+            inputPhase = std::intrinsics::wrap (inputPhase + (287.0f / float32 (processor.frequency)), 1.0f);
+            let stereoSample = float32<2> (sample, sample);
+
+            unwritten.in     <- stereoSample;  unwritten.advance();
+            writtenAsZero.in <- stereoSample;  writtenAsZero.advance();
+            writtenAsInit.in <- stereoSample;  writtenAsInit.advance();
+
+            if (unwritten.out[0] != writtenAsZero.out[0])
+                unwrittenIsZero = false;
+
+            differenceFromInit = std::intrinsics::max (
+                differenceFromInit,
+                std::intrinsics::abs (unwritten.out[0] - writtenAsInit.out[0])
+            );
+        }
+
+        // An unwritten parameter IS zero, bit for bit.
+        out <- unwrittenIsZero ? 1 : 0;
+        advance();
+
+        // ...and is emphatically not its declared init.
+        out <- (differenceFromInit > 0.01f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// 1. THE MODULE CONTRACT: hard audible bypass, zero latency, real wet path,
+//    and a bounded output level.
+//
+//    At mix 0 the module passes its input BIT-EXACTLY - asserted with float32 `!=`,
+//    no tolerance - while feedback is at maximum and the sweep is at full depth.
+//    That is what "zero-latency dry path" (ADR-008) and "a disabled module
+//    contributes no wet output" (ADR-005) actually mean at module level, and a
+//    tolerance would hide precisely the transport delay we are forbidding.
+//
+//    The level bounds are REAL levels, not the "finite and below 8.0" placeholder
+//    the adversarial review rejected. Derivations are given at each assertion.
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserContractTest [[ main ]]
+{
+    output stream int32 out;
+
+    node bypassPhaser     = wt::PhaserBus;
+    node impulsePhaser    = wt::PhaserBus;
+    node extremePhaser    = wt::PhaserBus;
+    node cleanPhaser      = wt::PhaserBus;
+    node equalPowerPhaser = wt::PhaserBus;
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let settleFrames = 4096;
+    let measureFrames = 8192;
+
+    float32 inputPhase;
+
+    float32 nextInputSample (float32 frequencyHz)
+    {
+        let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+        inputPhase = std::intrinsics::wrap (
+            inputPhase + (frequencyHz / float32 (processor.frequency)),
+            1.0f
+        );
+        return sample;
+    }
+
+    void main()
+    {
+        // ---- 1a. Bit-exact dry bypass at mix 0, under the most hostile settings
+        //          the module offers: maximum feedback, full depth, fastest sweep.
+        bypassPhaser.mixIn <- 0.0f;
+        bypassPhaser.rateIn <- 8.0f;
+        bypassPhaser.depthIn <- 1.0f;
+        bypassPhaser.frequencyIn <- 600.0f;
+        bypassPhaser.feedbackIn <- 0.95f;
+        bypassPhaser.phaseIn <- 90.0f;
+
+        bool bypassIsExact = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = nextInputSample (220.0f);
+            bypassPhaser.in <- float32<2> (sample, sample);
+            bypassPhaser.advance();
+            let rendered = bypassPhaser.out;
+
+            if (rendered[0] != sample || rendered[1] != sample)
+                bypassIsExact = false;
+        }
+
+        out <- bypassIsExact ? 1 : 0;
+        advance();
+
+        // ---- 1b. ZERO LATENCY. Fully wet, silence in, then a single impulse: the
+        //          response must appear on the SAME frame. No lookahead, no
+        //          transport delay, and nothing before the impulse.
+        impulsePhaser.mixIn <- 1.0f;
+        impulsePhaser.rateIn <- 0.02f;
+        impulsePhaser.depthIn <- 0.0f;
+        impulsePhaser.frequencyIn <- 600.0f;
+        impulsePhaser.feedbackIn <- 0.0f;
+        impulsePhaser.phaseIn <- 0.0f;
+
+        bool silentBeforeImpulse = true;
+
+        for (int32 frame = 0; frame < 1024; ++frame)
+        {
+            impulsePhaser.in <- float32<2> (0.0f, 0.0f);
+            impulsePhaser.advance();
+
+            if (impulsePhaser.out[0] != 0.0f)
+                silentBeforeImpulse = false;
+        }
+
+        impulsePhaser.in <- float32<2> (1.0f, 1.0f);
+        impulsePhaser.advance();
+        let impulseFrameResponse = impulsePhaser.out[0];
+
+        out <- (silentBeforeImpulse && impulseFrameResponse != 0.0f) ? 1 : 0;
+        advance();
+
+        // ---- 1c/1d. Fully wet at maximum feedback and full depth: every sample is
+        //             finite, and the peak stays inside a DERIVED bound.
+        //
+        //   The feedback loop saturates through v -> v / (1 + |v| / 8). Its DC fixed
+        //   point for a 0.5 drive at feedback 0.95 solves
+        //   0.125x^2 - 0.0125x - 0.5 = 0, i.e. x = 2.05, and the wet signal is
+        //   0.5 * (dry + cascade) = 0.5 * (0.5 + 2.05) = 1.28. 1.5 is that worst case
+        //   with a little headroom - roughly +9.5 dBFS on a 0.5 input. Final limiting
+        //   is the fixed post-rack output stage's job, not a reorderable module's.
+        extremePhaser.mixIn <- 1.0f;
+        extremePhaser.rateIn <- 8.0f;
+        extremePhaser.depthIn <- 1.0f;
+        extremePhaser.frequencyIn <- 600.0f;
+        extremePhaser.feedbackIn <- 0.95f;
+        extremePhaser.phaseIn <- 90.0f;
+
+        bool extremeIsFinite = true;
+        float32 extremePeak;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let sample = nextInputSample (330.0f);
+            extremePhaser.in <- float32<2> (sample, sample);
+            extremePhaser.advance();
+            let rendered = extremePhaser.out;
+
+            if (rendered[0] != rendered[0] || rendered[1] != rendered[1])
+                extremeIsFinite = false;
+
+            if (frame >= settleFrames)
+                extremePeak = std::intrinsics::max (
+                    extremePeak,
+                    std::intrinsics::max (
+                        std::intrinsics::abs (rendered[0]),
+                        std::intrinsics::abs (rendered[1])
+                    )
+                );
+        }
+
+        out <- extremeIsFinite ? 1 : 0;
+        advance();
+
+        out <- (extremePeak <= 1.5f) ? 1 : 0;
+        advance();
+
+        // ---- 1e/1f. Fully wet at the DEFAULT feedback of 0: an allpass cascade has
+        //             unity magnitude at every frequency, so 0.5 * (dry + cascade)
+        //             cannot exceed the input peak. Anything above that is a gain
+        //             bug, not a phaser. And it must still audibly DO something.
+        cleanPhaser.mixIn <- 1.0f;
+        cleanPhaser.rateIn <- 0.3f;
+        cleanPhaser.depthIn <- 0.7f;
+        cleanPhaser.frequencyIn <- 600.0f;
+        cleanPhaser.feedbackIn <- 0.0f;
+        cleanPhaser.phaseIn <- 90.0f;
+
+        float32 cleanPeak;
+        float32 maximumDivergence;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let sample = nextInputSample (440.0f);
+            cleanPhaser.in <- float32<2> (sample, sample);
+            cleanPhaser.advance();
+            let rendered = cleanPhaser.out;
+
+            if (frame >= settleFrames)
+            {
+                cleanPeak = std::intrinsics::max (cleanPeak, std::intrinsics::abs (rendered[0]));
+                maximumDivergence = std::intrinsics::max (
+                    maximumDivergence,
+                    std::intrinsics::abs (rendered[0] - sample)
+                );
+            }
+        }
+
+        out <- (cleanPeak <= inputAmplitude * 1.1f) ? 1 : 0;
+        advance();
+
+        out <- (maximumDivergence > 0.01f) ? 1 : 0;
+        advance();
+
+        // ---- 1g. THE MIX LAW IS EQUAL POWER, not a linear crossfade. Every other
+        //          assertion in this file sits at mix 0 or mix 1, and the two laws
+        //          agree exactly at both, so the shape between them is only visible
+        //          here. Probed at 25 Hz where the static cascade is very nearly
+        //          transparent (measured response 0.972 with -0.24 rad of phase), so
+        //          wet ~= dry and the laws separate widely: cos + sin at mix 0.5
+        //          gives about 1.385x the input peak, a linear (1-mix) + mix
+        //          crossfade about 0.979x.
+        equalPowerPhaser.mixIn <- 0.5f;
+        equalPowerPhaser.rateIn <- 0.02f;
+        equalPowerPhaser.depthIn <- 0.0f;
+        equalPowerPhaser.frequencyIn <- 600.0f;
+        equalPowerPhaser.feedbackIn <- 0.0f;
+        equalPowerPhaser.phaseIn <- 0.0f;
+
+        float32 equalPowerInputPeak;
+        float32 equalPowerOutputPeak;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let sample = nextInputSample (25.0f);
+            equalPowerPhaser.in <- float32<2> (sample, sample);
+            equalPowerPhaser.advance();
+
+            if (frame >= settleFrames)
+            {
+                equalPowerInputPeak = std::intrinsics::max (
+                    equalPowerInputPeak, std::intrinsics::abs (sample));
+                equalPowerOutputPeak = std::intrinsics::max (
+                    equalPowerOutputPeak, std::intrinsics::abs (equalPowerPhaser.out[0]));
+            }
+        }
+
+        out <- (equalPowerOutputPeak >= 1.2f * equalPowerInputPeak) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// 2. IT IS A PHASER, NOT A FILTER SWEEP, AND IT IS THE EIGHT-POLE ONE.
+//
+//    A cascade of allpass sections has unity magnitude everywhere; the notches
+//    exist only because the cascade is summed with the dry signal, and they are
+//    periodic in phase rather than a band cut. So the magnitude response must show
+//    BOTH deep notches AND full-amplitude passbands, with the extreme low and
+//    extreme high ends unattenuated. A lowpass masquerading as a phaser would fail
+//    the high-frequency assertion; a plain gain stage would fail the notch one.
+//
+//    The probe range is deliberately far wider than the 600 Hz centre. Four
+//    second-order sections at Q 0.707 have already rotated ~1.9 radians of total
+//    phase by 100 Hz, so "well below the centre" for THIS cascade means tens of
+//    hertz, not hundreds - measured 0.97 at 25 Hz against 0.58 at 100 Hz. Probing
+//    at 100 Hz and calling it the passband would be measuring the skirt.
+//
+//    THE NOTCH COUNT IS THE MODULE'S IDENTITY. Each second-order allpass rotates a
+//    full 2*pi across the spectrum, so it carries the summed response through pi
+//    exactly once: one section, one notch. Counting notches therefore measures the
+//    cascade depth from the audio alone. Measured across rebuilds at 1, 2, 3, 4 and
+//    6 sections, the count came back 1, 2, 3, 4 and 6 - so both assertions below
+//    are exact, not approximate. Four notches is the classic 8-pole phaser this
+//    module is specified to be; dropping to a single section still sweeps, still
+//    notches, and still passes every other assertion in this file.
+//
+//    The sweep is static (depth 0) and unresonant (feedback 0) so the measurement
+//    is of the response itself, not of the LFO.
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserMagnitudeResponseTest [[ main ]]
+{
+    output stream int32 out;
+
+    node phaser = wt::PhaserBus;
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let probeCount = 48;
+    let probeLowestHz = 25.0f;
+    let settleFrames = 3072;
+    let measureFrames = 3072;
+    let notchThreshold = 0.5f;
+    let expectedNotchCount = 4;
+
+    // Kept clear of Nyquist so the peak of a sampled sine is still a fair estimate
+    // of its amplitude at every probe.
+    let probeHighestHz = std::intrinsics::min (16000.0f, float32 (processor.frequency) * 0.3f);
+
+    float32 inputPhase;
+    float32[probeCount] responses;
+
+    float32 probeFrequencyHz (int32 probe)
+    {
+        let t = float32 (probe) / float32 (probeCount - 1);
+        return probeLowestHz * std::intrinsics::pow (probeHighestHz / probeLowestHz, t);
+    }
+
+    // Renders one probe frequency and returns output peak / input peak. Both peaks
+    // are measured over the same window, so the sine's discrete sampling cancels.
+    float32 measureResponse (float32 frequencyHz)
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+            inputPhase = std::intrinsics::wrap (inputPhase + (frequencyHz / float32 (processor.frequency)), 1.0f);
+            phaser.in <- float32<2> (sample, sample);
+            phaser.advance();
+        }
+
+        float32 inputPeak;
+        float32 outputPeak;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+            inputPhase = std::intrinsics::wrap (inputPhase + (frequencyHz / float32 (processor.frequency)), 1.0f);
+            phaser.in <- float32<2> (sample, sample);
+            phaser.advance();
+
+            inputPeak = std::intrinsics::max (inputPeak, std::intrinsics::abs (sample));
+            outputPeak = std::intrinsics::max (outputPeak, std::intrinsics::abs (phaser.out[0]));
+        }
+
+        return outputPeak / std::intrinsics::max (0.000001f, inputPeak);
+    }
+
+    void main()
+    {
+        phaser.mixIn <- 1.0f;
+        phaser.rateIn <- 0.02f;
+        phaser.depthIn <- 0.0f;
+        phaser.frequencyIn <- 600.0f;
+        phaser.feedbackIn <- 0.0f;
+        phaser.phaseIn <- 0.0f;
+
+        for (wrap<probeCount> probe)
+            responses[probe] = measureResponse (probeFrequencyHz (int32 (probe)));
+
+        float32 deepestNotch = 1000.0f;
+        float32 tallestPeak;
+        int32 notchCount;
+
+        for (int32 probe = 0; probe < probeCount; ++probe)
+        {
+            let response = responses.at (probe);
+
+            deepestNotch = std::intrinsics::min (deepestNotch, response);
+            tallestPeak = std::intrinsics::max (tallestPeak, response);
+
+            if (probe > 0 && probe < probeCount - 1)
+                if (response < responses.at (probe - 1)
+                     && response <= responses.at (probe + 1)
+                     && response < notchThreshold)
+                    notchCount += 1;
+        }
+
+        // Well below the swept centre the cascade's total phase is ~0, so the wet
+        // sum is the dry signal: the bottom end must survive intact.
+        out <- (responses.at (0) >= 0.85f) ? 1 : 0;
+        advance();
+
+        // Well above it the total phase has wrapped back through a whole number of
+        // turns, so the top end must survive too. A lowpass cannot do this.
+        out <- (responses.at (probeCount - 1) >= 0.85f) ? 1 : 0;
+        advance();
+
+        // Somewhere in between the phase passes through pi and the sum cancels.
+        out <- (deepestNotch <= 0.35f) ? 1 : 0;
+        advance();
+
+        // And somewhere else it passes through zero and the sum reinforces, so this
+        // is a comb, not a broadband attenuation.
+        out <- (tallestPeak >= 0.85f) ? 1 : 0;
+        advance();
+
+        // Four notches: the classic 8-pole phaser, measured from the audio.
+        out <- (notchCount == expectedNotchCount) ? 1 : 0;
+        advance();
+
+        // ...and each one belongs to exactly one allpass section, so a cascade that
+        // silently stopped chaining would show up as a shortfall here.
+        out <- (notchCount == wt::phaserSectionCount) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// 3. STEREO. The L/R LFO phase offset is a real parameter with a real effect:
+//    at 0 degrees the two channels are the same signal, at 90 degrees they are
+//    audibly different.
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserStereoTest [[ main ]]
+{
+    output stream int32 out;
+
+    node monoPhaser     = wt::PhaserBus;
+    node widePhaser     = wt::PhaserBus;
+    node opposedPhaser  = wt::PhaserBus;
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let settleFrames = 4096;
+    let measureFrames = 8192;
+
+    float32 inputPhase;
+
+    float32 nextInputSample()
+    {
+        let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+        inputPhase = std::intrinsics::wrap (inputPhase + (330.0f / float32 (processor.frequency)), 1.0f);
+        return sample;
+    }
+
+    void main()
+    {
+        monoPhaser.mixIn <- 1.0f;
+        monoPhaser.rateIn <- 0.3f;
+        monoPhaser.depthIn <- 0.7f;
+        monoPhaser.frequencyIn <- 600.0f;
+        monoPhaser.feedbackIn <- 0.0f;
+        monoPhaser.phaseIn <- 0.0f;
+
+        widePhaser.mixIn <- 1.0f;
+        widePhaser.rateIn <- 0.3f;
+        widePhaser.depthIn <- 0.7f;
+        widePhaser.frequencyIn <- 600.0f;
+        widePhaser.feedbackIn <- 0.0f;
+        widePhaser.phaseIn <- 90.0f;
+
+        // 180 degrees is the widest setting the parameter offers: half a cycle of
+        // LFO offset, so the right channel sweeps exactly counter to the left. It is
+        // also what pins the degrees-to-cycles scale, because the wrong divisor
+        // turns half a turn into a whole one and collapses this setting to mono.
+        opposedPhaser.mixIn <- 1.0f;
+        opposedPhaser.rateIn <- 0.3f;
+        opposedPhaser.depthIn <- 0.7f;
+        opposedPhaser.frequencyIn <- 600.0f;
+        opposedPhaser.feedbackIn <- 0.0f;
+        opposedPhaser.phaseIn <- 180.0f;
+
+        bool monoChannelsAreIdentical = true;
+        float32 wideChannelDifference;
+        float32 opposedChannelDifference;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let sample = nextInputSample();
+
+            monoPhaser.in <- float32<2> (sample, sample);
+            monoPhaser.advance();
+            widePhaser.in <- float32<2> (sample, sample);
+            widePhaser.advance();
+            opposedPhaser.in <- float32<2> (sample, sample);
+            opposedPhaser.advance();
+
+            if (monoPhaser.out[0] != monoPhaser.out[1])
+                monoChannelsAreIdentical = false;
+
+            if (frame >= settleFrames)
+            {
+                wideChannelDifference = std::intrinsics::max (
+                    wideChannelDifference,
+                    std::intrinsics::abs (widePhaser.out[0] - widePhaser.out[1])
+                );
+                opposedChannelDifference = std::intrinsics::max (
+                    opposedChannelDifference,
+                    std::intrinsics::abs (opposedPhaser.out[0] - opposedPhaser.out[1])
+                );
+            }
+        }
+
+        // At 0 degrees both channels run the same LFO from the same start, so they
+        // are the same signal bit for bit, from the first frame.
+        out <- monoChannelsAreIdentical ? 1 : 0;
+        advance();
+
+        // At 90 degrees they are not.
+        out <- (wideChannelDifference > 0.01f) ? 1 : 0;
+        advance();
+
+        // ...and at 180 degrees, the widest setting, they are emphatically not.
+        out <- (opposedChannelDifference > 0.01f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// 4. EVERY CONTINUOUS PARAMETER REACHES THE DSP. One pair of independently driven
+//    modules per parameter, differing ONLY in that parameter. This is the module's
+//    half of the "a forward that lands on the wrong endpoint compiles silently"
+//    defence: a parameter that is declared but never read fails here.
+//
+//    The modules live in a node ARRAY so one loop can give all of them the same
+//    fully-specified baseline before the single differing write. Cmajor will not
+//    let a node be passed to a function ("error: Cannot use a processor name as a
+//    type"), and hand-copying nine identical nine-line blocks is exactly how a
+//    baseline drifts and a comparison quietly stops being controlled.
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserParameterReachTest [[ main ]]
+{
+    output stream int32 out;
+
+    let moduleCount = 9;
+
+    let moduleShallow = 0;
+    let moduleDeep = 1;
+    let moduleLowCentre = 2;
+    let moduleHighCentre = 3;
+    let moduleDryLoop = 4;
+    let modulePositiveLoop = 5;
+    let moduleNegativeLoop = 6;
+    let moduleSlowRate = 7;
+    let moduleFastRate = 8;
+
+    node phasers = wt::PhaserBus[moduleCount];
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let settleFrames = 2048;
+    let measureFrames = 8192;
+
+    float32 inputPhase;
+
+    float32 nextInputSample()
+    {
+        let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+        inputPhase = std::intrinsics::wrap (inputPhase + (287.0f / float32 (processor.frequency)), 1.0f);
+        return sample;
+    }
+
+    void configureBaseline()
+    {
+        for (wrap<moduleCount> module)
+        {
+            phasers[module].mixIn <- 1.0f;
+            phasers[module].rateIn <- 0.3f;
+            phasers[module].rateModeIn <- 0.0f;
+            phasers[module].rateDivisionIn <- 2.0f;
+            phasers[module].depthIn <- 0.7f;
+            phasers[module].frequencyIn <- 600.0f;
+            phasers[module].feedbackIn <- 0.0f;
+            phasers[module].phaseIn <- 90.0f;
+            phasers[module].tempoBpmIn <- 120.0f;
+        }
+    }
+
+    void main()
+    {
+        configureBaseline();
+
+        phasers[moduleShallow].depthIn <- 0.0f;
+        phasers[moduleDeep].depthIn <- 1.0f;
+
+        phasers[moduleLowCentre].frequencyIn <- 200.0f;
+        phasers[moduleHighCentre].frequencyIn <- 4000.0f;
+
+        phasers[moduleDryLoop].feedbackIn <- 0.0f;
+        phasers[modulePositiveLoop].feedbackIn <- 0.9f;
+        phasers[moduleNegativeLoop].feedbackIn <- -0.9f;
+
+        phasers[moduleSlowRate].rateIn <- 0.05f;
+        phasers[moduleFastRate].rateIn <- 6.0f;
+
+        float32 depthDifference;
+        float32 frequencyDifference;
+        float32 feedbackDifference;
+        float32 feedbackSignDifference;
+        float32 rateDifference;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let sample = nextInputSample();
+            let stereoSample = float32<2> (sample, sample);
+
+            for (wrap<moduleCount> module)
+            {
+                phasers[module].in <- stereoSample;
+                phasers[module].advance();
+            }
+
+            if (frame < settleFrames)
+                continue;
+
+            depthDifference = std::intrinsics::max (
+                depthDifference,
+                std::intrinsics::abs (phasers[moduleShallow].out[0] - phasers[moduleDeep].out[0])
+            );
+            frequencyDifference = std::intrinsics::max (
+                frequencyDifference,
+                std::intrinsics::abs (phasers[moduleLowCentre].out[0] - phasers[moduleHighCentre].out[0])
+            );
+            feedbackDifference = std::intrinsics::max (
+                feedbackDifference,
+                std::intrinsics::abs (phasers[moduleDryLoop].out[0] - phasers[modulePositiveLoop].out[0])
+            );
+            feedbackSignDifference = std::intrinsics::max (
+                feedbackSignDifference,
+                std::intrinsics::abs (phasers[modulePositiveLoop].out[0] - phasers[moduleNegativeLoop].out[0])
+            );
+            rateDifference = std::intrinsics::max (
+                rateDifference,
+                std::intrinsics::abs (phasers[moduleSlowRate].out[0] - phasers[moduleFastRate].out[0])
+            );
+        }
+
+        out <- (depthDifference > 0.01f) ? 1 : 0;
+        advance();
+
+        out <- (frequencyDifference > 0.01f) ? 1 : 0;
+        advance();
+
+        out <- (feedbackDifference > 0.01f) ? 1 : 0;
+        advance();
+
+        // Signed feedback is a real inversion, not an absolute-value amount.
+        out <- (feedbackSignDifference > 0.01f) ? 1 : 0;
+        advance();
+
+        out <- (rateDifference > 0.01f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// 5. THE PERSISTENT COMPOUND RATE CONTROL (ledger 4.4 / 5.2 [U60], ledger 17
+//    "persistent timing mode"). Free/Sync and the rhythmic division are REAL
+//    persistent DSP settings, not adapter-side decoration - so they are pinned by
+//    exact equivalences, asserted with float32 `!=` and no tolerance.
+//
+//    Sync rate = tempoBpm / (60 * beatsPerCycle), clamped into the same
+//    0.02..8.0 Hz window as the free rate. The equivalences below are chosen so
+//    that both sides land on the identical float32 rate:
+//
+//      120 bpm / (60 * 4 beats)   = 0.5 Hz  = an explicitly written free 0.5 Hz
+//      120 bpm / (60 * 4 beats)   = 0.5 Hz  = 60 bpm / (60 * 2 beats)
+//      300 bpm / (60 * 0.25)      = 20 Hz  -> clamped to 8 Hz
+//      300 bpm / (60 * 0.5)       = 10 Hz  -> clamped to 8 Hz
+//
+//    Division indices: 0=4/1 1=2/1 2=1/1 3=1/2. 4=1/2 5=1/2T 6=1/4. 7=1/4
+//                      8=1/4T 9=1/8. 10=1/8 11=1/8T 12=1/16
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserRateModeTest [[ main ]]
+{
+    output stream int32 out;
+
+    let moduleCount = 24;
+
+    let moduleFreeReference = 0;
+    let moduleSyncEqualsFree = 1;
+    let moduleSyncSlowTempo = 2;
+    let moduleSyncFastTempo = 3;
+    let moduleSyncIgnoresRate = 4;
+    let moduleFreeWholeNote = 5;
+    let moduleFreeSixteenth = 6;
+    let moduleSyncDivided = 7;
+    let moduleSyncClampedA = 8;
+    let moduleSyncClampedB = 9;
+    let moduleTempoBelowFloor = 10;
+    let moduleTempoAtFloor = 11;
+    let moduleTempoAboveCeiling = 12;
+    let moduleTempoAtCeiling = 13;
+    let moduleFreeRateAboveCeiling = 14;
+    let moduleFreeRateAtCeiling = 15;
+    let moduleFreeRateBelowFloor = 16;
+    let moduleFreeRateAtFloor = 17;
+    let moduleDivisionBelowFloor = 18;
+    let moduleDivisionAtFloor = 19;
+    let moduleRateModeAboveCeiling = 20;
+    let moduleRateModeAtCeiling = 21;
+    let moduleRateModeRounds = 22;
+    let moduleDivisionRounds = 23;
+
+    node phasers = wt::PhaserBus[moduleCount];
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let measureFrames = 16384;
+
+    let rateModeFree = float32 (wt::phaserRateModeFree);
+    let rateModeSync = float32 (wt::phaserRateModeSync);
+    let divisionWholeNote = 2.0f;   // 1/1  - 4 beats
+    let divisionHalfNote = 4.0f;    // 1/2  - 2 beats
+    let divisionEighth = 10.0f;     // 1/8  - 0.5 beats
+    let divisionSixteenth = 12.0f;  // 1/16 - 0.25 beats
+
+    float32 inputPhase;
+
+    float32 nextInputSample()
+    {
+        let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+        inputPhase = std::intrinsics::wrap (inputPhase + (287.0f / float32 (processor.frequency)), 1.0f);
+        return sample;
+    }
+
+    // Free mode, an explicit 0.5 Hz, 120 bpm, whole note: every module starts here
+    // so the writes that follow are genuinely the only differences.
+    void configureBaseline()
+    {
+        for (wrap<moduleCount> module)
+        {
+            phasers[module].mixIn <- 1.0f;
+            phasers[module].rateIn <- 0.5f;
+            phasers[module].rateModeIn <- rateModeFree;
+            phasers[module].rateDivisionIn <- divisionWholeNote;
+            phasers[module].depthIn <- 0.7f;
+            phasers[module].frequencyIn <- 600.0f;
+            phasers[module].feedbackIn <- 0.0f;
+            phasers[module].phaseIn <- 90.0f;
+            phasers[module].tempoBpmIn <- 120.0f;
+        }
+    }
+
+    void main()
+    {
+        configureBaseline();
+
+        // moduleFreeReference keeps the baseline: Free at an explicit 0.5 Hz, the
+        // rate a whole note at 120 bpm resolves to.
+        phasers[moduleSyncEqualsFree].rateModeIn <- rateModeSync;
+
+        // The same synced rate reached two different ways: 120 bpm at 1/1, and
+        // 60 bpm at 1/2.
+        phasers[moduleSyncSlowTempo].rateModeIn <- rateModeSync;
+
+        phasers[moduleSyncFastTempo].rateModeIn <- rateModeSync;
+        phasers[moduleSyncFastTempo].rateDivisionIn <- divisionHalfNote;
+        phasers[moduleSyncFastTempo].tempoBpmIn <- 60.0f;
+
+        // In Sync mode the free rate is inert, however extreme it is set.
+        phasers[moduleSyncIgnoresRate].rateModeIn <- rateModeSync;
+        phasers[moduleSyncIgnoresRate].rateIn <- 8.0f;
+
+        // In Free mode the division is inert, however extreme it is set.
+        // moduleFreeWholeNote keeps the baseline's 1/1.
+        phasers[moduleFreeSixteenth].rateDivisionIn <- divisionSixteenth;
+
+        // But in Sync mode the division most certainly is not inert.
+        phasers[moduleSyncDivided].rateModeIn <- rateModeSync;
+        phasers[moduleSyncDivided].rateDivisionIn <- divisionEighth;
+
+        // Two synced rates that both exceed the LFO's 8 Hz ceiling land on the
+        // same clamped rate. This is the clamp behaving as a documented boundary
+        // rather than as a silent fallback.
+        phasers[moduleSyncClampedA].rateModeIn <- rateModeSync;
+        phasers[moduleSyncClampedA].rateDivisionIn <- divisionSixteenth;
+        phasers[moduleSyncClampedA].tempoBpmIn <- 300.0f;
+
+        phasers[moduleSyncClampedB].rateModeIn <- rateModeSync;
+        phasers[moduleSyncClampedB].rateDivisionIn <- divisionEighth;
+        phasers[moduleSyncClampedB].tempoBpmIn <- 300.0f;
+
+        // The tempo endpoint carries its own documented 20..300 bpm range. Both
+        // pairs below resolve well inside the 0.02..8.0 Hz rate window - 10 bpm is
+        // 0.042 Hz and 400 bpm is 1.67 Hz - so the rate clamp cannot mask a missing
+        // tempo clamp, and an out-of-range tempo must land on the boundary rather
+        // than run off it.
+        phasers[moduleTempoBelowFloor].rateModeIn <- rateModeSync;
+        phasers[moduleTempoBelowFloor].tempoBpmIn <- 10.0f;
+
+        phasers[moduleTempoAtFloor].rateModeIn <- rateModeSync;
+        phasers[moduleTempoAtFloor].tempoBpmIn <- 20.0f;
+
+        phasers[moduleTempoAboveCeiling].rateModeIn <- rateModeSync;
+        phasers[moduleTempoAboveCeiling].tempoBpmIn <- 400.0f;
+
+        phasers[moduleTempoAtCeiling].rateModeIn <- rateModeSync;
+        phasers[moduleTempoAtCeiling].tempoBpmIn <- 300.0f;
+
+        // The free rate has the same 0.02..8.0 Hz bounds as the synced one, and the
+        // baseline's depth of 0.7 means a wrong rate is immediately audible. Without
+        // the clamp the low pair would sweep BACKWARDS at 5 Hz instead of creeping
+        // forwards at 0.02 Hz.
+        phasers[moduleFreeRateAboveCeiling].rateIn <- 99.0f;
+        phasers[moduleFreeRateAtCeiling].rateIn <- 8.0f;
+        phasers[moduleFreeRateBelowFloor].rateIn <- -5.0f;
+        phasers[moduleFreeRateAtFloor].rateIn <- 0.02f;
+
+        // A division index below the table resolves to the table's first entry. This
+        // pair has to be in Sync mode to observe it at all, and it is the low end
+        // that discriminates: an out-of-range HIGH index happens to fall through the
+        // table to its last entry, which is where the clamp would have sent it too.
+        phasers[moduleDivisionBelowFloor].rateModeIn <- rateModeSync;
+        phasers[moduleDivisionBelowFloor].rateDivisionIn <- -5.0f;
+
+        phasers[moduleDivisionAtFloor].rateModeIn <- rateModeSync;
+        phasers[moduleDivisionAtFloor].rateDivisionIn <- 0.0f;
+
+        // The Free/Sync selector arrives as a float, so it is both clamped and
+        // ROUNDED. All three modules below must land on Sync, which the baseline
+        // resolves to 0.5 Hz, while their free rate of 6 Hz is nowhere near it - so
+        // a selector that truncated 0.6 to Free, or let 9.0 through as neither
+        // constant, would be plainly audible rather than a silent near-miss.
+        phasers[moduleRateModeAboveCeiling].rateModeIn <- 9.0f;
+        phasers[moduleRateModeAboveCeiling].rateIn <- 6.0f;
+
+        phasers[moduleRateModeAtCeiling].rateModeIn <- 1.0f;
+        phasers[moduleRateModeAtCeiling].rateIn <- 6.0f;
+
+        phasers[moduleRateModeRounds].rateModeIn <- 0.6f;
+        phasers[moduleRateModeRounds].rateIn <- 6.0f;
+
+        // The division selector rounds the same way: 1.6 is the 1/1 entry at index
+        // 2, not the 2/1 entry at index 1.
+        phasers[moduleDivisionRounds].rateModeIn <- rateModeSync;
+        phasers[moduleDivisionRounds].rateDivisionIn <- 1.6f;
+
+        bool syncMatchesFree = true;
+        bool syncTempoDivisionAgree = true;
+        bool syncIgnoresFreeRate = true;
+        bool freeIgnoresDivision = true;
+        bool clampedRatesAgree = true;
+        bool tempoFloorHolds = true;
+        bool tempoCeilingHolds = true;
+        bool freeRateCeilingHolds = true;
+        bool freeRateFloorHolds = true;
+        bool divisionFloorHolds = true;
+        bool rateModeCeilingHolds = true;
+        bool rateModeRounds = true;
+        bool divisionRounds = true;
+        float32 divisionDifference;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = nextInputSample();
+            let stereoSample = float32<2> (sample, sample);
+
+            for (wrap<moduleCount> module)
+            {
+                phasers[module].in <- stereoSample;
+                phasers[module].advance();
+            }
+
+            if (phasers[moduleFreeReference].out[0] != phasers[moduleSyncEqualsFree].out[0])
+                syncMatchesFree = false;
+
+            if (phasers[moduleSyncSlowTempo].out[0] != phasers[moduleSyncFastTempo].out[0])
+                syncTempoDivisionAgree = false;
+
+            if (phasers[moduleSyncEqualsFree].out[0] != phasers[moduleSyncIgnoresRate].out[0])
+                syncIgnoresFreeRate = false;
+
+            if (phasers[moduleFreeWholeNote].out[0] != phasers[moduleFreeSixteenth].out[0])
+                freeIgnoresDivision = false;
+
+            if (phasers[moduleSyncClampedA].out[0] != phasers[moduleSyncClampedB].out[0])
+                clampedRatesAgree = false;
+
+            if (phasers[moduleTempoBelowFloor].out[0] != phasers[moduleTempoAtFloor].out[0])
+                tempoFloorHolds = false;
+
+            if (phasers[moduleTempoAboveCeiling].out[0] != phasers[moduleTempoAtCeiling].out[0])
+                tempoCeilingHolds = false;
+
+            if (phasers[moduleFreeRateAboveCeiling].out[0] != phasers[moduleFreeRateAtCeiling].out[0])
+                freeRateCeilingHolds = false;
+
+            if (phasers[moduleFreeRateBelowFloor].out[0] != phasers[moduleFreeRateAtFloor].out[0])
+                freeRateFloorHolds = false;
+
+            if (phasers[moduleDivisionBelowFloor].out[0] != phasers[moduleDivisionAtFloor].out[0])
+                divisionFloorHolds = false;
+
+            if (phasers[moduleRateModeAboveCeiling].out[0] != phasers[moduleRateModeAtCeiling].out[0])
+                rateModeCeilingHolds = false;
+
+            if (phasers[moduleRateModeRounds].out[0] != phasers[moduleRateModeAtCeiling].out[0])
+                rateModeRounds = false;
+
+            if (phasers[moduleDivisionRounds].out[0] != phasers[moduleSyncEqualsFree].out[0])
+                divisionRounds = false;
+
+            divisionDifference = std::intrinsics::max (
+                divisionDifference,
+                std::intrinsics::abs (phasers[moduleSyncSlowTempo].out[0] - phasers[moduleSyncDivided].out[0])
+            );
+        }
+
+        // Sync at 120 bpm on a whole note IS a free rate of 0.5 Hz, exactly.
+        out <- syncMatchesFree ? 1 : 0;
+        advance();
+
+        // The division table's ratios are exact: 120 bpm at 1/1 == 60 bpm at 1/2.
+        out <- syncTempoDivisionAgree ? 1 : 0;
+        advance();
+
+        // Selecting Sync makes the free Hz control genuinely inert.
+        out <- syncIgnoresFreeRate ? 1 : 0;
+        advance();
+
+        // Selecting Free makes the division control genuinely inert.
+        out <- freeIgnoresDivision ? 1 : 0;
+        advance();
+
+        // Both over-ceiling sync rates clamp to the same 8 Hz.
+        out <- clampedRatesAgree ? 1 : 0;
+        advance();
+
+        // And the division is a real, audible choice within Sync mode.
+        out <- (divisionDifference > 0.01f) ? 1 : 0;
+        advance();
+
+        // A tempo below the supported range resolves as the floor...
+        out <- tempoFloorHolds ? 1 : 0;
+        advance();
+
+        // ...and one above it as the ceiling.
+        out <- tempoCeilingHolds ? 1 : 0;
+        advance();
+
+        // The free rate is bounded at both ends too.
+        out <- freeRateCeilingHolds ? 1 : 0;
+        advance();
+
+        out <- freeRateFloorHolds ? 1 : 0;
+        advance();
+
+        // ...and so is the division index.
+        out <- divisionFloorHolds ? 1 : 0;
+        advance();
+
+        // The Free/Sync selector is bounded...
+        out <- rateModeCeilingHolds ? 1 : 0;
+        advance();
+
+        // ...and both discrete selectors round to the nearest entry rather than
+        // truncating toward zero.
+        out <- rateModeRounds ? 1 : 0;
+        advance();
+
+        out <- divisionRounds ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// 6. THE CONTROL-RATE COEFFICIENT REFRESH IS FINE ENOUGH TO RENDER THE SWEEP.
+//
+//    setFrequency() calls tan(), so the eight allpass sections are refreshed on a
+//    16-frame stride rather than every frame. What that stride has to buy is a
+//    sweep that is actually resolved: with a fixed 600 Hz probe at full depth and
+//    the maximum 8 Hz rate, the notch comb must travel across the probe, so the
+//    module's output envelope must traverse a wide range. A stride too coarse to
+//    resolve the LFO freezes the coefficients and the envelope collapses to a flat
+//    line - measured: this module's block-peak range is 0.497 of a 0.5 input, and
+//    the same module with the stride widened to 11025 frames measures exactly 0.
+//
+//    HONEST LIMIT OF THE SECOND ASSERTION. I originally wrote this section to catch
+//    coefficient STEPPING via excess sample-to-sample slope, and measured that it
+//    cannot: at a 600 Hz probe the production module's peak output slope is 1.073x
+//    the input's, and widening the stride to 11025 frames takes it DOWN to 1.000x,
+//    because frozen coefficients are a static filter and a static filter is
+//    perfectly smooth. The stepping artefact is smaller than the signal's own
+//    slope. So the slope assertion below is kept only as what it really is - a
+//    continuity guard that would catch a gross output discontinuity such as a stray
+//    state reset - and the sweep-traversal assertion above is what actually pins
+//    the stride.
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserControlRateTest [[ main ]]
+{
+    output stream int32 out;
+
+    node phaser = wt::PhaserBus;
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let probeHz = 600.0f;
+    let settleFrames = 4096;
+    let blockFrames = 256;
+    let blockCount = 256;
+
+    float32 inputPhase;
+
+    float32 nextInputSample()
+    {
+        let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+        inputPhase = std::intrinsics::wrap (inputPhase + (probeHz / float32 (processor.frequency)), 1.0f);
+        return sample;
+    }
+
+    void main()
+    {
+        phaser.mixIn <- 1.0f;
+        phaser.rateIn <- 8.0f;
+        phaser.depthIn <- 1.0f;
+        phaser.frequencyIn <- 600.0f;
+        phaser.feedbackIn <- 0.0f;
+        phaser.phaseIn <- 0.0f;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            let sample = nextInputSample();
+            phaser.in <- float32<2> (sample, sample);
+            phaser.advance();
+        }
+
+        float32 previousInput;
+        float32 previousOutput;
+        float32 maximumInputSlope;
+        float32 maximumOutputSlope;
+        float32 lowestBlockPeak = 1000.0f;
+        float32 highestBlockPeak;
+
+        for (int32 block = 0; block < blockCount; ++block)
+        {
+            float32 blockPeak;
+
+            for (int32 frame = 0; frame < blockFrames; ++frame)
+            {
+                let sample = nextInputSample();
+                phaser.in <- float32<2> (sample, sample);
+                phaser.advance();
+                let rendered = phaser.out[0];
+
+                blockPeak = std::intrinsics::max (blockPeak, std::intrinsics::abs (rendered));
+                maximumInputSlope = std::intrinsics::max (
+                    maximumInputSlope,
+                    std::intrinsics::abs (sample - previousInput)
+                );
+                maximumOutputSlope = std::intrinsics::max (
+                    maximumOutputSlope,
+                    std::intrinsics::abs (rendered - previousOutput)
+                );
+
+                previousInput = sample;
+                previousOutput = rendered;
+            }
+
+            lowestBlockPeak = std::intrinsics::min (lowestBlockPeak, blockPeak);
+            highestBlockPeak = std::intrinsics::max (highestBlockPeak, blockPeak);
+        }
+
+        // The comb genuinely travels: the probe goes from sitting in a notch to
+        // sitting in a peak and back, across at least half the input's amplitude.
+        out <- ((highestBlockPeak - lowestBlockPeak) >= 0.25f) ? 1 : 0;
+        advance();
+
+        // Continuity guard - see the honest limit noted above.
+        out <- (maximumOutputSlope <= 2.0f * maximumInputSlope) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// 7. THE CLAMPS ARE ACTUALLY APPLIED.
+//
+//    Driving a parameter TO its declared limit only proves the module survives the
+//    limit; it says nothing about the clamp, because a module with no clamp at all
+//    behaves identically there. The clamp is only observable BEYOND the limit, so
+//    each extreme below is measured twice - once at the declared bound and once far
+//    outside it - and the two must render bit-identically.
+//
+//    This is not hypothetical for a rack module. ADR-012 makes every continuous
+//    parameter here a modulation destination, so what arrives at these endpoints is
+//    a base value plus a modulation offset, and the module is the last place that
+//    can be sure the sum is in range.
+//
+//    The at-the-limit runs additionally have to stay finite and inside the derived
+//    level bound, since they include maximum feedback at both polarities.
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserExtremesTest [[ main ]]
+{
+    output stream int32 out;
+
+    let moduleCount = 8;
+
+    let moduleAtMinimum = 0;
+    let moduleBelowMinimum = 1;
+    let moduleAtMaximum = 2;
+    let moduleAboveMaximum = 3;
+    let moduleMixAtMaximum = 4;
+    let moduleMixAboveMaximum = 5;
+    let moduleMixAtMinimum = 6;
+    let moduleMixBelowMinimum = 7;
+
+    node phasers = wt::PhaserBus[moduleCount];
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let settleFrames = 2048;
+    let measureFrames = 8192;
+
+    float32 inputPhase;
+
+    float32 nextInputSample()
+    {
+        let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+        inputPhase = std::intrinsics::wrap (inputPhase + (287.0f / float32 (processor.frequency)), 1.0f);
+        return sample;
+    }
+
+    void configureBaseline()
+    {
+        for (wrap<moduleCount> module)
+        {
+            phasers[module].mixIn <- 1.0f;
+            phasers[module].rateIn <- 0.3f;
+            phasers[module].rateModeIn <- 0.0f;
+            phasers[module].rateDivisionIn <- 2.0f;
+            phasers[module].depthIn <- 0.7f;
+            phasers[module].frequencyIn <- 600.0f;
+            phasers[module].feedbackIn <- 0.0f;
+            phasers[module].phaseIn <- 90.0f;
+            phasers[module].tempoBpmIn <- 120.0f;
+        }
+    }
+
+    void main()
+    {
+        configureBaseline();
+
+        // Every parameter except Mix at its declared minimum, and then far below it.
+        phasers[moduleAtMinimum].rateIn <- 0.02f;
+        phasers[moduleAtMinimum].rateModeIn <- 0.0f;
+        phasers[moduleAtMinimum].rateDivisionIn <- 0.0f;
+        phasers[moduleAtMinimum].depthIn <- 0.0f;
+        phasers[moduleAtMinimum].frequencyIn <- 60.0f;
+        phasers[moduleAtMinimum].feedbackIn <- -0.95f;
+        phasers[moduleAtMinimum].phaseIn <- -180.0f;
+        phasers[moduleAtMinimum].tempoBpmIn <- 20.0f;
+
+        phasers[moduleBelowMinimum].rateIn <- -5.0f;
+        phasers[moduleBelowMinimum].rateModeIn <- -5.0f;
+        phasers[moduleBelowMinimum].rateDivisionIn <- -5.0f;
+        phasers[moduleBelowMinimum].depthIn <- -3.0f;
+        phasers[moduleBelowMinimum].frequencyIn <- -1000.0f;
+        phasers[moduleBelowMinimum].feedbackIn <- -9.0f;
+        phasers[moduleBelowMinimum].phaseIn <- -900.0f;
+        phasers[moduleBelowMinimum].tempoBpmIn <- -50.0f;
+
+        // ...and at its declared maximum, then far above it. Sync is selected here so
+        // the mode and division selectors are clamped as well as the scalars.
+        phasers[moduleAtMaximum].rateIn <- 8.0f;
+        phasers[moduleAtMaximum].rateModeIn <- 1.0f;
+        phasers[moduleAtMaximum].rateDivisionIn <- 12.0f;
+        phasers[moduleAtMaximum].depthIn <- 1.0f;
+        phasers[moduleAtMaximum].frequencyIn <- 8000.0f;
+        phasers[moduleAtMaximum].feedbackIn <- 0.95f;
+        phasers[moduleAtMaximum].phaseIn <- 180.0f;
+        phasers[moduleAtMaximum].tempoBpmIn <- 300.0f;
+
+        phasers[moduleAboveMaximum].rateIn <- 99.0f;
+        phasers[moduleAboveMaximum].rateModeIn <- 9.0f;
+        phasers[moduleAboveMaximum].rateDivisionIn <- 99.0f;
+        phasers[moduleAboveMaximum].depthIn <- 3.0f;
+        phasers[moduleAboveMaximum].frequencyIn <- 99000.0f;
+        phasers[moduleAboveMaximum].feedbackIn <- 9.0f;
+        phasers[moduleAboveMaximum].phaseIn <- 900.0f;
+        phasers[moduleAboveMaximum].tempoBpmIn <- 9000.0f;
+
+        // Mix gets its own pair at each end, because a clamped Mix changes which
+        // branch of the module runs at all and cannot be folded into the runs above.
+        // 2.0, not 5.0: the equal-power law is cos/sin of 0.5*pi*mix, which has a
+        // period of 4 in mix, so an unclamped 5.0 would alias exactly onto 1.0 and
+        // the assertion would pass without a clamp anywhere in sight. 2.0 lands on
+        // cos(pi) = -1 instead, which is unmistakable.
+        phasers[moduleMixAtMaximum].mixIn <- 1.0f;
+        phasers[moduleMixAboveMaximum].mixIn <- 2.0f;
+        phasers[moduleMixAtMinimum].mixIn <- 0.0f;
+        phasers[moduleMixBelowMinimum].mixIn <- -3.0f;
+
+        bool minimumIsSane = true;
+        bool maximumIsSane = true;
+        bool belowMinimumIsClamped = true;
+        bool aboveMaximumIsClamped = true;
+        bool mixAboveMaximumIsClamped = true;
+        bool mixBelowMinimumIsDry = true;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let sample = nextInputSample();
+            let stereoSample = float32<2> (sample, sample);
+
+            for (wrap<moduleCount> module)
+            {
+                phasers[module].in <- stereoSample;
+                phasers[module].advance();
+            }
+
+            if (phasers[moduleBelowMinimum].out[0] != phasers[moduleAtMinimum].out[0]
+                 || phasers[moduleBelowMinimum].out[1] != phasers[moduleAtMinimum].out[1])
+                belowMinimumIsClamped = false;
+
+            if (phasers[moduleAboveMaximum].out[0] != phasers[moduleAtMaximum].out[0]
+                 || phasers[moduleAboveMaximum].out[1] != phasers[moduleAtMaximum].out[1])
+                aboveMaximumIsClamped = false;
+
+            if (phasers[moduleMixAboveMaximum].out[0] != phasers[moduleMixAtMaximum].out[0])
+                mixAboveMaximumIsClamped = false;
+
+            if (phasers[moduleMixBelowMinimum].out[0] != sample
+                 || phasers[moduleMixBelowMinimum].out[1] != sample)
+                mixBelowMinimumIsDry = false;
+
+            if (frame < settleFrames)
+                continue;
+
+            let minimumRendered = phasers[moduleAtMinimum].out;
+            let maximumRendered = phasers[moduleAtMaximum].out;
+
+            for (wrap<2> channel)
+            {
+                if (minimumRendered[channel] != minimumRendered[channel]
+                     || std::intrinsics::abs (minimumRendered[channel]) > 1.5f)
+                    minimumIsSane = false;
+
+                if (maximumRendered[channel] != maximumRendered[channel]
+                     || std::intrinsics::abs (maximumRendered[channel]) > 1.5f)
+                    maximumIsSane = false;
+            }
+        }
+
+        // At both declared extremes the module stays finite and inside its level bound.
+        out <- minimumIsSane ? 1 : 0;
+        advance();
+
+        out <- maximumIsSane ? 1 : 0;
+        advance();
+
+        // Beyond the declared range, every parameter lands exactly on its bound.
+        out <- belowMinimumIsClamped ? 1 : 0;
+        advance();
+
+        out <- aboveMaximumIsClamped ? 1 : 0;
+        advance();
+
+        out <- mixAboveMaximumIsClamped ? 1 : 0;
+        advance();
+
+        // A negative Mix is still a hard bypass, bit for bit - not a phase inversion
+        // and not a partial wet path. Note honestly that this one is enforced by the
+        // sleep branch's `mix01 > epsilon` test rather than by clampPhaserMix: a
+        // negative mix takes the dry branch with or without the clamp, so this
+        // assertion pins the BEHAVIOUR and the assertion above pins the clamp.
+        out <- mixBelowMinimumIsDry ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+// ---------------------------------------------------------------------------
+// 8. SLEEP AND WAKE LEAVE NO TRACE (ADR-005: "re-enabling must not expose an
+//    unsmoothed stale-state transient").
+//
+//    At mix 0 the module clears its eight biquad states and its two feedback
+//    samples and stops processing - the small, effect-local sleep ADR-005 permits.
+//    Two things must survive that: the LFO has to keep running, so the sweep is
+//    phase-continuous across the silent stretch, and waking has to refresh the
+//    coefficients immediately rather than serving up to 15 frames of whatever the
+//    LFO phase was when the module went to sleep.
+//
+//    Both are pinned exactly, by construction rather than by tolerance. A stays
+//    awake throughout; B sleeps for a whole second at the fastest LFO rate, which
+//    is eight complete sweeps. Both are driven with REAL SIGNAL first, so both carry
+//    live filter state into the silence - B has something to clear, and a sleep that
+//    forgot to clear it would freeze that state for the whole second while A's
+//    decayed away to nothing. B's sleep length is chosen so that its post-wake
+//    refresh cadence realigns with A's 16-frame stride. If the LFO froze while B
+//    slept, if B woke on stale coefficients, or if B kept its old filter state, the
+//    two diverge on the first frames of real signal.
+//
+//    B is deliberately made to sleep with its refresh countdown mid-stride (100
+//    active frames, not a multiple of 16), because with the countdown already at
+//    zero the wake refresh would be indistinguishable from the ordinary one.
+// ---------------------------------------------------------------------------
+
+## testProcessor()
+
+processor PhaserSleepWakeTest [[ main ]]
+{
+    output stream int32 out;
+
+    node alwaysAwake = wt::PhaserBus;
+    node sleeperNode = wt::PhaserBus;
+
+    let testTwoPi = 6.28318530717958647692f;
+    let inputAmplitude = 0.5f;
+    let activeBeforeSleep = 100;
+    let sleepFrames = 44092;        // activeBeforeSleep + sleepFrames == 44192 == 16 * 2762
+    let measureFrames = 8192;
+
+    float32 inputPhase;
+
+    void configure (float32 sleeperMix)
+    {
+        alwaysAwake.mixIn <- 1.0f;
+        alwaysAwake.rateIn <- 8.0f;
+        alwaysAwake.depthIn <- 1.0f;
+        alwaysAwake.frequencyIn <- 600.0f;
+        alwaysAwake.feedbackIn <- 0.0f;
+        alwaysAwake.phaseIn <- 90.0f;
+
+        sleeperNode.mixIn <- sleeperMix;
+        sleeperNode.rateIn <- 8.0f;
+        sleeperNode.depthIn <- 1.0f;
+        sleeperNode.frequencyIn <- 600.0f;
+        sleeperNode.feedbackIn <- 0.0f;
+        sleeperNode.phaseIn <- 90.0f;
+    }
+
+    void renderSilence (int32 frames)
+    {
+        for (int32 frame = 0; frame < frames; ++frame)
+        {
+            alwaysAwake.in <- float32<2> (0.0f, 0.0f);
+            alwaysAwake.advance();
+            sleeperNode.in <- float32<2> (0.0f, 0.0f);
+            sleeperNode.advance();
+        }
+    }
+
+    void main()
+    {
+        // Both awake and driven, so both accumulate real filter state.
+        configure (1.0f);
+
+        for (int32 frame = 0; frame < activeBeforeSleep; ++frame)
+        {
+            let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+            inputPhase = std::intrinsics::wrap (inputPhase + (287.0f / float32 (processor.frequency)), 1.0f);
+            let stereoSample = float32<2> (sample, sample);
+
+            alwaysAwake.in <- stereoSample;  alwaysAwake.advance();
+            sleeperNode.in <- stereoSample;  sleeperNode.advance();
+        }
+
+        // B sleeps through eight full LFO cycles while A keeps sweeping. A's live
+        // state decays to exactly zero across 44092 frames of silence; B's must be
+        // cleared outright, because a sleeping module does not process and so cannot
+        // decay anything.
+        configure (0.0f);
+        renderSilence (sleepFrames);
+
+        // B wakes. From here the two must agree bit for bit.
+        configure (1.0f);
+
+        bool wakeIsSeamless = true;
+        bool wokeToSomething = false;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = inputAmplitude * std::intrinsics::sin (testTwoPi * inputPhase);
+            inputPhase = std::intrinsics::wrap (inputPhase + (287.0f / float32 (processor.frequency)), 1.0f);
+            let stereoSample = float32<2> (sample, sample);
+
+            alwaysAwake.in <- stereoSample;  alwaysAwake.advance();
+            sleeperNode.in <- stereoSample;  sleeperNode.advance();
+
+            if (alwaysAwake.out[0] != sleeperNode.out[0]
+                 || alwaysAwake.out[1] != sleeperNode.out[1])
+                wakeIsSeamless = false;
+
+            if (std::intrinsics::abs (sleeperNode.out[0]) > 0.01f)
+                wokeToSomething = true;
+        }
+
+        // The woken module is indistinguishable from one that never slept: its LFO
+        // stayed on the rack's clock and its coefficients were refreshed on wake.
+        out <- wakeIsSeamless ? 1 : 0;
+        advance();
+
+        // ...and it really did wake up, so the assertion above is not comparing two
+        // silences.
+        out <- wokeToSomething ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

@@ -1,0 +1,125 @@
+// Production-path effects-rack tests for the real synth patch main.
+// These tests intentionally exercise WavetableSynth.cmajorpatch rather than a probe
+// graph: what they pin is the INTEGRATION - that the rack, the fixed output stage and
+// the rewired analyzers reach real DSP through the whole instrument.
+//
+// THE GOLDENS ARE INDEPENDENT, WHICH IS THE ONLY REASON THESE TESTS MEAN ANYTHING.
+// expectedOutput-audioOut.wav in fixtures/rack_default_inert and in
+// fixtures/rack_shipping_chain_identity_order was rendered by the PRE-RACK patch -
+// the fixed `trim -> distortion -> chorus -> audioOut` tail - before a line of this
+// integration existed, and was never regenerated afterwards. A golden regenerated from
+// the code under test proves only self-consistency; these two prove that the code under
+// test still sounds like the instrument that shipped. Every other fixture below reuses
+// one of those two files verbatim, so the entire suite is anchored to pre-rack audio.
+//
+// WHY THE NOTE STARTS AT FRAME 1024. A structure upload costs one ADR-003 transition:
+// the rack fades to exact silence, swaps, and fades back, which at 44.1 kHz is 2 x 132
+// frames. Uploading at frame 0 therefore leaves the rack at exact unity from frame 264
+// onwards, long before the note sounds. The fixtures are built that way so that a
+// difference in the rendered audio can only be the REORDERING, never the fade - the
+// transition itself is pinned frame-by-frame in RackShape.cmajtest, where it belongs.
+//
+// WHAT EACH CASE PINS:
+//   1. rack_default_inert                  - the rack in the path changes nothing.
+//   2. rack_all_disabled_dry               - hard audible bypass, at patch level.
+//   3. rack_rejected_order                 - a malformed order is rejected, not coerced.
+//   4. rack_shipping_chain_identity_order  - moving Distortion and Chorus into the rack
+//                                            preserved the shipping sound.
+//   5. rack_order_distortion_then_chorus   - an explicit reorder that preserves the two
+//                                            enabled modules' relative order preserves
+//                                            the sound, against that same pre-rack golden.
+//   6. rack_order_chorus_then_distortion   - swapping just those two changes it.
+
+const patchPath = "../../WavetableSynth.cmajorpatch";
+const defaultFrequency = 44100;
+const defaultBlockSize = 64;
+const samplesToRender = 8192;
+
+// -300 dB is bit-exactness in float32, not a tolerance. The rack's claim is that its
+// dry paths are EXACT, so the tests state it that way; anything looser would let a
+// silently-wrong forward or a stray coefficient hide under the floor.
+const bitExactDiffDb = -300.0;
+
+// Compares every output the patch has, including the two distortion analyzers, which
+// now read preview streams forwarded through the rack rather than reaching into
+// wt::DistortionBus directly. That rewiring is invisible in the audio and would
+// otherwise go unasserted.
+function fullPatchRun(subDir)
+{
+    return {
+        patch: patchPath,
+        subDir,
+        frequency: defaultFrequency,
+        blockSize: defaultBlockSize,
+        samplesToRender,
+        sessionID: 1,
+        skipMissingInputs: true,
+        maxDiffDb: bitExactDiffDb
+    };
+}
+
+// Audio plus effectiveRackState - what the rack committed and what it rejected - for
+// the four fixtures whose other outputs have no independent pre-rack baseline to be
+// compared against and would therefore only be asserting against themselves.
+function audioPatchRun(subDir)
+{
+    let options = fullPatchRun (subDir);
+    options.skipMissingOutputs = true;
+    return options;
+}
+
+// 1. INERTNESS. Default rack: identity order, OTT off, every Mix/Wet at its dry init.
+//    Eight resident modules are advancing every frame and wt::RackOutputStage is
+//    shaping every sample, and the instrument is bit-identical to the one that had
+//    neither. Compared across ALL outputs, not just audio.
+
+## runScript (fullPatchRun("fixtures/rack_default_inert"))
+
+// 2. HARD AUDIBLE BYPASS (ADR-005). Same render, but every module's wet control is
+//    driven hard - lowpass at 200 Hz with resonance 8, 30 dB of distortion at full wet,
+//    chorus/flanger/phaser/delay/reverb all at mix 1.0 with feedback 0.9 - and every
+//    module is disabled by one rackEnable upload. Bit-identical to the dry golden.
+//    A disabled module passes the signal through EXACTLY; it does not merely go quiet.
+
+## runScript (audioPatchRun("fixtures/rack_all_disabled_dry"))
+
+// 3. STRUCTURE VALIDATION (rack invariant C11). The uploaded order (1,1,2,3,4,5,6,7)
+//    names module 1 twice and module 0 never. A module advanced zero times per frame
+//    silently re-emits its previous frame - a corrupted time base with no error attached
+//    - so the upload is rejected outright. effectiveRackState reports rejectedOrderCount
+//    1 with committedStructureGeneration still 0 and committedOrderCode still the
+//    identity permutation, and the audio is bit-identical to the dry golden because the
+//    running order was left completely intact. Rejected, never coerced.
+
+## runScript (audioPatchRun("fixtures/rack_rejected_order"))
+
+// 4. THE SHIPPING CHAIN STILL SOUNDS LIKE ITSELF. Distortion at full wet and Chorus at
+//    mix 0.6, no rack uploads at all, against a golden rendered by the pre-rack patch
+//    with the same parameter values through the fixed distortion -> chorus tail. This is
+//    the assertion that moving two shipping effects into a runtime-ordered rack was a
+//    refactor and not a rewrite. Compared across ALL outputs.
+
+## runScript (fullPatchRun("fixtures/rack_shipping_chain_identity_order"))
+
+// 5. A REORDER REACHES REAL DSP, AND PRESERVES WHAT IT SHOULD. Same parameters, with
+//    rackOrder (1,3,0,2,4,5,6,7) uploaded at frame 0: Distortion moves to position 0 and
+//    Chorus to position 1, with the six dry modules behind them. Their RELATIVE order is
+//    unchanged, and the six modules that moved are bit-exact passthroughs, so the audio
+//    must still equal the pre-rack shipping-chain golden exactly. This is the case that
+//    catches a rack which corrupts the signal simply by being reordered.
+
+## runScript (audioPatchRun("fixtures/rack_order_distortion_then_chorus"))
+
+// 6. ...AND SWAPPING THE TWO CHANGES THE SOUND. Byte-for-byte the inputs of case 5 with
+//    one field different - rackOrder (3,1,0,2,4,5,6,7), Chorus now ahead of Distortion.
+//    This is the suite's ONLY golden rendered by the code under test, and the pairing is
+//    what stops that from being circular: it differs from case 5's pre-rack golden by
+//    maxDiff 0.0291 against a 0.4123 peak, i.e. -23.0 dB - 277 dB above the floor these
+//    tests assert at - so a rack that ignored rackOrder would render cases 5 and 6
+//    identically and could then match at most one of the two goldens.
+//    expectedOutput-effectiveRackState.json pins the other half: the DSP committed the
+//    exact permutation that was uploaded - 16434187, the eight module ids packed three
+//    bits per position, least-significant-position first - rather than coercing it, and
+//    committed it on frame 132, which is ADR-003's 3 ms transition at 44.1 kHz.
+
+## runScript (audioPatchRun("fixtures/rack_order_chorus_then_distortion"))

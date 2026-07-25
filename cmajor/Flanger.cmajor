@@ -1,0 +1,237 @@
+namespace wt
+{
+    let flangerPi = 3.14159265358979323846f;
+    let flangerChannelCount = 2;
+
+    // 24 ms of ring buffer covers the 8.0 ms maximum sweep with room to spare for
+    // the Catmull-Rom read window. At processor.maxFrequency (192 kHz) that is
+    // 4616 frames x 2 channels x 4 bytes = 36 KB, fixed, resident and never resized.
+    let flangerMaxDelayMs = 24.0f;
+
+    // The comb. A 0.6 ms floor puts the first notch at 833 Hz; the sweep takes the
+    // delay out to 8.0 ms, walking that notch down to 62 Hz. Short enough to read as
+    // a flanger rather than as a chorus or a slapback.
+    let flangerBaseDelayMs = 0.6f;
+    let flangerSweepDelayMs = 7.4f;
+
+    // Right channel LFO in quadrature - the same stereo device ChorusBus uses
+    // (chorusRightPhaseOffset, Chorus.cmajor:12).
+    let flangerRightPhaseOffset = 0.25f;
+
+    // Regeneration ceiling. flangerSaturate below is v / (1 + |v| / 8), which is
+    // exactly wt::chorusSoftClipLarge at drive 1 (Chorus.cmajor:49-53) - the
+    // instrument's existing feedback-loop limiter, so the chorus and flanger
+    // regeneration paths saturate with the same character.
+    let flangerLoopCeiling = 8.0f;
+
+    let flangerRateMinHz = 0.02f;
+    let flangerRateMaxHz = 8.0f;
+    let flangerDepthMin = 0.0f;
+    let flangerDepthMax = 1.0f;
+    let flangerFeedbackMin = -0.95f;
+    let flangerFeedbackMax = 0.95f;
+    let flangerMixMin = 0.0f;
+    let flangerMixMax = 1.0f;
+
+    // Control-rate recompute thresholds, following the house rule at
+    // Distortion.cmajor:144-160: rebuild a coefficient only once its driving value
+    // has actually moved.
+    let flangerRateEpsilonHz = 0.0001f;
+    let flangerDepthEpsilon = 0.0001f;
+
+    float32 clampFlangerRateHz (float32 value)
+    {
+        return std::intrinsics::clamp (value, flangerRateMinHz, flangerRateMaxHz);
+    }
+
+    float32 clampFlangerDepth (float32 value)
+    {
+        return std::intrinsics::clamp (value, flangerDepthMin, flangerDepthMax);
+    }
+
+    float32 clampFlangerFeedback (float32 value)
+    {
+        return std::intrinsics::clamp (value, flangerFeedbackMin, flangerFeedbackMax);
+    }
+
+    float32 clampFlangerMix (float32 value)
+    {
+        return std::intrinsics::clamp (value, flangerMixMin, flangerMixMax);
+    }
+
+    // The regeneration limiter. This is wt::chorusSoftClipLarge's curve at drive 1,
+    // written here rather than called from Chorus.cmajor for a language reason worth
+    // recording: a program that includes Chorus.cmajor but does not instantiate
+    // wt::ChorusBus does not compile - chorusBufferSize derives from
+    // processor.maxFrequency, which the compiler cannot fold for an uninstantiated
+    // processor ("error: The size of a 'wrap' or 'clamp' type must be a constant").
+    // Reaching into Chorus.cmajor for one helper would therefore chain every rack
+    // module's compile - and every module's isolated test - to a 2.9 MB chorus
+    // instance. The shared home for this is rackSoftClip in EffectsRack.cmajor.
+    float32 flangerSaturate (float32 value)
+    {
+        return value / (1.0f + (std::intrinsics::abs (value) / flangerLoopCeiling));
+    }
+
+    //==============================================================================
+    // Short modulated delay with feedback: the rack's Flanger module (ADR-001
+    // resident instance, ADR-005 hard audible bypass, ADR-008 zero latency).
+    //
+    // Stereo in, stereo out, in the shape of wt::DistortionBus and wt::ChorusBus so
+    // that wt::EffectsRack can drive it as a resident child node with
+    // `flanger.in <- signal; flanger.advance(); read flanger.out`.
+    //
+    // processor.latency is deliberately NOT declared. A composed child's latency
+    // does not propagate to its composing parent, so a rack module that declared any
+    // would make the instrument late while the host was told it was not (ADR-008).
+    //
+    // Every continuous parameter here is a legal modulation destination (ADR-012),
+    // including Mix - which is why each one is clamped in the DSP rather than
+    // trusting the endpoint's declared range: modulation arrives as an offset added
+    // to the base value and can land anywhere.
+    //==============================================================================
+    processor FlangerBus
+    {
+        input stream float32<2> in;
+
+        input value float32 rateIn     [[ name: "Flanger Rate",     min: 0.02f,  max: 8.0f,  init: 0.35f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 depthIn    [[ name: "Flanger Depth",    min: 0.0f,   max: 1.0f,  init: 0.6f,  rampFrames: 64 ]];
+        input value float32 feedbackIn [[ name: "Flanger Feedback", min: -0.95f, max: 0.95f, init: 0.0f,  rampFrames: 64 ]];
+        input value float32 mixIn      [[ name: "Flanger Mix",      min: 0.0f,   max: 1.0f,  init: 0.0f,  rampFrames: 128 ]];
+
+        output stream float32<2> out;
+
+        // The standing check, not a comment anyone can drift past. A composed child's
+        // declared latency does NOT propagate to its composing parent, so a rack
+        // module that declared any would make the instrument late while the host was
+        // told it was not - and nothing else in the toolchain would notice. Verified
+        // to fire: adding `processor.latency = 128;` above turns this into
+        // "8:5: error: A rack module must not declare latency (ADR-008)".
+        static_assert (processor.latency == 0, "A rack module must not declare latency (ADR-008)");
+
+        let flangerBufferSize = int (processor.maxFrequency * flangerMaxDelayMs * 0.001f) + 8;
+
+        float32[flangerChannelCount, flangerBufferSize] delayBuffers;
+        wrap<flangerBufferSize>[flangerChannelCount] delayWritePositions;
+
+        float32 lfoPhase;
+
+        // Cached control-rate coefficients. The negative sentinels are values the
+        // clamps can never produce, so the first frame always computes them.
+        float32 currentRateHz = -1.0f;
+        float32 phaseIncrement;
+        float32 currentDepth = -1.0f;
+        float32 sweepDelaySamples;
+        float32 baseDelaySamples;
+
+        void init()
+        {
+            baseDelaySamples = flangerBaseDelayMs * float32 (processor.frequency) * 0.001f;
+        }
+
+        void updateModulationCoefficients()
+        {
+            let sampleRate = float32 (processor.frequency);
+            let nextRateHz = clampFlangerRateHz (rateIn);
+            let nextDepth = clampFlangerDepth (depthIn);
+
+            if (std::intrinsics::abs (nextRateHz - currentRateHz) > flangerRateEpsilonHz)
+            {
+                phaseIncrement = nextRateHz / sampleRate;
+                currentRateHz = nextRateHz;
+            }
+
+            if (std::intrinsics::abs (nextDepth - currentDepth) > flangerDepthEpsilon)
+            {
+                sweepDelaySamples = nextDepth * flangerSweepDelayMs * sampleRate * 0.001f;
+                currentDepth = nextDepth;
+            }
+        }
+
+        // Fractional read of the ring buffer, in the shape of ChorusBus's
+        // readDelaySample (Chorus.cmajor:181-203), interpolating with the
+        // instrument's existing wt::catmullRom (FixedFrameOscillator.cmajor:250).
+        float32 readDelaySample (wrap<flangerChannelCount> channel, float32 delaySamples)
+        {
+            let clampedDelay = std::intrinsics::clamp (delaySamples, 2.0f, float32 (flangerBufferSize - 4));
+            let writeIndex = int32 (delayWritePositions[channel]);
+            let readPos = std::intrinsics::wrap (float32 (writeIndex) - clampedDelay, float32 (flangerBufferSize));
+            let index1 = int32 (std::intrinsics::floor (readPos));
+            let fraction = readPos - float32 (index1);
+            let i0 = wrap<flangerBufferSize> (index1 + flangerBufferSize - 1);
+            let i1 = wrap<flangerBufferSize> (index1);
+            let i2 = wrap<flangerBufferSize> (index1 + 1);
+            let i3 = wrap<flangerBufferSize> (index1 + 2);
+
+            return catmullRom (
+                delayBuffers[channel, i0],
+                delayBuffers[channel, i1],
+                delayBuffers[channel, i2],
+                delayBuffers[channel, i3],
+                fraction
+            );
+        }
+
+        void writeDelaySample (wrap<flangerChannelCount> channel, float32 sample)
+        {
+            let writeIndex = delayWritePositions[channel];
+            delayBuffers[channel, writeIndex] = sample;
+            delayWritePositions[channel] = wrap<flangerBufferSize> (int32 (writeIndex) + 1);
+        }
+
+        void main()
+        {
+            loop
+            {
+                updateModulationCoefficients();
+
+                let dry = in;
+                let feedback = clampFlangerFeedback (feedbackIn);
+                let mix01 = clampFlangerMix (mixIn);
+
+                float32[flangerChannelCount] wet;
+
+                for (wrap<flangerChannelCount> channel)
+                {
+                    let channelPhaseOffset = channel == 0 ? 0.0f : flangerRightPhaseOffset;
+                    let phase = std::intrinsics::wrap (lfoPhase + channelPhaseOffset, 1.0f);
+                    let sweep = 0.5f + 0.5f * std::intrinsics::sin (2.0f * flangerPi * phase);
+                    let delaySamples = baseDelaySamples + (sweepDelaySamples * sweep);
+                    let delayed = readDelaySample (channel, delaySamples);
+
+                    // Only the REGENERATION is saturated - the dry signal enters the
+                    // delay line untouched. That distinction is the whole effect:
+                    // saturating the sum instead would store a copy of the input a few
+                    // percent smaller than the input itself, so the two could never
+                    // cancel and the notches would bottom out around -34 dB even at
+                    // zero feedback. A flanger is its notch depth. Written this way the
+                    // zero-feedback comb is exact, and the loop is still bounded, by
+                    // |dry| + flangerLoopCeiling.
+                    //
+                    // Signed feedback is deliberate: the negative half of the range
+                    // inverts the comb, which is a different sound rather than a
+                    // mirror image.
+                    writeDelaySample (channel, dry[channel] + flangerSaturate (delayed * feedback));
+
+                    // The comb lives in the SUM of the dry and delayed signals.
+                    // Crossfading towards the delayed signal alone would lose the comb
+                    // entirely at mix 1 and leave a bare short delay behind.
+                    wet[channel] = 0.5f * (dry[channel] + delayed);
+                }
+
+                // The instrument's equal-power dry/wet law (Distortion.cmajor:186-188,
+                // Chorus.cmajor:472-473). At mix 0 this is cos(0) = 1 and sin(0) = 0
+                // exactly, so a mixed-out flanger is a bit-exact passthrough - which is
+                // what makes ADR-005's hard audible bypass honest rather than
+                // approximate, and what keeps the dry path at zero latency.
+                let dryGain = std::intrinsics::cos (0.5f * flangerPi * mix01);
+                let wetGain = std::intrinsics::sin (0.5f * flangerPi * mix01);
+
+                out <- (dry * dryGain) + (float32<2> (wet[0], wet[1]) * wetGain);
+
+                lfoPhase = std::intrinsics::wrap (lfoPhase + phaseIncrement, 1.0f);
+                advance();
+            }
+        }
+    }
+}

@@ -1,0 +1,165 @@
+// Smoke 2: properties the real rack needs from processor composition.
+//   A. a graph (not just a processor) can be a composed child node
+//   B. nested composition - a composed child may itself compose children
+//   C. value and event inputs on a composed child can be driven by the parent
+//   D. a stateful child keeps its state when its position in the order changes
+//   E. an oversampled child node inside composition
+
+## testProcessor()
+
+processor Gain (float32 factor)
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    void main()
+    {
+        loop
+        {
+            out <- in * factor;
+            advance();
+        }
+    }
+}
+
+// A: a graph used as a composed child node.
+graph GainPair
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    node first = Gain (2.0f);
+    node second = Gain (3.0f);
+
+    connection in -> first -> second -> out;
+}
+
+// B: a processor that itself composes a child, used as a composed child.
+processor NestedComposer
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    node inner = Gain (5.0f);
+
+    void main()
+    {
+        loop
+        {
+            inner.in <- in;
+            inner.advance();
+            out <- inner.out;
+            advance();
+        }
+    }
+}
+
+// C: value + event inputs driven from the composing parent.
+processor Offsetter
+{
+    input stream float32 in;
+    input value float32 offsetIn [[ init: 0.0f ]];
+    input event int32 resetIn;
+    output stream float32 out;
+
+    float32 bias;
+
+    event resetIn (int32 v)
+    {
+        bias = float32 (v);
+    }
+
+    void main()
+    {
+        loop
+        {
+            out <- in + offsetIn + bias;
+            advance();
+        }
+    }
+}
+
+// D: a stateful child - emits the value it was given on the previous frame.
+processor OneFrameMemory
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    float32 previous;
+
+    void main()
+    {
+        loop
+        {
+            out <- previous;
+            previous = in;
+            advance();
+        }
+    }
+}
+
+processor Test [[ main ]]
+{
+    output stream int32 out;
+
+    node gainPair = GainPair;
+    node nested = NestedComposer;
+    node offsetter = Offsetter;
+    node memory = OneFrameMemory;
+    node oversampled = Gain (2.0f) * 4;
+
+    bool approx (float32 a, float32 b)
+    {
+        return std::intrinsics::abs (a - b) < 0.0001f;
+    }
+
+    void main()
+    {
+        // A
+        gainPair.in <- 1.0f;
+        gainPair.advance();
+        out <- approx (gainPair.out, 6.0f) ? 1 : 0;
+        advance();
+
+        // B
+        nested.in <- 2.0f;
+        nested.advance();
+        out <- approx (nested.out, 10.0f) ? 1 : 0;
+        advance();
+
+        // C
+        offsetter.offsetIn <- 0.25f;
+        offsetter.resetIn <- 7;
+        offsetter.in <- 1.0f;
+        offsetter.advance();
+        out <- approx (offsetter.out, 8.25f) ? 1 : 0;
+        advance();
+
+        // D: state survives regardless of when we choose to advance the child.
+        memory.in <- 11.0f;
+        memory.advance();
+        memory.in <- 0.0f;
+        memory.advance();
+        out <- approx (memory.out, 11.0f) ? 1 : 0;
+        advance();
+
+        // E: an oversampled composed child works, but its sinc resamplers have a
+        // settling transient - its first frames are near zero, not the DC answer.
+        oversampled.in <- 3.0f;
+        oversampled.advance();
+        out <- (std::intrinsics::abs (oversampled.out) < 0.001f) ? 1 : 0;
+        advance();
+
+        for (int32 frame = 0; frame < 512; ++frame)
+        {
+            oversampled.in <- 3.0f;
+            oversampled.advance();
+        }
+
+        out <- approx (oversampled.out, 6.0f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

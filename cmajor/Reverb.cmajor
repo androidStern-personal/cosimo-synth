@@ -1,0 +1,346 @@
+namespace wt
+{
+    let reverbPi = 3.14159265358979323846f;
+    let reverbChannelCount = 2;
+    let reverbLineCount = 4;
+    let reverbDiffusionStageCount = 4;
+
+    let reverbMinLineMs = 15.0f;
+    let reverbMaxLineMs = 120.0f;
+    let reverbMaxDiffusionMs = 32.0f;
+
+    let reverbLineRatio0 = 0.7573f;
+    let reverbLineRatio1 = 0.8677f;
+    let reverbLineRatio2 = 0.9497f;
+    let reverbLineRatio3 = 1.0f;
+
+    let reverbDiffusionGain = 0.5f;
+    let reverbDiffusionModDepth = 0.06f;
+    let reverbDiffusionChannelPhaseOffset = 0.5f;
+    let reverbDiffusionStagePhaseSpread = 0.17f;
+
+    let reverbMinRt60Seconds = 0.2f;
+    let reverbRt60SpanSeconds = 11.8f;
+    let reverbMaxFeedbackGain = 0.9999f;
+
+    let reverbDampingMaxHz = 18000.0f;
+    let reverbDampingDecade = 0.0667f;
+    let reverbInputHighPassHz = 20.0f;
+
+    let reverbCoefficientEpsilon = 0.0005f;
+
+    // std::filters::tpt::onepole::Mode is not reachable through a parameterised
+    // namespace path, so the mode ints are named here exactly as
+    // cmajor/Distortion.cmajor:22-23 names the butterworth ones.
+    let reverbFilterLowPassMode = 0;
+    let reverbFilterHighPassMode = 1;
+
+    // Because the Hadamard mixing matrix is orthogonal, the tank loses exactly
+    // (1 - meanSquaredFeedbackGain) of its stored energy per sample, so its steady
+    // state sits at inputLevel / sqrt (1 - meanSquaredFeedbackGain). The injected
+    // signal is scaled by the inverse of that, which is why a 12 s tail is not five
+    // times louder than a 2 s one and why this module can carry a real output
+    // budget. It is applied on the way in, not on the way out, so changing decay
+    // never jumps the level of a tail that is already ringing.
+    let reverbInjectionGainConstant = 0.7071068f;
+
+    namespace reverbMonoFilters = std::filters (float32, float64, 32);
+    namespace reverbStereoFilters = std::filters (float32<2>, float64, 32);
+
+    float32 reverbLineRatio (int32 line)
+    {
+        if (line == 0) return reverbLineRatio0;
+        if (line == 1) return reverbLineRatio1;
+        if (line == 2) return reverbLineRatio2;
+        return reverbLineRatio3;
+    }
+
+    float32 reverbDiffusionStageMs (int32 stage)
+    {
+        if (stage == 0) return 4.77f;
+        if (stage == 1) return 8.13f;
+        if (stage == 2) return 13.31f;
+        return 21.73f;
+    }
+
+    float32 reverbDiffusionRateHz (int32 stage)
+    {
+        if (stage == 0) return 0.37f;
+        if (stage == 1) return 0.53f;
+        if (stage == 2) return 0.71f;
+        return 0.91f;
+    }
+
+    float32 reverbWrap01 (float32 value)
+    {
+        return std::intrinsics::wrap (value, 1.0f);
+    }
+
+    float32 reverbLongestLineMs (float32 size01)
+    {
+        return reverbMinLineMs + (size01 * (reverbMaxLineMs - reverbMinLineMs));
+    }
+
+    float32 reverbRt60Seconds (float32 decay01)
+    {
+        return reverbMinRt60Seconds + (decay01 * decay01 * reverbRt60SpanSeconds);
+    }
+
+    float32 reverbDampingCutoffHz (float32 damping01)
+    {
+        return reverbDampingMaxHz * std::intrinsics::pow (reverbDampingDecade, damping01);
+    }
+
+    float32 reverbFeedbackGain (float32 lineSeconds, float32 rt60Seconds)
+    {
+        return std::intrinsics::min (
+            std::intrinsics::pow (10.0f, (-3.0f * lineSeconds) / rt60Seconds),
+            reverbMaxFeedbackGain
+        );
+    }
+
+    // reverbFeedbackGain caps every line at reverbMaxFeedbackGain, so the argument
+    // to sqrt is strictly positive by construction and needs no guard.
+    float32 reverbInjectionGain (float32 meanSquaredFeedbackGain)
+    {
+        return reverbInjectionGainConstant * std::intrinsics::sqrt (1.0f - meanSquaredFeedbackGain);
+    }
+
+    processor ReverbBus
+    {
+        input stream float32<2> in;
+        input value float32 sizeIn    [[ name: "Reverb Size",    min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
+        input value float32 decayIn   [[ name: "Reverb Decay",   min: 0.0f, max: 1.0f, init: 0.4f, rampFrames: 128 ]];
+        input value float32 dampingIn [[ name: "Reverb Damping", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
+        input value float32 mixIn     [[ name: "Reverb Mix",     min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+
+        output stream float32<2> out;
+
+        let reverbLineBufferSize = int (processor.maxFrequency * reverbMaxLineMs * 0.001f) + 8;
+        let reverbDiffusionBufferSize = int (processor.maxFrequency * reverbMaxDiffusionMs * 0.001f) + 8;
+
+        float32[reverbLineCount, reverbLineBufferSize] lineBuffers;
+        wrap<reverbLineBufferSize>[reverbLineCount] lineWritePositions;
+
+        float32[reverbChannelCount, reverbDiffusionStageCount, reverbDiffusionBufferSize] diffusionBuffers;
+        wrap<reverbDiffusionBufferSize>[reverbChannelCount, reverbDiffusionStageCount] diffusionWritePositions;
+
+        reverbMonoFilters::tpt::onepole::Implementation[reverbLineCount] dampingFilters;
+
+        var inputHighPass = reverbStereoFilters::tpt::onepole::create (
+            reverbFilterHighPassMode,
+            processor.frequency,
+            reverbInputHighPassHz
+        );
+
+        float32[reverbLineCount] lineDelaySamples;
+        float32[reverbLineCount] lineFeedbackGains;
+        float32[reverbDiffusionStageCount] diffusionPhases;
+        float32 injectionGain;
+
+        float32 currentSize = -1.0f;
+        float32 currentDecay = -1.0f;
+        float32 currentDamping = -1.0f;
+
+        void init()
+        {
+            for (wrap<reverbLineCount> line)
+            {
+                dampingFilters[line].setMode (reverbFilterLowPassMode);
+                dampingFilters[line].setFrequency (processor.frequency, reverbDampingMaxHz);
+            }
+
+            for (wrap<reverbDiffusionStageCount> stage)
+                diffusionPhases[stage] = float32 (int32 (stage)) * reverbDiffusionStagePhaseSpread;
+        }
+
+        float32 readLineSample (wrap<reverbLineCount> line, float32 delaySamples)
+        {
+            let clampedDelay = std::intrinsics::clamp (delaySamples, 2.0f, float32 (reverbLineBufferSize - 4));
+            let writeIndex = int32 (lineWritePositions[line]);
+            let readPos = std::intrinsics::wrap (float32 (writeIndex) - clampedDelay, float32 (reverbLineBufferSize));
+            let index1 = int32 (std::intrinsics::floor (readPos));
+            let fraction = readPos - float32 (index1);
+            let i0 = wrap<reverbLineBufferSize> (index1 + reverbLineBufferSize - 1);
+            let i1 = wrap<reverbLineBufferSize> (index1);
+            let i2 = wrap<reverbLineBufferSize> (index1 + 1);
+            let i3 = wrap<reverbLineBufferSize> (index1 + 2);
+
+            return catmullRom (
+                lineBuffers[line, i0],
+                lineBuffers[line, i1],
+                lineBuffers[line, i2],
+                lineBuffers[line, i3],
+                fraction
+            );
+        }
+
+        void writeLineSample (wrap<reverbLineCount> line, float32 sample)
+        {
+            let writeIndex = lineWritePositions[line];
+            lineBuffers[line, writeIndex] = sample;
+            lineWritePositions[line] = wrap<reverbLineBufferSize> (int32 (writeIndex) + 1);
+        }
+
+        float32 readDiffusionSample (wrap<reverbChannelCount> channel,
+                                     wrap<reverbDiffusionStageCount> stage,
+                                     float32 delaySamples)
+        {
+            let clampedDelay = std::intrinsics::clamp (delaySamples, 2.0f, float32 (reverbDiffusionBufferSize - 4));
+            let writeIndex = int32 (diffusionWritePositions[channel, stage]);
+            let readPos = std::intrinsics::wrap (float32 (writeIndex) - clampedDelay, float32 (reverbDiffusionBufferSize));
+            let index1 = int32 (std::intrinsics::floor (readPos));
+            let fraction = readPos - float32 (index1);
+            let i0 = wrap<reverbDiffusionBufferSize> (index1 + reverbDiffusionBufferSize - 1);
+            let i1 = wrap<reverbDiffusionBufferSize> (index1);
+            let i2 = wrap<reverbDiffusionBufferSize> (index1 + 1);
+            let i3 = wrap<reverbDiffusionBufferSize> (index1 + 2);
+
+            return catmullRom (
+                diffusionBuffers[channel, stage, i0],
+                diffusionBuffers[channel, stage, i1],
+                diffusionBuffers[channel, stage, i2],
+                diffusionBuffers[channel, stage, i3],
+                fraction
+            );
+        }
+
+        void writeDiffusionSample (wrap<reverbChannelCount> channel,
+                                   wrap<reverbDiffusionStageCount> stage,
+                                   float32 sample)
+        {
+            let writeIndex = diffusionWritePositions[channel, stage];
+            diffusionBuffers[channel, stage, writeIndex] = sample;
+            diffusionWritePositions[channel, stage] = wrap<reverbDiffusionBufferSize> (int32 (writeIndex) + 1);
+        }
+
+        float32 processAllpassStage (wrap<reverbChannelCount> channel,
+                                     wrap<reverbDiffusionStageCount> stage,
+                                     float32 inputSample,
+                                     float32 sampleRate)
+        {
+            let baseDelaySamples = reverbDiffusionStageMs (int32 (stage)) * sampleRate * 0.001f;
+            let delayMod = std::intrinsics::sin (
+                2.0f * reverbPi
+                * (diffusionPhases[stage] + (float32 (int32 (channel)) * reverbDiffusionChannelPhaseOffset))
+            );
+            let delaySamples = std::intrinsics::clamp (
+                baseDelaySamples * (1.0f + (reverbDiffusionModDepth * delayMod)),
+                4.0f,
+                float32 (reverbDiffusionBufferSize - 8)
+            );
+            let delayed = readDiffusionSample (channel, stage, delaySamples);
+            let outputSample = delayed - (reverbDiffusionGain * inputSample);
+            let writeValue = inputSample + (reverbDiffusionGain * outputSample);
+
+            writeDiffusionSample (channel, stage, writeValue);
+            return outputSample;
+        }
+
+        float32 processDiffusion (wrap<reverbChannelCount> channel, float32 inputSample, float32 sampleRate)
+        {
+            var current = inputSample;
+
+            for (wrap<reverbDiffusionStageCount> stage)
+                current = processAllpassStage (channel, stage, current, sampleRate);
+
+            return current;
+        }
+
+        void updateCoefficients (float32 size01, float32 decay01, float32 damping01, float32 sampleRate)
+        {
+            let longestLineMs = reverbLongestLineMs (size01);
+
+            // The line lengths themselves are one multiply each, and gating them
+            // would step the fractional read position and click, so they follow size
+            // every frame. Only the pow()-derived values below are gated, in the
+            // idiom of cmajor/Distortion.cmajor:144-160.
+            for (wrap<reverbLineCount> line)
+                lineDelaySamples[line] = std::intrinsics::clamp (
+                    longestLineMs * reverbLineRatio (int32 (line)) * sampleRate * 0.001f,
+                    4.0f,
+                    float32 (reverbLineBufferSize - 8)
+                );
+
+            if (std::intrinsics::abs (size01 - currentSize) > reverbCoefficientEpsilon
+                 || std::intrinsics::abs (decay01 - currentDecay) > reverbCoefficientEpsilon)
+            {
+                let rt60Seconds = reverbRt60Seconds (decay01);
+                var squaredGainSum = 0.0f;
+
+                for (wrap<reverbLineCount> line)
+                {
+                    let gain = reverbFeedbackGain (
+                        longestLineMs * reverbLineRatio (int32 (line)) * 0.001f,
+                        rt60Seconds
+                    );
+
+                    lineFeedbackGains[line] = gain;
+                    squaredGainSum += gain * gain;
+                }
+
+                injectionGain = reverbInjectionGain (squaredGainSum / float32 (reverbLineCount));
+                currentSize = size01;
+                currentDecay = decay01;
+            }
+
+            if (std::intrinsics::abs (damping01 - currentDamping) > reverbCoefficientEpsilon)
+            {
+                for (wrap<reverbLineCount> line)
+                    dampingFilters[line].setFrequency (sampleRate, reverbDampingCutoffHz (damping01));
+
+                currentDamping = damping01;
+            }
+        }
+
+        void main()
+        {
+            loop
+            {
+                let sampleRate = float32 (processor.frequency);
+                let dry = in;
+                let size01 = std::intrinsics::clamp (sizeIn, 0.0f, 1.0f);
+                let decay01 = std::intrinsics::clamp (decayIn, 0.0f, 1.0f);
+                let damping01 = std::intrinsics::clamp (dampingIn, 0.0f, 1.0f);
+                let mix01 = std::intrinsics::clamp (mixIn, 0.0f, 1.0f);
+
+                updateCoefficients (size01, decay01, damping01, sampleRate);
+
+                let injected = inputHighPass.process (dry) * injectionGain;
+                let diffusedLeft = processDiffusion (0, injected[0], sampleRate);
+                let diffusedRight = processDiffusion (1, injected[1], sampleRate);
+
+                float32[reverbLineCount] lineOutputs;
+
+                for (wrap<reverbLineCount> line)
+                    lineOutputs[line] = dampingFilters[line].process (readLineSample (line, lineDelaySamples[line]));
+
+                // Normalised 4x4 Hadamard. It is orthogonal, so the tank itself is
+                // lossless and stability rests entirely on the per-line feedback
+                // gains being below unity - which is a proof, not a hope.
+                let mixed0 = 0.5f * (lineOutputs[0] + lineOutputs[1] + lineOutputs[2] + lineOutputs[3]);
+                let mixed1 = 0.5f * (lineOutputs[0] - lineOutputs[1] + lineOutputs[2] - lineOutputs[3]);
+                let mixed2 = 0.5f * (lineOutputs[0] + lineOutputs[1] - lineOutputs[2] - lineOutputs[3]);
+                let mixed3 = 0.5f * (lineOutputs[0] - lineOutputs[1] - lineOutputs[2] + lineOutputs[3]);
+
+                writeLineSample (0, diffusedLeft + (lineFeedbackGains[0] * mixed0));
+                writeLineSample (1, diffusedRight + (lineFeedbackGains[1] * mixed1));
+                writeLineSample (2, diffusedLeft + (lineFeedbackGains[2] * mixed2));
+                writeLineSample (3, diffusedRight + (lineFeedbackGains[3] * mixed3));
+
+                let wet = float32<2> (lineOutputs[0] + lineOutputs[2], lineOutputs[1] + lineOutputs[3]);
+                let dryGain = std::intrinsics::cos (0.5f * reverbPi * mix01);
+                let wetGain = std::intrinsics::sin (0.5f * reverbPi * mix01);
+
+                out <- (dry * dryGain) + (wet * wetGain);
+
+                for (wrap<reverbDiffusionStageCount> stage)
+                    diffusionPhases[stage] = reverbWrap01 (
+                        diffusionPhases[stage] + (reverbDiffusionRateHz (int32 (stage)) / sampleRate)
+                    );
+
+                advance();
+            }
+        }
+    }
+}

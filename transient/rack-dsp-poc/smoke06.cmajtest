@@ -1,0 +1,71 @@
+// Smoke 6: the alternative candidate - one homogeneous node array of eight
+// identical "any effect" slots, indexed at runtime. Compiles and runs, but every
+// slot must carry every effect's state, so the memory cost is N x N.
+
+## testProcessor()
+
+processor UnionSlot
+{
+    input stream float32 in;
+    input value int32 effectIdIn;
+    output stream float32 out;
+
+    // Each slot carries the state of every effect it might be asked to be.
+    float32 filterState;
+    float32 delayState;
+
+    void main()
+    {
+        loop
+        {
+            if (effectIdIn == 0)
+            {
+                filterState += (in - filterState) * 0.5f;
+                out <- filterState;
+            }
+            else
+            {
+                out <- in + delayState;
+                delayState = in * 0.5f;
+            }
+
+            advance();
+        }
+    }
+}
+
+processor Test [[ main ]]
+{
+    output stream int32 out;
+
+    node slots = UnionSlot[8];
+
+    int32[8] order;
+
+    float32 runRack (float32 signal)
+    {
+        var chain = signal;
+
+        for (wrap<8> position)
+        {
+            slots[position].effectIdIn <- order[position];
+            slots[position].in <- chain;
+            slots[position].advance();
+            chain = slots[position].out;
+        }
+
+        return chain;
+    }
+
+    void main()
+    {
+        for (wrap<8> position)
+            order[position] = int32 (position) % 2;
+
+        out <- (runRack (1.0f) != 0.0f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

@@ -1,0 +1,84 @@
+// Smoke 1: can a processor hold heterogeneous resident child nodes and advance
+// them in a runtime-selected serial order, including advance() inside a branch?
+
+## testProcessor()
+
+processor AddOne
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    void main()
+    {
+        loop
+        {
+            out <- in + 1.0f;
+            advance();
+        }
+    }
+}
+
+processor Double
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    void main()
+    {
+        loop
+        {
+            out <- in * 2.0f;
+            advance();
+        }
+    }
+}
+
+processor Test [[ main ]]
+{
+    output stream int32 out;
+
+    node addOne = AddOne;
+    node doubler = Double;
+
+    int32[2] order;
+
+    float32 runSlot (int32 effectId, float32 signal)
+    {
+        if (effectId == 0)
+        {
+            addOne.in <- signal;
+            addOne.advance();
+            return addOne.out;
+        }
+
+        doubler.in <- signal;
+        doubler.advance();
+        return doubler.out;
+    }
+
+    float32 runRack (float32 signal)
+    {
+        var chain = signal;
+
+        for (wrap<2> position)
+            chain = runSlot (order[position], chain);
+
+        return chain;
+    }
+
+    void main()
+    {
+        order[0] = 0;
+        order[1] = 1;
+        out <- (runRack (3.0f) == 8.0f) ? 1 : 0;   // (3 + 1) * 2
+        advance();
+
+        order[0] = 1;
+        order[1] = 0;
+        out <- (runRack (3.0f) == 7.0f) ? 1 : 0;   // (3 * 2) + 1
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

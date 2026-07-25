@@ -1,0 +1,753 @@
+namespace wt
+{
+    //==============================================================================
+    // The effects rack - eight resident effect instances advanced in a runtime-selected
+    // serial order (ADR-001).
+    //
+    // THE SHAPE. This is a `processor`, not a `graph`. A graph's `connection` block
+    // cannot express a runtime order: conditional connections need a compile-time
+    // constant condition, so the 8! = 40320 orders are unreachable from a graph, and a
+    // fixed-declaration-order routing bus would need a one-frame delay per hop, which
+    // is a direct ADR-008 violation. Cmajor's documented processor composition does
+    // express it exactly: the eight effects are resident `node`s, and main() drives
+    // each one by hand with `child.in <- signal; child.advance(); read child.out`,
+    // walking rack positions and dispatching on the effect id held in a runtime
+    // wrap<8> array. The idiom is already used in this repo - wt::DistortionBus
+    // hand-drives its two oversampled cores the same way (Distortion.cmajor:125-181).
+    // The generated C++ inlines all eight children's state by value: no heap, no
+    // indirection, no allocation, and in identity order the audio is bit-identical to
+    // the equivalent static graph chain.
+    //
+    // THE ONE LOAD-BEARING INVARIANT. Every module must be advanced EXACTLY ONCE per
+    // rack frame, whatever its position and whatever its enabled state. A module
+    // advanced zero times silently re-emits its previous frame - no error, no crash,
+    // just a corrupted time base - and nothing in the language enforces this. So the
+    // rack validates that every uploaded order is a COMPLETE PERMUTATION and rejects
+    // anything else outright (ADR-009), and a disabled module is still fed the live
+    // chain signal and still advanced.
+    //
+    // ALWAYS-ADVANCE IS THE v1 DEFAULT, PENDING PROFILING - NOT A PROHIBITION.
+    // ADR-005 is explicit that "whether a disabled child continues advancing is an
+    // effect-local implementation and performance decision, not part of the public
+    // rack-state model", and that "profiling, rather than rack architecture, determines
+    // whether a sleep optimization is necessary". Always-advance is the honest starting
+    // point because it cannot be wrong: no clock drifts, no delay line goes stale, and
+    // re-enabling exposes no transient. It is also the worst case for CPU - a rack with
+    // two modules enabled costs what a rack with eight costs - so it is a default with a
+    // known bill, and rackModuleSleepsWhileDisabled() below is the single point where a
+    // profiling pass changes it.
+    //
+    // WHAT THE RACK DOES NOT DO. It does not terminate the signal path. Output limiting
+    // lives in wt::RackOutputStage, fixed and non-reorderable, between rack.out and
+    // audioOut (ADR-006) - see RackOutputStage.cmajor for why that is not optional.
+    //
+    // INTEGRATION NOTES for whoever wires this into graph WavetableSynth:
+    //   - Hoist with MODULE-PREFIX wildcards only (`input rack.distortion*;` and so on).
+    //     A bare `input rack.*;` would also hoist `in`, `trackingPitchHzIn`,
+    //     `tempoBpmIn`, `rackModIn` and the four preview streams.
+    //   - DO NOT DELETE `chorusEnabled` from the graph. Endpoints are emitted in graph
+    //     DECLARATION ORDER, so deleting it shifts the thirteen host parameter slots
+    //     that follow it (chorusMix..ottEnvelopeMatch) and breaks every saved automation
+    //     lane. Keep it declared exactly where it is as a hidden, automatable:false,
+    //     deprecated no-op, and have the adapter migrate its saved value into
+    //     rackEnable[rackModuleChorus] on patch load. That migration is also what stops
+    //     a preset saved with chorusEnabled=0 and chorusMix>0 from suddenly sounding
+    //     chorused, because this rack pins chorus.enabledIn to 1 and lets rackEnable be
+    //     the only gate.
+    //   - The distortion scope and history analyzers read the four preview streams
+    //     forwarded below rather than reaching into wt::DistortionBus directly.
+    //   - A composed processor cannot write to `console`, so every diagnostic here is a
+    //     value output endpoint. That is the better design anyway: the iPhone UI can
+    //     read back what the DSP is actually running instead of assuming its upload
+    //     landed.
+    //   - `rackModIn` carries the 36 reduced modulation offsets from
+    //     wt::SharedVoiceEngine's `rackModOut` in ONE graph connection. The destination
+    //     vocabulary and the reduction itself live in VoiceReducer.cmajor. Note the
+    //     budget that surrounds them: the whole modulation system has TWELVE route slots
+    //     (`let modulationRouteCount = 12;`, FixedFrameOscillator.cmajor:31), shared with
+    //     the twelve existing voice targets. Thirty-six eligible destinations do not
+    //     mean thirty-six simultaneous mappings.
+    //   - THE DEFAULT ENABLE MASK IS NOT "everything on". Every module whose Mix/Wet
+    //     inits dry is enabled; OTT is not, because its host Mix parameter inits at 100%
+    //     and enabling it by default would retroactively add multiband compression to
+    //     every patch ever saved. See init().
+
+    let rackModuleCount = 8;
+    let rackChannelCount = 2;
+
+    // Effect instance ids. These are a WIRE CONTRACT with the adapter and with saved
+    // patches: they identify an instance, never a position.
+    let rackModuleGlobalFilter = 0;
+    let rackModuleDistortion   = 1;
+    let rackModuleOtt          = 2;
+    let rackModuleChorus       = 3;
+    let rackModuleFlanger      = 4;
+    let rackModulePhaser       = 5;
+    let rackModuleDelay        = 6;
+    let rackModuleReverb       = 7;
+
+    // ADR-003's 2-5 ms window. Long enough that the fade is inaudible, short enough
+    // that dragging a module in the UI feels instant.
+    let rackTransitionMs = 3.0f;
+
+    // Three bits per rack position, packed least-significant-position-first, so the
+    // committed order is one readable int32.
+    let rackOrderCodeBitsPerPosition = 3;
+
+    // Distortion.cmajor:144-160's rule, in octave units: 0.001 octaves is 0.07% of a
+    // frequency, so recomputing pow() below that buys nothing.
+    let rackOctaveEpsilon = 0.001f;
+
+    let rackOctaveScalerGlobalFilterCutoff = 0;
+    let rackOctaveScalerDistortionWetHP    = 1;
+    let rackOctaveScalerDistortionWetLP    = 2;
+    let rackOctaveScalerPhaserFrequency    = 3;
+    let rackOctaveScalerDelayTime          = 4;
+    let rackOctaveScalerDelayFilter        = 5;
+    let rackOctaveScalerCount              = 6;
+
+    //==============================================================================
+    // The adapter's wire format. Order and enabled state are stored SEPARATELY
+    // (ADR-009): moving a module must not change what is on, and turning a module off
+    // must not move it.
+
+    // Rack position -> effect instance id. Always a complete permutation.
+    struct RackOrderUpload
+    {
+        int32[rackModuleCount] moduleIds;
+    }
+
+    // Effect instance id -> enabled flag. A FLAG, so 0 or 1 - not a truthy integer.
+    struct RackEnableUpload
+    {
+        int32[rackModuleCount] enabledFlags;
+    }
+
+    //==============================================================================
+    // Structure validation. A malformed upload is a bug at the adapter boundary, not a
+    // runtime state the rack may occupy, so both of these fail fast and the caller
+    // leaves the running state completely untouched. Neither coerces.
+
+    bool isCompleteRackPermutation (int32[rackModuleCount] moduleIds)
+    {
+        bool[rackModuleCount] seen;
+
+        for (wrap<rackModuleCount> position)
+        {
+            let moduleId = moduleIds[position];
+
+            if (moduleId < 0 || moduleId >= rackModuleCount)
+                return false;
+
+            let index = wrap<rackModuleCount> (moduleId);
+
+            if (seen[index])
+                return false;
+
+            seen[index] = true;
+        }
+
+        return true;
+    }
+
+    bool isValidRackEnableUpload (int32[rackModuleCount] enabledFlags)
+    {
+        for (wrap<rackModuleCount> moduleId)
+            if (enabledFlags[moduleId] != 0 && enabledFlags[moduleId] != 1)
+                return false;
+
+        return true;
+    }
+
+    //==============================================================================
+    // C7 / ADR-005 sleep hook.
+    //
+    // Return true for a module and the dispatch below will stop advancing it while it
+    // is disabled. It returns false for EVERY module in v1 - pending profiling - so the
+    // compiler folds the branch away entirely and always-advance costs nothing to keep
+    // as an option. The three plausible candidates are the modules whose "sleep" is a
+    // genuinely small local implementation: wt::GlobalFilterBus (mode Off already
+    // resets its state and is a bit-exact passthrough), wt::DistortionBus (memoryless
+    // cores; its band filters and DC blockers are the only memory) and wt::PhaserBus
+    // (allpass state only). Waking any of them must still satisfy ADR-005's "re-enabling
+    // must not expose an unsmoothed stale-state transient", which for the phaser means
+    // its LFO phase, so none of this is free - which is exactly why it waits for a
+    // measurement rather than a hunch.
+    bool rackModuleSleepsWhileDisabled (int32 moduleId)
+    {
+        return false;
+    }
+
+    //==============================================================================
+    // Modulation application (ADR-012). The rack is the single point at which a
+    // patch-owned base value meets a reduced modulation offset, so there is exactly one
+    // place to look when a value is wrong.
+
+    float32 rackModulateLinear (float32 base, float32 offset)
+    {
+        return base + offset;
+    }
+
+    // Frequency-like destinations modulate in OCTAVES, matching the engine's existing
+    // modulationTargetFilterCutoffOctaves convention. pow() is only recomputed when the
+    // offset has actually moved, which in the overwhelmingly common case of an
+    // unrouted destination means never - the offset is exactly 0.0f every frame.
+    struct RackOctaveScaler
+    {
+        float32 offsetOctaves;
+        float32 scale;
+    }
+
+    float32 rackOctaveScale (RackOctaveScaler& scaler, float32 offsetOctaves)
+    {
+        if (std::intrinsics::abs (offsetOctaves - scaler.offsetOctaves) > rackOctaveEpsilon)
+        {
+            scaler.offsetOctaves = offsetOctaves;
+            scaler.scale = std::intrinsics::pow (2.0f, offsetOctaves);
+        }
+
+        return scaler.scale;
+    }
+
+    //==============================================================================
+    // C10: NO RACK CHILD MAY DECLARE processor.latency.
+    //
+    // A composed child's declared latency does NOT reach a composing PROCESSOR - a
+    // child with processor.latency = 128 leaves its parent reporting 0
+    // (transient/rack-dsp-poc/smoke05) - and it does not delay the audio either:
+    // processor.latency is purely declarative, so composing a latency-declaring child
+    // produces BIT-IDENTICAL samples to composing a clean one. Measured, not assumed.
+    // A rack module that declared latency would therefore make the host's delay
+    // compensation wrong with no audible and no readable symptom anywhere. That is
+    // precisely the failure ADR-008 exists to prevent, and neither a test of the rack's
+    // own latency nor any test of its audio can catch it.
+    //
+    // A GRAPH's latency, however, DOES sum its children's, and that is the lever. The
+    // standing check lives in tests/cmajor_rack/RackShape.cmajtest: a probe graph
+    // chaining all eight modules behind a one-frame latency witness, asserting the sum
+    // is exactly one. It has to live in the test rather than here because the sum is
+    // only a constant expression in a graph that is actually INSTANTIATED, and this
+    // rack must not pay for eight extra module instances just to hold an assertion.
+
+    //==============================================================================
+
+    processor EffectsRack
+    {
+        //----------------------------------------------------------------------
+        // Plumbing. None of this is hoisted to the host.
+
+        input stream float32<rackChannelCount> in;
+        input stream float32 trackingPitchHzIn;
+
+        // The reduced voice-to-global modulation offsets, one per rack destination,
+        // carried from wt::SharedVoiceEngine in a single graph connection. See
+        // VoiceReducer.cmajor for the vocabulary and the reduction itself.
+        input stream float32 rackModIn[rackModTargetCount];
+
+        // Host transport tempo, for the phaser's and delay's sync modes. Declared the
+        // way the modules declare theirs - no `name:`, so it is plumbing rather than a
+        // creative parameter, and it is not covered by any module-prefix hoist wildcard.
+        // The graph should drive it from the host transport; unconnected it sits at 120,
+        // which keeps the sync divisions meaningful in a standalone render.
+        input value float32 tempoBpmIn [[ init: 120.0f ]];
+
+        //----------------------------------------------------------------------
+        // Structure (ADR-007: patch state, NOT host automation). These are struct
+        // events, which carry no parameter purpose, so they are structurally
+        // non-automatable rather than non-automatable by convention.
+
+        input event RackOrderUpload rackOrder;
+        input event RackEnableUpload rackEnable;
+
+        //----------------------------------------------------------------------
+        // Host parameters. Distortion, Chorus and OTT keep the exact annotations they
+        // have today so that host parameter identity, ranges and automation lanes are
+        // unchanged by the move into the rack.
+
+        input value float32 globalFilterMode [[ name: "Global Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|Lowpass|Highpass|Bandpass|Notch|Peak", rampFrames: 0 ]];
+        input value float32 globalFilterCutoff [[ name: "Global Filter Cutoff", min: filterCutoffMinHz, max: filterCutoffMaxHz, init: filterCutoffMaxHz, unit: "Hz", rampFrames: 64 ]];
+        input value float32 globalFilterResonance [[ name: "Global Filter Resonance", min: filterQMin, max: filterQMax, init: 0.707107f, rampFrames: 64 ]];
+        input value float32 globalFilterDrive [[ name: "Global Filter Drive", min: globalFilterDriveMin, max: globalFilterDriveMax, init: 0.0f, rampFrames: 64 ]];
+
+        input value float32 distortionMode [[ name: "Distortion Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Classic|Harmonics", rampFrames: 0 ]];
+        input value float32 distortionDriveDb [[ name: "Distortion Drive", min: 0.0f, max: 36.0f, init: 12.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 distortionKnee [[ name: "Distortion Knee", min: 0.0f, max: 1.0f, init: 0.35f, rampFrames: 64 ]];
+        input value float32 distortionWet [[ name: "Distortion Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 distortionWetHPHz [[ name: "Distortion Band HP", min: 20.0f, max: 4000.0f, init: 40.0f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 distortionWetLPHz [[ name: "Distortion Band LP", min: 20.0f, max: 20000.0f, init: 18000.0f, unit: "Hz", rampFrames: 64 ]];
+
+        input value float32 ottMix [[ name: "OTT Mix", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
+        input value float32 ottAmount [[ name: "OTT Amount", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
+        input value float32 ottTimePercent [[ name: "OTT Time", min: 10.0f, max: 1000.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
+        input value float32 ottBandDrive [[ name: "OTT Band Drive", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 128 ]];
+        input value float32 ottEnvelopeMatch [[ name: "OTT Envelope Match", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 128 ]];
+
+        input value float32 chorusMix [[ name: "Chorus Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+        input value float32 chorusMotionMode [[ name: "Chorus Motion", min: 0.0f, max: 3.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Subtle|Wide Slow|Classic|Fast Light", rampFrames: 0 ]];
+        input value float32 chorusBloomMode [[ name: "Chorus Bloom", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Clean|Small|Large|Small+Shimmer|Large+Shimmer", rampFrames: 0 ]];
+        input value float32 chorusTone [[ name: "Chorus Tone", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
+        input value float32 chorusFeedback [[ name: "Chorus Feedback", min: 0.0f, max: 0.95f, init: 0.42f, rampFrames: 128 ]];
+        input value float32 chorusRingAmount [[ name: "Chorus Ring", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+        input value float32 chorusRingOffsetMode [[ name: "Chorus Ring Pitch", min: 0.0f, max: 3.0f, init: 0.0f, discrete: true, step: 1.0f, text: "+5th|Low 5th|+Oct|-Oct", rampFrames: 0 ]];
+        input value float32 chorusRingFineSemitones [[ name: "Chorus Ring Fine", min: -2.0f, max: 2.0f, init: 0.0f, unit: "st", rampFrames: 128 ]];
+
+        input value float32 flangerRate [[ name: "Flanger Rate", min: flangerRateMinHz, max: flangerRateMaxHz, init: 0.35f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 flangerDepth [[ name: "Flanger Depth", min: flangerDepthMin, max: flangerDepthMax, init: 0.6f, rampFrames: 64 ]];
+        input value float32 flangerFeedback [[ name: "Flanger Feedback", min: flangerFeedbackMin, max: flangerFeedbackMax, init: 0.0f, rampFrames: 64 ]];
+        input value float32 flangerMix [[ name: "Flanger Mix", min: flangerMixMin, max: flangerMixMax, init: 0.0f, rampFrames: 128 ]];
+
+        input value float32 phaserRate [[ name: "Phaser Rate", min: phaserRateMinHz, max: phaserRateMaxHz, init: 0.3f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 phaserRateMode [[ name: "Phaser Rate Mode", min: 0.0f, max: float32 (phaserRateModeMax), init: float32 (phaserRateModeFree), discrete: true, step: 1.0f, text: "Free|Sync", rampFrames: 0 ]];
+        input value float32 phaserRateDivision [[ name: "Phaser Division", min: 0.0f, max: float32 (phaserDivisionMax), init: 2.0f, discrete: true, step: 1.0f, text: "4/1|2/1|1/1|1/2.|1/2|1/2T|1/4.|1/4|1/4T|1/8.|1/8|1/8T|1/16", rampFrames: 0 ]];
+        input value float32 phaserDepth [[ name: "Phaser Depth", min: phaserDepthMin, max: phaserDepthMax, init: 0.7f, rampFrames: 64 ]];
+        input value float32 phaserFrequency [[ name: "Phaser Frequency", min: phaserFrequencyMinHz, max: phaserFrequencyMaxHz, init: 600.0f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 phaserFeedback [[ name: "Phaser Feedback", min: phaserFeedbackMin, max: phaserFeedbackMax, init: 0.0f, rampFrames: 64 ]];
+        input value float32 phaserPhase [[ name: "Phaser Phase", min: phaserPhaseMinDeg, max: phaserPhaseMaxDeg, init: 90.0f, unit: "deg", rampFrames: 64 ]];
+        input value float32 phaserMix [[ name: "Phaser Mix", min: phaserMixMin, max: phaserMixMax, init: 0.0f, rampFrames: 128 ]];
+
+        input value float32 delayTime [[ name: "Delay Time", min: delayMinMs, max: delayMaxMs, init: delayTimeInitMs, unit: "ms", rampFrames: 0 ]];
+        input value float32 delayTimeMode [[ name: "Delay Timing", min: 0.0f, max: float32 (delayTimeModeMax), init: float32 (delayTimeModeFree), discrete: true, step: 1.0f, text: "Free|Sync", rampFrames: 0 ]];
+        input value float32 delayDivision [[ name: "Delay Division", min: 0.0f, max: float32 (delayDivisionMax), init: float32 (delayDivisionInit), discrete: true, step: 1.0f, text: "1/1|1/2.|1/2|1/4.|1/2T|1/4|1/8.|1/4T|1/8|1/16.|1/8T|1/16|1/16T", rampFrames: 0 ]];
+        input value float32 delayFeedback [[ name: "Delay Feedback", min: delayFeedbackMin, max: delayFeedbackMax, init: delayFeedbackInit, rampFrames: 64 ]];
+        input value float32 delayFilter [[ name: "Delay Filter", min: delayFilterMinHz, max: delayFilterMaxHz, init: delayFilterInitHz, unit: "Hz", rampFrames: 64 ]];
+        input value float32 delayMix [[ name: "Delay Mix", min: delayMixMin, max: delayMixMax, init: delayMixInit, rampFrames: 128 ]];
+
+        // wt::ReverbBus exports no range constants; its own annotations use the same
+        // literals, and the module re-clamps every one of these internally.
+        input value float32 reverbSize [[ name: "Reverb Size", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
+        input value float32 reverbDecay [[ name: "Reverb Decay", min: 0.0f, max: 1.0f, init: 0.4f, rampFrames: 128 ]];
+        input value float32 reverbDamping [[ name: "Reverb Damping", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
+        input value float32 reverbMix [[ name: "Reverb Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+
+        //----------------------------------------------------------------------
+
+        output stream float32<rackChannelCount> out;
+
+        // A resident module's own stream outputs stay reachable: the two analyzers that
+        // today connect straight to wt::DistortionBus keep working once it lives inside
+        // the rack, they just read these forwarded streams instead.
+        output stream float32 previewInputLeft;
+        output stream float32 previewInputRight;
+        output stream float32 previewOutputLeft;
+        output stream float32 previewOutputRight;
+
+        // Diagnostics and state readback.
+        output value int32 rackCommittedStructureGeneration;
+        output value int32 rackCommittedOrderCode;
+        output value int32 rackCommittedEnableMask;
+        output value int32 rackRejectedOrderCount;
+        output value int32 rackRejectedEnableCount;
+
+        //----------------------------------------------------------------------
+        // Exactly one stable instance of each effect (ADR-001 effect identity). The
+        // declaration order below is also the compile-time default rack order.
+
+        node globalFilter = wt::GlobalFilterBus;
+        node distortion   = wt::DistortionBus;
+        node ott          = wt::OttBus;
+        node chorus       = wt::ChorusBus;
+        node flanger      = wt::FlangerBus;
+        node phaser       = wt::PhaserBus;
+        node delay        = wt::DelayBus;
+        node reverb       = wt::ReverbBus;
+
+        // NO processor.latency DECLARATION HERE, and there must never be one: every dry
+        // path through the rack is bit-exact and no module has lookahead (ADR-008). It
+        // cannot be pinned with a static_assert on this processor - `processor.latency`
+        // is not a constant expression inside a processor that declares nodes ("error:
+        // Expected a constant value") - so the rack is included in the latency probe
+        // graph in tests/cmajor_rack/RackShape.cmajtest instead, where a graph's summed
+        // latency does resolve.
+
+        let transitionFrames = int32 (std::intrinsics::max (1.0f,
+                                        float32 (processor.frequency) * rackTransitionMs * 0.001f));
+
+        wrap<rackModuleCount>[rackModuleCount] currentOrder;
+        wrap<rackModuleCount>[rackModuleCount] pendingOrder;
+        bool[rackModuleCount] currentEnabled;
+        bool[rackModuleCount] pendingEnabled;
+
+        bool hasPendingStructure;
+        float32 transitionGain = 1.0f;
+        int32 committedStructureGeneration;
+        int32 rejectedOrderCount;
+        int32 rejectedEnableCount;
+
+        RackOctaveScaler[rackOctaveScalerCount] octaveScalers;
+
+        void init()
+        {
+            for (wrap<rackModuleCount> position)
+            {
+                currentOrder[position] = position;
+                pendingOrder[position] = position;
+            }
+
+            for (wrap<rackModuleCount> moduleId)
+            {
+                // Every module whose Mix/Wet inits dry is enabled, so an existing preset
+                // that set that module's mix keeps sounding exactly as it did. OTT is
+                // the exception: its host Mix parameter inits at 100%, an annotation
+                // written while it drove no DSP at all, so enabling it by default would
+                // retroactively add multiband compression to every patch ever saved.
+                let enabledByDefault = int32 (moduleId) != rackModuleOtt;
+
+                currentEnabled[moduleId] = enabledByDefault;
+                pendingEnabled[moduleId] = enabledByDefault;
+            }
+
+            // pow (2, 0) - the identity, so an unrouted frequency destination never
+            // computes a pow() at all.
+            for (wrap<rackOctaveScalerCount> scaler)
+                octaveScalers[scaler].scale = 1.0f;
+        }
+
+        //----------------------------------------------------------------------
+        // Structure uploads.
+
+        event rackOrder (RackOrderUpload upload)
+        {
+            if (! isCompleteRackPermutation (upload.moduleIds))
+            {
+                rejectedOrderCount += 1;
+                return;
+            }
+
+            for (wrap<rackModuleCount> position)
+                pendingOrder[position] = wrap<rackModuleCount> (upload.moduleIds[position]);
+
+            hasPendingStructure = pendingStructureDiffersFromCurrent();
+        }
+
+        event rackEnable (RackEnableUpload upload)
+        {
+            if (! isValidRackEnableUpload (upload.enabledFlags))
+            {
+                rejectedEnableCount += 1;
+                return;
+            }
+
+            for (wrap<rackModuleCount> moduleId)
+                pendingEnabled[moduleId] = upload.enabledFlags[moduleId] != 0;
+
+            hasPendingStructure = pendingStructureDiffersFromCurrent();
+        }
+
+        // Compared against the RUNNING structure, never against the previous upload, so
+        // that a redundant upload arriving mid-transition cannot cancel a real pending
+        // change - and so that the adapter re-sending rack state on every patch load,
+        // which it does, costs nothing instead of a 6 ms dropout.
+        bool pendingStructureDiffersFromCurrent()
+        {
+            for (wrap<rackModuleCount> position)
+                if (pendingOrder[position] != currentOrder[position])
+                    return true;
+
+            for (wrap<rackModuleCount> moduleId)
+                if (pendingEnabled[moduleId] != currentEnabled[moduleId])
+                    return true;
+
+            return false;
+        }
+
+        void commitPendingStructure()
+        {
+            for (wrap<rackModuleCount> position)
+                currentOrder[position] = pendingOrder[position];
+
+            for (wrap<rackModuleCount> moduleId)
+                currentEnabled[moduleId] = pendingEnabled[moduleId];
+
+            hasPendingStructure = false;
+            committedStructureGeneration += 1;
+        }
+
+        int32 committedOrderCode()
+        {
+            var code = 0;
+
+            for (wrap<rackModuleCount> position)
+                code |= int32 (currentOrder[position]) << (rackOrderCodeBitsPerPosition * int32 (position));
+
+            return code;
+        }
+
+        int32 committedEnableMask()
+        {
+            var mask = 0;
+
+            for (wrap<rackModuleCount> moduleId)
+                if (currentEnabled[moduleId])
+                    mask |= 1 << int32 (moduleId);
+
+            return mask;
+        }
+
+        void publishStructureDiagnostics()
+        {
+            rackCommittedStructureGeneration <- committedStructureGeneration;
+            rackCommittedOrderCode <- committedOrderCode();
+            rackCommittedEnableMask <- committedEnableMask();
+            rackRejectedOrderCount <- rejectedOrderCount;
+            rackRejectedEnableCount <- rejectedEnableCount;
+        }
+
+        //----------------------------------------------------------------------
+        // The ADR-003 transition: ONE rack-local gain ramp.
+        //
+        // Fade to EXACT zero, swap the whole structure on that silent frame, fade back
+        // to EXACT unity. No duplicate A/B rack, no state copying, no serialisation, no
+        // effect-specific transition, no allocation and no runtime rewiring - it clears
+        // ADR-003's complexity constraint with room to spare, and the swap is inaudible
+        // by construction rather than by tolerance.
+        //
+        // An upload arriving mid-transition simply REVERSES THE RAMP, in either
+        // direction, and can never strand a pending structure: there is no phase to be
+        // in and no counter to be halfway through. The recon's first attempt used a
+        // two-phase counter state machine and lost the second of two rapid uploads;
+        // this form is immune to that whole class.
+
+        float32 nextTransitionGain()
+        {
+            let step = 1.0f / float32 (transitionFrames);
+
+            if (hasPendingStructure)
+            {
+                transitionGain = std::intrinsics::max (0.0f, transitionGain - step);
+
+                if (transitionGain == 0.0f)
+                    commitPendingStructure();
+            }
+            else
+            {
+                transitionGain = std::intrinsics::min (1.0f, transitionGain + step);
+            }
+
+            return transitionGain;
+        }
+
+        //----------------------------------------------------------------------
+        // Parameter forwarding.
+        //
+        // Hoisted-endpoint syntax is graph-only ("error: Expected a stream type
+        // specifier" inside a processor), so every child parameter is written by hand
+        // here. This is also the single point where a patch-owned base value meets its
+        // reduced modulation offset. Every value is re-clamped by its module's own
+        // clamp helper where one exists, because a modulated value can leave the
+        // parameter's declared range; the modules that export none (Chorus, Reverb)
+        // clamp every one of these internally.
+        //
+        // Endpoint access is statically restricted to code reachable from main(), so
+        // dropping this call is a compile error rather than a silent regression.
+
+        void forwardModuleParameters()
+        {
+            let sampleRate = float32 (processor.frequency);
+
+            // --- Global Filter ---------------------------------------------
+            globalFilter.modeIn <- globalFilterMode;
+            globalFilter.cutoffHzIn <- clampFilterCutoffHz (
+                globalFilterCutoff * rackOctaveScale (octaveScalers[rackOctaveScalerGlobalFilterCutoff],
+                                                      rackModIn[rackModTargetGlobalFilterCutoffOctaves]),
+                sampleRate);
+            globalFilter.resonanceIn <- clampFilterQ (
+                rackModulateLinear (globalFilterResonance, rackModIn[rackModTargetGlobalFilterResonance]));
+            globalFilter.driveIn <- clampGlobalFilterDrive (
+                rackModulateLinear (globalFilterDrive, rackModIn[rackModTargetGlobalFilterDrive]));
+
+            // --- Distortion ------------------------------------------------
+            let wetHPHz = clampDistortionWetHPHz (
+                distortionWetHPHz * rackOctaveScale (octaveScalers[rackOctaveScalerDistortionWetHP],
+                                                     rackModIn[rackModTargetDistortionWetHPOctaves]));
+
+            distortion.modeIn <- distortionMode;
+            distortion.driveDbIn <- clampDistortionDriveDb (
+                rackModulateLinear (distortionDriveDb, rackModIn[rackModTargetDistortionDriveDb]));
+            distortion.kneeIn <- clampDistortionKnee (
+                rackModulateLinear (distortionKnee, rackModIn[rackModTargetDistortionKnee]));
+            distortion.wetIn <- clampDistortionWet (
+                rackModulateLinear (distortionWet, rackModIn[rackModTargetDistortionWet]));
+            distortion.wetHPHzIn <- wetHPHz;
+            distortion.wetLPHzIn <- clampDistortionWetLPHz (
+                distortionWetLPHz * rackOctaveScale (octaveScalers[rackOctaveScalerDistortionWetLP],
+                                                     rackModIn[rackModTargetDistortionWetLPOctaves]),
+                wetHPHz);
+
+            // --- OTT -------------------------------------------------------
+            // Percent destinations take percent offsets: a modulation amount is always
+            // in its destination's own units, as the existing voice targets already are
+            // (dB for amp gain, semitones for pitch).
+            ott.mixIn <- ottClampMixPercent (
+                rackModulateLinear (ottMix, rackModIn[rackModTargetOttMix]));
+            ott.amountIn <- ottClampAmountPercent (
+                rackModulateLinear (ottAmount, rackModIn[rackModTargetOttAmount]));
+            ott.timePercentIn <- ottClampTimePercent (
+                rackModulateLinear (ottTimePercent, rackModIn[rackModTargetOttTimePercent]));
+            ott.bandDriveIn <- ottClampBandDrivePercent (
+                rackModulateLinear (ottBandDrive, rackModIn[rackModTargetOttBandDrive]));
+            ott.envelopeMatchIn <- ottClampEnvelopeMatchPercent (
+                rackModulateLinear (ottEnvelopeMatch, rackModIn[rackModTargetOttEnvelopeMatch]));
+
+            // --- Chorus / Bloom --------------------------------------------
+            // Pinned on: the module's participation is governed solely by rackEnable,
+            // never by a second gate. The deprecated chorusEnabled host parameter is
+            // migrated into rackEnable by the adapter - see the integration notes above.
+            chorus.enabledIn <- 1.0f;
+            chorus.mixIn <- rackModulateLinear (chorusMix, rackModIn[rackModTargetChorusMix]);
+            chorus.motionModeIn <- chorusMotionMode;
+            chorus.bloomModeIn <- chorusBloomMode;
+            chorus.toneIn <- rackModulateLinear (chorusTone, rackModIn[rackModTargetChorusTone]);
+            chorus.feedbackIn <- rackModulateLinear (chorusFeedback, rackModIn[rackModTargetChorusFeedback]);
+            chorus.ringAmountIn <- rackModulateLinear (chorusRingAmount, rackModIn[rackModTargetChorusRingAmount]);
+            chorus.ringOffsetModeIn <- chorusRingOffsetMode;
+            chorus.ringFineSemitonesIn <- rackModulateLinear (chorusRingFineSemitones,
+                                                              rackModIn[rackModTargetChorusRingFineSemitones]);
+            chorus.trackingPitchHzIn <- trackingPitchHzIn;
+
+            // --- Flanger ---------------------------------------------------
+            flanger.rateIn <- clampFlangerRateHz (
+                rackModulateLinear (flangerRate, rackModIn[rackModTargetFlangerRate]));
+            flanger.depthIn <- clampFlangerDepth (
+                rackModulateLinear (flangerDepth, rackModIn[rackModTargetFlangerDepth]));
+            flanger.feedbackIn <- clampFlangerFeedback (
+                rackModulateLinear (flangerFeedback, rackModIn[rackModTargetFlangerFeedback]));
+            flanger.mixIn <- clampFlangerMix (
+                rackModulateLinear (flangerMix, rackModIn[rackModTargetFlangerMix]));
+
+            // --- Phaser ----------------------------------------------------
+            phaser.rateIn <- clampPhaserRateHz (
+                rackModulateLinear (phaserRate, rackModIn[rackModTargetPhaserRate]));
+            phaser.rateModeIn <- phaserRateMode;
+            phaser.rateDivisionIn <- phaserRateDivision;
+            phaser.depthIn <- clampPhaserDepth (
+                rackModulateLinear (phaserDepth, rackModIn[rackModTargetPhaserDepth]));
+            phaser.frequencyIn <- clampPhaserFrequencyHz (
+                phaserFrequency * rackOctaveScale (octaveScalers[rackOctaveScalerPhaserFrequency],
+                                                   rackModIn[rackModTargetPhaserFrequencyOctaves]));
+            phaser.feedbackIn <- clampPhaserFeedback (
+                rackModulateLinear (phaserFeedback, rackModIn[rackModTargetPhaserFeedback]));
+            phaser.phaseIn <- clampPhaserPhaseDeg (
+                rackModulateLinear (phaserPhase, rackModIn[rackModTargetPhaserPhase]));
+            phaser.mixIn <- clampPhaserMix (
+                rackModulateLinear (phaserMix, rackModIn[rackModTargetPhaserMix]));
+            phaser.tempoBpmIn <- clampPhaserTempoBpm (tempoBpmIn);
+
+            // --- Delay -----------------------------------------------------
+            delay.timeMsIn <- clampDelayTimeMs (
+                delayTime * rackOctaveScale (octaveScalers[rackOctaveScalerDelayTime],
+                                             rackModIn[rackModTargetDelayTimeOctaves]));
+            delay.timeModeIn <- delayTimeMode;
+            delay.divisionIn <- delayDivision;
+            delay.feedbackIn <- clampDelayFeedback (
+                rackModulateLinear (delayFeedback, rackModIn[rackModTargetDelayFeedback]));
+            delay.filterHzIn <- clampDelayFilterHz (
+                delayFilter * rackOctaveScale (octaveScalers[rackOctaveScalerDelayFilter],
+                                               rackModIn[rackModTargetDelayFilterOctaves]));
+            delay.mixIn <- clampDelayMix (
+                rackModulateLinear (delayMix, rackModIn[rackModTargetDelayMix]));
+            delay.tempoBpmIn <- clampDelayTempoBpm (tempoBpmIn);
+
+            // --- Reverb ----------------------------------------------------
+            reverb.sizeIn <- rackModulateLinear (reverbSize, rackModIn[rackModTargetReverbSize]);
+            reverb.decayIn <- rackModulateLinear (reverbDecay, rackModIn[rackModTargetReverbDecay]);
+            reverb.dampingIn <- rackModulateLinear (reverbDamping, rackModIn[rackModTargetReverbDamping]);
+            reverb.mixIn <- rackModulateLinear (reverbMix, rackModIn[rackModTargetReverbMix]);
+        }
+
+        //----------------------------------------------------------------------
+        // Dispatch.
+        //
+        // A disabled module is fed the LIVE chain signal - not silence - and is still
+        // advanced, so its internal time never diverges from the rack's and its delay
+        // lines hold the history they would have held. It simply contributes no wet
+        // output and passes the signal through EXACTLY (ADR-005's hard audible bypass).
+
+        float32<rackChannelCount> advanceModule (wrap<rackModuleCount> moduleId,
+                                                 float32<rackChannelCount> signal)
+        {
+            let isEnabled = currentEnabled[moduleId];
+            let selector = int32 (moduleId);
+
+            if (! isEnabled && rackModuleSleepsWhileDisabled (selector))
+                return signal;
+
+            if (selector == rackModuleGlobalFilter)
+            {
+                globalFilter.in <- signal;
+                globalFilter.advance();
+                return isEnabled ? globalFilter.out : signal;
+            }
+
+            if (selector == rackModuleDistortion)
+            {
+                distortion.in <- signal;
+                distortion.advance();
+                return isEnabled ? distortion.out : signal;
+            }
+
+            if (selector == rackModuleOtt)
+            {
+                ott.in <- signal;
+                ott.advance();
+                return isEnabled ? ott.out : signal;
+            }
+
+            if (selector == rackModuleChorus)
+            {
+                chorus.in <- signal;
+                chorus.advance();
+                return isEnabled ? chorus.out : signal;
+            }
+
+            if (selector == rackModuleFlanger)
+            {
+                flanger.in <- signal;
+                flanger.advance();
+                return isEnabled ? flanger.out : signal;
+            }
+
+            if (selector == rackModulePhaser)
+            {
+                phaser.in <- signal;
+                phaser.advance();
+                return isEnabled ? phaser.out : signal;
+            }
+
+            if (selector == rackModuleDelay)
+            {
+                delay.in <- signal;
+                delay.advance();
+                return isEnabled ? delay.out : signal;
+            }
+
+            reverb.in <- signal;
+            reverb.advance();
+            return isEnabled ? reverb.out : signal;
+        }
+
+        void main()
+        {
+            publishStructureDiagnostics();
+
+            loop
+            {
+                forwardModuleParameters();
+
+                var chain = in;
+
+                for (wrap<rackModuleCount> position)
+                    chain = advanceModule (currentOrder[position], chain);
+
+                out <- chain * nextTransitionGain();
+
+                previewInputLeft <- distortion.previewInputLeft;
+                previewInputRight <- distortion.previewInputRight;
+                previewOutputLeft <- distortion.previewOutputLeft;
+                previewOutputRight <- distortion.previewOutputRight;
+
+                publishStructureDiagnostics();
+                advance();
+            }
+        }
+    }
+}

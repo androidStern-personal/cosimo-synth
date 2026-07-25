@@ -1,0 +1,260 @@
+// Proves ADR-001's fixed resident processor shape with a runtime-selected serial
+// order is expressible in Cmajor 1.0.3066, using the real production DistortionBus
+// and ChorusBus for two of the eight resident modules.
+//
+// The rack is deliberately NOT a pure function of its order: ADR-003 preserves every
+// instance's state and tails across a reorder, so "same order twice gives the same
+// samples" is false by design. The tests below therefore compare two independently
+// driven rack instances rather than one rack across time.
+
+## global ("sources_m3")
+
+## testProcessor()
+
+processor Test [[ main ]]
+{
+    output stream int32 out;
+
+    node rackA = wt::EffectsRack;
+    node rackB = wt::EffectsRack;
+
+    let settleFrames = 4096;
+    let measureFrames = 4096;
+
+    wt::RackOrderUpload makeOrder (int32 a, int32 b, int32 c, int32 d, int32 e, int32 f, int32 g, int32 h)
+    {
+        wt::RackOrderUpload upload;
+        upload.moduleIds[0] = a;
+        upload.moduleIds[1] = b;
+        upload.moduleIds[2] = c;
+        upload.moduleIds[3] = d;
+        upload.moduleIds[4] = e;
+        upload.moduleIds[5] = f;
+        upload.moduleIds[6] = g;
+        upload.moduleIds[7] = h;
+        return upload;
+    }
+
+    wt::RackEnableUpload makeEnables (int32 flag)
+    {
+        wt::RackEnableUpload upload;
+
+        for (wrap<8> moduleId)
+            upload.enabledFlags[moduleId] = flag;
+
+        return upload;
+    }
+
+    float32 testSignal (int32 frame)
+    {
+        return 0.4f * float32 (std::intrinsics::sin (float32 (frame) * 0.05f));
+    }
+
+    void configure()
+    {
+        rackA.distortionWetIn <- 1.0f;
+        rackA.distortionDriveDbIn <- 30.0f;
+        rackA.globalFilterCutoffIn <- 0.2f;
+        rackB.distortionWetIn <- 1.0f;
+        rackB.distortionDriveDbIn <- 30.0f;
+        rackB.globalFilterCutoffIn <- 0.2f;
+    }
+
+    float32<2> renderA (int32 frame)
+    {
+        rackA.in <- float32<2> (testSignal (frame), testSignal (frame));
+        rackA.trackingPitchHzIn <- 220.0f;
+        rackA.advance();
+        return rackA.out;
+    }
+
+    float32<2> renderB (int32 frame)
+    {
+        rackB.in <- float32<2> (testSignal (frame), testSignal (frame));
+        rackB.trackingPitchHzIn <- 220.0f;
+        rackB.advance();
+        return rackB.out;
+    }
+
+    void main()
+    {
+        configure();
+
+        // Rack A keeps the declaration order, rack B puts distortion before the
+        // filter. Same eight instances, same parameters, same input, same age.
+        rackB.rackOrderIn <- makeOrder (1, 0, 2, 3, 4, 5, 6, 7);
+
+        float32 maxDifference;
+        int32 differingFrames;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let a = renderA (frame);
+            let b = renderB (frame);
+
+            if (frame >= settleFrames)
+            {
+                let difference = std::intrinsics::abs (a[0] - b[0]);
+                maxDifference = std::intrinsics::max (maxDifference, difference);
+
+                if (difference > 0.0f)
+                    differingFrames += 1;
+            }
+        }
+
+        // 1. Position changes the sound: the two racks diverge audibly.
+        out <- (maxDifference > 0.001f) ? 1 : 0;
+        advance();
+
+        // 2. The divergence is sustained, not a single transition artefact.
+        out <- (differingFrames > measureFrames / 2) ? 1 : 0;
+        advance();
+
+        // 3. Every resident module advanced exactly once per rack frame, in both
+        //    racks, whatever their order. Six of the eight modules are instrumented;
+        //    all eight go through the same dispatch.
+        out <- (rackA.placeholderAdvanceTotalOut == 6 * rackA.rackFrameCountOut) ? 1 : 0;
+        advance();
+
+        out <- (rackB.placeholderAdvanceTotalOut == 6 * rackB.rackFrameCountOut) ? 1 : 0;
+        advance();
+
+        // 4. Exactly one order was committed on each rack: A's compile-time default
+        //    and B's single uploaded order.
+        out <- (rackA.committedOrderGenerationOut == 0 && rackB.committedOrderGenerationOut == 1) ? 1 : 0;
+        advance();
+
+        // 5. An order that is not a complete permutation is rejected outright.
+        rackB.rackOrderIn <- makeOrder (1, 1, 2, 3, 4, 5, 6, 7);
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            renderB (frame);
+
+        out <- (rackB.rejectedOrderCountOut == 1 && rackB.committedOrderGenerationOut == 1) ? 1 : 0;
+        advance();
+
+        // 6. Disabling every module is a hard audible bypass: the rack passes its
+        //    input through untouched once the transition has completed.
+        rackA.rackEnableIn <- makeEnables (0);
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            renderA (frame);
+
+        bool bypassIsExact = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let expected = testSignal (frame);
+
+            if (renderA (frame)[0] != expected)
+                bypassIsExact = false;
+        }
+
+        out <- bypassIsExact ? 1 : 0;
+        advance();
+
+        // 7. The bypassed modules kept advancing while disabled, so no module's
+        //    internal clock drifted away from the rack's.
+        out <- (rackA.placeholderAdvanceTotalOut == 6 * rackA.rackFrameCountOut) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// The reorder transition passes through exact silence, so the order swap is
+// atomic and inaudible, and the rack returns to unity gain afterwards.
+
+## testProcessor()
+
+processor TransitionTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let dcLevel = 0.5f;
+
+    float32<2> render()
+    {
+        rack.in <- float32<2> (dcLevel, dcLevel);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+        return rack.out;
+    }
+
+    wt::RackEnableUpload allDisabled()
+    {
+        wt::RackEnableUpload upload;
+
+        for (wrap<8> moduleId)
+            upload.enabledFlags[moduleId] = 0;
+
+        return upload;
+    }
+
+    wt::RackOrderUpload reversedOrder()
+    {
+        wt::RackOrderUpload upload;
+
+        for (wrap<8> position)
+            upload.moduleIds[position] = 7 - int32 (position);
+
+        return upload;
+    }
+
+    void main()
+    {
+        // Bypass everything so the rack output is exactly the transition gain
+        // applied to a DC input, and settle the resulting transition.
+        rack.rackEnableIn <- allDisabled();
+
+        for (int32 frame = 0; frame < 4096; ++frame)
+            render();
+
+        out <- (render()[0] == dcLevel) ? 1 : 0;
+        advance();
+
+        rack.rackOrderIn <- reversedOrder();
+
+        int32 silentFrames;
+        int32 aboveUnityFrames;
+        int32 commitFrame = -1;
+
+        for (int32 frame = 0; frame < 4096; ++frame)
+        {
+            let rendered = render()[0];
+
+            if (rendered == 0.0f)
+            {
+                silentFrames += 1;
+
+                if (commitFrame < 0 && rack.committedOrderGenerationOut == 2)
+                    commitFrame = frame;
+            }
+
+            if (rendered > dcLevel)
+                aboveUnityFrames += 1;
+        }
+
+        // 1. The rack reached exact silence, and the new order was committed there.
+        out <- (silentFrames > 0 && commitFrame >= 0) ? 1 : 0;
+        advance();
+
+        // 2. The transition never overshoots unity gain.
+        out <- (aboveUnityFrames == 0) ? 1 : 0;
+        advance();
+
+        // 3. The whole fade-out plus fade-in fits inside 10ms at 44.1kHz.
+        out <- (commitFrame < 441) ? 1 : 0;
+        advance();
+
+        // 4. The rack is back at unity afterwards.
+        out <- (render()[0] == dcLevel) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

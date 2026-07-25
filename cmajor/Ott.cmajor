@@ -1,0 +1,602 @@
+namespace wt
+{
+    //==============================================================================
+    // OTT - the rack adaptation of the standalone effect in fx/ott_lab/OttLab.cmajor.
+    //
+    // Three-band Linkwitz-Riley crossover feeding three independent upward+downward
+    // compressors, then a broadband envelope matcher. The RMS and peak detectors,
+    // the soft knee, the stereo link, the per-band input/output gains and the static
+    // band saturation are the standalone effect's, reused whole.
+    //
+    // ONE substantive change, mandated by ADR-008: the rack declares zero processing
+    // latency, so the standalone's 3 ms lookahead alignment path is gone. In the
+    // standalone the detector reads the undelayed band while the audio reads a copy
+    // delayed by 3 ms, which buys the compressor 3 ms of warning before a transient
+    // arrives. Here the detector and the audio read the SAME sample - which
+    // BandDynamicsState always supported, because detectorBand and audioBand were
+    // already separate arguments. The audible consequence is real and is not hidden:
+    // the rack OTT lets the leading edge of a sharp transient through at close to
+    // its uncompressed level where the standalone catches it before it arrives.
+    // fx/ott_lab keeps its own copy with the lookahead; ADR-008 sanctions exactly
+    // that divergence.
+    //
+    // The other 39 standalone controls stay at OttLab's shipped defaults as
+    // compile-time constants. Five continuous parameters are exposed, matching the
+    // ottMix / ottAmount / ottTimePercent / ottBandDrive / ottEnvelopeMatch host
+    // endpoints that already exist on the main graph but reach no DSP today.
+
+    let ottLowMidHz = 88.2818146f;
+    let ottMidHighHz = 2499.99951f;
+    let ottExpansionLimitDb = 30.0f;
+    let ottCompressionLimitDb = -96.0f;
+    let ottDetectorFloor = 1.0e-12f;
+    // The attack/release controls live in the detector. This final ramp only
+    // prevents zippering, and is deliberately not scaled by ottTimePercent.
+    let ottGainSmoothingMs = 0.04f;
+    let ottBandDriveMaxDb = 18.0f;
+    let ottBandSaturationPeakMarginDb = 6.0f;
+    let ottBandSaturationExponent = 4.0f;
+    let ottPercentToUnit = 0.01f;
+
+    // Parameter domains. The rack owns the host-facing annotation and the
+    // modulation summing; the module owns its own clamps, exactly as the
+    // clampDistortion* helpers do at Distortion.cmajor:49-78.
+    let ottMixMinPercent = 0.0f;
+    let ottMixMaxPercent = 100.0f;
+    let ottAmountMinPercent = 0.0f;
+    let ottAmountMaxPercent = 100.0f;
+    let ottTimeMinPercent = 10.0f;
+    let ottTimeMaxPercent = 1000.0f;
+    let ottBandDriveMinPercent = 0.0f;
+    let ottBandDriveMaxPercent = 100.0f;
+    let ottEnvelopeMatchMinPercent = 0.0f;
+    let ottEnvelopeMatchMaxPercent = 100.0f;
+    let ottDefaultTimeScale = 1.0f;
+    let ottDefaultBandDrive01 = 0.0f;
+
+    // A coefficient is rebuilt only when its parameter has moved by more than this,
+    // the discipline wt::DistortionBus applies to its band filters at
+    // Distortion.cmajor:149,155.
+    let ottCoefficientEpsilon = 0.001f;
+
+    // The standalone's fixed voicing, at OttLab's shipped defaults
+    // (fx/ott_lab/OttLab.cmajor:300-345). These are compile-time constants here, so
+    // the branches and multiplications they feed fold away.
+    let ottGlobalInputGainDb = 0.0f;
+    let ottUpAmount01 = 1.0f;
+    let ottDownAmount01 = 1.0f;
+    let ottUsePeakDetector = false;
+    let ottKneeDb = 6.0f;
+    let ottStereoLink01 = 1.0f;
+    let ottEnvelopeBoostClampDb = 6.0f;
+    let ottEnvelopeCutClampDb = 6.0f;
+    let ottEnvelopeAttackMs = 5.0f;
+    let ottEnvelopeReleaseMs = 120.0f;
+
+    let ottLowAboveDb = -33.75f;
+    let ottLowBelowDb = -40.75f;
+    let ottLowDownRatio = 66.7f;
+    let ottLowUpRatio = 4.17f;
+    let ottLowAttackMs = 2.8f;
+    let ottLowReleaseMs = 40.0f;
+    let ottLowInputGainDb = 5.19999981f;
+    let ottLowOutputGainDb = 10.3000002f;
+
+    let ottMidAboveDb = -30.25f;
+    let ottMidBelowDb = -41.75f;
+    let ottMidDownRatio = 66.7f;
+    let ottMidUpRatio = 4.17f;
+    let ottMidAttackMs = 1.4f;
+    let ottMidReleaseMs = 28.0f;
+    let ottMidInputGainDb = 5.19999981f;
+    let ottMidOutputGainDb = 5.69999981f;
+
+    let ottHighAboveDb = -35.5f;
+    let ottHighBelowDb = -40.75f;
+    let ottHighDownRatio = 1000.0f;
+    let ottHighUpRatio = 4.17f;
+    let ottHighAttackMs = 0.7f;
+    let ottHighReleaseMs = 15.0f;
+    let ottHighInputGainDb = 5.19999981f;
+    let ottHighOutputGainDb = 10.3000002f;
+
+    float32 ottClamp01 (float32 value)
+    {
+        return std::intrinsics::clamp (value, 0.0f, 1.0f);
+    }
+
+    float32 ottClampMixPercent (float32 value)
+    {
+        return std::intrinsics::clamp (value, ottMixMinPercent, ottMixMaxPercent);
+    }
+
+    float32 ottClampAmountPercent (float32 value)
+    {
+        return std::intrinsics::clamp (value, ottAmountMinPercent, ottAmountMaxPercent);
+    }
+
+    float32 ottClampTimePercent (float32 value)
+    {
+        return std::intrinsics::clamp (value, ottTimeMinPercent, ottTimeMaxPercent);
+    }
+
+    float32 ottClampBandDrivePercent (float32 value)
+    {
+        return std::intrinsics::clamp (value, ottBandDriveMinPercent, ottBandDriveMaxPercent);
+    }
+
+    float32 ottClampEnvelopeMatchPercent (float32 value)
+    {
+        return std::intrinsics::clamp (value, ottEnvelopeMatchMinPercent, ottEnvelopeMatchMaxPercent);
+    }
+
+    float32 ottLerp (float32 start, float32 end, float32 amount)
+    {
+        return start + ((end - start) * amount);
+    }
+
+    float32 ottTimeCoefficient (float32 sampleRate, float32 milliseconds)
+    {
+        let safeMs = std::intrinsics::max (milliseconds, 0.01f);
+        return std::intrinsics::exp (-1.0f / (safeMs * 0.001f * sampleRate));
+    }
+
+    float32 ottSmoothTowards (float32 current, float32 target, float32 coefficient)
+    {
+        return target + ((current - target) * coefficient);
+    }
+
+    float32 ottSmoothAttackRelease (float32 current, float32 target, float32 attackCoefficient, float32 releaseCoefficient)
+    {
+        let coefficient = target > current ? attackCoefficient : releaseCoefficient;
+        return ottSmoothTowards (current, target, coefficient);
+    }
+
+    float32 ottGainFromDb (float32 db)
+    {
+        return std::levels::dBtoGain (db);
+    }
+
+    float32 ottPowerFromDb (float32 db)
+    {
+        let gain = ottGainFromDb (db);
+        return gain * gain;
+    }
+
+    // The upper detector never falls below the knee's lower edge and the lower
+    // detector never rises above the knee's upper edge, so each half of the
+    // compressor only ever sees the region it acts on. The clamp arrives already
+    // converted - in power for the RMS detectors, in gain for the peak detectors -
+    // because it is derived from constants and has no business being recomputed
+    // every frame.
+    float32 ottSmoothUpperEnvelope (float32 current, float32 sampleValue, float32 clampValue, float32 attackCoefficient, float32 releaseCoefficient)
+    {
+        let clampedCurrent = std::intrinsics::max (current, clampValue);
+        let smoothed = ottSmoothAttackRelease (clampedCurrent, sampleValue, attackCoefficient, releaseCoefficient);
+        return std::intrinsics::max (smoothed, clampValue);
+    }
+
+    float32 ottSmoothLowerEnvelope (float32 current, float32 sampleValue, float32 clampValue, float32 attackCoefficient, float32 releaseCoefficient)
+    {
+        let smoothed = ottSmoothAttackRelease (current, sampleValue, attackCoefficient, releaseCoefficient);
+        return std::intrinsics::min (smoothed, clampValue);
+    }
+
+    float32 ottLevelDbFromPower (float32 power)
+    {
+        return std::levels::gainTodB (std::intrinsics::sqrt (std::intrinsics::max (power, ottDetectorFloor)));
+    }
+
+    float32 ottLevelDbFromPeak (float32 peak)
+    {
+        return std::levels::gainTodB (std::intrinsics::max (peak, ottDetectorFloor));
+    }
+
+    float32 ottDownwardGainDb (float32 levelDb, float32 thresholdDb, float32 ratio, float32 kneeDb)
+    {
+        let safeRatio = std::intrinsics::max (ratio, 1.0f);
+        let slope = (1.0f / safeRatio) - 1.0f;
+        let distance = levelDb - thresholdDb;
+
+        if (kneeDb <= 0.001f)
+            return distance > 0.0f ? slope * distance : 0.0f;
+
+        let halfKnee = kneeDb * 0.5f;
+
+        if (distance <= -halfKnee)
+            return 0.0f;
+
+        if (distance >= halfKnee)
+            return slope * distance;
+
+        let kneeDistance = distance + halfKnee;
+        return slope * kneeDistance * kneeDistance / (2.0f * kneeDb);
+    }
+
+    float32 ottUpwardGainDb (float32 levelDb, float32 thresholdDb, float32 ratio, float32 kneeDb)
+    {
+        let safeRatio = std::intrinsics::max (ratio, 1.0f);
+        let slope = 1.0f - (1.0f / safeRatio);
+        let distance = thresholdDb - levelDb;
+
+        if (kneeDb <= 0.001f)
+            return distance > 0.0f ? slope * distance : 0.0f;
+
+        let halfKnee = kneeDb * 0.5f;
+
+        if (distance <= -halfKnee)
+            return 0.0f;
+
+        if (distance >= halfKnee)
+            return slope * distance;
+
+        let kneeDistance = distance + halfKnee;
+        return slope * kneeDistance * kneeDistance / (2.0f * kneeDb);
+    }
+
+    //==============================================================================
+    // Per-band voicing. Everything in here is derived from compile-time constants,
+    // so it is built once when the processor is constructed and never rebuilt.
+
+    struct OttBandVoicing
+    {
+        float32 inputGain;          // linear, from the global gain plus the band's own
+        float32 outputGainDb;       // added to the smoothed gain before conversion
+        float32 aboveThresholdDb;
+        float32 belowThresholdDb;
+        float32 downRatio;
+        float32 upRatio;
+        float32 upperClampPower;    // the detector clamps, precomputed once
+        float32 lowerClampPower;
+        float32 upperClampPeak;
+        float32 lowerClampPeak;
+        float32 saturationCeiling;
+    }
+
+    OttBandVoicing ottMakeBandVoicing (
+        float32 aboveThresholdDb,
+        float32 belowThresholdDb,
+        float32 downRatio,
+        float32 upRatio,
+        float32 bandInputGainDb,
+        float32 bandOutputGainDb)
+    {
+        let upperClampDb = aboveThresholdDb - (ottKneeDb * 0.5f);
+        let lowerClampDb = belowThresholdDb + (ottKneeDb * 0.5f);
+
+        OttBandVoicing voicing;
+        voicing.inputGain = ottGainFromDb (ottGlobalInputGainDb + bandInputGainDb);
+        voicing.outputGainDb = bandOutputGainDb;
+        voicing.aboveThresholdDb = aboveThresholdDb;
+        voicing.belowThresholdDb = belowThresholdDb;
+        voicing.downRatio = downRatio;
+        voicing.upRatio = upRatio;
+        voicing.upperClampPower = ottPowerFromDb (upperClampDb);
+        voicing.lowerClampPower = ottPowerFromDb (lowerClampDb);
+        voicing.upperClampPeak = ottGainFromDb (upperClampDb);
+        voicing.lowerClampPeak = ottGainFromDb (lowerClampDb);
+        voicing.saturationCeiling = ottGainFromDb (
+            aboveThresholdDb + bandOutputGainDb + ottBandSaturationPeakMarginDb
+        );
+        return voicing;
+    }
+
+    //==============================================================================
+    // Detector timing. Every field costs an exp(), and the only thing that moves
+    // them is ottTimePercent, so they are rebuilt when it moves and not otherwise.
+
+    struct OttTimeCoefficients
+    {
+        float32 attackCoefficient;
+        float32 releaseCoefficient;
+    }
+
+    OttTimeCoefficients ottMakeTimeCoefficients (
+        float32 sampleRate,
+        float32 attackMs,
+        float32 releaseMs,
+        float32 timeScale)
+    {
+        OttTimeCoefficients timing;
+        timing.attackCoefficient = ottTimeCoefficient (sampleRate, attackMs * timeScale);
+        timing.releaseCoefficient = ottTimeCoefficient (sampleRate, releaseMs * timeScale);
+        return timing;
+    }
+
+    //==============================================================================
+    // The static band saturator's drive-derived gains. Only ottBandDrive moves them.
+
+    struct OttSaturationCoefficients
+    {
+        float32 drive01;
+        float32 driveGain;
+        float32 outputTrim;
+    }
+
+    OttSaturationCoefficients ottMakeSaturationCoefficients (float32 drive01)
+    {
+        let driveDb = ottBandDriveMaxDb * ottClamp01 (drive01);
+
+        OttSaturationCoefficients saturation;
+        saturation.drive01 = drive01;
+        saturation.driveGain = ottGainFromDb (driveDb);
+        saturation.outputTrim = ottGainFromDb (driveDb * -0.5f);
+        return saturation;
+    }
+
+    float32 ottStaticBandSaturate (float32 sample, float32 ceiling, OttSaturationCoefficients saturation)
+    {
+        if (saturation.drive01 <= 0.0001f)
+            return sample;
+
+        let normalized = (sample * saturation.driveGain) / std::intrinsics::max (ceiling, ottDetectorFloor);
+        let magnitude = std::intrinsics::abs (normalized);
+        let denominator = std::intrinsics::pow (
+            1.0f + std::intrinsics::pow (magnitude, ottBandSaturationExponent),
+            1.0f / ottBandSaturationExponent
+        );
+
+        return ceiling * normalized * saturation.outputTrim / denominator;
+    }
+
+    //==============================================================================
+    // One band's upward+downward compressor. Ported from ottlab::BandDynamicsState
+    // (fx/ott_lab/OttLab.cmajor:154-249). The detector maths is unchanged; what
+    // changed is that the coefficients and clamps arrive precomputed instead of
+    // being rebuilt from decibels on every frame.
+    //
+    // detectorBand and audioBand are still separate arguments even though the rack
+    // always passes the same signal to both. That is the seam the standalone's
+    // lookahead used, and leaving it open is what makes the two versions comparable.
+
+    struct OttBandDynamicsState
+    {
+        float32 upperRmsEnvLeft, upperRmsEnvRight, upperRmsEnvLinked;
+        float32 lowerRmsEnvLeft, lowerRmsEnvRight, lowerRmsEnvLinked;
+        float32 upperPeakEnvLeft, upperPeakEnvRight, upperPeakEnvLinked;
+        float32 lowerPeakEnvLeft, lowerPeakEnvRight, lowerPeakEnvLinked;
+        float32 gainDbLeft, gainDbRight;
+
+        float32<2> process (
+            float32<2> detectorBand,
+            float32<2> audioBand,
+            OttBandVoicing voicing,
+            OttTimeCoefficients timing,
+            OttSaturationCoefficients saturation,
+            float32 gainSmoothCoefficient,
+            float32 amount01)
+        {
+            let detectorInput = detectorBand * voicing.inputGain;
+            let audioInput = audioBand * voicing.inputGain;
+            let absLeft = std::intrinsics::abs (detectorInput[0]);
+            let absRight = std::intrinsics::abs (detectorInput[1]);
+            let powerLeft = detectorInput[0] * detectorInput[0];
+            let powerRight = detectorInput[1] * detectorInput[1];
+            let linkedPower = std::intrinsics::max (powerLeft, powerRight);
+            let linkedPeak = std::intrinsics::max (absLeft, absRight);
+            let attackCoeff = timing.attackCoefficient;
+            let releaseCoeff = timing.releaseCoefficient;
+
+            this.upperRmsEnvLeft = ottSmoothUpperEnvelope (this.upperRmsEnvLeft, powerLeft, voicing.upperClampPower, attackCoeff, releaseCoeff);
+            this.upperRmsEnvRight = ottSmoothUpperEnvelope (this.upperRmsEnvRight, powerRight, voicing.upperClampPower, attackCoeff, releaseCoeff);
+            this.upperRmsEnvLinked = ottSmoothUpperEnvelope (this.upperRmsEnvLinked, linkedPower, voicing.upperClampPower, attackCoeff, releaseCoeff);
+            this.lowerRmsEnvLeft = ottSmoothLowerEnvelope (this.lowerRmsEnvLeft, powerLeft, voicing.lowerClampPower, attackCoeff, releaseCoeff);
+            this.lowerRmsEnvRight = ottSmoothLowerEnvelope (this.lowerRmsEnvRight, powerRight, voicing.lowerClampPower, attackCoeff, releaseCoeff);
+            this.lowerRmsEnvLinked = ottSmoothLowerEnvelope (this.lowerRmsEnvLinked, linkedPower, voicing.lowerClampPower, attackCoeff, releaseCoeff);
+            this.upperPeakEnvLeft = ottSmoothUpperEnvelope (this.upperPeakEnvLeft, absLeft, voicing.upperClampPeak, attackCoeff, releaseCoeff);
+            this.upperPeakEnvRight = ottSmoothUpperEnvelope (this.upperPeakEnvRight, absRight, voicing.upperClampPeak, attackCoeff, releaseCoeff);
+            this.upperPeakEnvLinked = ottSmoothUpperEnvelope (this.upperPeakEnvLinked, linkedPeak, voicing.upperClampPeak, attackCoeff, releaseCoeff);
+            this.lowerPeakEnvLeft = ottSmoothLowerEnvelope (this.lowerPeakEnvLeft, absLeft, voicing.lowerClampPeak, attackCoeff, releaseCoeff);
+            this.lowerPeakEnvRight = ottSmoothLowerEnvelope (this.lowerPeakEnvRight, absRight, voicing.lowerClampPeak, attackCoeff, releaseCoeff);
+            this.lowerPeakEnvLinked = ottSmoothLowerEnvelope (this.lowerPeakEnvLinked, linkedPeak, voicing.lowerClampPeak, attackCoeff, releaseCoeff);
+
+            let levelDownLeft = ottUsePeakDetector ? ottLevelDbFromPeak (this.upperPeakEnvLeft)
+                                                  : ottLevelDbFromPower (this.upperRmsEnvLeft);
+            let levelDownRight = ottUsePeakDetector ? ottLevelDbFromPeak (this.upperPeakEnvRight)
+                                                    : ottLevelDbFromPower (this.upperRmsEnvRight);
+            let levelDownLinked = ottUsePeakDetector ? ottLevelDbFromPeak (this.upperPeakEnvLinked)
+                                                     : ottLevelDbFromPower (this.upperRmsEnvLinked);
+            let levelUpLeft = ottUsePeakDetector ? ottLevelDbFromPeak (this.lowerPeakEnvLeft)
+                                                 : ottLevelDbFromPower (this.lowerRmsEnvLeft);
+            let levelUpRight = ottUsePeakDetector ? ottLevelDbFromPeak (this.lowerPeakEnvRight)
+                                                  : ottLevelDbFromPower (this.lowerRmsEnvRight);
+            let levelUpLinked = ottUsePeakDetector ? ottLevelDbFromPeak (this.lowerPeakEnvLinked)
+                                                   : ottLevelDbFromPower (this.lowerRmsEnvLinked);
+
+            let targetDownLeftIndependent = ottDownwardGainDb (levelDownLeft, voicing.aboveThresholdDb, voicing.downRatio, ottKneeDb) * ottDownAmount01;
+            let targetDownRightIndependent = ottDownwardGainDb (levelDownRight, voicing.aboveThresholdDb, voicing.downRatio, ottKneeDb) * ottDownAmount01;
+            let targetDownLinked = ottDownwardGainDb (levelDownLinked, voicing.aboveThresholdDb, voicing.downRatio, ottKneeDb) * ottDownAmount01;
+            let targetUpLeftIndependent = ottUpwardGainDb (levelUpLeft, voicing.belowThresholdDb, voicing.upRatio, ottKneeDb) * ottUpAmount01;
+            let targetUpRightIndependent = ottUpwardGainDb (levelUpRight, voicing.belowThresholdDb, voicing.upRatio, ottKneeDb) * ottUpAmount01;
+            let targetUpLinked = ottUpwardGainDb (levelUpLinked, voicing.belowThresholdDb, voicing.upRatio, ottKneeDb) * ottUpAmount01;
+            let targetDownLeft = ottLerp (targetDownLeftIndependent, targetDownLinked, ottStereoLink01);
+            let targetDownRight = ottLerp (targetDownRightIndependent, targetDownLinked, ottStereoLink01);
+            let targetUpLeft = ottLerp (targetUpLeftIndependent, targetUpLinked, ottStereoLink01);
+            let targetUpRight = ottLerp (targetUpRightIndependent, targetUpLinked, ottStereoLink01);
+            let targetGainDbLeft = std::intrinsics::clamp ((targetDownLeft + targetUpLeft) * amount01, ottCompressionLimitDb, ottExpansionLimitDb);
+            let targetGainDbRight = std::intrinsics::clamp ((targetDownRight + targetUpRight) * amount01, ottCompressionLimitDb, ottExpansionLimitDb);
+
+            this.gainDbLeft = ottSmoothTowards (this.gainDbLeft, targetGainDbLeft, gainSmoothCoefficient);
+            this.gainDbRight = ottSmoothTowards (this.gainDbRight, targetGainDbRight, gainSmoothCoefficient);
+
+            let wetLeft = audioInput[0] * ottGainFromDb (this.gainDbLeft + voicing.outputGainDb);
+            let wetRight = audioInput[1] * ottGainFromDb (this.gainDbRight + voicing.outputGainDb);
+            let saturatedWetLeft = ottStaticBandSaturate (wetLeft, voicing.saturationCeiling, saturation);
+            let saturatedWetRight = ottStaticBandSaturate (wetRight, voicing.saturationCeiling, saturation);
+
+            return float32<2> (
+                ottLerp (audioBand[0], saturatedWetLeft, amount01),
+                ottLerp (audioBand[1], saturatedWetRight, amount01)
+            );
+        }
+    }
+
+    //==============================================================================
+    // Ported from ottlab::BroadbandEnvelopeMatcher (fx/ott_lab/OttLab.cmajor:251-286),
+    // unchanged apart from the precomputed coefficients and the fixed clamps.
+
+    struct OttBroadbandEnvelopeMatcher
+    {
+        float32 dryPowerEnv, wetPowerEnv;
+
+        float32<2> process (
+            float32<2> dryReference,
+            float32<2> wetInput,
+            OttTimeCoefficients timing,
+            float32 amount01)
+        {
+            let dryPower = std::intrinsics::max (dryReference[0] * dryReference[0], dryReference[1] * dryReference[1]);
+            let wetPower = std::intrinsics::max (wetInput[0] * wetInput[0], wetInput[1] * wetInput[1]);
+
+            this.dryPowerEnv = ottSmoothAttackRelease (this.dryPowerEnv, dryPower, timing.attackCoefficient, timing.releaseCoefficient);
+            this.wetPowerEnv = ottSmoothAttackRelease (this.wetPowerEnv, wetPower, timing.attackCoefficient, timing.releaseCoefficient);
+
+            if (amount01 <= 0.0001f)
+                return wetInput;
+
+            let dryDb = ottLevelDbFromPower (this.dryPowerEnv);
+            let wetDb = ottLevelDbFromPower (this.wetPowerEnv);
+            let correctionDb = std::intrinsics::clamp (
+                dryDb - wetDb,
+                -ottEnvelopeCutClampDb,
+                ottEnvelopeBoostClampDb
+            ) * amount01;
+
+            return wetInput * ottGainFromDb (correctionDb);
+        }
+    }
+
+    //==============================================================================
+    // The rack module. Stereo in, stereo out, no declared latency, no allocation and
+    // no unbounded state - the same shape as wt::DistortionBus, which is the module
+    // this repository has already proven composes as a resident rack child.
+
+    processor OttBus
+    {
+        input stream float32<2> in;
+
+        // Annotated with `init:` only, exactly as wt::DistortionBus's endpoints are
+        // (Distortion.cmajor:112-117). The host-facing name/min/max/unit/rampFrames
+        // live on wt::EffectsRack, which writes these every frame with the base
+        // value plus its modulation offset already summed; a second rampFrames here
+        // would lag that write by smoothing an already smoothed value.
+        input value float32 mixIn [[ init: 100.0f ]];
+        input value float32 amountIn [[ init: 100.0f ]];
+        input value float32 timePercentIn [[ init: 100.0f ]];
+        input value float32 bandDriveIn [[ init: 0.0f ]];
+        input value float32 envelopeMatchIn [[ init: 0.0f ]];
+
+        output stream float32<2> out;
+
+        // ADR-008: no lookahead, so there is no processor.latency declaration to
+        // make. A rack child that declared latency would make the signal late while
+        // the host was told it was not - a composed child's latency does not reach
+        // its composing parent.
+
+        let ottSampleRate = float32 (processor.frequency);
+
+        var lowMidCrossover = std::filters (float32<2>, float64, 32)::crossover::create (
+            processor.frequency,
+            ottLowMidHz
+        );
+        var midHighCrossover = std::filters (float32<2>, float64, 32)::crossover::create (
+            processor.frequency,
+            ottMidHighHz
+        );
+
+        var lowVoicing = ottMakeBandVoicing (ottLowAboveDb, ottLowBelowDb, ottLowDownRatio, ottLowUpRatio, ottLowInputGainDb, ottLowOutputGainDb);
+        var midVoicing = ottMakeBandVoicing (ottMidAboveDb, ottMidBelowDb, ottMidDownRatio, ottMidUpRatio, ottMidInputGainDb, ottMidOutputGainDb);
+        var highVoicing = ottMakeBandVoicing (ottHighAboveDb, ottHighBelowDb, ottHighDownRatio, ottHighUpRatio, ottHighInputGainDb, ottHighOutputGainDb);
+
+        var gainSmoothCoefficient = ottTimeCoefficient (ottSampleRate, ottGainSmoothingMs);
+        var envelopeTiming = ottMakeTimeCoefficients (ottSampleRate, ottEnvelopeAttackMs, ottEnvelopeReleaseMs, ottDefaultTimeScale);
+
+        // Rebuilt only when the parameter that feeds them has moved materially.
+        // Six exp() calls a frame at 44.1 kHz is 265,000 a second spent recomputing
+        // a number that only changes when somebody turns a knob.
+        float32 currentTimeScale = ottDefaultTimeScale;
+        var lowTiming = ottMakeTimeCoefficients (ottSampleRate, ottLowAttackMs, ottLowReleaseMs, ottDefaultTimeScale);
+        var midTiming = ottMakeTimeCoefficients (ottSampleRate, ottMidAttackMs, ottMidReleaseMs, ottDefaultTimeScale);
+        var highTiming = ottMakeTimeCoefficients (ottSampleRate, ottHighAttackMs, ottHighReleaseMs, ottDefaultTimeScale);
+
+        float32 currentBandDrive01 = ottDefaultBandDrive01;
+        var saturation = ottMakeSaturationCoefficients (ottDefaultBandDrive01);
+
+        OttBandDynamicsState lowDynamics;
+        OttBandDynamicsState midDynamics;
+        OttBandDynamicsState highDynamics;
+        OttBroadbandEnvelopeMatcher envelopeMatcher;
+
+        void updateTimeCoefficients()
+        {
+            let nextTimeScale = ottClampTimePercent (timePercentIn) * ottPercentToUnit;
+
+            if (std::intrinsics::abs (nextTimeScale - currentTimeScale) > ottCoefficientEpsilon)
+            {
+                lowTiming = ottMakeTimeCoefficients (ottSampleRate, ottLowAttackMs, ottLowReleaseMs, nextTimeScale);
+                midTiming = ottMakeTimeCoefficients (ottSampleRate, ottMidAttackMs, ottMidReleaseMs, nextTimeScale);
+                highTiming = ottMakeTimeCoefficients (ottSampleRate, ottHighAttackMs, ottHighReleaseMs, nextTimeScale);
+                currentTimeScale = nextTimeScale;
+            }
+        }
+
+        void updateSaturationCoefficients()
+        {
+            let nextBandDrive01 = ottClampBandDrivePercent (bandDriveIn) * ottPercentToUnit;
+
+            if (std::intrinsics::abs (nextBandDrive01 - currentBandDrive01) > ottCoefficientEpsilon)
+            {
+                saturation = ottMakeSaturationCoefficients (nextBandDrive01);
+                currentBandDrive01 = nextBandDrive01;
+            }
+        }
+
+        void main()
+        {
+            loop
+            {
+                updateTimeCoefficients();
+                updateSaturationCoefficients();
+
+                let dry = in;
+                let splitLowRest = lowMidCrossover.process (dry);
+                let lowBand = splitLowRest[0];
+                let splitMidHigh = midHighCrossover.process (splitLowRest[1]);
+                let midBand = splitMidHigh[0];
+                let highBand = splitMidHigh[1];
+
+                // The internal dry reference is the SUM OF THE THREE BANDS, not the
+                // raw input. A Linkwitz-Riley crossover sums to allpass, not to
+                // identity, so crossfading the raw input against processed bands
+                // would comb. An allpass phase response is an effect characteristic;
+                // it is not latency, and ADR-008 is about latency.
+                let bandSum = lowBand + midBand + highBand;
+
+                let amount01 = ottClampAmountPercent (amountIn) * ottPercentToUnit;
+                let mix01 = ottClampMixPercent (mixIn) * ottPercentToUnit;
+                let envelopeMatch01 = ottClampEnvelopeMatchPercent (envelopeMatchIn) * ottPercentToUnit;
+
+                // ADR-008: the detector and the audio read the SAME sample. In the
+                // standalone these two arguments differ by 3 ms of lookahead.
+                let processedLow = lowDynamics.process (lowBand, lowBand, lowVoicing, lowTiming, saturation, gainSmoothCoefficient, amount01);
+                let processedMid = midDynamics.process (midBand, midBand, midVoicing, midTiming, saturation, gainSmoothCoefficient, amount01);
+                let processedHigh = highDynamics.process (highBand, highBand, highVoicing, highTiming, saturation, gainSmoothCoefficient, amount01);
+
+                let processedWet = processedLow + processedMid + processedHigh;
+
+                // The standalone's global output gain sits at 0 dB and is not
+                // exposed here, so there is no makeup multiply to apply.
+                let wet = envelopeMatcher.process (bandSum, processedWet, envelopeTiming, envelopeMatch01);
+                let mixed = bandSum + ((wet - bandSum) * mix01);
+
+                // Hard bypass has to be honest: at mix 0 the module returns its own
+                // input bit for bit, so a fully dry OTT sitting in a rack position
+                // cannot be caught adding the crossover's allpass colour to a signal
+                // the user believes is untouched.
+                out <- mix01 <= 0.0f ? dry : mixed;
+
+                advance();
+            }
+        }
+    }
+}

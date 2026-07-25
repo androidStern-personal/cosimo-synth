@@ -1,0 +1,643 @@
+// Behavioural pin for wt::ReverbBus, the rack's Reverb module (ADR-006 inventory).
+//
+// The module is a feedback delay network: a four stage modulated Schroeder allpass
+// diffuser per channel - the structure wt::ChorusBus already ships and proves in
+// production at cmajor/Chorus.cmajor:331-375 - feeding four delay lines mixed by a
+// normalised 4x4 Hadamard matrix. The Hadamard is orthogonal, so the network is
+// lossless and stability depends only on the per line feedback gains being below
+// unity; those gains are derived from RT60 rather than guessed.
+//
+// `## testProcessor()` renders exactly 100 frames in ONE block, so reverb tails of
+// several seconds cannot be pinned at graph level. Every section below therefore
+// holds wt::ReverbBus as a composed child and advances it itself, which is also
+// exactly how wt::EffectsRack drives it.
+//
+// Run: cmaj test --singleThread --sessionID=1 tests/cmajor_rack
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Reverb.cmajor")
+
+
+//==============================================================================
+// Hard bypass, the stated level budget, and the zero latency dry path
+// (ADR-005, ADR-008).
+//
+// LEVEL BUDGET, and what it deliberately is NOT. The module is entirely linear -
+// there is no saturator anywhere in it, because a non-linearity inside a reverb
+// tank is a colouration, not a safety net. The two quantities below are therefore
+// the honest ones for a linear system:
+//
+//   * RMS gain, which is excitation independent. The reverb must never AMPLIFY.
+//   * Peak, for full scale broadband noise over a pinned duration - a Gaussian
+//     peak grows with the log of the run length, so the duration is part of the
+//     assertion, not an accident of it.
+//
+// What is NOT asserted, and must not be: a peak bound under a SUSTAINED PURE TONE.
+// The modal Q of a tail is set by RT60, so at decay 1.0 a tone parked on a mode
+// rings up without a useful bound - measured above +14 dBFS at 88 Hz. That is true
+// of every honest reverb and is exactly why ADR-006 keeps a fixed safety limiter
+// after the creative rack rather than inside a module.
+
+## testProcessor()
+
+processor ReverbBypassAndLevelTest [[ main ]]
+{
+    output stream int32 out;
+
+    node reverb = wt::ReverbBus;
+
+    std::random::RNG noise;
+
+    let settleFrames = 1024;
+    let measureFrames = 8192;
+
+    // 15 s at 44.1 kHz. RT60 at decay 1.0 is 12 s, so this reaches steady state, and
+    // it is the duration the peak budget below is quoted against.
+    let levelRunFrames = 661500;
+    let levelWindowFrames = 220500;
+
+    // Measured across a 75 corner grid (size and decay in 0.25 steps, damping in 0.5
+    // steps) driven with 15 s of full scale white noise per corner:
+    //     worst RMS gain 0.754 at size 0.0, decay 0.0, damping 0.0
+    //     worst peak     2.344 at size 1.0, decay 0.5, damping 0.0
+    let reverbRmsGainBudget = 1.0f;
+    let reverbBroadbandPeakBudget = 3.0f;
+
+    float32 testSignal (int32 frame)
+    {
+        return float32 (std::intrinsics::sin (float32 (frame) * 0.05f));
+    }
+
+    float32<2> render (int32 frame)
+    {
+        reverb.in <- float32<2> (testSignal (frame), testSignal (frame));
+        reverb.advance();
+        return reverb.out;
+    }
+
+    float32<2> renderNoise (float32 signal)
+    {
+        reverb.in <- float32<2> (signal, signal);
+        reverb.advance();
+        return reverb.out;
+    }
+
+    bool dryIsBitExact()
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (frame);
+
+        bool exact = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+            if (render (frame)[0] != testSignal (frame))
+                exact = false;
+
+        return exact;
+    }
+
+    void main()
+    {
+        noise.seed (20260725L);
+
+        // The bypass corner: every wet side parameter at its most extreme, mix at 0.
+        reverb.sizeIn <- 1.0f;
+        reverb.decayIn <- 1.0f;
+        reverb.dampingIn <- 0.0f;
+        reverb.mixIn <- 0.0f;
+
+        // 1. At mix 0 the reverb passes its input BIT-EXACTLY - float32 `!=`, no
+        //    tolerance. That is what makes the hard bypass honest, and it is also the
+        //    module level statement of ADR-008's zero latency dry path: a sample
+        //    cannot be both bit-exact and delayed.
+        out <- dryIsBitExact() ? 1 : 0;
+        advance();
+
+        // The loudest broadband corner found by the calibration grid, fully wet,
+        // driven with full scale white noise well past steady state.
+        reverb.sizeIn <- 1.0f;
+        reverb.decayIn <- 0.5f;
+        reverb.dampingIn <- 0.0f;
+        reverb.mixIn <- 1.0f;
+
+        float32 wetPeak, wetEnergy, inputEnergy;
+        bool wetIsFinite = true;
+
+        for (int32 frame = 0; frame < levelRunFrames; ++frame)
+        {
+            let signal = noise.getBipolar();
+            let rendered = renderNoise (signal);
+
+            for (wrap<2> channel)
+            {
+                let value = rendered[channel];
+
+                if (value != value)
+                    wetIsFinite = false;
+
+                wetPeak = std::intrinsics::max (wetPeak, std::intrinsics::abs (value));
+            }
+
+            if (frame >= levelRunFrames - levelWindowFrames)
+            {
+                wetEnergy += rendered[0] * rendered[0];
+                inputEnergy += signal * signal;
+            }
+        }
+
+        let wetRmsGain = float32 (std::intrinsics::sqrt (wetEnergy / std::intrinsics::max (inputEnergy, 1.0e-20f)));
+
+        // 2. The orthogonal feedback matrix has not been made an oscillator.
+        out <- wetIsFinite ? 1 : 0;
+        advance();
+
+        // 3. The reverb never amplifies: its wet RMS gain stays below unity.
+        out <- (wetRmsGain <= reverbRmsGainBudget) ? 1 : 0;
+        advance();
+
+        // 4. And its broadband peak stays inside the stated budget over this run
+        //    length. `abs(x) < 8.0` would pass at +18 dBFS and is not a level
+        //    assertion at all.
+        out <- (wetPeak <= reverbBroadbandPeakBudget) ? 1 : 0;
+        advance();
+
+        // 5. The wet path actually does something...
+        out <- (wetPeak > 0.01f) ? 1 : 0;
+        advance();
+
+        // 6. ... and what it does is not "pass the input through". A bare wire
+        //    satisfies bit-exact bypass, boundedness and non-silence, so without this
+        //    assertion the whole section is passable by a piece of wire.
+        reverb.mixIn <- 1.0f;
+
+        float32 wetDivergence;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+            wetDivergence = std::intrinsics::max (wetDivergence, std::intrinsics::abs (render (frame)[0] - testSignal (frame)));
+
+        out <- (wetDivergence > 0.01f) ? 1 : 0;
+        advance();
+
+        // 7. Returning to mix 0 while a loud tail is still ringing is bit-exact
+        //    again. This is the assertion that catches a wet path which is merely
+        //    small rather than genuinely gated by the equal power law.
+        reverb.mixIn <- 0.0f;
+
+        out <- dryIsBitExact() ? 1 : 0;
+        advance();
+
+        // 8. The opposite corner - the shortest, most damped setting, which is also
+        //    where the calibration grid found the highest RMS gain - is bit-exact dry
+        //    too, so the clamp helpers are actually applied at both ends.
+        reverb.sizeIn <- 0.0f;
+        reverb.decayIn <- 0.0f;
+        reverb.dampingIn <- 1.0f;
+        reverb.mixIn <- 0.0f;
+
+        out <- dryIsBitExact() ? 1 : 0;
+        advance();
+
+        // 9. And at that corner the wet path is audible and still under budget.
+        reverb.sizeIn <- 0.0f;
+        reverb.decayIn <- 0.0f;
+        reverb.dampingIn <- 0.0f;
+        reverb.mixIn <- 1.0f;
+
+        float32 minimumCornerPeak, minimumWetEnergy, minimumInputEnergy;
+
+        for (int32 frame = 0; frame < levelRunFrames; ++frame)
+        {
+            let signal = noise.getBipolar();
+            let rendered = renderNoise (signal);
+
+            for (wrap<2> channel)
+                minimumCornerPeak = std::intrinsics::max (minimumCornerPeak, std::intrinsics::abs (rendered[channel]));
+
+            if (frame >= levelRunFrames - levelWindowFrames)
+            {
+                minimumWetEnergy += rendered[0] * rendered[0];
+                minimumInputEnergy += signal * signal;
+            }
+        }
+
+        let minimumRmsGain = float32 (std::intrinsics::sqrt (minimumWetEnergy / std::intrinsics::max (minimumInputEnergy, 1.0e-20f)));
+
+        out <- (minimumCornerPeak > 0.01f && minimumCornerPeak <= reverbBroadbandPeakBudget) ? 1 : 0;
+        advance();
+
+        out <- (minimumRmsGain <= reverbRmsGainBudget) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// The tail: it decays, its RT60 is approximately what the decay parameter claims,
+// and damping actually darkens it.
+
+## testProcessor()
+
+processor ReverbTailTest [[ main ]]
+{
+    output stream int32 out;
+
+    node longTail = wt::ReverbBus;
+    node shortDecay = wt::ReverbBus;
+    node longDecay = wt::ReverbBus;
+    node brightTail = wt::ReverbBus;
+    node darkTail = wt::ReverbBus;
+
+    let exciteFrames = 22050;
+    let windowFrames = 512;
+    let silenceFrames = 242550;         // 5.5 s at 44.1 kHz
+
+    // RT60 at decay 0.2 is 0.2 + 0.04 * 11.8 = 0.672 s. Twice that is 1.344 s.
+    let rt60ProbeFrames = 59270;
+    let minus60dB = 0.001f;
+
+    let darknessMeasureFrames = 16384;
+
+    std::random::RNG noise;
+
+    float32 excitation (int32 frame)
+    {
+        return 0.9f * float32 (std::intrinsics::sin (float32 (frame) * 0.03f));
+    }
+
+    float32<2> renderLongTail (float32 signal)
+    {
+        longTail.in <- float32<2> (signal, signal);
+        longTail.advance();
+        return longTail.out;
+    }
+
+    float32<2> renderShortDecay (float32 signal)
+    {
+        shortDecay.in <- float32<2> (signal, signal);
+        shortDecay.advance();
+        return shortDecay.out;
+    }
+
+    float32<2> renderLongDecay (float32 signal)
+    {
+        longDecay.in <- float32<2> (signal, signal);
+        longDecay.advance();
+        return longDecay.out;
+    }
+
+    float32<2> renderBrightTail (float32 signal)
+    {
+        brightTail.in <- float32<2> (signal, signal);
+        brightTail.advance();
+        return brightTail.out;
+    }
+
+    float32<2> renderDarkTail (float32 signal)
+    {
+        darkTail.in <- float32<2> (signal, signal);
+        darkTail.advance();
+        return darkTail.out;
+    }
+
+    void main()
+    {
+        noise.seed (20260725L);
+
+        longTail.sizeIn <- 1.0f;
+        longTail.decayIn <- 1.0f;
+        longTail.dampingIn <- 0.0f;
+        longTail.mixIn <- 1.0f;
+
+        for (int32 frame = 0; frame < exciteFrames; ++frame)
+            renderLongTail (excitation (frame));
+
+        float32 earlyTailPeak;
+
+        for (int32 frame = 0; frame < windowFrames; ++frame)
+        {
+            let rendered = renderLongTail (0.0f);
+            earlyTailPeak = std::intrinsics::max (earlyTailPeak, std::intrinsics::abs (rendered[0]));
+        }
+
+        float32 lateTailPeak;
+
+        for (int32 frame = 0; frame < silenceFrames - (2 * windowFrames); ++frame)
+            renderLongTail (0.0f);
+
+        for (int32 frame = 0; frame < windowFrames; ++frame)
+        {
+            let rendered = renderLongTail (0.0f);
+            lateTailPeak = std::intrinsics::max (lateTailPeak, std::intrinsics::abs (rendered[0]));
+        }
+
+        // 1. THE TAIL DECAYS. After the input stops, the peak over the final 512
+        //    frames of 5.5 s of silence is strictly below the peak over the first
+        //    512 frames.
+        out <- (lateTailPeak < earlyTailPeak) ? 1 : 0;
+        advance();
+
+        // Two instances differing only in decay, excited identically, then measured
+        // at the same instant: twice the nominal RT60 of the shorter one.
+        shortDecay.sizeIn <- 0.5f;
+        shortDecay.decayIn <- 0.2f;
+        shortDecay.dampingIn <- 0.0f;
+        shortDecay.mixIn <- 1.0f;
+
+        longDecay.sizeIn <- 0.5f;
+        longDecay.decayIn <- 0.8f;
+        longDecay.dampingIn <- 0.0f;
+        longDecay.mixIn <- 1.0f;
+
+        for (int32 frame = 0; frame < exciteFrames; ++frame)
+        {
+            let signal = excitation (frame);
+            renderShortDecay (signal);
+            renderLongDecay (signal);
+        }
+
+        float32 shortReferencePeak;
+        float32 longReferencePeak;
+
+        for (int32 frame = 0; frame < windowFrames; ++frame)
+        {
+            shortReferencePeak = std::intrinsics::max (shortReferencePeak, std::intrinsics::abs (renderShortDecay (0.0f)[0]));
+            longReferencePeak = std::intrinsics::max (longReferencePeak, std::intrinsics::abs (renderLongDecay (0.0f)[0]));
+        }
+
+        for (int32 frame = 0; frame < rt60ProbeFrames - (2 * windowFrames); ++frame)
+        {
+            renderShortDecay (0.0f);
+            renderLongDecay (0.0f);
+        }
+
+        float32 shortProbePeak;
+        float32 longProbePeak;
+
+        for (int32 frame = 0; frame < windowFrames; ++frame)
+        {
+            shortProbePeak = std::intrinsics::max (shortProbePeak, std::intrinsics::abs (renderShortDecay (0.0f)[0]));
+            longProbePeak = std::intrinsics::max (longProbePeak, std::intrinsics::abs (renderLongDecay (0.0f)[0]));
+        }
+
+        // 2. RT60 IS APPROXIMATELY RIGHT: at decay 0.2 the tail has reached -60 dB
+        //    within twice the nominal RT60.
+        out <- (shortProbePeak < shortReferencePeak * minus60dB) ? 1 : 0;
+        advance();
+
+        // 3. ... and at decay 0.8, at that same instant, it has NOT. Without this
+        //    half, a reverb whose tail simply dies instantly would pass.
+        out <- (longProbePeak >= longReferencePeak * minus60dB) ? 1 : 0;
+        advance();
+
+        // Two instances differing only in damping, excited with identical broadband
+        // noise, measured over the same late window.
+        brightTail.sizeIn <- 0.6f;
+        brightTail.decayIn <- 0.7f;
+        brightTail.dampingIn <- 0.0f;
+        brightTail.mixIn <- 1.0f;
+
+        darkTail.sizeIn <- 0.6f;
+        darkTail.decayIn <- 0.7f;
+        darkTail.dampingIn <- 1.0f;
+        darkTail.mixIn <- 1.0f;
+
+        for (int32 frame = 0; frame < exciteFrames; ++frame)
+        {
+            let signal = 0.5f * noise.getBipolar();
+            renderBrightTail (signal);
+            renderDarkTail (signal);
+        }
+
+        float32 brightEnergy, brightHighEnergy, brightPrevious;
+        float32 darkEnergy, darkHighEnergy, darkPrevious;
+
+        for (int32 frame = 0; frame < darknessMeasureFrames; ++frame)
+        {
+            let bright = renderBrightTail (0.0f)[0];
+            let dark = renderDarkTail (0.0f)[0];
+
+            brightEnergy += bright * bright;
+            darkEnergy += dark * dark;
+
+            let brightDifference = bright - brightPrevious;
+            let darkDifference = dark - darkPrevious;
+
+            brightHighEnergy += brightDifference * brightDifference;
+            darkHighEnergy += darkDifference * darkDifference;
+
+            brightPrevious = bright;
+            darkPrevious = dark;
+        }
+
+        // 4. Damping at 1.0 makes the late tail measurably darker than at 0.0. The
+        //    first difference energy relative to total energy is a crude but
+        //    monotone brightness measure and needs no FFT.
+        let brightRatio = brightHighEnergy / std::intrinsics::max (brightEnergy, 1.0e-20f);
+        let darkRatio = darkHighEnergy / std::intrinsics::max (darkEnergy, 1.0e-20f);
+
+        out <- (darkRatio < brightRatio * 0.9f) ? 1 : 0;
+        advance();
+
+        // 5. Both tails were actually audible in that window, so assertion 4 is not
+        //    comparing two floors of numerical noise.
+        out <- (brightEnergy > 1.0e-6f && darkEnergy > 1.0e-6f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// Stereo behaviour, the pre-delay structure, and modulation eligibility: every
+// continuous parameter must move the sound (ADR-012 makes all four routable).
+
+## testProcessor()
+
+processor ReverbStructureTest [[ main ]]
+{
+    output stream int32 out;
+
+    node reference = wt::ReverbBus;
+    node sizeVariant = wt::ReverbBus;
+    node decayVariant = wt::ReverbBus;
+    node dampingVariant = wt::ReverbBus;
+    node mixVariant = wt::ReverbBus;
+    node impulseReverb = wt::ReverbBus;
+
+    let settleFrames = 4096;
+    let measureFrames = 8192;
+    let parameterDivergence = 0.001f;
+
+    // Size 0.5 gives a longest line of 15 + 0.5 * 105 = 67.5 ms; the shortest line
+    // is 0.7573 of that, i.e. 51.12 ms, which is 2254 frames at 44.1 kHz. The wet
+    // output is taken from the delay lines, so nothing may arrive before then.
+    let shortestLineFrames = 2254;
+    let lineArrivalTolerance = 8;
+
+    float32 testSignal (int32 frame)
+    {
+        return 0.7f * float32 (std::intrinsics::sin (float32 (frame) * 0.041f));
+    }
+
+    float32<2> renderReference (int32 frame)
+    {
+        reference.in <- float32<2> (testSignal (frame), testSignal (frame));
+        reference.advance();
+        return reference.out;
+    }
+
+    float32<2> renderSizeVariant (int32 frame)
+    {
+        sizeVariant.in <- float32<2> (testSignal (frame), testSignal (frame));
+        sizeVariant.advance();
+        return sizeVariant.out;
+    }
+
+    float32<2> renderDecayVariant (int32 frame)
+    {
+        decayVariant.in <- float32<2> (testSignal (frame), testSignal (frame));
+        decayVariant.advance();
+        return decayVariant.out;
+    }
+
+    float32<2> renderDampingVariant (int32 frame)
+    {
+        dampingVariant.in <- float32<2> (testSignal (frame), testSignal (frame));
+        dampingVariant.advance();
+        return dampingVariant.out;
+    }
+
+    float32<2> renderMixVariant (int32 frame)
+    {
+        mixVariant.in <- float32<2> (testSignal (frame), testSignal (frame));
+        mixVariant.advance();
+        return mixVariant.out;
+    }
+
+    float32<2> renderImpulse (float32 signal)
+    {
+        impulseReverb.in <- float32<2> (signal, signal);
+        impulseReverb.advance();
+        return impulseReverb.out;
+    }
+
+    void configureReference()
+    {
+        reference.sizeIn <- 0.5f;
+        reference.decayIn <- 0.5f;
+        reference.dampingIn <- 0.5f;
+        reference.mixIn <- 1.0f;
+    }
+
+    void main()
+    {
+        configureReference();
+
+        sizeVariant.sizeIn <- 0.8f;
+        sizeVariant.decayIn <- 0.5f;
+        sizeVariant.dampingIn <- 0.5f;
+        sizeVariant.mixIn <- 1.0f;
+
+        decayVariant.sizeIn <- 0.5f;
+        decayVariant.decayIn <- 0.8f;
+        decayVariant.dampingIn <- 0.5f;
+        decayVariant.mixIn <- 1.0f;
+
+        dampingVariant.sizeIn <- 0.5f;
+        dampingVariant.decayIn <- 0.5f;
+        dampingVariant.dampingIn <- 0.9f;
+        dampingVariant.mixIn <- 1.0f;
+
+        mixVariant.sizeIn <- 0.5f;
+        mixVariant.decayIn <- 0.5f;
+        mixVariant.dampingIn <- 0.5f;
+        mixVariant.mixIn <- 0.4f;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            renderReference (frame);
+            renderSizeVariant (frame);
+            renderDecayVariant (frame);
+            renderDampingVariant (frame);
+            renderMixVariant (frame);
+        }
+
+        float32 sizeDifference, decayDifference, dampingDifference, mixDifference;
+        float32 leftRightProduct, leftEnergy, rightEnergy;
+
+        for (int32 frame = settleFrames; frame < settleFrames + measureFrames; ++frame)
+        {
+            let referenceOut = renderReference (frame);
+
+            sizeDifference = std::intrinsics::max (sizeDifference, std::intrinsics::abs (referenceOut[0] - renderSizeVariant (frame)[0]));
+            decayDifference = std::intrinsics::max (decayDifference, std::intrinsics::abs (referenceOut[0] - renderDecayVariant (frame)[0]));
+            dampingDifference = std::intrinsics::max (dampingDifference, std::intrinsics::abs (referenceOut[0] - renderDampingVariant (frame)[0]));
+            mixDifference = std::intrinsics::max (mixDifference, std::intrinsics::abs (referenceOut[0] - renderMixVariant (frame)[0]));
+
+            leftRightProduct += referenceOut[0] * referenceOut[1];
+            leftEnergy += referenceOut[0] * referenceOut[0];
+            rightEnergy += referenceOut[1] * referenceOut[1];
+        }
+
+        // 1-4. Every continuous parameter moves the sound, so every one of them is a
+        //      usable modulation destination (ADR-012 includes Mix/Wet).
+        out <- (sizeDifference > parameterDivergence) ? 1 : 0;
+        advance();
+
+        out <- (decayDifference > parameterDivergence) ? 1 : 0;
+        advance();
+
+        out <- (dampingDifference > parameterDivergence) ? 1 : 0;
+        advance();
+
+        out <- (mixDifference > parameterDivergence) ? 1 : 0;
+        advance();
+
+        // 5. Left and right are decorrelated for a mono input: the line pair split
+        //    plus the per channel diffuser gives real stereo, not a doubled mono.
+        let correlation = leftRightProduct
+                        / std::intrinsics::max (1.0e-20f, float32 (std::intrinsics::sqrt (leftEnergy * rightEnergy)));
+
+        out <- (std::intrinsics::abs (correlation) < 0.9f) ? 1 : 0;
+        advance();
+
+        // 6. The wet path is taken from the delay lines, so an impulse produces
+        //    nothing at all until the shortest line comes round. That delayed signal
+        //    is an effect characteristic, not host reported latency (ADR-008), and
+        //    the dry path through it is bit-exact - assertion 1 of the first section.
+        impulseReverb.sizeIn <- 0.5f;
+        impulseReverb.decayIn <- 0.5f;
+        impulseReverb.dampingIn <- 0.0f;
+        impulseReverb.mixIn <- 1.0f;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            renderImpulse (0.0f);
+
+        renderImpulse (1.0f);
+
+        int32 firstWetFrame = -1;
+
+        for (int32 frame = 1; frame < shortestLineFrames + lineArrivalTolerance; ++frame)
+        {
+            let rendered = renderImpulse (0.0f);
+
+            if (firstWetFrame < 0 && std::intrinsics::abs (rendered[0]) > 1.0e-9f)
+                firstWetFrame = frame;
+        }
+
+        out <- (firstWetFrame >= shortestLineFrames - lineArrivalTolerance) ? 1 : 0;
+        advance();
+
+        // 7. ... and it does arrive, so assertion 6 is not passing on a silent
+        //    module. Together the two pin the line-length arithmetic itself.
+        out <- (firstWetFrame >= 0) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

@@ -1,0 +1,303 @@
+namespace wt
+{
+    //==============================================================================
+    // Voice-to-global modulation reduction - the piece that lets a PER-VOICE
+    // modulation source drive a GLOBAL effects-rack parameter (ADR-002).
+    //
+    // WHERE THIS RUNS. Inside wt::SharedVoiceEngine's existing per-voice route loop
+    // (FixedFrameOscillator.cmajor:3533-3600), not in a new aggregator processor.
+    // Cosimo is not a per-voice-graph synth: all sixteen voices live in ONE processor
+    // holding parallel arrays, so the voice-to-global fan-in problem does not exist
+    // here - the reducer is an ordinary array loop over data already in scope. This
+    // file owns the ALGORITHM as free functions and one fixed-size struct so the
+    // engine's handler and loop are three-line delegations, and so the parts that are
+    // easy to get wrong are testable without a synth attached.
+    //
+    // THE SHAPE OF ONE FRAME, per rack-target route r:
+    //     r.beginRackRouteFrame();                                    // before the voice loop
+    //     ... for each PARTICIPATING voice v:
+    //           r.accumulateRackRouteVoice (sourceValue, route.polarityKind);
+    //     let offset = r.resolveRackRouteOffset (route.reducerKind, route.amount, releaseStep);
+    //     rackModAccumulator[targetIndex] += offset;                  // several routes may share a target
+    //     ... then once per target: rackModOut[t] <- rackModOnePole (smoothed[t], accumulated[t], c);
+    //
+    // WHY THE SENTINEL IS NON-ZERO. Cmajor structs have no field defaults, so an
+    // omitted or zero-initialised reducerKind arrives as 0. If 0 meant "maximum", a
+    // malformed upload carrying no reducer policy would be bit-identical to one that
+    // explicitly asked for maximum, and ADR-002's invariant - "A mapping from a voice
+    // source to a global target is invalid unless it contains one of these reducer
+    // policies" - could never be enforced. 0 is therefore "unset" and is REJECTED.
+    // This is not hypothetical: docs/COSIMO_ADAPTER_COMMAND_MAP.md routes
+    // setMappingReducer to metadata today, so every route currently in flight carries
+    // no reducerKind at all.
+    //
+    // WHY `maximum` REDUCES ON THE POLARISED VALUE. ADR-002 says maximum is "the
+    // strongest participating voice". A bipolar source of 0.0 polarises to -1.0, so a
+    // raw max() over the [0,1] source domain picks the most POSITIVE deflection and
+    // throws away the strongest one. Two voices at 0.0 and 0.6, bipolar, amount 0.8:
+    // the raw rule returns +0.16 while the strongest voice is at -0.8. Reducing by
+    // MAGNITUDE OF THE POLARISED VALUE, sign preserved, is what the words mean.
+    // Unipolar is unaffected - polarisation is the identity there.
+    //
+    // WHY THE GATE IS HELD AND RAMPED, NOT STEPPED. With no voice participating the
+    // destination must sit at exactly its patch-owned base value (ADR-004), so the
+    // offset must reach exactly 0. But stepping there the instant the last voice
+    // retires is a click: Velocity is never at 0, Slide sits wherever it was left, and
+    // a bipolar source at rest is at FULL NEGATIVE. Worse, that instant is precisely
+    // when the rack's own delay and reverb tails are still sounding, because the
+    // engine's participation predicate covers the release stage. The last reduced
+    // offset is therefore HELD and its gate ramped linearly to zero over a musically
+    // scaled release. Linear rather than exponential because an exponential never
+    // arrives, and "exactly the base value" is the requirement.
+    //
+    // ROUTE BUDGET, stated rather than assumed. The whole modulation system has TWELVE
+    // route slots - `let modulationRouteCount = 12;` at FixedFrameOscillator.cmajor:31 -
+    // and they are SHARED with the twelve existing voice targets
+    // (modulationTargetWavetablePosition..modulationTargetUnisonWarpSpread). A user who
+    // maps four rack parameters has spent a third of the synth's entire modulation
+    // capacity, and the iPhone UI has to surface that exhaustion. Raising the number
+    // means re-measuring the per-voice per-route loop, currently 16 voices x 12 routes
+    // per frame; do not raise it without that measurement.
+    //
+    // ONE SHARED POLARITY FUNCTION. SharedVoiceEngine.applyRoutePolarity
+    // (FixedFrameOscillator.cmajor:2240-2247) is a private method with identical
+    // semantics. It should be changed to `return applyModulationPolarity (sourceValue,
+    // route.polarityKind);` when the reducer lands, so the voice path and the rack path
+    // cannot drift apart. That edit belongs to the engine's owner, not to this file.
+
+    //==============================================================================
+    // Reducer policies. The sentinel MUST be non-zero - see above.
+
+    let modulationReducerUnset   = 0;
+    let modulationReducerMaximum = 1;
+    let modulationReducerMean    = 2;
+
+    //==============================================================================
+    // Rack modulation destinations.
+    //
+    // ADR-012: "Every continuous creative parameter owned by a rack module is eligible
+    // to be a modulation destination, including Mix/Wet." All thirty-six of them are
+    // here. Rack order, enabled state and discrete mode selectors are deliberately
+    // absent - they are not continuous, and the glossary's "Routable Effect Parameter"
+    // excludes them in v1. Hiding a destination from the v1 UI is a UI-surface
+    // decision; this table is where DSP eligibility lives, and it withholds nothing.
+    //
+    // The indices are a WIRE CONTRACT with the adapter: targetKind =
+    // modulationTargetRackBase + index. They are grouped in rack module declaration
+    // order and must only ever be appended to.
+    //
+    // Frequency-like destinations modulate in OCTAVES, matching the engine's existing
+    // modulationTargetFilterCutoffOctaves convention; everything else is in the
+    // destination's own natural units.
+
+    let modulationTargetRackBase = 100;
+    let rackModTargetCount = 36;
+
+    let rackModTargetGlobalFilterCutoffOctaves  = 0;
+    let rackModTargetGlobalFilterResonance      = 1;
+    let rackModTargetGlobalFilterDrive          = 2;
+    let rackModTargetDistortionDriveDb          = 3;
+    let rackModTargetDistortionKnee             = 4;
+    let rackModTargetDistortionWet              = 5;
+    let rackModTargetDistortionWetHPOctaves     = 6;
+    let rackModTargetDistortionWetLPOctaves     = 7;
+    let rackModTargetOttMix                     = 8;
+    let rackModTargetOttAmount                  = 9;
+    let rackModTargetOttTimePercent             = 10;
+    let rackModTargetOttBandDrive               = 11;
+    let rackModTargetOttEnvelopeMatch           = 12;
+    let rackModTargetChorusMix                  = 13;
+    let rackModTargetChorusTone                 = 14;
+    let rackModTargetChorusFeedback             = 15;
+    let rackModTargetChorusRingAmount           = 16;
+    let rackModTargetChorusRingFineSemitones    = 17;
+    let rackModTargetFlangerRate                = 18;
+    let rackModTargetFlangerDepth               = 19;
+    let rackModTargetFlangerFeedback            = 20;
+    let rackModTargetFlangerMix                 = 21;
+    let rackModTargetPhaserRate                 = 22;
+    let rackModTargetPhaserDepth                = 23;
+    let rackModTargetPhaserFrequencyOctaves     = 24;
+    let rackModTargetPhaserFeedback             = 25;
+    let rackModTargetPhaserPhase                = 26;
+    let rackModTargetPhaserMix                  = 27;
+    let rackModTargetDelayTimeOctaves           = 28;
+    let rackModTargetDelayFeedback              = 29;
+    let rackModTargetDelayFilterOctaves         = 30;
+    let rackModTargetDelayMix                   = 31;
+    let rackModTargetReverbSize                 = 32;
+    let rackModTargetReverbDecay                = 33;
+    let rackModTargetReverbDamping              = 34;
+    let rackModTargetReverbMix                  = 35;
+
+    //==============================================================================
+    // Timing.
+
+    // How long the held offset takes to reach exactly zero after the last participating
+    // voice retires. Long enough that a Velocity 0.9 mapping glides rather than zips
+    // over a live reverb tail, short enough that the destination is back at its base
+    // value before the next phrase. First-pass value: it wants a listening pass before
+    // it is frozen.
+    let rackModGateReleaseMs = 180.0f;
+
+    // Ordinary parameter smoothing on the reduced value, matching the rampFrames 64/128
+    // idiom the rest of the instrument uses. A one-pole, so it adds no latency.
+    let rackModSmoothingMs = 5.0f;
+
+    //==============================================================================
+    // Free helpers.
+
+    // The polarity law, shared with the voice path. A unipolar source passes through
+    // clamped; a bipolar source is mapped from [0,1] onto [-1,+1], which is why a
+    // bipolar source AT REST sits at full negative rather than at zero.
+    float32 applyModulationPolarity (float32 sourceValue, int32 polarityKind)
+    {
+        let clampedSourceValue = std::intrinsics::clamp (sourceValue, 0.0f, 1.0f);
+
+        if (polarityKind == modulationPolarityBipolar)
+            return (clampedSourceValue * 2.0f) - 1.0f;
+
+        return clampedSourceValue;
+    }
+
+    // Voice-domain sources need a reducer policy and a participation gate to reach a
+    // global destination. A macro is already global-domain: resolveMacroValue ignores
+    // the voice index, so reducing it would be meaningless and gating it would silence
+    // a Macro -> Reverb Mix mapping whenever no notes were held.
+    bool isVoiceModulationSource (int32 sourceKind)
+    {
+        return sourceKind == modulationSourceMseg
+            || sourceKind == modulationSourceEnv
+            || sourceKind == modulationSourceVelocity
+            || sourceKind == modulationSourcePressure
+            || sourceKind == modulationSourceSlide;
+    }
+
+    bool isRackModulationTarget (int32 targetKind)
+    {
+        return targetKind >= modulationTargetRackBase
+            && targetKind < modulationTargetRackBase + rackModTargetCount;
+    }
+
+    int32 rackModTargetIndex (int32 targetKind)
+    {
+        return targetKind - modulationTargetRackBase;
+    }
+
+    // FAIL FAST. A voice source reaching a rack destination without a reducer policy is
+    // a bug at the adapter boundary, not a runtime state the engine may occupy. The
+    // caller increments its rejected-route diagnostic and leaves the slot disabled; it
+    // does NOT silently default to maximum.
+    bool isValidRackModulationRoute (int32 sourceKind, int32 targetKind, int32 reducerKind)
+    {
+        if (targetKind >= modulationTargetRackBase && ! isRackModulationTarget (targetKind))
+            return false;
+
+        if (! isRackModulationTarget (targetKind))
+            return true;
+
+        if (! isVoiceModulationSource (sourceKind))
+            return true;
+
+        return reducerKind == modulationReducerMaximum
+            || reducerKind == modulationReducerMean;
+    }
+
+    // A global-domain source reaches a rack destination with no reducer and no gate.
+    float32 resolveGlobalRackOffset (float32 sourceValue, int32 polarityKind, float32 amount)
+    {
+        return applyModulationPolarity (sourceValue, polarityKind) * amount;
+    }
+
+    // Fraction of the way from the held offset to zero per frame. Linear, so the offset
+    // arrives at EXACTLY zero after rackModGateReleaseMs.
+    float32 rackModGateReleaseStep (float32 sampleRate)
+    {
+        let releaseFrames = std::intrinsics::max (1.0f, rackModGateReleaseMs * 0.001f * sampleRate);
+        return 1.0f / releaseFrames;
+    }
+
+    // The instrument's one-pole idiom (Chorus.cmajor:461, Delay.cmajor:225, Ott.cmajor:141).
+    float32 rackModOnePoleCoefficient (float32 milliseconds, float32 sampleRate)
+    {
+        let frames = std::intrinsics::max (1.0f, milliseconds * 0.001f * sampleRate);
+        return 1.0f - std::intrinsics::exp (-1.0f / frames);
+    }
+
+    float32 rackModOnePole (float32 current, float32 target, float32 coefficient)
+    {
+        return current + ((target - current) * coefficient);
+    }
+
+    //==============================================================================
+    // One route's reduction state.
+    //
+    // Both reductions are accumulated unconditionally - a running sum and a running
+    // strongest-by-magnitude - so the per-voice inner loop carries no branch on the
+    // reducer policy. That matters: this runs 16 voices x 12 routes per frame.
+
+    struct RackRouteReducer
+    {
+        // Per frame. Cleared by beginRackRouteFrame before the voice loop.
+        float32 polarisedSum;
+        float32 strongestPolarised;
+        float32 strongestMagnitude;
+        int32   participants;
+
+        // Across frames. The gate is what keeps the destination from stepping when the
+        // last participating voice retires.
+        float32 heldOffset;
+        float32 gate;
+    }
+
+    void beginRackRouteFrame (RackRouteReducer& reducer)
+    {
+        reducer.polarisedSum = 0.0f;
+        reducer.strongestPolarised = 0.0f;
+        reducer.strongestMagnitude = 0.0f;
+        reducer.participants = 0;
+    }
+
+    // Called once per PARTICIPATING voice. The engine's own liveness predicate decides
+    // participation (voiceActive != 0 || envelopes[voice].gainOut > 0, its existing
+    // voice-monitor rule at FixedFrameOscillator.cmajor:2723) - a non-participating
+    // voice is simply never passed here, so its stale source value is invisible to both
+    // reductions by construction.
+    void accumulateRackRouteVoice (RackRouteReducer& reducer, float32 sourceValue, int32 polarityKind)
+    {
+        let polarised = applyModulationPolarity (sourceValue, polarityKind);
+        let magnitude = std::intrinsics::abs (polarised);
+
+        reducer.polarisedSum += polarised;
+
+        if (reducer.participants == 0 || magnitude > reducer.strongestMagnitude)
+        {
+            reducer.strongestPolarised = polarised;
+            reducer.strongestMagnitude = magnitude;
+        }
+
+        reducer.participants += 1;
+    }
+
+    // Called once per frame after the voice loop. Returns the route's contribution to
+    // its destination, in the destination's own units.
+    float32 resolveRackRouteOffset (RackRouteReducer& reducer, int32 reducerKind,
+                                    float32 amount, float32 releaseStep)
+    {
+        if (reducer.participants > 0)
+        {
+            let reduced = reducerKind == modulationReducerMean
+                            ? reducer.polarisedSum / float32 (reducer.participants)
+                            : reducer.strongestPolarised;
+
+            reducer.heldOffset = reduced * amount;
+            reducer.gate = 1.0f;
+        }
+        else
+        {
+            reducer.gate = std::intrinsics::max (0.0f, reducer.gate - releaseStep);
+        }
+
+        return reducer.heldOffset * reducer.gate;
+    }
+}

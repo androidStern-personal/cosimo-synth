@@ -1,0 +1,80 @@
+// Smoke 3: what does an oversampled child node do under manual advance()?
+// Compares advancing a `* 4` child once per parent frame against advancing it
+// four times per parent frame, at DC, after the resamplers have settled.
+
+## testConsole ("onceAdvanced=5.999998092651367\nfourTimesAdvanced=5.999998092651367\nplainRate=6\n")
+
+processor Gain (float32 factor)
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    int32 advanceCount;
+
+    void main()
+    {
+        loop
+        {
+            out <- in * factor;
+            advanceCount += 1;
+            advance();
+        }
+    }
+}
+
+processor CountingProbe
+{
+    input stream float32 in;
+    output stream float32 out;
+    output event int32 framesSeen;
+
+    int32 frames;
+
+    void main()
+    {
+        loop
+        {
+            frames += 1;
+            out <- in;
+            framesSeen <- frames;
+            advance();
+        }
+    }
+}
+
+processor Test [[ main ]]
+{
+    output stream int32 out;
+
+    node onceAdvanced = Gain (2.0f) * 4;
+    node fourTimesAdvanced = Gain (2.0f) * 4;
+    node plainRate = Gain (2.0f);
+
+    void main()
+    {
+        for (int32 frame = 0; frame < 512; ++frame)
+        {
+            onceAdvanced.in <- 3.0f;
+            onceAdvanced.advance();
+
+            for (int32 sub = 0; sub < 4; ++sub)
+            {
+                fourTimesAdvanced.in <- 3.0f;
+                fourTimesAdvanced.advance();
+            }
+
+            plainRate.in <- 3.0f;
+            plainRate.advance();
+
+            out <- 1;
+            advance();
+        }
+
+        console <- "onceAdvanced=" <- onceAdvanced.out <- "\n";
+        console <- "fourTimesAdvanced=" <- fourTimesAdvanced.out <- "\n";
+        console <- "plainRate=" <- plainRate.out <- "\n";
+
+        out <- -1;
+        advance();
+    }
+}

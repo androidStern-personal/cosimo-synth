@@ -1,0 +1,14 @@
+graph BenchDynamic [[ main ]]
+{
+    output stream float32<2> audioOut;
+
+    node source = wt::BenchSource;
+    node rack = wt::EffectsRack;
+
+    connection
+    {
+        source.out -> rack.in;
+        source.pitchOut -> rack.trackingPitchHzIn;
+        rack.out -> audioOut;
+    }
+}

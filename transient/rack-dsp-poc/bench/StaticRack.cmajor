@@ -1,0 +1,58 @@
+namespace wt
+{
+    // Reference point for the cost of the runtime-ordered dispatch: exactly the same
+    // eight resident modules, wired as ordinary static graph connections.
+    graph StaticRack
+    {
+        input stream float32<2> in;
+        input stream float32 trackingPitchHzIn;
+        output stream float32<2> out;
+
+        node globalFilter = wt::RackGlobalFilterPlaceholder;
+        node distortion   = wt::DistortionBus;
+        node ott          = wt::RackOttPlaceholder;
+        node chorus       = wt::ChorusBus;
+        node flanger      = wt::RackFlangerPlaceholder;
+        node phaser       = wt::RackPhaserPlaceholder;
+        node delay        = wt::RackDelayPlaceholder;
+        node reverb       = wt::RackReverbPlaceholder;
+
+        connection
+        {
+            in -> globalFilter.in;
+            globalFilter.out -> distortion.in;
+            distortion.out -> ott.in;
+            ott.out -> chorus.in;
+            trackingPitchHzIn -> chorus.trackingPitchHzIn;
+            chorus.out -> flanger.in;
+            flanger.out -> phaser.in;
+            phaser.out -> delay.in;
+            delay.out -> reverb.in;
+            reverb.out -> out;
+        }
+    }
+
+    processor BenchSource
+    {
+        output stream float32<2> out;
+        output stream float32 pitchOut;
+
+        float32 phase;
+
+        void main()
+        {
+            loop
+            {
+                phase += 220.0f / float32 (processor.frequency);
+
+                if (phase >= 1.0f)
+                    phase -= 1.0f;
+
+                let sample = 0.4f * float32 (std::intrinsics::sin (phase * twoPi));
+                out <- float32<2> (sample, sample);
+                pitchOut <- 220.0f;
+                advance();
+            }
+        }
+    }
+}

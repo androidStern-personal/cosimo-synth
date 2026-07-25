@@ -1,0 +1,370 @@
+namespace wt
+{
+    //==============================================================================
+    // Rack Phaser.
+    //
+    // Four second-order allpass sections per channel, cascaded and swept by one LFO,
+    // then summed back with the dry signal. The cascade has unity magnitude at every
+    // frequency; the notches exist only because of that sum, which is why the wet
+    // signal is 0.5 * (dry + cascade) rather than the cascade alone - taking the
+    // cascade alone would hand the equal-power mix a signal with no notches in it and
+    // the comb would vanish at mix 1.
+    //
+    // ADR-006 names Phaser as its own v1 rack module, independent of Flanger.
+    // ADR-008 forbids declared processing latency, so there are no delay lines here
+    // at all and no lookahead; the module declares no processor.latency and at mix 0
+    // it returns its input bit-exactly.
+    // ADR-012 makes every continuous parameter below a modulation destination,
+    // Mix included. The rack applies modulation before forwarding, so this module
+    // only ever sees a final value, which it clamps.
+    //
+    // RATE IS A COMPOUND, PERSISTENT CONTROL (ledger 4.4 and 5.2 [U60], ledger 17
+    // "persistent timing mode"): a Free/Sync selector and a rhythmic division are
+    // real settings that live here, in the DSP, next to the free Hz value. The synced
+    // rate is derived from tempo in this module rather than being flattened into Hz
+    // upstream, so the selector is a genuine persistent setting rather than a piece
+    // of adapter bookkeeping that the DSP cannot see.
+    //
+    // `tempoBpmIn` carries that tempo. It is deliberately UNANNOTATED - no `name:` -
+    // so it is internal plumbing for the rack to forward, exactly like ChorusBus's
+    // `trackingPitchHzIn`, and never becomes a host automation parameter. Until the
+    // graph carries a host transport it sits at its documented 120 bpm default, which
+    // is the same shape fx/seqfx/SeqFx.cmajor already ships as `manualBpm`.
+
+    let phaserPi = 3.14159265358979323846f;
+    let phaserSectionCount = 4;            // four biquad allpasses = the classic 8-pole sweep
+    let phaserChannelCount = 2;
+
+    // setFrequency() calls tan(), so refreshing all eight sections every frame would
+    // cost 8 tan/frame to track an LFO that never exceeds 8 Hz. Refreshing on a
+    // 16-frame stride is a ~2.8 kHz coefficient rate against that 8 Hz sweep - three
+    // orders of magnitude of headroom - for 0.5 tan/frame. Deliberate control-rate
+    // decision, pinned by the control-rate section of the test.
+    let phaserCoefficientUpdateFrames = 16;
+
+    // ...and within a refresh, a section is only recomputed when its frequency has
+    // actually moved, matching the house rule at cmajor/Distortion.cmajor:144-160.
+    // A static phaser therefore costs no tan() calls at all after the first frame.
+    let phaserCoefficientEpsilonHz = 0.001f;
+
+    // Butterworth Q, the same value the per-voice filter and the rack Global Filter
+    // use as their neutral resonance. It sets how sharply each section rotates phase,
+    // and therefore how tight the notches are; it is a voicing constant, not a
+    // parameter, because ADR-012 only makes DECLARED continuous parameters routable
+    // and the module's parameter surface is fixed by the rack inventory.
+    let phaserSectionQ = 0.707107f;
+
+    // +/- 2 octaves around centre at full depth. Combined with the 60..8000 Hz
+    // centre range that puts the swept section frequency in 15..32000 Hz, and
+    // std::filters::simper::setFrequency clamps its own argument to
+    // 0..0.48*sampleRate (std_library_filters.cmajor:679). The top of the sweep is
+    // therefore already bounded by the library, and the bottom cannot reach zero, so
+    // this module adds no clamp of its own: an extra one would be untested
+    // defensive code duplicating a documented library guarantee.
+    let phaserSweepOctaves = 2.0f;
+
+    let phaserRateMinHz = 0.02f;
+    let phaserRateMaxHz = 8.0f;
+    let phaserDepthMin = 0.0f;
+    let phaserDepthMax = 1.0f;
+    let phaserFrequencyMinHz = 60.0f;
+    let phaserFrequencyMaxHz = 8000.0f;
+    let phaserFeedbackMin = -0.95f;
+    let phaserFeedbackMax = 0.95f;
+    let phaserPhaseMinDeg = -180.0f;
+    let phaserPhaseMaxDeg = 180.0f;
+    let phaserMixMin = 0.0f;
+    let phaserMixMax = 1.0f;
+    let phaserTempoMinBpm = 20.0f;
+    let phaserTempoMaxBpm = 300.0f;
+
+    // Below this the equal-power law's wet gain is inaudible and the module sleeps
+    // instead - the same threshold and the same intent as Chorus.cmajor:429.
+    let phaserMixEpsilon = 0.000001f;
+
+    // The two entries of rateModeIn's `text: "Free|Sync"`. Named here because the
+    // rack, the adapter and the tests all have to agree on which index is which.
+    let phaserRateModeFree = 0;
+    let phaserRateModeSync = 1;
+    let phaserRateModeMax = 1;
+    let phaserDivisionMax = 12;
+    let phaserSecondsPerMinute = 60.0f;
+
+    float32 clampPhaserRateHz (float32 rateHz)
+    {
+        return std::intrinsics::clamp (rateHz, phaserRateMinHz, phaserRateMaxHz);
+    }
+
+    float32 clampPhaserDepth (float32 depth)
+    {
+        return std::intrinsics::clamp (depth, phaserDepthMin, phaserDepthMax);
+    }
+
+    float32 clampPhaserFrequencyHz (float32 frequencyHz)
+    {
+        return std::intrinsics::clamp (frequencyHz, phaserFrequencyMinHz, phaserFrequencyMaxHz);
+    }
+
+    float32 clampPhaserFeedback (float32 feedback)
+    {
+        return std::intrinsics::clamp (feedback, phaserFeedbackMin, phaserFeedbackMax);
+    }
+
+    float32 clampPhaserPhaseDeg (float32 phaseDeg)
+    {
+        return std::intrinsics::clamp (phaseDeg, phaserPhaseMinDeg, phaserPhaseMaxDeg);
+    }
+
+    float32 clampPhaserMix (float32 mix)
+    {
+        return std::intrinsics::clamp (mix, phaserMixMin, phaserMixMax);
+    }
+
+    float32 clampPhaserTempoBpm (float32 tempoBpm)
+    {
+        return std::intrinsics::clamp (tempoBpm, phaserTempoMinBpm, phaserTempoMaxBpm);
+    }
+
+    int32 clampPhaserMode (float32 rawMode, int32 maxMode)
+    {
+        return int32 (std::intrinsics::clamp (
+            std::intrinsics::floor (rawMode + 0.5f),
+            0.0f,
+            float32 (maxMode)
+        ));
+    }
+
+    // One LFO cycle per rhythmic division, expressed in quarter-note beats. The
+    // table is ordered slow to fast so the selector reads monotonically in the UI.
+    //
+    // The final `return` is the division == 12 entry, not a fallback for unexpected
+    // input: every caller passes the result of clampPhaserMode, which guarantees
+    // 0..phaserDivisionMax, and the clamp is pinned by the rate-control test.
+    float32 phaserDivisionBeats (int32 division)
+    {
+        if (division == 0)  return 16.0f;         // 4/1
+        if (division == 1)  return 8.0f;          // 2/1
+        if (division == 2)  return 4.0f;          // 1/1
+        if (division == 3)  return 3.0f;          // 1/2.
+        if (division == 4)  return 2.0f;          // 1/2
+        if (division == 5)  return 4.0f / 3.0f;   // 1/2T
+        if (division == 6)  return 1.5f;          // 1/4.
+        if (division == 7)  return 1.0f;          // 1/4
+        if (division == 8)  return 2.0f / 3.0f;   // 1/4T
+        if (division == 9)  return 0.75f;         // 1/8.
+        if (division == 10) return 0.5f;          // 1/8
+        if (division == 11) return 1.0f / 3.0f;   // 1/8T
+
+        return 0.25f;                             // 1/16
+    }
+
+    // A synced rate lands in exactly the same 0.02..8.0 Hz window as a free one, so
+    // Free and Sync are two ways of choosing one quantity rather than two rate
+    // systems. Fast tempi on short divisions therefore clamp - a documented ceiling,
+    // and the boundary the test pins - instead of silently outrunning the LFO.
+    float32 phaserSyncRateHz (float32 tempoBpm, int32 division)
+    {
+        let beatsPerCycle = phaserDivisionBeats (division);
+        let cycleRateHz = clampPhaserTempoBpm (tempoBpm) / (phaserSecondsPerMinute * beatsPerCycle);
+
+        return clampPhaserRateHz (cycleRateHz);
+    }
+
+    // The regeneration limiter: v -> v / (1 + |v| / 8). Near unity for musical
+    // levels, hard-bounded well above them, and continuous, so the resonant end of
+    // the feedback range cannot run away.
+    //
+    // This is exactly wt::chorusSoftClipLarge's curve at drive 1
+    // (Chorus.cmajor:49-53), the instrument's existing feedback-loop limiter, so the
+    // chorus, flanger and phaser regeneration paths saturate with the same character.
+    // It is written here rather than called from Chorus.cmajor for a language reason
+    // worth recording, and verified rather than assumed: a program that includes
+    // Chorus.cmajor but does not instantiate wt::ChorusBus does not compile, because
+    // chorusBufferSize derives from processor.maxFrequency, which the compiler cannot
+    // fold for an uninstantiated processor ("error: The size of a 'wrap' or 'clamp'
+    // type must be a constant"). Setting maxFrequency in the build settings does not
+    // help - I tried it. Reaching into Chorus.cmajor for one helper would therefore
+    // chain this module's isolated test to a 2.9 MB chorus instance. The shared home
+    // for this curve is rackSoftClip in EffectsRack.cmajor.
+    let phaserLoopCeiling = 8.0f;
+
+    float32 phaserLimitFeedback (float32 value)
+    {
+        return value / (1.0f + (std::intrinsics::abs (value) / phaserLoopCeiling));
+    }
+
+    processor PhaserBus
+    {
+        input stream float32<2> in;
+
+        input value float32 rateIn         [[ name: "Phaser Rate", min: 0.02f, max: 8.0f, init: 0.3f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 rateModeIn     [[ name: "Phaser Rate Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Free|Sync", rampFrames: 0 ]];
+        input value float32 rateDivisionIn [[ name: "Phaser Division", min: 0.0f, max: 12.0f, init: 2.0f, discrete: true, step: 1.0f, text: "4/1|2/1|1/1|1/2.|1/2|1/2T|1/4.|1/4|1/4T|1/8.|1/8|1/8T|1/16", rampFrames: 0 ]];
+        input value float32 depthIn        [[ name: "Phaser Depth", min: 0.0f, max: 1.0f, init: 0.7f, rampFrames: 64 ]];
+        input value float32 frequencyIn    [[ name: "Phaser Frequency", min: 60.0f, max: 8000.0f, init: 600.0f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 feedbackIn     [[ name: "Phaser Feedback", min: -0.95f, max: 0.95f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 phaseIn        [[ name: "Phaser Phase", min: -180.0f, max: 180.0f, init: 90.0f, unit: "deg", rampFrames: 64 ]];
+        input value float32 mixIn          [[ name: "Phaser Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+
+        // Internal plumbing, not a host parameter - see the note at the top of the file.
+        input value float32 tempoBpmIn [[ init: 120.0f, rampFrames: 0 ]];
+
+        output stream float32<2> out;
+
+        // The whole of the module's state: eight second-order sections, one feedback
+        // sample per channel, one LFO phase, one refresh countdown. No delay lines,
+        // no allocation, and nothing whose size depends on the sample rate.
+        std::filters::simper::Implementation[phaserSectionCount, phaserChannelCount] sections;
+        float32[phaserChannelCount] currentSectionHz;
+        float32[phaserChannelCount] feedbackState;
+        float32 lfoPhase;
+        int32 framesUntilCoefficientUpdate;
+        bool sectionsAreAsleep = true;
+
+        void init()
+        {
+            // The mode is fixed for the life of the module, and setFrequency() reads
+            // it to choose its output taps, so it has to be set before the first
+            // refresh rather than alongside it.
+            for (wrap<phaserSectionCount> section)
+                for (wrap<phaserChannelCount> channel)
+                    sections[section, channel].setMode (std::filters::simper::Mode::allPass);
+        }
+
+        // ADR-005's effect-local sleep, taken only where it is genuinely a small local
+        // implementation: this module's entire memory is eight biquad states and two
+        // feedback samples, so entering the mix-0 state clears all of it in one pass
+        // and re-entering costs nothing. The LFO deliberately keeps running, so the
+        // sweep stays phase-continuous and re-enabling cannot expose a jump.
+        // Whether the rack ALSO wants to stop advancing this module is a separate,
+        // profiling-led decision per ADR-005 - not one this file makes.
+        void sleepSections()
+        {
+            if (sectionsAreAsleep)
+                return;
+
+            for (wrap<phaserSectionCount> section)
+                for (wrap<phaserChannelCount> channel)
+                    sections[section, channel].reset();
+
+            for (wrap<phaserChannelCount> channel)
+                feedbackState[channel] = 0.0f;
+
+            sectionsAreAsleep = true;
+        }
+
+        void wakeSections()
+        {
+            if (! sectionsAreAsleep)
+                return;
+
+            // The LFO moved on while the module slept, so the loaded coefficients are
+            // stale by up to a full sweep. Refresh on this frame rather than waiting
+            // for the stride to come round.
+            framesUntilCoefficientUpdate = 0;
+            sectionsAreAsleep = false;
+        }
+
+        void updateSectionCoefficients (float32 centreHz, float32 depth01, float32 phaseOffset01)
+        {
+            for (wrap<phaserChannelCount> channel)
+            {
+                let channelPhaseOffset = channel == 0 ? 0.0f : phaseOffset01;
+
+                // phaseOffset01 spans -0.5..0.5, so the added 1.0f keeps the argument
+                // positive and the wrap unambiguous.
+                let channelPhase = std::intrinsics::wrap (lfoPhase + 1.0f + channelPhaseOffset, 1.0f);
+                let sweep = std::intrinsics::sin (2.0f * phaserPi * channelPhase);
+                let targetHz = centreHz * std::intrinsics::pow (2.0f, depth01 * phaserSweepOctaves * sweep);
+
+                if (std::intrinsics::abs (targetHz - currentSectionHz[channel]) > phaserCoefficientEpsilonHz)
+                {
+                    for (wrap<phaserSectionCount> section)
+                        sections[section, channel].setFrequency (
+                            processor.frequency,
+                            targetHz,
+                            phaserSectionQ,
+                            0.0f
+                        );
+
+                    currentSectionHz[channel] = targetHz;
+                }
+            }
+        }
+
+        float32 processChannel (wrap<phaserChannelCount> channel, float32 drySample, float32 feedback)
+        {
+            var signal = drySample + (feedbackState[channel] * feedback);
+
+            for (wrap<phaserSectionCount> section)
+                signal = sections[section, channel].process (signal);
+
+            feedbackState[channel] = phaserLimitFeedback (signal);
+
+            // The notch comb only exists in the sum. Halved so an allpass cascade of
+            // unity magnitude cannot make the wet signal louder than the dry one.
+            return 0.5f * (drySample + signal);
+        }
+
+        float32 resolveRateHz()
+        {
+            if (clampPhaserMode (rateModeIn, phaserRateModeMax) == phaserRateModeSync)
+                return phaserSyncRateHz (tempoBpmIn, clampPhaserMode (rateDivisionIn, phaserDivisionMax));
+
+            return clampPhaserRateHz (rateIn);
+        }
+
+        void main()
+        {
+            loop
+            {
+                let sampleRate = float32 (processor.frequency);
+                let dry = in;
+                let mix01 = clampPhaserMix (mixIn);
+                let rateHz = resolveRateHz();
+
+                if (mix01 > phaserMixEpsilon)
+                {
+                    wakeSections();
+
+                    if (framesUntilCoefficientUpdate <= 0)
+                    {
+                        updateSectionCoefficients (
+                            clampPhaserFrequencyHz (frequencyIn),
+                            clampPhaserDepth (depthIn),
+                            clampPhaserPhaseDeg (phaseIn) * (1.0f / 360.0f)
+                        );
+
+                        framesUntilCoefficientUpdate = phaserCoefficientUpdateFrames;
+                    }
+
+                    framesUntilCoefficientUpdate -= 1;
+
+                    let feedback = clampPhaserFeedback (feedbackIn);
+                    let wet = float32<2> (
+                        processChannel (0, dry[0], feedback),
+                        processChannel (1, dry[1], feedback)
+                    );
+
+                    // The same equal-power law as Distortion.cmajor:186-188 and
+                    // Chorus.cmajor:472-473. No output limiting here: the fixed,
+                    // non-reorderable stage after the rack owns that, and a limiter
+                    // inside a reorderable module would only be in circuit in one
+                    // rack order out of eight.
+                    let dryGain = float32 (std::intrinsics::cos (0.5f * pi * mix01));
+                    let wetGain = float32 (std::intrinsics::sin (0.5f * pi * mix01));
+
+                    out <- (dry * dryGain) + (wet * wetGain);
+                }
+                else
+                {
+                    sleepSections();
+                    out <- dry;
+                }
+
+                lfoPhase = std::intrinsics::wrap (lfoPhase + (rateHz / sampleRate), 1.0f);
+                advance();
+            }
+        }
+    }
+}

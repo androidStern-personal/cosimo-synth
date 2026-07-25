@@ -1,0 +1,892 @@
+// Behavioural specification for wt::FlangerBus - the rack's short modulated delay
+// with feedback (ledger 14.2: Flanger and Phaser are separate modules).
+//
+// Every section drives the module directly as a composed child node, using the
+// proven rack idiom `child.in <- signal; child.advance(); read child.out`. That is
+// the only shape that can pin behaviour over more frames than `## testProcessor()`'s
+// single 100-frame render block, and it is exactly how wt::EffectsRack will drive
+// this module in production.
+//
+// Independent scenarios use independent node instances. A flanger's delay line and
+// LFO phase are state, so "the same parameters again" is not the same thing as
+// "a fresh module", and comparing one instance against itself across time would
+// prove nothing.
+//
+// Run with:  cmaj test --singleThread --sessionID=1 tests/cmajor_rack
+
+// The global source set is exactly wt::FlangerBus's real dependency closure, not a
+// convenience selection: FixedFrameOscillator.cmajor supplies wt::catmullRom, the
+// instrument's existing fractional-delay interpolator, and it in turn needs
+// Mseg.cmajor. Reusing that instead of copying it is the whole point.
+//
+// Chorus.cmajor is deliberately NOT here. A program that includes it without
+// instantiating wt::ChorusBus does not compile, because chorusBufferSize derives
+// from processor.maxFrequency and the compiler cannot fold that for an
+// uninstantiated processor. See the note on flangerSaturate in Flanger.cmajor.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Flanger.cmajor")
+
+// ---------------------------------------------------------------------------
+// 1. HARD AUDIBLE BYPASS. At mix 0 the module passes its input BIT-EXACTLY -
+//    asserted with float32 `!=`, no tolerance - while feedback is at maximum and
+//    the sweep is at full depth. This is what "zero-latency dry path" and
+//    "a disabled module contributes no wet output" actually mean at module level,
+//    and a tolerance would hide exactly the transport delay we are forbidding.
+//
+//    The section then proves the module was NOT short-circuiting: bringing the mix
+//    up must immediately change the output, which is only possible if the delay
+//    line was being written all through the bit-exact stretch.
+
+## testProcessor()
+
+processor FlangerDryPath [[ main ]]
+{
+    output stream int32 out;
+
+    node flanger = wt::FlangerBus;
+
+    let measureFrames = 8192;
+
+    // Left and right carry DIFFERENT signals, so a channel-crossing bug cannot
+    // hide behind a symmetric test vector.
+    float32 leftSignal (int32 frame)
+    {
+        return 0.4f * std::intrinsics::sin (float32 (frame) * 0.05f);
+    }
+
+    float32 rightSignal (int32 frame)
+    {
+        return 0.3f * std::intrinsics::sin (float32 (frame) * 0.031f + 1.1f);
+    }
+
+    float32<2> render (int32 frame)
+    {
+        flanger.in <- float32<2> (leftSignal (frame), rightSignal (frame));
+        flanger.advance();
+        return flanger.out;
+    }
+
+    void main()
+    {
+        flanger.mixIn <- 0.0f;
+        flanger.feedbackIn <- 0.95f;
+        flanger.depthIn <- 1.0f;
+        flanger.rateIn <- 8.0f;
+
+        bool bypassIsExact = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let rendered = render (frame);
+
+            if (rendered[0] != leftSignal (frame) || rendered[1] != rightSignal (frame))
+                bypassIsExact = false;
+        }
+
+        // 1. Bit-exact dry passthrough at mix 0, both channels, 8192 frames.
+        out <- bypassIsExact ? 1 : 0;
+        advance();
+
+        // 2. The module was live all along: raising the mix changes the output, so
+        //    the delay line really was running under the bypass.
+        flanger.mixIn <- 1.0f;
+
+        float32 maxDifference;
+
+        for (int32 frame = measureFrames; frame < measureFrames + 4096; ++frame)
+        {
+            let rendered = render (frame);
+            maxDifference = std::intrinsics::max (maxDifference,
+                                                  std::intrinsics::abs (rendered[0] - leftSignal (frame)));
+        }
+
+        out <- (maxDifference > 0.1f) ? 1 : 0;
+        advance();
+
+        // 3. Returning the mix to 0 is bit-exact again FROM THE VERY NEXT FRAME -
+        //    no residual state leaks into the dry path once the effect is mixed out,
+        //    and there is no settling tail to wait out.
+        //
+        //    Asserting from frame 0 is legitimate because rampFrames is host
+        //    metadata: a value input written by a parent processor latches
+        //    immediately. Verified by probe - two modules given 8.0 and 100.0 for
+        //    rate never differ on any frame, which could not happen if the writes
+        //    ramped through the unclamped range.
+        flanger.mixIn <- 0.0f;
+
+        bool secondBypassIsExact = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let rendered = render (frame);
+
+            if (rendered[0] != leftSignal (frame) || rendered[1] != rightSignal (frame))
+                secondBypassIsExact = false;
+        }
+
+        out <- secondBypassIsExact ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 2. THE WET LEVEL IS PREDICTED, NOT MERELY SURVIVED.
+//
+//    The delay line stores x + flangerSaturate (fb * delayed), where
+//    flangerSaturate (u) = u / (1 + |u| / 8). At a comb resonance the delayed sample
+//    equals the written sample, so the steady-state loop peak w solves
+//
+//        (fb / 8) w^2  +  (1 - x fb / 8 - fb) w  -  x  =  0        (x, w > 0)
+//
+//    and the wet signal is 0.5 (x + w):
+//
+//        x = 0.4, fb = 0.95  ->  w = 1.82,  wet = 1.11   (measured 1.05-1.10)
+//        x = 1.0, fb = 0.95  ->  w = 3.21,  wet = 2.10   (measured 2.05-2.10)
+//
+//    Both bounds below are TWO-SIDED and straddle those predictions. The upper half
+//    is the safety bound the fixed post-rack output stage is sized against; the
+//    lower half is the half that actually bites, because it fails if the feedback
+//    never reaches the delay line, if the saturator is replaced by a hard clip, or
+//    if the wet signal is the delayed sample alone instead of the sum. "Finite and
+//    below 8.0" would accept +18 dBFS and is not an acceptance test.
+//
+//    The window is one whole LFO period (44100 / 0.35 Hz = 126000 frames). A shorter
+//    window is not a weaker version of this test, it is a different one: the comb
+//    only rings up to its steady state while the sweep is crossing a resonance, so
+//    over 8192 frames the same configuration peaks at 0.80-0.90 instead of 0.93.
+
+## testProcessor()
+
+processor FlangerWetLevel [[ main ]]
+{
+    output stream int32 out;
+
+    node nominal = wt::FlangerBus;
+    node fullScale = wt::FlangerBus;
+
+    // One full 0.35 Hz LFO period at 44100 Hz is 126000 frames.
+    let measureFrames = 130000;
+
+    let nominalAmplitude = 0.4f;
+    let nominalFloor = 1.00f;
+    let nominalCeiling = 1.20f;
+
+    let fullScaleAmplitude = 1.0f;
+    let fullScaleFloor = 1.95f;
+    let fullScaleCeiling = 2.25f;
+
+    float32 tone (int32 frame)
+    {
+        return std::intrinsics::sin (float32 (frame) * 0.05f);
+    }
+
+    void configure()
+    {
+        nominal.mixIn <- 1.0f;    nominal.feedbackIn <- 0.95f;
+        nominal.depthIn <- 1.0f;  nominal.rateIn <- 0.35f;
+
+        fullScale.mixIn <- 1.0f;   fullScale.feedbackIn <- 0.95f;
+        fullScale.depthIn <- 1.0f; fullScale.rateIn <- 0.35f;
+    }
+
+    void main()
+    {
+        configure();
+
+        // The "one whole LFO period" framing above is only true at 44100 Hz.
+        out <- (processor.frequency == 44100.0) ? 1 : 0;
+        advance();
+
+        float32 nominalPeak;
+        float32 fullScalePeak;
+        float32 maxDifference;
+        bool allFinite = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let dry = tone (frame);
+
+            nominal.in <- float32<2> (dry * nominalAmplitude, dry * nominalAmplitude);
+            nominal.advance();
+
+            fullScale.in <- float32<2> (dry * fullScaleAmplitude, dry * fullScaleAmplitude);
+            fullScale.advance();
+
+            for (wrap<2> channel)
+            {
+                let nominalValue = nominal.out[channel];
+                let fullScaleValue = fullScale.out[channel];
+
+                if (nominalValue != nominalValue || fullScaleValue != fullScaleValue)
+                    allFinite = false;
+
+                nominalPeak = std::intrinsics::max (nominalPeak, std::intrinsics::abs (nominalValue));
+                fullScalePeak = std::intrinsics::max (fullScalePeak, std::intrinsics::abs (fullScaleValue));
+            }
+
+            maxDifference = std::intrinsics::max (maxDifference,
+                                                  std::intrinsics::abs (nominal.out[0] - (dry * nominalAmplitude)));
+        }
+
+        // 1. Nothing went NaN at maximum feedback and maximum depth.
+        out <- allFinite ? 1 : 0;
+        advance();
+
+        // 2. A 0.4 input rings up to the predicted 1.11 and is held there.
+        out <- (nominalPeak > nominalFloor && nominalPeak < nominalCeiling) ? 1 : 0;
+        advance();
+
+        // 3. A full-scale input rings up to the predicted 2.10 and is held there.
+        //    The flanger is allowed to exceed unity - a resonant comb is supposed to
+        //    - which is precisely why the rack must not terminate the signal path.
+        out <- (fullScalePeak > fullScaleFloor && fullScalePeak < fullScaleCeiling) ? 1 : 0;
+        advance();
+
+        // 4. The wet path audibly departs from the dry signal.
+        out <- (maxDifference > 0.1f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 3. THE QUADRATURE LFO PRODUCES REAL STEREO WIDTH, and does so because of the
+//    LFO rather than because of a channel-indexing accident: at depth 0 there is
+//    no sweep, so the two channels must be BIT-IDENTICAL for a mono input.
+
+## testProcessor()
+
+processor FlangerStereoWidth [[ main ]]
+{
+    output stream int32 out;
+
+    node swept = wt::FlangerBus;
+    node still = wt::FlangerBus;
+
+    let measureFrames = 8192;
+
+    float32 testSignal (int32 frame)
+    {
+        return 0.4f * std::intrinsics::sin (float32 (frame) * 0.05f);
+    }
+
+    void main()
+    {
+        swept.mixIn <- 1.0f;
+        swept.feedbackIn <- 0.0f;
+        swept.depthIn <- 1.0f;
+        swept.rateIn <- 2.0f;
+
+        still.mixIn <- 1.0f;
+        still.feedbackIn <- 0.0f;
+        still.depthIn <- 0.0f;
+        still.rateIn <- 2.0f;
+
+        float32 sweptChannelDifference;
+        bool stillChannelsIdentical = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let signal = float32<2> (testSignal (frame), testSignal (frame));
+
+            swept.in <- signal;
+            swept.advance();
+            let sweptOut = swept.out;
+
+            still.in <- signal;
+            still.advance();
+            let stillOut = still.out;
+
+            sweptChannelDifference = std::intrinsics::max (sweptChannelDifference,
+                                                           std::intrinsics::abs (sweptOut[0] - sweptOut[1]));
+
+            if (stillOut[0] != stillOut[1])
+                stillChannelsIdentical = false;
+        }
+
+        // 1. With the sweep running the two channels genuinely differ.
+        out <- (sweptChannelDifference > 0.1f) ? 1 : 0;
+        advance();
+
+        // 2. With the sweep at zero they are bit-identical, so the width in (1)
+        //    comes from the quadrature LFO and nowhere else.
+        out <- stillChannelsIdentical ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 4. THE LFO RUNS AT flangerRate. The rate is chosen so that one LFO period is a
+//    whole number of frames AND a whole number of input-sine periods, which makes
+//    the whole system exactly periodic at 1 / rate:
+//
+//        44100 Hz / 4.41 Hz = 10000 frames per LFO period
+//        a 441 Hz sine has a 100-frame period, so 100 of them fit exactly
+//
+//    A half-period offset must NOT match: the sweep is mirrored there, so the comb
+//    sits somewhere else entirely. Without that second half the test would also
+//    pass for an LFO running at twice the requested rate.
+
+## testProcessor()
+
+processor FlangerLfoPeriod [[ main ]]
+{
+    output stream int32 out;
+
+    node flanger = wt::FlangerBus;
+
+    let lfoRateHz = 4.41f;
+    let periodFrames = 10000;
+    let halfPeriodFrames = periodFrames / 2;
+    let settleFrames = 10000;
+    // Measured: periodDifference lands at 0.0005-0.001 (float32 phase-accumulation
+    // drift over 10000 additions) and halfPeriodDifference at 0.3-0.4.
+    let periodTolerance = 0.005f;
+    let halfPeriodMinimumDifference = 0.15f;
+
+    float32[periodFrames] windowOne;
+    float32[periodFrames] windowTwo;
+
+    // 441 Hz at 44100 Hz: exactly 100 frames per cycle.
+    float32 testSignal (int32 frame)
+    {
+        return 0.4f * std::intrinsics::sin (float32 (frame % 100) * 0.06283185307f);
+    }
+
+    float32<2> render (int32 frame)
+    {
+        flanger.in <- float32<2> (testSignal (frame), testSignal (frame));
+        flanger.advance();
+        return flanger.out;
+    }
+
+    void main()
+    {
+        flanger.mixIn <- 1.0f;
+        flanger.feedbackIn <- 0.0f;
+        flanger.depthIn <- 1.0f;
+        flanger.rateIn <- lfoRateHz;
+
+        // The frame arithmetic above is only valid at 44100 Hz. Fail loudly rather
+        // than silently measuring the wrong period if the harness default changes.
+        out <- (processor.frequency == 44100.0) ? 1 : 0;
+        advance();
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (frame);
+
+        for (int32 index = 0; index < periodFrames; ++index)
+            windowOne.at (index) = render (settleFrames + index)[0];
+
+        for (int32 index = 0; index < periodFrames; ++index)
+            windowTwo.at (index) = render (settleFrames + periodFrames + index)[0];
+
+        float32 periodDifference;
+        float32 halfPeriodDifference;
+
+        for (int32 index = 0; index < periodFrames; ++index)
+            periodDifference = std::intrinsics::max (periodDifference,
+                                                     std::intrinsics::abs (windowOne.at (index) - windowTwo.at (index)));
+
+        for (int32 index = 0; index < halfPeriodFrames; ++index)
+            halfPeriodDifference = std::intrinsics::max (halfPeriodDifference,
+                                                         std::intrinsics::abs (windowOne.at (index)
+                                                                               - windowOne.at (index + halfPeriodFrames)));
+
+        // 1. The output repeats after exactly one LFO period.
+        out <- (periodDifference < periodTolerance) ? 1 : 0;
+        advance();
+
+        // 2. It does not repeat after half a period, so the LFO really is running
+        //    at the requested rate and not at a multiple of it.
+        out <- (halfPeriodDifference > halfPeriodMinimumDifference) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 5. EVERY PARAMETER REACHES THE DSP. Four modules differ from a reference module
+//    in exactly one parameter each. A parameter wired to the wrong internal state,
+//    or never read at all, compiles silently and sounds plausible - this is the
+//    only thing that catches it at module level.
+
+## testProcessor()
+
+processor FlangerParameterReach [[ main ]]
+{
+    output stream int32 out;
+
+    node reference    = wt::FlangerBus;
+    node rateVariant  = wt::FlangerBus;
+    node depthVariant = wt::FlangerBus;
+    node feedbackVariant = wt::FlangerBus;
+    node mixVariant   = wt::FlangerBus;
+
+    let measureFrames = 8192;
+    // Measured: every one of the four differences lands at 0.2 or above, so this
+    // threshold is a floor with margin rather than a hair above the noise.
+    let minimumDifference = 0.1f;
+
+    float32 testSignal (int32 frame)
+    {
+        return 0.4f * std::intrinsics::sin (float32 (frame) * 0.05f);
+    }
+
+    void configure()
+    {
+        reference.rateIn <- 0.35f;        reference.depthIn <- 0.6f;
+        reference.feedbackIn <- 0.0f;     reference.mixIn <- 1.0f;
+
+        rateVariant.rateIn <- 8.0f;       rateVariant.depthIn <- 0.6f;
+        rateVariant.feedbackIn <- 0.0f;   rateVariant.mixIn <- 1.0f;
+
+        depthVariant.rateIn <- 0.35f;     depthVariant.depthIn <- 0.0f;
+        depthVariant.feedbackIn <- 0.0f;  depthVariant.mixIn <- 1.0f;
+
+        feedbackVariant.rateIn <- 0.35f;    feedbackVariant.depthIn <- 0.6f;
+        feedbackVariant.feedbackIn <- 0.9f; feedbackVariant.mixIn <- 1.0f;
+
+        mixVariant.rateIn <- 0.35f;       mixVariant.depthIn <- 0.6f;
+        mixVariant.feedbackIn <- 0.0f;    mixVariant.mixIn <- 0.0f;
+    }
+
+    void main()
+    {
+        configure();
+
+        float32 rateDifference;
+        float32 depthDifference;
+        float32 feedbackDifference;
+        float32 mixDifference;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let signal = float32<2> (testSignal (frame), testSignal (frame));
+
+            reference.in <- signal;        reference.advance();
+            rateVariant.in <- signal;      rateVariant.advance();
+            depthVariant.in <- signal;     depthVariant.advance();
+            feedbackVariant.in <- signal;  feedbackVariant.advance();
+            mixVariant.in <- signal;       mixVariant.advance();
+
+            let base = reference.out[0];
+
+            rateDifference = std::intrinsics::max (rateDifference,
+                                                   std::intrinsics::abs (rateVariant.out[0] - base));
+            depthDifference = std::intrinsics::max (depthDifference,
+                                                    std::intrinsics::abs (depthVariant.out[0] - base));
+            feedbackDifference = std::intrinsics::max (feedbackDifference,
+                                                       std::intrinsics::abs (feedbackVariant.out[0] - base));
+            mixDifference = std::intrinsics::max (mixDifference,
+                                                  std::intrinsics::abs (mixVariant.out[0] - base));
+        }
+
+        out <- (rateDifference > minimumDifference) ? 1 : 0;
+        advance();
+
+        out <- (depthDifference > minimumDifference) ? 1 : 0;
+        advance();
+
+        out <- (feedbackDifference > minimumDifference) ? 1 : 0;
+        advance();
+
+        out <- (mixDifference > minimumDifference) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 6. FEEDBACK IS SIGNED, AND THE NEGATIVE HALF IS REAL FEEDBACK. The catalog gives
+//    feedback a -0.95..0.95 range because the negative half is a different sound -
+//    the inverted comb, whose peaks sit where the positive comb's notches are - not
+//    a mirror of the positive half.
+//
+//    Comparing +0.7 against -0.7 alone is NOT enough, and this test originally made
+//    that mistake: a `clamp (feedback, 0, 0.95)` typo turns -0.7 into 0, which still
+//    differs from +0.7, so the two-node version passed the mutation. The third node
+//    at feedback 0 is what closes it - inverted feedback must differ from NO
+//    feedback as well as from upright feedback.
+
+## testProcessor()
+
+processor FlangerFeedbackPolarity [[ main ]]
+{
+    output stream int32 out;
+
+    node positive = wt::FlangerBus;
+    node negative = wt::FlangerBus;
+    node neutral  = wt::FlangerBus;
+
+    let measureFrames = 8192;
+    let minimumDifference = 0.1f;
+
+    float32 testSignal (int32 frame)
+    {
+        return 0.4f * std::intrinsics::sin (float32 (frame) * 0.05f);
+    }
+
+    void main()
+    {
+        positive.mixIn <- 1.0f;   positive.feedbackIn <- 0.7f;
+        positive.depthIn <- 0.6f; positive.rateIn <- 0.35f;
+
+        negative.mixIn <- 1.0f;   negative.feedbackIn <- -0.7f;
+        negative.depthIn <- 0.6f; negative.rateIn <- 0.35f;
+
+        neutral.mixIn <- 1.0f;   neutral.feedbackIn <- 0.0f;
+        neutral.depthIn <- 0.6f; neutral.rateIn <- 0.35f;
+
+        float32 polarityDifference;
+        float32 regenerationDifference;
+        float32 peak;
+        bool allFinite = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let signal = float32<2> (testSignal (frame), testSignal (frame));
+
+            positive.in <- signal;  positive.advance();
+            negative.in <- signal;  negative.advance();
+            neutral.in <- signal;   neutral.advance();
+
+            let positiveOut = positive.out[0];
+            let negativeOut = negative.out[0];
+            let neutralOut = neutral.out[0];
+
+            if (positiveOut != positiveOut || negativeOut != negativeOut || neutralOut != neutralOut)
+                allFinite = false;
+
+            peak = std::intrinsics::max (peak, std::intrinsics::abs (negativeOut));
+
+            polarityDifference = std::intrinsics::max (polarityDifference,
+                                                       std::intrinsics::abs (positiveOut - negativeOut));
+            regenerationDifference = std::intrinsics::max (regenerationDifference,
+                                                           std::intrinsics::abs (negativeOut - neutralOut));
+        }
+
+        // 1. Inverting the feedback changes the sound, so the sign reaches the loop.
+        out <- (polarityDifference > minimumDifference) ? 1 : 0;
+        advance();
+
+        // 2. And negative feedback is genuinely feedback, not a clamped-away zero.
+        out <- (regenerationDifference > minimumDifference) ? 1 : 0;
+        advance();
+
+        // 3. The inverted comb is as well behaved as the upright one.
+        out <- allFinite ? 1 : 0;
+        advance();
+
+        // 4. Its level obeys the same steady-state law: x = 0.4, |fb| = 0.7 predicts
+        //    w = 1.11 and a wet peak of 0.75 (measured 0.70-0.75), comfortably under
+        //    the 1.11 that fb = 0.95 reaches in section 2.
+        out <- (peak < 0.90f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 7. ZERO LATENCY, ASSERTED AS BEHAVIOUR. An impulse must appear at the output on
+//    the very frame it was presented, wet or dry. This is the module-level form of
+//    ADR-008: a composed child's declared latency does NOT propagate to its parent,
+//    so a module that quietly delayed its signal would make the whole instrument
+//    late while the host was told it was not.
+
+## testProcessor()
+
+processor FlangerZeroLatency [[ main ]]
+{
+    output stream int32 out;
+
+    node dryModule = wt::FlangerBus;
+    node wetModule = wt::FlangerBus;
+
+    void main()
+    {
+        dryModule.mixIn <- 0.0f;  dryModule.feedbackIn <- 0.5f;
+        dryModule.depthIn <- 0.6f; dryModule.rateIn <- 0.35f;
+
+        wetModule.mixIn <- 1.0f;  wetModule.feedbackIn <- 0.5f;
+        wetModule.depthIn <- 0.6f; wetModule.rateIn <- 0.35f;
+
+        let silence = float32<2> (0.0f, 0.0f);
+        let impulse = float32<2> (1.0f, 1.0f);
+
+        // Settle the mix ramps on silence, so the impulse meets a fully-arrived
+        // mix and an empty delay line. Anything the module emits during this
+        // stretch is state it invented on its own.
+        bool silentBeforeImpulse = true;
+
+        for (int32 frame = 0; frame < 512; ++frame)
+        {
+            dryModule.in <- silence;  dryModule.advance();
+            wetModule.in <- silence;  wetModule.advance();
+
+            if (dryModule.out[0] != 0.0f || wetModule.out[0] != 0.0f)
+                silentBeforeImpulse = false;
+        }
+
+        dryModule.in <- impulse;
+        dryModule.advance();
+        let dryFirstFrame = dryModule.out;
+
+        wetModule.in <- impulse;
+        wetModule.advance();
+        let wetFirstFrame = wetModule.out;
+
+        // 1. Silence in, silence out: no self-oscillation, no DC offset, no
+        //    pre-response to smear the measurement below.
+        out <- silentBeforeImpulse ? 1 : 0;
+        advance();
+
+        // 2. At mix 0 the impulse arrives on frame 0, unchanged, in both channels.
+        out <- (dryFirstFrame[0] == 1.0f && dryFirstFrame[1] == 1.0f) ? 1 : 0;
+        advance();
+
+        // 3. At mix 1 it arrives on frame 0 too, at exactly half amplitude: the wet
+        //    signal is 0.5 * (dry + delayed), and the delay line is still empty, so
+        //    0.5 is the only answer consistent with zero latency AND with the comb
+        //    being formed from the sum. A module with any transport delay reads 0
+        //    here; one that crossfaded to the delayed signal alone also reads 0.
+        out <- (std::intrinsics::abs (wetFirstFrame[0] - 0.5f) < 0.001f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 8. THE CLAMPS ARE REAL, ASSERTED AS BIT-EXACT EQUIVALENCE.
+//
+//    This is not a hypothetical concern. ADR-012 makes every continuous parameter
+//    here a modulation destination, and modulation arrives as an offset added to
+//    the base value, so out-of-range values reach the DSP in normal use. The
+//    endpoint's declared min/max is host metadata, not a runtime guarantee.
+//
+//    "Stays finite" is far too weak to pin a clamp: an unclamped depth of 4 is
+//    perfectly finite, it just sweeps 30 ms instead of the documented 8 ms, and the
+//    ring buffer's own read clamp keeps it safe while it does so. The assertion that
+//    actually bites is EQUIVALENCE - a parameter driven past its limit must produce
+//    BIT-IDENTICAL audio to the same parameter sitting exactly at that limit.
+//
+//    Each variant differs from the reference in exactly one parameter, so a missing
+//    clamp names itself instead of failing a bundled check.
+
+## testProcessor()
+
+processor FlangerClamps [[ main ]]
+{
+    output stream int32 out;
+
+    // All four parameters at their declared maxima: also the loudest configuration
+    // the module can be asked for.
+    node limits = wt::FlangerBus;
+
+    node rateBeyond     = wt::FlangerBus;
+    node depthBeyond    = wt::FlangerBus;
+    node feedbackBeyond = wt::FlangerBus;
+    node mixBeyond      = wt::FlangerBus;
+
+    // Every parameter driven below its declared minimum at once. mix clamps to 0,
+    // so this must be a bit-exact dry path with a -0.95 feedback loop running
+    // underneath it.
+    node belowMinimum = wt::FlangerBus;
+
+    let measureFrames = 8192;
+    let fullScaleCeiling = 1.80f;
+
+    float32 testSignal (int32 frame)
+    {
+        return std::intrinsics::sin (float32 (frame) * 0.05f);
+    }
+
+    void configure()
+    {
+        limits.rateIn <- 8.0f;   limits.depthIn <- 1.0f;
+        limits.feedbackIn <- 0.95f; limits.mixIn <- 1.0f;
+
+        rateBeyond.rateIn <- 100.0f;  rateBeyond.depthIn <- 1.0f;
+        rateBeyond.feedbackIn <- 0.95f; rateBeyond.mixIn <- 1.0f;
+
+        depthBeyond.rateIn <- 8.0f;   depthBeyond.depthIn <- 4.0f;
+        depthBeyond.feedbackIn <- 0.95f; depthBeyond.mixIn <- 1.0f;
+
+        feedbackBeyond.rateIn <- 8.0f;  feedbackBeyond.depthIn <- 1.0f;
+        feedbackBeyond.feedbackIn <- 3.0f; feedbackBeyond.mixIn <- 1.0f;
+
+        mixBeyond.rateIn <- 8.0f;   mixBeyond.depthIn <- 1.0f;
+        mixBeyond.feedbackIn <- 0.95f; mixBeyond.mixIn <- 2.0f;
+
+        belowMinimum.rateIn <- -5.0f;  belowMinimum.depthIn <- -1.0f;
+        belowMinimum.feedbackIn <- -3.0f; belowMinimum.mixIn <- -1.0f;
+    }
+
+    void main()
+    {
+        configure();
+
+        bool rateClamped = true;
+        bool depthClamped = true;
+        bool feedbackClamped = true;
+        bool mixClamped = true;
+        bool belowMinimumIsDry = true;
+        bool allFinite = true;
+        float32 peak;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let signal = float32<2> (testSignal (frame), testSignal (frame));
+
+            limits.in <- signal;          limits.advance();
+            rateBeyond.in <- signal;      rateBeyond.advance();
+            depthBeyond.in <- signal;     depthBeyond.advance();
+            feedbackBeyond.in <- signal;  feedbackBeyond.advance();
+            mixBeyond.in <- signal;       mixBeyond.advance();
+            belowMinimum.in <- signal;    belowMinimum.advance();
+
+            let reference = limits.out;
+
+            for (wrap<2> channel)
+            {
+                if (rateBeyond.out[channel] != reference[channel])      rateClamped = false;
+                if (depthBeyond.out[channel] != reference[channel])     depthClamped = false;
+                if (feedbackBeyond.out[channel] != reference[channel])  feedbackClamped = false;
+                if (mixBeyond.out[channel] != reference[channel])       mixClamped = false;
+
+                let value = reference[channel];
+
+                if (value != value)
+                    allFinite = false;
+
+                peak = std::intrinsics::max (peak, std::intrinsics::abs (value));
+            }
+
+            if (belowMinimum.out[0] != testSignal (frame) || belowMinimum.out[1] != testSignal (frame))
+                belowMinimumIsDry = false;
+        }
+
+        // 1-4. Each parameter past its maximum is bit-identical to that maximum.
+        out <- rateClamped ? 1 : 0;
+        advance();
+
+        out <- depthClamped ? 1 : 0;
+        advance();
+
+        out <- feedbackClamped ? 1 : 0;
+        advance();
+
+        out <- mixClamped ? 1 : 0;
+        advance();
+
+        // 5. Every parameter below its minimum: mix clamps to 0, so this is a
+        //    bit-exact dry path with a live -0.95 feedback loop underneath.
+        out <- belowMinimumIsDry ? 1 : 0;
+        advance();
+
+        // 6-7. The loudest configuration the module can be asked for is finite and
+        //      sits under the same ceiling section 2 holds the full-scale case to.
+        out <- allFinite ? 1 : 0;
+        advance();
+
+        out <- (peak < fullScaleCeiling) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 9. THE MINIMUM DELAY IS THE DOCUMENTED 0.6 ms, MEASURED AS A COMB NULL.
+//
+//    With depth at 0 the sweep is switched off and the module is a fixed 0.6 ms
+//    comb. Feed it a tone whose HALF period is exactly that delay and the delayed
+//    signal arrives inverted, so wet = 0.5 (dry + delayed) cancels to nothing and
+//    the mix-1 output collapses into a null.
+//
+//    Nothing else in this file pins the base delay. It is set in init() from
+//    processor.frequency, and if init() never ran for a composed child node, or if
+//    the base were dropped, the delay would fall to the ring buffer's 2-sample read
+//    floor - which is still perfectly stable, still stereo, still periodic, and
+//    silently the wrong effect. The null is what tells the difference.
+
+## testProcessor()
+
+processor FlangerMinimumDelay [[ main ]]
+{
+    output stream int32 out;
+
+    node flanger = wt::FlangerBus;
+
+    let settleFrames = 1024;
+    let measureFrames = 4096;
+    let baseDelayMs = 0.6f;
+    let nullCeiling = 0.0001f;
+    let amplitude = 0.4f;
+
+    // A tone whose half period is exactly the module's minimum delay.
+    float32 nullTone (int32 frame)
+    {
+        let baseDelayFrames = baseDelayMs * 0.001f * float32 (processor.frequency);
+        return amplitude * std::intrinsics::sin (float32 (frame) * (3.14159265358979323846f / baseDelayFrames));
+    }
+
+    float32<2> render (int32 frame)
+    {
+        flanger.in <- float32<2> (nullTone (frame), nullTone (frame));
+        flanger.advance();
+        return flanger.out;
+    }
+
+    void main()
+    {
+        flanger.mixIn <- 1.0f;
+        flanger.depthIn <- 0.0f;
+        flanger.feedbackIn <- 0.0f;
+        flanger.rateIn <- 4.0f;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (frame);
+
+        float32 peak;
+
+        for (int32 frame = settleFrames; frame < settleFrames + measureFrames; ++frame)
+        {
+            let rendered = render (frame);
+
+            for (wrap<2> channel)
+                peak = std::intrinsics::max (peak, std::intrinsics::abs (rendered[channel]));
+        }
+
+        // The comb cancels the tone to better than -72 dB relative to the input
+        // (measured residual 5e-6 to 2e-5, i.e. about -86 dB). A 2-sample delay
+        // instead of 26.46 would leave the tone almost untouched.
+        //
+        // This bound is also what pins the regeneration topology. Saturating the
+        // whole delay-line input rather than just the feedback term stores a copy
+        // of the input several percent smaller than the input, and the residual
+        // jumps to 0.0095 - a -34 dB notch instead of a -86 dB one.
+        out <- (peak < nullCeiling) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

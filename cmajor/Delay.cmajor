@@ -1,0 +1,351 @@
+namespace wt
+{
+    //==============================================================================
+    //  Delay -- the rack's stereo delay module (ADR-006 v1 inventory).
+    //
+    //  Two independent lines, one per channel, read with Catmull-Rom fractional
+    //  interpolation, with the tone shaping and the feedback saturation inside the
+    //  loop so successive repeats darken and settle instead of accumulating.
+    //
+    //  ZERO LATENCY (ADR-008). No processor.latency is declared, and none may ever
+    //  be: a composed child's declared latency does not reach the composing rack, so
+    //  a latent child would make the signal late while the host is told it is not.
+    //  The dry path is the current input sample, so at mix 0 the module returns its
+    //  input BIT-EXACTLY -- that is both the hard audible bypass of ADR-005 and the
+    //  proof that nothing is buffered ahead of the output.
+    //
+    //  TIMING is a Free/Sync compound control, matching the UI catalog's
+    //  `compound: "sync"` flag on delay time. Sync resolves milliseconds from host
+    //  tempo and a rhythmic division HERE, in the DSP, so a tempo change tracks
+    //  sample-accurately rather than waiting for the adapter to push a new
+    //  millisecond value. In Sync the Free millisecond value is switched out
+    //  entirely; that is the semantics of the mode, not an unbacked parameter.
+    //  `tempoBpmIn` is transport, not a user parameter: the rack owns the
+    //  std::timeline::Tempo event and forwards its bpm here every frame, because a
+    //  composed child's endpoints may only be written from code reachable from the
+    //  parent's main().
+    //
+    //  OUTPUT BUDGET. The feedback loop saturates at delayLoopCeiling, so the wet
+    //  path cannot hand the rest of the rack an unbounded level however long the
+    //  loop runs. Chorus's own chorusSoftClipLarge was NOT reused for this: its
+    //  ceiling is 8.0, i.e. +18 dBFS, which is exactly the level the rack's fixed
+    //  output stage exists to prevent.
+    //
+    //  STATE IS NEVER RESET. A rack reorder is an atomic swap that preserves every
+    //  instance's internal state (ADR-003), and the module is advanced every frame
+    //  whatever its position and whatever its enabled state, so the line is never
+    //  cleared and tails survive both a reorder and any parameter change. Delay is
+    //  therefore explicitly NOT a candidate for the effect-local sleep ADR-005
+    //  permits: sleeping it would drop the tail it exists to produce.
+    //
+    //  REUSE. Fractional interpolation is wt::catmullRom (FixedFrameOscillator.cmajor).
+    //  The ring-buffer read/write shape and the in-loop tone shaping follow
+    //  Chorus.cmajor:181-213 and :312-329, and the time glide follows Chorus's ring
+    //  glide at :455-462. Chorus's free helpers are deliberately not called: its
+    //  buffer sizes derive from processor.maxFrequency, so any program that merely
+    //  mentions ChorusBus must also instantiate one, and a leaf effect module must
+    //  not impose that on its callers. delayCoefficientForCutoff is this module's own
+    //  copy of the same two-line one-pole formula, exactly as choruslab keeps its own.
+    //==============================================================================
+
+    let delayChannelCount = 2;
+
+    let delayMinMs = 1.0f;
+    let delayMaxMs = 2000.0f;
+    let delayFeedbackMin = -0.95f;
+    let delayFeedbackMax = 0.95f;
+    let delayFilterMinHz = 200.0f;
+    let delayFilterMaxHz = 18000.0f;
+    let delayMixMin = 0.0f;
+    let delayMixMax = 1.0f;
+    let delayTempoMinBpm = 20.0f;
+    let delayTempoMaxBpm = 300.0f;
+
+    // The shipped defaults. Named rather than written straight into the annotations
+    // so the tests can assert against the value the module actually declares.
+    let delayTimeInitMs = 375.0f;
+    let delayFeedbackInit = 0.35f;
+    let delayFilterInitHz = 6000.0f;
+    let delayMixInit = 0.0f;
+    let delayTempoInitBpm = 120.0f;
+
+    // The glide is the delay time's only smoothing, which is why delayTime declares
+    // rampFrames: 0 -- a host ramp on top would smooth an already smoothed value.
+    let delayTimeGlideMs = 40.0f;
+
+    // Loop safety and colour. The high-pass is a DC blocker, not a tone control: a
+    // one-pole low-pass has unity gain at DC, so without it a 0.95 feedback loop
+    // integrates any DC offset until the saturator is the only thing holding it.
+    let delayLoopHighpassHz = 20.0f;
+    let delayLoopCeiling = 2.0f;
+
+    // Matches Distortion.cmajor's material-change threshold: coefficients are only
+    // recomputed when the value that produces them actually moves.
+    let delayCoefficientEpsilonHz = 0.001f;
+
+    let delayMinReadSamples = 2.0f;
+    let delayReadHeadroomSamples = 8;
+    let delayMsPerMinute = 60000.0f;
+    let delayUnsetDelaySamples = -1.0f;
+    let delayUnsetFilterHz = -1.0f;
+
+    let delayTimeModeFree = 0;
+    let delayTimeModeSync = 1;
+    let delayTimeModeMax = 1;
+
+    // Rhythmic divisions, ordered longest first, in quarter-note beats.
+    let delayDivisionWhole = 0;
+    let delayDivisionHalfDotted = 1;
+    let delayDivisionHalf = 2;
+    let delayDivisionQuarterDotted = 3;
+    let delayDivisionHalfTriplet = 4;
+    let delayDivisionQuarter = 5;
+    let delayDivisionEighthDotted = 6;
+    let delayDivisionQuarterTriplet = 7;
+    let delayDivisionEighth = 8;
+    let delayDivisionSixteenthDotted = 9;
+    let delayDivisionEighthTriplet = 10;
+    let delayDivisionSixteenth = 11;
+    let delayDivisionSixteenthTriplet = 12;
+    let delayDivisionCount = 13;
+    let delayDivisionMax = delayDivisionCount - 1;
+    let delayDivisionInit = delayDivisionEighth;
+
+    float32 clampDelayTimeMs (float32 value)
+    {
+        return std::intrinsics::clamp (value, delayMinMs, delayMaxMs);
+    }
+
+    float32 clampDelayFeedback (float32 value)
+    {
+        return std::intrinsics::clamp (value, delayFeedbackMin, delayFeedbackMax);
+    }
+
+    float32 clampDelayFilterHz (float32 value)
+    {
+        return std::intrinsics::clamp (value, delayFilterMinHz, delayFilterMaxHz);
+    }
+
+    float32 clampDelayMix (float32 value)
+    {
+        return std::intrinsics::clamp (value, delayMixMin, delayMixMax);
+    }
+
+    float32 clampDelayTempoBpm (float32 value)
+    {
+        return std::intrinsics::clamp (value, delayTempoMinBpm, delayTempoMaxBpm);
+    }
+
+    int32 clampDelayMode (float32 value, int32 maxMode)
+    {
+        return int32 (std::intrinsics::clamp (std::intrinsics::floor (value + 0.5f), 0.0f, float32 (maxMode)));
+    }
+
+    // One-pole coefficient for a cutoff, clamped away from DC and from Nyquist.
+    float32 delayCoefficientForCutoff (float32 sampleRate, float32 cutoffHz)
+    {
+        let clampedCutoff = std::intrinsics::clamp (cutoffHz, 10.0f, sampleRate * 0.45f);
+        return 1.0f - std::intrinsics::exp ((-2.0f * float32 (pi) * clampedCutoff) / sampleRate);
+    }
+
+    // Feedback-loop saturation: transparent through 0 dBFS and asymptotic at
+    // delayLoopCeiling, so a 0.95 feedback loop builds musically and still cannot
+    // exceed a level the rest of the rack can be designed around.
+    float32 delaySoftClip (float32 value)
+    {
+        return delayLoopCeiling * std::intrinsics::tanh (value / delayLoopCeiling);
+    }
+
+    float32 delayDivisionBeats (int32 division)
+    {
+        if (division == delayDivisionWhole)            return 4.0f;
+        if (division == delayDivisionHalfDotted)       return 3.0f;
+        if (division == delayDivisionHalf)             return 2.0f;
+        if (division == delayDivisionQuarterDotted)    return 1.5f;
+        if (division == delayDivisionHalfTriplet)      return 4.0f / 3.0f;
+        if (division == delayDivisionQuarter)          return 1.0f;
+        if (division == delayDivisionEighthDotted)     return 0.75f;
+        if (division == delayDivisionQuarterTriplet)   return 2.0f / 3.0f;
+        if (division == delayDivisionEighth)           return 0.5f;
+        if (division == delayDivisionSixteenthDotted)  return 0.375f;
+        if (division == delayDivisionEighthTriplet)    return 1.0f / 3.0f;
+        if (division == delayDivisionSixteenth)        return 0.25f;
+        return 1.0f / 6.0f;
+    }
+
+    // A synced time longer than the line is clamped to the line. 1/1 at 20 bpm asks
+    // for twelve seconds and no bounded delay can honour that; the alternative is a
+    // 17 MB buffer at the 192 kHz maximum rate, which is not a mobile option.
+    float32 delaySyncedMs (float32 tempoBpm, int32 division)
+    {
+        let beatMs = delayMsPerMinute / clampDelayTempoBpm (tempoBpm);
+        return clampDelayTimeMs (delayDivisionBeats (division) * beatMs);
+    }
+
+    processor DelayBus
+    {
+        input stream float32<2> in;
+
+        // Ranges come from the same constants the clamps use, so a declared range and
+        // its clamp cannot drift apart. `text:` for the divisions is the one thing
+        // that has to be written out by hand; delayDivisionBeats is the source of
+        // truth for the order it lists.
+        input value float32 timeMsIn [[ name: "Delay Time", min: delayMinMs, max: delayMaxMs, init: delayTimeInitMs, unit: "ms", rampFrames: 0 ]];
+        input value float32 timeModeIn [[ name: "Delay Timing", min: 0.0f, max: float32 (delayTimeModeMax), init: float32 (delayTimeModeFree), discrete: true, step: 1.0f, text: "Free|Sync", rampFrames: 0 ]];
+        input value float32 divisionIn [[ name: "Delay Division", min: 0.0f, max: float32 (delayDivisionMax), init: float32 (delayDivisionInit), discrete: true, step: 1.0f, text: "1/1|1/2.|1/2|1/4.|1/2T|1/4|1/8.|1/4T|1/8|1/16.|1/8T|1/16|1/16T", rampFrames: 0 ]];
+        input value float32 feedbackIn [[ name: "Delay Feedback", min: delayFeedbackMin, max: delayFeedbackMax, init: delayFeedbackInit, rampFrames: 64 ]];
+        input value float32 filterHzIn [[ name: "Delay Filter", min: delayFilterMinHz, max: delayFilterMaxHz, init: delayFilterInitHz, unit: "Hz", rampFrames: 64 ]];
+        input value float32 mixIn [[ name: "Delay Mix", min: delayMixMin, max: delayMixMax, init: delayMixInit, rampFrames: 128 ]];
+
+        // Host transport, forwarded by the rack from std::timeline::Tempo. Not a
+        // user parameter and never a host automation slot.
+        input value float32 tempoBpmIn [[ init: delayTempoInitBpm ]];
+
+        output stream float32<2> out;
+
+        let delayBufferSize = int (processor.maxFrequency * delayMaxMs * 0.001f) + delayReadHeadroomSamples;
+
+        float32[delayChannelCount, delayBufferSize] delayBuffers;
+        wrap<delayBufferSize>[delayChannelCount] delayWritePositions;
+
+        float32[delayChannelCount] loopLowpassState;
+        float32[delayChannelCount] loopHighpassState;
+
+        float32 trackedDelaySamples = delayUnsetDelaySamples;
+        float32 currentFilterHz = delayUnsetFilterHz;
+        float32 currentLoopLowpassCoefficient;
+        float32 loopHighpassCoefficient;
+        float32 timeGlideCoefficient;
+
+        void init()
+        {
+            let sampleRate = float32 (processor.frequency);
+            let glideSamples = std::intrinsics::max (1.0f, delayTimeGlideMs * sampleRate * 0.001f);
+
+            timeGlideCoefficient = 1.0f - std::intrinsics::exp (-1.0f / glideSamples);
+            loopHighpassCoefficient = delayCoefficientForCutoff (sampleRate, delayLoopHighpassHz);
+        }
+
+        float32 readDelaySample (wrap<delayChannelCount> channel, float32 delaySamples)
+        {
+            let clampedDelay = std::intrinsics::clamp (
+                delaySamples,
+                delayMinReadSamples,
+                float32 (delayBufferSize - 4)
+            );
+            let writeIndex = int32 (delayWritePositions[channel]);
+            let readPos = std::intrinsics::wrap (float32 (writeIndex) - clampedDelay, float32 (delayBufferSize));
+            let index1 = int32 (std::intrinsics::floor (readPos));
+            let fraction = readPos - float32 (index1);
+            let i0 = wrap<delayBufferSize> (index1 + delayBufferSize - 1);
+            let i1 = wrap<delayBufferSize> (index1);
+            let i2 = wrap<delayBufferSize> (index1 + 1);
+            let i3 = wrap<delayBufferSize> (index1 + 2);
+
+            return catmullRom (
+                delayBuffers[channel, i0],
+                delayBuffers[channel, i1],
+                delayBuffers[channel, i2],
+                delayBuffers[channel, i3],
+                fraction
+            );
+        }
+
+        void writeDelaySample (wrap<delayChannelCount> channel, float32 sample)
+        {
+            let writeIndex = delayWritePositions[channel];
+            delayBuffers[channel, writeIndex] = sample;
+            delayWritePositions[channel] = wrap<delayBufferSize> (int32 (writeIndex) + 1);
+        }
+
+        // Tone shaping and saturation inside the loop, so each repeat is darker and
+        // more compressed than the one before it. The saturator comes last, which is
+        // what makes the written sample provably bounded by delayLoopCeiling: a
+        // one-pole low-pass is a convex combination and cannot overshoot, but the
+        // low-minus-lower high-pass has an impulse response whose absolute sum is
+        // nearly two, so saturating before it would not bound the buffer at all.
+        float32 colorLoopWrite (wrap<delayChannelCount> channel, float32 writeRaw, float32 lowCoeff)
+        {
+            let lowPassed = loopLowpassState[channel]
+                          + lowCoeff * (writeRaw - loopLowpassState[channel]);
+            loopLowpassState[channel] = lowPassed;
+
+            let highpassLow = loopHighpassState[channel]
+                            + loopHighpassCoefficient * (lowPassed - loopHighpassState[channel]);
+            loopHighpassState[channel] = highpassLow;
+
+            return delaySoftClip (lowPassed - highpassLow);
+        }
+
+        void updateLoopFilterCoefficient()
+        {
+            let nextFilterHz = clampDelayFilterHz (filterHzIn);
+
+            if (std::intrinsics::abs (nextFilterHz - currentFilterHz) > delayCoefficientEpsilonHz)
+            {
+                currentLoopLowpassCoefficient = delayCoefficientForCutoff (float32 (processor.frequency), nextFilterHz);
+                currentFilterHz = nextFilterHz;
+            }
+        }
+
+        float32 resolveTargetDelayMs()
+        {
+            if (clampDelayMode (timeModeIn, delayTimeModeMax) == delayTimeModeSync)
+                return delaySyncedMs (tempoBpmIn, clampDelayMode (divisionIn, delayDivisionMax));
+
+            return clampDelayTimeMs (timeMsIn);
+        }
+
+        void main()
+        {
+            loop
+            {
+                let sampleRate = float32 (processor.frequency);
+                let dry = in;
+
+                updateLoopFilterCoefficient();
+
+                let targetDelaySamples = std::intrinsics::clamp (
+                    resolveTargetDelayMs() * sampleRate * 0.001f,
+                    delayMinReadSamples,
+                    float32 (delayBufferSize - delayReadHeadroomSamples)
+                );
+
+                // The first frame snaps; after that the time glides, so changing it
+                // pitch-bends like tape instead of tearing the read pointer.
+                if (trackedDelaySamples < 0.0f)
+                    trackedDelaySamples = targetDelaySamples;
+
+                trackedDelaySamples += (targetDelaySamples - trackedDelaySamples) * timeGlideCoefficient;
+
+                let feedback = clampDelayFeedback (feedbackIn);
+                let mix01 = clampDelayMix (mixIn);
+                let dryGain = float32 (std::intrinsics::cos (0.5f * pi * mix01));
+                let wetGain = float32 (std::intrinsics::sin (0.5f * pi * mix01));
+
+                var wetLeft = 0.0f;
+                var wetRight = 0.0f;
+
+                for (wrap<delayChannelCount> channel)
+                {
+                    let delayed = readDelaySample (channel, trackedDelaySamples);
+                    let writeRaw = dry[channel] + (delayed * feedback);
+
+                    writeDelaySample (channel, colorLoopWrite (channel, writeRaw, currentLoopLowpassCoefficient));
+
+                    if (channel == 0)
+                        wetLeft = delayed;
+                    else
+                        wetRight = delayed;
+                }
+
+                // Equal power, exactly as Distortion.cmajor:186-188 and
+                // Chorus.cmajor:472-473. At mix 0 this is cos(0) = 1 and sin(0) = 0,
+                // so the output is the input to the last bit.
+                out <- (dry * dryGain) + (float32<2> (wetLeft, wetRight) * wetGain);
+
+                advance();
+            }
+        }
+    }
+}

@@ -1,0 +1,52 @@
+// Smoke 4: endpoint hoisting and latency behaviour across processor composition.
+//   A. can a composing processor hoist a composed child node's endpoints?
+//   B. can a parent graph hoist through a composing processor's child node?
+//   C. does a composed child's declared latency leak into the composing parent?
+
+## expectError ("21:11: error: Expected a stream type specifier")
+
+processor Child
+{
+    input stream float32 in;
+    input value float32 driveIn [[ name: "Drive", min: 0.0f, max: 1.0f, init: 0.5f ]];
+    output stream float32 out;
+
+    void main()
+    {
+        loop
+        {
+            out <- in * driveIn;
+            advance();
+        }
+    }
+}
+
+processor Composer
+{
+    input stream float32 in;
+    input child.driveIn;          // hoist from a node owned by a processor, not a graph
+    output stream float32 out;
+
+    node child = Child;
+
+    void main()
+    {
+        loop
+        {
+            child.in <- in;
+            child.advance();
+            out <- child.out;
+            advance();
+        }
+    }
+}
+
+graph Test [[ main ]]
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    node composer = Composer;
+
+    connection in -> composer -> out;
+}

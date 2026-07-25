@@ -1,0 +1,184 @@
+namespace wt
+{
+    //==============================================================================
+    // Global Filter - the effects rack's stereo multimode filter.
+    //
+    // This is a SECOND INSTANCE of the instrument's filter, not a second filter. The
+    // mode vocabulary (filterModeOff..filterModePeak), the clamps (clampFilterCutoffHz,
+    // clampFilterQ), the simper mode mapping (resolveSimperFilterMode) and the
+    // per-sample setMode/setFrequency/process/reset idiom are the ones the per-voice
+    // filter already uses at FixedFrameOscillator.cmajor:3748-3762, so the global and
+    // per-voice filters agree by construction rather than by coincidence. The state is
+    // separate, the parameters are separate; no filter maths is written here.
+    //
+    // Rack contract:
+    //   - filterModeOff is a hard audible bypass (ADR-005): the state is reset and the
+    //     input is passed through BIT-EXACTLY. That is also the module's zero-latency
+    //     dry path (ADR-008) - there is no lookahead and nothing to declare, and
+    //     processor.latency stays at its default of 0 (ADR-008 / rack invariant C10).
+    //   - Every continuous parameter here is a rack modulation destination (ADR-012):
+    //     cutoff in octaves, resonance and drive. They are therefore swept continuously
+    //     and must behave at, and across, their end stops.
+    //   - filterModeOff is also this module's effect-local sleep hook (ADR-005): while
+    //     off it runs a mode resolve, a comparison and a copy, and holds no live state.
+    //     Whether sleeping is worth it is a profiling question the rack owns, and
+    //     always-advance stays the v1 default until that profiling happens.
+    //
+    // RACK INTEGRATION. The rack owns the annotated host parameters and forwards them
+    // here each frame (hoisted-endpoint syntax is graph-only, so the forwards are
+    // hand-written):
+    //     globalFilter.modeIn      <- globalFilterMode        0..5,  discrete
+    //     globalFilter.cutoffHzIn  <- globalFilterCutoff      20..20000 Hz, modulated in octaves
+    //     globalFilter.resonanceIn <- globalFilterResonance   0.1..20 (Q)
+    //     globalFilter.driveIn     <- globalFilterDrive       0..1
+    // Every value is re-clamped here, because rack modulation is applied before the
+    // forward and a modulated value can leave the parameter's declared range.
+    // There is no Mix parameter: mode Off IS this module's dry state, and it is exact.
+    // If the rack ever chooses to sleep a disabled Global Filter, it needs no new
+    // endpoint - forwarding filterModeOff while disabled resets the module and makes it
+    // a bit-exact passthrough, which is precisely the sleep-and-reset ADR-005 describes.
+
+    let globalFilterChannelCount = 2;
+    let globalFilterDriveMin = 0.0f;
+    let globalFilterDriveMax = 1.0f;
+
+    // Drive 1.0 pushes 8x (+18 dB) into the shaper before the makeup below pulls the
+    // full-scale level back down. First-pass value: needs a listening pass before it is
+    // frozen into presets.
+    let globalFilterDriveGainRange = 7.0f;
+
+    // Distortion.cmajor:144-160's rule: recompute coefficients only when a value has
+    // moved materially. simper::setFrequency calls tan(), so this is the expensive one.
+    let globalFilterCoefficientEpsilon = 0.001f;
+
+    float32 clampGlobalFilterDrive (float32 value)
+    {
+        return std::intrinsics::clamp (value, globalFilterDriveMin, globalFilterDriveMax);
+    }
+
+    // The instrument's algebraic soft clip, the same shaper the chorus regeneration loop
+    // uses (chorusSoftClip, Chorus.cmajor:43-47). It is repeated here rather than reused
+    // because Chorus.cmajor sizes its delay buffers from processor.maxFrequency, and
+    // depending on it would make this module impossible to compile outside a patch.
+    float32 globalFilterSoftClip (float32 value)
+    {
+        let magnitude = std::intrinsics::abs (value);
+        return value / (1.0f + magnitude);
+    }
+
+    // Pre-filter saturation.
+    //
+    // The drive gain scales into the soft clip and the makeup divides by the shaper's own
+    // response to a full-scale input, so raising drive adds harmonics without adding
+    // loudness - a full-scale input still comes out at full scale. The dry/wet blend is the house
+    // equal-power law (Distortion.cmajor:186-188, Chorus.cmajor:472-473), which makes
+    // drive 0 an EXACT identity rather than an almost-identity. That matters: drive is a
+    // rack modulation destination, so it is swept through zero, and a shaper that only
+    // engages above zero steps the signal every time it crosses.
+    float32 globalFilterSaturate (float32 sample, float32 drive)
+    {
+        let drive01 = clampGlobalFilterDrive (drive);
+        let driveGain = 1.0f + (drive01 * globalFilterDriveGainRange);
+        let makeup = 1.0f / globalFilterSoftClip (driveGain);
+        let saturated = globalFilterSoftClip (sample * driveGain) * makeup;
+        let dryGain = float32 (std::intrinsics::cos (0.5f * pi * drive01));
+        let wetGain = float32 (std::intrinsics::sin (0.5f * pi * drive01));
+
+        return (sample * dryGain) + (saturated * wetGain);
+    }
+
+    processor GlobalFilterBus
+    {
+        input stream float32<2> in;
+        input value float32 modeIn      [[ init: 0.0f ]];
+        input value float32 cutoffHzIn  [[ init: 20000.0f ]];
+        input value float32 resonanceIn [[ init: 0.707107f ]];
+        input value float32 driveIn     [[ init: 0.0f ]];
+
+        output stream float32<2> out;
+
+        // ADR-008 / rack invariant C10, enforced at compile time rather than by review.
+        // A composed child's declared latency does NOT propagate to the composing parent,
+        // so a rack module that declared any would make the signal late while the host was
+        // told it was not. Verified to actually fire: adding `processor.latency = 8;`
+        // above this line fails the build with the message below.
+        static_assert (processor.latency == 0, "A rack module may not declare latency");
+
+        std::filters::simper::Implementation[globalFilterChannelCount] filters;
+
+        int32 currentMode = filterModeOff;
+        float32 currentCutoffHz = 0.0f;
+        float32 currentQ = 0.0f;
+
+        void resetFilterState()
+        {
+            for (wrap<globalFilterChannelCount> channel)
+                filters[channel].reset();
+
+            currentMode = filterModeOff;
+        }
+
+        void updateCoefficients (int32 mode, float32 cutoffHz, float32 q)
+        {
+            let modeMoved = mode != currentMode;
+            let cutoffMoved = std::intrinsics::abs (cutoffHz - currentCutoffHz) > globalFilterCoefficientEpsilon;
+            let qMoved = std::intrinsics::abs (q - currentQ) > globalFilterCoefficientEpsilon;
+
+            if (! (modeMoved || cutoffMoved || qMoved))
+                return;
+
+            let simperMode = resolveSimperFilterMode (mode);
+
+            for (wrap<globalFilterChannelCount> channel)
+            {
+                // setMode must precede setFrequency: the simper implementation derives
+                // f0/f1/f2 from the current mode inside setFrequency, so a mode change
+                // that skips setFrequency leaves the filter in its previous response.
+                filters[channel].setMode (simperMode);
+                filters[channel].setFrequency (processor.frequency, cutoffHz, q, 0.0f);
+            }
+
+            currentMode = mode;
+            currentCutoffHz = cutoffHz;
+            currentQ = q;
+        }
+
+        void main()
+        {
+            loop
+            {
+                let mode = resolveFilterMode (modeIn);
+
+                if (mode == filterModeOff)
+                {
+                    // Hard audible bypass. Reset on the way in so that re-enabling never
+                    // exposes stale state, and pass the input through untouched - not
+                    // "approximately untouched": the rack's dry path is bit-exact.
+                    if (currentMode != filterModeOff)
+                        resetFilterState();
+
+                    out <- in;
+                }
+                else
+                {
+                    let cutoffHz = clampFilterCutoffHz (cutoffHzIn, float32 (processor.frequency));
+                    let q = clampFilterQ (resonanceIn);
+
+                    updateCoefficients (mode, cutoffHz, q);
+
+                    let driven = float32<2> (
+                        globalFilterSaturate (in[0], driveIn),
+                        globalFilterSaturate (in[1], driveIn)
+                    );
+
+                    out <- float32<2> (
+                        filters[0].process (driven[0]),
+                        filters[1].process (driven[1])
+                    );
+                }
+
+                advance();
+            }
+        }
+    }
+}

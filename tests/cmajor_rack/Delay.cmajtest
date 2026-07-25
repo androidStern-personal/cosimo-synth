@@ -1,0 +1,1325 @@
+// Behavioural contract for the Delay rack module (wt::DelayBus, cmajor/Delay.cmajor).
+//
+//     cmaj test --singleThread --sessionID=1 tests/cmajor_rack
+//
+// `## testProcessor()` renders exactly 100 frames in ONE block and scans the FIRST
+// output endpoint: a value < 0 stops the scan, > 0 counts a success, == 0 a failure.
+// Every section below therefore hand-drives wt::DelayBus as a composed child node --
+// `child.in <- signal; child.advance(); read child.out` -- which is exactly how
+// wt::EffectsRack drives it. That lets one 100-frame test render the hundreds of
+// thousands of delay frames a two second delay line needs and still report one
+// boolean per frame.
+//
+// processor.maxFrequency is pinned to 48000 so each resident line costs 0.77 MB
+// instead of the 2.93 MB the shipping 192 kHz build allocates. Buffer SIZE is a
+// memory-budget question; nothing asserted here depends on it.
+//
+// cmajor/Delay.cmajor reuses wt::catmullRom, which lives in
+// cmajor/FixedFrameOscillator.cmajor, which in turn needs cmajor/Mseg.cmajor.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/Delay.cmajor")
+
+
+//==============================================================================
+// 1. HARD BYPASS AND THE ZERO-LATENCY DRY PATH (ADR-005, ADR-008).
+//
+// At mix 0 the module must pass its input BIT-EXACTLY, asserted with `!=` on
+// float32 and no tolerance whatsoever, while a 0.95 feedback loop is running hot
+// underneath. That single assertion is what makes hard audible bypass honest AND
+// what proves there is no lookahead: a module that buffered its dry path could not
+// return the input unchanged on the same frame.
+//
+// NOTE, and it is load-bearing for whoever writes wt::EffectsRack: a composed
+// child's `init:` annotations are INERT. A value endpoint driven by a parent
+// processor zero-initialises and stays at zero until the parent writes it, so every
+// parameter is written explicitly below exactly as forwardModuleParameters() must
+// write it every frame. The `unconfigured` node asserts what a rack that forgot to
+// forward Delay's parameters would actually get.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayBypassTest [[ main ]]
+{
+    output stream int32 out;
+
+    node bypassed = wt::DelayBus;
+    node unconfigured = wt::DelayBus;
+    node halfWet = wt::DelayBus;
+    node fullyWet = wt::DelayBus;
+
+    let settleFrames = 8192;
+    let measureFrames = 8192;
+
+    float32 toneAt (int32 frame)
+    {
+        return 0.9f * float32 (std::intrinsics::sin (float32 (frame) * 0.05f));
+    }
+
+    float32<2> renderBypassed (int32 frame)
+    {
+        bypassed.in <- float32<2> (toneAt (frame), toneAt (frame + 137));
+        bypassed.advance();
+        return bypassed.out;
+    }
+
+    float32<2> renderUnconfigured (int32 frame)
+    {
+        unconfigured.in <- float32<2> (toneAt (frame), toneAt (frame + 137));
+        unconfigured.advance();
+        return unconfigured.out;
+    }
+
+    float32<2> renderHalfWet (float32 sample)
+    {
+        halfWet.in <- float32<2> (sample, sample);
+        halfWet.advance();
+        return halfWet.out;
+    }
+
+    float32<2> renderFullyWet (float32 sample)
+    {
+        fullyWet.in <- float32<2> (sample, sample);
+        fullyWet.advance();
+        return fullyWet.out;
+    }
+
+    void main()
+    {
+        // Mix explicitly dry; everything else driven as hard as the ranges allow, so
+        // the bypass has something violent to hide.
+        bypassed.mixIn <- wt::delayMixMin;
+        bypassed.feedbackIn <- wt::delayFeedbackMax;
+        bypassed.filterHzIn <- wt::delayFilterMaxHz;
+        bypassed.timeMsIn <- wt::delayTimeInitMs;
+        bypassed.timeModeIn <- float32 (wt::delayTimeModeFree);
+
+        halfWet.mixIn <- 0.5f;
+        halfWet.filterHzIn <- wt::delayFilterMaxHz;
+        halfWet.timeMsIn <- wt::delayTimeInitMs;
+
+        fullyWet.mixIn <- wt::delayMixMax;
+        fullyWet.filterHzIn <- wt::delayFilterMaxHz;
+        fullyWet.timeMsIn <- wt::delayTimeInitMs;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            renderBypassed (frame);
+            renderUnconfigured (frame);
+        }
+
+        bool leftIsExact = true;
+        bool rightIsExact = true;
+        bool unconfiguredIsExact = true;
+
+        for (int32 frame = settleFrames; frame < settleFrames + measureFrames; ++frame)
+        {
+            let rendered = renderBypassed (frame);
+            let untouched = renderUnconfigured (frame);
+
+            if (rendered[0] != toneAt (frame))
+                leftIsExact = false;
+
+            if (rendered[1] != toneAt (frame + 137))
+                rightIsExact = false;
+
+            if (untouched[0] != toneAt (frame) || untouched[1] != toneAt (frame + 137))
+                unconfiguredIsExact = false;
+        }
+
+        // 1. Mix 0 is a bit-exact left passthrough over 8192 frames.
+        out <- leftIsExact ? 1 : 0;
+        advance();
+
+        // 2. ...and a bit-exact right passthrough.
+        out <- rightIsExact ? 1 : 0;
+        advance();
+
+        // 3. A DelayBus nobody configured is inert rather than noisy: the zero state
+        //    of every endpoint lands on mix 0, which is a bit-exact passthrough.
+        out <- unconfiguredIsExact ? 1 : 0;
+        advance();
+
+        // 4. ZERO LATENCY: a unit impulse reaches the output on the SAME frame it
+        //    enters, at the equal-power half-mix gain cos(pi/4).
+        let halfWetFirst = renderHalfWet (1.0f)[0];
+        out <- (halfWetFirst > 0.7f && halfWetFirst < 0.71f) ? 1 : 0;
+        advance();
+
+        // 5. At full wet the dry path is gone, so the same impulse is silent on the
+        //    frame it arrives -- the wet signal is genuinely delayed, not blended.
+        let fullyWetFirst = std::intrinsics::abs (renderFullyWet (1.0f)[0]);
+        out <- (fullyWetFirst < 0.000001f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 2. THE OUTPUT LEVEL BUDGET.
+//
+// "stays finite and bounded below 8.0" is not an acceptance criterion -- +18 dBFS
+// is a pass under it. The module bounds its feedback loop at wt::delayLoopCeiling,
+// so the assertions here are a real level budget: a full-scale input at maximum
+// feedback cannot hand the rest of the rack more than that ceiling plus the
+// interpolator's overshoot, and at the shipped feedback default a -6 dBFS input
+// stays under 0 dBFS.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayLevelBudgetTest [[ main ]]
+{
+    output stream int32 out;
+
+    node hot = wt::DelayBus;
+    node nominal = wt::DelayBus;
+    node offset = wt::DelayBus;
+
+    let measureFrames = 8192;
+    let interpolatorOvershoot = 1.25f;
+    let nominalBudget = 1.0f;
+    let settledDirectBudget = 0.25f;
+
+    float32 toneAt (int32 frame, float32 amplitude)
+    {
+        return amplitude * float32 (std::intrinsics::sin (float32 (frame) * 0.05f));
+    }
+
+    float32<2> renderOffset()
+    {
+        offset.in <- float32<2> (0.5f, 0.5f);
+        offset.advance();
+        return offset.out;
+    }
+
+    float32<2> renderHot (int32 frame)
+    {
+        hot.in <- float32<2> (toneAt (frame, 0.9f), toneAt (frame, 0.9f));
+        hot.advance();
+        return hot.out;
+    }
+
+    float32<2> renderNominal (int32 frame)
+    {
+        nominal.in <- float32<2> (toneAt (frame, 0.5f), toneAt (frame, 0.5f));
+        nominal.advance();
+        return nominal.out;
+    }
+
+    void main()
+    {
+        hot.mixIn <- wt::delayMixMax;
+        hot.feedbackIn <- wt::delayFeedbackMax;
+        hot.filterHzIn <- wt::delayFilterMaxHz;
+        hot.timeMsIn <- 40.0f;
+
+        // The shipped feedback and tone defaults, written explicitly because a
+        // composed child's `init:` annotations never reach it, at full wet and at a
+        // 40 ms time so the loop reaches steady state inside the measured window.
+        nominal.mixIn <- wt::delayMixMax;
+        nominal.feedbackIn <- wt::delayFeedbackInit;
+        nominal.filterHzIn <- wt::delayFilterInitHz;
+        nominal.timeMsIn <- 40.0f;
+        nominal.timeModeIn <- float32 (wt::delayTimeModeFree);
+
+        bool allFinite = true;
+        var hotPeak = 0.0f;
+        var nominalPeak = 0.0f;
+        var wetDivergence = 0.0f;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let hotSample = renderHot (frame)[0];
+            let nominalSample = renderNominal (frame)[0];
+
+            if (hotSample != hotSample)
+                allFinite = false;
+
+            hotPeak = std::intrinsics::max (hotPeak, std::intrinsics::abs (hotSample));
+            nominalPeak = std::intrinsics::max (nominalPeak, std::intrinsics::abs (nominalSample));
+            wetDivergence = std::intrinsics::max (
+                wetDivergence,
+                std::intrinsics::abs (nominalSample - toneAt (frame, 0.5f))
+            );
+        }
+
+        // 1. Nothing goes non-finite at maximum feedback.
+        out <- allFinite ? 1 : 0;
+        advance();
+
+        // 2. The loop ceiling actually bounds the output.
+        out <- (hotPeak < wt::delayLoopCeiling * interpolatorOvershoot) ? 1 : 0;
+        advance();
+
+        // 3. The wet path is a delay and not a wire: at full wet the output departs
+        //    from the input it was fed.
+        out <- (hotPeak > 0.01f && wetDivergence > 0.01f) ? 1 : 0;
+        advance();
+
+        // 4. At the shipped feedback default a -6 dBFS input stays under 0 dBFS.
+        out <- (nominalPeak > 0.01f && nominalPeak < nominalBudget) ? 1 : 0;
+        advance();
+
+        // A sustained DC offset is the pathological case for a feedback loop whose
+        // only in-loop filter is a low-pass: a one-pole low-pass has unity gain at
+        // DC, so at 0.95 feedback the loop would integrate the offset until the
+        // saturator was the only thing holding it, and park there. The in-loop DC
+        // blocker is what prevents that, and this is the assertion that pins it.
+        offset.mixIn <- wt::delayMixMax;
+        offset.feedbackIn <- wt::delayFeedbackMax;
+        offset.filterHzIn <- wt::delayFilterMaxHz;
+        offset.timeMsIn <- 40.0f;
+
+        for (int32 frame = 0; frame < 44100; ++frame)
+            renderOffset();
+
+        var settledDirectPeak = 0.0f;
+
+        for (int32 frame = 0; frame < 88200; ++frame)
+            settledDirectPeak = std::intrinsics::max (settledDirectPeak, std::intrinsics::abs (renderOffset()[0]));
+
+        // 5. The loop rejects DC instead of parking at the saturator's ceiling.
+        out <- (settledDirectPeak < settledDirectBudget) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 3. FREE TIMING IS CORRECT.
+//
+// An impulse fired into a settled 250 ms line must come back at 250 ms and at
+// nothing earlier. This is the assertion that catches an off-by-one in the ring
+// buffer, a glide that never converged, and a ms-to-samples conversion error.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayFreeTimingTest [[ main ]]
+{
+    output stream int32 out;
+
+    node timing = wt::DelayBus;
+
+    let requestedDelayMs = 250.0f;
+    let glideSettleFrames = 44100;
+    // The read happens at writeIndex minus an integral sample count and the loop
+    // filter peaks on its first sample, so the repeat lands on EXACTLY the delay
+    // frame. Nothing here needs a tolerance, and a tolerance would only hide an
+    // off-by-one in the ring buffer.
+    let toleranceFrames = 0;
+
+    float32<2> render (float32 sample)
+    {
+        timing.in <- float32<2> (sample, sample);
+        timing.advance();
+        return timing.out;
+    }
+
+    void main()
+    {
+        timing.mixIn <- wt::delayMixMax;
+        timing.feedbackIn <- 0.0f;
+        timing.filterHzIn <- wt::delayFilterMaxHz;
+        timing.timeMsIn <- requestedDelayMs;
+
+        // Let the 40 ms time glide converge on 250 ms before the impulse is fired,
+        // so what is measured is the delay line and not the glide.
+        for (int32 frame = 0; frame < glideSettleFrames; ++frame)
+            render (0.0f);
+
+        let expectedFrame = int32 (requestedDelayMs * 0.001f * float32 (processor.frequency));
+        let scanFrames = expectedFrame * 2;
+
+        render (1.0f);
+
+        var peakValue = 0.0f;
+        var peakFrame = 0;
+        var earlyPeak = 0.0f;
+
+        for (int32 frame = 1; frame < scanFrames; ++frame)
+        {
+            let magnitude = std::intrinsics::abs (render (0.0f)[0]);
+
+            if (magnitude > peakValue)
+            {
+                peakValue = magnitude;
+                peakFrame = frame;
+            }
+
+            if (frame < expectedFrame - toleranceFrames)
+                earlyPeak = std::intrinsics::max (earlyPeak, magnitude);
+        }
+
+        // 1. The repeat is audible.
+        out <- (peakValue > 0.1f) ? 1 : 0;
+        advance();
+
+        // 2. It lands at 250 ms.
+        out <- (std::intrinsics::abs (peakFrame - expectedFrame) <= toleranceFrames) ? 1 : 0;
+        advance();
+
+        // 3. And nothing arrives before it.
+        out <- (earlyPeak < 0.001f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 4. FEEDBACK DECAYS, AND ITS SIGN IS HONEST.
+//
+// Successive repeats must fall monotonically and reach silence, and a negative
+// feedback value must actually invert the polarity of every other repeat rather
+// than being quietly rectified into a magnitude.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayFeedbackTest [[ main ]]
+{
+    output stream int32 out;
+
+    node decaying = wt::DelayBus;
+    node inverted = wt::DelayBus;
+
+    let repeatDelayMs = 20.0f;
+    let repeatCount = 20;
+    let windowFrames = 64;
+    let silenceThreshold = 0.001f;
+
+    float32<2> renderDecaying (float32 sample)
+    {
+        decaying.in <- float32<2> (sample, sample);
+        decaying.advance();
+        return decaying.out;
+    }
+
+    float32<2> renderInverted (float32 sample)
+    {
+        inverted.in <- float32<2> (sample, sample);
+        inverted.advance();
+        return inverted.out;
+    }
+
+    void main()
+    {
+        decaying.mixIn <- wt::delayMixMax;
+        decaying.feedbackIn <- 0.5f;
+        decaying.filterHzIn <- wt::delayFilterMaxHz;
+        decaying.timeMsIn <- repeatDelayMs;
+
+        inverted.mixIn <- wt::delayMixMax;
+        inverted.feedbackIn <- -0.5f;
+        inverted.filterHzIn <- wt::delayFilterMaxHz;
+        inverted.timeMsIn <- repeatDelayMs;
+
+        for (int32 frame = 0; frame < 44100; ++frame)
+        {
+            renderDecaying (0.0f);
+            renderInverted (0.0f);
+        }
+
+        let repeatFrames = int32 (repeatDelayMs * 0.001f * float32 (processor.frequency));
+
+        renderDecaying (1.0f);
+        renderInverted (1.0f);
+
+        bool repeatsFallMonotonically = true;
+        var previousRepeatPeak = 1.0f;
+        var lastRepeatPeak = 0.0f;
+        var firstDecayingSigned = 0.0f;
+        var secondDecayingSigned = 0.0f;
+        var firstInvertedSigned = 0.0f;
+        var secondInvertedSigned = 0.0f;
+
+        // One running frame counter across every repeat: each frame must be
+        // rendered exactly once or the delay lines advance further than the frame
+        // numbers claim and every window lands in the wrong place.
+        var frame = 1;
+
+        for (int32 repeat = 1; repeat <= repeatCount; ++repeat)
+        {
+            let repeatCentre = repeat * repeatFrames;
+            let framesToRender = (repeatCentre + windowFrames) - frame + 1;
+            var repeatPeak = 0.0f;
+            var decayingSigned = 0.0f;
+            var invertedSigned = 0.0f;
+            var invertedPeak = 0.0f;
+
+            for (int32 step = 0; step < framesToRender; ++step)
+            {
+                let decayingSample = renderDecaying (0.0f)[0];
+                let invertedSample = renderInverted (0.0f)[0];
+
+                if (frame >= repeatCentre - windowFrames)
+                {
+                    if (std::intrinsics::abs (decayingSample) > repeatPeak)
+                    {
+                        repeatPeak = std::intrinsics::abs (decayingSample);
+                        decayingSigned = decayingSample;
+                    }
+
+                    if (std::intrinsics::abs (invertedSample) > invertedPeak)
+                    {
+                        invertedPeak = std::intrinsics::abs (invertedSample);
+                        invertedSigned = invertedSample;
+                    }
+                }
+
+                frame += 1;
+            }
+
+            if (repeatPeak >= previousRepeatPeak)
+                repeatsFallMonotonically = false;
+
+            previousRepeatPeak = repeatPeak;
+            lastRepeatPeak = repeatPeak;
+
+            if (repeat == 1)
+            {
+                firstDecayingSigned = decayingSigned;
+                firstInvertedSigned = invertedSigned;
+            }
+
+            if (repeat == 2)
+            {
+                secondDecayingSigned = decayingSigned;
+                secondInvertedSigned = invertedSigned;
+            }
+        }
+
+        // 1. Every repeat is quieter than the one before it.
+        out <- repeatsFallMonotonically ? 1 : 0;
+        advance();
+
+        // 2. Twenty repeats at 0.5 feedback reach below -60 dBFS.
+        out <- (lastRepeatPeak < silenceThreshold) ? 1 : 0;
+        advance();
+
+        // 3. Positive feedback keeps every repeat in phase.
+        out <- (firstDecayingSigned > 0.0f && secondDecayingSigned > 0.0f) ? 1 : 0;
+        advance();
+
+        // 4. Negative feedback inverts every other repeat.
+        out <- (firstInvertedSigned > 0.0f && secondInvertedSigned < 0.0f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 5. THE LOOP FILTER DARKENS SUCCESSIVE REPEATS.
+//
+// The filter sits INSIDE the feedback loop, so repeat two has been through it
+// twice. Brightness is measured as first-difference RMS over total RMS in each
+// repeat window, which is unit-free and therefore immune to the repeats simply
+// getting quieter.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayLoopToneTest [[ main ]]
+{
+    output stream int32 out;
+
+    node darkening = wt::DelayBus;
+    node retuned = wt::DelayBus;
+
+    let repeatDelayMs = 40.0f;
+    let windowFrames = 400;
+
+    bool retuneTracked = true;
+
+    float32<2> render (float32 sample)
+    {
+        darkening.in <- float32<2> (sample, sample);
+        darkening.advance();
+
+        retuned.in <- float32<2> (sample, sample);
+        retuned.advance();
+
+        let rendered = darkening.out;
+
+        if (rendered[0] != retuned.out[0])
+            retuneTracked = false;
+
+        return rendered;
+    }
+
+    void main()
+    {
+        darkening.mixIn <- wt::delayMixMax;
+        darkening.feedbackIn <- 0.5f;
+        darkening.filterHzIn <- 1000.0f;
+        darkening.timeMsIn <- repeatDelayMs;
+
+        // Same module, same tone -- but it arrives at 1000 Hz by being RETUNED at
+        // runtime rather than by being configured there. Silence leaves every filter
+        // state at exactly zero, so once the coefficient has caught up the two must
+        // agree sample for sample. A coefficient that is computed once and never
+        // refreshed passes every other assertion in this file and fails this one.
+        retuned.mixIn <- wt::delayMixMax;
+        retuned.feedbackIn <- 0.5f;
+        retuned.filterHzIn <- wt::delayFilterMaxHz;
+        retuned.timeMsIn <- repeatDelayMs;
+
+        for (int32 frame = 0; frame < 22050; ++frame)
+            render (0.0f);
+
+        retuned.filterHzIn <- 1000.0f;
+
+        for (int32 frame = 0; frame < 22050; ++frame)
+            render (0.0f);
+
+        let repeatFrames = int32 (repeatDelayMs * 0.001f * float32 (processor.frequency));
+
+        render (1.0f);
+
+        var firstBrightness = 0.0f;
+        var secondBrightness = 0.0f;
+        var previousSample = 0.0f;
+        var frame = 1;
+
+        for (int32 repeat = 1; repeat <= 2; ++repeat)
+        {
+            let repeatCentre = repeat * repeatFrames;
+            let framesToRender = (repeatCentre + windowFrames) - frame + 1;
+            var totalEnergy = 0.0f;
+            var differenceEnergy = 0.0f;
+
+            for (int32 step = 0; step < framesToRender; ++step)
+            {
+                let sample = render (0.0f)[0];
+
+                if (frame >= repeatCentre - windowFrames)
+                {
+                    let difference = sample - previousSample;
+                    totalEnergy += sample * sample;
+                    differenceEnergy += difference * difference;
+                }
+
+                previousSample = sample;
+                frame += 1;
+            }
+
+            let brightness = std::intrinsics::sqrt (
+                differenceEnergy / std::intrinsics::max (0.000000001f, totalEnergy)
+            );
+
+            if (repeat == 1)
+                firstBrightness = brightness;
+            else
+                secondBrightness = brightness;
+        }
+
+        // 1. Both windows carry signal.
+        out <- (firstBrightness > 0.0f && secondBrightness > 0.0f) ? 1 : 0;
+        advance();
+
+        // 2. The second repeat is measurably darker than the first.
+        out <- (secondBrightness < firstBrightness * 0.95f) ? 1 : 0;
+        advance();
+
+        // 3. The loop coefficient follows the parameter at runtime: retuning to
+        //    1000 Hz is indistinguishable from having started there.
+        out <- retuneTracked ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 6. A TIME CHANGE GLIDES, IT DOES NOT CLICK.
+//
+// Delay time is glided over wt::delayTimeGlideMs towards its target, so halving it
+// pitch-bends like tape. A hard read-pointer jump between two points of a 55 Hz
+// tone three quarters of a cycle apart would step by more than half a unit; the
+// glide keeps every step inside the swept tone's own slope.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayTimeGlideTest [[ main ]]
+{
+    output stream int32 out;
+
+    node glide = wt::DelayBus;
+
+    let toneHz = 55.0f;
+    let toneAmplitude = 0.4f;
+    let discontinuityLimit = 0.05f;
+
+    float32 toneAt (int32 frame)
+    {
+        let phase = 2.0f * float32 (pi) * toneHz * float32 (frame) / float32 (processor.frequency);
+        return toneAmplitude * float32 (std::intrinsics::sin (phase));
+    }
+
+    float32<2> render (int32 frame)
+    {
+        glide.in <- float32<2> (toneAt (frame), toneAt (frame));
+        glide.advance();
+        return glide.out;
+    }
+
+    void main()
+    {
+        glide.mixIn <- wt::delayMixMax;
+        glide.feedbackIn <- 0.0f;
+        glide.filterHzIn <- wt::delayFilterMaxHz;
+        glide.timeMsIn <- 500.0f;
+
+        var frame = 0;
+        var previousSample = 0.0f;
+
+        // previousSample must be the LAST settled sample, captured before the
+        // parameter moves. Taking it after the change would discard the one frame
+        // boundary a hard read-pointer jump actually lands on -- which is exactly
+        // the frame this section exists to inspect.
+        for (int32 settle = 0; settle < 88200; ++settle)
+        {
+            previousSample = render (frame)[0];
+            frame += 1;
+        }
+
+        glide.timeMsIn <- 250.0f;
+
+        var maximumStep = 0.0f;
+        var wetDivergence = 0.0f;
+
+        for (int32 measure = 0; measure < 44100; ++measure)
+        {
+            let sample = render (frame)[0];
+            maximumStep = std::intrinsics::max (maximumStep, std::intrinsics::abs (sample - previousSample));
+            wetDivergence = std::intrinsics::max (
+                wetDivergence,
+                std::intrinsics::abs (sample - toneAt (frame))
+            );
+            previousSample = sample;
+            frame += 1;
+        }
+
+        // 1. A delayed tone is genuinely present, so the step bound means something:
+        //    a passthrough would satisfy the bound trivially.
+        out <- (wetDivergence > discontinuityLimit) ? 1 : 0;
+        advance();
+
+        // 2. Halving the delay time produces no discontinuity.
+        out <- (maximumStep < discontinuityLimit) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 7. THE FREE / SYNC COMPOUND TIMING CONTROL.
+//
+// Sync resolves delay time from host tempo and a rhythmic division inside the DSP,
+// so a tempo change tracks sample-accurately instead of waiting for the adapter to
+// recompute a millisecond value. In Sync the Free millisecond value is switched out
+// entirely -- that is the semantics of the mode switch, and it is pinned here so it
+// can never become an accident.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelaySyncTimingTest [[ main ]]
+{
+    output stream int32 out;
+
+    node syncFast = wt::DelayBus;
+    node syncSlow = wt::DelayBus;
+    node syncIgnoresFreeTime = wt::DelayBus;
+
+    let glideSettleFrames = 88200;
+    // The read happens at writeIndex minus an integral sample count and the loop
+    // filter peaks on its first sample, so the repeat lands on EXACTLY the delay
+    // frame. Nothing here needs a tolerance, and a tolerance would only hide an
+    // off-by-one in the ring buffer.
+    let toleranceFrames = 0;
+
+    float32<2> renderFast (float32 sample)
+    {
+        syncFast.in <- float32<2> (sample, sample);
+        syncFast.advance();
+        return syncFast.out;
+    }
+
+    float32<2> renderSlow (float32 sample)
+    {
+        syncSlow.in <- float32<2> (sample, sample);
+        syncSlow.advance();
+        return syncSlow.out;
+    }
+
+    float32<2> renderIgnorer (float32 sample)
+    {
+        syncIgnoresFreeTime.in <- float32<2> (sample, sample);
+        syncIgnoresFreeTime.advance();
+        return syncIgnoresFreeTime.out;
+    }
+
+    void main()
+    {
+        // 1/8 at 120 bpm is 250 ms; the same division at 60 bpm is 500 ms.
+        syncFast.mixIn <- wt::delayMixMax;
+        syncFast.feedbackIn <- 0.0f;
+        syncFast.filterHzIn <- wt::delayFilterMaxHz;
+        syncFast.timeModeIn <- float32 (wt::delayTimeModeSync);
+        syncFast.divisionIn <- float32 (wt::delayDivisionEighth);
+        syncFast.tempoBpmIn <- 120.0f;
+
+        syncSlow.mixIn <- wt::delayMixMax;
+        syncSlow.feedbackIn <- 0.0f;
+        syncSlow.filterHzIn <- wt::delayFilterMaxHz;
+        syncSlow.timeModeIn <- float32 (wt::delayTimeModeSync);
+        syncSlow.divisionIn <- float32 (wt::delayDivisionEighth);
+        syncSlow.tempoBpmIn <- 60.0f;
+
+        // Same sync settings as syncFast, but a wildly different Free time. In Sync
+        // the Free value must be inert, so these two must agree sample for sample.
+        syncIgnoresFreeTime.mixIn <- wt::delayMixMax;
+        syncIgnoresFreeTime.feedbackIn <- 0.0f;
+        syncIgnoresFreeTime.filterHzIn <- wt::delayFilterMaxHz;
+        syncIgnoresFreeTime.timeModeIn <- float32 (wt::delayTimeModeSync);
+        syncIgnoresFreeTime.divisionIn <- float32 (wt::delayDivisionEighth);
+        syncIgnoresFreeTime.tempoBpmIn <- 120.0f;
+        syncIgnoresFreeTime.timeMsIn <- wt::delayMaxMs;
+
+        for (int32 frame = 0; frame < glideSettleFrames; ++frame)
+        {
+            renderFast (0.0f);
+            renderSlow (0.0f);
+            renderIgnorer (0.0f);
+        }
+
+        bool freeTimeIsInert = true;
+
+        let fastFirst = renderFast (1.0f)[0];
+        renderSlow (1.0f);
+
+        if (renderIgnorer (1.0f)[0] != fastFirst)
+            freeTimeIsInert = false;
+
+        let fastExpected = int32 (0.250f * float32 (processor.frequency));
+        let slowExpected = int32 (0.500f * float32 (processor.frequency));
+
+        var fastPeakValue = 0.0f;
+        var fastPeakFrame = 0;
+        var slowPeakValue = 0.0f;
+        var slowPeakFrame = 0;
+
+        for (int32 frame = 1; frame < slowExpected * 2; ++frame)
+        {
+            let fastSample = renderFast (0.0f)[0];
+            let slowSample = renderSlow (0.0f)[0];
+            let ignorerSample = renderIgnorer (0.0f)[0];
+
+            if (fastSample != ignorerSample)
+                freeTimeIsInert = false;
+
+            if (std::intrinsics::abs (fastSample) > fastPeakValue)
+            {
+                fastPeakValue = std::intrinsics::abs (fastSample);
+                fastPeakFrame = frame;
+            }
+
+            if (std::intrinsics::abs (slowSample) > slowPeakValue)
+            {
+                slowPeakValue = std::intrinsics::abs (slowSample);
+                slowPeakFrame = frame;
+            }
+        }
+
+        // 1. 1/8 at 120 bpm is 250 ms.
+        out <- (fastPeakValue > 0.1f
+                && std::intrinsics::abs (fastPeakFrame - fastExpected) <= toleranceFrames) ? 1 : 0;
+        advance();
+
+        // 2. The same division tracks tempo: at 60 bpm it is 500 ms.
+        out <- (slowPeakValue > 0.1f
+                && std::intrinsics::abs (slowPeakFrame - slowExpected) <= toleranceFrames) ? 1 : 0;
+        advance();
+
+        // 3. In Sync the Free millisecond value is switched out completely.
+        out <- freeTimeIsInert ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 8. A SYNCED TIME LONGER THAN THE LINE IS CLAMPED TO THE LINE.
+//
+// 1/1 at 20 bpm asks for 12 seconds. The line is wt::delayMaxMs long and no
+// bounded implementation can honour that, so the module clamps to the line length
+// rather than reading off the end of its buffer. The clamp is a stated behaviour,
+// not a silent one, and it is asserted here.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelaySyncClampTest [[ main ]]
+{
+    output stream int32 out;
+
+    node clamped = wt::DelayBus;
+
+    // The read happens at writeIndex minus an integral sample count and the loop
+    // filter peaks on its first sample, so the repeat lands on EXACTLY the delay
+    // frame. Nothing here needs a tolerance, and a tolerance would only hide an
+    // off-by-one in the ring buffer.
+    let toleranceFrames = 0;
+
+    float32<2> render (float32 sample)
+    {
+        clamped.in <- float32<2> (sample, sample);
+        clamped.advance();
+        return clamped.out;
+    }
+
+    void main()
+    {
+        clamped.mixIn <- wt::delayMixMax;
+        clamped.feedbackIn <- 0.0f;
+        clamped.filterHzIn <- wt::delayFilterMaxHz;
+        clamped.timeModeIn <- float32 (wt::delayTimeModeSync);
+        clamped.divisionIn <- float32 (wt::delayDivisionWhole);
+        clamped.tempoBpmIn <- wt::delayTempoMinBpm;
+
+        let expectedFrame = int32 (wt::delayMaxMs * 0.001f * float32 (processor.frequency));
+
+        for (int32 frame = 0; frame < 44100; ++frame)
+            render (0.0f);
+
+        render (1.0f);
+
+        var peakValue = 0.0f;
+        var peakFrame = 0;
+        bool allFinite = true;
+
+        for (int32 frame = 1; frame < expectedFrame + 44100; ++frame)
+        {
+            let sample = render (0.0f)[0];
+
+            if (sample != sample)
+                allFinite = false;
+
+            if (std::intrinsics::abs (sample) > peakValue)
+            {
+                peakValue = std::intrinsics::abs (sample);
+                peakFrame = frame;
+            }
+        }
+
+        // 1. Nothing went non-finite reading a clamped delay.
+        out <- allFinite ? 1 : 0;
+        advance();
+
+        // 2. The repeat arrives at the line length, not at the requested 12 seconds.
+        out <- (peakValue > 0.1f
+                && std::intrinsics::abs (peakFrame - expectedFrame) <= toleranceFrames) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 9. STEREO INDEPENDENCE, AND TAILS THAT SURVIVE.
+//
+// Two independent lines: signal in one channel never leaks into the other. And the
+// delay line is never cleared by a parameter change, because a rack reorder commits
+// as a parameter-level change while the tail is still sounding (ADR-003 preserves
+// every instance's state across a reorder).
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayStateTest [[ main ]]
+{
+    output stream int32 out;
+
+    node stereo = wt::DelayBus;
+    node tails = wt::DelayBus;
+
+    float32<2> renderStereo (float32 left)
+    {
+        stereo.in <- float32<2> (left, 0.0f);
+        stereo.advance();
+        return stereo.out;
+    }
+
+    float32<2> renderTails (float32 sample)
+    {
+        tails.in <- float32<2> (sample, sample);
+        tails.advance();
+        return tails.out;
+    }
+
+    void main()
+    {
+        stereo.mixIn <- wt::delayMixMax;
+        stereo.feedbackIn <- 0.8f;
+        stereo.filterHzIn <- wt::delayFilterMaxHz;
+        stereo.timeMsIn <- 30.0f;
+
+        tails.mixIn <- wt::delayMixMax;
+        tails.feedbackIn <- 0.7f;
+        tails.filterHzIn <- wt::delayFilterMaxHz;
+        tails.timeMsIn <- 100.0f;
+        tails.timeModeIn <- float32 (wt::delayTimeModeFree);
+
+        for (int32 frame = 0; frame < 44100; ++frame)
+        {
+            renderStereo (0.0f);
+            renderTails (0.0f);
+        }
+
+        renderStereo (1.0f);
+        renderTails (1.0f);
+
+        var leftPeak = 0.0f;
+        var rightLeak = 0.0f;
+
+        for (int32 frame = 0; frame < 8192; ++frame)
+        {
+            let rendered = renderStereo (0.0f);
+            leftPeak = std::intrinsics::max (leftPeak, std::intrinsics::abs (rendered[0]));
+            rightLeak = std::intrinsics::max (rightLeak, std::intrinsics::abs (rendered[1]));
+        }
+
+        // 1. The left line repeats.
+        out <- (leftPeak > 0.1f) ? 1 : 0;
+        advance();
+
+        // 2. The right line is untouched: two genuinely independent lines.
+        out <- (rightLeak == 0.0f) ? 1 : 0;
+        advance();
+
+        // The impulse is in flight but its first repeat has not arrived yet. Change
+        // every non-timing parameter the module owns while it is still airborne.
+        for (int32 frame = 0; frame < 2205; ++frame)
+            renderTails (0.0f);
+
+        tails.feedbackIn <- -0.6f;
+        tails.filterHzIn <- 3000.0f;
+        tails.mixIn <- 0.8f;
+
+        var survivedTonePeak = 0.0f;
+
+        for (int32 frame = 0; frame < 4410; ++frame)
+            survivedTonePeak = std::intrinsics::max (survivedTonePeak, std::intrinsics::abs (renderTails (0.0f)[0]));
+
+        // 3. The 100 ms repeat still arrived: no parameter write cleared the line.
+        out <- (survivedTonePeak > 0.01f) ? 1 : 0;
+        advance();
+
+        // Now switch the compound timing control over to Sync, at 1/16T of 90 bpm
+        // which is 111 ms -- close enough to the running 100 ms that the glide is a
+        // few hundred samples and the measurement stays deterministic.
+        tails.timeModeIn <- float32 (wt::delayTimeModeSync);
+        tails.divisionIn <- float32 (wt::delayDivisionSixteenthTriplet);
+        tails.tempoBpmIn <- 90.0f;
+
+        var survivedTimingPeak = 0.0f;
+
+        for (int32 frame = 0; frame < 22050; ++frame)
+            survivedTimingPeak = std::intrinsics::max (survivedTimingPeak, std::intrinsics::abs (renderTails (0.0f)[0]));
+
+        // 4. Repeats keep coming across a Free-to-Sync switch, so the compound
+        //    control retimes the line without flushing it.
+        out <- (survivedTimingPeak > 0.01f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+//==============================================================================
+// 10. THE RHYTHMIC DIVISION TABLE.
+//
+// Pure maths, asserted as pure maths rather than inferred from audio.
+//
+// This wants to be a `## testFunction()` section and cannot be one: wt::DelayBus
+// sizes its line from processor.maxFrequency, and a processor that no main graph
+// instantiates never gets a frequency, so the delay line's `wrap<delayBufferSize>`
+// fails to resolve with "The size of a 'wrap' or 'clamp' type must be a constant".
+// testFunction synthesises its own FunctionTester main, which instantiates nothing.
+// The resident node below exists purely to give DelayBus a frequency to resolve
+// against; no assertion here touches it.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayDivisionTableTest [[ main ]]
+{
+    output stream int32 out;
+
+    node resolver = wt::DelayBus;
+
+    let beatsTolerance = 0.000001f;
+    let millisecondTolerance = 0.001f;
+
+    bool divisionsAreOrderedLongestFirst()
+    {
+        for (wrap<wt::delayDivisionCount> division)
+        {
+            let index = int32 (division);
+
+            if (index > 0 && wt::delayDivisionBeats (index) >= wt::delayDivisionBeats (index - 1))
+                return false;
+        }
+
+        return true;
+    }
+
+    bool straightDivisionsAreExact()
+    {
+        return wt::delayDivisionBeats (wt::delayDivisionWhole) == 4.0f
+            && wt::delayDivisionBeats (wt::delayDivisionHalf) == 2.0f
+            && wt::delayDivisionBeats (wt::delayDivisionQuarter) == 1.0f
+            && wt::delayDivisionBeats (wt::delayDivisionEighth) == 0.5f
+            && wt::delayDivisionBeats (wt::delayDivisionSixteenth) == 0.25f;
+    }
+
+    bool dottedDivisionsAreHalfAsLongAgain()
+    {
+        return wt::delayDivisionBeats (wt::delayDivisionHalfDotted) == 1.5f * wt::delayDivisionBeats (wt::delayDivisionHalf)
+            && wt::delayDivisionBeats (wt::delayDivisionQuarterDotted) == 1.5f * wt::delayDivisionBeats (wt::delayDivisionQuarter)
+            && wt::delayDivisionBeats (wt::delayDivisionEighthDotted) == 1.5f * wt::delayDivisionBeats (wt::delayDivisionEighth)
+            && wt::delayDivisionBeats (wt::delayDivisionSixteenthDotted) == 1.5f * wt::delayDivisionBeats (wt::delayDivisionSixteenth);
+    }
+
+    bool tripletDivisionsAreTwoThirds()
+    {
+        return std::intrinsics::abs (wt::delayDivisionBeats (wt::delayDivisionHalfTriplet)
+                                     - wt::delayDivisionBeats (wt::delayDivisionHalf) * 2.0f / 3.0f) < beatsTolerance
+            && std::intrinsics::abs (wt::delayDivisionBeats (wt::delayDivisionQuarterTriplet)
+                                     - wt::delayDivisionBeats (wt::delayDivisionQuarter) * 2.0f / 3.0f) < beatsTolerance
+            && std::intrinsics::abs (wt::delayDivisionBeats (wt::delayDivisionEighthTriplet)
+                                     - wt::delayDivisionBeats (wt::delayDivisionEighth) * 2.0f / 3.0f) < beatsTolerance
+            && std::intrinsics::abs (wt::delayDivisionBeats (wt::delayDivisionSixteenthTriplet)
+                                     - wt::delayDivisionBeats (wt::delayDivisionSixteenth) * 2.0f / 3.0f) < beatsTolerance;
+    }
+
+    bool tempoAndDivisionResolveToMilliseconds()
+    {
+        return std::intrinsics::abs (wt::delaySyncedMs (120.0f, wt::delayDivisionEighth) - 250.0f) < millisecondTolerance
+            && std::intrinsics::abs (wt::delaySyncedMs (60.0f, wt::delayDivisionEighth) - 500.0f) < millisecondTolerance
+            && std::intrinsics::abs (wt::delaySyncedMs (120.0f, wt::delayDivisionQuarter) - 500.0f) < millisecondTolerance;
+    }
+
+    bool syncedMillisecondsAreClampedToTheLine()
+    {
+        return wt::delaySyncedMs (wt::delayTempoMinBpm, wt::delayDivisionWhole) == wt::delayMaxMs
+            && wt::delaySyncedMs (wt::delayTempoMaxBpm, wt::delayDivisionSixteenthTriplet) >= wt::delayMinMs;
+    }
+
+    bool outOfRangeTempoIsClampedNotWrapped()
+    {
+        return wt::delaySyncedMs (0.0f, wt::delayDivisionEighth)
+                   == wt::delaySyncedMs (wt::delayTempoMinBpm, wt::delayDivisionEighth)
+            && wt::delaySyncedMs (100000.0f, wt::delayDivisionEighth)
+                   == wt::delaySyncedMs (wt::delayTempoMaxBpm, wt::delayDivisionEighth);
+    }
+
+    void main()
+    {
+        out <- divisionsAreOrderedLongestFirst() ? 1 : 0;
+        advance();
+
+        out <- straightDivisionsAreExact() ? 1 : 0;
+        advance();
+
+        out <- dottedDivisionsAreHalfAsLongAgain() ? 1 : 0;
+        advance();
+
+        out <- tripletDivisionsAreTwoThirds() ? 1 : 0;
+        advance();
+
+        out <- tempoAndDivisionResolveToMilliseconds() ? 1 : 0;
+        advance();
+
+        out <- syncedMillisecondsAreClampedToTheLine() ? 1 : 0;
+        advance();
+
+        out <- outOfRangeTempoIsClampedNotWrapped() ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+
+
+
+//==============================================================================
+// 11. OUT-OF-RANGE PARAMETER VALUES ARE CLAMPED, NOT OBEYED.
+//
+// Every continuous parameter here is a modulation destination (ADR-012) and the
+// rack adds the modulation offset to the base value before forwarding it, so values
+// outside the declared range are a state this module will really be handed. The
+// discriminating assertion is not "the output stayed bounded" -- a saturated
+// feedback loop stays bounded whatever nonsense the feedback coefficient is. It is
+// that an out-of-range value behaves BIT-IDENTICALLY to the value it clamps to.
+//
+// Two nodes, driven in lockstep through six phases: as long as their effective
+// parameters agree, their internal states stay identical forever, so one running
+// bit-comparison covers every phase.
+//
+// timeMsIn is deliberately held equal on both nodes. Its clamp is defence in depth
+// behind main()'s clamp of the delay time to the physical line length, so an
+// out-of-range millisecond value is not separately observable here; section 8 is
+// what pins the line-length clamp that does the real work.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor DelayClampTest [[ main ]]
+{
+    output stream int32 out;
+
+    node stressed = wt::DelayBus;
+    node reference = wt::DelayBus;
+
+    let probeDelayMs = 40.0f;
+    let boundedBudget = 2.5f;
+
+    bool identical = true;
+    bool allFinite = true;
+    float32 stressedPeak;
+
+    float32 toneAt (int32 frame)
+    {
+        return 0.9f * float32 (std::intrinsics::sin (float32 (frame) * 0.05f));
+    }
+
+    void comparePhase (int32 frames, int32 startFrame)
+    {
+        for (int32 step = 0; step < frames; ++step)
+        {
+            let sample = toneAt (startFrame + step);
+
+            stressed.in <- float32<2> (sample, sample);
+            stressed.advance();
+
+            reference.in <- float32<2> (sample, sample);
+            reference.advance();
+
+            let stressedOut = stressed.out;
+
+            if (stressedOut[0] != reference.out[0] || stressedOut[1] != reference.out[1])
+                identical = false;
+
+            if (stressedOut[0] != stressedOut[0])
+                allFinite = false;
+
+            stressedPeak = std::intrinsics::max (stressedPeak, std::intrinsics::abs (stressedOut[0]));
+        }
+    }
+
+    void main()
+    {
+        // Phase 1: every continuous value far above its declared maximum.
+        stressed.timeMsIn <- probeDelayMs;
+        stressed.timeModeIn <- float32 (wt::delayTimeModeFree);
+        stressed.mixIn <- 5.0f;
+        stressed.feedbackIn <- 50.0f;
+        stressed.filterHzIn <- 1000000.0f;
+
+        reference.timeMsIn <- probeDelayMs;
+        reference.timeModeIn <- float32 (wt::delayTimeModeFree);
+        reference.mixIn <- wt::delayMixMax;
+        reference.feedbackIn <- wt::delayFeedbackMax;
+        reference.filterHzIn <- wt::delayFilterMaxHz;
+
+        comparePhase (8192, 0);
+
+        // Phase 2: feedback and tone far below their declared minima.
+        stressed.feedbackIn <- -50.0f;
+        stressed.filterHzIn <- -1000000.0f;
+
+        reference.feedbackIn <- wt::delayFeedbackMin;
+        reference.filterHzIn <- wt::delayFilterMinHz;
+
+        comparePhase (8192, 8192);
+
+        // Phase 3: a negative mix must clamp to dry, not wrap round the equal-power
+        // quarter cycle into full wet with an inverted phase.
+        stressed.mixIn <- -3.0f;
+        reference.mixIn <- wt::delayMixMin;
+
+        comparePhase (8192, 16384);
+
+        // Phase 4: a timing mode, a division index and a tempo that name nothing,
+        // all far above range.
+        stressed.mixIn <- wt::delayMixMax;
+        stressed.feedbackIn <- 0.0f;
+        stressed.filterHzIn <- wt::delayFilterMaxHz;
+        stressed.timeModeIn <- 42.0f;
+        stressed.divisionIn <- 999.0f;
+        stressed.tempoBpmIn <- 1000000.0f;
+
+        reference.mixIn <- wt::delayMixMax;
+        reference.feedbackIn <- 0.0f;
+        reference.filterHzIn <- wt::delayFilterMaxHz;
+        reference.timeModeIn <- float32 (wt::delayTimeModeSync);
+        reference.divisionIn <- float32 (wt::delayDivisionSixteenthTriplet);
+        reference.tempoBpmIn <- wt::delayTempoMaxBpm;
+
+        comparePhase (44100, 24576);
+
+        // Phase 5: a division index and a tempo far below range, still in Sync.
+        stressed.divisionIn <- -999.0f;
+        stressed.tempoBpmIn <- -1000000.0f;
+
+        reference.divisionIn <- float32 (wt::delayDivisionWhole);
+        reference.tempoBpmIn <- wt::delayTempoMinBpm;
+
+        comparePhase (88200, 68676);
+
+        // Phase 6: a negative timing mode falls back to Free, not to a wrapped index.
+        stressed.timeModeIn <- -42.0f;
+        reference.timeModeIn <- float32 (wt::delayTimeModeFree);
+
+        comparePhase (8192, 156876);
+
+        // 1. Out-of-range values are indistinguishable from their clamped twins.
+        out <- identical ? 1 : 0;
+        advance();
+
+        // 2. Nothing went non-finite under any of it.
+        out <- allFinite ? 1 : 0;
+        advance();
+
+        // 3. The output stayed inside the module's stated bound...
+        out <- (stressedPeak < boundedBudget) ? 1 : 0;
+        advance();
+
+        // 4. ...and the wet path was actually running, so none of the above was
+        //    satisfied by the module having quietly gone silent.
+        out <- (stressedPeak > 0.01f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

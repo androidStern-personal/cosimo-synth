@@ -1,0 +1,14 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.rack-bench-dynamic",
+  "version": "0.0.1",
+  "name": "Rack Bench Dynamic",
+  "isInstrument": false,
+  "source": [
+    "../../../cmajor/Distortion.cmajor",
+    "../../../cmajor/Chorus.cmajor",
+    "../EffectsRackShape.cmajor",
+    "StaticRack.cmajor",
+    "DynamicRack.cmajor"
+  ]
+}

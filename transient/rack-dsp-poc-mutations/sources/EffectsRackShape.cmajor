@@ -1,0 +1,480 @@
+namespace wt
+{
+    // Proof of concept for ADR-001's "fixed resident processor shape advanced in a
+    // runtime-selected serial order". This file exists to prove the shape compiles
+    // and behaves, not to propose DSP: the six modules this repository does not yet
+    // contain are represented by deliberately trivial placeholders whose only job is
+    // to be stateful, order-sensitive and individually identifiable. Distortion and
+    // Chorus/Bloom are the real production processors.
+
+    let rackModuleCount = 8;
+
+    let rackModuleGlobalFilter = 0;
+    let rackModuleDistortion   = 1;
+    let rackModuleOtt          = 2;
+    let rackModuleChorus       = 3;
+    let rackModuleFlanger      = 4;
+    let rackModulePhaser       = 5;
+    let rackModuleDelay        = 6;
+    let rackModuleReverb       = 7;
+
+    let rackTransitionMs = 3.0f;
+
+    // Rack position -> effect instance id. Always a complete permutation (ADR-009).
+    struct RackOrderUpload
+    {
+        int32[rackModuleCount] moduleIds;
+    }
+
+    // Effect instance id -> enabled flag. Stored separately from order (ADR-009).
+    struct RackEnableUpload
+    {
+        int32[rackModuleCount] enabledFlags;
+    }
+
+    processor RackGlobalFilterPlaceholder
+    {
+        input stream float32<2> in;
+        input value float32 cutoffIn [[ init: 0.35f ]];
+        output stream float32<2> out;
+        output value int32 advanceCountOut;
+
+        float32<2> lowPassState;
+        int32 advanceCount;
+
+        void main()
+        {
+            loop
+            {
+                lowPassState += (in - lowPassState) * std::intrinsics::clamp (cutoffIn, 0.001f, 1.0f);
+                out <- lowPassState;
+                advanceCount += 1;
+                advanceCountOut <- advanceCount;
+                advance();
+            }
+        }
+    }
+
+    processor RackOttPlaceholder
+    {
+        input stream float32<2> in;
+        input value float32 amountIn [[ init: 0.5f ]];
+        output stream float32<2> out;
+        output value int32 advanceCountOut;
+
+        float32 envelope;
+        int32 advanceCount;
+
+        void main()
+        {
+            loop
+            {
+                let level = std::intrinsics::max (std::intrinsics::abs (in[0]), std::intrinsics::abs (in[1]));
+                envelope += (level - envelope) * 0.01f;
+                let makeUp = 1.0f + (amountIn * (1.0f - std::intrinsics::min (envelope, 1.0f)));
+                out <- in * makeUp;
+                advanceCount += 1;
+                advanceCountOut <- advanceCount;
+                advance();
+            }
+        }
+    }
+
+    processor RackFlangerPlaceholder
+    {
+        input stream float32<2> in;
+        input value float32 feedbackIn [[ init: 0.4f ]];
+        output stream float32<2> out;
+        output value int32 advanceCountOut;
+
+        let flangerBufferSize = 256;
+
+        float32<2>[flangerBufferSize] buffer;
+        wrap<flangerBufferSize> writeIndex;
+        wrap<flangerBufferSize> readIndex = 1;
+        int32 advanceCount;
+
+        void main()
+        {
+            loop
+            {
+                let delayed = buffer[readIndex];
+                buffer[writeIndex] = in + (delayed * std::intrinsics::clamp (feedbackIn, 0.0f, 0.9f));
+                writeIndex += 1;
+                readIndex += 1;
+                out <- in + delayed;
+                advanceCount += 1;
+                advanceCountOut <- advanceCount;
+                advance();
+            }
+        }
+    }
+
+    processor RackPhaserPlaceholder
+    {
+        input stream float32<2> in;
+        input value float32 spreadIn [[ init: 0.5f ]];
+        output stream float32<2> out;
+        output value int32 advanceCountOut;
+
+        float32<2> allPassStateA;
+        float32<2> allPassStateB;
+        int32 advanceCount;
+
+        void main()
+        {
+            loop
+            {
+                let coefficient = std::intrinsics::clamp (spreadIn, 0.0f, 0.95f);
+                let stageA = allPassStateA + ((in - allPassStateA) * coefficient);
+                allPassStateA = in - (stageA * coefficient);
+                let stageB = allPassStateB + ((stageA - allPassStateB) * coefficient);
+                allPassStateB = stageA - (stageB * coefficient);
+                out <- (in + stageB) * 0.5f;
+                advanceCount += 1;
+                advanceCountOut <- advanceCount;
+                advance();
+            }
+        }
+    }
+
+    processor RackDelayPlaceholder
+    {
+        input stream float32<2> in;
+        input value float32 feedbackIn [[ init: 0.35f ]];
+        output stream float32<2> out;
+        output value int32 advanceCountOut;
+
+        let delayBufferSize = 4096;
+
+        float32<2>[delayBufferSize] buffer;
+        wrap<delayBufferSize> writeIndex;
+        wrap<delayBufferSize> readIndex = 1;
+        int32 advanceCount;
+
+        void main()
+        {
+            loop
+            {
+                let delayed = buffer[readIndex];
+                buffer[writeIndex] = in + (delayed * std::intrinsics::clamp (feedbackIn, 0.0f, 0.9f));
+                writeIndex += 1;
+                readIndex += 1;
+                out <- in + (delayed * 0.5f);
+                advanceCount += 1;
+                advanceCountOut <- advanceCount;
+                advance();
+            }
+        }
+    }
+
+    processor RackReverbPlaceholder
+    {
+        input stream float32<2> in;
+        input value float32 sizeIn [[ init: 0.5f ]];
+        output stream float32<2> out;
+        output value int32 advanceCountOut;
+
+        let reverbBufferSize = 8192;
+
+        float32<2>[reverbBufferSize] buffer;
+        wrap<reverbBufferSize> writeIndex;
+        wrap<reverbBufferSize> readIndex = 1;
+        int32 advanceCount;
+
+        void main()
+        {
+            loop
+            {
+                let delayed = buffer[readIndex];
+                buffer[writeIndex] = in + (delayed * (0.5f + (std::intrinsics::clamp (sizeIn, 0.0f, 1.0f) * 0.4f)));
+                writeIndex += 1;
+                readIndex += 1;
+                out <- (in * 0.7f) + (delayed * 0.3f);
+                advanceCount += 1;
+                advanceCountOut <- advanceCount;
+                advance();
+            }
+        }
+    }
+
+    //==============================================================================
+    // The rack itself. Eight resident child processors, one stable instance each,
+    // advanced exactly once per frame in a runtime-selected serial order.
+
+    processor EffectsRack
+    {
+        input stream float32<2> in;
+        input stream float32 trackingPitchHzIn;
+
+        input event RackOrderUpload rackOrderIn;
+        input event RackEnableUpload rackEnableIn;
+
+        input value float32 globalFilterCutoffIn [[ name: "Filter Cutoff", min: 0.0f, max: 1.0f, init: 0.35f, rampFrames: 64 ]];
+        input value float32 distortionModeIn [[ name: "Distortion Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 distortionDriveDbIn [[ name: "Distortion Drive", min: 0.0f, max: 36.0f, init: 12.0f, unit: "dB", rampFrames: 64 ]];
+        input value float32 distortionKneeIn [[ name: "Distortion Knee", min: 0.0f, max: 1.0f, init: 0.35f, rampFrames: 64 ]];
+        input value float32 distortionWetIn [[ name: "Distortion Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+        input value float32 distortionWetHPHzIn [[ name: "Distortion Band HP", min: 20.0f, max: 4000.0f, init: 40.0f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 distortionWetLPHzIn [[ name: "Distortion Band LP", min: 20.0f, max: 20000.0f, init: 18000.0f, unit: "Hz", rampFrames: 64 ]];
+        input value float32 ottAmountIn [[ name: "OTT Amount", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
+        input value float32 chorusMixIn [[ name: "Chorus Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+        input value float32 chorusMotionModeIn [[ name: "Chorus Motion", min: 0.0f, max: 3.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 chorusBloomModeIn [[ name: "Chorus Bloom", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 chorusToneIn [[ name: "Chorus Tone", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
+        input value float32 chorusFeedbackIn [[ name: "Chorus Feedback", min: 0.0f, max: 0.95f, init: 0.42f, rampFrames: 128 ]];
+        input value float32 chorusRingAmountIn [[ name: "Chorus Ring", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+        input value float32 chorusRingOffsetModeIn [[ name: "Chorus Ring Pitch", min: 0.0f, max: 3.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+        input value float32 chorusRingFineSemitonesIn [[ name: "Chorus Ring Fine", min: -2.0f, max: 2.0f, init: 0.0f, unit: "st", rampFrames: 128 ]];
+        input value float32 flangerFeedbackIn [[ name: "Flanger Feedback", min: 0.0f, max: 0.9f, init: 0.4f, rampFrames: 64 ]];
+        input value float32 phaserSpreadIn [[ name: "Phaser Spread", min: 0.0f, max: 0.95f, init: 0.5f, rampFrames: 64 ]];
+        input value float32 delayFeedbackIn [[ name: "Delay Feedback", min: 0.0f, max: 0.9f, init: 0.35f, rampFrames: 64 ]];
+        input value float32 reverbSizeIn [[ name: "Reverb Size", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 64 ]];
+
+        output stream float32<2> out;
+        output value int32 committedOrderGenerationOut;
+        output value int32 rejectedOrderCountOut;
+
+        // Proof-of-concept instrumentation only. Lets a test observe that every
+        // resident module advances exactly once per rack frame whatever the order
+        // and whatever its enabled state.
+        output value int32 rackFrameCountOut;
+        output value int32 placeholderAdvanceTotalOut;
+
+        node globalFilter = wt::RackGlobalFilterPlaceholder;
+        node distortion   = wt::DistortionBus;
+        node ott          = wt::RackOttPlaceholder;
+        node chorus       = wt::ChorusBus;
+        node flanger      = wt::RackFlangerPlaceholder;
+        node phaser       = wt::RackPhaserPlaceholder;
+        node delay        = wt::RackDelayPlaceholder;
+        node reverb       = wt::RackReverbPlaceholder;
+
+        let transitionFrames = int32 (std::intrinsics::max (1.0f, float32 (processor.frequency) * rackTransitionMs * 0.001f));
+
+        wrap<rackModuleCount>[rackModuleCount] currentOrder;
+        wrap<rackModuleCount>[rackModuleCount] pendingOrder;
+        bool[rackModuleCount] currentEnabled;
+        bool[rackModuleCount] pendingEnabled;
+
+        bool hasPendingStructure;
+        float32 transitionGain = 1.0f;
+        int32 committedOrderGeneration;
+        int32 rejectedOrderCount;
+        int32 rackFrameCount;
+
+        void init()
+        {
+            for (wrap<rackModuleCount> position)
+            {
+                currentOrder[position] = position;
+                pendingOrder[position] = position;
+                currentEnabled[position] = true;
+                pendingEnabled[position] = true;
+            }
+        }
+
+        // A rack order must be a complete permutation of the eight instance ids
+        // (ADR-009). A malformed upload is a bug at the adapter boundary, not a
+        // runtime state the rack may occupy, so it is counted on a diagnostic
+        // endpoint and the current order is left intact.
+        bool isCompletePermutation (int32[rackModuleCount] moduleIds)
+        {
+            bool[rackModuleCount] seen;
+
+            for (wrap<rackModuleCount> position)
+            {
+                let moduleId = moduleIds[position];
+
+                if (moduleId < 0 || moduleId >= rackModuleCount)
+                    return false;
+
+                let index = wrap<rackModuleCount> (moduleId);
+
+                if (seen[index])
+                    return false;
+
+                seen[index] = true;
+            }
+
+            return true;
+        }
+
+        event rackOrderIn (RackOrderUpload upload)
+        {
+            if (! isCompletePermutation (upload.moduleIds))
+            {
+                rejectedOrderCount += 1;
+                rejectedOrderCountOut <- rejectedOrderCount;
+                return;
+            }
+
+            for (wrap<rackModuleCount> position)
+                pendingOrder[position] = wrap<rackModuleCount> (upload.moduleIds[position]);
+
+            hasPendingStructure = true;
+        }
+
+        event rackEnableIn (RackEnableUpload upload)
+        {
+            for (wrap<rackModuleCount> moduleId)
+                pendingEnabled[moduleId] = upload.enabledFlags[moduleId] != 0;
+
+            hasPendingStructure = true;
+        }
+
+        void commitPendingStructure()
+        {
+            for (wrap<rackModuleCount> position)
+                currentOrder[position] = pendingOrder[position];
+
+            for (wrap<rackModuleCount> moduleId)
+                currentEnabled[moduleId] = pendingEnabled[moduleId];
+
+            hasPendingStructure = false;
+            committedOrderGeneration += 1;
+            committedOrderGenerationOut <- committedOrderGeneration;
+        }
+
+        // Fade out, atomically swap at exact silence, fade back in (ADR-003). One
+        // rack-local ramp: no A/B rack, no state copying, no allocation, and a
+        // further upload arriving mid-transition simply reverses the ramp.
+        float32 nextTransitionGain()
+        {
+            let step = 1.0f / float32 (transitionFrames);
+
+            if (hasPendingStructure)
+            {
+                transitionGain = std::intrinsics::max (0.0f, transitionGain - step);
+
+                if (transitionGain == 0.0f)
+                    commitPendingStructure();
+            }
+            else
+            {
+                transitionGain = std::intrinsics::min (1.0f, transitionGain + step);
+            }
+
+            return transitionGain;
+        }
+
+        void forwardModuleParameters()
+        {
+            globalFilter.cutoffIn <- globalFilterCutoffIn;
+
+            distortion.modeIn <- distortionModeIn;
+            distortion.driveDbIn <- distortionDriveDbIn;
+            distortion.kneeIn <- distortionKneeIn;
+            distortion.wetIn <- distortionWetIn;
+            distortion.wetHPHzIn <- distortionWetHPHzIn;
+            distortion.wetLPHzIn <- distortionWetLPHzIn;
+
+            ott.amountIn <- ottAmountIn;
+
+            chorus.enabledIn <- 1.0f;
+            chorus.mixIn <- chorusMixIn;
+            chorus.motionModeIn <- chorusMotionModeIn;
+            chorus.bloomModeIn <- chorusBloomModeIn;
+            chorus.toneIn <- chorusToneIn;
+            chorus.feedbackIn <- chorusFeedbackIn;
+            chorus.ringAmountIn <- chorusRingAmountIn;
+            chorus.ringOffsetModeIn <- chorusRingOffsetModeIn;
+            chorus.ringFineSemitonesIn <- chorusRingFineSemitonesIn;
+            chorus.trackingPitchHzIn <- trackingPitchHzIn;
+
+            flanger.feedbackIn <- flangerFeedbackIn;
+            phaser.spreadIn <- phaserSpreadIn;
+            delay.feedbackIn <- delayFeedbackIn;
+            reverb.sizeIn <- reverbSizeIn;
+        }
+
+        // Every module advances exactly once per frame whatever its position and
+        // whatever its enabled state, so no child's internal time can drift away
+        // from the rack's. A disabled module still receives the live signal and
+        // still advances; it simply contributes no wet output (ADR-005).
+        float32<2> advanceModule (wrap<rackModuleCount> moduleId, float32<2> signal)
+        {
+            let isEnabled = currentEnabled[moduleId];
+            let selector = int32 (moduleId);
+
+            if (selector == rackModuleGlobalFilter)
+            {
+                globalFilter.in <- signal;
+                globalFilter.advance();
+                return isEnabled ? globalFilter.out : signal;
+            }
+
+            if (selector == rackModuleDistortion)
+            {
+                distortion.in <- signal;
+                distortion.advance();
+                return isEnabled ? distortion.out : signal;
+            }
+
+            if (selector == rackModuleOtt)
+            {
+                ott.in <- signal;
+                ott.advance();
+                return isEnabled ? ott.out : signal;
+            }
+
+            if (selector == rackModuleChorus)
+            {
+                chorus.in <- signal;
+                chorus.advance();
+                return isEnabled ? chorus.out : signal;
+            }
+
+            if (selector == rackModuleFlanger)
+            {
+                flanger.in <- signal;
+                flanger.advance();
+                return isEnabled ? flanger.out : signal;
+            }
+
+            if (selector == rackModulePhaser)
+            {
+                phaser.in <- signal;
+                phaser.advance();
+                return isEnabled ? phaser.out : signal;
+            }
+
+            if (selector == rackModuleDelay)
+            {
+                delay.in <- signal;
+                delay.advance();
+                return isEnabled ? delay.out : signal;
+            }
+
+            reverb.in <- signal;
+            reverb.advance();
+            return isEnabled ? reverb.out : signal;
+        }
+
+        void main()
+        {
+            loop
+            {
+                forwardModuleParameters();
+
+                var chain = in;
+
+                for (wrap<rackModuleCount> position)
+                    chain = advanceModule (position, chain);
+
+                out <- chain * nextTransitionGain();
+
+                rackFrameCount += 1;
+                rackFrameCountOut <- rackFrameCount;
+                placeholderAdvanceTotalOut <- globalFilter.advanceCountOut
+                                            + ott.advanceCountOut
+                                            + flanger.advanceCountOut
+                                            + phaser.advanceCountOut
+                                            + delay.advanceCountOut
+                                            + reverb.advanceCountOut;
+
+                advance();
+            }
+        }
+    }
+}

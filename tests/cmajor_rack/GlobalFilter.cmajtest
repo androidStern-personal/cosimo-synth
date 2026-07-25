@@ -1,0 +1,727 @@
+// Behavioural contract for wt::GlobalFilterBus, the rack's stereo multimode filter.
+//
+// The module is driven the way the rack drives it (ADR-001 processor composition:
+// `child.in <- signal; child.advance(); read child.out`), so what is pinned here is
+// exactly what the rack will get.
+//
+// The load-bearing assertions, in the order a reviewer should read them:
+//   1. filterModeOff is a BIT-EXACT passthrough - float32 `!=`, no tolerance. That is
+//      what ADR-005's hard audible bypass and ADR-008's zero-latency dry path both
+//      actually mean at module level, and it is what makes the rack honest.
+//   2. Every mode responds on frame 0 to an impulse. No lookahead, no transport delay.
+//   3. The drive stage is CONTINUOUS at drive 0. globalFilterDrive is a rack modulation
+//      destination (ADR-012), so it will be swept through zero by an LFO/MSEG; a shaper
+//      that only engages for drive > 0 clicks every time it crosses.
+//   4. A real LEVEL assertion, not "finite and below 8.0". The refutation is right that
+//      +18 dBFS is not a passing grade for a module in a chain with no output limiter.
+//   5. A mode change actually recomputes coefficients. simper::setFrequency derives
+//      f0/f1/f2 from the mode (std_library_filters.cmajor:676-745), so a "recompute only
+//      when the value moved materially" gate that watches cutoff and Q but not mode
+//      compiles silently and leaves the filter in the old mode forever.
+//
+// A node cannot be passed to a function ("error: Cannot use a processor name as a
+// type"), so every child is configured and driven inline. Chorus.cmajor is deliberately
+// NOT in the global source set: its buffers are sized from processor.maxFrequency, which
+// is only defined when a patch manifest supplies it, so depending on it would make this
+// module untestable in isolation.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/GlobalFilter.cmajor")
+
+//==============================================================================
+// Bypass, residue and channel independence.
+
+## testProcessor()
+
+processor GlobalFilterBypassTest [[ main ]]
+{
+    output stream int32 out;
+
+    node filter = wt::GlobalFilterBus;
+
+    let bypassFrames = 8192;
+    let settleFrames = 4096;
+    let stereoFrames = 4096;
+
+    float32[stereoFrames] leftReference;
+
+    float32 testSignal (int32 frame)
+    {
+        return 0.4f * float32 (std::intrinsics::sin (float32 (frame) * 0.037f))
+             + 0.2f * float32 (std::intrinsics::sin (float32 (frame) * 0.211f));
+    }
+
+    void main()
+    {
+        // 1. Mode Off is a bit-exact passthrough even with every other parameter set to
+        //    something violent. Nothing about cutoff, resonance or drive may leak into
+        //    the bypass path.
+        filter.modeIn <- float32 (wt::filterModeOff);
+        filter.cutoffHzIn <- 500.0f;
+        filter.resonanceIn <- 20.0f;
+        filter.driveIn <- 1.0f;
+
+        bool bypassIsExact = true;
+
+        for (int32 frame = 0; frame < bypassFrames; ++frame)
+        {
+            let signal = float32<2> (testSignal (frame), testSignal (frame) * -0.5f);
+            filter.in <- signal;
+            filter.advance();
+
+            if (filter.out[0] != signal[0] || filter.out[1] != signal[1])
+                bypassIsExact = false;
+        }
+
+        out <- bypassIsExact ? 1 : 0;
+        advance();
+
+        // 2. Off -> Lowpass -> Off leaves no residual state. The second Off period is
+        //    again bit-exact, which is only true if entering Off resets the filter.
+        filter.modeIn <- float32 (wt::filterModeLowpass);
+        filter.cutoffHzIn <- 400.0f;
+        filter.resonanceIn <- 8.0f;
+        filter.driveIn <- 0.6f;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            filter.in <- float32<2> (testSignal (frame), testSignal (frame));
+            filter.advance();
+        }
+
+        filter.modeIn <- float32 (wt::filterModeOff);
+
+        bool secondBypassIsExact = true;
+
+        for (int32 frame = 0; frame < bypassFrames; ++frame)
+        {
+            let signal = float32<2> (testSignal (frame), testSignal (frame) * -0.5f);
+            filter.in <- signal;
+            filter.advance();
+
+            if (filter.out[0] != signal[0] || filter.out[1] != signal[1])
+                secondBypassIsExact = false;
+        }
+
+        out <- secondBypassIsExact ? 1 : 0;
+        advance();
+
+        // 3. The two channels are independent: silence in the right channel stays
+        //    exactly silent while the left is being filtered and driven.
+        filter.modeIn <- float32 (wt::filterModeLowpass);
+        filter.cutoffHzIn <- 900.0f;
+        filter.resonanceIn <- 4.0f;
+        filter.driveIn <- 0.5f;
+
+        bool rightStaysSilent = true;
+
+        for (int32 frame = 0; frame < stereoFrames; ++frame)
+        {
+            filter.in <- float32<2> (testSignal (frame), 0.0f);
+            filter.advance();
+            leftReference[wrap<stereoFrames> (frame)] = filter.out[0];
+
+            if (filter.out[1] != 0.0f)
+                rightStaysSilent = false;
+        }
+
+        out <- rightStaysSilent ? 1 : 0;
+        advance();
+
+        // 4. ...and the two channels are the same filter: after a reset, the same signal
+        //    fed to the right channel produces bit-identical output, so neither channel
+        //    is reading the other's coefficients or state.
+        filter.modeIn <- float32 (wt::filterModeOff);
+        filter.in <- float32<2> (0.0f, 0.0f);
+        filter.advance();
+        filter.modeIn <- float32 (wt::filterModeLowpass);
+
+        bool channelsAgree = true;
+        bool leftStaysSilent = true;
+
+        for (int32 frame = 0; frame < stereoFrames; ++frame)
+        {
+            filter.in <- float32<2> (0.0f, testSignal (frame));
+            filter.advance();
+
+            if (filter.out[0] != 0.0f)
+                leftStaysSilent = false;
+
+            if (filter.out[1] != leftReference[wrap<stereoFrames> (frame)])
+                channelsAgree = false;
+        }
+
+        out <- leftStaysSilent ? 1 : 0;
+        advance();
+
+        out <- channelsAgree ? 1 : 0;
+        advance();
+
+        // 5. Re-enabling after a bypass releases no stored energy (ADR-005: "re-enabling
+        //    must not expose an unsmoothed stale-state transient"). A resonant filter is
+        //    charged, bypassed, then re-enabled onto SILENCE - if entering Off did not
+        //    reset the state, the charge rings out here. Bit-exactness alone cannot see
+        //    this, because the bypass path is a passthrough whatever the state holds.
+        filter.modeIn <- float32 (wt::filterModeLowpass);
+        filter.cutoffHzIn <- 800.0f;
+        filter.resonanceIn <- 20.0f;
+        filter.driveIn <- 0.0f;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            filter.in <- float32<2> (testSignal (frame), testSignal (frame));
+            filter.advance();
+        }
+
+        filter.modeIn <- float32 (wt::filterModeOff);
+        filter.in <- float32<2> (0.0f, 0.0f);
+        filter.advance();
+        filter.modeIn <- float32 (wt::filterModeLowpass);
+
+        bool reEnablingIsSilent = true;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            filter.in <- float32<2> (0.0f, 0.0f);
+            filter.advance();
+
+            if (filter.out[0] != 0.0f || filter.out[1] != 0.0f)
+                reEnablingIsSilent = false;
+        }
+
+        out <- reEnablingIsSilent ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// It is actually a filter: attenuation, mode distinctness, resonance, and the
+// coefficient-recompute gate.
+
+## testProcessor()
+
+processor GlobalFilterResponseTest [[ main ]]
+{
+    output stream int32 out;
+
+    node lowpass = wt::GlobalFilterBus;
+    node highpass = wt::GlobalFilterBus;
+    node bandpass = wt::GlobalFilterBus;
+    node notch = wt::GlobalFilterBus;
+    node peak = wt::GlobalFilterBus;
+    node openQ = wt::GlobalFilterBus;
+    node resonantQ = wt::GlobalFilterBus;
+    node switcher = wt::GlobalFilterBus;
+    node impulse = wt::GlobalFilterBus;
+
+    let settleFrames = 8192;
+    let measureFrames = 2048;
+    let modeCount = 5;
+
+    float32[modeCount, measureFrames] modeOutputs;
+
+    // ~0.27 * fs, i.e. about 11.9 kHz at 44.1 kHz - far above a 200 Hz lowpass.
+    float32 fastSignal (int32 frame)
+    {
+        return 0.5f * float32 (std::intrinsics::sin (float32 (frame) * 1.7f));
+    }
+
+    // ~260 Hz at 44.1 kHz.
+    float32 slowSignal (int32 frame)
+    {
+        return 0.4f * float32 (std::intrinsics::sin (float32 (frame) * 0.037f));
+    }
+
+    // ~1000 Hz at 44.1 kHz, small enough that a Q of 20 stays inside full scale.
+    float32 cutoffSignal (int32 frame)
+    {
+        return 0.05f * float32 (std::intrinsics::sin (float32 (frame) * 0.142475f));
+    }
+
+    void main()
+    {
+        // 1. It attenuates: a 200 Hz lowpass on a ~11.9 kHz sine of amplitude 0.5 leaves
+        //    a peak below 0.05 once settled.
+        lowpass.modeIn <- float32 (wt::filterModeLowpass);
+        lowpass.cutoffHzIn <- 200.0f;
+        lowpass.resonanceIn <- 0.707107f;
+        lowpass.driveIn <- 0.0f;
+
+        float32 attenuatedPeak;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            lowpass.in <- float32<2> (fastSignal (frame), fastSignal (frame));
+            lowpass.advance();
+
+            if (frame >= settleFrames)
+                attenuatedPeak = std::intrinsics::max (attenuatedPeak, std::intrinsics::abs (lowpass.out[0]));
+        }
+
+        out <- (attenuatedPeak < 0.05f) ? 1 : 0;
+        advance();
+
+        // 2. Each of the five active modes produces a distinct output from the same
+        //    input, so `text:` ordering on the rack parameter matches the DSP constants.
+        lowpass.modeIn <- float32 (wt::filterModeLowpass);
+        lowpass.cutoffHzIn <- 300.0f;
+        lowpass.resonanceIn <- 2.0f;
+        lowpass.driveIn <- 0.0f;
+
+        highpass.modeIn <- float32 (wt::filterModeHighpass);
+        highpass.cutoffHzIn <- 300.0f;
+        highpass.resonanceIn <- 2.0f;
+        highpass.driveIn <- 0.0f;
+
+        bandpass.modeIn <- float32 (wt::filterModeBandpass);
+        bandpass.cutoffHzIn <- 300.0f;
+        bandpass.resonanceIn <- 2.0f;
+        bandpass.driveIn <- 0.0f;
+
+        notch.modeIn <- float32 (wt::filterModeNotch);
+        notch.cutoffHzIn <- 300.0f;
+        notch.resonanceIn <- 2.0f;
+        notch.driveIn <- 0.0f;
+
+        peak.modeIn <- float32 (wt::filterModePeak);
+        peak.cutoffHzIn <- 300.0f;
+        peak.resonanceIn <- 2.0f;
+        peak.driveIn <- 0.0f;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let signal = float32<2> (slowSignal (frame), slowSignal (frame));
+
+            lowpass.in <- signal;   lowpass.advance();
+            highpass.in <- signal;  highpass.advance();
+            bandpass.in <- signal;  bandpass.advance();
+            notch.in <- signal;     notch.advance();
+            peak.in <- signal;      peak.advance();
+
+            if (frame >= settleFrames)
+            {
+                let measured = wrap<measureFrames> (frame - settleFrames);
+
+                modeOutputs[0, measured] = lowpass.out[0];
+                modeOutputs[1, measured] = highpass.out[0];
+                modeOutputs[2, measured] = bandpass.out[0];
+                modeOutputs[3, measured] = notch.out[0];
+                modeOutputs[4, measured] = peak.out[0];
+            }
+        }
+
+        bool allModesDistinct = true;
+        bool allModesFinite = true;
+
+        for (wrap<modeCount> a)
+        {
+            for (wrap<modeCount> b)
+            {
+                if (int32 (b) <= int32 (a))
+                    continue;
+
+                float32 maxDifference;
+
+                for (wrap<measureFrames> frame)
+                {
+                    let value = modeOutputs[a, frame];
+
+                    if (! (value == value))
+                        allModesFinite = false;
+
+                    maxDifference = std::intrinsics::max (
+                        maxDifference,
+                        std::intrinsics::abs (value - modeOutputs[b, frame])
+                    );
+                }
+
+                if (maxDifference <= 0.001f)
+                    allModesDistinct = false;
+            }
+        }
+
+        out <- allModesDistinct ? 1 : 0;
+        advance();
+
+        out <- allModesFinite ? 1 : 0;
+        advance();
+
+        // 3. Resonance is real and bounded: a sine sitting exactly on a 1 kHz cutoff is
+        //    lifted more than 6 dB by a Q of 20 relative to a Q of 0.707, and does not
+        //    self-oscillate into a non-finite output.
+        openQ.modeIn <- float32 (wt::filterModeLowpass);
+        openQ.cutoffHzIn <- 1000.0f;
+        openQ.resonanceIn <- 0.707107f;
+        openQ.driveIn <- 0.0f;
+
+        resonantQ.modeIn <- float32 (wt::filterModeLowpass);
+        resonantQ.cutoffHzIn <- 1000.0f;
+        resonantQ.resonanceIn <- 20.0f;
+        resonantQ.driveIn <- 0.0f;
+
+        float32 openPeak;
+        float32 resonantPeak;
+        bool resonantIsFinite = true;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let signal = float32<2> (cutoffSignal (frame), cutoffSignal (frame));
+
+            openQ.in <- signal;      openQ.advance();
+            resonantQ.in <- signal;  resonantQ.advance();
+
+            if (frame >= settleFrames)
+            {
+                openPeak = std::intrinsics::max (openPeak, std::intrinsics::abs (openQ.out[0]));
+                resonantPeak = std::intrinsics::max (resonantPeak, std::intrinsics::abs (resonantQ.out[0]));
+
+                if (! (resonantQ.out[0] == resonantQ.out[0]))
+                    resonantIsFinite = false;
+            }
+        }
+
+        out <- (resonantPeak > openPeak * 2.0f) ? 1 : 0;
+        advance();
+
+        out <- resonantIsFinite ? 1 : 0;
+        advance();
+
+        // 4. A mode change on a LIVE instance changes the sound. simper derives f0/f1/f2
+        //    inside setFrequency, so a coefficient gate that ignores the mode leaves this
+        //    instance filtering as a lowpass forever and this assertion fails.
+        switcher.modeIn <- float32 (wt::filterModeLowpass);
+        switcher.cutoffHzIn <- 1000.0f;
+        switcher.resonanceIn <- 2.0f;
+        switcher.driveIn <- 0.0f;
+
+        float32 lowpassPeak;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            switcher.in <- float32<2> (slowSignal (frame), slowSignal (frame));
+            switcher.advance();
+
+            if (frame >= settleFrames)
+                lowpassPeak = std::intrinsics::max (lowpassPeak, std::intrinsics::abs (switcher.out[0]));
+        }
+
+        switcher.modeIn <- float32 (wt::filterModeHighpass);
+
+        float32 highpassPeak;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            switcher.in <- float32<2> (slowSignal (frame), slowSignal (frame));
+            switcher.advance();
+
+            if (frame >= settleFrames)
+                highpassPeak = std::intrinsics::max (highpassPeak, std::intrinsics::abs (switcher.out[0]));
+        }
+
+        out <- (lowpassPeak > highpassPeak * 3.0f) ? 1 : 0;
+        advance();
+
+        // 5. Zero latency, asserted as behaviour rather than as a declaration: an impulse
+        //    produces a non-zero output on the SAME frame, in every mode, at drive 0 and
+        //    at drive 1. No lookahead, no alignment delay, nothing to declare.
+        bool respondsOnFrameZero = true;
+
+        for (int32 mode = wt::filterModeLowpass; mode <= wt::filterModePeak; ++mode)
+        {
+            for (int32 driveStep = 0; driveStep < 2; ++driveStep)
+            {
+                impulse.modeIn <- float32 (wt::filterModeOff);
+                impulse.in <- float32<2> (0.0f, 0.0f);
+                impulse.advance();
+
+                impulse.modeIn <- float32 (mode);
+                impulse.cutoffHzIn <- 1000.0f;
+                impulse.resonanceIn <- 0.707107f;
+                impulse.driveIn <- float32 (driveStep);
+                impulse.in <- float32<2> (1.0f, 1.0f);
+                impulse.advance();
+
+                if (impulse.out[0] == 0.0f || impulse.out[1] == 0.0f)
+                    respondsOnFrameZero = false;
+            }
+        }
+
+        out <- respondsOnFrameZero ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// The drive stage: it distorts, it is continuous at zero, and it does not shout.
+
+## testProcessor()
+
+processor GlobalFilterDriveTest [[ main ]]
+{
+    output stream int32 out;
+
+    node clean = wt::GlobalFilterBus;
+    node driven = wt::GlobalFilterBus;
+    node zeroDrive = wt::GlobalFilterBus;
+    node epsilonDrive = wt::GlobalFilterBus;
+    node level = wt::GlobalFilterBus;
+
+    let harmonicFrames = 8192;
+    let continuityFrames = 4096;
+    let levelFrames = 2048;
+    let levelSteps = 11;
+
+    // Exactly 93 cycles in harmonicFrames frames (~501 Hz at 44.1 kHz), so the third
+    // harmonic falls on an exact bin and the correlation below is orthogonal.
+    let harmonicCycles = 93.0f;
+    let inputAmplitude = 0.5f;
+
+    // The module output reaches about 1.0 at the worst drive setting for a 0.5 input.
+    // Anything much above that is a level regression, not a filter.
+    let levelCeiling = 1.1f;
+
+    float32 twoPi = 2.0f * float32 (pi);
+
+    void main()
+    {
+        // Both harmonic probes run through a wide-open lowpass, which is linear and so
+        // cannot create a third harmonic of its own.
+        clean.modeIn <- float32 (wt::filterModeLowpass);
+        clean.cutoffHzIn <- 20000.0f;
+        clean.resonanceIn <- 0.707107f;
+        clean.driveIn <- 0.0f;
+
+        driven.modeIn <- float32 (wt::filterModeLowpass);
+        driven.cutoffHzIn <- 20000.0f;
+        driven.resonanceIn <- 0.707107f;
+        driven.driveIn <- 1.0f;
+
+        let phaseStep = harmonicCycles / float32 (harmonicFrames);
+        float32 phase;
+
+        for (int32 frame = 0; frame < harmonicFrames; ++frame)
+        {
+            let sample = inputAmplitude * float32 (std::intrinsics::sin (twoPi * phase));
+            let signal = float32<2> (sample, sample);
+
+            clean.in <- signal;   clean.advance();
+            driven.in <- signal;  driven.advance();
+
+            phase = std::intrinsics::wrap (phase + phaseStep, 1.0f);
+        }
+
+        phase = 0.0f;
+
+        float32 cleanFundamentalSin, cleanFundamentalCos, cleanHarmonicSin, cleanHarmonicCos;
+        float32 drivenFundamentalSin, drivenFundamentalCos, drivenHarmonicSin, drivenHarmonicCos;
+
+        for (int32 frame = 0; frame < harmonicFrames; ++frame)
+        {
+            let sample = inputAmplitude * float32 (std::intrinsics::sin (twoPi * phase));
+            let signal = float32<2> (sample, sample);
+
+            clean.in <- signal;   clean.advance();
+            driven.in <- signal;  driven.advance();
+
+            let harmonicPhase = std::intrinsics::wrap (phase * 3.0f, 1.0f);
+            let fundamentalSin = float32 (std::intrinsics::sin (twoPi * phase));
+            let fundamentalCos = float32 (std::intrinsics::cos (twoPi * phase));
+            let harmonicSin = float32 (std::intrinsics::sin (twoPi * harmonicPhase));
+            let harmonicCos = float32 (std::intrinsics::cos (twoPi * harmonicPhase));
+
+            cleanFundamentalSin += clean.out[0] * fundamentalSin;
+            cleanFundamentalCos += clean.out[0] * fundamentalCos;
+            cleanHarmonicSin += clean.out[0] * harmonicSin;
+            cleanHarmonicCos += clean.out[0] * harmonicCos;
+
+            drivenFundamentalSin += driven.out[0] * fundamentalSin;
+            drivenFundamentalCos += driven.out[0] * fundamentalCos;
+            drivenHarmonicSin += driven.out[0] * harmonicSin;
+            drivenHarmonicCos += driven.out[0] * harmonicCos;
+
+            phase = std::intrinsics::wrap (phase + phaseStep, 1.0f);
+        }
+
+        let cleanFundamental = std::intrinsics::sqrt (
+            (cleanFundamentalSin * cleanFundamentalSin) + (cleanFundamentalCos * cleanFundamentalCos));
+        let cleanHarmonic = std::intrinsics::sqrt (
+            (cleanHarmonicSin * cleanHarmonicSin) + (cleanHarmonicCos * cleanHarmonicCos));
+        let drivenFundamental = std::intrinsics::sqrt (
+            (drivenFundamentalSin * drivenFundamentalSin) + (drivenFundamentalCos * drivenFundamentalCos));
+        let drivenHarmonic = std::intrinsics::sqrt (
+            (drivenHarmonicSin * drivenHarmonicSin) + (drivenHarmonicCos * drivenHarmonicCos));
+
+        let cleanRatio = cleanHarmonic / std::intrinsics::max (cleanFundamental, 0.000001f);
+        let drivenRatio = drivenHarmonic / std::intrinsics::max (drivenFundamental, 0.000001f);
+
+        // 1. Drive 0 through a wide-open lowpass is linear: no third harmonic.
+        out <- (cleanRatio < 0.001f) ? 1 : 0;
+        advance();
+
+        // 2. Drive 1 adds real harmonic content.
+        out <- (drivenRatio > 0.02f) ? 1 : 0;
+        advance();
+
+        // 3. The drive stage is CONTINUOUS at zero. globalFilterDrive is a rack
+        //    modulation destination, so it gets swept through 0; a shaper that only
+        //    engages above zero steps the output the instant it does.
+        zeroDrive.modeIn <- float32 (wt::filterModeLowpass);
+        zeroDrive.cutoffHzIn <- 20000.0f;
+        zeroDrive.resonanceIn <- 0.707107f;
+        zeroDrive.driveIn <- 0.0f;
+
+        epsilonDrive.modeIn <- float32 (wt::filterModeLowpass);
+        epsilonDrive.cutoffHzIn <- 20000.0f;
+        epsilonDrive.resonanceIn <- 0.707107f;
+        epsilonDrive.driveIn <- 0.0001f;
+
+        float32 continuityStep;
+
+        for (int32 frame = 0; frame < continuityFrames; ++frame)
+        {
+            let sample = 0.4f * float32 (std::intrinsics::sin (float32 (frame) * 0.037f));
+            let signal = float32<2> (sample, sample);
+
+            zeroDrive.in <- signal;     zeroDrive.advance();
+            epsilonDrive.in <- signal;  epsilonDrive.advance();
+
+            continuityStep = std::intrinsics::max (
+                continuityStep,
+                std::intrinsics::abs (zeroDrive.out[0] - epsilonDrive.out[0])
+            );
+        }
+
+        out <- (continuityStep < 0.001f) ? 1 : 0;
+        advance();
+
+        // 4. A real level assertion. "Finite and below 8.0" would pass at +18 dBFS; the
+        //    rack has no output limiter of its own, so the module owns its own level.
+        level.modeIn <- float32 (wt::filterModeLowpass);
+        level.cutoffHzIn <- 20000.0f;
+        level.resonanceIn <- 0.707107f;
+
+        bool levelIsSane = true;
+
+        for (int32 step = 0; step < levelSteps; ++step)
+        {
+            level.driveIn <- float32 (step) / float32 (levelSteps - 1);
+
+            for (int32 frame = 0; frame < levelFrames; ++frame)
+            {
+                let sample = inputAmplitude * float32 (std::intrinsics::sin (float32 (frame) * 0.037f));
+                level.in <- float32<2> (sample, sample);
+                level.advance();
+
+                if (! (std::intrinsics::abs (level.out[0]) < levelCeiling))
+                    levelIsSane = false;
+            }
+        }
+
+        out <- levelIsSane ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// The clamps are actually applied: out-of-range parameter values from a modulated
+// rack destination cannot make the filter blow up.
+
+## testProcessor()
+
+processor GlobalFilterClampTest [[ main ]]
+{
+    output stream int32 out;
+
+    node probe = wt::GlobalFilterBus;
+
+    let probeFrames = 512;
+    let cutoffCount = 5;
+    let resonanceCount = 5;
+    let driveCount = 4;
+
+    // Deliberately outside the declared 20 Hz - 20 kHz / 0.1 - 20 / 0 - 1 ranges: the
+    // rack applies modulation before forwarding, so the module is the last line of
+    // defence and must clamp, not trust.
+    float32[cutoffCount] cutoffProbes;
+    float32[resonanceCount] resonanceProbes;
+    float32[driveCount] driveProbes;
+
+    // Q clamps at 20, so a resonant peak on a 0.1 amplitude input tops out near 2.0 even
+    // before the drive stage. This is a stability bound, not a level bound.
+    let stabilityCeiling = 16.0f;
+
+    void main()
+    {
+        cutoffProbes[0] = -100.0f;
+        cutoffProbes[1] = 0.0f;
+        cutoffProbes[2] = 20.0f;
+        cutoffProbes[3] = 20000.0f;
+        cutoffProbes[4] = 1000000000.0f;
+
+        resonanceProbes[0] = -5.0f;
+        resonanceProbes[1] = 0.0f;
+        resonanceProbes[2] = 0.1f;
+        resonanceProbes[3] = 20.0f;
+        resonanceProbes[4] = 1000000.0f;
+
+        driveProbes[0] = -1.0f;
+        driveProbes[1] = 0.0f;
+        driveProbes[2] = 1.0f;
+        driveProbes[3] = 5.0f;
+
+        bool alwaysFiniteAndBounded = true;
+
+        // Mode runs past filterModePeak so an out-of-range mode selector is covered too.
+        for (int32 mode = wt::filterModeOff; mode <= wt::filterModePeak + 2; ++mode)
+        {
+            for (wrap<cutoffCount> cutoffIndex)
+            {
+                for (wrap<resonanceCount> resonanceIndex)
+                {
+                    for (wrap<driveCount> driveIndex)
+                    {
+                        probe.modeIn <- float32 (wt::filterModeOff);
+                        probe.in <- float32<2> (0.0f, 0.0f);
+                        probe.advance();
+
+                        probe.modeIn <- float32 (mode);
+                        probe.cutoffHzIn <- cutoffProbes[cutoffIndex];
+                        probe.resonanceIn <- resonanceProbes[resonanceIndex];
+                        probe.driveIn <- driveProbes[driveIndex];
+
+                        for (int32 frame = 0; frame < probeFrames; ++frame)
+                        {
+                            let sample = 0.1f * float32 (std::intrinsics::sin (float32 (frame) * 0.142475f));
+                            probe.in <- float32<2> (sample, -sample);
+                            probe.advance();
+
+                            let left = probe.out[0];
+                            let right = probe.out[1];
+
+                            if (! (left == left && right == right))
+                                alwaysFiniteAndBounded = false;
+
+                            if (! (std::intrinsics::abs (left) < stabilityCeiling
+                                    && std::intrinsics::abs (right) < stabilityCeiling))
+                                alwaysFiniteAndBounded = false;
+                        }
+                    }
+                }
+            }
+        }
+
+        out <- alwaysFiniteAndBounded ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

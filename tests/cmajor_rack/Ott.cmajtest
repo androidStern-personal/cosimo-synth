@@ -1,0 +1,1306 @@
+// Behavioural specification for wt::OttBus - the rack adaptation of the standalone
+// OTT multiband upward/downward compressor (fx/ott_lab/OttLab.cmajor).
+//
+// The ONE substantive difference from the standalone is mandated by ADR-008: the
+// rack declares zero processing latency, so the rack OTT drops the standalone's
+// 3 ms lookahead alignment path entirely. Section 1 is what pins that. With a 3 ms
+// lookahead the module's wet output is EXACTLY ZERO for the first 132 frames at
+// 44.1 kHz, because the alignment buffers start empty; without it the response is
+// on frame 0. That is a binary, non-tunable discriminator, not a tolerance.
+//
+// Every section drives the module directly as a composed child node, using the
+// proven rack idiom `child.in <- signal; child.advance(); read child.out`. That is
+// the only shape that can pin behaviour over more frames than `## testProcessor()`'s
+// single 100-frame render block, and it is exactly how wt::EffectsRack drives the
+// module in production.
+//
+// Independent scenarios use independent node instances. A compressor's detector
+// envelopes and smoothed gain are state, so "the same parameters again" is not the
+// same thing as "a fresh module".
+//
+// Run with:  cmaj test --singleThread --sessionID=1 tests/cmajor_rack
+
+// A rack child that declared processor.latency would make the signal late while
+// the host was told it was not: a composed child's latency does not reach its
+// composing parent, and Cmajor has no syntax for reading a child node's latency
+// (`wrapper.processor.latency` is a parse error). Declaring latency also changes no
+// samples, so no behavioural assertion anywhere below can see it. A source check is
+// therefore the only standing guard available, and this is where it lives.
+function requireNoDeclaredLatency (relativePath)
+{
+    const section = getCurrentTestSection();
+    const source = new File (section.getAbsolutePath (relativePath)).read();
+    const code = source.replace (/\/\*[\s\S]*?\*\//g, "").replace (/\/\/[^\n]*/g, "");
+
+    if (code.indexOf ("processor.latency") >= 0)
+        throw new Error ("ADR-008 violated: " + relativePath + " declares processor.latency, "
+                          + "which a composing rack parent will neither report nor compensate.");
+
+    return undefined;
+}
+
+## global ("../../cmajor/Ott.cmajor")
+
+// ---------------------------------------------------------------------------
+// 1. HARD BYPASS AND ZERO LATENCY.
+//
+//    1a. At mix 0 the module passes its input BIT-EXACTLY - asserted with float32
+//        `!=`, no tolerance - while amount, band drive and envelope match are at
+//        maximum and the time scale is at minimum. A tolerance here would hide
+//        exactly the transport delay ADR-008 forbids.
+//    1b. At mix 0 an impulse arrives on the SAME frame, unchanged.
+//    1c. At mix 100 with the compressor fully active an impulse produces a
+//        same-frame response. A 3 ms lookahead build produces exactly 0.0f here.
+//    1d. With the dynamics taken out of the picture (amount 0) the wet path is the
+//        band sum alone, and its impulse response is concentrated inside the very
+//        window a lookahead build leaves empty.
+//    1e. And the module declares no processor.latency - checked at the source,
+//        because nothing at runtime can see it.
+
+## testProcessor (requireNoDeclaredLatency ("../../cmajor/Ott.cmajor"))
+
+processor OttHardBypassAndZeroLatency [[ main ]]
+{
+    output stream int32 out;
+
+    node bypassOtt = wt::OttBus;
+    node dryImpulseOtt = wt::OttBus;
+    node compressedImpulseOtt = wt::OttBus;
+    node alignmentImpulseOtt = wt::OttBus;
+
+    let measureFrames = 8192;
+    let impulseWindowFrames = 4096;
+
+    // 3 ms at the harness's 44.1 kHz: what fx/ott_lab/OttLab.cmajor delays its
+    // audio path by, and what this module must not.
+    let standaloneLookaheadFrames = 132;
+
+    // Left and right carry different signals, so a channel-crossing bug cannot
+    // hide behind a symmetric test vector.
+    float32 leftSignal (int32 frame)
+    {
+        return 0.4f * std::intrinsics::sin (float32 (frame) * 0.05f);
+    }
+
+    float32 rightSignal (int32 frame)
+    {
+        return 0.3f * std::intrinsics::sin (float32 (frame) * 0.031f + 1.1f);
+    }
+
+    float32 impulse (int32 frame)
+    {
+        return frame == 0 ? 1.0f : 0.0f;
+    }
+
+    // The hardest bypass case: every other control driven to an extreme.
+    float32<2> renderBypass (int32 frame)
+    {
+        bypassOtt.in <- float32<2> (leftSignal (frame), rightSignal (frame));
+        bypassOtt.mixIn <- 0.0f;
+        bypassOtt.amountIn <- 100.0f;
+        bypassOtt.timePercentIn <- 10.0f;
+        bypassOtt.bandDriveIn <- 100.0f;
+        bypassOtt.envelopeMatchIn <- 100.0f;
+        bypassOtt.advance();
+        return bypassOtt.out;
+    }
+
+    float32<2> renderDryImpulse (int32 frame)
+    {
+        dryImpulseOtt.in <- float32<2> (impulse (frame), impulse (frame));
+        dryImpulseOtt.mixIn <- 0.0f;
+        dryImpulseOtt.amountIn <- 100.0f;
+        dryImpulseOtt.timePercentIn <- 100.0f;
+        dryImpulseOtt.bandDriveIn <- 0.0f;
+        dryImpulseOtt.envelopeMatchIn <- 0.0f;
+        dryImpulseOtt.advance();
+        return dryImpulseOtt.out;
+    }
+
+    float32<2> renderCompressedImpulse (int32 frame)
+    {
+        compressedImpulseOtt.in <- float32<2> (impulse (frame), impulse (frame));
+        compressedImpulseOtt.mixIn <- 100.0f;
+        compressedImpulseOtt.amountIn <- 100.0f;
+        compressedImpulseOtt.timePercentIn <- 100.0f;
+        compressedImpulseOtt.bandDriveIn <- 0.0f;
+        compressedImpulseOtt.envelopeMatchIn <- 0.0f;
+        compressedImpulseOtt.advance();
+        return compressedImpulseOtt.out;
+    }
+
+    float32<2> renderAlignmentImpulse (int32 frame)
+    {
+        alignmentImpulseOtt.in <- float32<2> (impulse (frame), impulse (frame));
+        alignmentImpulseOtt.mixIn <- 100.0f;
+        alignmentImpulseOtt.amountIn <- 0.0f;
+        alignmentImpulseOtt.timePercentIn <- 100.0f;
+        alignmentImpulseOtt.bandDriveIn <- 0.0f;
+        alignmentImpulseOtt.envelopeMatchIn <- 0.0f;
+        alignmentImpulseOtt.advance();
+        return alignmentImpulseOtt.out;
+    }
+
+    void main()
+    {
+        // 1a. Bit-exact dry passthrough at mix 0.
+        bool bypassIsExact = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let rendered = renderBypass (frame);
+
+            if (rendered[0] != leftSignal (frame) || rendered[1] != rightSignal (frame))
+                bypassIsExact = false;
+        }
+
+        out <- bypassIsExact ? 1 : 0;
+        advance();
+
+        // 1b. The impulse survives the dry path on frame 0, unchanged.
+        let dryFirstFrame = renderDryImpulse (0);
+
+        out <- (dryFirstFrame[0] == 1.0f && dryFirstFrame[1] == 1.0f) ? 1 : 0;
+        advance();
+
+        // 1c. The fully active wet path answers on frame 0.
+        let compressedFirstFrame = std::intrinsics::abs (renderCompressedImpulse (0)[0]);
+
+        out <- (compressedFirstFrame > 0.05f) ? 1 : 0;
+        advance();
+
+        // 1d. And with the dynamics neutral the response lives in the window a
+        //     lookahead build leaves empty, so there is no transport delay hiding
+        //     behind the compressor.
+        float32 onsetPeak;
+        float32 tailPeak;
+
+        for (int32 frame = 0; frame < impulseWindowFrames; ++frame)
+        {
+            let magnitude = std::intrinsics::abs (renderAlignmentImpulse (frame)[0]);
+
+            if (frame < standaloneLookaheadFrames)
+                onsetPeak = std::intrinsics::max (onsetPeak, magnitude);
+            else
+                tailPeak = std::intrinsics::max (tailPeak, magnitude);
+        }
+
+        out <- (onsetPeak > tailPeak) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 2. THE BAND SUM RECONSTRUCTS.
+//
+//    The internal dry reference is the SUM OF THE THREE BANDS, not the raw input.
+//    A Linkwitz-Riley crossover sums to ALLPASS, not to identity, so crossfading
+//    the raw input against processed bands would comb. This section pins the
+//    difference: with amount 0 the output must be magnitude-flat against the input
+//    at every probe frequency, including both crossover points where a comb would
+//    null hardest - while being measurably NOT sample-identical at a crossover
+//    frequency, because an allpass phase response is real and is not latency.
+//
+//    THE SWEEP IS RUN TWICE, AT MIX 100 AND AT MIX 50, AND THE SECOND PASS IS THE
+//    ONE THAT MATTERS. At mix 100 the crossfade weight on the dry reference is
+//    zero, so getting the reference wrong is invisible; a build that crossfaded
+//    against the RAW INPUT passes the whole mix-100 sweep. It is at an intermediate
+//    mix that the error becomes 0.5 * (x + allpass(x)), which nulls hard at exactly
+//    the two crossover frequencies. That mutation was written and run: it survives
+//    the mix-100 sweep and is killed by the mix-50 one.
+
+## testProcessor()
+
+processor OttBandSumReconstruction [[ main ]]
+{
+    output stream int32 out;
+
+    node ott = wt::OttBus;
+
+    let settleFrames = 4096;
+    let measureFrames = 4096;
+    let flatnessToleranceDb = 0.25f;
+    let amplitude = 0.35f;
+
+    float64 phase;
+    float32 renderMixPercent = 100.0f;
+    float32 measuredLevelDifferenceDb;
+    float32 measuredPeakDeviation;
+
+    float32 nextSample (float32 frequencyHz)
+    {
+        let sample = amplitude * float32 (std::intrinsics::sin (phase));
+        phase += 2.0 * pi * float64 (frequencyHz) / processor.frequency;
+        return sample;
+    }
+
+    float32<2> render (float32 sample)
+    {
+        ott.in <- float32<2> (sample, sample);
+        ott.mixIn <- renderMixPercent;
+        ott.amountIn <- 0.0f;
+        ott.timePercentIn <- 100.0f;
+        ott.bandDriveIn <- 0.0f;
+        ott.envelopeMatchIn <- 0.0f;
+        ott.advance();
+        return ott.out;
+    }
+
+    void measureAt (float32 frequencyHz)
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (nextSample (frequencyHz));
+
+        float64 inputPower;
+        float64 outputPower;
+        measuredPeakDeviation = 0.0f;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = nextSample (frequencyHz);
+            let rendered = render (sample)[0];
+
+            inputPower += float64 (sample) * float64 (sample);
+            outputPower += float64 (rendered) * float64 (rendered);
+            measuredPeakDeviation = std::intrinsics::max (
+                measuredPeakDeviation,
+                std::intrinsics::abs (rendered - sample)
+            );
+        }
+
+        measuredLevelDifferenceDb = std::levels::gainTodB (
+            float32 (std::intrinsics::sqrt (outputPower / std::intrinsics::max (inputPower, 1.0e-30)))
+        );
+    }
+
+    bool isFlat()
+    {
+        return std::intrinsics::abs (measuredLevelDifferenceDb) < flatnessToleranceDb;
+    }
+
+    void sweep()
+    {
+        // Below the low/mid crossover.
+        measureAt (60.0f);
+        out <- isFlat() ? 1 : 0;
+        advance();
+
+        // Exactly at the low/mid crossover.
+        measureAt (88.2818146f);
+        out <- isFlat() ? 1 : 0;
+        advance();
+
+        // And the sum is NOT the input: the crossover's allpass phase response is
+        // real. A future "optimisation" that returned the raw input at amount 0
+        // would pass every flatness check here and fail this one.
+        out <- (measuredPeakDeviation > 0.1f * amplitude) ? 1 : 0;
+        advance();
+
+        // Mid band.
+        measureAt (300.0f);
+        out <- isFlat() ? 1 : 0;
+        advance();
+
+        measureAt (1000.0f);
+        out <- isFlat() ? 1 : 0;
+        advance();
+
+        // Exactly at the mid/high crossover.
+        measureAt (2499.99951f);
+        out <- isFlat() ? 1 : 0;
+        advance();
+
+        // High band.
+        measureAt (6000.0f);
+        out <- isFlat() ? 1 : 0;
+        advance();
+    }
+
+    void main()
+    {
+        renderMixPercent = 100.0f;
+        sweep();
+
+        // The same sweep with the crossfade actually doing something. This is what
+        // distinguishes "the dry reference is the band sum" from "the dry reference
+        // is the input".
+        renderMixPercent = 50.0f;
+        sweep();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 3. IT COMPRESSES, BOTH WAYS.
+//
+//    A static level-transfer measurement across 54 dB of input range. Measuring the
+//    curve rather than a single step is what makes "less than 34 dB of output
+//    change" mean something: it also pins the direction, the monotonicity, and the
+//    upward half of OTT, which a single downward step cannot see.
+
+## testProcessor()
+
+processor OttCompressionCurve [[ main ]]
+{
+    output stream int32 out;
+
+    node ott = wt::OttBus;
+
+    let settleFrames = 16384;
+    let measureFrames = 4096;
+    let probeFrequencyHz = 1000.0f;
+
+    // Peak amplitudes at -60, -40, -20 and -6 dBFS.
+    let amplitudeMinus60 = 0.001f;
+    let amplitudeMinus40 = 0.01f;
+    let amplitudeMinus20 = 0.1f;
+    let amplitudeMinus6 = 0.501187f;
+
+    // A sine's RMS is its peak minus 3.0103 dB.
+    let sineRmsOffsetDb = -3.0103f;
+
+    float64 phase;
+
+    float32 nextSample (float32 amplitude)
+    {
+        let sample = amplitude * float32 (std::intrinsics::sin (phase));
+        phase += 2.0 * pi * float64 (probeFrequencyHz) / processor.frequency;
+        return sample;
+    }
+
+    float32 render (float32 sample)
+    {
+        ott.in <- float32<2> (sample, sample);
+        ott.mixIn <- 100.0f;
+        ott.amountIn <- 100.0f;
+        ott.timePercentIn <- 100.0f;
+        ott.bandDriveIn <- 0.0f;
+        ott.envelopeMatchIn <- 0.0f;
+        ott.advance();
+        return ott.out[0];
+    }
+
+    float32 outputLevelDb (float32 amplitude)
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (nextSample (amplitude));
+
+        float64 outputPower;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let rendered = render (nextSample (amplitude));
+            outputPower += float64 (rendered) * float64 (rendered);
+        }
+
+        return std::levels::gainTodB (
+            float32 (std::intrinsics::sqrt (outputPower / float64 (measureFrames)))
+        );
+    }
+
+    void main()
+    {
+        let levelMinus60 = outputLevelDb (amplitudeMinus60);
+        let levelMinus40 = outputLevelDb (amplitudeMinus40);
+        let levelMinus20 = outputLevelDb (amplitudeMinus20);
+        let levelMinus6 = outputLevelDb (amplitudeMinus6);
+
+        // 3a. The transfer curve is monotonic: louder in is still louder out.
+        out <- (levelMinus40 > levelMinus60
+                 && levelMinus20 > levelMinus40
+                 && levelMinus6 > levelMinus20) ? 1 : 0;
+        advance();
+
+        // 3b. 54 dB of input becomes less than 34 dB of output.
+        let outputSpanDb = levelMinus6 - levelMinus60;
+
+        out <- (outputSpanDb < 34.0f) ? 1 : 0;
+        advance();
+
+        // 3c. And in fact far less: this is heavy multiband compression, not a
+        //     gentle 1.5:1.
+        out <- (outputSpanDb < 20.0f) ? 1 : 0;
+        advance();
+
+        // 3d. The gain applied to the quiet signal exceeds the gain applied to the
+        //     loud one by more than 20 dB. That difference is the compression, with
+        //     the fixed band makeup cancelling out of the subtraction.
+        let gainMinus60 = levelMinus60 - (std::levels::gainTodB (amplitudeMinus60) + sineRmsOffsetDb);
+        let gainMinus6 = levelMinus6 - (std::levels::gainTodB (amplitudeMinus6) + sineRmsOffsetDb);
+
+        out <- ((gainMinus60 - gainMinus6) > 20.0f) ? 1 : 0;
+        advance();
+
+        // 3e. Upward compression is real: a -60 dBFS signal comes out LOUDER than
+        //     it went in.
+        out <- (gainMinus60 > 0.0f) ? 1 : 0;
+        advance();
+
+        // 3f. Downward compression is real: a -6 dBFS signal comes out QUIETER.
+        out <- (gainMinus6 < 0.0f) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 4. THE TIME CONTROL SCALES THE DETECTORS.
+//
+//    ottTimePercent multiplies every band's attack and release. Two fresh modules
+//    fed an identical step from silence must therefore differ in HOW FAST the gain
+//    settles. Each is compared against ITS OWN settled level rather than against
+//    the other, because a fast detector also ripples more on a steady sine, so
+//    "they settle to the same number" is not a property either of them has.
+//
+//    256 frames is 5.8 ms. At ottTimePercent 10 the slowest band attack is 0.28 ms,
+//    so the fast module has long arrived; at 1000 the fastest is 7 ms, so the slow
+//    module cannot have.
+
+## testProcessor()
+
+processor OttTimeScaling [[ main ]]
+{
+    output stream int32 out;
+
+    node fastOtt = wt::OttBus;
+    node slowOtt = wt::OttBus;
+    node releaseOtt = wt::OttBus;
+
+    let earlyFrames = 256;
+    let settleFrames = 131072;
+    let measureFrames = 4096;
+    let probeFrequencyHz = 1000.0f;
+    let amplitude = 0.5f;
+
+    // After the level drops, the crossover filters still hold the loud signal's
+    // energy for a few milliseconds, and that residue is LOUDER than the settled
+    // quiet output. Measured: the first 448 frames after the drop read ABOVE the
+    // settled level for that reason alone. So the release window starts once the
+    // residue has gone - 11.6 ms in - and runs for 23 ms, which is inside the mid
+    // band's 28 ms release and far outside its 1.4 ms attack.
+    let releaseSettleFrames = 16384;
+    let releaseResidueFrames = 512;
+    let releaseWindowFrames = 1024;
+    let quietAmplitude = 0.02f;
+
+    float64 fastPhase;
+    float64 slowPhase;
+    float64 releasePhase;
+
+    float32 renderRelease (float32 releaseAmplitude)
+    {
+        let sample = releaseAmplitude * float32 (std::intrinsics::sin (releasePhase));
+        releasePhase += 2.0 * pi * float64 (probeFrequencyHz) / processor.frequency;
+
+        releaseOtt.in <- float32<2> (sample, sample);
+        releaseOtt.mixIn <- 100.0f;
+        releaseOtt.amountIn <- 100.0f;
+        releaseOtt.timePercentIn <- 100.0f;
+        releaseOtt.bandDriveIn <- 0.0f;
+        releaseOtt.envelopeMatchIn <- 0.0f;
+        releaseOtt.advance();
+        return releaseOtt.out[0];
+    }
+
+    float32 renderFast()
+    {
+        let sample = amplitude * float32 (std::intrinsics::sin (fastPhase));
+        fastPhase += 2.0 * pi * float64 (probeFrequencyHz) / processor.frequency;
+
+        fastOtt.in <- float32<2> (sample, sample);
+        fastOtt.mixIn <- 100.0f;
+        fastOtt.amountIn <- 100.0f;
+        fastOtt.timePercentIn <- 10.0f;
+        fastOtt.bandDriveIn <- 0.0f;
+        fastOtt.envelopeMatchIn <- 0.0f;
+        fastOtt.advance();
+        return fastOtt.out[0];
+    }
+
+    float32 renderSlow()
+    {
+        let sample = amplitude * float32 (std::intrinsics::sin (slowPhase));
+        slowPhase += 2.0 * pi * float64 (probeFrequencyHz) / processor.frequency;
+
+        slowOtt.in <- float32<2> (sample, sample);
+        slowOtt.mixIn <- 100.0f;
+        slowOtt.amountIn <- 100.0f;
+        slowOtt.timePercentIn <- 1000.0f;
+        slowOtt.bandDriveIn <- 0.0f;
+        slowOtt.envelopeMatchIn <- 0.0f;
+        slowOtt.advance();
+        return slowOtt.out[0];
+    }
+
+    void main()
+    {
+        float64 fastEarlyPower;
+        float64 slowEarlyPower;
+
+        for (int32 frame = 0; frame < earlyFrames; ++frame)
+        {
+            let fastSample = renderFast();
+            let slowSample = renderSlow();
+
+            fastEarlyPower += float64 (fastSample) * float64 (fastSample);
+            slowEarlyPower += float64 (slowSample) * float64 (slowSample);
+        }
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            renderFast();
+            renderSlow();
+        }
+
+        float64 fastSettledPower;
+        float64 slowSettledPower;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let fastSample = renderFast();
+            let slowSample = renderSlow();
+
+            fastSettledPower += float64 (fastSample) * float64 (fastSample);
+            slowSettledPower += float64 (slowSample) * float64 (slowSample);
+        }
+
+        let fastEarlyMeanPower = fastEarlyPower / float64 (earlyFrames);
+        let slowEarlyMeanPower = slowEarlyPower / float64 (earlyFrames);
+        let fastSettledMeanPower = fastSettledPower / float64 (measureFrames);
+        let slowSettledMeanPower = slowSettledPower / float64 (measureFrames);
+
+        // 4a. At ottTimePercent 10 the module has essentially arrived within
+        //     5.8 ms: its early level is within 3 dB of its settled level.
+        out <- (fastEarlyMeanPower < fastSettledMeanPower * 2.0) ? 1 : 0;
+        advance();
+
+        // 4b. At ottTimePercent 1000 it has not: its early level is still more than
+        //     4.8 dB above where it ends up.
+        out <- (slowEarlyMeanPower > slowSettledMeanPower * 3.0) ? 1 : 0;
+        advance();
+
+        // 4c. Directly: while both are attacking the slow one is the louder.
+        out <- (slowEarlyMeanPower > fastEarlyMeanPower * 1.1) ? 1 : 0;
+        advance();
+
+        // 4d. RELEASE IS SLOWER THAN ATTACK, which is a separate property from
+        //     everything above: nothing that measures a steady sine or an attack can
+        //     see the release coefficient at all. A loud signal is settled, then
+        //     dropped 28 dB. Eleven milliseconds later the gain must still be held
+        //     down more than 3 dB below where it eventually recovers to - which is
+        //     true of a 28 ms release and false of a 1.4 ms one. Measured: the ratio
+        //     is 0.012 as shipped and 1.0 with the release coefficient replaced by
+        //     the attack coefficient.
+        for (int32 frame = 0; frame < releaseSettleFrames; ++frame)
+            renderRelease (amplitude);
+
+        for (int32 frame = 0; frame < releaseResidueFrames; ++frame)
+            renderRelease (quietAmplitude);
+
+        float64 releaseEarlyPower;
+
+        for (int32 frame = 0; frame < releaseWindowFrames; ++frame)
+        {
+            let sample = renderRelease (quietAmplitude);
+            releaseEarlyPower += float64 (sample) * float64 (sample);
+        }
+
+        for (int32 frame = 0; frame < releaseSettleFrames; ++frame)
+            renderRelease (quietAmplitude);
+
+        float64 releaseSettledPower;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = renderRelease (quietAmplitude);
+            releaseSettledPower += float64 (sample) * float64 (sample);
+        }
+
+        let releaseEarlyMeanPower = releaseEarlyPower / float64 (releaseWindowFrames);
+        let releaseSettledMeanPower = releaseSettledPower / float64 (measureFrames);
+
+        out <- (releaseEarlyMeanPower < releaseSettledMeanPower * 0.5) ? 1 : 0;
+        advance();
+
+        // And it does recover, rather than staying ducked for ever.
+        out <- (releaseSettledMeanPower > releaseEarlyMeanPower) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 5. EVERY EXPOSED CONTROL REACHES THE DSP, AND THE EXTREMES ARE BOUNDED.
+//
+//    Five host parameters are exposed. Three of them (amount, band drive, envelope
+//    match) can only be shown to be connected by moving them, because none of them
+//    changes the module's structure. The fourth and fifth (mix, time) are pinned by
+//    sections 1 and 4.
+
+## testProcessor()
+
+processor OttControlReachAndStability [[ main ]]
+{
+    output stream int32 out;
+
+    node amountOffOtt = wt::OttBus;
+    node amountOnOtt = wt::OttBus;
+    node driveOffOtt = wt::OttBus;
+    node driveOnOtt = wt::OttBus;
+    node matchOffOtt = wt::OttBus;
+    node matchOnOtt = wt::OttBus;
+    node extremeOtt = wt::OttBus;
+
+    let settleFrames = 4096;
+    let measureFrames = 8192;
+    let probeFrequencyHz = 220.0f;
+    let probeAmplitude = 0.5f;
+    let extremeAmplitude = 0.95f;
+    let reachThreshold = 0.001f;
+    let stabilityBound = 8.0f;
+
+    float64 phase;
+
+    float32 nextSample (float32 amplitude)
+    {
+        let sample = amplitude * float32 (std::intrinsics::sin (phase));
+        phase += 2.0 * pi * float64 (probeFrequencyHz) / processor.frequency;
+        return sample;
+    }
+
+    float32 renderAmountOff (float32 sample)
+    {
+        amountOffOtt.in <- float32<2> (sample, sample);
+        amountOffOtt.mixIn <- 100.0f;
+        amountOffOtt.amountIn <- 0.0f;
+        amountOffOtt.timePercentIn <- 100.0f;
+        amountOffOtt.bandDriveIn <- 0.0f;
+        amountOffOtt.envelopeMatchIn <- 0.0f;
+        amountOffOtt.advance();
+        return amountOffOtt.out[0];
+    }
+
+    float32 renderAmountOn (float32 sample)
+    {
+        amountOnOtt.in <- float32<2> (sample, sample);
+        amountOnOtt.mixIn <- 100.0f;
+        amountOnOtt.amountIn <- 100.0f;
+        amountOnOtt.timePercentIn <- 100.0f;
+        amountOnOtt.bandDriveIn <- 0.0f;
+        amountOnOtt.envelopeMatchIn <- 0.0f;
+        amountOnOtt.advance();
+        return amountOnOtt.out[0];
+    }
+
+    float32 renderDriveOff (float32 sample)
+    {
+        driveOffOtt.in <- float32<2> (sample, sample);
+        driveOffOtt.mixIn <- 100.0f;
+        driveOffOtt.amountIn <- 100.0f;
+        driveOffOtt.timePercentIn <- 100.0f;
+        driveOffOtt.bandDriveIn <- 0.0f;
+        driveOffOtt.envelopeMatchIn <- 0.0f;
+        driveOffOtt.advance();
+        return driveOffOtt.out[0];
+    }
+
+    float32 renderDriveOn (float32 sample)
+    {
+        driveOnOtt.in <- float32<2> (sample, sample);
+        driveOnOtt.mixIn <- 100.0f;
+        driveOnOtt.amountIn <- 100.0f;
+        driveOnOtt.timePercentIn <- 100.0f;
+        driveOnOtt.bandDriveIn <- 100.0f;
+        driveOnOtt.envelopeMatchIn <- 0.0f;
+        driveOnOtt.advance();
+        return driveOnOtt.out[0];
+    }
+
+    float32 renderMatchOff (float32 sample)
+    {
+        matchOffOtt.in <- float32<2> (sample, sample);
+        matchOffOtt.mixIn <- 100.0f;
+        matchOffOtt.amountIn <- 100.0f;
+        matchOffOtt.timePercentIn <- 100.0f;
+        matchOffOtt.bandDriveIn <- 0.0f;
+        matchOffOtt.envelopeMatchIn <- 0.0f;
+        matchOffOtt.advance();
+        return matchOffOtt.out[0];
+    }
+
+    float32 renderMatchOn (float32 sample)
+    {
+        matchOnOtt.in <- float32<2> (sample, sample);
+        matchOnOtt.mixIn <- 100.0f;
+        matchOnOtt.amountIn <- 100.0f;
+        matchOnOtt.timePercentIn <- 100.0f;
+        matchOnOtt.bandDriveIn <- 0.0f;
+        matchOnOtt.envelopeMatchIn <- 100.0f;
+        matchOnOtt.advance();
+        return matchOnOtt.out[0];
+    }
+
+    float32<2> renderExtreme (float32 sample)
+    {
+        extremeOtt.in <- float32<2> (sample, sample * 0.5f);
+        extremeOtt.mixIn <- 100.0f;
+        extremeOtt.amountIn <- 100.0f;
+        extremeOtt.timePercentIn <- 10.0f;
+        extremeOtt.bandDriveIn <- 100.0f;
+        extremeOtt.envelopeMatchIn <- 100.0f;
+        extremeOtt.advance();
+        return extremeOtt.out;
+    }
+
+    void main()
+    {
+        float32 amountDeviation;
+        float32 driveDeviation;
+        float32 matchDeviation;
+
+        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        {
+            let sample = nextSample (probeAmplitude);
+            let amountOff = renderAmountOff (sample);
+            let amountOn = renderAmountOn (sample);
+            let driveOff = renderDriveOff (sample);
+            let driveOn = renderDriveOn (sample);
+            let matchOff = renderMatchOff (sample);
+            let matchOn = renderMatchOn (sample);
+
+            if (frame >= settleFrames)
+            {
+                amountDeviation = std::intrinsics::max (amountDeviation, std::intrinsics::abs (amountOn - amountOff));
+                driveDeviation = std::intrinsics::max (driveDeviation, std::intrinsics::abs (driveOn - driveOff));
+                matchDeviation = std::intrinsics::max (matchDeviation, std::intrinsics::abs (matchOn - matchOff));
+            }
+        }
+
+        // 5a-5c. Each control reaches the DSP.
+        out <- (amountDeviation > reachThreshold) ? 1 : 0;
+        advance();
+
+        out <- (driveDeviation > reachThreshold) ? 1 : 0;
+        advance();
+
+        out <- (matchDeviation > reachThreshold) ? 1 : 0;
+        advance();
+
+        // 5d. With every control at its most aggressive setting and a hot input,
+        //     the output stays finite and bounded. No unbounded state, no runaway.
+        bool isBounded = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let rendered = renderExtreme (nextSample (extremeAmplitude));
+
+            for (wrap<2> channel)
+            {
+                let sample = rendered[channel];
+
+                if (! (sample == sample) || std::intrinsics::abs (sample) >= stabilityBound)
+                    isBounded = false;
+            }
+        }
+
+        out <- isBounded ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 6. STEREO LINK, AND CONTROL CHANGES THAT ARRIVE MID-STREAM.
+//
+//    6a. The rack voicing runs the detector fully stereo-linked, so a transient on
+//        one channel must duck BOTH. Nothing above can see this: with the link at
+//        100 % the left and right gains are computed from the same linked level, so
+//        a mutation that drives the right channel from the left gain is an
+//        equivalent mutant. The property that is not equivalent is the one asserted
+//        here - an identical quiet right channel comes out measurably quieter when
+//        the LEFT channel is loud.
+//
+//    6b/6c. The module caches its detector and saturation coefficients and rebuilds
+//        them only when the parameter that feeds them has moved materially. Every
+//        other section sets its parameters before frame 0, so every other section
+//        would still pass if the cache were never refreshed again. These two change
+//        a control on a running module and require the sound to follow.
+
+## testProcessor()
+
+processor OttStereoLinkAndLiveControlChanges [[ main ]]
+{
+    output stream int32 out;
+
+    node loudLeftOtt = wt::OttBus;
+    node quietBothOtt = wt::OttBus;
+    node timeReferenceOtt = wt::OttBus;
+    node timeChangedOtt = wt::OttBus;
+    node driveReferenceOtt = wt::OttBus;
+    node driveChangedOtt = wt::OttBus;
+
+    let settleFrames = 8192;
+    let measureFrames = 4096;
+    let stepResponseFrames = 512;
+    let probeFrequencyHz = 500.0f;
+    let loudAmplitude = 0.5f;
+    let quietAmplitude = 0.02f;
+    let duckingRatioBound = 0.5f;
+    let divergenceThreshold = 0.001f;
+
+    float64 linkPhase;
+    float64 changePhase;
+
+    float32 nextLinkSample()
+    {
+        let sample = float32 (std::intrinsics::sin (linkPhase));
+        linkPhase += 2.0 * pi * float64 (probeFrequencyHz) / processor.frequency;
+        return sample;
+    }
+
+    float32 nextChangeSample()
+    {
+        let sample = float32 (std::intrinsics::sin (changePhase));
+        changePhase += 2.0 * pi * float64 (probeFrequencyHz) / processor.frequency;
+        return sample;
+    }
+
+    float32<2> renderLoudLeft (float32 sample)
+    {
+        loudLeftOtt.in <- float32<2> (sample * loudAmplitude, sample * quietAmplitude);
+        loudLeftOtt.mixIn <- 100.0f;
+        loudLeftOtt.amountIn <- 100.0f;
+        loudLeftOtt.timePercentIn <- 100.0f;
+        loudLeftOtt.bandDriveIn <- 0.0f;
+        loudLeftOtt.envelopeMatchIn <- 0.0f;
+        loudLeftOtt.advance();
+        return loudLeftOtt.out;
+    }
+
+    float32<2> renderQuietBoth (float32 sample)
+    {
+        quietBothOtt.in <- float32<2> (sample * quietAmplitude, sample * quietAmplitude);
+        quietBothOtt.mixIn <- 100.0f;
+        quietBothOtt.amountIn <- 100.0f;
+        quietBothOtt.timePercentIn <- 100.0f;
+        quietBothOtt.bandDriveIn <- 0.0f;
+        quietBothOtt.envelopeMatchIn <- 0.0f;
+        quietBothOtt.advance();
+        return quietBothOtt.out;
+    }
+
+    float32 renderTimeReference (float32 sample)
+    {
+        timeReferenceOtt.in <- float32<2> (sample, sample);
+        timeReferenceOtt.mixIn <- 100.0f;
+        timeReferenceOtt.amountIn <- 100.0f;
+        timeReferenceOtt.timePercentIn <- 100.0f;
+        timeReferenceOtt.bandDriveIn <- 0.0f;
+        timeReferenceOtt.envelopeMatchIn <- 0.0f;
+        timeReferenceOtt.advance();
+        return timeReferenceOtt.out[0];
+    }
+
+    float32 renderTimeChanged (float32 sample, float32 timePercent)
+    {
+        timeChangedOtt.in <- float32<2> (sample, sample);
+        timeChangedOtt.mixIn <- 100.0f;
+        timeChangedOtt.amountIn <- 100.0f;
+        timeChangedOtt.timePercentIn <- timePercent;
+        timeChangedOtt.bandDriveIn <- 0.0f;
+        timeChangedOtt.envelopeMatchIn <- 0.0f;
+        timeChangedOtt.advance();
+        return timeChangedOtt.out[0];
+    }
+
+    float32 renderDriveReference (float32 sample)
+    {
+        driveReferenceOtt.in <- float32<2> (sample, sample);
+        driveReferenceOtt.mixIn <- 100.0f;
+        driveReferenceOtt.amountIn <- 100.0f;
+        driveReferenceOtt.timePercentIn <- 100.0f;
+        driveReferenceOtt.bandDriveIn <- 0.0f;
+        driveReferenceOtt.envelopeMatchIn <- 0.0f;
+        driveReferenceOtt.advance();
+        return driveReferenceOtt.out[0];
+    }
+
+    float32 renderDriveChanged (float32 sample, float32 bandDrive)
+    {
+        driveChangedOtt.in <- float32<2> (sample, sample);
+        driveChangedOtt.mixIn <- 100.0f;
+        driveChangedOtt.amountIn <- 100.0f;
+        driveChangedOtt.timePercentIn <- 100.0f;
+        driveChangedOtt.bandDriveIn <- bandDrive;
+        driveChangedOtt.envelopeMatchIn <- 0.0f;
+        driveChangedOtt.advance();
+        return driveChangedOtt.out[0];
+    }
+
+    void main()
+    {
+        // 6a. Stereo link. Both modules get the SAME right channel; only the left
+        //     differs. The linked detector must duck the loud module's right.
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            let sample = nextLinkSample();
+            renderLoudLeft (sample);
+            renderQuietBoth (sample);
+        }
+
+        float64 loudRightPower;
+        float64 quietRightPower;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = nextLinkSample();
+            let loudRight = renderLoudLeft (sample)[1];
+            let quietRight = renderQuietBoth (sample)[1];
+
+            loudRightPower += float64 (loudRight) * float64 (loudRight);
+            quietRightPower += float64 (quietRight) * float64 (quietRight);
+        }
+
+        out <- (loudRightPower < quietRightPower * float64 (duckingRatioBound)) ? 1 : 0;
+        advance();
+
+        // 6b. ottTimePercent, changed on a running module. Both modules are driven
+        //     identically first, and must agree BIT-EXACTLY - otherwise the
+        //     divergence measured afterwards would prove nothing.
+        bool identicalBeforeTimeChange = true;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            let sample = nextChangeSample() * quietAmplitude;
+
+            if (renderTimeReference (sample) != renderTimeChanged (sample, 100.0f))
+                identicalBeforeTimeChange = false;
+        }
+
+        out <- identicalBeforeTimeChange ? 1 : 0;
+        advance();
+
+        // A level step, with one module's detector time now 10x slower. The slow
+        // module must still be the louder one while both are attacking.
+        float64 referenceStepPower;
+        float64 changedStepPower;
+        float32 timeDivergence;
+
+        for (int32 frame = 0; frame < stepResponseFrames; ++frame)
+        {
+            let sample = nextChangeSample() * loudAmplitude;
+            let reference = renderTimeReference (sample);
+            let changed = renderTimeChanged (sample, 1000.0f);
+
+            referenceStepPower += float64 (reference) * float64 (reference);
+            changedStepPower += float64 (changed) * float64 (changed);
+            timeDivergence = std::intrinsics::max (timeDivergence, std::intrinsics::abs (changed - reference));
+        }
+
+        out <- (timeDivergence > divergenceThreshold) ? 1 : 0;
+        advance();
+
+        out <- (changedStepPower > referenceStepPower) ? 1 : 0;
+        advance();
+
+        // 6c. ottBandDrive, changed on a running module.
+        bool identicalBeforeDriveChange = true;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            let sample = nextChangeSample() * loudAmplitude;
+
+            if (renderDriveReference (sample) != renderDriveChanged (sample, 0.0f))
+                identicalBeforeDriveChange = false;
+        }
+
+        out <- identicalBeforeDriveChange ? 1 : 0;
+        advance();
+
+        float32 driveDivergence;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let sample = nextChangeSample() * loudAmplitude;
+            let reference = renderDriveReference (sample);
+            let changed = renderDriveChanged (sample, 100.0f);
+
+            driveDivergence = std::intrinsics::max (driveDivergence, std::intrinsics::abs (changed - reference));
+        }
+
+        out <- (driveDivergence > divergenceThreshold) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 7. THE SAME MODULE AT 48 kHz.
+//
+//    Every other section runs at the harness's default 44.1 kHz. The crossovers are
+//    built from processor.frequency and the detector coefficients from
+//    float32 (processor.frequency), so nothing here should be rate-dependent - but
+//    "should be" is not a test. This section re-runs the three properties that a
+//    hard-coded 44100 would break, at the rate the iOS patch actually runs at.
+
+## testProcessor (undefined, { frequency: 48000 })
+
+processor OttAt48kHz [[ main ]]
+{
+    output stream int32 out;
+
+    node bypassOtt = wt::OttBus;
+    node impulseOtt = wt::OttBus;
+    node combOtt = wt::OttBus;
+
+    let measureFrames = 8192;
+    let settleFrames = 4096;
+    let flatnessToleranceDb = 0.25f;
+    let amplitude = 0.35f;
+
+    float64 phase;
+
+    float32 leftSignal (int32 frame)
+    {
+        return 0.4f * std::intrinsics::sin (float32 (frame) * 0.05f);
+    }
+
+    float32 rightSignal (int32 frame)
+    {
+        return 0.3f * std::intrinsics::sin (float32 (frame) * 0.031f + 1.1f);
+    }
+
+    float32 nextSample (float32 frequencyHz)
+    {
+        let sample = amplitude * float32 (std::intrinsics::sin (phase));
+        phase += 2.0 * pi * float64 (frequencyHz) / processor.frequency;
+        return sample;
+    }
+
+    float32<2> renderBypass (int32 frame)
+    {
+        bypassOtt.in <- float32<2> (leftSignal (frame), rightSignal (frame));
+        bypassOtt.mixIn <- 0.0f;
+        bypassOtt.amountIn <- 100.0f;
+        bypassOtt.timePercentIn <- 10.0f;
+        bypassOtt.bandDriveIn <- 100.0f;
+        bypassOtt.envelopeMatchIn <- 100.0f;
+        bypassOtt.advance();
+        return bypassOtt.out;
+    }
+
+    float32<2> renderImpulse (int32 frame)
+    {
+        let sample = frame == 0 ? 1.0f : 0.0f;
+        impulseOtt.in <- float32<2> (sample, sample);
+        impulseOtt.mixIn <- 100.0f;
+        impulseOtt.amountIn <- 100.0f;
+        impulseOtt.timePercentIn <- 100.0f;
+        impulseOtt.bandDriveIn <- 0.0f;
+        impulseOtt.envelopeMatchIn <- 0.0f;
+        impulseOtt.advance();
+        return impulseOtt.out;
+    }
+
+    // Half wet, so an internal dry reference taken from the raw input would comb.
+    float32<2> renderComb (float32 sample)
+    {
+        combOtt.in <- float32<2> (sample, sample);
+        combOtt.mixIn <- 50.0f;
+        combOtt.amountIn <- 0.0f;
+        combOtt.timePercentIn <- 100.0f;
+        combOtt.bandDriveIn <- 0.0f;
+        combOtt.envelopeMatchIn <- 0.0f;
+        combOtt.advance();
+        return combOtt.out;
+    }
+
+    float32 measureFlatnessDbAt (float32 frequencyHz)
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            renderComb (nextSample (frequencyHz));
+
+        float64 inputPower;
+        float64 outputPower;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+        {
+            let sample = nextSample (frequencyHz);
+            let rendered = renderComb (sample)[0];
+
+            inputPower += float64 (sample) * float64 (sample);
+            outputPower += float64 (rendered) * float64 (rendered);
+        }
+
+        return std::levels::gainTodB (
+            float32 (std::intrinsics::sqrt (outputPower / std::intrinsics::max (inputPower, 1.0e-30)))
+        );
+    }
+
+    void main()
+    {
+        // 7a. Bit-exact dry passthrough at mix 0, at 48 kHz.
+        bool bypassIsExact = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let rendered = renderBypass (frame);
+
+            if (rendered[0] != leftSignal (frame) || rendered[1] != rightSignal (frame))
+                bypassIsExact = false;
+        }
+
+        out <- bypassIsExact ? 1 : 0;
+        advance();
+
+        // 7b. Same-frame wet response. A 3 ms lookahead is 144 frames here.
+        out <- (std::intrinsics::abs (renderImpulse (0)[0]) > 0.05f) ? 1 : 0;
+        advance();
+
+        // 7c. The crossovers are still at the right frequencies, so the half-wet
+        //     band sum is still flat rather than combed.
+        out <- (std::intrinsics::abs (measureFlatnessDbAt (88.2818146f)) < flatnessToleranceDb) ? 1 : 0;
+        advance();
+
+        out <- (std::intrinsics::abs (measureFlatnessDbAt (2499.99951f)) < flatnessToleranceDb) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 8. WHAT OF THE FIXED VOICING CAN ACTUALLY BE PINNED FROM OUTSIDE.
+//
+//    Thirty-nine of the standalone's forty-four controls are compile-time constants
+//    here. Most of them cannot be pinned by a black-box level measurement, and this
+//    section deliberately contains only the two that can, each verified by running
+//    the mutation it is supposed to kill. The reason the rest resist is worth
+//    recording, because it is a property of the effect and not of the test:
+//
+//    OTT's three bands are voiced to land at nearly the same output level - that
+//    coherence is what makes it sound like one processor rather than three - so band
+//    identity barely shows up in the output level. What does show up is the UPWARD
+//    EXPANSION OF THE LEAKED NEIGHBOURING BANDS: at a probe level of about -42 dBFS
+//    the band that is 40 dB down still gets 27 dB of upward gain, and it lands only
+//    13 dB below the in-band signal. That contamination is what defeats a
+//    band-makeup prediction. Measured, not assumed: the mid/high crossover moved
+//    from 2500 Hz to 8000 Hz changes an 800 Hz-against-8 kHz level difference from
+//    1.92 dB to 3.03 dB - the wrong way round to assert on - and a hard knee changes
+//    the transfer curvature across the mid band's threshold from -0.82 dB to
+//    -0.60 dB, which is far too small a margin to hang a test on. Both were written,
+//    measured and removed rather than shipped with a threshold reverse-engineered
+//    from the output. The right tool for the rest of the voicing is a golden-render
+//    regression, which needs the patch manifest the integration agent owns.
+
+## testProcessor()
+
+processor OttFixedVoicing [[ main ]]
+{
+    output stream int32 out;
+
+    node ott = wt::OttBus;
+
+    let settleFrames = 16384;
+    let measureFrames = 4096;
+    let sineRmsOffsetDb = -3.0103f;
+
+    // About -42.6 dBFS RMS: inside the low and mid bands' zero-gain corridors, so
+    // the residual level difference between them is their static band gains.
+    let corridorAmplitude = 0.0105f;
+
+    // Two decades below the quiet reference, where the upward gain computer asks for
+    // about 40 dB and the +30 dB expansion limit has to refuse. Nothing in section 3
+    // goes anywhere near here: at -60 dBFS the upward gain is only about 10 dB, well
+    // inside the limit, which is why section 3 cannot see it.
+    let farBelowAmplitude = 1.417e-5f;
+    let referenceQuietAmplitude = 1.417e-3f;
+
+    float64 phase;
+
+    float32 nextSample (float32 amplitude, float32 frequencyHz)
+    {
+        let sample = amplitude * float32 (std::intrinsics::sin (phase));
+        phase += 2.0 * pi * float64 (frequencyHz) / processor.frequency;
+        return sample;
+    }
+
+    float32 render (float32 sample)
+    {
+        ott.in <- float32<2> (sample, sample);
+        ott.mixIn <- 100.0f;
+        ott.amountIn <- 100.0f;
+        ott.timePercentIn <- 100.0f;
+        ott.bandDriveIn <- 0.0f;
+        ott.envelopeMatchIn <- 0.0f;
+        ott.advance();
+        return ott.out[0];
+    }
+
+    float32 outputLevelDb (float32 amplitude, float32 frequencyHz)
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (nextSample (amplitude, frequencyHz));
+
+        float64 outputPower;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let rendered = render (nextSample (amplitude, frequencyHz));
+            outputPower += float64 (rendered) * float64 (rendered);
+        }
+
+        return std::levels::gainTodB (
+            float32 (std::intrinsics::sqrt (outputPower / float64 (measureFrames)))
+        );
+    }
+
+    float32 gainDb (float32 amplitude, float32 frequencyHz)
+    {
+        return outputLevelDb (amplitude, frequencyHz)
+                - (std::levels::gainTodB (amplitude) + sineRmsOffsetDb);
+    }
+
+    void main()
+    {
+        // 8a. 30 Hz and 400 Hz do not land in the same band, so the low/mid
+        //     crossover is somewhere between them. Measured: 4.12 dB apart as
+        //     shipped, 1.36 dB apart with ottLowMidHz moved to 200 Hz.
+        let levelAt30 = outputLevelDb (corridorAmplitude, 30.0f);
+        let levelAt400 = outputLevelDb (corridorAmplitude, 400.0f);
+
+        out <- (std::intrinsics::abs (levelAt30 - levelAt400) > 3.0f) ? 1 : 0;
+        advance();
+
+        // 8b. Forty decibels below the reference the module has not given away forty
+        //     decibels of gain, because the expansion limit stopped at thirty.
+        //     Measured: 18.5 dB as shipped, 29.0 dB with the limit lifted.
+        let gainFarBelow = gainDb (farBelowAmplitude, 1000.0f);
+        let gainReference = gainDb (referenceQuietAmplitude, 1000.0f);
+
+        out <- ((gainFarBelow - gainReference) < 25.0f) ? 1 : 0;
+        advance();
+
+        // And it is still expanding upward down there, so 8b is not passing because
+        // the module went silent.
+        out <- (gainFarBelow > gainReference) ? 1 : 0;
+        advance();
+
+        out <- -1;
+        advance();
+    }
+}

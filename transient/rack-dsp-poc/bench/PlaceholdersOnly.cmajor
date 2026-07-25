@@ -1,0 +1,23 @@
+graph BenchPlaceholders [[ main ]]
+{
+    output stream float32<2> audioOut;
+
+    node source = wt::BenchSource;
+    node globalFilter = wt::RackGlobalFilterPlaceholder;
+    node ott = wt::RackOttPlaceholder;
+    node flanger = wt::RackFlangerPlaceholder;
+    node phaser = wt::RackPhaserPlaceholder;
+    node delay = wt::RackDelayPlaceholder;
+    node reverb = wt::RackReverbPlaceholder;
+
+    connection
+    {
+        source.out -> globalFilter.in;
+        globalFilter.out -> ott.in;
+        ott.out -> flanger.in;
+        flanger.out -> phaser.in;
+        phaser.out -> delay.in;
+        delay.out -> reverb.in;
+        reverb.out -> audioOut;
+    }
+}

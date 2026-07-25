@@ -1,0 +1,116 @@
+// Smoke 5a: a parent graph CAN hoist a composing processor's own endpoints.
+
+## testCompile()
+
+processor Child
+{
+    input stream float32 in;
+    input value float32 driveIn [[ init: 0.5f ]];
+    output stream float32 out;
+
+    void main()
+    {
+        loop
+        {
+            out <- in * driveIn;
+            advance();
+        }
+    }
+}
+
+processor Composer
+{
+    input stream float32 in;
+    input value float32 distortionDriveIn [[ name: "Distortion Drive", min: 0.0f, max: 1.0f, init: 0.5f ]];
+    output stream float32 out;
+
+    node child = Child;
+
+    void main()
+    {
+        loop
+        {
+            child.driveIn <- distortionDriveIn;
+            child.in <- in;
+            child.advance();
+            out <- child.out;
+            advance();
+        }
+    }
+}
+
+graph Test [[ main ]]
+{
+    input stream float32 in;
+    input composer.distortion*;
+    output stream float32 out;
+
+    node composer = Composer;
+
+    connection
+    {
+        in -> composer.in;
+        composer.out -> out;
+    }
+}
+
+// Smoke 5b: does a composed child's declared latency leak into the composing
+// parent, and is it compensated?
+
+## testConsole ("composerOwnLatency=0\n")
+
+processor LatentChild
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    processor.latency = 128;
+
+    float32[128] history;
+    wrap<128> writeIndex;
+
+    void main()
+    {
+        loop
+        {
+            history[writeIndex] = in;
+            writeIndex += 1;
+            out <- history[writeIndex];
+            advance();
+        }
+    }
+}
+
+processor Composer2
+{
+    input stream float32 in;
+    output stream float32 out;
+
+    node latent = LatentChild;
+
+    void main()
+    {
+        loop
+        {
+            latent.in <- in;
+            latent.advance();
+            out <- latent.out;
+            advance();
+        }
+    }
+}
+
+processor Test2 [[ main ]]
+{
+    output stream int32 out;
+
+    node composer = Composer2;
+
+    void main()
+    {
+        console <- "composerOwnLatency=" <- processor.latency <- "\n";
+
+        out <- -1;
+        advance();
+    }
+}
