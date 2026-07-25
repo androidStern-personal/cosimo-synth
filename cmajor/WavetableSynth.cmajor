@@ -1429,6 +1429,25 @@ graph WavetableSynth [[ main ]]
         sharedEngine.trackingPitchHzOut -> rack.trackingPitchHzIn;
         tempo -> tempoMonitor.tempoIn;
         tempoMonitor.bpmOut -> rack.tempoBpmIn;
+        // NOT YET CONNECTED, AND SAY SO OUT LOUD: the rack's `rackModIn[36]` carries the
+        // reduced voice-to-global modulation offsets of ADR-002, and nothing drives it
+        // yet. wt::EffectsRack already applies all thirty-six - see forwardModuleParameters
+        // in cmajor/EffectsRack.cmajor - and cmajor/VoiceReducer.cmajor already owns the
+        // destination table and the reduction algorithm, tested standalone in
+        // tests/cmajor_rack/RackReducer.cmajtest. What is missing is the PRODUCER: the
+        // reduction has to run inside wt::SharedVoiceEngine's existing per-voice route
+        // loop and be published as `output stream float32 rackModOut[rackModTargetCount]`,
+        // which is an edit to cmajor/FixedFrameOscillator.cmajor. When that endpoint
+        // exists this becomes exactly one line -
+        //     sharedEngine.rackModOut -> rack.rackModIn;
+        // - because a stream array crosses a graph connection whole.
+        //
+        // Until then an unconnected input stream reads 0.0f on every frame, so every
+        // rackModulate* call returns its unmodulated base value and rack modulation is
+        // INERT rather than wrong. That is why the fixtures in tests/cmajor_rack are
+        // bit-exact against pre-rack audio - and it is also why this comment exists,
+        // because a silently-zero stream is otherwise indistinguishable from a working
+        // one that nobody has mapped anything to.
         // wt::DistortionBus now lives inside the rack, so the two analyzers read the
         // preview taps the rack forwards on its behalf. A composed child's STREAM
         // outputs stay reachable by its parent; its event outputs would not, which is

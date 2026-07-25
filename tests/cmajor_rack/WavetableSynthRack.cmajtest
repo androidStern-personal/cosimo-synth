@@ -93,6 +93,19 @@ function audioPatchRun(subDir)
 
 ## runScript (audioPatchRun("fixtures/rack_rejected_order"))
 
+// 3b. THE OTHER HALF OF THE VALIDATION (rack invariant C11). rackOrder is not the only
+//     structure upload, and an enable mask is just as capable of being malformed: this
+//     one carries 2 in the reverb slot, which is neither enabled nor disabled. It is
+//     rejected in one piece rather than coerced to truthy - rejectedEnableCount 1, no
+//     structure generation burned, committedEnableMask still the default 251 - and,
+//     because the upload also asked to switch OTT off and everything else on, a rack
+//     that had coerced it would have committed a DIFFERENT mask and a new generation.
+//     The audio stays bit-identical to the dry golden. Both structure events therefore
+//     fail the same way, which is the whole point: a malformed upload is an adapter bug
+//     the DSP reports, never a runtime state it occupies.
+
+## runScript (audioPatchRun("fixtures/rack_rejected_enable"))
+
 // 4. THE SHIPPING CHAIN STILL SOUNDS LIKE ITSELF. Distortion at full wet and Chorus at
 //    mix 0.6, no rack uploads at all, against a golden rendered by the pre-rack patch
 //    with the same parameter values through the fixed distortion -> chorus tail. This is
