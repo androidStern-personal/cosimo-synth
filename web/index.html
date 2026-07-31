@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#080b14">
+  <link rel="icon" href="data:,">
+  <title>Cosimo Synth — Browser Proof</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body,
+    #cosimo-web-shell,
+    #cosimo-view {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+    }
+
+    html,
+    body {
+      overflow: hidden;
+      background: #080b14;
+      color: #f8f3ea;
+      font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+    }
+
+    #cosimo-web-shell {
+      position: relative;
+      display: grid;
+      place-items: center;
+    }
+
+    #cosimo-view {
+      overflow: hidden;
+    }
+
+    #cosimo-start-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 10;
+      display: grid;
+      place-items: center;
+      border: 0;
+      background: radial-gradient(circle, rgb(35 42 59 / 94%), rgb(8 11 20 / 98%));
+      color: inherit;
+      cursor: pointer;
+    }
+
+    #cosimo-start-overlay[disabled] {
+      cursor: wait;
+    }
+
+    #cosimo-start-copy {
+      display: grid;
+      gap: 0.8rem;
+      justify-items: center;
+      text-align: center;
+    }
+
+    #cosimo-start-title {
+      font-size: clamp(1.8rem, 5vw, 4rem);
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    #cosimo-start-status {
+      color: #b8c2d8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.8rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    #cosimo-start-action {
+      margin-top: 1rem;
+      border: 1px solid rgb(248 243 234 / 38%);
+      border-radius: 999px;
+      padding: 0.7rem 1.2rem;
+      background: rgb(255 255 255 / 8%);
+    }
+
+    #cosimo-error {
+      position: absolute;
+      inset: auto 1rem 1rem;
+      z-index: 20;
+      display: none;
+      max-height: 40%;
+      overflow: auto;
+      border: 1px solid #e6657a;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      background: #240b13;
+      color: #ffd7df;
+      white-space: pre-wrap;
+    }
+  </style>
+</head>
+<body>
+  <main id="cosimo-web-shell">
+    <div id="cosimo-view" aria-label="Cosimo Synth"></div>
+    <button id="cosimo-start-overlay" type="button" disabled>
+      <span id="cosimo-start-copy">
+        <span id="cosimo-start-title">Cosimo Synth</span>
+        <span id="cosimo-start-status">Loading WebAssembly engine…</span>
+        <span id="cosimo-start-action">Start audio</span>
+      </span>
+    </button>
+    <pre id="cosimo-error" role="alert"></pre>
+  </main>
+  <script type="module" src="./cosimo-web-host.js"></script>
+</body>
+</html>
