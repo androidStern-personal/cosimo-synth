@@ -48,6 +48,44 @@ async function serveWebProof(request, response) {
     }
 }
 
+async function readKeyboardLayout(page) {
+    return page.evaluate(() => {
+        const view = document.querySelector("cosimo-desktop-react-view");
+        const root = view?.shadowRoot;
+        const stickyKeyboard = root?.querySelector('[data-role="sticky-keyboard"]');
+        const scrollRegion = root?.querySelector('[data-role="desktop-scroll-region"]');
+        const keyboard = root?.querySelector("cosimo-react-desktop-keyboard");
+        const keyboardHost = keyboard?.parentElement;
+        const stickyBounds = stickyKeyboard?.getBoundingClientRect();
+        const keyboardBounds = keyboard?.getBoundingClientRect();
+
+        return {
+            documentScrollWidth: document.documentElement.scrollWidth,
+            hostClientWidth: keyboardHost instanceof HTMLElement ? keyboardHost.clientWidth : 0,
+            keyboardMaxWidth: keyboard instanceof HTMLElement ? keyboard.style.maxWidth : "",
+            keyboardWidth: keyboardBounds?.width ?? 0,
+            scrollClientHeight: scrollRegion instanceof HTMLElement ? scrollRegion.clientHeight : 0,
+            scrollHeight: scrollRegion instanceof HTMLElement ? scrollRegion.scrollHeight : 0,
+            scrollTop: scrollRegion instanceof HTMLElement ? scrollRegion.scrollTop : 0,
+            stickyBottom: stickyBounds?.bottom ?? 0,
+            stickyTop: stickyBounds?.top ?? 0,
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+        };
+    });
+}
+
+async function sampleKeyboardWidths(page, sampleCount = 4) {
+    const widths = [];
+
+    for (let sampleIndex = 0; sampleIndex < sampleCount; sampleIndex += 1) {
+        widths.push((await readKeyboardLayout(page)).keyboardWidth);
+        await page.waitForTimeout(100);
+    }
+
+    return widths;
+}
+
 before(async () => {
     await fs.access(path.join(webRoot, "index.html"));
     server = createServer((request, response) => {
@@ -83,7 +121,7 @@ after(async () => {
     });
 });
 
-test("generated browser proof loads Cosimo and renders non-silent audio from MIDI", async () => {
+test("generated browser proof keeps the real keyboard pinned and renders non-silent audio from it", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     const consoleErrors = [];
     const failedResponses = [];
@@ -110,6 +148,39 @@ test("generated browser proof loads Cosimo and renders non-silent audio from MID
             const view = document.querySelector("cosimo-desktop-react-view");
             return view?.shadowRoot?.querySelector('select[aria-label="Select wavetable"]')?.options.length ?? 0;
         }), 238);
+        await page.waitForFunction(() => {
+            const view = document.querySelector("cosimo-desktop-react-view");
+            return Boolean(view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard"));
+        });
+
+        const desktopWidths = await sampleKeyboardWidths(page);
+        const desktopLayoutBeforeScroll = await readKeyboardLayout(page);
+        assert.ok(
+            Math.max(...desktopWidths) - Math.min(...desktopWidths) < 0.5,
+            `Expected a stable keyboard width, received ${desktopWidths.join(", ")}.`,
+        );
+        assert.equal(desktopLayoutBeforeScroll.keyboardMaxWidth, "100%");
+        assert.ok(desktopLayoutBeforeScroll.keyboardWidth > 0);
+        assert.ok(desktopLayoutBeforeScroll.keyboardWidth <= desktopLayoutBeforeScroll.hostClientWidth + 0.5);
+        assert.ok(desktopLayoutBeforeScroll.stickyTop >= 0);
+        assert.ok(desktopLayoutBeforeScroll.stickyBottom <= desktopLayoutBeforeScroll.viewportHeight);
+        assert.ok(desktopLayoutBeforeScroll.scrollHeight > desktopLayoutBeforeScroll.scrollClientHeight);
+
+        await page.evaluate(() => {
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const scrollRegion = view?.shadowRoot?.querySelector('[data-role="desktop-scroll-region"]');
+
+            if (scrollRegion instanceof HTMLElement) {
+                scrollRegion.scrollTop = scrollRegion.scrollHeight;
+            }
+        });
+        await page.waitForTimeout(100);
+        const desktopLayoutAfterScroll = await readKeyboardLayout(page);
+        assert.ok(desktopLayoutAfterScroll.scrollTop > 0);
+        assert.ok(
+            Math.abs(desktopLayoutAfterScroll.stickyTop - desktopLayoutBeforeScroll.stickyTop) < 0.5,
+            "Expected the keyboard to remain fixed while the synth controls scroll.",
+        );
 
         await page.locator("#cosimo-start-overlay").click();
         await page.waitForFunction(() => {
@@ -120,16 +191,54 @@ test("generated browser proof loads Cosimo and renders non-silent audio from MID
             timeout: 30_000,
         });
 
-        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.noteOn(60, 110));
-        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().audioPeak > 0.00001, null, {
-            timeout: 10_000,
+        const noteBounds = await page.evaluate(() => {
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const keyboard = view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard");
+            const note = keyboard?.shadowRoot?.querySelector("#note48");
+            const bounds = note?.getBoundingClientRect();
+
+            return bounds
+                ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+                : null;
         });
-        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.noteOff(60));
+        assert.ok(noteBounds && noteBounds.width > 0 && noteBounds.height > 0, "Expected middle C to be playable.");
+
+        await page.mouse.move(
+            noteBounds.x + noteBounds.width / 2,
+            noteBounds.y + noteBounds.height * 0.8,
+        );
+        await page.mouse.down();
+
+        try {
+            await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().audioPeak > 0.00001, null, {
+                timeout: 10_000,
+            });
+            assert.equal(await page.evaluate(() => {
+                const view = document.querySelector("cosimo-desktop-react-view");
+                const keyboard = view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard");
+                return keyboard?.shadowRoot?.querySelector("#note48")?.classList.contains("active") ?? false;
+            }), true);
+        } finally {
+            await page.mouse.up();
+        }
 
         const snapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
         assert.equal(snapshot.error, null);
         assert.equal(snapshot.hasActiveTable, true);
         assert.ok(snapshot.audioPeak > 0.00001, `Expected non-silent audio, received peak ${snapshot.audioPeak}.`);
+
+        await page.setViewportSize({ width: 390, height: 844 });
+        await page.waitForTimeout(150);
+        const mobileWidths = await sampleKeyboardWidths(page);
+        const mobileLayout = await readKeyboardLayout(page);
+        assert.ok(
+            Math.max(...mobileWidths) - Math.min(...mobileWidths) < 0.5,
+            `Expected a stable mobile keyboard width, received ${mobileWidths.join(", ")}.`,
+        );
+        assert.ok(mobileLayout.keyboardWidth <= mobileLayout.hostClientWidth + 0.5);
+        assert.ok(mobileLayout.stickyTop >= 0);
+        assert.ok(mobileLayout.stickyBottom <= mobileLayout.viewportHeight);
+        assert.ok(mobileLayout.documentScrollWidth <= mobileLayout.viewportWidth);
         assert.deepEqual(failedResponses, [], `Unexpected HTTP failures:\n${failedResponses.join("\n")}`);
         assert.deepEqual(consoleErrors, [], `Unexpected console errors:\n${consoleErrors.join("\n")}`);
     } finally {

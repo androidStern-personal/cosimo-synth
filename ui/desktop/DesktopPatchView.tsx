@@ -3488,6 +3488,20 @@ function DesktopPatchViewBody({
                     </section>
                 </section>
 
+                <section
+                    data-role="keyboard-controls"
+                    data-section-accent="lime"
+                    data-liquid-detail="edge-rail"
+                    className={`${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`}
+                >
+                    {keyboardToolbarOverride}
+                </section>
+            </main>
+
+            <div
+                data-role="sticky-keyboard"
+                className="relative z-20 min-w-0 shrink-0 border-t border-white/[0.05] pt-3"
+            >
                 <KeyboardSection
                     playMode={synthView.playMode}
                     glideTime={synthView.glideTime}
@@ -3509,9 +3523,9 @@ function DesktopPatchViewBody({
                     playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
                     glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
                     keyboardRef={keyboardElementRef}
-                    toolbarOverride={keyboardToolbarOverride}
+                    toolbarOverride={false}
                 />
-            </main>
+            </div>
 
             <MsegEditorModal
                 isOpen={synthView.msegEditor.isOpen}
