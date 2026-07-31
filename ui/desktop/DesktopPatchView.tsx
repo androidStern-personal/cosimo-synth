@@ -1892,7 +1892,6 @@ function DistortionSection({
             data-role="distortion-card"
             data-layout-card="desktop-grid-card"
             data-section-accent="coral"
-            data-liquid-detail="meter-cover"
             className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${className ?? ""}`}
         >
             <input
@@ -2080,7 +2079,6 @@ function ChorusEffectColumn({
         <section
             data-role="chorus-effect-column"
             data-section-accent="ion"
-            data-liquid-detail="icon-lens"
             className="synth-grid-card-shell relative flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] p-2"
         >
             <div className="flex items-center justify-between gap-2">
@@ -2683,7 +2681,6 @@ function ModulationMatrixSection({
             data-role="mseg-card"
             data-layout-card="desktop-grid-card"
             data-section-accent="mint"
-            data-liquid-detail="routing-node"
             className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${DESKTOP_GRID_CARD_CLASS}`}
         >
             {/* ── Pip selector top-bar ── */}

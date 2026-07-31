@@ -187,6 +187,29 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
             wavetableName: "PWM MedicineHat",
             wavetableValue: "34",
         });
+        const unwantedLiquidDetails = await page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+
+            return {
+                chorus: getComputedStyle(
+                    root?.querySelector('[data-role="chorus-effect-column"]'),
+                    "::before",
+                ).content,
+                distortion: getComputedStyle(
+                    root?.querySelector('[data-role="distortion-card"]'),
+                    "::before",
+                ).content,
+                mseg: getComputedStyle(
+                    root?.querySelector('[data-role="mseg-card"]'),
+                    "::before",
+                ).content,
+            };
+        });
+        assert.deepEqual(unwantedLiquidDetails, {
+            chorus: "none",
+            distortion: "none",
+            mseg: "none",
+        });
         await page.waitForFunction(() => {
             const view = document.querySelector("cosimo-desktop-react-view");
             return Boolean(view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard"));
