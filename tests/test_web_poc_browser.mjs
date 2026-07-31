@@ -153,7 +153,6 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
             const root = view?.shadowRoot;
             const wavetableSelect = root?.querySelector('select[aria-label="Select wavetable"]');
             const filterModeSelect = root?.querySelector('select[aria-label="Filter mode"]');
-            const routeAmount = root?.querySelector('[aria-label="Route 1 amount"]');
 
             return {
                 filterModeName: filterModeSelect instanceof HTMLSelectElement
@@ -162,9 +161,12 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
                 filterModeValue: filterModeSelect instanceof HTMLSelectElement
                     ? filterModeSelect.value
                     : null,
-                routeAmount: routeAmount?.getAttribute("aria-valuenow") ?? null,
-                routeSource: root?.querySelector('button[aria-label="Route 1 source"]')?.textContent?.trim() ?? null,
-                routeTarget: root?.querySelector('button[aria-label="Route 1 target"]')?.textContent?.trim() ?? null,
+                route1Amount: root?.querySelector('[aria-label="Route 1 amount"]')?.getAttribute("aria-valuenow") ?? null,
+                route1Source: root?.querySelector('button[aria-label="Route 1 source"]')?.textContent?.trim() ?? null,
+                route1Target: root?.querySelector('button[aria-label="Route 1 target"]')?.textContent?.trim() ?? null,
+                route2Amount: root?.querySelector('[aria-label="Route 2 amount"]')?.getAttribute("aria-valuenow") ?? null,
+                route2Source: root?.querySelector('button[aria-label="Route 2 source"]')?.textContent?.trim() ?? null,
+                route2Target: root?.querySelector('button[aria-label="Route 2 target"]')?.textContent?.trim() ?? null,
                 wavetableName: wavetableSelect instanceof HTMLSelectElement
                     ? wavetableSelect.selectedOptions[0]?.textContent?.trim()
                     : null,
@@ -176,9 +178,12 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         assert.deepEqual(initializedSound, {
             filterModeName: "Lowpass",
             filterModeValue: "1",
-            routeAmount: "1",
-            routeSource: "MSEG 1",
-            routeTarget: "WT POS",
+            route1Amount: "1",
+            route1Source: "MSEG 1",
+            route1Target: "WT POS",
+            route2Amount: "4",
+            route2Source: "MSEG 1",
+            route2Target: "CUTOFF",
             wavetableName: "PWM MedicineHat",
             wavetableValue: "34",
         });
@@ -254,6 +259,7 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
 
                 return Number(filter?.hasActive) === 1
                     && Number(filter?.mode) === 1
+                    && Number(filter?.cutoffHz) > 1_300
                     && Number(wavetable?.position) > 0.15;
             }, null, { timeout: 10_000 });
             assert.equal(await page.evaluate(() => {

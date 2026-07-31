@@ -112,7 +112,7 @@ test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploadi
     assert.equal(state.msegSlots[0].morph, 0);
     assert.deepEqual(state.msegSlots[0].shapeA, state.msegSlots[0].shapeB);
     assert.equal(state.envelopeSlots.length, 3);
-    assert.equal(state.routes.length, 1);
+    assert.equal(state.routes.length, 2);
     assert.deepEqual(routeSummary(state.routes[0]), {
         enabled: true,
         sourceKind: "mseg",
@@ -120,6 +120,14 @@ test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploadi
         polarity: "unipolar",
         targetKind: "wavetablePosition",
         amount: 1,
+    });
+    assert.deepEqual(routeSummary(state.routes[1]), {
+        enabled: true,
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        polarity: "unipolar",
+        targetKind: "filterCutoffOctaves",
+        amount: 4,
     });
 
     assert.deepEqual(patchConnection.events, []);
@@ -146,7 +154,16 @@ test("modulation runtime event builder converts defaults into a complete Cmajor 
         targetKind: 1,
         amount: 1,
     });
-    assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[1].value.enabled, false);
+    assert.deepEqual(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[1].value, {
+        routeIndex: 1,
+        enabled: true,
+        sourceKind: 1,
+        sourceSlot: 1,
+        polarityKind: 0,
+        targetKind: 3,
+        amount: 4,
+    });
+    assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[2].value.enabled, false);
 });
 
 test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploading", () => {

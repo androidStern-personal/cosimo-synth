@@ -692,7 +692,14 @@ export function createDefaultModulationState(): ModulationState {
         version: 2,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
-        routes: [createDefaultRoute({ id: "mod-route-1", amount: 1 })],
+        routes: [
+            createDefaultRoute({ id: "mod-route-1", amount: 1 }),
+            createDefaultRoute({
+                id: "mod-route-2",
+                targetKind: "filterCutoffOctaves",
+                amount: 4,
+            }),
+        ],
         macroNames: MACRO_SLOT_NAMES.slice(),
     };
 }
