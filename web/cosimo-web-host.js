@@ -18,6 +18,8 @@ const state = {
     audioPeak: 0,
     connection: null,
     error: null,
+    latestEffectiveFilterState: null,
+    latestEffectiveWavetablePosition: null,
     latestRuntimeState: null,
     midiEndpointID: null,
     phase: "initialising",
@@ -40,6 +42,10 @@ function showError(error) {
     elements.error.style.display = "block";
     elements.startStatus.textContent = "Could not start Cosimo";
     elements.startOverlay.disabled = true;
+}
+
+function endpointEvent(message) {
+    return message?.event ?? message;
 }
 
 function findEndpointID(connection, purpose) {
@@ -106,6 +112,8 @@ function getSnapshot() {
         audioPeak: state.audioPeak,
         error: state.error,
         hasActiveTable: Boolean(state.latestRuntimeState?.hasActive),
+        latestEffectiveFilterState: state.latestEffectiveFilterState,
+        latestEffectiveWavetablePosition: state.latestEffectiveWavetablePosition,
         latestRuntimeState: state.latestRuntimeState,
         phase: state.phase,
         started: state.started,
@@ -137,6 +145,12 @@ async function initialise() {
 
     connection.addEndpointListener("runtimeState", (message) => {
         state.latestRuntimeState = message;
+    });
+    connection.addEndpointListener("effectiveFilterState", (message) => {
+        state.latestEffectiveFilterState = endpointEvent(message);
+    });
+    connection.addEndpointListener("effectiveWavetablePosition", (message) => {
+        state.latestEffectiveWavetablePosition = endpointEvent(message);
     });
 
     if (new URLSearchParams(globalThis.location.search).has("test")) {

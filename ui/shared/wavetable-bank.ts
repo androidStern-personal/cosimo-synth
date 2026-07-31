@@ -6,6 +6,9 @@ import {
 export const DEFAULT_SAMPLES_PER_FRAME = 2048;
 export const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
 
+/** Catalog index for the stable `pwm-medicinehat` factory-table identity. */
+export const DEFAULT_FACTORY_TABLE_INDEX = 34;
+
 export type FactoryTableMeta = {
     tableId: string;
     name: string;

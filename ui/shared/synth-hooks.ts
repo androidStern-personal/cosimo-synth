@@ -80,6 +80,7 @@ import {
 import {
     clampDisplayPosition,
     describeRuntimeTableFailureDetails,
+    FILTER_MODE_LOWPASS,
     mapDisplayDragToPosition,
     normalizeRuntimeTableState,
     resolveRuntimeTablePresentation,
@@ -120,6 +121,7 @@ import {
     type SynthKeyboardLike,
 } from "./synth-input-router";
 import {
+    DEFAULT_FACTORY_TABLE_INDEX,
     loadFactoryBankCatalog,
     loadFactoryBankFrames,
     type FactoryBankCatalog,
@@ -1631,7 +1633,7 @@ export function useSynthPatchViewModel({
     });
     const wavetableSelect = usePatchParameterBinding<number>({
         endpointID: WAVETABLE_SELECT_ENDPOINT_ID,
-        initialValue: 0,
+        initialValue: DEFAULT_FACTORY_TABLE_INDEX,
         coerce: (value) => Math.max(0, Math.trunc(Number(value) || 0)),
     });
     const playMode = usePatchParameterBinding<number>({
@@ -1661,7 +1663,7 @@ export function useSynthPatchViewModel({
     });
     const filterMode = usePatchParameterBinding<number>({
         endpointID: FILTER_MODE_ENDPOINT_ID,
-        initialValue: 0,
+        initialValue: FILTER_MODE_LOWPASS,
         coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 5),
     });
     const filterCutoff = usePatchParameterBinding<number>({

@@ -272,6 +272,16 @@ async function loadCurrentBank() {
     };
 }
 
+test("initialized factory table identity remains PWM MedicineHat", async () => {
+    const catalog = getFactoryBankCatalogValue(
+        JSON.parse(await fs.readFile(path.join(repoRoot, "assets", "factory-bank-catalog.json"), "utf8"))
+    );
+    const defaultTable = catalog.tables[34];
+
+    assert.equal(defaultTable?.tableId, "pwm-medicinehat");
+    assert.equal(defaultTable?.name, "PWM MedicineHat");
+});
+
 test("wave bank parser reads the current display source wavetable", async () => {
     const { bank, parsedWave } = await loadCurrentBank();
     assert.equal(parsedWave.sampleRate, 44100);

@@ -1111,7 +1111,8 @@ graph WavetableSynth [[ main ]]
     // parameters must start at slot 1.
     input value float32 hostSlot0Guard [[ name: "Host Slot 0 Guard", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, hidden: true, automatable: false, rampFrames: 0 ]];
     input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
-    input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    // Catalog index 34 is the stable `pwm-medicinehat` factory table.
+    input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 34.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 glideTime [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
     input value float32 pan [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
@@ -1121,7 +1122,7 @@ graph WavetableSynth [[ main ]]
     input value float32 macro4 [[ name: "Macro 4", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 warpMode [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 warpAmount [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
-    input value float32 filterMode [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 filterMode [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 filterCutoff [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
     input value float32 filterQ [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
     input value float32 unisonVoices [[ name: "Unison", min: 1.0f, max: 8.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];

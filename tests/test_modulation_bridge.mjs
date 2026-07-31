@@ -119,7 +119,7 @@ test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploadi
         sourceSlot: 1,
         polarity: "unipolar",
         targetKind: "wavetablePosition",
-        amount: 0,
+        amount: 1,
     });
 
     assert.deepEqual(patchConnection.events, []);
@@ -144,7 +144,7 @@ test("modulation runtime event builder converts defaults into a complete Cmajor 
         sourceSlot: 1,
         polarityKind: 0,
         targetKind: 1,
-        amount: 0,
+        amount: 1,
     });
     assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[1].value.enabled, false);
 });

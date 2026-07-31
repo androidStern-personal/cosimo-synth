@@ -148,6 +148,40 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
             const view = document.querySelector("cosimo-desktop-react-view");
             return view?.shadowRoot?.querySelector('select[aria-label="Select wavetable"]')?.options.length ?? 0;
         }), 238);
+        const initializedSound = await page.evaluate(() => {
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const root = view?.shadowRoot;
+            const wavetableSelect = root?.querySelector('select[aria-label="Select wavetable"]');
+            const filterModeSelect = root?.querySelector('select[aria-label="Filter mode"]');
+            const routeAmount = root?.querySelector('[aria-label="Route 1 amount"]');
+
+            return {
+                filterModeName: filterModeSelect instanceof HTMLSelectElement
+                    ? filterModeSelect.selectedOptions[0]?.textContent?.trim()
+                    : null,
+                filterModeValue: filterModeSelect instanceof HTMLSelectElement
+                    ? filterModeSelect.value
+                    : null,
+                routeAmount: routeAmount?.getAttribute("aria-valuenow") ?? null,
+                routeSource: root?.querySelector('button[aria-label="Route 1 source"]')?.textContent?.trim() ?? null,
+                routeTarget: root?.querySelector('button[aria-label="Route 1 target"]')?.textContent?.trim() ?? null,
+                wavetableName: wavetableSelect instanceof HTMLSelectElement
+                    ? wavetableSelect.selectedOptions[0]?.textContent?.trim()
+                    : null,
+                wavetableValue: wavetableSelect instanceof HTMLSelectElement
+                    ? wavetableSelect.value
+                    : null,
+            };
+        });
+        assert.deepEqual(initializedSound, {
+            filterModeName: "Lowpass",
+            filterModeValue: "1",
+            routeAmount: "1",
+            routeSource: "MSEG 1",
+            routeTarget: "WT POS",
+            wavetableName: "PWM MedicineHat",
+            wavetableValue: "34",
+        });
         await page.waitForFunction(() => {
             const view = document.querySelector("cosimo-desktop-react-view");
             return Boolean(view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard"));
@@ -213,6 +247,15 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
             await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().audioPeak > 0.00001, null, {
                 timeout: 10_000,
             });
+            await page.waitForFunction(() => {
+                const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
+                const filter = snapshot?.latestEffectiveFilterState;
+                const wavetable = snapshot?.latestEffectiveWavetablePosition;
+
+                return Number(filter?.hasActive) === 1
+                    && Number(filter?.mode) === 1
+                    && Number(wavetable?.position) > 0.15;
+            }, null, { timeout: 10_000 });
             assert.equal(await page.evaluate(() => {
                 const view = document.querySelector("cosimo-desktop-react-view");
                 const keyboard = view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard");
