@@ -8,7 +8,9 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const webRoot = path.join(repoRoot, "build", "web");
+const webRoot = process.env.COSIMO_WEB_ROOT
+    ? path.resolve(repoRoot, process.env.COSIMO_WEB_ROOT)
+    : path.join(repoRoot, "build", "web");
 let browser;
 let server;
 let baseUrl;
@@ -123,6 +125,10 @@ after(async () => {
 
 test("generated browser proof keeps the real keyboard pinned and renders non-silent audio from it", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const factoryCatalog = JSON.parse(await fs.readFile(
+        path.join(webRoot, "assets", "factory-bank-catalog.json"),
+        "utf8",
+    ));
     const consoleErrors = [];
     const failedResponses = [];
 
@@ -147,7 +153,7 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         assert.equal(await page.evaluate(() => {
             const view = document.querySelector("cosimo-desktop-react-view");
             return view?.shadowRoot?.querySelector('select[aria-label="Select wavetable"]')?.options.length ?? 0;
-        }), 238);
+        }), factoryCatalog.tables.length);
         const initializedSound = await page.evaluate(() => {
             const view = document.querySelector("cosimo-desktop-react-view");
             const root = view?.shadowRoot;
