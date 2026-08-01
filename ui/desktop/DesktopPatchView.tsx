@@ -108,7 +108,7 @@ const ENVELOPE_VIEWBOX = {
     top: 42,
     bottom: 118,
 } as const;
-const DESKTOP_GRID_CARD_CLASS = SYNTH_GRID_CARD_SIZE_CLASS;
+const DESKTOP_GRID_CARD_CLASS = `w-full ${SYNTH_GRID_CARD_SIZE_CLASS}`;
 const WARP_MODE_OPTIONS = [
     { value: 0, label: "Off" },
     { value: 1, label: "Bend +/-" },
@@ -3382,7 +3382,7 @@ function DesktopPatchViewBody({
                 data-role="desktop-scroll-region"
                 className="grid min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1"
             >
-                <section className="grid min-h-0 items-stretch gap-4 md:grid-cols-2">
+                <section className="grid min-h-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2">
                     <WavetableStageSection
                         stageRef={stageRef}
                         frames={synthView.frames}

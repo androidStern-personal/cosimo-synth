@@ -23,8 +23,11 @@ export type PianoKeyboardElement = HTMLElement & {
     accidentalWidth: number;
     handleKey: (event: KeyboardEvent, isDown: boolean) => void;
     allNotesOff: () => void;
+    touchStart?: (event: TouchEvent) => void;
+    touchEnd?: (event: TouchEvent) => void;
     refreshHTML: () => void;
     refreshActiveNoteElements: () => void;
+    bindRenderedTouchHandlers?: () => void;
     attachToPatchConnection?: (connection: PatchConnectionLike, endpointID: string) => void;
     detachPatchConnection?: (connection: PatchConnectionLike) => void;
 };
@@ -64,6 +67,7 @@ export function createKeyboardTagName() {
 function refreshKeyboardLayout(keyboard: PianoKeyboardElement) {
     keyboard.notes = [];
     keyboard.refreshHTML();
+    keyboard.bindRenderedTouchHandlers?.();
     keyboard.style.maxWidth = "100%";
     keyboard.style.minWidth = "0";
     keyboard.refreshActiveNoteElements();
@@ -167,6 +171,15 @@ export function ensureKeyboardElement(patchConnection: PatchConnectionLike) {
                         box-shadow: inset 0 0 0 1px rgb(245 255 216 / 0.5), 0 0 18px rgb(185 244 93 / 0.28);
                     }
                 `;
+            }
+
+            bindRenderedTouchHandlers() {
+                const keyboard = this as PianoKeyboardElement;
+
+                for (const child of Array.from(keyboard.root.children)) {
+                    child.addEventListener("touchstart", (event) => keyboard.touchStart?.(event), { passive: false });
+                    child.addEventListener("touchend", (event) => keyboard.touchEnd?.(event));
+                }
             }
         }
 

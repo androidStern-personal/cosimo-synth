@@ -5,9 +5,10 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { chromium, webkit } from "playwright";
+import { chromium, devices, webkit } from "playwright";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const browserEngine = process.env.COSIMO_WEB_BROWSER ?? "chromium";
 const webRoot = process.env.COSIMO_WEB_ROOT
     ? path.resolve(repoRoot, process.env.COSIMO_WEB_ROOT)
     : path.join(repoRoot, "build", "web");
@@ -102,8 +103,6 @@ before(async () => {
             resolve();
         });
     });
-    const browserEngine = process.env.COSIMO_WEB_BROWSER ?? "chromium";
-
     browser = browserEngine === "webkit"
         ? await webkit.launch({
             executablePath: process.env.COSIMO_WEBKIT_EXECUTABLE_PATH,
@@ -150,7 +149,7 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
     });
 
     try {
-        await page.goto(`${baseUrl}?test=1`, { waitUntil: "networkidle" });
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
@@ -326,6 +325,135 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         assert.ok(mobileLayout.documentScrollWidth <= mobileLayout.viewportWidth);
         assert.deepEqual(failedResponses, [], `Unexpected HTTP failures:\n${failedResponses.join("\n")}`);
         assert.deepEqual(consoleErrors, [], `Unexpected console errors:\n${consoleErrors.join("\n")}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("generated browser proof plays and visibly presses notes from a touchscreen", {
+    skip: browserEngine !== "webkit",
+}, async () => {
+    const page = await browser.newPage({
+        ...devices["iPhone 13"],
+    });
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+
+        const startBounds = await page.locator("#cosimo-start-overlay").boundingBox();
+        assert.ok(startBounds, "Expected the Start audio control to be visible.");
+        await page.touchscreen.tap(
+            startBounds.x + startBounds.width / 2,
+            startBounds.y + startBounds.height / 2,
+        );
+        await page.waitForFunction(() => {
+            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
+            return snapshot?.phase === "running" && snapshot.hasActiveTable;
+        }, null, { timeout: 30_000 });
+
+        const noteBounds = await page.evaluate(() => {
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const keyboard = view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard");
+            const note = keyboard?.shadowRoot?.querySelector("#note48");
+            const bounds = note?.getBoundingClientRect();
+
+            globalThis.__COSIMO_TOUCH_TEST__ = {
+                noteDownCount: 0,
+                noteUpCount: 0,
+                sawActive: false,
+            };
+            keyboard?.addEventListener("note-down", () => {
+                globalThis.__COSIMO_TOUCH_TEST__.noteDownCount += 1;
+            });
+            keyboard?.addEventListener("note-up", () => {
+                globalThis.__COSIMO_TOUCH_TEST__.noteUpCount += 1;
+            });
+            new MutationObserver(() => {
+                if (note?.classList.contains("active")) {
+                    globalThis.__COSIMO_TOUCH_TEST__.sawActive = true;
+                }
+            }).observe(note, { attributeFilter: ["class"] });
+
+            return bounds
+                ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+                : null;
+        });
+        assert.ok(noteBounds, "Expected middle C to be touchable.");
+
+        await page.touchscreen.tap(
+            noteBounds.x + noteBounds.width / 2,
+            noteBounds.y + noteBounds.height * 0.8,
+        );
+        await page.waitForFunction(() => {
+            const touch = globalThis.__COSIMO_TOUCH_TEST__;
+            return touch?.noteDownCount === 1
+                && touch.noteUpCount === 1
+                && touch.sawActive;
+        }, null, { timeout: 10_000 });
+
+        const heldTouch = await page.evaluate(async () => {
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const keyboard = view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard");
+            const note = keyboard?.shadowRoot?.querySelector("#note48");
+
+            if (!note) {
+                return null;
+            }
+
+            const touch = { identifier: 7, target: note };
+            const dispatchTouch = (type) => {
+                const event = new Event(type, { bubbles: true, cancelable: true });
+                Object.defineProperty(event, "changedTouches", { value: [touch] });
+                note.dispatchEvent(event);
+            };
+
+            dispatchTouch("touchstart");
+            await new Promise((resolve) => setTimeout(resolve, 300));
+            const result = {
+                active: note.classList.contains("active"),
+                audioPeak: globalThis.__COSIMO_WEB_POC__?.getSnapshot().audioPeak ?? 0,
+            };
+            dispatchTouch("touchend");
+            return result;
+        });
+        assert.equal(heldTouch?.active, true, "Expected a held touch to keep the key visibly pressed.");
+        assert.ok(heldTouch?.audioPeak > 0.00001, `Expected non-silent touch audio, received peak ${heldTouch?.audioPeak ?? 0}.`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("generated browser proof shows the wavetable and filter cards on mobile", {
+    skip: browserEngine !== "webkit",
+}, async () => {
+    const page = await browser.newPage({
+        ...devices["iPhone 13"],
+    });
+
+    try {
+        await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+
+        const cards = await page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const readBounds = (selector) => {
+                const bounds = root?.querySelector(selector)?.getBoundingClientRect();
+                return bounds ? { width: bounds.width, height: bounds.height } : null;
+            };
+
+            return {
+                filter: readBounds('[data-role="filter-card"]'),
+                wavetable: readBounds('[data-role="wavetable-card"]'),
+            };
+        });
+
+        assert.ok(cards.wavetable?.width > 0 && cards.wavetable.height > 0, "Expected the mobile wavetable card to be visible.");
+        assert.ok(cards.filter?.width > 0 && cards.filter.height > 0, "Expected the mobile filter card to be visible.");
     } finally {
         await page.close();
     }
