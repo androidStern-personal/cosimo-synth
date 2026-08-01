@@ -5,7 +5,7 @@ import path from "node:path";
 import test, { after, before } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import { chromium } from "playwright";
+import { chromium, webkit } from "playwright";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const webRoot = process.env.COSIMO_WEB_ROOT
@@ -102,10 +102,17 @@ before(async () => {
             resolve();
         });
     });
-    browser = await chromium.launch({
-        channel: "chrome",
-        headless: true,
-    });
+    const browserEngine = process.env.COSIMO_WEB_BROWSER ?? "chromium";
+
+    browser = browserEngine === "webkit"
+        ? await webkit.launch({
+            executablePath: process.env.COSIMO_WEBKIT_EXECUTABLE_PATH,
+            headless: true,
+        })
+        : await chromium.launch({
+            channel: "chrome",
+            headless: true,
+        });
 });
 
 after(async () => {

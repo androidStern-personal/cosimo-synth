@@ -133,7 +133,11 @@ globalThis.__COSIMO_WEB_POC__ = {
 
 async function initialise() {
     const audioContext = new AudioContext();
-    await audioContext.suspend();
+
+    if (audioContext.state === "running") {
+        await audioContext.suspend();
+    }
+
     const connection = await patch.createAudioWorkletNodePatchConnection(
         audioContext,
         "cosimo-web-audio-worklet",
