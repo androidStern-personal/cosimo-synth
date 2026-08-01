@@ -12,9 +12,12 @@ import {
     getModulationAmountBounds,
     getModulationAmountSliderPosition,
     getModulationSourceOptionValue,
+    isRackModulationTarget,
+    isVoiceModulationSource,
     parseModulationAmountEditingValue,
     type ModulationPolarity,
     type ModulationRoute,
+    type ModulationRouteUpdate,
     type ModulationTargetKind,
 } from "../shared/modulation";
 
@@ -410,7 +413,7 @@ function RouteRow({
 }: {
     route: ModulationRoute;
     routeIndex: number;
-    onUpdate: (nextRoute: ModulationRoute) => void;
+    onUpdate: (update: ModulationRouteUpdate) => void;
     onDelete: () => void;
     rowRef: (element: HTMLDivElement | null) => void;
 }) {
@@ -428,7 +431,7 @@ function RouteRow({
             <button
                 type="button"
                 aria-label={`Route ${routeIndex + 1} ${route.enabled ? "bypass" : "enable"}`}
-                onClick={() => onUpdate({ ...route, enabled: !route.enabled })}
+                onClick={() => onUpdate({ enabled: !route.enabled })}
                 className={`shrink-0 rounded p-1 transition-all ${
                     route.enabled
                         ? "synth-readout-text hover:text-[rgb(var(--section-accent-rgb)/0.78)]"
@@ -444,7 +447,10 @@ function RouteRow({
                     ariaLabel={`Route ${routeIndex + 1} source`}
                     value={sourceValue}
                     options={MODULATION_SOURCE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
-                    onChange={(nextSourceValue) => onUpdate(applyModulationSourceOption(route, nextSourceValue))}
+                    onChange={(nextSourceValue) => {
+                        const nextSource = applyModulationSourceOption(route, nextSourceValue);
+                        onUpdate({ sourceKind: nextSource.sourceKind, sourceSlot: nextSource.sourceSlot });
+                    }}
                     minWidthPx={118}
                 />
             </div>
@@ -458,7 +464,6 @@ function RouteRow({
                 onChange={(nextTargetKind) => {
                     const targetKind = nextTargetKind as ModulationTargetKind;
                     onUpdate({
-                        ...route,
                         targetKind,
                         amount: clampModulationRouteAmount(targetKind, route.amount),
                     });
@@ -471,8 +476,21 @@ function RouteRow({
             <RoutePolarityToggle
                 ariaLabel={`Route ${routeIndex + 1} polarity`}
                 value={route.polarity}
-                onChange={(polarity) => onUpdate({ ...route, polarity })}
+                onChange={(polarity) => onUpdate({ polarity })}
             />
+
+            {isRackModulationTarget(route.targetKind) && isVoiceModulationSource(route.sourceKind) ? (
+                <PrototypeSelect
+                    ariaLabel={`Route ${routeIndex + 1} voice reducer`}
+                    value={route.reducer}
+                    options={[
+                        { value: "max", label: "MAX" },
+                        { value: "mean", label: "MEAN" },
+                    ]}
+                    onChange={(reducer) => onUpdate({ reducer: reducer === "mean" ? "mean" : "max" })}
+                    minWidthPx={72}
+                />
+            ) : null}
 
             <MiniKnob
                 targetKind={route.targetKind}
@@ -481,7 +499,7 @@ function RouteRow({
                 value={route.amount}
                 min={targetBounds.min}
                 max={targetBounds.max}
-                onChange={(nextAmount) => onUpdate({ ...route, amount: clampModulationRouteAmount(route.targetKind, nextAmount) })}
+                onChange={(nextAmount) => onUpdate({ amount: clampModulationRouteAmount(route.targetKind, nextAmount) })}
             />
 
             <span className="synth-readout-text hidden w-16 shrink-0 text-right text-xs tabular-nums sm:block">
@@ -510,7 +528,7 @@ export function DesktopModMatrix({
     routes: ModulationRoute[];
     onAddRoute: () => void;
     onRemoveRoute: (routeIndex: number) => void;
-    onRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
+    onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     className?: string;
 }) {
     const routeRowRefs = useRef<Array<HTMLDivElement | null>>([]);

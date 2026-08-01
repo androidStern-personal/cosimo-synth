@@ -1,5 +1,9 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 import {
+    allRackParameterDescriptors,
+    type RackParameterDescriptor,
+} from "./rack-parameter-descriptors";
+import {
     MSEG_DEFAULT_DEPTH,
     addMsegPoint,
     clamp01,
@@ -29,6 +33,11 @@ export const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
 export const MODULATION_MSEG_PLAYBACK_ENDPOINT_ID = "modulationMsegPlayback";
 export const MODULATION_ENV_ENDPOINT_ID = "modulationEnvelope";
 export const MODULATION_ROUTE_ENDPOINT_ID = "modulationRoute";
+export const RACK_MODULATION_ROUTE_ENDPOINT_ID = "rackModulationRoute";
+export const MOD_TARGET_RACK_BASE = 100;
+export const MOD_REDUCER_UNSET = 0;
+export const MOD_REDUCER_MAX = 1;
+export const MOD_REDUCER_MEAN = 2;
 
 export const MOD_SOURCE_MSEG = 1;
 export const MOD_SOURCE_ENV = 2;
@@ -89,6 +98,14 @@ const ROUTE_AMOUNT_STEPS = {
     unisonWarpSpread: 0.001,
 } as const;
 
+export type RackModulationTargetKind = `rack.${string}`;
+
+const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
+    .filter((parameter) => parameter.modulationTargetIndex !== null);
+const RACK_MODULATION_PARAMETER_BY_KIND = new Map<RackModulationTargetKind, RackParameterDescriptor>(
+    RACK_MODULATION_PARAMETERS.map((parameter) => [`rack.${parameter.endpointID}`, parameter]),
+);
+
 export type ModulationSourceKind = "mseg" | "env" | "velocity" | "pressure" | "slide" | "macro";
 export type ModulationTargetKind =
     | "wavetablePosition"
@@ -102,8 +119,10 @@ export type ModulationTargetKind =
     | "unisonBlend"
     | "unisonWidth"
     | "unisonWavetablePositionSpread"
-    | "unisonWarpSpread";
+    | "unisonWarpSpread"
+    | RackModulationTargetKind;
 export type ModulationPolarity = "unipolar" | "bipolar";
+export type ModulationReducer = "max" | "mean";
 
 export type ModulationSourceOption = {
     value: string;
@@ -140,7 +159,10 @@ export type ModulationRoute = {
     polarity: ModulationPolarity;
     targetKind: ModulationTargetKind;
     amount: number;
+    reducer: ModulationReducer;
 };
+
+export type ModulationRouteUpdate = Partial<Omit<ModulationRoute, "id">>;
 
 export type ModulationState = {
     format: "cosimo.modulation";
@@ -188,6 +210,10 @@ export type ModulationRouteUpload = {
     amount: number;
 };
 
+export type RackModulationRouteUpload = ModulationRouteUpload & {
+    reducerKind: number;
+};
+
 export type ModulationRuntimeEvent = {
     endpointID: string;
     value: unknown;
@@ -222,6 +248,10 @@ export const MODULATION_TARGET_OPTIONS: ModulationTargetOption[] = [
     { value: "unisonWidth", label: "UNI WIDTH" },
     { value: "unisonWavetablePositionSpread", label: "UNI WT" },
     { value: "unisonWarpSpread", label: "UNI WARP" },
+    ...RACK_MODULATION_PARAMETERS.map((parameter) => ({
+        value: `rack.${parameter.endpointID}` as RackModulationTargetKind,
+        label: `${parameter.effectId.toUpperCase()} ${parameter.shortLabel.toUpperCase()}`,
+    })),
 ];
 
 type StoredStateMessage = {
@@ -288,8 +318,36 @@ function formatSignedNumeric(value: number, digits: number) {
     return String(numeric);
 }
 
+export function isRackModulationTarget(targetKind: ModulationTargetKind): targetKind is RackModulationTargetKind {
+    return RACK_MODULATION_PARAMETER_BY_KIND.has(targetKind as RackModulationTargetKind);
+}
+
+export function isVoiceModulationSource(sourceKind: ModulationSourceKind) {
+    return sourceKind !== "macro";
+}
+
+function getRackRouteAmountLimit(descriptor: RackParameterDescriptor) {
+    if (descriptor.scale === "log") {
+        return { min: -6, max: 6 };
+    }
+    const span = descriptor.max - descriptor.min;
+    return { min: -span, max: span };
+}
+
 function getRouteAmountLimit(targetKind: ModulationTargetKind) {
-    return ROUTE_AMOUNT_LIMITS[targetKind];
+    const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
+    if (rackParameter !== undefined) {
+        return getRackRouteAmountLimit(rackParameter);
+    }
+    return ROUTE_AMOUNT_LIMITS[targetKind as keyof typeof ROUTE_AMOUNT_LIMITS];
+}
+
+function getRouteAmountStep(targetKind: ModulationTargetKind) {
+    const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
+    if (rackParameter !== undefined) {
+        return rackParameter.scale === "log" ? 0.01 : (rackParameter.max - rackParameter.min) / 1000;
+    }
+    return ROUTE_AMOUNT_STEPS[targetKind as keyof typeof ROUTE_AMOUNT_STEPS];
 }
 
 function getRouteAmountMagnitudeLimit(targetKind: ModulationTargetKind) {
@@ -339,12 +397,12 @@ export function getModulationAmountBounds(targetKind: ModulationTargetKind) {
     return {
         min: limits.min,
         max: limits.max,
-        step: ROUTE_AMOUNT_STEPS[targetKind],
+        step: getRouteAmountStep(targetKind),
     };
 }
 
 export function clampModulationRouteAmount(targetKind: ModulationTargetKind, value: number) {
-    const limits = ROUTE_AMOUNT_LIMITS[targetKind];
+    const limits = getRouteAmountLimit(targetKind);
     const numeric = Number(value);
     return clamp(Number.isFinite(numeric) ? numeric : 0.0, limits.min, limits.max);
 }
@@ -417,6 +475,17 @@ export function formatModulationAmountReadout(
     const prefix = polarity === "bipolar"
         ? (Math.abs(clampedAmount) <= 1e-9 ? "" : "±")
         : (clampedAmount > 0 ? "+" : clampedAmount < 0 ? "-" : "");
+    const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
+    if (rackParameter !== undefined) {
+        if (rackParameter.scale === "log") {
+            return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
+        }
+        if (rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2) {
+            return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+        }
+        const unit = rackParameter.unit === "deg" ? "°" : rackParameter.unit;
+        return `${prefix}${formatMagnitude(clampedAmount, Math.abs(clampedAmount) < 10 ? 2 : 1)}${unit ? ` ${unit}` : ""}`;
+    }
 
     switch (targetKind) {
         case "wavetablePosition":
@@ -456,6 +525,15 @@ export function formatModulationAmountReadout(
 
 export function formatModulationAmountEditingValue(targetKind: ModulationTargetKind, amount: number) {
     const clampedAmount = clampModulationRouteAmount(targetKind, amount);
+    const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
+    if (rackParameter !== undefined) {
+        return formatSignedNumeric(
+            rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2
+                ? clampedAmount * 100
+                : clampedAmount,
+            2,
+        );
+    }
 
     switch (targetKind) {
         case "wavetablePosition":
@@ -511,6 +589,16 @@ export function parseModulationAmountEditingValue(targetKind: ModulationTargetKi
         return null;
     }
 
+    const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
+    if (rackParameter !== undefined) {
+        return clampModulationRouteAmount(
+            targetKind,
+            rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2
+                ? numericValue / 100
+                : numericValue,
+        );
+    }
+
     if (
         targetKind === "wavetablePosition"
         || targetKind === "warpAmount"
@@ -538,6 +626,9 @@ export function getModulationAmountPercentLabel(targetKind: ModulationTargetKind
 }
 
 export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
+    if (isRackModulationTarget(targetKind)) {
+        return "Rack modulation adds to the base control and clamps to the effect's authored range.";
+    }
     switch (targetKind) {
         case "wavetablePosition":
             return "Wavetable scan still clamps to the table range.";
@@ -580,6 +671,9 @@ function normalizeSourceKind(value: unknown): ModulationSourceKind {
 }
 
 function normalizeTargetKind(value: unknown): ModulationTargetKind {
+    if (typeof value === "string" && RACK_MODULATION_PARAMETER_BY_KIND.has(value as RackModulationTargetKind)) {
+        return value as RackModulationTargetKind;
+    }
     if (
         value === "wavetablePosition"
         || value === "warpAmount"
@@ -652,6 +746,7 @@ export function createDefaultRoute(overrides: Partial<ModulationRoute> = {}): Mo
         polarity: "unipolar",
         targetKind: "wavetablePosition",
         amount: 0,
+        reducer: "max",
         ...overrides,
     };
 }
@@ -670,6 +765,7 @@ export function normalizeRoute(value: unknown, routeIndex = 0): ModulationRoute 
         polarity: normalizePolarity(nextValue.polarity),
         targetKind,
         amount: clampModulationRouteAmount(targetKind, numericAmount),
+        reducer: nextValue.reducer === "mean" ? "mean" : "max",
     };
 }
 
@@ -762,6 +858,10 @@ function sourceKindToCode(sourceKind: ModulationSourceKind) {
 }
 
 function targetKindToCode(targetKind: ModulationTargetKind) {
+    const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
+    if (rackParameter?.modulationTargetIndex !== null && rackParameter?.modulationTargetIndex !== undefined) {
+        return MOD_TARGET_RACK_BASE + rackParameter.modulationTargetIndex;
+    }
     if (targetKind === "wavetablePosition") return MOD_TARGET_WAVETABLE_POSITION;
     if (targetKind === "warpAmount") return MOD_TARGET_WARP_AMOUNT;
     if (targetKind === "filterCutoffOctaves") return MOD_TARGET_FILTER_CUTOFF_OCTAVES;
@@ -828,6 +928,16 @@ function toRouteUpload(routeIndex: number, route: ModulationRoute | null): Modul
     };
 }
 
+function toRackRouteUpload(routeIndex: number, route: ModulationRoute): RackModulationRouteUpload {
+    const normalizedRoute = normalizeRoute(route);
+    return {
+        ...toRouteUpload(routeIndex, normalizedRoute),
+        reducerKind: isVoiceModulationSource(normalizedRoute.sourceKind)
+            ? normalizedRoute.reducer === "mean" ? MOD_REDUCER_MEAN : MOD_REDUCER_MAX
+            : MOD_REDUCER_UNSET,
+    };
+}
+
 export function buildModulationRuntimeEvents(stateValue: unknown): ModulationRuntimeEvent[] {
     const state = normalizeModulationState(stateValue);
     const events: ModulationRuntimeEvent[] = [
@@ -859,9 +969,14 @@ export function buildModulationRuntimeEvents(stateValue: unknown): ModulationRun
     }
 
     for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
+        const route = state.routes[routeIndex] ?? null;
         events.push({
-            endpointID: MODULATION_ROUTE_ENDPOINT_ID,
-            value: toRouteUpload(routeIndex, state.routes[routeIndex] ?? null),
+            endpointID: route !== null && isRackModulationTarget(route.targetKind)
+                ? RACK_MODULATION_ROUTE_ENDPOINT_ID
+                : MODULATION_ROUTE_ENDPOINT_ID,
+            value: route !== null && isRackModulationTarget(route.targetKind)
+                ? toRackRouteUpload(routeIndex, route)
+                : toRouteUpload(routeIndex, route),
         });
     }
 

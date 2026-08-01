@@ -452,7 +452,7 @@ processor ReverbTailTest [[ main ]]
 
 
 //==============================================================================
-// Stereo behaviour, the pre-delay structure, and modulation eligibility: every
+// Stereo behaviour, useful early energy, and modulation eligibility: every
 // continuous parameter must move the sound (ADR-012 makes all four routable).
 
 ## testProcessor()
@@ -472,11 +472,9 @@ processor ReverbStructureTest [[ main ]]
     let measureFrames = 8192;
     let parameterDivergence = 0.001f;
 
-    // Size 0.5 gives a longest line of 15 + 0.5 * 105 = 67.5 ms; the shortest line
-    // is 0.7573 of that, i.e. 51.12 ms, which is 2254 frames at 44.1 kHz. The wet
-    // output is taken from the delay lines, so nothing may arrive before then.
-    let shortestLineFrames = 2254;
-    let lineArrivalTolerance = 8;
+    // The first diffuser stage is 4.77 ms. The early-reflection output must make a
+    // fully-wet impulse audible well before the shortest 51 ms FDN line arrives.
+    let usefulEarlyWindowFrames = 1024;
 
     float32 testSignal (int32 frame)
     {
@@ -605,10 +603,9 @@ processor ReverbStructureTest [[ main ]]
         out <- (std::intrinsics::abs (correlation) < 0.9f) ? 1 : 0;
         advance();
 
-        // 6. The wet path is taken from the delay lines, so an impulse produces
-        //    nothing at all until the shortest line comes round. That delayed signal
-        //    is an effect characteristic, not host reported latency (ADR-008), and
-        //    the dry path through it is bit-exact - assertion 1 of the first section.
+        // 6. The diffuser is also an early-reflection network. A fully wet impulse must
+        //    produce useful energy inside 23 ms rather than waiting 51 ms for the first
+        //    FDN line. The dry path remains bit-exact and zero-latency above.
         impulseReverb.sizeIn <- 0.5f;
         impulseReverb.decayIn <- 0.5f;
         impulseReverb.dampingIn <- 0.0f;
@@ -621,7 +618,7 @@ processor ReverbStructureTest [[ main ]]
 
         int32 firstWetFrame = -1;
 
-        for (int32 frame = 1; frame < shortestLineFrames + lineArrivalTolerance; ++frame)
+        for (int32 frame = 1; frame < usefulEarlyWindowFrames; ++frame)
         {
             let rendered = renderImpulse (0.0f);
 
@@ -629,12 +626,12 @@ processor ReverbStructureTest [[ main ]]
                 firstWetFrame = frame;
         }
 
-        out <- (firstWetFrame >= shortestLineFrames - lineArrivalTolerance) ? 1 : 0;
+        out <- (firstWetFrame >= 0 && firstWetFrame < usefulEarlyWindowFrames) ? 1 : 0;
         advance();
 
-        // 7. ... and it does arrive, so assertion 6 is not passing on a silent
-        //    module. Together the two pin the line-length arithmetic itself.
-        out <- (firstWetFrame >= 0) ? 1 : 0;
+        // 7. It is a reflection rather than a dry leak: the input frame itself was not
+        //    included, and the first reported energy is delayed.
+        out <- (firstWetFrame > 0) ? 1 : 0;
         advance();
 
         out <- -1;

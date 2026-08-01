@@ -12569,9 +12569,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       --tw-duration: initial;
       --tw-ease: initial;
       --tw-content: "";
-      --tw-scale-x: 1;
-      --tw-scale-y: 1;
-      --tw-scale-z: 1;
     }
   }
 }
@@ -12975,10 +12972,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 @layer components;
 
 @layer utilities {
-  .\\@container {
-    container-type: inline-size;
-  }
-
   .pointer-events-auto {
     pointer-events: auto;
   }
@@ -13139,10 +13132,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     top: calc(var(--spacing) * 14);
   }
 
-  .top-\\[92px\\] {
-    top: 92px;
-  }
-
   .top-full {
     top: 100%;
   }
@@ -13161,10 +13150,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .right-1\\.5 {
     right: calc(var(--spacing) * 1.5);
-  }
-
-  .right-1\\/2 {
-    right: 50%;
   }
 
   .right-2 {
@@ -13241,10 +13226,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .left-1\\/2 {
     left: 50%;
-  }
-
-  .left-1\\/3 {
-    left: 33.3333%;
   }
 
   .left-2 {
@@ -13495,10 +13476,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-top: calc(var(--spacing) * 0);
   }
 
-  .-mt-0\\.5 {
-    margin-top: calc(var(--spacing) * -.5);
-  }
-
   .-mt-4 {
     margin-top: calc(var(--spacing) * -4);
   }
@@ -13507,12 +13484,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-top: calc(var(--spacing) * 0);
   }
 
-  .mt-1 {
-    margin-top: calc(var(--spacing) * 1);
+  .mt-0\\.5 {
+    margin-top: calc(var(--spacing) * .5);
   }
 
-  .mt-1\\.5 {
-    margin-top: calc(var(--spacing) * 1.5);
+  .mt-1 {
+    margin-top: calc(var(--spacing) * 1);
   }
 
   .mt-2 {
@@ -13545,10 +13522,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .mt-16 {
     margin-top: calc(var(--spacing) * 16);
-  }
-
-  .mt-\\[1px\\] {
-    margin-top: 1px;
   }
 
   .mt-auto {
@@ -13593,10 +13566,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .mb-20 {
     margin-bottom: calc(var(--spacing) * 20);
-  }
-
-  .\\!ml-0 {
-    margin-left: calc(var(--spacing) * 0) !important;
   }
 
   .-ml-4 {
@@ -13889,8 +13858,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 80px;
   }
 
-  .h-\\[118px\\] {
-    height: 118px;
+  .h-\\[112px\\] {
+    height: 112px;
   }
 
   .h-\\[180px\\] {
@@ -13903,18 +13872,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .h-\\[320px\\] {
     height: 320px;
-  }
-
-  .h-\\[400px\\] {
-    height: 400px;
-  }
-
-  .h-\\[600px\\] {
-    height: 600px;
-  }
-
-  .h-\\[calc\\(100vh-3\\.5rem\\)\\] {
-    height: calc(100vh - 3.5rem);
   }
 
   .h-auto {
@@ -13997,12 +13954,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: 158px;
   }
 
+  .min-h-\\[215px\\] {
+    min-height: 215px;
+  }
+
   .min-h-\\[220px\\] {
     min-height: 220px;
   }
 
-  .min-h-\\[240px\\] {
-    min-height: 240px;
+  .min-h-\\[410px\\] {
+    min-height: 410px;
   }
 
   .min-h-\\[calc\\(100dvh-2rem\\)\\] {
@@ -14037,10 +13998,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: calc(var(--spacing) * 1.5);
   }
 
-  .w-1\\/2 {
-    width: 50%;
-  }
-
   .w-2 {
     width: calc(var(--spacing) * 2);
   }
@@ -14055,10 +14012,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .w-3\\.5 {
     width: calc(var(--spacing) * 3.5);
-  }
-
-  .w-3\\/4 {
-    width: 75%;
   }
 
   .w-4 {
@@ -14297,10 +14250,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     flex: 1;
   }
 
-  .flex-\\[2\\] {
-    flex: 2;
-  }
-
   .flex-none {
     flex: none;
   }
@@ -14371,11 +14320,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
-  .translate-x-2\\.5 {
-    --tw-translate-x: calc(var(--spacing) * 2.5);
-    translate: var(--tw-translate-x) var(--tw-translate-y);
-  }
-
   .translate-x-7 {
     --tw-translate-x: calc(var(--spacing) * 7);
     translate: var(--tw-translate-x) var(--tw-translate-y);
@@ -14423,11 +14367,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .translate-y-6 {
     --tw-translate-y: calc(var(--spacing) * 6);
-    translate: var(--tw-translate-x) var(--tw-translate-y);
-  }
-
-  .translate-y-6\\.5 {
-    --tw-translate-y: calc(var(--spacing) * 6.5);
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
@@ -14741,6 +14680,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     column-gap: calc(var(--spacing) * 1);
   }
 
+  .gap-x-4 {
+    column-gap: calc(var(--spacing) * 4);
+  }
+
   .gap-x-6 {
     column-gap: calc(var(--spacing) * 6);
   }
@@ -14761,6 +14704,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .gap-y-0 {
     row-gap: calc(var(--spacing) * 0);
+  }
+
+  .gap-y-3 {
+    row-gap: calc(var(--spacing) * 3);
   }
 
   .gap-y-6 {
@@ -15020,6 +14967,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-style: solid;
   }
 
+  .border-\\[rgb\\(var\\(--cosimo-edge-rgb\\)\\/0\\.34\\)\\] {
+    border-color: rgb(var(--cosimo-edge-rgb)/.34);
+  }
+
   .border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.38\\)\\] {
     border-color: rgb(var(--section-accent-rgb)/.38);
   }
@@ -15129,6 +15080,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-cyan-300\\/20 {
       border-color: color-mix(in oklab, var(--color-cyan-300) 20%, transparent);
+    }
+  }
+
+  .border-cyan-300\\/45 {
+    border-color: #53eafd73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-300\\/45 {
+      border-color: color-mix(in oklab, var(--color-cyan-300) 45%, transparent);
     }
   }
 
@@ -15342,12 +15303,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: oklab(14.5558% -.00103131 -.0183188 / .96);
   }
 
-  .bg-\\[\\#050505\\] {
-    background-color: #050505;
-  }
-
   .bg-\\[\\#050712\\]\\/55 {
     background-color: oklab(13.2687% .00102779 -.0255741 / .55);
+  }
+
+  .bg-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.58\\)\\] {
+    background-color: rgb(var(--cosimo-control-rgb)/.58);
   }
 
   .bg-\\[rgb\\(var\\(--cosimo-recess-rgb\\)\\/0\\.92\\)\\] {
@@ -15368,6 +15329,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {
     background-color: #03050c99;
+  }
+
+  .bg-\\[rgba\\(3\\,5\\,12\\,0\\.58\\)\\] {
+    background-color: #03050c94;
   }
 
   .bg-\\[var\\(--cosimo-accent-amber\\)\\] {
@@ -15428,14 +15393,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .bg-background, .bg-background\\/95 {
+  .bg-background {
     background-color: var(--cosimo-mod-background);
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-background\\/95 {
-      background-color: color-mix(in oklab, var(--cosimo-mod-background) 95%, transparent);
-    }
   }
 
   .bg-black {
@@ -15452,6 +15411,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-black\\/15 {
+    background-color: #00000026;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/15 {
+      background-color: color-mix(in oklab, var(--color-black) 15%, transparent);
+    }
+  }
+
   .bg-black\\/20 {
     background-color: #0003;
   }
@@ -15459,6 +15428,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-black\\/20 {
       background-color: color-mix(in oklab, var(--color-black) 20%, transparent);
+    }
+  }
+
+  .bg-black\\/25 {
+    background-color: #00000040;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/25 {
+      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);
     }
   }
 
@@ -15602,16 +15581,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-gray-900 {
     background-color: var(--color-gray-900);
-  }
-
-  .bg-gray-900\\/5 {
-    background-color: #1018280d;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-gray-900\\/5 {
-      background-color: color-mix(in oklab, var(--color-gray-900) 5%, transparent);
-    }
   }
 
   .bg-indigo-100 {
@@ -15896,20 +15865,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
-  .from-orange-500\\/10 {
-    --tw-gradient-from: #fe6e001a;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .from-orange-500\\/10 {
-      --tw-gradient-from: color-mix(in oklab, var(--color-orange-500) 10%, transparent);
-    }
-  }
-
-  .from-orange-500\\/10 {
-    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
-  }
-
   .from-rose-400 {
     --tw-gradient-from: var(--color-rose-400);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
@@ -15943,20 +15898,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .to-orange-500 {
     --tw-gradient-to: var(--color-orange-500);
-    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
-  }
-
-  .to-orange-500\\/5 {
-    --tw-gradient-to: #fe6e000d;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .to-orange-500\\/5 {
-      --tw-gradient-to: color-mix(in oklab, var(--color-orange-500) 5%, transparent);
-    }
-  }
-
-  .to-orange-500\\/5 {
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
@@ -16066,10 +16007,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .p-7 {
     padding: calc(var(--spacing) * 7);
-  }
-
-  .p-7\\.5 {
-    padding: calc(var(--spacing) * 7.5);
   }
 
   .p-8 {
@@ -16388,11 +16325,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     line-height: var(--tw-leading, var(--text-base--line-height));
   }
 
-  .text-base\\/6 {
-    font-size: var(--text-base);
-    line-height: calc(var(--spacing) * 6);
-  }
-
   .text-lg {
     font-size: var(--text-lg);
     line-height: var(--tw-leading, var(--text-lg--line-height));
@@ -16555,6 +16487,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     letter-spacing: .1em;
   }
 
+  .tracking-\\[0\\.11em\\] {
+    --tw-tracking: .11em;
+    letter-spacing: .11em;
+  }
+
   .tracking-\\[0\\.12em\\] {
     --tw-tracking: .12em;
     letter-spacing: .12em;
@@ -16651,6 +16588,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.72\\)\\] {
     color: rgb(var(--section-accent-rgb)/.72);
+  }
+
+  .text-\\[var\\(--cosimo-text\\)\\] {
+    color: var(--cosimo-text);
   }
 
   .text-\\[var\\(--cosimo-text-muted\\)\\] {
@@ -17271,6 +17212,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .text-slate-400\\/55 {
+    color: #90a1b98c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/55 {
+      color: color-mix(in oklab, var(--color-slate-400) 55%, transparent);
+    }
+  }
+
   .text-slate-400\\/60 {
     color: #90a1b999;
   }
@@ -17278,6 +17229,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-slate-400\\/60 {
       color: color-mix(in oklab, var(--color-slate-400) 60%, transparent);
+    }
+  }
+
+  .text-slate-400\\/65 {
+    color: #90a1b9a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/65 {
+      color: color-mix(in oklab, var(--color-slate-400) 65%, transparent);
     }
   }
 
@@ -17323,16 +17284,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-slate-500 {
     color: var(--color-slate-500);
-  }
-
-  .text-slate-500\\/35 {
-    color: #62748e59;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-500\\/35 {
-      color: color-mix(in oklab, var(--color-slate-500) 35%, transparent);
-    }
   }
 
   .text-slate-600 {
@@ -17524,6 +17475,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[var\\(--cosimo-contact-shadow\\)\\] {
+    --tw-shadow: var(--cosimo-contact-shadow);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
   .shadow-lg {
     --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, #0000001a), 0 4px 6px -4px var(--tw-shadow-color, #0000001a);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17581,32 +17542,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-ring-color: var(--color-gray-900);
   }
 
-  .ring-gray-900\\/10 {
-    --tw-ring-color: #1018281a;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .ring-gray-900\\/10 {
-      --tw-ring-color: color-mix(in oklab, var(--color-gray-900) 10%, transparent);
-    }
-  }
-
   .ring-indigo-600 {
     --tw-ring-color: var(--color-indigo-600);
   }
 
   .ring-orange-500 {
     --tw-ring-color: var(--color-orange-500);
-  }
-
-  .ring-orange-500\\/20 {
-    --tw-ring-color: #fe6e0033;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .ring-orange-500\\/20 {
-      --tw-ring-color: color-mix(in oklab, var(--color-orange-500) 20%, transparent);
-    }
   }
 
   .ring-offset-background {
@@ -17637,6 +17578,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .contrast-80 {
     --tw-contrast: contrast(80%);
+    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+  }
+
+  .grayscale {
+    --tw-grayscale: grayscale(100%);
     filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
   }
 
@@ -17686,12 +17632,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .transition {
     transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;
-    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
-    transition-duration: var(--tw-duration, var(--default-transition-duration));
-  }
-
-  .transition-\\[filter\\] {
-    transition-property: filter;
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
     transition-duration: var(--tw-duration, var(--default-transition-duration));
   }
@@ -17775,10 +17715,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     transition-timing-function: var(--ease-out);
   }
 
-  .will-change-\\[filter\\] {
-    will-change: filter;
-  }
-
   .outline-none {
     --tw-outline-style: none;
     outline-style: none;
@@ -17813,30 +17749,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .group-hover\\:opacity-100:is(:where(.group):hover *) {
       opacity: 1;
     }
-
-    .group-hover\\/article\\:text-primary:is(:where(.group\\/article):hover *) {
-      color: var(--cosimo-mod-primary);
-    }
-
-    .peer-hover\\:opacity-80:is(:where(.peer):hover ~ *) {
-      opacity: .8;
-    }
-  }
-
-  .marker\\:shrink-0 ::marker {
-    flex-shrink: 0;
-  }
-
-  .marker\\:shrink-0::marker {
-    flex-shrink: 0;
-  }
-
-  .marker\\:shrink-0 ::-webkit-details-marker {
-    flex-shrink: 0;
-  }
-
-  .marker\\:shrink-0::-webkit-details-marker {
-    flex-shrink: 0;
   }
 
   .selection\\:bg-cyan-300\\/25 ::selection {
@@ -17859,49 +17771,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .file\\:border-0::file-selector-button {
-    border-style: var(--tw-border-style);
-    border-width: 0;
-  }
-
-  .file\\:bg-transparent::file-selector-button {
-    background-color: #0000;
-  }
-
-  .file\\:text-sm::file-selector-button {
-    font-size: var(--text-sm);
-    line-height: var(--tw-leading, var(--text-sm--line-height));
-  }
-
-  .file\\:font-medium::file-selector-button {
-    --tw-font-weight: var(--font-weight-medium);
-    font-weight: var(--font-weight-medium);
-  }
-
-  .placeholder\\:text-muted-foreground::placeholder {
-    color: var(--cosimo-mod-muted-foreground);
-  }
-
-  .before\\:absolute:before {
-    content: var(--tw-content);
-    position: absolute;
-  }
-
-  .before\\:top-0:before {
-    content: var(--tw-content);
-    top: calc(var(--spacing) * 0);
-  }
-
-  .before\\:bottom-0:before {
-    content: var(--tw-content);
-    bottom: calc(var(--spacing) * 0);
-  }
-
-  .before\\:left-0:before {
-    content: var(--tw-content);
-    left: calc(var(--spacing) * 0);
-  }
-
   .before\\:block:before {
     content: var(--tw-content);
     display: block;
@@ -17912,19 +17781,9 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 3);
   }
 
-  .before\\:h-\\[1px\\]:before {
-    content: var(--tw-content);
-    height: 1px;
-  }
-
   .before\\:w-\\[2px\\]:before {
     content: var(--tw-content);
     width: 2px;
-  }
-
-  .before\\:w-full:before {
-    content: var(--tw-content);
-    width: 100%;
   }
 
   .before\\:rounded-full:before {
@@ -17977,13 +17836,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   }
 
   @media (hover: hover) {
-    .hover\\:scale-105:hover {
-      --tw-scale-x: 105%;
-      --tw-scale-y: 105%;
-      --tw-scale-z: 105%;
-      scale: var(--tw-scale-x) var(--tw-scale-y);
-    }
-
     .hover\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.22\\)\\]:hover {
       border-color: rgb(var(--section-accent-rgb)/.22);
     }
@@ -18162,10 +18014,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-blue-700:hover {
-      background-color: var(--color-blue-700);
-    }
-
     .hover\\:bg-cyan-300\\/14:hover {
       background-color: #53eafd24;
     }
@@ -18184,40 +18032,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       .hover\\:bg-cyan-300\\/22:hover {
         background-color: color-mix(in oklab, var(--color-cyan-300) 22%, transparent);
       }
-    }
-
-    .hover\\:bg-destructive\\/90:hover {
-      background-color: var(--cosimo-mod-destructive);
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-destructive\\/90:hover {
-        background-color: color-mix(in oklab, var(--cosimo-mod-destructive) 90%, transparent);
-      }
-    }
-
-    .hover\\:bg-gray-50:hover {
-      background-color: var(--color-gray-50);
-    }
-
-    .hover\\:bg-gray-100:hover {
-      background-color: var(--color-gray-100);
-    }
-
-    .hover\\:bg-gray-200:hover {
-      background-color: var(--color-gray-200);
-    }
-
-    .hover\\:bg-gray-300:hover {
-      background-color: var(--color-gray-300);
-    }
-
-    .hover\\:bg-indigo-50:hover {
-      background-color: var(--color-indigo-50);
-    }
-
-    .hover\\:bg-indigo-500:hover {
-      background-color: var(--color-indigo-500);
     }
 
     .hover\\:bg-pink-300\\/12:hover {
@@ -18258,20 +18072,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
         background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
       }
-    }
-
-    .hover\\:bg-primary\\/90:hover {
-      background-color: var(--cosimo-mod-primary);
-    }
-
-    @supports (color: color-mix(in lab, red, red)) {
-      .hover\\:bg-primary\\/90:hover {
-        background-color: color-mix(in oklab, var(--cosimo-mod-primary) 90%, transparent);
-      }
-    }
-
-    .hover\\:bg-red-700:hover {
-      background-color: var(--color-red-700);
     }
 
     .hover\\:bg-slate-200\\/55:hover {
@@ -18396,36 +18196,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:text-blue-600:hover {
-      color: var(--color-blue-600);
-    }
-
     .hover\\:text-cyan-100:hover {
       color: var(--color-cyan-100);
     }
 
-    .hover\\:text-foreground:hover {
-      color: var(--cosimo-mod-foreground);
-    }
-
-    .hover\\:text-gray-700:hover {
-      color: var(--color-gray-700);
-    }
-
-    .hover\\:text-gray-900:hover {
-      color: var(--color-gray-900);
-    }
-
-    .hover\\:text-orange-500:hover {
-      color: var(--color-orange-500);
-    }
-
     .hover\\:text-pink-100:hover {
       color: var(--color-pink-100);
-    }
-
-    .hover\\:text-primary:hover {
-      color: var(--cosimo-mod-primary);
     }
 
     .hover\\:text-slate-50:hover {
@@ -18456,20 +18232,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:underline:hover {
-      text-decoration-line: underline;
-    }
-
-    .hover\\:decoration-orange-500:hover {
-      -webkit-text-decoration-color: var(--color-orange-500);
-      -webkit-text-decoration-color: var(--color-orange-500);
-      text-decoration-color: var(--color-orange-500);
-    }
-
-    .hover\\:opacity-80:hover {
-      opacity: .8;
-    }
-
     .hover\\:opacity-100:hover {
       opacity: 1;
     }
@@ -18483,25 +18245,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       content: var(--tw-content);
       opacity: .95;
     }
-  }
-
-  .focus\\:not-sr-only:focus {
-    clip-path: none;
-    white-space: normal;
-    width: auto;
-    height: auto;
-    margin: 0;
-    padding: 0;
-    position: static;
-    overflow: visible;
-  }
-
-  .focus\\:absolute:focus {
-    position: absolute;
-  }
-
-  .focus\\:top-0:focus {
-    top: calc(var(--spacing) * 0);
   }
 
   .focus\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.54\\)\\]:focus {
@@ -18541,15 +18284,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .focus-visible\\:ring-2:focus-visible {
-    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  .focus-visible\\:ring-blue-500:focus-visible {
-    --tw-ring-color: var(--color-blue-500);
-  }
-
   .focus-visible\\:ring-cyan-200\\/45:focus-visible {
     --tw-ring-color: #a2f4fd73;
   }
@@ -18560,51 +18294,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .focus-visible\\:ring-destructive:focus-visible {
-    --tw-ring-color: var(--cosimo-mod-destructive);
-  }
-
-  .focus-visible\\:ring-gray-500:focus-visible {
-    --tw-ring-color: var(--color-gray-500);
-  }
-
-  .focus-visible\\:ring-red-500:focus-visible {
-    --tw-ring-color: var(--color-red-500);
-  }
-
   .focus-visible\\:ring-offset-0:focus-visible {
     --tw-ring-offset-width: 0px;
     --tw-ring-offset-shadow: var(--tw-ring-inset, ) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
   }
 
-  .focus-visible\\:ring-offset-2:focus-visible {
-    --tw-ring-offset-width: 2px;
-    --tw-ring-offset-shadow: var(--tw-ring-inset, ) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
-  }
-
-  .focus-visible\\:outline-2:focus-visible {
-    outline-style: var(--tw-outline-style);
-    outline-width: 2px;
-  }
-
-  .focus-visible\\:outline-offset-2:focus-visible {
-    outline-offset: 2px;
-  }
-
-  .focus-visible\\:outline-indigo-600:focus-visible {
-    outline-color: var(--color-indigo-600);
-  }
-
   .focus-visible\\:outline-none:focus-visible {
     --tw-outline-style: none;
     outline-style: none;
-  }
-
-  .active\\:scale-95:active {
-    --tw-scale-x: 95%;
-    --tw-scale-y: 95%;
-    --tw-scale-z: 95%;
-    scale: var(--tw-scale-x) var(--tw-scale-y);
   }
 
   .active\\:scale-\\[0\\.92\\]:active {
@@ -18695,12 +18392,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .disabled\\:pointer-events-none:disabled {
-    pointer-events: none;
-  }
-
-  .disabled\\:cursor-not-allowed:disabled {
-    cursor: not-allowed;
+  .disabled\\:opacity-20:disabled {
+    opacity: .2;
   }
 
   .disabled\\:opacity-35:disabled {
@@ -18709,15 +18402,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .disabled\\:opacity-40:disabled {
     opacity: .4;
-  }
-
-  .disabled\\:opacity-50:disabled {
-    opacity: .5;
-  }
-
-  .has-\\[\\:focus\\]\\:outline:has(:focus) {
-    outline-style: var(--tw-outline-style);
-    outline-width: 1px;
   }
 
   @media not all and (min-width: 480px) {
@@ -18776,49 +18460,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  @media not all and (min-width: 64rem) {
-    .max-lg\\:mb-6 {
-      margin-bottom: calc(var(--spacing) * 6);
-    }
-
-    .max-lg\\:max-w-xl {
-      max-width: var(--container-xl);
-    }
-  }
-
-  @media not all and (min-width: 48rem) {
-    .max-md\\:mx-auto {
-      margin-inline: auto;
-    }
-
-    .max-md\\:hidden {
-      display: none;
-    }
-
-    .max-md\\:max-w-lg {
-      max-width: var(--container-lg);
-    }
-
-    .max-md\\:pb-2 {
-      padding-bottom: calc(var(--spacing) * 2);
-    }
-  }
-
-  @media not all and (min-width: 40rem) {
-    .max-sm\\:gap-8 {
-      gap: calc(var(--spacing) * 8);
-    }
-
-    .max-sm\\:pt-2 {
-      padding-top: calc(var(--spacing) * 2);
-    }
-  }
-
   @media (min-width: 40rem) {
-    .sm\\:mt-20 {
-      margin-top: calc(var(--spacing) * 20);
-    }
-
     .sm\\:block {
       display: block;
     }
@@ -18839,206 +18481,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       display: inline-flex;
     }
 
-    .sm\\:h-9 {
-      height: calc(var(--spacing) * 9);
-    }
-
-    .sm\\:h-10 {
-      height: calc(var(--spacing) * 10);
-    }
-
-    .sm\\:h-full {
-      height: 100%;
-    }
-
-    .sm\\:w-1\\/2 {
-      width: 50%;
-    }
-
-    .sm\\:w-9 {
-      width: calc(var(--spacing) * 9);
-    }
-
-    .sm\\:w-10 {
-      width: calc(var(--spacing) * 10);
-    }
-
-    .sm\\:w-auto {
-      width: auto;
-    }
-
-    .sm\\:basis-auto {
-      flex-basis: auto;
-    }
-
     .sm\\:grid-cols-2 {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .sm\\:flex-row {
-      flex-direction: row;
-    }
-
-    .sm\\:justify-center {
-      justify-content: center;
-    }
-
-    .sm\\:gap-6 {
-      gap: calc(var(--spacing) * 6);
-    }
-
-    .sm\\:p-3 {
-      padding: calc(var(--spacing) * 3);
-    }
-
-    .sm\\:px-6 {
-      padding-inline: calc(var(--spacing) * 6);
-    }
-
-    .sm\\:px-10 {
-      padding-inline: calc(var(--spacing) * 10);
-    }
-
-    .sm\\:py-3 {
-      padding-block: calc(var(--spacing) * 3);
-    }
-
-    .sm\\:py-24 {
-      padding-block: calc(var(--spacing) * 24);
-    }
-
-    .sm\\:py-32 {
-      padding-block: calc(var(--spacing) * 32);
-    }
-
-    .sm\\:pt-24 {
-      padding-top: calc(var(--spacing) * 24);
-    }
-
-    .sm\\:pt-40 {
-      padding-top: calc(var(--spacing) * 40);
-    }
-
-    .sm\\:pb-16 {
-      padding-bottom: calc(var(--spacing) * 16);
-    }
-
-    .sm\\:pb-20 {
-      padding-bottom: calc(var(--spacing) * 20);
-    }
-
-    .sm\\:text-left {
-      text-align: left;
-    }
-
-    .sm\\:text-4xl {
-      font-size: var(--text-4xl);
-      line-height: var(--tw-leading, var(--text-4xl--line-height));
-    }
-
-    .sm\\:text-5xl {
-      font-size: var(--text-5xl);
-      line-height: var(--tw-leading, var(--text-5xl--line-height));
-    }
-
-    .sm\\:text-xl {
-      font-size: var(--text-xl);
-      line-height: var(--tw-leading, var(--text-xl--line-height));
+    .sm\\:grid-cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
 
   @media (min-width: 48rem) {
-    .md\\:m-0 {
-      margin: calc(var(--spacing) * 0);
-    }
-
-    .md\\:mb-32 {
-      margin-bottom: calc(var(--spacing) * 32);
-    }
-
-    .md\\:ml-3 {
-      margin-left: calc(var(--spacing) * 3);
-    }
-
-    .md\\:flex {
-      display: flex;
-    }
-
-    .md\\:hidden {
-      display: none;
-    }
-
-    .md\\:-rotate-4 {
-      rotate: -4deg;
-    }
-
-    .md\\:rotate-3 {
-      rotate: 3deg;
+    .md\\:col-span-2 {
+      grid-column: span 2 / span 2;
     }
 
     .md\\:grid-cols-2 {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-
-    .md\\:grid-cols-3 {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .md\\:flex-row {
-      flex-direction: row;
-    }
-
-    .md\\:flex-wrap {
-      flex-wrap: wrap;
-    }
-
-    .md\\:items-end {
-      align-items: flex-end;
-    }
-
-    .md\\:gap-4 {
-      gap: calc(var(--spacing) * 4);
-    }
-
-    .md\\:text-base {
-      font-size: var(--text-base);
-      line-height: var(--tw-leading, var(--text-base--line-height));
-    }
   }
 
   @media (min-width: 64rem) {
-    .lg\\:relative {
-      position: relative;
-    }
-
-    .lg\\:-top-15 {
-      top: calc(var(--spacing) * -15);
-    }
-
-    .lg\\:-bottom-18 {
-      bottom: calc(var(--spacing) * -18);
-    }
-
-    .lg\\:block {
-      display: block;
-    }
-
-    .lg\\:max-w-4xl {
-      max-width: var(--container-4xl);
-    }
-
-    .lg\\:max-w-160 {
-      max-width: calc(var(--spacing) * 160);
-    }
-
-    .lg\\:-rotate-6 {
-      rotate: -6deg;
-    }
-
-    .lg\\:rotate-7 {
-      rotate: 7deg;
-    }
-
     .lg\\:grid-cols-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -19046,189 +18508,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .lg\\:grid-cols-\\[minmax\\(168px\\,0\\.78fr\\)_minmax\\(0\\,1\\.22fr\\)\\] {
       grid-template-columns: minmax(168px, .78fr) minmax(0, 1.22fr);
     }
-
-    .lg\\:flex-row {
-      flex-direction: row;
-    }
-
-    .lg\\:gap-8 {
-      gap: calc(var(--spacing) * 8);
-    }
-
-    .lg\\:gap-30 {
-      gap: calc(var(--spacing) * 30);
-    }
-
-    .lg\\:rounded-2xl {
-      border-radius: var(--radius-2xl);
-    }
-
-    .lg\\:border-none {
-      --tw-border-style: none;
-      border-style: none;
-    }
-
-    .lg\\:p-10 {
-      padding: calc(var(--spacing) * 10);
-    }
-
-    .lg\\:px-8 {
-      padding-inline: calc(var(--spacing) * 8);
-    }
-
-    .lg\\:px-10 {
-      padding-inline: calc(var(--spacing) * 10);
-    }
-
-    .lg\\:py-24 {
-      padding-block: calc(var(--spacing) * 24);
-    }
-
-    .lg\\:pt-32 {
-      padding-top: calc(var(--spacing) * 32);
-    }
-
-    .lg\\:pt-48 {
-      padding-top: calc(var(--spacing) * 48);
-    }
-
-    .lg\\:pb-20 {
-      padding-bottom: calc(var(--spacing) * 20);
-    }
-
-    .lg\\:pb-28 {
-      padding-bottom: calc(var(--spacing) * 28);
-    }
-
-    .lg\\:text-6xl {
-      font-size: var(--text-6xl);
-      line-height: var(--tw-leading, var(--text-6xl--line-height));
-    }
-
-    .lg\\:text-\\[0\\.95rem\\] {
-      font-size: .95rem;
-    }
-
-    .lg\\:text-\\[1\\.35rem\\] {
-      font-size: 1.35rem;
-    }
-
-    .lg\\:leading-relaxed {
-      --tw-leading: var(--leading-relaxed);
-      line-height: var(--leading-relaxed);
-    }
   }
 
   @media (min-width: 80rem) {
-    .xl\\:-top-24\\.5 {
-      top: calc(var(--spacing) * -24.5);
-    }
-
-    .xl\\:-bottom-22 {
-      bottom: calc(var(--spacing) * -22);
-    }
-
-    .xl\\:-left-5 {
-      left: calc(var(--spacing) * -5);
-    }
-
-    .xl\\:-mr-4 {
-      margin-right: calc(var(--spacing) * -4);
-    }
-
-    .xl\\:w-10\\.5 {
-      width: calc(var(--spacing) * 10.5);
-    }
-
-    .xl\\:w-11 {
-      width: calc(var(--spacing) * 11);
-    }
-
-    .xl\\:w-14 {
-      width: calc(var(--spacing) * 14);
-    }
-
-    .xl\\:w-23 {
-      width: calc(var(--spacing) * 23);
-    }
-
-    .xl\\:w-25 {
-      width: calc(var(--spacing) * 25);
-    }
-
-    .xl\\:-translate-x-9 {
-      --tw-translate-x: calc(var(--spacing) * -9);
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-
-    .xl\\:translate-x-8 {
-      --tw-translate-x: calc(var(--spacing) * 8);
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-
-    .xl\\:-translate-y-7 {
-      --tw-translate-y: calc(var(--spacing) * -7);
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-
-    .xl\\:translate-y-9 {
-      --tw-translate-y: calc(var(--spacing) * 9);
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-
-    .xl\\:grid-cols-4 {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
     .xl\\:grid-cols-\\[minmax\\(260px\\,0\\.76fr\\)_minmax\\(0\\,1\\.24fr\\)\\] {
       grid-template-columns: minmax(260px, .76fr) minmax(0, 1.24fr);
     }
-
-    .xl\\:gap-40 {
-      gap: calc(var(--spacing) * 40);
-    }
-
-    .xl\\:p-15 {
-      padding: calc(var(--spacing) * 15);
-    }
-
-    .xl\\:px-0 {
-      padding-inline: calc(var(--spacing) * 0);
-    }
-  }
-
-  @media (min-width: 96rem) {
-    .\\32 xl\\:px-5 {
-      padding-inline: calc(var(--spacing) * 5);
-    }
-
-    .\\32 xl\\:px-10 {
-      padding-inline: calc(var(--spacing) * 10);
-    }
-
-    .\\32 xl\\:py-13 {
-      padding-block: calc(var(--spacing) * 13);
-    }
-  }
-
-  .ltr\\:-rotate-90:where(:dir(ltr), [dir="ltr"], [dir="ltr"] *) {
-    rotate: -90deg;
-  }
-
-  .rtl\\:rotate-90:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
-    rotate: 90deg;
-  }
-
-  .rtl\\:rotate-180:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
-    rotate: 180deg;
-  }
-
-  .\\[\\&_p\\]\\:mb-6 p {
-    margin-bottom: calc(var(--spacing) * 6);
-  }
-
-  .\\[\\&_strong\\]\\:bg-yellow-100 strong {
-    background-color: var(--color-yellow-100);
   }
 
   .\\[\\&\\:\\:-webkit-scrollbar\\]\\:hidden::-webkit-scrollbar {
@@ -20287,24 +19572,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   initial-value: "";
 }
 
-@property --tw-scale-x {
-  syntax: "*";
-  inherits: false;
-  initial-value: 1;
-}
-
-@property --tw-scale-y {
-  syntax: "*";
-  inherits: false;
-  initial-value: 1;
-}
-
-@property --tw-scale-z {
-  syntax: "*";
-  inherits: false;
-  initial-value: 1;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -20740,6 +20007,429 @@ function usePatchEndpoint(endpointID, initialValue) {
     };
   }, [endpointID, patchConnection]);
   return value;
+}
+function serializeIdentity(value) {
+  return value;
+}
+function usePatchParameterBinding({
+  endpointID,
+  initialValue,
+  coerce,
+  serialize = serializeIdentity
+}) {
+  const parameter = usePatchParameter(endpointID, serialize(initialValue));
+  const value = reactExports.useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
+  const setValue = reactExports.useCallback((nextValue) => {
+    parameter.setValue(serialize(nextValue));
+  }, [parameter.setValue, serialize]);
+  const commitValue = reactExports.useCallback((nextValue) => {
+    parameter.beginGesture();
+    parameter.setValue(serialize(nextValue));
+    parameter.endGesture();
+  }, [parameter.beginGesture, parameter.endGesture, parameter.setValue, serialize]);
+  return reactExports.useMemo(() => ({
+    endpointID,
+    value,
+    setValue,
+    commitValue,
+    beginGesture: parameter.beginGesture,
+    endGesture: parameter.endGesture
+  }), [endpointID, parameter.beginGesture, parameter.endGesture, value, setValue, commitValue]);
+}
+function usePatchEventTrigger(endpointID) {
+  const patchConnection = usePatchConnection();
+  return reactExports.useCallback((value) => {
+    patchConnection.sendEventOrValue?.(endpointID, value);
+  }, [endpointID, patchConnection]);
+}
+const choice = (label, value) => ({ label, value });
+function vendoredIconUrl(resolveUrl, fallback) {
+  try {
+    return resolveUrl();
+  } catch {
+    return fallback;
+  }
+}
+const RACK_ICON_URLS = Object.freeze({
+  filter: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M24.22%2067.796a3.995%203.995%200%200%201%204.008-3.991h85.498c8.834%200%2019.732%206.112%2024.345%2013.657l53.76%2087.936c3.46%205.66%2011.628%2010.247%2018.256%2010.247h16.718a3.996%203.996%200%200%201%203.994%204.007v8.985a4.007%204.007%200%200%201-4.007%204.008h-24.7c-8.835%200-19.709-6.13-24.283-13.683l-52.324-86.4c-3.43-5.665-11.577-10.257-18.202-10.257H28.214a3.995%203.995%200%200%201-3.993-3.992V67.796z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-filter-lowpass.svg"
+  ),
+  drive: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M233%2064.5h-28.495c-18.104%200-32.517%204.04-49.695%2018.089-15.765%2012.892-30.941%2031.655-39.559%2046.948-12.478%2022.144-33.858%2039.953-43.54%2043.463-9.68%203.51-23.202%203.5-30.711%203.5H25V192h23.5c9.747%200%2026.265-.681%2039.867-7.61%2018.496-9.42%2033.507-35.51%2047.578-54.853%209.879-13.579%2021.773-27.756%2032.732-36.034C182.775%2082.853%20196.637%2080%20216.5%2080H233V64.5z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-softclipcurve.svg"
+  ),
+  ott: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M175.863%20100.122c0-2.205%201.293-2.747%202.883-1.214l30.096%2028.996-30.11%2029.24c-1.585%201.538-2.87%201-2.87-1.209v-19.24l-95.811.637v18.596c0%202.21-1.28%202.746-2.854%201.201l-29.788-29.225%2029.774-28.982c1.584-1.542%202.868-1.004%202.868%201.2v19.54h95.812v-19.54z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-arrows-vert.svg"
+  ),
+  chorus: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M48%20128c-1.955-29.248%2019.364-64%2037.364-64%2018%200%2036.136%2013.843%2036.136%2064.5s19.136%2080.5%2049.136%2080.5c30%200%2053.364-40.125%2053.364-80.5-8.182%200-7.273-.752-16%200%200%2032.35-20.455%2064.45-37.364%2064.45s-33.909-13.542-33.909-64.45S120.273%2048%2085.364%2048C50.454%2048%2032%2088.626%2032%20127.748c6%200%208.364.252%2016%20.252z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-modsine.svg"
+  ),
+  flanger: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M116.589%20182.742l-7.405%2020.346a4%204%200%200%201-5.125%202.396l-7.525-2.738a4%204%200%200%201-2.386-5.13l7.435-20.427C83.963%20167.623%2072%20148.959%2072%20127.5%2072%2096.296%2097.296%2071%20128.5%2071c3.877%200%207.663.39%2011.32%201.134l6.996-19.222a4%204%200%200%201%205.125-2.396l7.525%202.738a4%204%200%200%201%202.386%205.13l-6.968%2019.142C172.796%2087.002%20185%20105.826%20185%20127.5c0%2031.204-25.296%2056.5-56.5%2056.5-4.086%200-8.071-.434-11.911-1.258zm5.173-14.213A41.32%2041.32%200%200%200%20128%20169c22.644%200%2041-18.356%2041-41%200-14.855-7.9-27.864-19.727-35.056l-27.51%2075.585zm-15.035-5.473l27.51-75.585A41.32%2041.32%200%200%200%20128%2087c-22.644%200-41%2018.356-41%2041%200%2014.855%207.9%2027.864%2019.727%2035.056z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-phase.svg"
+  ),
+  phaser: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M25.101%2077.628a4.008%204.008%200%200%200%203.997%204.01h16.996c6.632%200%2013.927%205.01%2016.3%2011.202l52.724%2085.231c7.115%2018.564%2018.693%2018.571%2025.857.025L193.91%2092.84c2.39-6.187%209.693-11.202%2016.336-11.202h16.49a4.01%204.01%200%200%200%204-4.01V68.82a4%204%200%200%200-3.994-4.009h-23.508c-8.835%200-18.547%206.702-21.69%2014.962l-47.147%2073.852c-3.533%209.287-9.217%209.262-12.694-.051L75.2%2079.805C72.108%2071.524%2062.44%2064.81%2053.6%2064.81H29.11a4.012%204.012%200%200%200-4.008%204.01v8.808z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-filter-notch.svg"
+  ),
+  delay: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cg%20fill-rule='evenodd'%3e%3cpath%20d='M109.533%20197.602a1.887%201.887%200%200%201-.034%202.76l-7.583%207.066a4.095%204.095%200%200%201-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581%204.11-1.658%205.74-.18l7.655%206.94c.82.743.833%201.952.02%202.708l-21.11%2019.659s53.036.129%2071.708.064c18.672-.064%2033.437-16.973%2033.437-34.7%200-7.214-5.578-17.64-5.578-17.64-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794%201.772-.632%202.242.364%200%200%209.212%2018.651%209.212%2028.562%200%2028.035-21.765%2050.882-48.533%2050.882-26.769%200-70.921.201-70.921.201l20.186%2019.568z'/%3e%3cpath%20d='M144.398%2058.435a1.887%201.887%200%200%201%20.034-2.76l7.583-7.066a4.095%204.095%200%200%201%205.714.152l32.918%2034.095c1.537%201.592%201.54%204.162.002%205.746l-33.1%2034.092c-1.536%201.581-4.11%201.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437%2016.973-33.437%2034.7%200%207.214%205.578%2017.64%205.578%2017.64.498.99.273%202.444-.483%203.229l-8.61%208.94c-.764.794-1.772.632-2.242-.364%200%200-9.212-18.65-9.212-28.562%200-28.035%2021.765-50.882%2048.533-50.882%2026.769%200%2070.921-.201%2070.921-.201l-20.186-19.568z'/%3e%3c/g%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-repeat.svg"
+  ),
+  reverb: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M128.802%2095.03c-9.229-9.369-22.39-15.228-37-15.228-27.92%200-50.555%2021.402-50.555%2047.803%200%2026.4%2022.634%2047.802%2050.555%2047.802%2014.711%200%2027.954-5.94%2037.193-15.423-12.232-16.88-14.177-19.888-14.177-32.38%200-12.016%205.924-18.458%2014.19-31.142%206.753%2013.293%2013.629%2019.445%2013.629%2031.538%200%2012.802-6.03%2020.525-13.402%2032.614%209.206%209.115%2022.185%2014.793%2036.567%2014.793%2027.922%200%2050.556-21.401%2050.556-47.802%200-26.4-22.634-47.803-50.556-47.803-14.608%200-27.77%205.86-37%2015.228zM128%2075.374C138.501%2068.202%20151.252%2064%20165%2064c35.899%200%2065%2028.654%2065%2064%200%2035.346-29.101%2064-65%2064-13.748%200-26.499-4.202-37-11.374C117.499%20187.798%20104.748%20192%2091%20192c-35.899%200-65-28.654-65-64%200-35.346%2029.101-64%2065-64%2013.748%200%2026.499%204.202%2037%2011.374z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-stereo.svg"
+  )
+});
+const p = (effectId, endpointID, label, shortLabel, min, max, initial, options = {}) => ({
+  id: `${effectId}.${endpointID}`,
+  effectId,
+  endpointID,
+  label,
+  shortLabel,
+  min,
+  max,
+  initial,
+  step: options.step ?? (max - min) / 1e3,
+  scale: options.scale ?? "linear",
+  unit: options.unit ?? "",
+  choices: options.choices,
+  quick: options.quick ?? false,
+  modulationTargetIndex: options.modulationTargetIndex ?? null
+});
+const PHASER_DIVISIONS = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"];
+const DELAY_DIVISIONS = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"];
+const definitions = [
+  {
+    id: "filter",
+    label: "Global Filter",
+    summary: "Final tone shaping for the complete voice mix.",
+    iconUrl: RACK_ICON_URLS.filter,
+    parameters: [
+      p("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 0, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(choice), quick: true }),
+      p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 2e4, 2e4, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0 }),
+      p("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1 }),
+      p("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 })
+    ]
+  },
+  {
+    id: "drive",
+    label: "Distortion",
+    summary: "Classic clipping or harmonic-residue saturation.",
+    iconUrl: RACK_ICON_URLS.drive,
+    parameters: [
+      p("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Classic", 0), choice("Harmonics", 1)] }),
+      p("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: true, modulationTargetIndex: 3 }),
+      p("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
+      p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 5 }),
+      p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6 }),
+      p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7 })
+    ]
+  },
+  {
+    id: "ott",
+    label: "OTT",
+    summary: "Upward/downward multiband dynamics with envelope matching.",
+    iconUrl: RACK_ICON_URLS.ott,
+    parameters: [
+      p("ott", "ottMix", "Mix", "Mix", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 8 }),
+      p("ott", "ottAmount", "Amount", "Amt", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 9 }),
+      p("ott", "ottTimePercent", "Time", "Time", 10, 1e3, 100, { unit: "%", scale: "log", modulationTargetIndex: 10 }),
+      p("ott", "ottBandDrive", "Band Drive", "Drv", 0, 100, 0, { unit: "%", modulationTargetIndex: 11 }),
+      p("ott", "ottEnvelopeMatch", "Envelope Match", "Env", 0, 100, 0, { unit: "%", modulationTargetIndex: 12 })
+    ]
+  },
+  {
+    id: "chorus",
+    label: "Chorus",
+    summary: "Modulated ensemble, bloom, and pitch-following ring colour.",
+    iconUrl: RACK_ICON_URLS.chorus,
+    parameters: [
+      p("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide Slow", "Classic", "Fast Light"].map(choice) }),
+      p("chorus", "chorusBloomMode", "Bloom", "Blm", 0, 4, 0, { step: 1, choices: ["Clean", "Small", "Large", "Small+Shimmer", "Large+Shimmer"].map(choice) }),
+      p("chorus", "chorusMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 13 }),
+      p("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
+      p("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
+      p("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
+      p("chorus", "chorusRingOffsetMode", "Ring Pitch", "Pitch", 0, 3, 0, { step: 1, choices: ["+5th", "Low 5th", "+Oct", "-Oct"].map(choice) }),
+      p("chorus", "chorusRingFineSemitones", "Ring Fine", "Fine", -2, 2, 0, { unit: "st", modulationTargetIndex: 17 })
+    ]
+  },
+  {
+    id: "flanger",
+    label: "Flanger",
+    summary: "Short swept comb delay with signed feedback.",
+    iconUrl: RACK_ICON_URLS.flanger,
+    parameters: [
+      p("flanger", "flangerRate", "Rate", "Rate", 0.02, 8, 0.35, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 18 }),
+      p("flanger", "flangerDepth", "Depth", "Dpt", 0, 1, 0.6, { quick: true, modulationTargetIndex: 19 }),
+      p("flanger", "flangerFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 20 }),
+      p("flanger", "flangerMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 21 })
+    ]
+  },
+  {
+    id: "phaser",
+    label: "Phaser",
+    summary: "Eight-pole swept all-pass network with Free/Sync rate.",
+    iconUrl: RACK_ICON_URLS.phaser,
+    parameters: [
+      p("phaser", "phaserRateMode", "Rate Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
+      p("phaser", "phaserRate", "Rate", "Rate", 0.02, 8, 0.3, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 22 }),
+      p("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: PHASER_DIVISIONS.map(choice) }),
+      p("phaser", "phaserDepth", "Depth", "Dpt", 0, 1, 0.7, { modulationTargetIndex: 23 }),
+      p("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24 }),
+      p("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
+      p("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
+      p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 27 })
+    ]
+  },
+  {
+    id: "delay",
+    label: "Delay",
+    summary: "Tape-gliding stereo delay with Free/Sync timing.",
+    iconUrl: RACK_ICON_URLS.delay,
+    parameters: [
+      p("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
+      p("delay", "delayTime", "Time", "Time", 1, 2e3, 375, { unit: "ms", scale: "log", quick: true, modulationTargetIndex: 28 }),
+      p("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: DELAY_DIVISIONS.map(choice) }),
+      p("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
+      p("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30 }),
+      p("delay", "delayMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 31 })
+    ]
+  },
+  {
+    id: "reverb",
+    label: "Reverb",
+    summary: "Modulated early reflections into a four-line stereo tank.",
+    iconUrl: RACK_ICON_URLS.reverb,
+    parameters: [
+      p("reverb", "reverbSize", "Size", "Size", 0, 1, 0.5, { quick: true, modulationTargetIndex: 32 }),
+      p("reverb", "reverbDecay", "Decay", "Dcy", 0, 1, 0.4, { quick: true, modulationTargetIndex: 33 }),
+      p("reverb", "reverbDamping", "Damping", "Dmp", 0, 1, 0.5, { modulationTargetIndex: 34 }),
+      p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 35 })
+    ]
+  }
+];
+const RACK_EFFECT_DESCRIPTORS = definitions;
+function getRackEffectDescriptor(effectId) {
+  const descriptor = RACK_EFFECT_DESCRIPTORS.find((candidate) => candidate.id === effectId);
+  if (descriptor === void 0) {
+    throw new Error(`Unknown rack effect: ${effectId}`);
+  }
+  return descriptor;
+}
+function allRackParameterDescriptors() {
+  return RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters);
+}
+function formatRackParameterValue(descriptor, value) {
+  if (descriptor.choices !== void 0) {
+    return descriptor.choices.find((item) => item.value === Math.round(value))?.label ?? String(Math.round(value));
+  }
+  if (descriptor.unit === "%") return `${Math.round(value)}%`;
+  if (descriptor.unit === "Hz") return value >= 1e3 ? `${(value / 1e3).toFixed(value >= 1e4 ? 1 : 2)}kHz` : `${Math.round(value)}Hz`;
+  if (descriptor.unit === "ms") return `${Math.round(value)}ms`;
+  if (descriptor.unit === "dB") return `${value.toFixed(1)}dB`;
+  if (descriptor.unit === "deg") return `${Math.round(value)}°`;
+  if (descriptor.unit === "st") return `${value >= 0 ? "+" : ""}${value.toFixed(1)}st`;
+  return `${Math.round(value * 100)}%`;
+}
+const RACK_STATE_KEY = "rack.v1";
+const RACK_ORDER_ENDPOINT_ID = "rackOrder";
+const RACK_ENABLE_ENDPOINT_ID = "rackEnable";
+const EFFECTIVE_RACK_STATE_ENDPOINT_ID = "effectiveRackState";
+const RACK_EFFECT_ORDER = Object.freeze([
+  "filter",
+  "drive",
+  "ott",
+  "chorus",
+  "flanger",
+  "phaser",
+  "delay",
+  "reverb"
+]);
+const EFFECT_ID_TO_WIRE_ID = Object.freeze({
+  filter: 0,
+  drive: 1,
+  ott: 2,
+  chorus: 3,
+  flanger: 4,
+  phaser: 5,
+  delay: 6,
+  reverb: 7
+});
+const WIRE_ID_TO_EFFECT_ID = new Map(
+  RACK_EFFECT_ORDER.map((effectId) => [EFFECT_ID_TO_WIRE_ID[effectId], effectId])
+);
+function defaultEnabled() {
+  return {
+    filter: false,
+    drive: false,
+    ott: false,
+    chorus: false,
+    flanger: false,
+    phaser: false,
+    delay: false,
+    reverb: false
+  };
+}
+function createDefaultRackState() {
+  return {
+    format: "cosimo.rack",
+    version: 1,
+    order: [...RACK_EFFECT_ORDER],
+    enabled: defaultEnabled()
+  };
+}
+function parseJsonDocument(input) {
+  if (typeof input !== "string") {
+    return { _tag: "json", value: input };
+  }
+  if (input.trim().length === 0) {
+    return { _tag: "err", message: `${RACK_STATE_KEY} must not be empty` };
+  }
+  try {
+    const value = JSON.parse(input);
+    return { _tag: "json", value };
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    return { _tag: "err", message: `${RACK_STATE_KEY} is not valid JSON: ${detail}` };
+  }
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseEffectId(input) {
+  if (typeof input !== "string") {
+    return null;
+  }
+  return RACK_EFFECT_ORDER.find((candidate) => candidate === input) ?? null;
+}
+function parseRackState(input) {
+  const document2 = parseJsonDocument(input);
+  if (document2._tag === "err") {
+    return document2;
+  }
+  if (!isRecord(document2.value)) {
+    return { _tag: "err", message: `${RACK_STATE_KEY} must be an object` };
+  }
+  const allowedKeys = /* @__PURE__ */ new Set(["format", "version", "order", "enabled"]);
+  for (const key of Reflect.ownKeys(document2.value)) {
+    if (typeof key !== "string" || !allowedKeys.has(key)) {
+      return { _tag: "err", message: `${RACK_STATE_KEY} has unexpected field ${String(key)}` };
+    }
+  }
+  if (document2.value.format !== "cosimo.rack" || document2.value.version !== 1) {
+    return { _tag: "err", message: `${RACK_STATE_KEY} must be cosimo.rack version 1` };
+  }
+  if (!Array.isArray(document2.value.order) || document2.value.order.length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${RACK_STATE_KEY}.order must contain every effect once` };
+  }
+  const order = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const rawEffectId of document2.value.order) {
+    const effectId = parseEffectId(rawEffectId);
+    if (effectId === null || seen.has(effectId)) {
+      return { _tag: "err", message: `${RACK_STATE_KEY}.order is not a complete permutation` };
+    }
+    seen.add(effectId);
+    order.push(effectId);
+  }
+  if (!isRecord(document2.value.enabled)) {
+    return { _tag: "err", message: `${RACK_STATE_KEY}.enabled must be an object` };
+  }
+  if (Reflect.ownKeys(document2.value.enabled).length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${RACK_STATE_KEY}.enabled must contain every effect once` };
+  }
+  const enabled = defaultEnabled();
+  for (const effectId of RACK_EFFECT_ORDER) {
+    const rawEnabled = document2.value.enabled[effectId];
+    if (typeof rawEnabled !== "boolean") {
+      return { _tag: "err", message: `${RACK_STATE_KEY}.enabled.${effectId} must be boolean` };
+    }
+    enabled[effectId] = rawEnabled;
+  }
+  return {
+    _tag: "ok",
+    value: { format: "cosimo.rack", version: 1, order, enabled }
+  };
+}
+function deserializeRackState(input) {
+  if (input === void 0) {
+    return createDefaultRackState();
+  }
+  const parsed = parseRackState(input);
+  return parsed._tag === "ok" ? parsed.value : createDefaultRackState();
+}
+function serializeRackState(state) {
+  return JSON.stringify({
+    format: "cosimo.rack",
+    version: 1,
+    order: state.order,
+    enabled: state.enabled
+  });
+}
+function buildRackRuntimeEvents(state) {
+  return [
+    {
+      endpointID: RACK_ORDER_ENDPOINT_ID,
+      value: { moduleIds: state.order.map((effectId) => EFFECT_ID_TO_WIRE_ID[effectId]) }
+    },
+    {
+      endpointID: RACK_ENABLE_ENDPOINT_ID,
+      value: { enabledFlags: RACK_EFFECT_ORDER.map((effectId) => state.enabled[effectId] ? 1 : 0) }
+    }
+  ];
+}
+function commitRackState(connection, state) {
+  for (const event of buildRackRuntimeEvents(state)) {
+    connection.sendEventOrValue?.(event.endpointID, event.value);
+  }
+}
+function decodeOrder(code) {
+  const order = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (let position = 0; position < RACK_EFFECT_ORDER.length; position += 1) {
+    const wireId = code >>> position * 3 & 7;
+    const effectId = WIRE_ID_TO_EFFECT_ID.get(wireId);
+    if (effectId === void 0 || seen.has(effectId)) {
+      return null;
+    }
+    seen.add(effectId);
+    order.push(effectId);
+  }
+  return order;
+}
+function parseEffectiveRackState(input) {
+  if (!isRecord(input)) {
+    return null;
+  }
+  const generation = Number(input.committedStructureGeneration);
+  const orderCode = Number(input.committedOrderCode);
+  const enableMask = Number(input.committedEnableMask);
+  const rejectedOrderCount = Number(input.rejectedOrderCount);
+  const rejectedEnableCount = Number(input.rejectedEnableCount);
+  if (![generation, orderCode, enableMask, rejectedOrderCount, rejectedEnableCount].every(Number.isFinite)) {
+    return null;
+  }
+  const order = decodeOrder(Math.trunc(orderCode));
+  if (order === null) {
+    return null;
+  }
+  const enabled = defaultEnabled();
+  for (const effectId of RACK_EFFECT_ORDER) {
+    const wireId = EFFECT_ID_TO_WIRE_ID[effectId];
+    enabled[effectId] = (Math.trunc(enableMask) >>> wireId & 1) === 1;
+  }
+  return {
+    generation: Math.trunc(generation),
+    order,
+    enabled,
+    rejectedOrderCount: Math.trunc(rejectedOrderCount),
+    rejectedEnableCount: Math.trunc(rejectedEnableCount)
+  };
 }
 const MSEG_BODY_SAMPLES = 2048;
 const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
@@ -21367,6 +21057,7 @@ const runtimeFailurePhaseTransferMip = 3;
 const runtimeFailureReasonTimeout = 2;
 const runtimeFailureScopeService = 1;
 const FILTER_MODE_OFF$1 = 0;
+const FILTER_MODE_LOWPASS$1 = 1;
 const FILTER_MODE_PEAK$1 = 5;
 const WARP_MODE_OFF$1 = 0;
 const WARP_MODE_MIRROR$1 = 4;
@@ -21711,6 +21402,7 @@ const CAMERA_PITCH = 26 * (Math.PI / 180);
 const CAMERA_DISTANCE = 10.5;
 const CAMERA_FOCAL_LENGTH = 2.4;
 const FRAME_DEPTH_EXTENT = 3.6;
+const STAGE_FIT_X_SCALE = 1.3;
 const AMPLITUDE_SCALE = 0.3;
 const DISCONTINUITY_THRESHOLD = 0.5;
 const FLOOR_Y = -0.64;
@@ -21981,6 +21673,18 @@ function createViewportPadding(width, height) {
     bottom: clamp$b(height * 0.09, 20, 52)
   };
 }
+function createDrawableViewport(width, height, insets = {}) {
+  const left = clamp$b(Number(insets.left) || 0, 0, width - 1);
+  const right = clamp$b(Number(insets.right) || 0, 0, width - left - 1);
+  const top = clamp$b(Number(insets.top) || 0, 0, height - 1);
+  const bottom = clamp$b(Number(insets.bottom) || 0, 0, height - top - 1);
+  return {
+    x: left,
+    y: top,
+    width: Math.max(1, width - left - right),
+    height: Math.max(1, height - top - bottom)
+  };
+}
 function projectWorldPoint(point, camera) {
   const relative = subtractPoints(point, camera.position);
   const cameraX = dotProduct(relative, camera.right);
@@ -21995,15 +21699,18 @@ function projectWorldPoint(point, camera) {
   };
 }
 function projectToScreen(projectedPoint, projection) {
+  const scaleX = projection.scaleX ?? projection.scale;
+  const scaleY = projection.scaleY ?? projection.scale;
   return {
-    x: projection.centerX + (projectedPoint.projectedX - projection.projectedCenterX) * projection.scale,
-    y: projection.centerY - (projectedPoint.projectedY - projection.projectedCenterY) * projection.scale,
+    x: projection.centerX + (projectedPoint.projectedX - projection.projectedCenterX) * scaleX,
+    y: projection.centerY - (projectedPoint.projectedY - projection.projectedCenterY) * scaleY,
     cameraDepth: projectedPoint.cameraDepth,
     perspective: projectedPoint.perspective
   };
 }
-function createProjection(points, width, height) {
-  const padding = createViewportPadding(width, height);
+function createProjection(points, width, height, drawableInsets = {}) {
+  const drawable = createDrawableViewport(width, height, drawableInsets);
+  const padding = createViewportPadding(drawable.width, drawable.height);
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -22017,18 +21724,21 @@ function createProjection(points, width, height) {
   const spanX = Math.max(1e-3, maxX - minX);
   const spanY = Math.max(1e-3, maxY - minY);
   const scale = Math.min(
-    (width - padding.left - padding.right) / spanX,
-    (height - padding.top - padding.bottom) / spanY
+    (drawable.width - padding.left - padding.right) / spanX,
+    (drawable.height - padding.top - padding.bottom) / spanY
   );
   return {
     width,
     height,
+    drawable,
     scale,
+    scaleX: scale * STAGE_FIT_X_SCALE,
+    scaleY: scale,
     padding,
     projectedCenterX: (minX + maxX) * 0.5,
     projectedCenterY: (minY + maxY) * 0.5,
-    centerX: width * 0.5,
-    centerY: height * 0.46
+    centerX: drawable.x + drawable.width * 0.5,
+    centerY: drawable.y + drawable.height * 0.5
   };
 }
 function getSurfacePointCount(width, sampleCount) {
@@ -22130,7 +21840,7 @@ function createGuideLines(camera, projection) {
     { kind: "frame", strength: 0.18, points: createGuideLine(topRight, camera, projection) }
   ];
 }
-function buildProjectionFromFrames(contourSamples, width, height, frameCount) {
+function buildProjectionFromFrames(contourSamples, width, height, frameCount, drawableInsets = {}) {
   const camera = createCamera();
   const stableWorldPoints = [
     { x: -1, y: FLOOR_Y, z: 0 },
@@ -22149,7 +21859,7 @@ function buildProjectionFromFrames(contourSamples, width, height, frameCount) {
   const projectedAnchors = stableWorldPoints.map((point) => projectWorldPoint(point, camera));
   return {
     camera,
-    projection: createProjection(projectedAnchors, width, height)
+    projection: createProjection(projectedAnchors, width, height, drawableInsets)
   };
 }
 function getSparseContourIndices(frameCount, frameState) {
@@ -22408,7 +22118,8 @@ function buildWavetableStaticScene({
   frames,
   width = 640,
   height = 320,
-  pixelRatio = 1
+  pixelRatio = 1,
+  drawableInsets = {}
 }) {
   assertFrames(frames);
   const safeWidth = Math.max(180, Math.floor(width || 0));
@@ -22418,7 +22129,7 @@ function buildWavetableStaticScene({
   const surfacePointCount = getSurfacePointCount(safeWidth, frames[0].length);
   const contourSamples = frames.map((frame) => decimateFrame(frame, contourPointCount));
   const surfaceSamples = frames.map((frame) => decimateFrame(frame, surfacePointCount));
-  const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight);
+  const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight, frameCount, drawableInsets);
   const contourFrames = contourSamples.map(
     (samples, frameIndex) => createProjectedFrame(samples, frameIndex, frameCount, camera, projection)
   );
@@ -22429,6 +22140,7 @@ function buildWavetableStaticScene({
     width: safeWidth,
     height: safeHeight,
     pixelRatio: Math.max(1, Number(pixelRatio) || 1),
+    drawableInsets,
     frameCount,
     camera,
     contourPointCount,
@@ -22450,13 +22162,15 @@ function buildWavetableRenderModel({
   width = 640,
   height = 320,
   pixelRatio = 1,
+  drawableInsets = {},
   staticScene = null
 }) {
   const scene = staticScene ?? buildWavetableStaticScene({
     frames,
     width,
     height,
-    pixelRatio
+    pixelRatio,
+    drawableInsets
   });
   const frameState = createFrameState(scene.frameCount, position, warpMode, warpAmount);
   return {
@@ -22489,11 +22203,11 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
   const meshColour = mixRGB(theme.meshColor, [214, 246, 255], 0.34);
   const gradient = context.createLinearGradient?.(0, 0, 0, model.height);
   if (gradient) {
-    gradient.addColorStop(0, theme.backgroundTop);
-    gradient.addColorStop(1, theme.backgroundBottom);
+    gradient.addColorStop(0, "#4b164f");
+    gradient.addColorStop(1, "#1f4f5c");
     context.fillStyle = gradient;
   } else {
-    context.fillStyle = theme.backgroundBottom;
+    context.fillStyle = "#4b164f";
   }
   context.clearRect(0, 0, model.width, model.height);
   context.fillRect(0, 0, model.width, model.height);
@@ -22590,6 +22304,7 @@ class CanvasWavetableDisplay {
     this.devicePixelRatio = 1;
     this.cssWidth = 0;
     this.cssHeight = 0;
+    this.drawableInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     this.staticScene = null;
     this.staticKey = "";
     this.pendingRenderHandle = null;
@@ -22615,6 +22330,20 @@ class CanvasWavetableDisplay {
     this.warpAmount = clamp$b(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
+  setDrawableInsets(insets = {}) {
+    const nextInsets = {
+      top: Math.max(0, Number(insets.top) || 0),
+      right: Math.max(0, Number(insets.right) || 0),
+      bottom: Math.max(0, Number(insets.bottom) || 0),
+      left: Math.max(0, Number(insets.left) || 0)
+    };
+    if (nextInsets.top === this.drawableInsets.top && nextInsets.right === this.drawableInsets.right && nextInsets.bottom === this.drawableInsets.bottom && nextInsets.left === this.drawableInsets.left) {
+      return;
+    }
+    this.drawableInsets = nextInsets;
+    this.invalidateStaticScene();
+    this.queueRender();
+  }
   resize(width, height, devicePixelRatio = 1) {
     const nextWidth = Math.max(1, Math.floor(width || this.canvas.clientWidth || 1));
     const nextHeight = Math.max(1, Math.floor(height || this.canvas.clientHeight || 1));
@@ -22635,7 +22364,11 @@ class CanvasWavetableDisplay {
       this.frames[0]?.length ?? 0,
       width,
       height,
-      this.devicePixelRatio
+      this.devicePixelRatio,
+      this.drawableInsets.top,
+      this.drawableInsets.right,
+      this.drawableInsets.bottom,
+      this.drawableInsets.left
     ].join(":");
     if (this.staticScene && this.staticKey === nextKey) {
       return this.staticScene;
@@ -22645,7 +22378,8 @@ class CanvasWavetableDisplay {
       frames: this.frames,
       width,
       height,
-      pixelRatio: this.devicePixelRatio
+      pixelRatio: this.devicePixelRatio,
+      drawableInsets: this.drawableInsets
     });
     return this.staticScene;
   }
@@ -23198,7 +22932,9 @@ const MODULATION_STATE_KEY = "modulation.v2";
 const MODULATION_MAX_ROUTES = 12;
 const MODULATION_MSEG_SLOT_COUNT = 3;
 const MODULATION_ENV_SLOT_COUNT = 3;
+const MODULATION_MACRO_SLOT_COUNT = 4;
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"];
+const MACRO_SLOT_NAMES = ["Macro 1", "Macro 2", "Macro 3", "Macro 4"];
 const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"];
 const ENV_MIN_SECONDS = 1e-3;
 const ENV_MAX_SECONDS = 10;
@@ -23232,6 +22968,10 @@ const ROUTE_AMOUNT_STEPS = {
   unisonWavetablePositionSpread: 1e-3,
   unisonWarpSpread: 1e-3
 };
+const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter) => parameter.modulationTargetIndex !== null);
+const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
+  RACK_MODULATION_PARAMETERS.map((parameter) => [`rack.${parameter.endpointID}`, parameter])
+);
 const MODULATION_SOURCE_OPTIONS = [
   { value: "mseg-1", label: "MSEG 1", sourceKind: "mseg", sourceSlot: 1 },
   { value: "mseg-2", label: "MSEG 2", sourceKind: "mseg", sourceSlot: 2 },
@@ -23239,6 +22979,10 @@ const MODULATION_SOURCE_OPTIONS = [
   { value: "env-1", label: "ENV 1", sourceKind: "env", sourceSlot: 1 },
   { value: "env-2", label: "ENV 2", sourceKind: "env", sourceSlot: 2 },
   { value: "env-3", label: "ENV 3", sourceKind: "env", sourceSlot: 3 },
+  { value: "macro-1", label: "MACRO 1", sourceKind: "macro", sourceSlot: 1 },
+  { value: "macro-2", label: "MACRO 2", sourceKind: "macro", sourceSlot: 2 },
+  { value: "macro-3", label: "MACRO 3", sourceKind: "macro", sourceSlot: 3 },
+  { value: "macro-4", label: "MACRO 4", sourceKind: "macro", sourceSlot: 4 },
   { value: "velocity", label: "VEL", sourceKind: "velocity", sourceSlot: null },
   { value: "pressure", label: "AT", sourceKind: "pressure", sourceSlot: null },
   { value: "slide", label: "SLIDE", sourceKind: "slide", sourceSlot: null }
@@ -23255,7 +22999,11 @@ const MODULATION_TARGET_OPTIONS = [
   { value: "unisonBlend", label: "UNI BLEND" },
   { value: "unisonWidth", label: "UNI WIDTH" },
   { value: "unisonWavetablePositionSpread", label: "UNI WT" },
-  { value: "unisonWarpSpread", label: "UNI WARP" }
+  { value: "unisonWarpSpread", label: "UNI WARP" },
+  ...RACK_MODULATION_PARAMETERS.map((parameter) => ({
+    value: `rack.${parameter.endpointID}`,
+    label: `${parameter.effectId.toUpperCase()} ${parameter.shortLabel.toUpperCase()}`
+  }))
 ];
 let generatedRouteIdCounter = 1;
 function hasOwnValue$1(record, key) {
@@ -23290,8 +23038,32 @@ function formatSignedNumeric(value, digits) {
   }
   return String(numeric);
 }
+function isRackModulationTarget(targetKind) {
+  return RACK_MODULATION_PARAMETER_BY_KIND.has(targetKind);
+}
+function isVoiceModulationSource(sourceKind) {
+  return sourceKind !== "macro";
+}
+function getRackRouteAmountLimit(descriptor) {
+  if (descriptor.scale === "log") {
+    return { min: -6, max: 6 };
+  }
+  const span = descriptor.max - descriptor.min;
+  return { min: -span, max: span };
+}
 function getRouteAmountLimit(targetKind) {
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter !== void 0) {
+    return getRackRouteAmountLimit(rackParameter);
+  }
   return ROUTE_AMOUNT_LIMITS[targetKind];
+}
+function getRouteAmountStep(targetKind) {
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter !== void 0) {
+    return rackParameter.scale === "log" ? 0.01 : (rackParameter.max - rackParameter.min) / 1e3;
+  }
+  return ROUTE_AMOUNT_STEPS[targetKind];
 }
 function createGeneratedRouteId() {
   const routeId = `mod-route-auto-${generatedRouteIdCounter}`;
@@ -23312,11 +23084,11 @@ function getModulationAmountBounds(targetKind) {
   return {
     min: limits.min,
     max: limits.max,
-    step: ROUTE_AMOUNT_STEPS[targetKind]
+    step: getRouteAmountStep(targetKind)
   };
 }
 function clampModulationRouteAmount(targetKind, value) {
-  const limits = ROUTE_AMOUNT_LIMITS[targetKind];
+  const limits = getRouteAmountLimit(targetKind);
   const numeric = Number(value);
   return clamp$8(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
@@ -23359,6 +23131,17 @@ function getModulationAmountSliderPosition(targetKind, amount) {
 function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar") {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
   const prefix = polarity === "bipolar" ? Math.abs(clampedAmount) <= 1e-9 ? "" : "±" : clampedAmount > 0 ? "+" : clampedAmount < 0 ? "-" : "";
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter !== void 0) {
+    if (rackParameter.scale === "log") {
+      return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
+    }
+    if (rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2) {
+      return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+    }
+    const unit = rackParameter.unit === "deg" ? "°" : rackParameter.unit;
+    return `${prefix}${formatMagnitude(clampedAmount, Math.abs(clampedAmount) < 10 ? 2 : 1)}${unit ? ` ${unit}` : ""}`;
+  }
   switch (targetKind) {
     case "wavetablePosition":
       return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
@@ -23394,6 +23177,13 @@ function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar"
 }
 function formatModulationAmountEditingValue(targetKind, amount) {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter !== void 0) {
+    return formatSignedNumeric(
+      rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2 ? clampedAmount * 100 : clampedAmount,
+      2
+    );
+  }
   switch (targetKind) {
     case "wavetablePosition":
     case "warpAmount":
@@ -23437,6 +23227,13 @@ function parseModulationAmountEditingValue(targetKind, rawText) {
   if (!Number.isFinite(numericValue)) {
     return null;
   }
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter !== void 0) {
+    return clampModulationRouteAmount(
+      targetKind,
+      rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2 ? numericValue / 100 : numericValue
+    );
+  }
   if (targetKind === "wavetablePosition" || targetKind === "warpAmount" || targetKind === "unisonDetune" || targetKind === "unisonBlend" || targetKind === "unisonWidth" || targetKind === "unisonWavetablePositionSpread" || targetKind === "unisonWarpSpread") {
     return clampModulationRouteAmount(targetKind, numericValue / 100);
   }
@@ -23447,23 +23244,30 @@ function parseModulationAmountEditingValue(targetKind, rawText) {
   return clampModulationRouteAmount(targetKind, numericValue);
 }
 function normalizeSourceKind(value) {
-  if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide") {
+  if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide" || value === "macro") {
     return value;
   }
   return "mseg";
 }
 function normalizeTargetKind(value) {
+  if (typeof value === "string" && RACK_MODULATION_PARAMETER_BY_KIND.has(value)) {
+    return value;
+  }
   if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan" || value === "unisonDetune" || value === "unisonBlend" || value === "unisonWidth" || value === "unisonWavetablePositionSpread" || value === "unisonWarpSpread") {
     return value;
   }
   return "wavetablePosition";
+}
+function normalizeMacroName(value, slotIndex) {
+  const fallback = MACRO_SLOT_NAMES[slotIndex] ?? `Macro ${slotIndex + 1}`;
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 function normalizeSourceSlot(sourceKind, rawSlot) {
   const numericSlot = Math.round(Number(rawSlot));
   if (sourceKind === "velocity" || sourceKind === "pressure" || sourceKind === "slide") {
     return null;
   }
-  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : sourceKind === "macro" ? MODULATION_MACRO_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
   return clamp$8(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
@@ -23495,6 +23299,7 @@ function createDefaultRoute(overrides = {}) {
     polarity: "unipolar",
     targetKind: "wavetablePosition",
     amount: 0,
+    reducer: "max",
     ...overrides
   };
 }
@@ -23510,7 +23315,8 @@ function normalizeRoute(value, routeIndex = 0) {
     sourceSlot: normalizeSourceSlot(sourceKind, nextValue.sourceSlot),
     polarity: normalizePolarity(nextValue.polarity),
     targetKind,
-    amount: clampModulationRouteAmount(targetKind, numericAmount)
+    amount: clampModulationRouteAmount(targetKind, numericAmount),
+    reducer: nextValue.reducer === "mean" ? "mean" : "max"
   };
 }
 function normalizeMsegSlot(value, slotIndex) {
@@ -23530,7 +23336,15 @@ function createDefaultModulationState() {
     version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
-    routes: [createDefaultRoute({ id: "mod-route-1" })]
+    routes: [
+      createDefaultRoute({ id: "mod-route-1", amount: 1 }),
+      createDefaultRoute({
+        id: "mod-route-2",
+        targetKind: "filterCutoffOctaves",
+        amount: 4
+      })
+    ],
+    macroNames: MACRO_SLOT_NAMES.slice()
   };
 }
 function normalizeModulationState(value = createDefaultModulationState()) {
@@ -23538,12 +23352,17 @@ function normalizeModulationState(value = createDefaultModulationState()) {
   const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
   const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
   const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
+  const inputMacroNames = Array.isArray(nextValue.macroNames) ? nextValue.macroNames : [];
   return {
     format: "cosimo.modulation",
     version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
-    routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
+    routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)),
+    macroNames: Array.from(
+      { length: MODULATION_MACRO_SLOT_COUNT },
+      (_, slotIndex) => normalizeMacroName(inputMacroNames[slotIndex], slotIndex)
+    )
   };
 }
 function serializeModulationState(state) {
@@ -23893,11 +23712,12 @@ const VOICE_MODE_OPTIONS = [
   { value: 1, label: "Mono" },
   { value: 2, label: "Legato" }
 ];
-const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27] min-h-[240px]";
+const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27]";
 const SYNTH_GRID_CARD_SHELL_CLASS = "synth-grid-card-shell relative min-h-0 overflow-hidden rounded-[14px]";
 const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "synth-grid-card-inset";
 const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "synth-compact-control rounded-[5px]";
 const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "synth-compact-control-text";
+const WAVETABLE_DRAWABLE_CONTROL_GAP_PX = 0;
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75];
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
@@ -23925,6 +23745,31 @@ function useResizeObserver$1(ref) {
     return () => observer.disconnect();
   }, [ref]);
   return size;
+}
+function useElementBottomInset(containerRef, elementRef, extraGapPx = 0) {
+  const [inset, setInset] = reactExports.useState(0);
+  reactExports.useLayoutEffect(() => {
+    const container = containerRef.current;
+    const element = elementRef.current;
+    if (!container || !element) {
+      return;
+    }
+    const update = () => {
+      const containerBounds = container.getBoundingClientRect();
+      const elementBounds = element.getBoundingClientRect();
+      setInset(Math.ceil(Math.max(0, elementBounds.bottom - containerBounds.top + extraGapPx)));
+    };
+    const observer = new ResizeObserver(update);
+    observer.observe(container);
+    observer.observe(element);
+    window.addEventListener("resize", update);
+    update();
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [containerRef, elementRef, extraGapPx]);
+  return inset;
 }
 function formatFrameIndex(position, frameCount) {
   const safeFrameCount = Math.max(1, frameCount);
@@ -24242,7 +24087,8 @@ function WavetableCanvas({
   frames,
   position,
   warpMode,
-  warpAmount
+  warpAmount,
+  drawableTopInset
 }) {
   const canvasRef = reactExports.useRef(null);
   const viewportRef = reactExports.useRef(null);
@@ -24269,6 +24115,9 @@ function WavetableCanvas({
   reactExports.useEffect(() => {
     displayRef.current?.setWarp(warpMode, warpAmount);
   }, [warpAmount, warpMode]);
+  reactExports.useEffect(() => {
+    displayRef.current?.setDrawableInsets({ top: drawableTopInset });
+  }, [drawableTopInset]);
   reactExports.useEffect(() => {
     displayRef.current?.resize(size.width, size.height, window.devicePixelRatio || 1);
   }, [size]);
@@ -25188,6 +25037,8 @@ function WavetableStageSection({
   bottomRightAccessory,
   className
 }) {
+  const topControlsRef = reactExports.useRef(null);
+  const drawableTopInset = useElementBottomInset(stageRef, topControlsRef, WAVETABLE_DRAWABLE_CONTROL_GAP_PX);
   const debugState = reactExports.useMemo(() => ({
     position: clampDisplayPosition(position),
     warpMode: Math.round(Number(warpMode) || 0),
@@ -25217,12 +25068,14 @@ function WavetableStageSection({
             frames,
             position,
             warpMode,
-            warpAmount
+            warpAmount,
+            drawableTopInset
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "div",
           {
+            ref: topControlsRef,
             "data-role": "wavetable-stage-top-controls",
             className: "synth-display-lip-controls text-[8px] uppercase tracking-[0.10em]",
             children: [
@@ -25249,16 +25102,10 @@ function WavetableStageSection({
                   ]
                 }
               ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-1", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-frame-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`, children: [
-                  "Frame ",
-                  formatFrameIndex(position, frameCount)
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-position-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`, children: [
-                  "Pos ",
-                  clampDisplayPosition(position).toFixed(3)
-                ] })
-              ] })
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex min-w-0 items-center gap-1", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "wavetable-frame-chip", className: `flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`, children: [
+                "Frame ",
+                formatFrameIndex(position, frameCount)
+              ] }) })
             ]
           }
         ),
@@ -26357,11 +26204,10 @@ function useResizeObserver(ref) {
       return;
     }
     const update = () => {
-      const bounds = element.getBoundingClientRect();
       const host = element;
       setSize({
-        width: Math.max(1, bounds.width || host.clientWidth || 1),
-        height: Math.max(1, bounds.height || host.clientHeight || 1)
+        width: Math.max(1, host.clientWidth || 1),
+        height: Math.max(1, host.clientHeight || 1)
       });
     };
     const observer = new ResizeObserver(update);
@@ -26373,6 +26219,14 @@ function useResizeObserver(ref) {
 }
 function createKeyboardTagName() {
   return "cosimo-react-desktop-keyboard";
+}
+function refreshKeyboardLayout(keyboard) {
+  keyboard.notes = [];
+  keyboard.refreshHTML();
+  keyboard.bindRenderedTouchHandlers?.();
+  keyboard.style.maxWidth = "100%";
+  keyboard.style.minWidth = "0";
+  keyboard.refreshActiveNoteElements();
 }
 function ensureKeyboardElement(patchConnection) {
   const tagName = createKeyboardTagName();
@@ -26387,8 +26241,87 @@ function ensureKeyboardElement(patchConnection) {
           naturalNoteWidth: 22,
           accidentalWidth: 13,
           accidentalPercentageHeight: 64,
-          pressedNoteColour: "#f56cb6"
+          pressedNoteColour: "#b9f45d"
         });
+      }
+      getCSS() {
+        return `
+                    * {
+                        box-sizing: border-box;
+                        margin: 0;
+                        padding: 0;
+                        user-select: none;
+                        -webkit-user-select: none;
+                    }
+
+                    :host {
+                        display: block;
+                        min-width: 0;
+                        max-width: 100%;
+                        overflow: hidden;
+                        position: relative;
+                        touch-action: none;
+                    }
+
+                    .note-holder {
+                        position: relative;
+                        height: 100%;
+                        overflow: hidden;
+                        border-radius: 18px;
+                        background: #252727;
+                    }
+
+                    .natural-note {
+                        position: absolute;
+                        display: flex;
+                        width: ${this.naturalWidth}px;
+                        height: 100%;
+                        align-items: flex-end;
+                        justify-content: center;
+                        border: 1px solid #232525;
+                        border-radius: 0 0 8px 8px;
+                        background: linear-gradient(180deg, #f5f4ec 0%, #deddd5 100%);
+                        box-shadow: inset 0 -10px 18px rgb(32 35 35 / 0.08);
+                    }
+
+                    .natural-note:first-of-type {
+                        border-radius: 18px 0 8px 18px;
+                    }
+
+                    p {
+                        pointer-events: none;
+                        padding-bottom: 7px;
+                        color: rgb(46 50 50 / 0.56);
+                        font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+                        font-size: 10px;
+                        font-weight: 650;
+                        letter-spacing: 0.08em;
+                    }
+
+                    .accidental-note {
+                        position: absolute;
+                        z-index: 2;
+                        top: 0;
+                        width: ${this.accidentalWidth}px;
+                        height: ${this.accidentalPercentageHeight}%;
+                        border: 1px solid #111313;
+                        border-radius: 0 0 7px 7px;
+                        background: linear-gradient(180deg, #252828 0%, #111313 100%);
+                        box-shadow: 0 5px 9px rgb(0 0 0 / 0.38);
+                    }
+
+                    .note.active {
+                        background: linear-gradient(180deg, #d8ff85 0%, #9bcf46 100%);
+                        box-shadow: inset 0 0 0 1px rgb(245 255 216 / 0.5), 0 0 18px rgb(185 244 93 / 0.28);
+                    }
+                `;
+      }
+      bindRenderedTouchHandlers() {
+        const keyboard = this;
+        for (const child of Array.from(keyboard.root?.children ?? [])) {
+          child.addEventListener("touchstart", (event) => keyboard.touchStart?.(event), { passive: false });
+          child.addEventListener("touchend", (event) => keyboard.touchEnd?.(event));
+        }
       }
     }
     window.customElements.define(tagName, CosimoDesktopKeyboard);
@@ -26421,9 +26354,8 @@ function KeyboardDock({
     keyboard.tabIndex = 0;
     keyboard.setAttribute("root-note", String(rootNote));
     keyboard.setAttribute("note-count", String(noteCount));
-    keyboard.refreshHTML();
+    refreshKeyboardLayout(keyboard);
     keyboard.attachToPatchConnection?.(patchConnection, midiInputEndpointID);
-    keyboard.refreshActiveNoteElements?.();
     keyboardRef.current = keyboard;
     host.replaceChildren(keyboard);
     return () => {
@@ -26444,9 +26376,7 @@ function KeyboardDock({
     }
     keyboard.setAttribute("root-note", String(rootNote));
     keyboard.setAttribute("note-count", String(noteCount));
-    keyboard.notes = [];
-    keyboard.refreshHTML();
-    keyboard.refreshActiveNoteElements();
+    refreshKeyboardLayout(keyboard);
   }, [noteCount, rootNote, keyboardRef]);
   reactExports.useEffect(() => {
     const keyboard = keyboardRef.current;
@@ -26466,11 +26396,9 @@ function KeyboardDock({
     }
     keyboard.naturalWidth = naturalWidth;
     keyboard.accidentalWidth = accidentalWidth;
-    keyboard.notes = [];
-    keyboard.refreshHTML();
-    keyboard.refreshActiveNoteElements();
+    refreshKeyboardLayout(keyboard);
   }, [hostSize.width, noteCount, rootNote, keyboardRef]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-grid-card-shell rounded-[28px] border p-3", "data-section-accent": "lime", "data-liquid-detail": "edge-rail", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: hostRef, className: "synth-display-recess h-[118px] w-full overflow-hidden rounded-[22px]" }) });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "synth-grid-card-shell min-w-0 max-w-full rounded-[24px] border p-2", "data-section-accent": "lime", "data-liquid-detail": "edge-rail", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: hostRef, className: "synth-display-recess h-[112px] min-w-0 max-w-full overflow-hidden rounded-[18px]" }) });
 }
 var NexusUI$1 = { exports: {} };
 var NexusUI = NexusUI$1.exports;
@@ -34607,6 +34535,9 @@ function PrecisionNumberField({
   width = 128,
   height = 40,
   variant = "default",
+  leadingLabel = null,
+  enableWheel = false,
+  wheelStep,
   suffix = null,
   normalizedFromValue = (value) => value,
   valueFromNormalized = (value) => value,
@@ -34618,11 +34549,15 @@ function PrecisionNumberField({
   dataRole
 }) {
   const inputRef = reactExports.useRef(null);
+  const fieldRef = reactExports.useRef(null);
   const activeDragRef = reactExports.useRef(null);
   const draftValueRef = reactExports.useRef("");
   const skipCommitOnBlurRef = reactExports.useRef(false);
+  const wheelCursorTimerRef = reactExports.useRef(0);
+  const isMountedRef = reactExports.useRef(true);
   const [isEditing, setIsEditing] = reactExports.useState(false);
   const [draftValue, setDraftValue] = reactExports.useState("");
+  const [isWheelCursorHidden, setIsWheelCursorHidden] = reactExports.useState(false);
   const normalizedMin = reactExports.useMemo(
     () => Math.min(normalizedFromValue(min), normalizedFromValue(max)),
     [max, min, normalizedFromValue]
@@ -34633,9 +34568,15 @@ function PrecisionNumberField({
   );
   const displayValue = reactExports.useMemo(() => isEditing ? draftValue : formatDisplay(binding.value), [binding.value, draftValue, formatDisplay, isEditing]);
   const isCompactOverlay = variant === "compactOverlay";
+  const isInlineDark = variant === "inlineDark";
+  const shouldShowLeadingLabel = isInlineDark && Boolean(leadingLabel);
   reactExports.useEffect(() => {
     draftValueRef.current = draftValue;
   }, [draftValue]);
+  reactExports.useEffect(() => () => {
+    isMountedRef.current = false;
+    clearTimeout(wheelCursorTimerRef.current);
+  }, []);
   reactExports.useEffect(() => {
     if (!isEditing) {
       return;
@@ -34649,6 +34590,11 @@ function PrecisionNumberField({
       window.cancelAnimationFrame(animationFrameID);
     };
   }, [binding.value, formatEditingValue, isEditing]);
+  reactExports.useEffect(() => {
+    if (isEditing) {
+      setIsWheelCursorHidden(false);
+    }
+  }, [isEditing]);
   const commitTextEntry = (rawText) => {
     const parsedValue = parseText(rawText);
     const nextValue = quantizeToStep(
@@ -34663,6 +34609,46 @@ function PrecisionNumberField({
     }
     binding.commitValue(nextValue);
   };
+  const adjustByWheel = reactExports.useCallback((deltaDirection) => {
+    const displayStep = Math.abs(wheelStep ?? step) || Math.max(1e-9, (max - min) / 400);
+    const nextValue = quantizeToStep(
+      clampNumber(binding.value + deltaDirection * displayStep, min, max),
+      min,
+      max,
+      step
+    );
+    if (Math.abs(nextValue - binding.value) <= Math.max(step / 10, 1e-9)) {
+      return;
+    }
+    binding.commitValue(nextValue);
+  }, [binding, max, min, step, wheelStep]);
+  reactExports.useEffect(() => {
+    const field = fieldRef.current;
+    const input = inputRef.current;
+    if (!field || !input || !enableWheel) {
+      return;
+    }
+    const timerRef = wheelCursorTimerRef;
+    const handler = (event) => {
+      if (isEditing || event.deltaY === 0) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      setIsWheelCursorHidden(true);
+      clearTimeout(timerRef.current);
+      timerRef.current = window.setTimeout(() => {
+        if (isMountedRef.current) {
+          setIsWheelCursorHidden(false);
+        }
+      }, 400);
+      adjustByWheel(event.deltaY > 0 ? 1 : -1);
+    };
+    field.addEventListener("wheel", handler, { passive: false });
+    return () => {
+      field.removeEventListener("wheel", handler);
+    };
+  }, [adjustByWheel, enableWheel, isEditing]);
   const finishTextEntry = (commit) => {
     if (!isEditing) {
       return;
@@ -34675,131 +34661,148 @@ function PrecisionNumberField({
     }
     setDraftValue(formatEditingValue(binding.value));
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid gap-1", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "sr-only", children: ariaLabel }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        "data-role": dataRole,
-        className: `synth-compact-control relative ${isCompactOverlay ? "rounded-[5px]" : "rounded-full"}`,
-        style: { width: `${width}px`, height: `${height}px` },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "input",
-            {
-              ref: inputRef,
-              "aria-label": ariaLabel,
-              type: "text",
-              inputMode: "decimal",
-              autoComplete: "off",
-              spellCheck: false,
-              readOnly: !isEditing,
-              value: displayValue,
-              className: `synth-readout-text h-full w-full bg-transparent outline-none ${isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${suffix && !isEditing ? "pr-11" : "pr-4"} pl-4`} ${isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"}`,
-              onPointerDown: (event) => {
-                if (event.button !== 0 || isEditing) {
-                  return;
-                }
-                activeDragRef.current = {
-                  pointerId: event.pointerId,
-                  startClientX: event.clientX,
-                  startNormalizedValue: clampNumber(normalizedFromValue(binding.value), normalizedMin, normalizedMax),
-                  moved: false
-                };
-                binding.beginGesture();
-                event.currentTarget.setPointerCapture(event.pointerId);
-                event.preventDefault();
-              },
-              onPointerMove: (event) => {
-                const activeDrag = activeDragRef.current;
-                if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
-                  return;
-                }
-                const deltaX = event.clientX - activeDrag.startClientX;
-                if (Math.abs(deltaX) >= DRAG_START_THRESHOLD_PX) {
-                  activeDrag.moved = true;
-                }
-                const normalizedSpan = Math.max(1e-9, normalizedMax - normalizedMin);
-                const scaledDelta = deltaX / Math.max(1, pixelsPerFullRange) * normalizedSpan * (event.shiftKey ? fineDragMultiplier : 1);
-                const nextNormalizedValue = clampNumber(
-                  activeDrag.startNormalizedValue + scaledDelta,
-                  normalizedMin,
-                  normalizedMax
-                );
-                const nextBindingValue = quantizeToStep(
-                  clampNumber(valueFromNormalized(nextNormalizedValue), min, max),
-                  min,
-                  max,
-                  step
-                );
-                binding.setValue(nextBindingValue);
-              },
-              onPointerUp: (event) => {
-                const activeDrag = activeDragRef.current;
-                if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
-                  return;
-                }
-                activeDragRef.current = null;
-                event.currentTarget.releasePointerCapture?.(event.pointerId);
-                binding.endGesture();
-                if (!activeDrag.moved) {
-                  inputRef.current?.focus();
-                }
-              },
-              onPointerCancel: (event) => {
-                const activeDrag = activeDragRef.current;
-                if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
-                  return;
-                }
-                activeDragRef.current = null;
-                event.currentTarget.releasePointerCapture?.(event.pointerId);
-                binding.endGesture();
-              },
-              onDoubleClick: (event) => {
-                if (event.button !== 0) {
-                  return;
-                }
-                event.preventDefault();
-                setIsEditing(true);
-              },
-              onChange: (event) => {
-                if (!isEditing) {
-                  return;
-                }
-                setDraftValue(event.currentTarget.value);
-              },
-              onBlur: () => {
-                const shouldCommit = !skipCommitOnBlurRef.current;
-                skipCommitOnBlurRef.current = false;
-                finishTextEntry(shouldCommit);
-              },
-              onKeyDown: (event) => {
-                if (!isEditing) {
-                  if (event.key === "Enter") {
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "label",
+    {
+      ref: fieldRef,
+      "data-role": isInlineDark ? dataRole : void 0,
+      className: isInlineDark ? "inline-flex h-6 min-w-0 items-center gap-1 rounded-[5px] border border-[rgb(var(--cosimo-edge-rgb)/0.34)] bg-[rgb(var(--cosimo-control-rgb)/0.58)] px-1 text-[var(--cosimo-text)] shadow-[var(--cosimo-contact-shadow)]" : "grid gap-1",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: shouldShowLeadingLabel ? "shrink-0 text-[7px] font-bold uppercase tracking-[0.10em] text-slate-300/45" : "sr-only", children: leadingLabel ?? ariaLabel }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-role": isInlineDark ? void 0 : dataRole,
+            className: isInlineDark ? "relative flex items-center rounded-[4px] border border-white/[0.07] bg-[rgba(3,5,12,0.58)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]" : `synth-compact-control relative ${isCompactOverlay ? "rounded-[5px]" : "rounded-full"}`,
+            style: { width: `${width}px`, height: `${height}px` },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "input",
+                {
+                  ref: inputRef,
+                  "aria-label": ariaLabel,
+                  type: "text",
+                  inputMode: "decimal",
+                  autoComplete: "off",
+                  spellCheck: false,
+                  readOnly: !isEditing,
+                  value: displayValue,
+                  style: isWheelCursorHidden && !isEditing ? { cursor: "none" } : void 0,
+                  className: isInlineDark ? `synth-readout-text w-full select-none whitespace-nowrap bg-transparent px-1.5 py-[3px] text-center text-[10px] leading-none tracking-[0.08em] outline-none ${isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize"}` : `synth-readout-text h-full w-full bg-transparent outline-none ${isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${suffix && !isEditing ? "pr-11" : "pr-4"} pl-4`} ${isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"}`,
+                  onPointerDown: (event) => {
+                    if (event.button !== 0 || isEditing) {
+                      return;
+                    }
+                    activeDragRef.current = {
+                      pointerId: event.pointerId,
+                      startClientX: event.clientX,
+                      startNormalizedValue: clampNumber(normalizedFromValue(binding.value), normalizedMin, normalizedMax),
+                      moved: false
+                    };
+                    binding.beginGesture();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    event.preventDefault();
+                  },
+                  onPointerMove: (event) => {
+                    const activeDrag = activeDragRef.current;
+                    if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                      return;
+                    }
+                    const deltaX = event.clientX - activeDrag.startClientX;
+                    if (Math.abs(deltaX) >= DRAG_START_THRESHOLD_PX) {
+                      activeDrag.moved = true;
+                    }
+                    const normalizedSpan = Math.max(1e-9, normalizedMax - normalizedMin);
+                    const scaledDelta = deltaX / Math.max(1, pixelsPerFullRange) * normalizedSpan * (event.shiftKey ? fineDragMultiplier : 1);
+                    const nextNormalizedValue = clampNumber(
+                      activeDrag.startNormalizedValue + scaledDelta,
+                      normalizedMin,
+                      normalizedMax
+                    );
+                    const nextBindingValue = quantizeToStep(
+                      clampNumber(valueFromNormalized(nextNormalizedValue), min, max),
+                      min,
+                      max,
+                      step
+                    );
+                    binding.setValue(nextBindingValue);
+                  },
+                  onPointerUp: (event) => {
+                    const activeDrag = activeDragRef.current;
+                    if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                      return;
+                    }
+                    activeDragRef.current = null;
+                    event.currentTarget.releasePointerCapture?.(event.pointerId);
+                    binding.endGesture();
+                    if (!activeDrag.moved) {
+                      if (isInlineDark) {
+                        setIsEditing(true);
+                        window.requestAnimationFrame(() => {
+                          inputRef.current?.focus();
+                          inputRef.current?.select();
+                        });
+                      } else {
+                        inputRef.current?.focus();
+                      }
+                    }
+                  },
+                  onPointerCancel: (event) => {
+                    const activeDrag = activeDragRef.current;
+                    if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                      return;
+                    }
+                    activeDragRef.current = null;
+                    event.currentTarget.releasePointerCapture?.(event.pointerId);
+                    binding.endGesture();
+                  },
+                  onDoubleClick: (event) => {
+                    if (event.button !== 0) {
+                      return;
+                    }
                     event.preventDefault();
                     setIsEditing(true);
+                  },
+                  onChange: (event) => {
+                    if (!isEditing) {
+                      return;
+                    }
+                    setDraftValue(event.currentTarget.value);
+                  },
+                  onBlur: () => {
+                    const shouldCommit = !skipCommitOnBlurRef.current;
+                    skipCommitOnBlurRef.current = false;
+                    finishTextEntry(shouldCommit);
+                  },
+                  onKeyDown: (event) => {
+                    if (!isEditing) {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        setIsEditing(true);
+                      }
+                      return;
+                    }
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      inputRef.current?.blur();
+                      return;
+                    }
+                    if (event.key === "Escape") {
+                      event.preventDefault();
+                      skipCommitOnBlurRef.current = true;
+                      finishTextEntry(false);
+                      inputRef.current?.blur();
+                    }
                   }
-                  return;
                 }
-                if (event.key === "Enter") {
-                  event.preventDefault();
-                  inputRef.current?.blur();
-                  return;
-                }
-                if (event.key === "Escape") {
-                  event.preventDefault();
-                  skipCommitOnBlurRef.current = true;
-                  finishTextEntry(false);
-                  inputRef.current?.blur();
-                }
-              }
-            }
-          ),
-          suffix && !isEditing ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `synth-readout-text pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"}`, children: suffix }) : null
-        ]
-      }
-    )
-  ] });
+              ),
+              suffix && !isEditing ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `synth-readout-text pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"}`, children: suffix }) : null
+            ]
+          }
+        )
+      ]
+    }
+  );
 }
 function clamp$4(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -35484,7 +35487,7 @@ function RouteRow({
           {
             type: "button",
             "aria-label": `Route ${routeIndex + 1} ${route.enabled ? "bypass" : "enable"}`,
-            onClick: () => onUpdate({ ...route, enabled: !route.enabled }),
+            onClick: () => onUpdate({ enabled: !route.enabled }),
             className: `shrink-0 rounded p-1 transition-all ${route.enabled ? "synth-readout-text hover:text-[rgb(var(--section-accent-rgb)/0.78)]" : "text-[rgb(var(--cosimo-control-rgb)/0.62)] hover:text-[rgb(232_236_239/0.82)]"}`,
             title: route.enabled ? "Bypass" : "Enable",
             children: /* @__PURE__ */ jsxRuntimeExports.jsx(PowerIcon, { className: "h-3 w-3" })
@@ -35496,7 +35499,10 @@ function RouteRow({
             ariaLabel: `Route ${routeIndex + 1} source`,
             value: sourceValue,
             options: MODULATION_SOURCE_OPTIONS.map((option) => ({ value: option.value, label: option.label })),
-            onChange: (nextSourceValue) => onUpdate(applyModulationSourceOption(route, nextSourceValue)),
+            onChange: (nextSourceValue) => {
+              const nextSource = applyModulationSourceOption(route, nextSourceValue);
+              onUpdate({ sourceKind: nextSource.sourceKind, sourceSlot: nextSource.sourceSlot });
+            },
             minWidthPx: 118
           }
         ) }),
@@ -35510,7 +35516,6 @@ function RouteRow({
             onChange: (nextTargetKind) => {
               const targetKind = nextTargetKind;
               onUpdate({
-                ...route,
                 targetKind,
                 amount: clampModulationRouteAmount(targetKind, route.amount)
               });
@@ -35524,9 +35529,22 @@ function RouteRow({
           {
             ariaLabel: `Route ${routeIndex + 1} polarity`,
             value: route.polarity,
-            onChange: (polarity) => onUpdate({ ...route, polarity })
+            onChange: (polarity) => onUpdate({ polarity })
           }
         ),
+        isRackModulationTarget(route.targetKind) && isVoiceModulationSource(route.sourceKind) ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          PrototypeSelect,
+          {
+            ariaLabel: `Route ${routeIndex + 1} voice reducer`,
+            value: route.reducer,
+            options: [
+              { value: "max", label: "MAX" },
+              { value: "mean", label: "MEAN" }
+            ],
+            onChange: (reducer) => onUpdate({ reducer: reducer === "mean" ? "mean" : "max" }),
+            minWidthPx: 72
+          }
+        ) : null,
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           MiniKnob,
           {
@@ -35536,7 +35554,7 @@ function RouteRow({
             value: route.amount,
             min: targetBounds.min,
             max: targetBounds.max,
-            onChange: (nextAmount) => onUpdate({ ...route, amount: clampModulationRouteAmount(route.targetKind, nextAmount) })
+            onChange: (nextAmount) => onUpdate({ amount: clampModulationRouteAmount(route.targetKind, nextAmount) })
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-readout-text hidden w-16 shrink-0 text-right text-xs tabular-nums sm:block", children: formatModulationAmountReadout(route.targetKind, route.amount, route.polarity) }),
@@ -35619,40 +35637,6 @@ function DesktopModMatrix({
       route.id
     )) })
   ] });
-}
-function serializeIdentity(value) {
-  return value;
-}
-function usePatchParameterBinding({
-  endpointID,
-  initialValue,
-  coerce,
-  serialize = serializeIdentity
-}) {
-  const parameter = usePatchParameter(endpointID, serialize(initialValue));
-  const value = reactExports.useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
-  const setValue = reactExports.useCallback((nextValue) => {
-    parameter.setValue(serialize(nextValue));
-  }, [parameter.setValue, serialize]);
-  const commitValue = reactExports.useCallback((nextValue) => {
-    parameter.beginGesture();
-    parameter.setValue(serialize(nextValue));
-    parameter.endGesture();
-  }, [parameter.beginGesture, parameter.endGesture, parameter.setValue, serialize]);
-  return reactExports.useMemo(() => ({
-    endpointID,
-    value,
-    setValue,
-    commitValue,
-    beginGesture: parameter.beginGesture,
-    endGesture: parameter.endGesture
-  }), [endpointID, parameter.beginGesture, parameter.endGesture, value, setValue, commitValue]);
-}
-function usePatchEventTrigger(endpointID) {
-  const patchConnection = usePatchConnection();
-  return reactExports.useCallback((value) => {
-    patchConnection.sendEventOrValue?.(endpointID, value);
-  }, [endpointID, patchConnection]);
 }
 const ARTICULATION_STATE_KEY = "articulations.v2";
 const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
@@ -35774,7 +35758,6 @@ function createDefaultArticulationParameterSnapshot() {
     distortionWet: 0,
     distortionWetHPHz: 40,
     distortionWetLPHz: 18e3,
-    chorusEnabled: 0,
     chorusMix: 0,
     chorusMotionMode: 1,
     chorusBloomMode: 0,
@@ -35826,7 +35809,6 @@ function normalizeArticulationParameterSnapshot(value) {
     distortionWet: normalizeNumber(nextValue.distortionWet, defaults.distortionWet, 0, 1),
     distortionWetHPHz: normalizeNumber(nextValue.distortionWetHPHz, defaults.distortionWetHPHz, 20, 4e3),
     distortionWetLPHz: normalizeNumber(nextValue.distortionWetLPHz, defaults.distortionWetLPHz, 20, 2e4),
-    chorusEnabled: normalizeInteger(nextValue.chorusEnabled, defaults.chorusEnabled, 0, 1),
     chorusMix: normalizeNumber(nextValue.chorusMix, defaults.chorusMix, 0, 1),
     chorusMotionMode: normalizeInteger(nextValue.chorusMotionMode, defaults.chorusMotionMode, 0, 3),
     chorusBloomMode: normalizeInteger(nextValue.chorusBloomMode, defaults.chorusBloomMode, 0, 4),
@@ -36940,6 +36922,7 @@ function useSynthInputRouter(keyboardRef, {
 }
 const DEFAULT_SAMPLES_PER_FRAME = 2048;
 const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
+const DEFAULT_FACTORY_TABLE_INDEX = 34;
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -37079,7 +37062,6 @@ const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
 const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
 const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
 const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
-const CHORUS_ENABLED_ENDPOINT_ID = "chorusEnabled";
 const CHORUS_MIX_ENDPOINT_ID = "chorusMix";
 const CHORUS_MOTION_MODE_ENDPOINT_ID = "chorusMotionMode";
 const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
@@ -38088,7 +38070,7 @@ function useSynthPatchViewModel({
   });
   const wavetableSelect = usePatchParameterBinding({
     endpointID: WAVETABLE_SELECT_ENDPOINT_ID,
-    initialValue: 0,
+    initialValue: DEFAULT_FACTORY_TABLE_INDEX,
     coerce: (value) => Math.max(0, Math.trunc(Number(value) || 0))
   });
   const playMode = usePatchParameterBinding({
@@ -38118,7 +38100,7 @@ function useSynthPatchViewModel({
   });
   const filterMode = usePatchParameterBinding({
     endpointID: FILTER_MODE_ENDPOINT_ID,
-    initialValue: 0,
+    initialValue: FILTER_MODE_LOWPASS$1,
     coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 5)
   });
   const filterCutoff = usePatchParameterBinding({
@@ -38230,11 +38212,6 @@ function useSynthPatchViewModel({
     endpointID: DISTORTION_WET_LP_HZ_ENDPOINT_ID,
     initialValue: 18e3,
     coerce: (value) => clamp$2(Number(value) || 0, 20, 2e4)
-  });
-  const chorusEnabled = usePatchParameterBinding({
-    endpointID: CHORUS_ENABLED_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$2(Math.round(Number(value) || 0), 0, 1)
   });
   const chorusMix = usePatchParameterBinding({
     endpointID: CHORUS_MIX_ENDPOINT_ID,
@@ -38482,8 +38459,13 @@ function useSynthPatchViewModel({
   const handleRemoveRoute = reactExports.useCallback((routeIndex) => {
     modulationBridge.current?.removeRoute(routeIndex);
   }, [modulationBridge]);
-  const handleRouteChange = reactExports.useCallback((routeIndex, nextRoute) => {
-    modulationBridge.current?.setRoute(routeIndex, nextRoute);
+  const handleRouteChange = reactExports.useCallback((routeIndex, update) => {
+    const bridge = modulationBridge.current;
+    const currentRoute = bridge?.getState().routes[routeIndex];
+    if (!bridge || !currentRoute) {
+      return;
+    }
+    bridge.setRoute(routeIndex, { ...currentRoute, ...update });
   }, [modulationBridge]);
   const captureCurrentArticulationSnapshot = reactExports.useCallback(() => {
     const currentModulationState = modulationBridge.current?.getState() ?? modulationState;
@@ -38516,7 +38498,6 @@ function useSynthPatchViewModel({
         distortionWet: distortionWet.value,
         distortionWetHPHz: distortionWetHPHz.value,
         distortionWetLPHz: distortionWetLPHz.value,
-        chorusEnabled: chorusEnabled.value,
         chorusMix: chorusMix.value,
         chorusMotionMode: chorusMotionMode.value,
         chorusBloomMode: chorusBloomMode.value,
@@ -38534,7 +38515,6 @@ function useSynthPatchViewModel({
     });
   }, [
     chorusBloomMode.value,
-    chorusEnabled.value,
     chorusFeedback.value,
     chorusMix.value,
     chorusMotionMode.value,
@@ -38606,7 +38586,6 @@ function useSynthPatchViewModel({
     distortionWet.setValue(parameters.distortionWet);
     distortionWetHPHz.setValue(parameters.distortionWetHPHz);
     distortionWetLPHz.setValue(parameters.distortionWetLPHz);
-    chorusEnabled.setValue(parameters.chorusEnabled);
     chorusMix.setValue(parameters.chorusMix);
     chorusMotionMode.setValue(parameters.chorusMotionMode);
     chorusBloomMode.setValue(parameters.chorusBloomMode);
@@ -38647,7 +38626,6 @@ function useSynthPatchViewModel({
     }
   }, [
     chorusBloomMode,
-    chorusEnabled,
     chorusFeedback,
     chorusMix,
     chorusMotionMode,
@@ -39068,7 +39046,6 @@ function useSynthPatchViewModel({
     distortionWet,
     distortionWetHPHz,
     distortionWetLPHz,
-    chorusEnabled,
     chorusMix,
     chorusMotionMode,
     chorusBloomMode,
@@ -40076,7 +40053,7 @@ class PresetBar extends HTMLElement {
   _navigate(direction) {
     const state = this._state;
     if (!state || state.visiblePresets.length === 0) return;
-    const currentIndex = state.visiblePresets.findIndex((p) => p.isActive);
+    const currentIndex = state.visiblePresets.findIndex((p2) => p2.isActive);
     let nextIndex;
     if (currentIndex < 0) {
       nextIndex = direction > 0 ? 0 : state.visiblePresets.length - 1;
@@ -40094,7 +40071,7 @@ class PresetBar extends HTMLElement {
   _doSave() {
     const state = this._state;
     if (!state?.activePreset) return;
-    const activeItem = state.presets.find((p) => p.isActive);
+    const activeItem = state.presets.find((p2) => p2.isActive);
     if (!activeItem?.canOverwrite) return;
     const result = this._mutations.overwriteUserPreset(activeItem.presetKey);
     handleMutationResult(result, this._els["toast-host"]);
@@ -40106,7 +40083,7 @@ class PresetBar extends HTMLElement {
   _doCopy() {
     const state = this._state;
     if (!state?.activePreset) return;
-    const activeItem = state.presets.find((p) => p.isActive);
+    const activeItem = state.presets.find((p2) => p2.isActive);
     if (!activeItem) return;
     void this._mutations.copyPresetToClipboard(activeItem.presetKey).then((result) => {
       handleMutationResult(result, this._els["toast-host"]);
@@ -40154,7 +40131,7 @@ class PresetBar extends HTMLElement {
   }
   // ── Context Menu ─────────────────────────────────────
   _openCtxMenu(event, presetKey) {
-    const item = this._state?.presets.find((p) => p.presetKey === presetKey);
+    const item = this._state?.presets.find((p2) => p2.presetKey === presetKey);
     if (!item || item.source !== "user") return;
     this._ctxTarget = item;
     const menu = this._els["ctx-menu"];
@@ -40234,7 +40211,7 @@ class PresetBar extends HTMLElement {
   _updateBar(state) {
     this._els["preset-name"].textContent = state.activeLabel || "No Preset";
     this._els["dirty-dot"].classList.toggle("visible", state.dirty);
-    const activeItem = state.presets.find((p) => p.isActive);
+    const activeItem = state.presets.find((p2) => p2.isActive);
     this._els["source-tag"].textContent = activeItem?.source ?? "";
     this._els["btn-save"].disabled = !state.dirty || !activeItem?.canOverwrite;
     this._els["btn-revert"].disabled = !state.dirty;
@@ -40251,19 +40228,19 @@ class PresetBar extends HTMLElement {
       list.innerHTML = `<div class="flyout-empty">No presets match.</div>`;
       return;
     }
-    const factory = visible.filter((p) => p.source === "factory");
-    const user = visible.filter((p) => p.source === "user");
+    const factory = visible.filter((p2) => p2.source === "factory");
+    const user = visible.filter((p2) => p2.source === "user");
     let html = "";
     if (factory.length) {
       html += `<div class="section-header">Factory</div>`;
-      for (const p of factory) {
-        html += this._presetItemHTML(p);
+      for (const p2 of factory) {
+        html += this._presetItemHTML(p2);
       }
     }
     if (user.length) {
       html += `<div class="section-header">User</div>`;
-      for (const p of user) {
-        html += this._presetItemHTML(p);
+      for (const p2 of user) {
+        html += this._presetItemHTML(p2);
       }
     }
     list.innerHTML = html;
@@ -40974,7 +40951,6 @@ const EFFECT_FACTORY_PRESETS = {
       presetID: "chorus.clean-wide",
       label: "Clean Wide",
       values: {
-        chorusEnabled: 1,
         chorusMix: 0.62,
         chorusMotionMode: 1,
         chorusBloomMode: 0,
@@ -40992,7 +40968,6 @@ const EFFECT_FACTORY_PRESETS = {
       presetID: "chorus.bloom-ring",
       label: "Bloom Ring",
       values: {
-        chorusEnabled: 1,
         chorusMix: 0.76,
         chorusMotionMode: 0,
         chorusBloomMode: 2,
@@ -42661,7 +42636,7 @@ function MsegThumbnail({ points, color }) {
       y: padY + (1 - clamp$1(py, 0, 1)) * (H - padY * 2)
     });
     const projected = samples.map((s) => project(s.x, s.y));
-    const stroke = projected.map((p, index) => `${index === 0 ? "M" : "L"}${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(" ");
+    const stroke = projected.map((p2, index) => `${index === 0 ? "M" : "L"}${p2.x.toFixed(2)} ${p2.y.toFixed(2)}`).join(" ");
     const fill = `${stroke} L${projected[projected.length - 1].x.toFixed(2)} ${(H - padY).toFixed(2)} L${projected[0].x.toFixed(2)} ${(H - padY).toFixed(2)} Z`;
     return { stroke, fill };
   }, [points]);
@@ -44512,7 +44487,7 @@ const ENVELOPE_VIEWBOX = {
   top: 42,
   bottom: 118
 };
-const DESKTOP_GRID_CARD_CLASS = SYNTH_GRID_CARD_SIZE_CLASS;
+const DESKTOP_GRID_CARD_CLASS = `w-full ${SYNTH_GRID_CARD_SIZE_CLASS}`;
 const WARP_MODE_OPTIONS = [
   { value: 0, label: "Off" },
   { value: 1, label: "Bend +/-" },
@@ -45758,6 +45733,7 @@ function StatusHeader({ statusText }) {
   ] });
 }
 function SynthPresetBarHost({
+  isHidden,
   storedStateAdapters
 }) {
   const patchConnection = usePatchConnection();
@@ -45787,6 +45763,7 @@ function SynthPresetBarHost({
     {
       ref: hostRef,
       "data-role": "synth-preset-bar-host",
+      hidden: isHidden,
       className: "relative z-40 min-w-0 overflow-visible rounded-[12px] border border-white/[0.06] bg-black/20 [--knob-track-value-color:#87d7f5] [--preset-bar-border-radius:12px]"
     }
   );
@@ -45969,7 +45946,6 @@ function DistortionSection({
       "data-role": "distortion-card",
       "data-layout-card": "desktop-grid-card",
       "data-section-accent": "coral",
-      "data-liquid-detail": "meter-cover",
       className: `flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${className ?? ""}`,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -46166,7 +46142,6 @@ function ChorusModeRow({
   );
 }
 function ChorusEffectColumn({
-  chorusEnabled,
   chorusMix,
   chorusMotionMode,
   chorusBloomMode,
@@ -46179,27 +46154,16 @@ function ChorusEffectColumn({
   const motionIndex = clamp(Math.round(Number(chorusMotionMode.value) || 0), 0, CHORUS_MOTION_MODE_OPTIONS.length - 1);
   const bloomIndex = clamp(Math.round(Number(chorusBloomMode.value) || 0), 0, CHORUS_BLOOM_MODE_OPTIONS.length - 1);
   const ringOffsetIndex = clamp(Math.round(Number(chorusRingOffsetMode.value) || 0), 0, CHORUS_RING_OFFSET_MODE_OPTIONS.length - 1);
-  const enabled = Math.round(Number(chorusEnabled.value) || 0) === 1;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "section",
     {
       "data-role": "chorus-effect-column",
       "data-section-accent": "ion",
-      "data-liquid-detail": "icon-lens",
-      className: "synth-grid-card-shell relative flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] p-2",
+      className: "synth-grid-card-shell relative flex h-full min-h-[220px] min-w-0 flex-col gap-1.5 rounded-[12px] p-2",
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-section-title", children: "Chorus" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              "data-role": "chorus-enabled-control",
-              type: "button",
-              className: `rounded-[7px] border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] transition ${enabled ? "synth-accent-active-button" : "border-white/[0.07] bg-white/[0.025] text-slate-400/70"}`,
-              onClick: () => chorusEnabled.commitValue(enabled ? 0 : 1),
-              children: enabled ? "On" : "Off"
-            }
-          )
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[8px] uppercase tracking-[0.12em] text-slate-400/55", children: "Rack enabled" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid min-w-0 gap-0.5", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -46319,18 +46283,223 @@ function ChorusEffectColumn({
     }
   );
 }
-function ReservedEffectColumn({ label }) {
-  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+function readRackStateFromFullStoredState(fullState) {
+  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
+  return Object.hasOwn(values, RACK_STATE_KEY) ? values[RACK_STATE_KEY] : fullState[RACK_STATE_KEY];
+}
+function useRackState() {
+  const patchConnection = usePatchConnection();
+  const [rackState, setRackState] = reactExports.useState(createDefaultRackState);
+  reactExports.useEffect(() => {
+    const storedStateListener = (message) => {
+      if (typeof message !== "object" || message === null || Array.isArray(message)) {
+        return;
+      }
+      const key = Reflect.get(message, "key");
+      if (key === RACK_STATE_KEY) {
+        setRackState(deserializeRackState(Reflect.get(message, "value")));
+      }
+    };
+    const effectiveStateListener = (message) => {
+      const effectiveState = parseEffectiveRackState(message);
+      if (effectiveState === null) {
+        return;
+      }
+      setRackState({
+        format: "cosimo.rack",
+        version: 1,
+        order: effectiveState.order,
+        enabled: effectiveState.enabled
+      });
+    };
+    patchConnection.addStoredStateValueListener?.(storedStateListener);
+    patchConnection.addEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
+    patchConnection.requestFullStoredState?.((fullState) => {
+      setRackState(deserializeRackState(readRackStateFromFullStoredState(fullState)));
+    });
+    return () => {
+      patchConnection.removeStoredStateValueListener?.(storedStateListener);
+      patchConnection.removeEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
+    };
+  }, [patchConnection]);
+  const commit = reactExports.useCallback((nextState) => {
+    setRackState(nextState);
+    commitRackState(patchConnection, nextState);
+    patchConnection.sendStoredStateValue?.(RACK_STATE_KEY, serializeRackState(nextState));
+  }, [patchConnection]);
+  return { rackState, commit };
+}
+function normalizedRackParameterValue(descriptor, value) {
+  if (descriptor.scale === "log") {
+    return Math.log(clamp(value, descriptor.min, descriptor.max) / descriptor.min) / Math.log(descriptor.max / descriptor.min);
+  }
+  return (clamp(value, descriptor.min, descriptor.max) - descriptor.min) / (descriptor.max - descriptor.min);
+}
+function rackParameterValueFromNormalized(descriptor, normalizedValue) {
+  const normalized = clamp(normalizedValue, 0, 1);
+  return descriptor.scale === "log" ? descriptor.min * (descriptor.max / descriptor.min) ** normalized : descriptor.min + (descriptor.max - descriptor.min) * normalized;
+}
+function RackParameterControl({ descriptor, compact = false }) {
+  const binding = usePatchParameterBinding({
+    endpointID: descriptor.endpointID,
+    initialValue: descriptor.initial,
+    coerce: (value) => clamp(Number(value) || descriptor.initial, descriptor.min, descriptor.max)
+  });
+  if (descriptor.choices !== void 0) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid min-w-0 gap-1 text-[8px] font-bold uppercase tracking-[0.11em] text-slate-400/65", children: [
+      !compact ? descriptor.label : descriptor.shortLabel,
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "select",
+        {
+          "data-role": `rack-parameter-${descriptor.endpointID}`,
+          "aria-label": descriptor.label,
+          value: String(Math.round(binding.value)),
+          onChange: (event) => binding.commitValue(Number(event.target.value)),
+          className: "min-w-0 rounded-[7px] border border-white/[0.08] bg-black/25 px-2 py-1.5 text-[10px] normal-case tracking-normal text-slate-100 outline-none",
+          children: descriptor.choices.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: item.value, children: item.label }, item.value))
+        }
+      )
+    ] });
+  }
+  const normalizedValue = normalizedRackParameterValue(descriptor, binding.value);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "grid min-w-0 gap-1", title: `${descriptor.label}: ${formatRackParameterValue(descriptor, binding.value)}`, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "flex items-center justify-between gap-2 text-[8px] font-bold uppercase tracking-[0.11em] text-slate-400/65", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: compact ? descriptor.shortLabel : descriptor.label }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-readout-text text-[9px] normal-case tracking-normal text-slate-200/85", children: formatRackParameterValue(descriptor, binding.value) })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "input",
+      {
+        "data-role": `rack-parameter-${descriptor.endpointID}`,
+        "aria-label": descriptor.label,
+        type: "range",
+        min: 0,
+        max: 1,
+        step: 1e-3,
+        value: normalizedValue,
+        onPointerDown: binding.beginGesture,
+        onPointerUp: binding.endGesture,
+        onPointerCancel: binding.endGesture,
+        onChange: (event) => binding.setValue(rackParameterValueFromNormalized(descriptor, Number(event.target.value))),
+        className: "h-2 w-full cursor-ew-resize accent-cyan-300"
+      }
+    )
+  ] });
+}
+function RackSyncParameterControls({
+  effectId,
+  compact = false
+}) {
+  const effectDescriptor = getRackEffectDescriptor(effectId);
+  const modeEndpointID = effectId === "phaser" ? "phaserRateMode" : "delayTimeMode";
+  const freeEndpointID = effectId === "phaser" ? "phaserRate" : "delayTime";
+  const syncEndpointID = effectId === "phaser" ? "phaserRateDivision" : "delayDivision";
+  const modeDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === modeEndpointID);
+  const freeDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === freeEndpointID);
+  const syncDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === syncEndpointID);
+  const modeBinding = usePatchParameterBinding({
+    endpointID: modeDescriptor.endpointID,
+    initialValue: modeDescriptor.initial,
+    coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1)
+  });
+  const timingDescriptor = modeBinding.value >= 0.5 ? syncDescriptor : freeDescriptor;
+  if (compact) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(RackParameterControl, { descriptor: timingDescriptor, compact: true });
+  }
+  const hiddenEndpointIDs = /* @__PURE__ */ new Set([modeEndpointID, freeEndpointID, syncEndpointID]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(RackParameterControl, { descriptor: modeDescriptor }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(RackParameterControl, { descriptor: timingDescriptor }),
+    effectDescriptor.parameters.filter((parameter) => !hiddenEndpointIDs.has(parameter.endpointID)).map((parameter) => /* @__PURE__ */ jsxRuntimeExports.jsx(RackParameterControl, { descriptor: parameter }, parameter.endpointID))
+  ] });
+}
+function RackModuleQuickControl({ effectId }) {
+  if (effectId === "phaser" || effectId === "delay") {
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(RackSyncParameterControls, { effectId, compact: true });
+  }
+  const quickParameter = getRackEffectDescriptor(effectId).parameters.find((parameter) => parameter.quick);
+  return quickParameter ? /* @__PURE__ */ jsxRuntimeExports.jsx(RackParameterControl, { descriptor: quickParameter, compact: true }) : null;
+}
+function RackModuleCard({
+  effectId,
+  enabled,
+  selected,
+  position,
+  positionCount,
+  onSelect,
+  onToggle,
+  onMove,
+  onDragStart,
+  onDragEnter,
+  onDrop,
+  onDragEnd
+}) {
+  const descriptor = getRackEffectDescriptor(effectId);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
-      "data-role": "effect-rack-column",
-      className: "flex h-full min-w-0 items-center justify-center rounded-[12px] border border-dashed border-white/[0.06] bg-white/[0.012] text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500/35",
-      children: label
+      "data-role": `rack-module-${effectId}`,
+      "data-rack-position": position,
+      draggable: true,
+      onDragStart,
+      onDragOver: (event) => event.preventDefault(),
+      onDragEnter,
+      onDrop: (event) => {
+        event.preventDefault();
+        onDrop();
+      },
+      onDragEnd,
+      className: `grid min-w-0 gap-2 rounded-[12px] border p-2 transition ${selected ? "border-cyan-300/45 bg-cyan-300/[0.08]" : "border-white/[0.07] bg-white/[0.025] hover:bg-white/[0.04]"}`,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex min-w-0 items-center gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "button",
+            {
+              "data-role": `rack-select-${effectId}`,
+              type: "button",
+              onClick: onSelect,
+              className: "flex min-w-0 flex-1 items-center gap-2 text-left",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: descriptor.iconUrl, alt: "", className: "h-4 w-4 opacity-75 invert" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "truncate text-[9px] font-bold uppercase tracking-[0.10em] text-slate-200", children: descriptor.label })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              "data-role": `rack-enabled-${effectId}`,
+              type: "button",
+              "aria-pressed": enabled,
+              onClick: onToggle,
+              className: `rounded-[6px] border px-1.5 py-1 text-[7px] font-bold uppercase tracking-[0.10em] ${enabled ? "synth-accent-active-button" : "border-white/[0.07] bg-black/15 text-slate-500"}`,
+              children: enabled ? "On" : "Off"
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(RackModuleQuickControl, { effectId }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between sm:hidden", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", disabled: position === 0, onClick: () => onMove(-1), "aria-label": `Move ${descriptor.label} earlier`, className: "px-2 text-xs text-slate-400 disabled:opacity-20", children: "‹" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-[7px] uppercase tracking-[0.12em] text-slate-500", children: [
+            position + 1,
+            "/",
+            positionCount
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", disabled: position === positionCount - 1, onClick: () => onMove(1), "aria-label": `Move ${descriptor.label} later`, className: "px-2 text-xs text-slate-400 disabled:opacity-20", children: "›" })
+        ] })
+      ]
     }
   );
 }
 function EffectsRackSection({
-  chorusEnabled,
+  distortionMode,
+  distortionDriveDb,
+  distortionKnee,
+  distortionWet,
+  distortionWetHPHz,
+  distortionWetLPHz,
+  observedDistortionHistory,
+  observedDistortionScope,
   chorusMix,
   chorusMotionMode,
   chorusBloomMode,
@@ -46341,6 +46510,47 @@ function EffectsRackSection({
   chorusRingFineSemitones,
   className
 }) {
+  const { rackState, commit } = useRackState();
+  const [selectedEffectId, setSelectedEffectId] = reactExports.useState("filter");
+  const [draggedEffectId, setDraggedEffectId] = reactExports.useState(null);
+  const draggedEffectIdRef = reactExports.useRef(null);
+  const [previewOrder, setPreviewOrder] = reactExports.useState(rackState.order);
+  const previewOrderRef = reactExports.useRef(rackState.order);
+  const dropCommittedRef = reactExports.useRef(false);
+  const selectedDescriptor = getRackEffectDescriptor(selectedEffectId);
+  reactExports.useEffect(() => {
+    previewOrderRef.current = rackState.order;
+    setPreviewOrder(rackState.order);
+  }, [rackState.order]);
+  const setEnabled = reactExports.useCallback((effectId, enabled) => {
+    commit({ ...rackState, enabled: { ...rackState.enabled, [effectId]: enabled } });
+  }, [commit, rackState]);
+  const commitOrder = reactExports.useCallback((order) => {
+    commit({ ...rackState, order: [...order] });
+  }, [commit, rackState]);
+  const previewMove = reactExports.useCallback((effectId, overEffectId) => {
+    setPreviewOrder((currentOrder) => {
+      const sourceIndex = currentOrder.indexOf(effectId);
+      const targetIndex = currentOrder.indexOf(overEffectId);
+      if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return currentOrder;
+      const nextOrder = [...currentOrder];
+      nextOrder.splice(sourceIndex, 1);
+      nextOrder.splice(targetIndex, 0, effectId);
+      previewOrderRef.current = nextOrder;
+      return nextOrder;
+    });
+  }, []);
+  const moveBy = reactExports.useCallback((effectId, offset) => {
+    const sourceIndex = previewOrder.indexOf(effectId);
+    const targetIndex = clamp(sourceIndex + offset, 0, previewOrder.length - 1);
+    if (sourceIndex === targetIndex) return;
+    const nextOrder = [...previewOrder];
+    nextOrder.splice(sourceIndex, 1);
+    nextOrder.splice(targetIndex, 0, effectId);
+    previewOrderRef.current = nextOrder;
+    setPreviewOrder(nextOrder);
+    commitOrder(nextOrder);
+  }, [commitOrder, previewOrder]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "section",
     {
@@ -46348,25 +46558,100 @@ function EffectsRackSection({
       "data-layout-card": "desktop-grid-card",
       "data-section-accent": "ion",
       "data-liquid-detail": "edge-rail",
-      className: `grid h-full grid-cols-4 gap-2 ${SYNTH_GRID_CARD_SHELL_CLASS} border p-2 ${className ?? ""}`,
+      className: `grid min-h-[410px] gap-3 ${SYNTH_GRID_CARD_SHELL_CLASS} border p-3 ${className ?? ""}`,
       children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-role": "effect-rack-column", className: "min-h-0 min-w-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          ChorusEffectColumn,
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "synth-section-title", children: "Effects Rack" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-0.5 text-[8px] uppercase tracking-[0.12em] text-slate-500", children: "Drag to reorder · structure commits on drop" })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[8px] uppercase tracking-[0.12em] text-slate-400/55", children: "8 modules" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-role": "rack-module-list", className: "grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4", children: previewOrder.map((effectId, position) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+          RackModuleCard,
           {
-            chorusEnabled,
-            chorusMix,
-            chorusMotionMode,
-            chorusBloomMode,
-            chorusTone,
-            chorusFeedback,
-            chorusRingAmount,
-            chorusRingOffsetMode,
-            chorusRingFineSemitones
-          }
-        ) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ReservedEffectColumn, { label: "FX 2" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ReservedEffectColumn, { label: "FX 3" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(ReservedEffectColumn, { label: "FX 4" })
+            effectId,
+            enabled: rackState.enabled[effectId],
+            selected: selectedEffectId === effectId,
+            position,
+            positionCount: previewOrder.length,
+            onSelect: () => setSelectedEffectId(effectId),
+            onToggle: () => setEnabled(effectId, !rackState.enabled[effectId]),
+            onMove: (offset) => moveBy(effectId, offset),
+            onDragStart: (event) => {
+              setDraggedEffectId(effectId);
+              draggedEffectIdRef.current = effectId;
+              dropCommittedRef.current = false;
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", effectId);
+            },
+            onDragEnter: () => {
+              if (draggedEffectIdRef.current !== null) {
+                previewMove(draggedEffectIdRef.current, effectId);
+              }
+            },
+            onDrop: () => {
+              dropCommittedRef.current = true;
+              const dragged = draggedEffectIdRef.current;
+              if (dragged !== null && rackState.order.indexOf(dragged) !== rackState.order.indexOf(effectId)) {
+                const nextOrder = [...rackState.order];
+                const sourceIndex = nextOrder.indexOf(dragged);
+                const targetIndex = nextOrder.indexOf(effectId);
+                nextOrder.splice(sourceIndex, 1);
+                nextOrder.splice(targetIndex, 0, dragged);
+                previewOrderRef.current = nextOrder;
+              }
+              commitOrder(previewOrderRef.current);
+              draggedEffectIdRef.current = null;
+              setDraggedEffectId(null);
+            },
+            onDragEnd: () => {
+              if (!dropCommittedRef.current && draggedEffectId !== null) {
+                previewOrderRef.current = rackState.order;
+                setPreviewOrder(rackState.order);
+              }
+              dropCommittedRef.current = false;
+              draggedEffectIdRef.current = null;
+              setDraggedEffectId(null);
+            }
+          },
+          effectId
+        )) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": `rack-editor-${selectedEffectId}`, className: "min-h-[215px] rounded-[14px] border border-white/[0.06] bg-black/15 p-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-2 flex items-start gap-2 px-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: selectedDescriptor.iconUrl, alt: "", className: "mt-0.5 h-5 w-5 opacity-75 invert" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-[11px] font-bold uppercase tracking-[0.12em] text-slate-100", children: selectedDescriptor.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[9px] text-slate-400/70", children: selectedDescriptor.summary })
+            ] })
+          ] }),
+          selectedEffectId === "drive" ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+            DistortionSection,
+            {
+              distortionMode,
+              distortionDriveDb,
+              distortionKnee,
+              distortionWet,
+              distortionWetHPHz,
+              distortionWetLPHz,
+              observedDistortionHistory,
+              observedDistortionScope,
+              className: "min-h-[220px]"
+            }
+          ) : selectedEffectId === "chorus" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-[220px]", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ChorusEffectColumn,
+            {
+              chorusMix,
+              chorusMotionMode,
+              chorusBloomMode,
+              chorusTone,
+              chorusFeedback,
+              chorusRingAmount,
+              chorusRingOffsetMode,
+              chorusRingFineSemitones
+            }
+          ) }) : selectedEffectId === "phaser" || selectedEffectId === "delay" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-x-4 gap-y-3 rounded-[10px] border border-white/[0.05] bg-white/[0.018] p-3 sm:grid-cols-2 lg:grid-cols-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(RackSyncParameterControls, { effectId: selectedEffectId }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid gap-x-4 gap-y-3 rounded-[10px] border border-white/[0.05] bg-white/[0.018] p-3 sm:grid-cols-2 lg:grid-cols-3", children: selectedDescriptor.parameters.map((parameter) => /* @__PURE__ */ jsxRuntimeExports.jsx(RackParameterControl, { descriptor: parameter }, parameter.endpointID)) })
+        ] })
       ]
     }
   );
@@ -46742,7 +47027,6 @@ function ModulationMatrixSection({
       "data-role": "mseg-card",
       "data-layout-card": "desktop-grid-card",
       "data-section-accent": "mint",
-      "data-liquid-detail": "routing-node",
       className: `flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${DESKTOP_GRID_CARD_CLASS}`,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 items-center gap-1.5 px-2.5 py-1.5", children: [
@@ -47248,10 +47532,13 @@ function DesktopPatchViewBody({
       formatEditingValue: formatPanEditingValue,
       parseText: parsePanInput,
       pixelsPerFullRange: 180,
+      enableWheel: true,
+      wheelStep: 0.01,
+      leadingLabel: "Pan",
       dataRole: "wavetable-pan-field",
-      variant: "compactOverlay",
-      width: 46,
-      height: 22
+      variant: "inlineDark",
+      width: 44,
+      height: 20
     }
   ), [synthView.pan]);
   const keyboardToolbarOverride = reactExports.useMemo(() => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { "data-role": "keyboard-control-row", className: "grid min-h-[158px] min-w-0 gap-2 overflow-hidden", children: [
@@ -47349,14 +47636,20 @@ function DesktopPatchViewBody({
   ]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(SynthPresetBarHost, { storedStateAdapters: synthView.presetStoredStateAdapters }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      SynthPresetBarHost,
+      {
+        isHidden: synthView.msegEditor.isOpen,
+        storedStateAdapters: synthView.presetStoredStateAdapters
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "main",
       {
         "data-role": "desktop-scroll-region",
         className: "grid min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1",
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 items-stretch gap-4 md:grid-cols-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               WavetableStageSection,
               {
@@ -47397,37 +47690,28 @@ function DesktopPatchViewBody({
               }
             )
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 items-stretch gap-4 md:grid-cols-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              DistortionSection,
-              {
-                distortionMode: synthView.distortionMode,
-                distortionDriveDb: synthView.distortionDriveDb,
-                distortionKnee: synthView.distortionKnee,
-                distortionWet: synthView.distortionWet,
-                distortionWetHPHz: synthView.distortionWetHPHz,
-                distortionWetLPHz: synthView.distortionWetLPHz,
-                observedDistortionHistory: synthView.observedDistortionHistory,
-                observedDistortionScope: synthView.observedDistortionScope,
-                className: DESKTOP_GRID_CARD_CLASS
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              EffectsRackSection,
-              {
-                chorusEnabled: synthView.chorusEnabled,
-                chorusMix: synthView.chorusMix,
-                chorusMotionMode: synthView.chorusMotionMode,
-                chorusBloomMode: synthView.chorusBloomMode,
-                chorusTone: synthView.chorusTone,
-                chorusFeedback: synthView.chorusFeedback,
-                chorusRingAmount: synthView.chorusRingAmount,
-                chorusRingOffsetMode: synthView.chorusRingOffsetMode,
-                chorusRingFineSemitones: synthView.chorusRingFineSemitones,
-                className: DESKTOP_GRID_CARD_CLASS
-              }
-            )
-          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("section", { className: "grid min-h-0 items-stretch gap-4 md:grid-cols-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            EffectsRackSection,
+            {
+              distortionMode: synthView.distortionMode,
+              distortionDriveDb: synthView.distortionDriveDb,
+              distortionKnee: synthView.distortionKnee,
+              distortionWet: synthView.distortionWet,
+              distortionWetHPHz: synthView.distortionWetHPHz,
+              distortionWetLPHz: synthView.distortionWetLPHz,
+              observedDistortionHistory: synthView.observedDistortionHistory,
+              observedDistortionScope: synthView.observedDistortionScope,
+              chorusMix: synthView.chorusMix,
+              chorusMotionMode: synthView.chorusMotionMode,
+              chorusBloomMode: synthView.chorusBloomMode,
+              chorusTone: synthView.chorusTone,
+              chorusFeedback: synthView.chorusFeedback,
+              chorusRingAmount: synthView.chorusRingAmount,
+              chorusRingOffsetMode: synthView.chorusRingOffsetMode,
+              chorusRingFineSemitones: synthView.chorusRingFineSemitones,
+              className: "md:col-span-2"
+            }
+          ) }),
           synthView.failureDetail ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90", children: synthView.failureDetail }) : null,
           /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 items-stretch gap-4 md:grid-cols-2", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -47475,32 +47759,49 @@ function DesktopPatchViewBody({
             )
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
-            KeyboardSection,
+            "section",
             {
-              playMode: synthView.playMode,
-              glideTime: synthView.glideTime,
-              unisonVoices: synthView.unisonVoices,
-              unisonDetune: synthView.unisonDetune,
-              unisonBlend: synthView.unisonBlend,
-              unisonWidth: synthView.unisonWidth,
-              unisonPhase: synthView.unisonPhase,
-              unisonRandom: synthView.unisonRandom,
-              unisonPhaseMode: synthView.unisonPhaseMode,
-              unisonDetuneMode: synthView.unisonDetuneMode,
-              unisonStackMode: synthView.unisonStackMode,
-              unisonWavetablePositionSpread: synthView.unisonWavetablePositionSpread,
-              unisonWarpSpread: synthView.unisonWarpSpread,
-              observedUnisonState: synthView.observedUnisonState,
-              keyboardRootNote,
-              onOctaveDown: handleKeyboardOctaveDown,
-              onOctaveUp: handleKeyboardOctaveUp,
-              playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
-              glideFocusTarget: synthView.keyboardRouting.glideFocusTarget,
-              keyboardRef: keyboardElementRef,
-              toolbarOverride: keyboardToolbarOverride
+              "data-role": "keyboard-controls",
+              "data-section-accent": "lime",
+              "data-liquid-detail": "edge-rail",
+              className: `${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`,
+              children: keyboardToolbarOverride
             }
           )
         ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        "data-role": "sticky-keyboard",
+        className: "relative z-20 min-w-0 shrink-0 border-t border-white/[0.05] pt-3",
+        children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+          KeyboardSection,
+          {
+            playMode: synthView.playMode,
+            glideTime: synthView.glideTime,
+            unisonVoices: synthView.unisonVoices,
+            unisonDetune: synthView.unisonDetune,
+            unisonBlend: synthView.unisonBlend,
+            unisonWidth: synthView.unisonWidth,
+            unisonPhase: synthView.unisonPhase,
+            unisonRandom: synthView.unisonRandom,
+            unisonPhaseMode: synthView.unisonPhaseMode,
+            unisonDetuneMode: synthView.unisonDetuneMode,
+            unisonStackMode: synthView.unisonStackMode,
+            unisonWavetablePositionSpread: synthView.unisonWavetablePositionSpread,
+            unisonWarpSpread: synthView.unisonWarpSpread,
+            observedUnisonState: synthView.observedUnisonState,
+            keyboardRootNote,
+            onOctaveDown: handleKeyboardOctaveDown,
+            onOctaveUp: handleKeyboardOctaveUp,
+            playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,
+            glideFocusTarget: synthView.keyboardRouting.glideFocusTarget,
+            keyboardRef: keyboardElementRef,
+            toolbarOverride: false
+          }
+        )
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsx(

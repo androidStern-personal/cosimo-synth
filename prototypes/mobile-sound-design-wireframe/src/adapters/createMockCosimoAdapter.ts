@@ -29,9 +29,13 @@ import {
 import type { ModulationEnvelope, ModulationMsegSlot } from "../../../../ui/shared/modulation";
 import type { MsegPlayback, MsegShape } from "../../../../ui/shared/mseg";
 import { err, ok } from "../../../../ui/shared/result";
-import { parseTargetId, type EffectModuleId } from "../../../../ui/shared/target-descriptor";
-import { FIXED_SOURCES, TARGETS } from "../domain/catalog.js";
-import { clampModAmount, defaultModAmount } from "../domain/formatting.js";
+import {
+    allTargetDescriptors,
+    getTargetDescriptor,
+    parseTargetId,
+    type EffectModuleId,
+} from "../../../../ui/shared/target-descriptor";
+import { FIXED_SOURCES } from "../domain/catalog.js";
 import { createInitialMockCosimoState } from "../domain/fixtures.js";
 import {
     clampArticulationRange,
@@ -142,14 +146,16 @@ function reducePrototypeState(state: PrototypeState, action: PrototypeAction): P
 }
 
 function requireTargetId(rawTargetId: string): TargetId {
-    if (!TARGETS[rawTargetId]) {
-        throw new Error(`Unknown target id: ${rawTargetId}`);
-    }
     const parsed = parseTargetId(rawTargetId);
     if (parsed._tag === "err") {
         throw new Error(`Prototype target is absent from the port catalog: ${rawTargetId}`);
     }
     return parsed.value;
+}
+
+function knownTargetId(rawTargetId: string): TargetId | null {
+    const parsed = parseTargetId(rawTargetId);
+    return parsed._tag === "ok" ? parsed.value : null;
 }
 
 function sourceIdFromKnownIdentity(rawSourceId: string): SourceId {
@@ -283,13 +289,21 @@ function projectSourceState(sourceState: PrototypeSourceState): SourceState {
 
 function projectParameterValues(
     parameterValues: Readonly<Record<string, number>>,
+    includeCatalogDefaults = false,
 ): Readonly<Record<TargetId, NormalizedValue>> {
-    return Object.fromEntries(
-        Object.entries(parameterValues).map(([rawTargetId, value]) => [
-            requireTargetId(rawTargetId),
-            clampNormalizedValue(value / 100),
-        ]),
-    );
+    const projected = new Map<TargetId, NormalizedValue>();
+    if (includeCatalogDefaults) {
+        for (const descriptor of allTargetDescriptors()) {
+            projected.set(descriptor.targetId, descriptor.initialValue);
+        }
+    }
+    for (const [rawTargetId, value] of Object.entries(parameterValues)) {
+        const targetId = knownTargetId(rawTargetId);
+        if (targetId !== null) {
+            projected.set(targetId, clampNormalizedValue(value / 100));
+        }
+    }
+    return Object.fromEntries(projected);
 }
 
 function projectArticulationOverrides(
@@ -336,12 +350,14 @@ function projectArticulationMappingAmounts(
 function projectCompoundSettings(
     compoundSettings: Readonly<Record<string, CompoundSetting>>,
 ): PatchSnapshot["patch"]["compoundSettings"] {
-    return Object.fromEntries(
-        Object.entries(compoundSettings).map(([rawTargetId, setting]) => [
-            requireTargetId(rawTargetId),
-            { mode: setting.mode, division: setting.division },
-        ]),
-    );
+    const projected: Array<readonly [TargetId, CompoundSetting]> = [];
+    for (const [rawTargetId, setting] of Object.entries(compoundSettings)) {
+        const targetId = knownTargetId(rawTargetId);
+        if (targetId !== null) {
+            projected.push([targetId, { mode: setting.mode, division: setting.division }]);
+        }
+    }
+    return Object.fromEntries(projected);
 }
 
 function projectEffectEnabled(
@@ -465,7 +481,7 @@ function projectSnapshot(state: PrototypeState): PatchSnapshot {
     return {
         connection: { _tag: "ready" },
         patch: {
-            parameterValues: projectParameterValues(state.patch.parameterValues),
+            parameterValues: projectParameterValues(state.patch.parameterValues, true),
             mappings,
             sources,
             effectOrder: state.patch.effectOrder.map(requireEffectModuleId),
@@ -541,14 +557,10 @@ export function createMockCosimoAdapter({
             if (state.patch.mappings.some((mapping) => mapping.id === String(mappingId))) {
                 return err(new MappingAlreadyExists(mappingId));
             }
-            const target = TARGETS[String(targetId)];
-            if (!target) {
-                throw new Error(`Unknown prototype target id: ${targetId}`);
-            }
-            const amount = clampModAmount(
-                target,
-                input.amount ?? defaultModAmount(target),
-            );
+            const amountSpec = getTargetDescriptor(targetId).modAmount;
+            const requestedAmount = input.amount
+                ?? Math.max(Math.abs(amountSpec.min), Math.abs(amountSpec.max)) * 0.25;
+            const amount = Math.min(amountSpec.max, Math.max(amountSpec.min, requestedAmount));
             const mapping = createMapping(
                 String(targetId),
                 source.id,
@@ -874,10 +886,13 @@ export function createMockCosimoAdapter({
         },
 
         captureMotion() {
-            if (!state.audition.captureCandidate) return null;
+            const candidate = state.audition.captureCandidate;
+            if (!candidate) return null;
             const slot = firstAvailableSourceSlot(state.patch.sources, "mseg");
             const source = createSourceIdentity("mseg", slot);
-            dispatch({ type: "CAPTURE_MOTION", source });
+            const targetId = requireTargetId(candidate.targetKey);
+            const amount = getTargetDescriptor(targetId).modAmount.max;
+            dispatch({ type: "CAPTURE_MOTION", source, amount });
             return source === null ? null : sourceIdFromKnownIdentity(source.id);
         },
 

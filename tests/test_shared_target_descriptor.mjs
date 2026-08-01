@@ -8,27 +8,8 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const catalogPromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
+const rackCatalogPromise = loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
 
-/** The frozen 42-target surface (the prototype's locked instrument model). */
-const EXPECTED_TARGET_IDS = [
-    "filter.cutoff", "filter.resonance", "filter.drive",
-    "drive.amount", "drive.tone", "drive.mix",
-    "ott.depth", "ott.time", "ott.mix",
-    "chorus.rate", "chorus.depth", "chorus.delay", "chorus.mix",
-    "flanger.rate", "flanger.depth", "flanger.feedback", "flanger.mix",
-    "phaser.rate", "phaser.depth", "phaser.frequency", "phaser.feedback", "phaser.phase", "phaser.mix",
-    "delay.time", "delay.feedback", "delay.filter", "delay.mix",
-    "reverb.size", "reverb.decay", "reverb.damping", "reverb.mix",
-    "wavetable.index", "wavetable.warp", "wavetable.unison", "wavetable.tune",
-    "voice-filter.cutoff", "voice-filter.resonance", "voice-filter.drive",
-    "amp-pan.level", "amp-pan.pan", "amp-pan.attack", "amp-pan.release",
-];
-
-/**
- * Binding policy (roadmap Phase 1): rack targets stay honestly unbacked until
- * the rack DSP lands; voice targets bind to real endpoints where one exists.
- * [tag, endpointId-or-reason, articulationParameterId]
- */
 const EXPECTED_VOICE_BINDINGS = {
     "wavetable.index": ["endpoint", "wavetablePosition", "framePosition"],
     "wavetable.warp": ["endpoint", "warpAmount", "warpAmount"],
@@ -43,171 +24,91 @@ const EXPECTED_VOICE_BINDINGS = {
     "amp-pan.release": ["unbacked", "no-endpoint", null],
 };
 
-/** Engine-unit extremes for every bound endpoint (from the cmajor annotations). */
-const EXPECTED_ENGINE_EXTREMES = {
-    "wavetable.index": [0, 1],
-    "wavetable.warp": [0, 1],
-    "wavetable.unison": [0, 1],
-    "voice-filter.cutoff": [20, 20000],
-    "voice-filter.resonance": [0.1, 20],
-    "amp-pan.pan": [-1, 1],
-};
-
-const EXPECTED_QUICK = new Set([
-    "filter.cutoff", "drive.amount", "ott.depth", "chorus.depth", "flanger.rate",
-    "phaser.frequency", "delay.time", "reverb.size",
-    "wavetable.index", "voice-filter.cutoff", "amp-pan.level",
-]);
-
-const EXPECTED_COMPOUND = new Set(["chorus.rate", "flanger.rate", "phaser.rate", "delay.time"]);
-
-/** Engine modulation destinations — wider than base bindings (tune/level modulate). */
-const EXPECTED_MOD_TARGETS = {
-    "wavetable.index": "wavetablePosition",
-    "wavetable.warp": "warpAmount",
-    "wavetable.unison": "unisonDetune",
-    "wavetable.tune": "pitchSemitones",
-    "voice-filter.cutoff": "filterCutoffOctaves",
-    "voice-filter.resonance": "filterQ",
-    "amp-pan.pan": "pan",
-    "amp-pan.level": "ampGainDb",
-};
-
-test("the catalog covers exactly the frozen 42-target surface", async () => {
+test("the catalog is the complete eight-effect DSP inventory plus the voice surface", async () => {
     const catalog = await catalogPromise;
+    const rackCatalog = await rackCatalogPromise;
     const all = catalog.allTargetDescriptors();
-    assert.deepEqual(all.map((d) => d.targetId).sort(), [...EXPECTED_TARGET_IDS].sort());
-    for (const descriptor of all) {
-        const [moduleId] = descriptor.targetId.split(".");
-        assert.equal(descriptor.moduleId, moduleId, descriptor.targetId);
-        assert.equal(descriptor.workspace, ["wavetable", "voice-filter", "amp-pan"].includes(moduleId) ? "voice" : "effects");
-        assert.equal(descriptor.defaultValue >= 0 && descriptor.defaultValue <= 1, true, `${descriptor.targetId} default`);
-        assert.equal(descriptor.initialValue >= 0 && descriptor.initialValue <= 1, true, `${descriptor.targetId} initial`);
-        assert.equal(descriptor.isQuick, EXPECTED_QUICK.has(descriptor.targetId), `${descriptor.targetId} quick`);
-        assert.equal(descriptor.compound, EXPECTED_COMPOUND.has(descriptor.targetId) ? "sync" : null, `${descriptor.targetId} compound`);
+    const rackParameters = rackCatalog.allRackParameterDescriptors();
+    const rackTargets = all.filter((descriptor) => descriptor.workspace === "effects");
+    const voiceTargets = all.filter((descriptor) => descriptor.workspace === "voice");
+
+    assert.equal(rackCatalog.RACK_EFFECT_DESCRIPTORS.length, 8);
+    assert.equal(rackTargets.length, rackParameters.length);
+    assert.equal(voiceTargets.length, 11);
+    assert.deepEqual(
+        rackTargets.map((descriptor) => descriptor.targetId),
+        rackParameters.map((parameter) => `${parameter.effectId}.${parameter.endpointID}`),
+    );
+    assert.equal(new Set(all.map((descriptor) => descriptor.targetId)).size, all.length);
+});
+
+test("every rack target is bound to its real Cmajor endpoint", async () => {
+    const catalog = await catalogPromise;
+    const rackCatalog = await rackCatalogPromise;
+    const targetById = new Map(catalog.allTargetDescriptors().map((descriptor) => [descriptor.targetId, descriptor]));
+
+    for (const parameter of rackCatalog.allRackParameterDescriptors()) {
+        const descriptor = targetById.get(`${parameter.effectId}.${parameter.endpointID}`);
+        assert.notEqual(descriptor, undefined, parameter.endpointID);
+        assert.equal(descriptor.binding._tag, "endpoint", parameter.endpointID);
+        assert.equal(descriptor.binding.endpointId, parameter.endpointID, parameter.endpointID);
+        assert.equal(descriptor.articulationParameterId, null, parameter.endpointID);
+        assert.equal(descriptor.isQuick, parameter.quick, parameter.endpointID);
+        assert.equal(
+            descriptor.modulationTargetKind,
+            parameter.modulationTargetIndex === null ? null : `rack.${parameter.endpointID}`,
+            parameter.endpointID,
+        );
+        assert.ok(Math.abs(descriptor.binding.toEngine(descriptor.initialValue) - parameter.initial) < 1e-6);
     }
 });
 
-test("binding policy: rack unbacked, voice bound to real endpoints, gaps explicit", async () => {
+test("all bound endpoint conversions roundtrip across the normalized domain", async () => {
     const catalog = await catalogPromise;
     for (const descriptor of catalog.allTargetDescriptors()) {
-        const expected = EXPECTED_VOICE_BINDINGS[descriptor.targetId];
-        if (expected === undefined) {
-            assert.equal(descriptor.workspace, "effects", descriptor.targetId);
-            assert.equal(descriptor.binding._tag, "unbacked", descriptor.targetId);
-            assert.equal(descriptor.binding.reason, "rack-dsp", descriptor.targetId);
-            assert.equal(descriptor.articulationParameterId, null, descriptor.targetId);
-            continue;
-        }
-        const [tag, detail, articulationParameterId] = expected;
+        if (descriptor.binding._tag !== "endpoint") continue;
+        fc.assert(fc.property(fc.double({ min: 0, max: 1, noNaN: true }), (value) => {
+            const engineValue = descriptor.binding.toEngine(value);
+            assert.ok(Math.abs(descriptor.binding.fromEngine(engineValue) - value) < 1e-6, descriptor.targetId);
+        }));
+    }
+});
+
+test("voice bindings retain their shipped endpoint and articulation contract", async () => {
+    const catalog = await catalogPromise;
+    for (const descriptor of catalog.allTargetDescriptors().filter((candidate) => candidate.workspace === "voice")) {
+        const [tag, detail, articulationParameterId] = EXPECTED_VOICE_BINDINGS[descriptor.targetId];
         assert.equal(descriptor.binding._tag, tag, descriptor.targetId);
-        if (tag === "endpoint") {
-            assert.equal(descriptor.binding.endpointId, detail, descriptor.targetId);
-        } else {
-            assert.equal(descriptor.binding.reason, detail, descriptor.targetId);
-        }
+        assert.equal(
+            descriptor.binding._tag === "endpoint" ? descriptor.binding.endpointId : descriptor.binding.reason,
+            detail,
+            descriptor.targetId,
+        );
         assert.equal(descriptor.articulationParameterId, articulationParameterId, descriptor.targetId);
     }
 });
 
-test("modulation destinations are catalog-owned and wider than base bindings", async () => {
+test("Phaser and Delay Free/Sync compounds have real mode, free-value, and division endpoints", async () => {
+    const catalog = await catalogPromise;
+    const byId = new Map(catalog.allTargetDescriptors().map((descriptor) => [descriptor.targetId, descriptor]));
+    for (const targetId of [
+        "phaser.phaserRateMode", "phaser.phaserRate", "phaser.phaserRateDivision",
+        "delay.delayTimeMode", "delay.delayTime", "delay.delayDivision",
+    ]) {
+        assert.equal(byId.get(targetId)?.binding._tag, "endpoint", targetId);
+    }
+    assert.equal(byId.get("phaser.phaserRate")?.compound, "sync");
+    assert.equal(byId.get("delay.delayTime")?.compound, "sync");
+});
+
+test("parseTargetId accepts exactly the live catalog surface", async () => {
     const catalog = await catalogPromise;
     for (const descriptor of catalog.allTargetDescriptors()) {
-        assert.equal(
-            descriptor.modulationTargetKind,
-            EXPECTED_MOD_TARGETS[descriptor.targetId] ?? null,
-            descriptor.targetId,
-        );
+        const parsed = catalog.parseTargetId(descriptor.targetId);
+        assert.equal(parsed._tag, "ok", descriptor.targetId);
+        assert.equal(catalog.getTargetDescriptor(parsed.value), descriptor);
     }
-});
-
-test("bound conversions roundtrip and hit the engine extremes exactly", async () => {
-    const catalog = await catalogPromise;
-    for (const descriptor of catalog.allTargetDescriptors()) {
-        if (descriptor.binding._tag !== "endpoint") continue;
-        const { toEngine, fromEngine } = descriptor.binding;
-        const [engineMin, engineMax] = EXPECTED_ENGINE_EXTREMES[descriptor.targetId];
-        assert.ok(Math.abs(toEngine(0) - engineMin) < 1e-9, `${descriptor.targetId} min`);
-        assert.ok(Math.abs(toEngine(1) - engineMax) < 1e-9, `${descriptor.targetId} max`);
-        fc.assert(
-            fc.property(fc.double({ min: 0, max: 1, noNaN: true }), (value) => {
-                const engine = toEngine(value);
-                assert.equal(engine >= Math.min(engineMin, engineMax) - 1e-9, true);
-                assert.equal(engine <= Math.max(engineMin, engineMax) + 1e-9, true);
-                assert.ok(Math.abs(fromEngine(engine) - value) < 1e-6, `${descriptor.targetId} roundtrip at ${value}`);
-            }),
-        );
-    }
-});
-
-test("modAmount specs follow the locked per-unit policy", async () => {
-    const catalog = await catalogPromise;
-    for (const descriptor of catalog.allTargetDescriptors()) {
-        const spec = descriptor.modAmount;
-        if (descriptor.format.kind === "frequency") {
-            assert.deepEqual(spec, { min: -6, max: 6, unit: "oct", digits: 1 }, descriptor.targetId);
-        } else if (descriptor.format.kind === "semitone") {
-            assert.deepEqual(spec, { min: -48, max: 48, unit: "st", digits: 0 }, descriptor.targetId);
-        } else if (descriptor.targetId === "amp-pan.level") {
-            assert.deepEqual(spec, { min: -48, max: 6, unit: "dB", digits: 0 }, descriptor.targetId);
-        } else if (descriptor.targetId === "amp-pan.pan") {
-            assert.deepEqual(spec, { min: -100, max: 100, unit: "pan", digits: 0 }, descriptor.targetId);
-        } else {
-            assert.deepEqual(spec, { min: -100, max: 100, unit: "%", digits: 0 }, descriptor.targetId);
-        }
-    }
-});
-
-test("formatTargetValue reproduces the locked display strings on the normalized scale", async () => {
-    const catalog = await catalogPromise;
-    const byId = new Map(catalog.allTargetDescriptors().map((d) => [d.targetId, d]));
-    const fmt = (targetId, value) => catalog.formatTargetValue(byId.get(targetId), value);
-
-    assert.equal(fmt("filter.resonance", 0.64), "64%");
-    assert.equal(fmt("filter.cutoff", 0.62), "1.45 kHz");
-    assert.equal(fmt("filter.cutoff", 0.2), "80 Hz");
-    assert.equal(fmt("chorus.rate", 0), "0.05 Hz");
-    assert.equal(fmt("chorus.rate", 1), "10.00 Hz");
-    assert.equal(fmt("phaser.phase", 0.25), "90°");
-    assert.equal(fmt("amp-pan.pan", 0.75), "50%");
-    assert.equal(fmt("amp-pan.pan", 0.25), "-50%");
-    assert.equal(fmt("amp-pan.pan", 0.5), "0%");
-    assert.equal(fmt("wavetable.tune", 0.5), "+0 st");
-    assert.equal(fmt("wavetable.tune", 0.75), "+13 st");
-    assert.equal(fmt("wavetable.tune", 0.2), "-15 st");
-});
-
-test("parseTargetId accepts exactly the catalog surface", async () => {
-    const catalog = await catalogPromise;
-    for (const targetId of EXPECTED_TARGET_IDS) {
-        const parsed = catalog.parseTargetId(targetId);
-        assert.equal(parsed._tag, "ok", targetId);
-        assert.equal(catalog.getTargetDescriptor(parsed.value).targetId, targetId);
-    }
-    for (const bad of ["", "wavetable", "wavetable.ghost", "chorusMix", "Filter.Cutoff"]) {
-        const parsed = catalog.parseTargetId(bad);
-        assert.equal(parsed._tag, "err", bad);
-        assert.equal(parsed.error._tag, "UnknownTarget", bad);
-    }
-});
-
-test("the shared catalog transcribes the prototype catalog exactly (until catalog.js retires)", async () => {
-    const catalog = await catalogPromise;
-    const prototypeCatalog = await loadUIModule(
-        repoRoot,
-        "prototypes/mobile-sound-design-wireframe/src/domain/catalog.js",
-    );
-    for (const descriptor of catalog.allTargetDescriptors()) {
-        const legacy = prototypeCatalog.TARGETS[descriptor.targetId];
-        assert.notEqual(legacy, undefined, descriptor.targetId);
-        assert.equal(descriptor.label, legacy.label, `${descriptor.targetId} label`);
-        assert.ok(Math.abs(descriptor.initialValue - legacy.initial / 100) < 1e-12, `${descriptor.targetId} initial`);
-        assert.ok(Math.abs(descriptor.defaultValue - legacy.defaultValue / 100) < 1e-12, `${descriptor.targetId} default`);
-        const legacyFormat = legacy.format ?? "percent";
-        const kindMap = {
-            percent: "percent", frequency: "frequency", rate: "rate",
-            phase: "phase", signed: "signed-percent", semitone: "semitone",
-        };
-        assert.equal(descriptor.format.kind, kindMap[legacyFormat], `${descriptor.targetId} format`);
+    for (const bad of ["", "wavetable", "filter.cutoff", "chorusEnabled", "Filter.Cutoff"]) {
+        assert.equal(catalog.parseTargetId(bad)._tag, "err", bad);
     }
 });

@@ -65,7 +65,6 @@ export type ArticulationParameterSnapshot = {
     distortionWet: number;
     distortionWetHPHz: number;
     distortionWetLPHz: number;
-    chorusEnabled: number;
     chorusMix: number;
     chorusMotionMode: number;
     chorusBloomMode: number;
@@ -287,7 +286,6 @@ export function createDefaultArticulationParameterSnapshot(): ArticulationParame
         distortionWet: 0,
         distortionWetHPHz: 40,
         distortionWetLPHz: 18_000,
-        chorusEnabled: 0,
         chorusMix: 0,
         chorusMotionMode: 1,
         chorusBloomMode: 0,
@@ -343,7 +341,6 @@ export function normalizeArticulationParameterSnapshot(value: unknown): Articula
         distortionWet: normalizeNumber(nextValue.distortionWet, defaults.distortionWet, 0, 1),
         distortionWetHPHz: normalizeNumber(nextValue.distortionWetHPHz, defaults.distortionWetHPHz, 20, 4_000),
         distortionWetLPHz: normalizeNumber(nextValue.distortionWetLPHz, defaults.distortionWetLPHz, 20, 20_000),
-        chorusEnabled: normalizeInteger(nextValue.chorusEnabled, defaults.chorusEnabled, 0, 1),
         chorusMix: normalizeNumber(nextValue.chorusMix, defaults.chorusMix, 0, 1),
         chorusMotionMode: normalizeInteger(nextValue.chorusMotionMode, defaults.chorusMotionMode, 0, 3),
         chorusBloomMode: normalizeInteger(nextValue.chorusBloomMode, defaults.chorusBloomMode, 0, 4),

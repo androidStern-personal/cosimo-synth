@@ -167,6 +167,11 @@ async function dispatchInputValueChange(locator, nextValue) {
     }, String(nextValue));
 }
 
+async function selectRackEffect(page, effectId) {
+    await page.click(`[data-role="rack-select-${effectId}"]`);
+    await page.waitForSelector(`[data-role="rack-editor-${effectId}"]`);
+}
+
 async function clickFilterGraphAt(page, normalizedX, normalizedY) {
     const graph = page.locator('[data-role="filter-response-graph"]');
     const box = await graph.boundingBox();
@@ -251,7 +256,13 @@ async function waitForHarnessSnapshot(page, description, predicate, {
         await page.waitForTimeout(delayMs);
     }
 
-    throw new Error(`Timed out waiting for ${description}. Last snapshot: ${JSON.stringify(lastSnapshot)}`);
+    const modulationState = lastSnapshot ? readStoredModulationState(lastSnapshot) : null;
+    throw new Error(`Timed out waiting for ${description}. Last snapshot: ${JSON.stringify({
+        routes: modulationState ? routeSummaries(modulationState.routes) : null,
+        sentMessages: (lastSnapshot?.sentMessages ?? [])
+            .filter(({ endpointID }) => endpointID === "modulationRoute" || endpointID === "rackModulationRoute")
+            .slice(-12),
+    })}`);
 }
 
 async function waitForPageValue(page, description, readValue, predicate, {
@@ -417,13 +428,28 @@ async function openHarnessPage({
     beforeGoto = null,
 } = {}) {
     const page = await browser.newPage();
+    const diagnostics = [];
+    page.on("pageerror", (error) => diagnostics.push(`pageerror: ${error.message}`));
+    page.on("console", (message) => {
+        if (message.type() === "error") diagnostics.push(`console: ${message.text()}`);
+    });
 
     if (typeof beforeGoto === "function") {
         await beforeGoto(page);
     }
 
     await page.goto(server.baseUrl, { waitUntil: "commit" });
-    await waitForHarnessReady(page);
+    try {
+        await waitForHarnessReady(page);
+    } catch (cause) {
+        const renderedState = await page.evaluate(() => (
+            window.__COSIMO_DESKTOP_HARNESS__?.getRenderedState?.() ?? null
+        ));
+        throw new Error(
+            `Desktop harness did not render. State: ${JSON.stringify(renderedState)}. ${diagnostics.join(" | ")}`,
+            { cause },
+        );
+    }
     return page;
 }
 
@@ -945,6 +971,20 @@ test("built desktop bundle renders visible distortion slider handles inside the 
 
     try {
         await page.waitForSelector("cosimo-desktop-react-view");
+        await page.evaluate(() => {
+            const host = document.querySelector("cosimo-desktop-react-view");
+            const selectDrive = host?.shadowRoot?.querySelector('[data-role="rack-select-drive"]');
+
+            if (!(selectDrive instanceof HTMLButtonElement)) {
+                throw new Error("Expected the Distortion rack selector in the built bundle.");
+            }
+
+            selectDrive.click();
+        });
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot?.querySelector('[data-role="rack-editor-drive"]')
+            instanceof HTMLElement
+        ));
 
         const handleState = await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
@@ -1262,6 +1302,7 @@ test("desktop grid cards share the compact panel shell at narrow and standalone 
 
         try {
             await page.waitForSelector("text=Ready");
+            await selectRackEffect(page, "drive");
 
             const metrics = await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
@@ -1287,8 +1328,6 @@ test("desktop grid cards share the compact panel shell at narrow and standalone 
             const gridCardSelectors = [
                 '[data-role="wavetable-card"]',
                 '[data-role="filter-card"]',
-                '[data-role="distortion-card"]',
-                '[data-role="effects-rack-card"]',
                 '[data-role="mseg-card"]',
                 '[data-role="mod-matrix-card"]',
             ];
@@ -1332,7 +1371,7 @@ test("desktop grid cards share the compact panel shell at narrow and standalone 
             };
             });
 
-            assert.equal(metrics.cards.length, 6, `Expected the six main desktop panels to be measured by name at ${viewportCase.label}.`);
+            assert.equal(metrics.cards.length, 4, `Expected the four compact desktop panels to be measured by name at ${viewportCase.label}.`);
             assert.deepEqual(
                 metrics.cards.map((card) => card.hasSharedShell),
                 Array.from({ length: metrics.cards.length }, () => true),
@@ -2113,7 +2152,7 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
         assert.equal(await page.locator('[aria-label="Route 1 slot"]').count(), 0);
         await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
         await page.getByRole("button", { name: "Route 1 polarity" }).click();
-        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, -42);
+        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, 78);
 
         snapshot = await waitForHarnessSnapshot(
             page,
@@ -2130,14 +2169,14 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
             .reverse()
             .find(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0);
 
-        assert.deepEqual(routeSummaries(readStoredModulationState(snapshot).routes), [{
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
             targetKind: "warpAmount",
             amount: readStoredModulationState(snapshot).routes[0].amount,
-        }]);
+        });
         assert.deepEqual(finalRouteUpload?.value, {
             routeIndex: 0,
             enabled: true,
@@ -3966,7 +4005,6 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
         "mseg1Morph",
         "distortionMode",
         "distortionWet",
-        "chorusEnabled",
         "chorusMix",
     ];
     const liveParameters = {
@@ -3982,7 +4020,6 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
         mseg1Morph: 0.22,
         distortionMode: 1,
         distortionWet: 0.37,
-        chorusEnabled: 1,
         chorusMix: 0.48,
     };
     const storedBank = normalizeArticulationBank({
@@ -4005,7 +4042,6 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
                     msegMorphs: [0.91, 0, 0],
                     distortionMode: 0,
                     distortionWet: 0.12,
-                    chorusEnabled: 0,
                     chorusMix: 0.16,
                 },
             },
@@ -4065,12 +4101,13 @@ test("Add route appends an inert row and scrolls the new row into view", async (
 
     try {
         await page.setViewportSize({ width: 1280, height: 600 });
+        const initialRoutes = readStoredModulationState(await getHarnessSnapshot(page)).routes;
 
-        for (let routeIndex = 0; routeIndex < 7; routeIndex += 1) {
+        for (let routeIndex = initialRoutes.length; routeIndex < 8; routeIndex += 1) {
             await page.getByRole("button", { name: "Add route" }).click();
             await page.waitForFunction((expectedRouteIndex) => (
                 document.querySelector(`[data-role="route-row-${expectedRouteIndex}"]`) instanceof HTMLElement
-            ), routeIndex + 2);
+            ), routeIndex + 1);
         }
 
         await page.waitForFunction(() => {
@@ -4087,14 +4124,17 @@ test("Add route appends an inert row and scrolls the new row into view", async (
         const snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
             routeSummaries(readStoredModulationState(snapshot).routes),
-            Array.from({ length: 8 }, () => ({
-                enabled: true,
-                sourceKind: "mseg",
-                sourceSlot: 1,
-                polarity: "unipolar",
-                targetKind: "wavetablePosition",
-                amount: 0,
-            })),
+            [
+                ...routeSummaries(initialRoutes),
+                ...Array.from({ length: 8 - initialRoutes.length }, () => ({
+                    enabled: true,
+                    sourceKind: "mseg",
+                    sourceSlot: 1,
+                    polarity: "unipolar",
+                    targetKind: "wavetablePosition",
+                    amount: 0,
+                })),
+            ],
         );
         assert.equal(
             snapshot.sentMessages.some(({ endpointID, value }) => (
@@ -4113,7 +4153,16 @@ test("mod matrix keeps the list shell when empty and restores the seeded route w
     const page = await openHarnessPage();
 
     try {
-        await page.getByRole("button", { name: "Remove route 1" }).click();
+        const initialRouteCount = readStoredModulationState(await getHarnessSnapshot(page)).routes.length;
+
+        for (let remainingRouteCount = initialRouteCount; remainingRouteCount > 0; remainingRouteCount -= 1) {
+            await page.getByRole("button", { name: "Remove route 1" }).click();
+            await waitForHarnessSnapshot(
+                page,
+                `route removal leaves ${remainingRouteCount - 1} rows`,
+                (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.length === remainingRouteCount - 1,
+            );
+        }
 
         let snapshot = await waitForHarnessSnapshot(
             page,
@@ -4192,7 +4241,7 @@ test("mod matrix source and target selects keep enough width for their menu cont
             sourceSlot: 3,
             polarity: "unipolar",
             targetKind: "wavetablePosition",
-            amount: 0,
+            amount: 1,
         });
 
         await page.getByRole("button", { name: "Route 1 target" }).click();
@@ -4223,7 +4272,7 @@ test("mod matrix source and target selects keep enough width for their menu cont
             sourceSlot: 3,
             polarity: "unipolar",
             targetKind: "pitchSemitones",
-            amount: 0,
+            amount: 1,
         });
 
         await page.getByRole("button", { name: "Route 1 bypass" }).click();
@@ -4240,7 +4289,7 @@ test("mod matrix source and target selects keep enough width for their menu cont
             sourceSlot: 3,
             polarity: "unipolar",
             targetKind: "pitchSemitones",
-            amount: 0,
+            amount: 1,
         });
         assert.equal(
             snapshot.sentMessages.some(({ endpointID, value }) => (
@@ -4606,7 +4655,7 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
 
         await choosePrototypeSelectOption(page, "Route 1 target", "CUTOFF");
         await page.getByRole("button", { name: "Route 1 polarity" }).click();
-        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, -60);
+        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, -40);
 
         snapshot = await waitForHarnessSnapshot(
             page,
@@ -4623,14 +4672,14 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
             .reverse()
             .find(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0);
 
-        assert.deepEqual(routeSummaries(readStoredModulationState(snapshot).routes), [{
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
             targetKind: "filterCutoffOctaves",
             amount: readStoredModulationState(snapshot).routes[0].amount,
-        }]);
+        });
         assert.deepEqual(finalRouteUpload?.value, {
             routeIndex: 0,
             enabled: true,
@@ -5501,6 +5550,7 @@ test("desktop distortion controls send live parameter updates", async () => {
     const page = await openHarnessPage();
 
     try {
+        await selectRackEffect(page, "drive");
         await page.waitForSelector('[data-role="distortion-card"]');
         await clearHarnessDebugLog(page);
 
@@ -5531,7 +5581,7 @@ test("desktop distortion controls send live parameter updates", async () => {
     }
 });
 
-test("desktop effects rack renders four vertical effect columns with chorus occupying one column", async () => {
+test("desktop effects rack renders the complete ordered eight-module surface", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -5539,40 +5589,141 @@ test("desktop effects rack renders four vertical effect columns with chorus occu
 
         const layout = await page.evaluate(() => {
             const rack = document.querySelector('[data-role="effects-rack-card"]');
-            const chorus = document.querySelector('[data-role="chorus-effect-column"]');
-            const columns = Array.from(document.querySelectorAll('[data-role="effect-rack-column"]'));
+            const modules = Array.from(document.querySelectorAll("[data-rack-position]"));
 
-            if (!(rack instanceof HTMLElement) || !(chorus instanceof HTMLElement)) {
+            if (!(rack instanceof HTMLElement)) {
                 return null;
             }
 
             const rackRect = rack.getBoundingClientRect();
-            const chorusRect = chorus.getBoundingClientRect();
 
             return {
-                columnCount: columns.length,
+                moduleCount: modules.length,
+                effectIds: modules.map((module) => module.getAttribute("data-role")?.replace("rack-module-", "")),
+                positions: modules.map((module) => Number(module.getAttribute("data-rack-position"))),
                 rackWidth: rackRect.width,
                 rackHeight: rackRect.height,
-                chorusWidth: chorusRect.width,
-                chorusHeight: chorusRect.height,
             };
         });
 
-        assert.ok(layout, "Expected effects rack and chorus column to render.");
-        assert.equal(layout.columnCount, 4);
-        assert.ok(layout.chorusWidth / layout.rackWidth >= 0.20, `Chorus column too narrow: ${JSON.stringify(layout)}`);
-        assert.ok(layout.chorusWidth / layout.rackWidth <= 0.30, `Chorus column too wide: ${JSON.stringify(layout)}`);
-        assert.ok(layout.chorusHeight / layout.rackHeight >= 0.90, `Chorus column should be full-height: ${JSON.stringify(layout)}`);
+        assert.ok(layout, "Expected effects rack to render.");
+        assert.equal(layout.moduleCount, 8);
+        assert.deepEqual(layout.effectIds, ["filter", "drive", "ott", "chorus", "flanger", "phaser", "delay", "reverb"]);
+        assert.deepEqual(layout.positions, [0, 1, 2, 3, 4, 5, 6, 7]);
+        assert.ok(layout.rackWidth > 0 && layout.rackHeight > 0);
     } finally {
         await page.close();
     }
 });
 
-test("desktop chorus mode buttons do not visually collide in the compact effects column", async () => {
+test("every rack editor binds live controls and one drop commits one complete DSP order", async () => {
     const page = await openHarnessPage();
 
     try {
-        await page.waitForSelector('[data-role="chorus-effect-column"]');
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        const editorControlByEffect = {
+            filter: "rack-parameter-globalFilterCutoff",
+            drive: "distortion-drive-field",
+            ott: "rack-parameter-ottAmount",
+            chorus: "chorus-mix-control",
+            flanger: "rack-parameter-flangerRate",
+            phaser: "rack-parameter-phaserRateMode",
+            delay: "rack-parameter-delayTimeMode",
+            reverb: "rack-parameter-reverbSize",
+        };
+
+        for (const [effectId, controlRole] of Object.entries(editorControlByEffect)) {
+            await selectRackEffect(page, effectId);
+            await page.waitForSelector(
+                `[data-role="rack-editor-${effectId}"] [data-role="${controlRole}"]`,
+            );
+        }
+
+        await clearHarnessDebugLog(page);
+        for (const effectId of Object.keys(editorControlByEffect)) {
+            await page.click(`[data-role="rack-enabled-${effectId}"]`);
+        }
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "all rack enable commits",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "rackEnable"
+                && Array.isArray(value?.enabledFlags)
+                && value.enabledFlags.every((flag) => Number(flag) === 1)
+            )),
+        );
+        const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
+        assert.deepEqual(storedRack.order, ["filter", "drive", "ott", "chorus", "flanger", "phaser", "delay", "reverb"]);
+        assert.equal(Object.values(storedRack.enabled).every(Boolean), true);
+
+        await clearHarnessDebugLog(page);
+        await page.evaluate(() => {
+            const source = document.querySelector('[data-role="rack-module-reverb"]');
+            const target = document.querySelector('[data-role="rack-module-filter"]');
+            if (!(source instanceof HTMLElement) || !(target instanceof HTMLElement)) {
+                throw new Error("Rack drag endpoints are missing");
+            }
+            const dataTransfer = new DataTransfer();
+            source.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+            target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
+            source.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer }));
+        });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "one rack reorder commit",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "rackOrder"
+                && Array.isArray(value?.moduleIds)
+                && Number(value.moduleIds[0]) === 7
+            )),
+        );
+        const orderMessages = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "rackOrder");
+        assert.equal(orderMessages.length, 1, "drag previews must not write DSP structure");
+        assert.deepEqual(orderMessages[0].value.moduleIds, [7, 0, 1, 2, 3, 4, 5, 6]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("Phaser and Delay expose only the effective Free or Sync timing control", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        for (const effect of [
+            { id: "phaser", mode: "phaserRateMode", free: "phaserRate", sync: "phaserRateDivision" },
+            { id: "delay", mode: "delayTimeMode", free: "delayTime", sync: "delayDivision" },
+        ]) {
+            await selectRackEffect(page, effect.id);
+            const editor = page.locator(`[data-role="rack-editor-${effect.id}"]`);
+            assert.equal(await editor.locator(`[data-role="rack-parameter-${effect.free}"]`).count(), 1);
+            assert.equal(await editor.locator(`[data-role="rack-parameter-${effect.sync}"]`).count(), 0);
+
+            await page.evaluate(({ endpointID }) => {
+                window.__COSIMO_DESKTOP_HARNESS__.setParameterValue(endpointID, 1, true);
+            }, { endpointID: effect.mode });
+            await page.waitForFunction(({ effectId, freeEndpointID, syncEndpointID }) => {
+                const editorElement = document.querySelector(`[data-role="rack-editor-${effectId}"]`);
+                return editorElement?.querySelector(`[data-role="rack-parameter-${freeEndpointID}"]`) === null
+                    && editorElement?.querySelector(`[data-role="rack-parameter-${syncEndpointID}"]`) !== null;
+            }, {
+                effectId: effect.id,
+                freeEndpointID: effect.free,
+                syncEndpointID: effect.sync,
+            });
+        }
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus mode buttons do not visually collide in the selected rack editor", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 2, true);
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 2, true);
@@ -5635,16 +5786,16 @@ test("desktop chorus controls send exact parameter updates", async () => {
     const page = await openHarnessPage();
 
     try {
-        await page.waitForSelector('[data-role="chorus-effect-column"]');
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusEnabled", 0, true);
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 0, true);
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 0, true);
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 0, true);
         });
         await clearHarnessDebugLog(page);
 
-        await page.click('[data-role="chorus-enabled-control"]');
+        await page.click('[data-role="rack-enabled-chorus"]');
         await dispatchInputValueChange(page.locator('[data-role="chorus-mix-control"]'), "0.660");
         await page.click('[data-role="chorus-motion-mode-control"]');
         await page.click('[data-role="chorus-bloom-mode-control"]');
@@ -5658,7 +5809,11 @@ test("desktop chorus controls send exact parameter updates", async () => {
             page,
             "chorus parameter updates",
             (nextSnapshot) => (
-                nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusEnabled" && Number(value) === 1)
+                nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                    endpointID === "rackEnable"
+                    && Array.isArray(value?.enabledFlags)
+                    && Number(value.enabledFlags[3]) === 1
+                ))
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusMix" && Math.abs(Number(value) - 0.66) <= 1e-6)
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusMotionMode" && Number(value) === 1)
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusBloomMode" && Number(value) === 1)
@@ -5680,9 +5835,9 @@ test("desktop chorus controls render host values before edits", async () => {
     const page = await openHarnessPage();
 
     try {
-        await page.waitForSelector('[data-role="chorus-effect-column"]');
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusEnabled", 1, true);
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMix", 0.375, true);
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 3, true);
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 4, true);
@@ -5702,7 +5857,6 @@ test("desktop chorus controls render host values before edits", async () => {
                 && readInputValue("chorus-feedback-control") === "0.615"
                 && readInputValue("chorus-ring-amount-control") === "0.285"
                 && readInputValue("chorus-ring-fine-control") === "1.25"
-                && readText("chorus-enabled-control").includes("On")
                 && readText("chorus-motion-mode-control").includes("Fast")
                 && readText("chorus-bloom-mode-control").includes("Lg+Sh")
                 && readText("chorus-ring-offset-mode-control").includes("+Oct");
@@ -5714,7 +5868,6 @@ test("desktop chorus controls render host values before edits", async () => {
             feedback: document.querySelector('[data-role="chorus-feedback-control"]')?.value,
             ring: document.querySelector('[data-role="chorus-ring-amount-control"]')?.value,
             ringFine: document.querySelector('[data-role="chorus-ring-fine-control"]')?.value,
-            enabledText: document.querySelector('[data-role="chorus-enabled-control"]')?.textContent?.trim(),
             motionText: document.querySelector('[data-role="chorus-motion-mode-control"]')?.textContent?.trim(),
             bloomText: document.querySelector('[data-role="chorus-bloom-mode-control"]')?.textContent?.trim(),
             ringOffsetText: document.querySelector('[data-role="chorus-ring-offset-mode-control"]')?.textContent?.trim(),
@@ -5726,7 +5879,6 @@ test("desktop chorus controls render host values before edits", async () => {
             feedback: "0.615",
             ring: "0.285",
             ringFine: "1.25",
-            enabledText: "On",
             motionText: "MotionFast",
             bloomText: "BloomLg+Sh",
             ringOffsetText: "Pitch+Oct",
@@ -5740,6 +5892,8 @@ test("desktop chorus slider closes host gesture on pointer cancellation", async 
     const page = await openHarnessPage();
 
     try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await selectRackEffect(page, "chorus");
         await page.waitForSelector('[data-role="chorus-mix-track"]');
         await clearHarnessDebugLog(page);
 
@@ -5768,6 +5922,8 @@ test("desktop chorus slider closes host gesture when pointer movement reports no
     const page = await openHarnessPage();
 
     try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await selectRackEffect(page, "chorus");
         await page.waitForSelector('[data-role="chorus-mix-track"]');
         await clearHarnessDebugLog(page);
 
@@ -5796,6 +5952,8 @@ test("desktop chorus slider ignores mouse movement after a completed drag releas
     const page = await openHarnessPage();
 
     try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await selectRackEffect(page, "chorus");
         await page.waitForSelector('[data-role="chorus-mix-control"]');
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMix", 0.2, true);
@@ -5838,7 +5996,8 @@ test("desktop chorus cycle buttons wrap through all modes", async () => {
     const page = await openHarnessPage();
 
     try {
-        await page.waitForSelector('[data-role="chorus-effect-column"]');
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 0, true);
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 0, true);
@@ -5895,6 +6054,7 @@ test("desktop distortion wet low-pass slider renders the full 20 Hz floor", asyn
     const page = await openHarnessPage();
 
     try {
+        await selectRackEffect(page, "drive");
         await page.waitForSelector('[data-role="distortion-card"]');
 
         await page.evaluate(() => {
@@ -5937,6 +6097,7 @@ test("desktop distortion graph renders occupancy bands on the fixed transfer sca
     const page = await openHarnessPage();
 
     try {
+        await selectRackEffect(page, "drive");
         const scopeFixture = buildDistortionScopeFixture();
         const historyFixture = buildDistortionHistoryFixture();
 

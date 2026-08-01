@@ -45,15 +45,8 @@ namespace wt
     //   - Hoist with MODULE-PREFIX wildcards only (`input rack.distortion*;` and so on).
     //     A bare `input rack.*;` would also hoist `in`, `trackingPitchHzIn`,
     //     `tempoBpmIn`, `rackModIn` and the four preview streams.
-    //   - DO NOT DELETE `chorusEnabled` from the graph. Endpoints are emitted in graph
-    //     DECLARATION ORDER, so deleting it shifts the thirteen host parameter slots
-    //     that follow it (chorusMix..ottEnvelopeMatch) and breaks every saved automation
-    //     lane. Keep it declared exactly where it is as a hidden, automatable:false,
-    //     deprecated no-op, and have the adapter migrate its saved value into
-    //     rackEnable[rackModuleChorus] on patch load. That migration is also what stops
-    //     a preset saved with chorusEnabled=0 and chorusMix>0 from suddenly sounding
-    //     chorused, because this rack pins chorus.enabledIn to 1 and lets rackEnable be
-    //     the only gate.
+    //   - rackEnable is the only participation gate for every module. This is the first
+    //     production rack schema, so there is no deprecated Chorus gate or migration.
     //   - The distortion scope and history analyzers read the four preview streams
     //     forwarded below rather than reaching into wt::DistortionBus directly.
     //   - A composed processor cannot write to `console`, so every diagnostic here is a
@@ -67,10 +60,9 @@ namespace wt
     //     (`let modulationRouteCount = 12;`, FixedFrameOscillator.cmajor:31), shared with
     //     the twelve existing voice targets. Thirty-six eligible destinations do not
     //     mean thirty-six simultaneous mappings.
-    //   - THE DEFAULT ENABLE MASK IS NOT "everything on". Every module whose Mix/Wet
-    //     inits dry is enabled; OTT is not, because its host Mix parameter inits at 100%
-    //     and enabling it by default would retroactively add multiband compression to
-    //     every patch ever saved. See init().
+    //   - THE DEFAULT ENABLE MASK IS EMPTY. This preserves the deployed pre-rack sound
+    //     until the adapter restores the canonical rack.v1 document. A module's host
+    //     parameter default is never allowed to opt it into the audio path implicitly.
 
     let rackModuleCount = 8;
     let rackChannelCount = 2;
@@ -298,7 +290,7 @@ namespace wt
 
         input value float32 phaserRate [[ name: "Phaser Rate", min: phaserRateMinHz, max: phaserRateMaxHz, init: 0.3f, unit: "Hz", rampFrames: 64 ]];
         input value float32 phaserRateMode [[ name: "Phaser Rate Mode", min: 0.0f, max: float32 (phaserRateModeMax), init: float32 (phaserRateModeFree), discrete: true, step: 1.0f, text: "Free|Sync", rampFrames: 0 ]];
-        input value float32 phaserRateDivision [[ name: "Phaser Division", min: 0.0f, max: float32 (phaserDivisionMax), init: 2.0f, discrete: true, step: 1.0f, text: "4/1|2/1|1/1|1/2.|1/2|1/2T|1/4.|1/4|1/4T|1/8.|1/8|1/8T|1/16", rampFrames: 0 ]];
+        input value float32 phaserRateDivision [[ name: "Phaser Division", min: 0.0f, max: float32 (phaserDivisionMax), init: 2.0f, discrete: true, step: 1.0f, text: "4/1|2/1|1/1|1/2.|1/2|1/4.|1/2T|1/4|1/4T|1/8.|1/8|1/8T|1/16", rampFrames: 0 ]];
         input value float32 phaserDepth [[ name: "Phaser Depth", min: phaserDepthMin, max: phaserDepthMax, init: 0.7f, rampFrames: 64 ]];
         input value float32 phaserFrequency [[ name: "Phaser Frequency", min: phaserFrequencyMinHz, max: phaserFrequencyMaxHz, init: 600.0f, unit: "Hz", rampFrames: 64 ]];
         input value float32 phaserFeedback [[ name: "Phaser Feedback", min: phaserFeedbackMin, max: phaserFeedbackMax, init: 0.0f, rampFrames: 64 ]];
@@ -385,15 +377,8 @@ namespace wt
 
             for (wrap<rackModuleCount> moduleId)
             {
-                // Every module whose Mix/Wet inits dry is enabled, so an existing preset
-                // that set that module's mix keeps sounding exactly as it did. OTT is
-                // the exception: its host Mix parameter inits at 100%, an annotation
-                // written while it drove no DSP at all, so enabling it by default would
-                // retroactively add multiband compression to every patch ever saved.
-                let enabledByDefault = int32 (moduleId) != rackModuleOtt;
-
-                currentEnabled[moduleId] = enabledByDefault;
-                pendingEnabled[moduleId] = enabledByDefault;
+                currentEnabled[moduleId] = false;
+                pendingEnabled[moduleId] = false;
             }
 
             // pow (2, 0) - the identity, so an unrouted frequency destination never
@@ -493,13 +478,10 @@ namespace wt
         }
 
         //----------------------------------------------------------------------
-        // The ADR-003 transition: ONE rack-local gain ramp.
+        // The ADR-003 transition: one rack-local processed-depth ramp.
         //
-        // Fade to EXACT zero, swap the whole structure on that silent frame, fade back
-        // to EXACT unity. No duplicate A/B rack, no state copying, no serialisation, no
-        // effect-specific transition, no allocation and no runtime rewiring - it clears
-        // ADR-003's complexity constraint with room to spare, and the swap is inaudible
-        // by construction rather than by tolerance.
+        // Fade the processed chain to the live dry input, swap on that dry frame, then
+        // fade the new chain back in. A reorder never gates or mutes the instrument.
         //
         // An upload arriving mid-transition simply REVERSES THE RAMP, in either
         // direction, and can never strand a pending structure: there is no phase to be
@@ -589,9 +571,7 @@ namespace wt
                 rackModulateLinear (ottEnvelopeMatch, rackModIn[rackModTargetOttEnvelopeMatch]));
 
             // --- Chorus / Bloom --------------------------------------------
-            // Pinned on: the module's participation is governed solely by rackEnable,
-            // never by a second gate. The deprecated chorusEnabled host parameter is
-            // migrated into rackEnable by the adapter - see the integration notes above.
+            // Pinned on internally: module participation is governed solely by rackEnable.
             chorus.enabledIn <- 1.0f;
             chorus.mixIn <- rackModulateLinear (chorusMix, rackModIn[rackModTargetChorusMix]);
             chorus.motionModeIn <- chorusMotionMode;
@@ -738,7 +718,11 @@ namespace wt
                 for (wrap<rackModuleCount> position)
                     chain = advanceModule (currentOrder[position], chain);
 
-                out <- chain * nextTransitionGain();
+                let transition = nextTransitionGain();
+                out <- float32<2> (
+                    in[0] + ((chain[0] - in[0]) * transition),
+                    in[1] + ((chain[1] - in[1]) * transition)
+                );
 
                 previewInputLeft <- distortion.previewInputLeft;
                 previewInputRight <- distortion.previewInputRight;

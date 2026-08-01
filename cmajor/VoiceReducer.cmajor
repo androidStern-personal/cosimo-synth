@@ -196,11 +196,13 @@ namespace wt
         if (! isRackModulationTarget (targetKind))
             return true;
 
-        if (! isVoiceModulationSource (sourceKind))
-            return true;
+        if (isVoiceModulationSource (sourceKind))
+            return reducerKind == modulationReducerMaximum
+                || reducerKind == modulationReducerMean;
 
-        return reducerKind == modulationReducerMaximum
-            || reducerKind == modulationReducerMean;
+        // Macro is the only global-domain source. Unknown source codes must not fall
+        // through to bipolar full-negative modulation while no note is playing.
+        return sourceKind == modulationSourceMacro;
     }
 
     // A global-domain source reaches a rack destination with no reducer and no gate.
@@ -227,6 +229,16 @@ namespace wt
     float32 rackModOnePole (float32 current, float32 target, float32 coefficient)
     {
         return current + ((target - current) * coefficient);
+    }
+
+    let rackModSnapThreshold = 0.000001f;
+
+    float32 rackModSmoothTowards (float32 current, float32 target, float32 coefficient)
+    {
+        if (std::intrinsics::abs (target - current) <= rackModSnapThreshold)
+            return target;
+
+        return rackModOnePole (current, target, coefficient);
     }
 
     //==============================================================================

@@ -155,7 +155,7 @@ export function createNewPatchMockCosimoState() {
   return {
     patch: {
       effectOrder: EFFECTS.map((effect) => effect.id),
-      effectEnabled: Object.fromEntries(EFFECTS.map((effect) => [effect.id, true])),
+      effectEnabled: Object.fromEntries(EFFECTS.map((effect) => [effect.id, false])),
       parameterValues: { ...INITIAL_BASE_VALUES },
       compoundSettings: {},
       articulationOverrides: {},

@@ -38,6 +38,7 @@ import {
     MODULATION_MSEG_SLOT_COUNT,
     getModulationSourceOptionValue,
     type ModulationRoute,
+    type ModulationRouteUpdate,
 } from "../shared/modulation";
 import {
     clampDisplayPosition,
@@ -483,7 +484,7 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
     onEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
     onAddRoute: () => void;
     onRemoveRoute: (routeIndex: number) => void;
-    onRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
+    onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
 }) {
     return (
         <div
@@ -567,7 +568,11 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                                 aria-label={`Route ${routeIndex + 1} source`}
                                 value={getModulationSourceOptionValue(route)}
                                 onChange={(event) => {
-                                    onRouteChange(routeIndex, applyModulationSourceOption(route, event.target.value));
+                                    const nextSource = applyModulationSourceOption(route, event.target.value);
+                                    onRouteChange(routeIndex, {
+                                        sourceKind: nextSource.sourceKind,
+                                        sourceSlot: nextSource.sourceSlot,
+                                    });
                                 }}
                             >
                                 {MODULATION_SOURCE_OPTIONS.map((option) => (
@@ -580,7 +585,6 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                                 onChange={(event) => {
                                     const nextTargetKind = event.target.value;
                                     onRouteChange(routeIndex, {
-                                        ...route,
                                         targetKind: nextTargetKind as ModulationRoute["targetKind"],
                                         amount: clampModulationRouteAmount(nextTargetKind as ModulationRoute["targetKind"], route.amount),
                                     });
@@ -596,7 +600,6 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                                 amount={route.amount}
                                 onPolarityChange={(nextPolarity) => {
                                     onRouteChange(routeIndex, {
-                                        ...route,
                                         polarity: nextPolarity,
                                     });
                                 }}
@@ -604,7 +607,6 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                                 polarityAriaLabel={`Route ${routeIndex + 1} polarity`}
                                 onChange={(nextAmount) => {
                                     onRouteChange(routeIndex, {
-                                        ...route,
                                         amount: nextAmount,
                                     });
                                 }}

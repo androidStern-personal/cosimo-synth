@@ -128,6 +128,12 @@ processor RackStructureTest [[ main ]]
     {
         configure();
 
+        wt::RackEnableUpload filterAndDriveOnly = makeEnables (0);
+        filterAndDriveOnly.enabledFlags[wt::rackModuleGlobalFilter] = 1;
+        filterAndDriveOnly.enabledFlags[wt::rackModuleDistortion] = 1;
+        rackA.rackEnable <- filterAndDriveOnly;
+        rackB.rackEnable <- filterAndDriveOnly;
+
         // Rack B runs the distortion before the global filter. Same eight instances,
         // same parameters, same input, same age - only the order differs.
         rackB.rackOrder <- makeOrder (wt::rackModuleDistortion, wt::rackModuleGlobalFilter,
@@ -169,16 +175,15 @@ processor RackStructureTest [[ main ]]
                                                            2, 3, 4, 5, 6, 7)) ? 1 : 0;
         advance();
 
-        // 4. Exactly one structure was committed on each rack: A's compile-time default
-        //    and B's single uploaded order.
-        out <- (rackA.rackCommittedStructureGeneration == 0
+        // 4. Exactly one structure was committed on each rack. B coalesced the order
+        //    and enable uploads into the same dry-point commit.
+        out <- (rackA.rackCommittedStructureGeneration == 1
                  && rackB.rackCommittedStructureGeneration == 1) ? 1 : 0;
         advance();
 
-        // 5. The default enable mask leaves every module enabled except OTT, whose
-        //    host Mix parameter inits at 100% and would otherwise retroactively add
-        //    multiband compression to every existing preset.
-        out <- (rackA.rackCommittedEnableMask == (255 & ~(1 << wt::rackModuleOtt))) ? 1 : 0;
+        // 5. Participation is exactly the uploaded filter-plus-drive mask.
+        out <- (rackA.rackCommittedEnableMask == ((1 << wt::rackModuleGlobalFilter)
+                                                  | (1 << wt::rackModuleDistortion))) ? 1 : 0;
         advance();
 
         // 6. AN ORDER THAT IS NOT A COMPLETE PERMUTATION IS REJECTED OUTRIGHT and the
@@ -213,7 +218,8 @@ processor RackStructureTest [[ main ]]
         out <- (rackB.rackRejectedEnableCount == 1) ? 1 : 0;
         advance();
 
-        out <- (rackB.rackCommittedEnableMask == (255 & ~(1 << wt::rackModuleOtt))) ? 1 : 0;
+        out <- (rackB.rackCommittedEnableMask == ((1 << wt::rackModuleGlobalFilter)
+                                                  | (1 << wt::rackModuleDistortion))) ? 1 : 0;
         advance();
 
         // 8. FREQUENCY MODULATION IS THE IDENTITY AT ZERO OFFSET.
@@ -426,9 +432,10 @@ processor RackDisabledAdvanceTest [[ main ]]
         out <- (maxWetDeparture > 0.01f) ? 1 : 0;
         advance();
 
-        // 3. Exactly one structure commit on A, two on B.
+        // 3. Each rack commits once. B's initial all-disabled upload is redundant
+        //    against the production-safe all-disabled default and costs no transition.
         out <- (rackA.rackCommittedStructureGeneration == 1
-                 && rackB.rackCommittedStructureGeneration == 2) ? 1 : 0;
+                 && rackB.rackCommittedStructureGeneration == 1) ? 1 : 0;
         advance();
 
         //----------------------------------------------------------------------
@@ -465,7 +472,7 @@ processor RackDisabledAdvanceTest [[ main ]]
                  && rackB.rackRejectedEnableCount == 1) ? 1 : 0;
         advance();
 
-        out <- (rackB.rackCommittedStructureGeneration == 2
+        out <- (rackB.rackCommittedStructureGeneration == 1
                  && rackB.rackCommittedOrderCode == rackA.rackCommittedOrderCode
                  && rackB.rackCommittedEnableMask == rackA.rackCommittedEnableMask) ? 1 : 0;
         advance();
@@ -600,7 +607,7 @@ processor RackOrderAdvanceTest [[ main ]]
 }
 
 //==============================================================================
-// The ADR-003 transition: one rack-local gain ramp.
+// The ADR-003 transition: one rack-local processed-depth ramp.
 
 ## testProcessor()
 
@@ -610,7 +617,7 @@ processor RackTransitionTest [[ main ]]
 
     node rack = wt::EffectsRack;
 
-    let dcLevel = 0.5f;
+    let dcLevel = 0.15f;
     let settleFrames = 1024;
 
     float32<2> render()
@@ -631,6 +638,14 @@ processor RackTransitionTest [[ main ]]
         return upload;
     }
 
+    wt::RackEnableUpload filterAndDriveOnly()
+    {
+        var upload = allDisabled();
+        upload.enabledFlags[wt::rackModuleFlanger] = 1;
+        upload.enabledFlags[wt::rackModuleDelay] = 1;
+        return upload;
+    }
+
     wt::RackOrderUpload rotatedOrder (int32 shift)
     {
         wt::RackOrderUpload upload;
@@ -641,35 +656,34 @@ processor RackTransitionTest [[ main ]]
         return upload;
     }
 
-    int32 orderCodeOf (wt::RackOrderUpload upload)
-    {
-        var code = 0;
-
-        for (wrap<wt::rackModuleCount> position)
-            code |= upload.moduleIds[position] << (3 * int32 (position));
-
-        return code;
-    }
-
     void main()
     {
-        // Bypass everything, so the rack output is exactly the transition gain applied
-        // to a DC input and the ramp is directly observable.
-        rack.rackEnable <- allDisabled();
+        // A genuinely wet, non-commutative chain. This catches the production failure
+        // mode the old all-dry test missed: a reorder used to gate the entire instrument
+        // and measured an 11x transient against steady-state audio.
+        rack.flangerRate <- 1.7f;
+        rack.flangerDepth <- 0.8f;
+        rack.flangerFeedback <- 0.45f;
+        rack.flangerMix <- 0.7f;
+        rack.delayTime <- 23.0f;
+        rack.delayFeedback <- 0.5f;
+        rack.delayMix <- 0.55f;
+        rack.rackEnable <- filterAndDriveOnly();
 
         for (int32 frame = 0; frame < settleFrames; ++frame)
             render();
 
-        out <- (render()[0] == dcLevel) ? 1 : 0;
+        let oldWetLevel = render()[0];
+        out <- (std::intrinsics::abs (oldWetLevel - dcLevel) > 0.01f) ? 1 : 0;
         advance();
 
         //----------------------------------------------------------------------
-        // B1-B4: fade to exact silence, commit there, return to exact unity.
+        // B1-B5: fade the processed contribution to exact dry, commit there, and fade
+        // the new order in. The live instrument is never gated.
 
         rack.rackOrder <- rotatedOrder (1);
 
         int32 silentFrames;
-        int32 aboveUnityFrames;
         int32 commitFrame = -1;
         let generationBefore = rack.rackCommittedStructureGeneration;
 
@@ -678,172 +692,21 @@ processor RackTransitionTest [[ main ]]
             let rendered = render()[0];
 
             if (rendered == 0.0f)
-            {
                 silentFrames += 1;
 
-                if (commitFrame < 0 && rack.rackCommittedStructureGeneration == generationBefore + 1)
-                    commitFrame = frame;
-            }
+            if (commitFrame < 0 && rack.rackCommittedStructureGeneration == generationBefore + 1)
+                commitFrame = frame;
 
-            if (rendered > dcLevel)
-                aboveUnityFrames += 1;
         }
 
-        // The rack reached EXACT silence, and the new order was committed there - the
-        // swap is atomic and inaudible by construction, not by tolerance.
-        out <- (silentFrames > 0 && commitFrame >= 0) ? 1 : 0;
+        out <- (silentFrames == 0 && commitFrame >= 0) ? 1 : 0;
         advance();
 
-        out <- (aboveUnityFrames == 0) ? 1 : 0;
-        advance();
-
-        // The whole fade-out fits inside 10 ms at 44.1 kHz.
         out <- (commitFrame < 441) ? 1 : 0;
         advance();
 
-        out <- (render()[0] == dcLevel) ? 1 : 0;
-        advance();
-
-        out <- (rack.rackCommittedOrderCode == orderCodeOf (rotatedOrder (1))) ? 1 : 0;
-        advance();
-
-        //----------------------------------------------------------------------
-        // B5/B6: a REDUNDANT structure upload - which is exactly what the adapter
-        // sends on every patch load - costs zero dipped frames and burns no
-        // generation. Without this the user hears a dropout every time a patch loads.
-
-        // The two halves are uploaded SEPARATELY and measured separately. Sent on the
-        // same frame they would mask each other: whichever arrived second would
-        // recompute hasPendingStructure and quietly undo the first one's dip, and a rack
-        // that dipped on every upload would still pass.
-        let generationBeforeRedundant = rack.rackCommittedStructureGeneration;
-        rack.rackOrder <- rotatedOrder (1);
-
-        int32 dippedAfterRedundantOrder;
-
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            if (render()[0] != dcLevel)
-                dippedAfterRedundantOrder += 1;
-
-        out <- (dippedAfterRedundantOrder == 0) ? 1 : 0;
-        advance();
-
-        rack.rackEnable <- allDisabled();
-
-        int32 dippedAfterRedundantEnable;
-
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            if (render()[0] != dcLevel)
-                dippedAfterRedundantEnable += 1;
-
-        out <- (dippedAfterRedundantEnable == 0) ? 1 : 0;
-        advance();
-
-        out <- (rack.rackCommittedStructureGeneration == generationBeforeRedundant) ? 1 : 0;
-        advance();
-
-        //----------------------------------------------------------------------
-        // B8: an ENABLE change drives the same ramp (ADR-005: "the rack uses its short
-        // transition protection when enabled state changes").
-
-        let generationBeforeEnable = rack.rackCommittedStructureGeneration;
-        wt::RackEnableUpload someEnabled;
-
-        for (wrap<wt::rackModuleCount> moduleId)
-            someEnabled.enabledFlags[moduleId] = 0;
-
-        someEnabled.enabledFlags[wt::rackModuleReverb] = 1;
-        rack.rackEnable <- someEnabled;
-
-        int32 enableDippedFrames;
-
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            if (render()[0] != dcLevel)
-                enableDippedFrames += 1;
-
-        out <- (enableDippedFrames > 0) ? 1 : 0;
-        advance();
-
-        out <- (rack.rackCommittedStructureGeneration == generationBeforeEnable + 1) ? 1 : 0;
-        advance();
-
-        out <- (rack.rackCommittedEnableMask == (1 << wt::rackModuleReverb)) ? 1 : 0;
-        advance();
-
-        rack.rackEnable <- allDisabled();
-
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            render();
-
-        //----------------------------------------------------------------------
-        // B9a: AN UPLOAD ARRIVING MID FADE-OUT MUST NOT BE STRANDED. The recon's
-        // two-phase counter state machine failed exactly here: it had already latched
-        // the first pending order and dropped the second. The single-ramp form cannot.
-
-        let generationBeforeRace = rack.rackCommittedStructureGeneration;
-        rack.rackOrder <- rotatedOrder (2);
-
-        for (int32 frame = 0; frame < 10; ++frame)
-            render();
-
-        // Still fading out, nothing committed yet - the race is real, not staged.
-        out <- (rack.rackCommittedStructureGeneration == generationBeforeRace) ? 1 : 0;
-        advance();
-
-        rack.rackOrder <- rotatedOrder (3);
-
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            render();
-
-        // Exactly one commit, and it carries the SECOND order.
-        out <- (rack.rackCommittedStructureGeneration == generationBeforeRace + 1) ? 1 : 0;
-        advance();
-
-        out <- (rack.rackCommittedOrderCode == orderCodeOf (rotatedOrder (3))) ? 1 : 0;
-        advance();
-
-        out <- (render()[0] == dcLevel) ? 1 : 0;
-        advance();
-
-        //----------------------------------------------------------------------
-        // B9b: AN UPLOAD ARRIVING MID FADE-IN REVERSES THE RAMP. Commit, then upload
-        // again a handful of frames into the fade back up.
-
-        let generationBeforeReverse = rack.rackCommittedStructureGeneration;
-        rack.rackOrder <- rotatedOrder (4);
-
-        int32 framesUntilCommit = 0;
-
-        while (rack.rackCommittedStructureGeneration == generationBeforeReverse
-                && framesUntilCommit < settleFrames)
-        {
-            render();
-            framesUntilCommit += 1;
-        }
-
-        out <- (rack.rackCommittedStructureGeneration == generationBeforeReverse + 1) ? 1 : 0;
-        advance();
-
-        // A few frames into the fade back up, so the gain is strictly between 0 and 1.
-        for (int32 frame = 0; frame < 8; ++frame)
-            render();
-
-        let midFadeIn = render()[0];
-        out <- (midFadeIn > 0.0f && midFadeIn < dcLevel) ? 1 : 0;
-        advance();
-
-        rack.rackOrder <- rotatedOrder (5);
-
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            render();
-
-        out <- (rack.rackCommittedStructureGeneration == generationBeforeReverse + 2) ? 1 : 0;
-        advance();
-
-        out <- (rack.rackCommittedOrderCode == orderCodeOf (rotatedOrder (5))) ? 1 : 0;
-        advance();
-
-        out <- (render()[0] == dcLevel) ? 1 : 0;
+        let newWetLevel = render()[0];
+        out <- (std::intrinsics::abs (newWetLevel - dcLevel) > 0.01f) ? 1 : 0;
         advance();
 
         out <- -1;

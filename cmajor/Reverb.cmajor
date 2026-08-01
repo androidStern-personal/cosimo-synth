@@ -44,6 +44,13 @@ namespace wt
     // never jumps the level of a tail that is already ringing.
     let reverbInjectionGainConstant = 0.7071068f;
 
+    // The diffuser is also the early-reflection network. Listening only to the FDN
+    // lines left a 15-120 ms hole before any wet energy and made short rooms feel like
+    // a weak delay. These gains keep the tank dominant while giving the room a clear
+    // early body; their sum stays below unity before decorrelation.
+    let reverbEarlyReflectionGain = 0.35f;
+    let reverbTankOutputGain = 0.65f;
+
     namespace reverbMonoFilters = std::filters (float32, float64, 32);
     namespace reverbStereoFilters = std::filters (float32<2>, float64, 32);
 
@@ -328,9 +335,11 @@ namespace wt
                 writeLineSample (2, diffusedLeft + (lineFeedbackGains[2] * mixed2));
                 writeLineSample (3, diffusedRight + (lineFeedbackGains[3] * mixed3));
 
-                let wet = float32<2> (lineOutputs[0] + lineOutputs[2], lineOutputs[1] + lineOutputs[3]);
-                let dryGain = std::intrinsics::cos (0.5f * reverbPi * mix01);
-                let wetGain = std::intrinsics::sin (0.5f * reverbPi * mix01);
+                let tank = float32<2> (lineOutputs[0] + lineOutputs[2], lineOutputs[1] + lineOutputs[3]);
+                let early = float32<2> (diffusedLeft, diffusedRight);
+                let wet = (early * reverbEarlyReflectionGain) + (tank * reverbTankOutputGain);
+                let dryGain = 1.0f - mix01;
+                let wetGain = mix01;
 
                 out <- (dry * dryGain) + (wet * wetGain);
 

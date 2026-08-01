@@ -40,6 +40,7 @@ import {
     serializeModulationState,
     type ModulationEnvelope,
     type ModulationRoute,
+    type ModulationRouteUpdate,
     type ModulationState,
     type MsegEditorControllerLike,
 } from "./modulation";
@@ -164,7 +165,6 @@ const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
 const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
 const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
 const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
-const CHORUS_ENABLED_ENDPOINT_ID = "chorusEnabled";
 const CHORUS_MIX_ENDPOINT_ID = "chorusMix";
 const CHORUS_MOTION_MODE_ENDPOINT_ID = "chorusMotionMode";
 const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
@@ -296,7 +296,6 @@ export type SynthPatchViewModel = {
     distortionWet: PatchControlBinding<number>;
     distortionWetHPHz: PatchControlBinding<number>;
     distortionWetLPHz: PatchControlBinding<number>;
-    chorusEnabled: PatchControlBinding<number>;
     chorusMix: PatchControlBinding<number>;
     chorusMotionMode: PatchControlBinding<number>;
     chorusBloomMode: PatchControlBinding<number>;
@@ -335,7 +334,7 @@ export type SynthPatchViewModel = {
     handleEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
     handleAddRoute: () => void;
     handleRemoveRoute: (routeIndex: number) => void;
-    handleRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
+    handleRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     handleAddArticulationSlot: () => void;
     handleCaptureArticulationSlot: (options?: { autoAssign?: boolean }) => void;
     handleSelectArticulationSlot: (slotId: string) => void;
@@ -1776,11 +1775,6 @@ export function useSynthPatchViewModel({
         initialValue: 18_000,
         coerce: (value) => clamp(Number(value) || 0, 20, 20_000),
     });
-    const chorusEnabled = usePatchParameterBinding<number>({
-        endpointID: CHORUS_ENABLED_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
-    });
     const chorusMix = usePatchParameterBinding<number>({
         endpointID: CHORUS_MIX_ENDPOINT_ID,
         initialValue: 0,
@@ -2068,8 +2062,15 @@ export function useSynthPatchViewModel({
         modulationBridge.current?.removeRoute(routeIndex);
     }, [modulationBridge]);
 
-    const handleRouteChange = useCallback((routeIndex: number, nextRoute: ModulationRoute) => {
-        modulationBridge.current?.setRoute(routeIndex, nextRoute);
+    const handleRouteChange = useCallback((routeIndex: number, update: ModulationRouteUpdate) => {
+        const bridge = modulationBridge.current;
+        const currentRoute = bridge?.getState().routes[routeIndex];
+
+        if (!bridge || !currentRoute) {
+            return;
+        }
+
+        bridge.setRoute(routeIndex, { ...currentRoute, ...update });
     }, [modulationBridge]);
 
     const captureCurrentArticulationSnapshot = useCallback((): ArticulationSnapshot => {
@@ -2104,7 +2105,6 @@ export function useSynthPatchViewModel({
                 distortionWet: distortionWet.value,
                 distortionWetHPHz: distortionWetHPHz.value,
                 distortionWetLPHz: distortionWetLPHz.value,
-                chorusEnabled: chorusEnabled.value,
                 chorusMix: chorusMix.value,
                 chorusMotionMode: chorusMotionMode.value,
                 chorusBloomMode: chorusBloomMode.value,
@@ -2124,7 +2124,6 @@ export function useSynthPatchViewModel({
         });
     }, [
         chorusBloomMode.value,
-        chorusEnabled.value,
         chorusFeedback.value,
         chorusMix.value,
         chorusMotionMode.value,
@@ -2198,7 +2197,6 @@ export function useSynthPatchViewModel({
         distortionWet.setValue(parameters.distortionWet);
         distortionWetHPHz.setValue(parameters.distortionWetHPHz);
         distortionWetLPHz.setValue(parameters.distortionWetLPHz);
-        chorusEnabled.setValue(parameters.chorusEnabled);
         chorusMix.setValue(parameters.chorusMix);
         chorusMotionMode.setValue(parameters.chorusMotionMode);
         chorusBloomMode.setValue(parameters.chorusBloomMode);
@@ -2245,7 +2243,6 @@ export function useSynthPatchViewModel({
         }
     }, [
         chorusBloomMode,
-        chorusEnabled,
         chorusFeedback,
         chorusMix,
         chorusMotionMode,
@@ -2809,7 +2806,6 @@ export function useSynthPatchViewModel({
         distortionWet,
         distortionWetHPHz,
         distortionWetLPHz,
-        chorusEnabled,
         chorusMix,
         chorusMotionMode,
         chorusBloomMode,

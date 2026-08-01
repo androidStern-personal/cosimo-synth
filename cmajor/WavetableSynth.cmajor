@@ -1210,6 +1210,7 @@ graph WavetableSynth [[ main ]]
     input event wt::ModulationMsegPlaybackUpload modulationMsegPlayback;
     input event wt::ModulationEnvelopeUpload modulationEnvelope;
     input event wt::ModulationRouteUpload modulationRoute;
+    input event wt::RackModulationRouteUpload rackModulationRoute;
     input event wt::ArticulationNoteMeta articulationNoteMeta;
     input event wt::ArticulatedNoteOn articulatedNoteOn;
     input event wt::ArticulationSnapshotUpload articulationSnapshot;
@@ -1262,13 +1263,6 @@ graph WavetableSynth [[ main ]]
     input rack.distortionWet;
     input rack.distortionWetHPHz;
     input rack.distortionWetLPHz;
-    // DEPRECATED, and deliberately still here. The rack is the single source of truth
-    // for whether an effect is on (ADR-009), so this no longer drives anything - but
-    // deleting it would shift the thirteen host parameter slots below it and break every
-    // automation lane and preset that addresses them. It stays declared, in place,
-    // connected to nothing; the adapter migrates its saved value into
-    // rackEnable[rackModuleChorus] on patch load.
-    input value float32 chorusEnabled [[ name: "Chorus On (deprecated)", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, hidden: true, automatable: false, rampFrames: 0 ]];
     input rack.chorusMix;
     input rack.chorusMotionMode;
     input rack.chorusBloomMode;
@@ -1381,6 +1375,7 @@ graph WavetableSynth [[ main ]]
         modulationMsegPlayback -> sharedEngine.modulationMsegPlaybackIn;
         modulationEnvelope -> sharedEngine.modulationEnvelopeIn;
         modulationRoute -> sharedEngine.modulationRouteIn;
+        rackModulationRoute -> sharedEngine.rackModulationRouteIn;
         wavetablePosition -> sharedEngine.framePositionIn;
         wavetableSelect -> desiredTableMonitor.tableSelectIn;
         glideTime -> sharedEngine.glideTimeIn;
@@ -1429,25 +1424,7 @@ graph WavetableSynth [[ main ]]
         sharedEngine.trackingPitchHzOut -> rack.trackingPitchHzIn;
         tempo -> tempoMonitor.tempoIn;
         tempoMonitor.bpmOut -> rack.tempoBpmIn;
-        // NOT YET CONNECTED, AND SAY SO OUT LOUD: the rack's `rackModIn[36]` carries the
-        // reduced voice-to-global modulation offsets of ADR-002, and nothing drives it
-        // yet. wt::EffectsRack already applies all thirty-six - see forwardModuleParameters
-        // in cmajor/EffectsRack.cmajor - and cmajor/VoiceReducer.cmajor already owns the
-        // destination table and the reduction algorithm, tested standalone in
-        // tests/cmajor_rack/RackReducer.cmajtest. What is missing is the PRODUCER: the
-        // reduction has to run inside wt::SharedVoiceEngine's existing per-voice route
-        // loop and be published as `output stream float32 rackModOut[rackModTargetCount]`,
-        // which is an edit to cmajor/FixedFrameOscillator.cmajor. When that endpoint
-        // exists this becomes exactly one line -
-        //     sharedEngine.rackModOut -> rack.rackModIn;
-        // - because a stream array crosses a graph connection whole.
-        //
-        // Until then an unconnected input stream reads 0.0f on every frame, so every
-        // rackModulate* call returns its unmodulated base value and rack modulation is
-        // INERT rather than wrong. That is why the fixtures in tests/cmajor_rack are
-        // bit-exact against pre-rack audio - and it is also why this comment exists,
-        // because a silently-zero stream is otherwise indistinguishable from a working
-        // one that nobody has mapped anything to.
+        sharedEngine.rackModOut -> rack.rackModIn;
         // wt::DistortionBus now lives inside the rack, so the two analyzers read the
         // preview taps the rack forwards on its behalf. A composed child's STREAM
         // outputs stay reachable by its parent; its event outputs would not, which is

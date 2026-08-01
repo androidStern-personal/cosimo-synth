@@ -86,11 +86,6 @@
       "displayName": "Distortion Band LP"
     },
     {
-      "address": 12146312146003246687,
-      "identifier": "chorusEnabled",
-      "displayName": "Chorus On"
-    },
-    {
       "address": 1083297385416233762,
       "identifier": "chorusMix",
       "displayName": "Chorus Mix"

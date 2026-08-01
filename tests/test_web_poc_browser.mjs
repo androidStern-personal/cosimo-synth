@@ -89,6 +89,27 @@ async function sampleKeyboardWidths(page, sampleCount = 4) {
     return widths;
 }
 
+async function sampleAudioRms(page, sampleCount = 16, intervalMs = 60) {
+    const values = [];
+    for (let index = 0; index < sampleCount; index += 1) {
+        values.push(await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRms));
+        await page.waitForTimeout(intervalMs);
+    }
+    return Math.sqrt(values.reduce((sum, value) => sum + (value * value), 0) / values.length);
+}
+
+async function measureHeldNote(page, note = 48) {
+    await page.evaluate((noteNumber) => {
+        globalThis.__COSIMO_WEB_POC__.resetAudioMetrics();
+        globalThis.__COSIMO_WEB_POC__.noteOn(noteNumber, 100);
+    }, note);
+    await page.waitForTimeout(350);
+    const rms = await sampleAudioRms(page);
+    await page.evaluate((noteNumber) => globalThis.__COSIMO_WEB_POC__.noteOff(noteNumber), note);
+    await page.waitForTimeout(180);
+    return rms;
+}
+
 before(async () => {
     await fs.access(path.join(webRoot, "index.html"));
     server = createServer((request, response) => {
@@ -199,29 +220,10 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
             wavetableName: "PWM MedicineHat",
             wavetableValue: "34",
         });
-        const unwantedLiquidDetails = await page.evaluate(() => {
-            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-
-            return {
-                chorus: getComputedStyle(
-                    root?.querySelector('[data-role="chorus-effect-column"]'),
-                    "::before",
-                ).content,
-                distortion: getComputedStyle(
-                    root?.querySelector('[data-role="distortion-card"]'),
-                    "::before",
-                ).content,
-                mseg: getComputedStyle(
-                    root?.querySelector('[data-role="mseg-card"]'),
-                    "::before",
-                ).content,
-            };
-        });
-        assert.deepEqual(unwantedLiquidDetails, {
-            chorus: "none",
-            distortion: "none",
-            mseg: "none",
-        });
+        assert.equal(await page.evaluate(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelectorAll("[data-rack-position]").length ?? 0
+        )), 8);
         await page.waitForFunction(() => {
             const view = document.querySelector("cosimo-desktop-react-view");
             return Boolean(view?.shadowRoot?.querySelector("cosimo-react-desktop-keyboard"));
@@ -326,6 +328,169 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         assert.deepEqual(failedResponses, [], `Unexpected HTTP failures:\n${failedResponses.join("\n")}`);
         assert.deepEqual(consoleErrors, [], `Unexpected console errors:\n${consoleErrors.join("\n")}`);
     } finally {
+        await page.close();
+    }
+});
+
+test("generated WebAssembly rack changes audio, modulates a real target, stays gain-safe, and reloads rack.v1", async (t) => {
+    const page = await browser.newPage(browserEngine === "webkit"
+        ? { ...devices["iPhone 13"] }
+        : { viewport: { width: 1280, height: 820 } });
+    const consoleErrors = [];
+    const failedResponses = [];
+    page.on("console", (message) => {
+        if (message.type() === "error") consoleErrors.push(message.text());
+    });
+    page.on("response", (response) => {
+        if (!response.ok()) failedResponses.push(`${response.status()} ${response.url()}`);
+    });
+    await page.addInitScript(() => {
+        if (sessionStorage.getItem("cosimo-rack-test-initialised") !== "1") {
+            localStorage.removeItem("cosimo.web.patch-state.v1");
+            sessionStorage.setItem("cosimo-rack-test-initialised", "1");
+        }
+    });
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => {
+            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
+            return snapshot?.phase === "running" && snapshot.hasActiveTable;
+        }, null, { timeout: 30_000 });
+
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.sendEvent("rackEnable", { enabledFlags: [0, 0, 0, 0, 0, 0, 0, 0] });
+            api.setParameter("distortionDriveDb", 30);
+            api.setParameter("distortionWet", 0);
+        });
+        const dryRms = await measureHeldNote(page);
+        assert.ok(dryRms > 1e-5, `Dry rack must be audible, received RMS ${dryRms}.`);
+
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.sendEvent("rackEnable", { enabledFlags: [0, 1, 0, 0, 0, 0, 0, 0] });
+            api.setParameter("distortionWet", 1);
+        });
+        const drivenRms = await measureHeldNote(page);
+        assert.ok(
+            Math.abs(drivenRms - dryRms) / dryRms > 0.08,
+            `Distortion parameter must measurably change audio (dry ${dryRms}, wet ${drivenRms}).`,
+        );
+
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.setParameter("distortionWet", 0);
+            api.setParameter("macro1", 0);
+            api.sendEvent("modulationClear", 1);
+            api.sendEvent("rackModulationRoute", {
+                routeIndex: 0,
+                enabled: true,
+                sourceKind: 6,
+                sourceSlot: 1,
+                polarityKind: 0,
+                targetKind: 105,
+                amount: 1,
+                reducerKind: 0,
+            });
+            api.sendEvent("modulationEnable", 1);
+        });
+        const macroLowRms = await measureHeldNote(page);
+        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.setParameter("macro1", 1));
+        const macroHighRms = await measureHeldNote(page);
+        assert.ok(
+            Math.abs(macroHighRms - macroLowRms) / macroLowRms > 0.08,
+            `Macro-to-rack modulation must change audio (low ${macroLowRms}, high ${macroHighRms}).`,
+        );
+
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.sendEvent("modulationClear", 1);
+            api.setParameter("macro1", 0);
+            api.setParameter("distortionWet", 0.35);
+            api.setParameter("ottAmount", 35);
+            api.setParameter("ottMix", 35);
+            api.setParameter("chorusMix", 0.3);
+            api.setParameter("flangerMix", 0.25);
+            api.setParameter("phaserMix", 0.25);
+            api.setParameter("delayMix", 0.25);
+            api.setParameter("reverbMix", 0.3);
+            api.sendEvent("rackEnable", { enabledFlags: [1, 1, 1, 1, 1, 1, 1, 1] });
+        });
+        const allOnRms = await measureHeldNote(page);
+        const allOnGainDb = 20 * Math.log10(allOnRms / dryRms);
+        assert.ok(allOnGainDb < 6, `Ordinary all-on rack gain is unsafe: ${allOnGainDb.toFixed(2)} dB.`);
+        assert.ok(allOnRms > 1e-5, "All-on rack must remain audible.");
+
+        await page.evaluate(() => {
+            globalThis.__COSIMO_WEB_POC__.resetAudioMetrics();
+            globalThis.__COSIMO_WEB_POC__.noteOn(48, 100);
+        });
+        await page.waitForTimeout(400);
+        for (let poll = 0; poll < 30; poll += 1) {
+            await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
+            await page.waitForTimeout(100);
+        }
+        const sustainedSnapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
+        await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.noteOff(48));
+        assert.equal(sustainedSnapshot.audioContextState, "running");
+        assert.equal(sustainedSnapshot.silentHeldNotePollCount, 0, "No analyser poll may underrun to silence.");
+
+        const root = page.locator("cosimo-desktop-react-view");
+        await root.evaluate((host) => {
+            const shadow = host.shadowRoot;
+            shadow?.querySelector('[data-role="rack-enabled-chorus"]')?.click();
+            const source = shadow?.querySelector('[data-role="rack-module-reverb"]');
+            const target = shadow?.querySelector('[data-role="rack-module-filter"]');
+            if (!(source instanceof HTMLElement) || !(target instanceof HTMLElement)) return;
+            const dataTransfer = new DataTransfer();
+            source.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
+            target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
+            source.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer }));
+        });
+        await page.waitForFunction(async () => {
+            const state = await globalThis.__COSIMO_WEB_POC__.storedState();
+            const rack = JSON.parse(String(state.values?.["rack.v1"]));
+            return rack.order[0] === "reverb" && rack.enabled.chorus === true;
+        });
+
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.waitForFunction(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const first = root?.querySelector('[data-role="rack-module-list"]')?.firstElementChild;
+            const chorus = root?.querySelector('[data-role="rack-enabled-chorus"]');
+            return first?.getAttribute("data-role") === "rack-module-reverb"
+                && chorus?.getAttribute("aria-pressed") === "true";
+        });
+
+        t.diagnostic(JSON.stringify({
+            allOnGainDb,
+            allOnRms,
+            audioBaseLatency: sustainedSnapshot.audioBaseLatency,
+            audioOutputLatency: sustainedSnapshot.audioOutputLatency,
+            audioWorkletAverageLoad: sustainedSnapshot.audioWorkletAverageLoad,
+            audioWorkletBlockCount: sustainedSnapshot.audioWorkletBlockCount,
+            audioWorkletMaxLoad: sustainedSnapshot.audioWorkletMaxLoad,
+            audioWorkletOverBudgetBlocks: sustainedSnapshot.audioWorkletOverBudgetBlocks,
+            drivenRms,
+            dryRms,
+            macroHighRms,
+            macroLowRms,
+            silentHeldNotePollCount: sustainedSnapshot.silentHeldNotePollCount,
+            usedJSHeapSize: sustainedSnapshot.usedJSHeapSize,
+        }));
+
+        assert.deepEqual(failedResponses, []);
+        assert.deepEqual(consoleErrors, []);
+    } finally {
+        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v1")).catch(() => {});
         await page.close();
     }
 });

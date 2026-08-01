@@ -140,9 +140,9 @@ processor DelayBypassTest [[ main ]]
         advance();
 
         // 4. ZERO LATENCY: a unit impulse reaches the output on the SAME frame it
-        //    enters, at the equal-power half-mix gain cos(pi/4).
+        //    enters, at the constant-sum half-mix gain.
         let halfWetFirst = renderHalfWet (1.0f)[0];
-        out <- (halfWetFirst > 0.7f && halfWetFirst < 0.71f) ? 1 : 0;
+        out <- (halfWetFirst == 0.5f) ? 1 : 0;
         advance();
 
         // 5. At full wet the dry path is gone, so the same impulse is silent on the

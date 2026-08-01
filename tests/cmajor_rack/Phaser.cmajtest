@@ -152,7 +152,7 @@ processor PhaserContractTest [[ main ]]
     node impulsePhaser    = wt::PhaserBus;
     node extremePhaser    = wt::PhaserBus;
     node cleanPhaser      = wt::PhaserBus;
-    node equalPowerPhaser = wt::PhaserBus;
+    node halfMixPhaser = wt::PhaserBus;
 
     let testTwoPi = 6.28318530717958647692f;
     let inputAmplitude = 0.5f;
@@ -308,20 +308,15 @@ processor PhaserContractTest [[ main ]]
         out <- (maximumDivergence > 0.01f) ? 1 : 0;
         advance();
 
-        // ---- 1g. THE MIX LAW IS EQUAL POWER, not a linear crossfade. Every other
-        //          assertion in this file sits at mix 0 or mix 1, and the two laws
-        //          agree exactly at both, so the shape between them is only visible
-        //          here. Probed at 25 Hz where the static cascade is very nearly
-        //          transparent (measured response 0.972 with -0.24 rad of phase), so
-        //          wet ~= dry and the laws separate widely: cos + sin at mix 0.5
-        //          gives about 1.385x the input peak, a linear (1-mix) + mix
-        //          crossfade about 0.979x.
-        equalPowerPhaser.mixIn <- 0.5f;
-        equalPowerPhaser.rateIn <- 0.02f;
-        equalPowerPhaser.depthIn <- 0.0f;
-        equalPowerPhaser.frequencyIn <- 600.0f;
-        equalPowerPhaser.feedbackIn <- 0.0f;
-        equalPowerPhaser.phaseIn <- 0.0f;
+        // ---- 1g. HALF MIX IS GAIN-NEUTRAL for a nearly correlated dry/wet signal.
+        //          This is the rack-level gain fix: an equal-power law would produce
+        //          roughly 1.385x here and compound by about 3 dB per module.
+        halfMixPhaser.mixIn <- 0.5f;
+        halfMixPhaser.rateIn <- 0.02f;
+        halfMixPhaser.depthIn <- 0.0f;
+        halfMixPhaser.frequencyIn <- 600.0f;
+        halfMixPhaser.feedbackIn <- 0.0f;
+        halfMixPhaser.phaseIn <- 0.0f;
 
         float32 equalPowerInputPeak;
         float32 equalPowerOutputPeak;
@@ -329,19 +324,20 @@ processor PhaserContractTest [[ main ]]
         for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
         {
             let sample = nextInputSample (25.0f);
-            equalPowerPhaser.in <- float32<2> (sample, sample);
-            equalPowerPhaser.advance();
+            halfMixPhaser.in <- float32<2> (sample, sample);
+            halfMixPhaser.advance();
 
             if (frame >= settleFrames)
             {
                 equalPowerInputPeak = std::intrinsics::max (
                     equalPowerInputPeak, std::intrinsics::abs (sample));
                 equalPowerOutputPeak = std::intrinsics::max (
-                    equalPowerOutputPeak, std::intrinsics::abs (equalPowerPhaser.out[0]));
+                    equalPowerOutputPeak, std::intrinsics::abs (halfMixPhaser.out[0]));
             }
         }
 
-        out <- (equalPowerOutputPeak >= 1.2f * equalPowerInputPeak) ? 1 : 0;
+        out <- (equalPowerOutputPeak >= 0.9f * equalPowerInputPeak
+                 && equalPowerOutputPeak <= 1.1f * equalPowerInputPeak) ? 1 : 0;
         advance();
 
         out <- -1;

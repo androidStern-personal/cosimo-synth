@@ -78,7 +78,7 @@ namespace wt
     let phaserTempoMinBpm = 20.0f;
     let phaserTempoMaxBpm = 300.0f;
 
-    // Below this the equal-power law's wet gain is inaudible and the module sleeps
+    // Below this the wet gain is inaudible and the module sleeps
     // instead - the same threshold and the same intent as Chorus.cmajor:429.
     let phaserMixEpsilon = 0.000001f;
 
@@ -147,8 +147,8 @@ namespace wt
         if (division == 2)  return 4.0f;          // 1/1
         if (division == 3)  return 3.0f;          // 1/2.
         if (division == 4)  return 2.0f;          // 1/2
-        if (division == 5)  return 4.0f / 3.0f;   // 1/2T
-        if (division == 6)  return 1.5f;          // 1/4.
+        if (division == 5)  return 1.5f;          // 1/4.
+        if (division == 6)  return 4.0f / 3.0f;   // 1/2T
         if (division == 7)  return 1.0f;          // 1/4
         if (division == 8)  return 2.0f / 3.0f;   // 1/4T
         if (division == 9)  return 0.75f;         // 1/8.
@@ -199,7 +199,7 @@ namespace wt
 
         input value float32 rateIn         [[ name: "Phaser Rate", min: 0.02f, max: 8.0f, init: 0.3f, unit: "Hz", rampFrames: 64 ]];
         input value float32 rateModeIn     [[ name: "Phaser Rate Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Free|Sync", rampFrames: 0 ]];
-        input value float32 rateDivisionIn [[ name: "Phaser Division", min: 0.0f, max: 12.0f, init: 2.0f, discrete: true, step: 1.0f, text: "4/1|2/1|1/1|1/2.|1/2|1/2T|1/4.|1/4|1/4T|1/8.|1/8|1/8T|1/16", rampFrames: 0 ]];
+        input value float32 rateDivisionIn [[ name: "Phaser Division", min: 0.0f, max: 12.0f, init: 2.0f, discrete: true, step: 1.0f, text: "4/1|2/1|1/1|1/2.|1/2|1/4.|1/2T|1/4|1/4T|1/8.|1/8|1/8T|1/16", rampFrames: 0 ]];
         input value float32 depthIn        [[ name: "Phaser Depth", min: 0.0f, max: 1.0f, init: 0.7f, rampFrames: 64 ]];
         input value float32 frequencyIn    [[ name: "Phaser Frequency", min: 60.0f, max: 8000.0f, init: 600.0f, unit: "Hz", rampFrames: 64 ]];
         input value float32 feedbackIn     [[ name: "Phaser Feedback", min: -0.95f, max: 0.95f, init: 0.0f, rampFrames: 64 ]];
@@ -346,13 +346,10 @@ namespace wt
                         processChannel (1, dry[1], feedback)
                     );
 
-                    // The same equal-power law as Distortion.cmajor:186-188 and
-                    // Chorus.cmajor:472-473. No output limiting here: the fixed,
-                    // non-reorderable stage after the rack owns that, and a limiter
-                    // inside a reorderable module would only be in circuit in one
-                    // rack order out of eight.
-                    let dryGain = float32 (std::intrinsics::cos (0.5f * pi * mix01));
-                    let wetGain = float32 (std::intrinsics::sin (0.5f * pi * mix01));
+                    // Constant-sum mixing avoids a correlated +3 dB lift at half mix,
+                    // which otherwise compounds across an ordered multi-effect rack.
+                    let dryGain = 1.0f - mix01;
+                    let wetGain = mix01;
 
                     out <- (dry * dryGain) + (wet * wetGain);
                 }

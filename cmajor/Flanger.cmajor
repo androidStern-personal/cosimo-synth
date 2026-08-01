@@ -219,13 +219,11 @@ namespace wt
                     wet[channel] = 0.5f * (dry[channel] + delayed);
                 }
 
-                // The instrument's equal-power dry/wet law (Distortion.cmajor:186-188,
-                // Chorus.cmajor:472-473). At mix 0 this is cos(0) = 1 and sin(0) = 0
-                // exactly, so a mixed-out flanger is a bit-exact passthrough - which is
-                // what makes ADR-005's hard audible bypass honest rather than
-                // approximate, and what keeps the dry path at zero latency.
-                let dryGain = std::intrinsics::cos (0.5f * flangerPi * mix01);
-                let wetGain = std::intrinsics::sin (0.5f * flangerPi * mix01);
+                // Constant-sum mixing prevents correlated dry and short-delay signals
+                // from adding +3 dB per module. That lift compounded into the measured
+                // +12.42 dB all-rack buildup across the four new time effects.
+                let dryGain = 1.0f - mix01;
+                let wetGain = mix01;
 
                 out <- (dry * dryGain) + (float32<2> (wet[0], wet[1]) * wetGain);
 

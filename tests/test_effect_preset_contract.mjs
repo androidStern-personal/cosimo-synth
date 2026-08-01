@@ -8,7 +8,6 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const cmajorIdentifierPattern = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const expectedChorusPresetEndpoints = [
-    "chorusEnabled",
     "chorusMix",
     "chorusMotionMode",
     "chorusBloomMode",
@@ -52,8 +51,12 @@ function factoryPresetList(factoryPresetsByEffect) {
 
 async function readCmajorEndpointIDs(relativePath) {
     const source = await fs.readFile(path.join(repoRoot, relativePath), "utf8");
-    return new Set([...source.matchAll(/\binput\s+value\s+(?:bool|float32|float64|int32|int64)\s+([A-Za-z_][A-Za-z0-9_]*)\b/g)]
-        .map((match) => match[1]));
+    return new Set([
+        ...[...source.matchAll(/\binput\s+value\s+(?:bool|float32|float64|int32|int64)\s+([A-Za-z_][A-Za-z0-9_]*)\b/g)]
+            .map((match) => match[1]),
+        ...[...source.matchAll(/\binput\s+[A-Za-z_][A-Za-z0-9_]*\.([A-Za-z_][A-Za-z0-9_]*)\b/g)]
+            .map((match) => match[1]),
+    ]);
 }
 
 async function readCmajorEndpointAnnotations(relativePath) {

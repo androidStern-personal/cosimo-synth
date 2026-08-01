@@ -12566,9 +12566,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       --tw-duration: initial;
       --tw-ease: initial;
       --tw-content: "";
-      --tw-scale-x: 1;
-      --tw-scale-y: 1;
-      --tw-scale-z: 1;
     }
   }
 }
@@ -12967,10 +12964,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 @layer components;
 
 @layer utilities {
-  .\\@container {
-    container-type: inline-size;
-  }
-
   .pointer-events-auto {
     pointer-events: auto;
   }
@@ -13131,10 +13124,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     top: calc(var(--spacing) * 14);
   }
 
-  .top-\\[92px\\] {
-    top: 92px;
-  }
-
   .top-full {
     top: 100%;
   }
@@ -13153,10 +13142,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .right-1\\.5 {
     right: calc(var(--spacing) * 1.5);
-  }
-
-  .right-1\\/2 {
-    right: 50%;
   }
 
   .right-2 {
@@ -13233,10 +13218,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .left-1\\/2 {
     left: 50%;
-  }
-
-  .left-1\\/3 {
-    left: 33.3333%;
   }
 
   .left-2 {
@@ -13487,10 +13468,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-top: calc(var(--spacing) * 0);
   }
 
-  .-mt-0\\.5 {
-    margin-top: calc(var(--spacing) * -.5);
-  }
-
   .-mt-4 {
     margin-top: calc(var(--spacing) * -4);
   }
@@ -13499,12 +13476,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-top: calc(var(--spacing) * 0);
   }
 
-  .mt-1 {
-    margin-top: calc(var(--spacing) * 1);
+  .mt-0\\.5 {
+    margin-top: calc(var(--spacing) * .5);
   }
 
-  .mt-1\\.5 {
-    margin-top: calc(var(--spacing) * 1.5);
+  .mt-1 {
+    margin-top: calc(var(--spacing) * 1);
   }
 
   .mt-2 {
@@ -13537,10 +13514,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .mt-16 {
     margin-top: calc(var(--spacing) * 16);
-  }
-
-  .mt-\\[1px\\] {
-    margin-top: 1px;
   }
 
   .mt-auto {
@@ -13585,10 +13558,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .mb-20 {
     margin-bottom: calc(var(--spacing) * 20);
-  }
-
-  .\\!ml-0 {
-    margin-left: calc(var(--spacing) * 0) !important;
   }
 
   .-ml-4 {
@@ -13881,8 +13850,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: 80px;
   }
 
-  .h-\\[118px\\] {
-    height: 118px;
+  .h-\\[112px\\] {
+    height: 112px;
   }
 
   .h-\\[180px\\] {
@@ -13895,18 +13864,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .h-\\[320px\\] {
     height: 320px;
-  }
-
-  .h-\\[400px\\] {
-    height: 400px;
-  }
-
-  .h-\\[600px\\] {
-    height: 600px;
-  }
-
-  .h-\\[calc\\(100vh-3\\.5rem\\)\\] {
-    height: calc(100vh - 3.5rem);
   }
 
   .h-auto {
@@ -13989,12 +13946,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: 158px;
   }
 
+  .min-h-\\[215px\\] {
+    min-height: 215px;
+  }
+
   .min-h-\\[220px\\] {
     min-height: 220px;
   }
 
-  .min-h-\\[240px\\] {
-    min-height: 240px;
+  .min-h-\\[410px\\] {
+    min-height: 410px;
   }
 
   .min-h-\\[calc\\(100dvh-2rem\\)\\] {
@@ -14029,10 +13990,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     width: calc(var(--spacing) * 1.5);
   }
 
-  .w-1\\/2 {
-    width: 50%;
-  }
-
   .w-2 {
     width: calc(var(--spacing) * 2);
   }
@@ -14047,10 +14004,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .w-3\\.5 {
     width: calc(var(--spacing) * 3.5);
-  }
-
-  .w-3\\/4 {
-    width: 75%;
   }
 
   .w-4 {
@@ -14289,10 +14242,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     flex: 1;
   }
 
-  .flex-\\[2\\] {
-    flex: 2;
-  }
-
   .flex-none {
     flex: none;
   }
@@ -14363,11 +14312,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
-  .translate-x-2\\.5 {
-    --tw-translate-x: calc(var(--spacing) * 2.5);
-    translate: var(--tw-translate-x) var(--tw-translate-y);
-  }
-
   .translate-x-7 {
     --tw-translate-x: calc(var(--spacing) * 7);
     translate: var(--tw-translate-x) var(--tw-translate-y);
@@ -14415,11 +14359,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .translate-y-6 {
     --tw-translate-y: calc(var(--spacing) * 6);
-    translate: var(--tw-translate-x) var(--tw-translate-y);
-  }
-
-  .translate-y-6\\.5 {
-    --tw-translate-y: calc(var(--spacing) * 6.5);
     translate: var(--tw-translate-x) var(--tw-translate-y);
   }
 
@@ -14733,6 +14672,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     column-gap: calc(var(--spacing) * 1);
   }
 
+  .gap-x-4 {
+    column-gap: calc(var(--spacing) * 4);
+  }
+
   .gap-x-6 {
     column-gap: calc(var(--spacing) * 6);
   }
@@ -14753,6 +14696,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .gap-y-0 {
     row-gap: calc(var(--spacing) * 0);
+  }
+
+  .gap-y-3 {
+    row-gap: calc(var(--spacing) * 3);
   }
 
   .gap-y-6 {
@@ -15012,6 +14959,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-style: solid;
   }
 
+  .border-\\[rgb\\(var\\(--cosimo-edge-rgb\\)\\/0\\.34\\)\\] {
+    border-color: rgb(var(--cosimo-edge-rgb)/.34);
+  }
+
   .border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.38\\)\\] {
     border-color: rgb(var(--section-accent-rgb)/.38);
   }
@@ -15117,6 +15068,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-cyan-300\\/20 {
       border-color: color-mix(in oklab, var(--color-cyan-300) 20%, transparent);
+    }
+  }
+
+  .border-cyan-300\\/45 {
+    border-color: #53eafd73;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-300\\/45 {
+      border-color: color-mix(in oklab, var(--color-cyan-300) 45%, transparent);
     }
   }
 
@@ -15322,12 +15283,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: oklab(14.5558% -.00103131 -.0183188 / .96);
   }
 
-  .bg-\\[\\#050505\\] {
-    background-color: #050505;
-  }
-
   .bg-\\[\\#050712\\]\\/55 {
     background-color: oklab(13.2687% .00102779 -.0255741 / .55);
+  }
+
+  .bg-\\[rgb\\(var\\(--cosimo-control-rgb\\)\\/0\\.58\\)\\] {
+    background-color: rgb(var(--cosimo-control-rgb)/.58);
   }
 
   .bg-\\[rgb\\(var\\(--cosimo-recess-rgb\\)\\/0\\.92\\)\\] {
@@ -15348,6 +15309,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-\\[rgba\\(3\\,5\\,12\\,0\\.6\\)\\] {
     background-color: #03050c99;
+  }
+
+  .bg-\\[rgba\\(3\\,5\\,12\\,0\\.58\\)\\] {
+    background-color: #03050c94;
   }
 
   .bg-\\[var\\(--cosimo-accent-amber\\)\\] {
@@ -15422,6 +15387,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .bg-black\\/15 {
+    background-color: #00000026;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/15 {
+      background-color: color-mix(in oklab, var(--color-black) 15%, transparent);
+    }
+  }
+
   .bg-black\\/20 {
     background-color: #0003;
   }
@@ -15429,6 +15404,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .bg-black\\/20 {
       background-color: color-mix(in oklab, var(--color-black) 20%, transparent);
+    }
+  }
+
+  .bg-black\\/25 {
+    background-color: #00000040;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .bg-black\\/25 {
+      background-color: color-mix(in oklab, var(--color-black) 25%, transparent);
     }
   }
 
@@ -15556,16 +15541,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .bg-gray-900 {
     background-color: var(--color-gray-900);
-  }
-
-  .bg-gray-900\\/5 {
-    background-color: #1018280d;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .bg-gray-900\\/5 {
-      background-color: color-mix(in oklab, var(--color-gray-900) 5%, transparent);
-    }
   }
 
   .bg-indigo-100 {
@@ -15834,20 +15809,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
-  .from-orange-500\\/10 {
-    --tw-gradient-from: #fe6e001a;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .from-orange-500\\/10 {
-      --tw-gradient-from: color-mix(in oklab, var(--color-orange-500) 10%, transparent);
-    }
-  }
-
-  .from-orange-500\\/10 {
-    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
-  }
-
   .from-rose-400 {
     --tw-gradient-from: var(--color-rose-400);
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
@@ -15881,20 +15842,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .to-orange-500 {
     --tw-gradient-to: var(--color-orange-500);
-    --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
-  }
-
-  .to-orange-500\\/5 {
-    --tw-gradient-to: #fe6e000d;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .to-orange-500\\/5 {
-      --tw-gradient-to: color-mix(in oklab, var(--color-orange-500) 5%, transparent);
-    }
-  }
-
-  .to-orange-500\\/5 {
     --tw-gradient-stops: var(--tw-gradient-via-stops, var(--tw-gradient-position), var(--tw-gradient-from) var(--tw-gradient-from-position), var(--tw-gradient-to) var(--tw-gradient-to-position));
   }
 
@@ -15996,10 +15943,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .p-7 {
     padding: calc(var(--spacing) * 7);
-  }
-
-  .p-7\\.5 {
-    padding: calc(var(--spacing) * 7.5);
   }
 
   .p-8 {
@@ -16318,11 +16261,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     line-height: var(--tw-leading, var(--text-base--line-height));
   }
 
-  .text-base\\/6 {
-    font-size: var(--text-base);
-    line-height: calc(var(--spacing) * 6);
-  }
-
   .text-lg {
     font-size: var(--text-lg);
     line-height: var(--tw-leading, var(--text-lg--line-height));
@@ -16485,6 +16423,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     letter-spacing: .1em;
   }
 
+  .tracking-\\[0\\.11em\\] {
+    --tw-tracking: .11em;
+    letter-spacing: .11em;
+  }
+
   .tracking-\\[0\\.12em\\] {
     --tw-tracking: .12em;
     letter-spacing: .12em;
@@ -16581,6 +16524,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.72\\)\\] {
     color: rgb(var(--section-accent-rgb)/.72);
+  }
+
+  .text-\\[var\\(--cosimo-text\\)\\] {
+    color: var(--cosimo-text);
   }
 
   .text-\\[var\\(--cosimo-text-muted\\)\\] {
@@ -17167,6 +17114,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
+  .text-slate-400\\/55 {
+    color: #90a1b98c;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/55 {
+      color: color-mix(in oklab, var(--color-slate-400) 55%, transparent);
+    }
+  }
+
   .text-slate-400\\/60 {
     color: #90a1b999;
   }
@@ -17174,6 +17131,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .text-slate-400\\/60 {
       color: color-mix(in oklab, var(--color-slate-400) 60%, transparent);
+    }
+  }
+
+  .text-slate-400\\/65 {
+    color: #90a1b9a6;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/65 {
+      color: color-mix(in oklab, var(--color-slate-400) 65%, transparent);
     }
   }
 
@@ -17219,16 +17186,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-slate-500 {
     color: var(--color-slate-500);
-  }
-
-  .text-slate-500\\/35 {
-    color: #62748e59;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .text-slate-500\\/35 {
-      color: color-mix(in oklab, var(--color-slate-500) 35%, transparent);
-    }
   }
 
   .text-slate-600 {
@@ -17420,6 +17377,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
+  .shadow-\\[inset_0_1px_0_rgba\\(255\\,255\\,255\\,0\\.04\\)\\] {
+    --tw-shadow: inset 0 1px 0 var(--tw-shadow-color, #ffffff0a);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
+  .shadow-\\[var\\(--cosimo-contact-shadow\\)\\] {
+    --tw-shadow: var(--cosimo-contact-shadow);
+    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
+  }
+
   .shadow-lg {
     --tw-shadow: 0 10px 15px -3px var(--tw-shadow-color, #0000001a), 0 4px 6px -4px var(--tw-shadow-color, #0000001a);
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
@@ -17477,32 +17444,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     --tw-ring-color: var(--color-gray-900);
   }
 
-  .ring-gray-900\\/10 {
-    --tw-ring-color: #1018281a;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .ring-gray-900\\/10 {
-      --tw-ring-color: color-mix(in oklab, var(--color-gray-900) 10%, transparent);
-    }
-  }
-
   .ring-indigo-600 {
     --tw-ring-color: var(--color-indigo-600);
   }
 
   .ring-orange-500 {
     --tw-ring-color: var(--color-orange-500);
-  }
-
-  .ring-orange-500\\/20 {
-    --tw-ring-color: #fe6e0033;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .ring-orange-500\\/20 {
-      --tw-ring-color: color-mix(in oklab, var(--color-orange-500) 20%, transparent);
-    }
   }
 
   .outline-hidden {
@@ -17529,6 +17476,11 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .contrast-80 {
     --tw-contrast: contrast(80%);
+    filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
+  }
+
+  .grayscale {
+    --tw-grayscale: grayscale(100%);
     filter: var(--tw-blur, ) var(--tw-brightness, ) var(--tw-contrast, ) var(--tw-grayscale, ) var(--tw-hue-rotate, ) var(--tw-invert, ) var(--tw-saturate, ) var(--tw-sepia, ) var(--tw-drop-shadow, );
   }
 
@@ -17578,12 +17530,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .transition {
     transition-property: color, background-color, border-color, outline-color, text-decoration-color, fill, stroke, --tw-gradient-from, --tw-gradient-via, --tw-gradient-to, opacity, box-shadow, transform, translate, scale, rotate, filter, -webkit-backdrop-filter, backdrop-filter, display, content-visibility, overlay, pointer-events;
-    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
-    transition-duration: var(--tw-duration, var(--default-transition-duration));
-  }
-
-  .transition-\\[filter\\] {
-    transition-property: filter;
     transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
     transition-duration: var(--tw-duration, var(--default-transition-duration));
   }
@@ -17667,10 +17613,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     transition-timing-function: var(--ease-out);
   }
 
-  .will-change-\\[filter\\] {
-    will-change: filter;
-  }
-
   .outline-none {
     --tw-outline-style: none;
     outline-style: none;
@@ -17705,26 +17647,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .group-hover\\:opacity-100:is(:where(.group):hover *) {
       opacity: 1;
     }
-
-    .peer-hover\\:opacity-80:is(:where(.peer):hover ~ *) {
-      opacity: .8;
-    }
-  }
-
-  .marker\\:shrink-0 ::marker {
-    flex-shrink: 0;
-  }
-
-  .marker\\:shrink-0::marker {
-    flex-shrink: 0;
-  }
-
-  .marker\\:shrink-0 ::-webkit-details-marker {
-    flex-shrink: 0;
-  }
-
-  .marker\\:shrink-0::-webkit-details-marker {
-    flex-shrink: 0;
   }
 
   .selection\\:bg-cyan-300\\/25 ::selection {
@@ -17747,45 +17669,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .file\\:border-0::file-selector-button {
-    border-style: var(--tw-border-style);
-    border-width: 0;
-  }
-
-  .file\\:bg-transparent::file-selector-button {
-    background-color: #0000;
-  }
-
-  .file\\:text-sm::file-selector-button {
-    font-size: var(--text-sm);
-    line-height: var(--tw-leading, var(--text-sm--line-height));
-  }
-
-  .file\\:font-medium::file-selector-button {
-    --tw-font-weight: var(--font-weight-medium);
-    font-weight: var(--font-weight-medium);
-  }
-
-  .before\\:absolute:before {
-    content: var(--tw-content);
-    position: absolute;
-  }
-
-  .before\\:top-0:before {
-    content: var(--tw-content);
-    top: calc(var(--spacing) * 0);
-  }
-
-  .before\\:bottom-0:before {
-    content: var(--tw-content);
-    bottom: calc(var(--spacing) * 0);
-  }
-
-  .before\\:left-0:before {
-    content: var(--tw-content);
-    left: calc(var(--spacing) * 0);
-  }
-
   .before\\:block:before {
     content: var(--tw-content);
     display: block;
@@ -17796,19 +17679,9 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     height: calc(var(--spacing) * 3);
   }
 
-  .before\\:h-\\[1px\\]:before {
-    content: var(--tw-content);
-    height: 1px;
-  }
-
   .before\\:w-\\[2px\\]:before {
     content: var(--tw-content);
     width: 2px;
-  }
-
-  .before\\:w-full:before {
-    content: var(--tw-content);
-    width: 100%;
   }
 
   .before\\:rounded-full:before {
@@ -17861,13 +17734,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   }
 
   @media (hover: hover) {
-    .hover\\:scale-105:hover {
-      --tw-scale-x: 105%;
-      --tw-scale-y: 105%;
-      --tw-scale-z: 105%;
-      scale: var(--tw-scale-x) var(--tw-scale-y);
-    }
-
     .hover\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.22\\)\\]:hover {
       border-color: rgb(var(--section-accent-rgb)/.22);
     }
@@ -18046,10 +17912,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:bg-blue-700:hover {
-      background-color: var(--color-blue-700);
-    }
-
     .hover\\:bg-cyan-300\\/14:hover {
       background-color: #53eafd24;
     }
@@ -18068,30 +17930,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       .hover\\:bg-cyan-300\\/22:hover {
         background-color: color-mix(in oklab, var(--color-cyan-300) 22%, transparent);
       }
-    }
-
-    .hover\\:bg-gray-50:hover {
-      background-color: var(--color-gray-50);
-    }
-
-    .hover\\:bg-gray-100:hover {
-      background-color: var(--color-gray-100);
-    }
-
-    .hover\\:bg-gray-200:hover {
-      background-color: var(--color-gray-200);
-    }
-
-    .hover\\:bg-gray-300:hover {
-      background-color: var(--color-gray-300);
-    }
-
-    .hover\\:bg-indigo-50:hover {
-      background-color: var(--color-indigo-50);
-    }
-
-    .hover\\:bg-indigo-500:hover {
-      background-color: var(--color-indigo-500);
     }
 
     .hover\\:bg-pink-300\\/12:hover {
@@ -18132,10 +17970,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       .hover\\:bg-pink-300\\/\\[0\\.16\\]:hover {
         background-color: color-mix(in oklab, var(--color-pink-300) 16%, transparent);
       }
-    }
-
-    .hover\\:bg-red-700:hover {
-      background-color: var(--color-red-700);
     }
 
     .hover\\:bg-slate-200\\/55:hover {
@@ -18260,24 +18094,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:text-blue-600:hover {
-      color: var(--color-blue-600);
-    }
-
     .hover\\:text-cyan-100:hover {
       color: var(--color-cyan-100);
-    }
-
-    .hover\\:text-gray-700:hover {
-      color: var(--color-gray-700);
-    }
-
-    .hover\\:text-gray-900:hover {
-      color: var(--color-gray-900);
-    }
-
-    .hover\\:text-orange-500:hover {
-      color: var(--color-orange-500);
     }
 
     .hover\\:text-pink-100:hover {
@@ -18312,20 +18130,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       }
     }
 
-    .hover\\:underline:hover {
-      text-decoration-line: underline;
-    }
-
-    .hover\\:decoration-orange-500:hover {
-      -webkit-text-decoration-color: var(--color-orange-500);
-      -webkit-text-decoration-color: var(--color-orange-500);
-      text-decoration-color: var(--color-orange-500);
-    }
-
-    .hover\\:opacity-80:hover {
-      opacity: .8;
-    }
-
     .hover\\:opacity-100:hover {
       opacity: 1;
     }
@@ -18339,25 +18143,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       content: var(--tw-content);
       opacity: .95;
     }
-  }
-
-  .focus\\:not-sr-only:focus {
-    clip-path: none;
-    white-space: normal;
-    width: auto;
-    height: auto;
-    margin: 0;
-    padding: 0;
-    position: static;
-    overflow: visible;
-  }
-
-  .focus\\:absolute:focus {
-    position: absolute;
-  }
-
-  .focus\\:top-0:focus {
-    top: calc(var(--spacing) * 0);
   }
 
   .focus\\:border-\\[rgb\\(var\\(--section-accent-rgb\\)\\/0\\.54\\)\\]:focus {
@@ -18397,15 +18182,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
   }
 
-  .focus-visible\\:ring-2:focus-visible {
-    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  .focus-visible\\:ring-blue-500:focus-visible {
-    --tw-ring-color: var(--color-blue-500);
-  }
-
   .focus-visible\\:ring-cyan-200\\/45:focus-visible {
     --tw-ring-color: #a2f4fd73;
   }
@@ -18416,47 +18192,14 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .focus-visible\\:ring-gray-500:focus-visible {
-    --tw-ring-color: var(--color-gray-500);
-  }
-
-  .focus-visible\\:ring-red-500:focus-visible {
-    --tw-ring-color: var(--color-red-500);
-  }
-
   .focus-visible\\:ring-offset-0:focus-visible {
     --tw-ring-offset-width: 0px;
     --tw-ring-offset-shadow: var(--tw-ring-inset, ) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
   }
 
-  .focus-visible\\:ring-offset-2:focus-visible {
-    --tw-ring-offset-width: 2px;
-    --tw-ring-offset-shadow: var(--tw-ring-inset, ) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);
-  }
-
-  .focus-visible\\:outline-2:focus-visible {
-    outline-style: var(--tw-outline-style);
-    outline-width: 2px;
-  }
-
-  .focus-visible\\:outline-offset-2:focus-visible {
-    outline-offset: 2px;
-  }
-
-  .focus-visible\\:outline-indigo-600:focus-visible {
-    outline-color: var(--color-indigo-600);
-  }
-
   .focus-visible\\:outline-none:focus-visible {
     --tw-outline-style: none;
     outline-style: none;
-  }
-
-  .active\\:scale-95:active {
-    --tw-scale-x: 95%;
-    --tw-scale-y: 95%;
-    --tw-scale-z: 95%;
-    scale: var(--tw-scale-x) var(--tw-scale-y);
   }
 
   .active\\:scale-\\[0\\.92\\]:active {
@@ -18547,12 +18290,8 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  .disabled\\:pointer-events-none:disabled {
-    pointer-events: none;
-  }
-
-  .disabled\\:cursor-not-allowed:disabled {
-    cursor: not-allowed;
+  .disabled\\:opacity-20:disabled {
+    opacity: .2;
   }
 
   .disabled\\:opacity-35:disabled {
@@ -18561,15 +18300,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .disabled\\:opacity-40:disabled {
     opacity: .4;
-  }
-
-  .disabled\\:opacity-50:disabled {
-    opacity: .5;
-  }
-
-  .has-\\[\\:focus\\]\\:outline:has(:focus) {
-    outline-style: var(--tw-outline-style);
-    outline-width: 1px;
   }
 
   @media not all and (min-width: 480px) {
@@ -18628,49 +18358,7 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     }
   }
 
-  @media not all and (min-width: 64rem) {
-    .max-lg\\:mb-6 {
-      margin-bottom: calc(var(--spacing) * 6);
-    }
-
-    .max-lg\\:max-w-xl {
-      max-width: var(--container-xl);
-    }
-  }
-
-  @media not all and (min-width: 48rem) {
-    .max-md\\:mx-auto {
-      margin-inline: auto;
-    }
-
-    .max-md\\:hidden {
-      display: none;
-    }
-
-    .max-md\\:max-w-lg {
-      max-width: var(--container-lg);
-    }
-
-    .max-md\\:pb-2 {
-      padding-bottom: calc(var(--spacing) * 2);
-    }
-  }
-
-  @media not all and (min-width: 40rem) {
-    .max-sm\\:gap-8 {
-      gap: calc(var(--spacing) * 8);
-    }
-
-    .max-sm\\:pt-2 {
-      padding-top: calc(var(--spacing) * 2);
-    }
-  }
-
   @media (min-width: 40rem) {
-    .sm\\:mt-20 {
-      margin-top: calc(var(--spacing) * 20);
-    }
-
     .sm\\:block {
       display: block;
     }
@@ -18691,206 +18379,26 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
       display: inline-flex;
     }
 
-    .sm\\:h-9 {
-      height: calc(var(--spacing) * 9);
-    }
-
-    .sm\\:h-10 {
-      height: calc(var(--spacing) * 10);
-    }
-
-    .sm\\:h-full {
-      height: 100%;
-    }
-
-    .sm\\:w-1\\/2 {
-      width: 50%;
-    }
-
-    .sm\\:w-9 {
-      width: calc(var(--spacing) * 9);
-    }
-
-    .sm\\:w-10 {
-      width: calc(var(--spacing) * 10);
-    }
-
-    .sm\\:w-auto {
-      width: auto;
-    }
-
-    .sm\\:basis-auto {
-      flex-basis: auto;
-    }
-
     .sm\\:grid-cols-2 {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .sm\\:flex-row {
-      flex-direction: row;
-    }
-
-    .sm\\:justify-center {
-      justify-content: center;
-    }
-
-    .sm\\:gap-6 {
-      gap: calc(var(--spacing) * 6);
-    }
-
-    .sm\\:p-3 {
-      padding: calc(var(--spacing) * 3);
-    }
-
-    .sm\\:px-6 {
-      padding-inline: calc(var(--spacing) * 6);
-    }
-
-    .sm\\:px-10 {
-      padding-inline: calc(var(--spacing) * 10);
-    }
-
-    .sm\\:py-3 {
-      padding-block: calc(var(--spacing) * 3);
-    }
-
-    .sm\\:py-24 {
-      padding-block: calc(var(--spacing) * 24);
-    }
-
-    .sm\\:py-32 {
-      padding-block: calc(var(--spacing) * 32);
-    }
-
-    .sm\\:pt-24 {
-      padding-top: calc(var(--spacing) * 24);
-    }
-
-    .sm\\:pt-40 {
-      padding-top: calc(var(--spacing) * 40);
-    }
-
-    .sm\\:pb-16 {
-      padding-bottom: calc(var(--spacing) * 16);
-    }
-
-    .sm\\:pb-20 {
-      padding-bottom: calc(var(--spacing) * 20);
-    }
-
-    .sm\\:text-left {
-      text-align: left;
-    }
-
-    .sm\\:text-4xl {
-      font-size: var(--text-4xl);
-      line-height: var(--tw-leading, var(--text-4xl--line-height));
-    }
-
-    .sm\\:text-5xl {
-      font-size: var(--text-5xl);
-      line-height: var(--tw-leading, var(--text-5xl--line-height));
-    }
-
-    .sm\\:text-xl {
-      font-size: var(--text-xl);
-      line-height: var(--tw-leading, var(--text-xl--line-height));
+    .sm\\:grid-cols-4 {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
     }
   }
 
   @media (min-width: 48rem) {
-    .md\\:m-0 {
-      margin: calc(var(--spacing) * 0);
-    }
-
-    .md\\:mb-32 {
-      margin-bottom: calc(var(--spacing) * 32);
-    }
-
-    .md\\:ml-3 {
-      margin-left: calc(var(--spacing) * 3);
-    }
-
-    .md\\:flex {
-      display: flex;
-    }
-
-    .md\\:hidden {
-      display: none;
-    }
-
-    .md\\:-rotate-4 {
-      rotate: -4deg;
-    }
-
-    .md\\:rotate-3 {
-      rotate: 3deg;
+    .md\\:col-span-2 {
+      grid-column: span 2 / span 2;
     }
 
     .md\\:grid-cols-2 {
       grid-template-columns: repeat(2, minmax(0, 1fr));
     }
-
-    .md\\:grid-cols-3 {
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-    }
-
-    .md\\:flex-row {
-      flex-direction: row;
-    }
-
-    .md\\:flex-wrap {
-      flex-wrap: wrap;
-    }
-
-    .md\\:items-end {
-      align-items: flex-end;
-    }
-
-    .md\\:gap-4 {
-      gap: calc(var(--spacing) * 4);
-    }
-
-    .md\\:text-base {
-      font-size: var(--text-base);
-      line-height: var(--tw-leading, var(--text-base--line-height));
-    }
   }
 
   @media (min-width: 64rem) {
-    .lg\\:relative {
-      position: relative;
-    }
-
-    .lg\\:-top-15 {
-      top: calc(var(--spacing) * -15);
-    }
-
-    .lg\\:-bottom-18 {
-      bottom: calc(var(--spacing) * -18);
-    }
-
-    .lg\\:block {
-      display: block;
-    }
-
-    .lg\\:max-w-4xl {
-      max-width: var(--container-4xl);
-    }
-
-    .lg\\:max-w-160 {
-      max-width: calc(var(--spacing) * 160);
-    }
-
-    .lg\\:-rotate-6 {
-      rotate: -6deg;
-    }
-
-    .lg\\:rotate-7 {
-      rotate: 7deg;
-    }
-
     .lg\\:grid-cols-3 {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
@@ -18898,189 +18406,12 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     .lg\\:grid-cols-\\[minmax\\(168px\\,0\\.78fr\\)_minmax\\(0\\,1\\.22fr\\)\\] {
       grid-template-columns: minmax(168px, .78fr) minmax(0, 1.22fr);
     }
-
-    .lg\\:flex-row {
-      flex-direction: row;
-    }
-
-    .lg\\:gap-8 {
-      gap: calc(var(--spacing) * 8);
-    }
-
-    .lg\\:gap-30 {
-      gap: calc(var(--spacing) * 30);
-    }
-
-    .lg\\:rounded-2xl {
-      border-radius: var(--radius-2xl);
-    }
-
-    .lg\\:border-none {
-      --tw-border-style: none;
-      border-style: none;
-    }
-
-    .lg\\:p-10 {
-      padding: calc(var(--spacing) * 10);
-    }
-
-    .lg\\:px-8 {
-      padding-inline: calc(var(--spacing) * 8);
-    }
-
-    .lg\\:px-10 {
-      padding-inline: calc(var(--spacing) * 10);
-    }
-
-    .lg\\:py-24 {
-      padding-block: calc(var(--spacing) * 24);
-    }
-
-    .lg\\:pt-32 {
-      padding-top: calc(var(--spacing) * 32);
-    }
-
-    .lg\\:pt-48 {
-      padding-top: calc(var(--spacing) * 48);
-    }
-
-    .lg\\:pb-20 {
-      padding-bottom: calc(var(--spacing) * 20);
-    }
-
-    .lg\\:pb-28 {
-      padding-bottom: calc(var(--spacing) * 28);
-    }
-
-    .lg\\:text-6xl {
-      font-size: var(--text-6xl);
-      line-height: var(--tw-leading, var(--text-6xl--line-height));
-    }
-
-    .lg\\:text-\\[0\\.95rem\\] {
-      font-size: .95rem;
-    }
-
-    .lg\\:text-\\[1\\.35rem\\] {
-      font-size: 1.35rem;
-    }
-
-    .lg\\:leading-relaxed {
-      --tw-leading: var(--leading-relaxed);
-      line-height: var(--leading-relaxed);
-    }
   }
 
   @media (min-width: 80rem) {
-    .xl\\:-top-24\\.5 {
-      top: calc(var(--spacing) * -24.5);
-    }
-
-    .xl\\:-bottom-22 {
-      bottom: calc(var(--spacing) * -22);
-    }
-
-    .xl\\:-left-5 {
-      left: calc(var(--spacing) * -5);
-    }
-
-    .xl\\:-mr-4 {
-      margin-right: calc(var(--spacing) * -4);
-    }
-
-    .xl\\:w-10\\.5 {
-      width: calc(var(--spacing) * 10.5);
-    }
-
-    .xl\\:w-11 {
-      width: calc(var(--spacing) * 11);
-    }
-
-    .xl\\:w-14 {
-      width: calc(var(--spacing) * 14);
-    }
-
-    .xl\\:w-23 {
-      width: calc(var(--spacing) * 23);
-    }
-
-    .xl\\:w-25 {
-      width: calc(var(--spacing) * 25);
-    }
-
-    .xl\\:-translate-x-9 {
-      --tw-translate-x: calc(var(--spacing) * -9);
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-
-    .xl\\:translate-x-8 {
-      --tw-translate-x: calc(var(--spacing) * 8);
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-
-    .xl\\:-translate-y-7 {
-      --tw-translate-y: calc(var(--spacing) * -7);
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-
-    .xl\\:translate-y-9 {
-      --tw-translate-y: calc(var(--spacing) * 9);
-      translate: var(--tw-translate-x) var(--tw-translate-y);
-    }
-
-    .xl\\:grid-cols-4 {
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-    }
-
     .xl\\:grid-cols-\\[minmax\\(260px\\,0\\.76fr\\)_minmax\\(0\\,1\\.24fr\\)\\] {
       grid-template-columns: minmax(260px, .76fr) minmax(0, 1.24fr);
     }
-
-    .xl\\:gap-40 {
-      gap: calc(var(--spacing) * 40);
-    }
-
-    .xl\\:p-15 {
-      padding: calc(var(--spacing) * 15);
-    }
-
-    .xl\\:px-0 {
-      padding-inline: calc(var(--spacing) * 0);
-    }
-  }
-
-  @media (min-width: 96rem) {
-    .\\32 xl\\:px-5 {
-      padding-inline: calc(var(--spacing) * 5);
-    }
-
-    .\\32 xl\\:px-10 {
-      padding-inline: calc(var(--spacing) * 10);
-    }
-
-    .\\32 xl\\:py-13 {
-      padding-block: calc(var(--spacing) * 13);
-    }
-  }
-
-  .ltr\\:-rotate-90:where(:dir(ltr), [dir="ltr"], [dir="ltr"] *) {
-    rotate: -90deg;
-  }
-
-  .rtl\\:rotate-90:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
-    rotate: 90deg;
-  }
-
-  .rtl\\:rotate-180:where(:dir(rtl), [dir="rtl"], [dir="rtl"] *) {
-    rotate: 180deg;
-  }
-
-  .\\[\\&_p\\]\\:mb-6 p {
-    margin-bottom: calc(var(--spacing) * 6);
-  }
-
-  .\\[\\&_strong\\]\\:bg-yellow-100 strong {
-    background-color: var(--color-yellow-100);
   }
 
   .\\[\\&\\:\\:-webkit-scrollbar\\]\\:hidden::-webkit-scrollbar {
@@ -20670,24 +20001,6 @@ button, input, select {
   initial-value: "";
 }
 
-@property --tw-scale-x {
-  syntax: "*";
-  inherits: false;
-  initial-value: 1;
-}
-
-@property --tw-scale-y {
-  syntax: "*";
-  inherits: false;
-  initial-value: 1;
-}
-
-@property --tw-scale-z {
-  syntax: "*";
-  inherits: false;
-  initial-value: 1;
-}
-
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -21132,6 +20445,7 @@ const runtimeFailurePhaseTransferMip = 3;
 const runtimeFailureReasonTimeout = 2;
 const runtimeFailureScopeService = 1;
 const FILTER_MODE_OFF = 0;
+const FILTER_MODE_LOWPASS = 1;
 const FILTER_MODE_PEAK = 5;
 const WARP_MODE_OFF$1 = 0;
 const WARP_MODE_MIRROR$1 = 4;
@@ -22029,6 +21343,7 @@ const CAMERA_PITCH = 26 * (Math.PI / 180);
 const CAMERA_DISTANCE = 10.5;
 const CAMERA_FOCAL_LENGTH = 2.4;
 const FRAME_DEPTH_EXTENT = 3.6;
+const STAGE_FIT_X_SCALE = 1.3;
 const AMPLITUDE_SCALE = 0.3;
 const DISCONTINUITY_THRESHOLD = 0.5;
 const FLOOR_Y = -0.64;
@@ -22299,6 +21614,18 @@ function createViewportPadding(width, height) {
     bottom: clamp$7(height * 0.09, 20, 52)
   };
 }
+function createDrawableViewport(width, height, insets = {}) {
+  const left = clamp$7(Number(insets.left) || 0, 0, width - 1);
+  const right = clamp$7(Number(insets.right) || 0, 0, width - left - 1);
+  const top = clamp$7(Number(insets.top) || 0, 0, height - 1);
+  const bottom = clamp$7(Number(insets.bottom) || 0, 0, height - top - 1);
+  return {
+    x: left,
+    y: top,
+    width: Math.max(1, width - left - right),
+    height: Math.max(1, height - top - bottom)
+  };
+}
 function projectWorldPoint(point, camera) {
   const relative = subtractPoints(point, camera.position);
   const cameraX = dotProduct(relative, camera.right);
@@ -22313,15 +21640,18 @@ function projectWorldPoint(point, camera) {
   };
 }
 function projectToScreen(projectedPoint, projection) {
+  const scaleX = projection.scaleX ?? projection.scale;
+  const scaleY = projection.scaleY ?? projection.scale;
   return {
-    x: projection.centerX + (projectedPoint.projectedX - projection.projectedCenterX) * projection.scale,
-    y: projection.centerY - (projectedPoint.projectedY - projection.projectedCenterY) * projection.scale,
+    x: projection.centerX + (projectedPoint.projectedX - projection.projectedCenterX) * scaleX,
+    y: projection.centerY - (projectedPoint.projectedY - projection.projectedCenterY) * scaleY,
     cameraDepth: projectedPoint.cameraDepth,
     perspective: projectedPoint.perspective
   };
 }
-function createProjection(points, width, height) {
-  const padding = createViewportPadding(width, height);
+function createProjection(points, width, height, drawableInsets = {}) {
+  const drawable = createDrawableViewport(width, height, drawableInsets);
+  const padding = createViewportPadding(drawable.width, drawable.height);
   let minX = Infinity;
   let maxX = -Infinity;
   let minY = Infinity;
@@ -22335,18 +21665,21 @@ function createProjection(points, width, height) {
   const spanX = Math.max(1e-3, maxX - minX);
   const spanY = Math.max(1e-3, maxY - minY);
   const scale = Math.min(
-    (width - padding.left - padding.right) / spanX,
-    (height - padding.top - padding.bottom) / spanY
+    (drawable.width - padding.left - padding.right) / spanX,
+    (drawable.height - padding.top - padding.bottom) / spanY
   );
   return {
     width,
     height,
+    drawable,
     scale,
+    scaleX: scale * STAGE_FIT_X_SCALE,
+    scaleY: scale,
     padding,
     projectedCenterX: (minX + maxX) * 0.5,
     projectedCenterY: (minY + maxY) * 0.5,
-    centerX: width * 0.5,
-    centerY: height * 0.46
+    centerX: drawable.x + drawable.width * 0.5,
+    centerY: drawable.y + drawable.height * 0.5
   };
 }
 function getSurfacePointCount(width, sampleCount) {
@@ -22448,7 +21781,7 @@ function createGuideLines(camera, projection) {
     { kind: "frame", strength: 0.18, points: createGuideLine(topRight, camera, projection) }
   ];
 }
-function buildProjectionFromFrames(contourSamples, width, height, frameCount) {
+function buildProjectionFromFrames(contourSamples, width, height, frameCount, drawableInsets = {}) {
   const camera = createCamera();
   const stableWorldPoints = [
     { x: -1, y: FLOOR_Y, z: 0 },
@@ -22467,7 +21800,7 @@ function buildProjectionFromFrames(contourSamples, width, height, frameCount) {
   const projectedAnchors = stableWorldPoints.map((point) => projectWorldPoint(point, camera));
   return {
     camera,
-    projection: createProjection(projectedAnchors, width, height)
+    projection: createProjection(projectedAnchors, width, height, drawableInsets)
   };
 }
 function getSparseContourIndices(frameCount, frameState) {
@@ -22726,7 +22059,8 @@ function buildWavetableStaticScene({
   frames,
   width = 640,
   height = 320,
-  pixelRatio = 1
+  pixelRatio = 1,
+  drawableInsets = {}
 }) {
   assertFrames(frames);
   const safeWidth = Math.max(180, Math.floor(width || 0));
@@ -22736,7 +22070,7 @@ function buildWavetableStaticScene({
   const surfacePointCount = getSurfacePointCount(safeWidth, frames[0].length);
   const contourSamples = frames.map((frame) => decimateFrame(frame, contourPointCount));
   const surfaceSamples = frames.map((frame) => decimateFrame(frame, surfacePointCount));
-  const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight);
+  const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight, frameCount, drawableInsets);
   const contourFrames = contourSamples.map(
     (samples, frameIndex) => createProjectedFrame(samples, frameIndex, frameCount, camera, projection)
   );
@@ -22747,6 +22081,7 @@ function buildWavetableStaticScene({
     width: safeWidth,
     height: safeHeight,
     pixelRatio: Math.max(1, Number(pixelRatio) || 1),
+    drawableInsets,
     frameCount,
     camera,
     contourPointCount,
@@ -22768,13 +22103,15 @@ function buildWavetableRenderModel({
   width = 640,
   height = 320,
   pixelRatio = 1,
+  drawableInsets = {},
   staticScene = null
 }) {
   const scene = staticScene ?? buildWavetableStaticScene({
     frames,
     width,
     height,
-    pixelRatio
+    pixelRatio,
+    drawableInsets
   });
   const frameState = createFrameState(scene.frameCount, position, warpMode, warpAmount);
   return {
@@ -22807,11 +22144,11 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
   const meshColour = mixRGB(theme.meshColor, [214, 246, 255], 0.34);
   const gradient = context.createLinearGradient?.(0, 0, 0, model.height);
   if (gradient) {
-    gradient.addColorStop(0, theme.backgroundTop);
-    gradient.addColorStop(1, theme.backgroundBottom);
+    gradient.addColorStop(0, "#4b164f");
+    gradient.addColorStop(1, "#1f4f5c");
     context.fillStyle = gradient;
   } else {
-    context.fillStyle = theme.backgroundBottom;
+    context.fillStyle = "#4b164f";
   }
   context.clearRect(0, 0, model.width, model.height);
   context.fillRect(0, 0, model.width, model.height);
@@ -22908,6 +22245,7 @@ class CanvasWavetableDisplay {
     this.devicePixelRatio = 1;
     this.cssWidth = 0;
     this.cssHeight = 0;
+    this.drawableInsets = { top: 0, right: 0, bottom: 0, left: 0 };
     this.staticScene = null;
     this.staticKey = "";
     this.pendingRenderHandle = null;
@@ -22933,6 +22271,20 @@ class CanvasWavetableDisplay {
     this.warpAmount = clamp$7(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
+  setDrawableInsets(insets = {}) {
+    const nextInsets = {
+      top: Math.max(0, Number(insets.top) || 0),
+      right: Math.max(0, Number(insets.right) || 0),
+      bottom: Math.max(0, Number(insets.bottom) || 0),
+      left: Math.max(0, Number(insets.left) || 0)
+    };
+    if (nextInsets.top === this.drawableInsets.top && nextInsets.right === this.drawableInsets.right && nextInsets.bottom === this.drawableInsets.bottom && nextInsets.left === this.drawableInsets.left) {
+      return;
+    }
+    this.drawableInsets = nextInsets;
+    this.invalidateStaticScene();
+    this.queueRender();
+  }
   resize(width, height, devicePixelRatio = 1) {
     const nextWidth = Math.max(1, Math.floor(width || this.canvas.clientWidth || 1));
     const nextHeight = Math.max(1, Math.floor(height || this.canvas.clientHeight || 1));
@@ -22953,7 +22305,11 @@ class CanvasWavetableDisplay {
       this.frames[0]?.length ?? 0,
       width,
       height,
-      this.devicePixelRatio
+      this.devicePixelRatio,
+      this.drawableInsets.top,
+      this.drawableInsets.right,
+      this.drawableInsets.bottom,
+      this.drawableInsets.left
     ].join(":");
     if (this.staticScene && this.staticKey === nextKey) {
       return this.staticScene;
@@ -22963,7 +22319,8 @@ class CanvasWavetableDisplay {
       frames: this.frames,
       width,
       height,
-      pixelRatio: this.devicePixelRatio
+      pixelRatio: this.devicePixelRatio,
+      drawableInsets: this.drawableInsets
     });
     return this.staticScene;
   }
@@ -23019,11 +22376,188 @@ function normalizeFilterSpectrumMessage(message) {
     magnitudes: magnitudes.map((value) => Math.max(0, Number(value) || 0))
   };
 }
+const choice = (label, value) => ({ label, value });
+function vendoredIconUrl(resolveUrl, fallback) {
+  try {
+    return resolveUrl();
+  } catch {
+    return fallback;
+  }
+}
+const RACK_ICON_URLS = Object.freeze({
+  filter: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M24.22%2067.796a3.995%203.995%200%200%201%204.008-3.991h85.498c8.834%200%2019.732%206.112%2024.345%2013.657l53.76%2087.936c3.46%205.66%2011.628%2010.247%2018.256%2010.247h16.718a3.996%203.996%200%200%201%203.994%204.007v8.985a4.007%204.007%200%200%201-4.007%204.008h-24.7c-8.835%200-19.709-6.13-24.283-13.683l-52.324-86.4c-3.43-5.665-11.577-10.257-18.202-10.257H28.214a3.995%203.995%200%200%201-3.993-3.992V67.796z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-filter-lowpass.svg"
+  ),
+  drive: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M233%2064.5h-28.495c-18.104%200-32.517%204.04-49.695%2018.089-15.765%2012.892-30.941%2031.655-39.559%2046.948-12.478%2022.144-33.858%2039.953-43.54%2043.463-9.68%203.51-23.202%203.5-30.711%203.5H25V192h23.5c9.747%200%2026.265-.681%2039.867-7.61%2018.496-9.42%2033.507-35.51%2047.578-54.853%209.879-13.579%2021.773-27.756%2032.732-36.034C182.775%2082.853%20196.637%2080%20216.5%2080H233V64.5z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-softclipcurve.svg"
+  ),
+  ott: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M175.863%20100.122c0-2.205%201.293-2.747%202.883-1.214l30.096%2028.996-30.11%2029.24c-1.585%201.538-2.87%201-2.87-1.209v-19.24l-95.811.637v18.596c0%202.21-1.28%202.746-2.854%201.201l-29.788-29.225%2029.774-28.982c1.584-1.542%202.868-1.004%202.868%201.2v19.54h95.812v-19.54z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-arrows-vert.svg"
+  ),
+  chorus: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M48%20128c-1.955-29.248%2019.364-64%2037.364-64%2018%200%2036.136%2013.843%2036.136%2064.5s19.136%2080.5%2049.136%2080.5c30%200%2053.364-40.125%2053.364-80.5-8.182%200-7.273-.752-16%200%200%2032.35-20.455%2064.45-37.364%2064.45s-33.909-13.542-33.909-64.45S120.273%2048%2085.364%2048C50.454%2048%2032%2088.626%2032%20127.748c6%200%208.364.252%2016%20.252z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-modsine.svg"
+  ),
+  flanger: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M116.589%20182.742l-7.405%2020.346a4%204%200%200%201-5.125%202.396l-7.525-2.738a4%204%200%200%201-2.386-5.13l7.435-20.427C83.963%20167.623%2072%20148.959%2072%20127.5%2072%2096.296%2097.296%2071%20128.5%2071c3.877%200%207.663.39%2011.32%201.134l6.996-19.222a4%204%200%200%201%205.125-2.396l7.525%202.738a4%204%200%200%201%202.386%205.13l-6.968%2019.142C172.796%2087.002%20185%20105.826%20185%20127.5c0%2031.204-25.296%2056.5-56.5%2056.5-4.086%200-8.071-.434-11.911-1.258zm5.173-14.213A41.32%2041.32%200%200%200%20128%20169c22.644%200%2041-18.356%2041-41%200-14.855-7.9-27.864-19.727-35.056l-27.51%2075.585zm-15.035-5.473l27.51-75.585A41.32%2041.32%200%200%200%20128%2087c-22.644%200-41%2018.356-41%2041%200%2014.855%207.9%2027.864%2019.727%2035.056z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-phase.svg"
+  ),
+  phaser: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M25.101%2077.628a4.008%204.008%200%200%200%203.997%204.01h16.996c6.632%200%2013.927%205.01%2016.3%2011.202l52.724%2085.231c7.115%2018.564%2018.693%2018.571%2025.857.025L193.91%2092.84c2.39-6.187%209.693-11.202%2016.336-11.202h16.49a4.01%204.01%200%200%200%204-4.01V68.82a4%204%200%200%200-3.994-4.009h-23.508c-8.835%200-18.547%206.702-21.69%2014.962l-47.147%2073.852c-3.533%209.287-9.217%209.262-12.694-.051L75.2%2079.805C72.108%2071.524%2062.44%2064.81%2053.6%2064.81H29.11a4.012%204.012%200%200%200-4.008%204.01v8.808z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-filter-notch.svg"
+  ),
+  delay: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cg%20fill-rule='evenodd'%3e%3cpath%20d='M109.533%20197.602a1.887%201.887%200%200%201-.034%202.76l-7.583%207.066a4.095%204.095%200%200%201-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581%204.11-1.658%205.74-.18l7.655%206.94c.82.743.833%201.952.02%202.708l-21.11%2019.659s53.036.129%2071.708.064c18.672-.064%2033.437-16.973%2033.437-34.7%200-7.214-5.578-17.64-5.578-17.64-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794%201.772-.632%202.242.364%200%200%209.212%2018.651%209.212%2028.562%200%2028.035-21.765%2050.882-48.533%2050.882-26.769%200-70.921.201-70.921.201l20.186%2019.568z'/%3e%3cpath%20d='M144.398%2058.435a1.887%201.887%200%200%201%20.034-2.76l7.583-7.066a4.095%204.095%200%200%201%205.714.152l32.918%2034.095c1.537%201.592%201.54%204.162.002%205.746l-33.1%2034.092c-1.536%201.581-4.11%201.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437%2016.973-33.437%2034.7%200%207.214%205.578%2017.64%205.578%2017.64.498.99.273%202.444-.483%203.229l-8.61%208.94c-.764.794-1.772.632-2.242-.364%200%200-9.212-18.65-9.212-28.562%200-28.035%2021.765-50.882%2048.533-50.882%2026.769%200%2070.921-.201%2070.921-.201l-20.186-19.568z'/%3e%3c/g%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-repeat.svg"
+  ),
+  reverb: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M128.802%2095.03c-9.229-9.369-22.39-15.228-37-15.228-27.92%200-50.555%2021.402-50.555%2047.803%200%2026.4%2022.634%2047.802%2050.555%2047.802%2014.711%200%2027.954-5.94%2037.193-15.423-12.232-16.88-14.177-19.888-14.177-32.38%200-12.016%205.924-18.458%2014.19-31.142%206.753%2013.293%2013.629%2019.445%2013.629%2031.538%200%2012.802-6.03%2020.525-13.402%2032.614%209.206%209.115%2022.185%2014.793%2036.567%2014.793%2027.922%200%2050.556-21.401%2050.556-47.802%200-26.4-22.634-47.803-50.556-47.803-14.608%200-27.77%205.86-37%2015.228zM128%2075.374C138.501%2068.202%20151.252%2064%20165%2064c35.899%200%2065%2028.654%2065%2064%200%2035.346-29.101%2064-65%2064-13.748%200-26.499-4.202-37-11.374C117.499%20187.798%20104.748%20192%2091%20192c-35.899%200-65-28.654-65-64%200-35.346%2029.101-64%2065-64%2013.748%200%2026.499%204.202%2037%2011.374z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-stereo.svg"
+  )
+});
+const p = (effectId, endpointID, label, shortLabel, min, max, initial, options = {}) => ({
+  id: `${effectId}.${endpointID}`,
+  effectId,
+  endpointID,
+  label,
+  shortLabel,
+  min,
+  max,
+  initial,
+  step: options.step ?? (max - min) / 1e3,
+  scale: options.scale ?? "linear",
+  unit: options.unit ?? "",
+  choices: options.choices,
+  quick: options.quick ?? false,
+  modulationTargetIndex: options.modulationTargetIndex ?? null
+});
+const PHASER_DIVISIONS = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"];
+const DELAY_DIVISIONS = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"];
+const definitions = [
+  {
+    id: "filter",
+    label: "Global Filter",
+    summary: "Final tone shaping for the complete voice mix.",
+    iconUrl: RACK_ICON_URLS.filter,
+    parameters: [
+      p("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 0, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(choice), quick: true }),
+      p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 2e4, 2e4, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0 }),
+      p("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1 }),
+      p("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 })
+    ]
+  },
+  {
+    id: "drive",
+    label: "Distortion",
+    summary: "Classic clipping or harmonic-residue saturation.",
+    iconUrl: RACK_ICON_URLS.drive,
+    parameters: [
+      p("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Classic", 0), choice("Harmonics", 1)] }),
+      p("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: true, modulationTargetIndex: 3 }),
+      p("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
+      p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 5 }),
+      p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6 }),
+      p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7 })
+    ]
+  },
+  {
+    id: "ott",
+    label: "OTT",
+    summary: "Upward/downward multiband dynamics with envelope matching.",
+    iconUrl: RACK_ICON_URLS.ott,
+    parameters: [
+      p("ott", "ottMix", "Mix", "Mix", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 8 }),
+      p("ott", "ottAmount", "Amount", "Amt", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 9 }),
+      p("ott", "ottTimePercent", "Time", "Time", 10, 1e3, 100, { unit: "%", scale: "log", modulationTargetIndex: 10 }),
+      p("ott", "ottBandDrive", "Band Drive", "Drv", 0, 100, 0, { unit: "%", modulationTargetIndex: 11 }),
+      p("ott", "ottEnvelopeMatch", "Envelope Match", "Env", 0, 100, 0, { unit: "%", modulationTargetIndex: 12 })
+    ]
+  },
+  {
+    id: "chorus",
+    label: "Chorus",
+    summary: "Modulated ensemble, bloom, and pitch-following ring colour.",
+    iconUrl: RACK_ICON_URLS.chorus,
+    parameters: [
+      p("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide Slow", "Classic", "Fast Light"].map(choice) }),
+      p("chorus", "chorusBloomMode", "Bloom", "Blm", 0, 4, 0, { step: 1, choices: ["Clean", "Small", "Large", "Small+Shimmer", "Large+Shimmer"].map(choice) }),
+      p("chorus", "chorusMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 13 }),
+      p("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
+      p("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
+      p("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
+      p("chorus", "chorusRingOffsetMode", "Ring Pitch", "Pitch", 0, 3, 0, { step: 1, choices: ["+5th", "Low 5th", "+Oct", "-Oct"].map(choice) }),
+      p("chorus", "chorusRingFineSemitones", "Ring Fine", "Fine", -2, 2, 0, { unit: "st", modulationTargetIndex: 17 })
+    ]
+  },
+  {
+    id: "flanger",
+    label: "Flanger",
+    summary: "Short swept comb delay with signed feedback.",
+    iconUrl: RACK_ICON_URLS.flanger,
+    parameters: [
+      p("flanger", "flangerRate", "Rate", "Rate", 0.02, 8, 0.35, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 18 }),
+      p("flanger", "flangerDepth", "Depth", "Dpt", 0, 1, 0.6, { quick: true, modulationTargetIndex: 19 }),
+      p("flanger", "flangerFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 20 }),
+      p("flanger", "flangerMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 21 })
+    ]
+  },
+  {
+    id: "phaser",
+    label: "Phaser",
+    summary: "Eight-pole swept all-pass network with Free/Sync rate.",
+    iconUrl: RACK_ICON_URLS.phaser,
+    parameters: [
+      p("phaser", "phaserRateMode", "Rate Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
+      p("phaser", "phaserRate", "Rate", "Rate", 0.02, 8, 0.3, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 22 }),
+      p("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: PHASER_DIVISIONS.map(choice) }),
+      p("phaser", "phaserDepth", "Depth", "Dpt", 0, 1, 0.7, { modulationTargetIndex: 23 }),
+      p("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24 }),
+      p("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
+      p("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
+      p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 27 })
+    ]
+  },
+  {
+    id: "delay",
+    label: "Delay",
+    summary: "Tape-gliding stereo delay with Free/Sync timing.",
+    iconUrl: RACK_ICON_URLS.delay,
+    parameters: [
+      p("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
+      p("delay", "delayTime", "Time", "Time", 1, 2e3, 375, { unit: "ms", scale: "log", quick: true, modulationTargetIndex: 28 }),
+      p("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: DELAY_DIVISIONS.map(choice) }),
+      p("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
+      p("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30 }),
+      p("delay", "delayMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 31 })
+    ]
+  },
+  {
+    id: "reverb",
+    label: "Reverb",
+    summary: "Modulated early reflections into a four-line stereo tank.",
+    iconUrl: RACK_ICON_URLS.reverb,
+    parameters: [
+      p("reverb", "reverbSize", "Size", "Size", 0, 1, 0.5, { quick: true, modulationTargetIndex: 32 }),
+      p("reverb", "reverbDecay", "Decay", "Dcy", 0, 1, 0.4, { quick: true, modulationTargetIndex: 33 }),
+      p("reverb", "reverbDamping", "Damping", "Dmp", 0, 1, 0.5, { modulationTargetIndex: 34 }),
+      p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 35 })
+    ]
+  }
+];
+const RACK_EFFECT_DESCRIPTORS = definitions;
+function allRackParameterDescriptors() {
+  return RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters);
+}
 const MODULATION_STATE_KEY = "modulation.v2";
 const MODULATION_MAX_ROUTES = 12;
 const MODULATION_MSEG_SLOT_COUNT = 3;
 const MODULATION_ENV_SLOT_COUNT = 3;
+const MODULATION_MACRO_SLOT_COUNT = 4;
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"];
+const MACRO_SLOT_NAMES = ["Macro 1", "Macro 2", "Macro 3", "Macro 4"];
 const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"];
 const ENV_MIN_SECONDS = 1e-3;
 const ENV_MAX_SECONDS = 10;
@@ -23043,6 +22577,10 @@ const ROUTE_AMOUNT_LIMITS = {
   unisonWavetablePositionSpread: { min: -1, max: 1 },
   unisonWarpSpread: { min: -1, max: 1 }
 };
+const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter) => parameter.modulationTargetIndex !== null);
+const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
+  RACK_MODULATION_PARAMETERS.map((parameter) => [`rack.${parameter.endpointID}`, parameter])
+);
 const MODULATION_SOURCE_OPTIONS = [
   { value: "mseg-1", label: "MSEG 1", sourceKind: "mseg", sourceSlot: 1 },
   { value: "mseg-2", label: "MSEG 2", sourceKind: "mseg", sourceSlot: 2 },
@@ -23050,6 +22588,10 @@ const MODULATION_SOURCE_OPTIONS = [
   { value: "env-1", label: "ENV 1", sourceKind: "env", sourceSlot: 1 },
   { value: "env-2", label: "ENV 2", sourceKind: "env", sourceSlot: 2 },
   { value: "env-3", label: "ENV 3", sourceKind: "env", sourceSlot: 3 },
+  { value: "macro-1", label: "MACRO 1", sourceKind: "macro", sourceSlot: 1 },
+  { value: "macro-2", label: "MACRO 2", sourceKind: "macro", sourceSlot: 2 },
+  { value: "macro-3", label: "MACRO 3", sourceKind: "macro", sourceSlot: 3 },
+  { value: "macro-4", label: "MACRO 4", sourceKind: "macro", sourceSlot: 4 },
   { value: "velocity", label: "VEL", sourceKind: "velocity", sourceSlot: null },
   { value: "pressure", label: "AT", sourceKind: "pressure", sourceSlot: null },
   { value: "slide", label: "SLIDE", sourceKind: "slide", sourceSlot: null }
@@ -23066,7 +22608,11 @@ const MODULATION_TARGET_OPTIONS = [
   { value: "unisonBlend", label: "UNI BLEND" },
   { value: "unisonWidth", label: "UNI WIDTH" },
   { value: "unisonWavetablePositionSpread", label: "UNI WT" },
-  { value: "unisonWarpSpread", label: "UNI WARP" }
+  { value: "unisonWarpSpread", label: "UNI WARP" },
+  ...RACK_MODULATION_PARAMETERS.map((parameter) => ({
+    value: `rack.${parameter.endpointID}`,
+    label: `${parameter.effectId.toUpperCase()} ${parameter.shortLabel.toUpperCase()}`
+  }))
 ];
 let generatedRouteIdCounter = 1;
 function hasOwnValue(record, key) {
@@ -23094,7 +22640,21 @@ function formatMagnitude(value, digits) {
   const numeric = Number.isFinite(value) ? value : 0;
   return Math.abs(numeric).toFixed(digits);
 }
+function isRackModulationTarget(targetKind) {
+  return RACK_MODULATION_PARAMETER_BY_KIND.has(targetKind);
+}
+function getRackRouteAmountLimit(descriptor) {
+  if (descriptor.scale === "log") {
+    return { min: -6, max: 6 };
+  }
+  const span = descriptor.max - descriptor.min;
+  return { min: -span, max: span };
+}
 function getRouteAmountLimit(targetKind) {
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter !== void 0) {
+    return getRackRouteAmountLimit(rackParameter);
+  }
   return ROUTE_AMOUNT_LIMITS[targetKind];
 }
 function getRouteAmountMagnitudeLimit(targetKind) {
@@ -23126,7 +22686,7 @@ function normalizePolarity(value) {
   return value === "bipolar" ? "bipolar" : "unipolar";
 }
 function clampModulationRouteAmount(targetKind, value) {
-  const limits = ROUTE_AMOUNT_LIMITS[targetKind];
+  const limits = getRouteAmountLimit(targetKind);
   const numeric = Number(value);
   return clamp$6(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
@@ -23177,6 +22737,17 @@ function getModulationAmountSliderPosition(targetKind, amount) {
 function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar") {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
   const prefix = polarity === "bipolar" ? Math.abs(clampedAmount) <= 1e-9 ? "" : "±" : clampedAmount > 0 ? "+" : clampedAmount < 0 ? "-" : "";
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter !== void 0) {
+    if (rackParameter.scale === "log") {
+      return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
+    }
+    if (rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2) {
+      return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+    }
+    const unit = rackParameter.unit === "deg" ? "°" : rackParameter.unit;
+    return `${prefix}${formatMagnitude(clampedAmount, Math.abs(clampedAmount) < 10 ? 2 : 1)}${unit ? ` ${unit}` : ""}`;
+  }
   switch (targetKind) {
     case "wavetablePosition":
       return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
@@ -23214,6 +22785,9 @@ function getModulationAmountPercentLabel(targetKind, amount) {
   return `${Math.round(getModulationAmountDepth(targetKind, amount) * 100)}%`;
 }
 function getModulationTargetClampHint(targetKind) {
+  if (isRackModulationTarget(targetKind)) {
+    return "Rack modulation adds to the base control and clamps to the effect's authored range.";
+  }
   switch (targetKind) {
     case "wavetablePosition":
       return "Wavetable scan still clamps to the table range.";
@@ -23244,23 +22818,30 @@ function getModulationTargetClampHint(targetKind) {
   }
 }
 function normalizeSourceKind(value) {
-  if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide") {
+  if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide" || value === "macro") {
     return value;
   }
   return "mseg";
 }
 function normalizeTargetKind(value) {
+  if (typeof value === "string" && RACK_MODULATION_PARAMETER_BY_KIND.has(value)) {
+    return value;
+  }
   if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan" || value === "unisonDetune" || value === "unisonBlend" || value === "unisonWidth" || value === "unisonWavetablePositionSpread" || value === "unisonWarpSpread") {
     return value;
   }
   return "wavetablePosition";
+}
+function normalizeMacroName(value, slotIndex) {
+  const fallback = MACRO_SLOT_NAMES[slotIndex] ?? `Macro ${slotIndex + 1}`;
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 function normalizeSourceSlot(sourceKind, rawSlot) {
   const numericSlot = Math.round(Number(rawSlot));
   if (sourceKind === "velocity" || sourceKind === "pressure" || sourceKind === "slide") {
     return null;
   }
-  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : sourceKind === "macro" ? MODULATION_MACRO_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
   return clamp$6(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
@@ -23292,6 +22873,7 @@ function createDefaultRoute(overrides = {}) {
     polarity: "unipolar",
     targetKind: "wavetablePosition",
     amount: 0,
+    reducer: "max",
     ...overrides
   };
 }
@@ -23307,7 +22889,8 @@ function normalizeRoute(value, routeIndex = 0) {
     sourceSlot: normalizeSourceSlot(sourceKind, nextValue.sourceSlot),
     polarity: normalizePolarity(nextValue.polarity),
     targetKind,
-    amount: clampModulationRouteAmount(targetKind, numericAmount)
+    amount: clampModulationRouteAmount(targetKind, numericAmount),
+    reducer: nextValue.reducer === "mean" ? "mean" : "max"
   };
 }
 function normalizeMsegSlot(value, slotIndex) {
@@ -23327,7 +22910,15 @@ function createDefaultModulationState() {
     version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
-    routes: [createDefaultRoute({ id: "mod-route-1" })]
+    routes: [
+      createDefaultRoute({ id: "mod-route-1", amount: 1 }),
+      createDefaultRoute({
+        id: "mod-route-2",
+        targetKind: "filterCutoffOctaves",
+        amount: 4
+      })
+    ],
+    macroNames: MACRO_SLOT_NAMES.slice()
   };
 }
 function normalizeModulationState(value = createDefaultModulationState()) {
@@ -23335,12 +22926,17 @@ function normalizeModulationState(value = createDefaultModulationState()) {
   const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
   const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
   const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
+  const inputMacroNames = Array.isArray(nextValue.macroNames) ? nextValue.macroNames : [];
   return {
     format: "cosimo.modulation",
     version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
-    routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
+    routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)),
+    macroNames: Array.from(
+      { length: MODULATION_MACRO_SLOT_COUNT },
+      (_, slotIndex) => normalizeMacroName(inputMacroNames[slotIndex], slotIndex)
+    )
   };
 }
 function serializeModulationState(state) {
@@ -23988,7 +23584,8 @@ function WavetableCanvas({
   frames,
   position,
   warpMode,
-  warpAmount
+  warpAmount,
+  drawableTopInset
 }) {
   const canvasRef = reactExports.useRef(null);
   const viewportRef = reactExports.useRef(null);
@@ -24015,6 +23612,9 @@ function WavetableCanvas({
   reactExports.useEffect(() => {
     displayRef.current?.setWarp(warpMode, warpAmount);
   }, [warpAmount, warpMode]);
+  reactExports.useEffect(() => {
+    displayRef.current?.setDrawableInsets({ top: drawableTopInset });
+  }, [drawableTopInset]);
   reactExports.useEffect(() => {
     displayRef.current?.resize(size.width, size.height, window.devicePixelRatio || 1);
   }, [size]);
@@ -25439,7 +25039,6 @@ function createDefaultArticulationParameterSnapshot() {
     distortionWet: 0,
     distortionWetHPHz: 40,
     distortionWetLPHz: 18e3,
-    chorusEnabled: 0,
     chorusMix: 0,
     chorusMotionMode: 1,
     chorusBloomMode: 0,
@@ -25491,7 +25090,6 @@ function normalizeArticulationParameterSnapshot(value) {
     distortionWet: normalizeNumber(nextValue.distortionWet, defaults.distortionWet, 0, 1),
     distortionWetHPHz: normalizeNumber(nextValue.distortionWetHPHz, defaults.distortionWetHPHz, 20, 4e3),
     distortionWetLPHz: normalizeNumber(nextValue.distortionWetLPHz, defaults.distortionWetLPHz, 20, 2e4),
-    chorusEnabled: normalizeInteger(nextValue.chorusEnabled, defaults.chorusEnabled, 0, 1),
     chorusMix: normalizeNumber(nextValue.chorusMix, defaults.chorusMix, 0, 1),
     chorusMotionMode: normalizeInteger(nextValue.chorusMotionMode, defaults.chorusMotionMode, 0, 3),
     chorusBloomMode: normalizeInteger(nextValue.chorusBloomMode, defaults.chorusBloomMode, 0, 4),
@@ -26605,6 +26203,7 @@ function useSynthInputRouter(keyboardRef, {
 }
 const DEFAULT_SAMPLES_PER_FRAME = 2048;
 const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
+const DEFAULT_FACTORY_TABLE_INDEX = 34;
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -26744,7 +26343,6 @@ const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
 const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
 const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
 const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
-const CHORUS_ENABLED_ENDPOINT_ID = "chorusEnabled";
 const CHORUS_MIX_ENDPOINT_ID = "chorusMix";
 const CHORUS_MOTION_MODE_ENDPOINT_ID = "chorusMotionMode";
 const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
@@ -27752,7 +27350,7 @@ function useSynthPatchViewModel({
   });
   const wavetableSelect = usePatchParameterBinding({
     endpointID: WAVETABLE_SELECT_ENDPOINT_ID,
-    initialValue: 0,
+    initialValue: DEFAULT_FACTORY_TABLE_INDEX,
     coerce: (value) => Math.max(0, Math.trunc(Number(value) || 0))
   });
   const playMode = usePatchParameterBinding({
@@ -27782,7 +27380,7 @@ function useSynthPatchViewModel({
   });
   const filterMode = usePatchParameterBinding({
     endpointID: FILTER_MODE_ENDPOINT_ID,
-    initialValue: 0,
+    initialValue: FILTER_MODE_LOWPASS,
     coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 5)
   });
   const filterCutoff = usePatchParameterBinding({
@@ -27894,11 +27492,6 @@ function useSynthPatchViewModel({
     endpointID: DISTORTION_WET_LP_HZ_ENDPOINT_ID,
     initialValue: 18e3,
     coerce: (value) => clamp$1(Number(value) || 0, 20, 2e4)
-  });
-  const chorusEnabled = usePatchParameterBinding({
-    endpointID: CHORUS_ENABLED_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 1)
   });
   const chorusMix = usePatchParameterBinding({
     endpointID: CHORUS_MIX_ENDPOINT_ID,
@@ -28146,8 +27739,13 @@ function useSynthPatchViewModel({
   const handleRemoveRoute = reactExports.useCallback((routeIndex) => {
     modulationBridge.current?.removeRoute(routeIndex);
   }, [modulationBridge]);
-  const handleRouteChange = reactExports.useCallback((routeIndex, nextRoute) => {
-    modulationBridge.current?.setRoute(routeIndex, nextRoute);
+  const handleRouteChange = reactExports.useCallback((routeIndex, update) => {
+    const bridge = modulationBridge.current;
+    const currentRoute = bridge?.getState().routes[routeIndex];
+    if (!bridge || !currentRoute) {
+      return;
+    }
+    bridge.setRoute(routeIndex, { ...currentRoute, ...update });
   }, [modulationBridge]);
   const captureCurrentArticulationSnapshot = reactExports.useCallback(() => {
     const currentModulationState = modulationBridge.current?.getState() ?? modulationState;
@@ -28180,7 +27778,6 @@ function useSynthPatchViewModel({
         distortionWet: distortionWet.value,
         distortionWetHPHz: distortionWetHPHz.value,
         distortionWetLPHz: distortionWetLPHz.value,
-        chorusEnabled: chorusEnabled.value,
         chorusMix: chorusMix.value,
         chorusMotionMode: chorusMotionMode.value,
         chorusBloomMode: chorusBloomMode.value,
@@ -28198,7 +27795,6 @@ function useSynthPatchViewModel({
     });
   }, [
     chorusBloomMode.value,
-    chorusEnabled.value,
     chorusFeedback.value,
     chorusMix.value,
     chorusMotionMode.value,
@@ -28270,7 +27866,6 @@ function useSynthPatchViewModel({
     distortionWet.setValue(parameters.distortionWet);
     distortionWetHPHz.setValue(parameters.distortionWetHPHz);
     distortionWetLPHz.setValue(parameters.distortionWetLPHz);
-    chorusEnabled.setValue(parameters.chorusEnabled);
     chorusMix.setValue(parameters.chorusMix);
     chorusMotionMode.setValue(parameters.chorusMotionMode);
     chorusBloomMode.setValue(parameters.chorusBloomMode);
@@ -28311,7 +27906,6 @@ function useSynthPatchViewModel({
     }
   }, [
     chorusBloomMode,
-    chorusEnabled,
     chorusFeedback,
     chorusMix,
     chorusMotionMode,
@@ -28732,7 +28326,6 @@ function useSynthPatchViewModel({
     distortionWet,
     distortionWetHPHz,
     distortionWetLPHz,
-    chorusEnabled,
     chorusMix,
     chorusMotionMode,
     chorusBloomMode,
@@ -29379,7 +28972,11 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
                       "aria-label": `Route ${routeIndex + 1} source`,
                       value: getModulationSourceOptionValue(route),
                       onChange: (event) => {
-                        onRouteChange(routeIndex, applyModulationSourceOption(route, event.target.value));
+                        const nextSource = applyModulationSourceOption(route, event.target.value);
+                        onRouteChange(routeIndex, {
+                          sourceKind: nextSource.sourceKind,
+                          sourceSlot: nextSource.sourceSlot
+                        });
                       },
                       children: MODULATION_SOURCE_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
                     }
@@ -29392,7 +28989,6 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
                       onChange: (event) => {
                         const nextTargetKind = event.target.value;
                         onRouteChange(routeIndex, {
-                          ...route,
                           targetKind: nextTargetKind,
                           amount: clampModulationRouteAmount(nextTargetKind, route.amount)
                         });
@@ -29408,7 +29004,6 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
                       amount: route.amount,
                       onPolarityChange: (nextPolarity) => {
                         onRouteChange(routeIndex, {
-                          ...route,
                           polarity: nextPolarity
                         });
                       },
@@ -29416,7 +29011,6 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
                       polarityAriaLabel: `Route ${routeIndex + 1} polarity`,
                       onChange: (nextAmount) => {
                         onRouteChange(routeIndex, {
-                          ...route,
                           amount: nextAmount
                         });
                       }

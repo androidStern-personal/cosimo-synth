@@ -598,6 +598,181 @@ async function startPatchWorkerServices(connection, serviceFactories) {
   await host.start();
   return host;
 }
+const choice = (label, value) => ({ label, value });
+function vendoredIconUrl(resolveUrl, fallback) {
+  try {
+    return resolveUrl();
+  } catch {
+    return fallback;
+  }
+}
+const RACK_ICON_URLS = Object.freeze({
+  filter: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M24.22%2067.796a3.995%203.995%200%200%201%204.008-3.991h85.498c8.834%200%2019.732%206.112%2024.345%2013.657l53.76%2087.936c3.46%205.66%2011.628%2010.247%2018.256%2010.247h16.718a3.996%203.996%200%200%201%203.994%204.007v8.985a4.007%204.007%200%200%201-4.007%204.008h-24.7c-8.835%200-19.709-6.13-24.283-13.683l-52.324-86.4c-3.43-5.665-11.577-10.257-18.202-10.257H28.214a3.995%203.995%200%200%201-3.993-3.992V67.796z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-filter-lowpass.svg"
+  ),
+  drive: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M233%2064.5h-28.495c-18.104%200-32.517%204.04-49.695%2018.089-15.765%2012.892-30.941%2031.655-39.559%2046.948-12.478%2022.144-33.858%2039.953-43.54%2043.463-9.68%203.51-23.202%203.5-30.711%203.5H25V192h23.5c9.747%200%2026.265-.681%2039.867-7.61%2018.496-9.42%2033.507-35.51%2047.578-54.853%209.879-13.579%2021.773-27.756%2032.732-36.034C182.775%2082.853%20196.637%2080%20216.5%2080H233V64.5z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-softclipcurve.svg"
+  ),
+  ott: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M175.863%20100.122c0-2.205%201.293-2.747%202.883-1.214l30.096%2028.996-30.11%2029.24c-1.585%201.538-2.87%201-2.87-1.209v-19.24l-95.811.637v18.596c0%202.21-1.28%202.746-2.854%201.201l-29.788-29.225%2029.774-28.982c1.584-1.542%202.868-1.004%202.868%201.2v19.54h95.812v-19.54z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-arrows-vert.svg"
+  ),
+  chorus: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M48%20128c-1.955-29.248%2019.364-64%2037.364-64%2018%200%2036.136%2013.843%2036.136%2064.5s19.136%2080.5%2049.136%2080.5c30%200%2053.364-40.125%2053.364-80.5-8.182%200-7.273-.752-16%200%200%2032.35-20.455%2064.45-37.364%2064.45s-33.909-13.542-33.909-64.45S120.273%2048%2085.364%2048C50.454%2048%2032%2088.626%2032%20127.748c6%200%208.364.252%2016%20.252z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-modsine.svg"
+  ),
+  flanger: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M116.589%20182.742l-7.405%2020.346a4%204%200%200%201-5.125%202.396l-7.525-2.738a4%204%200%200%201-2.386-5.13l7.435-20.427C83.963%20167.623%2072%20148.959%2072%20127.5%2072%2096.296%2097.296%2071%20128.5%2071c3.877%200%207.663.39%2011.32%201.134l6.996-19.222a4%204%200%200%201%205.125-2.396l7.525%202.738a4%204%200%200%201%202.386%205.13l-6.968%2019.142C172.796%2087.002%20185%20105.826%20185%20127.5c0%2031.204-25.296%2056.5-56.5%2056.5-4.086%200-8.071-.434-11.911-1.258zm5.173-14.213A41.32%2041.32%200%200%200%20128%20169c22.644%200%2041-18.356%2041-41%200-14.855-7.9-27.864-19.727-35.056l-27.51%2075.585zm-15.035-5.473l27.51-75.585A41.32%2041.32%200%200%200%20128%2087c-22.644%200-41%2018.356-41%2041%200%2014.855%207.9%2027.864%2019.727%2035.056z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-phase.svg"
+  ),
+  phaser: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M25.101%2077.628a4.008%204.008%200%200%200%203.997%204.01h16.996c6.632%200%2013.927%205.01%2016.3%2011.202l52.724%2085.231c7.115%2018.564%2018.693%2018.571%2025.857.025L193.91%2092.84c2.39-6.187%209.693-11.202%2016.336-11.202h16.49a4.01%204.01%200%200%200%204-4.01V68.82a4%204%200%200%200-3.994-4.009h-23.508c-8.835%200-18.547%206.702-21.69%2014.962l-47.147%2073.852c-3.533%209.287-9.217%209.262-12.694-.051L75.2%2079.805C72.108%2071.524%2062.44%2064.81%2053.6%2064.81H29.11a4.012%204.012%200%200%200-4.008%204.01v8.808z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-filter-notch.svg"
+  ),
+  delay: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cg%20fill-rule='evenodd'%3e%3cpath%20d='M109.533%20197.602a1.887%201.887%200%200%201-.034%202.76l-7.583%207.066a4.095%204.095%200%200%201-5.714-.152l-32.918-34.095c-1.537-1.592-1.54-4.162-.002-5.746l33.1-34.092c1.536-1.581%204.11-1.658%205.74-.18l7.655%206.94c.82.743.833%201.952.02%202.708l-21.11%2019.659s53.036.129%2071.708.064c18.672-.064%2033.437-16.973%2033.437-34.7%200-7.214-5.578-17.64-5.578-17.64-.498-.99-.273-2.444.483-3.229l8.61-8.94c.764-.794%201.772-.632%202.242.364%200%200%209.212%2018.651%209.212%2028.562%200%2028.035-21.765%2050.882-48.533%2050.882-26.769%200-70.921.201-70.921.201l20.186%2019.568z'/%3e%3cpath%20d='M144.398%2058.435a1.887%201.887%200%200%201%20.034-2.76l7.583-7.066a4.095%204.095%200%200%201%205.714.152l32.918%2034.095c1.537%201.592%201.54%204.162.002%205.746l-33.1%2034.092c-1.536%201.581-4.11%201.658-5.74.18l-7.656-6.94c-.819-.743-.832-1.952-.02-2.708l21.111-19.659s-53.036-.129-71.708-.064c-18.672.064-33.437%2016.973-33.437%2034.7%200%207.214%205.578%2017.64%205.578%2017.64.498.99.273%202.444-.483%203.229l-8.61%208.94c-.764.794-1.772.632-2.242-.364%200%200-9.212-18.65-9.212-28.562%200-28.035%2021.765-50.882%2048.533-50.882%2026.769%200%2070.921-.201%2070.921-.201l-20.186-19.568z'/%3e%3c/g%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-repeat.svg"
+  ),
+  reverb: vendoredIconUrl(
+    () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M128.802%2095.03c-9.229-9.369-22.39-15.228-37-15.228-27.92%200-50.555%2021.402-50.555%2047.803%200%2026.4%2022.634%2047.802%2050.555%2047.802%2014.711%200%2027.954-5.94%2037.193-15.423-12.232-16.88-14.177-19.888-14.177-32.38%200-12.016%205.924-18.458%2014.19-31.142%206.753%2013.293%2013.629%2019.445%2013.629%2031.538%200%2012.802-6.03%2020.525-13.402%2032.614%209.206%209.115%2022.185%2014.793%2036.567%2014.793%2027.922%200%2050.556-21.401%2050.556-47.802%200-26.4-22.634-47.803-50.556-47.803-14.608%200-27.77%205.86-37%2015.228zM128%2075.374C138.501%2068.202%20151.252%2064%20165%2064c35.899%200%2065%2028.654%2065%2064%200%2035.346-29.101%2064-65%2064-13.748%200-26.499-4.202-37-11.374C117.499%20187.798%20104.748%20192%2091%20192c-35.899%200-65-28.654-65-64%200-35.346%2029.101-64%2065-64%2013.748%200%2026.499%204.202%2037%2011.374z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
+    "../assets/fontaudio/fad-stereo.svg"
+  )
+});
+const p = (effectId, endpointID, label, shortLabel, min, max, initial, options = {}) => ({
+  id: `${effectId}.${endpointID}`,
+  effectId,
+  endpointID,
+  label,
+  shortLabel,
+  min,
+  max,
+  initial,
+  step: options.step ?? (max - min) / 1e3,
+  scale: options.scale ?? "linear",
+  unit: options.unit ?? "",
+  choices: options.choices,
+  quick: options.quick ?? false,
+  modulationTargetIndex: options.modulationTargetIndex ?? null
+});
+const PHASER_DIVISIONS = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"];
+const DELAY_DIVISIONS = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"];
+const definitions = [
+  {
+    id: "filter",
+    label: "Global Filter",
+    summary: "Final tone shaping for the complete voice mix.",
+    iconUrl: RACK_ICON_URLS.filter,
+    parameters: [
+      p("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 0, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(choice), quick: true }),
+      p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 2e4, 2e4, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0 }),
+      p("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1 }),
+      p("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 })
+    ]
+  },
+  {
+    id: "drive",
+    label: "Distortion",
+    summary: "Classic clipping or harmonic-residue saturation.",
+    iconUrl: RACK_ICON_URLS.drive,
+    parameters: [
+      p("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Classic", 0), choice("Harmonics", 1)] }),
+      p("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: true, modulationTargetIndex: 3 }),
+      p("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
+      p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 5 }),
+      p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6 }),
+      p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7 })
+    ]
+  },
+  {
+    id: "ott",
+    label: "OTT",
+    summary: "Upward/downward multiband dynamics with envelope matching.",
+    iconUrl: RACK_ICON_URLS.ott,
+    parameters: [
+      p("ott", "ottMix", "Mix", "Mix", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 8 }),
+      p("ott", "ottAmount", "Amount", "Amt", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 9 }),
+      p("ott", "ottTimePercent", "Time", "Time", 10, 1e3, 100, { unit: "%", scale: "log", modulationTargetIndex: 10 }),
+      p("ott", "ottBandDrive", "Band Drive", "Drv", 0, 100, 0, { unit: "%", modulationTargetIndex: 11 }),
+      p("ott", "ottEnvelopeMatch", "Envelope Match", "Env", 0, 100, 0, { unit: "%", modulationTargetIndex: 12 })
+    ]
+  },
+  {
+    id: "chorus",
+    label: "Chorus",
+    summary: "Modulated ensemble, bloom, and pitch-following ring colour.",
+    iconUrl: RACK_ICON_URLS.chorus,
+    parameters: [
+      p("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide Slow", "Classic", "Fast Light"].map(choice) }),
+      p("chorus", "chorusBloomMode", "Bloom", "Blm", 0, 4, 0, { step: 1, choices: ["Clean", "Small", "Large", "Small+Shimmer", "Large+Shimmer"].map(choice) }),
+      p("chorus", "chorusMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 13 }),
+      p("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
+      p("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
+      p("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
+      p("chorus", "chorusRingOffsetMode", "Ring Pitch", "Pitch", 0, 3, 0, { step: 1, choices: ["+5th", "Low 5th", "+Oct", "-Oct"].map(choice) }),
+      p("chorus", "chorusRingFineSemitones", "Ring Fine", "Fine", -2, 2, 0, { unit: "st", modulationTargetIndex: 17 })
+    ]
+  },
+  {
+    id: "flanger",
+    label: "Flanger",
+    summary: "Short swept comb delay with signed feedback.",
+    iconUrl: RACK_ICON_URLS.flanger,
+    parameters: [
+      p("flanger", "flangerRate", "Rate", "Rate", 0.02, 8, 0.35, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 18 }),
+      p("flanger", "flangerDepth", "Depth", "Dpt", 0, 1, 0.6, { quick: true, modulationTargetIndex: 19 }),
+      p("flanger", "flangerFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 20 }),
+      p("flanger", "flangerMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 21 })
+    ]
+  },
+  {
+    id: "phaser",
+    label: "Phaser",
+    summary: "Eight-pole swept all-pass network with Free/Sync rate.",
+    iconUrl: RACK_ICON_URLS.phaser,
+    parameters: [
+      p("phaser", "phaserRateMode", "Rate Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
+      p("phaser", "phaserRate", "Rate", "Rate", 0.02, 8, 0.3, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 22 }),
+      p("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: PHASER_DIVISIONS.map(choice) }),
+      p("phaser", "phaserDepth", "Depth", "Dpt", 0, 1, 0.7, { modulationTargetIndex: 23 }),
+      p("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24 }),
+      p("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
+      p("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
+      p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 27 })
+    ]
+  },
+  {
+    id: "delay",
+    label: "Delay",
+    summary: "Tape-gliding stereo delay with Free/Sync timing.",
+    iconUrl: RACK_ICON_URLS.delay,
+    parameters: [
+      p("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
+      p("delay", "delayTime", "Time", "Time", 1, 2e3, 375, { unit: "ms", scale: "log", quick: true, modulationTargetIndex: 28 }),
+      p("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: DELAY_DIVISIONS.map(choice) }),
+      p("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
+      p("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30 }),
+      p("delay", "delayMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 31 })
+    ]
+  },
+  {
+    id: "reverb",
+    label: "Reverb",
+    summary: "Modulated early reflections into a four-line stereo tank.",
+    iconUrl: RACK_ICON_URLS.reverb,
+    parameters: [
+      p("reverb", "reverbSize", "Size", "Size", 0, 1, 0.5, { quick: true, modulationTargetIndex: 32 }),
+      p("reverb", "reverbDecay", "Decay", "Dcy", 0, 1, 0.4, { quick: true, modulationTargetIndex: 33 }),
+      p("reverb", "reverbDamping", "Damping", "Dmp", 0, 1, 0.5, { modulationTargetIndex: 34 }),
+      p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 35 })
+    ]
+  }
+];
+const RACK_EFFECT_DESCRIPTORS = definitions;
+function allRackParameterDescriptors() {
+  return RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters);
+}
 const MSEG_BODY_SAMPLES = 2048;
 const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;
 const MSEG_CURVE_POWER_LIMIT = 20;
@@ -804,11 +979,18 @@ const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
 const MODULATION_MSEG_PLAYBACK_ENDPOINT_ID = "modulationMsegPlayback";
 const MODULATION_ENV_ENDPOINT_ID = "modulationEnvelope";
 const MODULATION_ROUTE_ENDPOINT_ID = "modulationRoute";
+const RACK_MODULATION_ROUTE_ENDPOINT_ID = "rackModulationRoute";
+const MOD_TARGET_RACK_BASE = 100;
+const MOD_REDUCER_UNSET = 0;
+const MOD_REDUCER_MAX = 1;
+const MOD_REDUCER_MEAN = 2;
 const MOD_SOURCE_MSEG = 1;
 const MOD_SOURCE_ENV = 2;
 const MOD_SOURCE_VELOCITY = 3;
 const MOD_SOURCE_PRESSURE = 4;
 const MOD_SOURCE_SLIDE = 5;
+const MOD_SOURCE_MACRO = 6;
+const MODULATION_MACRO_SLOT_COUNT = 4;
 const MOD_POLARITY_UNIPOLAR = 0;
 const MOD_POLARITY_BIPOLAR = 1;
 const MOD_TARGET_WAVETABLE_POSITION = 1;
@@ -824,6 +1006,7 @@ const MOD_TARGET_UNISON_WIDTH = 10;
 const MOD_TARGET_UNISON_WT_POSITION_SPREAD = 11;
 const MOD_TARGET_UNISON_WARP_SPREAD = 12;
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"];
+const MACRO_SLOT_NAMES = ["Macro 1", "Macro 2", "Macro 3", "Macro 4"];
 const ENV_SLOT_NAMES = ["Env 1", "Env 2", "Env 3"];
 const ENV_MIN_SECONDS = 1e-3;
 const ENV_MAX_SECONDS = 10;
@@ -843,6 +1026,28 @@ const ROUTE_AMOUNT_LIMITS = {
   unisonWavetablePositionSpread: { min: -1, max: 1 },
   unisonWarpSpread: { min: -1, max: 1 }
 };
+const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter) => parameter.modulationTargetIndex !== null);
+const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
+  RACK_MODULATION_PARAMETERS.map((parameter) => [`rack.${parameter.endpointID}`, parameter])
+);
+[
+  { value: "wavetablePosition", label: "WT POS" },
+  { value: "warpAmount", label: "WARP" },
+  { value: "filterCutoffOctaves", label: "CUTOFF" },
+  { value: "filterQ", label: "RES" },
+  { value: "pitchSemitones", label: "PITCH" },
+  { value: "ampGainDb", label: "AMP" },
+  { value: "pan", label: "PAN" },
+  { value: "unisonDetune", label: "UNI DET" },
+  { value: "unisonBlend", label: "UNI BLEND" },
+  { value: "unisonWidth", label: "UNI WIDTH" },
+  { value: "unisonWavetablePositionSpread", label: "UNI WT" },
+  { value: "unisonWarpSpread", label: "UNI WARP" },
+  ...RACK_MODULATION_PARAMETERS.map((parameter) => ({
+    value: `rack.${parameter.endpointID}`,
+    label: `${parameter.effectId.toUpperCase()} ${parameter.shortLabel.toUpperCase()}`
+  }))
+];
 let generatedRouteIdCounter = 1;
 function clamp$2(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -850,6 +1055,26 @@ function clamp$2(value, min, max) {
 function clampEnvSeconds(value, fallback) {
   const numeric = Number(value);
   return clamp$2(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+}
+function isRackModulationTarget(targetKind) {
+  return RACK_MODULATION_PARAMETER_BY_KIND.has(targetKind);
+}
+function isVoiceModulationSource(sourceKind) {
+  return sourceKind !== "macro";
+}
+function getRackRouteAmountLimit(descriptor) {
+  if (descriptor.scale === "log") {
+    return { min: -6, max: 6 };
+  }
+  const span = descriptor.max - descriptor.min;
+  return { min: -span, max: span };
+}
+function getRouteAmountLimit(targetKind) {
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter !== void 0) {
+    return getRackRouteAmountLimit(rackParameter);
+  }
+  return ROUTE_AMOUNT_LIMITS[targetKind];
 }
 function createGeneratedRouteId() {
   const routeId = `mod-route-auto-${generatedRouteIdCounter}`;
@@ -869,28 +1094,35 @@ function polarityToCode(polarity) {
   return polarity === "bipolar" ? MOD_POLARITY_BIPOLAR : MOD_POLARITY_UNIPOLAR;
 }
 function clampModulationRouteAmount(targetKind, value) {
-  const limits = ROUTE_AMOUNT_LIMITS[targetKind];
+  const limits = getRouteAmountLimit(targetKind);
   const numeric = Number(value);
   return clamp$2(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
 function normalizeSourceKind(value) {
-  if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide") {
+  if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide" || value === "macro") {
     return value;
   }
   return "mseg";
 }
 function normalizeTargetKind(value) {
+  if (typeof value === "string" && RACK_MODULATION_PARAMETER_BY_KIND.has(value)) {
+    return value;
+  }
   if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan" || value === "unisonDetune" || value === "unisonBlend" || value === "unisonWidth" || value === "unisonWavetablePositionSpread" || value === "unisonWarpSpread") {
     return value;
   }
   return "wavetablePosition";
+}
+function normalizeMacroName(value, slotIndex) {
+  const fallback = MACRO_SLOT_NAMES[slotIndex] ?? `Macro ${slotIndex + 1}`;
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 function normalizeSourceSlot(sourceKind, rawSlot) {
   const numericSlot = Math.round(Number(rawSlot));
   if (sourceKind === "velocity" || sourceKind === "pressure" || sourceKind === "slide") {
     return null;
   }
-  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
+  const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : sourceKind === "macro" ? MODULATION_MACRO_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
   return clamp$2(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
@@ -922,6 +1154,7 @@ function createDefaultRoute(overrides = {}) {
     polarity: "unipolar",
     targetKind: "wavetablePosition",
     amount: 0,
+    reducer: "max",
     ...overrides
   };
 }
@@ -937,7 +1170,8 @@ function normalizeRoute(value, routeIndex = 0) {
     sourceSlot: normalizeSourceSlot(sourceKind, nextValue.sourceSlot),
     polarity: normalizePolarity(nextValue.polarity),
     targetKind,
-    amount: clampModulationRouteAmount(targetKind, numericAmount)
+    amount: clampModulationRouteAmount(targetKind, numericAmount),
+    reducer: nextValue.reducer === "mean" ? "mean" : "max"
   };
 }
 function normalizeMsegSlot(value, slotIndex) {
@@ -957,7 +1191,15 @@ function createDefaultModulationState() {
     version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
-    routes: [createDefaultRoute({ id: "mod-route-1" })]
+    routes: [
+      createDefaultRoute({ id: "mod-route-1", amount: 1 }),
+      createDefaultRoute({
+        id: "mod-route-2",
+        targetKind: "filterCutoffOctaves",
+        amount: 4
+      })
+    ],
+    macroNames: MACRO_SLOT_NAMES.slice()
   };
 }
 function normalizeModulationState(value = createDefaultModulationState()) {
@@ -965,12 +1207,17 @@ function normalizeModulationState(value = createDefaultModulationState()) {
   const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
   const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
   const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
+  const inputMacroNames = Array.isArray(nextValue.macroNames) ? nextValue.macroNames : [];
   return {
     format: "cosimo.modulation",
     version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
-    routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
+    routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)),
+    macroNames: Array.from(
+      { length: MODULATION_MACRO_SLOT_COUNT },
+      (_, slotIndex) => normalizeMacroName(inputMacroNames[slotIndex], slotIndex)
+    )
   };
 }
 function deserializeModulationState(value) {
@@ -988,9 +1235,14 @@ function sourceKindToCode(sourceKind) {
   if (sourceKind === "env") return MOD_SOURCE_ENV;
   if (sourceKind === "velocity") return MOD_SOURCE_VELOCITY;
   if (sourceKind === "pressure") return MOD_SOURCE_PRESSURE;
-  return MOD_SOURCE_SLIDE;
+  if (sourceKind === "slide") return MOD_SOURCE_SLIDE;
+  return MOD_SOURCE_MACRO;
 }
 function targetKindToCode(targetKind) {
+  const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
+  if (rackParameter?.modulationTargetIndex !== null && rackParameter?.modulationTargetIndex !== void 0) {
+    return MOD_TARGET_RACK_BASE + rackParameter.modulationTargetIndex;
+  }
   if (targetKind === "wavetablePosition") return MOD_TARGET_WAVETABLE_POSITION;
   if (targetKind === "warpAmount") return MOD_TARGET_WARP_AMOUNT;
   if (targetKind === "filterCutoffOctaves") return MOD_TARGET_FILTER_CUTOFF_OCTAVES;
@@ -1046,6 +1298,13 @@ function toRouteUpload(routeIndex, route) {
     amount: isEnabled ? normalizedRoute?.amount ?? 0 : 0
   };
 }
+function toRackRouteUpload(routeIndex, route) {
+  const normalizedRoute = normalizeRoute(route);
+  return {
+    ...toRouteUpload(routeIndex, normalizedRoute),
+    reducerKind: isVoiceModulationSource(normalizedRoute.sourceKind) ? normalizedRoute.reducer === "mean" ? MOD_REDUCER_MEAN : MOD_REDUCER_MAX : MOD_REDUCER_UNSET
+  };
+}
 function buildModulationRuntimeEvents(stateValue) {
   const state = normalizeModulationState(stateValue);
   const events = [
@@ -1074,9 +1333,10 @@ function buildModulationRuntimeEvents(stateValue) {
     });
   }
   for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
+    const route = state.routes[routeIndex] ?? null;
     events.push({
-      endpointID: MODULATION_ROUTE_ENDPOINT_ID,
-      value: toRouteUpload(routeIndex, state.routes[routeIndex] ?? null)
+      endpointID: route !== null && isRackModulationTarget(route.targetKind) ? RACK_MODULATION_ROUTE_ENDPOINT_ID : MODULATION_ROUTE_ENDPOINT_ID,
+      value: route !== null && isRackModulationTarget(route.targetKind) ? toRackRouteUpload(routeIndex, route) : toRouteUpload(routeIndex, route)
     });
   }
   events.push({ endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 1 });
@@ -1154,7 +1414,6 @@ function createDefaultArticulationParameterSnapshot() {
     distortionWet: 0,
     distortionWetHPHz: 40,
     distortionWetLPHz: 18e3,
-    chorusEnabled: 0,
     chorusMix: 0,
     chorusMotionMode: 1,
     chorusBloomMode: 0,
@@ -1206,7 +1465,6 @@ function normalizeArticulationParameterSnapshot(value) {
     distortionWet: normalizeNumber(nextValue.distortionWet, defaults.distortionWet, 0, 1),
     distortionWetHPHz: normalizeNumber(nextValue.distortionWetHPHz, defaults.distortionWetHPHz, 20, 4e3),
     distortionWetLPHz: normalizeNumber(nextValue.distortionWetLPHz, defaults.distortionWetLPHz, 20, 2e4),
-    chorusEnabled: normalizeInteger(nextValue.chorusEnabled, defaults.chorusEnabled, 0, 1),
     chorusMix: normalizeNumber(nextValue.chorusMix, defaults.chorusMix, 0, 1),
     chorusMotionMode: normalizeInteger(nextValue.chorusMotionMode, defaults.chorusMotionMode, 0, 3),
     chorusBloomMode: normalizeInteger(nextValue.chorusBloomMode, defaults.chorusBloomMode, 0, 4),
@@ -1460,7 +1718,7 @@ function buildArticulationRuntimeUploads(bankValue, currentRoutesValue = []) {
     };
   });
 }
-const runtimeStateEndpointID$2 = "runtimeState";
+const runtimeStateEndpointID$1 = "runtimeState";
 function hasOwnValue$1(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
@@ -1508,7 +1766,7 @@ class ArticulationWorkerService {
     }
     this.started = true;
     this.connection.addStoredStateValueListener?.(this.handleStoredStateValueBound);
-    this.connection.addEndpointListener?.(runtimeStateEndpointID$2, this.handleRuntimeStateBound);
+    this.connection.addEndpointListener?.(runtimeStateEndpointID$1, this.handleRuntimeStateBound);
     this.requestBootState();
   }
   stop() {
@@ -1517,7 +1775,7 @@ class ArticulationWorkerService {
     }
     this.started = false;
     this.connection.removeStoredStateValueListener?.(this.handleStoredStateValueBound);
-    this.connection.removeEndpointListener?.(runtimeStateEndpointID$2, this.handleRuntimeStateBound);
+    this.connection.removeEndpointListener?.(runtimeStateEndpointID$1, this.handleRuntimeStateBound);
   }
   requestBootState() {
     if (typeof this.connection.requestFullStoredState === "function") {
@@ -1584,6 +1842,19 @@ class ArticulationWorkerService {
 function createArticulationWorkerService(connection) {
   return new ArticulationWorkerService(connection);
 }
+const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
+function getRuntimeDspSessionId(value) {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return 0;
+  }
+  const dspSessionId = Number(Reflect.get(value, "dspSessionId"));
+  return Number.isFinite(dspSessionId) ? Math.trunc(dspSessionId) : 0;
+}
+const RUNTIME_DSP_SESSION_DEPENDENCY = {
+  endpointID: RUNTIME_STATE_ENDPOINT_ID,
+  required: true,
+  mapValue: getRuntimeDspSessionId
+};
 function hasOwnValue(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key);
 }
@@ -1784,24 +2055,160 @@ function dedupeRuntimeEndpointDependencies(dependencies) {
 function createStoredStateRuntimeMirror(connection, options) {
   return new StoredStateRuntimeMirror(connection, options);
 }
-const runtimeStateEndpointID$1 = "runtimeState";
-function getRuntimeDspSessionId(value) {
-  if (!value || typeof value !== "object") {
-    return 0;
-  }
-  return Math.trunc(Number(value.dspSessionId) || 0);
-}
 function createModulationWorkerService(connection) {
   return createStoredStateRuntimeMirror(connection, {
     stateKey: MODULATION_STATE_KEY,
-    runtimeEndpointDependencies: [{
-      endpointID: runtimeStateEndpointID$1,
-      required: true,
-      mapValue: getRuntimeDspSessionId
-    }],
+    runtimeEndpointDependencies: [RUNTIME_DSP_SESSION_DEPENDENCY],
     applyDefaultRuntimeStateWhenMissing: true,
     deserializeStoredState: deserializeModulationState,
     buildRuntimeEvents: ({ state }) => buildModulationRuntimeEvents(state)
+  });
+}
+const RACK_STATE_KEY = "rack.v1";
+const RACK_ORDER_ENDPOINT_ID = "rackOrder";
+const RACK_ENABLE_ENDPOINT_ID = "rackEnable";
+const RACK_EFFECT_ORDER = Object.freeze([
+  "filter",
+  "drive",
+  "ott",
+  "chorus",
+  "flanger",
+  "phaser",
+  "delay",
+  "reverb"
+]);
+const EFFECT_ID_TO_WIRE_ID = Object.freeze({
+  filter: 0,
+  drive: 1,
+  ott: 2,
+  chorus: 3,
+  flanger: 4,
+  phaser: 5,
+  delay: 6,
+  reverb: 7
+});
+new Map(
+  RACK_EFFECT_ORDER.map((effectId) => [EFFECT_ID_TO_WIRE_ID[effectId], effectId])
+);
+function defaultEnabled() {
+  return {
+    filter: false,
+    drive: false,
+    ott: false,
+    chorus: false,
+    flanger: false,
+    phaser: false,
+    delay: false,
+    reverb: false
+  };
+}
+function createDefaultRackState() {
+  return {
+    format: "cosimo.rack",
+    version: 1,
+    order: [...RACK_EFFECT_ORDER],
+    enabled: defaultEnabled()
+  };
+}
+function parseJsonDocument(input) {
+  if (typeof input !== "string") {
+    return { _tag: "json", value: input };
+  }
+  if (input.trim().length === 0) {
+    return { _tag: "err", message: `${RACK_STATE_KEY} must not be empty` };
+  }
+  try {
+    const value = JSON.parse(input);
+    return { _tag: "json", value };
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    return { _tag: "err", message: `${RACK_STATE_KEY} is not valid JSON: ${detail}` };
+  }
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseEffectId(input) {
+  if (typeof input !== "string") {
+    return null;
+  }
+  return RACK_EFFECT_ORDER.find((candidate) => candidate === input) ?? null;
+}
+function parseRackState(input) {
+  const document = parseJsonDocument(input);
+  if (document._tag === "err") {
+    return document;
+  }
+  if (!isRecord(document.value)) {
+    return { _tag: "err", message: `${RACK_STATE_KEY} must be an object` };
+  }
+  const allowedKeys = /* @__PURE__ */ new Set(["format", "version", "order", "enabled"]);
+  for (const key of Reflect.ownKeys(document.value)) {
+    if (typeof key !== "string" || !allowedKeys.has(key)) {
+      return { _tag: "err", message: `${RACK_STATE_KEY} has unexpected field ${String(key)}` };
+    }
+  }
+  if (document.value.format !== "cosimo.rack" || document.value.version !== 1) {
+    return { _tag: "err", message: `${RACK_STATE_KEY} must be cosimo.rack version 1` };
+  }
+  if (!Array.isArray(document.value.order) || document.value.order.length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${RACK_STATE_KEY}.order must contain every effect once` };
+  }
+  const order = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const rawEffectId of document.value.order) {
+    const effectId = parseEffectId(rawEffectId);
+    if (effectId === null || seen.has(effectId)) {
+      return { _tag: "err", message: `${RACK_STATE_KEY}.order is not a complete permutation` };
+    }
+    seen.add(effectId);
+    order.push(effectId);
+  }
+  if (!isRecord(document.value.enabled)) {
+    return { _tag: "err", message: `${RACK_STATE_KEY}.enabled must be an object` };
+  }
+  if (Reflect.ownKeys(document.value.enabled).length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${RACK_STATE_KEY}.enabled must contain every effect once` };
+  }
+  const enabled = defaultEnabled();
+  for (const effectId of RACK_EFFECT_ORDER) {
+    const rawEnabled = document.value.enabled[effectId];
+    if (typeof rawEnabled !== "boolean") {
+      return { _tag: "err", message: `${RACK_STATE_KEY}.enabled.${effectId} must be boolean` };
+    }
+    enabled[effectId] = rawEnabled;
+  }
+  return {
+    _tag: "ok",
+    value: { format: "cosimo.rack", version: 1, order, enabled }
+  };
+}
+function deserializeRackState(input) {
+  if (input === void 0) {
+    return createDefaultRackState();
+  }
+  const parsed = parseRackState(input);
+  return parsed._tag === "ok" ? parsed.value : createDefaultRackState();
+}
+function buildRackRuntimeEvents(state) {
+  return [
+    {
+      endpointID: RACK_ORDER_ENDPOINT_ID,
+      value: { moduleIds: state.order.map((effectId) => EFFECT_ID_TO_WIRE_ID[effectId]) }
+    },
+    {
+      endpointID: RACK_ENABLE_ENDPOINT_ID,
+      value: { enabledFlags: RACK_EFFECT_ORDER.map((effectId) => state.enabled[effectId] ? 1 : 0) }
+    }
+  ];
+}
+function createRackStateWorkerService(connection) {
+  return createStoredStateRuntimeMirror(connection, {
+    stateKey: RACK_STATE_KEY,
+    runtimeEndpointDependencies: [RUNTIME_DSP_SESSION_DEPENDENCY],
+    applyDefaultRuntimeStateWhenMissing: true,
+    deserializeStoredState: deserializeRackState,
+    buildRuntimeEvents: ({ state }) => [...buildRackRuntimeEvents(state)]
   });
 }
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
@@ -2739,6 +3146,7 @@ function createWavetableWorkerController(connection, options = {}) {
 async function runWavetableWorker(connection, options = {}) {
   return startPatchWorkerServices(connection, [
     createModulationWorkerService,
+    createRackStateWorkerService,
     createArticulationWorkerService,
     () => createWavetableWorkerController(connection, options)
   ]);

@@ -57,7 +57,7 @@ function seedDemoPatch(adapter) {
     expectOkValue(commands.addMapping({ targetId: "wavetable.warp", sourceId: "envelope-1" }), "seed warp mapping");
     commands.setMappingAmount("wavetable.warp::envelope-1", 40, { _tag: "patchBase" });
     expectOkValue(commands.addMapping({ targetId: "wavetable.index", sourceId: "mseg-1" }), "seed index mapping");
-    expectOkValue(commands.addMapping({ targetId: "phaser.depth", sourceId: "macro-1" }), "seed rack mapping");
+    expectOkValue(commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" }), "seed rack mapping");
     return { articulationIds: [a, b, c] };
 }
 
@@ -143,20 +143,20 @@ function contractSuite(adapterName, makeAdapter) {
     // ── Mappings ──────────────────────────────────────────────────────────
 
     t("addMapping creates one enabled unipolar mapping with the default amount", (adapter) => {
-        const result = adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "velocity" });
+        const result = adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
         assert.equal(result._tag, "ok");
         const mapping = adapter.getSnapshot().patch.mappings.find((m) => m.id === result.value);
-        assert.equal(mapping.targetId, "phaser.depth");
+        assert.equal(mapping.targetId, "phaser.phaserDepth");
         assert.equal(mapping.sourceId, "velocity");
         assert.equal(mapping.polarity, "Unipolar");
         assert.equal(mapping.enabled, true);
-        assert.equal(mapping.amount, 25, "default = 25% of the percent spec magnitude");
+        assert.equal(mapping.amount, 0.25, "default = 25% of the parameter span");
     });
 
     t("a second mapping for the same pair is MappingAlreadyExists", (adapter) => {
-        const first = adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "velocity" });
+        const first = adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
         assert.equal(first._tag, "ok");
-        const second = adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "velocity" });
+        const second = adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "velocity" });
         assert.equal(second._tag, "err");
         assert.equal(second.error._tag, "MappingAlreadyExists");
     });
@@ -166,9 +166,11 @@ function contractSuite(adapterName, makeAdapter) {
         const snapshot = adapter.getSnapshot();
         const sources = snapshot.patch.sources.map((source) => source.id);
         const targets = [
-            "filter.cutoff", "filter.resonance", "filter.drive", "drive.amount", "drive.tone",
-            "drive.mix", "ott.depth", "ott.time", "ott.mix", "chorus.rate", "chorus.depth",
-            "chorus.delay", "chorus.mix", "flanger.rate", "flanger.depth",
+            "filter.globalFilterCutoff", "filter.globalFilterResonance", "filter.globalFilterDrive",
+            "drive.distortionDriveDb", "drive.distortionKnee", "drive.distortionWet",
+            "ott.ottAmount", "ott.ottTimePercent", "ott.ottMix", "chorus.chorusMix",
+            "chorus.chorusTone", "chorus.chorusFeedback", "chorus.chorusRingAmount",
+            "flanger.flangerRate", "flanger.flangerDepth",
         ];
         let refused = null;
         let added = 0;
@@ -438,7 +440,7 @@ function contractSuite(adapterName, makeAdapter) {
     t("captureMotion without a candidate is null, with one it mints a mapped mseg", (adapter) => {
         assert.equal(adapter.commands.captureMotion(), null);
         adapter.commands.beginTrigger();
-        adapter.commands.setParameter({ targetId: "phaser.frequency", value: 0.8, layer: { _tag: "patchBase" } });
+        adapter.commands.setParameter({ targetId: "phaser.phaserFrequency", value: 0.8, layer: { _tag: "patchBase" } });
         adapter.commands.endTrigger();
         const captured = adapter.commands.captureMotion();
         assert.notEqual(captured, null);
@@ -446,7 +448,7 @@ function contractSuite(adapterName, makeAdapter) {
         const source = patch.sources.find((s) => s.id === captured);
         assert.equal(source.type, "mseg");
         const capturedMapping = patch.mappings.find(
-            (m) => m.sourceId === captured && m.targetId === "phaser.frequency",
+            (m) => m.sourceId === captured && m.targetId === "phaser.phaserFrequency",
         );
         assert.notEqual(capturedMapping, undefined, "capture commits to an MSEG mapped to the moved parameter");
         assert.equal(capturedMapping.amount, 6, "capture commits at FULL spec amount (±6 oct), same on every adapter");

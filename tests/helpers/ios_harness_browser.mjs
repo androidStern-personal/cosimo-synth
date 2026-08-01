@@ -28,7 +28,6 @@ export function createIOSHarnessInitScript(baseUrl) {
             ["distortionWet", 0],
             ["distortionWetHPHz", 40],
             ["distortionWetLPHz", 18000],
-            ["chorusEnabled", 0],
             ["chorusMix", 0],
             ["chorusMotionMode", 1],
             ["chorusBloomMode", 0],
@@ -162,11 +161,6 @@ export function createIOSHarnessInitScript(baseUrl) {
                         endpointID: "distortionWetLPHz",
                         purpose: "parameter",
                         annotation: { name: "Distortion Wet LP", min: 20, max: 20000, init: 18000 },
-                    },
-                    {
-                        endpointID: "chorusEnabled",
-                        purpose: "parameter",
-                        annotation: { name: "Chorus On", min: 0, max: 1, init: 0 },
                     },
                     {
                         endpointID: "chorusMix",
@@ -377,7 +371,6 @@ export function createIOSHarnessInitScript(baseUrl) {
                     || endpointID === "wavetableSelect"
                     || endpointID === "playMode"
                     || endpointID === "glideTime"
-                    || endpointID === "chorusEnabled"
                     || endpointID === "chorusMix"
                     || endpointID === "chorusMotionMode"
                     || endpointID === "chorusBloomMode"

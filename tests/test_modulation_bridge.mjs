@@ -13,6 +13,7 @@ import {
     MODULATION_MSEG_BUFFER_ENDPOINT_ID,
     MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
     MODULATION_ROUTE_ENDPOINT_ID,
+    RACK_MODULATION_ROUTE_ENDPOINT_ID,
     MODULATION_STATE_KEY,
     ModulationRuntimeBridge,
     buildModulationRuntimeEvents,
@@ -166,6 +167,34 @@ test("modulation runtime event builder converts defaults into a complete Cmajor 
     assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[2].value.enabled, false);
 });
 
+test("rack modulation uploads use the rack endpoint and the requested voice reducer", () => {
+    const state = createDefaultModulationState();
+    state.routes = [{
+        id: "rack-route",
+        enabled: true,
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        polarity: "bipolar",
+        targetKind: "rack.reverbDecay",
+        amount: 0.35,
+        reducer: "mean",
+    }];
+    const events = buildModulationRuntimeEvents(state);
+    assert.deepEqual(endpointEvents({ events }, RACK_MODULATION_ROUTE_ENDPOINT_ID), [{
+        endpointID: RACK_MODULATION_ROUTE_ENDPOINT_ID,
+        value: {
+            routeIndex: 0,
+            enabled: true,
+            sourceKind: 1,
+            sourceSlot: 1,
+            polarityKind: 1,
+            targetKind: 133,
+            amount: 0.35,
+            reducerKind: 2,
+        },
+    }]);
+});
+
 test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploading", () => {
     const customState = createDefaultModulationState();
     customState.msegSlots[1].shapeA = {
@@ -199,6 +228,7 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
         polarity: "unipolar",
         targetKind: "filterCutoffOctaves",
         amount: 4.0,
+        reducer: "max",
     }];
 
     const patchConnection = new FakePatchConnection({
@@ -250,6 +280,7 @@ test("modulation runtime event builder converts saved state into slot_envelope_a
         polarity: "unipolar",
         targetKind: "filterCutoffOctaves",
         amount: 4.0,
+        reducer: "max",
     }];
 
     const events = buildModulationRuntimeEvents(customState);
@@ -362,6 +393,7 @@ test("replacing_routes_preserves_signed_amounts_and_disables_the_unused_tail", (
             polarity: "unipolar",
             targetKind: "filterCutoffOctaves",
             amount: -2.5,
+            reducer: "max",
         },
         {
             id: "route-b",
@@ -371,6 +403,7 @@ test("replacing_routes_preserves_signed_amounts_and_disables_the_unused_tail", (
             polarity: "bipolar",
             targetKind: "pan",
             amount: 0.5,
+            reducer: "max",
         },
     ]);
 

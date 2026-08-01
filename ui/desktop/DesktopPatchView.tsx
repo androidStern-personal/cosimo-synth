@@ -4,6 +4,7 @@ import {
     useMemo,
     useRef,
     useState,
+    type DragEvent as ReactDragEvent,
     type ReactNode,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -15,7 +16,27 @@ import {
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
 import type { ResourceClient } from "../shared/resource-client";
-import type { PatchControlBinding } from "../shared/patch-controls";
+import {
+    usePatchParameterBinding,
+    type PatchControlBinding,
+} from "../shared/patch-controls";
+import {
+    RACK_EFFECT_DESCRIPTORS,
+    formatRackParameterValue,
+    getRackEffectDescriptor,
+    type RackParameterDescriptor,
+} from "../shared/rack-parameter-descriptors";
+import {
+    EFFECTIVE_RACK_STATE_ENDPOINT_ID,
+    RACK_STATE_KEY,
+    commitRackState,
+    createDefaultRackState,
+    deserializeRackState,
+    parseEffectiveRackState,
+    serializeRackState,
+    type RackState,
+} from "../shared/rack-state";
+import type { EffectModuleId } from "../shared/target-descriptor";
 import {
     type SynthFocusBindings,
     type SynthKeyboardInputMode,
@@ -57,6 +78,7 @@ import { DesktopModMatrix } from "./desktop-mod-matrix";
 import {
     SYNTH_PRESET_EFFECT_ID,
     useSynthPatchViewModel,
+    type SynthPatchViewModel,
 } from "../shared/synth-hooks";
 import { createPresetBar } from "../shared/effects/preset-bar";
 import { createStandaloneEffectPresetController } from "../shared/effects/standalone-effect-presets";
@@ -88,6 +110,7 @@ import {
     MODULATION_ENV_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
     type ModulationRoute,
+    type ModulationRouteUpdate,
 } from "../shared/modulation";
 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
@@ -288,8 +311,7 @@ type DistortionSectionProps = {
     className?: string;
 };
 
-type EffectsRackSectionProps = {
-    chorusEnabled: PatchControlBinding<number>;
+type ChorusParameterBindings = {
     chorusMix: PatchControlBinding<number>;
     chorusMotionMode: PatchControlBinding<number>;
     chorusBloomMode: PatchControlBinding<number>;
@@ -298,10 +320,13 @@ type EffectsRackSectionProps = {
     chorusRingAmount: PatchControlBinding<number>;
     chorusRingOffsetMode: PatchControlBinding<number>;
     chorusRingFineSemitones: PatchControlBinding<number>;
+};
+
+type EffectsRackSectionProps = Omit<DistortionSectionProps, "className"> & ChorusParameterBindings & {
     className?: string;
 };
 
-type ChorusEffectColumnProps = Omit<EffectsRackSectionProps, "className">;
+type ChorusEffectColumnProps = ChorusParameterBindings;
 
 type MsegEditorModalProps = {
     isOpen: boolean;
@@ -347,7 +372,7 @@ type ModulationMatrixSectionProps = {
     onEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
     onAddRoute: () => void;
     onRemoveRoute: (routeIndex: number) => void;
-    onRouteChange: (routeIndex: number, nextRoute: ModulationRoute) => void;
+    onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     msegRateFocusBindings: SynthFocusBindings;
 };
 
@@ -2063,7 +2088,6 @@ function ChorusModeRow({
 }
 
 function ChorusEffectColumn({
-    chorusEnabled,
     chorusMix,
     chorusMotionMode,
     chorusBloomMode,
@@ -2076,28 +2100,16 @@ function ChorusEffectColumn({
     const motionIndex = clamp(Math.round(Number(chorusMotionMode.value) || 0), 0, CHORUS_MOTION_MODE_OPTIONS.length - 1);
     const bloomIndex = clamp(Math.round(Number(chorusBloomMode.value) || 0), 0, CHORUS_BLOOM_MODE_OPTIONS.length - 1);
     const ringOffsetIndex = clamp(Math.round(Number(chorusRingOffsetMode.value) || 0), 0, CHORUS_RING_OFFSET_MODE_OPTIONS.length - 1);
-    const enabled = Math.round(Number(chorusEnabled.value) || 0) === 1;
 
     return (
         <section
             data-role="chorus-effect-column"
             data-section-accent="ion"
-            className="synth-grid-card-shell relative flex h-full min-w-0 flex-col gap-1.5 rounded-[12px] p-2"
+            className="synth-grid-card-shell relative flex h-full min-h-[220px] min-w-0 flex-col gap-1.5 rounded-[12px] p-2"
         >
             <div className="flex items-center justify-between gap-2">
                 <span className="synth-section-title">Chorus</span>
-                <button
-                        data-role="chorus-enabled-control"
-                        type="button"
-                        className={`rounded-[7px] border px-2 py-1 text-[8px] font-bold uppercase tracking-[0.12em] transition ${
-                            enabled
-                            ? "synth-accent-active-button"
-                            : "border-white/[0.07] bg-white/[0.025] text-slate-400/70"
-                        }`}
-                    onClick={() => chorusEnabled.commitValue(enabled ? 0 : 1)}
-                >
-                    {enabled ? "On" : "Off"}
-                </button>
+                <span className="text-[8px] uppercase tracking-[0.12em] text-slate-400/55">Rack enabled</span>
             </div>
 
             <div className="grid min-w-0 gap-0.5">
@@ -2196,19 +2208,267 @@ function ChorusEffectColumn({
     );
 }
 
-function ReservedEffectColumn({ label }: { label: string }) {
+function readRackStateFromFullStoredState(fullState: Record<string, unknown>) {
+    const values = fullState.values && typeof fullState.values === "object"
+        ? fullState.values as Record<string, unknown>
+        : {};
+    return Object.hasOwn(values, RACK_STATE_KEY) ? values[RACK_STATE_KEY] : fullState[RACK_STATE_KEY];
+}
+
+function useRackState() {
+    const patchConnection = usePatchConnection();
+    const [rackState, setRackState] = useState<RackState>(createDefaultRackState);
+
+    useEffect(() => {
+        const storedStateListener = (message: unknown) => {
+            if (typeof message !== "object" || message === null || Array.isArray(message)) {
+                return;
+            }
+            const key = Reflect.get(message, "key");
+            if (key === RACK_STATE_KEY) {
+                setRackState(deserializeRackState(Reflect.get(message, "value")));
+            }
+        };
+        const effectiveStateListener = (message: unknown) => {
+            const effectiveState = parseEffectiveRackState(message);
+            if (effectiveState === null) {
+                return;
+            }
+            setRackState({
+                format: "cosimo.rack",
+                version: 1,
+                order: effectiveState.order,
+                enabled: effectiveState.enabled,
+            });
+        };
+
+        patchConnection.addStoredStateValueListener?.(storedStateListener);
+        patchConnection.addEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
+        patchConnection.requestFullStoredState?.((fullState) => {
+            setRackState(deserializeRackState(readRackStateFromFullStoredState(fullState)));
+        });
+
+        return () => {
+            patchConnection.removeStoredStateValueListener?.(storedStateListener);
+            patchConnection.removeEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
+        };
+    }, [patchConnection]);
+
+    const commit = useCallback((nextState: RackState) => {
+        setRackState(nextState);
+        commitRackState(patchConnection, nextState);
+        patchConnection.sendStoredStateValue?.(RACK_STATE_KEY, serializeRackState(nextState));
+    }, [patchConnection]);
+
+    return { rackState, commit };
+}
+
+function normalizedRackParameterValue(descriptor: RackParameterDescriptor, value: number) {
+    if (descriptor.scale === "log") {
+        return Math.log(clamp(value, descriptor.min, descriptor.max) / descriptor.min)
+            / Math.log(descriptor.max / descriptor.min);
+    }
+    return (clamp(value, descriptor.min, descriptor.max) - descriptor.min) / (descriptor.max - descriptor.min);
+}
+
+function rackParameterValueFromNormalized(descriptor: RackParameterDescriptor, normalizedValue: number) {
+    const normalized = clamp(normalizedValue, 0, 1);
+    return descriptor.scale === "log"
+        ? descriptor.min * (descriptor.max / descriptor.min) ** normalized
+        : descriptor.min + (descriptor.max - descriptor.min) * normalized;
+}
+
+function RackParameterControl({ descriptor, compact = false }: {
+    descriptor: RackParameterDescriptor;
+    compact?: boolean;
+}) {
+    const binding = usePatchParameterBinding<number>({
+        endpointID: descriptor.endpointID,
+        initialValue: descriptor.initial,
+        coerce: (value) => clamp(Number(value) || descriptor.initial, descriptor.min, descriptor.max),
+    });
+
+    if (descriptor.choices !== undefined) {
+        return (
+            <label className="grid min-w-0 gap-1 text-[8px] font-bold uppercase tracking-[0.11em] text-slate-400/65">
+                {!compact ? descriptor.label : descriptor.shortLabel}
+                <select
+                    data-role={`rack-parameter-${descriptor.endpointID}`}
+                    aria-label={descriptor.label}
+                    value={String(Math.round(binding.value))}
+                    onChange={(event) => binding.commitValue(Number(event.target.value))}
+                    className="min-w-0 rounded-[7px] border border-white/[0.08] bg-black/25 px-2 py-1.5 text-[10px] normal-case tracking-normal text-slate-100 outline-none"
+                >
+                    {descriptor.choices.map((item) => (
+                        <option key={item.value} value={item.value}>{item.label}</option>
+                    ))}
+                </select>
+            </label>
+        );
+    }
+
+    const normalizedValue = normalizedRackParameterValue(descriptor, binding.value);
+    return (
+        <label className="grid min-w-0 gap-1" title={`${descriptor.label}: ${formatRackParameterValue(descriptor, binding.value)}`}>
+            <span className="flex items-center justify-between gap-2 text-[8px] font-bold uppercase tracking-[0.11em] text-slate-400/65">
+                <span>{compact ? descriptor.shortLabel : descriptor.label}</span>
+                <span className="synth-readout-text text-[9px] normal-case tracking-normal text-slate-200/85">
+                    {formatRackParameterValue(descriptor, binding.value)}
+                </span>
+            </span>
+            <input
+                data-role={`rack-parameter-${descriptor.endpointID}`}
+                aria-label={descriptor.label}
+                type="range"
+                min={0}
+                max={1}
+                step={0.001}
+                value={normalizedValue}
+                onPointerDown={binding.beginGesture}
+                onPointerUp={binding.endGesture}
+                onPointerCancel={binding.endGesture}
+                onChange={(event) => binding.setValue(rackParameterValueFromNormalized(descriptor, Number(event.target.value)))}
+                className="h-2 w-full cursor-ew-resize accent-cyan-300"
+            />
+        </label>
+    );
+}
+
+function RackSyncParameterControls({
+    effectId,
+    compact = false,
+}: {
+    effectId: "phaser" | "delay";
+    compact?: boolean;
+}) {
+    const effectDescriptor = getRackEffectDescriptor(effectId);
+    const modeEndpointID = effectId === "phaser" ? "phaserRateMode" : "delayTimeMode";
+    const freeEndpointID = effectId === "phaser" ? "phaserRate" : "delayTime";
+    const syncEndpointID = effectId === "phaser" ? "phaserRateDivision" : "delayDivision";
+    const modeDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === modeEndpointID)!;
+    const freeDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === freeEndpointID)!;
+    const syncDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === syncEndpointID)!;
+    const modeBinding = usePatchParameterBinding<number>({
+        endpointID: modeDescriptor.endpointID,
+        initialValue: modeDescriptor.initial,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
+    });
+    const timingDescriptor = modeBinding.value >= 0.5 ? syncDescriptor : freeDescriptor;
+
+    if (compact) {
+        return <RackParameterControl descriptor={timingDescriptor} compact />;
+    }
+
+    const hiddenEndpointIDs = new Set([modeEndpointID, freeEndpointID, syncEndpointID]);
+    return (
+        <>
+            <RackParameterControl descriptor={modeDescriptor} />
+            <RackParameterControl descriptor={timingDescriptor} />
+            {effectDescriptor.parameters
+                .filter((parameter) => !hiddenEndpointIDs.has(parameter.endpointID))
+                .map((parameter) => (
+                    <RackParameterControl key={parameter.endpointID} descriptor={parameter} />
+                ))}
+        </>
+    );
+}
+
+function RackModuleQuickControl({ effectId }: { effectId: EffectModuleId }) {
+    if (effectId === "phaser" || effectId === "delay") {
+        return <RackSyncParameterControls effectId={effectId} compact />;
+    }
+    const quickParameter = getRackEffectDescriptor(effectId).parameters.find((parameter) => parameter.quick);
+    return quickParameter ? <RackParameterControl descriptor={quickParameter} compact /> : null;
+}
+
+function RackModuleCard({
+    effectId,
+    enabled,
+    selected,
+    position,
+    positionCount,
+    onSelect,
+    onToggle,
+    onMove,
+    onDragStart,
+    onDragEnter,
+    onDrop,
+    onDragEnd,
+}: {
+    effectId: EffectModuleId;
+    enabled: boolean;
+    selected: boolean;
+    position: number;
+    positionCount: number;
+    onSelect: () => void;
+    onToggle: () => void;
+    onMove: (offset: -1 | 1) => void;
+    onDragStart: (event: ReactDragEvent<HTMLDivElement>) => void;
+    onDragEnter: () => void;
+    onDrop: () => void;
+    onDragEnd: () => void;
+}) {
+    const descriptor = getRackEffectDescriptor(effectId);
+
     return (
         <div
-            data-role="effect-rack-column"
-            className="flex h-full min-w-0 items-center justify-center rounded-[12px] border border-dashed border-white/[0.06] bg-white/[0.012] text-[9px] font-bold uppercase tracking-[0.16em] text-slate-500/35"
+            data-role={`rack-module-${effectId}`}
+            data-rack-position={position}
+            draggable
+            onDragStart={onDragStart}
+            onDragOver={(event) => event.preventDefault()}
+            onDragEnter={onDragEnter}
+            onDrop={(event) => { event.preventDefault(); onDrop(); }}
+            onDragEnd={onDragEnd}
+            className={`grid min-w-0 gap-2 rounded-[12px] border p-2 transition ${selected
+                ? "border-cyan-300/45 bg-cyan-300/[0.08]"
+                : "border-white/[0.07] bg-white/[0.025] hover:bg-white/[0.04]"
+            }`}
         >
-            {label}
+            <div className="flex min-w-0 items-center gap-2">
+                <button
+                    data-role={`rack-select-${effectId}`}
+                    type="button"
+                    onClick={onSelect}
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                    <img src={descriptor.iconUrl} alt="" className="h-4 w-4 opacity-75 invert" />
+                    <span className="truncate text-[9px] font-bold uppercase tracking-[0.10em] text-slate-200">
+                        {descriptor.label}
+                    </span>
+                </button>
+                <button
+                    data-role={`rack-enabled-${effectId}`}
+                    type="button"
+                    aria-pressed={enabled}
+                    onClick={onToggle}
+                    className={`rounded-[6px] border px-1.5 py-1 text-[7px] font-bold uppercase tracking-[0.10em] ${enabled
+                        ? "synth-accent-active-button"
+                        : "border-white/[0.07] bg-black/15 text-slate-500"
+                    }`}
+                >
+                    {enabled ? "On" : "Off"}
+                </button>
+            </div>
+            <RackModuleQuickControl effectId={effectId} />
+            <div className="flex justify-between sm:hidden">
+                <button type="button" disabled={position === 0} onClick={() => onMove(-1)} aria-label={`Move ${descriptor.label} earlier`} className="px-2 text-xs text-slate-400 disabled:opacity-20">‹</button>
+                <span className="text-[7px] uppercase tracking-[0.12em] text-slate-500">{position + 1}/{positionCount}</span>
+                <button type="button" disabled={position === positionCount - 1} onClick={() => onMove(1)} aria-label={`Move ${descriptor.label} later`} className="px-2 text-xs text-slate-400 disabled:opacity-20">›</button>
+            </div>
         </div>
     );
 }
 
 function EffectsRackSection({
-    chorusEnabled,
+    distortionMode,
+    distortionDriveDb,
+    distortionKnee,
+    distortionWet,
+    distortionWetHPHz,
+    distortionWetLPHz,
+    observedDistortionHistory,
+    observedDistortionScope,
     chorusMix,
     chorusMotionMode,
     chorusBloomMode,
@@ -2219,30 +2479,167 @@ function EffectsRackSection({
     chorusRingFineSemitones,
     className,
 }: EffectsRackSectionProps) {
+    const { rackState, commit } = useRackState();
+    const [selectedEffectId, setSelectedEffectId] = useState<EffectModuleId>("filter");
+    const [draggedEffectId, setDraggedEffectId] = useState<EffectModuleId | null>(null);
+    const draggedEffectIdRef = useRef<EffectModuleId | null>(null);
+    const [previewOrder, setPreviewOrder] = useState<ReadonlyArray<EffectModuleId>>(rackState.order);
+    const previewOrderRef = useRef<ReadonlyArray<EffectModuleId>>(rackState.order);
+    const dropCommittedRef = useRef(false);
+    const selectedDescriptor = getRackEffectDescriptor(selectedEffectId);
+
+    useEffect(() => {
+        previewOrderRef.current = rackState.order;
+        setPreviewOrder(rackState.order);
+    }, [rackState.order]);
+
+    const setEnabled = useCallback((effectId: EffectModuleId, enabled: boolean) => {
+        commit({ ...rackState, enabled: { ...rackState.enabled, [effectId]: enabled } });
+    }, [commit, rackState]);
+
+    const commitOrder = useCallback((order: ReadonlyArray<EffectModuleId>) => {
+        commit({ ...rackState, order: [...order] });
+    }, [commit, rackState]);
+
+    const previewMove = useCallback((effectId: EffectModuleId, overEffectId: EffectModuleId) => {
+        setPreviewOrder((currentOrder) => {
+            const sourceIndex = currentOrder.indexOf(effectId);
+            const targetIndex = currentOrder.indexOf(overEffectId);
+            if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return currentOrder;
+            const nextOrder = [...currentOrder];
+            nextOrder.splice(sourceIndex, 1);
+            nextOrder.splice(targetIndex, 0, effectId);
+            previewOrderRef.current = nextOrder;
+            return nextOrder;
+        });
+    }, []);
+
+    const moveBy = useCallback((effectId: EffectModuleId, offset: -1 | 1) => {
+        const sourceIndex = previewOrder.indexOf(effectId);
+        const targetIndex = clamp(sourceIndex + offset, 0, previewOrder.length - 1);
+        if (sourceIndex === targetIndex) return;
+        const nextOrder = [...previewOrder];
+        nextOrder.splice(sourceIndex, 1);
+        nextOrder.splice(targetIndex, 0, effectId);
+        previewOrderRef.current = nextOrder;
+        setPreviewOrder(nextOrder);
+        commitOrder(nextOrder);
+    }, [commitOrder, previewOrder]);
+
     return (
         <section
             data-role="effects-rack-card"
             data-layout-card="desktop-grid-card"
             data-section-accent="ion"
             data-liquid-detail="edge-rail"
-            className={`grid h-full grid-cols-4 gap-2 ${SYNTH_GRID_CARD_SHELL_CLASS} border p-2 ${className ?? ""}`}
+            className={`grid min-h-[410px] gap-3 ${SYNTH_GRID_CARD_SHELL_CLASS} border p-3 ${className ?? ""}`}
         >
-            <div data-role="effect-rack-column" className="min-h-0 min-w-0">
-                <ChorusEffectColumn
-                    chorusEnabled={chorusEnabled}
-                    chorusMix={chorusMix}
-                    chorusMotionMode={chorusMotionMode}
-                    chorusBloomMode={chorusBloomMode}
-                    chorusTone={chorusTone}
-                    chorusFeedback={chorusFeedback}
-                    chorusRingAmount={chorusRingAmount}
-                    chorusRingOffsetMode={chorusRingOffsetMode}
-                    chorusRingFineSemitones={chorusRingFineSemitones}
-                />
+            <div className="flex items-center justify-between gap-3">
+                <div>
+                    <h2 className="synth-section-title">Effects Rack</h2>
+                    <p className="mt-0.5 text-[8px] uppercase tracking-[0.12em] text-slate-500">Drag to reorder · structure commits on drop</p>
+                </div>
+                <span className="text-[8px] uppercase tracking-[0.12em] text-slate-400/55">8 modules</span>
             </div>
-            <ReservedEffectColumn label="FX 2" />
-            <ReservedEffectColumn label="FX 3" />
-            <ReservedEffectColumn label="FX 4" />
+
+            <div data-role="rack-module-list" className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
+                {previewOrder.map((effectId, position) => (
+                    <RackModuleCard
+                        key={effectId}
+                        effectId={effectId}
+                        enabled={rackState.enabled[effectId]}
+                        selected={selectedEffectId === effectId}
+                        position={position}
+                        positionCount={previewOrder.length}
+                        onSelect={() => setSelectedEffectId(effectId)}
+                        onToggle={() => setEnabled(effectId, !rackState.enabled[effectId])}
+                        onMove={(offset) => moveBy(effectId, offset)}
+                        onDragStart={(event) => {
+                            setDraggedEffectId(effectId);
+                            draggedEffectIdRef.current = effectId;
+                            dropCommittedRef.current = false;
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", effectId);
+                        }}
+                        onDragEnter={() => {
+                            if (draggedEffectIdRef.current !== null) {
+                                previewMove(draggedEffectIdRef.current, effectId);
+                            }
+                        }}
+                        onDrop={() => {
+                            dropCommittedRef.current = true;
+                            const dragged = draggedEffectIdRef.current;
+                            if (dragged !== null && rackState.order.indexOf(dragged) !== rackState.order.indexOf(effectId)) {
+                                const nextOrder = [...rackState.order];
+                                const sourceIndex = nextOrder.indexOf(dragged);
+                                const targetIndex = nextOrder.indexOf(effectId);
+                                nextOrder.splice(sourceIndex, 1);
+                                nextOrder.splice(targetIndex, 0, dragged);
+                                previewOrderRef.current = nextOrder;
+                            }
+                            commitOrder(previewOrderRef.current);
+                            draggedEffectIdRef.current = null;
+                            setDraggedEffectId(null);
+                        }}
+                        onDragEnd={() => {
+                            if (!dropCommittedRef.current && draggedEffectId !== null) {
+                                previewOrderRef.current = rackState.order;
+                                setPreviewOrder(rackState.order);
+                            }
+                            dropCommittedRef.current = false;
+                            draggedEffectIdRef.current = null;
+                            setDraggedEffectId(null);
+                        }}
+                    />
+                ))}
+            </div>
+
+            <div data-role={`rack-editor-${selectedEffectId}`} className="min-h-[215px] rounded-[14px] border border-white/[0.06] bg-black/15 p-2">
+                <div className="mb-2 flex items-start gap-2 px-1">
+                    <img src={selectedDescriptor.iconUrl} alt="" className="mt-0.5 h-5 w-5 opacity-75 invert" />
+                    <div>
+                        <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-100">{selectedDescriptor.label}</h3>
+                        <p className="text-[9px] text-slate-400/70">{selectedDescriptor.summary}</p>
+                    </div>
+                </div>
+
+                {selectedEffectId === "drive" ? (
+                    <DistortionSection
+                        distortionMode={distortionMode}
+                        distortionDriveDb={distortionDriveDb}
+                        distortionKnee={distortionKnee}
+                        distortionWet={distortionWet}
+                        distortionWetHPHz={distortionWetHPHz}
+                        distortionWetLPHz={distortionWetLPHz}
+                        observedDistortionHistory={observedDistortionHistory}
+                        observedDistortionScope={observedDistortionScope}
+                        className="min-h-[220px]"
+                    />
+                ) : selectedEffectId === "chorus" ? (
+                    <div className="min-h-[220px]">
+                        <ChorusEffectColumn
+                            chorusMix={chorusMix}
+                            chorusMotionMode={chorusMotionMode}
+                            chorusBloomMode={chorusBloomMode}
+                            chorusTone={chorusTone}
+                            chorusFeedback={chorusFeedback}
+                            chorusRingAmount={chorusRingAmount}
+                            chorusRingOffsetMode={chorusRingOffsetMode}
+                            chorusRingFineSemitones={chorusRingFineSemitones}
+                        />
+                    </div>
+                ) : selectedEffectId === "phaser" || selectedEffectId === "delay" ? (
+                    <div className="grid gap-x-4 gap-y-3 rounded-[10px] border border-white/[0.05] bg-white/[0.018] p-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <RackSyncParameterControls effectId={selectedEffectId} />
+                    </div>
+                ) : (
+                    <div className="grid gap-x-4 gap-y-3 rounded-[10px] border border-white/[0.05] bg-white/[0.018] p-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {selectedDescriptor.parameters.map((parameter) => (
+                            <RackParameterControl key={parameter.endpointID} descriptor={parameter} />
+                        ))}
+                    </div>
+                )}
+            </div>
         </section>
     );
 }
@@ -3424,7 +3821,7 @@ function DesktopPatchViewBody({
                 </section>
 
                 <section className="grid min-h-0 items-stretch gap-4 md:grid-cols-2">
-                    <DistortionSection
+                    <EffectsRackSection
                         distortionMode={synthView.distortionMode}
                         distortionDriveDb={synthView.distortionDriveDb}
                         distortionKnee={synthView.distortionKnee}
@@ -3433,10 +3830,6 @@ function DesktopPatchViewBody({
                         distortionWetLPHz={synthView.distortionWetLPHz}
                         observedDistortionHistory={synthView.observedDistortionHistory}
                         observedDistortionScope={synthView.observedDistortionScope}
-                        className={DESKTOP_GRID_CARD_CLASS}
-                    />
-                    <EffectsRackSection
-                        chorusEnabled={synthView.chorusEnabled}
                         chorusMix={synthView.chorusMix}
                         chorusMotionMode={synthView.chorusMotionMode}
                         chorusBloomMode={synthView.chorusBloomMode}
@@ -3445,7 +3838,7 @@ function DesktopPatchViewBody({
                         chorusRingAmount={synthView.chorusRingAmount}
                         chorusRingOffsetMode={synthView.chorusRingOffsetMode}
                         chorusRingFineSemitones={synthView.chorusRingFineSemitones}
-                        className={DESKTOP_GRID_CARD_CLASS}
+                        className="md:col-span-2"
                     />
                 </section>
 

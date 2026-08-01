@@ -247,6 +247,21 @@ namespace wt
         float32 amount;
     }
 
+    // Rack routes use a distinct wire shape so the long-shipped voice-route event
+    // remains byte-for-byte stable. Both endpoint types share the same twelve slots;
+    // uploading one disables the other representation at that slot.
+    struct RackModulationRouteUpload
+    {
+        int32 routeIndex;
+        bool enabled;
+        int32 sourceKind;
+        int32 sourceSlot;
+        int32 polarityKind;
+        int32 targetKind;
+        float32 amount;
+        int32 reducerKind;
+    }
+
     float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
     {
         return p1 + 0.5f * t * ((p2 - p0) + t * ((2.0f * p0 - 5.0f * p1 + 4.0f * p2 - p3)
@@ -1431,6 +1446,7 @@ namespace wt
         input event ModulationMsegPlaybackUpload modulationMsegPlaybackIn;
         input event ModulationEnvelopeUpload modulationEnvelopeIn;
         input event ModulationRouteUpload modulationRouteIn;
+        input event RackModulationRouteUpload rackModulationRouteIn;
         input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
         input value float32 glideTimeIn [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
         input value float32 warpModeIn [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
@@ -1468,6 +1484,8 @@ namespace wt
         output event wt::VoiceArticulationMonitor voiceArticulationStartOut;
         output stream float32<2> out;
         output stream float32 trackingPitchHzOut;
+        output stream float32 rackModOut[rackModTargetCount];
+        output value int32 modulationRejectedRouteCountOut;
 
         node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
         node mseg1 = wt::MsegReader[voiceCount];
@@ -1574,7 +1592,14 @@ namespace wt
         float32[voiceCount * maxUnisonVoiceCount * warpDecimatorTapCount] unisonWarpHistory;
         int32[voiceCount * maxUnisonVoiceCount] unisonWarpHistoryWriteIndex;
         ModulationRouteUpload[modulationRouteCount] modulationRoutes;
+        RackModulationRouteUpload[modulationRouteCount] rackModulationRoutes;
         bool modulationEnabled = true;
+        RackRouteReducer[modulationRouteCount] rackRouteReducers;
+        float32[rackModTargetCount] rackModAccumulator;
+        float32[rackModTargetCount] rackModSmoothed;
+        float32 rackModGateReleaseStepState;
+        float32 rackModSmoothingCoefficientState;
+        int32 rejectedModulationRouteCount;
 
         float32[maxMipSampleCount] mip0Bank0Samples;
         float32[maxMipSampleCount] mip0Bank1Samples;
@@ -1800,6 +1825,15 @@ namespace wt
                 modulationRoutes.at (routeIndex).polarityKind = modulationPolarityUnipolar;
                 modulationRoutes.at (routeIndex).targetKind = modulationTargetWavetablePosition;
                 modulationRoutes.at (routeIndex).amount = 0.0f;
+
+                rackModulationRoutes.at (routeIndex).routeIndex = routeIndex;
+                rackModulationRoutes.at (routeIndex).enabled = false;
+                rackModulationRoutes.at (routeIndex).sourceKind = modulationSourceMseg;
+                rackModulationRoutes.at (routeIndex).sourceSlot = 0;
+                rackModulationRoutes.at (routeIndex).polarityKind = modulationPolarityUnipolar;
+                rackModulationRoutes.at (routeIndex).targetKind = modulationTargetRackBase;
+                rackModulationRoutes.at (routeIndex).amount = 0.0f;
+                rackModulationRoutes.at (routeIndex).reducerKind = modulationReducerUnset;
             }
         }
 
@@ -2245,6 +2279,75 @@ namespace wt
                 return (clampedSourceValue * 2.0f) - 1.0f;
 
             return clampedSourceValue;
+        }
+
+        bool voiceIsSoundingForRackModulation (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            return voiceActive.at (voice) != 0 || envelopes[voice].gainOut > 0.0f;
+        }
+
+        float32 resolveRackRouteSourceValue (int32 voiceIndex, RackModulationRouteUpload route)
+        {
+            ModulationRouteUpload voiceRoute;
+            voiceRoute.sourceKind = route.sourceKind;
+            voiceRoute.sourceSlot = route.sourceSlot;
+            return resolveRouteSourceValue (voiceIndex, voiceRoute);
+        }
+
+        void beginRackModulationFrame()
+        {
+            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+                rackRouteReducers.at (routeIndex).beginRackRouteFrame();
+        }
+
+        void accumulateRackModulationForVoice (int32 voiceIndex)
+        {
+            if (! modulationEnabled || ! voiceIsSoundingForRackModulation (voiceIndex))
+                return;
+
+            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+            {
+                let route = rackModulationRoutes.at (routeIndex);
+
+                if (route.enabled && isVoiceModulationSource (route.sourceKind))
+                    rackRouteReducers.at (routeIndex).accumulateRackRouteVoice (
+                        resolveRackRouteSourceValue (voiceIndex, route),
+                        route.polarityKind);
+            }
+        }
+
+        void updateRackModulationOutputs()
+        {
+            for (wrap<rackModTargetCount> target)
+                rackModAccumulator[target] = 0.0f;
+
+            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+            {
+                let route = rackModulationRoutes.at (routeIndex);
+                let reducedOffset = rackRouteReducers.at (routeIndex)
+                                      .resolveRackRouteOffset (route.reducerKind,
+                                                               route.amount,
+                                                               rackModGateReleaseStepState);
+
+                if (! modulationEnabled || ! route.enabled)
+                    continue;
+
+                let target = wrap<rackModTargetCount> (rackModTargetIndex (route.targetKind));
+                rackModAccumulator[target] += isVoiceModulationSource (route.sourceKind)
+                    ? reducedOffset
+                    : resolveGlobalRackOffset (resolveMacroValue (route.sourceSlot),
+                                               route.polarityKind,
+                                               route.amount);
+            }
+
+            for (wrap<rackModTargetCount> target)
+            {
+                rackModSmoothed[target] = rackModSmoothTowards (rackModSmoothed[target],
+                                                                rackModAccumulator[target],
+                                                                rackModSmoothingCoefficientState);
+                rackModOut[target] <- rackModSmoothed[target];
+            }
         }
 
         void initialiseWarpDecimatorTaps()
@@ -3392,7 +3495,25 @@ namespace wt
             if (upload.routeIndex < 0 || upload.routeIndex >= modulationRouteCount)
                 return;
 
+            rackModulationRoutes.at (upload.routeIndex).enabled = false;
             modulationRoutes.at (upload.routeIndex) = upload;
+        }
+
+        event rackModulationRouteIn (RackModulationRouteUpload upload)
+        {
+            if (upload.routeIndex < 0 || upload.routeIndex >= modulationRouteCount)
+                return;
+
+            if (! isValidRackModulationRoute (upload.sourceKind, upload.targetKind, upload.reducerKind))
+            {
+                rackModulationRoutes.at (upload.routeIndex).enabled = false;
+                rejectedModulationRouteCount += 1;
+                modulationRejectedRouteCountOut <- rejectedModulationRouteCount;
+                return;
+            }
+
+            modulationRoutes.at (upload.routeIndex).enabled = false;
+            rackModulationRoutes.at (upload.routeIndex) = upload;
         }
 
         event wavetableLoadBeginIn (WavetableLoadBegin request)
@@ -3508,6 +3629,9 @@ namespace wt
             );
             msegMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedMsegInterval);
             framesUntilNextMsegMonitorUpdate = 0;
+            rackModGateReleaseStepState = rackModGateReleaseStep (float32 (processor.frequency));
+            rackModSmoothingCoefficientState = rackModOnePoleCoefficient (rackModSmoothingMs,
+                                                                          float32 (processor.frequency));
             resetAllFilterState();
             for (wrap<voiceCount> voice)
                 clearVoiceArticulation (int32 (voice));
@@ -3529,6 +3653,8 @@ namespace wt
                 float32 rightMix = 0.0f;
                 float32 trackingPitchHz = 0.0f;
                 int32 trackingSerial = -1;
+
+                beginRackModulationFrame();
 
                 for (wrap<voiceCount> voice)
                 {
@@ -3599,6 +3725,8 @@ namespace wt
                                 routeUnisonWarpSpread += routedValue;
                         }
                     }
+
+                    accumulateRackModulationForVoice (int32 (voice));
 
                     let baseFramePosition = voiceUsesArticulation.at (voice)
                         ? voiceArticulationFramePosition.at (voice)
@@ -3878,6 +4006,8 @@ namespace wt
                         rightMix += unisonRight * gain;
                     }
                 }
+
+                updateRackModulationOutputs();
 
                 out <- float32<2> (leftMix, rightMix);
                 trackingPitchHzOut <- trackingPitchHz;

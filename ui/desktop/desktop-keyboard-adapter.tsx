@@ -17,7 +17,7 @@ export const DEFAULT_KEYBOARD_NOTE_COUNT = 25;
 export const DEFAULT_KEYBOARD_ROOT_NOTE = 36;
 
 export type PianoKeyboardElement = HTMLElement & {
-    root: ShadowRoot;
+    root?: ShadowRoot;
     notes: unknown[];
     naturalWidth: number;
     accidentalWidth: number;
@@ -176,7 +176,7 @@ export function ensureKeyboardElement(patchConnection: PatchConnectionLike) {
             bindRenderedTouchHandlers() {
                 const keyboard = this as PianoKeyboardElement;
 
-                for (const child of Array.from(keyboard.root.children)) {
+                for (const child of Array.from(keyboard.root?.children ?? [])) {
                     child.addEventListener("touchstart", (event) => keyboard.touchStart?.(event), { passive: false });
                     child.addEventListener("touchend", (event) => keyboard.touchEnd?.(event));
                 }

@@ -10,9 +10,10 @@ const sourceTypeOrder = { macro: 0, envelope: 1, mseg: 2 };
 
 function describeCandidate(candidate) {
   const target = candidate ? TARGETS[candidate.targetKey] : null;
-  return candidate && target
+  if (!candidate) return null;
+  return target
     ? `${candidate.layer} · ${target.moduleLabel} ${target.label}`
-    : null;
+    : `${candidate.layer} · ${candidate.targetKey}`;
 }
 
 function withMotionCandidate(state, targetId, layer) {
@@ -29,7 +30,9 @@ function withMotionCandidate(state, targetId, layer) {
   return {
     ...state.audition,
     captureCandidate,
-    status: `Recording · ${layerLabel} · ${target.moduleLabel} ${target.label}`,
+    status: target
+      ? `Recording · ${layerLabel} · ${target.moduleLabel} ${target.label}`
+      : `Recording · ${layerLabel} · ${targetId}`,
   };
 }
 
@@ -68,7 +71,6 @@ export function mockCosimoReducer(state, action) {
   switch (action.type) {
     case "SET_PARAMETER": {
       const { targetId, value, layer } = action;
-      if (!TARGETS[targetId]) return state;
       const nextValue = clamp(value);
       const patch = layer.kind === "articulationOverride"
         ? {
@@ -166,7 +168,6 @@ export function mockCosimoReducer(state, action) {
     }
 
     case "SET_COMPOUND_SETTING":
-      if (!TARGETS[action.targetId]) return state;
       return {
         ...state,
         patch: {
@@ -402,7 +403,6 @@ export function mockCosimoReducer(state, action) {
     case "ADD_MAPPING":
       if (
         !action.mapping ||
-        !TARGETS[action.mapping.targetKey] ||
         state.patch.mappings.some((item) => item.id === action.mapping.id)
       ) {
         return state;
@@ -748,7 +748,9 @@ export function mockCosimoReducer(state, action) {
       const capturedMapping = createMapping(
         candidate.targetKey,
         capturedSource.id,
-        clampModAmount(TARGETS[candidate.targetKey], 100),
+        Number.isFinite(action.amount)
+          ? action.amount
+          : clampModAmount(TARGETS[candidate.targetKey], 100),
         "Unipolar",
         "Max",
         {
@@ -778,8 +780,9 @@ export function mockCosimoReducer(state, action) {
           ...state.audition,
           triggerActive: false,
           captureCandidate: null,
-          status:
-            `Captured · ${candidate.layer} · ${target.moduleLabel} ${target.label} · ${capturedSource.label}`,
+          status: target
+            ? `Captured · ${candidate.layer} · ${target.moduleLabel} ${target.label} · ${capturedSource.label}`
+            : `Captured · ${candidate.layer} · ${candidate.targetKey} · ${capturedSource.label}`,
         },
       };
     }

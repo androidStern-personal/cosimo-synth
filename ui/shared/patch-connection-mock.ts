@@ -38,7 +38,6 @@ const distortionKneeEndpointID = "distortionKnee";
 const distortionWetEndpointID = "distortionWet";
 const distortionWetHPHzEndpointID = "distortionWetHPHz";
 const distortionWetLPHzEndpointID = "distortionWetLPHz";
-const chorusEnabledEndpointID = "chorusEnabled";
 const chorusMixEndpointID = "chorusMix";
 const chorusMotionModeEndpointID = "chorusMotionMode";
 const chorusBloomModeEndpointID = "chorusBloomMode";
@@ -483,16 +482,6 @@ function buildHarnessStatus(manifest: unknown) {
                     },
                 },
                 {
-                    endpointID: chorusEnabledEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus On",
-                        min: 0,
-                        max: 1,
-                        init: 0,
-                    },
-                },
-                {
                     endpointID: chorusMixEndpointID,
                     purpose: "parameter",
                     annotation: {
@@ -633,7 +622,6 @@ export class MockPatchConnection implements PatchConnectionLike {
         [distortionWetEndpointID, 0],
         [distortionWetHPHzEndpointID, 40],
         [distortionWetLPHzEndpointID, 18_000],
-        [chorusEnabledEndpointID, 0],
         [chorusMixEndpointID, 0],
         [chorusMotionModeEndpointID, 1],
         [chorusBloomModeEndpointID, 0],

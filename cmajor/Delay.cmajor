@@ -320,8 +320,8 @@ namespace wt
 
                 let feedback = clampDelayFeedback (feedbackIn);
                 let mix01 = clampDelayMix (mixIn);
-                let dryGain = float32 (std::intrinsics::cos (0.5f * pi * mix01));
-                let wetGain = float32 (std::intrinsics::sin (0.5f * pi * mix01));
+                let dryGain = 1.0f - mix01;
+                let wetGain = mix01;
 
                 var wetLeft = 0.0f;
                 var wetRight = 0.0f;
@@ -339,9 +339,8 @@ namespace wt
                         wetRight = delayed;
                 }
 
-                // Equal power, exactly as Distortion.cmajor:186-188 and
-                // Chorus.cmajor:472-473. At mix 0 this is cos(0) = 1 and sin(0) = 0,
-                // so the output is the input to the last bit.
+                // Constant-sum prevents correlated repeats lifting a half-wet signal;
+                // at mix 0 the output remains bit-exact dry.
                 out <- (dry * dryGain) + (float32<2> (wetLeft, wetRight) * wetGain);
 
                 advance();

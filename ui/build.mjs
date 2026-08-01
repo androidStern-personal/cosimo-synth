@@ -101,6 +101,7 @@ if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild(
     await emitGeneratedPatchGuiModule("ui/shared/stored-state-runtime-mirror.ts", "patch_gui/stored-state-runtime-mirror.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
+    await emitGeneratedPatchGuiModule("ui/shared/rack-parameter-descriptors.ts", "patch_gui/rack-parameter-descriptors.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation.ts", "patch_gui/modulation.js");
     await emitGeneratedPatchGuiModule("ui/shared/articulations.ts", "patch_gui/articulations.js");
     await emitGeneratedPatchGuiModule("ui/shared/articulation-worker-service.ts", "patch_gui/articulation-worker-service.js");

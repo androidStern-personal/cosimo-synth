@@ -10,7 +10,6 @@ export const EFFECT_PRESET_DESCRIPTORS = {
         effectID: "chorus",
         label: "Chorus",
         params: {
-            chorusEnabled: { type: "integer", min: 0, max: 1, defaultValue: 0 },
             chorusMix: { type: "number", min: 0, max: 1, defaultValue: 0 },
             chorusMotionMode: { type: "integer", min: 0, max: 3, defaultValue: 1 },
             chorusBloomMode: { type: "integer", min: 0, max: 4, defaultValue: 0 },
@@ -43,7 +42,6 @@ export const EFFECT_FACTORY_PRESETS: Record<string, EffectPreset[]> = {
             presetID: "chorus.clean-wide",
             label: "Clean Wide",
             values: {
-                chorusEnabled: 1,
                 chorusMix: 0.62,
                 chorusMotionMode: 1,
                 chorusBloomMode: 0,
@@ -61,7 +59,6 @@ export const EFFECT_FACTORY_PRESETS: Record<string, EffectPreset[]> = {
             presetID: "chorus.bloom-ring",
             label: "Bloom Ring",
             values: {
-                chorusEnabled: 1,
                 chorusMix: 0.76,
                 chorusMotionMode: 0,
                 chorusBloomMode: 2,

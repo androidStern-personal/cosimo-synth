@@ -12,12 +12,11 @@
 // test still sounds like the instrument that shipped. Every other fixture below reuses
 // one of those two files verbatim, so the entire suite is anchored to pre-rack audio.
 //
-// WHY THE NOTE STARTS AT FRAME 1024. A structure upload costs one ADR-003 transition:
-// the rack fades to exact silence, swaps, and fades back, which at 44.1 kHz is 2 x 132
-// frames. Uploading at frame 0 therefore leaves the rack at exact unity from frame 264
-// onwards, long before the note sounds. The fixtures are built that way so that a
-// difference in the rendered audio can only be the REORDERING, never the fade - the
-// transition itself is pinned frame-by-frame in RackShape.cmajtest, where it belongs.
+// WHY THE NOTE STARTS AT FRAME 1024. A structure upload transitions the processed
+// contribution to dry, swaps once, and restores the processed contribution over two
+// 132-frame ramps at 44.1 kHz. The note begins after that completes, so a difference in
+// rendered audio can only be the running order, never the transition itself. Wet-chain
+// transition continuity is pinned in RackShape.cmajtest, where it belongs.
 //
 // WHAT EACH CASE PINS:
 //   1. rack_default_inert                  - the rack in the path changes nothing.
@@ -39,6 +38,10 @@ const samplesToRender = 8192;
 // dry paths are EXACT, so the tests state it that way; anything looser would let a
 // silently-wrong forward or a stray coefficient hide under the floor.
 const bitExactDiffDb = -300.0;
+// Cmajor can differ by one float32 ULP between otherwise identical wet-chain renders
+// (observed max absolute difference 2.98e-8 at a 0.41 peak). This remains more than
+// 97 dB tighter than the -23 dB signal change that the swapped-order case must prove.
+const wetChainDiffDb = -120.0;
 
 // Compares every output the patch has, including the two distortion analyzers, which
 // now read preview streams forwarded through the rack rather than reaching into
@@ -65,6 +68,20 @@ function audioPatchRun(subDir)
 {
     let options = fullPatchRun (subDir);
     options.skipMissingOutputs = true;
+    return options;
+}
+
+function fullWetPatchRun(subDir)
+{
+    let options = fullPatchRun (subDir);
+    options.maxDiffDb = wetChainDiffDb;
+    return options;
+}
+
+function wetAudioPatchRun(subDir)
+{
+    let options = audioPatchRun (subDir);
+    options.maxDiffDb = wetChainDiffDb;
     return options;
 }
 
@@ -112,7 +129,7 @@ function audioPatchRun(subDir)
 //    the assertion that moving two shipping effects into a runtime-ordered rack was a
 //    refactor and not a rewrite. Compared across ALL outputs.
 
-## runScript (fullPatchRun("fixtures/rack_shipping_chain_identity_order"))
+## runScript (fullWetPatchRun("fixtures/rack_shipping_chain_identity_order"))
 
 // 5. A REORDER REACHES REAL DSP, AND PRESERVES WHAT IT SHOULD. Same parameters, with
 //    rackOrder (1,3,0,2,4,5,6,7) uploaded at frame 0: Distortion moves to position 0 and
@@ -121,7 +138,7 @@ function audioPatchRun(subDir)
 //    must still equal the pre-rack shipping-chain golden exactly. This is the case that
 //    catches a rack which corrupts the signal simply by being reordered.
 
-## runScript (audioPatchRun("fixtures/rack_order_distortion_then_chorus"))
+## runScript (wetAudioPatchRun("fixtures/rack_order_distortion_then_chorus"))
 
 // 6. ...AND SWAPPING THE TWO CHANGES THE SOUND. Byte-for-byte the inputs of case 5 with
 //    one field different - rackOrder (3,1,0,2,4,5,6,7), Chorus now ahead of Distortion.
@@ -135,4 +152,4 @@ function audioPatchRun(subDir)
 //    bits per position, least-significant-position first - rather than coercing it, and
 //    committed it on frame 132, which is ADR-003's 3 ms transition at 44.1 kHz.
 
-## runScript (audioPatchRun("fixtures/rack_order_chorus_then_distortion"))
+## runScript (wetAudioPatchRun("fixtures/rack_order_chorus_then_distortion"))

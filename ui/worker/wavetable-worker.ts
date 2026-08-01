@@ -19,6 +19,7 @@ import {
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
 import { createArticulationWorkerService } from "../shared/articulation-worker-service";
 import { createModulationWorkerService } from "./modulation-worker-service";
+import { createRackStateWorkerService } from "./rack-state-worker-service";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
@@ -1374,6 +1375,7 @@ export function createWavetableWorkerController(connection: PatchConnectionLike,
 export default async function runWavetableWorker(connection: PatchConnectionLike, options: WorkerOptions = {}) {
     return startPatchWorkerServices(connection, [
         createModulationWorkerService,
+        createRackStateWorkerService,
         createArticulationWorkerService,
         () => createWavetableWorkerController(connection, options),
     ]);

@@ -70,6 +70,17 @@ import {
 import { createDefaultMsegPlayback, createDefaultMsegShape } from "./mseg";
 import { err, ok } from "./result";
 import {
+    EFFECTIVE_RACK_STATE_ENDPOINT_ID,
+    RACK_EFFECT_ORDER,
+    RACK_STATE_KEY,
+    commitRackState,
+    createDefaultRackState,
+    parseEffectiveRackState,
+    parseRackState as parseCanonicalRackState,
+    serializeRackState,
+    type RackState,
+} from "./rack-state";
+import {
     allTargetDescriptors,
     getTargetDescriptor,
     parseTargetId,
@@ -80,18 +91,6 @@ import {
 
 const UI_PATCH_VALUES_STATE_KEY = "uiPatchValues.v1";
 const UI_MAPPINGS_STATE_KEY = "uiMappings.v1";
-const RACK_STATE_KEY = "rackState.v1";
-
-const EFFECT_ORDER: ReadonlyArray<EffectModuleId> = [
-    "filter",
-    "drive",
-    "ott",
-    "chorus",
-    "flanger",
-    "phaser",
-    "delay",
-    "reverb",
-];
 
 const ARTICULATION_COLORS = [
     "#d2a128",
@@ -140,11 +139,6 @@ type StoredUiMapping = {
     readonly enabled: boolean;
 };
 
-type RackState = {
-    readonly order: ReadonlyArray<EffectModuleId>;
-    readonly enabled: Readonly<Record<EffectModuleId, boolean>>;
-    readonly compound: Readonly<Record<TargetId, CompoundSetting>>;
-};
 
 type ParseOutcome<T> =
     | { readonly _tag: "ok"; readonly value: T }
@@ -256,7 +250,7 @@ function clampSpecAmount(spec: ModAmountSpec, amount: number): number {
 
 function defaultSpecAmount(spec: ModAmountSpec): number {
     const magnitude = Math.max(Math.abs(spec.min), Math.abs(spec.max));
-    return clampSpecAmount(spec, Math.round(magnitude * 2.5) / 10);
+    return clampSpecAmount(spec, magnitude * 0.25);
 }
 
 function specAmountToRouteAmount(
@@ -306,21 +300,7 @@ function createInitialParameterValues(): Record<string, NormalizedValue> {
 }
 
 function createInitialRackState(): RackState {
-    const enabled: Record<EffectModuleId, boolean> = {
-        filter: true,
-        drive: true,
-        ott: true,
-        chorus: true,
-        flanger: true,
-        phaser: true,
-        delay: true,
-        reverb: true,
-    };
-    return {
-        order: [...EFFECT_ORDER],
-        enabled,
-        compound: {},
-    };
+    return createDefaultRackState();
 }
 
 function parseUiPatchValues(input: unknown): ParseOutcome<Record<string, NormalizedValue>> {
@@ -363,126 +343,11 @@ function parseUiPatchValues(input: unknown): ParseOutcome<Record<string, Normali
 }
 
 function requireEffectId(input: string): EffectModuleId {
-    const effectId = EFFECT_ORDER.find((candidate) => candidate === input);
+    const effectId = RACK_EFFECT_ORDER.find((candidate) => candidate === input);
     if (effectId === undefined) {
         throw new Error(`Unknown effect id: ${input}`);
     }
     return effectId;
-}
-
-function parseCompoundSettings(input: unknown): ParseOutcome<Readonly<Record<TargetId, CompoundSetting>>> {
-    if (input === undefined) {
-        return { _tag: "ok", value: {} };
-    }
-
-    if (!isRecord(input)) {
-        return parseError(`${RACK_STATE_KEY}.compound must be an object`);
-    }
-
-    const compound: Record<string, CompoundSetting> = {};
-    for (const [targetIdRaw, rawSetting] of Object.entries(input)) {
-        const parsedTarget = parseTargetId(targetIdRaw);
-        if (parsedTarget._tag === "err") {
-            return parseError(`${RACK_STATE_KEY}.compound has unknown target "${targetIdRaw}"`);
-        }
-        const descriptor = getTargetDescriptor(parsedTarget.value);
-        if (descriptor.compound !== "sync") {
-            return parseError(`${RACK_STATE_KEY}.compound target "${targetIdRaw}" is not compound`);
-        }
-        if (!isRecord(rawSetting)) {
-            return parseError(`${RACK_STATE_KEY}.compound.${targetIdRaw} must be an object`);
-        }
-        const keys = Reflect.ownKeys(rawSetting);
-        if (keys.length !== 2 || !Object.hasOwn(rawSetting, "mode") || !Object.hasOwn(rawSetting, "division")) {
-            return parseError(`${RACK_STATE_KEY}.compound.${targetIdRaw} must contain mode and division`);
-        }
-        if (rawSetting.mode !== "Free" && rawSetting.mode !== "Sync") {
-            return parseError(`${RACK_STATE_KEY}.compound.${targetIdRaw}.mode must be Free or Sync`);
-        }
-        if (typeof rawSetting.division !== "string" || rawSetting.division.length === 0) {
-            return parseError(`${RACK_STATE_KEY}.compound.${targetIdRaw}.division must be a non-empty string`);
-        }
-        compound[parsedTarget.value] = {
-            mode: rawSetting.mode,
-            division: rawSetting.division,
-        };
-    }
-
-    return { _tag: "ok", value: compound };
-}
-
-function parseRackState(input: unknown): ParseOutcome<RackState> {
-    const document = parseJsonDocument(input, RACK_STATE_KEY);
-    if (document._tag === "err") {
-        return document;
-    }
-    if (!isRecord(document.value)) {
-        return parseError(`${RACK_STATE_KEY} must be an object`);
-    }
-
-    const allowedKeys = new Set(["order", "enabled", "compound"]);
-    for (const key of Reflect.ownKeys(document.value)) {
-        if (typeof key !== "string" || !allowedKeys.has(key)) {
-            return parseError(`${RACK_STATE_KEY} has unexpected field "${String(key)}"`);
-        }
-    }
-
-    if (!Array.isArray(document.value.order) || document.value.order.length !== EFFECT_ORDER.length) {
-        return parseError(`${RACK_STATE_KEY}.order must contain every effect exactly once`);
-    }
-    const order: Array<EffectModuleId> = [];
-    const seenEffects = new Set<EffectModuleId>();
-    for (const rawEffectId of document.value.order) {
-        if (typeof rawEffectId !== "string") {
-            return parseError(`${RACK_STATE_KEY}.order entries must be strings`);
-        }
-        let effectId: EffectModuleId;
-        try {
-            effectId = requireEffectId(rawEffectId);
-        } catch {
-            return parseError(`${RACK_STATE_KEY}.order has unknown effect "${rawEffectId}"`);
-        }
-        if (seenEffects.has(effectId)) {
-            return parseError(`${RACK_STATE_KEY}.order duplicates "${effectId}"`);
-        }
-        seenEffects.add(effectId);
-        order.push(effectId);
-    }
-
-    if (!isRecord(document.value.enabled)) {
-        return parseError(`${RACK_STATE_KEY}.enabled must be an object`);
-    }
-    const enabledKeys = Reflect.ownKeys(document.value.enabled);
-    if (enabledKeys.length !== EFFECT_ORDER.length) {
-        return parseError(`${RACK_STATE_KEY}.enabled must contain every effect exactly once`);
-    }
-    const enabled: Record<EffectModuleId, boolean> = {
-        filter: false,
-        drive: false,
-        ott: false,
-        chorus: false,
-        flanger: false,
-        phaser: false,
-        delay: false,
-        reverb: false,
-    };
-    for (const effectId of EFFECT_ORDER) {
-        const rawEnabled = document.value.enabled[effectId];
-        if (typeof rawEnabled !== "boolean") {
-            return parseError(`${RACK_STATE_KEY}.enabled.${effectId} must be boolean`);
-        }
-        enabled[effectId] = rawEnabled;
-    }
-
-    const compound = parseCompoundSettings(document.value.compound);
-    if (compound._tag === "err") {
-        return compound;
-    }
-
-    return {
-        _tag: "ok",
-        value: { order, enabled, compound: compound.value },
-    };
 }
 
 function parseUiMappings(input: unknown): ParseOutcome<Map<MappingId, PendingUiMapping>> {
@@ -644,6 +509,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private parameterValues = createInitialParameterValues();
     private articulations = createEmptyArticulationsState();
     private rackState = createInitialRackState();
+    private compoundSettings: Readonly<Record<TargetId, CompoundSetting>> = {};
     private connectionState: PatchSnapshot["connection"] = { _tag: "connecting" };
     private audition: AuditionState = {
         articulation: "Default",
@@ -688,6 +554,26 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.adoptValidRoutes(validRoutes);
     };
 
+    private readonly handleEffectiveRackState = (message: unknown): void => {
+        if (this.disposed) {
+            return;
+        }
+
+        const parsed = parseEffectiveRackState(message);
+        if (parsed === null) {
+            return;
+        }
+
+        this.runCommand(() => {
+            this.rackState = {
+                ...this.rackState,
+                order: parsed.order,
+                enabled: parsed.enabled,
+            };
+            this.markSnapshotDirty();
+        });
+    };
+
     private adoptValidRoutes(validRoutes: ReadonlyArray<ValidRoute>): void {
         if (validRoutes.length + this.uiMappings.size > ROUTE_BUDGET) {
             this.detach(`Stored mappings exceed the shared route budget of ${ROUTE_BUDGET}`);
@@ -728,12 +614,13 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 return;
             }
             if (message.key === RACK_STATE_KEY) {
-                const parsed = parseRackState(message.value);
+                const parsed = parseCanonicalRackState(message.value);
                 if (parsed._tag === "err") {
                     this.detach(parsed.message);
                     return;
                 }
                 this.rackState = parsed.value;
+                commitRackState(this.connection, this.rackState);
                 this.markSnapshotDirty();
                 return;
             }
@@ -775,6 +662,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.modulationBridge.subscribe(this.handleModulationState);
         this.handleModulationState(this.modulationBridge.getState());
         this.connection.addStoredStateValueListener?.(this.handleStoredStateValue);
+        this.connection.addEndpointListener?.(
+            EFFECTIVE_RACK_STATE_ENDPOINT_ID,
+            this.handleEffectiveRackState,
+        );
 
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => this.hydrate(storedState));
@@ -859,6 +750,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 ...this.rackState,
                 enabled: { ...this.rackState.enabled, [knownEffectId]: enabled },
             };
+            commitRackState(this.connection, this.rackState);
             this.persistRackState();
             this.markSnapshotDirty();
         }),
@@ -906,6 +798,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         this.disposed = true;
         this.connection.removeStoredStateValueListener?.(this.handleStoredStateValue);
+        this.connection.removeEndpointListener?.(
+            EFFECTIVE_RACK_STATE_ENDPOINT_ID,
+            this.handleEffectiveRackState,
+        );
         this.modulationBridge.unsubscribe(this.handleModulationState);
         releaseModulationRuntimeBridge(this.connection);
         this.listeners.clear();
@@ -948,7 +844,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
         const parsedRackState = rawRackState === undefined
             ? { _tag: "ok", value: createInitialRackState() } as const
-            : parseRackState(rawRackState);
+            : parseCanonicalRackState(rawRackState);
         if (parsedRackState._tag === "err") {
             this.detach(parsedRackState.message);
             return;
@@ -979,6 +875,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             this.uploadAllBoundBaseValues();
             this.uploadAllArticulationImages();
             this.sendNativeTriggerConfig();
+            commitRackState(this.connection, this.rackState);
             this.markSnapshotDirty();
         });
     }
@@ -1075,7 +972,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 sources: this.projectSources(),
                 effectOrder: [...this.rackState.order],
                 effectEnabled: { ...this.rackState.enabled },
-                compoundSettings: { ...this.rackState.compound },
+                compoundSettings: { ...this.compoundSettings },
                 articulations: this.articulations.slots.map((slot) => ({
                     id: articulationIdFromSlot(slot),
                     label: slot.name,
@@ -1238,7 +1135,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 validRoute.route.amount,
             ),
             polarity: validRoute.route.polarity === "bipolar" ? "Bipolar" : "Unipolar",
-            reducer: this.routeReducers.get(validRoute.route.id) ?? "Max",
+            reducer: validRoute.route.reducer === "mean" ? "Mean" : "Max",
             enabled: validRoute.route.enabled,
         };
     }
@@ -1359,6 +1256,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             polarity: input.polarity === "Bipolar" ? "bipolar" : "unipolar",
             targetKind,
             amount: specAmountToRouteAmount(descriptor.modAmount, targetKind, amount),
+            reducer: input.reducer === "Mean" ? "mean" : "max",
         };
         this.routeReducers.set(mappingId, input.reducer ?? "Max");
         this.modulationBridge.addRoute(route);
@@ -1461,8 +1359,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private setMappingReducer(mappingId: MappingId, reducer: MappingReducer): void {
         const mapping = this.requireMapping(mappingId);
         if (mapping._tag === "engine") {
-            this.routeReducers.set(mappingId, reducer);
-            this.markSnapshotDirty();
+            this.modulationBridge.setRoute(mapping.validRoute.routeIndex, {
+                ...mapping.validRoute.route,
+                reducer: reducer === "Mean" ? "mean" : "max",
+            });
             return;
         }
         this.replaceUiMapping({ ...mapping.mapping, reducer });
@@ -1950,19 +1850,21 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const order = [...withoutMoved];
         order.splice(overIndex, 0, knownEffectId);
         this.rackState = { ...this.rackState, order };
+        commitRackState(this.connection, this.rackState);
         this.persistRackState();
         this.markSnapshotDirty();
     }
 
     private restoreEffectOrder(effectOrder: ReadonlyArray<EffectModuleId>): void {
-        if (effectOrder.length !== EFFECT_ORDER.length) {
+        if (effectOrder.length !== RACK_EFFECT_ORDER.length) {
             throw new Error("Effect order must contain every rack effect");
         }
         const order = effectOrder.map((effectId) => requireEffectId(effectId));
-        if (new Set(order).size !== EFFECT_ORDER.length) {
+        if (new Set(order).size !== RACK_EFFECT_ORDER.length) {
             throw new Error("Effect order contains duplicate effects");
         }
         this.rackState = { ...this.rackState, order };
+        commitRackState(this.connection, this.rackState);
         this.persistRackState();
         this.markSnapshotDirty();
     }
@@ -1975,16 +1877,12 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         if (descriptor.compound !== "sync") {
             throw new Error(`Target ${targetId} is not a compound setting`);
         }
-        const previous = this.rackState.compound[targetId] ?? { mode: "Free", division: "1/8" };
+        const previous = this.compoundSettings[targetId] ?? { mode: "Free", division: "1/8" };
         const next: CompoundSetting = {
             mode: patch.mode ?? previous.mode,
             division: patch.division ?? previous.division,
         };
-        this.rackState = {
-            ...this.rackState,
-            compound: { ...this.rackState.compound, [targetId]: next },
-        };
-        this.persistRackState();
+        this.compoundSettings = { ...this.compoundSettings, [targetId]: next };
         this.markSnapshotDirty();
     }
 
@@ -2068,6 +1966,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.parameterValues = createInitialParameterValues();
         this.articulations = createEmptyArticulationsState();
         this.rackState = createInitialRackState();
+        this.compoundSettings = {};
         this.connectionState = { _tag: "ready" };
         this.audition = {
             articulation: "Default",
@@ -2096,6 +1995,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.persistParameterValues();
         this.persistUiMappings();
         this.persistRackState();
+        commitRackState(this.connection, this.rackState);
         this.persistArticulationsAndTriggerConfig();
         this.uploadAllBoundBaseValues();
         this.uploadAllArticulationImages();
@@ -2341,11 +2241,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private persistRackState(): void {
-        this.sendStoredStateValue(RACK_STATE_KEY, JSON.stringify({
-            order: this.rackState.order,
-            enabled: this.rackState.enabled,
-            compound: this.rackState.compound,
-        }));
+        this.sendStoredStateValue(RACK_STATE_KEY, serializeRackState(this.rackState));
     }
 
     private sendStoredStateValue(key: string, value: unknown): void {

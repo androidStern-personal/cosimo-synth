@@ -11,6 +11,10 @@
 import { type ArticulationVoiceParameterId } from "./articulation-image";
 import { type Brand, type NormalizedValue, type TargetId } from "./cosimo-ids";
 import { type ModulationTargetKind } from "./modulation";
+import {
+    RACK_EFFECT_DESCRIPTORS,
+    type RackParameterDescriptor,
+} from "./rack-parameter-descriptors";
 import { casesHandled, err, ok, shouldNeverHappen, type Result } from "./result";
 
 /** The eight fixed rack effects (ADR-006 v1 inventory; identity ≠ position). */
@@ -147,93 +151,6 @@ function parameter(
 }
 
 const MODULE_DEFINITIONS: ReadonlyArray<ModuleDefinition> = [
-    {
-        moduleId: "filter",
-        workspace: "effects",
-        quickParameterId: "cutoff",
-        parameters: [
-            parameter("cutoff", "Cutoff", 62, 70, "frequency"),
-            parameter("resonance", "Resonance", 30, 0),
-            parameter("drive", "Drive", 22, 0),
-        ],
-    },
-    {
-        moduleId: "drive",
-        workspace: "effects",
-        quickParameterId: "amount",
-        parameters: [
-            parameter("amount", "Amount", 45, 0),
-            parameter("tone", "Tone", 55, 50),
-            parameter("mix", "Mix", 38, 0),
-        ],
-    },
-    {
-        moduleId: "ott",
-        workspace: "effects",
-        quickParameterId: "depth",
-        parameters: [
-            parameter("depth", "Depth", 64, 0),
-            parameter("time", "Time", 48, 50),
-            parameter("mix", "Mix", 50, 0),
-        ],
-    },
-    {
-        moduleId: "chorus",
-        workspace: "effects",
-        quickParameterId: "depth",
-        parameters: [
-            parameter("rate", "Rate", 28, 20, "rate", "sync"),
-            parameter("depth", "Depth", 55, 0),
-            parameter("delay", "Delay", 36, 25),
-            parameter("mix", "Mix", 35, 0),
-        ],
-    },
-    {
-        moduleId: "flanger",
-        workspace: "effects",
-        quickParameterId: "rate",
-        parameters: [
-            parameter("rate", "Rate", 26, 20, "rate", "sync"),
-            parameter("depth", "Depth", 68, 0),
-            parameter("feedback", "Feedback", 42, 50, "signed"),
-            parameter("mix", "Mix", 38, 0),
-        ],
-    },
-    {
-        moduleId: "phaser",
-        workspace: "effects",
-        quickParameterId: "frequency",
-        parameters: [
-            parameter("rate", "Rate", 26, 20, "rate", "sync"),
-            parameter("depth", "Depth", 68, 50),
-            parameter("frequency", "Frequency", 54, 45, "frequency"),
-            parameter("feedback", "Feedback", 42, 50, "signed"),
-            parameter("phase", "Phase", 50, 50, "phase"),
-            parameter("mix", "Mix", 38, 0),
-        ],
-    },
-    {
-        moduleId: "delay",
-        workspace: "effects",
-        quickParameterId: "time",
-        parameters: [
-            parameter("time", "Time", 48, 40, "percent", "sync"),
-            parameter("feedback", "Feedback", 36, 0, "signed"),
-            parameter("filter", "Filter", 58, 70, "frequency"),
-            parameter("mix", "Mix", 30, 0),
-        ],
-    },
-    {
-        moduleId: "reverb",
-        workspace: "effects",
-        quickParameterId: "size",
-        parameters: [
-            parameter("size", "Size", 72, 50),
-            parameter("decay", "Decay", 64, 40),
-            parameter("damping", "Damping", 43, 50),
-            parameter("mix", "Mix", 28, 0),
-        ],
-    },
     {
         moduleId: "wavetable",
         workspace: "voice",
@@ -469,12 +386,93 @@ function createDescriptor(
     });
 }
 
+function rackTargetId(parameter: RackParameterDescriptor): TargetId {
+    // SAFETY: effect identity and endpoint id both come from the closed rack catalog.
+    return `${parameter.effectId}.${parameter.endpointID}` as TargetId;
+}
+
+function rackNormalizedFromEngine(parameter: RackParameterDescriptor, value: number): NormalizedValue {
+    const normalizedValue = parameter.scale === "log"
+        ? Math.log(value / parameter.min) / Math.log(parameter.max / parameter.min)
+        : (value - parameter.min) / (parameter.max - parameter.min);
+    return normalized(normalizedValue, `${parameter.endpointID} endpoint conversion`);
+}
+
+function rackEngineFromNormalized(parameter: RackParameterDescriptor, value: NormalizedValue) {
+    return parameter.scale === "log"
+        ? parameter.min * (parameter.max / parameter.min) ** value
+        : parameter.min + (parameter.max - parameter.min) * value;
+}
+
+function rackValueFormat(parameter: RackParameterDescriptor): ValueFormat {
+    if (parameter.unit === "Hz") {
+        return { kind: "frequency", minHz: parameter.min, maxHz: parameter.max };
+    }
+    if (parameter.unit === "deg") {
+        return { kind: "phase" };
+    }
+    if (parameter.unit === "st") {
+        return { kind: "semitone", span: Math.max(Math.abs(parameter.min), Math.abs(parameter.max)) };
+    }
+    if (parameter.min < 0 && parameter.max > 0) {
+        return { kind: "signed-percent" };
+    }
+    return { kind: "percent" };
+}
+
+function rackModAmountSpec(parameter: RackParameterDescriptor): ModAmountSpec {
+    if (parameter.scale === "log") {
+        return { min: -6, max: 6, unit: "oct", digits: 2 };
+    }
+    if (parameter.unit === "st") {
+        const span = parameter.max - parameter.min;
+        return { min: -span, max: span, unit: "st", digits: 2 };
+    }
+    if (parameter.unit === "dB") {
+        const span = parameter.max - parameter.min;
+        return { min: -span, max: span, unit: "dB", digits: 1 };
+    }
+    const span = parameter.max - parameter.min;
+    return { min: -span, max: span, unit: "%", digits: span <= 2 ? 3 : 1 };
+}
+
+function createRackTargetDescriptor(parameter: RackParameterDescriptor): TargetDescriptor {
+    const targetId = rackTargetId(parameter);
+    return Object.freeze({
+        targetId,
+        moduleId: parameter.effectId,
+        workspace: "effects" as const,
+        label: parameter.label,
+        defaultValue: rackNormalizedFromEngine(parameter, parameter.initial),
+        initialValue: rackNormalizedFromEngine(parameter, parameter.initial),
+        format: rackValueFormat(parameter),
+        modAmount: rackModAmountSpec(parameter),
+        binding: {
+            _tag: "endpoint" as const,
+            endpointId: parameter.endpointID as EndpointId,
+            toEngine: (value: NormalizedValue) => rackEngineFromNormalized(parameter, value),
+            fromEngine: (value: number) => rackNormalizedFromEngine(parameter, value),
+        },
+        isQuick: parameter.quick,
+        compound: parameter.endpointID === "phaserRate" || parameter.endpointID === "delayTime"
+            ? "sync" as const
+            : null,
+        articulationParameterId: null,
+        modulationTargetKind: parameter.modulationTargetIndex === null
+            ? null
+            : `rack.${parameter.endpointID}` as ModulationTargetKind,
+    });
+}
+
 const TARGET_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.freeze(
-    MODULE_DEFINITIONS.flatMap((moduleDefinition) =>
-        moduleDefinition.parameters.map((parameterDefinition) =>
-            createDescriptor(moduleDefinition, parameterDefinition),
+    [
+        ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
+        ...MODULE_DEFINITIONS.flatMap((moduleDefinition) =>
+            moduleDefinition.parameters.map((parameterDefinition) =>
+                createDescriptor(moduleDefinition, parameterDefinition),
+            ),
         ),
-    ),
+    ],
 );
 
 const TARGET_DESCRIPTOR_BY_ID = new Map<string, TargetDescriptor>(
@@ -519,7 +517,7 @@ export function getTargetDescriptor(targetId: TargetId): TargetDescriptor {
 /**
  * Every descriptor, in stable module/parameter order.
  *
- * @returns All 42 descriptors.
+ * @returns Every bound rack and voice descriptor.
  */
 export function allTargetDescriptors(): ReadonlyArray<TargetDescriptor> {
     return TARGET_DESCRIPTORS;
