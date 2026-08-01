@@ -1319,7 +1319,6 @@ test("desktop grid cards share the compact panel shell at narrow and standalone 
                 wavetableBottomControls: rectOf('[data-role="wavetable-stage-bottom-controls"]'),
                 wavetableSelectChip: rectOf('[data-role="wavetable-select-chip"]'),
                 wavetableFrameChip: rectOf('[data-role="wavetable-frame-chip"]'),
-                wavetablePositionChip: rectOf('[data-role="wavetable-position-chip"]'),
                 warpControlCluster: rectOf('[data-role="warp-control-cluster"]'),
                 warpModeControl: rectOf('[data-role="warp-mode-control"]'),
                 wavetablePanField: rectOf('[data-role="wavetable-pan-field"]'),
@@ -1371,7 +1370,6 @@ test("desktop grid cards share the compact panel shell at narrow and standalone 
             for (const compactControl of [
                 metrics.wavetableSelectChip,
                 metrics.wavetableFrameChip,
-                metrics.wavetablePositionChip,
                 metrics.warpModeControl,
                 metrics.filterModeChip,
                 metrics.filterAnalyzerChip,
@@ -5120,6 +5118,13 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         await page.click('button[aria-label="Open MSEG editor"]');
         await page.waitForSelector("text=Modulation Shape Editor");
 
+        const presetBarHost = page.locator('[data-role="synth-preset-bar-host"]');
+        assert.equal(
+            await presetBarHost.evaluate((element) => getComputedStyle(element).display),
+            "none",
+            "The preset bar must not cover the full-screen MSEG editor.",
+        );
+
         const surface = page.locator('svg[data-role="mseg-editor-surface"]');
         const box = await surface.boundingBox();
         assert.ok(box);
@@ -5196,6 +5201,11 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
 
         await page.keyboard.press("Escape");
         await page.waitForSelector("text=Modulation Shape Editor", { state: "detached" });
+        assert.notEqual(
+            await presetBarHost.evaluate((element) => getComputedStyle(element).display),
+            "none",
+            "The preset bar must return after the MSEG editor closes.",
+        );
     } finally {
         await page.close();
     }

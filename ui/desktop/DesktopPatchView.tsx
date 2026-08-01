@@ -1666,8 +1666,10 @@ function StatusHeader({ statusText }: HeaderProps) {
 }
 
 function SynthPresetBarHost({
+    isHidden,
     storedStateAdapters,
 }: {
+    isHidden: boolean;
     storedStateAdapters: EffectStoredStateAdapter[];
 }) {
     const patchConnection = usePatchConnection();
@@ -1701,6 +1703,7 @@ function SynthPresetBarHost({
         <div
             ref={hostRef}
             data-role="synth-preset-bar-host"
+            hidden={isHidden}
             className="relative z-40 min-w-0 overflow-visible rounded-[12px] border border-white/[0.06] bg-black/20 [--knob-track-value-color:#87d7f5] [--preset-bar-border-radius:12px]"
         />
     );
@@ -3254,10 +3257,13 @@ function DesktopPatchViewBody({
             formatEditingValue={formatPanEditingValue}
             parseText={parsePanInput}
             pixelsPerFullRange={180}
+            enableWheel
+            wheelStep={0.01}
+            leadingLabel="Pan"
             dataRole="wavetable-pan-field"
-            variant="compactOverlay"
-            width={46}
-            height={22}
+            variant="inlineDark"
+            width={44}
+            height={20}
         />
     ), [synthView.pan]);
     const keyboardToolbarOverride = useMemo(() => (
@@ -3367,7 +3373,10 @@ function DesktopPatchViewBody({
     return (
         <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100">
             <StatusHeader statusText={synthView.topStatus} />
-            <SynthPresetBarHost storedStateAdapters={synthView.presetStoredStateAdapters} />
+            <SynthPresetBarHost
+                isHidden={synthView.msegEditor.isOpen}
+                storedStateAdapters={synthView.presetStoredStateAdapters}
+            />
 
             <main
                 data-role="desktop-scroll-region"

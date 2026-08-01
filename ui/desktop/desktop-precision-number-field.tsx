@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { PatchControlBinding } from "../shared/patch-controls";
 
@@ -12,7 +12,10 @@ export type PrecisionNumberFieldProps = {
     step?: number;
     width?: number;
     height?: number;
-    variant?: "default" | "compactOverlay";
+    variant?: "default" | "compactOverlay" | "inlineDark";
+    leadingLabel?: string | null;
+    enableWheel?: boolean;
+    wheelStep?: number;
     suffix?: string | null;
     normalizedFromValue?: (bindingValue: number) => number;
     valueFromNormalized?: (normalizedValue: number) => number;
@@ -62,6 +65,9 @@ export function PrecisionNumberField({
     width = 128,
     height = 40,
     variant = "default",
+    leadingLabel = null,
+    enableWheel = false,
+    wheelStep,
     suffix = null,
     normalizedFromValue = (value) => value,
     valueFromNormalized = (value) => value,
@@ -73,11 +79,15 @@ export function PrecisionNumberField({
     dataRole,
 }: PrecisionNumberFieldProps) {
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const fieldRef = useRef<HTMLLabelElement | null>(null);
     const activeDragRef = useRef<ActiveDragState | null>(null);
     const draftValueRef = useRef("");
     const skipCommitOnBlurRef = useRef(false);
+    const wheelCursorTimerRef = useRef<number>(0);
+    const isMountedRef = useRef(true);
     const [isEditing, setIsEditing] = useState(false);
     const [draftValue, setDraftValue] = useState("");
+    const [isWheelCursorHidden, setIsWheelCursorHidden] = useState(false);
     const normalizedMin = useMemo(
         () => Math.min(normalizedFromValue(min), normalizedFromValue(max)),
         [max, min, normalizedFromValue],
@@ -91,10 +101,17 @@ export function PrecisionNumberField({
         isEditing ? draftValue : formatDisplay(binding.value)
     ), [binding.value, draftValue, formatDisplay, isEditing]);
     const isCompactOverlay = variant === "compactOverlay";
+    const isInlineDark = variant === "inlineDark";
+    const shouldShowLeadingLabel = isInlineDark && Boolean(leadingLabel);
 
     useEffect(() => {
         draftValueRef.current = draftValue;
     }, [draftValue]);
+
+    useEffect(() => () => {
+        isMountedRef.current = false;
+        clearTimeout(wheelCursorTimerRef.current);
+    }, []);
 
     useEffect(() => {
         if (!isEditing) {
@@ -113,6 +130,12 @@ export function PrecisionNumberField({
         };
     }, [binding.value, formatEditingValue, isEditing]);
 
+    useEffect(() => {
+        if (isEditing) {
+            setIsWheelCursorHidden(false);
+        }
+    }, [isEditing]);
+
     const commitTextEntry = (rawText: string) => {
         const parsedValue = parseText(rawText);
         const nextValue = quantizeToStep(
@@ -129,6 +152,55 @@ export function PrecisionNumberField({
 
         binding.commitValue(nextValue);
     };
+
+    const adjustByWheel = useCallback((deltaDirection: number) => {
+        const displayStep = Math.abs(wheelStep ?? step) || Math.max(1e-9, (max - min) / 400);
+        const nextValue = quantizeToStep(
+            clampNumber(binding.value + (deltaDirection * displayStep), min, max),
+            min,
+            max,
+            step,
+        );
+
+        if (Math.abs(nextValue - binding.value) <= Math.max(step / 10, 1e-9)) {
+            return;
+        }
+
+        binding.commitValue(nextValue);
+    }, [binding, max, min, step, wheelStep]);
+
+    useEffect(() => {
+        const field = fieldRef.current;
+        const input = inputRef.current;
+
+        if (!field || !input || !enableWheel) {
+            return;
+        }
+
+        const timerRef = wheelCursorTimerRef;
+        const handler = (event: WheelEvent) => {
+            if (isEditing || event.deltaY === 0) {
+                return;
+            }
+
+            event.preventDefault();
+            event.stopPropagation();
+            setIsWheelCursorHidden(true);
+            clearTimeout(timerRef.current);
+            timerRef.current = window.setTimeout(() => {
+                if (isMountedRef.current) {
+                    setIsWheelCursorHidden(false);
+                }
+            }, 400);
+            adjustByWheel(event.deltaY > 0 ? 1 : -1);
+        };
+
+        field.addEventListener("wheel", handler, { passive: false });
+
+        return () => {
+            field.removeEventListener("wheel", handler);
+        };
+    }, [adjustByWheel, enableWheel, isEditing]);
 
     const finishTextEntry = (commit: boolean) => {
         if (!isEditing) {
@@ -147,15 +219,30 @@ export function PrecisionNumberField({
     };
 
     return (
-        <label className="grid gap-1">
-            <span className="sr-only">{ariaLabel}</span>
+        <label
+            ref={fieldRef}
+            data-role={isInlineDark ? dataRole : undefined}
+            className={isInlineDark
+                ? "inline-flex h-6 min-w-0 items-center gap-1 rounded-[5px] border border-[rgb(var(--cosimo-edge-rgb)/0.34)] bg-[rgb(var(--cosimo-control-rgb)/0.58)] px-1 text-[var(--cosimo-text)] shadow-[var(--cosimo-contact-shadow)]"
+                : "grid gap-1"
+            }
+        >
+            <span className={shouldShowLeadingLabel
+                ? "shrink-0 text-[7px] font-bold uppercase tracking-[0.10em] text-slate-300/45"
+                : "sr-only"
+            }>
+                {leadingLabel ?? ariaLabel}
+            </span>
             <div
-                data-role={dataRole}
-                className={`synth-compact-control relative ${
-                    isCompactOverlay
-                        ? "rounded-[5px]"
-                        : "rounded-full"
-                }`}
+                data-role={isInlineDark ? undefined : dataRole}
+                className={isInlineDark
+                    ? "relative flex items-center rounded-[4px] border border-white/[0.07] bg-[rgba(3,5,12,0.58)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
+                    : `synth-compact-control relative ${
+                        isCompactOverlay
+                            ? "rounded-[5px]"
+                            : "rounded-full"
+                    }`
+                }
                 style={{ width: `${width}px`, height: `${height}px` }}
             >
                 <input
@@ -167,13 +254,18 @@ export function PrecisionNumberField({
                     spellCheck={false}
                     readOnly={!isEditing}
                     value={displayValue}
-                    className={`synth-readout-text h-full w-full bg-transparent outline-none ${
-                        isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${
+                    style={isWheelCursorHidden && !isEditing ? { cursor: "none" } : undefined}
+                    className={isInlineDark
+                        ? `synth-readout-text w-full select-none whitespace-nowrap bg-transparent px-1.5 py-[3px] text-center text-[10px] leading-none tracking-[0.08em] outline-none ${
+                            isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize"
+                        }`
+                        : `synth-readout-text h-full w-full bg-transparent outline-none ${isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${
                             suffix && !isEditing ? "pr-11" : "pr-4"
                         } pl-4`
-                    } ${
-                        isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"
-                    }`}
+                        } ${
+                            isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"
+                        }`
+                    }
                     onPointerDown={(event) => {
                         if (event.button !== 0 || isEditing) {
                             return;
@@ -231,7 +323,15 @@ export function PrecisionNumberField({
                         binding.endGesture();
 
                         if (!activeDrag.moved) {
-                            inputRef.current?.focus();
+                            if (isInlineDark) {
+                                setIsEditing(true);
+                                window.requestAnimationFrame(() => {
+                                    inputRef.current?.focus();
+                                    inputRef.current?.select();
+                                });
+                            } else {
+                                inputRef.current?.focus();
+                            }
                         }
                     }}
                     onPointerCancel={(event) => {

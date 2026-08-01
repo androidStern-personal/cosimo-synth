@@ -82,6 +82,7 @@ export const SYNTH_GRID_CARD_SHELL_CLASS = "synth-grid-card-shell relative min-h
 export const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "synth-grid-card-inset";
 export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "synth-compact-control rounded-[5px]";
 export const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "synth-compact-control-text";
+const WAVETABLE_DRAWABLE_CONTROL_GAP_PX = 0;
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75] as const;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const MSEG_PREVIEW_VERTICAL_PADDING_PX = 22;
@@ -256,6 +257,42 @@ function useResizeObserver<TElement extends Element>(ref: RefObject<TElement | n
     }, [ref]);
 
     return size;
+}
+
+function useElementBottomInset<TContainer extends Element, TElement extends Element>(
+    containerRef: RefObject<TContainer | null>,
+    elementRef: RefObject<TElement | null>,
+    extraGapPx = 0,
+) {
+    const [inset, setInset] = useState(0);
+
+    useLayoutEffect(() => {
+        const container = containerRef.current;
+        const element = elementRef.current;
+
+        if (!container || !element) {
+            return;
+        }
+
+        const update = () => {
+            const containerBounds = container.getBoundingClientRect();
+            const elementBounds = element.getBoundingClientRect();
+            setInset(Math.ceil(Math.max(0, elementBounds.bottom - containerBounds.top + extraGapPx)));
+        };
+
+        const observer = new ResizeObserver(update);
+        observer.observe(container);
+        observer.observe(element);
+        window.addEventListener("resize", update);
+        update();
+
+        return () => {
+            observer.disconnect();
+            window.removeEventListener("resize", update);
+        };
+    }, [containerRef, elementRef, extraGapPx]);
+
+    return inset;
 }
 
 function formatSeconds(seconds: number) {
@@ -688,11 +725,13 @@ export function WavetableCanvas({
     position,
     warpMode,
     warpAmount,
+    drawableTopInset,
 }: {
     frames: Float32Array[] | null;
     position: number;
     warpMode: number;
     warpAmount: number;
+    drawableTopInset: number;
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -725,6 +764,10 @@ export function WavetableCanvas({
     useEffect(() => {
         displayRef.current?.setWarp(warpMode, warpAmount);
     }, [warpAmount, warpMode]);
+
+    useEffect(() => {
+        displayRef.current?.setDrawableInsets({ top: drawableTopInset });
+    }, [drawableTopInset]);
 
     useEffect(() => {
         displayRef.current?.resize(size.width, size.height, window.devicePixelRatio || 1);
@@ -1900,6 +1943,8 @@ export function WavetableStageSection({
     bottomRightAccessory,
     className,
 }: WavetableStageSectionProps) {
+    const topControlsRef = useRef<HTMLDivElement | null>(null);
+    const drawableTopInset = useElementBottomInset(stageRef, topControlsRef, WAVETABLE_DRAWABLE_CONTROL_GAP_PX);
     const debugState = useMemo(() => ({
         position: clampDisplayPosition(position),
         warpMode: Math.round(Number(warpMode) || 0),
@@ -1928,9 +1973,11 @@ export function WavetableStageSection({
                 position={position}
                 warpMode={warpMode}
                 warpAmount={warpAmount}
+                drawableTopInset={drawableTopInset}
             />
 
             <div
+                ref={topControlsRef}
                 data-role="wavetable-stage-top-controls"
                 className="synth-display-lip-controls text-[8px] uppercase tracking-[0.10em]"
             >
@@ -1961,9 +2008,6 @@ export function WavetableStageSection({
                 <div className="flex min-w-0 items-center gap-1">
                     <div data-role="wavetable-frame-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
                         Frame {formatFrameIndex(position, frameCount)}
-                    </div>
-                    <div data-role="wavetable-position-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
-                        Pos {clampDisplayPosition(position).toFixed(3)}
                     </div>
                 </div>
             </div>

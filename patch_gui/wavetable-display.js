@@ -5,6 +5,7 @@ const CAMERA_PITCH = 26 * (Math.PI / 180);
 const CAMERA_DISTANCE = 10.5;
 const CAMERA_FOCAL_LENGTH = 2.4;
 const FRAME_DEPTH_EXTENT = 3.6;
+const STAGE_FIT_X_SCALE = 1.3;
 const AMPLITUDE_SCALE = 0.3;
 const DISCONTINUITY_THRESHOLD = 0.5;
 const FLOOR_Y = -0.64;
@@ -348,6 +349,20 @@ function createViewportPadding(width, height) {
     };
 }
 
+function createDrawableViewport(width, height, insets = {}) {
+    const left = clamp(Number(insets.left) || 0, 0, width - 1);
+    const right = clamp(Number(insets.right) || 0, 0, width - left - 1);
+    const top = clamp(Number(insets.top) || 0, 0, height - 1);
+    const bottom = clamp(Number(insets.bottom) || 0, 0, height - top - 1);
+
+    return {
+        x: left,
+        y: top,
+        width: Math.max(1, width - left - right),
+        height: Math.max(1, height - top - bottom),
+    };
+}
+
 function projectWorldPoint(point, camera) {
     const relative = subtractPoints(point, camera.position);
     const cameraX = dotProduct(relative, camera.right);
@@ -364,16 +379,20 @@ function projectWorldPoint(point, camera) {
 }
 
 function projectToScreen(projectedPoint, projection) {
+    const scaleX = projection.scaleX ?? projection.scale;
+    const scaleY = projection.scaleY ?? projection.scale;
+
     return {
-        x: projection.centerX + ((projectedPoint.projectedX - projection.projectedCenterX) * projection.scale),
-        y: projection.centerY - ((projectedPoint.projectedY - projection.projectedCenterY) * projection.scale),
+        x: projection.centerX + ((projectedPoint.projectedX - projection.projectedCenterX) * scaleX),
+        y: projection.centerY - ((projectedPoint.projectedY - projection.projectedCenterY) * scaleY),
         cameraDepth: projectedPoint.cameraDepth,
         perspective: projectedPoint.perspective,
     };
 }
 
-function createProjection(points, width, height) {
-    const padding = createViewportPadding(width, height);
+function createProjection(points, width, height, drawableInsets = {}) {
+    const drawable = createDrawableViewport(width, height, drawableInsets);
+    const padding = createViewportPadding(drawable.width, drawable.height);
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
@@ -389,19 +408,22 @@ function createProjection(points, width, height) {
     const spanX = Math.max(0.001, maxX - minX);
     const spanY = Math.max(0.001, maxY - minY);
     const scale = Math.min(
-        (width - padding.left - padding.right) / spanX,
-        (height - padding.top - padding.bottom) / spanY
+        (drawable.width - padding.left - padding.right) / spanX,
+        (drawable.height - padding.top - padding.bottom) / spanY
     );
 
     return {
         width,
         height,
+        drawable,
         scale,
+        scaleX: scale * STAGE_FIT_X_SCALE,
+        scaleY: scale,
         padding,
         projectedCenterX: (minX + maxX) * 0.5,
         projectedCenterY: (minY + maxY) * 0.5,
-        centerX: width * 0.5,
-        centerY: height * 0.5,
+        centerX: drawable.x + (drawable.width * 0.5),
+        centerY: drawable.y + (drawable.height * 0.5),
     };
 }
 
@@ -518,7 +540,7 @@ function createGuideLines(camera, projection) {
     ];
 }
 
-function buildProjectionFromFrames(contourSamples, width, height, frameCount) {
+function buildProjectionFromFrames(contourSamples, width, height, frameCount, drawableInsets = {}) {
     const camera = createCamera();
     const stableWorldPoints = [
         { x: -1, y: FLOOR_Y, z: 0 },
@@ -538,7 +560,7 @@ function buildProjectionFromFrames(contourSamples, width, height, frameCount) {
 
     return {
         camera,
-        projection: createProjection(projectedAnchors, width, height),
+        projection: createProjection(projectedAnchors, width, height, drawableInsets),
     };
 }
 
@@ -860,6 +882,7 @@ export function buildWavetableStaticScene({
     width = 640,
     height = 320,
     pixelRatio = 1,
+    drawableInsets = {},
 }) {
     assertFrames(frames);
 
@@ -870,7 +893,7 @@ export function buildWavetableStaticScene({
     const surfacePointCount = getSurfacePointCount(safeWidth, frames[0].length);
     const contourSamples = frames.map((frame) => decimateFrame(frame, contourPointCount));
     const surfaceSamples = frames.map((frame) => decimateFrame(frame, surfacePointCount));
-    const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight, frameCount);
+    const { camera, projection } = buildProjectionFromFrames(contourSamples, safeWidth, safeHeight, frameCount, drawableInsets);
     const contourFrames = contourSamples.map((samples, frameIndex) =>
         createProjectedFrame(samples, frameIndex, frameCount, camera, projection)
     );
@@ -882,6 +905,7 @@ export function buildWavetableStaticScene({
         width: safeWidth,
         height: safeHeight,
         pixelRatio: Math.max(1, Number(pixelRatio) || 1),
+        drawableInsets,
         frameCount,
         camera,
         contourPointCount,
@@ -904,6 +928,7 @@ export function buildWavetableRenderModel({
     width = 640,
     height = 320,
     pixelRatio = 1,
+    drawableInsets = {},
     staticScene = null,
 }) {
     const scene = staticScene ?? buildWavetableStaticScene({
@@ -911,6 +936,7 @@ export function buildWavetableRenderModel({
         width,
         height,
         pixelRatio,
+        drawableInsets,
     });
     const frameState = createFrameState(scene.frameCount, position, warpMode, warpAmount);
 
@@ -1067,6 +1093,7 @@ export class CanvasWavetableDisplay {
         this.devicePixelRatio = 1;
         this.cssWidth = 0;
         this.cssHeight = 0;
+        this.drawableInsets = { top: 0, right: 0, bottom: 0, left: 0 };
         this.staticScene = null;
         this.staticKey = "";
         this.pendingRenderHandle = null;
@@ -1097,6 +1124,28 @@ export class CanvasWavetableDisplay {
         this.queueRender();
     }
 
+    setDrawableInsets(insets = {}) {
+        const nextInsets = {
+            top: Math.max(0, Number(insets.top) || 0),
+            right: Math.max(0, Number(insets.right) || 0),
+            bottom: Math.max(0, Number(insets.bottom) || 0),
+            left: Math.max(0, Number(insets.left) || 0),
+        };
+
+        if (
+            nextInsets.top === this.drawableInsets.top &&
+            nextInsets.right === this.drawableInsets.right &&
+            nextInsets.bottom === this.drawableInsets.bottom &&
+            nextInsets.left === this.drawableInsets.left
+        ) {
+            return;
+        }
+
+        this.drawableInsets = nextInsets;
+        this.invalidateStaticScene();
+        this.queueRender();
+    }
+
     resize(width, height, devicePixelRatio = 1) {
         const nextWidth = Math.max(1, Math.floor(width || this.canvas.clientWidth || 1));
         const nextHeight = Math.max(1, Math.floor(height || this.canvas.clientHeight || 1));
@@ -1120,6 +1169,10 @@ export class CanvasWavetableDisplay {
             width,
             height,
             this.devicePixelRatio,
+            this.drawableInsets.top,
+            this.drawableInsets.right,
+            this.drawableInsets.bottom,
+            this.drawableInsets.left,
         ].join(":");
 
         if (this.staticScene && this.staticKey === nextKey) {
@@ -1132,6 +1185,7 @@ export class CanvasWavetableDisplay {
             width,
             height,
             pixelRatio: this.devicePixelRatio,
+            drawableInsets: this.drawableInsets,
         });
 
         return this.staticScene;

@@ -6,6 +6,7 @@
     "ui:desktop:dev": "vite --config ui/vite.desktop.config.mjs",
     "ui:desktop:build": "node ui/build.mjs --desktop",
     "web:build": "node web/build.mjs",
+    "sites:build": "node web/build-sites.mjs",
     "web:serve": "python3 -m http.server 8123 --bind 127.0.0.1 --directory build/web",
     "test:web:poc": "npm run web:build && node --test tests/test_web_poc_browser.mjs",
     "synth:desktop:build": "./scripts/build_desktop_native.sh",
