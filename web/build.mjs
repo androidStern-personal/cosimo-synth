@@ -26,6 +26,7 @@ function run(command, args) {
 async function copyWebHost() {
     await Promise.all([
         fs.copyFile(path.join(webDirectory, "index.html"), path.join(outputDirectory, "index.html")),
+        fs.copyFile(path.join(webDirectory, "favicon.svg"), path.join(outputDirectory, "favicon.svg")),
         fs.copyFile(path.join(webDirectory, "cosimo-web-host.js"), path.join(outputDirectory, "cosimo-web-host.js")),
         fs.copyFile(
             path.join(webDirectory, "desktop-production-loader.js"),

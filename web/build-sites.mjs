@@ -73,8 +73,8 @@ await fs.writeFile(
     `const worker = {
     async fetch(request, env) {
         const url = new URL(request.url);
-        if (url.pathname === "/") {
-            url.pathname = "/index.html";
+        if (url.pathname === "/" || url.pathname === "/favicon.ico") {
+            url.pathname = url.pathname === "/" ? "/index.html" : "/favicon.svg";
             return env.ASSETS.fetch(new Request(url, request));
         }
         return env.ASSETS.fetch(request);

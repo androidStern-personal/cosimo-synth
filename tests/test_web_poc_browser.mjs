@@ -9,6 +9,7 @@ import { chromium, devices, webkit } from "playwright";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const browserEngine = process.env.COSIMO_WEB_BROWSER ?? "chromium";
+const remoteBaseUrl = process.env.COSIMO_WEB_BASE_URL;
 const webRoot = process.env.COSIMO_WEB_ROOT
     ? path.resolve(repoRoot, process.env.COSIMO_WEB_ROOT)
     : path.join(repoRoot, "build", "web");
@@ -112,6 +113,20 @@ async function measureHeldNote(page, note = 48) {
 
 before(async () => {
     await fs.access(path.join(webRoot, "index.html"));
+    if (remoteBaseUrl) {
+        baseUrl = new URL("/", remoteBaseUrl).href;
+        browser = browserEngine === "webkit"
+            ? await webkit.launch({
+                executablePath: process.env.COSIMO_WEBKIT_EXECUTABLE_PATH,
+                headless: true,
+            })
+            : await chromium.launch({
+                channel: "chrome",
+                headless: true,
+            });
+        return;
+    }
+
     server = createServer((request, response) => {
         void serveWebProof(request, response);
     });
@@ -166,7 +181,7 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         }
     });
     page.on("response", (response) => {
-        if (!response.ok()) failedResponses.push(`${response.status()} ${response.url()}`);
+        if (response.status() >= 400) failedResponses.push(`${response.status()} ${response.url()}`);
     });
 
     try {
@@ -342,7 +357,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, stays g
         if (message.type() === "error") consoleErrors.push(message.text());
     });
     page.on("response", (response) => {
-        if (!response.ok()) failedResponses.push(`${response.status()} ${response.url()}`);
+        if (response.status() >= 400) failedResponses.push(`${response.status()} ${response.url()}`);
     });
     await page.addInitScript(() => {
         if (sessionStorage.getItem("cosimo-rack-test-initialised") !== "1") {
