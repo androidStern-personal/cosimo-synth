@@ -781,6 +781,12 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
     });
 
     try {
+        await page.addInitScript(() => {
+            Object.defineProperty(navigator, "audioSession", {
+                configurable: true,
+                value: { type: "ambient" },
+            });
+        });
         await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
@@ -796,6 +802,11 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
             const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
             return snapshot?.phase === "running" && snapshot.hasActiveTable;
         }, null, { timeout: 30_000 });
+        assert.equal(
+            await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot().audioSessionType),
+            "playback",
+            "The explicitly started synth must use iOS's audible playback session, not the silent-switch ambient session.",
+        );
 
         await page.locator('[data-role="open-effects-rack"]').click();
         await page.waitForFunction(() => {

@@ -146,11 +146,18 @@ function markAudioRunning() {
     return true;
 }
 
+function usePlaybackAudioSession() {
+    if (navigator.audioSession) {
+        navigator.audioSession.type = "playback";
+    }
+}
+
 function requestAudioResumeFromGesture() {
     if (!state.audioConnected || !state.audioContext || state.audioContext.state === "running") {
         return;
     }
 
+    usePlaybackAudioSession();
     void state.audioContext.resume()
         .then(() => {
             if (!markAudioRunning()) {
@@ -173,6 +180,10 @@ async function startAudio() {
 
     elements.startOverlay.disabled = true;
     elements.startStatus.textContent = "Starting audio…";
+
+    // A synth is intentional media playback. iOS's default ambient session is
+    // muted by the hardware silent switch even while Web Audio is running.
+    usePlaybackAudioSession();
 
     // Safari requires resume() to be requested synchronously inside the user's
     // activation. Do this before yielding to any graph-connection work.
@@ -204,6 +215,7 @@ function getSnapshot() {
 
     return {
         audioContextState: state.audioContext?.state ?? null,
+        audioSessionType: navigator.audioSession?.type ?? null,
         audioBaseLatency: state.audioContext?.baseLatency ?? null,
         audioOutputLatency: state.audioContext?.outputLatency ?? null,
         audioPeak: state.audioPeak,
