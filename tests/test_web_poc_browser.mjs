@@ -193,6 +193,11 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
+        await page.waitForFunction((expectedTableCount) => {
+            const view = document.querySelector("cosimo-desktop-react-view");
+            const select = view?.shadowRoot?.querySelector('select[aria-label="Select wavetable"]');
+            return select instanceof HTMLSelectElement && select.options.length === expectedTableCount;
+        }, factoryCatalog.tables.length, { timeout: 30_000 });
 
         assert.equal(await page.title(), "Cosimo Synth — Browser Proof");
         assert.equal(await page.locator("cosimo-desktop-react-view").count(), 1);
