@@ -42,3 +42,10 @@ Approved mobile rack workspace — 2026-08-06
 - Source pages carousel for 280 ms; the selected source remains visible. Source-first and target-first route creation both work, and one right-column bipolar control edits the real selected source/target route intersection.
 - Local package and fresh logged-out public proofs are green against the exact Sites artifact in Chromium and WebKit 26.4. WebKit iPhone profile verifies click-to-start, the real FX subpage, eight rows, no LFO, touch note down/up, visible held-key depression, non-silent audio, and zero over-budget worklet blocks in the measured segment.
 - TypeScript still reports only the pre-existing articulation narrowing, custom keyboard typing, iOS wavetable inset, and `CanvasWavetableDisplay.setDrawableInsets` errors; the new rack workspace has no type errors and the production Vite/Cmajor builds pass.
+
+Mobile rack touch repair — 2026-08-06
+- Safari touch moves must not use `PointerEvent.buttons` as the drag-liveness signal. WebKit bug 201770 documents active touch `pointermove` events reporting `buttons === 0`; only mouse movement now uses the zero-button release fallback.
+- Rack reorder captures on the stable rack list. Optimistic faceplate reordering can no longer move the capture owner out from under the active finger, and the grip plus descendants explicitly suppress touch panning/callouts.
+- Modulation source drop hit-testing uses the source's `Document` or `ShadowRoot`, not the outer document. A touch drag from MSEG 1 onto Distortion Knee now creates the real `rack.distortionKnee` route in the generated Cmajor view.
+- Two production-seam touch regressions were red before the fix and green afterward in 2.8 seconds. The full desktop UI remains 73/73; generated Chromium passes 5/5 applicable cases and WebKit passes 5/5 applicable cases with non-silent audio and zero measured worklet overruns.
+- The paired physical iPhone remains unavailable to CoreDevice, so the repair is verified with real Chromium touch injection, the WebKit zero-button compatibility case, and the iPhone-profile WebKit suite; physical-device observation is still the external gap.

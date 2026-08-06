@@ -65,7 +65,7 @@ type ReorderGesture = {
     readonly pointerId: number;
     readonly effectId: EffectModuleId;
     readonly originalOrder: ReadonlyArray<EffectModuleId>;
-    readonly handle: HTMLButtonElement;
+    readonly captureElement: HTMLDivElement;
 };
 
 const EFFECT_ACCENTS: Readonly<Record<EffectModuleId, string>> = {
@@ -81,6 +81,23 @@ const EFFECT_ACCENTS: Readonly<Record<EffectModuleId, string>> = {
 
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
+}
+
+function hasReleasedMouseButton(event: ReactPointerEvent<HTMLElement>) {
+    return event.pointerType === "mouse" && event.buttons === 0;
+}
+
+function elementAtPointInRenderRoot(referenceElement: Element, clientX: number, clientY: number) {
+    const renderRoot = referenceElement.getRootNode();
+    if (renderRoot instanceof Document || renderRoot instanceof ShadowRoot) {
+        return renderRoot.elementFromPoint(clientX, clientY);
+    }
+    return null;
+}
+
+function rackModulationTargetAtPoint(referenceElement: Element, clientX: number, clientY: number) {
+    return elementAtPointInRenderRoot(referenceElement, clientX, clientY)
+        ?.closest<HTMLElement>("[data-rack-mod-target]") ?? null;
 }
 
 function readRackStateFromFullStoredState(fullState: Record<string, unknown>) {
@@ -324,10 +341,6 @@ function RackUnit({
     onToggle,
     onRecentParameter,
     onReorderPointerDown,
-    onReorderPointerMove,
-    onReorderPointerUp,
-    onReorderPointerCancel,
-    onReorderLostCapture,
     onKeyboardMove,
 }: {
     effectId: EffectModuleId;
@@ -340,10 +353,6 @@ function RackUnit({
     onToggle: () => void;
     onRecentParameter: (endpointID: string) => void;
     onReorderPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-    onReorderPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-    onReorderPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-    onReorderPointerCancel: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-    onReorderLostCapture: () => void;
     onKeyboardMove: (offset: -1 | 1) => void;
 }) {
     const effect = getRackEffectDescriptor(effectId);
@@ -366,10 +375,6 @@ function RackUnit({
                 aria-label={`Reorder ${effect.label}`}
                 className="rack-grip"
                 onPointerDown={onReorderPointerDown}
-                onPointerMove={onReorderPointerMove}
-                onPointerUp={onReorderPointerUp}
-                onPointerCancel={onReorderPointerCancel}
-                onLostPointerCapture={onReorderLostCapture}
                 onKeyDown={(event) => {
                     if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
                         event.preventDefault();
@@ -780,7 +785,7 @@ function ModSourceCarousel({
             return;
         }
 
-        const targetElement = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-rack-mod-target]");
+        const targetElement = rackModulationTargetAtPoint(event.currentTarget, event.clientX, event.clientY);
         const targetEndpointID = targetElement?.dataset.rackModTarget;
         dragRef.current = null;
         onHoverTarget(null);
@@ -859,12 +864,18 @@ function ModSourceCarousel({
                                                 if (!drag || drag.pointerId !== event.pointerId) {
                                                     return;
                                                 }
-                                                if (event.buttons === 0) {
+                                                event.preventDefault();
+                                                event.stopPropagation();
+                                                if (hasReleasedMouseButton(event)) {
                                                     finishSourceGesture(event, true);
                                                     return;
                                                 }
                                                 drag.moved ||= Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 5;
-                                                const target = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-rack-mod-target]");
+                                                const target = rackModulationTargetAtPoint(
+                                                    event.currentTarget,
+                                                    event.clientX,
+                                                    event.clientY,
+                                                );
                                                 onHoverTarget(target?.dataset.rackModTarget ?? null);
                                             }}
                                             onPointerUp={(event) => finishSourceGesture(event, false)}
@@ -1000,6 +1011,7 @@ export function EffectsRackWorkspace({
     ));
     const [previewOrder, setPreviewOrder] = useState<ReadonlyArray<EffectModuleId>>(rackState.order);
     const previewOrderRef = useRef<ReadonlyArray<EffectModuleId>>(rackState.order);
+    const rackListRef = useRef<HTMLDivElement | null>(null);
     const reorderRef = useRef<ReorderGesture | null>(null);
     const [reorderingEffectId, setReorderingEffectId] = useState<EffectModuleId | null>(null);
     const [selectedSource, setSelectedSource] = useState<SelectedSource>({ sourceKind: "mseg", sourceSlot: 1 });
@@ -1065,8 +1077,8 @@ export function EffectsRackWorkspace({
         reorderRef.current = null;
         setReorderingEffectId(null);
         try {
-            if (gesture.handle.hasPointerCapture(pointerId)) {
-                gesture.handle.releasePointerCapture(pointerId);
+            if (gesture.captureElement.hasPointerCapture(pointerId)) {
+                gesture.captureElement.releasePointerCapture(pointerId);
             }
         } catch {
             // Capture may already be gone after a platform cancellation.
@@ -1079,6 +1091,59 @@ export function EffectsRackWorkspace({
             setPreviewOrder(gesture.originalOrder);
         }
     }, [commitOrder]);
+
+    const updateReorderPreview = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        const gesture = reorderRef.current;
+        if (!gesture || gesture.pointerId !== event.pointerId) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        if (hasReleasedMouseButton(event)) {
+            finishReorder(event.pointerId, false);
+            return;
+        }
+
+        const renderRoot = event.currentTarget.getRootNode();
+        if (!(renderRoot instanceof Document) && !(renderRoot instanceof ShadowRoot)) {
+            return;
+        }
+
+        const rackUnits = Array.from(
+            renderRoot.querySelectorAll<HTMLElement>("[data-rack-effect-id]"),
+        );
+        const containingUnit = rackUnits.find((unit) => {
+            const rect = unit.getBoundingClientRect();
+            return event.clientY >= rect.top && event.clientY <= rect.bottom;
+        });
+        const nearestUnit = containingUnit ?? rackUnits.reduce<HTMLElement | null>(
+            (nearest, unit) => {
+                if (!nearest) {
+                    return unit;
+                }
+                const unitRect = unit.getBoundingClientRect();
+                const nearestRect = nearest.getBoundingClientRect();
+                const unitDistance = Math.abs(event.clientY - (unitRect.top + unitRect.height / 2));
+                const nearestDistance = Math.abs(
+                    event.clientY - (nearestRect.top + nearestRect.height / 2),
+                );
+                return unitDistance < nearestDistance ? unit : nearest;
+            },
+            null,
+        );
+        const candidateEffectId = (containingUnit ?? nearestUnit)?.dataset.rackEffectId;
+        const overEffectId = previewOrderRef.current.find((effectId) => effectId === candidateEffectId);
+        if (!overEffectId) {
+            return;
+        }
+
+        const nextOrder = moveEffect(previewOrderRef.current, gesture.effectId, overEffectId);
+        if (nextOrder !== previewOrderRef.current) {
+            previewOrderRef.current = nextOrder;
+            setPreviewOrder(nextOrder);
+        }
+    }, [finishReorder]);
 
     useEffect(() => {
         const handlePointerUp = (event: PointerEvent) => finishReorder(event.pointerId, true);
@@ -1243,7 +1308,20 @@ export function EffectsRackWorkspace({
 
             <div className="rack-effects-grid">
                 <div className="rack-stack" aria-label="Ordered effects rack">
-                    <div className="rack-list" data-role="rack-module-list">
+                    <div
+                        ref={rackListRef}
+                        className="rack-list"
+                        data-role="rack-module-list"
+                        onPointerMove={updateReorderPreview}
+                        onPointerUp={(event) => finishReorder(event.pointerId, true)}
+                        onPointerCancel={(event) => finishReorder(event.pointerId, false)}
+                        onLostPointerCapture={(event) => {
+                            const gesture = reorderRef.current;
+                            if (gesture?.captureElement === event.currentTarget) {
+                                finishReorder(gesture.pointerId, false);
+                            }
+                        }}
+                    >
                         {previewOrder.map((effectId, position) => (
                             <RackUnit
                                 key={effectId}
@@ -1268,65 +1346,18 @@ export function EffectsRackWorkspace({
                                     }
                                     event.preventDefault();
                                     event.stopPropagation();
-                                    event.currentTarget.setPointerCapture(event.pointerId);
+                                    const captureElement = rackListRef.current;
+                                    if (!captureElement) {
+                                        return;
+                                    }
+                                    captureElement.setPointerCapture(event.pointerId);
                                     reorderRef.current = {
                                         pointerId: event.pointerId,
                                         effectId,
                                         originalOrder: [...previewOrderRef.current],
-                                        handle: event.currentTarget,
+                                        captureElement,
                                     };
                                     setReorderingEffectId(effectId);
-                                }}
-                                onReorderPointerMove={(event) => {
-                                    const gesture = reorderRef.current;
-                                    if (!gesture || gesture.pointerId !== event.pointerId) {
-                                        return;
-                                    }
-                                    if (event.buttons === 0) {
-                                        finishReorder(event.pointerId, false);
-                                        return;
-                                    }
-                                    const renderRoot = event.currentTarget.getRootNode() as Document | ShadowRoot;
-                                    const rackUnits = Array.from(
-                                        renderRoot.querySelectorAll<HTMLElement>("[data-rack-effect-id]"),
-                                    );
-                                    const containingUnit = rackUnits.find((unit) => {
-                                        const rect = unit.getBoundingClientRect();
-                                        return event.clientY >= rect.top && event.clientY <= rect.bottom;
-                                    });
-                                    const nearestUnit = containingUnit ?? rackUnits.reduce<HTMLElement | null>(
-                                        (nearest, unit) => {
-                                            if (!nearest) {
-                                                return unit;
-                                            }
-                                            const unitRect = unit.getBoundingClientRect();
-                                            const nearestRect = nearest.getBoundingClientRect();
-                                            const unitDistance = Math.abs(event.clientY - (unitRect.top + unitRect.height / 2));
-                                            const nearestDistance = Math.abs(
-                                                event.clientY - (nearestRect.top + nearestRect.height / 2),
-                                            );
-                                            return unitDistance < nearestDistance ? unit : nearest;
-                                        },
-                                        null,
-                                    );
-                                    const overEffectId = (containingUnit ?? nearestUnit)?.dataset
-                                        .rackEffectId as EffectModuleId | undefined;
-                                    if (!overEffectId) {
-                                        return;
-                                    }
-                                    const nextOrder = moveEffect(previewOrderRef.current, gesture.effectId, overEffectId);
-                                    if (nextOrder !== previewOrderRef.current) {
-                                        previewOrderRef.current = nextOrder;
-                                        setPreviewOrder(nextOrder);
-                                    }
-                                }}
-                                onReorderPointerUp={(event) => finishReorder(event.pointerId, true)}
-                                onReorderPointerCancel={(event) => finishReorder(event.pointerId, false)}
-                                onReorderLostCapture={() => {
-                                    const gesture = reorderRef.current;
-                                    if (gesture?.effectId === effectId) {
-                                        finishReorder(gesture.pointerId, false);
-                                    }
                                 }}
                                 onKeyboardMove={(offset) => {
                                     const targetPosition = clamp(position + offset, 0, previewOrder.length - 1);

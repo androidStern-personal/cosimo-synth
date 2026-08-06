@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import { chromium, devices, webkit } from "playwright";
 
+import { deserializeModulationState } from "../patch_gui/modulation.js";
+
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const browserEngine = process.env.COSIMO_WEB_BROWSER ?? "chromium";
 const remoteBaseUrl = process.env.COSIMO_WEB_BASE_URL;
@@ -113,6 +115,95 @@ async function measureHeldNote(page, note = 48) {
     await page.evaluate((noteNumber) => globalThis.__COSIMO_WEB_POC__.noteOff(noteNumber), note);
     await page.waitForTimeout(180);
     return rms;
+}
+
+async function dispatchTouchDrag(page, start, end, { steps = 10 } = {}) {
+    const client = await page.context().newCDPSession(page);
+
+    try {
+        await client.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{
+                x: start.x,
+                y: start.y,
+                radiusX: 5,
+                radiusY: 5,
+                force: 1,
+                id: 1,
+            }],
+        });
+
+        for (let index = 1; index <= steps; index += 1) {
+            const progress = index / steps;
+            await client.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: start.x + ((end.x - start.x) * progress),
+                    y: start.y + ((end.y - start.y) * progress),
+                    radiusX: 5,
+                    radiusY: 5,
+                    force: 1,
+                    id: 1,
+                }],
+            });
+        }
+
+        await client.send("Input.dispatchTouchEvent", {
+            type: "touchEnd",
+            touchPoints: [],
+        });
+    } finally {
+        await client.detach();
+    }
+}
+
+async function centerOf(locator) {
+    const bounds = await locator.boundingBox();
+    assert.ok(bounds, "Expected a visible touch target.");
+    return {
+        x: bounds.x + (bounds.width / 2),
+        y: bounds.y + (bounds.height / 2),
+    };
+}
+
+async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = false } = {}) {
+    const page = await browser.newPage({
+        ...devices["iPhone 13"],
+    });
+
+    await page.addInitScript(({ shouldSimulateZeroTouchButtons }) => {
+        localStorage.removeItem("cosimo.web.patch-state.v1");
+        if (!shouldSimulateZeroTouchButtons) {
+            return;
+        }
+
+        const buttonsGetter = Object.getOwnPropertyDescriptor(MouseEvent.prototype, "buttons")?.get;
+        Object.defineProperty(PointerEvent.prototype, "buttons", {
+            configurable: true,
+            get() {
+                if (this.pointerType === "touch" && this.type === "pointermove") {
+                    return 0;
+                }
+                return buttonsGetter ? Reflect.apply(buttonsGetter, this, []) : 0;
+            },
+        });
+    }, { shouldSimulateZeroTouchButtons: simulateWebKitZeroTouchButtons });
+
+    await page.goto(`${baseUrl}?rack-touch-gestures=1`, { waitUntil: "domcontentloaded" });
+    await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+        timeout: 30_000,
+    });
+
+    const startBounds = await page.locator("#cosimo-start-overlay").boundingBox();
+    assert.ok(startBounds, "Expected the Start audio control to be visible.");
+    await page.touchscreen.tap(
+        startBounds.x + (startBounds.width / 2),
+        startBounds.y + (startBounds.height / 2),
+    );
+    await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
+    await page.locator('[data-role="open-effects-rack"]').click();
+    await page.locator('[data-role="rack-module-list"]').waitFor();
+    return page;
 }
 
 before(async () => {
@@ -545,6 +636,88 @@ test("generated rack UI persists one grip reorder and enable change through relo
         t.diagnostic(`After reload: ${JSON.stringify(afterReload)}`);
         assert.equal(afterReload.firstRole, "rack-module-reverb");
         assert.equal(afterReload.chorusPressed, "true");
+    } finally {
+        await page.close();
+    }
+});
+
+test("generated mobile rack reorder survives WebKit zero-button touch moves without scrolling", {
+    skip: browserEngine !== "chromium",
+}, async () => {
+    const page = await openStartedMobileRackPage({ simulateWebKitZeroTouchButtons: true });
+
+    try {
+        const scrollBefore = await page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const scrollRegion = root?.querySelector('[data-role="desktop-scroll-region"]');
+            return {
+                documentY: window.scrollY,
+                regionY: scrollRegion instanceof HTMLElement ? scrollRegion.scrollTop : 0,
+            };
+        });
+        const reorderStart = await centerOf(page.locator('[data-role="rack-reorder-handle-reverb"]'));
+        const reorderEnd = await centerOf(page.locator('[data-role="rack-module-filter"]'));
+        await dispatchTouchDrag(page, reorderStart, reorderEnd);
+        await page.waitForTimeout(100);
+        const reorderResult = await page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const list = root?.querySelector('[data-role="rack-module-list"]');
+            const scrollRegion = root?.querySelector('[data-role="desktop-scroll-region"]');
+            return {
+                documentY: window.scrollY,
+                firstRole: list?.firstElementChild?.getAttribute("data-role") ?? null,
+                regionY: scrollRegion instanceof HTMLElement ? scrollRegion.scrollTop : 0,
+            };
+        });
+        assert.equal(reorderResult.firstRole, "rack-module-reverb");
+        assert.deepEqual(
+            { documentY: reorderResult.documentY, regionY: reorderResult.regionY },
+            scrollBefore,
+            "The rack reorder handle yielded its touch gesture to page scrolling.",
+        );
+        const storedRack = await page.evaluate(async () => {
+            const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
+            return JSON.parse(String(stored.values?.["rack.v1"]));
+        });
+        assert.equal(storedRack.order[0], "reverb", "Touch reorder did not commit its new DSP order.");
+    } finally {
+        await page.close();
+    }
+});
+
+test("generated mobile modulation source touch-drops onto a parameter inside the patch shadow root", {
+    skip: browserEngine !== "chromium",
+}, async () => {
+    const page = await openStartedMobileRackPage();
+
+    try {
+        const sourceStart = await centerOf(page.locator('[data-role="rack-mod-source-mseg-1"]'));
+        const targetEnd = await centerOf(page.locator('[data-rack-mod-target="distortionKnee"]'));
+        await dispatchTouchDrag(page, sourceStart, targetEnd);
+
+        await page.waitForFunction(async () => {
+            const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
+            const serialized = stored.values?.["modulation.v2"];
+            if (typeof serialized !== "string") {
+                return false;
+            }
+            const state = JSON.parse(serialized);
+            return Array.isArray(state.routes) && state.routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.distortionKnee"
+            ));
+        }, null, { timeout: 3_000 });
+        const modulationState = await page.evaluate(async () => {
+            const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
+            return stored.values?.["modulation.v2"] ?? null;
+        });
+        const route = deserializeModulationState(modulationState).routes.find((candidate) => (
+            candidate.sourceKind === "mseg"
+            && candidate.sourceSlot === 1
+            && candidate.targetKind === "rack.distortionKnee"
+        ));
+        assert.ok(route, "Touch drag from MSEG 1 did not create the Distortion Knee route.");
     } finally {
         await page.close();
     }
