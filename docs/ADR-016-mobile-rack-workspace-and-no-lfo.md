@@ -15,6 +15,7 @@ The approved mobile effects design must show all eight 56-pixel rack faceplates,
 - Selecting a source and a target identifies their route intersection. The one bipolar amount control reads or writes that real route; selecting in either order is supported.
 - Drag lifetimes are owned by pointer identity through `pointerup` or `pointercancel`; `buttons === 0` is only a mouse-release fallback because WebKit has reported zero button state during active touch moves. Rack reorder capture belongs to the stable rack list rather than a faceplate handle that moves during optimistic preview.
 - Modulation drop hit-testing stays inside the render root that owns the source. This keeps parameter discovery correct in both the ordinary document and the generated Cmajor shadow root.
+- The web host requests `AudioContext.resume()` synchronously inside the Start gesture, connects the Cmajor output graph only once, and retries resume from later pointer/touch gestures only when an already-connected context is not running. A keyboard touch can therefore recover Safari audio after a background/interruption without duplicating the output connection.
 
 ## Consequences
 
@@ -23,3 +24,4 @@ The approved mobile effects design must show all eight 56-pixel rack faceplates,
 - LFO prototype assets are removed rather than left as dormant product vocabulary.
 - The desktop layout continues to place the same shared rack workspace inline; parameter descriptors, state, and engine writes are not forked by viewport.
 - Touch reorder cannot yield to page scrolling after it begins, and moving faceplates cannot invalidate their own capture owner. Generated-browser regression coverage simulates WebKit's zero-button touch moves and performs a real touch drop from MSEG 1 onto Distortion Knee inside the production shadow root.
+- Safari may consume the first gesture after returning from an interruption to resume audio; the same gesture still reaches the keyboard. Regression coverage deliberately suspends the running context, touches the real keyboard, and requires both a `running` context and measurable post-recovery output.

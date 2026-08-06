@@ -17,6 +17,7 @@ const state = {
     audioContext: null,
     audioProbe: null,
     audioProbeBuffer: null,
+    audioConnected: false,
     audioPeak: 0,
     audioPeakCurrent: 0,
     audioRms: 0,
@@ -134,8 +135,35 @@ function sendMIDI(status, note, velocity) {
     );
 }
 
+function markAudioRunning() {
+    if (state.audioContext?.state !== "running") {
+        return false;
+    }
+
+    state.started = true;
+    state.phase = "running";
+    elements.startOverlay.style.display = "none";
+    return true;
+}
+
+function requestAudioResumeFromGesture() {
+    if (!state.audioConnected || !state.audioContext || state.audioContext.state === "running") {
+        return;
+    }
+
+    void state.audioContext.resume()
+        .then(() => {
+            if (!markAudioRunning()) {
+                elements.startOverlay.style.display = "";
+                elements.startOverlay.disabled = false;
+                elements.startStatus.textContent = "Tap to resume audio";
+            }
+        })
+        .catch(showError);
+}
+
 async function startAudio() {
-    if (state.started) {
+    if (state.started && state.audioContext?.state === "running") {
         return;
     }
 
@@ -145,18 +173,30 @@ async function startAudio() {
 
     elements.startOverlay.disabled = true;
     elements.startStatus.textContent = "Starting audio…";
-    await state.connection.connectDefaultAudioAndMIDI(state.audioContext);
 
-    if (state.audioProbe) {
-        state.connection.audioNode.disconnect();
-        state.connection.audioNode.connect(state.audioProbe);
-        state.audioProbe.connect(state.audioContext.destination);
+    // Safari requires resume() to be requested synchronously inside the user's
+    // activation. Do this before yielding to any graph-connection work.
+    const resumePromise = state.audioContext.resume();
+
+    if (!state.audioConnected) {
+        await state.connection.connectDefaultAudioAndMIDI(state.audioContext);
+
+        if (state.audioProbe) {
+            state.connection.audioNode.disconnect();
+            state.connection.audioNode.connect(state.audioProbe);
+            state.audioProbe.connect(state.audioContext.destination);
+        }
+
+        state.audioConnected = true;
     }
 
-    await state.audioContext.resume();
-    state.started = true;
-    state.phase = "running";
-    elements.startOverlay.style.display = "none";
+    await resumePromise;
+
+    if (!markAudioRunning()) {
+        elements.startOverlay.style.display = "";
+        elements.startOverlay.disabled = false;
+        elements.startStatus.textContent = "Tap to resume audio";
+    }
 }
 
 function getSnapshot() {
@@ -221,6 +261,15 @@ globalThis.__COSIMO_WEB_POC__ = {
         state.connection.sendEventOrValue(endpointID, value);
     },
     start: startAudio,
+    suspendAudioForTest() {
+        if (!new URLSearchParams(globalThis.location.search).has("test")) {
+            return Promise.reject(new Error("Audio suspension is only available in test mode."));
+        }
+        if (!state.audioContext) {
+            return Promise.reject(new Error("Cosimo's audio engine is not ready."));
+        }
+        return state.audioContext.suspend();
+    },
     storedState() {
         if (!state.connection) return Promise.reject(new Error("Cosimo is not ready."));
         return new Promise((resolve) => state.connection.requestFullStoredState(resolve));
@@ -295,6 +344,9 @@ async function initialise() {
 elements.startOverlay.addEventListener("click", () => {
     void startAudio().catch(showError);
 });
+
+document.addEventListener("pointerdown", requestAudioResumeFromGesture, { capture: true, passive: true });
+document.addEventListener("touchstart", requestAudioResumeFromGesture, { capture: true, passive: true });
 
 globalThis.addEventListener("error", (event) => {
     showError(event.error ?? event.message);
