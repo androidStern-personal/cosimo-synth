@@ -1,0 +1,399 @@
+{
+  "format": "cosimo.modulation-source-icons.v1",
+  "palette": {
+    "macro": "#ff6b2c",
+    "cyclic": "#54d9ff",
+    "shape": "#d978e5",
+    "performance": "#b9d947"
+  },
+  "logicalSizes": [
+    24,
+    32,
+    44
+  ],
+  "devicePixelRatios": [
+    1,
+    2,
+    3
+  ],
+  "pixelSizes": [
+    24,
+    32,
+    44,
+    48,
+    64,
+    72,
+    88,
+    96,
+    132
+  ],
+  "glyphSources": {
+    "macro": "../fontaudio/fad-slider-round-1.svg",
+    "lfo": "../fontaudio/fad-modsine.svg",
+    "envelope": "../fontaudio/fad-ADSR.svg",
+    "mseg": "../fontaudio/fad-automation-4p.svg",
+    "velocity": "../fontaudio/fad-keyboard.svg",
+    "pressure": "../fontaudio/fad-thunderbolt.svg",
+    "slide": "../fontaudio/fad-arrows-horz.svg",
+    "mod-wheel": "../fontaudio/fad-vroundswitch-on.svg"
+  },
+  "assets": [
+    {
+      "id": "macro-1",
+      "label": "Macro 1",
+      "glyph": "macro",
+      "family": "macro",
+      "number": 1,
+      "color": "#ff6b2c",
+      "svg": "svg/fixed/macro-1.svg",
+      "maskSvg": "svg/mask/macro-1.svg",
+      "png": {
+        "24": "png/24/macro-1.png",
+        "32": "png/32/macro-1.png",
+        "44": "png/44/macro-1.png",
+        "48": "png/48/macro-1.png",
+        "64": "png/64/macro-1.png",
+        "72": "png/72/macro-1.png",
+        "88": "png/88/macro-1.png",
+        "96": "png/96/macro-1.png",
+        "132": "png/132/macro-1.png"
+      }
+    },
+    {
+      "id": "macro-2",
+      "label": "Macro 2",
+      "glyph": "macro",
+      "family": "macro",
+      "number": 2,
+      "color": "#ff6b2c",
+      "svg": "svg/fixed/macro-2.svg",
+      "maskSvg": "svg/mask/macro-2.svg",
+      "png": {
+        "24": "png/24/macro-2.png",
+        "32": "png/32/macro-2.png",
+        "44": "png/44/macro-2.png",
+        "48": "png/48/macro-2.png",
+        "64": "png/64/macro-2.png",
+        "72": "png/72/macro-2.png",
+        "88": "png/88/macro-2.png",
+        "96": "png/96/macro-2.png",
+        "132": "png/132/macro-2.png"
+      }
+    },
+    {
+      "id": "macro-3",
+      "label": "Macro 3",
+      "glyph": "macro",
+      "family": "macro",
+      "number": 3,
+      "color": "#ff6b2c",
+      "svg": "svg/fixed/macro-3.svg",
+      "maskSvg": "svg/mask/macro-3.svg",
+      "png": {
+        "24": "png/24/macro-3.png",
+        "32": "png/32/macro-3.png",
+        "44": "png/44/macro-3.png",
+        "48": "png/48/macro-3.png",
+        "64": "png/64/macro-3.png",
+        "72": "png/72/macro-3.png",
+        "88": "png/88/macro-3.png",
+        "96": "png/96/macro-3.png",
+        "132": "png/132/macro-3.png"
+      }
+    },
+    {
+      "id": "macro-4",
+      "label": "Macro 4",
+      "glyph": "macro",
+      "family": "macro",
+      "number": 4,
+      "color": "#ff6b2c",
+      "svg": "svg/fixed/macro-4.svg",
+      "maskSvg": "svg/mask/macro-4.svg",
+      "png": {
+        "24": "png/24/macro-4.png",
+        "32": "png/32/macro-4.png",
+        "44": "png/44/macro-4.png",
+        "48": "png/48/macro-4.png",
+        "64": "png/64/macro-4.png",
+        "72": "png/72/macro-4.png",
+        "88": "png/88/macro-4.png",
+        "96": "png/96/macro-4.png",
+        "132": "png/132/macro-4.png"
+      }
+    },
+    {
+      "id": "lfo-1",
+      "label": "LFO 1",
+      "glyph": "lfo",
+      "family": "cyclic",
+      "number": 1,
+      "color": "#54d9ff",
+      "svg": "svg/fixed/lfo-1.svg",
+      "maskSvg": "svg/mask/lfo-1.svg",
+      "png": {
+        "24": "png/24/lfo-1.png",
+        "32": "png/32/lfo-1.png",
+        "44": "png/44/lfo-1.png",
+        "48": "png/48/lfo-1.png",
+        "64": "png/64/lfo-1.png",
+        "72": "png/72/lfo-1.png",
+        "88": "png/88/lfo-1.png",
+        "96": "png/96/lfo-1.png",
+        "132": "png/132/lfo-1.png"
+      }
+    },
+    {
+      "id": "lfo-2",
+      "label": "LFO 2",
+      "glyph": "lfo",
+      "family": "cyclic",
+      "number": 2,
+      "color": "#54d9ff",
+      "svg": "svg/fixed/lfo-2.svg",
+      "maskSvg": "svg/mask/lfo-2.svg",
+      "png": {
+        "24": "png/24/lfo-2.png",
+        "32": "png/32/lfo-2.png",
+        "44": "png/44/lfo-2.png",
+        "48": "png/48/lfo-2.png",
+        "64": "png/64/lfo-2.png",
+        "72": "png/72/lfo-2.png",
+        "88": "png/88/lfo-2.png",
+        "96": "png/96/lfo-2.png",
+        "132": "png/132/lfo-2.png"
+      }
+    },
+    {
+      "id": "lfo-3",
+      "label": "LFO 3",
+      "glyph": "lfo",
+      "family": "cyclic",
+      "number": 3,
+      "color": "#54d9ff",
+      "svg": "svg/fixed/lfo-3.svg",
+      "maskSvg": "svg/mask/lfo-3.svg",
+      "png": {
+        "24": "png/24/lfo-3.png",
+        "32": "png/32/lfo-3.png",
+        "44": "png/44/lfo-3.png",
+        "48": "png/48/lfo-3.png",
+        "64": "png/64/lfo-3.png",
+        "72": "png/72/lfo-3.png",
+        "88": "png/88/lfo-3.png",
+        "96": "png/96/lfo-3.png",
+        "132": "png/132/lfo-3.png"
+      }
+    },
+    {
+      "id": "envelope-1",
+      "label": "Envelope 1",
+      "glyph": "envelope",
+      "family": "shape",
+      "number": 1,
+      "color": "#d978e5",
+      "svg": "svg/fixed/envelope-1.svg",
+      "maskSvg": "svg/mask/envelope-1.svg",
+      "png": {
+        "24": "png/24/envelope-1.png",
+        "32": "png/32/envelope-1.png",
+        "44": "png/44/envelope-1.png",
+        "48": "png/48/envelope-1.png",
+        "64": "png/64/envelope-1.png",
+        "72": "png/72/envelope-1.png",
+        "88": "png/88/envelope-1.png",
+        "96": "png/96/envelope-1.png",
+        "132": "png/132/envelope-1.png"
+      }
+    },
+    {
+      "id": "envelope-2",
+      "label": "Envelope 2",
+      "glyph": "envelope",
+      "family": "shape",
+      "number": 2,
+      "color": "#d978e5",
+      "svg": "svg/fixed/envelope-2.svg",
+      "maskSvg": "svg/mask/envelope-2.svg",
+      "png": {
+        "24": "png/24/envelope-2.png",
+        "32": "png/32/envelope-2.png",
+        "44": "png/44/envelope-2.png",
+        "48": "png/48/envelope-2.png",
+        "64": "png/64/envelope-2.png",
+        "72": "png/72/envelope-2.png",
+        "88": "png/88/envelope-2.png",
+        "96": "png/96/envelope-2.png",
+        "132": "png/132/envelope-2.png"
+      }
+    },
+    {
+      "id": "envelope-3",
+      "label": "Envelope 3",
+      "glyph": "envelope",
+      "family": "shape",
+      "number": 3,
+      "color": "#d978e5",
+      "svg": "svg/fixed/envelope-3.svg",
+      "maskSvg": "svg/mask/envelope-3.svg",
+      "png": {
+        "24": "png/24/envelope-3.png",
+        "32": "png/32/envelope-3.png",
+        "44": "png/44/envelope-3.png",
+        "48": "png/48/envelope-3.png",
+        "64": "png/64/envelope-3.png",
+        "72": "png/72/envelope-3.png",
+        "88": "png/88/envelope-3.png",
+        "96": "png/96/envelope-3.png",
+        "132": "png/132/envelope-3.png"
+      }
+    },
+    {
+      "id": "mseg-1",
+      "label": "MSEG 1",
+      "glyph": "mseg",
+      "family": "shape",
+      "number": 1,
+      "color": "#d978e5",
+      "svg": "svg/fixed/mseg-1.svg",
+      "maskSvg": "svg/mask/mseg-1.svg",
+      "png": {
+        "24": "png/24/mseg-1.png",
+        "32": "png/32/mseg-1.png",
+        "44": "png/44/mseg-1.png",
+        "48": "png/48/mseg-1.png",
+        "64": "png/64/mseg-1.png",
+        "72": "png/72/mseg-1.png",
+        "88": "png/88/mseg-1.png",
+        "96": "png/96/mseg-1.png",
+        "132": "png/132/mseg-1.png"
+      }
+    },
+    {
+      "id": "mseg-2",
+      "label": "MSEG 2",
+      "glyph": "mseg",
+      "family": "shape",
+      "number": 2,
+      "color": "#d978e5",
+      "svg": "svg/fixed/mseg-2.svg",
+      "maskSvg": "svg/mask/mseg-2.svg",
+      "png": {
+        "24": "png/24/mseg-2.png",
+        "32": "png/32/mseg-2.png",
+        "44": "png/44/mseg-2.png",
+        "48": "png/48/mseg-2.png",
+        "64": "png/64/mseg-2.png",
+        "72": "png/72/mseg-2.png",
+        "88": "png/88/mseg-2.png",
+        "96": "png/96/mseg-2.png",
+        "132": "png/132/mseg-2.png"
+      }
+    },
+    {
+      "id": "mseg-3",
+      "label": "MSEG 3",
+      "glyph": "mseg",
+      "family": "shape",
+      "number": 3,
+      "color": "#d978e5",
+      "svg": "svg/fixed/mseg-3.svg",
+      "maskSvg": "svg/mask/mseg-3.svg",
+      "png": {
+        "24": "png/24/mseg-3.png",
+        "32": "png/32/mseg-3.png",
+        "44": "png/44/mseg-3.png",
+        "48": "png/48/mseg-3.png",
+        "64": "png/64/mseg-3.png",
+        "72": "png/72/mseg-3.png",
+        "88": "png/88/mseg-3.png",
+        "96": "png/96/mseg-3.png",
+        "132": "png/132/mseg-3.png"
+      }
+    },
+    {
+      "id": "velocity",
+      "label": "Velocity",
+      "glyph": "velocity",
+      "family": "performance",
+      "number": null,
+      "color": "#b9d947",
+      "svg": "svg/fixed/velocity.svg",
+      "maskSvg": "svg/mask/velocity.svg",
+      "png": {
+        "24": "png/24/velocity.png",
+        "32": "png/32/velocity.png",
+        "44": "png/44/velocity.png",
+        "48": "png/48/velocity.png",
+        "64": "png/64/velocity.png",
+        "72": "png/72/velocity.png",
+        "88": "png/88/velocity.png",
+        "96": "png/96/velocity.png",
+        "132": "png/132/velocity.png"
+      }
+    },
+    {
+      "id": "pressure",
+      "label": "Pressure",
+      "glyph": "pressure",
+      "family": "performance",
+      "number": null,
+      "color": "#b9d947",
+      "svg": "svg/fixed/pressure.svg",
+      "maskSvg": "svg/mask/pressure.svg",
+      "png": {
+        "24": "png/24/pressure.png",
+        "32": "png/32/pressure.png",
+        "44": "png/44/pressure.png",
+        "48": "png/48/pressure.png",
+        "64": "png/64/pressure.png",
+        "72": "png/72/pressure.png",
+        "88": "png/88/pressure.png",
+        "96": "png/96/pressure.png",
+        "132": "png/132/pressure.png"
+      }
+    },
+    {
+      "id": "slide",
+      "label": "Slide",
+      "glyph": "slide",
+      "family": "performance",
+      "number": null,
+      "color": "#b9d947",
+      "svg": "svg/fixed/slide.svg",
+      "maskSvg": "svg/mask/slide.svg",
+      "png": {
+        "24": "png/24/slide.png",
+        "32": "png/32/slide.png",
+        "44": "png/44/slide.png",
+        "48": "png/48/slide.png",
+        "64": "png/64/slide.png",
+        "72": "png/72/slide.png",
+        "88": "png/88/slide.png",
+        "96": "png/96/slide.png",
+        "132": "png/132/slide.png"
+      }
+    },
+    {
+      "id": "mod-wheel",
+      "label": "Mod Wheel",
+      "glyph": "mod-wheel",
+      "family": "performance",
+      "number": null,
+      "color": "#b9d947",
+      "svg": "svg/fixed/mod-wheel.svg",
+      "maskSvg": "svg/mask/mod-wheel.svg",
+      "png": {
+        "24": "png/24/mod-wheel.png",
+        "32": "png/32/mod-wheel.png",
+        "44": "png/44/mod-wheel.png",
+        "48": "png/48/mod-wheel.png",
+        "64": "png/64/mod-wheel.png",
+        "72": "png/72/mod-wheel.png",
+        "88": "png/88/mod-wheel.png",
+        "96": "png/96/mod-wheel.png",
+        "132": "png/132/mod-wheel.png"
+      }
+    }
+  ]
+}

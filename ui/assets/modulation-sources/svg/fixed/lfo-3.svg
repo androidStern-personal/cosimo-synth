@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title" style="color:#54d9ff">
+  <title id="title">LFO 3 modulation source</title>
+  <circle cx="32" cy="32" r="28.25" fill="none" stroke="currentColor" stroke-width="3.25"/>
+  <g fill="currentColor" stroke="none" transform="translate(6 12) scale(0.14)">
+    <path d="M48 128c-1.955-29.248 19.364-64 37.364-64 18 0 36.136 13.843 36.136 64.5s19.136 80.5 49.136 80.5c30 0 53.364-40.125 53.364-80.5-8.182 0-7.273-.752-16 0 0 32.35-20.455 64.45-37.364 64.45s-33.909-13.542-33.909-64.45S120.273 48 85.364 48C50.454 48 32 88.626 32 127.748c6 0 8.364.252 16 .252z" fill-rule="evenodd"/>
+  </g>
+  <path d="M46.1 27.4c.8-1.2 2-1.8 3.5-1.8 2.2 0 3.6 1.3 3.6 3.3 0 1.8-1 3-2.9 3.5 2.1.4 3.2 1.7 3.2 3.8 0 2.7-1.7 4.4-4.2 4.4-1.7 0-3-.7-3.9-2" fill="none" stroke="currentColor" stroke-width="2.45" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
