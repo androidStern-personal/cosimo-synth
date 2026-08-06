@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 import type { PatchControlBinding } from "./patch-controls";
 
@@ -12,28 +12,73 @@ type DragState = {
     startClientX: number;
     startNormalized: number;
     binding: PatchControlBinding<number>;
-    axis: "vertical" | "horizontal";
+    axis: "vertical" | "horizontal" | "horizontal-relative";
     min: number;
     max: number;
-    trackElement: HTMLDivElement;
+    trackElement: HTMLElement;
     onChange?: (normalized: number) => void;
 };
 
 export function useSliderDrag() {
     const dragRef = useRef<DragState | null>(null);
 
+    const finishDrag = useCallback((pointerId?: number) => {
+        const drag = dragRef.current;
+        if (!drag || (pointerId !== undefined && drag.pointerId !== pointerId)) {
+            return;
+        }
+
+        dragRef.current = null;
+        try {
+            if (drag.trackElement.hasPointerCapture(drag.pointerId)) {
+                drag.trackElement.releasePointerCapture(drag.pointerId);
+            }
+        } catch {
+            // Pointer capture may already be released by cancel, blur, or test events.
+        }
+        drag.binding.endGesture();
+    }, []);
+
+    useEffect(() => {
+        const handlePointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
+        const handleBlur = () => finishDrag();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                finishDrag();
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishDrag();
+        };
+    }, [finishDrag]);
+
     const handlePointerDown = useCallback((
-        event: ReactPointerEvent<HTMLDivElement>,
-        trackElement: HTMLDivElement | null,
+        event: ReactPointerEvent<HTMLElement>,
+        trackElement: HTMLElement | null,
         binding: PatchControlBinding<number>,
         currentNormalized: number,
         min: number,
         max: number,
-        axis: "vertical" | "horizontal",
+        axis: "vertical" | "horizontal" | "horizontal-relative",
         onChange?: (normalized: number) => void,
     ) => {
-        if (!trackElement) return;
+        if (!trackElement || (event.pointerType === "mouse" && event.button !== 0)) {
+            return;
+        }
+
         event.preventDefault();
+        event.stopPropagation();
+        finishDrag();
         try {
             trackElement.setPointerCapture(event.pointerId);
         } catch {
@@ -52,30 +97,30 @@ export function useSliderDrag() {
             trackElement,
             onChange,
         };
-    }, []);
+    }, [finishDrag]);
 
-    const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         const drag = dragRef.current;
         if (!drag || event.pointerId !== drag.pointerId) return;
         if (event.buttons === 0) {
-            try {
-                drag.trackElement.releasePointerCapture(event.pointerId);
-            } catch {
-                // Pointer capture may already be released.
-            }
-            drag.binding.endGesture();
-            dragRef.current = null;
+            finishDrag(event.pointerId);
             return;
         }
+        event.preventDefault();
+        event.stopPropagation();
         const rect = drag.trackElement.getBoundingClientRect();
         let nextNormalized: number;
         if (drag.axis === "vertical") {
             const deltaY = drag.startClientY - event.clientY;
-            const trackHeight = rect.height;
+            const trackHeight = Math.max(1, rect.height);
             nextNormalized = clamp(drag.startNormalized + (deltaY / trackHeight), 0, 1);
+        } else if (drag.axis === "horizontal-relative") {
+            const deltaX = event.clientX - drag.startClientX;
+            const trackWidth = Math.max(1, rect.width);
+            nextNormalized = clamp(drag.startNormalized + (deltaX / trackWidth), 0, 1);
         } else {
             const deltaX = event.clientX - rect.left;
-            nextNormalized = clamp(deltaX / rect.width, 0, 1);
+            nextNormalized = clamp(deltaX / Math.max(1, rect.width), 0, 1);
         }
         if (drag.onChange) {
             drag.onChange(nextNormalized);
@@ -83,19 +128,17 @@ export function useSliderDrag() {
             const denormalized = drag.min + (nextNormalized * (drag.max - drag.min));
             drag.binding.setValue(denormalized);
         }
-    }, []);
+    }, [finishDrag]);
 
-    const endDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        const drag = dragRef.current;
-        if (!drag || event.pointerId !== drag.pointerId) return;
-        try {
-            drag.trackElement.releasePointerCapture(event.pointerId);
-        } catch {
-            // Pointer capture may already be released (e.g. after pointercancel).
-        }
-        drag.binding.endGesture();
-        dragRef.current = null;
-    }, []);
+    const endDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+        finishDrag(event.pointerId);
+    }, [finishDrag]);
 
-    return { handlePointerDown, handlePointerMove, handlePointerUp: endDrag, handlePointerCancel: endDrag };
+    return {
+        handlePointerDown,
+        handlePointerMove,
+        handlePointerUp: endDrag,
+        handlePointerCancel: endDrag,
+        handleLostPointerCapture: finishDrag,
+    };
 }

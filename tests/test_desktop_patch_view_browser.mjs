@@ -168,7 +168,7 @@ async function dispatchInputValueChange(locator, nextValue) {
 }
 
 async function selectRackEffect(page, effectId) {
-    await page.click(`[data-role="rack-select-${effectId}"]`);
+    await page.click(`[data-role="rack-quick-${effectId}"]`);
     await page.waitForSelector(`[data-role="rack-editor-${effectId}"]`);
 }
 
@@ -973,7 +973,7 @@ test("built desktop bundle renders visible distortion slider handles inside the 
         await page.waitForSelector("cosimo-desktop-react-view");
         await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
-            const selectDrive = host?.shadowRoot?.querySelector('[data-role="rack-select-drive"]');
+            const selectDrive = host?.shadowRoot?.querySelector('[data-role="rack-quick-drive"]');
 
             if (!(selectDrive instanceof HTMLButtonElement)) {
                 throw new Error("Expected the Distortion rack selector in the built bundle.");
@@ -5551,7 +5551,7 @@ test("desktop distortion controls send live parameter updates", async () => {
 
     try {
         await selectRackEffect(page, "drive");
-        await page.waitForSelector('[data-role="distortion-card"]');
+        await page.waitForSelector('[data-role="rack-editor-drive"]');
         await clearHarnessDebugLog(page);
 
         await page.click('[data-role="distortion-mode-option-1"]');
@@ -5616,6 +5616,330 @@ test("desktop effects rack renders the complete ordered eight-module surface", a
     }
 });
 
+test("mobile FX subpage keeps all eight approved rack rows visible and confines modulation controls to the editor", async () => {
+    for (const width of [320, 375, 390, 430]) {
+        const page = await openHarnessPage({
+            beforeGoto: (nextPage) => nextPage.setViewportSize({ width, height: 667 }),
+        });
+
+        try {
+            await page.click('[data-role="open-effects-rack"]');
+            await page.waitForSelector('[data-role="mobile-effects-region"] [data-role="effects-rack-card"]');
+
+            const layout = await page.evaluate(() => {
+                const rectOf = (element) => {
+                    const rect = element.getBoundingClientRect();
+                    return {
+                        left: rect.left,
+                        right: rect.right,
+                        top: rect.top,
+                        bottom: rect.bottom,
+                        width: rect.width,
+                        height: rect.height,
+                    };
+                };
+                const units = Array.from(document.querySelectorAll("[data-rack-position]"));
+                const list = document.querySelector(".rack-list");
+                const editor = document.querySelector(".rack-effect-editor");
+                const amount = document.querySelector(".rack-mod-amount");
+                const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+                const wordmarks = Array.from(document.querySelectorAll(".rack-wordmark"));
+                const powers = Array.from(document.querySelectorAll(".rack-power"));
+                const quickLines = Array.from(document.querySelectorAll(".rack-quick-line"));
+                const rawRanges = Array.from(document.querySelectorAll(
+                    '[data-role="effects-rack-card"] input[type="range"]',
+                ));
+
+                if (!(list instanceof HTMLElement)
+                    || !(editor instanceof HTMLElement)
+                    || !(amount instanceof HTMLElement)
+                    || !(keyboard instanceof HTMLElement)) {
+                    return null;
+                }
+
+                return {
+                    viewportWidth: window.innerWidth,
+                    documentScrollWidth: document.documentElement.scrollWidth,
+                    units: units.map(rectOf),
+                    list: rectOf(list),
+                    editor: rectOf(editor),
+                    amount: rectOf(amount),
+                    keyboard: rectOf(keyboard),
+                    wordmarks: wordmarks.map((wordmark, index) => ({
+                        ...rectOf(wordmark),
+                        row: rectOf(units[index]),
+                    })),
+                    powers: powers.map(rectOf),
+                    quickLinesAreSingleRow: quickLines.every((line) => {
+                        const children = Array.from(line.children).map(rectOf);
+                        return getComputedStyle(line).display === "flex"
+                            && children.length === 2
+                            && Math.abs(children[0].top - children[1].top) <= 1
+                            && Math.abs(children[0].bottom - children[1].bottom) <= 1
+                            && Array.from(line.children).every((child) => getComputedStyle(child).whiteSpace === "nowrap");
+                    }),
+                    rawRangesAreVisuallyHidden: rawRanges.every((range) => {
+                        const style = getComputedStyle(range);
+                        return style.position === "absolute"
+                            && (style.clip !== "auto" || style.clipPath !== "none")
+                            && Number.parseFloat(style.width) <= 1
+                            && Number.parseFloat(style.height) <= 1;
+                    }),
+                };
+            });
+
+            assert.ok(layout, `Expected compact rack layout at ${width}px.`);
+            assert.equal(layout.units.length, 8, `Expected eight rack rows at ${width}px.`);
+            assert.equal(layout.documentScrollWidth <= layout.viewportWidth, true, `Horizontal overflow at ${width}px.`);
+            assert.equal(
+                layout.units.every((unit) => Math.abs(unit.height - 56) <= 0.5),
+                true,
+                `Rack rows are not 56px at ${width}px: ${JSON.stringify(layout.units)}`,
+            );
+            assert.equal(layout.units[7].bottom <= layout.keyboard.top + 0.5, true, `Last rack row clips keyboard at ${width}px.`);
+            assert.equal(layout.units[7].bottom <= 667, true, `All rack rows must remain in the viewport at ${width}px.`);
+            assert.equal(layout.amount.left >= layout.editor.left - 0.5, true, `Amount control escapes editor at ${width}px.`);
+            assert.equal(layout.amount.right <= layout.editor.right + 0.5, true, `Amount control escapes editor at ${width}px.`);
+            assert.equal(layout.amount.left >= layout.list.right - 0.5, true, `Amount control steals rack width at ${width}px.`);
+            assert.equal(layout.list.bottom >= layout.units[7].bottom - 0.5, true);
+            assert.equal(
+                layout.wordmarks.every(({ left, top, row }) => left >= row.left && top >= row.top && top - row.top <= 9),
+                true,
+                `Rack names are not upper-left aligned at ${width}px.`
+            );
+            assert.equal(
+                layout.powers.every(({ width: powerWidth, height: powerHeight }) => powerWidth >= 44 && powerHeight >= 44),
+                true,
+                `Power targets are not touchable at ${width}px.`
+            );
+            assert.equal(layout.quickLinesAreSingleRow, true, `Quick values wrapped at ${width}px.`);
+            assert.equal(layout.rawRangesAreVisuallyHidden, true, `Native rack ranges leaked visually at ${width}px.`);
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly carousels for 280 ms", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await page.click('[data-role="open-effects-rack"]');
+        await page.waitForSelector('[data-role="rack-mod-source-track"]');
+
+        const initial = await page.evaluate(() => {
+            const rack = document.querySelector('[data-role="effects-rack-card"]');
+            const track = document.querySelector('[data-role="rack-mod-source-track"]');
+            const activePage = document.querySelector('.rack-mod-page[aria-hidden="false"]');
+            if (!(rack instanceof HTMLElement) || !(track instanceof HTMLElement) || !(activePage instanceof HTMLElement)) {
+                return null;
+            }
+            return {
+                labels: Array.from(activePage.querySelectorAll("button")).map((button) => button.getAttribute("aria-label")),
+                sourceRoles: Array.from(rack.querySelectorAll('button[data-role^="rack-mod-source-"]'))
+                    .map((element) => element.getAttribute("data-role")),
+                rackText: rack.textContent ?? "",
+                transitionDuration: getComputedStyle(track).transitionDuration,
+            };
+        });
+
+        assert.ok(initial);
+        assert.deepEqual(initial.labels, ["MSEG 1", "Envelope 1", "Macro 1"]);
+        assert.equal(initial.sourceRoles.length, 9);
+        assert.equal(initial.sourceRoles.some((role) => /lfo/i.test(String(role))), false);
+        assert.equal(/\blfo\b/i.test(initial.rackText), false);
+        assert.equal(initial.transitionDuration, "0.28s");
+
+        const animation = await page.evaluate(async () => {
+            const track = document.querySelector('[data-role="rack-mod-source-track"]');
+            const viewport = document.querySelector(".rack-mod-viewport");
+            const next = document.querySelector('[aria-label="Next modulation-source group"]');
+            if (!(track instanceof HTMLElement) || !(viewport instanceof HTMLElement) || !(next instanceof HTMLButtonElement)) {
+                return null;
+            }
+            const startLeft = track.getBoundingClientRect().left;
+            const travel = viewport.getBoundingClientRect().width;
+            next.click();
+            await new Promise((resolve) => window.setTimeout(resolve, 80));
+            const duringLeft = track.getBoundingClientRect().left;
+            await new Promise((resolve) => window.setTimeout(resolve, 260));
+            const endLeft = track.getBoundingClientRect().left;
+            const activePage = document.querySelector('.rack-mod-page[aria-hidden="false"]');
+            const selected = activePage?.querySelector('[aria-pressed="true"]');
+            return {
+                startLeft,
+                duringLeft,
+                endLeft,
+                travel,
+                labels: Array.from(activePage?.querySelectorAll("button") ?? [])
+                    .map((button) => button.getAttribute("aria-label")),
+                selectedLabel: selected?.getAttribute("aria-label") ?? null,
+            };
+        });
+
+        assert.ok(animation);
+        assert.equal(animation.duringLeft < animation.startLeft - 1, true, "Carousel did not begin moving.");
+        assert.equal(
+            animation.duringLeft > animation.startLeft - animation.travel + 1,
+            true,
+            "Carousel switched instantly instead of animating.",
+        );
+        assert.equal(
+            Math.abs((animation.startLeft - animation.endLeft) - animation.travel) <= 2,
+            true,
+            `Carousel did not finish one page away: ${JSON.stringify(animation)}`,
+        );
+        assert.deepEqual(animation.labels, ["MSEG 2", "Envelope 2", "Macro 2"]);
+        assert.equal(animation.selectedLabel, "MSEG 2");
+    } finally {
+        await page.close();
+    }
+});
+
+test("rack mod bar supports source-first and target-first routes with one real bipolar amount control", async () => {
+    const sourceFirstPage = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await sourceFirstPage.click('[data-role="open-effects-rack"]');
+        await clearHarnessDebugLog(sourceFirstPage);
+        await sourceFirstPage.click('[data-role="rack-mod-source-mseg-1"]');
+
+        let snapshot = await waitForHarnessSnapshot(
+            sourceFirstPage,
+            "source-first rack route",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.distortionDriveDb"
+            )),
+        );
+        const sourceFirstRoute = readStoredModulationState(snapshot).routes.find((route) => (
+            route.sourceKind === "mseg"
+            && route.sourceSlot === 1
+            && route.targetKind === "rack.distortionDriveDb"
+        ));
+        assert.ok(sourceFirstRoute);
+
+        const amount = sourceFirstPage.locator('[data-role="rack-modulation-amount"]');
+        const amountBox = await amount.boundingBox();
+        assert.ok(amountBox, "Expected the rack amount control.");
+        await sourceFirstPage.mouse.move(amountBox.x + (amountBox.width * 0.5), amountBox.y + (amountBox.height * 0.5));
+        await sourceFirstPage.mouse.down();
+        await sourceFirstPage.mouse.move(amountBox.x + (amountBox.width * 0.82), amountBox.y + (amountBox.height * 0.5), { steps: 8 });
+        await sourceFirstPage.mouse.up();
+
+        snapshot = await waitForHarnessSnapshot(
+            sourceFirstPage,
+            "rack route amount update",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.distortionDriveDb"
+                && route.amount > 1
+            )),
+        );
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "rackModulationRoute"
+                && Number(value?.reducerKind) === 1
+                && Number(value?.amount) > 1
+            )),
+            true,
+            "Voice-source rack route did not reach the real rack endpoint with Max reduction.",
+        );
+        assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').getAttribute("aria-valuemin"), "-100");
+        assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').getAttribute("aria-valuemax"), "100");
+        assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 1);
+    } finally {
+        await sourceFirstPage.close();
+    }
+
+    const targetFirstPage = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await targetFirstPage.click('[data-role="open-effects-rack"]');
+        await selectRackEffect(targetFirstPage, "reverb");
+        await targetFirstPage.click('[aria-label="Next modulation-source group"]');
+        await targetFirstPage.waitForTimeout(300);
+        await clearHarnessDebugLog(targetFirstPage);
+        await targetFirstPage.click('[data-role="rack-mod-source-macro-2"]');
+
+        const snapshot = await waitForHarnessSnapshot(
+            targetFirstPage,
+            "target-first rack route",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
+                route.sourceKind === "macro"
+                && route.sourceSlot === 2
+                && route.targetKind === "rack.reverbSize"
+            )),
+        );
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "rackModulationRoute"
+                && Number(value?.sourceKind) === 6
+                && Number(value?.reducerKind) === 0
+            )),
+            true,
+            "Global Macro route must reach the rack without a voice reducer.",
+        );
+    } finally {
+        await targetFirstPage.close();
+    }
+});
+
+test("rack quick controls never reorder or stick after release and reorder is grip-only", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await clearHarnessDebugLog(page);
+        const quick = page.locator('[data-role="rack-quick-reverb"]');
+        await quick.scrollIntoViewIfNeeded();
+        const quickBox = await quick.boundingBox();
+        assert.ok(quickBox);
+
+        await page.mouse.move(quickBox.x + (quickBox.width * 0.2), quickBox.y + (quickBox.height * 0.72));
+        await page.mouse.move(quickBox.x + (quickBox.width * 0.8), quickBox.y + (quickBox.height * 0.72), { steps: 8 });
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.sentMessages, [], "Hovering a quick control must be inert.");
+        assert.deepEqual(snapshot.gestureStarts, []);
+
+        await page.mouse.down();
+        await page.mouse.move(quickBox.x + (quickBox.width * 0.55), quickBox.y + (quickBox.height * 0.72), { steps: 6 });
+        await page.mouse.up();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "quick-control parameter gesture",
+            (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
+                && nextSnapshot.gestureEnds.includes("reverbSize"),
+        );
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "reverbSize"), true);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "rackOrder"), false);
+
+        const valueAfterRelease = Number(snapshot.parameterValues.reverbSize);
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(quickBox.x + 2, quickBox.y + (quickBox.height * 0.72), { steps: 10 });
+        await page.mouse.move(quickBox.x + quickBox.width - 2, quickBox.y + (quickBox.height * 0.72), { steps: 10 });
+        await page.waitForTimeout(80);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(Number(snapshot.parameterValues.reverbSize), valueAfterRelease);
+        assert.deepEqual(snapshot.sentMessages, [], "Released quick control remained attached to the pointer.");
+        assert.deepEqual(snapshot.gestureStarts, []);
+        assert.deepEqual(snapshot.gestureEnds, []);
+
+        assert.equal(await page.locator('[data-rack-position][draggable="true"]').count(), 0);
+        assert.equal(await page.locator('[data-role^="rack-reorder-handle-"]').count(), 8);
+    } finally {
+        await page.close();
+    }
+});
+
 test("every rack editor binds live controls and one drop commits one complete DSP order", async () => {
     const page = await openHarnessPage();
 
@@ -5658,17 +5982,16 @@ test("every rack editor binds live controls and one drop commits one complete DS
         assert.equal(Object.values(storedRack.enabled).every(Boolean), true);
 
         await clearHarnessDebugLog(page);
-        await page.evaluate(() => {
-            const source = document.querySelector('[data-role="rack-module-reverb"]');
-            const target = document.querySelector('[data-role="rack-module-filter"]');
-            if (!(source instanceof HTMLElement) || !(target instanceof HTMLElement)) {
-                throw new Error("Rack drag endpoints are missing");
-            }
-            const dataTransfer = new DataTransfer();
-            source.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
-            target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
-            source.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer }));
-        });
+        const reorderHandle = page.locator('[data-role="rack-reorder-handle-reverb"]');
+        const reorderTarget = page.locator('[data-role="rack-module-filter"]');
+        await reorderHandle.scrollIntoViewIfNeeded();
+        const handleBox = await reorderHandle.boundingBox();
+        const targetBox = await reorderTarget.boundingBox();
+        assert.ok(handleBox && targetBox, "Rack pointer-reorder endpoints are missing");
+        await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
+        await page.mouse.up();
         snapshot = await waitForHarnessSnapshot(
             page,
             "one rack reorder commit",
@@ -5767,7 +6090,13 @@ test("desktop chorus mode buttons do not visually collide in the selected rack e
 
             return {
                 rects,
-                noBoxOverlap: rects.every((rect, index) => index === 0 || rects[index - 1].bottom <= rect.top),
+                noBoxOverlap: rects.every((rect, index) => rects.every((otherRect, otherIndex) => (
+                    index === otherIndex
+                    || rect.right <= otherRect.left
+                    || otherRect.right <= rect.left
+                    || rect.bottom <= otherRect.top
+                    || otherRect.bottom <= rect.top
+                ))),
                 clipsInternalOverflow: rects.every((rect) => rect.overflowX === "hidden"),
                 contentFits: rects.every((rect) => rect.scrollWidth <= rect.clientWidth + 1),
             };
@@ -6055,7 +6384,7 @@ test("desktop distortion wet low-pass slider renders the full 20 Hz floor", asyn
 
     try {
         await selectRackEffect(page, "drive");
-        await page.waitForSelector('[data-role="distortion-card"]');
+        await page.waitForSelector('[data-role="rack-editor-drive"]');
 
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWetLPHz", 20, true);
@@ -6079,15 +6408,15 @@ test("desktop distortion wet low-pass slider renders the full 20 Hz floor", asyn
             },
             (nextState) => Boolean(
                 nextState
-                && nextState.min === "0"
-                && nextState.max === "1"
-                && Math.abs(Number(nextState.value)) <= 0.001
+                && nextState.min === "20"
+                && nextState.max === "20000"
+                && Math.abs(Number(nextState.value) - 20) <= 0.001
             ),
         );
 
-        assert.equal(sliderState.min, "0");
-        assert.equal(sliderState.max, "1");
-        assert.equal(Math.abs(Number(sliderState.value)) <= 0.001, true);
+        assert.equal(sliderState.min, "20");
+        assert.equal(sliderState.max, "20000");
+        assert.equal(Math.abs(Number(sliderState.value) - 20) <= 0.001, true);
     } finally {
         await page.close();
     }

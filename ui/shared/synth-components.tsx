@@ -2057,6 +2057,8 @@ export type VerticalSliderProps = {
     trackDataRole?: string;
     formatValue?: (value: number) => string;
     onChange?: (normalized: number) => void;
+    normalizedFromValue?: (value: number) => number;
+    valueFromNormalized?: (normalized: number) => number;
     className?: string;
 };
 
@@ -2081,13 +2083,30 @@ export function VerticalSlider({
     trackDataRole,
     formatValue,
     onChange,
+    normalizedFromValue,
+    valueFromNormalized,
     className,
 }: VerticalSliderProps) {
     const trackRef = useRef<HTMLDivElement>(null);
-    const { handlePointerDown, handlePointerMove, handlePointerUp, handlePointerCancel } = useSliderDrag();
+    const {
+        handlePointerDown,
+        handlePointerMove,
+        handlePointerUp,
+        handlePointerCancel,
+        handleLostPointerCapture,
+    } = useSliderDrag();
 
-    const normalized = clamp((binding.value - min) / (max - min), 0, 1);
+    const normalized = clamp(
+        normalizedFromValue
+            ? normalizedFromValue(binding.value)
+            : (binding.value - min) / (max - min),
+        0,
+        1,
+    );
     const displayValue = formatValue ? formatValue(binding.value) : defaultFormatValue(binding.value, min, max);
+    const handleNormalizedChange = onChange ?? (valueFromNormalized
+        ? (nextNormalized: number) => binding.setValue(valueFromNormalized(nextNormalized))
+        : undefined);
 
     const fillStyle = bipolar
         ? normalized >= 0.5
@@ -2102,10 +2121,20 @@ export function VerticalSlider({
                 ref={trackRef}
                 data-role={trackDataRole}
                 className="relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]"
-                onPointerDown={(e) => handlePointerDown(e, trackRef.current, binding, normalized, min, max, "vertical", onChange)}
+                onPointerDown={(e) => handlePointerDown(
+                    e,
+                    trackRef.current,
+                    binding,
+                    normalized,
+                    min,
+                    max,
+                    "vertical",
+                    handleNormalizedChange,
+                )}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
+                onLostPointerCapture={() => handleLostPointerCapture()}
             >
                 {bipolar && (
                     <div className="absolute left-0 right-0 top-1/2 h-px -translate-y-px bg-white/[0.12]" />

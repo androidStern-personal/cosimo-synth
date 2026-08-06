@@ -333,6 +333,7 @@ export type SynthPatchViewModel = {
     handleSelectEnvelopeSlot: (slotIndex: number) => void;
     handleEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
     handleAddRoute: () => void;
+    handleAddRouteWithOverrides: (overrides: Partial<ModulationRoute>) => void;
     handleRemoveRoute: (routeIndex: number) => void;
     handleRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     handleAddArticulationSlot: () => void;
@@ -2058,6 +2059,10 @@ export function useSynthPatchViewModel({
         modulationBridge.current?.addRoute(createDefaultRoute());
     }, [modulationBridge]);
 
+    const handleAddRouteWithOverrides = useCallback((overrides: Partial<ModulationRoute>) => {
+        modulationBridge.current?.addRoute(createDefaultRoute(overrides));
+    }, [modulationBridge]);
+
     const handleRemoveRoute = useCallback((routeIndex: number) => {
         modulationBridge.current?.removeRoute(routeIndex);
     }, [modulationBridge]);
@@ -2845,6 +2850,7 @@ export function useSynthPatchViewModel({
         handleSelectEnvelopeSlot,
         handleEnvelopeChange,
         handleAddRoute,
+        handleAddRouteWithOverrides,
         handleRemoveRoute,
         handleRouteChange,
         handleAddArticulationSlot,

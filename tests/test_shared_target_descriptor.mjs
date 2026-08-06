@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import fc from "fast-check";
@@ -9,6 +10,25 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const catalogPromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
 const rackCatalogPromise = loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
+
+test("modulation-source assets deliberately contain no separate LFO family", async () => {
+    const manifest = JSON.parse(await readFile(
+        path.join(repoRoot, "ui/assets/modulation-sources/manifest.json"),
+        "utf8",
+    ));
+    const identities = manifest.assets.map((asset) => asset.id);
+
+    assert.equal(Object.prototype.hasOwnProperty.call(manifest.glyphSources, "lfo"), false);
+    assert.equal(identities.some((identity) => /lfo/i.test(identity)), false);
+    assert.deepEqual(
+        identities.filter((identity) => /^(mseg|envelope|macro)-[1-3]$/.test(identity)).sort(),
+        [
+            "envelope-1", "envelope-2", "envelope-3",
+            "macro-1", "macro-2", "macro-3",
+            "mseg-1", "mseg-2", "mseg-3",
+        ],
+    );
+});
 
 const EXPECTED_VOICE_BINDINGS = {
     "wavetable.index": ["endpoint", "wavetablePosition", "framePosition"],

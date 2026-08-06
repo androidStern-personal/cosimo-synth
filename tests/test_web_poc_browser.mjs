@@ -23,6 +23,10 @@ function contentTypeFor(filePath) {
     if (extension === ".html") return "text/html; charset=utf-8";
     if (extension === ".js" || extension === ".mjs") return "text/javascript; charset=utf-8";
     if (extension === ".json") return "application/json; charset=utf-8";
+    if (extension === ".jpg" || extension === ".jpeg") return "image/jpeg";
+    if (extension === ".png") return "image/png";
+    if (extension === ".svg") return "image/svg+xml";
+    if (extension === ".ttf") return "font/ttf";
     if (extension === ".wav") return "audio/wav";
     return "application/octet-stream";
 }
@@ -347,7 +351,7 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
     }
 });
 
-test("generated WebAssembly rack changes audio, modulates a real target, stays gain-safe, and reloads rack.v1", async (t) => {
+test("generated WebAssembly rack changes audio, modulates a real target, and stays gain-safe", async (t) => {
     const page = await browser.newPage(browserEngine === "webkit"
         ? { ...devices["iPhone 13"] }
         : { viewport: { width: 1280, height: 820 } });
@@ -455,36 +459,6 @@ test("generated WebAssembly rack changes audio, modulates a real target, stays g
         assert.equal(sustainedSnapshot.audioContextState, "running");
         assert.equal(sustainedSnapshot.silentHeldNotePollCount, 0, "No analyser poll may underrun to silence.");
 
-        const root = page.locator("cosimo-desktop-react-view");
-        await root.evaluate((host) => {
-            const shadow = host.shadowRoot;
-            shadow?.querySelector('[data-role="rack-enabled-chorus"]')?.click();
-            const source = shadow?.querySelector('[data-role="rack-module-reverb"]');
-            const target = shadow?.querySelector('[data-role="rack-module-filter"]');
-            if (!(source instanceof HTMLElement) || !(target instanceof HTMLElement)) return;
-            const dataTransfer = new DataTransfer();
-            source.dispatchEvent(new DragEvent("dragstart", { bubbles: true, dataTransfer }));
-            target.dispatchEvent(new DragEvent("drop", { bubbles: true, cancelable: true, dataTransfer }));
-            source.dispatchEvent(new DragEvent("dragend", { bubbles: true, dataTransfer }));
-        });
-        await page.waitForFunction(async () => {
-            const state = await globalThis.__COSIMO_WEB_POC__.storedState();
-            const rack = JSON.parse(String(state.values?.["rack.v1"]));
-            return rack.order[0] === "reverb" && rack.enabled.chorus === true;
-        });
-
-        await page.reload({ waitUntil: "domcontentloaded" });
-        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
-            timeout: 30_000,
-        });
-        await page.waitForFunction(() => {
-            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const first = root?.querySelector('[data-role="rack-module-list"]')?.firstElementChild;
-            const chorus = root?.querySelector('[data-role="rack-enabled-chorus"]');
-            return first?.getAttribute("data-role") === "rack-module-reverb"
-                && chorus?.getAttribute("aria-pressed") === "true";
-        });
-
         t.diagnostic(JSON.stringify({
             allOnGainDb,
             allOnRms,
@@ -506,6 +480,67 @@ test("generated WebAssembly rack changes audio, modulates a real target, stays g
         assert.deepEqual(consoleErrors, []);
     } finally {
         await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v1")).catch(() => {});
+        await page.close();
+    }
+});
+
+test("generated rack UI persists one grip reorder and enable change through reload", async (t) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    await page.addInitScript(() => {
+        if (sessionStorage.getItem("cosimo-rack-state-test-initialised") !== "1") {
+            localStorage.removeItem("cosimo.web.patch-state.v1");
+            sessionStorage.setItem("cosimo-rack-state-test-initialised", "1");
+        }
+    });
+
+    try {
+        await page.goto(`${baseUrl}?rack-state-test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
+        await page.locator('[data-role="rack-enabled-chorus"]').click();
+        const reorderHandle = page.locator('[data-role="rack-reorder-handle-reverb"]');
+        const reorderTarget = page.locator('[data-role="rack-module-filter"]');
+        await reorderHandle.scrollIntoViewIfNeeded();
+        const handleBox = await reorderHandle.boundingBox();
+        const targetBox = await reorderTarget.boundingBox();
+        assert.ok(handleBox && targetBox);
+        await page.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
+        await page.mouse.up();
+
+        await page.waitForFunction(async () => {
+            const state = await globalThis.__COSIMO_WEB_POC__.storedState();
+            const rack = JSON.parse(String(state.values?.["rack.v1"]));
+            return rack.order[0] === "reverb" && rack.enabled.chorus === true;
+        });
+        const beforeReload = await page.evaluate(async () => ({
+            connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["rack.v1"] ?? null,
+            local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v1") ?? "{}")["rack.v1"] ?? null,
+        }));
+        t.diagnostic(`Before reload: ${JSON.stringify(beforeReload)}`);
+
+        await page.reload({ waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.waitForTimeout(500);
+        const afterReload = await page.evaluate(async () => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            return {
+                connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["rack.v1"] ?? null,
+                local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v1") ?? "{}")["rack.v1"] ?? null,
+                firstRole: root?.querySelector('[data-role="rack-module-list"]')?.firstElementChild?.getAttribute("data-role") ?? null,
+                chorusPressed: root?.querySelector('[data-role="rack-enabled-chorus"]')?.getAttribute("aria-pressed") ?? null,
+            };
+        });
+        t.diagnostic(`After reload: ${JSON.stringify(afterReload)}`);
+        assert.equal(afterReload.firstRole, "rack-module-reverb");
+        assert.equal(afterReload.chorusPressed, "true");
+    } finally {
         await page.close();
     }
 });
@@ -533,6 +568,30 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
             const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
             return snapshot?.phase === "running" && snapshot.hasActiveTable;
         }, null, { timeout: 30_000 });
+
+        await page.locator('[data-role="open-effects-rack"]').click();
+        await page.waitForFunction(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            return root?.querySelectorAll('[data-role="rack-module-list"] > [data-rack-effect-id]').length === 8;
+        });
+        const rackLayout = await page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const listBounds = root?.querySelector('[data-role="rack-module-list"]')?.getBoundingClientRect();
+            const editorBounds = root?.querySelector('[data-role^="rack-editor-"]')?.getBoundingClientRect();
+            const amountBounds = root?.querySelector('[data-role="rack-modulation-amount"]')?.getBoundingClientRect();
+            const sourceLabels = Array.from(root?.querySelectorAll('[data-role^="rack-mod-source-"]') ?? [])
+                .map((source) => source.getAttribute("aria-label") ?? "");
+            return {
+                amountWithinEditor: Boolean(amountBounds && editorBounds
+                    && amountBounds.left >= editorBounds.left
+                    && amountBounds.right <= editorBounds.right),
+                listHeight: listBounds?.height ?? 0,
+                sourceLabels,
+            };
+        });
+        assert.equal(rackLayout.amountWithinEditor, true, "The mapping amount must consume only the editor column.");
+        assert.ok(rackLayout.listHeight > 400, "All eight compact rack rows must remain present in the mobile flow.");
+        assert.equal(rackLayout.sourceLabels.some((label) => /LFO/i.test(label)), false, "The rack must expose no LFO source.");
 
         const noteBounds = await page.evaluate(() => {
             const view = document.querySelector("cosimo-desktop-react-view");

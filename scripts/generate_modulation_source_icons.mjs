@@ -10,7 +10,6 @@ const OUTPUT_DIRECTORY = path.join(REPOSITORY_ROOT, "ui", "assets", "modulation-
 
 const PALETTE = Object.freeze({
     macro: "#ff6b2c",
-    cyclic: "#54d9ff",
     shape: "#d978e5",
     performance: "#b9d947",
 });
@@ -25,10 +24,6 @@ const GLYPHS = Object.freeze({
     macro: {
         source: "fad-slider-round-1.svg",
         transform: "translate(6.5 12.5) scale(0.13)",
-    },
-    lfo: {
-        source: "fad-modsine.svg",
-        transform: "translate(6 12) scale(0.14)",
     },
     envelope: {
         source: "fad-ADSR.svg",
@@ -58,7 +53,6 @@ const GLYPHS = Object.freeze({
 
 const SOURCE_ASSETS = Object.freeze([
     ...numberedSources("macro", "Macro", "macro", 4),
-    ...numberedSources("lfo", "LFO", "cyclic", 3),
     ...numberedSources("envelope", "Envelope", "shape", 3),
     ...numberedSources("mseg", "MSEG", "shape", 3),
     sourceAsset("velocity", "Velocity", "velocity", "performance"),

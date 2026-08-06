@@ -24,7 +24,7 @@ Deliberate clean break
 
 Acceptance evidence
 - Rack Cmajor suite: 59/59. Warp regression: 16/16 Cmajor and 5/5 Python. Filter regression: 14/14 Cmajor and 31/31 Python.
-- Desktop UI suite: 69/69. Shared hooks: 19/19. Adapter/state/modulation/descriptor: 83/83. Effect preset suite: 112/112.
+- Desktop UI suite: 73/73. Shared hooks: 19/19. Adapter/state/modulation/descriptor: 87/87. Effect preset suite: 112/112.
 - Production `npm run sites:build` passes from clean source. The packaged public assets contain no localhost/file references or symlinks.
 - Chromium logged-out production proof passed: non-silent notes, eight real rack modules, parameter and modulation audio deltas, gain-safe all-on rack, `rack.v1` reload, no console/application-request errors, zero silent analyser polls, and zero over-budget worklet blocks in the measured segment.
 - WebKit iPhone-13-profile production proof passed all four cases: click-to-start, touch note down/up, visible depression, sticky keyboard, mobile wavetable/filter cards, rack audio/state/modulation, and no silent analyser polls. Average worklet load was about 0.28; nine brief late callbacks occurred during extreme host load, so do not describe this as zero late callbacks.
@@ -35,7 +35,11 @@ Acceptance evidence
 Only unresolved acceptance item
 - After the handset was unlocked, CoreDevice successfully launched production version 5 in physical iPhone 14 Pro Safari (`00C7F433-8B6A-5CAC-856F-56D7385E12F9`). Mac Safari sees the connected iPhone on iOS 27.0 but reports `No inspectable contents`, so Web Inspector cannot drive or measure the page. iPhone Mirroring reports Mac Bluetooth off. Physical touch/audio interaction remains unverified; do not enable Bluetooth or change the device inspection setting without explicit approval.
 
-Modulation-source visual work — 2026-08-06
-- The user selected the clean circular icon direction. Production assets live in `ui/assets/modulation-sources`: 17 fixed-color SVG masters, matching tintable mask SVGs, and transparent PNGs for 24/32/44 CSS px at 1x/2x/3x. Regenerate with `npm run assets:mod-sources`.
-- The family uses the approved source colors: Macro orange, LFO cyan, Envelope/MSEG magenta, and performance sources lime. It covers the authoritative current catalog (Macro 1–4, Envelope 1–3, MSEG 1–3, Velocity, Pressure, Slide) plus the LFO 1–3 and Mod Wheel types already present in the rack prototype.
-- Inner glyphs are official vendored fontaudio SVGs. Numerals and circular boundaries are deterministic vector paths. Assets are not yet wired into the rack UI; preserve that separation until the user approves the phone review.
+Approved mobile rack workspace — 2026-08-06
+- The approved variant-D faceplates, individual wordmark fonts, square 56-pixel rack rows, bare power controls, four-dot grips, one-line quick values, and thick bottom value meters are now the shared production rack workspace. All eight rows remain visible at 320/375/390/430-pixel widths.
+- Mobile uses an explicit FX Rack subpage. The voice/wavetable page remains normally scrollable, while the sticky keyboard stays mounted and playable on both pages. The left rack list keeps its full height; modulation amount consumes only the selected-effect column.
+- Rack parameter gestures use the shared pointer-capture controller. Hover cannot change a value, cancellation/lost capture/window blur closes the host gesture, and only the dedicated grip can begin reorder. Reorder previews optimistically and sends one complete DSP structure commit on drop. The generated shadow-root build specifically verifies this path.
+- The mod bar uses the approved exact circular image assets and exposes only MSEG 1–3, Envelope 1–3, and Macro 1–3. The user explicitly rejected LFOs: the LFO asset family, generator entries, state, routes, and engine work are absent. Looping MSEG is the repeating source. See `docs/ADR-016-mobile-rack-workspace-and-no-lfo.md`.
+- Source pages carousel for 280 ms; the selected source remains visible. Source-first and target-first route creation both work, and one right-column bipolar control edits the real selected source/target route intersection.
+- Local release-candidate proof is green against the exact `dist/assets` Sites package in Chromium and WebKit 26.4. WebKit iPhone profile verifies click-to-start, the real FX subpage, eight rows, no LFO, touch note down/up, visible held-key depression, non-silent audio, and zero over-budget worklet blocks in the measured segment.
+- TypeScript still reports only the pre-existing articulation narrowing, custom keyboard typing, iOS wavetable inset, and `CanvasWavetableDisplay.setDrawableInsets` errors; the new rack workspace has no type errors and the production Vite/Cmajor builds pass.

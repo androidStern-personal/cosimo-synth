@@ -2,7 +2,6 @@
   "format": "cosimo.modulation-source-icons.v1",
   "palette": {
     "macro": "#ff6b2c",
-    "cyclic": "#54d9ff",
     "shape": "#d978e5",
     "performance": "#b9d947"
   },
@@ -29,7 +28,6 @@
   ],
   "glyphSources": {
     "macro": "../fontaudio/fad-slider-round-1.svg",
-    "lfo": "../fontaudio/fad-modsine.svg",
     "envelope": "../fontaudio/fad-ADSR.svg",
     "mseg": "../fontaudio/fad-automation-4p.svg",
     "velocity": "../fontaudio/fad-keyboard.svg",
@@ -120,69 +118,6 @@
         "88": "png/88/macro-4.png",
         "96": "png/96/macro-4.png",
         "132": "png/132/macro-4.png"
-      }
-    },
-    {
-      "id": "lfo-1",
-      "label": "LFO 1",
-      "glyph": "lfo",
-      "family": "cyclic",
-      "number": 1,
-      "color": "#54d9ff",
-      "svg": "svg/fixed/lfo-1.svg",
-      "maskSvg": "svg/mask/lfo-1.svg",
-      "png": {
-        "24": "png/24/lfo-1.png",
-        "32": "png/32/lfo-1.png",
-        "44": "png/44/lfo-1.png",
-        "48": "png/48/lfo-1.png",
-        "64": "png/64/lfo-1.png",
-        "72": "png/72/lfo-1.png",
-        "88": "png/88/lfo-1.png",
-        "96": "png/96/lfo-1.png",
-        "132": "png/132/lfo-1.png"
-      }
-    },
-    {
-      "id": "lfo-2",
-      "label": "LFO 2",
-      "glyph": "lfo",
-      "family": "cyclic",
-      "number": 2,
-      "color": "#54d9ff",
-      "svg": "svg/fixed/lfo-2.svg",
-      "maskSvg": "svg/mask/lfo-2.svg",
-      "png": {
-        "24": "png/24/lfo-2.png",
-        "32": "png/32/lfo-2.png",
-        "44": "png/44/lfo-2.png",
-        "48": "png/48/lfo-2.png",
-        "64": "png/64/lfo-2.png",
-        "72": "png/72/lfo-2.png",
-        "88": "png/88/lfo-2.png",
-        "96": "png/96/lfo-2.png",
-        "132": "png/132/lfo-2.png"
-      }
-    },
-    {
-      "id": "lfo-3",
-      "label": "LFO 3",
-      "glyph": "lfo",
-      "family": "cyclic",
-      "number": 3,
-      "color": "#54d9ff",
-      "svg": "svg/fixed/lfo-3.svg",
-      "maskSvg": "svg/mask/lfo-3.svg",
-      "png": {
-        "24": "png/24/lfo-3.png",
-        "32": "png/32/lfo-3.png",
-        "44": "png/44/lfo-3.png",
-        "48": "png/48/lfo-3.png",
-        "64": "png/64/lfo-3.png",
-        "72": "png/72/lfo-3.png",
-        "88": "png/88/lfo-3.png",
-        "96": "png/96/lfo-3.png",
-        "132": "png/132/lfo-3.png"
       }
     },
     {

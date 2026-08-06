@@ -7,9 +7,10 @@ The PNG directories contain physical-pixel exports for the app's supported logic
 Source families:
 
 - Macro: orange `#ff6b2c`
-- Cyclic/LFO: cyan `#54d9ff`
 - Envelope and MSEG shapes: magenta `#d978e5`
 - Performance sources: lime `#b9d947`
+
+There is deliberately no separate LFO family. Repeating modulation is authored with looping MSEG sources.
 
 The inner audio glyphs are vendored fontaudio artwork. See the repository `CREDITS.md` for attribution and licensing.
 

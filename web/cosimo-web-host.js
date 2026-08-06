@@ -73,15 +73,24 @@ function readBrowserPatchState() {
 function installBrowserPatchStatePersistence(connection) {
     const browserState = readBrowserPatchState();
     const sendStoredStateValue = connection.sendStoredStateValue.bind(connection);
+    const persistValue = (key, value) => {
+        if (value === undefined) delete browserState[key];
+        else browserState[key] = value;
+        localStorage.setItem(BROWSER_PATCH_STATE_KEY, JSON.stringify(browserState));
+    };
     for (const [key, value] of Object.entries(browserState)) {
         sendStoredStateValue(key, value);
     }
     connection.sendStoredStateValue = (key, value) => {
-        if (value === undefined) delete browserState[key];
-        else browserState[key] = value;
-        localStorage.setItem(BROWSER_PATCH_STATE_KEY, JSON.stringify(browserState));
+        persistValue(key, value);
         sendStoredStateValue(key, value);
     };
+    connection.addStoredStateValueListener?.((message) => {
+        const storedStateMessage = endpointEvent(message);
+        if (typeof storedStateMessage?.key === "string") {
+            persistValue(storedStateMessage.key, storedStateMessage.value);
+        }
+    });
 }
 
 function findEndpointID(connection, purpose) {

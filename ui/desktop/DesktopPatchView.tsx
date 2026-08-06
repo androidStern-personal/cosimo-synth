@@ -75,6 +75,7 @@ import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import { DesktopModMatrix } from "./desktop-mod-matrix";
+import { EffectsRackWorkspace } from "./effects-rack-workspace";
 import {
     SYNTH_PRESET_EFFECT_ID,
     useSynthPatchViewModel,
@@ -3451,8 +3452,26 @@ function DesktopPatchViewBody({
     keyboardInputMode: SynthKeyboardInputMode;
 }) {
     const stageRef = useRef<HTMLDivElement | null>(null);
+    const scrollRegionRef = useRef<HTMLElement | null>(null);
     const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
     const keyboardElementRef = useRef<PianoKeyboardElement | null>(null);
+    const [isCompactViewport, setIsCompactViewport] = useState(false);
+    const [mobilePage, setMobilePage] = useState<"voice" | "effects">("voice");
+    useEffect(() => {
+        if (typeof window.matchMedia !== "function") {
+            return undefined;
+        }
+        const mediaQuery = window.matchMedia("(max-width: 639px)");
+        const update = () => setIsCompactViewport(mediaQuery.matches);
+        update();
+        mediaQuery.addEventListener?.("change", update);
+        return () => mediaQuery.removeEventListener?.("change", update);
+    }, []);
+    useEffect(() => {
+        if (!isCompactViewport) {
+            setMobilePage("voice");
+        }
+    }, [isCompactViewport]);
     const [keyboardRootNote, setKeyboardRootNote] = useState(KEYBOARD_ROOT_NOTE_DEFAULT);
     const shiftKeyboardRootNote = useCallback((direction: -1 | 1, { releaseHeldNotes = true }: { releaseHeldNotes?: boolean } = {}) => {
         if (
@@ -3767,17 +3786,39 @@ function DesktopPatchViewBody({
         velocitySegments,
     ]);
 
+    const isMobileEffectsPage = isCompactViewport && mobilePage === "effects";
+    const effectsRackWorkspace = (
+        <EffectsRackWorkspace
+            routes={synthView.routes}
+            observedFilterSpectrum={synthView.observedFilterSpectrum}
+            observedDistortionHistory={synthView.observedDistortionHistory}
+            observedDistortionScope={synthView.observedDistortionScope}
+            onAddRouteWithOverrides={synthView.handleAddRouteWithOverrides}
+            onRouteChange={synthView.handleRouteChange}
+            onBackToVoice={() => {
+                if (isCompactViewport) {
+                    setMobilePage("voice");
+                    return;
+                }
+                scrollRegionRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+        />
+    );
+
     return (
-        <div className="cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100">
-            <StatusHeader statusText={synthView.topStatus} />
-            <SynthPresetBarHost
-                isHidden={synthView.msegEditor.isOpen}
-                storedStateAdapters={synthView.presetStoredStateAdapters}
-            />
+        <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
+            {!isMobileEffectsPage ? <StatusHeader statusText={synthView.topStatus} /> : null}
+            {!isMobileEffectsPage ? (
+                <SynthPresetBarHost
+                    isHidden={synthView.msegEditor.isOpen}
+                    storedStateAdapters={synthView.presetStoredStateAdapters}
+                />
+            ) : null}
 
             <main
+                ref={scrollRegionRef}
                 data-role="desktop-scroll-region"
-                className="grid min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1"
+                className={`${isMobileEffectsPage ? "hidden" : "grid"} min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1`}
             >
                 <section className="grid min-h-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2">
                     <WavetableStageSection
@@ -3820,27 +3861,17 @@ function DesktopPatchViewBody({
                     />
                 </section>
 
-                <section className="grid min-h-0 items-stretch gap-4 md:grid-cols-2">
-                    <EffectsRackSection
-                        distortionMode={synthView.distortionMode}
-                        distortionDriveDb={synthView.distortionDriveDb}
-                        distortionKnee={synthView.distortionKnee}
-                        distortionWet={synthView.distortionWet}
-                        distortionWetHPHz={synthView.distortionWetHPHz}
-                        distortionWetLPHz={synthView.distortionWetLPHz}
-                        observedDistortionHistory={synthView.observedDistortionHistory}
-                        observedDistortionScope={synthView.observedDistortionScope}
-                        chorusMix={synthView.chorusMix}
-                        chorusMotionMode={synthView.chorusMotionMode}
-                        chorusBloomMode={synthView.chorusBloomMode}
-                        chorusTone={synthView.chorusTone}
-                        chorusFeedback={synthView.chorusFeedback}
-                        chorusRingAmount={synthView.chorusRingAmount}
-                        chorusRingOffsetMode={synthView.chorusRingOffsetMode}
-                        chorusRingFineSemitones={synthView.chorusRingFineSemitones}
-                        className="md:col-span-2"
-                    />
-                </section>
+                {isCompactViewport ? (
+                    <button
+                        type="button"
+                        data-role="open-effects-rack"
+                        className="flex min-h-12 items-center justify-between rounded-[14px] border border-cyan-200/20 bg-cyan-200/[0.05] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-100"
+                        onClick={() => setMobilePage("effects")}
+                    >
+                        <span>FX Rack</span>
+                        <span className="text-slate-400">8 FX&nbsp; ›</span>
+                    </button>
+                ) : effectsRackWorkspace}
 
                 {synthView.failureDetail ? (
                     <div className="rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90">
@@ -3896,6 +3927,12 @@ function DesktopPatchViewBody({
                     {keyboardToolbarOverride}
                 </section>
             </main>
+
+            {isMobileEffectsPage ? (
+                <main data-role="mobile-effects-region" className="min-h-0 flex-1 overflow-hidden">
+                    {effectsRackWorkspace}
+                </main>
+            ) : null}
 
             <div
                 data-role="sticky-keyboard"
