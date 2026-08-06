@@ -4,7 +4,7 @@ Branch, deployment, rollback
 - Integration branch: `codex/web-effects-rack-integration`, based on deployed source `c585580`.
 - Exact rack commits were cherry-picked as `730cf06` (`9ebee83`) and `047d705` (`27ddb2c`).
 - Approved-workspace implementation checkpoint: `a2a6ddd98d9da885ef2e30a77b6336ccd063cf54`; public-latency acceptance checkpoint: `5eb12a1fee927fc0e14391813f62238474b7c6d3`.
-- Sites version 8 is public at `https://cosimo-synth.andrew-martin-stern.chatgpt.site/` with public access.
+- Sites version 9 is public at `https://cosimo-synth.andrew-martin-stern.chatgpt.site/` with public access; deployed touch-fix source is `baa0dfffd37b2f6e99777002c2a16b9363d2c3e9`.
 - Sites version 5 (`70459f0`) is the immediate pre-redesign rollback; source `c585580` remains the pre-rack rollback requested by the user. Both are retained.
 
 Product and architecture
@@ -48,4 +48,5 @@ Mobile rack touch repair — 2026-08-06
 - Rack reorder captures on the stable rack list. Optimistic faceplate reordering can no longer move the capture owner out from under the active finger, and the grip plus descendants explicitly suppress touch panning/callouts.
 - Modulation source drop hit-testing uses the source's `Document` or `ShadowRoot`, not the outer document. A touch drag from MSEG 1 onto Distortion Knee now creates the real `rack.distortionKnee` route in the generated Cmajor view.
 - Two production-seam touch regressions were red before the fix and green afterward in 2.8 seconds. The full desktop UI remains 73/73; generated Chromium passes 5/5 applicable cases and WebKit passes 5/5 applicable cases with non-silent audio and zero measured worklet overruns.
+- Sites version 9 was verified at the public URL twice with real Chromium touch injection: reorder commits without scrolling under simulated WebKit zero-button moves, and MSEG 1 drops onto Distortion Knee. The matching curated public WebKit suite passes all five applicable cases; average measured worklet load was 0.257 with zero over-budget blocks.
 - The paired physical iPhone remains unavailable to CoreDevice, so the repair is verified with real Chromium touch injection, the WebKit zero-button compatibility case, and the iPhone-profile WebKit suite; physical-device observation is still the external gap.

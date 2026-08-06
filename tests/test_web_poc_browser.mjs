@@ -658,27 +658,40 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
         const reorderStart = await centerOf(page.locator('[data-role="rack-reorder-handle-reverb"]'));
         const reorderEnd = await centerOf(page.locator('[data-role="rack-module-filter"]'));
         await dispatchTouchDrag(page, reorderStart, reorderEnd);
-        await page.waitForTimeout(100);
+        await page.waitForFunction(async () => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const list = root?.querySelector('[data-role="rack-module-list"]');
+            const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
+            const rack = JSON.parse(String(stored.values?.["rack.v1"]));
+            return list?.firstElementChild?.getAttribute("data-role") === "rack-module-reverb"
+                && rack.order[0] === "reverb";
+        }, null, { timeout: 3_000 });
         const reorderResult = await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const list = root?.querySelector('[data-role="rack-module-list"]');
+            const handle = root?.querySelector('[data-role="rack-reorder-handle-reverb"]');
             const scrollRegion = root?.querySelector('[data-role="desktop-scroll-region"]');
             return {
                 documentY: window.scrollY,
                 firstRole: list?.firstElementChild?.getAttribute("data-role") ?? null,
+                handleTouchAction: handle instanceof HTMLElement ? getComputedStyle(handle).touchAction : null,
                 regionY: scrollRegion instanceof HTMLElement ? scrollRegion.scrollTop : 0,
             };
         });
-        assert.equal(reorderResult.firstRole, "rack-module-reverb");
+        const storedRack = await page.evaluate(async () => {
+            const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
+            return JSON.parse(String(stored.values?.["rack.v1"]));
+        });
+        assert.equal(
+            reorderResult.firstRole,
+            "rack-module-reverb",
+            `Touch reorder did not preview: ${JSON.stringify({ reorderResult, scrollBefore, storedRack })}`,
+        );
         assert.deepEqual(
             { documentY: reorderResult.documentY, regionY: reorderResult.regionY },
             scrollBefore,
             "The rack reorder handle yielded its touch gesture to page scrolling.",
         );
-        const storedRack = await page.evaluate(async () => {
-            const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
-            return JSON.parse(String(stored.values?.["rack.v1"]));
-        });
         assert.equal(storedRack.order[0], "reverb", "Touch reorder did not commit its new DSP order.");
     } finally {
         await page.close();
