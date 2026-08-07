@@ -3,9 +3,9 @@ Cosimo web effects rack integration — 2026-08-01
 Branch, deployment, rollback
 - Integration branch: `codex/web-effects-rack-integration`, based on deployed source `c585580`.
 - Exact rack commits were cherry-picked as `730cf06` (`9ebee83`) and `047d705` (`27ddb2c`).
-- Approved-workspace implementation checkpoint: `a2a6ddd98d9da885ef2e30a77b6336ccd063cf54`; public-latency acceptance checkpoint: `5eb12a1fee927fc0e14391813f62238474b7c6d3`.
-- Sites version 13 is public at `https://cosimo-synth.andrew-martin-stern.chatgpt.site/` with public access and contains accordion implementation checkpoint `0fe8f8e3241ea5268de6f446889d3a7e2aa281e2`.
-- Sites version 12 is the identical-artifact accordion rollback, version 11 (`8f9fc8e`) is the pre-accordion playback-session rollback, version 5 (`70459f0`) is the pre-redesign rollback, and source `c585580` remains the requested pre-rack rollback.
+- Approved-workspace implementation checkpoint: `a2a6ddd98d9da885ef2e30a77b6336ccd063cf54`; interaction/CPU stabilization checkpoint: `a063eb84783135030ed467d6d85342f9b5850558`.
+- Sites version 14 is public at `https://cosimo-synth.andrew-martin-stern.chatgpt.site/` with public access and contains stabilization checkpoint `a063eb84783135030ed467d6d85342f9b5850558`.
+- Sites version 13 is the immediate pre-stabilization rollback, version 11 (`8f9fc8e`) is the pre-accordion playback-session rollback, version 5 (`70459f0`) is the pre-redesign rollback, and source `c585580` remains the requested pre-rack rollback.
 
 Product and architecture
 - The main Cmajor graph has a real ordered rack: Global Filter, Distortion, OTT, Chorus, Flanger, Phaser, Delay, Reverb.
@@ -77,3 +77,4 @@ Interaction and mobile CPU stabilization — 2026-08-07
 - Legacy `.mjs` wavetable/theme duplicates now re-export the production `.js` modules, eliminating divergent colors, projection math, and tests. The current graphite/cyan theme and inset-aware production projection are the single authority.
 - Exact generated artifact verification is green in Chromium and WebKit: non-silent notes, visible touch depression/release, real rack parameter and Macro-to-rack audio deltas, `rack.v1` reload, and zero worklet overruns. Local Chromium measured 0.135 average worklet load and 46.4 MiB JS heap; WebKit measured 0.139 average load. All-eight-on gain was about -2.96 dB in both.
 - Regression totals: desktop UI 93/93, shared hooks 21/21, iPhone shell 16/16, shared components 11/11, broad adapter/state/worker matrix 245/245, rack DSP 59/59, filter 31/31 Python plus 14/14 Cmajor, warp 5/5 Python plus 16/16 Cmajor. `npx tsc --noEmit`, iPhone UI, Sites/WebAssembly, and curated Sites packaging builds pass.
+- Fresh logged-out Sites version 14 passes all five applicable Chromium and all five applicable WebKit cases. Public Chromium measured -3.03 dB all-eight-on gain, 0.185 average worklet load, 34.1 MiB JS heap, zero over-budget blocks, and zero silent note polls. Public WebKit measured -3.28 dB, 0.131 average load, zero over-budget blocks, and zero silent note polls. Engine, host, UI, worker, and curated catalog are byte-identical to local `dist`; recent production worker error logs are empty.
