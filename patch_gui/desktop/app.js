@@ -13528,6 +13528,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-top: auto;
   }
 
+  .mr-1 {
+    margin-right: calc(var(--spacing) * 1);
+  }
+
   .mb-2 {
     margin-bottom: calc(var(--spacing) * 2);
   }
@@ -13918,6 +13922,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: calc(var(--spacing) * 6);
   }
 
+  .min-h-7 {
+    min-height: calc(var(--spacing) * 7);
+  }
+
   .min-h-8 {
     min-height: calc(var(--spacing) * 8);
   }
@@ -14166,6 +14174,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     max-width: 140px;
   }
 
+  .max-w-\\[420px\\] {
+    max-width: 420px;
+  }
+
   .max-w-\\[1080px\\] {
     max-width: 1080px;
   }
@@ -14212,6 +14224,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .min-w-10 {
     min-width: calc(var(--spacing) * 10);
+  }
+
+  .min-w-11 {
+    min-width: calc(var(--spacing) * 11);
   }
 
   .min-w-12 {
@@ -15049,16 +15065,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-cyan-200);
   }
 
-  .border-cyan-200\\/20 {
-    border-color: #a2f4fd33;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-cyan-200\\/20 {
-      border-color: color-mix(in oklab, var(--color-cyan-200) 20%, transparent);
-    }
-  }
-
   .border-cyan-200\\/28 {
     border-color: #a2f4fd47;
   }
@@ -15076,6 +15082,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-cyan-200\\/\\[0\\.09\\] {
       border-color: color-mix(in oklab, var(--color-cyan-200) 9%, transparent);
+    }
+  }
+
+  .border-cyan-200\\/\\[0\\.10\\] {
+    border-color: #a2f4fd1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-200\\/\\[0\\.10\\] {
+      border-color: color-mix(in oklab, var(--color-cyan-200) 10%, transparent);
     }
   }
 
@@ -15513,13 +15529,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-cyan-200);
   }
 
-  .bg-cyan-200\\/\\[0\\.05\\] {
-    background-color: #a2f4fd0d;
+  .bg-cyan-200\\/\\[0\\.035\\] {
+    background-color: #a2f4fd09;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-cyan-200\\/\\[0\\.05\\] {
-      background-color: color-mix(in oklab, var(--color-cyan-200) 5%, transparent);
+    .bg-cyan-200\\/\\[0\\.035\\] {
+      background-color: color-mix(in oklab, var(--color-cyan-200) 3.5%, transparent);
     }
   }
 
@@ -17210,6 +17226,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-slate-400 {
     color: var(--color-slate-400);
+  }
+
+  .text-slate-400\\/40 {
+    color: #90a1b966;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/40 {
+      color: color-mix(in oklab, var(--color-slate-400) 40%, transparent);
+    }
   }
 
   .text-slate-400\\/45 {
@@ -18945,8 +18971,46 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   margin-inline: auto;
   padding: 5px;
   font-family: Departure Mono, SFMono-Regular, ui-monospace, monospace;
+  position: relative;
   overflow: hidden;
   box-shadow: 0 18px 48px #00000052;
+}
+
+.rack-parameter-hud {
+  z-index: 40;
+  border: 1px solid var(--editor-accent, #69d5c5);
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  min-width: 116px;
+  min-height: 34px;
+  padding: 5px 9px;
+  display: flex;
+  position: absolute;
+  top: 4px;
+  left: 50%;
+}
+
+@supports (color: color-mix(in lab, red, red)) {
+  .rack-parameter-hud {
+    border: 1px solid color-mix(in srgb, var(--editor-accent, #69d5c5) 58%, #dce4e5);
+  }
+}
+
+.rack-parameter-hud {
+  color: #aeb7ba;
+  pointer-events: none;
+  background: #070b0df5;
+  border-radius: 7px;
+  font-size: 9px;
+  transform: translateX(-50%);
+  box-shadow: 0 8px 22px #0000006b;
+}
+
+.rack-parameter-hud > strong {
+  color: var(--editor-accent, #69d5c5);
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .rack-effects-nav {
@@ -19571,38 +19635,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   }
 }
 
-.rack-editor-control [data-role^="rack-parameter-track-"], .rack-editor-control [data-role="chorus-mix-track"] {
-  touch-action: none;
-  width: 8px;
-  min-height: 34px;
-}
-
-.rack-control-fill {
-  background: linear-gradient(0deg, var(--editor-accent), var(--editor-accent));
-}
-
-@supports (color: color-mix(in lab, red, red)) {
-  .rack-control-fill {
-    background: linear-gradient(0deg, var(--editor-accent), color-mix(in srgb, var(--editor-accent) 22%, transparent));
-  }
-}
-
-.rack-control-fill {
-  box-shadow: 0 0 7px var(--editor-accent);
-}
-
-@supports (color: color-mix(in lab, red, red)) {
-  .rack-control-fill {
-    box-shadow: 0 0 7px color-mix(in srgb, var(--editor-accent) 50%, transparent);
-  }
-}
-
-.rack-control-handle {
-  box-shadow: 0 0 8px var(--editor-accent);
-  background: #f5f6f6;
-  border-color: #03050cb3;
-}
-
 .rack-choice-control {
   cursor: pointer;
   align-content: center;
@@ -19879,6 +19911,17 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   .is-mobile-effects-page [data-role="sticky-keyboard"] .synth-display-recess {
     height: 88px;
   }
+
+  .rack-editor-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-auto-rows: 72px;
+    gap: 4px;
+    padding-inline: 4px;
+  }
+
+  .rack-editor-control, .rack-choice-control {
+    min-height: 72px;
+  }
 }
 
 @media (max-width: 349px) {
@@ -19948,6 +19991,463 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 @media (prefers-reduced-motion: reduce) {
   .rack-mod-track {
     transition-duration: 1ms !important;
+  }
+}
+
+.rack-parameter-menu-layer {
+  z-index: 90;
+  background: #02070942;
+  position: fixed;
+  inset: 0;
+}
+
+.rack-parameter-menu {
+  left: min(var(--rack-menu-x), calc(100vw - 218px));
+  top: min(var(--rack-menu-y), calc(100vh - 304px));
+  background: linear-gradient(160deg, #192225fa, #070c0efc);
+  border: 1px solid #67e5dc8f;
+  border-radius: 10px;
+  width: 210px;
+  padding: 6px;
+  display: grid;
+  position: fixed;
+  box-shadow: 0 16px 44px #00000094, inset 0 1px #ffffff12;
+}
+
+.rack-parameter-menu > button {
+  color: #dce5e7;
+  min-height: 38px;
+  font: 500 11px/1.2 var(--cosimo-mono-font);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid #ffffff12;
+  padding: 7px 10px;
+}
+
+.rack-parameter-menu > button:last-child {
+  color: #ff8b72;
+  border-bottom: 0;
+}
+
+.rack-parameter-menu > button:focus-visible, .rack-parameter-menu > button:hover {
+  color: #fff;
+  background: #4edbd21f;
+  outline: 0;
+}
+
+.rack-value-sheet-layer {
+  z-index: 95;
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+  background: #020709a8;
+  place-items: start center;
+  padding: max(72px, 12vh) 12px 12px;
+  display: grid;
+  position: fixed;
+  inset: 0;
+}
+
+.rack-value-sheet {
+  background: linear-gradient(155deg, #1c2629fc, #070c0efc);
+  border: 1px solid #64e5dc99;
+  border-radius: 14px;
+  gap: 12px;
+  width: min(330px, 100vw - 24px);
+  padding: 16px;
+  display: grid;
+  box-shadow: 0 22px 64px #000000a8, inset 0 1px #ffffff14;
+}
+
+.rack-value-sheet > header {
+  gap: 3px;
+  display: grid;
+}
+
+.rack-value-sheet > header > span {
+  color: #5ee4d9;
+  font: 600 9px/1 var(--cosimo-mono-font);
+  letter-spacing: .16em;
+}
+
+.rack-value-sheet > header > strong {
+  color: #f4f7f7;
+  font: 600 15px/1.2 var(--cosimo-mono-font);
+}
+
+.rack-value-sheet > label {
+  color: #bdc8ca;
+  font: 500 11px/1.2 var(--cosimo-mono-font);
+  grid-template-columns: minmax(0, 1fr) 128px;
+  align-items: center;
+  gap: 10px;
+  display: grid;
+}
+
+.rack-value-sheet-input {
+  background: #020709b8;
+  border: 1px solid #ffffff26;
+  border-radius: 8px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  min-height: 42px;
+  padding: 0 9px;
+  display: grid;
+}
+
+.rack-value-sheet-input:focus-within {
+  border-color: #59e2d8b8;
+  box-shadow: 0 0 0 2px #59e2d81f;
+}
+
+.rack-value-sheet-input > input {
+  color: #fff;
+  min-width: 0;
+  font: 600 16px/1 var(--cosimo-mono-font);
+  text-align: right;
+  background: none;
+  border: 0;
+  outline: 0;
+}
+
+.rack-value-sheet-input > input:disabled {
+  opacity: .42;
+}
+
+.rack-value-sheet-input > em {
+  color: #7d8a8d;
+  font: 500 10px/1 var(--cosimo-mono-font);
+  margin-left: 6px;
+  font-style: normal;
+}
+
+.rack-value-sheet > p {
+  color: #899699;
+  font: 500 9px/1.3 var(--cosimo-mono-font);
+  margin: -4px 0 0;
+}
+
+.rack-value-sheet > .rack-value-sheet-error {
+  color: #ff8b72;
+}
+
+.rack-value-sheet > footer {
+  grid-template-columns: auto 1fr auto auto;
+  gap: 7px;
+  display: grid;
+}
+
+.rack-value-sheet > footer > button {
+  color: #dce5e7;
+  min-height: 38px;
+  font: 600 10px/1 var(--cosimo-mono-font);
+  background: #ffffff0f;
+  border: 1px solid #ffffff21;
+  border-radius: 8px;
+  padding: 0 11px;
+}
+
+.rack-value-sheet > footer > button:last-child {
+  color: #7cf2e9;
+  background: #59e2d824;
+  border-color: #59e2d885;
+}
+
+.rack-remove-routes-confirmation {
+  background: linear-gradient(155deg, #291c1bfc, #0a0a0bfc);
+  border: 1px solid #ff75578a;
+  border-radius: 14px;
+  gap: 9px;
+  width: min(330px, 100vw - 24px);
+  padding: 17px;
+  display: grid;
+  box-shadow: 0 22px 64px #000000a8;
+}
+
+.rack-remove-routes-confirmation > span {
+  color: #ff8b72;
+  font: 600 9px/1 var(--cosimo-mono-font);
+  letter-spacing: .16em;
+}
+
+.rack-remove-routes-confirmation > strong {
+  color: #f8efed;
+  font: 600 14px/1.35 var(--cosimo-mono-font);
+}
+
+.rack-remove-routes-confirmation > p {
+  color: #a99d9b;
+  font: 500 10px/1.35 var(--cosimo-mono-font);
+  margin: 0;
+}
+
+.rack-remove-routes-confirmation > footer {
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+  display: flex;
+}
+
+.rack-remove-routes-confirmation > footer > button {
+  color: #d8d1d0;
+  min-height: 40px;
+  font: 600 10px/1 var(--cosimo-mono-font);
+  background: #ffffff0f;
+  border: 1px solid #ffffff21;
+  border-radius: 8px;
+  padding: 0 13px;
+}
+
+.rack-remove-routes-confirmation > footer > button:last-child {
+  color: #ff9b84;
+  border-color: #ff755775;
+}
+
+.rack-parameter-knob {
+  color: #d7dcde;
+  cursor: ns-resize;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  background: none;
+  border: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  place-items: center;
+  gap: 1px;
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  min-height: 72px;
+  padding: 3px;
+  display: grid;
+}
+
+.rack-knob-label, .rack-knob-readout {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  font-family: Departure Mono, SFMono-Regular, ui-monospace, monospace;
+  font-size: 9px;
+  line-height: 1;
+  overflow: hidden;
+}
+
+.rack-knob-label {
+  color: #cbd2d4;
+}
+
+.rack-knob-readout {
+  color: var(--editor-accent);
+}
+
+.rack-knob-art {
+  width: 58px;
+  max-width: 100%;
+  height: 58px;
+  display: block;
+  overflow: visible;
+}
+
+.rack-knob-base-track, .rack-knob-mod-track {
+  opacity: .34;
+}
+
+.rack-knob-base-fill {
+  fill: var(--rack-knob-accent);
+}
+
+.rack-knob-mod-fill {
+  fill: var(--rack-knob-mod-accent);
+  opacity: .94;
+}
+
+.rack-knob-handle {
+  fill: #f5f6f6;
+  stroke: #03050cb8;
+  stroke-width: 1px;
+}
+
+.rack-knob-default-marker {
+  fill: #090d0f;
+  stroke: #eff4f5c7;
+  stroke-width: 1.2px;
+}
+
+@media (max-width: 639px) {
+  .cosimo-surface.is-mobile-accordion {
+    border-radius: 18px;
+    gap: 4px;
+    padding: 4px;
+  }
+
+  .mobile-workspace-accordion {
+    flex-direction: column;
+    gap: 4px;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .mobile-workspace-section {
+    background: #0b1012;
+    border: 1px solid #ffffff17;
+    border-radius: 12px;
+    flex-direction: column;
+    flex: none;
+    min-height: 44px;
+    display: flex;
+    overflow: hidden;
+  }
+
+  .mobile-workspace-section.is-expanded {
+    flex: auto;
+    min-height: 0;
+  }
+
+  .mobile-workspace-toggle {
+    background: linear-gradient(90deg, var(--mobile-section-accent), transparent 44%), linear-gradient(180deg, #1b2427fa, #0c1113fa);
+    border: 0;
+    flex: 0 0 44px;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    min-height: 44px;
+    padding-inline: 14px;
+    display: flex;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .mobile-workspace-toggle {
+      background: linear-gradient(90deg, color-mix(in srgb, var(--mobile-section-accent) 12%, transparent), transparent 44%), linear-gradient(180deg, #1b2427fa, #0c1113fa);
+    }
+  }
+
+  .mobile-workspace-toggle {
+    color: var(--mobile-section-accent);
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .mobile-workspace-toggle {
+      color: color-mix(in srgb, var(--mobile-section-accent) 72%, #f3f6f7);
+    }
+  }
+
+  .mobile-workspace-toggle {
+    cursor: pointer;
+    letter-spacing: .15em;
+    text-align: left;
+    text-transform: uppercase;
+    font-family: Departure Mono, SFMono-Regular, ui-monospace, monospace;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .mobile-workspace-toggle:after {
+    color: #d5dfe27a;
+    content: "+";
+    font-size: 16px;
+    font-weight: 400;
+  }
+
+  .mobile-workspace-toggle[aria-expanded="true"]:after {
+    content: "−";
+  }
+
+  .mobile-workspace-section.is-voice {
+    --mobile-section-accent: #69d5c5;
+  }
+
+  .mobile-workspace-section.is-fx {
+    --mobile-section-accent: #edb45a;
+  }
+
+  .mobile-workspace-section.is-mod {
+    --mobile-section-accent: #df74cf;
+  }
+
+  .mobile-workspace-panel {
+    overscroll-behavior: contain;
+    flex: auto;
+    min-width: 0;
+    min-height: 0;
+    padding: 4px;
+    overflow: hidden auto;
+  }
+
+  .mobile-voice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+  }
+
+  .mobile-workspace-section.is-fx .mobile-workspace-panel {
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .mobile-workspace-section.is-fx .rack-effects-nav {
+    display: none;
+  }
+
+  .mobile-workspace-section.is-fx .effects-rack-workspace {
+    border: 0;
+    border-radius: 0;
+    width: 100%;
+    height: 100%;
+    margin-inline: 0;
+  }
+
+  .mobile-workspace-section.is-fx .rack-effects-grid {
+    height: 100%;
+  }
+
+  .mobile-workspace-section.is-fx .rack-list {
+    grid-template-rows: repeat(8, 48px);
+  }
+
+  .mobile-workspace-section.is-fx .rack-unit {
+    grid-template-rows: 48px;
+    min-height: 48px;
+  }
+
+  .mobile-workspace-section.is-fx .rack-quick-surface {
+    min-height: 48px;
+  }
+
+  .is-mobile-accordion [data-role="sticky-keyboard"] {
+    padding-top: 3px;
+  }
+
+  .is-mobile-accordion [data-role="sticky-keyboard"] > section {
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 5px;
+    height: 84px;
+    overflow: hidden;
+  }
+
+  .is-mobile-accordion [data-role="sticky-keyboard"] .synth-control-rail {
+    gap: 2px;
+    height: 84px;
+    padding: 0 2px;
+  }
+
+  .is-mobile-accordion [data-role="sticky-keyboard"] .synth-control-rail > span, .is-mobile-accordion [data-role="sticky-keyboard"] .synth-control-rail > div {
+    display: none;
+  }
+
+  .is-mobile-accordion [data-role="sticky-keyboard"] .synth-control-rail > button {
+    border-radius: 12px;
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+  }
+
+  .is-mobile-accordion [data-role="sticky-keyboard"] section > div:last-child, .is-mobile-accordion [data-role="sticky-keyboard"] section > div:last-child > div {
+    height: 84px;
+    min-height: 0;
+  }
+
+  .is-mobile-accordion [data-role="sticky-keyboard"] .synth-display-recess {
+    height: 70px;
   }
 }
 
@@ -21327,6 +21827,28 @@ function formatRackParameterValue(descriptor, value) {
   if (descriptor.unit === "st") return `${value >= 0 ? "+" : ""}${value.toFixed(1)}st`;
   return `${Math.round(value * 100)}%`;
 }
+function formatRackParameterEditingValue(descriptor, value) {
+  const clamped = Math.min(Math.max(Number(value), descriptor.min), descriptor.max);
+  const editingValue = descriptor.unit === "" && descriptor.max - descriptor.min <= 2 ? clamped * 100 : clamped;
+  return String(Number(editingValue.toFixed(4)));
+}
+function parseRackParameterEditingValue(descriptor, rawText) {
+  let normalized = String(rawText ?? "").trim().toLowerCase().replace(/,/g, "").replace(/\s+/g, "").replace(/khz|hz|ms|db|deg|°|st|%/g, "");
+  if (!normalized) {
+    return null;
+  }
+  let multiplier = 1;
+  if (normalized.endsWith("k")) {
+    multiplier = 1e3;
+    normalized = normalized.slice(0, -1);
+  }
+  const parsed = Number.parseFloat(normalized);
+  if (!Number.isFinite(parsed)) {
+    return null;
+  }
+  const realUnitValue = descriptor.unit === "" && descriptor.max - descriptor.min <= 2 ? parsed / 100 : parsed * multiplier;
+  return Math.min(Math.max(realUnitValue, descriptor.min), descriptor.max);
+}
 const RACK_STATE_KEY = "rack.v1";
 const RACK_ORDER_ENDPOINT_ID = "rackOrder";
 const RACK_ENABLE_ENDPOINT_ID = "rackEnable";
@@ -21542,17 +22064,17 @@ const MSEG_NOTE_OFF_POLICY_VALUES = /* @__PURE__ */ new Set([
   "immediate",
   "ignore"
 ]);
-function clamp$f(value, min, max) {
+function clamp$g(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function almostEqual(left, right, epsilon = 1e-12) {
   return Math.abs(left - right) <= epsilon;
 }
 function clampCurvePower(value) {
-  return clamp$f(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
+  return clamp$g(Number.isFinite(value) ? value : 0, -MSEG_CURVE_POWER_LIMIT, MSEG_CURVE_POWER_LIMIT);
 }
 function clamp01$1(value) {
-  return clamp$f(Number.isFinite(value) ? value : 0, 0, 1);
+  return clamp$g(Number.isFinite(value) ? value : 0, 0, 1);
 }
 function createDefaultMsegShape(name = MSEG_DEFAULT_NAME) {
   return {
@@ -21582,7 +22104,7 @@ function createDefaultMsegPlayback() {
 }
 function clampMsegRateSeconds(value) {
   const numericValue = Number(value);
-  return clamp$f(
+  return clamp$g(
     Number.isFinite(numericValue) ? numericValue : 1,
     MSEG_RATE_MIN_SECONDS,
     MSEG_RATE_MAX_SECONDS
@@ -21755,7 +22277,7 @@ function distanceSquaredToLineSegment(targetX, targetY, fromX, fromY, toX, toY) 
     const pointDeltaY2 = targetY - fromY;
     return pointDeltaX2 * pointDeltaX2 + pointDeltaY2 * pointDeltaY2;
   }
-  const projection = clamp$f(
+  const projection = clamp$g(
     ((targetX - fromX) * deltaX + (targetY - fromY) * deltaY) / segmentLengthSquared,
     0,
     1
@@ -21974,9 +22496,9 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   if (width <= 1e-12 || Math.abs(deltaY) <= 1e-12) {
     return 0;
   }
-  const localX = clamp$f(clamp01$1(Number(x)), from.x, to.x);
-  const t = clamp$f((localX - from.x) / width, 1e-4, 1 - 1e-4);
-  const targetCurvedT = clamp$f((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
+  const localX = clamp$g(clamp01$1(Number(x)), from.x, to.x);
+  const t = clamp$g((localX - from.x) / width, 1e-4, 1 - 1e-4);
+  const targetCurvedT = clamp$g((Number(y) - from.y) / deltaY, 1e-4, 1 - 1e-4);
   if (!Number.isFinite(targetCurvedT) || almostEqual(targetCurvedT, t, 1e-4)) {
     return 0;
   }
@@ -21984,7 +22506,7 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
   let high = MSEG_CURVE_POWER_LIMIT;
   let lowValue = powerScale(t, low);
   let highValue = powerScale(t, high);
-  const target = clamp$f(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
+  const target = clamp$g(targetCurvedT, Math.min(lowValue, highValue), Math.max(lowValue, highValue));
   const ascending = lowValue <= highValue;
   for (let iteration = 0; iteration < 32; iteration += 1) {
     const middle = (low + high) * 0.5;
@@ -22041,7 +22563,7 @@ function moveMsegPoint(shape, pointIndex, x, y) {
   } else if (pointIndex === points.length - 1) {
     moved.x = 1;
   } else {
-    moved.x = clamp$f(clamp01$1(Number(x)), previousX, nextX);
+    moved.x = clamp$g(clamp01$1(Number(x)), previousX, nextX);
   }
   points[pointIndex] = moved;
   return normalizeMsegShape({
@@ -22075,7 +22597,7 @@ function setMsegSegmentCurvePower(shape, segmentIndex, curvePower) {
     points
   });
 }
-function clamp$e(value, min, max) {
+function clamp$f(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function useSliderDrag() {
@@ -22153,14 +22675,14 @@ function useSliderDrag() {
     if (drag.axis === "vertical") {
       const deltaY = drag.startClientY - event.clientY;
       const trackHeight = Math.max(1, rect.height);
-      nextNormalized = clamp$e(drag.startNormalized + deltaY / trackHeight, 0, 1);
+      nextNormalized = clamp$f(drag.startNormalized + deltaY / trackHeight, 0, 1);
     } else if (drag.axis === "horizontal-relative") {
       const deltaX = event.clientX - drag.startClientX;
       const trackWidth = Math.max(1, rect.width);
-      nextNormalized = clamp$e(drag.startNormalized + deltaX / trackWidth, 0, 1);
+      nextNormalized = clamp$f(drag.startNormalized + deltaX / trackWidth, 0, 1);
     } else {
       const deltaX = event.clientX - rect.left;
-      nextNormalized = clamp$e(deltaX / Math.max(1, rect.width), 0, 1);
+      nextNormalized = clamp$f(deltaX / Math.max(1, rect.width), 0, 1);
     }
     if (drag.onChange) {
       drag.onChange(nextNormalized);
@@ -22199,38 +22721,38 @@ const FILTER_CUTOFF_MIN_HZ$1 = 20;
 const FILTER_CUTOFF_MAX_HZ$1 = 2e4;
 const FILTER_Q_MIN$2 = 0.1;
 const FILTER_Q_MAX$2 = 20;
-function clamp$d(value, min, max) {
+function clamp$e(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterCutoffHz$1(value) {
-  return clamp$d(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
+  return clamp$e(Number(value) || 0, FILTER_CUTOFF_MIN_HZ$1, FILTER_CUTOFF_MAX_HZ$1);
 }
 function clampFilterQ$1(value) {
-  return clamp$d(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
+  return clamp$e(Number(value) || 0, FILTER_Q_MIN$2, FILTER_Q_MAX$2);
 }
 function clampFilterMode$1(value) {
-  return clamp$d(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
+  return clamp$e(Math.round(Number(value) || 0), FILTER_MODE_OFF$1, FILTER_MODE_PEAK$1);
 }
 function clampWarpMode(value) {
-  return clamp$d(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
+  return clamp$e(Math.round(Number(value) || 0), WARP_MODE_OFF$1, WARP_MODE_MIRROR$1);
 }
 function clampWarpAmount(value) {
-  return clamp$d(Number(value) || 0, 0, 1);
+  return clamp$e(Number(value) || 0, 0, 1);
 }
 function clampUnisonVoiceCount(value) {
-  return clamp$d(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
+  return clamp$e(Math.round(Number(value) || 1), 1, UNISON_MAX_VOICES);
 }
 function clampUnison01(value) {
-  return clamp$d(Number(value) || 0, 0, 1);
+  return clamp$e(Number(value) || 0, 0, 1);
 }
 function clampUnisonDetuneMode(value) {
-  return clamp$d(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
+  return clamp$e(Math.round(Number(value) || 0), UNISON_DETUNE_MODE_LINEAR, UNISON_DETUNE_MODE_RANDOM);
 }
 function clampUnisonStackMode(value) {
-  return clamp$d(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
+  return clamp$e(Math.round(Number(value) || 0), UNISON_STACK_MODE_OFF, UNISON_STACK_MODE_CENTER_TWO_OCTAVES);
 }
 function clampDisplayPosition(value) {
-  return clamp$d(Number(value) || 0, 0, 1);
+  return clamp$e(Number(value) || 0, 0, 1);
 }
 function mapDisplayDragToPosition(startValue, startClientY, nextClientY, dragSpan) {
   const safeSpan = Math.max(1, Number(dragSpan) || 0);
@@ -22542,7 +23064,7 @@ const WARP_MODE_PWM = 2;
 const WARP_MODE_ASYM = 3;
 const WARP_MODE_MIRROR = 4;
 const DEFAULT_WAVETABLE_THEME = createDefaultWavetableTheme();
-function clamp$c(value, min, max) {
+function clamp$d(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function requestNextAnimationFrame(callback) {
@@ -22586,10 +23108,10 @@ function assertFrames(frames) {
   }
 }
 function resolveWarpMode(rawMode) {
-  return clamp$c(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
+  return clamp$d(Math.round(Number(rawMode) || 0), WARP_MODE_OFF, WARP_MODE_MIRROR);
 }
 function isIdentityWarp(warpMode, warpAmount) {
-  const clampedAmount = clamp$c(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$d(Number(warpAmount) || 0, 0, 1);
   if (warpMode <= WARP_MODE_OFF) {
     return true;
   }
@@ -22608,46 +23130,46 @@ function isIdentityWarp(warpMode, warpAmount) {
   return true;
 }
 function curvedWarpRight(phase, amount) {
-  const clampedPhase = clamp$c(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$c(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$d(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$d(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return Math.pow(clampedPhase, exponent);
 }
 function curvedWarpLeft(phase, amount) {
-  const clampedPhase = clamp$c(Number(phase) || 0, 0, 1);
-  const clampedAmount = clamp$c(Number(amount) || 0, 0, 1);
+  const clampedPhase = clamp$d(Number(phase) || 0, 0, 1);
+  const clampedAmount = clamp$d(Number(amount) || 0, 0, 1);
   const exponent = Math.pow(2, 4 * clampedAmount);
   return 1 - Math.pow(1 - clampedPhase, exponent);
 }
 function curvedAsymSigned(phase, dial) {
-  const clampedDial = clamp$c(Number(dial) || 0, 0, 1);
+  const clampedDial = clamp$d(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
   const magnitude = Math.abs(signedAmount);
   return signedAmount >= 0 ? curvedWarpRight(phase, magnitude) : curvedWarpLeft(phase, magnitude);
 }
 function linearSkewSigned(phase, dial) {
-  const clampedPhase = clamp$c(Number(phase) || 0, 0, 1);
-  const clampedDial = clamp$c(Number(dial) || 0, 0, 1);
+  const clampedPhase = clamp$d(Number(phase) || 0, 0, 1);
+  const clampedDial = clamp$d(Number(dial) || 0, 0, 1);
   const signedAmount = 2 * clampedDial - 1;
-  const split = clamp$c(0.5 + 0.48 * signedAmount, 0.02, 0.98);
+  const split = clamp$d(0.5 + 0.48 * signedAmount, 0.02, 0.98);
   if (clampedPhase < split) {
     return 0.5 * (clampedPhase / split);
   }
   return 0.5 + 0.5 * ((clampedPhase - split) / (1 - split));
 }
 function mirrorBasePhase(phase) {
-  const clampedPhase = clamp$c(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$d(Number(phase) || 0, 0, 1);
   if (clampedPhase < 0.5) {
     return clampedPhase * 2;
   }
   return 2 - 2 * clampedPhase;
 }
 function pwmActivePortion(amount) {
-  const clampedAmount = clamp$c(Number(amount) || 0, 0, 1);
+  const clampedAmount = clamp$d(Number(amount) || 0, 0, 1);
   return 1 - (1 - 0.02) * clampedAmount;
 }
 function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
-  const clampedPhase = clamp$c(Number(phase) || 0, 0, 1);
+  const clampedPhase = clamp$d(Number(phase) || 0, 0, 1);
   const result = {
     shouldLookup: true,
     phase: clampedPhase
@@ -22655,7 +23177,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   if (warpMode <= WARP_MODE_OFF || clampedPhase >= 1) {
     return result;
   }
-  const clampedAmount = clamp$c(Number(warpAmount) || 0, 0, 1);
+  const clampedAmount = clamp$d(Number(warpAmount) || 0, 0, 1);
   if (warpMode === WARP_MODE_BEND) {
     const invertedDial = 1 - clampedAmount;
     if (clampedPhase < 0.5) {
@@ -22685,7 +23207,7 @@ function resolveDisplayWarpPhase(warpMode, warpAmount, phase) {
   return result;
 }
 function sampleDisplayFrame(frame, phase) {
-  const safePhase = clamp$c(Number(phase) || 0, 0, 1);
+  const safePhase = clamp$d(Number(phase) || 0, 0, 1);
   const frameLength = frame.length;
   if (frameLength === 0) {
     return 0;
@@ -22796,17 +23318,17 @@ function createCamera() {
 }
 function createViewportPadding(width, height) {
   return {
-    left: clamp$c(width * 0.06, 22, 48),
-    right: clamp$c(width * 0.06, 22, 48),
-    top: clamp$c(height * 0.1, 20, 56),
-    bottom: clamp$c(height * 0.09, 20, 52)
+    left: clamp$d(width * 0.06, 22, 48),
+    right: clamp$d(width * 0.06, 22, 48),
+    top: clamp$d(height * 0.1, 20, 56),
+    bottom: clamp$d(height * 0.09, 20, 52)
   };
 }
 function createDrawableViewport(width, height, insets = {}) {
-  const left = clamp$c(Number(insets.left) || 0, 0, width - 1);
-  const right = clamp$c(Number(insets.right) || 0, 0, width - left - 1);
-  const top = clamp$c(Number(insets.top) || 0, 0, height - 1);
-  const bottom = clamp$c(Number(insets.bottom) || 0, 0, height - top - 1);
+  const left = clamp$d(Number(insets.left) || 0, 0, width - 1);
+  const right = clamp$d(Number(insets.right) || 0, 0, width - left - 1);
+  const top = clamp$d(Number(insets.top) || 0, 0, height - 1);
+  const bottom = clamp$d(Number(insets.bottom) || 0, 0, height - top - 1);
   return {
     x: left,
     y: top,
@@ -22871,10 +23393,10 @@ function createProjection(points, width, height, drawableInsets = {}) {
   };
 }
 function getSurfacePointCount(width, sampleCount) {
-  return clamp$c(Math.round(width / 10), 64, Math.min(128, sampleCount));
+  return clamp$d(Math.round(width / 10), 64, Math.min(128, sampleCount));
 }
 function getContourPointCount(width, sampleCount) {
-  return clamp$c(Math.round(width / 4), 128, Math.min(256, sampleCount));
+  return clamp$d(Math.round(width / 4), 128, Math.min(256, sampleCount));
 }
 function createObjectPoints(samples, depth) {
   const points = new Array(samples.length);
@@ -23049,8 +23571,8 @@ function createSurfaceBands(projectedFrames) {
       const lightDirection = normaliseVector({ x: -0.2, y: 0.95, z: -0.5 });
       const averageCameraDepth = quad.reduce((total, point) => total + point.cameraDepth, 0) / quad.length;
       const depthNormalized = (frontFrame.depthNormalized + backFrame.depthNormalized) * 0.5;
-      const slopeLight = clamp$c((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
-      const ridgeAmount = clamp$c(
+      const slopeLight = clamp$d((dotProduct(surfaceNormal, lightDirection) + 1) * 0.5, 0, 1);
+      const ridgeAmount = clamp$d(
         Math.abs(frontFrame.samples[sampleIndex + 1] - frontFrame.samples[sampleIndex]) * 0.95 + Math.abs(backFrame.samples[sampleIndex + 1] - backFrame.samples[sampleIndex]) * 0.95,
         0,
         1
@@ -23075,7 +23597,7 @@ function createSurfaceRibs(projectedFrames) {
   if (sampleCount < 3) {
     return [];
   }
-  const desiredRibCount = clamp$c(Math.round(sampleCount / 10), 8, 14);
+  const desiredRibCount = clamp$d(Math.round(sampleCount / 10), 8, 14);
   const selectedColumns = /* @__PURE__ */ new Set([0, sampleCount - 1]);
   for (let ribIndex = 1; ribIndex < desiredRibCount - 1; ribIndex += 1) {
     selectedColumns.add(
@@ -23118,7 +23640,7 @@ function createInterpolatedSurfaceSlices(sourceFrames, camera, projection) {
   if (frameCount === 0) {
     return [];
   }
-  const sliceCount = clamp$c(frameCount * 3 - 2, 17, 41);
+  const sliceCount = clamp$d(frameCount * 3 - 2, 17, 41);
   const slices = [];
   for (let sliceIndex = 0; sliceIndex < sliceCount; sliceIndex += 1) {
     const framePosition = sliceIndex * (frameCount - 1) / Math.max(1, sliceCount - 1);
@@ -23159,7 +23681,7 @@ function createCurrentSlice(staticScene, frameState) {
   const lowFrame = staticScene.contourFrames[frameState.frameLo];
   const highFrame = staticScene.contourFrames[frameState.frameHi];
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$c(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$d(Number(frameState.warpAmount) || 0, 0, 1);
   const blendedSamples = isIdentityWarp(warpMode, warpAmount) ? buildInterpolatedFrame(lowFrame.samples, highFrame.samples, frameState.frameT) : buildWarpedFrame(lowFrame.samples, highFrame.samples, frameState.frameT, warpMode, warpAmount);
   const depth = getSceneDepth(frameState.frameIndex, staticScene.frameCount);
   const objectPoints = createObjectPoints(blendedSamples, depth);
@@ -23173,8 +23695,8 @@ function createCurrentSlice(staticScene, frameState) {
   const labelAnchor = points[Math.floor(points.length * 0.78)] ?? points[points.length - 1];
   const label = {
     text: buildCurrentSliceLabel(frameState, staticScene.frameCount),
-    x: clamp$c(labelAnchor.x + 14, 18, staticScene.width - 236),
-    y: clamp$c(labelAnchor.y - 18, 24, staticScene.height - 24)
+    x: clamp$d(labelAnchor.x + 14, 18, staticScene.width - 236),
+    y: clamp$d(labelAnchor.y - 18, 24, staticScene.height - 24)
   };
   return {
     frameState,
@@ -23189,7 +23711,7 @@ function createCurrentSlice(staticScene, frameState) {
 }
 function buildCurrentSliceLabel(frameState, frameCount) {
   const warpMode = resolveWarpMode(frameState.warpMode);
-  const warpAmount = clamp$c(Number(frameState.warpAmount) || 0, 0, 1);
+  const warpAmount = clamp$d(Number(frameState.warpAmount) || 0, 0, 1);
   const baseLabel = `Frame ${frameState.frameIndex.toFixed(2)} / ${frameCount - 1}`;
   if (isIdentityWarp(warpMode, warpAmount)) {
     return baseLabel;
@@ -23213,7 +23735,7 @@ function buildCurrentSliceLabel(frameState, frameCount) {
 }
 function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
   const safeFrameCount = Math.max(1, Number(frameCount) || 0);
-  const clampedPosition = clamp$c(Number(position) || 0, 0, 1);
+  const clampedPosition = clamp$d(Number(position) || 0, 0, 1);
   const frameIndex = clampedPosition * (safeFrameCount - 1);
   const frameLo = Math.floor(frameIndex);
   const frameHi = Math.min(frameLo + 1, safeFrameCount - 1);
@@ -23226,7 +23748,7 @@ function createFrameState(frameCount, position, warpMode = 0, warpAmount = 0) {
     frameHi,
     frameT,
     warpMode: resolveWarpMode(warpMode),
-    warpAmount: clamp$c(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$d(Number(warpAmount) || 0, 0, 1)
   };
 }
 function decimateFrame(frame, targetPointCount) {
@@ -23392,7 +23914,7 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
     context.restore();
   }
   for (const contour of model.contours) {
-    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$c(contour.colourMix, 0, 0.92));
+    const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp$d(contour.colourMix, 0, 0.92));
     context.save();
     context.strokeStyle = toRGBA(strokeColour, contour.alpha);
     context.lineWidth = contour.lineWidth;
@@ -23451,12 +23973,12 @@ class CanvasWavetableDisplay {
     this.queueRender();
   }
   setPosition(position) {
-    this.position = clamp$c(Number(position) || 0, 0, 1);
+    this.position = clamp$d(Number(position) || 0, 0, 1);
     this.queueRender();
   }
   setWarp(mode, amount) {
     this.warpMode = resolveWarpMode(mode);
-    this.warpAmount = clamp$c(Number(amount) || 0, 0, 1);
+    this.warpAmount = clamp$d(Number(amount) || 0, 0, 1);
     this.queueRender();
   }
   setDrawableInsets(insets = {}) {
@@ -23556,26 +24078,26 @@ const FILTER_MODE_HIGHPASS = 2;
 const FILTER_MODE_BANDPASS = 3;
 const FILTER_MODE_NOTCH = 4;
 const FILTER_MODE_PEAK = 5;
-function clamp$b(value, min, max) {
+function clamp$c(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampFilterMode(value) {
-  return clamp$b(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
+  return clamp$c(Math.round(Number(value) || 0), FILTER_MODE_OFF, FILTER_MODE_PEAK);
 }
 function clampFilterCutoffHz(value) {
-  return clamp$b(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  return clamp$c(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
 }
 function clampFilterQ(value) {
-  return clamp$b(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
+  return clamp$c(Number(value) || 0, FILTER_Q_MIN$1, FILTER_Q_MAX$1);
 }
 function filterCutoffHzToNormalized(value) {
   const clampedHz = clampFilterCutoffHz(value);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$b((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+  return clamp$c((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function normalizedToFilterCutoffHz(value) {
-  const normalized = clamp$b(Number(value) || 0, 0, 1);
+  const normalized = clamp$c(Number(value) || 0, 0, 1);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
   return Math.exp(minLog + (maxLog - minLog) * normalized);
@@ -23585,7 +24107,7 @@ function filterQToNormalized(value) {
   return (clampedQ - FILTER_Q_MIN$1) / (FILTER_Q_MAX$1 - FILTER_Q_MIN$1);
 }
 function normalizedToFilterQ(value) {
-  const normalized = clamp$b(Number(value) || 0, 0, 1);
+  const normalized = clamp$c(Number(value) || 0, 0, 1);
   return FILTER_Q_MIN$1 + (FILTER_Q_MAX$1 - FILTER_Q_MIN$1) * normalized;
 }
 function complexAdd(left, right) {
@@ -23636,7 +24158,7 @@ function responseGainForFrequency({
   const safeSampleRate = Math.max(1, Number(sampleRate) || 44100);
   const clampedCutoff = clampFilterCutoffHz(Math.min(Number(cutoffHz) || 0, safeSampleRate * 0.48));
   const clampedQ = clampFilterQ(q);
-  const safeFrequency = clamp$b(frequencyHz, 10, safeSampleRate * 0.49);
+  const safeFrequency = clamp$c(frequencyHz, 10, safeSampleRate * 0.49);
   const g = Math.tan(Math.PI * clampedCutoff / safeSampleRate);
   const k = 1 / clampedQ;
   let f0 = 1;
@@ -23749,7 +24271,7 @@ const FILTER_SPECTRUM_RENDER_MODE_OPTIONS = [
   { value: "bars", label: "Bars" },
   { value: "round-bars", label: "Round Bars" }
 ];
-function clamp$a(value, min, max) {
+function clamp$b(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber$1(value) {
@@ -23757,13 +24279,13 @@ function coerceFiniteNumber$1(value) {
   return Number.isFinite(coerced) ? coerced : null;
 }
 function frequencyHzToNormalized(value) {
-  const clampedHz = clamp$a(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
+  const clampedHz = clamp$b(value, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ);
   const minLog = Math.log(FILTER_CUTOFF_MIN_HZ);
   const maxLog = Math.log(FILTER_CUTOFF_MAX_HZ);
-  return clamp$a((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
+  return clamp$b((Math.log(clampedHz) - minLog) / (maxLog - minLog), 0, 1);
 }
 function dbToNormalizedY(value) {
-  return clamp$a((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
+  return clamp$b((value - FILTER_SPECTRUM_MAX_DB) / (FILTER_SPECTRUM_MIN_DB - FILTER_SPECTRUM_MAX_DB), 0, 1);
 }
 function formatFrequencyLabel(frequencyHz) {
   if (frequencyHz >= 1e3) {
@@ -23773,7 +24295,7 @@ function formatFrequencyLabel(frequencyHz) {
   return String(Math.round(frequencyHz));
 }
 function magnitudeToDb(magnitude) {
-  return clamp$a(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
+  return clamp$b(20 * Math.log10(Math.max(1e-9, magnitude)), FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB);
 }
 function findPeakIndex(values) {
   let peakIndex = 0;
@@ -23875,8 +24397,8 @@ function createPlotMetrics(width, height, {
   };
 }
 function createPlotPoint(normalizedX, magnitudeDb, plot) {
-  const x = plot.plotLeft + plot.plotWidth * clamp$a(normalizedX, 0, 1);
-  const normalizedY = clamp$a((clamp$a(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
+  const x = plot.plotLeft + plot.plotWidth * clamp$b(normalizedX, 0, 1);
+  const normalizedY = clamp$b((clamp$b(magnitudeDb, FILTER_SPECTRUM_MIN_DB, FILTER_SPECTRUM_MAX_DB) - FILTER_SPECTRUM_MIN_DB) / (FILTER_SPECTRUM_MAX_DB - FILTER_SPECTRUM_MIN_DB), 0, 1);
   const y = plot.plotBottom - plot.plotHeight * normalizedY;
   return { x, y };
 }
@@ -23955,8 +24477,8 @@ function createFilterSpectrumDisplayFrame({
   const maxBinIndex = Math.max(0, sourceBinCount - 1);
   const nyquistHz = Math.max(1, frame.sampleRateHz * 0.5);
   const sampleDisplayRange = (range) => {
-    const startIndex = clamp$a(Math.floor(clamp$a(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
-    const endIndex = clamp$a(Math.ceil(clamp$a(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
+    const startIndex = clamp$b(Math.floor(clamp$b(range.lowHz, 0, nyquistHz) / nyquistHz * maxBinIndex), 0, maxBinIndex);
+    const endIndex = clamp$b(Math.ceil(clamp$b(range.highHz, 0, nyquistHz) / nyquistHz * maxBinIndex), startIndex, maxBinIndex);
     return magnitudeToDb(sampleMagnitudeAtIndexRange(frame.magnitudes, startIndex, endIndex));
   };
   const bandMagnitudesDb = bands.map(sampleDisplayRange);
@@ -24149,12 +24671,12 @@ function readFullStoredStateValue$1(storedState, key) {
   }
   return void 0;
 }
-function clamp$9(value, min, max) {
+function clamp$a(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function clampEnvSeconds(value, fallback) {
   const numeric = Number(value);
-  return clamp$9(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
+  return clamp$a(Number.isFinite(numeric) ? numeric : fallback, ENV_MIN_SECONDS, ENV_MAX_SECONDS);
 }
 function formatMagnitude(value, digits) {
   const numeric = Number.isFinite(value) ? value : 0;
@@ -24219,11 +24741,11 @@ function getModulationAmountBounds(targetKind) {
 function clampModulationRouteAmount(targetKind, value) {
   const limits = getRouteAmountLimit(targetKind);
   const numeric = Number(value);
-  return clamp$9(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
+  return clamp$a(Number.isFinite(numeric) ? numeric : 0, limits.min, limits.max);
 }
 function composeModulationAmount(targetKind, depth) {
   const limits = getRouteAmountLimit(targetKind);
-  const clampedDepth = clamp$9(Number.isFinite(depth) ? depth : 0, 0, 1);
+  const clampedDepth = clamp$a(Number.isFinite(depth) ? depth : 0, 0, 1);
   if (Math.abs(clampedDepth - 0.5) <= 1e-9) {
     return 0;
   }
@@ -24250,12 +24772,12 @@ function getModulationAmountSliderPosition(targetKind, amount) {
     if (Math.abs(limits.min) <= 1e-9) {
       return 0.5;
     }
-    return clamp$9(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
+    return clamp$a(0.5 * (1 - Math.abs(clampedAmount) / Math.abs(limits.min)), 0, 0.5);
   }
   if (Math.abs(limits.max) <= 1e-9) {
     return 0.5;
   }
-  return clamp$9(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
+  return clamp$a(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
 }
 function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar") {
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
@@ -24397,7 +24919,7 @@ function normalizeSourceSlot(sourceKind, rawSlot) {
     return null;
   }
   const maxSlot = sourceKind === "mseg" ? MODULATION_MSEG_SLOT_COUNT : sourceKind === "macro" ? MODULATION_MACRO_SLOT_COUNT : MODULATION_ENV_SLOT_COUNT;
-  return clamp$9(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
+  return clamp$a(Number.isFinite(numericSlot) ? numericSlot : 1, 1, maxSlot);
 }
 function createDefaultEnvelope(slotIndex) {
   return {
@@ -24618,13 +25140,13 @@ class ModulationRuntimeBridge {
     this.stateListeners.delete(listener);
   }
   getMsegSlotController(slotIndex) {
-    return this.slotControllers[clamp$9(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.slotControllers[clamp$a(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   getMsegSlotEditShapeIndex(slotIndex) {
-    return this.msegSlotEditShapeIndexes[clamp$9(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
+    return this.msegSlotEditShapeIndexes[clamp$a(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
   }
   setMsegSlotEditShapeIndex(slotIndex, shapeIndex) {
-    const normalizedSlotIndex = clamp$9(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
+    const normalizedSlotIndex = clamp$a(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1);
     const normalizedShapeIndex = Math.round(Number(shapeIndex)) === 1 ? 1 : 0;
     if (this.msegSlotEditShapeIndexes[normalizedSlotIndex] === normalizedShapeIndex) {
       return;
@@ -24905,7 +25427,7 @@ function formatFrameIndex(position, frameCount) {
   const frameIndex = Math.round(position * Math.max(0, safeFrameCount - 1)) + 1;
   return `${String(frameIndex).padStart(2, "0")}/${String(safeFrameCount).padStart(2, "0")}`;
 }
-function clamp$8(value, min, max) {
+function clamp$9(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function buildMsegSurfacePaths(points, width, height, options = {}) {
@@ -24935,7 +25457,7 @@ function buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, widt
   try {
     const bufferA = renderMsegShape({ points: shapeAPoints });
     const bufferB = renderMsegShape({ points: shapeBPoints });
-    const morph = clamp$8(Number(morphValue) || 0, 0, 1);
+    const morph = clamp$9(Number(morphValue) || 0, 0, 1);
     const metrics = createMsegEditorMetrics(width, height, {
       pointRadius: options.pointRadius,
       horizontalPadding: options.horizontalPadding ?? MSEG_EDITOR_HORIZONTAL_PADDING_PX,
@@ -24946,7 +25468,7 @@ function buildMsegMorphSurfacePaths(shapeAPoints, shapeBPoints, morphValue, widt
       const x = sampleIndex / Math.max(1, sampleCount - 1);
       const valueA = sampleRenderedMsegBuffer(bufferA, x);
       const valueB = sampleRenderedMsegBuffer(bufferB, x);
-      const y = clamp$8(valueA + (valueB - valueA) * morph, 0, 1);
+      const y = clamp$9(valueA + (valueB - valueA) * morph, 0, 1);
       return pointToMsegEditorCoordinates({ x, y }, width, height, options);
     });
     const curvePath = polylineToSvgPath(polyline);
@@ -25080,7 +25602,7 @@ function MsegPreview({
       morphShapeBFillPath: shapeBReferencePaths?.fillPath ?? ""
     };
   }, [morphShapeAPoints, morphShapeBPoints, morphValue, orientation, points, referencePoints, size.height, size.width]);
-  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$8(Number(progressFillEnd), 0, 1) : null;
+  const clampedProgressFillEnd = progressFillEnd !== null && progressFillEnd !== void 0 && Number.isFinite(Number(progressFillEnd)) ? clamp$9(Number(progressFillEnd), 0, 1) : null;
   const progressClipRect = reactExports.useMemo(() => {
     if (clampedProgressFillEnd === null) {
       return null;
@@ -25461,7 +25983,7 @@ function buildMagnitudePlotPoints(magnitudesDb, width, height, {
   const points = [];
   for (let index = 0; index < magnitudesDb.length; index += 1) {
     const x = plotLeft + plotWidth * (index / Math.max(1, magnitudesDb.length - 1));
-    const normalized = clamp$8((clamp$8(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
+    const normalized = clamp$9((clamp$9(magnitudesDb[index], minDb, maxDb) - minDb) / (maxDb - minDb), 0, 1);
     const y = plotBottom - plotHeight * normalized;
     points.push({ x, y });
   }
@@ -25690,7 +26212,7 @@ function FilterResponseGraph({
   }, [size.height, size.width, spectrumGeometry]);
   const baseHandle = reactExports.useMemo(() => {
     const cutoffNormalized = filterCutoffHzToNormalized(baseModel.cutoffHz);
-    const qNormalized = clamp$8(resonanceNormalizedFromQ(baseModel.q), 0, 1);
+    const qNormalized = clamp$9(resonanceNormalizedFromQ(baseModel.q), 0, 1);
     return {
       cutoffNormalized,
       qNormalized,
@@ -25707,20 +26229,20 @@ function FilterResponseGraph({
     const bounds = surface.getBoundingClientRect();
     const handleClientX = clientX - dragState.pointerOffsetX;
     const handleClientY = clientY - dragState.pointerOffsetY;
-    const plotX = clamp$8(handleClientX - bounds.left, basePath.plotLeft, basePath.plotRight);
-    const plotY = clamp$8(handleClientY - bounds.top, basePath.plotTop, basePath.plotBottom);
-    const nextCutoffNormalized = clamp$8(
+    const plotX = clamp$9(handleClientX - bounds.left, basePath.plotLeft, basePath.plotRight);
+    const plotY = clamp$9(handleClientY - bounds.top, basePath.plotTop, basePath.plotBottom);
+    const nextCutoffNormalized = clamp$9(
       (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
       0,
       1
     );
-    const nextQNormalized = clamp$8(
+    const nextQNormalized = clamp$9(
       1 - (plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight),
       0,
       1
     );
-    onCutoffSet(clamp$8(normalizedToFilterCutoffHz(nextCutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
-    onQSet(clamp$8(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN$1, FILTER_Q_MAX$1));
+    onCutoffSet(clamp$9(normalizedToFilterCutoffHz(nextCutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
+    onQSet(clamp$9(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN$1, FILTER_Q_MAX$1));
   };
   const endDrag = (pointerId) => {
     const dragState = dragStateRef.current;
@@ -26171,7 +26693,7 @@ function WavetableStageSection({
   const debugState = reactExports.useMemo(() => ({
     position: clampDisplayPosition(position),
     warpMode: Math.round(Number(warpMode) || 0),
-    warpAmount: clamp$8(Number(warpAmount) || 0, 0, 1)
+    warpAmount: clamp$9(Number(warpAmount) || 0, 0, 1)
   }), [position, warpAmount, warpMode]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "section",
@@ -26266,107 +26788,6 @@ function WavetableStageSection({
     }
   );
 }
-function defaultFormatValue(value, min, max) {
-  if (max <= 1 && min >= -1) {
-    return `${Math.round(clamp$8(value, min, max) * 100)}`;
-  }
-  return value.toFixed(1);
-}
-function VerticalSlider({
-  label,
-  binding,
-  min,
-  max,
-  bipolar = false,
-  fillClassName,
-  handleClassName,
-  fillDataRole,
-  handleDataRole,
-  inputDataRole,
-  trackDataRole,
-  formatValue,
-  onChange,
-  normalizedFromValue,
-  valueFromNormalized,
-  className
-}) {
-  const trackRef = reactExports.useRef(null);
-  const {
-    handlePointerDown,
-    handlePointerMove,
-    handlePointerUp,
-    handlePointerCancel,
-    handleLostPointerCapture
-  } = useSliderDrag();
-  const normalized = clamp$8(
-    normalizedFromValue ? normalizedFromValue(binding.value) : (binding.value - min) / (max - min),
-    0,
-    1
-  );
-  const displayValue = formatValue ? formatValue(binding.value) : defaultFormatValue(binding.value, min, max);
-  const handleNormalizedChange = onChange ?? (valueFromNormalized ? (nextNormalized) => binding.setValue(valueFromNormalized(nextNormalized)) : void 0);
-  const fillStyle = bipolar ? normalized >= 0.5 ? { bottom: "50%", height: `${(normalized - 0.5) * 100}%` } : { bottom: `${normalized * 100}%`, height: `${(0.5 - normalized) * 100}%` } : { height: `${normalized * 100}%` };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `flex shrink-0 flex-col items-center gap-1 py-2 ${className ?? ""}`, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[8px] font-bold uppercase tracking-[0.1em] text-slate-400/45", children: label }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        ref: trackRef,
-        "data-role": trackDataRole,
-        className: "relative w-1.5 flex-1 cursor-ns-resize rounded-full bg-white/[0.04]",
-        onPointerDown: (e) => handlePointerDown(
-          e,
-          trackRef.current,
-          binding,
-          normalized,
-          min,
-          max,
-          "vertical",
-          handleNormalizedChange
-        ),
-        onPointerMove: handlePointerMove,
-        onPointerUp: handlePointerUp,
-        onPointerCancel: handlePointerCancel,
-        onLostPointerCapture: () => handleLostPointerCapture(),
-        children: [
-          bipolar && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute left-0 right-0 top-1/2 h-px -translate-y-px bg-white/[0.12]" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              "data-role": fillDataRole,
-              className: `${fillClassName} absolute bottom-0 left-0 right-0 rounded-full`,
-              style: fillStyle
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "div",
-            {
-              "data-role": handleDataRole,
-              className: `${handleClassName} absolute left-1/2 size-3.5 -translate-x-1/2 translate-y-1/2 rounded-full border-2 border-[rgba(3,5,12,0.7)]`,
-              style: { bottom: `${normalized * 100}%` }
-            }
-          )
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-[8px] tracking-[0.04em] text-slate-200/55", children: displayValue }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "input",
-      {
-        "data-role": inputDataRole,
-        type: "range",
-        min,
-        max,
-        step: 1e-3,
-        value: binding.value,
-        className: "sr-only",
-        tabIndex: -1,
-        onInput: (event) => binding.setValue(Number(event.currentTarget.value)),
-        onChange: (event) => binding.setValue(Number(event.currentTarget.value))
-      }
-    )
-  ] });
-}
 const DISTORTION_SCOPE_ENDPOINT_ID = "distortionScope";
 const DISTORTION_HISTORY_ENDPOINT_ID = "distortionHistory";
 const DISTORTION_SCOPE_CLIP_EPSILON = 25e-4;
@@ -26374,7 +26795,7 @@ const DISTORTION_FIXED_DISPLAY_RANGE = 2;
 const DISTORTION_CURVE_POINT_COUNT = 241;
 const DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT = 81;
 const DISTORTION_TRANSFER_OCCUPANCY_ACTIVITY_EPSILON = 0.035;
-function clamp$7(value, min, max) {
+function clamp$8(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function coerceFiniteNumber(value) {
@@ -26428,7 +26849,7 @@ function normalizeDistortionScopeMessage(message) {
   const computedRemovedPeak = findPeak(normalizedInput.map((inputSample, index) => inputSample - normalizedOutput[index]));
   return {
     sampleRateHz: Math.max(1, coerceFiniteNumber(record.sampleRateHz) ?? 44100),
-    dominantChannel: clamp$7(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
+    dominantChannel: clamp$8(Math.round(coerceFiniteNumber(record.dominantChannel) ?? 0), 0, 1),
     inputPeak: Math.max(0, coerceFiniteNumber(record.inputPeak) ?? computedInputPeak),
     outputPeak: Math.max(0, coerceFiniteNumber(record.outputPeak) ?? computedOutputPeak),
     removedPeak: Math.max(0, coerceFiniteNumber(record.removedPeak) ?? computedRemovedPeak),
@@ -26458,12 +26879,12 @@ function normalizeDistortionHistoryMessage(message) {
   if (availableBinCount <= 0) {
     return null;
   }
-  const binCount = clamp$7(
+  const binCount = clamp$8(
     Math.round(coerceFiniteNumber(record.binCount) ?? availableBinCount),
     1,
     availableBinCount
   );
-  const validBinCount = clamp$7(
+  const validBinCount = clamp$8(
     Math.round(coerceFiniteNumber(record.validBinCount) ?? binCount),
     0,
     binCount
@@ -26489,7 +26910,7 @@ function normalizeDistortionHistoryMessage(message) {
   };
 }
 function shapeDistortionSample(inputSample, knee) {
-  const clampedKnee = clamp$7(Number(knee) || 0, 0, 1);
+  const clampedKnee = clamp$8(Number(knee) || 0, 0, 1);
   const exponent = 2 + 14 * clampedKnee * clampedKnee;
   const magnitude = Math.abs(Number(inputSample) || 0);
   const denominator = Math.pow(1 + Math.pow(magnitude, exponent), 1 / exponent);
@@ -26519,7 +26940,7 @@ function buildDistortionHistoryBins(frame) {
     frame.outputMins.length,
     frame.outputMaxs.length
   );
-  const safeValidBinCount = clamp$7(frame.validBinCount, 0, activeBinCount);
+  const safeValidBinCount = clamp$8(frame.validBinCount, 0, activeBinCount);
   const leadingPaddingCount = Math.max(0, activeBinCount - safeValidBinCount);
   const bins = [];
   for (let index = 0; index < leadingPaddingCount; index += 1) {
@@ -26629,7 +27050,7 @@ function buildDistortionTransferOccupancy({
       continue;
     }
     const normalized = (point.input + safeInputRange) / (safeInputRange * 2);
-    const binIndex = clamp$7(
+    const binIndex = clamp$8(
       Math.round(normalized * (safeBinCount - 1)),
       0,
       safeBinCount - 1
@@ -26642,7 +27063,7 @@ function buildDistortionTransferOccupancy({
   const smoothedRemoved = normalizeSeries(smoothSeries(removedBins));
   const smoothedClipped = smoothSeries(clippedBins).map((value, index) => {
     const density = densityBins[index] ?? 0;
-    return density > 0 ? clamp$7(value / density, 0, 1) : 0;
+    return density > 0 ? clamp$8(value / density, 0, 1) : 0;
   });
   const rawPoints = Array.from({ length: safeBinCount }, (_, index) => {
     const normalized = safeBinCount <= 1 ? 0 : index / (safeBinCount - 1);
@@ -26652,7 +27073,7 @@ function buildDistortionTransferOccupancy({
       output: shapeDistortionSample(input, knee),
       density: smoothedDensity[index] ?? 0,
       removed: smoothedRemoved[index] ?? 0,
-      clipped: clamp$7(smoothedClipped[index] ?? 0, 0, 1)
+      clipped: clamp$8(smoothedClipped[index] ?? 0, 0, 1)
     };
   });
   const segments = [];
@@ -26726,15 +27147,15 @@ const COMPACT_PLOT = {
 function joinClasses$1(...classes) {
   return classes.filter(Boolean).join(" ");
 }
-function clamp$6(value, min, max) {
+function clamp$7(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function mapPlotX(sampleValue, plot, range) {
-  const normalized = clamp$6((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized = clamp$7((sampleValue + range) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.left + plot.width * normalized;
 }
 function mapPlotY(sampleValue, plot, range) {
-  const normalized = clamp$6((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
+  const normalized = clamp$7((range - sampleValue) / (Math.max(range, 1e-6) * 2), 0, 1);
   return plot.top + plot.height * normalized;
 }
 function buildPolylinePath(points) {
@@ -26872,8 +27293,8 @@ function DistortionVisualizer({
     return {
       occupancyPath,
       clippedPath,
-      occupancyOpacity: clamp$6(0.14 + peakDensity * 0.34, 0.14, 0.48),
-      clippedOpacity: clamp$6(peakRemoved * 0.62 + peakClipped * 0.24, 0, 0.72)
+      occupancyOpacity: clamp$7(0.14 + peakDensity * 0.34, 0.14, 0.48),
+      clippedOpacity: clamp$7(peakRemoved * 0.62 + peakClipped * 0.24, 0, 0.72)
     };
   }).filter((segment) => segment.occupancyPath), [displayRange, transferOccupancy, transferPlotRect]);
   const historyColumns = reactExports.useMemo(() => {
@@ -35692,7 +36113,7 @@ function PrecisionNumberField({
   wheelStep,
   suffix = null,
   normalizedFromValue = (value) => value,
-  valueFromNormalized = (value) => value,
+  valueFromNormalized: valueFromNormalized2 = (value) => value,
   pixelsPerFullRange = 180,
   fineDragMultiplier = 0.2,
   formatDisplay = defaultFormatEditingValue,
@@ -35872,7 +36293,7 @@ function PrecisionNumberField({
                       normalizedMax
                     );
                     const nextBindingValue = quantizeToStep(
-                      clampNumber(valueFromNormalized(nextNormalizedValue), min, max),
+                      clampNumber(valueFromNormalized2(nextNormalizedValue), min, max),
                       min,
                       max,
                       step
@@ -35956,7 +36377,7 @@ function PrecisionNumberField({
     }
   );
 }
-function clamp$5(value, min, max) {
+function clamp$6(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 function formatPercent$1(value) {
@@ -35967,37 +36388,37 @@ function formatQValue(value) {
   return `${qValue >= 10 ? qValue.toFixed(1) : qValue.toFixed(2)} Q`;
 }
 function smoothstep(value) {
-  const clampedValue = clamp$5(value, 0, 1);
+  const clampedValue = clamp$6(value, 0, 1);
   return clampedValue * clampedValue * (3 - 2 * clampedValue);
 }
 function smootherstep(value) {
-  const clampedValue = clamp$5(value, 0, 1);
+  const clampedValue = clamp$6(value, 0, 1);
   return clampedValue * clampedValue * clampedValue * (clampedValue * (clampedValue * 6 - 15) + 10);
 }
 function evaluateBalancedPower(normalizedInput, coefficients) {
-  const x = clamp$5(normalizedInput, 0, 1);
-  const power = clamp$5(Number(coefficients.power) || 2.25, 0.35, 6);
+  const x = clamp$6(normalizedInput, 0, 1);
+  const power = clamp$6(Number(coefficients.power) || 2.25, 0.35, 6);
   if (x <= 0.5) {
     return 0.5 * Math.pow(x * 2, power);
   }
   return 1 - 0.5 * Math.pow((1 - x) * 2, power);
 }
 function evaluateSmoothstepBlend(normalizedInput, coefficients) {
-  const x = clamp$5(normalizedInput, 0, 1);
-  const blend = clamp$5(Number(coefficients.blend) || 0.65, 0, 1);
-  const shaping = clamp$5(Number(coefficients.shaping) || 0.6, 0, 1);
+  const x = clamp$6(normalizedInput, 0, 1);
+  const blend = clamp$6(Number(coefficients.blend) || 0.65, 0, 1);
+  const shaping = clamp$6(Number(coefficients.shaping) || 0.6, 0, 1);
   const curved = smoothstep(x) * (1 - shaping) + smootherstep(x) * shaping;
-  return clamp$5(x * (1 - blend) + curved * blend, 0, 1);
+  return clamp$6(x * (1 - blend) + curved * blend, 0, 1);
 }
 function evaluateSigmoid(normalizedInput, coefficients) {
-  const x = clamp$5(normalizedInput, 0, 1);
-  const slope = clamp$5(Number(coefficients.slope) || 7, 0.5, 20);
-  const center = clamp$5(Number(coefficients.center) || 0.5, 0.08, 0.92);
+  const x = clamp$6(normalizedInput, 0, 1);
+  const slope = clamp$6(Number(coefficients.slope) || 7, 0.5, 20);
+  const center = clamp$6(Number(coefficients.center) || 0.5, 0.08, 0.92);
   const logistic = (sample) => 1 / (1 + Math.exp(-slope * (sample - center)));
   const low = logistic(0);
   const high = logistic(1);
   const span = Math.max(1e-9, high - low);
-  return clamp$5((logistic(x) - low) / span, 0, 1);
+  return clamp$6((logistic(x) - low) / span, 0, 1);
 }
 const CURVE_FAMILY_DEFINITIONS = [
   {
@@ -36006,7 +36427,7 @@ const CURVE_FAMILY_DEFINITIONS = [
     equation: "y = x",
     description: "Direct 1:1 motion with no shaping.",
     coefficients: [],
-    evaluate: (normalizedInput) => clamp$5(normalizedInput, 0, 1)
+    evaluate: (normalizedInput) => clamp$6(normalizedInput, 0, 1)
   },
   {
     id: "balanced-power",
@@ -36122,7 +36543,7 @@ function createDefaultCurveProfile(targetId) {
         const resolvedValue = Number.isFinite(Number(requestedValue)) ? Number(requestedValue) : coefficient.defaultValue;
         return [
           coefficient.key,
-          clamp$5(resolvedValue, coefficient.min, coefficient.max)
+          clamp$6(resolvedValue, coefficient.min, coefficient.max)
         ];
       })
     )
@@ -36149,7 +36570,7 @@ function sanitizeCurveProfile(targetId, profile) {
       const resolvedValue = Number.isFinite(Number(rawValue)) ? Number(rawValue) : definition.defaultValue;
       return [
         definition.key,
-        clamp$5(resolvedValue, definition.min, definition.max)
+        clamp$6(resolvedValue, definition.min, definition.max)
       ];
     })
   );
@@ -36162,12 +36583,12 @@ function evaluateCurveProfile(targetId, profile, normalizedInput) {
   const target = getTargetDefinitionInternal(targetId);
   const sanitizedProfile = sanitizeCurveProfile(target.id, profile);
   const family = getFamilyDefinitionInternal(sanitizedProfile.familyId);
-  return clamp$5(family.evaluate(normalizedInput, sanitizedProfile.coefficients), 0, 1);
+  return clamp$6(family.evaluate(normalizedInput, sanitizedProfile.coefficients), 0, 1);
 }
 function invertCurveProfile(targetId, profile, normalizedOutput) {
   const target = getTargetDefinitionInternal(targetId);
   const sanitizedProfile = sanitizeCurveProfile(target.id, profile);
-  const desiredOutput = clamp$5(normalizedOutput, 0, 1);
+  const desiredOutput = clamp$6(normalizedOutput, 0, 1);
   if (desiredOutput <= 0) {
     return 0;
   }
@@ -36844,6 +37265,421 @@ function findRackModulationSource(sourceKind, sourceSlot) {
   }
   return source;
 }
+const KNOB_CENTER = 50;
+const KNOB_SWEEP_START_DEGREES = 225;
+const KNOB_SWEEP_DEGREES = 270;
+const BASE_RADIUS = 25;
+const MOD_INNER_RADIUS = 36;
+const MOD_OUTER_RADIUS = 48;
+const LONG_PRESS_DELAY_MS = 500;
+const GESTURE_MOVE_THRESHOLD_PX = 6;
+function triggerRackControlHaptic() {
+  const trigger = globalThis.cmaj_triggerHaptic;
+  trigger?.("light");
+}
+function clamp$5(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function normalizedValue(descriptor, value) {
+  const clamped = clamp$5(value, descriptor.min, descriptor.max);
+  if (descriptor.scale === "log") {
+    return Math.log(clamped / descriptor.min) / Math.log(descriptor.max / descriptor.min);
+  }
+  return (clamped - descriptor.min) / (descriptor.max - descriptor.min);
+}
+function valueFromNormalized(descriptor, normalized) {
+  const clamped = clamp$5(normalized, 0, 1);
+  return descriptor.scale === "log" ? descriptor.min * (descriptor.max / descriptor.min) ** clamped : descriptor.min + clamped * (descriptor.max - descriptor.min);
+}
+function pointOnCircle(degrees, radius) {
+  const radians = degrees * Math.PI / 180;
+  return {
+    x: KNOB_CENTER + radius * Math.cos(radians),
+    y: KNOB_CENTER - radius * Math.sin(radians)
+  };
+}
+function angleForNormalized(value) {
+  return KNOB_SWEEP_START_DEGREES - clamp$5(value, 0, 1) * KNOB_SWEEP_DEGREES;
+}
+function formatPoint(point) {
+  return `${point.x.toFixed(3)} ${point.y.toFixed(3)}`;
+}
+function pieSectorPath(fromNormalized, toNormalized, radius) {
+  const low = Math.min(fromNormalized, toNormalized);
+  const high = Math.max(fromNormalized, toNormalized);
+  const extent = (high - low) * KNOB_SWEEP_DEGREES;
+  if (extent <= 1e-3) {
+    return "";
+  }
+  const start = pointOnCircle(angleForNormalized(low), radius);
+  const end = pointOnCircle(angleForNormalized(high), radius);
+  return `M ${KNOB_CENTER} ${KNOB_CENTER} L ${formatPoint(start)} A ${radius} ${radius} 0 ${extent > 180 ? 1 : 0} 1 ${formatPoint(end)} Z`;
+}
+function annularSectorPath(fromNormalized, toNormalized, innerRadius, outerRadius) {
+  const low = Math.min(fromNormalized, toNormalized);
+  const high = Math.max(fromNormalized, toNormalized);
+  const extent = (high - low) * KNOB_SWEEP_DEGREES;
+  if (extent <= 1e-3) {
+    return "";
+  }
+  const outerStart = pointOnCircle(angleForNormalized(low), outerRadius);
+  const outerEnd = pointOnCircle(angleForNormalized(high), outerRadius);
+  const innerStart = pointOnCircle(angleForNormalized(low), innerRadius);
+  const innerEnd = pointOnCircle(angleForNormalized(high), innerRadius);
+  const largeArc = extent > 180 ? 1 : 0;
+  return `M ${formatPoint(outerStart)} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${formatPoint(outerEnd)} L ${formatPoint(innerEnd)} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${formatPoint(innerStart)} Z`;
+}
+function modulationRange(descriptor, baseValue, route) {
+  if (!route || !route.enabled || Math.abs(route.amount) <= 1e-9) {
+    return null;
+  }
+  const magnitude = Math.abs(route.amount);
+  let lowValue;
+  let highValue;
+  if (descriptor.scale === "log") {
+    if (route.polarity === "bipolar") {
+      lowValue = baseValue * 2 ** -magnitude;
+      highValue = baseValue * 2 ** magnitude;
+    } else {
+      const modulated = baseValue * 2 ** route.amount;
+      lowValue = Math.min(baseValue, modulated);
+      highValue = Math.max(baseValue, modulated);
+    }
+  } else if (route.polarity === "bipolar") {
+    lowValue = baseValue - magnitude;
+    highValue = baseValue + magnitude;
+  } else {
+    const modulated = baseValue + route.amount;
+    lowValue = Math.min(baseValue, modulated);
+    highValue = Math.max(baseValue, modulated);
+  }
+  return {
+    low: normalizedValue(descriptor, lowValue),
+    high: normalizedValue(descriptor, highValue)
+  };
+}
+function RackParameterKnob({
+  descriptor,
+  binding,
+  route,
+  sourceAccent,
+  dataRole,
+  trackDataRole,
+  handleDataRole,
+  onSelect,
+  onHudChange,
+  onModulationAmountChange,
+  onRequestContextMenu
+}) {
+  const artRef = reactExports.useRef(null);
+  const gestureRef = reactExports.useRef(null);
+  const suppressClickRef = reactExports.useRef(false);
+  const holdTimerRef = reactExports.useRef(null);
+  const bindingRef = reactExports.useRef(binding);
+  const onHudChangeRef = reactExports.useRef(onHudChange);
+  const onModulationAmountChangeRef = reactExports.useRef(onModulationAmountChange);
+  const onRequestContextMenuRef = reactExports.useRef(onRequestContextMenu);
+  bindingRef.current = binding;
+  onHudChangeRef.current = onHudChange;
+  onModulationAmountChangeRef.current = onModulationAmountChange;
+  onRequestContextMenuRef.current = onRequestContextMenu;
+  const patternStem = reactExports.useId().replaceAll(":", "");
+  const baseTrackPatternID = `rack-knob-base-${patternStem}`;
+  const modTrackPatternID = `rack-knob-mod-${patternStem}`;
+  const baseNormalized = normalizedValue(descriptor, binding.value);
+  const targetKind = `rack.${descriptor.endpointID}`;
+  const modulationAmount = route?.amount ?? 0;
+  const modulationNormalized = getModulationAmountSliderPosition(targetKind, modulationAmount);
+  const baseOrigin = descriptor.min < 0 && descriptor.max > 0 ? normalizedValue(descriptor, 0) : 0;
+  const routeRange = modulationRange(descriptor, binding.value, route);
+  const handlePoint = pointOnCircle(angleForNormalized(baseNormalized), BASE_RADIUS * 0.72);
+  const defaultPoint = pointOnCircle(
+    angleForNormalized(normalizedValue(descriptor, descriptor.initial)),
+    BASE_RADIUS * 0.94
+  );
+  const style = {
+    "--rack-knob-accent": "var(--editor-accent)",
+    "--rack-knob-mod-accent": sourceAccent
+  };
+  const finishGesture = reactExports.useCallback((pointerId) => {
+    const gesture = gestureRef.current;
+    if (!gesture || pointerId !== void 0 && gesture.pointerId !== pointerId) {
+      return;
+    }
+    gestureRef.current = null;
+    if (holdTimerRef.current !== null) {
+      clearTimeout(holdTimerRef.current);
+      holdTimerRef.current = null;
+    }
+    suppressClickRef.current = gesture.moved || gesture.holdActivated;
+    delete gesture.element.dataset.dragging;
+    try {
+      if (gesture.element.hasPointerCapture(gesture.pointerId)) {
+        gesture.element.releasePointerCapture(gesture.pointerId);
+      }
+    } catch {
+    }
+    if (gesture.baseGestureStarted) {
+      bindingRef.current.endGesture();
+    }
+    onHudChangeRef.current(null);
+  }, []);
+  reactExports.useEffect(() => {
+    const handlePointerEnd = (event) => finishGesture(event.pointerId);
+    const handleBlur = () => finishGesture();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        finishGesture();
+      }
+    };
+    window.addEventListener("pointerup", handlePointerEnd, true);
+    window.addEventListener("pointercancel", handlePointerEnd, true);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("pointerup", handlePointerEnd, true);
+      window.removeEventListener("pointercancel", handlePointerEnd, true);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      finishGesture();
+    };
+  }, [finishGesture]);
+  const handlePointerDown = reactExports.useCallback((event) => {
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+    const art = artRef.current;
+    if (!art) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    finishGesture();
+    onSelect();
+    const artBounds = art.getBoundingClientRect();
+    const normalizedX = (event.clientX - artBounds.left) / Math.max(1, artBounds.width) * 106 - 3;
+    const normalizedY = (event.clientY - artBounds.top) / Math.max(1, artBounds.height) * 106 - 3;
+    const distance = Math.hypot(normalizedX - KNOB_CENTER, normalizedY - KNOB_CENTER);
+    const mode = distance >= MOD_INNER_RADIUS - 2 ? "modulation" : "base";
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+    }
+    event.currentTarget.dataset.dragging = mode;
+    gestureRef.current = {
+      pointerId: event.pointerId,
+      element: event.currentTarget,
+      mode,
+      startClientX: event.clientX,
+      startClientY: event.clientY,
+      startNormalized: mode === "base" ? baseNormalized : modulationNormalized,
+      moved: false,
+      baseGestureStarted: false,
+      holdActivated: false
+    };
+    holdTimerRef.current = setTimeout(() => {
+      const gesture = gestureRef.current;
+      if (!gesture || gesture.pointerId !== event.pointerId || gesture.moved) {
+        return;
+      }
+      holdTimerRef.current = null;
+      gesture.holdActivated = true;
+      suppressClickRef.current = true;
+      onHudChangeRef.current(null);
+      triggerRackControlHaptic();
+      onRequestContextMenuRef.current(event.clientX, event.clientY);
+    }, LONG_PRESS_DELAY_MS);
+    onHudChange({
+      endpointID: descriptor.endpointID,
+      label: descriptor.label,
+      value: mode === "base" ? formatRackParameterValue(descriptor, binding.value) : formatModulationAmountReadout(targetKind, modulationAmount, route?.polarity),
+      mode
+    });
+  }, [
+    baseNormalized,
+    binding,
+    descriptor,
+    finishGesture,
+    modulationAmount,
+    modulationNormalized,
+    onHudChange,
+    onSelect,
+    route?.polarity,
+    targetKind
+  ]);
+  const handlePointerMove = reactExports.useCallback((event) => {
+    const gesture = gestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) {
+      return;
+    }
+    if (event.pointerType === "mouse" && event.buttons === 0) {
+      finishGesture(event.pointerId);
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const deltaY = gesture.startClientY - event.clientY;
+    const distance = Math.hypot(
+      event.clientX - gesture.startClientX,
+      event.clientY - gesture.startClientY
+    );
+    if (!gesture.moved && distance >= GESTURE_MOVE_THRESHOLD_PX) {
+      gesture.moved = true;
+      if (holdTimerRef.current !== null) {
+        clearTimeout(holdTimerRef.current);
+        holdTimerRef.current = null;
+      }
+      if (gesture.mode === "base") {
+        bindingRef.current.beginGesture();
+        gesture.baseGestureStarted = true;
+      }
+    }
+    if (!gesture.moved || gesture.holdActivated) {
+      return;
+    }
+    const sensitivity = event.shiftKey ? 720 : 180;
+    const nextNormalized = clamp$5(gesture.startNormalized + deltaY / sensitivity, 0, 1);
+    if (gesture.mode === "modulation") {
+      const nextAmount = composeModulationAmount(targetKind, nextNormalized);
+      onModulationAmountChangeRef.current(nextAmount);
+      onHudChange({
+        endpointID: descriptor.endpointID,
+        label: descriptor.label,
+        value: formatModulationAmountReadout(targetKind, nextAmount, route?.polarity),
+        mode: "modulation"
+      });
+      return;
+    }
+    const nextValue = valueFromNormalized(
+      descriptor,
+      nextNormalized
+    );
+    binding.setValue(nextValue);
+    onHudChange({
+      endpointID: descriptor.endpointID,
+      label: descriptor.label,
+      value: formatRackParameterValue(descriptor, nextValue),
+      mode: "base"
+    });
+  }, [binding, descriptor, finishGesture, onHudChange, route?.polarity, targetKind]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "button",
+    {
+      type: "button",
+      role: "slider",
+      "data-role": dataRole,
+      value: String(binding.value),
+      "aria-label": descriptor.label,
+      "aria-valuemin": descriptor.min,
+      "aria-valuemax": descriptor.max,
+      "aria-valuenow": binding.value,
+      className: "rack-parameter-knob",
+      style,
+      onPointerDown: handlePointerDown,
+      onPointerMove: handlePointerMove,
+      onPointerUp: (event) => finishGesture(event.pointerId),
+      onPointerCancel: (event) => finishGesture(event.pointerId),
+      onLostPointerCapture: (event) => finishGesture(event.pointerId),
+      onContextMenu: (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onSelect();
+        onRequestContextMenu(event.clientX, event.clientY);
+      },
+      onClick: (event) => {
+        if (suppressClickRef.current) {
+          suppressClickRef.current = false;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
+        if (event.detail === 0) {
+          onSelect();
+        }
+      },
+      onKeyDown: (event) => {
+        if (!["ArrowUp", "ArrowRight", "ArrowDown", "ArrowLeft", "Home", "End"].includes(event.key)) {
+          return;
+        }
+        event.preventDefault();
+        const step = event.shiftKey ? 0.01 : 0.04;
+        const current = normalizedValue(descriptor, binding.value);
+        const nextNormalized = event.key === "Home" ? 0 : event.key === "End" ? 1 : clamp$5(current + (["ArrowUp", "ArrowRight"].includes(event.key) ? step : -step), 0, 1);
+        binding.commitValue(valueFromNormalized(descriptor, nextNormalized));
+        onSelect();
+      },
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "rack-knob-label", children: descriptor.shortLabel }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "svg",
+          {
+            ref: artRef,
+            className: "rack-knob-art",
+            "data-role": trackDataRole,
+            viewBox: "-3 -3 106 106",
+            "aria-hidden": "true",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("defs", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("pattern", { id: baseTrackPatternID, width: "4", height: "4", patternUnits: "userSpaceOnUse", children: /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "2", cy: "2", r: "0.9", fill: "var(--rack-knob-accent)" }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("pattern", { id: modTrackPatternID, width: "4", height: "4", patternUnits: "userSpaceOnUse", children: /* @__PURE__ */ jsxRuntimeExports.jsx("circle", { cx: "2", cy: "2", r: "0.9", fill: "var(--rack-knob-mod-accent)" }) })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "path",
+                {
+                  className: "rack-knob-base-track",
+                  d: pieSectorPath(0, 1, BASE_RADIUS),
+                  fill: `url(#${baseTrackPatternID})`
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "path",
+                {
+                  className: "rack-knob-base-fill",
+                  d: pieSectorPath(baseOrigin, baseNormalized, BASE_RADIUS)
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "path",
+                {
+                  className: "rack-knob-mod-track",
+                  d: annularSectorPath(0, 1, MOD_INNER_RADIUS, MOD_OUTER_RADIUS),
+                  fill: `url(#${modTrackPatternID})`
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "path",
+                {
+                  className: "rack-knob-mod-fill",
+                  d: routeRange === null ? "" : annularSectorPath(routeRange.low, routeRange.high, MOD_INNER_RADIUS, MOD_OUTER_RADIUS)
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "circle",
+                {
+                  className: "rack-knob-default-marker",
+                  cx: defaultPoint.x,
+                  cy: defaultPoint.y,
+                  r: "1.75"
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "circle",
+                {
+                  "data-role": handleDataRole,
+                  className: "rack-knob-handle",
+                  cx: handlePoint.x,
+                  cy: handlePoint.y,
+                  r: "2.5"
+                }
+              )
+            ]
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("output", { className: "rack-knob-readout", children: formatRackParameterValue(descriptor, binding.value) })
+      ]
+    }
+  );
+}
 const EFFECT_ACCENTS = {
   filter: "#c6db3f",
   drive: "#ff6a27",
@@ -36933,8 +37769,8 @@ function normalizedRackParameterValue(descriptor, value) {
   }
   return (clamp$4(value, descriptor.min, descriptor.max) - descriptor.min) / (descriptor.max - descriptor.min);
 }
-function rackParameterValueFromNormalized(descriptor, normalizedValue) {
-  const normalized = clamp$4(normalizedValue, 0, 1);
+function rackParameterValueFromNormalized(descriptor, normalizedValue2) {
+  const normalized = clamp$4(normalizedValue2, 0, 1);
   return descriptor.scale === "log" ? descriptor.min * (descriptor.max / descriptor.min) ** normalized : descriptor.min + (descriptor.max - descriptor.min) * normalized;
 }
 function formatRackQuickParameterValue(descriptor, value) {
@@ -37154,15 +37990,19 @@ function RackParameterControl({
   descriptor,
   routes,
   selected,
-  activeSourceAccent,
+  activeSource,
   hovered,
   onSelect,
-  onRecentParameter
+  onRecentParameter,
+  onHudChange,
+  onModulationAmountChange,
+  onRequestContextMenu
 }) {
   const binding = useRackParameterBinding(descriptor);
   const isTarget = descriptor.modulationTargetIndex !== null;
   const hasRoute = isTarget && routes.some((route) => isRouteForTarget(route, descriptor.endpointID));
-  const rootStyle = { "--active-source-color": activeSourceAccent };
+  const selectedRoute = routes.find((route) => route.sourceKind === activeSource.sourceKind && route.sourceSlot === activeSource.sourceSlot && isRouteForTarget(route, descriptor.endpointID)) ?? null;
+  const rootStyle = { "--active-source-color": activeSource.accent };
   const controlDataRole = RACK_CONTROL_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-${descriptor.endpointID}`;
   const selectParameter = reactExports.useCallback(() => {
     onRecentParameter(descriptor.endpointID);
@@ -37203,25 +38043,24 @@ function RackParameterControl({
       "data-rack-mod-target": isTarget ? descriptor.endpointID : void 0,
       className: `rack-editor-control${hasRoute ? " has-route" : ""}${selected ? " is-selected-target" : ""}${hovered ? " is-mod-hover" : ""}`,
       style: rootStyle,
-      onPointerDownCapture: selectParameter,
       children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-        VerticalSlider,
+        RackParameterKnob,
         {
-          label: descriptor.shortLabel,
+          descriptor,
           binding,
-          min: descriptor.min,
-          max: descriptor.max,
-          bipolar: descriptor.min < 0 && descriptor.max > 0,
-          fillClassName: "rack-control-fill",
-          handleClassName: "rack-control-handle",
-          fillDataRole: `rack-parameter-fill-${descriptor.endpointID}`,
-          handleDataRole: RACK_HANDLE_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-handle-${descriptor.endpointID}`,
-          inputDataRole: controlDataRole,
+          route: selectedRoute,
+          sourceAccent: activeSource.accent,
+          dataRole: controlDataRole,
           trackDataRole: RACK_TRACK_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-track-${descriptor.endpointID}`,
-          formatValue: (value) => formatRackParameterValue(descriptor, value),
-          normalizedFromValue: (value) => normalizedRackParameterValue(descriptor, value),
-          valueFromNormalized: (normalized) => rackParameterValueFromNormalized(descriptor, normalized),
-          className: "h-full w-full"
+          handleDataRole: RACK_HANDLE_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-handle-${descriptor.endpointID}`,
+          onSelect: selectParameter,
+          onHudChange,
+          onModulationAmountChange: (amount) => onModulationAmountChange(descriptor.endpointID, amount),
+          onRequestContextMenu: (clientX, clientY) => onRequestContextMenu(
+            descriptor.endpointID,
+            clientX,
+            clientY
+          )
         }
       )
     }
@@ -37337,9 +38176,12 @@ function ParameterList({
   routes,
   selectedTargetEndpointID,
   hoverTargetEndpointID,
-  activeSourceAccent,
+  activeSource,
   onSelectTarget,
-  onRecentParameter
+  onRecentParameter,
+  onHudChange,
+  onModulationAmountChange,
+  onRequestContextMenu
 }) {
   const descriptor = getRackEffectDescriptor(effectId);
   if (effectId === "phaser" || effectId === "delay") {
@@ -37350,9 +38192,12 @@ function ParameterList({
         routes,
         selectedTargetEndpointID,
         hoverTargetEndpointID,
-        activeSourceAccent,
+        activeSource,
         onSelectTarget,
-        onRecentParameter
+        onRecentParameter,
+        onHudChange,
+        onModulationAmountChange,
+        onRequestContextMenu
       }
     );
   }
@@ -37362,10 +38207,13 @@ function ParameterList({
       descriptor: parameter,
       routes,
       selected: selectedTargetEndpointID === parameter.endpointID,
-      activeSourceAccent,
+      activeSource,
       hovered: hoverTargetEndpointID === parameter.endpointID,
       onSelect: () => onSelectTarget(parameter.endpointID),
-      onRecentParameter
+      onRecentParameter,
+      onHudChange,
+      onModulationAmountChange,
+      onRequestContextMenu
     },
     parameter.endpointID
   )) });
@@ -37375,9 +38223,12 @@ function SyncParameterList({
   routes,
   selectedTargetEndpointID,
   hoverTargetEndpointID,
-  activeSourceAccent,
+  activeSource,
   onSelectTarget,
-  onRecentParameter
+  onRecentParameter,
+  onHudChange,
+  onModulationAmountChange,
+  onRequestContextMenu
 }) {
   const descriptor = getRackEffectDescriptor(effectId);
   const modeEndpointID = effectId === "phaser" ? "phaserRateMode" : "delayTimeMode";
@@ -37400,10 +38251,13 @@ function SyncParameterList({
       descriptor: parameter,
       routes,
       selected: selectedTargetEndpointID === parameter.endpointID,
-      activeSourceAccent,
+      activeSource,
       hovered: hoverTargetEndpointID === parameter.endpointID,
       onSelect: () => onSelectTarget(parameter.endpointID),
-      onRecentParameter
+      onRecentParameter,
+      onHudChange,
+      onModulationAmountChange,
+      onRequestContextMenu
     },
     parameter.endpointID
   )) });
@@ -37411,9 +38265,11 @@ function SyncParameterList({
 function ModSourceCarousel({
   pageIndex,
   selectedSource,
+  sourceIsArmed,
   onPageChange,
   onSourcePreview,
   onSourceActivate,
+  onOpenSelectedSource,
   onHoverTarget
 }) {
   const dragRef = reactExports.useRef(null);
@@ -37438,9 +38294,13 @@ function ModSourceCarousel({
     if (targetEndpointID) {
       onSourceActivate(drag.source, targetEndpointID);
     } else if (!drag.moved) {
-      onSourceActivate(drag.source);
+      if (drag.wasActiveSelection) {
+        onOpenSelectedSource(drag.source);
+      } else {
+        onSourceActivate(drag.source);
+      }
     }
-  }, [onHoverTarget, onSourceActivate]);
+  }, [onHoverTarget, onOpenSelectedSource, onSourceActivate]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rack-mod-dock", role: "group", "aria-label": "Rack modulation sources", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "rack-mod-header", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "MOD BAR" }),
@@ -37493,7 +38353,8 @@ function ModSourceCarousel({
                     source,
                     moved: false,
                     startX: event.clientX,
-                    startY: event.clientY
+                    startY: event.clientY,
+                    wasActiveSelection: isSelected && sourceIsArmed
                   };
                 },
                 onPointerMove: (event) => {
@@ -37631,14 +38492,217 @@ function ModulationAmountControl({
     )
   ] });
 }
+const RACK_PARAMETER_MENU_ITEMS = [
+  { action: "edit-values", label: "Edit values…" },
+  { action: "reset-base", label: "Reset base to default" },
+  { action: "toggle-route", label: "Bypass route" },
+  { action: "polarity", label: "Polarity: Unipolar" },
+  { action: "reducer", label: "Voice reducer: Maximum" },
+  { action: "remove-route", label: "Remove this route" },
+  { action: "remove-all-target-routes", label: "Remove all routes to target…" }
+];
+function RackParameterContextMenu({
+  state,
+  route,
+  onClose,
+  onSelectAction
+}) {
+  const style = {
+    "--rack-menu-x": `${state.clientX}px`,
+    "--rack-menu-y": `${state.clientY}px`
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "div",
+    {
+      className: "rack-parameter-menu-layer",
+      "data-role": "rack-parameter-menu-layer",
+      onPointerDown: onClose,
+      children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          role: "menu",
+          "aria-label": "Rack parameter actions",
+          "data-role": "rack-parameter-menu",
+          "data-endpoint-id": state.endpointID,
+          className: "rack-parameter-menu",
+          style,
+          onPointerDown: (event) => event.stopPropagation(),
+          children: RACK_PARAMETER_MENU_ITEMS.filter((item) => item.action !== "reducer" || route !== null && isVoiceModulationSource(route.sourceKind)).map((item) => {
+            const label = item.action === "toggle-route" ? route?.enabled === false ? "Enable route" : "Bypass route" : item.action === "polarity" ? `Polarity: ${route?.polarity === "bipolar" ? "Bipolar" : "Unipolar"}` : item.action === "reducer" ? `Voice reducer: ${route?.reducer === "mean" ? "Mean" : "Maximum"}` : item.label;
+            const needsRoute = ["toggle-route", "polarity", "reducer", "remove-route"].includes(item.action);
+            return /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                role: "menuitem",
+                "data-role": "rack-parameter-menu-item",
+                "data-action": item.action,
+                disabled: needsRoute && route === null,
+                onClick: () => onSelectAction(item.action),
+                children: label
+              },
+              item.action
+            );
+          })
+        }
+      )
+    }
+  );
+}
+function rackParameterEditingUnit(descriptor) {
+  if (descriptor.unit === "" && descriptor.max - descriptor.min <= 2) {
+    return "%";
+  }
+  return descriptor.unit === "deg" ? "°" : descriptor.unit;
+}
+function rackModulationEditingUnit(descriptor) {
+  if (descriptor.scale === "log") {
+    return "oct";
+  }
+  return rackParameterEditingUnit(descriptor);
+}
+function RackParameterValueSheet({
+  descriptor,
+  binding,
+  route,
+  source,
+  onApply,
+  onClose
+}) {
+  const targetKind = `rack.${descriptor.endpointID}`;
+  const [baseDraft, setBaseDraft] = reactExports.useState(() => formatRackParameterEditingValue(descriptor, binding.value));
+  const [amountDraft, setAmountDraft] = reactExports.useState(() => route ? formatModulationAmountEditingValue(targetKind, route.amount) : "");
+  const [error, setError] = reactExports.useState("");
+  const apply = reactExports.useCallback(() => {
+    const baseValue = parseRackParameterEditingValue(descriptor, baseDraft);
+    const modulationAmount = route === null ? null : parseModulationAmountEditingValue(targetKind, amountDraft);
+    if (baseValue === null || route !== null && modulationAmount === null) {
+      setError("Enter valid values in the shown units.");
+      return;
+    }
+    onApply(baseValue, modulationAmount);
+  }, [amountDraft, baseDraft, descriptor, onApply, route, targetKind]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rack-value-sheet-layer", onPointerDown: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "section",
+    {
+      role: "dialog",
+      "aria-modal": "true",
+      "aria-label": `Edit ${descriptor.label} values`,
+      "data-role": "rack-parameter-value-sheet",
+      className: "rack-value-sheet",
+      onPointerDown: (event) => event.stopPropagation(),
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "EXACT VALUE" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("strong", { children: [
+            getRackEffectDescriptor(descriptor.effectId).label,
+            " · ",
+            descriptor.label
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Base" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "rack-value-sheet-input", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                "data-role": "rack-base-value-input",
+                inputMode: "decimal",
+                value: baseDraft,
+                onChange: (event) => setBaseDraft(event.currentTarget.value),
+                onKeyDown: (event) => {
+                  if (event.key === "Enter") apply();
+                  if (event.key === "Escape") onClose();
+                },
+                autoFocus: true
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("em", { children: rackParameterEditingUnit(descriptor) })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+            source.label,
+            " amount"
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "rack-value-sheet-input", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
+              {
+                "data-role": "rack-modulation-value-input",
+                inputMode: "decimal",
+                value: amountDraft,
+                disabled: route === null,
+                onChange: (event) => setAmountDraft(event.currentTarget.value),
+                onKeyDown: (event) => {
+                  if (event.key === "Enter") apply();
+                  if (event.key === "Escape") onClose();
+                }
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("em", { children: rackModulationEditingUnit(descriptor) })
+          ] })
+        ] }),
+        route === null ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { "data-role": "rack-value-sheet-no-route", children: "No selected source route." }) : null,
+        error ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "rack-value-sheet-error", role: "alert", children: error }) : null,
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "data-role": "rack-value-sheet-default", onClick: () => {
+            setBaseDraft(formatRackParameterEditingValue(descriptor, descriptor.initial));
+            setError("");
+          }, children: "Default" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", {}),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "data-role": "rack-value-sheet-cancel", onClick: onClose, children: "Cancel" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "data-role": "rack-value-sheet-apply", onClick: apply, children: "Apply" })
+        ] })
+      ]
+    }
+  ) });
+}
+function RemoveRackTargetRoutesConfirmation({
+  descriptor,
+  routeCount,
+  onCancel,
+  onConfirm
+}) {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rack-value-sheet-layer", onPointerDown: onCancel, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "section",
+    {
+      role: "alertdialog",
+      "aria-modal": "true",
+      "aria-label": "Remove all modulation routes to parameter",
+      "data-role": "rack-remove-target-routes-confirmation",
+      className: "rack-remove-routes-confirmation",
+      onPointerDown: (event) => event.stopPropagation(),
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "REMOVE ROUTES" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("strong", { children: [
+          "Remove all ",
+          routeCount,
+          " ",
+          routeCount === 1 ? "route" : "routes",
+          " to ",
+          descriptor.label,
+          "?"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Other parameters and the base value will not change." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: onCancel, children: "Cancel" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "data-role": "rack-remove-target-routes-confirm", onClick: onConfirm, children: "Remove" })
+        ] })
+      ]
+    }
+  ) });
+}
 function EffectsRackWorkspace({
   routes,
   observedFilterSpectrum,
   observedDistortionHistory,
   observedDistortionScope,
   onAddRouteWithOverrides,
+  onRemoveRoute,
   onRouteChange,
   onBackToVoice,
+  onOpenModSource,
   className
 }) {
   const { rackState, commit } = useRackState();
@@ -37656,7 +38720,23 @@ function EffectsRackWorkspace({
   const [hoverTargetEndpointID, setHoverTargetEndpointID] = reactExports.useState(null);
   const [routeStatus, setRouteStatus] = reactExports.useState("");
   const [draftAmount, setDraftAmount] = reactExports.useState(null);
+  const [parameterHud, setParameterHud] = reactExports.useState(null);
+  const [parameterMenu, setParameterMenu] = reactExports.useState(null);
+  const [parameterValueSheetEndpointID, setParameterValueSheetEndpointID] = reactExports.useState(null);
+  const [removeTargetRoutesEndpointID, setRemoveTargetRoutesEndpointID] = reactExports.useState(null);
   const pendingRouteRef = reactExports.useRef(null);
+  reactExports.useEffect(() => {
+    if (parameterMenu === null) {
+      return;
+    }
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        setParameterMenu(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [parameterMenu]);
   reactExports.useEffect(() => {
     previewOrderRef.current = rackState.order;
     setPreviewOrder(rackState.order);
@@ -37668,6 +38748,13 @@ function EffectsRackWorkspace({
   const selectedRouteIndex = routes.findIndex((route) => route.sourceKind === selectedSource.sourceKind && route.sourceSlot === selectedSource.sourceSlot && route.targetKind === selectedTargetKind);
   const selectedRoute = selectedRouteIndex >= 0 ? routes[selectedRouteIndex] : null;
   const selectedPairKey = `${selectedSource.sourceKind}:${selectedSource.sourceSlot}:${selectedTargetKind}`;
+  const parameterOverlayEndpointID = parameterValueSheetEndpointID ?? parameterMenu?.endpointID ?? removeTargetRoutesEndpointID;
+  const parameterOverlayDescriptor = RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters).find((parameter) => parameter.endpointID === parameterOverlayEndpointID) ?? selectedTarget;
+  const parameterOverlayBinding = useRackParameterBinding(parameterOverlayDescriptor);
+  const parameterOverlayTargetKind = `rack.${parameterOverlayDescriptor.endpointID}`;
+  const parameterOverlayRouteIndex = routes.findIndex((route) => route.sourceKind === selectedSource.sourceKind && route.sourceSlot === selectedSource.sourceSlot && route.targetKind === parameterOverlayTargetKind);
+  const parameterOverlayRoute = parameterOverlayRouteIndex >= 0 ? routes[parameterOverlayRouteIndex] ?? null : null;
+  const parameterOverlayTargetRouteIndices = routes.flatMap((route, routeIndex) => route.targetKind === parameterOverlayTargetKind ? [routeIndex] : []);
   reactExports.useEffect(() => {
     const pending = pendingRouteRef.current;
     if (!pending || pending.key !== selectedPairKey || selectedRouteIndex < 0) {
@@ -37781,11 +38868,11 @@ function EffectsRackWorkspace({
       cancelActiveReorder();
     };
   }, [finishReorder]);
-  const ensureRoute = reactExports.useCallback((source, targetEndpointID, initialAmount = 0) => {
+  const ensureRoute = reactExports.useCallback((source, targetEndpointID, initialAmount = 0, enableExisting = false) => {
     const targetKind = `rack.${targetEndpointID}`;
     const existingIndex = routes.findIndex((route) => route.sourceKind === source.sourceKind && route.sourceSlot === source.sourceSlot && route.targetKind === targetKind);
     if (existingIndex >= 0) {
-      if (!routes[existingIndex]?.enabled) {
+      if (enableExisting && !routes[existingIndex]?.enabled) {
         onRouteChange(existingIndex, { enabled: true });
       }
       setRouteStatus("");
@@ -37849,7 +38936,7 @@ function EffectsRackWorkspace({
       setSelectedEffectId(targetParameter.effectId);
     }
     setDraftAmount(null);
-    ensureRoute(source, targetEndpointID);
+    ensureRoute(source, targetEndpointID, 0, true);
   }, [ensureRoute, selectedTarget.endpointID]);
   const changeSourcePage = reactExports.useCallback((nextPageIndex) => {
     const normalizedPageIndex = (nextPageIndex % RACK_MODULATION_SOURCE_PAGES.length + RACK_MODULATION_SOURCE_PAGES.length) % RACK_MODULATION_SOURCE_PAGES.length;
@@ -37866,10 +38953,54 @@ function EffectsRackWorkspace({
     }
     ensureRoute(selectedSource, selectedTarget.endpointID, nextAmount);
   }, [ensureRoute, onRouteChange, selectedRouteIndex, selectedSource, selectedTarget.endpointID]);
+  const changeParameterModulationAmount = reactExports.useCallback((endpointID, nextAmount) => {
+    const targetKind = `rack.${endpointID}`;
+    const routeIndex = routes.findIndex((route) => route.sourceKind === selectedSource.sourceKind && route.sourceSlot === selectedSource.sourceSlot && route.targetKind === targetKind);
+    setSelectedTargetEndpointID(endpointID);
+    setSourceIsArmed(true);
+    setDraftAmount(nextAmount);
+    if (routeIndex >= 0) {
+      onRouteChange(routeIndex, { amount: nextAmount, enabled: true });
+      return;
+    }
+    ensureRoute(selectedSource, endpointID, nextAmount);
+  }, [ensureRoute, onRouteChange, routes, selectedSource]);
   const setRecentParameter = reactExports.useCallback((effectId, endpointID) => {
     setQuickEndpointByEffect((current) => ({ ...current, [effectId]: endpointID }));
   }, []);
   const displayAmount = draftAmount ?? selectedRoute?.amount ?? 0;
+  const handleParameterMenuAction = reactExports.useCallback((action) => {
+    if (action === "edit-values") {
+      setParameterValueSheetEndpointID(parameterOverlayDescriptor.endpointID);
+    } else if (action === "reset-base") {
+      parameterOverlayBinding.commitValue(parameterOverlayDescriptor.initial);
+    } else if (action === "remove-all-target-routes") {
+      setRemoveTargetRoutesEndpointID(parameterOverlayDescriptor.endpointID);
+    } else if (parameterOverlayRouteIndex >= 0 && parameterOverlayRoute !== null) {
+      if (action === "toggle-route") {
+        onRouteChange(parameterOverlayRouteIndex, { enabled: !parameterOverlayRoute.enabled });
+      } else if (action === "polarity") {
+        onRouteChange(parameterOverlayRouteIndex, {
+          polarity: parameterOverlayRoute.polarity === "unipolar" ? "bipolar" : "unipolar"
+        });
+      } else if (action === "reducer" && isVoiceModulationSource(parameterOverlayRoute.sourceKind)) {
+        onRouteChange(parameterOverlayRouteIndex, {
+          reducer: parameterOverlayRoute.reducer === "max" ? "mean" : "max"
+        });
+      } else if (action === "remove-route") {
+        onRemoveRoute(parameterOverlayRouteIndex);
+      }
+    }
+    setParameterMenu(null);
+  }, [
+    onRouteChange,
+    onRemoveRoute,
+    parameterOverlayBinding,
+    parameterOverlayDescriptor.endpointID,
+    parameterOverlayDescriptor.initial,
+    parameterOverlayRoute,
+    parameterOverlayRouteIndex
+  ]);
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "section",
     {
@@ -37877,6 +39008,61 @@ function EffectsRackWorkspace({
       "data-layout-card": "mobile-effects-workspace",
       className: `effects-rack-workspace ${className ?? ""}`,
       children: [
+        parameterHud ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-role": "rack-parameter-hud",
+            "data-mode": parameterHud.mode,
+            className: "rack-parameter-hud",
+            "aria-live": "polite",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: parameterHud.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: parameterHud.value })
+            ]
+          }
+        ) : null,
+        parameterMenu ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          RackParameterContextMenu,
+          {
+            state: parameterMenu,
+            route: parameterOverlayRoute,
+            onClose: () => setParameterMenu(null),
+            onSelectAction: handleParameterMenuAction
+          }
+        ) : null,
+        parameterValueSheetEndpointID ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          RackParameterValueSheet,
+          {
+            descriptor: parameterOverlayDescriptor,
+            binding: parameterOverlayBinding,
+            route: parameterOverlayRoute,
+            source: activeSource,
+            onApply: (baseValue, modulationAmount) => {
+              parameterOverlayBinding.commitValue(baseValue);
+              if (parameterOverlayRouteIndex >= 0 && modulationAmount !== null) {
+                onRouteChange(parameterOverlayRouteIndex, {
+                  amount: modulationAmount,
+                  enabled: true
+                });
+              }
+              setParameterValueSheetEndpointID(null);
+            },
+            onClose: () => setParameterValueSheetEndpointID(null)
+          },
+          `${parameterValueSheetEndpointID}:${selectedSource.sourceKind}:${selectedSource.sourceSlot}`
+        ) : null,
+        removeTargetRoutesEndpointID ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+          RemoveRackTargetRoutesConfirmation,
+          {
+            descriptor: parameterOverlayDescriptor,
+            routeCount: parameterOverlayTargetRouteIndices.length,
+            onCancel: () => setRemoveTargetRoutesEndpointID(null),
+            onConfirm: () => {
+              [...parameterOverlayTargetRouteIndices].sort((left, right) => right - left).forEach(onRemoveRoute);
+              setRemoveTargetRoutesEndpointID(null);
+            }
+          }
+        ) : null,
         /* @__PURE__ */ jsxRuntimeExports.jsxs("nav", { className: "rack-effects-nav", "aria-label": "Effects workspace navigation", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
@@ -37996,9 +39182,15 @@ function EffectsRackWorkspace({
                     routes,
                     selectedTargetEndpointID: selectedTarget.endpointID,
                     hoverTargetEndpointID,
-                    activeSourceAccent: activeSource.accent,
+                    activeSource,
                     onSelectTarget: selectTarget,
-                    onRecentParameter: (endpointID) => setRecentParameter(selectedEffectId, endpointID)
+                    onRecentParameter: (endpointID) => setRecentParameter(selectedEffectId, endpointID),
+                    onHudChange: setParameterHud,
+                    onModulationAmountChange: changeParameterModulationAmount,
+                    onRequestContextMenu: (endpointID, clientX, clientY) => {
+                      selectTarget(endpointID);
+                      setParameterMenu({ endpointID, clientX, clientY });
+                    }
                   }
                 ) }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rack-editor-modulation", children: [
@@ -38007,6 +39199,7 @@ function EffectsRackWorkspace({
                     {
                       pageIndex: sourcePageIndex,
                       selectedSource,
+                      sourceIsArmed,
                       onPageChange: changeSourcePage,
                       onSourcePreview: (source) => {
                         setSelectedSource(source);
@@ -38014,6 +39207,7 @@ function EffectsRackWorkspace({
                         setDraftAmount(null);
                       },
                       onSourceActivate: activateSource,
+                      onOpenSelectedSource: (source) => onOpenModSource?.(source),
                       onHoverTarget: setHoverTargetEndpointID
                     }
                   ),
@@ -43188,8 +44382,8 @@ function validateExactPreset(preset, currentContract, adapters = []) {
       normalizedStoredState[entry.key] = rawValue;
       continue;
     }
-    const normalizedValue = adapter.normalizeForPreset(rawValue);
-    normalizedStoredState[entry.key] = adapter.serializeForPreset(normalizedValue);
+    const normalizedValue2 = adapter.normalizeForPreset(rawValue);
+    normalizedStoredState[entry.key] = adapter.serializeForPreset(normalizedValue2);
   }
   return {
     ...preset,
@@ -44321,24 +45515,24 @@ class StandaloneEffectPresetController {
     }
   }
   handleParameterValue(endpointID, value) {
-    let normalizedValue;
+    let normalizedValue2;
     try {
-      normalizedValue = this.normalizeEndpointValue(endpointID, value);
+      normalizedValue2 = this.normalizeEndpointValue(endpointID, value);
     } catch (error) {
       this.lastError = errorFromUnknown(error).message;
       this.notify();
       return;
     }
-    this.currentValues.set(endpointID, normalizedValue);
+    this.currentValues.set(endpointID, normalizedValue2);
     if (this.hydratingEndpointIDs.delete(endpointID)) {
       this.notify();
       return;
     }
-    if (this.consumeSuppressedParameterValue(endpointID, normalizedValue)) {
+    if (this.consumeSuppressedParameterValue(endpointID, normalizedValue2)) {
       this.notify();
       return;
     }
-    this.markActivePresetDirtyIfNeeded(endpointID, normalizedValue);
+    this.markActivePresetDirtyIfNeeded(endpointID, normalizedValue2);
     this.notify();
   }
   normalizeEndpointValue(endpointID, value) {
@@ -48339,6 +49533,7 @@ function KeyboardSection({
   unisonWarpSpread,
   observedUnisonState,
   keyboardRootNote,
+  noteCount = DEFAULT_KEYBOARD_NOTE_COUNT,
   onOctaveDown,
   onOctaveUp,
   playModeFocusBindings,
@@ -48377,7 +49572,7 @@ function KeyboardSection({
           glideFocusTarget
         }
       ),
-      keyboard: /* @__PURE__ */ jsxRuntimeExports.jsx(KeyboardDock, { rootNote: keyboardRootNote, keyboardRef })
+      keyboard: /* @__PURE__ */ jsxRuntimeExports.jsx(KeyboardDock, { rootNote: keyboardRootNote, noteCount, keyboardRef })
     }
   );
 }
@@ -48517,7 +49712,39 @@ function MsegEditorModal({
     }
   ) });
 }
+function MacroSourceEditor({ slotIndex }) {
+  const endpointID = `macro${slotIndex + 1}`;
+  const coerce = reactExports.useCallback((rawValue) => clamp(Number(rawValue) || 0, 0, 1), []);
+  const binding = usePatchParameterBinding({
+    endpointID,
+    initialValue: 0,
+    coerce
+  });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid h-full place-items-center p-5", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid w-full max-w-[420px] gap-5 rounded-[18px] border border-white/[0.07] bg-white/[0.025] p-5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "synth-section-title", children: [
+        "Macro ",
+        slotIndex + 1
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1 text-xs text-slate-300/55", children: "One global control feeding every route assigned to this source." })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      RangeField,
+      {
+        label: `Macro ${slotIndex + 1} value`,
+        min: 0,
+        max: 1,
+        step: 1e-3,
+        value: binding.value,
+        displayValue: formatPercent(binding.value),
+        onChange: binding.commitValue,
+        dataRole: `macro-source-value-${slotIndex + 1}`
+      }
+    )
+  ] }) });
+}
 function ModulationMatrixSection({
+  focusedSource = null,
   selectedMsegSlot,
   msegState,
   selectedMsegMorph,
@@ -48544,6 +49771,23 @@ function ModulationMatrixSection({
   });
   const activeMsegSlot = activeEditorTab.kind === "mseg" ? activeEditorTab.slotIndex : selectedMsegSlot;
   const activeEnvelopeSlot = activeEditorTab.kind === "envelope" ? activeEditorTab.slotIndex : selectedEnvelopeSlot;
+  reactExports.useEffect(() => {
+    if (!focusedSource) {
+      return;
+    }
+    const slotIndex = focusedSource.sourceSlot - 1;
+    if (focusedSource.sourceKind === "macro") {
+      setActiveEditorTab((current) => current.kind === "macro" && current.slotIndex === slotIndex ? current : { kind: "macro", slotIndex });
+      return;
+    }
+    if (focusedSource.sourceKind === "mseg") {
+      onSelectMsegSlot(slotIndex);
+      setActiveEditorTab((current) => current.kind === "mseg" && current.slotIndex === slotIndex ? current : { kind: "mseg", slotIndex });
+      return;
+    }
+    onSelectEnvelopeSlot(slotIndex);
+    setActiveEditorTab((current) => current.kind === "envelope" && current.slotIndex === slotIndex ? current : { kind: "envelope", slotIndex });
+  }, [focusedSource, onSelectEnvelopeSlot, onSelectMsegSlot]);
   const msegRateRef = reactExports.useRef(null);
   const msegRateWheelCursorTimerRef = reactExports.useRef(0);
   const msegRateDragRef = reactExports.useRef(null);
@@ -48632,10 +49876,22 @@ function ModulationMatrixSection({
     "section",
     {
       "data-role": "mseg-card",
+      "data-source-kind": activeEditorTab.kind === "envelope" ? "env" : activeEditorTab.kind,
+      "data-source-slot": (activeEditorTab.slotIndex + 1).toString(),
+      "data-role-source-editor": "true",
       "data-layout-card": "desktop-grid-card",
       "data-section-accent": "mint",
       className: `flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${DESKTOP_GRID_CARD_CLASS}`,
       children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "span",
+          {
+            "data-role": "mod-source-editor",
+            "data-source-kind": activeEditorTab.kind === "envelope" ? "env" : activeEditorTab.kind,
+            "data-source-slot": (activeEditorTab.slotIndex + 1).toString(),
+            hidden: true
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex shrink-0 items-center gap-1.5 px-2.5 py-1.5", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-[3px]", children: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
             "button",
@@ -48668,6 +49924,19 @@ function ModulationMatrixSection({
             `env-pip-${slotIndex}`
           )) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-section-title ml-0.5", children: "Env" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-[3px]", children: Array.from({ length: MODULATION_MACRO_SLOT_COUNT }, (_, slotIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              type: "button",
+              "aria-label": `Select macro ${slotIndex + 1}`,
+              className: `grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${activeEditorTab.kind === "macro" && activeEditorTab.slotIndex === slotIndex ? "synth-accent-active-button" : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"}`,
+              onClick: () => setActiveEditorTab({ kind: "macro", slotIndex }),
+              children: slotIndex + 1
+            },
+            `macro-pip-${slotIndex}`
+          )) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-section-title ml-0.5", children: "Macro" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative ml-auto h-[24px] shrink-0 max-[480px]:h-7", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `absolute inset-0 flex items-center justify-end gap-2 ${activeEditorTab.kind === "mseg" ? "visible" : "invisible"}`, children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-center gap-1 rounded-[7px] border border-white/[0.05] bg-white/[0.025] p-[2px]", children: [0, 1].map((shapeIndex) => /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -48845,6 +50114,31 @@ function ModulationMatrixSection({
             ] }, param.label)) : null })
           ] })
         ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            "data-role": "mod-fixed-sources",
+            className: "flex shrink-0 items-center gap-1.5 border-y border-white/[0.05] bg-white/[0.018] px-2.5 py-1.5",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "synth-section-title mr-1", children: "Fixed" }),
+              [
+                { label: "VEL", title: "Note velocity" },
+                { label: "AT", title: "Polyphonic pressure" },
+                { label: "SLIDE", title: "Per-note slide" }
+              ].map((source) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  "data-role": "mod-fixed-source",
+                  title: source.title,
+                  className: "grid min-h-7 min-w-11 place-items-center rounded-[7px] border border-cyan-200/[0.10] bg-cyan-200/[0.035] px-2 font-mono text-[9px] font-semibold tracking-[0.08em] text-cyan-100/60",
+                  children: source.label
+                },
+                source.label
+              )),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-auto truncate font-mono text-[8px] text-slate-400/40", children: "performance inputs" })
+            ]
+          }
+        ),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-0 flex-1", children: activeEditorTab.kind === "mseg" ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative h-full w-full", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "button",
@@ -48879,13 +50173,13 @@ function ModulationMatrixSection({
               onAdjustingChange: setIsMsegMorphAdjusting
             }
           ) })
-        ] }) : selectedEnvelope ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ] }) : activeEditorTab.kind === "envelope" && selectedEnvelope ? /* @__PURE__ */ jsxRuntimeExports.jsx(
           DesktopEnvelopeEditor,
           {
             selectedEnvelope,
             onEnvelopeChange
           }
-        ) : null })
+        ) : activeEditorTab.kind === "macro" ? /* @__PURE__ */ jsxRuntimeExports.jsx(MacroSourceEditor, { slotIndex: activeEditorTab.slotIndex }) : null })
       ]
     }
   );
@@ -48971,6 +50265,62 @@ function ContextualArticulationToolbar({
     }
   );
 }
+function MobileWorkspaceAccordion({
+  activeSection,
+  onSelectSection,
+  voice,
+  effects,
+  modulation
+}) {
+  const sections = [
+    { id: "voice", label: "Voice", content: voice },
+    { id: "fx", label: "FX", content: effects },
+    { id: "mod", label: "Mod", content: modulation }
+  ];
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(
+    "main",
+    {
+      "data-role": "mobile-workspace-accordion",
+      className: "mobile-workspace-accordion min-h-0 flex-1",
+      children: sections.map((section) => {
+        const isExpanded = section.id === activeSection;
+        return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "section",
+          {
+            className: `mobile-workspace-section is-${section.id}${isExpanded ? " is-expanded" : ""}`,
+            "data-mobile-workspace-section": section.id,
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  "data-role": `mobile-workspace-toggle-${section.id}`,
+                  className: "mobile-workspace-toggle",
+                  "aria-expanded": isExpanded,
+                  "aria-controls": `mobile-workspace-panel-${section.id}`,
+                  onClick: () => onSelectSection(section.id),
+                  children: section.label
+                }
+              ),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "div",
+                {
+                  id: `mobile-workspace-panel-${section.id}`,
+                  "data-role": `mobile-workspace-panel-${section.id}`,
+                  className: "mobile-workspace-panel",
+                  hidden: !isExpanded,
+                  "aria-hidden": !isExpanded,
+                  children: section.content
+                }
+              )
+            ]
+          },
+          section.id
+        );
+      })
+    }
+  );
+}
 function DesktopPatchViewBody({
   keyboardInputMode
 }) {
@@ -48979,7 +50329,9 @@ function DesktopPatchViewBody({
   const msegEditorSurfaceRef = reactExports.useRef(null);
   const keyboardElementRef = reactExports.useRef(null);
   const [isCompactViewport, setIsCompactViewport] = reactExports.useState(false);
-  const [mobilePage, setMobilePage] = reactExports.useState("voice");
+  const [mobileWorkspaceSection, setMobileWorkspaceSection] = reactExports.useState("voice");
+  const [mobileModSource, setMobileModSource] = reactExports.useState(null);
+  const [mobileReturnSection, setMobileReturnSection] = reactExports.useState(null);
   reactExports.useEffect(() => {
     if (typeof window.matchMedia !== "function") {
       return void 0;
@@ -48992,7 +50344,9 @@ function DesktopPatchViewBody({
   }, []);
   reactExports.useEffect(() => {
     if (!isCompactViewport) {
-      setMobilePage("voice");
+      setMobileWorkspaceSection("voice");
+      setMobileModSource(null);
+      setMobileReturnSection(null);
     }
   }, [isCompactViewport]);
   const [keyboardRootNote, setKeyboardRootNote] = reactExports.useState(KEYBOARD_ROOT_NOTE_DEFAULT);
@@ -49259,7 +50613,135 @@ function DesktopPatchViewBody({
     synthView,
     velocitySegments
   ]);
-  const isMobileEffectsPage = isCompactViewport && mobilePage === "effects";
+  const selectMobileWorkspaceSection = reactExports.useCallback((section) => {
+    setMobileWorkspaceSection(section);
+    setMobileReturnSection(null);
+  }, []);
+  const openMobileModSource = reactExports.useCallback((source) => {
+    setMobileModSource(source);
+    setMobileReturnSection(mobileWorkspaceSection);
+    setMobileWorkspaceSection("mod");
+  }, [mobileWorkspaceSection]);
+  const returnFromMobileModSource = reactExports.useCallback(() => {
+    setMobileWorkspaceSection(mobileReturnSection ?? "fx");
+    setMobileReturnSection(null);
+  }, [mobileReturnSection]);
+  const voiceWorkspace = /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "mobile-voice-grid grid min-h-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        WavetableStageSection,
+        {
+          stageRef,
+          frames: synthView.frames,
+          position: synthView.observedPosition,
+          warpMode: synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value,
+          warpAmount: synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value,
+          tableName: synthView.displayedTableName,
+          frameCount: synthView.displayedFrameCount,
+          desiredTableIndex: synthView.desiredTableIndex,
+          tableOptions: synthView.tableOptions,
+          canRetry: synthView.canRetryDesiredTableLoad,
+          onTableChange: synthView.handleSelectWavetable,
+          onTablePrewarm: synthView.handlePrewarmWavetablePicker,
+          onRetry: synthView.handleRetryLoad,
+          tableFocusBindings: synthView.keyboardRouting.wavetableFocusBindings,
+          onPointerDown: synthView.stageBindings.handleStagePointerDown,
+          onPointerMove: synthView.stageBindings.handleStagePointerMove,
+          onPointerUp: synthView.stageBindings.handleStagePointerUp,
+          bottomLeftAccessory: warpControlCluster,
+          bottomRightAccessory: panField,
+          className: DESKTOP_GRID_CARD_CLASS
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        FilterSection,
+        {
+          filterMode: synthView.filterMode,
+          filterCutoff: synthView.filterCutoff,
+          filterQ: synthView.filterQ,
+          observedFilterState: synthView.observedFilterState,
+          observedFilterSpectrum: synthView.observedFilterSpectrum,
+          resonanceNormalizedFromQ,
+          resonanceQFromSurface,
+          resonanceCurveDebugState: filterResonanceCurveProfile,
+          className: DESKTOP_GRID_CARD_CLASS
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "section",
+      {
+        "data-role": "keyboard-controls",
+        "data-section-accent": "lime",
+        "data-liquid-detail": "edge-rail",
+        className: `${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`,
+        children: keyboardToolbarOverride
+      }
+    )
+  ] });
+  const modulationWorkspace = /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    mobileReturnSection ? /* @__PURE__ */ jsxRuntimeExports.jsx("nav", { className: "mobile-mod-return-bar", "aria-label": "Modulation source navigation", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        type: "button",
+        "data-role": "mobile-workspace-back",
+        onClick: returnFromMobileModSource,
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-hidden": "true", children: "‹" }),
+          "Back to ",
+          mobileReturnSection === "fx" ? "FX" : mobileReturnSection === "voice" ? "Voice" : "Mod"
+        ]
+      }
+    ) }) : null,
+    synthView.failureDetail ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90", children: synthView.failureDetail }) : null,
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 items-stretch gap-4 md:grid-cols-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        ModulationMatrixSection,
+        {
+          focusedSource: mobileModSource,
+          selectedMsegSlot: synthView.selectedMsegSlot,
+          msegState: synthView.msegState,
+          selectedMsegMorph: synthView.selectedMsegMorph,
+          observedMsegPlayhead: synthView.observedMsegPlayhead,
+          selectedEnvelopeSlot: synthView.selectedEnvelopeSlot,
+          selectedEnvelope: synthView.selectedEnvelope,
+          routes: synthView.routes,
+          onSelectMsegSlot: synthView.handleSelectMsegSlot,
+          onSelectMsegShape: synthView.handleSelectMsegShape,
+          onOpenMsegEditor: synthView.msegEditor.openEditor,
+          onMsegMorphChange: synthView.handleMsegMorphChange,
+          onMsegRateChange: synthView.handleMsegRateChange,
+          onToggleMsegLoop: synthView.handleToggleMsegLoop,
+          onSelectEnvelopeSlot: synthView.handleSelectEnvelopeSlot,
+          onEnvelopeChange: synthView.handleEnvelopeChange,
+          onAddRoute: synthView.handleAddRoute,
+          onRemoveRoute: synthView.handleRemoveRoute,
+          onRouteChange: synthView.handleRouteChange,
+          msegRateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "section",
+        {
+          "data-role": "mod-matrix-card",
+          "data-layout-card": "desktop-grid-card",
+          "data-section-accent": "amber",
+          "data-liquid-detail": "edge-rail",
+          className: `flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border p-4 ${DESKTOP_GRID_CARD_CLASS}`,
+          children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            DesktopModMatrix,
+            {
+              routes: synthView.routes,
+              onAddRoute: synthView.handleAddRoute,
+              onRemoveRoute: synthView.handleRemoveRoute,
+              onRouteChange: synthView.handleRouteChange
+            }
+          )
+        }
+      )
+    ] })
+  ] });
+  const isMobileEffectsPage = isCompactViewport && mobileWorkspaceSection === "fx";
   const effectsRackWorkspace = /* @__PURE__ */ jsxRuntimeExports.jsx(
     EffectsRackWorkspace,
     {
@@ -49268,146 +50750,49 @@ function DesktopPatchViewBody({
       observedDistortionHistory: synthView.observedDistortionHistory,
       observedDistortionScope: synthView.observedDistortionScope,
       onAddRouteWithOverrides: synthView.handleAddRouteWithOverrides,
+      onRemoveRoute: synthView.handleRemoveRoute,
       onRouteChange: synthView.handleRouteChange,
+      onOpenModSource: openMobileModSource,
       onBackToVoice: () => {
         if (isCompactViewport) {
-          setMobilePage("voice");
+          setMobileWorkspaceSection("voice");
           return;
         }
         scrollRegionRef.current?.scrollTo({ top: 0, behavior: "smooth" });
       }
     }
   );
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`, children: [
-    !isMobileEffectsPage ? /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }) : null,
-    !isMobileEffectsPage ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-accordion" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`, children: [
+    !isCompactViewport ? /* @__PURE__ */ jsxRuntimeExports.jsx(StatusHeader, { statusText: synthView.topStatus }) : null,
+    !isCompactViewport ? /* @__PURE__ */ jsxRuntimeExports.jsx(
       SynthPresetBarHost,
       {
         isHidden: synthView.msegEditor.isOpen,
         storedStateAdapters: synthView.presetStoredStateAdapters
       }
     ) : null,
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    isCompactViewport ? /* @__PURE__ */ jsxRuntimeExports.jsx(
+      MobileWorkspaceAccordion,
+      {
+        activeSection: mobileWorkspaceSection,
+        onSelectSection: selectMobileWorkspaceSection,
+        voice: voiceWorkspace,
+        effects: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { "data-role": "mobile-effects-region", className: "min-h-0 h-full overflow-hidden", children: effectsRackWorkspace }),
+        modulation: modulationWorkspace
+      }
+    ) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "main",
       {
         ref: scrollRegionRef,
         "data-role": "desktop-scroll-region",
-        className: `${isMobileEffectsPage ? "hidden" : "grid"} min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1`,
+        className: "grid min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1",
         children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              WavetableStageSection,
-              {
-                stageRef,
-                frames: synthView.frames,
-                position: synthView.observedPosition,
-                warpMode: synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value,
-                warpAmount: synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value,
-                tableName: synthView.displayedTableName,
-                frameCount: synthView.displayedFrameCount,
-                desiredTableIndex: synthView.desiredTableIndex,
-                tableOptions: synthView.tableOptions,
-                canRetry: synthView.canRetryDesiredTableLoad,
-                onTableChange: synthView.handleSelectWavetable,
-                onTablePrewarm: synthView.handlePrewarmWavetablePicker,
-                onRetry: synthView.handleRetryLoad,
-                tableFocusBindings: synthView.keyboardRouting.wavetableFocusBindings,
-                onPointerDown: synthView.stageBindings.handleStagePointerDown,
-                onPointerMove: synthView.stageBindings.handleStagePointerMove,
-                onPointerUp: synthView.stageBindings.handleStagePointerUp,
-                bottomLeftAccessory: warpControlCluster,
-                bottomRightAccessory: /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: panField }),
-                className: DESKTOP_GRID_CARD_CLASS
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              FilterSection,
-              {
-                filterMode: synthView.filterMode,
-                filterCutoff: synthView.filterCutoff,
-                filterQ: synthView.filterQ,
-                observedFilterState: synthView.observedFilterState,
-                observedFilterSpectrum: synthView.observedFilterSpectrum,
-                resonanceNormalizedFromQ,
-                resonanceQFromSurface,
-                resonanceCurveDebugState: filterResonanceCurveProfile,
-                className: DESKTOP_GRID_CARD_CLASS
-              }
-            )
-          ] }),
-          isCompactViewport ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              type: "button",
-              "data-role": "open-effects-rack",
-              className: "flex min-h-12 items-center justify-between rounded-[14px] border border-cyan-200/20 bg-cyan-200/[0.05] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-100",
-              onClick: () => setMobilePage("effects"),
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "FX Rack" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-400", children: "8 FX  ›" })
-              ]
-            }
-          ) : effectsRackWorkspace,
-          synthView.failureDetail ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90", children: synthView.failureDetail }) : null,
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "grid min-h-0 items-stretch gap-4 md:grid-cols-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              ModulationMatrixSection,
-              {
-                selectedMsegSlot: synthView.selectedMsegSlot,
-                msegState: synthView.msegState,
-                selectedMsegMorph: synthView.selectedMsegMorph,
-                observedMsegPlayhead: synthView.observedMsegPlayhead,
-                selectedEnvelopeSlot: synthView.selectedEnvelopeSlot,
-                selectedEnvelope: synthView.selectedEnvelope,
-                routes: synthView.routes,
-                onSelectMsegSlot: synthView.handleSelectMsegSlot,
-                onSelectMsegShape: synthView.handleSelectMsegShape,
-                onOpenMsegEditor: synthView.msegEditor.openEditor,
-                onMsegMorphChange: synthView.handleMsegMorphChange,
-                onMsegRateChange: synthView.handleMsegRateChange,
-                onToggleMsegLoop: synthView.handleToggleMsegLoop,
-                onSelectEnvelopeSlot: synthView.handleSelectEnvelopeSlot,
-                onEnvelopeChange: synthView.handleEnvelopeChange,
-                onAddRoute: synthView.handleAddRoute,
-                onRemoveRoute: synthView.handleRemoveRoute,
-                onRouteChange: synthView.handleRouteChange,
-                msegRateFocusBindings: synthView.keyboardRouting.msegRateFocusBindings
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "section",
-              {
-                "data-role": "mod-matrix-card",
-                "data-layout-card": "desktop-grid-card",
-                "data-section-accent": "amber",
-                "data-liquid-detail": "edge-rail",
-                className: `flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border p-4 ${DESKTOP_GRID_CARD_CLASS}`,
-                children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                  DesktopModMatrix,
-                  {
-                    routes: synthView.routes,
-                    onAddRoute: synthView.handleAddRoute,
-                    onRemoveRoute: synthView.handleRemoveRoute,
-                    onRouteChange: synthView.handleRouteChange
-                  }
-                )
-              }
-            )
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "section",
-            {
-              "data-role": "keyboard-controls",
-              "data-section-accent": "lime",
-              "data-liquid-detail": "edge-rail",
-              className: `${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`,
-              children: keyboardToolbarOverride
-            }
-          )
+          voiceWorkspace,
+          effectsRackWorkspace,
+          modulationWorkspace
         ]
       }
     ),
-    isMobileEffectsPage ? /* @__PURE__ */ jsxRuntimeExports.jsx("main", { "data-role": "mobile-effects-region", className: "min-h-0 flex-1 overflow-hidden", children: effectsRackWorkspace }) : null,
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
@@ -49431,6 +50816,7 @@ function DesktopPatchViewBody({
             unisonWarpSpread: synthView.unisonWarpSpread,
             observedUnisonState: synthView.observedUnisonState,
             keyboardRootNote,
+            noteCount: isCompactViewport ? 18 : DEFAULT_KEYBOARD_NOTE_COUNT,
             onOctaveDown: handleKeyboardOctaveDown,
             onOctaveUp: handleKeyboardOctaveUp,
             playModeFocusBindings: synthView.keyboardRouting.playModeFocusBindings,

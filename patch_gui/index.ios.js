@@ -13520,6 +13520,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     margin-top: auto;
   }
 
+  .mr-1 {
+    margin-right: calc(var(--spacing) * 1);
+  }
+
   .mb-2 {
     margin-bottom: calc(var(--spacing) * 2);
   }
@@ -13910,6 +13914,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     min-height: calc(var(--spacing) * 6);
   }
 
+  .min-h-7 {
+    min-height: calc(var(--spacing) * 7);
+  }
+
   .min-h-8 {
     min-height: calc(var(--spacing) * 8);
   }
@@ -14158,6 +14166,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     max-width: 140px;
   }
 
+  .max-w-\\[420px\\] {
+    max-width: 420px;
+  }
+
   .max-w-\\[1080px\\] {
     max-width: 1080px;
   }
@@ -14204,6 +14216,10 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .min-w-10 {
     min-width: calc(var(--spacing) * 10);
+  }
+
+  .min-w-11 {
+    min-width: calc(var(--spacing) * 11);
   }
 
   .min-w-12 {
@@ -15037,16 +15053,6 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     border-color: var(--color-cyan-200);
   }
 
-  .border-cyan-200\\/20 {
-    border-color: #a2f4fd33;
-  }
-
-  @supports (color: color-mix(in lab, red, red)) {
-    .border-cyan-200\\/20 {
-      border-color: color-mix(in oklab, var(--color-cyan-200) 20%, transparent);
-    }
-  }
-
   .border-cyan-200\\/28 {
     border-color: #a2f4fd47;
   }
@@ -15064,6 +15070,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
   @supports (color: color-mix(in lab, red, red)) {
     .border-cyan-200\\/\\[0\\.09\\] {
       border-color: color-mix(in oklab, var(--color-cyan-200) 9%, transparent);
+    }
+  }
+
+  .border-cyan-200\\/\\[0\\.10\\] {
+    border-color: #a2f4fd1a;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .border-cyan-200\\/\\[0\\.10\\] {
+      border-color: color-mix(in oklab, var(--color-cyan-200) 10%, transparent);
     }
   }
 
@@ -15481,13 +15497,13 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
     background-color: var(--color-cyan-200);
   }
 
-  .bg-cyan-200\\/\\[0\\.05\\] {
-    background-color: #a2f4fd0d;
+  .bg-cyan-200\\/\\[0\\.035\\] {
+    background-color: #a2f4fd09;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
-    .bg-cyan-200\\/\\[0\\.05\\] {
-      background-color: color-mix(in oklab, var(--color-cyan-200) 5%, transparent);
+    .bg-cyan-200\\/\\[0\\.035\\] {
+      background-color: color-mix(in oklab, var(--color-cyan-200) 3.5%, transparent);
     }
   }
 
@@ -17112,6 +17128,16 @@ const cssText = `/*! tailwindcss v4.2.2 | MIT License | https://tailwindcss.com 
 
   .text-slate-400 {
     color: var(--color-slate-400);
+  }
+
+  .text-slate-400\\/40 {
+    color: #90a1b966;
+  }
+
+  @supports (color: color-mix(in lab, red, red)) {
+    .text-slate-400\\/40 {
+      color: color-mix(in oklab, var(--color-slate-400) 40%, transparent);
+    }
   }
 
   .text-slate-400\\/45 {

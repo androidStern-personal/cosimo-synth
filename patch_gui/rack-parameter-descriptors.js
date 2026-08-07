@@ -189,3 +189,36 @@ export function formatRackParameterValue(descriptor, value) {
         return `${value >= 0 ? "+" : ""}${value.toFixed(1)}st`;
     return `${Math.round(value * 100)}%`;
 }
+/** Plain real-unit text for the rack's exact-value editor. Unitless normalized controls edit as percent. */
+export function formatRackParameterEditingValue(descriptor, value) {
+    const clamped = Math.min(Math.max(Number(value), descriptor.min), descriptor.max);
+    const editingValue = descriptor.unit === "" && descriptor.max - descriptor.min <= 2
+        ? clamped * 100
+        : clamped;
+    return String(Number(editingValue.toFixed(4)));
+}
+/** Parse exact rack input at the descriptor boundary; accepts visible units and `k` frequency shorthand. */
+export function parseRackParameterEditingValue(descriptor, rawText) {
+    let normalized = String(rawText ?? "")
+        .trim()
+        .toLowerCase()
+        .replace(/,/g, "")
+        .replace(/\s+/g, "")
+        .replace(/khz|hz|ms|db|deg|°|st|%/g, "");
+    if (!normalized) {
+        return null;
+    }
+    let multiplier = 1;
+    if (normalized.endsWith("k")) {
+        multiplier = 1_000;
+        normalized = normalized.slice(0, -1);
+    }
+    const parsed = Number.parseFloat(normalized);
+    if (!Number.isFinite(parsed)) {
+        return null;
+    }
+    const realUnitValue = descriptor.unit === "" && descriptor.max - descriptor.min <= 2
+        ? parsed / 100
+        : parsed * multiplier;
+    return Math.min(Math.max(realUnitValue, descriptor.min), descriptor.max);
+}

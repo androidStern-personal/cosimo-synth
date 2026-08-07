@@ -238,7 +238,7 @@ async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = fals
         startBounds.y + (startBounds.height / 2),
     );
     await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
-    await page.locator('[data-role="open-effects-rack"]').click();
+    await page.locator('[data-role="mobile-workspace-toggle-fx"]').click();
     await page.locator('[data-role="rack-module-list"]').waitFor();
     return page;
 }
@@ -808,7 +808,7 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
             "The explicitly started synth must use iOS's audible playback session, not the silent-switch ambient session.",
         );
 
-        await page.locator('[data-role="open-effects-rack"]').click();
+        await page.locator('[data-role="mobile-workspace-toggle-fx"]').click();
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             return root?.querySelectorAll('[data-role="rack-module-list"] > [data-rack-effect-id]').length === 8;

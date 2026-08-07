@@ -13,8 +13,10 @@ import { usePatchConnection } from "../shared/cmajor-react";
 import { usePatchParameterBinding, type PatchControlBinding } from "../shared/patch-controls";
 import {
     RACK_EFFECT_DESCRIPTORS,
+    formatRackParameterEditingValue,
     formatRackParameterValue,
     getRackEffectDescriptor,
+    parseRackParameterEditingValue,
     type RackEffectDescriptor,
     type RackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
@@ -31,8 +33,11 @@ import {
 import {
     MODULATION_MAX_ROUTES,
     composeModulationAmount,
+    formatModulationAmountEditingValue,
     formatModulationAmountReadout,
     getModulationAmountSliderPosition,
+    isVoiceModulationSource,
+    parseModulationAmountEditingValue,
     type ModulationRoute,
     type ModulationRouteUpdate,
     type RackModulationTargetKind,
@@ -43,10 +48,14 @@ import {
     type RackModulationSource,
 } from "../shared/rack-modulation-sources";
 import type { EffectModuleId } from "../shared/target-descriptor";
-import { FilterResponseGraph, VerticalSlider } from "../shared/synth-components";
+import { FilterResponseGraph } from "../shared/synth-components";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
 import type { SynthPatchViewModel } from "../shared/synth-hooks";
 import { useSliderDrag } from "../shared/use-slider-drag";
+import {
+    RackParameterKnob,
+    type RackParameterHud,
+} from "./rack-parameter-knob";
 
 type EffectsRackWorkspaceProps = {
     routes: ModulationRoute[];
@@ -54,8 +63,10 @@ type EffectsRackWorkspaceProps = {
     observedDistortionHistory: SynthPatchViewModel["observedDistortionHistory"];
     observedDistortionScope: SynthPatchViewModel["observedDistortionScope"];
     onAddRouteWithOverrides: (overrides: Partial<ModulationRoute>) => void;
+    onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     onBackToVoice: () => void;
+    onOpenModSource?: (source: SelectedSource) => void;
     className?: string;
 };
 
@@ -444,23 +455,34 @@ function RackParameterControl({
     descriptor,
     routes,
     selected,
-    activeSourceAccent,
+    activeSource,
     hovered,
     onSelect,
     onRecentParameter,
+    onHudChange,
+    onModulationAmountChange,
+    onRequestContextMenu,
 }: {
     descriptor: RackParameterDescriptor;
     routes: ReadonlyArray<ModulationRoute>;
     selected: boolean;
-    activeSourceAccent: string;
+    activeSource: RackModulationSource;
     hovered: boolean;
     onSelect: () => void;
     onRecentParameter: (endpointID: string) => void;
+    onHudChange: (hud: RackParameterHud | null) => void;
+    onModulationAmountChange: (endpointID: string, amount: number) => void;
+    onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
 }) {
     const binding = useRackParameterBinding(descriptor);
     const isTarget = descriptor.modulationTargetIndex !== null;
     const hasRoute = isTarget && routes.some((route) => isRouteForTarget(route, descriptor.endpointID));
-    const rootStyle = { "--active-source-color": activeSourceAccent } as CSSProperties;
+    const selectedRoute = routes.find((route) => (
+        route.sourceKind === activeSource.sourceKind
+        && route.sourceSlot === activeSource.sourceSlot
+        && isRouteForTarget(route, descriptor.endpointID)
+    )) ?? null;
+    const rootStyle = { "--active-source-color": activeSource.accent } as CSSProperties;
     const controlDataRole = RACK_CONTROL_ROLE_ALIASES[descriptor.endpointID]
         ?? `rack-parameter-${descriptor.endpointID}`;
 
@@ -503,24 +525,23 @@ function RackParameterControl({
             data-rack-mod-target={isTarget ? descriptor.endpointID : undefined}
             className={`rack-editor-control${hasRoute ? " has-route" : ""}${selected ? " is-selected-target" : ""}${hovered ? " is-mod-hover" : ""}`}
             style={rootStyle}
-            onPointerDownCapture={selectParameter}
         >
-            <VerticalSlider
-                label={descriptor.shortLabel}
+            <RackParameterKnob
+                descriptor={descriptor}
                 binding={binding}
-                min={descriptor.min}
-                max={descriptor.max}
-                bipolar={descriptor.min < 0 && descriptor.max > 0}
-                fillClassName="rack-control-fill"
-                handleClassName="rack-control-handle"
-                fillDataRole={`rack-parameter-fill-${descriptor.endpointID}`}
-                handleDataRole={RACK_HANDLE_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-handle-${descriptor.endpointID}`}
-                inputDataRole={controlDataRole}
+                route={selectedRoute}
+                sourceAccent={activeSource.accent}
+                dataRole={controlDataRole}
                 trackDataRole={RACK_TRACK_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-track-${descriptor.endpointID}`}
-                formatValue={(value) => formatRackParameterValue(descriptor, value)}
-                normalizedFromValue={(value) => normalizedRackParameterValue(descriptor, value)}
-                valueFromNormalized={(normalized) => rackParameterValueFromNormalized(descriptor, normalized)}
-                className="h-full w-full"
+                handleDataRole={RACK_HANDLE_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-handle-${descriptor.endpointID}`}
+                onSelect={selectParameter}
+                onHudChange={onHudChange}
+                onModulationAmountChange={(amount) => onModulationAmountChange(descriptor.endpointID, amount)}
+                onRequestContextMenu={(clientX, clientY) => onRequestContextMenu(
+                    descriptor.endpointID,
+                    clientX,
+                    clientY,
+                )}
             />
         </div>
     );
@@ -659,17 +680,23 @@ function ParameterList({
     routes,
     selectedTargetEndpointID,
     hoverTargetEndpointID,
-    activeSourceAccent,
+    activeSource,
     onSelectTarget,
     onRecentParameter,
+    onHudChange,
+    onModulationAmountChange,
+    onRequestContextMenu,
 }: {
     effectId: EffectModuleId;
     routes: ReadonlyArray<ModulationRoute>;
     selectedTargetEndpointID: string;
     hoverTargetEndpointID: string | null;
-    activeSourceAccent: string;
+    activeSource: RackModulationSource;
     onSelectTarget: (endpointID: string) => void;
     onRecentParameter: (endpointID: string) => void;
+    onHudChange: (hud: RackParameterHud | null) => void;
+    onModulationAmountChange: (endpointID: string, amount: number) => void;
+    onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
 }) {
     const descriptor = getRackEffectDescriptor(effectId);
 
@@ -680,9 +707,12 @@ function ParameterList({
                 routes={routes}
                 selectedTargetEndpointID={selectedTargetEndpointID}
                 hoverTargetEndpointID={hoverTargetEndpointID}
-                activeSourceAccent={activeSourceAccent}
+                activeSource={activeSource}
                 onSelectTarget={onSelectTarget}
                 onRecentParameter={onRecentParameter}
+                onHudChange={onHudChange}
+                onModulationAmountChange={onModulationAmountChange}
+                onRequestContextMenu={onRequestContextMenu}
             />
         );
     }
@@ -695,10 +725,13 @@ function ParameterList({
                     descriptor={parameter}
                     routes={routes}
                     selected={selectedTargetEndpointID === parameter.endpointID}
-                    activeSourceAccent={activeSourceAccent}
+                    activeSource={activeSource}
                     hovered={hoverTargetEndpointID === parameter.endpointID}
                     onSelect={() => onSelectTarget(parameter.endpointID)}
                     onRecentParameter={onRecentParameter}
+                    onHudChange={onHudChange}
+                    onModulationAmountChange={onModulationAmountChange}
+                    onRequestContextMenu={onRequestContextMenu}
                 />
             ))}
         </>
@@ -710,17 +743,23 @@ function SyncParameterList({
     routes,
     selectedTargetEndpointID,
     hoverTargetEndpointID,
-    activeSourceAccent,
+    activeSource,
     onSelectTarget,
     onRecentParameter,
+    onHudChange,
+    onModulationAmountChange,
+    onRequestContextMenu,
 }: {
     effectId: "phaser" | "delay";
     routes: ReadonlyArray<ModulationRoute>;
     selectedTargetEndpointID: string;
     hoverTargetEndpointID: string | null;
-    activeSourceAccent: string;
+    activeSource: RackModulationSource;
     onSelectTarget: (endpointID: string) => void;
     onRecentParameter: (endpointID: string) => void;
+    onHudChange: (hud: RackParameterHud | null) => void;
+    onModulationAmountChange: (endpointID: string, amount: number) => void;
+    onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
 }) {
     const descriptor = getRackEffectDescriptor(effectId);
     const modeEndpointID = effectId === "phaser" ? "phaserRateMode" : "delayTimeMode";
@@ -746,10 +785,13 @@ function SyncParameterList({
                     descriptor={parameter}
                     routes={routes}
                     selected={selectedTargetEndpointID === parameter.endpointID}
-                    activeSourceAccent={activeSourceAccent}
+                    activeSource={activeSource}
                     hovered={hoverTargetEndpointID === parameter.endpointID}
                     onSelect={() => onSelectTarget(parameter.endpointID)}
                     onRecentParameter={onRecentParameter}
+                    onHudChange={onHudChange}
+                    onModulationAmountChange={onModulationAmountChange}
+                    onRequestContextMenu={onRequestContextMenu}
                 />
             ))}
         </>
@@ -759,16 +801,20 @@ function SyncParameterList({
 function ModSourceCarousel({
     pageIndex,
     selectedSource,
+    sourceIsArmed,
     onPageChange,
     onSourcePreview,
     onSourceActivate,
+    onOpenSelectedSource,
     onHoverTarget,
 }: {
     pageIndex: number;
     selectedSource: SelectedSource;
+    sourceIsArmed: boolean;
     onPageChange: (pageIndex: number) => void;
     onSourcePreview: (source: SelectedSource) => void;
     onSourceActivate: (source: SelectedSource, targetEndpointID?: string) => void;
+    onOpenSelectedSource: (source: SelectedSource) => void;
     onHoverTarget: (endpointID: string | null) => void;
 }) {
     const dragRef = useRef<{
@@ -777,6 +823,7 @@ function ModSourceCarousel({
         moved: boolean;
         startX: number;
         startY: number;
+        wasActiveSelection: boolean;
     } | null>(null);
 
     const finishSourceGesture = useCallback((event: ReactPointerEvent<HTMLButtonElement>, cancelled: boolean) => {
@@ -805,9 +852,13 @@ function ModSourceCarousel({
         if (targetEndpointID) {
             onSourceActivate(drag.source, targetEndpointID);
         } else if (!drag.moved) {
-            onSourceActivate(drag.source);
+            if (drag.wasActiveSelection) {
+                onOpenSelectedSource(drag.source);
+            } else {
+                onSourceActivate(drag.source);
+            }
         }
-    }, [onHoverTarget, onSourceActivate]);
+    }, [onHoverTarget, onOpenSelectedSource, onSourceActivate]);
 
     return (
         <div className="rack-mod-dock" role="group" aria-label="Rack modulation sources">
@@ -857,6 +908,7 @@ function ModSourceCarousel({
                                                     moved: false,
                                                     startX: event.clientX,
                                                     startY: event.clientY,
+                                                    wasActiveSelection: isSelected && sourceIsArmed,
                                                 };
                                             }}
                                             onPointerMove={(event) => {
@@ -994,14 +1046,241 @@ function ModulationAmountControl({
     );
 }
 
+type RackParameterMenuState = {
+    readonly endpointID: string;
+    readonly clientX: number;
+    readonly clientY: number;
+};
+
+const RACK_PARAMETER_MENU_ITEMS = [
+    { action: "edit-values", label: "Edit values…" },
+    { action: "reset-base", label: "Reset base to default" },
+    { action: "toggle-route", label: "Bypass route" },
+    { action: "polarity", label: "Polarity: Unipolar" },
+    { action: "reducer", label: "Voice reducer: Maximum" },
+    { action: "remove-route", label: "Remove this route" },
+    { action: "remove-all-target-routes", label: "Remove all routes to target…" },
+] as const;
+
+type RackParameterMenuAction = typeof RACK_PARAMETER_MENU_ITEMS[number]["action"];
+
+function RackParameterContextMenu({
+    state,
+    route,
+    onClose,
+    onSelectAction,
+}: {
+    state: RackParameterMenuState;
+    route: ModulationRoute | null;
+    onClose: () => void;
+    onSelectAction: (action: RackParameterMenuAction) => void;
+}) {
+    const style = {
+        "--rack-menu-x": `${state.clientX}px`,
+        "--rack-menu-y": `${state.clientY}px`,
+    } as CSSProperties;
+
+    return (
+        <div
+            className="rack-parameter-menu-layer"
+            data-role="rack-parameter-menu-layer"
+            onPointerDown={onClose}
+        >
+            <div
+                role="menu"
+                aria-label="Rack parameter actions"
+                data-role="rack-parameter-menu"
+                data-endpoint-id={state.endpointID}
+                className="rack-parameter-menu"
+                style={style}
+                onPointerDown={(event) => event.stopPropagation()}
+            >
+                {RACK_PARAMETER_MENU_ITEMS
+                    .filter((item) => item.action !== "reducer"
+                        || (route !== null && isVoiceModulationSource(route.sourceKind)))
+                    .map((item) => {
+                        const label = item.action === "toggle-route"
+                            ? (route?.enabled === false ? "Enable route" : "Bypass route")
+                            : item.action === "polarity"
+                                ? `Polarity: ${route?.polarity === "bipolar" ? "Bipolar" : "Unipolar"}`
+                                : item.action === "reducer"
+                                    ? `Voice reducer: ${route?.reducer === "mean" ? "Mean" : "Maximum"}`
+                                    : item.label;
+                        const needsRoute = ["toggle-route", "polarity", "reducer", "remove-route"].includes(item.action);
+                        return (
+                    <button
+                        key={item.action}
+                        type="button"
+                        role="menuitem"
+                        data-role="rack-parameter-menu-item"
+                        data-action={item.action}
+                        disabled={needsRoute && route === null}
+                        onClick={() => onSelectAction(item.action)}
+                    >
+                        {label}
+                    </button>
+                        );
+                    })}
+            </div>
+        </div>
+    );
+}
+
+function rackParameterEditingUnit(descriptor: RackParameterDescriptor) {
+    if (descriptor.unit === "" && descriptor.max - descriptor.min <= 2) {
+        return "%";
+    }
+    return descriptor.unit === "deg" ? "°" : descriptor.unit;
+}
+
+function rackModulationEditingUnit(descriptor: RackParameterDescriptor) {
+    if (descriptor.scale === "log") {
+        return "oct";
+    }
+    return rackParameterEditingUnit(descriptor);
+}
+
+function RackParameterValueSheet({
+    descriptor,
+    binding,
+    route,
+    source,
+    onApply,
+    onClose,
+}: {
+    descriptor: RackParameterDescriptor;
+    binding: PatchControlBinding<number>;
+    route: ModulationRoute | null;
+    source: RackModulationSource;
+    onApply: (baseValue: number, modulationAmount: number | null) => void;
+    onClose: () => void;
+}) {
+    const targetKind = `rack.${descriptor.endpointID}` as RackModulationTargetKind;
+    const [baseDraft, setBaseDraft] = useState(() => formatRackParameterEditingValue(descriptor, binding.value));
+    const [amountDraft, setAmountDraft] = useState(() => (
+        route ? formatModulationAmountEditingValue(targetKind, route.amount) : ""
+    ));
+    const [error, setError] = useState("");
+
+    const apply = useCallback(() => {
+        const baseValue = parseRackParameterEditingValue(descriptor, baseDraft);
+        const modulationAmount = route === null
+            ? null
+            : parseModulationAmountEditingValue(targetKind, amountDraft);
+        if (baseValue === null || (route !== null && modulationAmount === null)) {
+            setError("Enter valid values in the shown units.");
+            return;
+        }
+        onApply(baseValue, modulationAmount);
+    }, [amountDraft, baseDraft, descriptor, onApply, route, targetKind]);
+
+    return (
+        <div className="rack-value-sheet-layer" onPointerDown={onClose}>
+            <section
+                role="dialog"
+                aria-modal="true"
+                aria-label={`Edit ${descriptor.label} values`}
+                data-role="rack-parameter-value-sheet"
+                className="rack-value-sheet"
+                onPointerDown={(event) => event.stopPropagation()}
+            >
+                <header>
+                    <span>EXACT VALUE</span>
+                    <strong>{getRackEffectDescriptor(descriptor.effectId).label} · {descriptor.label}</strong>
+                </header>
+                <label>
+                    <span>Base</span>
+                    <span className="rack-value-sheet-input">
+                        <input
+                            data-role="rack-base-value-input"
+                            inputMode="decimal"
+                            value={baseDraft}
+                            onChange={(event) => setBaseDraft(event.currentTarget.value)}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") apply();
+                                if (event.key === "Escape") onClose();
+                            }}
+                            autoFocus
+                        />
+                        <em>{rackParameterEditingUnit(descriptor)}</em>
+                    </span>
+                </label>
+                <label>
+                    <span>{source.label} amount</span>
+                    <span className="rack-value-sheet-input">
+                        <input
+                            data-role="rack-modulation-value-input"
+                            inputMode="decimal"
+                            value={amountDraft}
+                            disabled={route === null}
+                            onChange={(event) => setAmountDraft(event.currentTarget.value)}
+                            onKeyDown={(event) => {
+                                if (event.key === "Enter") apply();
+                                if (event.key === "Escape") onClose();
+                            }}
+                        />
+                        <em>{rackModulationEditingUnit(descriptor)}</em>
+                    </span>
+                </label>
+                {route === null ? <p data-role="rack-value-sheet-no-route">No selected source route.</p> : null}
+                {error ? <p className="rack-value-sheet-error" role="alert">{error}</p> : null}
+                <footer>
+                    <button type="button" data-role="rack-value-sheet-default" onClick={() => {
+                        setBaseDraft(formatRackParameterEditingValue(descriptor, descriptor.initial));
+                        setError("");
+                    }}>Default</button>
+                    <span />
+                    <button type="button" data-role="rack-value-sheet-cancel" onClick={onClose}>Cancel</button>
+                    <button type="button" data-role="rack-value-sheet-apply" onClick={apply}>Apply</button>
+                </footer>
+            </section>
+        </div>
+    );
+}
+
+function RemoveRackTargetRoutesConfirmation({
+    descriptor,
+    routeCount,
+    onCancel,
+    onConfirm,
+}: {
+    descriptor: RackParameterDescriptor;
+    routeCount: number;
+    onCancel: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <div className="rack-value-sheet-layer" onPointerDown={onCancel}>
+            <section
+                role="alertdialog"
+                aria-modal="true"
+                aria-label="Remove all modulation routes to parameter"
+                data-role="rack-remove-target-routes-confirmation"
+                className="rack-remove-routes-confirmation"
+                onPointerDown={(event) => event.stopPropagation()}
+            >
+                <span>REMOVE ROUTES</span>
+                <strong>Remove all {routeCount} {routeCount === 1 ? "route" : "routes"} to {descriptor.label}?</strong>
+                <p>Other parameters and the base value will not change.</p>
+                <footer>
+                    <button type="button" onClick={onCancel}>Cancel</button>
+                    <button type="button" data-role="rack-remove-target-routes-confirm" onClick={onConfirm}>Remove</button>
+                </footer>
+            </section>
+        </div>
+    );
+}
+
 export function EffectsRackWorkspace({
     routes,
     observedFilterSpectrum,
     observedDistortionHistory,
     observedDistortionScope,
     onAddRouteWithOverrides,
+    onRemoveRoute,
     onRouteChange,
     onBackToVoice,
+    onOpenModSource,
     className,
 }: EffectsRackWorkspaceProps) {
     const { rackState, commit } = useRackState();
@@ -1021,7 +1300,24 @@ export function EffectsRackWorkspace({
     const [hoverTargetEndpointID, setHoverTargetEndpointID] = useState<string | null>(null);
     const [routeStatus, setRouteStatus] = useState("");
     const [draftAmount, setDraftAmount] = useState<number | null>(null);
+    const [parameterHud, setParameterHud] = useState<RackParameterHud | null>(null);
+    const [parameterMenu, setParameterMenu] = useState<RackParameterMenuState | null>(null);
+    const [parameterValueSheetEndpointID, setParameterValueSheetEndpointID] = useState<string | null>(null);
+    const [removeTargetRoutesEndpointID, setRemoveTargetRoutesEndpointID] = useState<string | null>(null);
     const pendingRouteRef = useRef<{ key: string; amount: number } | null>(null);
+
+    useEffect(() => {
+        if (parameterMenu === null) {
+            return;
+        }
+        const handleKeyDown = (event: KeyboardEvent) => {
+            if (event.key === "Escape") {
+                setParameterMenu(null);
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [parameterMenu]);
 
     useEffect(() => {
         previewOrderRef.current = rackState.order;
@@ -1044,6 +1340,26 @@ export function EffectsRackWorkspace({
     ));
     const selectedRoute = selectedRouteIndex >= 0 ? routes[selectedRouteIndex] : null;
     const selectedPairKey = `${selectedSource.sourceKind}:${selectedSource.sourceSlot}:${selectedTargetKind}`;
+    const parameterOverlayEndpointID = parameterValueSheetEndpointID
+        ?? parameterMenu?.endpointID
+        ?? removeTargetRoutesEndpointID;
+    const parameterOverlayDescriptor = RACK_EFFECT_DESCRIPTORS
+        .flatMap((effect) => effect.parameters)
+        .find((parameter) => parameter.endpointID === parameterOverlayEndpointID)
+        ?? selectedTarget;
+    const parameterOverlayBinding = useRackParameterBinding(parameterOverlayDescriptor);
+    const parameterOverlayTargetKind = `rack.${parameterOverlayDescriptor.endpointID}` as RackModulationTargetKind;
+    const parameterOverlayRouteIndex = routes.findIndex((route) => (
+        route.sourceKind === selectedSource.sourceKind
+        && route.sourceSlot === selectedSource.sourceSlot
+        && route.targetKind === parameterOverlayTargetKind
+    ));
+    const parameterOverlayRoute = parameterOverlayRouteIndex >= 0
+        ? routes[parameterOverlayRouteIndex] ?? null
+        : null;
+    const parameterOverlayTargetRouteIndices = routes.flatMap((route, routeIndex) => (
+        route.targetKind === parameterOverlayTargetKind ? [routeIndex] : []
+    ));
 
     useEffect(() => {
         const pending = pendingRouteRef.current;
@@ -1177,6 +1493,7 @@ export function EffectsRackWorkspace({
         source: SelectedSource,
         targetEndpointID: string,
         initialAmount = 0,
+        enableExisting = false,
     ) => {
         const targetKind = `rack.${targetEndpointID}` as RackModulationTargetKind;
         const existingIndex = routes.findIndex((route) => (
@@ -1186,7 +1503,7 @@ export function EffectsRackWorkspace({
         ));
 
         if (existingIndex >= 0) {
-            if (!routes[existingIndex]?.enabled) {
+            if (enableExisting && !routes[existingIndex]?.enabled) {
                 onRouteChange(existingIndex, { enabled: true });
             }
             setRouteStatus("");
@@ -1260,7 +1577,7 @@ export function EffectsRackWorkspace({
             setSelectedEffectId(targetParameter.effectId);
         }
         setDraftAmount(null);
-        ensureRoute(source, targetEndpointID);
+        ensureRoute(source, targetEndpointID, 0, true);
     }, [ensureRoute, selectedTarget.endpointID]);
 
     const changeSourcePage = useCallback((nextPageIndex: number) => {
@@ -1281,11 +1598,62 @@ export function EffectsRackWorkspace({
         ensureRoute(selectedSource, selectedTarget.endpointID, nextAmount);
     }, [ensureRoute, onRouteChange, selectedRouteIndex, selectedSource, selectedTarget.endpointID]);
 
+    const changeParameterModulationAmount = useCallback((endpointID: string, nextAmount: number) => {
+        const targetKind = `rack.${endpointID}` as RackModulationTargetKind;
+        const routeIndex = routes.findIndex((route) => (
+            route.sourceKind === selectedSource.sourceKind
+            && route.sourceSlot === selectedSource.sourceSlot
+            && route.targetKind === targetKind
+        ));
+
+        setSelectedTargetEndpointID(endpointID);
+        setSourceIsArmed(true);
+        setDraftAmount(nextAmount);
+        if (routeIndex >= 0) {
+            onRouteChange(routeIndex, { amount: nextAmount, enabled: true });
+            return;
+        }
+        ensureRoute(selectedSource, endpointID, nextAmount);
+    }, [ensureRoute, onRouteChange, routes, selectedSource]);
+
     const setRecentParameter = useCallback((effectId: EffectModuleId, endpointID: string) => {
         setQuickEndpointByEffect((current) => ({ ...current, [effectId]: endpointID }));
     }, []);
 
     const displayAmount = draftAmount ?? selectedRoute?.amount ?? 0;
+
+    const handleParameterMenuAction = useCallback((action: RackParameterMenuAction) => {
+        if (action === "edit-values") {
+            setParameterValueSheetEndpointID(parameterOverlayDescriptor.endpointID);
+        } else if (action === "reset-base") {
+            parameterOverlayBinding.commitValue(parameterOverlayDescriptor.initial);
+        } else if (action === "remove-all-target-routes") {
+            setRemoveTargetRoutesEndpointID(parameterOverlayDescriptor.endpointID);
+        } else if (parameterOverlayRouteIndex >= 0 && parameterOverlayRoute !== null) {
+            if (action === "toggle-route") {
+                onRouteChange(parameterOverlayRouteIndex, { enabled: !parameterOverlayRoute.enabled });
+            } else if (action === "polarity") {
+                onRouteChange(parameterOverlayRouteIndex, {
+                    polarity: parameterOverlayRoute.polarity === "unipolar" ? "bipolar" : "unipolar",
+                });
+            } else if (action === "reducer" && isVoiceModulationSource(parameterOverlayRoute.sourceKind)) {
+                onRouteChange(parameterOverlayRouteIndex, {
+                    reducer: parameterOverlayRoute.reducer === "max" ? "mean" : "max",
+                });
+            } else if (action === "remove-route") {
+                onRemoveRoute(parameterOverlayRouteIndex);
+            }
+        }
+        setParameterMenu(null);
+    }, [
+        onRouteChange,
+        onRemoveRoute,
+        parameterOverlayBinding,
+        parameterOverlayDescriptor.endpointID,
+        parameterOverlayDescriptor.initial,
+        parameterOverlayRoute,
+        parameterOverlayRouteIndex,
+    ]);
 
     return (
         <section
@@ -1293,6 +1661,58 @@ export function EffectsRackWorkspace({
             data-layout-card="mobile-effects-workspace"
             className={`effects-rack-workspace ${className ?? ""}`}
         >
+            {parameterHud ? (
+                <div
+                    data-role="rack-parameter-hud"
+                    data-mode={parameterHud.mode}
+                    className="rack-parameter-hud"
+                    aria-live="polite"
+                >
+                    <span>{parameterHud.label}</span>
+                    <strong>{parameterHud.value}</strong>
+                </div>
+            ) : null}
+            {parameterMenu ? (
+                <RackParameterContextMenu
+                    state={parameterMenu}
+                    route={parameterOverlayRoute}
+                    onClose={() => setParameterMenu(null)}
+                    onSelectAction={handleParameterMenuAction}
+                />
+            ) : null}
+            {parameterValueSheetEndpointID ? (
+                <RackParameterValueSheet
+                    key={`${parameterValueSheetEndpointID}:${selectedSource.sourceKind}:${selectedSource.sourceSlot}`}
+                    descriptor={parameterOverlayDescriptor}
+                    binding={parameterOverlayBinding}
+                    route={parameterOverlayRoute}
+                    source={activeSource}
+                    onApply={(baseValue, modulationAmount) => {
+                        parameterOverlayBinding.commitValue(baseValue);
+                        if (parameterOverlayRouteIndex >= 0 && modulationAmount !== null) {
+                            onRouteChange(parameterOverlayRouteIndex, {
+                                amount: modulationAmount,
+                                enabled: true,
+                            });
+                        }
+                        setParameterValueSheetEndpointID(null);
+                    }}
+                    onClose={() => setParameterValueSheetEndpointID(null)}
+                />
+            ) : null}
+            {removeTargetRoutesEndpointID ? (
+                <RemoveRackTargetRoutesConfirmation
+                    descriptor={parameterOverlayDescriptor}
+                    routeCount={parameterOverlayTargetRouteIndices.length}
+                    onCancel={() => setRemoveTargetRoutesEndpointID(null)}
+                    onConfirm={() => {
+                        [...parameterOverlayTargetRouteIndices]
+                            .sort((left, right) => right - left)
+                            .forEach(onRemoveRoute);
+                        setRemoveTargetRoutesEndpointID(null);
+                    }}
+                />
+            ) : null}
             <nav className="rack-effects-nav" aria-label="Effects workspace navigation">
                 <button
                     type="button"
@@ -1402,15 +1822,22 @@ export function EffectsRackWorkspace({
                             routes={routes}
                             selectedTargetEndpointID={selectedTarget.endpointID}
                             hoverTargetEndpointID={hoverTargetEndpointID}
-                            activeSourceAccent={activeSource.accent}
+                            activeSource={activeSource}
                             onSelectTarget={selectTarget}
                             onRecentParameter={(endpointID) => setRecentParameter(selectedEffectId, endpointID)}
+                            onHudChange={setParameterHud}
+                            onModulationAmountChange={changeParameterModulationAmount}
+                            onRequestContextMenu={(endpointID, clientX, clientY) => {
+                                selectTarget(endpointID);
+                                setParameterMenu({ endpointID, clientX, clientY });
+                            }}
                         />
                     </div>
                     <div className="rack-editor-modulation">
                         <ModSourceCarousel
                             pageIndex={sourcePageIndex}
                             selectedSource={selectedSource}
+                            sourceIsArmed={sourceIsArmed}
                             onPageChange={changeSourcePage}
                             onSourcePreview={(source) => {
                                 setSelectedSource(source);
@@ -1418,6 +1845,7 @@ export function EffectsRackWorkspace({
                                 setDraftAmount(null);
                             }}
                             onSourceActivate={activateSource}
+                            onOpenSelectedSource={(source) => onOpenModSource?.(source)}
                             onHoverTarget={setHoverTargetEndpointID}
                         />
                         <ModulationAmountControl

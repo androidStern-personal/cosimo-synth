@@ -1,6 +1,8 @@
 @import "tailwindcss";
 @import "../shared/synth-style-guide.css";
 @import "./effects-rack-workspace.css";
+@import "./rack-parameter-knob.css";
+@import "./mobile-workspace.css";
 
 @theme inline {
     --color-background: var(--cosimo-mod-background);

@@ -1,6 +1,6 @@
 # ADR-016: Mobile rack workspace and no separate LFO family
 
-Status: accepted — 2026-08-06
+Status: accepted — 2026-08-06; mobile navigation superseded by ADR-017
 
 ## Context
 

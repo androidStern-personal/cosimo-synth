@@ -109,10 +109,12 @@ import {
 } from "../shared/filter-response";
 import {
     MODULATION_ENV_SLOT_COUNT,
+    MODULATION_MACRO_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
     type ModulationRoute,
     type ModulationRouteUpdate,
 } from "../shared/modulation";
+import type { RackModulationSource } from "../shared/rack-modulation-sources";
 
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
@@ -351,6 +353,7 @@ type MsegEditorModalProps = {
 };
 
 type ModulationMatrixSectionProps = {
+    focusedSource?: MobileModSource | null;
     selectedMsegSlot: number;
     msegState: MsegState | null;
     selectedMsegMorph: PatchControlBinding<number>;
@@ -2736,6 +2739,7 @@ function KeyboardSection({
     unisonWarpSpread,
     observedUnisonState,
     keyboardRootNote,
+    noteCount = DEFAULT_KEYBOARD_NOTE_COUNT,
     onOctaveDown,
     onOctaveUp,
     playModeFocusBindings,
@@ -2756,6 +2760,7 @@ function KeyboardSection({
     unisonWarpSpread: PatchControlBinding<number>;
     observedUnisonState: SynthPatchViewModel["observedUnisonState"];
     keyboardRootNote: number;
+    noteCount?: number;
     onOctaveDown: () => void;
     onOctaveUp: () => void;
     playModeFocusBindings: SynthFocusBindings;
@@ -2796,7 +2801,7 @@ function KeyboardSection({
                     glideFocusTarget={glideFocusTarget}
                 />
             )}
-            keyboard={<KeyboardDock rootNote={keyboardRootNote} keyboardRef={keyboardRef} />}
+            keyboard={<KeyboardDock rootNote={keyboardRootNote} noteCount={noteCount} keyboardRef={keyboardRef} />}
         />
     );
 }
@@ -2939,7 +2944,41 @@ function MsegEditorModal({
     );
 }
 
+function MacroSourceEditor({ slotIndex }: { slotIndex: number }) {
+    const endpointID = `macro${slotIndex + 1}`;
+    const coerce = useCallback((rawValue: unknown) => clamp(Number(rawValue) || 0, 0, 1), []);
+    const binding = usePatchParameterBinding<number>({
+        endpointID,
+        initialValue: 0,
+        coerce,
+    });
+
+    return (
+        <div className="grid h-full place-items-center p-5">
+            <div className="grid w-full max-w-[420px] gap-5 rounded-[18px] border border-white/[0.07] bg-white/[0.025] p-5">
+                <div>
+                    <div className="synth-section-title">Macro {slotIndex + 1}</div>
+                    <p className="mt-1 text-xs text-slate-300/55">
+                        One global control feeding every route assigned to this source.
+                    </p>
+                </div>
+                <RangeField
+                    label={`Macro ${slotIndex + 1} value`}
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    value={binding.value}
+                    displayValue={formatPercent(binding.value)}
+                    onChange={binding.commitValue}
+                    dataRole={`macro-source-value-${slotIndex + 1}`}
+                />
+            </div>
+        </div>
+    );
+}
+
 function ModulationMatrixSection({
+    focusedSource = null,
     selectedMsegSlot,
     msegState,
     selectedMsegMorph,
@@ -2961,7 +3000,7 @@ function ModulationMatrixSection({
     msegRateFocusBindings,
 }: ModulationMatrixSectionProps) {
     const [activeEditorTab, setActiveEditorTab] = useState<{
-        kind: "mseg" | "envelope";
+        kind: "mseg" | "envelope" | "macro";
         slotIndex: number;
     }>({
         kind: "mseg",
@@ -2970,6 +3009,39 @@ function ModulationMatrixSection({
 
     const activeMsegSlot = activeEditorTab.kind === "mseg" ? activeEditorTab.slotIndex : selectedMsegSlot;
     const activeEnvelopeSlot = activeEditorTab.kind === "envelope" ? activeEditorTab.slotIndex : selectedEnvelopeSlot;
+
+    useEffect(() => {
+        if (!focusedSource) {
+            return;
+        }
+
+        const slotIndex = focusedSource.sourceSlot - 1;
+        if (focusedSource.sourceKind === "macro") {
+            setActiveEditorTab((current) => (
+                current.kind === "macro" && current.slotIndex === slotIndex
+                    ? current
+                    : { kind: "macro", slotIndex }
+            ));
+            return;
+        }
+
+        if (focusedSource.sourceKind === "mseg") {
+            onSelectMsegSlot(slotIndex);
+            setActiveEditorTab((current) => (
+                current.kind === "mseg" && current.slotIndex === slotIndex
+                    ? current
+                    : { kind: "mseg", slotIndex }
+            ));
+            return;
+        }
+
+        onSelectEnvelopeSlot(slotIndex);
+        setActiveEditorTab((current) => (
+            current.kind === "envelope" && current.slotIndex === slotIndex
+                ? current
+                : { kind: "envelope", slotIndex }
+        ));
+    }, [focusedSource, onSelectEnvelopeSlot, onSelectMsegSlot]);
 
     // MSEG rate drag/edit state
     const msegRateRef = useRef<HTMLInputElement | null>(null);
@@ -3080,10 +3152,19 @@ function ModulationMatrixSection({
     return (
         <section
             data-role="mseg-card"
+            data-source-kind={activeEditorTab.kind === "envelope" ? "env" : activeEditorTab.kind}
+            data-source-slot={(activeEditorTab.slotIndex + 1).toString()}
+            data-role-source-editor="true"
             data-layout-card="desktop-grid-card"
             data-section-accent="mint"
             className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${DESKTOP_GRID_CARD_CLASS}`}
         >
+            <span
+                data-role="mod-source-editor"
+                data-source-kind={activeEditorTab.kind === "envelope" ? "env" : activeEditorTab.kind}
+                data-source-slot={(activeEditorTab.slotIndex + 1).toString()}
+                hidden
+            />
             {/* ── Pip selector top-bar ── */}
             <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
                 {/* MSEG pips */}
@@ -3134,6 +3215,27 @@ function ModulationMatrixSection({
                     ))}
                 </div>
                 <span className="synth-section-title ml-0.5">Env</span>
+
+                <div className="mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" />
+
+                <div className="flex gap-[3px]">
+                    {Array.from({ length: MODULATION_MACRO_SLOT_COUNT }, (_, slotIndex) => (
+                        <button
+                            key={`macro-pip-${slotIndex}`}
+                            type="button"
+                            aria-label={`Select macro ${slotIndex + 1}`}
+                            className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
+                                activeEditorTab.kind === "macro" && activeEditorTab.slotIndex === slotIndex
+                                    ? "synth-accent-active-button"
+                                    : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
+                            }`}
+                            onClick={() => setActiveEditorTab({ kind: "macro", slotIndex })}
+                        >
+                            {slotIndex + 1}
+                        </button>
+                    ))}
+                </div>
+                <span className="synth-section-title ml-0.5">Macro</span>
 
                 {/* Right-aligned controls — fixed-height container, both layers always rendered */}
                 <div className="relative ml-auto h-[24px] shrink-0 max-[480px]:h-7">
@@ -3313,6 +3415,28 @@ function ModulationMatrixSection({
                 </div>
             </div>
 
+            <div
+                data-role="mod-fixed-sources"
+                className="flex shrink-0 items-center gap-1.5 border-y border-white/[0.05] bg-white/[0.018] px-2.5 py-1.5"
+            >
+                <span className="synth-section-title mr-1">Fixed</span>
+                {[
+                    { label: "VEL", title: "Note velocity" },
+                    { label: "AT", title: "Polyphonic pressure" },
+                    { label: "SLIDE", title: "Per-note slide" },
+                ].map((source) => (
+                    <span
+                        key={source.label}
+                        data-role="mod-fixed-source"
+                        title={source.title}
+                        className="grid min-h-7 min-w-11 place-items-center rounded-[7px] border border-cyan-200/[0.10] bg-cyan-200/[0.035] px-2 font-mono text-[9px] font-semibold tracking-[0.08em] text-cyan-100/60"
+                    >
+                        {source.label}
+                    </span>
+                ))}
+                <span className="ml-auto truncate font-mono text-[8px] text-slate-400/40">performance inputs</span>
+            </div>
+
             {/* ── Body: MSEG preview or envelope editor ── */}
             <div className="min-h-0 flex-1">
                 {activeEditorTab.kind === "mseg" ? (
@@ -3351,11 +3475,13 @@ function ModulationMatrixSection({
                             />
                         </div>
                     </div>
-                ) : selectedEnvelope ? (
+                ) : activeEditorTab.kind === "envelope" && selectedEnvelope ? (
                     <DesktopEnvelopeEditor
                         selectedEnvelope={selectedEnvelope}
                         onEnvelopeChange={onEnvelopeChange}
                     />
+                ) : activeEditorTab.kind === "macro" ? (
+                    <MacroSourceEditor slotIndex={activeEditorTab.slotIndex} />
                 ) : null}
             </div>
         </section>
@@ -3446,6 +3572,72 @@ function ContextualArticulationToolbar({
     );
 }
 
+type MobileWorkspaceSection = "voice" | "fx" | "mod";
+type MobileModSource = Pick<RackModulationSource, "sourceKind" | "sourceSlot">;
+
+function MobileWorkspaceAccordion({
+    activeSection,
+    onSelectSection,
+    voice,
+    effects,
+    modulation,
+}: {
+    activeSection: MobileWorkspaceSection;
+    onSelectSection: (section: MobileWorkspaceSection) => void;
+    voice: ReactNode;
+    effects: ReactNode;
+    modulation: ReactNode;
+}) {
+    const sections: ReadonlyArray<{
+        id: MobileWorkspaceSection;
+        label: string;
+        content: ReactNode;
+    }> = [
+        { id: "voice", label: "Voice", content: voice },
+        { id: "fx", label: "FX", content: effects },
+        { id: "mod", label: "Mod", content: modulation },
+    ];
+
+    return (
+        <main
+            data-role="mobile-workspace-accordion"
+            className="mobile-workspace-accordion min-h-0 flex-1"
+        >
+            {sections.map((section) => {
+                const isExpanded = section.id === activeSection;
+
+                return (
+                    <section
+                        key={section.id}
+                        className={`mobile-workspace-section is-${section.id}${isExpanded ? " is-expanded" : ""}`}
+                        data-mobile-workspace-section={section.id}
+                    >
+                        <button
+                            type="button"
+                            data-role={`mobile-workspace-toggle-${section.id}`}
+                            className="mobile-workspace-toggle"
+                            aria-expanded={isExpanded}
+                            aria-controls={`mobile-workspace-panel-${section.id}`}
+                            onClick={() => onSelectSection(section.id)}
+                        >
+                            {section.label}
+                        </button>
+                        <div
+                            id={`mobile-workspace-panel-${section.id}`}
+                            data-role={`mobile-workspace-panel-${section.id}`}
+                            className="mobile-workspace-panel"
+                            hidden={!isExpanded}
+                            aria-hidden={!isExpanded}
+                        >
+                            {section.content}
+                        </div>
+                    </section>
+                );
+            })}
+        </main>
+    );
+}
+
 function DesktopPatchViewBody({
     keyboardInputMode,
 }: {
@@ -3456,7 +3648,9 @@ function DesktopPatchViewBody({
     const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
     const keyboardElementRef = useRef<PianoKeyboardElement | null>(null);
     const [isCompactViewport, setIsCompactViewport] = useState(false);
-    const [mobilePage, setMobilePage] = useState<"voice" | "effects">("voice");
+    const [mobileWorkspaceSection, setMobileWorkspaceSection] = useState<MobileWorkspaceSection>("voice");
+    const [mobileModSource, setMobileModSource] = useState<MobileModSource | null>(null);
+    const [mobileReturnSection, setMobileReturnSection] = useState<MobileWorkspaceSection | null>(null);
     useEffect(() => {
         if (typeof window.matchMedia !== "function") {
             return undefined;
@@ -3469,7 +3663,9 @@ function DesktopPatchViewBody({
     }, []);
     useEffect(() => {
         if (!isCompactViewport) {
-            setMobilePage("voice");
+            setMobileWorkspaceSection("voice");
+            setMobileModSource(null);
+            setMobileReturnSection(null);
         }
     }, [isCompactViewport]);
     const [keyboardRootNote, setKeyboardRootNote] = useState(KEYBOARD_ROOT_NOTE_DEFAULT);
@@ -3786,7 +3982,136 @@ function DesktopPatchViewBody({
         velocitySegments,
     ]);
 
-    const isMobileEffectsPage = isCompactViewport && mobilePage === "effects";
+    const selectMobileWorkspaceSection = useCallback((section: MobileWorkspaceSection) => {
+        setMobileWorkspaceSection(section);
+        setMobileReturnSection(null);
+    }, []);
+
+    const openMobileModSource = useCallback((source: MobileModSource) => {
+        setMobileModSource(source);
+        setMobileReturnSection(mobileWorkspaceSection);
+        setMobileWorkspaceSection("mod");
+    }, [mobileWorkspaceSection]);
+
+    const returnFromMobileModSource = useCallback(() => {
+        setMobileWorkspaceSection(mobileReturnSection ?? "fx");
+        setMobileReturnSection(null);
+    }, [mobileReturnSection]);
+
+    const voiceWorkspace = (
+        <>
+        <section className="mobile-voice-grid grid min-h-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2">
+            <WavetableStageSection
+                stageRef={stageRef}
+                frames={synthView.frames}
+                position={synthView.observedPosition}
+                warpMode={synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value}
+                warpAmount={synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value}
+                tableName={synthView.displayedTableName}
+                frameCount={synthView.displayedFrameCount}
+                desiredTableIndex={synthView.desiredTableIndex}
+                tableOptions={synthView.tableOptions}
+                canRetry={synthView.canRetryDesiredTableLoad}
+                onTableChange={synthView.handleSelectWavetable}
+                onTablePrewarm={synthView.handlePrewarmWavetablePicker}
+                onRetry={synthView.handleRetryLoad}
+                tableFocusBindings={synthView.keyboardRouting.wavetableFocusBindings}
+                onPointerDown={synthView.stageBindings.handleStagePointerDown}
+                onPointerMove={synthView.stageBindings.handleStagePointerMove}
+                onPointerUp={synthView.stageBindings.handleStagePointerUp}
+                bottomLeftAccessory={warpControlCluster}
+                bottomRightAccessory={panField}
+                className={DESKTOP_GRID_CARD_CLASS}
+            />
+
+            <FilterSection
+                filterMode={synthView.filterMode}
+                filterCutoff={synthView.filterCutoff}
+                filterQ={synthView.filterQ}
+                observedFilterState={synthView.observedFilterState}
+                observedFilterSpectrum={synthView.observedFilterSpectrum}
+                resonanceNormalizedFromQ={resonanceNormalizedFromQ}
+                resonanceQFromSurface={resonanceQFromSurface}
+                resonanceCurveDebugState={filterResonanceCurveProfile}
+                className={DESKTOP_GRID_CARD_CLASS}
+            />
+        </section>
+        <section
+            data-role="keyboard-controls"
+            data-section-accent="lime"
+            data-liquid-detail="edge-rail"
+            className={`${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`}
+        >
+            {keyboardToolbarOverride}
+        </section>
+        </>
+    );
+
+    const modulationWorkspace = (
+        <>
+            {mobileReturnSection ? (
+                <nav className="mobile-mod-return-bar" aria-label="Modulation source navigation">
+                    <button
+                        type="button"
+                        data-role="mobile-workspace-back"
+                        onClick={returnFromMobileModSource}
+                    >
+                        <span aria-hidden="true">‹</span>
+                        Back to {mobileReturnSection === "fx" ? "FX" : mobileReturnSection === "voice" ? "Voice" : "Mod"}
+                    </button>
+                </nav>
+            ) : null}
+
+            {synthView.failureDetail ? (
+                <div className="rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90">
+                    {synthView.failureDetail}
+                </div>
+            ) : null}
+
+            <section className="grid min-h-0 items-stretch gap-4 md:grid-cols-2">
+                <ModulationMatrixSection
+                    focusedSource={mobileModSource}
+                    selectedMsegSlot={synthView.selectedMsegSlot}
+                    msegState={synthView.msegState}
+                    selectedMsegMorph={synthView.selectedMsegMorph}
+                    observedMsegPlayhead={synthView.observedMsegPlayhead}
+                    selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
+                    selectedEnvelope={synthView.selectedEnvelope}
+                    routes={synthView.routes}
+                    onSelectMsegSlot={synthView.handleSelectMsegSlot}
+                    onSelectMsegShape={synthView.handleSelectMsegShape}
+                    onOpenMsegEditor={synthView.msegEditor.openEditor}
+                    onMsegMorphChange={synthView.handleMsegMorphChange}
+                    onMsegRateChange={synthView.handleMsegRateChange}
+                    onToggleMsegLoop={synthView.handleToggleMsegLoop}
+                    onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
+                    onEnvelopeChange={synthView.handleEnvelopeChange}
+                    onAddRoute={synthView.handleAddRoute}
+                    onRemoveRoute={synthView.handleRemoveRoute}
+                    onRouteChange={synthView.handleRouteChange}
+                    msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
+                />
+
+                <section
+                    data-role="mod-matrix-card"
+                    data-layout-card="desktop-grid-card"
+                    data-section-accent="amber"
+                    data-liquid-detail="edge-rail"
+                    className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border p-4 ${DESKTOP_GRID_CARD_CLASS}`}
+                >
+                    <DesktopModMatrix
+                        routes={synthView.routes}
+                        onAddRoute={synthView.handleAddRoute}
+                        onRemoveRoute={synthView.handleRemoveRoute}
+                        onRouteChange={synthView.handleRouteChange}
+                    />
+                </section>
+            </section>
+
+        </>
+    );
+
+    const isMobileEffectsPage = isCompactViewport && mobileWorkspaceSection === "fx";
     const effectsRackWorkspace = (
         <EffectsRackWorkspace
             routes={synthView.routes}
@@ -3794,10 +4119,12 @@ function DesktopPatchViewBody({
             observedDistortionHistory={synthView.observedDistortionHistory}
             observedDistortionScope={synthView.observedDistortionScope}
             onAddRouteWithOverrides={synthView.handleAddRouteWithOverrides}
+            onRemoveRoute={synthView.handleRemoveRoute}
             onRouteChange={synthView.handleRouteChange}
+            onOpenModSource={openMobileModSource}
             onBackToVoice={() => {
                 if (isCompactViewport) {
-                    setMobilePage("voice");
+                    setMobileWorkspaceSection("voice");
                     return;
                 }
                 scrollRegionRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -3806,133 +4133,38 @@ function DesktopPatchViewBody({
     );
 
     return (
-        <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
-            {!isMobileEffectsPage ? <StatusHeader statusText={synthView.topStatus} /> : null}
-            {!isMobileEffectsPage ? (
+        <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-accordion" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
+            {!isCompactViewport ? <StatusHeader statusText={synthView.topStatus} /> : null}
+            {!isCompactViewport ? (
                 <SynthPresetBarHost
                     isHidden={synthView.msegEditor.isOpen}
                     storedStateAdapters={synthView.presetStoredStateAdapters}
                 />
             ) : null}
 
-            <main
-                ref={scrollRegionRef}
-                data-role="desktop-scroll-region"
-                className={`${isMobileEffectsPage ? "hidden" : "grid"} min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1`}
-            >
-                <section className="grid min-h-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2">
-                    <WavetableStageSection
-                        stageRef={stageRef}
-                        frames={synthView.frames}
-                        position={synthView.observedPosition}
-                        warpMode={synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value}
-                        warpAmount={synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value}
-                        tableName={synthView.displayedTableName}
-                        frameCount={synthView.displayedFrameCount}
-                        desiredTableIndex={synthView.desiredTableIndex}
-                        tableOptions={synthView.tableOptions}
-                        canRetry={synthView.canRetryDesiredTableLoad}
-                        onTableChange={synthView.handleSelectWavetable}
-                        onTablePrewarm={synthView.handlePrewarmWavetablePicker}
-                        onRetry={synthView.handleRetryLoad}
-                        tableFocusBindings={synthView.keyboardRouting.wavetableFocusBindings}
-                        onPointerDown={synthView.stageBindings.handleStagePointerDown}
-                        onPointerMove={synthView.stageBindings.handleStagePointerMove}
-                        onPointerUp={synthView.stageBindings.handleStagePointerUp}
-                        bottomLeftAccessory={warpControlCluster}
-                        bottomRightAccessory={
-                            <>
-                                {panField}
-                            </>
-                        }
-                        className={DESKTOP_GRID_CARD_CLASS}
-                    />
-
-                    <FilterSection
-                        filterMode={synthView.filterMode}
-                        filterCutoff={synthView.filterCutoff}
-                        filterQ={synthView.filterQ}
-                        observedFilterState={synthView.observedFilterState}
-                        observedFilterSpectrum={synthView.observedFilterSpectrum}
-                        resonanceNormalizedFromQ={resonanceNormalizedFromQ}
-                        resonanceQFromSurface={resonanceQFromSurface}
-                        resonanceCurveDebugState={filterResonanceCurveProfile}
-                        className={DESKTOP_GRID_CARD_CLASS}
-                    />
-                </section>
-
-                {isCompactViewport ? (
-                    <button
-                        type="button"
-                        data-role="open-effects-rack"
-                        className="flex min-h-12 items-center justify-between rounded-[14px] border border-cyan-200/20 bg-cyan-200/[0.05] px-4 text-[11px] font-bold uppercase tracking-[0.14em] text-cyan-100"
-                        onClick={() => setMobilePage("effects")}
-                    >
-                        <span>FX Rack</span>
-                        <span className="text-slate-400">8 FX&nbsp; ›</span>
-                    </button>
-                ) : effectsRackWorkspace}
-
-                {synthView.failureDetail ? (
-                    <div className="rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90">
-                        {synthView.failureDetail}
-                    </div>
-                ) : null}
-
-                <section className="grid min-h-0 items-stretch gap-4 md:grid-cols-2">
-                    <ModulationMatrixSection
-                        selectedMsegSlot={synthView.selectedMsegSlot}
-                        msegState={synthView.msegState}
-                        selectedMsegMorph={synthView.selectedMsegMorph}
-                        observedMsegPlayhead={synthView.observedMsegPlayhead}
-                        selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
-                        selectedEnvelope={synthView.selectedEnvelope}
-                        routes={synthView.routes}
-                        onSelectMsegSlot={synthView.handleSelectMsegSlot}
-                        onSelectMsegShape={synthView.handleSelectMsegShape}
-                        onOpenMsegEditor={synthView.msegEditor.openEditor}
-                        onMsegMorphChange={synthView.handleMsegMorphChange}
-                        onMsegRateChange={synthView.handleMsegRateChange}
-                        onToggleMsegLoop={synthView.handleToggleMsegLoop}
-                        onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
-                        onEnvelopeChange={synthView.handleEnvelopeChange}
-                        onAddRoute={synthView.handleAddRoute}
-                        onRemoveRoute={synthView.handleRemoveRoute}
-                        onRouteChange={synthView.handleRouteChange}
-                        msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
-                    />
-
-                    <section
-                        data-role="mod-matrix-card"
-                        data-layout-card="desktop-grid-card"
-                        data-section-accent="amber"
-                        data-liquid-detail="edge-rail"
-                        className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border p-4 ${DESKTOP_GRID_CARD_CLASS}`}
-                    >
-                        <DesktopModMatrix
-                            routes={synthView.routes}
-                            onAddRoute={synthView.handleAddRoute}
-                            onRemoveRoute={synthView.handleRemoveRoute}
-                            onRouteChange={synthView.handleRouteChange}
-                        />
-                    </section>
-                </section>
-
-                <section
-                    data-role="keyboard-controls"
-                    data-section-accent="lime"
-                    data-liquid-detail="edge-rail"
-                    className={`${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`}
+            {isCompactViewport ? (
+                <MobileWorkspaceAccordion
+                    activeSection={mobileWorkspaceSection}
+                    onSelectSection={selectMobileWorkspaceSection}
+                    voice={voiceWorkspace}
+                    effects={(
+                        <div data-role="mobile-effects-region" className="min-h-0 h-full overflow-hidden">
+                            {effectsRackWorkspace}
+                        </div>
+                    )}
+                    modulation={modulationWorkspace}
+                />
+            ) : (
+                <main
+                    ref={scrollRegionRef}
+                    data-role="desktop-scroll-region"
+                    className="grid min-h-0 flex-1 auto-rows-max gap-4 overflow-x-hidden overflow-y-auto pr-1"
                 >
-                    {keyboardToolbarOverride}
-                </section>
-            </main>
-
-            {isMobileEffectsPage ? (
-                <main data-role="mobile-effects-region" className="min-h-0 flex-1 overflow-hidden">
+                    {voiceWorkspace}
                     {effectsRackWorkspace}
+                    {modulationWorkspace}
                 </main>
-            ) : null}
+            )}
 
             <div
                 data-role="sticky-keyboard"
@@ -3954,6 +4186,7 @@ function DesktopPatchViewBody({
                     unisonWarpSpread={synthView.unisonWarpSpread}
                     observedUnisonState={synthView.observedUnisonState}
                     keyboardRootNote={keyboardRootNote}
+                    noteCount={isCompactViewport ? 18 : DEFAULT_KEYBOARD_NOTE_COUNT}
                     onOctaveDown={handleKeyboardOctaveDown}
                     onOctaveUp={handleKeyboardOctaveUp}
                     playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
