@@ -5,6 +5,7 @@ import {
     useContext,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type ReactNode,
 } from "react";
@@ -93,11 +94,22 @@ export function useResourceClient() {
     return usePatchHost().resourceClient;
 }
 
-export function usePatchParameter(endpointID: string, initialValue: unknown = 0): ParameterBinding {
+export function usePatchParameter(
+    endpointID: string,
+    initialValue: unknown = 0,
+    active = true,
+): ParameterBinding {
     const patchConnection = usePatchConnection();
     const [value, setValue] = useState<unknown>(initialValue);
+    const initialValueRef = useRef(initialValue);
+    initialValueRef.current = initialValue;
 
     useEffect(() => {
+        if (!active) {
+            setValue(initialValueRef.current);
+            return undefined;
+        }
+
         const listener = (nextValue: unknown) => setValue(nextValue);
 
         patchConnection.addParameterListener?.(endpointID, listener);
@@ -106,7 +118,7 @@ export function usePatchParameter(endpointID: string, initialValue: unknown = 0)
         return () => {
             patchConnection.removeParameterListener?.(endpointID, listener);
         };
-    }, [endpointID, patchConnection]);
+    }, [active, endpointID, patchConnection]);
 
     const setParameterValue = useCallback((nextValue: unknown) => {
         patchConnection.sendEventOrValue?.(endpointID, nextValue);
@@ -129,11 +141,22 @@ export function usePatchParameter(endpointID: string, initialValue: unknown = 0)
     }), [beginGesture, endGesture, setParameterValue, value]);
 }
 
-export function usePatchEndpoint<TValue = unknown>(endpointID: string, initialValue: TValue) {
+export function usePatchEndpoint<TValue = unknown>(
+    endpointID: string,
+    initialValue: TValue,
+    active = true,
+) {
     const patchConnection = usePatchConnection();
     const [value, setValue] = useState<TValue>(initialValue);
+    const initialValueRef = useRef(initialValue);
+    initialValueRef.current = initialValue;
 
     useEffect(() => {
+        if (!active) {
+            setValue(initialValueRef.current);
+            return undefined;
+        }
+
         const listener = (nextValue: unknown) => setValue(nextValue as TValue);
 
         patchConnection.addEndpointListener?.(endpointID, listener);
@@ -141,7 +164,7 @@ export function usePatchEndpoint<TValue = unknown>(endpointID: string, initialVa
         return () => {
             patchConnection.removeEndpointListener?.(endpointID, listener);
         };
-    }, [endpointID, patchConnection]);
+    }, [active, endpointID, patchConnection]);
 
     return value;
 }

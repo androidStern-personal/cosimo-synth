@@ -232,6 +232,14 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
 /** Complete ordered rack catalog. */
 export const RACK_EFFECT_DESCRIPTORS: ReadonlyArray<RackEffectDescriptor> = definitions;
 
+const RACK_PARAMETER_DESCRIPTORS: ReadonlyArray<RackParameterDescriptor> = Object.freeze(
+    RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters),
+);
+
+const RACK_PARAMETER_BY_ENDPOINT_ID: ReadonlyMap<string, RackParameterDescriptor> = new Map(
+    RACK_PARAMETER_DESCRIPTORS.map((descriptor) => [descriptor.endpointID, descriptor]),
+);
+
 /** Look up a stable rack module or fail at the catalog boundary. */
 export function getRackEffectDescriptor(effectId: EffectModuleId): RackEffectDescriptor {
     const descriptor = RACK_EFFECT_DESCRIPTORS.find((candidate) => candidate.id === effectId);
@@ -243,7 +251,12 @@ export function getRackEffectDescriptor(effectId: EffectModuleId): RackEffectDes
 
 /** Complete parameter list used by UI, modulation binding, and contract tests. */
 export function allRackParameterDescriptors(): ReadonlyArray<RackParameterDescriptor> {
-    return RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters);
+    return RACK_PARAMETER_DESCRIPTORS;
+}
+
+/** Look up a parameter through the catalog's allocation-free endpoint index. */
+export function getRackParameterDescriptor(endpointID: string): RackParameterDescriptor | null {
+    return RACK_PARAMETER_BY_ENDPOINT_ID.get(endpointID) ?? null;
 }
 
 /** Format a raw engine value with the descriptor's unit and scale vocabulary. */

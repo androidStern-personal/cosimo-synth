@@ -21551,17 +21551,23 @@ function usePatchConnection() {
 function useResourceClient() {
   return usePatchHost().resourceClient;
 }
-function usePatchParameter(endpointID, initialValue = 0) {
+function usePatchParameter(endpointID, initialValue = 0, active = true) {
   const patchConnection = usePatchConnection();
   const [value, setValue] = reactExports.useState(initialValue);
+  const initialValueRef = reactExports.useRef(initialValue);
+  initialValueRef.current = initialValue;
   reactExports.useEffect(() => {
+    if (!active) {
+      setValue(initialValueRef.current);
+      return void 0;
+    }
     const listener = (nextValue) => setValue(nextValue);
     patchConnection.addParameterListener?.(endpointID, listener);
     patchConnection.requestParameterValue?.(endpointID);
     return () => {
       patchConnection.removeParameterListener?.(endpointID, listener);
     };
-  }, [endpointID, patchConnection]);
+  }, [active, endpointID, patchConnection]);
   const setParameterValue = reactExports.useCallback((nextValue) => {
     patchConnection.sendEventOrValue?.(endpointID, nextValue);
     setValue(nextValue);
@@ -21579,16 +21585,22 @@ function usePatchParameter(endpointID, initialValue = 0) {
     endGesture
   }), [beginGesture, endGesture, setParameterValue, value]);
 }
-function usePatchEndpoint(endpointID, initialValue) {
+function usePatchEndpoint(endpointID, initialValue, active = true) {
   const patchConnection = usePatchConnection();
   const [value, setValue] = reactExports.useState(initialValue);
+  const initialValueRef = reactExports.useRef(initialValue);
+  initialValueRef.current = initialValue;
   reactExports.useEffect(() => {
+    if (!active) {
+      setValue(initialValueRef.current);
+      return void 0;
+    }
     const listener = (nextValue) => setValue(nextValue);
     patchConnection.addEndpointListener?.(endpointID, listener);
     return () => {
       patchConnection.removeEndpointListener?.(endpointID, listener);
     };
-  }, [endpointID, patchConnection]);
+  }, [active, endpointID, patchConnection]);
   return value;
 }
 function serializeIdentity(value) {
@@ -21598,9 +21610,10 @@ function usePatchParameterBinding({
   endpointID,
   initialValue,
   coerce,
-  serialize = serializeIdentity
+  serialize = serializeIdentity,
+  active = true
 }) {
-  const parameter = usePatchParameter(endpointID, serialize(initialValue));
+  const parameter = usePatchParameter(endpointID, serialize(initialValue), active);
   const value = reactExports.useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
   const setValue = reactExports.useCallback((nextValue) => {
     parameter.setValue(serialize(nextValue));
@@ -21805,6 +21818,12 @@ const definitions = [
   }
 ];
 const RACK_EFFECT_DESCRIPTORS = definitions;
+const RACK_PARAMETER_DESCRIPTORS = Object.freeze(
+  RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters)
+);
+const RACK_PARAMETER_BY_ENDPOINT_ID = new Map(
+  RACK_PARAMETER_DESCRIPTORS.map((descriptor) => [descriptor.endpointID, descriptor])
+);
 function getRackEffectDescriptor(effectId) {
   const descriptor = RACK_EFFECT_DESCRIPTORS.find((candidate) => candidate.id === effectId);
   if (descriptor === void 0) {
@@ -21813,7 +21832,10 @@ function getRackEffectDescriptor(effectId) {
   return descriptor;
 }
 function allRackParameterDescriptors() {
-  return RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters);
+  return RACK_PARAMETER_DESCRIPTORS;
+}
+function getRackParameterDescriptor(endpointID) {
+  return RACK_PARAMETER_BY_ENDPOINT_ID.get(endpointID) ?? null;
 }
 function formatRackParameterValue(descriptor, value) {
   if (descriptor.choices !== void 0) {
@@ -25739,7 +25761,7 @@ function WavetableCanvas({
   position,
   warpMode,
   warpAmount,
-  drawableTopInset
+  drawableTopInset = 0
 }) {
   const canvasRef = reactExports.useRef(null);
   const viewportRef = reactExports.useRef(null);
@@ -27892,8 +27914,12 @@ function ensureKeyboardElement(patchConnection) {
       bindRenderedTouchHandlers() {
         const keyboard = this;
         for (const child of Array.from(keyboard.root?.children ?? [])) {
+          if (!(child instanceof HTMLElement)) {
+            continue;
+          }
           child.addEventListener("touchstart", (event) => keyboard.touchStart?.(event), { passive: false });
           child.addEventListener("touchend", (event) => keyboard.touchEnd?.(event));
+          child.addEventListener("touchcancel", (event) => keyboard.touchEnd?.(event));
         }
       }
     }
@@ -36128,6 +36154,8 @@ function PrecisionNumberField({
   const skipCommitOnBlurRef = reactExports.useRef(false);
   const wheelCursorTimerRef = reactExports.useRef(0);
   const isMountedRef = reactExports.useRef(true);
+  const bindingRef = reactExports.useRef(binding);
+  bindingRef.current = binding;
   const [isEditing, setIsEditing] = reactExports.useState(false);
   const [draftValue, setDraftValue] = reactExports.useState("");
   const [isWheelCursorHidden, setIsWheelCursorHidden] = reactExports.useState(false);
@@ -36146,10 +36174,45 @@ function PrecisionNumberField({
   reactExports.useEffect(() => {
     draftValueRef.current = draftValue;
   }, [draftValue]);
-  reactExports.useEffect(() => () => {
-    isMountedRef.current = false;
-    clearTimeout(wheelCursorTimerRef.current);
+  const finishDrag = reactExports.useCallback((pointerId) => {
+    const activeDrag = activeDragRef.current;
+    if (!activeDrag || pointerId !== void 0 && activeDrag.pointerId !== pointerId) {
+      return null;
+    }
+    activeDragRef.current = null;
+    const input = inputRef.current;
+    try {
+      if (input?.hasPointerCapture(activeDrag.pointerId)) {
+        input.releasePointerCapture(activeDrag.pointerId);
+      }
+    } catch {
+    }
+    bindingRef.current.endGesture();
+    return activeDrag;
   }, []);
+  reactExports.useEffect(() => {
+    isMountedRef.current = true;
+    const handlePointerEnd = (event) => finishDrag(event.pointerId);
+    const handleBlur = () => finishDrag();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        finishDrag();
+      }
+    };
+    window.addEventListener("pointerup", handlePointerEnd);
+    window.addEventListener("pointercancel", handlePointerEnd);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      isMountedRef.current = false;
+      clearTimeout(wheelCursorTimerRef.current);
+      window.removeEventListener("pointerup", handlePointerEnd);
+      window.removeEventListener("pointercancel", handlePointerEnd);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      finishDrag();
+    };
+  }, [finishDrag]);
   reactExports.useEffect(() => {
     if (!isEditing) {
       return;
@@ -36273,12 +36336,19 @@ function PrecisionNumberField({
                       moved: false
                     };
                     binding.beginGesture();
-                    event.currentTarget.setPointerCapture(event.pointerId);
+                    try {
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                    } catch {
+                    }
                     event.preventDefault();
                   },
                   onPointerMove: (event) => {
                     const activeDrag = activeDragRef.current;
                     if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                      return;
+                    }
+                    if (event.pointerType === "mouse" && event.buttons === 0) {
+                      finishDrag(event.pointerId);
                       return;
                     }
                     const deltaX = event.clientX - activeDrag.startClientX;
@@ -36301,13 +36371,10 @@ function PrecisionNumberField({
                     binding.setValue(nextBindingValue);
                   },
                   onPointerUp: (event) => {
-                    const activeDrag = activeDragRef.current;
-                    if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                    const activeDrag = finishDrag(event.pointerId);
+                    if (!activeDrag || isEditing) {
                       return;
                     }
-                    activeDragRef.current = null;
-                    event.currentTarget.releasePointerCapture?.(event.pointerId);
-                    binding.endGesture();
                     if (!activeDrag.moved) {
                       if (isInlineDark) {
                         setIsEditing(true);
@@ -36321,14 +36388,9 @@ function PrecisionNumberField({
                     }
                   },
                   onPointerCancel: (event) => {
-                    const activeDrag = activeDragRef.current;
-                    if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
-                      return;
-                    }
-                    activeDragRef.current = null;
-                    event.currentTarget.releasePointerCapture?.(event.pointerId);
-                    binding.endGesture();
+                    finishDrag(event.pointerId);
                   },
+                  onLostPointerCapture: (event) => finishDrag(event.pointerId),
                   onDoubleClick: (event) => {
                     if (event.button !== 0) {
                       return;
@@ -37751,7 +37813,7 @@ function useRackState() {
   }, [patchConnection]);
   return { rackState, commit };
 }
-function useRackParameterBinding(descriptor) {
+function useRackParameterBinding(descriptor, active = true) {
   const coerce = reactExports.useCallback((rawValue) => {
     const numericValue = Number(rawValue);
     const fallback = Number.isFinite(numericValue) ? numericValue : descriptor.initial;
@@ -37760,7 +37822,8 @@ function useRackParameterBinding(descriptor) {
   return usePatchParameterBinding({
     endpointID: descriptor.endpointID,
     initialValue: descriptor.initial,
-    coerce
+    coerce,
+    active
   });
 }
 function normalizedRackParameterValue(descriptor, value) {
@@ -38703,6 +38766,7 @@ function EffectsRackWorkspace({
   onRouteChange,
   onBackToVoice,
   onOpenModSource,
+  onSelectedEffectChange,
   className
 }) {
   const { rackState, commit } = useRackState();
@@ -38742,15 +38806,19 @@ function EffectsRackWorkspace({
     setPreviewOrder(rackState.order);
   }, [rackState.order]);
   const selectedEffect = getRackEffectDescriptor(selectedEffectId);
-  const selectedTarget = RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters).find((parameter) => parameter.endpointID === selectedTargetEndpointID && parameter.modulationTargetIndex !== null) ?? selectedEffect.parameters.find((parameter) => parameter.modulationTargetIndex !== null) ?? selectedEffect.parameters[0];
+  const selectedTargetCandidate = getRackParameterDescriptor(selectedTargetEndpointID);
+  const selectedTarget = selectedTargetCandidate !== null && selectedTargetCandidate.modulationTargetIndex !== null ? selectedTargetCandidate : selectedEffect.parameters.find((parameter) => parameter.modulationTargetIndex !== null) ?? selectedEffect.parameters[0];
   const activeSource = findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot);
   const selectedTargetKind = `rack.${selectedTarget.endpointID}`;
   const selectedRouteIndex = routes.findIndex((route) => route.sourceKind === selectedSource.sourceKind && route.sourceSlot === selectedSource.sourceSlot && route.targetKind === selectedTargetKind);
   const selectedRoute = selectedRouteIndex >= 0 ? routes[selectedRouteIndex] : null;
   const selectedPairKey = `${selectedSource.sourceKind}:${selectedSource.sourceSlot}:${selectedTargetKind}`;
   const parameterOverlayEndpointID = parameterValueSheetEndpointID ?? parameterMenu?.endpointID ?? removeTargetRoutesEndpointID;
-  const parameterOverlayDescriptor = RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters).find((parameter) => parameter.endpointID === parameterOverlayEndpointID) ?? selectedTarget;
-  const parameterOverlayBinding = useRackParameterBinding(parameterOverlayDescriptor);
+  const parameterOverlayDescriptor = parameterOverlayEndpointID === void 0 || parameterOverlayEndpointID === null ? selectedTarget : getRackParameterDescriptor(parameterOverlayEndpointID) ?? selectedTarget;
+  const parameterOverlayBinding = useRackParameterBinding(
+    parameterOverlayDescriptor,
+    parameterOverlayEndpointID !== void 0 && parameterOverlayEndpointID !== null
+  );
   const parameterOverlayTargetKind = `rack.${parameterOverlayDescriptor.endpointID}`;
   const parameterOverlayRouteIndex = routes.findIndex((route) => route.sourceKind === selectedSource.sourceKind && route.sourceSlot === selectedSource.sourceSlot && route.targetKind === parameterOverlayTargetKind);
   const parameterOverlayRoute = parameterOverlayRouteIndex >= 0 ? routes[parameterOverlayRouteIndex] ?? null : null;
@@ -38902,6 +38970,7 @@ function EffectsRackWorkspace({
   }, [onAddRouteWithOverrides, onRouteChange, routes]);
   const selectEffect = reactExports.useCallback((effectId) => {
     setSelectedEffectId(effectId);
+    onSelectedEffectChange?.(effectId);
     const effect = getRackEffectDescriptor(effectId);
     const preferredEndpointID = quickEndpointByEffect[effectId];
     const preferred = effect.parameters.find((parameter) => parameter.endpointID === preferredEndpointID && parameter.modulationTargetIndex !== null);
@@ -38913,31 +38982,33 @@ function EffectsRackWorkspace({
         ensureRoute(selectedSource, target.endpointID);
       }
     }
-  }, [ensureRoute, quickEndpointByEffect, selectedSource, sourceIsArmed]);
+  }, [ensureRoute, onSelectedEffectChange, quickEndpointByEffect, selectedSource, sourceIsArmed]);
   const selectTarget = reactExports.useCallback((endpointID) => {
-    const parameter = RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters).find((candidate) => candidate.endpointID === endpointID);
+    const parameter = getRackParameterDescriptor(endpointID);
     if (!parameter || parameter.modulationTargetIndex === null) {
       return;
     }
     setSelectedTargetEndpointID(endpointID);
     setSelectedEffectId(parameter.effectId);
+    onSelectedEffectChange?.(parameter.effectId);
     setDraftAmount(null);
     if (sourceIsArmed) {
       ensureRoute(selectedSource, endpointID);
     }
-  }, [ensureRoute, selectedSource, sourceIsArmed]);
+  }, [ensureRoute, onSelectedEffectChange, selectedSource, sourceIsArmed]);
   const activateSource = reactExports.useCallback((source, targetEndpointID = selectedTarget.endpointID) => {
-    const targetParameter = RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters).find((parameter) => parameter.endpointID === targetEndpointID);
+    const targetParameter = getRackParameterDescriptor(targetEndpointID);
     setSelectedSource(source);
     setSourcePageIndex(source.sourceSlot - 1);
     setSourceIsArmed(true);
     if (targetParameter && targetParameter.modulationTargetIndex !== null) {
       setSelectedTargetEndpointID(targetEndpointID);
       setSelectedEffectId(targetParameter.effectId);
+      onSelectedEffectChange?.(targetParameter.effectId);
     }
     setDraftAmount(null);
     ensureRoute(source, targetEndpointID, 0, true);
-  }, [ensureRoute, selectedTarget.endpointID]);
+  }, [ensureRoute, onSelectedEffectChange, selectedTarget.endpointID]);
   const changeSourcePage = reactExports.useCallback((nextPageIndex) => {
     const normalizedPageIndex = (nextPageIndex % RACK_MODULATION_SOURCE_PAGES.length + RACK_MODULATION_SOURCE_PAGES.length) % RACK_MODULATION_SOURCE_PAGES.length;
     setSourcePageIndex(normalizedPageIndex);
@@ -40797,10 +40868,14 @@ function useObservedFilterState({
     q: Number(filterQ) || 0.707107
   };
 }
-function useObservedFilterSpectrum() {
-  const message = usePatchEndpoint(FILTER_SPECTRUM_ENDPOINT_ID, null);
+function useObservedFilterSpectrum(active = true) {
+  const message = usePatchEndpoint(FILTER_SPECTRUM_ENDPOINT_ID, null, active);
   const [observedState, setObservedState] = reactExports.useState(null);
   reactExports.useEffect(() => {
+    if (!active) {
+      setObservedState(null);
+      return;
+    }
     if (!message) {
       return;
     }
@@ -40809,13 +40884,17 @@ function useObservedFilterSpectrum() {
       return;
     }
     setObservedState(normalizedState);
-  }, [message]);
+  }, [active, message]);
   return observedState;
 }
-function useObservedDistortionScope() {
-  const message = usePatchEndpoint(DISTORTION_SCOPE_ENDPOINT_ID, null);
+function useObservedDistortionScope(active = true) {
+  const message = usePatchEndpoint(DISTORTION_SCOPE_ENDPOINT_ID, null, active);
   const [observedState, setObservedState] = reactExports.useState(null);
   reactExports.useEffect(() => {
+    if (!active) {
+      setObservedState(null);
+      return;
+    }
     if (!message) {
       return;
     }
@@ -40824,13 +40903,17 @@ function useObservedDistortionScope() {
       return;
     }
     setObservedState(normalizedState);
-  }, [message]);
+  }, [active, message]);
   return observedState;
 }
-function useObservedDistortionHistory() {
-  const message = usePatchEndpoint(DISTORTION_HISTORY_ENDPOINT_ID, null);
+function useObservedDistortionHistory(active = true) {
+  const message = usePatchEndpoint(DISTORTION_HISTORY_ENDPOINT_ID, null, active);
   const [observedState, setObservedState] = reactExports.useState(null);
   reactExports.useEffect(() => {
+    if (!active) {
+      setObservedState(null);
+      return;
+    }
     if (!message) {
       return;
     }
@@ -40839,13 +40922,17 @@ function useObservedDistortionHistory() {
       return;
     }
     setObservedState(normalizedState);
-  }, [message]);
+  }, [active, message]);
   return observedState;
 }
-function useObservedMsegState() {
-  const message = usePatchEndpoint(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null);
+function useObservedMsegState(active = true) {
+  const message = usePatchEndpoint(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null, active);
   const [observedState, setObservedState] = reactExports.useState(null);
   reactExports.useEffect(() => {
+    if (!active) {
+      setObservedState(null);
+      return;
+    }
     if (!message) {
       return;
     }
@@ -40853,7 +40940,7 @@ function useObservedMsegState() {
       return;
     }
     setObservedState((previousState) => selectObservedEffectiveMsegState(previousState, message));
-  }, [message]);
+  }, [active, message]);
   return observedState;
 }
 function useObservedWarpState({
@@ -41646,7 +41733,10 @@ function useSynthPatchViewModel({
   onMsegCurveEditHoldActivated = null,
   onKeyboardOctaveDown,
   onKeyboardOctaveUp,
-  keyboardInputMode = "hosted"
+  keyboardInputMode = "hosted",
+  observeFilterSpectrum = true,
+  observeDistortionVisuals = true,
+  observeMsegPlayhead = true
 }) {
   const patchConnection = usePatchConnection();
   const runtimeStateMessage = usePatchEndpoint(RUNTIME_STATE_ENDPOINT_ID, null);
@@ -41868,10 +41958,10 @@ function useSynthPatchViewModel({
     unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
     unisonWarpSpread: unisonWarpSpread.value
   });
-  const observedFilterSpectrum = useObservedFilterSpectrum();
-  const observedDistortionHistory = useObservedDistortionHistory();
-  const observedDistortionScope = useObservedDistortionScope();
-  const observedMsegState = useObservedMsegState();
+  const observedFilterSpectrum = useObservedFilterSpectrum(observeFilterSpectrum);
+  const observedDistortionHistory = useObservedDistortionHistory(observeDistortionVisuals);
+  const observedDistortionScope = useObservedDistortionScope(observeDistortionVisuals);
+  const observedMsegState = useObservedMsegState(observeMsegPlayhead);
   const voiceArticulationStartMessage = usePatchEndpoint(
     VOICE_ARTICULATION_START_ENDPOINT_ID,
     null
@@ -47082,7 +47172,7 @@ function ArticulationRangeLane({
       return;
     }
     const dragState = resolveBoundaryResizeState(currentDragState, event.clientX);
-    if (dragState.kind !== currentDragState.kind) {
+    if (currentDragState.kind === "boundary-resize" && dragState.kind !== "boundary-resize") {
       dragStateRef.current = dragState;
       setFocusedSegmentId(dragState.segment.id);
       setHoveredSegmentId(dragState.segment.id);
@@ -50328,10 +50418,11 @@ function DesktopPatchViewBody({
   const scrollRegionRef = reactExports.useRef(null);
   const msegEditorSurfaceRef = reactExports.useRef(null);
   const keyboardElementRef = reactExports.useRef(null);
-  const [isCompactViewport, setIsCompactViewport] = reactExports.useState(false);
+  const [isCompactViewport, setIsCompactViewport] = reactExports.useState(() => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches);
   const [mobileWorkspaceSection, setMobileWorkspaceSection] = reactExports.useState("voice");
   const [mobileModSource, setMobileModSource] = reactExports.useState(null);
   const [mobileReturnSection, setMobileReturnSection] = reactExports.useState(null);
+  const [selectedRackEffectId, setSelectedRackEffectId] = reactExports.useState("drive");
   reactExports.useEffect(() => {
     if (typeof window.matchMedia !== "function") {
       return void 0;
@@ -50370,6 +50461,9 @@ function DesktopPatchViewBody({
     keyboardRef: keyboardElementRef,
     voiceModeCount: VOICE_MODE_OPTIONS.length,
     keyboardInputMode,
+    observeFilterSpectrum: !isCompactViewport || mobileWorkspaceSection === "voice" || mobileWorkspaceSection === "fx" && selectedRackEffectId === "filter",
+    observeDistortionVisuals: selectedRackEffectId === "drive" && (!isCompactViewport || mobileWorkspaceSection === "fx"),
+    observeMsegPlayhead: !isCompactViewport || mobileWorkspaceSection === "mod",
     onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
     onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false })
   });
@@ -50753,6 +50847,7 @@ function DesktopPatchViewBody({
       onRemoveRoute: synthView.handleRemoveRoute,
       onRouteChange: synthView.handleRouteChange,
       onOpenModSource: openMobileModSource,
+      onSelectedEffectChange: setSelectedRackEffectId,
       onBackToVoice: () => {
         if (isCompactViewport) {
           setMobileWorkspaceSection("voice");

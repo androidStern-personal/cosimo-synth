@@ -62,6 +62,18 @@ test("the catalog is the complete eight-effect DSP inventory plus the voice surf
     assert.equal(new Set(all.map((descriptor) => descriptor.targetId)).size, all.length);
 });
 
+test("the authoritative rack parameter index is stable and allocation-free", async () => {
+    const rackCatalog = await rackCatalogPromise;
+    const firstRead = rackCatalog.allRackParameterDescriptors();
+    const secondRead = rackCatalog.allRackParameterDescriptors();
+
+    assert.equal(firstRead, secondRead);
+    for (const descriptor of firstRead) {
+        assert.equal(rackCatalog.getRackParameterDescriptor(descriptor.endpointID), descriptor);
+    }
+    assert.equal(rackCatalog.getRackParameterDescriptor("missingRackParameter"), null);
+});
+
 test("every rack target is bound to its real Cmajor endpoint", async () => {
     const catalog = await catalogPromise;
     const rackCatalog = await rackCatalogPromise;

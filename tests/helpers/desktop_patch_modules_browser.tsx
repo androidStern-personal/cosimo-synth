@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
 import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
 import filterRangeEditorCssText from "../../ui/shared/filter-range-editor.css?inline";
-import { PatchConnectionProvider, type PatchConnectionLike } from "../../ui/shared/cmajor-react";
+import { PatchConnectionProvider, usePatchEndpoint, type PatchConnectionLike } from "../../ui/shared/cmajor-react";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
 import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
 import {
@@ -479,6 +479,55 @@ export async function inspectEnsureKeyboardElement() {
     } finally {
         window.customElements.define = originalDefine;
     }
+}
+
+export async function inspectDesktopKeyboardTouchCancellation() {
+    const touchEndEventTypes: string[] = [];
+
+    class TestKeyboard extends HTMLElement {
+        root: ShadowRoot;
+        notes: unknown[] = [];
+        naturalWidth = 22;
+        accidentalWidth = 13;
+        accidentalPercentageHeight = 64;
+
+        constructor() {
+            super();
+            this.root = this.attachShadow({ mode: "open" });
+            this.root.append(document.createElement("div"));
+        }
+
+        handleKey() {}
+        allNotesOff() {}
+        refreshHTML() {}
+        refreshActiveNoteElements() {}
+        touchStart() {}
+        touchEnd(event: TouchEvent) {
+            touchEndEventTypes.push(event.type);
+        }
+    }
+
+    const patchConnection: PatchConnectionLike = {
+        utilities: {
+            PianoKeyboard: TestKeyboard,
+            ParameterControls: {},
+        },
+    };
+    const tagName = ensureKeyboardElement(patchConnection);
+    const KeyboardElement = tagName ? window.customElements.get(tagName) : undefined;
+
+    if (!KeyboardElement) {
+        throw new Error("Desktop keyboard custom element was not defined.");
+    }
+
+    const keyboard = new KeyboardElement() as PianoKeyboardElement;
+    keyboard.bindRenderedTouchHandlers?.();
+    keyboard.root?.firstElementChild?.dispatchEvent(new Event("touchcancel", {
+        bubbles: true,
+        cancelable: true,
+    }));
+
+    return { touchEndEventTypes };
 }
 
 export async function installKeyboardDockHarness(target: HTMLElement) {
@@ -1062,6 +1111,73 @@ export async function installObservedDisplayPositionHookHarness(target: HTMLElem
             return {
                 renderLog: [...renderLog],
                 lastPosition: renderLog.at(-1) ?? null,
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installPatchEndpointActivityHarness(target: HTMLElement) {
+    const endpointListeners = new Set<(value: unknown) => void>();
+    const renderLog: unknown[] = [];
+    let setActiveState: ((nextValue: boolean) => void) | null = null;
+
+    const patchConnection: PatchConnectionLike = {
+        addEndpointListener(endpointID, listener) {
+            if (endpointID === "visualizerFrame") {
+                endpointListeners.add(listener);
+            }
+        },
+        removeEndpointListener(endpointID, listener) {
+            if (endpointID === "visualizerFrame") {
+                endpointListeners.delete(listener);
+            }
+        },
+    };
+    const mounted = mountHarness(target, (root) => {
+        function Reader({ active }: { active: boolean }) {
+            const frame = usePatchEndpoint<unknown | null>("visualizerFrame", null, active);
+
+            useEffect(() => {
+                renderLog.push(cloneValue(frame));
+            }, [frame]);
+
+            return null;
+        }
+
+        function Harness() {
+            const [active, setActive] = useState(false);
+            setActiveState = setActive;
+
+            return (
+                <PatchConnectionProvider patchConnection={patchConnection}>
+                    <Reader active={active} />
+                </PatchConnectionProvider>
+            );
+        }
+
+        root.render(<Harness />);
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async setActive(nextValue: boolean) {
+            setActiveState?.(nextValue);
+            await waitForMicrotask();
+        },
+        async emitFrame(value: unknown) {
+            endpointListeners.forEach((listener) => listener(value));
+            await waitForMicrotask();
+        },
+        getSnapshot() {
+            return {
+                listenerCount: endpointListeners.size,
+                renderLog: cloneValue(renderLog),
+                lastRender: cloneValue(renderLog.at(-1) ?? null),
             };
         },
         async unmount() {

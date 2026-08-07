@@ -850,6 +850,14 @@ export class MockPatchConnection implements PatchConnectionLike {
             })),
             keyboardAttachCalls: this.keyboardAttachCalls.map(({ endpointID }) => ({ endpointID })),
             keyboardDetachCount: this.keyboardDetachCount,
+            parameterListenerCounts: Object.fromEntries(Array.from(this.parameterListeners.entries()).map(([
+                endpointID,
+                listeners,
+            ]) => [endpointID, listeners.size])),
+            endpointListenerCounts: Object.fromEntries(Array.from(this.endpointListeners.entries()).map(([
+                endpointID,
+                listeners,
+            ]) => [endpointID, listeners.size])),
         };
     }
 

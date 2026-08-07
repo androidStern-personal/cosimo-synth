@@ -778,8 +778,14 @@ const definitions = [
   }
 ];
 const RACK_EFFECT_DESCRIPTORS = definitions;
+const RACK_PARAMETER_DESCRIPTORS = Object.freeze(
+  RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters)
+);
+new Map(
+  RACK_PARAMETER_DESCRIPTORS.map((descriptor) => [descriptor.endpointID, descriptor])
+);
 function allRackParameterDescriptors() {
-  return RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters);
+  return RACK_PARAMETER_DESCRIPTORS;
 }
 const MSEG_BODY_SAMPLES = 2048;
 const MSEG_PADDED_SAMPLES = MSEG_BODY_SAMPLES + 3;

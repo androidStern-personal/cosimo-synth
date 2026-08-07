@@ -21,13 +21,14 @@ export type PianoKeyboardElement = HTMLElement & {
     notes: unknown[];
     naturalWidth: number;
     accidentalWidth: number;
+    accidentalPercentageHeight: number;
     handleKey: (event: KeyboardEvent, isDown: boolean) => void;
     allNotesOff: () => void;
     touchStart?: (event: TouchEvent) => void;
     touchEnd?: (event: TouchEvent) => void;
     refreshHTML: () => void;
     refreshActiveNoteElements: () => void;
-    bindRenderedTouchHandlers?: () => void;
+    bindRenderedTouchHandlers?(): void;
     attachToPatchConnection?: (connection: PatchConnectionLike, endpointID: string) => void;
     detachPatchConnection?: (connection: PatchConnectionLike) => void;
 };
@@ -177,8 +178,13 @@ export function ensureKeyboardElement(patchConnection: PatchConnectionLike) {
                 const keyboard = this as PianoKeyboardElement;
 
                 for (const child of Array.from(keyboard.root?.children ?? [])) {
+                    if (!(child instanceof HTMLElement)) {
+                        continue;
+                    }
+
                     child.addEventListener("touchstart", (event) => keyboard.touchStart?.(event), { passive: false });
                     child.addEventListener("touchend", (event) => keyboard.touchEnd?.(event));
+                    child.addEventListener("touchcancel", (event) => keyboard.touchEnd?.(event));
                 }
             }
         }

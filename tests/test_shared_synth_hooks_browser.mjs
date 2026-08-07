@@ -118,6 +118,54 @@ after(async () => {
     await server?.stop();
 });
 
+test("desktop keyboard treats a cancelled touch as note release", async () => {
+    const page = await openModulePage();
+
+    try {
+        const snapshot = await page.evaluate(async () => {
+            const helpers = await import("/tests/helpers/desktop_patch_modules_browser.tsx");
+            return helpers.inspectDesktopKeyboardTouchCancellation();
+        });
+
+        assert.deepEqual(snapshot.touchEndEventTypes, ["touchcancel"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("usePatchEndpoint detaches high-rate streams while their visualizer is inactive", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installPatchEndpointActivityHarness");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().renderLog.length >= 1);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.listenerCount, 0);
+
+        await invokeHarness(page, "emitFrame", { sequence: 1 });
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.lastRender, null);
+
+        await invokeHarness(page, "setActive", true);
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().listenerCount === 1);
+        await invokeHarness(page, "emitFrame", { sequence: 2 });
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().lastRender?.sequence === 2);
+
+        await invokeHarness(page, "setActive", false);
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().listenerCount === 0);
+        snapshot = await getHarnessSnapshot(page);
+        const renderCountBeforeInactiveFrame = snapshot.renderLog.length;
+        assert.equal(snapshot.lastRender, null);
+        await invokeHarness(page, "emitFrame", { sequence: 3 });
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.renderLog.length, renderCountBeforeInactiveFrame);
+        assert.equal(snapshot.lastRender, null);
+    } finally {
+        await page.close();
+    }
+});
+
 test("useFactoryBankCatalog loads the catalog and exposes the resolved table metadata", async () => {
     const page = await openModulePage();
 

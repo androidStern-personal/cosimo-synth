@@ -536,11 +536,15 @@ export function useObservedFilterState({
     };
 }
 
-export function useObservedFilterSpectrum() {
-    const message = usePatchEndpoint<unknown | null>(FILTER_SPECTRUM_ENDPOINT_ID, null);
+export function useObservedFilterSpectrum(active = true) {
+    const message = usePatchEndpoint<unknown | null>(FILTER_SPECTRUM_ENDPOINT_ID, null, active);
     const [observedState, setObservedState] = useState<FilterSpectrumFrame | null>(null);
 
     useEffect(() => {
+        if (!active) {
+            setObservedState(null);
+            return;
+        }
         if (!message) {
             return;
         }
@@ -551,16 +555,20 @@ export function useObservedFilterSpectrum() {
         }
 
         setObservedState(normalizedState);
-    }, [message]);
+    }, [active, message]);
 
     return observedState;
 }
 
-export function useObservedDistortionScope() {
-    const message = usePatchEndpoint<unknown | null>(DISTORTION_SCOPE_ENDPOINT_ID, null);
+export function useObservedDistortionScope(active = true) {
+    const message = usePatchEndpoint<unknown | null>(DISTORTION_SCOPE_ENDPOINT_ID, null, active);
     const [observedState, setObservedState] = useState<DistortionScopeFrame | null>(null);
 
     useEffect(() => {
+        if (!active) {
+            setObservedState(null);
+            return;
+        }
         if (!message) {
             return;
         }
@@ -571,16 +579,20 @@ export function useObservedDistortionScope() {
         }
 
         setObservedState(normalizedState);
-    }, [message]);
+    }, [active, message]);
 
     return observedState;
 }
 
-export function useObservedDistortionHistory() {
-    const message = usePatchEndpoint<unknown | null>(DISTORTION_HISTORY_ENDPOINT_ID, null);
+export function useObservedDistortionHistory(active = true) {
+    const message = usePatchEndpoint<unknown | null>(DISTORTION_HISTORY_ENDPOINT_ID, null, active);
     const [observedState, setObservedState] = useState<DistortionHistoryFrame | null>(null);
 
     useEffect(() => {
+        if (!active) {
+            setObservedState(null);
+            return;
+        }
         if (!message) {
             return;
         }
@@ -591,16 +603,20 @@ export function useObservedDistortionHistory() {
         }
 
         setObservedState(normalizedState);
-    }, [message]);
+    }, [active, message]);
 
     return observedState;
 }
 
-export function useObservedMsegState() {
-    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null);
+export function useObservedMsegState(active = true) {
+    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null, active);
     const [observedState, setObservedState] = useState<EffectiveMsegState | null>(null);
 
     useEffect(() => {
+        if (!active) {
+            setObservedState(null);
+            return;
+        }
         if (!message) {
             return;
         }
@@ -610,7 +626,7 @@ export function useObservedMsegState() {
         }
 
         setObservedState((previousState) => selectObservedEffectiveMsegState(previousState, message));
-    }, [message]);
+    }, [active, message]);
 
     return observedState;
 }
@@ -1607,6 +1623,9 @@ export function useSynthPatchViewModel({
     onKeyboardOctaveDown,
     onKeyboardOctaveUp,
     keyboardInputMode = "hosted",
+    observeFilterSpectrum = true,
+    observeDistortionVisuals = true,
+    observeMsegPlayhead = true,
 }: {
     stageRef: RefObject<HTMLDivElement | null>;
     msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
@@ -1618,6 +1637,9 @@ export function useSynthPatchViewModel({
     onKeyboardOctaveDown?: () => boolean;
     onKeyboardOctaveUp?: () => boolean;
     keyboardInputMode?: SynthKeyboardInputMode;
+    observeFilterSpectrum?: boolean;
+    observeDistortionVisuals?: boolean;
+    observeMsegPlayhead?: boolean;
 }): SynthPatchViewModel {
     const patchConnection = usePatchConnection();
     const runtimeStateMessage = usePatchEndpoint<unknown | null>(RUNTIME_STATE_ENDPOINT_ID, null);
@@ -1839,10 +1861,10 @@ export function useSynthPatchViewModel({
         unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
         unisonWarpSpread: unisonWarpSpread.value,
     });
-    const observedFilterSpectrum = useObservedFilterSpectrum();
-    const observedDistortionHistory = useObservedDistortionHistory();
-    const observedDistortionScope = useObservedDistortionScope();
-    const observedMsegState = useObservedMsegState();
+    const observedFilterSpectrum = useObservedFilterSpectrum(observeFilterSpectrum);
+    const observedDistortionHistory = useObservedDistortionHistory(observeDistortionVisuals);
+    const observedDistortionScope = useObservedDistortionScope(observeDistortionVisuals);
+    const observedMsegState = useObservedMsegState(observeMsegPlayhead);
     const voiceArticulationStartMessage = usePatchEndpoint<VoiceArticulationStartMessage | null>(
         VOICE_ARTICULATION_START_ENDPOINT_ID,
         null,

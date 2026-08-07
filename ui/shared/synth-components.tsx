@@ -725,13 +725,13 @@ export function WavetableCanvas({
     position,
     warpMode,
     warpAmount,
-    drawableTopInset,
+    drawableTopInset = 0,
 }: {
     frames: Float32Array[] | null;
     position: number;
     warpMode: number;
     warpAmount: number;
-    drawableTopInset: number;
+    drawableTopInset?: number;
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const viewportRef = useRef<HTMLDivElement | null>(null);

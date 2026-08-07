@@ -1752,7 +1752,7 @@ function ArticulationRangeLane({
 
         const dragState = resolveBoundaryResizeState(currentDragState, event.clientX);
 
-        if (dragState.kind !== currentDragState.kind) {
+        if (currentDragState.kind === "boundary-resize" && dragState.kind !== "boundary-resize") {
             dragStateRef.current = dragState;
             setFocusedSegmentId(dragState.segment.id);
             setHoveredSegmentId(dragState.segment.id);

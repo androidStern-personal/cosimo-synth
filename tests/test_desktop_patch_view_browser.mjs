@@ -2125,6 +2125,85 @@ test("unison controls commit parameters and redraw the voice distribution", asyn
     }
 });
 
+test("precision value entry commits the newest text when Enter follows in the same event turn", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await showVoiceControls(page);
+        const detuneInput = page.locator('[data-role="unison-detune-control"] input');
+        await detuneInput.dblclick();
+        await clearHarnessDebugLog(page);
+        await detuneInput.evaluate((element) => {
+            if (!(element instanceof HTMLInputElement)) {
+                throw new Error("Expected the unison detune input.");
+            }
+            const setNativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+            if (!setNativeValue) {
+                throw new Error("Expected the native input value setter.");
+            }
+            setNativeValue.call(element, "25");
+            element.dispatchEvent(new Event("input", { bubbles: true }));
+            element.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        });
+
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Math.abs(Number(snapshot.parameterValues.unisonDetune) - 0.5) < 0.0001;
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("precision fields end their host gesture when mouse movement reports no pressed button", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await showVoiceControls(page);
+        const detuneInput = page.locator('[data-role="unison-detune-control"] input');
+        const box = await detuneInput.boundingBox();
+        assert.ok(box);
+        const startX = box.x + (box.width / 2);
+        const startY = box.y + (box.height / 2);
+        await clearHarnessDebugLog(page);
+        await detuneInput.evaluate((element, point) => {
+            if (!(element instanceof HTMLInputElement)) {
+                throw new Error("Expected the unison detune input.");
+            }
+            element.setPointerCapture = () => undefined;
+            element.hasPointerCapture = () => false;
+            element.releasePointerCapture = () => undefined;
+            element.dispatchEvent(new PointerEvent("pointerdown", {
+                bubbles: true,
+                pointerId: 47,
+                pointerType: "mouse",
+                button: 0,
+                buttons: 1,
+                clientX: point.startX,
+                clientY: point.startY,
+            }));
+            element.dispatchEvent(new PointerEvent("pointermove", {
+                bubbles: true,
+                pointerId: 47,
+                pointerType: "mouse",
+                button: 0,
+                buttons: 0,
+                clientX: point.startX + 20,
+                clientY: point.startY,
+            }));
+        }, {
+            startX,
+            startY,
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, ["unisonDetune"]);
+        assert.deepEqual(snapshot.gestureEnds, ["unisonDetune"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("warp controls commit mode and amount, and the matrix can route MSEG 1 into warp amount", async () => {
     const page = await openHarnessPage();
 
@@ -5648,6 +5727,19 @@ test("desktop effects rack renders the complete ordered eight-module surface", a
         assert.deepEqual(layout.effectIds, ["filter", "drive", "ott", "chorus", "flanger", "phaser", "delay", "reverb"]);
         assert.deepEqual(layout.positions, [0, 1, 2, 3, 4, 5, 6, 7]);
         assert.ok(layout.rackWidth > 0 && layout.rackHeight > 0);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.parameterListenerCounts.distortionDriveDb, 5);
+        await page.locator('[data-role="distortion-drive-field"]').click({ button: "right" });
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterListenerCounts.distortionDriveDb === 6
+        ));
+        await page.keyboard.press("Escape");
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterListenerCounts.distortionDriveDb === 5
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.parameterListenerCounts.distortionDriveDb, 5);
     } finally {
         await page.close();
     }
@@ -5668,18 +5760,72 @@ test("mobile workspace keeps Voice FX and Mod visible while exactly one accordio
             buttons.map((button) => button.getAttribute("aria-expanded"))
         )), ["true", "false", "false"]);
         assert.equal(await accordion.locator('[data-role="mobile-workspace-panel-voice"]').count(), 1);
+        await page.waitForFunction(() => {
+            const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
+            return counts.filterSpectrum === 1
+                && (counts.distortionHistory ?? 0) === 0
+                && (counts.distortionScope ?? 0) === 0
+                && (counts.effectiveMsegState ?? 0) === 0;
+        });
 
         await accordion.locator('[data-role="mobile-workspace-toggle-fx"]').click();
         assert.deepEqual(await sectionButtons.evaluateAll((buttons) => (
             buttons.map((button) => button.getAttribute("aria-expanded"))
         )), ["false", "true", "false"]);
         assert.equal(await accordion.locator('[data-role="mobile-workspace-panel-fx"] [data-role="effects-rack-card"]').count(), 1);
+        await page.waitForFunction(() => {
+            const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
+            return (counts.filterSpectrum ?? 0) === 0
+                && counts.distortionHistory === 1
+                && counts.distortionScope === 1
+                && (counts.effectiveMsegState ?? 0) === 0;
+        });
+
+        await page.locator('[data-role="rack-quick-filter"]').click();
+        await page.waitForFunction(() => {
+            const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
+            return counts.filterSpectrum === 1
+                && (counts.distortionHistory ?? 0) === 0
+                && (counts.distortionScope ?? 0) === 0;
+        });
+        await page.locator('[data-role="rack-quick-chorus"]').click();
+        await page.waitForFunction(() => {
+            const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
+            return (counts.filterSpectrum ?? 0) === 0
+                && (counts.distortionHistory ?? 0) === 0
+                && (counts.distortionScope ?? 0) === 0;
+        });
 
         await accordion.locator('[data-role="mobile-workspace-toggle-mod"]').click();
         assert.deepEqual(await sectionButtons.evaluateAll((buttons) => (
             buttons.map((button) => button.getAttribute("aria-expanded"))
         )), ["false", "false", "true"]);
         assert.equal(await accordion.locator('[data-role="mobile-workspace-panel-mod"] [data-role="mod-matrix-card"]').count(), 1);
+        await page.waitForFunction(() => {
+            const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
+            return (counts.filterSpectrum ?? 0) === 0
+                && (counts.distortionHistory ?? 0) === 0
+                && (counts.distortionScope ?? 0) === 0
+                && counts.effectiveMsegState === 1;
+        });
+
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.emitEffectiveMsegState({
+                voiceGeneration: 12,
+                hasActive: 1,
+                positions: [0.72, 0.4, 0.2],
+            });
+        });
+        await page.waitForFunction(() => Boolean(
+            window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.progressClip,
+        ));
+        await accordion.locator('[data-role="mobile-workspace-toggle-voice"]').click();
+        await accordion.locator('[data-role="mobile-workspace-toggle-mod"]').click();
+        await page.evaluate(() => new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+        const renderedState = await getHarnessRenderedState(page);
+        assert.equal(renderedState.msegPreviewState?.progressClip ?? null, null);
     } finally {
         await page.close();
     }

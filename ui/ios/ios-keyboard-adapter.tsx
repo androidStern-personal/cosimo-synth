@@ -25,7 +25,7 @@ export type IOSPianoKeyboardElement = HTMLElement & {
     touchEnd?: (event: TouchEvent) => void;
     refreshHTML: () => void;
     refreshActiveNoteElements: () => void;
-    bindRenderedTouchHandlers?: () => void;
+    bindRenderedTouchHandlers?(): void;
     attributeChangedCallback?: (name: string, oldValue: string | null, newValue: string | null) => void;
     attachToPatchConnection?: (connection: PatchConnectionLike, endpointID: string) => void;
     detachPatchConnection?: (connection: PatchConnectionLike) => void;
@@ -111,6 +111,7 @@ export function ensureIOSKeyboardElement(
                     };
                     touchTarget.addEventListener("touchstart", (event) => keyboard.touchStart?.(event as TouchEvent), { passive: false });
                     touchTarget.addEventListener("touchend", (event) => keyboard.touchEnd?.(event as TouchEvent));
+                    touchTarget.addEventListener("touchcancel", (event) => keyboard.touchEnd?.(event as TouchEvent));
                 }
             }
 

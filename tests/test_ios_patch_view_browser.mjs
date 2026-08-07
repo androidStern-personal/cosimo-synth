@@ -1209,7 +1209,7 @@ test("mounted iPhone MSEG modal keeps the main view layout-stable while hidden, 
                 text: "x",
                 backgroundColor: "rgba(0, 0, 0, 0)",
                 borderRadius: "0px",
-                color: "rgb(238, 242, 245)",
+                color: "rgb(232, 236, 239)",
                 opacity: "1",
                 appearance: "none",
             });

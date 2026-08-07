@@ -20441,17 +20441,23 @@ function usePatchConnection() {
 function useResourceClient() {
   return usePatchHost().resourceClient;
 }
-function usePatchParameter(endpointID, initialValue = 0) {
+function usePatchParameter(endpointID, initialValue = 0, active = true) {
   const patchConnection = usePatchConnection();
   const [value, setValue] = reactExports.useState(initialValue);
+  const initialValueRef = reactExports.useRef(initialValue);
+  initialValueRef.current = initialValue;
   reactExports.useEffect(() => {
+    if (!active) {
+      setValue(initialValueRef.current);
+      return void 0;
+    }
     const listener = (nextValue) => setValue(nextValue);
     patchConnection.addParameterListener?.(endpointID, listener);
     patchConnection.requestParameterValue?.(endpointID);
     return () => {
       patchConnection.removeParameterListener?.(endpointID, listener);
     };
-  }, [endpointID, patchConnection]);
+  }, [active, endpointID, patchConnection]);
   const setParameterValue = reactExports.useCallback((nextValue) => {
     patchConnection.sendEventOrValue?.(endpointID, nextValue);
     setValue(nextValue);
@@ -20469,16 +20475,22 @@ function usePatchParameter(endpointID, initialValue = 0) {
     endGesture
   }), [beginGesture, endGesture, setParameterValue, value]);
 }
-function usePatchEndpoint(endpointID, initialValue) {
+function usePatchEndpoint(endpointID, initialValue, active = true) {
   const patchConnection = usePatchConnection();
   const [value, setValue] = reactExports.useState(initialValue);
+  const initialValueRef = reactExports.useRef(initialValue);
+  initialValueRef.current = initialValue;
   reactExports.useEffect(() => {
+    if (!active) {
+      setValue(initialValueRef.current);
+      return void 0;
+    }
     const listener = (nextValue) => setValue(nextValue);
     patchConnection.addEndpointListener?.(endpointID, listener);
     return () => {
       patchConnection.removeEndpointListener?.(endpointID, listener);
     };
-  }, [endpointID, patchConnection]);
+  }, [active, endpointID, patchConnection]);
   return value;
 }
 const runtimeFailurePhaseLoadSource = 1;
@@ -22598,8 +22610,14 @@ const definitions = [
   }
 ];
 const RACK_EFFECT_DESCRIPTORS = definitions;
+const RACK_PARAMETER_DESCRIPTORS = Object.freeze(
+  RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters)
+);
+new Map(
+  RACK_PARAMETER_DESCRIPTORS.map((descriptor) => [descriptor.endpointID, descriptor])
+);
 function allRackParameterDescriptors() {
-  return RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters);
+  return RACK_PARAMETER_DESCRIPTORS;
 }
 const MODULATION_STATE_KEY = "modulation.v2";
 const MODULATION_MAX_ROUTES = 12;
@@ -23635,7 +23653,7 @@ function WavetableCanvas({
   position,
   warpMode,
   warpAmount,
-  drawableTopInset
+  drawableTopInset = 0
 }) {
   const canvasRef = reactExports.useRef(null);
   const viewportRef = reactExports.useRef(null);
@@ -24942,9 +24960,10 @@ function usePatchParameterBinding({
   endpointID,
   initialValue,
   coerce,
-  serialize = serializeIdentity
+  serialize = serializeIdentity,
+  active = true
 }) {
-  const parameter = usePatchParameter(endpointID, serialize(initialValue));
+  const parameter = usePatchParameter(endpointID, serialize(initialValue), active);
   const value = reactExports.useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
   const setValue = reactExports.useCallback((nextValue) => {
     parameter.setValue(serialize(nextValue));
@@ -26535,10 +26554,14 @@ function useObservedFilterState({
     q: Number(filterQ) || 0.707107
   };
 }
-function useObservedFilterSpectrum() {
-  const message = usePatchEndpoint(FILTER_SPECTRUM_ENDPOINT_ID, null);
+function useObservedFilterSpectrum(active = true) {
+  const message = usePatchEndpoint(FILTER_SPECTRUM_ENDPOINT_ID, null, active);
   const [observedState, setObservedState] = reactExports.useState(null);
   reactExports.useEffect(() => {
+    if (!active) {
+      setObservedState(null);
+      return;
+    }
     if (!message) {
       return;
     }
@@ -26547,13 +26570,17 @@ function useObservedFilterSpectrum() {
       return;
     }
     setObservedState(normalizedState);
-  }, [message]);
+  }, [active, message]);
   return observedState;
 }
-function useObservedDistortionScope() {
-  const message = usePatchEndpoint(DISTORTION_SCOPE_ENDPOINT_ID, null);
+function useObservedDistortionScope(active = true) {
+  const message = usePatchEndpoint(DISTORTION_SCOPE_ENDPOINT_ID, null, active);
   const [observedState, setObservedState] = reactExports.useState(null);
   reactExports.useEffect(() => {
+    if (!active) {
+      setObservedState(null);
+      return;
+    }
     if (!message) {
       return;
     }
@@ -26562,13 +26589,17 @@ function useObservedDistortionScope() {
       return;
     }
     setObservedState(normalizedState);
-  }, [message]);
+  }, [active, message]);
   return observedState;
 }
-function useObservedDistortionHistory() {
-  const message = usePatchEndpoint(DISTORTION_HISTORY_ENDPOINT_ID, null);
+function useObservedDistortionHistory(active = true) {
+  const message = usePatchEndpoint(DISTORTION_HISTORY_ENDPOINT_ID, null, active);
   const [observedState, setObservedState] = reactExports.useState(null);
   reactExports.useEffect(() => {
+    if (!active) {
+      setObservedState(null);
+      return;
+    }
     if (!message) {
       return;
     }
@@ -26577,13 +26608,17 @@ function useObservedDistortionHistory() {
       return;
     }
     setObservedState(normalizedState);
-  }, [message]);
+  }, [active, message]);
   return observedState;
 }
-function useObservedMsegState() {
-  const message = usePatchEndpoint(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null);
+function useObservedMsegState(active = true) {
+  const message = usePatchEndpoint(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null, active);
   const [observedState, setObservedState] = reactExports.useState(null);
   reactExports.useEffect(() => {
+    if (!active) {
+      setObservedState(null);
+      return;
+    }
     if (!message) {
       return;
     }
@@ -26591,7 +26626,7 @@ function useObservedMsegState() {
       return;
     }
     setObservedState((previousState) => selectObservedEffectiveMsegState(previousState, message));
-  }, [message]);
+  }, [active, message]);
   return observedState;
 }
 function useObservedWarpState({
@@ -27384,7 +27419,10 @@ function useSynthPatchViewModel({
   onMsegCurveEditHoldActivated = null,
   onKeyboardOctaveDown,
   onKeyboardOctaveUp,
-  keyboardInputMode = "hosted"
+  keyboardInputMode = "hosted",
+  observeFilterSpectrum = true,
+  observeDistortionVisuals = true,
+  observeMsegPlayhead = true
 }) {
   const patchConnection = usePatchConnection();
   const runtimeStateMessage = usePatchEndpoint(RUNTIME_STATE_ENDPOINT_ID, null);
@@ -27606,10 +27644,10 @@ function useSynthPatchViewModel({
     unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
     unisonWarpSpread: unisonWarpSpread.value
   });
-  const observedFilterSpectrum = useObservedFilterSpectrum();
-  const observedDistortionHistory = useObservedDistortionHistory();
-  const observedDistortionScope = useObservedDistortionScope();
-  const observedMsegState = useObservedMsegState();
+  const observedFilterSpectrum = useObservedFilterSpectrum(observeFilterSpectrum);
+  const observedDistortionHistory = useObservedDistortionHistory(observeDistortionVisuals);
+  const observedDistortionScope = useObservedDistortionScope(observeDistortionVisuals);
+  const observedMsegState = useObservedMsegState(observeMsegPlayhead);
   const voiceArticulationStartMessage = usePatchEndpoint(
     VOICE_ARTICULATION_START_ENDPOINT_ID,
     null
@@ -28535,6 +28573,7 @@ function ensureIOSKeyboardElement(patchConnection, styleName, keyboardOptions) {
           const touchTarget = child;
           touchTarget.addEventListener("touchstart", (event) => keyboard.touchStart?.(event), { passive: false });
           touchTarget.addEventListener("touchend", (event) => keyboard.touchEnd?.(event));
+          touchTarget.addEventListener("touchcancel", (event) => keyboard.touchEnd?.(event));
         }
       }
       attributeChangedCallback(name, oldValue, newValue) {

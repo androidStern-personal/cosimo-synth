@@ -166,7 +166,10 @@ test("shared wavetable stage mounts with plain props and reports select and retr
             "BS2 - Acid",
         );
         assert.equal(await page.getByText("Frame 65/128").count(), 1);
-        assert.equal(await page.getByText("Pos 0.500").count(), 1);
+        assert.deepEqual(
+            JSON.parse(await page.locator('[data-role="wavetable-stage-debug"]').textContent()),
+            { position: 0.5, warpMode: 1, warpAmount: 0.72 },
+        );
 
         await page.locator('select[aria-label="Select wavetable"]').selectOption("1");
         await page.getByRole("button", { name: "Retry Load" }).click();

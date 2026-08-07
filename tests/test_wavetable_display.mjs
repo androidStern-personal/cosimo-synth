@@ -620,11 +620,11 @@ test("factory bank catalog loader returns names for the selector UI", async () =
     assert.equal(typeof catalog.tables[0]?.sourceWav, "string");
 });
 
-test("wavetable renderer keeps a flat shared background and no visible panel stroke", () => {
-    assert.equal(DEFAULT_WAVETABLE_THEME.backgroundTop, "#04070f");
-    assert.equal(DEFAULT_WAVETABLE_THEME.backgroundBottom, "#04070f");
-    assert.deepEqual(DEFAULT_WAVETABLE_THEME.backgroundRGB, [4, 7, 15]);
-    assert.equal(DEFAULT_WAVETABLE_THEME.panelStroke, "rgba(132, 149, 255, 0.0)");
+test("wavetable renderer inherits the graphite and cyan shared patch theme", () => {
+    assert.equal(DEFAULT_WAVETABLE_THEME.backgroundTop, "#161616");
+    assert.equal(DEFAULT_WAVETABLE_THEME.backgroundBottom, "#101010");
+    assert.deepEqual(DEFAULT_WAVETABLE_THEME.backgroundRGB, [16, 16, 16]);
+    assert.equal(DEFAULT_WAVETABLE_THEME.panelStroke, "rgba(125, 247, 255, 0.05)");
     assert.deepEqual(DEFAULT_WAVETABLE_THEME.meshColor, DEFAULT_PATCH_THEME.accentBlueRGB);
     assert.equal(getPatchThemeCSSVariables()["--cosimo-accent-blue"], DEFAULT_PATCH_THEME.accentBlue);
 });
@@ -1090,9 +1090,9 @@ test("real-bank model keeps discontinuities and produces a deterministic highlig
             Number(point.y.toFixed(2)),
         ]),
         [
-            [282.26, 120.7],
-            [283.45, 119.05],
-            [284.65, 117.44],
+            [252.94, 136.7],
+            [254.49, 135.05],
+            [256.05, 133.44],
         ]
     );
     assert.equal(model.currentSlice.segments.length, 1);

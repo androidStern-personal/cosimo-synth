@@ -20,6 +20,7 @@ type PatchParameterBindingOptions<TValue> = {
     initialValue: TValue;
     coerce: (rawValue: unknown) => TValue;
     serialize?: (value: TValue) => unknown;
+    active?: boolean;
 };
 
 export function usePatchParameterBinding<TValue>({
@@ -27,8 +28,9 @@ export function usePatchParameterBinding<TValue>({
     initialValue,
     coerce,
     serialize = serializeIdentity,
+    active = true,
 }: PatchParameterBindingOptions<TValue>): PatchControlBinding<TValue> {
-    const parameter = usePatchParameter(endpointID, serialize(initialValue));
+    const parameter = usePatchParameter(endpointID, serialize(initialValue), active);
     const value = useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
 
     const setValue = useCallback((nextValue: TValue) => {

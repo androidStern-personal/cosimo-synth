@@ -16,6 +16,7 @@ import {
     formatRackParameterEditingValue,
     formatRackParameterValue,
     getRackEffectDescriptor,
+    getRackParameterDescriptor,
     parseRackParameterEditingValue,
     type RackEffectDescriptor,
     type RackParameterDescriptor,
@@ -67,6 +68,7 @@ type EffectsRackWorkspaceProps = {
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     onBackToVoice: () => void;
     onOpenModSource?: (source: SelectedSource) => void;
+    onSelectedEffectChange?: (effectId: EffectModuleId) => void;
     className?: string;
 };
 
@@ -167,7 +169,7 @@ function useRackState() {
     return { rackState, commit };
 }
 
-function useRackParameterBinding(descriptor: RackParameterDescriptor) {
+function useRackParameterBinding(descriptor: RackParameterDescriptor, active = true) {
     const coerce = useCallback((rawValue: unknown) => {
         const numericValue = Number(rawValue);
         const fallback = Number.isFinite(numericValue) ? numericValue : descriptor.initial;
@@ -178,6 +180,7 @@ function useRackParameterBinding(descriptor: RackParameterDescriptor) {
         endpointID: descriptor.endpointID,
         initialValue: descriptor.initial,
         coerce,
+        active,
     });
 }
 
@@ -1281,6 +1284,7 @@ export function EffectsRackWorkspace({
     onRouteChange,
     onBackToVoice,
     onOpenModSource,
+    onSelectedEffectChange,
     className,
 }: EffectsRackWorkspaceProps) {
     const { rackState, commit } = useRackState();
@@ -1325,12 +1329,12 @@ export function EffectsRackWorkspace({
     }, [rackState.order]);
 
     const selectedEffect = getRackEffectDescriptor(selectedEffectId);
-    const selectedTarget = RACK_EFFECT_DESCRIPTORS
-        .flatMap((effect) => effect.parameters)
-        .find((parameter) => parameter.endpointID === selectedTargetEndpointID
-            && parameter.modulationTargetIndex !== null)
-        ?? selectedEffect.parameters.find((parameter) => parameter.modulationTargetIndex !== null)
-        ?? selectedEffect.parameters[0];
+    const selectedTargetCandidate = getRackParameterDescriptor(selectedTargetEndpointID);
+    const selectedTarget = selectedTargetCandidate !== null
+        && selectedTargetCandidate.modulationTargetIndex !== null
+        ? selectedTargetCandidate
+        : selectedEffect.parameters.find((parameter) => parameter.modulationTargetIndex !== null)
+            ?? selectedEffect.parameters[0];
     const activeSource = findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot);
     const selectedTargetKind = `rack.${selectedTarget.endpointID}` as RackModulationTargetKind;
     const selectedRouteIndex = routes.findIndex((route) => (
@@ -1343,11 +1347,15 @@ export function EffectsRackWorkspace({
     const parameterOverlayEndpointID = parameterValueSheetEndpointID
         ?? parameterMenu?.endpointID
         ?? removeTargetRoutesEndpointID;
-    const parameterOverlayDescriptor = RACK_EFFECT_DESCRIPTORS
-        .flatMap((effect) => effect.parameters)
-        .find((parameter) => parameter.endpointID === parameterOverlayEndpointID)
-        ?? selectedTarget;
-    const parameterOverlayBinding = useRackParameterBinding(parameterOverlayDescriptor);
+    const parameterOverlayDescriptor = parameterOverlayEndpointID === undefined
+        || parameterOverlayEndpointID === null
+        ? selectedTarget
+        : getRackParameterDescriptor(parameterOverlayEndpointID)
+            ?? selectedTarget;
+    const parameterOverlayBinding = useRackParameterBinding(
+        parameterOverlayDescriptor,
+        parameterOverlayEndpointID !== undefined && parameterOverlayEndpointID !== null,
+    );
     const parameterOverlayTargetKind = `rack.${parameterOverlayDescriptor.endpointID}` as RackModulationTargetKind;
     const parameterOverlayRouteIndex = routes.findIndex((route) => (
         route.sourceKind === selectedSource.sourceKind
@@ -1537,6 +1545,7 @@ export function EffectsRackWorkspace({
 
     const selectEffect = useCallback((effectId: EffectModuleId) => {
         setSelectedEffectId(effectId);
+        onSelectedEffectChange?.(effectId);
         const effect = getRackEffectDescriptor(effectId);
         const preferredEndpointID = quickEndpointByEffect[effectId];
         const preferred = effect.parameters.find((parameter) => (
@@ -1550,35 +1559,35 @@ export function EffectsRackWorkspace({
                 ensureRoute(selectedSource, target.endpointID);
             }
         }
-    }, [ensureRoute, quickEndpointByEffect, selectedSource, sourceIsArmed]);
+    }, [ensureRoute, onSelectedEffectChange, quickEndpointByEffect, selectedSource, sourceIsArmed]);
 
     const selectTarget = useCallback((endpointID: string) => {
-        const parameter = RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters)
-            .find((candidate) => candidate.endpointID === endpointID);
+        const parameter = getRackParameterDescriptor(endpointID);
         if (!parameter || parameter.modulationTargetIndex === null) {
             return;
         }
         setSelectedTargetEndpointID(endpointID);
         setSelectedEffectId(parameter.effectId);
+        onSelectedEffectChange?.(parameter.effectId);
         setDraftAmount(null);
         if (sourceIsArmed) {
             ensureRoute(selectedSource, endpointID);
         }
-    }, [ensureRoute, selectedSource, sourceIsArmed]);
+    }, [ensureRoute, onSelectedEffectChange, selectedSource, sourceIsArmed]);
 
     const activateSource = useCallback((source: SelectedSource, targetEndpointID = selectedTarget.endpointID) => {
-        const targetParameter = RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters)
-            .find((parameter) => parameter.endpointID === targetEndpointID);
+        const targetParameter = getRackParameterDescriptor(targetEndpointID);
         setSelectedSource(source);
         setSourcePageIndex(source.sourceSlot - 1);
         setSourceIsArmed(true);
         if (targetParameter && targetParameter.modulationTargetIndex !== null) {
             setSelectedTargetEndpointID(targetEndpointID);
             setSelectedEffectId(targetParameter.effectId);
+            onSelectedEffectChange?.(targetParameter.effectId);
         }
         setDraftAmount(null);
         ensureRoute(source, targetEndpointID, 0, true);
-    }, [ensureRoute, selectedTarget.endpointID]);
+    }, [ensureRoute, onSelectedEffectChange, selectedTarget.endpointID]);
 
     const changeSourcePage = useCallback((nextPageIndex: number) => {
         const normalizedPageIndex = ((nextPageIndex % RACK_MODULATION_SOURCE_PAGES.length)

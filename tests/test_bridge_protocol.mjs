@@ -229,19 +229,12 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
     t.after(() => harness.adapter.dispose());
     const descriptors = harness.descriptors.allTargetDescriptors()
         .filter((descriptor) => descriptor.modulationTargetKind !== null);
-    const mappingIdByTarget = new Map();
 
     for (const descriptor of descriptors) {
         const mappingId = expectOk(harness.adapter.commands.addMapping({
             targetId: descriptor.targetId,
             sourceId: "velocity",
         }), `add ${descriptor.targetId} mapping`);
-        mappingIdByTarget.set(descriptor.targetId, mappingId);
-    }
-
-    for (const descriptor of descriptors) {
-        const mappingId = mappingIdByTarget.get(descriptor.targetId);
-        assert.notEqual(mappingId, undefined);
         const routeBounds = harness.modulation.getModulationAmountBounds(
             descriptor.modulationTargetKind,
         );
@@ -290,6 +283,7 @@ test("mapping amount conversion roundtrips for every modulatable target", async 
             ),
             { numRuns: 50 },
         );
+        harness.adapter.commands.removeMapping(mappingId);
     }
 });
 
@@ -404,7 +398,7 @@ test("full state roundtrip: a second bridge over the first one's stored state is
     const m = first.adapter.commands.addMapping({ targetId: "voice-filter.cutoff", sourceId: "envelope-1" });
     assert.equal(m._tag, "ok");
     first.adapter.commands.setMappingAmount(m.value, 3, { _tag: "patchBase" });
-    const rack = first.adapter.commands.addMapping({ targetId: "phaser.depth", sourceId: "macro-1" });
+    const rack = first.adapter.commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" });
     assert.equal(rack._tag, "ok");
     first.adapter.commands.setEffectEnabled("delay", false);
     first.adapter.commands.renameMacro("macro-1", "Shimmer");

@@ -127,6 +127,7 @@ declare module "../../patch_gui/wavetable-display.js" {
         setFrames(frames: Float32Array[]): void;
         setPosition(position: number): void;
         setWarp(mode: number, amount: number): void;
+        setDrawableInsets(insets?: { top?: number; right?: number; bottom?: number; left?: number }): void;
         resize(width: number, height: number, devicePixelRatio: number): void;
     }
 }

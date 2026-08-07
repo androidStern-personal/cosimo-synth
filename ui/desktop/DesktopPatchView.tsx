@@ -3647,10 +3647,13 @@ function DesktopPatchViewBody({
     const scrollRegionRef = useRef<HTMLElement | null>(null);
     const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
     const keyboardElementRef = useRef<PianoKeyboardElement | null>(null);
-    const [isCompactViewport, setIsCompactViewport] = useState(false);
+    const [isCompactViewport, setIsCompactViewport] = useState(() => (
+        typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches
+    ));
     const [mobileWorkspaceSection, setMobileWorkspaceSection] = useState<MobileWorkspaceSection>("voice");
     const [mobileModSource, setMobileModSource] = useState<MobileModSource | null>(null);
     const [mobileReturnSection, setMobileReturnSection] = useState<MobileWorkspaceSection | null>(null);
+    const [selectedRackEffectId, setSelectedRackEffectId] = useState<EffectModuleId>("drive");
     useEffect(() => {
         if (typeof window.matchMedia !== "function") {
             return undefined;
@@ -3694,6 +3697,12 @@ function DesktopPatchViewBody({
         keyboardRef: keyboardElementRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
         keyboardInputMode,
+        observeFilterSpectrum: !isCompactViewport
+            || mobileWorkspaceSection === "voice"
+            || (mobileWorkspaceSection === "fx" && selectedRackEffectId === "filter"),
+        observeDistortionVisuals: selectedRackEffectId === "drive"
+            && (!isCompactViewport || mobileWorkspaceSection === "fx"),
+        observeMsegPlayhead: !isCompactViewport || mobileWorkspaceSection === "mod",
         onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
         onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false }),
     });
@@ -4122,6 +4131,7 @@ function DesktopPatchViewBody({
             onRemoveRoute={synthView.handleRemoveRoute}
             onRouteChange={synthView.handleRouteChange}
             onOpenModSource={openMobileModSource}
+            onSelectedEffectChange={setSelectedRackEffectId}
             onBackToVoice={() => {
                 if (isCompactViewport) {
                     setMobileWorkspaceSection("voice");

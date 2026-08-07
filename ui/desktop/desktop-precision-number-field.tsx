@@ -85,6 +85,8 @@ export function PrecisionNumberField({
     const skipCommitOnBlurRef = useRef(false);
     const wheelCursorTimerRef = useRef<number>(0);
     const isMountedRef = useRef(true);
+    const bindingRef = useRef(binding);
+    bindingRef.current = binding;
     const [isEditing, setIsEditing] = useState(false);
     const [draftValue, setDraftValue] = useState("");
     const [isWheelCursorHidden, setIsWheelCursorHidden] = useState(false);
@@ -108,10 +110,49 @@ export function PrecisionNumberField({
         draftValueRef.current = draftValue;
     }, [draftValue]);
 
-    useEffect(() => () => {
-        isMountedRef.current = false;
-        clearTimeout(wheelCursorTimerRef.current);
+    const finishDrag = useCallback((pointerId?: number) => {
+        const activeDrag = activeDragRef.current;
+        if (!activeDrag || (pointerId !== undefined && activeDrag.pointerId !== pointerId)) {
+            return null;
+        }
+
+        activeDragRef.current = null;
+        const input = inputRef.current;
+        try {
+            if (input?.hasPointerCapture(activeDrag.pointerId)) {
+                input.releasePointerCapture(activeDrag.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation or window deactivation.
+        }
+        bindingRef.current.endGesture();
+        return activeDrag;
     }, []);
+
+    useEffect(() => {
+        isMountedRef.current = true;
+        const handlePointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
+        const handleBlur = () => finishDrag();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                finishDrag();
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerEnd);
+        window.addEventListener("pointercancel", handlePointerEnd);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            isMountedRef.current = false;
+            clearTimeout(wheelCursorTimerRef.current);
+            window.removeEventListener("pointerup", handlePointerEnd);
+            window.removeEventListener("pointercancel", handlePointerEnd);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishDrag();
+        };
+    }, [finishDrag]);
 
     useEffect(() => {
         if (!isEditing) {
@@ -278,13 +319,21 @@ export function PrecisionNumberField({
                             moved: false,
                         };
                         binding.beginGesture();
-                        event.currentTarget.setPointerCapture(event.pointerId);
+                        try {
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                        } catch {
+                            // Synthetic pointers and older hosts may not support capture.
+                        }
                         event.preventDefault();
                     }}
                     onPointerMove={(event) => {
                         const activeDrag = activeDragRef.current;
 
                         if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                            return;
+                        }
+                        if (event.pointerType === "mouse" && event.buttons === 0) {
+                            finishDrag(event.pointerId);
                             return;
                         }
 
@@ -312,15 +361,10 @@ export function PrecisionNumberField({
                         binding.setValue(nextBindingValue);
                     }}
                     onPointerUp={(event) => {
-                        const activeDrag = activeDragRef.current;
-
-                        if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+                        const activeDrag = finishDrag(event.pointerId);
+                        if (!activeDrag || isEditing) {
                             return;
                         }
-
-                        activeDragRef.current = null;
-                        event.currentTarget.releasePointerCapture?.(event.pointerId);
-                        binding.endGesture();
 
                         if (!activeDrag.moved) {
                             if (isInlineDark) {
@@ -335,16 +379,9 @@ export function PrecisionNumberField({
                         }
                     }}
                     onPointerCancel={(event) => {
-                        const activeDrag = activeDragRef.current;
-
-                        if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
-                            return;
-                        }
-
-                        activeDragRef.current = null;
-                        event.currentTarget.releasePointerCapture?.(event.pointerId);
-                        binding.endGesture();
+                        finishDrag(event.pointerId);
                     }}
+                    onLostPointerCapture={(event) => finishDrag(event.pointerId)}
                     onDoubleClick={(event) => {
                         if (event.button !== 0) {
                             return;
