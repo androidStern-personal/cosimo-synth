@@ -4,8 +4,8 @@ Branch, deployment, rollback
 - Integration branch: `codex/web-effects-rack-integration`, based on deployed source `c585580`.
 - Exact rack commits were cherry-picked as `730cf06` (`9ebee83`) and `047d705` (`27ddb2c`).
 - Approved-workspace implementation checkpoint: `a2a6ddd98d9da885ef2e30a77b6336ccd063cf54`; public-latency acceptance checkpoint: `5eb12a1fee927fc0e14391813f62238474b7c6d3`.
-- Sites version 9 is public at `https://cosimo-synth.andrew-martin-stern.chatgpt.site/` with public access; deployed touch-fix source is `baa0dfffd37b2f6e99777002c2a16b9363d2c3e9`.
-- Sites version 5 (`70459f0`) is the immediate pre-redesign rollback; source `c585580` remains the pre-rack rollback requested by the user. Both are retained.
+- Sites version 11 is public at `https://cosimo-synth.andrew-martin-stern.chatgpt.site/` with public access; deployed source is `8f9fc8e2c1e4fdf37e706786a303ad53f3a25cae`.
+- Sites version 10 (`a2a8c42`) is the immediate pre-playback-session rollback, version 9 (`baa0dff`) retains the rack-touch repair, version 5 (`70459f0`) is the pre-redesign rollback, and source `c585580` remains the requested pre-rack rollback.
 
 Product and architecture
 - The main Cmajor graph has a real ordered rack: Global Filter, Distortion, OTT, Chorus, Flanger, Phaser, Delay, Reverb.
@@ -31,8 +31,8 @@ Acceptance evidence
 - `npm run synth:desktop:build` passed and installed the self-contained compiled VST3 at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` with valid ad-hoc signing.
 - `npm run synth:desktop:dev` started a fresh Vite server from this repo at `http://127.0.0.1:5174` and launched the standalone app against HMR. A final compiled install pass restored the on-disk Ableton VST3 without stopping the already-running HMR review process.
 
-Only unresolved acceptance item
-- The physical iPhone 14 Pro is paired and visible to CoreDevice (`00C7F433-8B6A-5CAC-856F-56D7385E12F9`). User testing proved the deployed engine, touch, MIDI, and physical output are audible when the hardware silent switch is off. Final physical proof with silent mode enabled is pending deployment of the playback-session opt-in; do not enable Bluetooth or change device inspection settings.
+Physical iPhone acceptance
+- The paired iPhone 14 Pro (`00C7F433-8B6A-5CAC-856F-56D7385E12F9`) opened public Sites version 11 in Safari. With the hardware silent switch enabled, the user tapped Start, held an on-screen key, saw the key depress, and confirmed audible physical output. Bluetooth and Safari inspection settings were not changed.
 
 Approved mobile rack workspace — 2026-08-06
 - The approved variant-D faceplates, individual wordmark fonts, square 56-pixel rack rows, bare power controls, four-dot grips, one-line quick values, and thick bottom value meters are now the shared production rack workspace. All eight rows remain visible at 320/375/390/430-pixel widths.
@@ -49,7 +49,7 @@ Mobile rack touch repair — 2026-08-06
 - Modulation source drop hit-testing uses the source's `Document` or `ShadowRoot`, not the outer document. A touch drag from MSEG 1 onto Distortion Knee now creates the real `rack.distortionKnee` route in the generated Cmajor view.
 - Two production-seam touch regressions were red before the fix and green afterward in 2.8 seconds. The full desktop UI remains 73/73; generated Chromium passes 5/5 applicable cases and WebKit passes 5/5 applicable cases with non-silent audio and zero measured worklet overruns.
 - Sites version 9 was verified at the public URL twice with real Chromium touch injection: reorder commits without scrolling under simulated WebKit zero-button moves, and MSEG 1 drops onto Distortion Knee. The matching curated public WebKit suite passes all five applicable cases; average measured worklet load was 0.257 with zero over-budget blocks.
-- The paired physical iPhone is visible to CoreDevice, but direct UI automation remains unavailable without changing Bluetooth or Safari inspection settings. The repair is verified with real Chromium touch injection, the WebKit zero-button compatibility case, and the iPhone-profile WebKit suite; physical-device observation is still the external gap.
+- Direct rack gesture automation on the physical phone remains unavailable without changing Bluetooth or Safari inspection settings. The unchanged rack paths remain covered by real Chromium touch injection, the WebKit zero-button compatibility case, and the iPhone-profile WebKit suite; physical Safari now also proves Start, key depression, and audible output.
 
 Mobile Safari audio recovery — 2026-08-06
 - A physical-phone report exposed a gap in the previous touchscreen proof: it verified note delivery and non-silent output in a continuously running context, but did not cover Safari suspension/interruption after Start.
@@ -58,3 +58,5 @@ Mobile Safari audio recovery — 2026-08-06
 - Exact packaged Sites artifact passes all five applicable Chromium and five applicable WebKit cases. WebKit measured all-eight-on gain at -2.80 dB, average worklet load 0.267, zero over-budget blocks, and non-silent recovered touch output. The package has no symlinks or localhost/file references.
 - Physical iPhone testing then isolated the remaining silence: Start disappeared and touched keys visibly lit, but output became audible immediately after the user disabled the hardware silent switch. This matches WebKit's ambient-session behavior rather than a DSP or MIDI failure.
 - The host now opts an explicitly started synth into `navigator.audioSession.type = "playback"` before resume (and again on interruption recovery). A focused WebKit regression was red at `ambient` and green at `playback`; browsers without the Audio Session API keep their existing behavior.
+- Sites version 11 is the public playback-session build. Fresh logged-out public Chromium and WebKit suites pass all five applicable cases; WebKit measured -2.94 dB all-eight-on gain, 0.136 average worklet load, zero over-budget blocks, and no silent held-note polls. Recent production worker error logs are empty.
+- Final physical proof passed on iPhone Safari with the hardware silent switch enabled: Start completed, the touched key visibly depressed, and the user confirmed audible output.
