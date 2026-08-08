@@ -97,7 +97,7 @@ ${reactRefreshPreamble}
         outDir: path.join(repoRoot, "patch_gui", "desktop"),
         emptyOutDir: true,
         sourcemap: true,
-        minify: false,
+        minify: command === "build",
         lib: {
             entry: desktopPatchViewSource,
             formats: ["es"],

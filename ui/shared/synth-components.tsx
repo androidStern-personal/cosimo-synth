@@ -1,5 +1,6 @@
 import {
     type ReactNode,
+    useCallback,
     useEffect,
     useId,
     useLayoutEffect,
@@ -858,6 +859,7 @@ export function EditableMsegSurface({
             onPointerLeave={onPointerLeave}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
+            onLostPointerCapture={onPointerUp}
         >
             <g>
                 {MSEG_GRID_STEPS.map((step) => (
@@ -1370,6 +1372,8 @@ export function FilterResponseGraph({
         pointerOffsetY: number;
         hasMoved: boolean;
     } | null>(null);
+    const onGestureEndRef = useRef(onGestureEnd);
+    onGestureEndRef.current = onGestureEnd;
     const baseModel = useMemo(() => createFilterResponseModel({
         mode: baseMode,
         cutoffHz: baseCutoffHz,
@@ -1492,26 +1496,51 @@ export function FilterResponseGraph({
         onQSet(clamp(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN, FILTER_Q_MAX));
     };
 
-    const endDrag = (pointerId: number) => {
+    const endDrag = useCallback((pointerId?: number) => {
         const dragState = dragStateRef.current;
 
-        if (!dragState || dragState.pointerId !== pointerId) {
+        if (!dragState || (pointerId !== undefined && dragState.pointerId !== pointerId)) {
             return;
-        }
-
-        const surface = surfaceRef.current;
-
-        if (surface?.hasPointerCapture(pointerId)) {
-            surface.releasePointerCapture(pointerId);
-        }
-
-        if (dragState?.hasMoved) {
-            onGestureEnd?.();
         }
 
         dragStateRef.current = null;
         setActivePointerId(null);
-    };
+        const surface = surfaceRef.current;
+
+        try {
+            if (surface?.hasPointerCapture(dragState.pointerId)) {
+                surface.releasePointerCapture(dragState.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation, blur, or unmount.
+        }
+
+        if (dragState.hasMoved) {
+            onGestureEndRef.current?.();
+        }
+    }, []);
+
+    useEffect(() => {
+        const handlePointerEnd = (event: PointerEvent) => endDrag(event.pointerId);
+        const handleBlur = () => endDrag();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                endDrag();
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            endDrag();
+        };
+    }, [endDrag]);
 
     const debugState = useMemo(() => ({
         base: {
@@ -1651,6 +1680,11 @@ export function FilterResponseGraph({
                             return;
                         }
 
+                        if (event.pointerType === "mouse" && event.buttons === 0) {
+                            endDrag(event.pointerId);
+                            return;
+                        }
+
                         const deltaX = event.clientX - dragState.startClientX;
                         const deltaY = event.clientY - dragState.startClientY;
 
@@ -1668,6 +1702,9 @@ export function FilterResponseGraph({
                         endDrag(event.pointerId);
                     }}
                     onPointerCancel={(event) => {
+                        endDrag(event.pointerId);
+                    }}
+                    onLostPointerCapture={(event) => {
                         endDrag(event.pointerId);
                     }}
                 >
@@ -1742,7 +1779,12 @@ export function FilterResponseGraph({
                         className="cursor-grab active:cursor-grabbing"
                         onPointerDown={(event) => {
                             event.preventDefault();
-                            surfaceRef.current?.setPointerCapture(event.pointerId);
+                            endDrag();
+                            try {
+                                surfaceRef.current?.setPointerCapture(event.pointerId);
+                            } catch {
+                                // Window-level termination still owns unsupported or synthetic pointers.
+                            }
                             const bounds = surfaceRef.current?.getBoundingClientRect();
                             dragStateRef.current = {
                                 pointerId: event.pointerId,

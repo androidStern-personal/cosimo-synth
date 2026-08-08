@@ -4107,6 +4107,50 @@ test("articulation card audition is press-hold and follows the most recently pla
     }
 });
 
+test("articulation card audition releases its note when the window blurs", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+            ],
+        });
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+
+        const playButton = page.locator('[data-role="articulation-card-play"]').first();
+        await playButton.waitFor();
+        await playButton.scrollIntoViewIfNeeded();
+        const box = await playButton.boundingBox();
+        assert.ok(box, "Expected the articulation audition button to be visible.");
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(box.x + (box.width * 0.5), box.y + (box.height * 0.5));
+        await page.mouse.down();
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1);
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.waitForTimeout(100);
+
+        assert.deepEqual((await getHarnessSnapshot(page)).midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 60, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 60) },
+        ]);
+    } finally {
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
 test("opening the synth GUI does not recall or overwrite a stored selected articulation", async () => {
     const parameterEndpoints = [
         "wavetablePosition",
@@ -4583,6 +4627,35 @@ test("desktop envelope editor drags handles and commits compact rail values for 
     }
 });
 
+test("desktop envelope handle stops editing after the window blurs", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("button", { name: "Select envelope 2" }).click();
+        const handle = page.locator('[data-role="adsr-attack-handle-hit-target"]');
+        await handle.scrollIntoViewIfNeeded();
+        const handleBox = await handle.boundingBox();
+        assert.ok(handleBox, "Expected the ADSR attack handle to be visible.");
+
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(handleBox.x + (handleBox.width * 0.5), handleBox.y + (handleBox.height * 0.5));
+        await page.mouse.down();
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.mouse.move(handleBox.x + handleBox.width + 120, handleBox.y + (handleBox.height * 0.5));
+        await page.mouse.up();
+        await page.waitForTimeout(100);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationEnvelope"),
+            false,
+        );
+    } finally {
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
 test("desktop wavetable stage follows live effective warp state and falls back to the base controls", async () => {
     const page = await openHarnessPage();
 
@@ -4952,6 +5025,36 @@ test("desktop filter graph follows live effective filter state and falls back to
 
         renderedState = await getHarnessRenderedState(page);
         assert.equal(renderedState.filterGraphState.live.hasActive, false);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop filter graph closes both host gestures when the window blurs mid-drag", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+        const bounds = await handle.boundingBox();
+        assert.ok(bounds);
+        const startX = bounds.x + (bounds.width / 2);
+        const startY = bounds.y + (bounds.height / 2);
+        await clearHarnessDebugLog(page);
+
+        await page.mouse.move(startX, startY);
+        await page.mouse.down();
+        await page.mouse.move(startX + 24, startY - 18, { steps: 4 });
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return snapshot.gestureStarts.includes("filterCutoff")
+                && snapshot.gestureStarts.includes("filterQ");
+        });
+
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.waitForTimeout(20);
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureEnds, ["filterCutoff", "filterQ"]);
+        await page.mouse.up();
     } finally {
         await page.close();
     }
@@ -5526,6 +5629,57 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
             true,
         );
     } finally {
+        await page.close();
+    }
+});
+
+test("main MSEG morph control closes its host gesture when the window blurs", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const morphSlider = page.locator('[data-role="mseg-morph-slider"]').first();
+        await morphSlider.scrollIntoViewIfNeeded();
+        const sliderBox = await morphSlider.boundingBox();
+        assert.ok(sliderBox, "Expected the main MSEG morph control to be visible.");
+
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(sliderBox.x + 2, sliderBox.y + (sliderBox.height * 0.5));
+        await page.mouse.down();
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.gestureStarts.filter((value) => value === "mseg1Morph").length, 1);
+        assert.equal(snapshot.gestureEnds.filter((value) => value === "mseg1Morph").length, 1);
+    } finally {
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("MSEG rate drag stops changing values after the window blurs", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const rateInput = page.locator('input[aria-label="MSEG rate"]').first();
+        await rateInput.scrollIntoViewIfNeeded();
+        const inputBox = await rateInput.boundingBox();
+        assert.ok(inputBox, "Expected the MSEG rate input to be visible.");
+
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(inputBox.x + (inputBox.width * 0.5), inputBox.y + (inputBox.height * 0.5));
+        await page.mouse.down();
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.mouse.move(inputBox.x + inputBox.width + 120, inputBox.y + (inputBox.height * 0.5));
+        await page.mouse.up();
+        await page.waitForTimeout(100);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback"),
+            false,
+        );
+    } finally {
+        await page.mouse.up().catch(() => {});
         await page.close();
     }
 });
@@ -6926,6 +7080,41 @@ test("rack mod bar supports source-first and target-first routes with one real b
         );
     } finally {
         await targetFirstPage.close();
+    }
+});
+
+test("rack modulation-source gesture cancels on window blur instead of creating a route", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        await source.scrollIntoViewIfNeeded();
+        const sourceBounds = await source.boundingBox();
+        assert.ok(sourceBounds);
+        const beforeRoutes = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        await clearHarnessDebugLog(page);
+
+        await page.mouse.move(
+            sourceBounds.x + (sourceBounds.width / 2),
+            sourceBounds.y + (sourceBounds.height / 2),
+        );
+        await page.mouse.down();
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.mouse.up();
+        await page.waitForTimeout(80);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(readStoredModulationState(snapshot).routes.length, beforeRoutes.length);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "rackModulationRoute"),
+            false,
+            "A blurred source gesture must not create a modulation route on the later pointer release.",
+        );
+    } finally {
+        await page.close();
     }
 });
 

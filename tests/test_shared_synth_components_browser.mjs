@@ -489,6 +489,34 @@ test("shared filter range editor exposes the universal cutoff, resonance, range,
     }
 });
 
+test("shared filter range editor ends an active edit when the window blurs", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSharedFilterRangeEditorHarness");
+        const handle = page.locator('[data-role="filter-range-value-hit-target"]');
+        const handleBox = await handle.boundingBox();
+        assert.ok(handleBox, "Expected the filter value handle to be visible.");
+
+        await page.mouse.move(handleBox.x + (handleBox.width * 0.5), handleBox.y + (handleBox.height * 0.5));
+        await page.mouse.down();
+        await page.mouse.move(handleBox.x + (handleBox.width * 0.5) + 40, handleBox.y + (handleBox.height * 0.5));
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().editLog?.includes("start:value"));
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+
+        const afterBlur = await getHarnessSnapshot(page);
+        assert.deepEqual(afterBlur.editLog.slice(-2), ["start:value", "end:value"]);
+        const valueWriteCount = afterBlur.valueLog.length;
+
+        await page.mouse.move(handleBox.x + (handleBox.width * 0.5) + 100, handleBox.y + (handleBox.height * 0.5));
+        await page.mouse.up();
+        assert.equal((await getHarnessSnapshot(page)).valueLog.length, valueWriteCount);
+    } finally {
+        await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
 test("shared filter range editor keeps bottom chips aligned at compact widths", async () => {
     const page = await openModulePage();
 

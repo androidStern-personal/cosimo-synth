@@ -846,6 +846,10 @@ function MsegMorphRail({
 }) {
     const railRef = useRef<HTMLDivElement | null>(null);
     const activePointerRef = useRef<number | null>(null);
+    const bindingRef = useRef(binding);
+    const onAdjustingChangeRef = useRef(onAdjustingChange);
+    bindingRef.current = binding;
+    onAdjustingChangeRef.current = onAdjustingChange;
     const value = clamp(Number(binding.value) || 0, 0, 1);
 
     const updateFromClientX = useCallback((clientX: number) => {
@@ -859,18 +863,45 @@ function MsegMorphRail({
         onChange(nextValue);
     }, [onChange]);
 
-    const endDrag = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        if (activePointerRef.current !== event.pointerId) {
+    const finishDrag = useCallback((pointerId?: number) => {
+        const activePointerId = activePointerRef.current;
+        if (activePointerId === null || (pointerId !== undefined && activePointerId !== pointerId)) {
             return;
         }
 
         activePointerRef.current = null;
-        event.currentTarget.releasePointerCapture?.(event.pointerId);
-        binding.endGesture();
-        onAdjustingChange?.(false);
-        event.preventDefault();
-        event.stopPropagation();
-    }, [binding, onAdjustingChange]);
+        try {
+            if (railRef.current?.hasPointerCapture(activePointerId)) {
+                railRef.current.releasePointerCapture(activePointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation, blur, or unmount.
+        }
+        bindingRef.current.endGesture();
+        onAdjustingChangeRef.current?.(false);
+    }, []);
+
+    useEffect(() => {
+        const handlePointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
+        const handleBlur = () => finishDrag();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                finishDrag();
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishDrag();
+        };
+    }, [finishDrag]);
 
     return (
         <div
@@ -893,10 +924,15 @@ function MsegMorphRail({
                         return;
                     }
 
+                    finishDrag();
                     activePointerRef.current = event.pointerId;
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    binding.beginGesture();
-                    onAdjustingChange?.(true);
+                    try {
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                    } catch {
+                        // Window-level termination still owns unsupported or synthetic pointers.
+                    }
+                    bindingRef.current.beginGesture();
+                    onAdjustingChangeRef.current?.(true);
                     updateFromClientX(event.clientX);
                     event.preventDefault();
                     event.stopPropagation();
@@ -906,12 +942,18 @@ function MsegMorphRail({
                         return;
                     }
 
+                    if (event.pointerType === "mouse" && event.buttons === 0) {
+                        finishDrag(event.pointerId);
+                        return;
+                    }
+
                     updateFromClientX(event.clientX);
                     event.preventDefault();
                     event.stopPropagation();
                 }}
-                onPointerUp={endDrag}
-                onPointerCancel={endDrag}
+                onPointerUp={(event) => finishDrag(event.pointerId)}
+                onPointerCancel={(event) => finishDrag(event.pointerId)}
+                onLostPointerCapture={(event) => finishDrag(event.pointerId)}
             >
                 <div className="absolute left-0 right-0 top-1/2 h-[7px] -translate-y-1/2 rounded-full bg-white/[0.06]" />
                 <div
@@ -1477,8 +1519,18 @@ function DesktopEnvelopeEditor({
             return;
         }
 
+        const clearActiveDrag = () => {
+            setActiveHandle(null);
+            setActivePointerId(null);
+        };
+
         const handlePointerMove = (event: PointerEvent) => {
             if (event.pointerId !== activePointerId) {
+                return;
+            }
+
+            if (event.pointerType === "mouse" && event.buttons === 0) {
+                clearActiveDrag();
                 return;
             }
 
@@ -1517,19 +1569,24 @@ function DesktopEnvelopeEditor({
             onEnvelopeChange("releaseSeconds", normalizedToEnvelopeSeconds(normalizedRelease));
         };
 
-        const clearActiveDrag = () => {
-            setActiveHandle(null);
-            setActivePointerId(null);
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                clearActiveDrag();
+            }
         };
 
         window.addEventListener("pointermove", handlePointerMove);
         window.addEventListener("pointerup", clearActiveDrag);
         window.addEventListener("pointercancel", clearActiveDrag);
+        window.addEventListener("blur", clearActiveDrag);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
             window.removeEventListener("pointermove", handlePointerMove);
             window.removeEventListener("pointerup", clearActiveDrag);
             window.removeEventListener("pointercancel", clearActiveDrag);
+            window.removeEventListener("blur", clearActiveDrag);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
     }, [activeHandle, activePointerId, geometry, onEnvelopeChange, readStagePoint]);
 
@@ -3056,6 +3113,44 @@ function ModulationMatrixSection({
     const [draftMsegRate, setDraftMsegRate] = useState("");
     const [isMsegMorphAdjusting, setIsMsegMorphAdjusting] = useState(false);
 
+    const cancelMsegRateDrag = useCallback((pointerId?: number) => {
+        const drag = msegRateDragRef.current;
+        if (!drag || (pointerId !== undefined && drag.pointerId !== pointerId)) {
+            return;
+        }
+
+        msegRateDragRef.current = null;
+        try {
+            if (msegRateRef.current?.hasPointerCapture(drag.pointerId)) {
+                msegRateRef.current.releasePointerCapture(drag.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation, blur, or unmount.
+        }
+    }, []);
+
+    useEffect(() => {
+        const handlePointerEnd = (event: PointerEvent) => cancelMsegRateDrag(event.pointerId);
+        const handleBlur = () => cancelMsegRateDrag();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                cancelMsegRateDrag();
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerEnd);
+        window.addEventListener("pointercancel", handlePointerEnd);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointerup", handlePointerEnd);
+            window.removeEventListener("pointercancel", handlePointerEnd);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            cancelMsegRateDrag();
+        };
+    }, [cancelMsegRateDrag]);
+
     const currentMsegRate = clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1));
 
     useEffect(() => {
@@ -3072,7 +3167,11 @@ function ModulationMatrixSection({
             onMsegRateChange(clamp(currentMsegRate + step, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
         };
         el.addEventListener("wheel", handler, { passive: false });
-        return () => el.removeEventListener("wheel", handler);
+        return () => {
+            el.removeEventListener("wheel", handler);
+            clearTimeout(timerRef.current);
+            el.style.cursor = "";
+        };
     }, [isEditingMsegRate, currentMsegRate, onMsegRateChange]);
 
     const commitMsegRateText = useCallback((text: string) => {
@@ -3298,18 +3397,27 @@ function ModulationMatrixSection({
                             tabIndex={activeEditorTab.kind === "mseg" ? 0 : -1}
                             onPointerDown={(event) => {
                                 if (event.button !== 0 || isEditingMsegRate) return;
+                                cancelMsegRateDrag();
                                 msegRateDragRef.current = {
                                     pointerId: event.pointerId,
                                     startClientX: event.clientX,
                                     startValue: currentMsegRate,
                                     moved: false,
                                 };
-                                event.currentTarget.setPointerCapture(event.pointerId);
+                                try {
+                                    event.currentTarget.setPointerCapture(event.pointerId);
+                                } catch {
+                                    // Window-level termination still owns unsupported or synthetic pointers.
+                                }
                                 event.preventDefault();
                             }}
                             onPointerMove={(event) => {
                                 const drag = msegRateDragRef.current;
                                 if (!drag || drag.pointerId !== event.pointerId || isEditingMsegRate) return;
+                                if (event.pointerType === "mouse" && event.buttons === 0) {
+                                    cancelMsegRateDrag(event.pointerId);
+                                    return;
+                                }
                                 const deltaX = event.clientX - drag.startClientX;
                                 if (Math.abs(deltaX) >= 2) drag.moved = true;
                                 const range = MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS;
@@ -3320,7 +3428,13 @@ function ModulationMatrixSection({
                                 const drag = msegRateDragRef.current;
                                 if (!drag || drag.pointerId !== event.pointerId || isEditingMsegRate) return;
                                 msegRateDragRef.current = null;
-                                event.currentTarget.releasePointerCapture(event.pointerId);
+                                try {
+                                    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                                        event.currentTarget.releasePointerCapture(event.pointerId);
+                                    }
+                                } catch {
+                                    // Capture may already be gone at normal pointer release.
+                                }
                                 if (!drag.moved) {
                                     setDraftMsegRate(currentMsegRate.toFixed(3));
                                     setIsEditingMsegRate(true);
@@ -3331,11 +3445,9 @@ function ModulationMatrixSection({
                                 }
                             }}
                             onPointerCancel={(event) => {
-                                const drag = msegRateDragRef.current;
-                                if (!drag || drag.pointerId !== event.pointerId) return;
-                                msegRateDragRef.current = null;
-                                event.currentTarget.releasePointerCapture(event.pointerId);
+                                cancelMsegRateDrag(event.pointerId);
                             }}
+                            onLostPointerCapture={(event) => cancelMsegRateDrag(event.pointerId)}
                             onChange={(event) => {
                                 if (isEditingMsegRate) {
                                     setDraftMsegRate(event.currentTarget.value);

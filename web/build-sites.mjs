@@ -3,6 +3,8 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { enforcePublicAssetPolicy } from "./public-asset-policy.mjs";
+
 const webDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDirectory, "..");
 const webBuildDirectory = path.join(repoRoot, "build", "web");
@@ -68,6 +70,7 @@ await fs.mkdir(path.join(distDirectory, "server"), { recursive: true });
 const assetsDirectory = path.join(distDirectory, "assets");
 await fs.cp(webBuildDirectory, assetsDirectory, { recursive: true });
 await curateFactoryBank(assetsDirectory);
+await enforcePublicAssetPolicy(assetsDirectory);
 await fs.writeFile(
     path.join(distDirectory, "server", "index.js"),
     `const worker = {

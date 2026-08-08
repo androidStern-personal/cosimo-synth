@@ -2,6 +2,8 @@ import {
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
+    useCallback,
+    useEffect,
     useMemo,
     useRef,
     useState,
@@ -694,6 +696,8 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const surfaceRef = useRef<SVGSVGElement | null>(null);
     const dragStateRef = useRef<DragState | null>(null);
+    const onEditEndRef = useRef(onEditEnd);
+    onEditEndRef.current = onEditEnd;
     const [activeDragTarget, setActiveDragTarget] = useState<FilterRangeEditTarget | null>(null);
     const size = useEditorSurfaceSize(viewportRef);
     const safeSampleRateHz = Math.max(1, Math.round(finiteNumber(sampleRateHz, DEFAULT_SAMPLE_RATE_HZ)));
@@ -903,25 +907,51 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
         );
     };
 
-    const endDrag = (pointerId: number) => {
+    const endDrag = useCallback((pointerId?: number) => {
         const dragState = dragStateRef.current;
 
-        if (!dragState || dragState.pointerId !== pointerId) {
+        if (!dragState || (pointerId !== undefined && dragState.pointerId !== pointerId)) {
             return;
         }
 
+        dragStateRef.current = null;
         const surface = surfaceRef.current;
-        if (surface?.hasPointerCapture(pointerId)) {
-            surface.releasePointerCapture(pointerId);
+        try {
+            if (surface?.hasPointerCapture(dragState.pointerId)) {
+                surface.releasePointerCapture(dragState.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation, blur, or unmount.
         }
 
         if (dragState.hasMoved) {
-            onEditEnd?.(dragState.target);
+            onEditEndRef.current?.(dragState.target);
         }
 
-        dragStateRef.current = null;
         setActiveDragTarget(null);
-    };
+    }, []);
+
+    useEffect(() => {
+        const handlePointerEnd = (event: PointerEvent) => endDrag(event.pointerId);
+        const handleBlur = () => endDrag();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                endDrag();
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            endDrag();
+        };
+    }, [endDrag]);
 
     const beginDrag = (
         target: FilterRangeEditTarget,
@@ -929,7 +959,12 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
         origin: { x: number; y: number },
     ) => {
         event.preventDefault();
-        surfaceRef.current?.setPointerCapture(event.pointerId);
+        endDrag();
+        try {
+            surfaceRef.current?.setPointerCapture(event.pointerId);
+        } catch {
+            // Window-level termination still owns unsupported or synthetic pointers.
+        }
         const bounds = surfaceRef.current?.getBoundingClientRect();
         dragStateRef.current = {
             pointerId: event.pointerId,
@@ -993,6 +1028,11 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                             return;
                         }
 
+                        if (event.pointerType === "mouse" && event.buttons === 0) {
+                            endDrag(event.pointerId);
+                            return;
+                        }
+
                         const deltaX = event.clientX - dragState.startClientX;
                         const deltaY = event.clientY - dragState.startClientY;
                         if (!dragState.hasMoved && Math.abs(deltaX) < EDITOR_DRAG_START_THRESHOLD_PX && Math.abs(deltaY) < EDITOR_DRAG_START_THRESHOLD_PX) {
@@ -1008,6 +1048,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                     }}
                     onPointerUp={(event) => endDrag(event.pointerId)}
                     onPointerCancel={(event) => endDrag(event.pointerId)}
+                    onLostPointerCapture={(event) => endDrag(event.pointerId)}
                 >
                     <EditorCurvePlotArea plot={baseResponse.path} />
                     {[0.2, 0.4, 0.6, 0.8].map((tick) => (

@@ -1,9 +1,13 @@
 import * as patch from "./cmaj_Cosimo_Synth.js";
 import { createPatchViewHolder } from "./cmaj_api/cmaj-patch-view.js";
+import {
+    installBrowserPatchStatePersistence,
+    readBrowserPatchState,
+} from "./browser-patch-state.mjs";
 
 globalThis.__COSIMO_DESKTOP_RUNTIME_KIND__ = "standalone";
 
-const BROWSER_PATCH_STATE_KEY = "cosimo.web.patch-state.v1";
+const isTestMode = new URLSearchParams(globalThis.location.search).has("test");
 
 const elements = {
     error: document.getElementById("cosimo-error"),
@@ -60,38 +64,6 @@ function showError(error) {
 
 function endpointEvent(message) {
     return message?.event ?? message;
-}
-
-function readBrowserPatchState() {
-    try {
-        const parsed = JSON.parse(localStorage.getItem(BROWSER_PATCH_STATE_KEY) ?? "{}");
-        return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
-    } catch {
-        return {};
-    }
-}
-
-function installBrowserPatchStatePersistence(connection) {
-    const browserState = readBrowserPatchState();
-    const sendStoredStateValue = connection.sendStoredStateValue.bind(connection);
-    const persistValue = (key, value) => {
-        if (value === undefined) delete browserState[key];
-        else browserState[key] = value;
-        localStorage.setItem(BROWSER_PATCH_STATE_KEY, JSON.stringify(browserState));
-    };
-    for (const [key, value] of Object.entries(browserState)) {
-        sendStoredStateValue(key, value);
-    }
-    connection.sendStoredStateValue = (key, value) => {
-        persistValue(key, value);
-        sendStoredStateValue(key, value);
-    };
-    connection.addStoredStateValueListener?.((message) => {
-        const storedStateMessage = endpointEvent(message);
-        if (typeof storedStateMessage?.key === "string") {
-            persistValue(storedStateMessage.key, storedStateMessage.value);
-        }
-    });
 }
 
 function findEndpointID(connection, purpose) {
@@ -274,7 +246,7 @@ globalThis.__COSIMO_WEB_POC__ = {
     },
     start: startAudio,
     suspendAudioForTest() {
-        if (!new URLSearchParams(globalThis.location.search).has("test")) {
+        if (!isTestMode) {
             return Promise.reject(new Error("Audio suspension is only available in test mode."));
         }
         if (!state.audioContext) {
@@ -305,37 +277,41 @@ async function initialise() {
     state.connection = connection;
     state.midiEndpointID = findEndpointID(connection, "midi in");
 
-    connection.audioNode.port.addEventListener("message", (event) => {
-        if (event.data?.type !== "cosimo-perf") return;
-        const blockCount = Number(event.data.blockCount) || 0;
-        const averageLoad = Number(event.data.averageLoad) || 0;
-        state.audioWorkletBlockCount += blockCount;
-        state.audioWorkletLoadSum += averageLoad * blockCount;
-        state.audioWorkletMaxLoad = Math.max(state.audioWorkletMaxLoad, Number(event.data.maxLoad) || 0);
-        state.audioWorkletOverBudgetBlocks += Number(event.data.overBudgetBlocks) || 0;
-    });
-
-    connection.addEndpointListener("runtimeState", (message) => {
-        state.latestRuntimeState = message;
-    });
-    connection.addEndpointListener("effectiveFilterState", (message) => {
-        state.latestEffectiveFilterState = endpointEvent(message);
-    });
-    connection.addEndpointListener("effectiveRackState", (message) => {
-        state.latestEffectiveRackState = endpointEvent(message);
-    });
-    connection.addEndpointListener("effectiveWavetablePosition", (message) => {
-        state.latestEffectiveWavetablePosition = endpointEvent(message);
-    });
-    for (const endpoint of connection.inputEndpoints) {
-        if (endpoint.purpose !== "parameter") continue;
-        connection.addParameterListener(endpoint.endpointID, (message) => {
-            state.parameterValues[endpoint.endpointID] = Number(message?.value ?? message);
+    if (isTestMode) {
+        connection.audioNode.port.addEventListener("message", (event) => {
+            if (event.data?.type !== "cosimo-perf") return;
+            const blockCount = Number(event.data.blockCount) || 0;
+            const averageLoad = Number(event.data.averageLoad) || 0;
+            state.audioWorkletBlockCount += blockCount;
+            state.audioWorkletLoadSum += averageLoad * blockCount;
+            state.audioWorkletMaxLoad = Math.max(state.audioWorkletMaxLoad, Number(event.data.maxLoad) || 0);
+            state.audioWorkletOverBudgetBlocks += Number(event.data.overBudgetBlocks) || 0;
         });
-        connection.requestParameterValue(endpoint.endpointID);
-    }
+        connection.audioNode.port.postMessage({
+            type: "patch",
+            payload: { type: "cosimo-perf-config", enabled: true },
+        });
 
-    if (new URLSearchParams(globalThis.location.search).has("test")) {
+        connection.addEndpointListener("runtimeState", (message) => {
+            state.latestRuntimeState = message;
+        });
+        connection.addEndpointListener("effectiveFilterState", (message) => {
+            state.latestEffectiveFilterState = endpointEvent(message);
+        });
+        connection.addEndpointListener("effectiveRackState", (message) => {
+            state.latestEffectiveRackState = endpointEvent(message);
+        });
+        connection.addEndpointListener("effectiveWavetablePosition", (message) => {
+            state.latestEffectiveWavetablePosition = endpointEvent(message);
+        });
+        for (const endpoint of connection.inputEndpoints) {
+            if (endpoint.purpose !== "parameter") continue;
+            connection.addParameterListener(endpoint.endpointID, (message) => {
+                state.parameterValues[endpoint.endpointID] = Number(message?.value ?? message);
+            });
+            connection.requestParameterValue(endpoint.endpointID);
+        }
+
         state.audioProbe = audioContext.createAnalyser();
         state.audioProbe.fftSize = 2048;
         state.audioProbeBuffer = new Float32Array(state.audioProbe.fftSize);

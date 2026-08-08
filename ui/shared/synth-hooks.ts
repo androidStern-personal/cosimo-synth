@@ -1067,19 +1067,60 @@ export function useStagePositionDrag({
     observedPosition: number;
     binding: PatchControlBinding<number>;
 }) {
-    const [activeDisplayDrag, setActiveDisplayDrag] = useState<{
+    const bindingRef = useRef(binding);
+    bindingRef.current = binding;
+    const activeDisplayDragRef = useRef<{
         pointerId: number;
         startPosition: number;
         startClientY: number;
     } | null>(null);
 
     const beginPositionGesture = useCallback(() => {
-        binding.beginGesture();
-    }, [binding]);
+        bindingRef.current.beginGesture();
+    }, []);
 
     const endPositionGesture = useCallback(() => {
-        binding.endGesture();
-    }, [binding]);
+        bindingRef.current.endGesture();
+    }, []);
+
+    const finishPositionGesture = useCallback((pointerId?: number) => {
+        const activeDisplayDrag = activeDisplayDragRef.current;
+        if (!activeDisplayDrag || (pointerId !== undefined && activeDisplayDrag.pointerId !== pointerId)) {
+            return;
+        }
+
+        activeDisplayDragRef.current = null;
+        try {
+            if (stageRef.current?.hasPointerCapture(activeDisplayDrag.pointerId)) {
+                stageRef.current.releasePointerCapture(activeDisplayDrag.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation, blur, or unmount.
+        }
+        endPositionGesture();
+    }, [endPositionGesture, stageRef]);
+
+    useEffect(() => {
+        const handlePointerEnd = (event: PointerEvent) => finishPositionGesture(event.pointerId);
+        const handleBlur = () => finishPositionGesture();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                finishPositionGesture();
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishPositionGesture();
+        };
+    }, [finishPositionGesture]);
 
     const handleStagePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         if (event.button !== 0) {
@@ -1090,17 +1131,28 @@ export function useStagePositionDrag({
             return;
         }
 
+        finishPositionGesture();
         beginPositionGesture();
-        setActiveDisplayDrag({
+        activeDisplayDragRef.current = {
             pointerId: event.pointerId,
             startPosition: observedPosition,
             startClientY: event.clientY,
-        });
-        event.currentTarget.setPointerCapture(event.pointerId);
-    }, [beginPositionGesture, observedPosition]);
+        };
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // Window-level termination still owns unsupported or synthetic pointers.
+        }
+    }, [beginPositionGesture, finishPositionGesture, observedPosition]);
 
     const handleStagePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        const activeDisplayDrag = activeDisplayDragRef.current;
         if (!activeDisplayDrag || activeDisplayDrag.pointerId !== event.pointerId || !stageRef.current) {
+            return;
+        }
+
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            finishPositionGesture(event.pointerId);
             return;
         }
 
@@ -1115,18 +1167,12 @@ export function useStagePositionDrag({
             event.clientY,
             bounds.height,
         );
-        binding.setValue(nextPosition);
-    }, [activeDisplayDrag, binding, stageRef]);
+        bindingRef.current.setValue(nextPosition);
+    }, [finishPositionGesture, stageRef]);
 
     const handleStagePointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        if (!activeDisplayDrag || activeDisplayDrag.pointerId !== event.pointerId) {
-            return;
-        }
-
-        event.currentTarget.releasePointerCapture?.(event.pointerId);
-        setActiveDisplayDrag(null);
-        endPositionGesture();
-    }, [activeDisplayDrag, endPositionGesture]);
+        finishPositionGesture(event.pointerId);
+    }, [finishPositionGesture]);
 
     return {
         handleStagePointerDown,
@@ -1164,6 +1210,25 @@ export function useMsegEditorInteractions({
             pointerState.holdTimeoutId = null;
         }
     }, []);
+
+    const cancelActivePointer = useCallback((pointerId?: number) => {
+        const activePointer = activePointerRef.current;
+        if (!activePointer || (pointerId !== undefined && activePointer.pointerId !== pointerId)) {
+            return;
+        }
+
+        activePointerRef.current = null;
+        clearPendingSegmentTimer(activePointer);
+        try {
+            if (surfaceRef.current?.hasPointerCapture(activePointer.pointerId)) {
+                surfaceRef.current.releasePointerCapture(activePointer.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation, blur, or unmount.
+        }
+        setHoveredSegmentIndex(-1);
+        setActiveSegmentIndex(-1);
+    }, [clearPendingSegmentTimer, surfaceRef]);
 
     useEffect(() => {
         if (!msegState) {
@@ -1224,10 +1289,7 @@ export function useMsegEditorInteractions({
 
     useEffect(() => {
         if (!isOpen) {
-            clearPendingSegmentTimer(activePointerRef.current);
-            activePointerRef.current = null;
-            setHoveredSegmentIndex(-1);
-            setActiveSegmentIndex(-1);
+            cancelActivePointer();
             return;
         }
 
@@ -1236,12 +1298,23 @@ export function useMsegEditorInteractions({
                 setIsOpen(false);
             }
         };
+        const handleBlur = () => cancelActivePointer();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                cancelActivePointer();
+            }
+        };
 
         window.addEventListener("keydown", handleEscapeKey);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
             window.removeEventListener("keydown", handleEscapeKey);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            cancelActivePointer();
         };
-    }, [clearPendingSegmentTimer, isOpen]);
+    }, [cancelActivePointer, isOpen]);
 
     const openEditor = useCallback(() => {
         setIsOpen(true);
@@ -1249,11 +1322,8 @@ export function useMsegEditorInteractions({
 
     const closeEditor = useCallback(() => {
         setIsOpen(false);
-        clearPendingSegmentTimer(activePointerRef.current);
-        activePointerRef.current = null;
-        setHoveredSegmentIndex(-1);
-        setActiveSegmentIndex(-1);
-    }, [clearPendingSegmentTimer]);
+        cancelActivePointer();
+    }, [cancelActivePointer]);
 
     const applyCurveEditFromClientCoordinates = useCallback((segmentIndex: number, clientX: number, clientY: number) => {
         if (!surfaceRef.current || !msegController.current) {
@@ -1472,10 +1542,22 @@ export function useMsegEditorInteractions({
             return;
         }
 
-        event.currentTarget.releasePointerCapture?.(event.pointerId);
+        if (event.type !== "pointerup") {
+            cancelActivePointer(event.pointerId);
+            event.preventDefault();
+            return;
+        }
+
         const pointerState = activePointer;
         activePointerRef.current = null;
         setActiveSegmentIndex(-1);
+        try {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after a platform cancellation.
+        }
 
         if (pointerState.kind === "pending-segment") {
             clearPendingSegmentTimer(pointerState);
@@ -1520,6 +1602,7 @@ export function useMsegEditorInteractions({
         setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
         event.preventDefault();
     }, [
+        cancelActivePointer,
         clearPendingSegmentTimer,
         msegController,
         orientation,

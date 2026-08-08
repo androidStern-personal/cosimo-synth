@@ -5,6 +5,7 @@ import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
 import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
 import filterRangeEditorCssText from "../../ui/shared/filter-range-editor.css?inline";
 import { PatchConnectionProvider, usePatchEndpoint, type PatchConnectionLike } from "../../ui/shared/cmajor-react";
+import { usePatchParameterBinding } from "../../ui/shared/patch-controls";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
 import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
 import {
@@ -1176,6 +1177,83 @@ export async function installPatchEndpointActivityHarness(target: HTMLElement) {
         getSnapshot() {
             return {
                 listenerCount: endpointListeners.size,
+                renderLog: cloneValue(renderLog),
+                lastRender: cloneValue(renderLog.at(-1) ?? null),
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installPatchParameterRebindingHarness(target: HTMLElement) {
+    const parameterListeners = new Map<string, Set<(value: unknown) => void>>();
+    const requestedParameters: string[] = [];
+    const renderLog: Array<{ endpointID: string; value: number }> = [];
+    let selectEndpoint: ((endpointID: string) => void) | null = null;
+
+    const patchConnection: PatchConnectionLike = {
+        addParameterListener(endpointID, listener) {
+            const listeners = parameterListeners.get(endpointID) ?? new Set<(value: unknown) => void>();
+            listeners.add(listener);
+            parameterListeners.set(endpointID, listeners);
+        },
+        removeParameterListener(endpointID, listener) {
+            parameterListeners.get(endpointID)?.delete(listener);
+        },
+        requestParameterValue(endpointID) {
+            requestedParameters.push(endpointID);
+        },
+    };
+    const mounted = mountHarness(target, (root) => {
+        function Reader({ endpointID }: { endpointID: string }) {
+            const initialValue = endpointID === "parameterA" ? 0.1 : 0.25;
+            const binding = usePatchParameterBinding<number>({
+                endpointID,
+                initialValue,
+                coerce: Number,
+            });
+
+            useEffect(() => {
+                renderLog.push({ endpointID: binding.endpointID, value: binding.value });
+            }, [binding.endpointID, binding.value]);
+
+            return null;
+        }
+
+        function Harness() {
+            const [endpointID, setEndpointID] = useState("parameterA");
+            selectEndpoint = setEndpointID;
+
+            return (
+                <PatchConnectionProvider patchConnection={patchConnection}>
+                    <Reader endpointID={endpointID} />
+                </PatchConnectionProvider>
+            );
+        }
+
+        root.render(<Harness />);
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async emitParameter(endpointID: string, value: number) {
+            parameterListeners.get(endpointID)?.forEach((listener) => listener(value));
+            await waitForMicrotask();
+        },
+        async selectEndpoint(endpointID: string) {
+            selectEndpoint?.(endpointID);
+            await waitForMicrotask();
+        },
+        getSnapshot() {
+            return {
+                listenerCounts: Object.fromEntries(Array.from(parameterListeners.entries()).map(([endpointID, listeners]) => (
+                    [endpointID, listeners.size]
+                ))),
+                requestedParameters: [...requestedParameters],
                 renderLog: cloneValue(renderLog),
                 lastRender: cloneValue(renderLog.at(-1) ?? null),
             };

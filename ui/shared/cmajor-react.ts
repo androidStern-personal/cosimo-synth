@@ -105,17 +105,23 @@ export function usePatchParameter(
     initialValueRef.current = initialValue;
 
     useEffect(() => {
+        setValue(initialValueRef.current);
         if (!active) {
-            setValue(initialValueRef.current);
             return undefined;
         }
 
-        const listener = (nextValue: unknown) => setValue(nextValue);
+        let listening = true;
+        const listener = (nextValue: unknown) => {
+            if (listening) {
+                setValue(nextValue);
+            }
+        };
 
         patchConnection.addParameterListener?.(endpointID, listener);
         patchConnection.requestParameterValue?.(endpointID);
 
         return () => {
+            listening = false;
             patchConnection.removeParameterListener?.(endpointID, listener);
         };
     }, [active, endpointID, patchConnection]);
@@ -152,16 +158,22 @@ export function usePatchEndpoint<TValue = unknown>(
     initialValueRef.current = initialValue;
 
     useEffect(() => {
+        setValue(initialValueRef.current);
         if (!active) {
-            setValue(initialValueRef.current);
             return undefined;
         }
 
-        const listener = (nextValue: unknown) => setValue(nextValue as TValue);
+        let listening = true;
+        const listener = (nextValue: unknown) => {
+            if (listening) {
+                setValue(nextValue as TValue);
+            }
+        };
 
         patchConnection.addEndpointListener?.(endpointID, listener);
 
         return () => {
+            listening = false;
             patchConnection.removeEndpointListener?.(endpointID, listener);
         };
     }, [active, endpointID, patchConnection]);

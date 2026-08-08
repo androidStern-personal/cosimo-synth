@@ -166,6 +166,27 @@ test("usePatchEndpoint detaches high-rate streams while their visualizer is inac
     }
 });
 
+test("usePatchParameterBinding resets stale display state when the active endpoint changes", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installPatchParameterRebindingHarness");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().requestedParameters.length === 1);
+        await invokeHarness(page, "emitParameter", "parameterA", 0.8);
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().lastRender?.value === 0.8);
+
+        await invokeHarness(page, "selectEndpoint", "parameterB");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().requestedParameters.length === 2);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.requestedParameters, ["parameterA", "parameterB"]);
+        assert.deepEqual(snapshot.listenerCounts, { parameterA: 0, parameterB: 1 });
+        assert.deepEqual(snapshot.lastRender, { endpointID: "parameterB", value: 0.25 });
+    } finally {
+        await page.close();
+    }
+});
+
 test("useFactoryBankCatalog loads the catalog and exposes the resolved table metadata", async () => {
     const page = await openModulePage();
 
@@ -476,6 +497,37 @@ test("useStagePositionDrag preserves the swipe threshold and begin-set-end gestu
         assert.deepEqual(snapshot.gestureLog, ["begin", "end"]);
         assert.equal(snapshot.setValues.length, 1);
         assertAlmostEqual(snapshot.setValues[0], 0.9, 1e-9);
+    } finally {
+        await page.close();
+    }
+});
+
+test("useStagePositionDrag closes the host gesture when the window blurs", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installStagePositionDragHookHarness");
+        await invokeHarness(page, "dispatchPointer", "#stage", "pointerdown", {
+            pointerId: 31,
+            button: 0,
+            clientX: 32,
+            clientY: 160,
+        });
+
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.waitForTimeout(20);
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureLog, ["begin", "end"]);
+
+        await invokeHarness(page, "dispatchPointer", "#stage", "pointerup", {
+            pointerId: 31,
+            button: 0,
+            clientX: 32,
+            clientY: 60,
+        });
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureLog, ["begin", "end"]);
+        assert.deepEqual(snapshot.setValues, []);
     } finally {
         await page.close();
     }
@@ -853,6 +905,40 @@ test("useMsegEditorInteractions bends a segment immediately on desktop drag and 
         assert.deepEqual(snapshot.hapticLog, ["light"]);
     } finally {
         await touchPage.close();
+    }
+});
+
+test("useMsegEditorInteractions does not add a point when a pending touch is cancelled", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installMsegEditorInteractionsHookHarness");
+        await invokeHarness(page, "setCurveEditMode", "hold-or-drag");
+        await invokeHarness(page, "setCurveEditHoldDelayMs", 1_000);
+        await invokeHarness(page, "openEditor");
+
+        const segmentStart = await invokeHarness(page, "getNormalizedCoordinates", 0.25, 0.175);
+        await invokeHarness(page, "dispatchPointer", "pointerdown", {
+            pointerId: 43,
+            button: 0,
+            clientX: segmentStart.x,
+            clientY: segmentStart.y,
+            pointerType: "touch",
+        });
+        await invokeHarness(page, "dispatchPointer", "pointercancel", {
+            pointerId: 43,
+            button: 0,
+            clientX: segmentStart.x,
+            clientY: segmentStart.y,
+            pointerType: "touch",
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.pointCount, 3);
+        assert.deepEqual(snapshot.actionLog, []);
+        assert.equal(snapshot.activeSegmentIndex, -1);
+    } finally {
+        await page.close();
     }
 });
 

@@ -484,6 +484,27 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
     }
 });
 
+test("generated production-mode browser keeps acceptance diagnostics off the audio hot path", async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+
+    try {
+        await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
+        await page.waitForTimeout(1_000);
+
+        const snapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
+        assert.equal(snapshot.audioWorkletBlockCount, 0);
+        assert.deepEqual(snapshot.parameterValues, {});
+        assert.equal(snapshot.audioPollCount, 0);
+    } finally {
+        await page.close();
+    }
+});
+
 test("generated WebAssembly rack changes audio, modulates a real target, and stays gain-safe", async (t) => {
     const page = await browser.newPage(browserEngine === "webkit"
         ? { ...devices["iPhone 13"] }

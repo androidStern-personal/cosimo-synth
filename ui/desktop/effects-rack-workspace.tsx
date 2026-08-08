@@ -820,6 +820,16 @@ function ModSourceCarousel({
     onOpenSelectedSource: (source: SelectedSource) => void;
     onHoverTarget: (endpointID: string | null) => void;
 }) {
+    const handlersRef = useRef({
+        onHoverTarget,
+        onOpenSelectedSource,
+        onSourceActivate,
+    });
+    handlersRef.current = {
+        onHoverTarget,
+        onOpenSelectedSource,
+        onSourceActivate,
+    };
     const dragRef = useRef<{
         pointerId: number;
         source: SelectedSource;
@@ -827,22 +837,30 @@ function ModSourceCarousel({
         startX: number;
         startY: number;
         wasActiveSelection: boolean;
+        captureElement: HTMLButtonElement;
     } | null>(null);
 
-    const finishSourceGesture = useCallback((event: ReactPointerEvent<HTMLButtonElement>, cancelled: boolean) => {
+    const finishSourceGesture = useCallback((
+        pointerId: number,
+        clientX: number,
+        clientY: number,
+        cancelled: boolean,
+    ) => {
         const drag = dragRef.current;
-        if (!drag || drag.pointerId !== event.pointerId) {
+        if (!drag || drag.pointerId !== pointerId) {
             return;
         }
 
-        const targetElement = rackModulationTargetAtPoint(event.currentTarget, event.clientX, event.clientY);
+        const targetElement = cancelled
+            ? null
+            : rackModulationTargetAtPoint(drag.captureElement, clientX, clientY);
         const targetEndpointID = targetElement?.dataset.rackModTarget;
         dragRef.current = null;
-        onHoverTarget(null);
+        handlersRef.current.onHoverTarget(null);
 
         try {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-                event.currentTarget.releasePointerCapture(event.pointerId);
+            if (drag.captureElement.hasPointerCapture(pointerId)) {
+                drag.captureElement.releasePointerCapture(pointerId);
             }
         } catch {
             // Pointer capture may already have been released by the browser.
@@ -853,15 +871,47 @@ function ModSourceCarousel({
         }
 
         if (targetEndpointID) {
-            onSourceActivate(drag.source, targetEndpointID);
+            handlersRef.current.onSourceActivate(drag.source, targetEndpointID);
         } else if (!drag.moved) {
             if (drag.wasActiveSelection) {
-                onOpenSelectedSource(drag.source);
+                handlersRef.current.onOpenSelectedSource(drag.source);
             } else {
-                onSourceActivate(drag.source);
+                handlersRef.current.onSourceActivate(drag.source);
             }
         }
-    }, [onHoverTarget, onOpenSelectedSource, onSourceActivate]);
+    }, []);
+
+    useEffect(() => {
+        const handlePointerUp = (event: PointerEvent) => {
+            finishSourceGesture(event.pointerId, event.clientX, event.clientY, false);
+        };
+        const handlePointerCancel = (event: PointerEvent) => {
+            finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
+        };
+        const cancelActiveGesture = () => {
+            const drag = dragRef.current;
+            if (drag) {
+                finishSourceGesture(drag.pointerId, drag.startX, drag.startY, true);
+            }
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                cancelActiveGesture();
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerUp, true);
+        window.addEventListener("pointercancel", handlePointerCancel, true);
+        window.addEventListener("blur", cancelActiveGesture);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointerup", handlePointerUp, true);
+            window.removeEventListener("pointercancel", handlePointerCancel, true);
+            window.removeEventListener("blur", cancelActiveGesture);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            cancelActiveGesture();
+        };
+    }, [finishSourceGesture]);
 
     return (
         <div className="rack-mod-dock" role="group" aria-label="Rack modulation sources">
@@ -904,7 +954,6 @@ function ModSourceCarousel({
                                                 event.preventDefault();
                                                 event.stopPropagation();
                                                 onSourcePreview(source);
-                                                event.currentTarget.setPointerCapture(event.pointerId);
                                                 dragRef.current = {
                                                     pointerId: event.pointerId,
                                                     source,
@@ -912,7 +961,13 @@ function ModSourceCarousel({
                                                     startX: event.clientX,
                                                     startY: event.clientY,
                                                     wasActiveSelection: isSelected && sourceIsArmed,
+                                                    captureElement: event.currentTarget,
                                                 };
+                                                try {
+                                                    event.currentTarget.setPointerCapture(event.pointerId);
+                                                } catch {
+                                                    // Window-level termination still owns unsupported or synthetic pointers.
+                                                }
                                             }}
                                             onPointerMove={(event) => {
                                                 const drag = dragRef.current;
@@ -922,7 +977,12 @@ function ModSourceCarousel({
                                                 event.preventDefault();
                                                 event.stopPropagation();
                                                 if (hasReleasedMouseButton(event)) {
-                                                    finishSourceGesture(event, true);
+                                                    finishSourceGesture(
+                                                        event.pointerId,
+                                                        event.clientX,
+                                                        event.clientY,
+                                                        true,
+                                                    );
                                                     return;
                                                 }
                                                 drag.moved ||= Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 5;
@@ -933,13 +993,25 @@ function ModSourceCarousel({
                                                 );
                                                 onHoverTarget(target?.dataset.rackModTarget ?? null);
                                             }}
-                                            onPointerUp={(event) => finishSourceGesture(event, false)}
-                                            onPointerCancel={(event) => finishSourceGesture(event, true)}
+                                            onPointerUp={(event) => finishSourceGesture(
+                                                event.pointerId,
+                                                event.clientX,
+                                                event.clientY,
+                                                false,
+                                            )}
+                                            onPointerCancel={(event) => finishSourceGesture(
+                                                event.pointerId,
+                                                event.clientX,
+                                                event.clientY,
+                                                true,
+                                            )}
                                             onLostPointerCapture={(event) => {
-                                                if (dragRef.current?.pointerId === event.pointerId) {
-                                                    dragRef.current = null;
-                                                    onHoverTarget(null);
-                                                }
+                                                finishSourceGesture(
+                                                    event.pointerId,
+                                                    event.clientX,
+                                                    event.clientY,
+                                                    true,
+                                                );
                                             }}
                                         >
                                             <img src={source.iconUrl} alt="" draggable={false} />
