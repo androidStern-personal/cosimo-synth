@@ -302,14 +302,6 @@
         border-radius: 999px;
     }
 
-    .cosimo-surface.is-mod-source-mapping [data-rack-mod-target] {
-        outline: 2px solid color-mix(in srgb, var(--active-source-color, #df74cf) 78%, white);
-        outline-offset: -2px;
-        box-shadow:
-            inset 0 0 16px color-mix(in srgb, var(--active-source-color, #df74cf) 17%, transparent),
-            0 0 8px color-mix(in srgb, var(--active-source-color, #df74cf) 34%, transparent);
-    }
-
     .cosimo-surface.is-mod-source-mapping .rack-editor-controls > :not([data-rack-mod-target]) {
         opacity: 0.42;
     }

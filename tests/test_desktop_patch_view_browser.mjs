@@ -7059,7 +7059,9 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-env-1"]');
+        await collapseGlobalModRail(page);
 
         const mixSurface = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
         const driveSurface = page.locator('[data-role="rack-parameter-surface-distortionDriveDb"]');
@@ -7121,6 +7123,7 @@ test("switching armed sources swaps only selected-route outer geometry and prese
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWet", 0.6, true);
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await expandGlobalModRail(page);
         const mix = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
         const readRing = () => mix.evaluate((element) => {
             const knob = element.querySelector('.rack-parameter-knob');
@@ -9321,6 +9324,7 @@ test("source preview and valid hover stay transient while the armed ring and foc
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
+        await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-mseg-1"]');
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
         const knob = surface.locator('[data-role="rack-parameter-reverbSize"]');
@@ -9402,6 +9406,7 @@ test("a real source drop at the route cap remains byte-identical and visibly unm
         );
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
+        await expandGlobalModRail(page);
         await clearHarnessDebugLog(page);
         const before = await getHarnessSnapshot(page);
         const beforeStored = before.storedState["modulation.v2"];
@@ -9451,7 +9456,9 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
         await page.click('[data-role="rack-enabled-reverb"]');
+        await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-env-1"]');
+        await collapseGlobalModRail(page);
         const reverbKnob = page.locator('[data-role="rack-parameter-reverbSize"]');
         const reverbBadge = page.locator('[data-role="rack-route-count-reverbSize"]');
         const activeGeometry = await reverbKnob.locator('.rack-knob-mod-fill').getAttribute("d");
