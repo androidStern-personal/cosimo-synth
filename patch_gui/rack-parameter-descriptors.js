@@ -34,6 +34,8 @@ const p = (effectId, endpointID, label, shortLabel, min, max, initial, options =
     choices: options.choices,
     quick: options.quick ?? false,
     modulationTargetIndex: options.modulationTargetIndex ?? null,
+    modulationApplication: options.modulationApplication
+        ?? (options.modulationTargetIndex === undefined || options.modulationTargetIndex === null ? null : "linear"),
 });
 const PHASER_DIVISIONS = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"];
 const DELAY_DIVISIONS = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"];
@@ -45,8 +47,8 @@ const definitions = [
         iconUrl: RACK_ICON_URLS.filter,
         initialQuickEndpointID: "globalFilterCutoff",
         parameters: [
-            p("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 0, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(choice), quick: true }),
-            p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 20_000, 20_000, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0 }),
+            p("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 1, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(choice), quick: true }),
+            p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 20_000, 20_000, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0, modulationApplication: "octaves" }),
             p("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1 }),
             p("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 }),
         ],
@@ -62,8 +64,8 @@ const definitions = [
             p("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: true, modulationTargetIndex: 3 }),
             p("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
             p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 5 }),
-            p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4_000, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6 }),
-            p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 20_000, 18_000, { unit: "Hz", scale: "log", modulationTargetIndex: 7 }),
+            p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4_000, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
+            p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 20_000, 18_000, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" }),
         ],
     },
     {
@@ -121,7 +123,7 @@ const definitions = [
             p("phaser", "phaserRate", "Rate", "Rate", 0.02, 8, 0.3, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 22 }),
             p("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: PHASER_DIVISIONS.map(choice) }),
             p("phaser", "phaserDepth", "Depth", "Dpt", 0, 1, 0.7, { modulationTargetIndex: 23 }),
-            p("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8_000, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24 }),
+            p("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8_000, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24, modulationApplication: "octaves" }),
             p("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
             p("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
             p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 27 }),
@@ -135,10 +137,10 @@ const definitions = [
         initialQuickEndpointID: "delayTime",
         parameters: [
             p("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
-            p("delay", "delayTime", "Time", "Time", 1, 2_000, 375, { unit: "ms", scale: "log", quick: true, modulationTargetIndex: 28 }),
+            p("delay", "delayTime", "Time", "Time", 1, 2_000, 375, { unit: "ms", scale: "log", quick: true, modulationTargetIndex: 28, modulationApplication: "octaves" }),
             p("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: DELAY_DIVISIONS.map(choice) }),
             p("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
-            p("delay", "delayFilter", "Filter", "Filt", 200, 18_000, 6_000, { unit: "Hz", scale: "log", modulationTargetIndex: 30 }),
+            p("delay", "delayFilter", "Filter", "Filt", 200, 18_000, 6_000, { unit: "Hz", scale: "log", modulationTargetIndex: 30, modulationApplication: "octaves" }),
             p("delay", "delayMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 31 }),
         ],
     },

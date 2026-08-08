@@ -2237,7 +2237,7 @@ export function useSynthPatchViewModel({
     }, [modulationBridge, selectedEnvelope, selectedEnvelopeSlot]);
 
     const handleAddRoute = useCallback(() => {
-        modulationBridge.current?.addRoute(createDefaultRoute());
+        modulationBridge.current?.addRoute();
     }, [modulationBridge]);
 
     const handleAddRouteWithOverrides = useCallback((overrides: Partial<ModulationRoute>) => {

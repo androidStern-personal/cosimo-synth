@@ -256,7 +256,7 @@ namespace wt
         // have today so that host parameter identity, ranges and automation lanes are
         // unchanged by the move into the rack.
 
-        input value float32 globalFilterMode [[ name: "Global Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|Lowpass|Highpass|Bandpass|Notch|Peak", rampFrames: 0 ]];
+        input value float32 globalFilterMode [[ name: "Global Filter Mode", min: 0.0f, max: 5.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|Lowpass|Highpass|Bandpass|Notch|Peak", rampFrames: 0 ]];
         input value float32 globalFilterCutoff [[ name: "Global Filter Cutoff", min: filterCutoffMinHz, max: filterCutoffMaxHz, init: filterCutoffMaxHz, unit: "Hz", rampFrames: 64 ]];
         input value float32 globalFilterResonance [[ name: "Global Filter Resonance", min: filterQMin, max: filterQMax, init: 0.707107f, rampFrames: 64 ]];
         input value float32 globalFilterDrive [[ name: "Global Filter Drive", min: globalFilterDriveMin, max: globalFilterDriveMax, init: 0.0f, rampFrames: 64 ]];

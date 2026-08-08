@@ -317,7 +317,7 @@
 
 @media (max-width: 639px) {
     .cosimo-surface.is-mobile-accordion {
-        gap: 4px;
+        gap: 2px;
         padding: 4px;
         border-radius: 18px;
     }
@@ -325,7 +325,7 @@
     .mobile-workspace-accordion {
         display: flex;
         flex-direction: column;
-        gap: 4px;
+        gap: 0;
         overflow: hidden;
     }
 
@@ -455,6 +455,7 @@
 
     .mobile-workspace-section.is-fx .rack-list {
         grid-template-rows: repeat(8, 48px);
+        gap: 0;
     }
 
     .mobile-workspace-section.is-fx .rack-unit {

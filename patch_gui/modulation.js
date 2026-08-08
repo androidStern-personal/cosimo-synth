@@ -152,7 +152,7 @@ export function isVoiceModulationSource(sourceKind) {
     return sourceKind !== "macro";
 }
 function getRackRouteAmountLimit(descriptor) {
-    if (descriptor.scale === "log") {
+    if (descriptor.modulationApplication === "octaves") {
         return { min: -6, max: 6 };
     }
     const span = descriptor.max - descriptor.min;
@@ -168,7 +168,7 @@ function getRouteAmountLimit(targetKind) {
 function getRouteAmountStep(targetKind) {
     const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
     if (rackParameter !== undefined) {
-        return rackParameter.scale === "log" ? 0.01 : (rackParameter.max - rackParameter.min) / 1000;
+        return rackParameter.modulationApplication === "octaves" ? 0.01 : (rackParameter.max - rackParameter.min) / 1000;
     }
     return ROUTE_AMOUNT_STEPS[targetKind];
 }
@@ -267,7 +267,7 @@ export function formatModulationAmountReadout(targetKind, amount, polarity = "un
         : (clampedAmount > 0 ? "+" : clampedAmount < 0 ? "-" : "");
     const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
     if (rackParameter !== undefined) {
-        if (rackParameter.scale === "log") {
+        if (rackParameter.modulationApplication === "octaves") {
             return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
         }
         if (rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2) {
@@ -500,6 +500,23 @@ export function createDefaultRoute(overrides = {}) {
         ...overrides,
     };
 }
+/** Returns the first deterministic source/target pair not already present. */
+export function createAvailableDefaultRoute(existingRoutes) {
+    const occupiedPairs = new Set(existingRoutes.map(routePairKey));
+    for (const source of MODULATION_SOURCE_OPTIONS) {
+        for (const target of MODULATION_TARGET_OPTIONS) {
+            const candidate = createDefaultRoute({
+                sourceKind: source.sourceKind,
+                sourceSlot: source.sourceSlot,
+                targetKind: target.value,
+            });
+            if (!occupiedPairs.has(routePairKey(candidate))) {
+                return candidate;
+            }
+        }
+    }
+    return null;
+}
 export function normalizeRoute(value, routeIndex = 0) {
     const nextValue = value && typeof value === "object" ? value : {};
     const sourceKind = normalizeSourceKind(nextValue.sourceKind);
@@ -544,6 +561,26 @@ export function createDefaultModulationState() {
         macroNames: MACRO_SLOT_NAMES.slice(),
     };
 }
+function routePairKey(route) {
+    return `${route.sourceKind}:${route.sourceSlot ?? 0}:${route.targetKind}`;
+}
+function normalizeUniqueRoutes(inputRoutes) {
+    const seenPairs = new Set();
+    const routes = [];
+    for (const inputRoute of inputRoutes) {
+        const normalizedRoute = normalizeRoute(inputRoute, routes.length);
+        const pairKey = routePairKey(normalizedRoute);
+        if (seenPairs.has(pairKey)) {
+            continue;
+        }
+        seenPairs.add(pairKey);
+        routes.push(normalizedRoute);
+        if (routes.length >= MODULATION_MAX_ROUTES) {
+            break;
+        }
+    }
+    return routes;
+}
 export function normalizeModulationState(value = createDefaultModulationState()) {
     const nextValue = value && typeof value === "object" ? value : {};
     const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
@@ -555,7 +592,7 @@ export function normalizeModulationState(value = createDefaultModulationState())
         version: 2,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
-        routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)),
+        routes: normalizeUniqueRoutes(inputRoutes),
         macroNames: Array.from({ length: MODULATION_MACRO_SLOT_COUNT }, (_, slotIndex) => normalizeMacroName(inputMacroNames[slotIndex], slotIndex)),
     };
 }
@@ -904,7 +941,7 @@ export class ModulationRuntimeBridge {
     }
     replaceRoutes(nextRoutes) {
         const normalizedRoutes = Array.isArray(nextRoutes)
-            ? nextRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
+            ? normalizeUniqueRoutes(nextRoutes)
             : [];
         if (JSON.stringify(this.state.routes) === JSON.stringify(normalizedRoutes)) {
             return;
@@ -926,11 +963,17 @@ export class ModulationRuntimeBridge {
         currentRoutes[routeIndex] = normalizedRoute;
         this.replaceRoutes(currentRoutes);
     }
-    addRoute(nextRoute = createDefaultRoute()) {
+    addRoute(nextRoute) {
         if (this.state.routes.length >= MODULATION_MAX_ROUTES) {
             return;
         }
-        this.replaceRoutes([...this.state.routes, normalizeRoute(nextRoute, this.state.routes.length)]);
+        const normalizedRoute = nextRoute === undefined
+            ? createAvailableDefaultRoute(this.state.routes)
+            : normalizeRoute(nextRoute, this.state.routes.length);
+        if (!normalizedRoute) {
+            return;
+        }
+        this.replaceRoutes([...this.state.routes, normalizedRoute]);
     }
     removeRoute(routeIndex) {
         if (routeIndex < 0 || routeIndex >= this.state.routes.length) {

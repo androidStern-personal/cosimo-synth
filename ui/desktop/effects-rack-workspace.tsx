@@ -35,6 +35,7 @@ import {
 } from "../shared/rack-state";
 import {
     MODULATION_MAX_ROUTES,
+    MODULATION_SOURCE_OPTIONS,
     composeModulationAmount,
     formatModulationAmountEditingValue,
     formatModulationAmountReadout,
@@ -43,6 +44,7 @@ import {
     parseModulationAmountEditingValue,
     type ModulationRoute,
     type ModulationRouteUpdate,
+    type ModulationTargetKind,
     type RackModulationTargetKind,
 } from "../shared/modulation";
 import {
@@ -50,11 +52,16 @@ import {
     findRackModulationSource,
     type RackModulationSource,
 } from "../shared/rack-modulation-sources";
+import {
+    projectRackRoutePresentation,
+    type RackRouteCreation,
+    type RackRouteSource,
+} from "../shared/rack-route-presentation";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import { FilterResponseGraph } from "../shared/synth-components";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
 import type { SynthPatchViewModel } from "../shared/synth-hooks";
-import { useSliderDrag } from "../shared/use-slider-drag";
+import { useSliderDrag, type SliderDragPointer } from "../shared/use-slider-drag";
 import {
     RackParameterKnob,
     type RackParameterHud,
@@ -445,6 +452,10 @@ function isRouteForTarget(route: ModulationRoute, endpointID: string) {
     return route.targetKind === `rack.${endpointID}`;
 }
 
+function routePairKey(source: RackRouteSource, targetKind: ModulationTargetKind) {
+    return `${source.sourceKind}:${source.sourceSlot}:${targetKind}`;
+}
+
 const RACK_CONTROL_ROLE_ALIASES: Readonly<Record<string, string>> = {
     distortionMode: "distortion-mode-option-1",
     distortionDriveDb: "distortion-drive-field",
@@ -477,6 +488,10 @@ function RackParameterControl({
     selected,
     activeSource,
     sourceIsSelected,
+    effectEnabled,
+    targetEffective,
+    pending,
+    dragSourceAccent,
     hovered,
     onSelect,
     onRecentParameter,
@@ -489,6 +504,10 @@ function RackParameterControl({
     selected: boolean;
     activeSource: RackModulationSource;
     sourceIsSelected: boolean;
+    effectEnabled: boolean;
+    targetEffective: boolean;
+    pending: boolean;
+    dragSourceAccent: string | null;
     hovered: boolean;
     onSelect: () => void;
     onRecentParameter: (endpointID: string) => void;
@@ -498,13 +517,17 @@ function RackParameterControl({
 }) {
     const binding = useRackParameterBinding(descriptor);
     const isTarget = descriptor.modulationTargetIndex !== null;
-    const hasRoute = isTarget && routes.some((route) => isRouteForTarget(route, descriptor.endpointID));
-    const selectedRoute = sourceIsSelected ? routes.find((route) => (
-        route.sourceKind === activeSource.sourceKind
-        && route.sourceSlot === activeSource.sourceSlot
-        && isRouteForTarget(route, descriptor.endpointID)
-    )) ?? null : null;
-    const rootStyle = { "--active-source-color": activeSource.accent } as CSSProperties;
+    const presentation = projectRackRoutePresentation({
+        routes,
+        armedSource: sourceIsSelected ? activeSource : null,
+        targetKind: isTarget ? `rack.${descriptor.endpointID}` as RackModulationTargetKind : null,
+        effectEnabled,
+        targetEffective,
+        pending,
+    });
+    const rootStyle = {
+        "--drag-source-color": dragSourceAccent ?? "transparent",
+    } as CSSProperties;
     const controlDataRole = RACK_CONTROL_ROLE_ALIASES[descriptor.endpointID]
         ?? `rack-parameter-${descriptor.endpointID}`;
 
@@ -545,15 +568,30 @@ function RackParameterControl({
         <div
             data-role={`rack-parameter-surface-${descriptor.endpointID}`}
             data-rack-mod-target={isTarget ? descriptor.endpointID : undefined}
-            className={`rack-editor-control${hasRoute ? " has-route" : ""}${selected ? " is-selected-target" : ""}${hovered ? " is-mod-hover" : ""}`}
+            data-creation-state={presentation.creation}
+            data-effectiveness={presentation.effectiveness}
+            className={`rack-editor-control${selected ? " is-selected-target" : ""}${hovered ? " is-mod-hover" : ""}${presentation.effectiveness === "active" ? "" : " is-suspended"}`}
             style={rootStyle}
         >
+            {presentation.badge !== "hidden" ? (
+                <span
+                    className={`rack-route-count-badge is-${presentation.badge}`}
+                    data-role={`rack-route-count-${descriptor.endpointID}`}
+                    aria-label={`${presentation.targetRouteCount} modulation ${presentation.targetRouteCount === 1 ? "route" : "routes"} target ${descriptor.label}`}
+                >
+                    {presentation.targetRouteCount}
+                </span>
+            ) : null}
+            {presentation.effectiveness === "target-suspended" ? (
+                <span className="rack-target-suspended-label">MODE</span>
+            ) : null}
             <RackParameterKnob
                 descriptor={descriptor}
                 binding={binding}
-                route={selectedRoute}
+                route={presentation.currentRoute}
                 sourceIsSelected={sourceIsSelected}
                 sourceAccent={activeSource.accent}
+                effectiveness={presentation.effectiveness}
                 dataRole={controlDataRole}
                 trackDataRole={RACK_TRACK_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-track-${descriptor.endpointID}`}
                 handleDataRole={RACK_HANDLE_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-handle-${descriptor.endpointID}`}
@@ -705,6 +743,9 @@ function ParameterList({
     hoverTargetEndpointID,
     activeSource,
     sourceIsSelected,
+    effectEnabled,
+    pendingRouteKey,
+    dragSourceAccent,
     onSelectTarget,
     onRecentParameter,
     onHudChange,
@@ -717,6 +758,9 @@ function ParameterList({
     hoverTargetEndpointID: string | null;
     activeSource: RackModulationSource;
     sourceIsSelected: boolean;
+    effectEnabled: boolean;
+    pendingRouteKey: string | null;
+    dragSourceAccent: string | null;
     onSelectTarget: (endpointID: string) => void;
     onRecentParameter: (endpointID: string) => void;
     onHudChange: (hud: RackParameterHud | null) => void;
@@ -734,6 +778,29 @@ function ParameterList({
                 hoverTargetEndpointID={hoverTargetEndpointID}
                 activeSource={activeSource}
                 sourceIsSelected={sourceIsSelected}
+                effectEnabled={effectEnabled}
+                pendingRouteKey={pendingRouteKey}
+                dragSourceAccent={dragSourceAccent}
+                onSelectTarget={onSelectTarget}
+                onRecentParameter={onRecentParameter}
+                onHudChange={onHudChange}
+                onModulationAmountChange={onModulationAmountChange}
+                onRequestContextMenu={onRequestContextMenu}
+            />
+        );
+    }
+
+    if (effectId === "filter") {
+        return (
+            <FilterParameterList
+                routes={routes}
+                selectedTargetEndpointID={selectedTargetEndpointID}
+                hoverTargetEndpointID={hoverTargetEndpointID}
+                activeSource={activeSource}
+                sourceIsSelected={sourceIsSelected}
+                effectEnabled={effectEnabled}
+                pendingRouteKey={pendingRouteKey}
+                dragSourceAccent={dragSourceAccent}
                 onSelectTarget={onSelectTarget}
                 onRecentParameter={onRecentParameter}
                 onHudChange={onHudChange}
@@ -753,6 +820,56 @@ function ParameterList({
                     selected={selectedTargetEndpointID === parameter.endpointID}
                     activeSource={activeSource}
                     sourceIsSelected={sourceIsSelected}
+                    effectEnabled={effectEnabled}
+                    targetEffective
+                    pending={pendingRouteKey === `${activeSource.sourceKind}:${activeSource.sourceSlot}:rack.${parameter.endpointID}`}
+                    dragSourceAccent={dragSourceAccent}
+                    hovered={hoverTargetEndpointID === parameter.endpointID}
+                    onSelect={() => onSelectTarget(parameter.endpointID)}
+                    onRecentParameter={onRecentParameter}
+                    onHudChange={onHudChange}
+                    onModulationAmountChange={onModulationAmountChange}
+                    onRequestContextMenu={onRequestContextMenu}
+                />
+            ))}
+        </>
+    );
+}
+
+function FilterParameterList({
+    routes,
+    selectedTargetEndpointID,
+    hoverTargetEndpointID,
+    activeSource,
+    sourceIsSelected,
+    effectEnabled,
+    pendingRouteKey,
+    dragSourceAccent,
+    onSelectTarget,
+    onRecentParameter,
+    onHudChange,
+    onModulationAmountChange,
+    onRequestContextMenu,
+}: Omit<Parameters<typeof ParameterList>[0], "effectId">) {
+    const descriptor = getRackEffectDescriptor("filter");
+    const modeDescriptor = descriptor.parameters.find((parameter) => parameter.endpointID === "globalFilterMode")!;
+    const modeBinding = useRackParameterBinding(modeDescriptor);
+    const filterIsAudible = modeBinding.value >= 0.5;
+
+    return (
+        <>
+            {descriptor.parameters.map((parameter) => (
+                <RackParameterControl
+                    key={parameter.endpointID}
+                    descriptor={parameter}
+                    routes={routes}
+                    selected={selectedTargetEndpointID === parameter.endpointID}
+                    activeSource={activeSource}
+                    sourceIsSelected={sourceIsSelected}
+                    effectEnabled={effectEnabled}
+                    targetEffective={parameter.modulationTargetIndex === null || filterIsAudible}
+                    pending={pendingRouteKey === `${activeSource.sourceKind}:${activeSource.sourceSlot}:rack.${parameter.endpointID}`}
+                    dragSourceAccent={dragSourceAccent}
                     hovered={hoverTargetEndpointID === parameter.endpointID}
                     onSelect={() => onSelectTarget(parameter.endpointID)}
                     onRecentParameter={onRecentParameter}
@@ -772,6 +889,9 @@ function SyncParameterList({
     hoverTargetEndpointID,
     activeSource,
     sourceIsSelected,
+    effectEnabled,
+    pendingRouteKey,
+    dragSourceAccent,
     onSelectTarget,
     onRecentParameter,
     onHudChange,
@@ -784,6 +904,9 @@ function SyncParameterList({
     hoverTargetEndpointID: string | null;
     activeSource: RackModulationSource;
     sourceIsSelected: boolean;
+    effectEnabled: boolean;
+    pendingRouteKey: string | null;
+    dragSourceAccent: string | null;
     onSelectTarget: (endpointID: string) => void;
     onRecentParameter: (endpointID: string) => void;
     onHudChange: (hud: RackParameterHud | null) => void;
@@ -796,12 +919,15 @@ function SyncParameterList({
     const divisionEndpointID = effectId === "phaser" ? "phaserRateDivision" : "delayDivision";
     const modeDescriptor = descriptor.parameters.find((parameter) => parameter.endpointID === modeEndpointID)!;
     const modeBinding = useRackParameterBinding(modeDescriptor);
+    const syncMode = modeBinding.value >= 0.5;
     const visibleParameters = descriptor.parameters.filter((parameter) => {
         if (parameter.endpointID === freeEndpointID) {
-            return modeBinding.value < 0.5;
+            return !syncMode
+                || selectedTargetEndpointID === freeEndpointID
+                || routes.some((route) => isRouteForTarget(route, freeEndpointID));
         }
         if (parameter.endpointID === divisionEndpointID) {
-            return modeBinding.value >= 0.5;
+            return syncMode;
         }
         return true;
     });
@@ -816,6 +942,10 @@ function SyncParameterList({
                     selected={selectedTargetEndpointID === parameter.endpointID}
                     activeSource={activeSource}
                     sourceIsSelected={sourceIsSelected}
+                    effectEnabled={effectEnabled}
+                    targetEffective={parameter.endpointID !== freeEndpointID || !syncMode}
+                    pending={pendingRouteKey === `${activeSource.sourceKind}:${activeSource.sourceSlot}:rack.${parameter.endpointID}`}
+                    dragSourceAccent={dragSourceAccent}
                     hovered={hoverTargetEndpointID === parameter.endpointID}
                     onSelect={() => onSelectTarget(parameter.endpointID)}
                     onRecentParameter={onRecentParameter}
@@ -833,7 +963,7 @@ function ModSourceCarousel({
     selectedSource,
     sourceIsArmed,
     onPageChange,
-    onSourcePreview,
+    onDragSourceChange,
     onSourceSelect,
     onSourceDrop,
     onOpenSelectedSource,
@@ -844,15 +974,19 @@ function ModSourceCarousel({
     selectedSource: SelectedSource;
     sourceIsArmed: boolean;
     onPageChange: (pageIndex: number) => void;
-    onSourcePreview: (source: SelectedSource) => void;
+    onDragSourceChange: (source: SelectedSource | null) => void;
     onSourceSelect: (source: SelectedSource) => void;
     onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
     onOpenSelectedSource: (source: SelectedSource) => void;
-    onHoverTarget: (endpointID: string | null) => void;
+    onHoverTarget: (source: SelectedSource, endpointID: string | null) => void;
     onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
 }) {
+    const armedSourceLabel = sourceIsArmed
+        ? findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot).label
+        : null;
     const handlersRef = useRef({
         onHoverTarget,
+        onDragSourceChange,
         onOpenSelectedSource,
         onSourceDrop,
         onSourceSelect,
@@ -860,6 +994,7 @@ function ModSourceCarousel({
     });
     handlersRef.current = {
         onHoverTarget,
+        onDragSourceChange,
         onOpenSelectedSource,
         onSourceDrop,
         onSourceSelect,
@@ -943,7 +1078,8 @@ function ModSourceCarousel({
             : rackModulationTargetAtPoint(drag.captureElement, clientX, clientY);
         const targetEndpointID = targetElement?.dataset.rackModTarget;
         dragRef.current = null;
-        handlersRef.current.onHoverTarget(null);
+        handlersRef.current.onHoverTarget(drag.source, null);
+        handlersRef.current.onDragSourceChange(null);
         handlersRef.current.onSourceDragChange?.(null);
         stopSourceAutoScroll();
 
@@ -1006,7 +1142,7 @@ function ModSourceCarousel({
     return (
         <div className="rack-mod-dock" role="group" aria-label="Rack modulation sources">
             <header className="rack-mod-header">
-                <strong>MOD BAR</strong>
+                <strong>MOD BAR{armedSourceLabel === null ? "" : ` · ${armedSourceLabel}`}</strong>
                 <span>GROUP {pageIndex + 1} / {RACK_MODULATION_SOURCE_PAGES.length}</span>
             </header>
             <div className="rack-mod-row">
@@ -1044,7 +1180,7 @@ function ModSourceCarousel({
                                                 }
                                                 event.preventDefault();
                                                 event.stopPropagation();
-                                                onSourcePreview(source);
+                                                onDragSourceChange(source);
                                                 dragRef.current = {
                                                     pointerId: event.pointerId,
                                                     source,
@@ -1090,7 +1226,7 @@ function ModSourceCarousel({
                                                     event.clientX,
                                                     event.clientY,
                                                 );
-                                                onHoverTarget(target?.dataset.rackModTarget ?? null);
+                                                onHoverTarget(drag.source, target?.dataset.rackModTarget ?? null);
                                             }}
                                             onPointerUp={(event) => finishSourceGesture(
                                                 event.pointerId,
@@ -1117,6 +1253,12 @@ function ModSourceCarousel({
                                                 <img
                                                     className="rack-mod-icon"
                                                     src={source.iconUrl}
+                                                    alt=""
+                                                    draggable={false}
+                                                />
+                                                <img
+                                                    className="rack-mod-identity-glyph"
+                                                    src={source.identityIconUrl}
                                                     alt=""
                                                     draggable={false}
                                                 />
@@ -1709,14 +1851,19 @@ function ModulationAmountControl({
     source,
     target,
     amount,
+    polarity,
     onChange,
+    onHudChange,
 }: {
     source: RackModulationSource;
     target: RackParameterDescriptor;
     amount: number;
+    polarity: ModulationRoute["polarity"];
     onChange: (amount: number) => void;
+    onHudChange: (hud: RackParameterHud | null) => void;
 }) {
     const sliderRef = useRef<HTMLButtonElement | null>(null);
+    const hudPointerRef = useRef<SliderDragPointer | null>(null);
     const {
         handlePointerDown,
         handlePointerMove,
@@ -1726,17 +1873,47 @@ function ModulationAmountControl({
     } = useSliderDrag();
     const targetKind = `rack.${target.endpointID}` as RackModulationTargetKind;
     const sliderPosition = getModulationAmountSliderPosition(targetKind, amount);
+    const showModulationHud = useCallback((nextAmount: number, pointer?: SliderDragPointer) => {
+        const slider = sliderRef.current;
+        if (!slider) {
+            return;
+        }
+        const bounds = slider.getBoundingClientRect();
+        const hudPointer = pointer ?? hudPointerRef.current ?? {
+            x: (bounds.left + bounds.right) / 2,
+            y: (bounds.top + bounds.bottom) / 2,
+        };
+        hudPointerRef.current = hudPointer;
+        onHudChange({
+            endpointID: target.endpointID,
+            label: `MOD · ${target.label}`,
+            value: formatModulationAmountReadout(targetKind, nextAmount, polarity),
+            mode: "modulation",
+            anchor: {
+                left: bounds.left,
+                top: bounds.top,
+                right: bounds.right,
+                bottom: bounds.bottom,
+            },
+            pointer: hudPointer,
+        });
+    }, [onHudChange, polarity, target.endpointID, target.label, targetKind]);
     const binding = useMemo<PatchControlBinding<number>>(() => ({
         endpointID: "rackModulationAmount",
         value: sliderPosition,
         setValue: () => undefined,
         commitValue: () => undefined,
-        beginGesture: () => undefined,
-        endGesture: () => undefined,
-    }), [sliderPosition]);
-    const handleNormalizedChange = useCallback((normalized: number) => {
-        onChange(composeModulationAmount(targetKind, normalized));
-    }, [onChange, targetKind]);
+        beginGesture: () => showModulationHud(amount),
+        endGesture: () => {
+            hudPointerRef.current = null;
+            onHudChange(null);
+        },
+    }), [amount, onHudChange, showModulationHud, sliderPosition]);
+    const handleNormalizedChange = useCallback((normalized: number, pointer?: SliderDragPointer) => {
+        const nextAmount = composeModulationAmount(targetKind, normalized);
+        onChange(nextAmount);
+        showModulationHud(nextAmount, pointer);
+    }, [onChange, showModulationHud, targetKind]);
     const fillStart = Math.min(0.5, sliderPosition);
     const fillWidth = Math.abs(sliderPosition - 0.5);
 
@@ -1744,7 +1921,7 @@ function ModulationAmountControl({
         <section className="rack-mod-amount" aria-label="Selected modulation mapping amount">
             <div className="rack-mod-amount-label">
                 <span><strong>AMOUNT</strong>{source.label} → {getRackEffectDescriptor(target.effectId).label} {target.shortLabel}</span>
-                <output>{formatModulationAmountReadout(targetKind, amount)}</output>
+                <output>{formatModulationAmountReadout(targetKind, amount, polarity)}</output>
             </div>
             <button
                 ref={sliderRef}
@@ -1755,18 +1932,21 @@ function ModulationAmountControl({
                 aria-valuemin={-100}
                 aria-valuemax={100}
                 aria-valuenow={Math.round((sliderPosition - 0.5) * 200)}
-                aria-valuetext={formatModulationAmountReadout(targetKind, amount)}
+                aria-valuetext={formatModulationAmountReadout(targetKind, amount, polarity)}
                 className="rack-mod-amount-slider"
-                onPointerDown={(event) => handlePointerDown(
-                    event,
-                    sliderRef.current,
-                    binding,
-                    sliderPosition,
-                    0,
-                    1,
-                    "horizontal",
-                    handleNormalizedChange,
-                )}
+                onPointerDown={(event) => {
+                    hudPointerRef.current = { x: event.clientX, y: event.clientY };
+                    handlePointerDown(
+                        event,
+                        sliderRef.current,
+                        binding,
+                        sliderPosition,
+                        0,
+                        1,
+                        "horizontal",
+                        handleNormalizedChange,
+                    );
+                }}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerCancel}
@@ -1782,6 +1962,12 @@ function ModulationAmountControl({
                         1,
                     ));
                 }}
+                onKeyUp={(event) => {
+                    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                        onHudChange(null);
+                    }
+                }}
+                onBlur={() => onHudChange(null)}
             >
                 <span className="rack-mod-amount-track" aria-hidden="true">
                     <span className="rack-mod-amount-zero" />
@@ -1838,20 +2024,28 @@ const RACK_PARAMETER_MENU_ITEMS = [
     { action: "toggle-route", label: "Bypass route" },
     { action: "polarity", label: "Polarity: Unipolar" },
     { action: "reducer", label: "Voice reducer: Maximum" },
-    { action: "remove-route", label: "Remove this route" },
+    { action: "remove-route", label: "Remove selected-source route" },
     { action: "remove-all-target-routes", label: "Remove all routes to target…" },
 ] as const;
 
 type RackParameterMenuAction = typeof RACK_PARAMETER_MENU_ITEMS[number]["action"];
 
+function routeSourceLabel(route: Pick<ModulationRoute, "sourceKind" | "sourceSlot">) {
+    return MODULATION_SOURCE_OPTIONS.find((source) => (
+        source.sourceKind === route.sourceKind && source.sourceSlot === route.sourceSlot
+    ))?.label ?? "Selected source";
+}
+
 function RackParameterContextMenu({
     state,
     route,
+    targetRouteCount,
     onClose,
     onSelectAction,
 }: {
     state: RackParameterMenuState;
     route: ModulationRoute | null;
+    targetRouteCount: number;
     onClose: () => void;
     onSelectAction: (action: RackParameterMenuAction) => void;
 }) {
@@ -1876,8 +2070,18 @@ function RackParameterContextMenu({
                 onPointerDown={(event) => event.stopPropagation()}
             >
                 {RACK_PARAMETER_MENU_ITEMS
-                    .filter((item) => item.action !== "reducer"
-                        || (route !== null && isVoiceModulationSource(route.sourceKind)))
+                    .filter((item) => {
+                        if (item.action === "remove-all-target-routes") {
+                            return targetRouteCount > 0;
+                        }
+                        if (item.action === "reducer") {
+                            return route !== null && isVoiceModulationSource(route.sourceKind);
+                        }
+                        if (["toggle-route", "polarity", "remove-route"].includes(item.action)) {
+                            return route !== null;
+                        }
+                        return true;
+                    })
                     .map((item) => {
                         const label = item.action === "toggle-route"
                             ? (route?.enabled === false ? "Enable route" : "Bypass route")
@@ -1885,6 +2089,8 @@ function RackParameterContextMenu({
                                 ? `Polarity: ${route?.polarity === "bipolar" ? "Bipolar" : "Unipolar"}`
                                 : item.action === "reducer"
                                     ? `Voice reducer: ${route?.reducer === "mean" ? "Mean" : "Maximum"}`
+                                    : item.action === "remove-route" && route !== null
+                                        ? `Remove ${routeSourceLabel(route)} route`
                                     : item.label;
                         const needsRoute = ["toggle-route", "polarity", "reducer", "remove-route"].includes(item.action);
                         return (
@@ -1931,7 +2137,7 @@ function RackParameterValueSheet({
     descriptor: RackParameterDescriptor;
     binding: PatchControlBinding<number>;
     route: ModulationRoute | null;
-    source: RackModulationSource;
+    source: RackModulationSource | null;
     onApply: (baseValue: number, modulationAmount: number | null) => void;
     onClose: () => void;
 }) {
@@ -1986,7 +2192,7 @@ function RackParameterValueSheet({
                     </span>
                 </label>
                 <label>
-                    <span>{source.label} amount</span>
+                    <span>{source === null ? "No armed source" : `${source.label} amount`}</span>
                     <span className="rack-value-sheet-input">
                         <input
                             data-role="rack-modulation-value-input"
@@ -2002,7 +2208,7 @@ function RackParameterValueSheet({
                         <em>{rackModulationEditingUnit(descriptor)}</em>
                     </span>
                 </label>
-                {route === null ? <p data-role="rack-value-sheet-no-route">No selected source route.</p> : null}
+                {route === null ? <p data-role="rack-value-sheet-no-route">{source === null ? "Arm a source to edit its route." : "No selected source route."}</p> : null}
                 {error ? <p className="rack-value-sheet-error" role="alert">{error}</p> : null}
                 <footer>
                     <button type="button" data-role="rack-value-sheet-default" onClick={() => {
@@ -2081,6 +2287,7 @@ export function EffectsRackWorkspace({
     const [selectedSource, setSelectedSource] = useState<SelectedSource>({ sourceKind: "mseg", sourceSlot: 1 });
     const [sourcePageIndex, setSourcePageIndex] = useState(0);
     const [sourceIsArmed, setSourceIsArmed] = useState(false);
+    const [dragSource, setDragSource] = useState<SelectedSource | null>(null);
     const [selectedTargetEndpointID, setSelectedTargetEndpointID] = useState("distortionDriveDb");
     const [hoverTargetEndpointID, setHoverTargetEndpointID] = useState<string | null>(null);
     const [routeStatus, setRouteStatus] = useState("");
@@ -2091,6 +2298,7 @@ export function EffectsRackWorkspace({
     const [parameterValueSheetEndpointID, setParameterValueSheetEndpointID] = useState<string | null>(null);
     const [removeTargetRoutesEndpointID, setRemoveTargetRoutesEndpointID] = useState<string | null>(null);
     const pendingRouteRef = useRef<{ key: string } | null>(null);
+    const [pendingRouteKey, setPendingRouteKey] = useState<string | null>(null);
 
     useEffect(() => {
         if (parameterMenu === null) {
@@ -2118,6 +2326,9 @@ export function EffectsRackWorkspace({
         : selectedEffect.parameters.find((parameter) => parameter.modulationTargetIndex !== null)
             ?? selectedEffect.parameters[0];
     const activeSource = findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot);
+    const dragSourceDescriptor = dragSource === null
+        ? null
+        : findRackModulationSource(dragSource.sourceKind, dragSource.sourceSlot);
     const selectedTargetKind = `rack.${selectedTarget.endpointID}` as RackModulationTargetKind;
     const selectedRouteIndex = routes.findIndex((route) => (
         route.sourceKind === selectedSource.sourceKind
@@ -2139,11 +2350,11 @@ export function EffectsRackWorkspace({
         parameterOverlayEndpointID !== undefined && parameterOverlayEndpointID !== null,
     );
     const parameterOverlayTargetKind = `rack.${parameterOverlayDescriptor.endpointID}` as RackModulationTargetKind;
-    const parameterOverlayRouteIndex = routes.findIndex((route) => (
+    const parameterOverlayRouteIndex = sourceIsArmed ? routes.findIndex((route) => (
         route.sourceKind === selectedSource.sourceKind
         && route.sourceSlot === selectedSource.sourceSlot
         && route.targetKind === parameterOverlayTargetKind
-    ));
+    )) : -1;
     const parameterOverlayRoute = parameterOverlayRouteIndex >= 0
         ? routes[parameterOverlayRouteIndex] ?? null
         : null;
@@ -2157,8 +2368,30 @@ export function EffectsRackWorkspace({
             return;
         }
         pendingRouteRef.current = null;
+        setPendingRouteKey(null);
         setRouteStatus("");
     }, [selectedPairKey, selectedRouteIndex]);
+
+    useEffect(() => {
+        if (pendingRouteKey === null) {
+            return;
+        }
+        const routeExists = routes.some((route) => routePairKey(route, route.targetKind) === pendingRouteKey);
+        if (routeExists) {
+            pendingRouteRef.current = null;
+            setPendingRouteKey(null);
+            setRouteStatus("");
+            return;
+        }
+        const timeout = window.setTimeout(() => {
+            if (pendingRouteRef.current?.key === pendingRouteKey) {
+                pendingRouteRef.current = null;
+            }
+            setPendingRouteKey((current) => current === pendingRouteKey ? null : current);
+            setRouteStatus((current) => current === "CREATING MAPPING…" ? "MAPPING NOT CREATED" : current);
+        }, 750);
+        return () => window.clearTimeout(timeout);
+    }, [pendingRouteKey, routes]);
 
     const commitOrder = useCallback((order: ReadonlyArray<EffectModuleId>) => {
         commit({ ...rackState, order: [...order] });
@@ -2269,33 +2502,46 @@ export function EffectsRackWorkspace({
         };
     }, [finishReorder]);
 
+    const getPairCreation = useCallback((
+        source: SelectedSource,
+        targetEndpointID: string,
+    ): RackRouteCreation => {
+        const target = getRackParameterDescriptor(targetEndpointID);
+        if (target === null || target.modulationTargetIndex === null) {
+            return "ineligible";
+        }
+        const targetKind = `rack.${targetEndpointID}` as RackModulationTargetKind;
+        return projectRackRoutePresentation({
+            routes,
+            armedSource: source,
+            targetKind,
+            effectEnabled: true,
+            targetEffective: true,
+            pending: pendingRouteRef.current?.key === routePairKey(source, targetKind),
+        }).creation;
+    }, [routes]);
+
     const createRoute = useCallback((
         source: SelectedSource,
         targetEndpointID: string,
     ) => {
         const targetKind = `rack.${targetEndpointID}` as RackModulationTargetKind;
-        const existingIndex = routes.findIndex((route) => (
-            route.sourceKind === source.sourceKind
-            && route.sourceSlot === source.sourceSlot
-            && route.targetKind === targetKind
-        ));
-
-        if (existingIndex >= 0) {
+        const creation = getPairCreation(source, targetEndpointID);
+        if (creation === "existing") {
             setRouteStatus("");
-            return existingIndex;
+            return true;
         }
-
-        const key = `${source.sourceKind}:${source.sourceSlot}:${targetKind}`;
-        if (pendingRouteRef.current?.key === key) {
-            return -1;
-        }
-
-        if (routes.length >= MODULATION_MAX_ROUTES) {
+        if (creation === "blocked-at-cap") {
             setRouteStatus(`ROUTE LIMIT REACHED · ${MODULATION_MAX_ROUTES}/${MODULATION_MAX_ROUTES}`);
-            return -1;
+            return false;
+        }
+        if (creation !== "creatable") {
+            return false;
         }
 
+        const key = routePairKey(source, targetKind);
         pendingRouteRef.current = { key };
+        setPendingRouteKey(key);
         onAddRouteWithOverrides({
             sourceKind: source.sourceKind,
             sourceSlot: source.sourceSlot,
@@ -2306,8 +2552,8 @@ export function EffectsRackWorkspace({
             enabled: true,
         });
         setRouteStatus("CREATING MAPPING…");
-        return -1;
-    }, [onAddRouteWithOverrides, routes]);
+        return true;
+    }, [getPairCreation, onAddRouteWithOverrides]);
 
     const selectEffect = useCallback((effectId: EffectModuleId) => {
         setSelectedEffectId(effectId);
@@ -2343,6 +2589,14 @@ export function EffectsRackWorkspace({
 
     const dropSource = useCallback((source: SelectedSource, targetEndpointID: string) => {
         const targetParameter = getRackParameterDescriptor(targetEndpointID);
+        const creation = getPairCreation(source, targetEndpointID);
+        if (creation === "blocked-at-cap") {
+            setRouteStatus(`ROUTE LIMIT REACHED · ${MODULATION_MAX_ROUTES}/${MODULATION_MAX_ROUTES}`);
+            return;
+        }
+        if (creation !== "existing" && creation !== "creatable") {
+            return;
+        }
         setSelectedSource(source);
         setSourcePageIndex(source.sourceSlot - 1);
         setSourceIsArmed(true);
@@ -2351,14 +2605,15 @@ export function EffectsRackWorkspace({
             setSelectedEffectId(targetParameter.effectId);
             onSelectedEffectChange?.(targetParameter.effectId);
         }
-        createRoute(source, targetEndpointID);
-    }, [createRoute, onSelectedEffectChange]);
+        if (creation === "creatable") {
+            createRoute(source, targetEndpointID);
+        }
+    }, [createRoute, getPairCreation, onSelectedEffectChange]);
 
     const changeSourcePage = useCallback((nextPageIndex: number) => {
         const normalizedPageIndex = ((nextPageIndex % RACK_MODULATION_SOURCE_PAGES.length)
             + RACK_MODULATION_SOURCE_PAGES.length) % RACK_MODULATION_SOURCE_PAGES.length;
         setSourcePageIndex(normalizedPageIndex);
-        setSelectedSource((source) => ({ ...source, sourceSlot: (normalizedPageIndex + 1) as 1 | 2 | 3 }));
         setRouteStatus("");
     }, []);
 
@@ -2430,17 +2685,23 @@ export function EffectsRackWorkspace({
                 selectedSource={selectedSource}
                 sourceIsArmed={sourceIsArmed}
                 onPageChange={changeSourcePage}
-                onSourcePreview={(source) => {
-                    setSelectedSource(source);
-                    setSourcePageIndex(source.sourceSlot - 1);
-                }}
+                onDragSourceChange={setDragSource}
                 onSourceSelect={selectSource}
                 onSourceDrop={dropSource}
                 onOpenSelectedSource={(source) => {
                     setRailCollapseSignal((current) => current + 1);
                     onOpenModSource?.(source);
                 }}
-                onHoverTarget={setHoverTargetEndpointID}
+                onHoverTarget={(source, endpointID) => {
+                    if (endpointID === null) {
+                        setHoverTargetEndpointID(null);
+                        return;
+                    }
+                    const creation = getPairCreation(source, endpointID);
+                    setHoverTargetEndpointID(
+                        creation === "existing" || creation === "creatable" ? endpointID : null,
+                    );
+                }}
                 onSourceDragChange={setSourceDrag}
             />
             {selectedRoute ? (
@@ -2448,7 +2709,9 @@ export function EffectsRackWorkspace({
                     source={activeSource}
                     target={selectedTarget}
                     amount={selectedRoute.amount}
+                    polarity={selectedRoute.polarity}
                     onChange={changeModulationAmount}
+                    onHudChange={setParameterHud}
                 />
             ) : sourceIsArmed ? (
                 <UnmappedModulationPair
@@ -2475,6 +2738,7 @@ export function EffectsRackWorkspace({
                 <RackParameterContextMenu
                     state={parameterMenu}
                     route={parameterOverlayRoute}
+                    targetRouteCount={parameterOverlayTargetRouteIndices.length}
                     onClose={() => setParameterMenu(null)}
                     onSelectAction={handleParameterMenuAction}
                 />
@@ -2485,7 +2749,7 @@ export function EffectsRackWorkspace({
                     descriptor={parameterOverlayDescriptor}
                     binding={parameterOverlayBinding}
                     route={parameterOverlayRoute}
-                    source={activeSource}
+                    source={sourceIsArmed ? activeSource : null}
                     onApply={(baseValue, modulationAmount) => {
                         parameterOverlayBinding.commitValue(baseValue);
                         if (parameterOverlayRouteIndex >= 0 && modulationAmount !== null) {
@@ -2600,12 +2864,13 @@ export function EffectsRackWorkspace({
                 <section
                     data-role={`rack-editor-${selectedEffectId}`}
                     data-selected-effect={selectedEffectId}
+                    data-effect-enabled={rackState.enabled[selectedEffectId] ? "true" : "false"}
                     className="rack-effect-editor"
                     style={{ "--editor-accent": EFFECT_ACCENTS[selectedEffectId] } as CSSProperties}
                     aria-label="Selected effect editor"
                 >
                     <header className="rack-editor-header">
-                        <span>SELECTED FX</span>
+                        <span>{rackState.enabled[selectedEffectId] ? "SELECTED FX" : "FX BYPASSED"}</span>
                         <strong className="rack-editor-name">{selectedEffect.label}</strong>
                         <p>{selectedEffect.summary}</p>
                     </header>
@@ -2627,6 +2892,9 @@ export function EffectsRackWorkspace({
                             hoverTargetEndpointID={hoverTargetEndpointID}
                             activeSource={activeSource}
                             sourceIsSelected={sourceIsArmed}
+                            effectEnabled={rackState.enabled[selectedEffectId]}
+                            pendingRouteKey={pendingRouteKey}
+                            dragSourceAccent={dragSourceDescriptor?.accent ?? null}
                             onSelectTarget={selectTarget}
                             onRecentParameter={(endpointID) => setRecentParameter(selectedEffectId, endpointID)}
                             onHudChange={setParameterHud}

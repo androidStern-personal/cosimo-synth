@@ -46,6 +46,7 @@ const chorusFeedbackEndpointID = "chorusFeedback";
 const chorusRingAmountEndpointID = "chorusRingAmount";
 const chorusRingOffsetModeEndpointID = "chorusRingOffsetMode";
 const chorusRingFineSemitonesEndpointID = "chorusRingFineSemitones";
+const globalFilterModeEndpointID = "globalFilterMode";
 const hiddenSynthPresetGuardEndpointID = "hiddenSynthPresetGuard";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeStateEndpointID = "runtimeState";
@@ -60,6 +61,7 @@ const distortionScopeEndpointID = "distortionScope";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 const wavetablePrewarmRequestEndpointID = "wavetablePrewarmRequest";
 const wavetablePrewarmNotificationEndpointID = "wavetablePrewarmNotification";
+const HARNESS_WAVETABLE_ACTIVATION_DELAY_MS = 700;
 
 type ParameterListener = (value: unknown) => void;
 type EndpointListener = (value: unknown) => void;
@@ -630,6 +632,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         [chorusRingAmountEndpointID, 0],
         [chorusRingOffsetModeEndpointID, 0],
         [chorusRingFineSemitonesEndpointID, 0],
+        [globalFilterModeEndpointID, 1],
         [hiddenSynthPresetGuardEndpointID, 0.42],
     ]);
     private parameterListeners = new Map<string, Set<ParameterListener>>();
@@ -638,6 +641,7 @@ export class MockPatchConnection implements PatchConnectionLike {
     private storedStateListeners = new Set<StoredStateListener>();
     private storedState = new Map<string, unknown>();
     private runtimeState = createDefaultRuntimeState();
+    private wavetableActivationTimerID: number | null = null;
     private status: unknown;
     private readonly modulationRuntimeMirror;
     private readonly articulationWorkerService;
@@ -659,6 +663,40 @@ export class MockPatchConnection implements PatchConnectionLike {
         this.modulationRuntimeMirror.start();
         this.articulationWorkerService = createArticulationWorkerService(this);
         this.articulationWorkerService.start();
+    }
+
+    private cancelScheduledWavetableActivation() {
+        if (this.wavetableActivationTimerID === null) {
+            return;
+        }
+        window.clearTimeout(this.wavetableActivationTimerID);
+        this.wavetableActivationTimerID = null;
+    }
+
+    private scheduleWavetableActivation(tableIndex: number, generation: number) {
+        this.cancelScheduledWavetableActivation();
+        const intentSerial = this.runtimeState.desiredIntentSerial;
+        this.wavetableActivationTimerID = window.setTimeout(() => {
+            this.wavetableActivationTimerID = null;
+            if (!this.runtimeState.hasLoading
+                || this.runtimeState.hasFailure
+                || this.runtimeState.desiredIntentSerial !== intentSerial
+                || this.runtimeState.loadingTableIndex !== tableIndex
+                || this.runtimeState.loadingGeneration !== generation) {
+                return;
+            }
+
+            this.runtimeState = {
+                ...this.runtimeState,
+                hasActive: true,
+                activeTableIndex: tableIndex,
+                activeGeneration: generation,
+                hasLoading: false,
+                loadingTableIndex: 0,
+                loadingGeneration: 0,
+            };
+            this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
+        }, HARNESS_WAVETABLE_ACTIVATION_DELAY_MS);
     }
 
     getResourceAddress(path: string) {
@@ -706,6 +744,7 @@ export class MockPatchConnection implements PatchConnectionLike {
                 loadingGeneration: retryGeneration,
             };
             this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
+            this.scheduleWavetableActivation(this.runtimeState.desiredTableIndex, retryGeneration);
             return;
         }
 
@@ -748,6 +787,11 @@ export class MockPatchConnection implements PatchConnectionLike {
                 failureReasonCode: 0,
             };
             this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
+            if (isAlreadyActive) {
+                this.cancelScheduledWavetableActivation();
+            } else {
+                this.scheduleWavetableActivation(tableIndex, nextGeneration);
+            }
         }
     }
 
@@ -870,6 +914,7 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     setRuntimeState(nextState: Partial<ReturnType<typeof createDefaultRuntimeState>>) {
+        this.cancelScheduledWavetableActivation();
         this.runtimeState = {
             ...this.runtimeState,
             ...nextState,

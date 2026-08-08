@@ -16,8 +16,13 @@ type DragState = {
     min: number;
     max: number;
     trackElement: HTMLElement;
-    onChange?: (normalized: number) => void;
+    onChange?: (normalized: number, pointer: SliderDragPointer) => void;
     captureFailed: boolean;
+};
+
+export type SliderDragPointer = {
+    readonly x: number;
+    readonly y: number;
 };
 
 type SliderPointerMoveEvent = Pick<
@@ -69,7 +74,7 @@ export function useSliderDrag() {
             nextNormalized = clamp(deltaX / Math.max(1, rect.width), 0, 1);
         }
         if (drag.onChange) {
-            drag.onChange(nextNormalized);
+            drag.onChange(nextNormalized, { x: event.clientX, y: event.clientY });
         } else {
             const denormalized = drag.min + (nextNormalized * (drag.max - drag.min));
             drag.binding.setValue(denormalized);
@@ -120,7 +125,7 @@ export function useSliderDrag() {
         min: number,
         max: number,
         axis: "vertical" | "horizontal" | "horizontal-relative",
-        onChange?: (normalized: number) => void,
+        onChange?: (normalized: number, pointer: SliderDragPointer) => void,
     ) => {
         if (!trackElement || (event.pointerType === "mouse" && event.button !== 0)) {
             return;
