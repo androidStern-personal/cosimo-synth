@@ -327,7 +327,7 @@ export function isVoiceModulationSource(sourceKind: ModulationSourceKind) {
 }
 
 function getRackRouteAmountLimit(descriptor: RackParameterDescriptor) {
-    if (descriptor.scale === "log") {
+    if (descriptor.modulationApplication === "octaves") {
         return { min: -6, max: 6 };
     }
     const span = descriptor.max - descriptor.min;
@@ -345,7 +345,7 @@ function getRouteAmountLimit(targetKind: ModulationTargetKind) {
 function getRouteAmountStep(targetKind: ModulationTargetKind) {
     const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
     if (rackParameter !== undefined) {
-        return rackParameter.scale === "log" ? 0.01 : (rackParameter.max - rackParameter.min) / 1000;
+        return rackParameter.modulationApplication === "octaves" ? 0.01 : (rackParameter.max - rackParameter.min) / 1000;
     }
     return ROUTE_AMOUNT_STEPS[targetKind as keyof typeof ROUTE_AMOUNT_STEPS];
 }
@@ -477,7 +477,7 @@ export function formatModulationAmountReadout(
         : (clampedAmount > 0 ? "+" : clampedAmount < 0 ? "-" : "");
     const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
     if (rackParameter !== undefined) {
-        if (rackParameter.scale === "log") {
+        if (rackParameter.modulationApplication === "octaves") {
             return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
         }
         if (rackParameter.unit === "" && rackParameter.max - rackParameter.min <= 2) {
@@ -751,6 +751,29 @@ export function createDefaultRoute(overrides: Partial<ModulationRoute> = {}): Mo
     };
 }
 
+/** Returns the first deterministic source/target pair not already present. */
+export function createAvailableDefaultRoute(
+    existingRoutes: ReadonlyArray<ModulationRoute>,
+): ModulationRoute | null {
+    const occupiedPairs = new Set(existingRoutes.map(routePairKey));
+
+    for (const source of MODULATION_SOURCE_OPTIONS) {
+        for (const target of MODULATION_TARGET_OPTIONS) {
+            const candidate = createDefaultRoute({
+                sourceKind: source.sourceKind,
+                sourceSlot: source.sourceSlot,
+                targetKind: target.value,
+            });
+
+            if (!occupiedPairs.has(routePairKey(candidate))) {
+                return candidate;
+            }
+        }
+    }
+
+    return null;
+}
+
 export function normalizeRoute(value: unknown, routeIndex = 0): ModulationRoute {
     const nextValue = value && typeof value === "object" ? value as Partial<ModulationRoute> : {};
     const sourceKind = normalizeSourceKind(nextValue.sourceKind);
@@ -800,6 +823,30 @@ export function createDefaultModulationState(): ModulationState {
     };
 }
 
+function routePairKey(route: Pick<ModulationRoute, "sourceKind" | "sourceSlot" | "targetKind">) {
+    return `${route.sourceKind}:${route.sourceSlot ?? 0}:${route.targetKind}`;
+}
+
+function normalizeUniqueRoutes(inputRoutes: ReadonlyArray<unknown>) {
+    const seenPairs = new Set<string>();
+    const routes: ModulationRoute[] = [];
+
+    for (const inputRoute of inputRoutes) {
+        const normalizedRoute = normalizeRoute(inputRoute, routes.length);
+        const pairKey = routePairKey(normalizedRoute);
+        if (seenPairs.has(pairKey)) {
+            continue;
+        }
+        seenPairs.add(pairKey);
+        routes.push(normalizedRoute);
+        if (routes.length >= MODULATION_MAX_ROUTES) {
+            break;
+        }
+    }
+
+    return routes;
+}
+
 export function normalizeModulationState(value: unknown = createDefaultModulationState()): ModulationState {
     const nextValue = value && typeof value === "object" ? value as Partial<ModulationState> : {};
     const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
@@ -812,7 +859,7 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
         version: 2,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
-        routes: inputRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex)),
+        routes: normalizeUniqueRoutes(inputRoutes),
         macroNames: Array.from(
             { length: MODULATION_MACRO_SLOT_COUNT },
             (_, slotIndex) => normalizeMacroName(inputMacroNames[slotIndex], slotIndex),
@@ -1229,7 +1276,7 @@ export class ModulationRuntimeBridge {
 
     replaceRoutes(nextRoutes: unknown) {
         const normalizedRoutes = Array.isArray(nextRoutes)
-            ? nextRoutes.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
+            ? normalizeUniqueRoutes(nextRoutes)
             : [];
 
         if (JSON.stringify(this.state.routes) === JSON.stringify(normalizedRoutes)) {
@@ -1258,12 +1305,20 @@ export class ModulationRuntimeBridge {
         this.replaceRoutes(currentRoutes);
     }
 
-    addRoute(nextRoute: unknown = createDefaultRoute()) {
+    addRoute(nextRoute?: unknown) {
         if (this.state.routes.length >= MODULATION_MAX_ROUTES) {
             return;
         }
 
-        this.replaceRoutes([...this.state.routes, normalizeRoute(nextRoute, this.state.routes.length)]);
+        const normalizedRoute = nextRoute === undefined
+            ? createAvailableDefaultRoute(this.state.routes)
+            : normalizeRoute(nextRoute, this.state.routes.length);
+
+        if (!normalizedRoute) {
+            return;
+        }
+
+        this.replaceRoutes([...this.state.routes, normalizedRoute]);
     }
 
     removeRoute(routeIndex: number) {

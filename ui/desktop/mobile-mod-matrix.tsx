@@ -30,6 +30,7 @@ import {
 } from "../shared/rack-parameter-descriptors";
 import { RACK_MODULATION_SOURCE_PAGES } from "../shared/rack-modulation-sources";
 import type { EffectModuleId } from "../shared/target-descriptor";
+import { getModulationRouteCreation } from "../shared/rack-route-presentation";
 
 type FocusedModulationSource = {
     sourceKind: Extract<ModulationSourceKind, "mseg" | "env" | "macro">;
@@ -267,17 +268,27 @@ export function MobileModMatrix({
 
     const createRoute = (sourceValue: string, targetKind: ModulationTargetKind) => {
         const source = MODULATION_SOURCE_OPTIONS.find((option) => option.value === sourceValue);
-        if (!source || routes.length >= MODULATION_MAX_ROUTES) {
+        if (!source) {
             setView({ kind: "list" });
             return;
         }
-        const existingRoute = routes.find((route) => (
+        const creation = getModulationRouteCreation({
+            routes,
+            source,
+            targetKind,
+            pending: false,
+        });
+        const existingRoute = creation === "existing" ? routes.find((route) => (
             route.sourceKind === source.sourceKind
             && route.sourceSlot === source.sourceSlot
             && route.targetKind === targetKind
-        ));
+        )) : undefined;
         if (existingRoute) {
             setView({ kind: "detail", routeId: existingRoute.id });
+            return;
+        }
+        if (creation !== "creatable") {
+            setView({ kind: "list" });
             return;
         }
         onCreateRoute({

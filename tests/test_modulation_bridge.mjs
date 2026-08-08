@@ -23,6 +23,7 @@ import {
     formatModulationAmountEditingValue,
     getModulationAmountDepth,
     getModulationAmountSliderPosition,
+    normalizeModulationState,
     parseModulationAmountEditingValue,
     serializeModulationState,
 } from "../patch_gui/modulation.js";
@@ -132,6 +133,50 @@ test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploadi
     });
 
     assert.deepEqual(patchConnection.events, []);
+});
+
+test("modulation state keeps one deterministic route per source-target pair", () => {
+    const normalized = normalizeModulationState({
+        routes: [
+            {
+                id: "first-pair-route",
+                enabled: false,
+                sourceKind: "env",
+                sourceSlot: 1,
+                polarity: "bipolar",
+                targetKind: "rack.distortionWet",
+                amount: -0.25,
+                reducer: "mean",
+            },
+            {
+                id: "duplicate-pair-route",
+                enabled: true,
+                sourceKind: "env",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "rack.distortionWet",
+                amount: 0.8,
+                reducer: "max",
+            },
+            {
+                id: "different-source-route",
+                enabled: true,
+                sourceKind: "macro",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "rack.distortionWet",
+                amount: 0.4,
+                reducer: "max",
+            },
+        ],
+    });
+
+    assert.deepEqual(normalized.routes.map(({ id }) => id), [
+        "first-pair-route",
+        "different-source-route",
+    ]);
+    assert.equal(normalized.routes[0].enabled, false);
+    assert.equal(normalized.routes[0].amount, -0.25);
 });
 
 test("modulation runtime event builder converts defaults into a complete Cmajor upload batch", () => {

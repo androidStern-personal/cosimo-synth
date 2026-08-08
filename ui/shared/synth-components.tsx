@@ -156,6 +156,7 @@ export type WavetableStageSectionProps = {
     warpMode: number;
     warpAmount: number;
     tableName: string;
+    pendingTableName: string | null;
     frameCount: number;
     desiredTableIndex: number;
     tableOptions: FactoryTableOption[];
@@ -1992,6 +1993,7 @@ export function WavetableStageSection({
     warpMode,
     warpAmount,
     tableName,
+    pendingTableName,
     frameCount,
     desiredTableIndex,
     tableOptions,
@@ -2050,8 +2052,22 @@ export function WavetableStageSection({
                     onFocus={onTablePrewarm}
                     onPointerEnter={onTablePrewarm}
                 >
-                    <div data-role="wavetable-select-chip" className={`inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
-                        <span data-role="wavetable-stage-title" className="truncate">{tableName}</span>
+                    <div data-role="wavetable-select-chip" className={`relative inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
+                        <span
+                            data-role="wavetable-stage-title"
+                            className={`truncate${pendingTableName === null ? "" : " opacity-0"}`}
+                        >
+                            {tableName}
+                        </span>
+                        {pendingTableName === null ? null : (
+                            <span
+                                data-role="wavetable-load-status"
+                                className="absolute inset-y-0 left-1.5 right-5 flex items-center truncate text-[var(--section-accent)]"
+                                aria-live="polite"
+                            >
+                                Loading {pendingTableName}…
+                            </span>
+                        )}
                     </div>
                     <SelectChevron className="pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--section-accent)] opacity-70" />
                     <select

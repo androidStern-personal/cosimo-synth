@@ -19,6 +19,10 @@ import {
     formatRackParameterValue,
     type RackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
+import {
+    projectRackRouteTravel,
+    type RackRouteEffectiveness,
+} from "../shared/rack-route-presentation";
 
 const KNOB_CENTER = 50;
 const KNOB_SWEEP_START_DEGREES = 225;
@@ -38,6 +42,7 @@ export type RackParameterKnobProps = {
     readonly route: ModulationRoute | null;
     readonly sourceIsSelected: boolean;
     readonly sourceAccent: string;
+    readonly effectiveness: RackRouteEffectiveness;
     readonly dataRole: string;
     readonly trackDataRole: string;
     readonly handleDataRole: string;
@@ -144,43 +149,6 @@ function annularSectorPath(
     return `M ${formatPoint(outerStart)} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${formatPoint(outerEnd)} L ${formatPoint(innerEnd)} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${formatPoint(innerStart)} Z`;
 }
 
-function modulationRange(
-    descriptor: RackParameterDescriptor,
-    baseValue: number,
-    route: ModulationRoute | null,
-) {
-    if (!route || Math.abs(route.amount) <= 1e-9) {
-        return null;
-    }
-
-    const magnitude = Math.abs(route.amount);
-    let lowValue: number;
-    let highValue: number;
-
-    if (descriptor.scale === "log") {
-        if (route.polarity === "bipolar") {
-            lowValue = baseValue * (2 ** -magnitude);
-            highValue = baseValue * (2 ** magnitude);
-        } else {
-            const modulated = baseValue * (2 ** route.amount);
-            lowValue = Math.min(baseValue, modulated);
-            highValue = Math.max(baseValue, modulated);
-        }
-    } else if (route.polarity === "bipolar") {
-        lowValue = baseValue - magnitude;
-        highValue = baseValue + magnitude;
-    } else {
-        const modulated = baseValue + route.amount;
-        lowValue = Math.min(baseValue, modulated);
-        highValue = Math.max(baseValue, modulated);
-    }
-
-    return {
-        low: normalizedValue(descriptor, lowValue),
-        high: normalizedValue(descriptor, highValue),
-    };
-}
-
 /** Stippled dual-ring rack control: inner sector is the base value, outer sector is the selected modulation route. */
 export function RackParameterKnob({
     descriptor,
@@ -188,6 +156,7 @@ export function RackParameterKnob({
     route,
     sourceIsSelected,
     sourceAccent,
+    effectiveness,
     dataRole,
     trackDataRole,
     handleDataRole,
@@ -226,7 +195,9 @@ export function RackParameterKnob({
     const baseOrigin = descriptor.min < 0 && descriptor.max > 0
         ? normalizedValue(descriptor, 0)
         : 0;
-    const routeRange = modulationRange(descriptor, binding.value, route);
+    const routeTravel = route === null
+        ? null
+        : projectRackRouteTravel(descriptor, binding.value, route);
     const routePresencePoint = pointOnCircle(angleForNormalized(baseNormalized), (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2);
     const handlePoint = pointOnCircle(angleForNormalized(baseNormalized), BASE_RADIUS * 0.72);
     const defaultPoint = pointOnCircle(
@@ -234,7 +205,7 @@ export function RackParameterKnob({
         BASE_RADIUS * 0.94,
     );
     const style = {
-        "--rack-knob-accent": "var(--editor-accent)",
+        "--rack-knob-accent": "#d5dcde",
         "--rack-knob-mod-accent": sourceAccent,
     } as CSSProperties;
 
@@ -446,6 +417,7 @@ export function RackParameterKnob({
             aria-valuemax={descriptor.max}
             aria-valuenow={binding.value}
             data-route-state={!sourceIsSelected ? "no-source" : route === null ? "unmapped" : route.enabled ? "mapped" : "bypassed"}
+            data-route-effectiveness={effectiveness}
             className="rack-parameter-knob"
             style={style}
             onPointerDown={handlePointerDown}
@@ -526,9 +498,9 @@ export function RackParameterKnob({
                 />
                 <path
                     className={`rack-knob-mod-fill${route && !route.enabled ? " is-bypassed" : ""}`}
-                    d={routeRange === null
+                    d={routeTravel === null
                         ? ""
-                        : annularSectorPath(routeRange.low, routeRange.high, MOD_INNER_RADIUS, MOD_OUTER_RADIUS)}
+                        : annularSectorPath(routeTravel.normalized[0], routeTravel.normalized[1], MOD_INNER_RADIUS, MOD_OUTER_RADIUS)}
                 />
                 <circle
                     className="rack-knob-default-marker"

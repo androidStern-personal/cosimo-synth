@@ -9,6 +9,7 @@ export type RackModulationSource = {
     readonly label: string;
     readonly shortLabel: string;
     readonly iconUrl: string;
+    readonly identityIconUrl: string;
     readonly accent: string;
 };
 
@@ -18,6 +19,7 @@ type SourceFamily = {
     readonly shortLabel: string;
     readonly accent: string;
     readonly iconUrl: string;
+    readonly identityIconUrl: string;
 };
 
 const SOURCE_FAMILIES: ReadonlyArray<SourceFamily> = [
@@ -27,6 +29,7 @@ const SOURCE_FAMILIES: ReadonlyArray<SourceFamily> = [
         shortLabel: "MSEG",
         accent: "#cc59d2",
         iconUrl: new URL("../assets/modulation-sources/approved-generated/mseg-face.png", import.meta.url).href,
+        identityIconUrl: new URL("../assets/fontaudio/fad-automation-4p.svg", import.meta.url).href,
     },
     {
         sourceKind: "env",
@@ -34,6 +37,7 @@ const SOURCE_FAMILIES: ReadonlyArray<SourceFamily> = [
         shortLabel: "ENV",
         accent: "#b8e236",
         iconUrl: new URL("../assets/modulation-sources/approved-generated/envelope-face.png", import.meta.url).href,
+        identityIconUrl: new URL("../assets/fontaudio/fad-ADSR.svg", import.meta.url).href,
     },
     {
         sourceKind: "macro",
@@ -41,6 +45,7 @@ const SOURCE_FAMILIES: ReadonlyArray<SourceFamily> = [
         shortLabel: "MAC",
         accent: "#ff6428",
         iconUrl: new URL("../assets/modulation-sources/approved-generated/macro-face.png", import.meta.url).href,
+        identityIconUrl: new URL("../assets/fontaudio/fad-slider-round-1.svg", import.meta.url).href,
     },
 ];
 
@@ -52,6 +57,7 @@ export const RACK_MODULATION_SOURCE_PAGES: ReadonlyArray<ReadonlyArray<RackModul
         label: `${family.label} ${sourceSlot}`,
         shortLabel: family.shortLabel,
         iconUrl: family.iconUrl,
+        identityIconUrl: family.identityIconUrl,
         accent: family.accent,
     })),
 );

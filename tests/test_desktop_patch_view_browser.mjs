@@ -1748,6 +1748,43 @@ test("runtime loading state keeps the audible table visible while naming the des
     }
 });
 
+test("mobile wavetable selection names the pending table and the harness activates it", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const select = page.locator('select[aria-label="Select wavetable"]');
+        const desiredOption = select.locator("option").nth(1);
+        await desiredOption.waitFor({ state: "attached" });
+        const desiredTableName = (await desiredOption.textContent())?.trim();
+        assert.ok(desiredTableName);
+
+        await select.selectOption("1");
+        const loadStatus = page.locator('[data-role="wavetable-load-status"]');
+        await page.waitForFunction((expected) => (
+            document.querySelector('[data-role="wavetable-load-status"]')?.textContent?.trim()
+                === `Loading ${expected}…`
+        ), desiredTableName, { timeout: 3_000 });
+        assert.equal(
+            await page.locator('header:has-text("Cosimo Synth")').count(),
+            0,
+            "Compact mode must not rely on the desktop status header.",
+        );
+
+        await page.waitForFunction(() => {
+            const { runtimeState } = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return runtimeState.activeTableIndex === 1 && runtimeState.hasLoading === false;
+        });
+        await loadStatus.waitFor({ state: "detached" });
+        const stageTitle = page.locator('[data-role="wavetable-stage-title"]');
+        assert.equal((await stageTitle.textContent()).trim(), desiredTableName);
+        assert.equal(await select.inputValue(), "1");
+    } finally {
+        await page.close();
+    }
+});
+
 test("stage drag preserves the gesture contract and ignores tiny drags", async () => {
     const page = await openHarnessPage();
 
@@ -4435,20 +4472,13 @@ test("Add route appends an inert row and scrolls the new row into view", async (
         });
 
         const snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(
-            routeSummaries(readStoredModulationState(snapshot).routes),
-            [
-                ...routeSummaries(initialRoutes),
-                ...Array.from({ length: 8 - initialRoutes.length }, () => ({
-                    enabled: true,
-                    sourceKind: "mseg",
-                    sourceSlot: 1,
-                    polarity: "unipolar",
-                    targetKind: "wavetablePosition",
-                    amount: 0,
-                })),
-            ],
+        const routes = readStoredModulationState(snapshot).routes;
+        assert.equal(routes.length, 8);
+        assert.equal(
+            new Set(routes.map((route) => `${route.sourceKind}:${route.sourceSlot ?? "none"}:${route.targetKind}`)).size,
+            routes.length,
         );
+        assert.equal(routes.slice(initialRoutes.length).every((route) => route.amount === 0), true);
         assert.equal(
             snapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "modulationRoute"
@@ -4532,10 +4562,12 @@ test("mod matrix source and target selects keep enough width for their menu cont
                 widestOptionWidth: optionButtons.reduce((widest, button) => (
                     button instanceof HTMLElement ? Math.max(widest, button.scrollWidth) : widest
                 ), 0),
+                optionFontFamilies: optionButtons.map((button) => getComputedStyle(button).fontFamily),
             };
         });
 
         assert.ok(sourceSizing.triggerWidth >= sourceSizing.widestOptionWidth);
+        assert.equal(sourceSizing.optionFontFamilies.every((fontFamily) => /system-ui/.test(fontFamily)), true);
         await page.getByRole("button", { name: "Route 1 source ENV 3" }).click();
 
         let snapshot = await waitForHarnessSnapshot(
@@ -6794,6 +6826,10 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
         await page.mouse.move(centerX, centerY - 10, { steps: 3 });
         await page.waitForSelector('[data-role="rack-parameter-hud"]');
         assert.match(await page.locator('[data-role="rack-parameter-hud"]').innerText(), /BASE.*Size/i);
+        assert.match(
+            await page.locator('[data-role="rack-parameter-hud"]').evaluate((element) => getComputedStyle(element).fontFamily),
+            /system-ui/,
+        );
         const hudLayout = await page.locator('[data-role="rack-parameter-hud"]').evaluate((element) => {
             const hud = element.getBoundingClientRect();
             const workspace = element.closest('[data-role="effects-rack-card"]')?.getBoundingClientRect();
@@ -6973,6 +7009,107 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
     }
 });
 
+test("rack parameter frames stay neutral while badges and armed rings tell route ownership", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "mseg-mix", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.distortionWet", amount: 0.35, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await page.click('[data-role="rack-mod-source-env-1"]');
+
+        const mixSurface = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
+        const driveSurface = page.locator('[data-role="rack-parameter-surface-distortionDriveDb"]');
+        const mixKnob = mixSurface.locator('[data-role="distortion-mix-field"]');
+        const visual = await mixSurface.evaluate((element) => {
+            const knob = element.querySelector('.rack-parameter-knob');
+            const outerTrack = element.querySelector('.rack-knob-mod-track');
+            const innerFill = element.querySelector('.rack-knob-base-fill');
+            if (!(knob instanceof HTMLElement) || !(outerTrack instanceof SVGElement) || !(innerFill instanceof SVGElement)) {
+                return null;
+            }
+            const surfaceStyle = getComputedStyle(element);
+            return {
+                className: element.className,
+                borderColor: surfaceStyle.borderColor,
+                boxShadow: surfaceStyle.boxShadow,
+                routeState: knob.dataset.routeState,
+                trackStroke: getComputedStyle(outerTrack).stroke,
+                innerFill: getComputedStyle(innerFill).fill,
+            };
+        });
+        assert.ok(visual);
+        assert.equal(visual.className.includes("has-route"), false);
+        assert.equal(visual.className.includes("is-selected-target"), false);
+        assert.equal(visual.routeState, "unmapped");
+        assert.equal(visual.borderColor, "rgba(255, 255, 255, 0.08)");
+        assert.equal(/184, 226, 54/.test(`${visual.borderColor} ${visual.boxShadow}`), false);
+        assert.equal(visual.trackStroke, "rgba(210, 220, 222, 0.42)");
+        assert.equal(visual.innerFill, "rgb(213, 220, 222)");
+        assert.equal(await mixKnob.getAttribute("aria-label"), "Mix");
+        const badge = mixSurface.locator('[data-role="rack-route-count-distortionWet"]');
+        assert.equal((await badge.textContent()).trim(), "1");
+        assert.match(await badge.getAttribute("aria-label"), /1 modulation route target Mix/);
+        assert.equal((await badge.getAttribute("class")).includes("is-solid"), true);
+        assert.equal((await driveSurface.getAttribute("class")).includes("is-selected-target"), true);
+        assert.equal(
+            await driveSurface.evaluate((element) => getComputedStyle(element).borderColor),
+            "rgba(223, 230, 232, 0.78)",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("switching armed sources swaps only selected-route outer geometry and preserves exact target count", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "mseg-mix", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.distortionWet", amount: 0.2, reducer: "max" },
+                { id: "env-mix", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.distortionWet", amount: -0.55, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWet", 0.6, true);
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        const mix = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
+        const readRing = () => mix.evaluate((element) => {
+            const knob = element.querySelector('.rack-parameter-knob');
+            const fill = element.querySelector('.rack-knob-mod-fill');
+            return knob instanceof HTMLElement && fill instanceof SVGPathElement
+                ? { color: knob.style.getPropertyValue("--rack-knob-mod-accent"), path: fill.getAttribute("d") }
+                : null;
+        });
+
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        const msegRing = await readRing();
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        const envRing = await readRing();
+        assert.ok(msegRing && envRing);
+        assert.equal(msegRing.color, "#cc59d2");
+        assert.equal(envRing.color, "#b8e236");
+        assert.notEqual(msegRing.path, envRing.path);
+        assert.equal((await mix.locator('[data-role="rack-route-count-distortionWet"]').textContent()).trim(), "2");
+        assert.equal((await mix.getAttribute("class")).includes("is-selected-target"), false);
+    } finally {
+        await page.close();
+    }
+});
+
 test("an unmapped rack knob shows a neutral outer track and horizontal drag cannot create a route", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -7041,6 +7178,15 @@ test("editing a bypassed rack route preserves bypass and renders the outer ring 
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
         await page.mouse.down();
         await page.mouse.move(box.x + box.width / 2 + 36, box.y + box.height / 2, { steps: 8 });
+        assert.equal(await knob.getAttribute("data-dragging"), "modulation");
+        assert.equal(await knob.getAttribute("data-route-state"), "bypassed");
+        const liveBypassedStyle = await knob.locator('.rack-knob-mod-fill').evaluate((element) => {
+            const style = getComputedStyle(element);
+            return { opacity: style.opacity, dash: style.strokeDasharray, filter: style.filter };
+        });
+        assert.equal(liveBypassedStyle.opacity, "0.28");
+        assert.notEqual(liveBypassedStyle.dash, "none");
+        assert.equal(liveBypassedStyle.filter, "none");
         await page.mouse.up();
         const snapshot = await waitForHarnessSnapshot(page, "bypassed route amount edit", (nextSnapshot) => {
             const route = readStoredModulationState(nextSnapshot).routes.find((candidate) => candidate.targetKind === "rack.reverbSize");
@@ -7337,6 +7483,13 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
         await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
         const sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
         await sheet.waitFor();
+        const sheetVisual = await sheet.evaluate((element) => ({
+            backgroundImage: getComputedStyle(element).backgroundImage,
+            fontFamilies: Array.from(element.querySelectorAll("button, em, input, label, p, span, strong"))
+                .map((child) => getComputedStyle(child).fontFamily),
+        }));
+        assert.equal(sheetVisual.backgroundImage, "none");
+        assert.equal(sheetVisual.fontFamilies.every((fontFamily) => /system-ui/.test(fontFamily)), true);
         const baseInput = sheet.locator('[data-role="rack-base-value-input"]');
         const amountInput = sheet.locator('[data-role="rack-modulation-value-input"]');
         assert.equal(await baseInput.inputValue(), "50");
@@ -7385,7 +7538,7 @@ test("rack exact-value editing never creates an unrequested modulation route", a
         const sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
         const amountInput = sheet.locator('[data-role="rack-modulation-value-input"]');
         assert.equal(await amountInput.isDisabled(), true);
-        assert.equal((await sheet.locator('[data-role="rack-value-sheet-no-route"]').textContent()).trim(), "No selected source route.");
+        assert.equal((await sheet.locator('[data-role="rack-value-sheet-no-route"]').textContent()).trim(), "Arm a source to edit its route.");
         await sheet.locator('[data-role="rack-base-value-input"]').fill("64");
         await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
 
@@ -7397,6 +7550,68 @@ test("rack exact-value editing never creates an unrequested modulation route", a
         assert.equal(
             readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "rack.reverbSize"),
             false,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("rack parameter menu hides route removal when the target has no routes", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await page.locator('[data-role="rack-parameter-reverbSize"]').click({ button: "right" });
+
+        const menu = page.locator('[data-role="rack-parameter-menu"]');
+        assert.doesNotMatch(await menu.innerText(), /Remove this route/i);
+        assert.equal(await menu.locator('[data-action="remove-route"]').count(), 0);
+        assert.equal(await menu.locator('[data-action="remove-all-target-routes"]').count(), 0);
+    } finally {
+        await page.close();
+    }
+});
+
+test("rack parameter menus never edit a hidden default-source route while no source is armed", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "hidden-mseg-route", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.reverbSize", amount: 0.45, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        assert.equal(await knob.getAttribute("data-route-state"), "no-source");
+        await knob.click({ button: "right" });
+        for (const action of ["toggle-route", "polarity", "remove-route"]) {
+            assert.equal(
+                await page.locator(`[data-role="rack-parameter-menu-item"][data-action="${action}"]`).count(),
+                0,
+                action,
+            );
+        }
+        assert.equal(
+            await page.locator('[data-role="rack-parameter-menu-item"][data-action="remove-all-target-routes"]').count(),
+            1,
+        );
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        const sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        assert.match(await sheet.innerText(), /No armed source.*Arm a source to edit its route/is);
+        assert.equal(await sheet.locator('[data-role="rack-modulation-value-input"]').isDisabled(), true);
+        assert.equal(
+            readStoredModulationState(await getHarnessSnapshot(page)).routes.find((route) => route.id === "hidden-mseg-route")?.amount,
+            0.45,
         );
     } finally {
         await page.close();
@@ -7425,7 +7640,21 @@ test("rack parameter route removal targets one source or confirms removal of eve
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
 
         await knob.click({ button: "right" });
-        await page.locator('[data-role="rack-parameter-menu-item"][data-action="remove-route"]').click();
+        const menuTypography = await page.locator('[data-role="rack-parameter-menu-item"]').first().evaluate((item) => {
+            const style = getComputedStyle(item);
+            return {
+                fontFamily: style.fontFamily,
+                fontSize: style.fontSize,
+                letterSpacing: style.letterSpacing,
+            };
+        });
+        assert.match(menuTypography.fontFamily, /system-ui/);
+        assert.doesNotMatch(menuTypography.fontFamily, /Departure Mono/);
+        assert.equal(menuTypography.fontSize, "13px");
+        assert.equal(menuTypography.letterSpacing, "normal");
+        const removeSelectedRoute = page.locator('[data-role="rack-parameter-menu-item"][data-action="remove-route"]');
+        assert.equal((await removeSelectedRoute.textContent()).trim(), "Remove ENV 1 route");
+        await removeSelectedRoute.click();
         let snapshot = await waitForHarnessSnapshot(
             page,
             "single selected rack route removed",
@@ -7442,10 +7671,20 @@ test("rack parameter route removal targets one source or confirms removal of eve
 
         await page.click('[data-role="rack-mod-source-mseg-1"]');
         await knob.click({ button: "right" });
-        await page.locator('[data-role="rack-parameter-menu-item"][data-action="remove-all-target-routes"]').click();
+        const removeAllRoutes = page.locator('[data-role="rack-parameter-menu-item"][data-action="remove-all-target-routes"]');
+        const removeAllBounds = await removeAllRoutes.boundingBox();
+        assert.ok(removeAllBounds && removeAllBounds.y >= 0 && removeAllBounds.y + removeAllBounds.height <= 667);
+        await removeAllRoutes.click();
         const confirmation = page.locator('[data-role="rack-remove-target-routes-confirmation"]');
         await confirmation.waitFor();
         assert.match(await confirmation.textContent(), /remove all 1 route/i);
+        const confirmationVisual = await confirmation.evaluate((element) => ({
+            backgroundImage: getComputedStyle(element).backgroundImage,
+            fontFamilies: Array.from(element.querySelectorAll("button, p, span, strong"))
+                .map((child) => getComputedStyle(child).fontFamily),
+        }));
+        assert.equal(confirmationVisual.backgroundImage, "none");
+        assert.equal(confirmationVisual.fontFamilies.every((fontFamily) => /system-ui/.test(fontFamily)), true);
         snapshot = await getHarnessSnapshot(page);
         assert.equal(
             readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "rack.reverbSize"),
@@ -7862,6 +8101,41 @@ test("rack reorder survives a platform pointer-capture rejection", async () => {
     }
 });
 
+test("mobile workspace keeps the synth preset bar visible and contained at 320px", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 667 }),
+    });
+
+    try {
+        const host = page.locator('[data-role="synth-preset-bar-host"]');
+        await host.waitFor();
+        const layout = await host.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const accordion = document.querySelector('[data-role="mobile-workspace-accordion"]');
+            const presetBar = element.querySelector("cosimo-preset-bar")?.shadowRoot?.querySelector(".preset-bar");
+            const presetName = element.querySelector("cosimo-preset-bar")?.shadowRoot?.querySelector('[data-el="preset-name"]');
+            return {
+                display: getComputedStyle(element).display,
+                left: bounds.left,
+                right: bounds.right,
+                height: bounds.height,
+                accordionTop: accordion instanceof HTMLElement ? accordion.getBoundingClientRect().top : null,
+                presetBarHeight: presetBar instanceof HTMLElement ? presetBar.getBoundingClientRect().height : null,
+                presetName: presetName?.textContent?.trim() ?? null,
+            };
+        });
+
+        assert.notEqual(layout.display, "none");
+        assert.equal(layout.left >= 0 && layout.right <= 320, true);
+        assert.equal(layout.height, 40);
+        assert.equal(layout.presetBarHeight, 38);
+        assert.equal(layout.accordionTop >= layout.height, true);
+        assert.equal(layout.presetName, "No Preset");
+    } finally {
+        await page.close();
+    }
+});
+
 test("mobile FX subpage keeps all eight approved rack rows visible and confines modulation controls to the editor", async () => {
     for (const width of [320, 375, 390, 430]) {
         const page = await openHarnessPage({
@@ -8013,10 +8287,12 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
                     const button = source;
                     const art = source.querySelector(".rack-mod-art");
                     const image = source.querySelector(".rack-mod-icon");
+                    const identity = source.querySelector(".rack-mod-identity-glyph");
                     const number = source.querySelector(".rack-mod-number");
                     if (!(button instanceof HTMLButtonElement)
                         || !(art instanceof HTMLElement)
                         || !(image instanceof HTMLImageElement)
+                        || !(identity instanceof HTMLImageElement)
                         || !(number instanceof HTMLElement)) {
                         return null;
                     }
@@ -8033,6 +8309,7 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
                         overflow: buttonStyle.overflow,
                         accent: buttonStyle.getPropertyValue("--source-color").trim(),
                         imageSource: image.src,
+                        identitySource: identity.src,
                         number: number.textContent?.trim(),
                         artFilter: artStyle.filter,
                     };
@@ -8051,12 +8328,17 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
         assert.equal(visualContract.sources.every((source) => source.boxShadow === "none"), true);
         assert.equal(visualContract.sources.every((source) => source.overflow === "visible"), true);
         assert.equal(visualContract.sources.every((source) => /approved-generated\/.+\.png/.test(source.imageSource)), true);
+        assert.match(visualContract.sources[0].identitySource, /^data:image\/svg\+xml/);
+        assert.match(visualContract.sources[1].identitySource, /^data:image\/svg\+xml/);
+        assert.notEqual(visualContract.sources[0].identitySource, visualContract.sources[1].identitySource);
         assert.equal(Math.abs(visualContract.paddleWidth - 20) <= 0.5, true);
 
         await page.click('[data-role="rack-mod-source-mseg-1"]');
         const selectedVisual = await page.locator('[data-role="rack-mod-source-mseg-1"]').evaluate((button) => {
             const art = button.querySelector(".rack-mod-art");
+            const viewport = button.closest(".rack-mod-viewport");
             const underline = getComputedStyle(button, "::after");
+            const viewportStyle = viewport instanceof HTMLElement ? getComputedStyle(viewport) : null;
             return {
                 buttonFilter: getComputedStyle(button).filter,
                 buttonShadow: getComputedStyle(button).boxShadow,
@@ -8064,6 +8346,8 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
                 artTransform: art instanceof HTMLElement ? getComputedStyle(art).transform : "",
                 underlineHeight: underline.height,
                 underlineShadow: underline.boxShadow,
+                viewportOverflow: viewportStyle?.overflow ?? "",
+                viewportClipMargin: viewportStyle?.overflowClipMargin ?? "",
             };
         });
         assert.equal(selectedVisual.buttonFilter, "none");
@@ -8072,6 +8356,8 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
         assert.notEqual(selectedVisual.artTransform, "none");
         assert.equal(selectedVisual.underlineHeight, "2px");
         assert.notEqual(selectedVisual.underlineShadow, "none");
+        assert.equal(selectedVisual.viewportOverflow, "clip");
+        assert.equal(Number.parseFloat(selectedVisual.viewportClipMargin) >= 9, true);
 
         const animation = await page.evaluate(async () => {
             const track = document.querySelector('[data-role="rack-mod-source-track"]');
@@ -8089,6 +8375,7 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
             const endLeft = track.getBoundingClientRect().left;
             const activePage = document.querySelector('.rack-mod-page[aria-hidden="false"]');
             const selected = activePage?.querySelector('[aria-pressed="true"]');
+            const header = document.querySelector('.rack-mod-header strong');
             return {
                 startLeft,
                 duringLeft,
@@ -8097,6 +8384,7 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
                 labels: Array.from(activePage?.querySelectorAll("button") ?? [])
                     .map((button) => button.getAttribute("aria-label")),
                 selectedLabel: selected?.getAttribute("aria-label") ?? null,
+                armedLabel: header?.textContent ?? "",
             };
         });
 
@@ -8113,7 +8401,8 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
             `Carousel did not finish one page away: ${JSON.stringify(animation)}`,
         );
         assert.deepEqual(animation.labels, ["MSEG 2", "Envelope 2", "Macro 2"]);
-        assert.equal(animation.selectedLabel, "MSEG 2");
+        assert.equal(animation.selectedLabel, null);
+        assert.match(animation.armedLabel, /MSEG 1/);
     } finally {
         await page.close();
     }
@@ -8170,7 +8459,12 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
         await sourceFirstPage.mouse.move(amountBox.x + (amountBox.width * 0.5), amountBox.y + (amountBox.height * 0.5));
         await sourceFirstPage.mouse.down();
         await sourceFirstPage.mouse.move(amountBox.x + (amountBox.width * 0.82), amountBox.y + (amountBox.height * 0.5), { steps: 8 });
+        const amountHud = sourceFirstPage.locator('[data-role="rack-parameter-hud"]');
+        await amountHud.waitFor();
+        assert.equal(await amountHud.getAttribute("data-mode"), "modulation");
+        assert.match(await amountHud.innerText(), /MOD.*Drive.*dB/is);
         await sourceFirstPage.mouse.up();
+        await amountHud.waitFor({ state: "detached" });
 
         snapshot = await waitForHarnessSnapshot(
             sourceFirstPage,
@@ -8275,6 +8569,295 @@ test("rack modulation-source gesture cancels on window blur instead of creating 
             false,
             "A blurred source gesture must not create a modulation route on the later pointer release.",
         );
+    } finally {
+        await page.close();
+    }
+});
+
+test("source preview and valid hover stay transient while the armed ring and focus indicator persist", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "armed-mseg-size", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.reverbSize", amount: 0.4, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        const knob = surface.locator('[data-role="rack-parameter-reverbSize"]');
+        await knob.focus();
+        const env = page.locator('[data-role="rack-mod-source-env-1"]');
+        const envBox = await env.boundingBox();
+        const targetBox = await surface.boundingBox();
+        assert.ok(envBox && targetBox);
+        await page.mouse.move(envBox.x + envBox.width / 2, envBox.y + envBox.height / 2);
+        await page.mouse.down();
+        assert.equal(await knob.evaluate((element) => element.style.getPropertyValue("--rack-knob-mod-accent")), "#cc59d2");
+        await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 });
+
+        const live = await surface.evaluate((element) => {
+            const style = getComputedStyle(element);
+            const knobElement = element.querySelector('.rack-parameter-knob');
+            return {
+                isHover: element.classList.contains("is-mod-hover"),
+                borderColor: style.borderColor,
+                boxShadow: style.boxShadow,
+                dragAccent: style.getPropertyValue("--drag-source-color").trim(),
+                outline: style.outline,
+                outlineOffset: style.outlineOffset,
+                ringAccent: knobElement instanceof HTMLElement
+                    ? knobElement.style.getPropertyValue("--rack-knob-mod-accent")
+                    : "",
+            };
+        });
+        assert.equal(live.isHover, true);
+        assert.equal(live.borderColor, "rgba(223, 230, 232, 0.78)");
+        assert.notEqual(live.boxShadow, "none");
+        assert.equal(live.dragAccent, "#b8e236");
+        assert.match(live.outline, /rgb\(245, 255, 255\)/);
+        assert.equal(live.outlineOffset, "2px");
+        assert.equal(live.ringAccent, "#cc59d2");
+
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.mouse.up();
+        await page.waitForTimeout(60);
+        assert.equal((await surface.getAttribute("class")).includes("is-mod-hover"), false);
+        assert.equal(await knob.evaluate((element) => element.style.getPropertyValue("--rack-knob-mod-accent")), "#cc59d2");
+        const routes = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        assert.equal(routes.some((route) => route.sourceKind === "env" && route.targetKind === "rack.reverbSize"), false);
+    } finally {
+        await page.close();
+    }
+});
+
+test("a real source drop at the route cap remains byte-identical and visibly unmapped", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const targets = [
+            "wavetablePosition", "warpAmount", "filterCutoffOctaves", "filterQ",
+            "pitchSemitones", "ampGainDb", "pan", "unisonDetune", "unisonBlend",
+            "unisonWidth", "unisonWavetablePositionSpread", "unisonWarpSpread",
+        ];
+        const seededState = normalizeModulationState({
+            routes: targets.map((targetKind, routeIndex) => ({
+                id: `cap-drop-${routeIndex}`,
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind,
+                amount: routeIndex / 20,
+                reducer: "max",
+            })),
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+        }, seededState);
+        await waitForHarnessSnapshot(
+            page,
+            "route cap seeded before real drop",
+            (snapshot) => readStoredModulationState(snapshot).routes.length === 12,
+        );
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await clearHarnessDebugLog(page);
+        const before = await getHarnessSnapshot(page);
+        const beforeStored = before.storedState["modulation.v2"];
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const target = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        const sourceBox = await source.boundingBox();
+        const targetBox = await target.boundingBox();
+        assert.ok(sourceBox && targetBox);
+        await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 });
+        assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), false);
+        await page.mouse.up();
+        await page.waitForTimeout(100);
+
+        const after = await getHarnessSnapshot(page);
+        assert.equal(after.storedState["modulation.v2"], beforeStored);
+        assert.equal(after.sentMessages.some(({ endpointID }) => endpointID === "rackModulationRoute"), false);
+        const knob = target.locator('[data-role="rack-parameter-reverbSize"]');
+        assert.equal(await knob.getAttribute("data-route-state"), "no-source");
+        assert.equal(await knob.locator('.rack-knob-route-presence').count(), 0);
+        assert.equal(await knob.locator('.rack-knob-mod-fill').getAttribute("d"), "");
+        assert.match(await page.locator('.rack-route-status').innerText(), /ROUTE LIMIT REACHED/);
+    } finally {
+        await page.close();
+    }
+});
+
+test("effect bypass and mode suspension preserve route geometry without claiming audible activity", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "env-reverb", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.reverbSize", amount: 0.4, reducer: "max" },
+                { id: "env-filter", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.globalFilterResonance", amount: 2, reducer: "max" },
+                { id: "env-phaser", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.phaserRate", amount: 1.2, reducer: "max" },
+                { id: "env-delay", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.delayTime", amount: 1, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("globalFilterMode", 0, true);
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await page.click('[data-role="rack-enabled-reverb"]');
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        const reverbKnob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        const reverbBadge = page.locator('[data-role="rack-route-count-reverbSize"]');
+        const activeGeometry = await reverbKnob.locator('.rack-knob-mod-fill').getAttribute("d");
+        assert.notEqual(activeGeometry, "");
+        assert.equal((await reverbBadge.textContent()).trim(), "1");
+        const routesBeforeBypass = routeSummaries(readStoredModulationState(await getHarnessSnapshot(page)).routes);
+
+        await page.click('[data-role="rack-enabled-reverb"]');
+        assert.match(await page.locator('[data-role="rack-editor-reverb"] .rack-editor-header').innerText(), /FX BYPASSED/);
+        assert.equal(await reverbKnob.getAttribute("data-route-state"), "mapped");
+        assert.equal(await reverbKnob.getAttribute("data-route-effectiveness"), "effect-bypassed");
+        assert.equal(await reverbKnob.locator('.rack-knob-mod-fill').getAttribute("d"), activeGeometry);
+        assert.equal((await reverbBadge.textContent()).trim(), "1");
+        assert.equal(
+            await reverbKnob.locator('.rack-knob-mod-fill').evaluate((element) => getComputedStyle(element).filter),
+            "none",
+        );
+        assert.deepEqual(routeSummaries(readStoredModulationState(await getHarnessSnapshot(page)).routes), routesBeforeBypass);
+        await page.click('[data-role="rack-enabled-reverb"]');
+        assert.equal(await reverbKnob.getAttribute("data-route-effectiveness"), "active");
+        assert.equal(await reverbKnob.locator('.rack-knob-mod-fill').getAttribute("d"), activeGeometry);
+
+        await page.click('[data-role="rack-enabled-reverb"]');
+        const reverbArtBox = await reverbKnob.locator('.rack-knob-art').boundingBox();
+        assert.ok(reverbArtBox);
+        await page.mouse.move(reverbArtBox.x + reverbArtBox.width / 2, reverbArtBox.y + reverbArtBox.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(reverbArtBox.x + reverbArtBox.width / 2 + 30, reverbArtBox.y + reverbArtBox.height / 2, { steps: 6 });
+        assert.equal(await reverbKnob.getAttribute("data-route-effectiveness"), "effect-bypassed");
+        await page.mouse.up();
+        const afterBypassedEdit = await waitForHarnessSnapshot(
+            page,
+            "effect-bypassed route amount edit",
+            (snapshot) => readStoredModulationState(snapshot).routes.find((route) => route.id === "env-reverb")?.amount > 0.4,
+        );
+        assert.equal(await page.locator('[data-role="rack-editor-reverb"]').getAttribute("data-effect-enabled"), "false");
+        assert.equal(readStoredModulationState(afterBypassedEdit).routes.find((route) => route.id === "env-reverb")?.enabled, true);
+
+        await selectRackEffect(page, "filter");
+        await page.click('[data-role="rack-enabled-filter"]');
+        const filterMode = page.locator('[data-role="rack-parameter-globalFilterMode"]');
+        const resonance = page.locator('[data-role="rack-parameter-globalFilterResonance"]');
+        assert.equal(await filterMode.getAttribute("data-rack-mod-target"), null);
+        assert.equal(await filterMode.locator('.rack-route-count-badge').count(), 0);
+        assert.equal(await resonance.getAttribute("data-route-effectiveness"), "target-suspended");
+        assert.equal(await page.locator('[data-role="rack-parameter-surface-globalFilterResonance"] .rack-target-suspended-label').count(), 1);
+        await filterMode.click();
+        assert.equal(await resonance.getAttribute("data-route-effectiveness"), "active");
+
+        await selectRackEffect(page, "phaser");
+        await page.click('[data-role="rack-enabled-phaser"]');
+        const phaserMode = page.locator('[data-role="rack-parameter-phaserRateMode"]');
+        await phaserMode.click();
+        const phaserRate = page.locator('[data-role="rack-parameter-phaserRate"]');
+        assert.equal(await phaserRate.count(), 1, "Configured Free rate must stay discoverable in Sync mode.");
+        assert.equal(await phaserRate.getAttribute("data-route-effectiveness"), "target-suspended");
+
+        await selectRackEffect(page, "delay");
+        await page.click('[data-role="rack-enabled-delay"]');
+        await page.locator('[data-role="rack-parameter-delayTimeMode"]').click();
+        const delayTime = page.locator('[data-role="rack-parameter-delayTime"]');
+        assert.equal(await delayTime.count(), 1, "Configured Free time must stay discoverable in Sync mode.");
+        assert.equal(await delayTime.getAttribute("data-route-effectiveness"), "target-suspended");
+    } finally {
+        await page.close();
+    }
+});
+
+test("rack Filter defaults to Lowpass while its effect remains bypassed", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "filter");
+
+        const snapshot = await getHarnessSnapshot(page);
+        const mode = page.locator('[data-role="rack-parameter-globalFilterMode"]');
+        assert.equal(Number(snapshot.parameterValues.globalFilterMode), 1);
+        assert.match(await mode.innerText(), /Lowpass/i);
+        assert.match(await page.locator('[data-role="rack-editor-filter"] .rack-editor-header').innerText(), /FX BYPASSED/);
+        assert.equal(await page.locator('[data-role="rack-editor-filter"]').getAttribute("data-effect-enabled"), "false");
+    } finally {
+        await page.close();
+    }
+});
+
+test("a two-digit exact route badge stays contained at 320px without changing the slider name", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 852 }),
+    });
+
+    try {
+        const sources = [
+            ["mseg", 1], ["mseg", 2], ["mseg", 3],
+            ["env", 1], ["env", 2], ["env", 3],
+            ["macro", 1], ["macro", 2], ["macro", 3], ["macro", 4],
+            ["velocity", null], ["pressure", null],
+        ];
+        const seededState = normalizeModulationState({
+            routes: sources.map(([sourceKind, sourceSlot], routeIndex) => ({
+                id: `badge-${routeIndex}`,
+                enabled: true,
+                sourceKind,
+                sourceSlot,
+                polarity: "unipolar",
+                targetKind: "rack.distortionWet",
+                amount: routeIndex / 100,
+                reducer: "max",
+            })),
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        const surface = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
+        const badge = surface.locator('[data-role="rack-route-count-distortionWet"]');
+        const geometry = await surface.evaluate((element) => {
+            const badgeElement = element.querySelector('.rack-route-count-badge');
+            if (!(badgeElement instanceof HTMLElement)) return null;
+            const surfaceBounds = element.getBoundingClientRect();
+            const badgeBounds = badgeElement.getBoundingClientRect();
+            return {
+                surfaceLeft: surfaceBounds.left,
+                surfaceRight: surfaceBounds.right,
+                badgeLeft: badgeBounds.left,
+                badgeRight: badgeBounds.right,
+                badgeWidth: badgeBounds.width,
+            };
+        });
+        assert.ok(geometry);
+        assert.equal((await badge.textContent()).trim(), "12");
+        assert.equal(geometry.badgeLeft >= geometry.surfaceLeft && geometry.badgeRight <= geometry.surfaceRight, true);
+        assert.equal(geometry.badgeWidth >= 15, true);
+        assert.equal(await surface.locator('[data-role="distortion-mix-field"]').getAttribute("aria-label"), "Mix");
+        assert.match(await badge.getAttribute("aria-label"), /12 modulation routes target Mix/);
     } finally {
         await page.close();
     }
@@ -8542,7 +9125,7 @@ test("every rack editor binds live controls and one drop commits one complete DS
     }
 });
 
-test("Phaser and Delay expose only the effective Free or Sync timing control", async () => {
+test("Phaser and Delay keep the selected Free control visibly ineffective when Sync is active", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -8561,13 +9144,19 @@ test("Phaser and Delay expose only the effective Free or Sync timing control", a
             }, { endpointID: effect.mode });
             await page.waitForFunction(({ effectId, freeEndpointID, syncEndpointID }) => {
                 const editorElement = document.querySelector(`[data-role="rack-editor-${effectId}"]`);
-                return editorElement?.querySelector(`[data-role="rack-parameter-${freeEndpointID}"]`) === null
+                return editorElement?.querySelector(`[data-role="rack-parameter-${freeEndpointID}"]`) !== null
                     && editorElement?.querySelector(`[data-role="rack-parameter-${syncEndpointID}"]`) !== null;
             }, {
                 effectId: effect.id,
                 freeEndpointID: effect.free,
                 syncEndpointID: effect.sync,
             });
+            assert.equal(
+                ["target-suspended", "effect-bypassed"].includes(
+                    await editor.locator(`[data-role="rack-parameter-${effect.free}"]`).getAttribute("data-route-effectiveness"),
+                ),
+                true,
+            );
         }
     } finally {
         await page.close();
