@@ -1,6 +1,7 @@
 import {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -8,6 +9,7 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { usePatchConnection } from "../shared/cmajor-react";
 import { usePatchParameterBinding, type PatchControlBinding } from "../shared/patch-controls";
@@ -68,11 +70,26 @@ type EffectsRackWorkspaceProps = {
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     onBackToVoice: () => void;
     onOpenModSource?: (source: SelectedSource) => void;
+    onGlobalModRailStateChange?: (state: GlobalModRailState) => void;
     onSelectedEffectChange?: (effectId: EffectModuleId) => void;
+    mobileGlobalModRail?: boolean;
+    mobileModRailPortalTarget?: HTMLElement | null;
+    globalModSourceActivity?: number | null;
     className?: string;
 };
 
 type SelectedSource = Pick<RackModulationSource, "sourceKind" | "sourceSlot">;
+
+export type GlobalModRailState = {
+    readonly expanded: boolean;
+    readonly selectedSource: SelectedSource;
+};
+
+type SourceDragPresentation = {
+    readonly source: SelectedSource;
+    readonly clientX: number;
+    readonly clientY: number;
+};
 
 type ReorderGesture = {
     readonly pointerId: number;
@@ -821,6 +838,7 @@ function ModSourceCarousel({
     onSourceDrop,
     onOpenSelectedSource,
     onHoverTarget,
+    onSourceDragChange,
 }: {
     pageIndex: number;
     selectedSource: SelectedSource;
@@ -831,19 +849,27 @@ function ModSourceCarousel({
     onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
     onOpenSelectedSource: (source: SelectedSource) => void;
     onHoverTarget: (endpointID: string | null) => void;
+    onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
 }) {
     const handlersRef = useRef({
         onHoverTarget,
         onOpenSelectedSource,
         onSourceDrop,
         onSourceSelect,
+        onSourceDragChange,
     });
     handlersRef.current = {
         onHoverTarget,
         onOpenSelectedSource,
         onSourceDrop,
         onSourceSelect,
+        onSourceDragChange,
     };
+    const autoScrollRef = useRef<{
+        clientY: number;
+        frame: number | null;
+        referenceElement: HTMLElement | null;
+    }>({ clientY: 0, frame: null, referenceElement: null });
     const dragRef = useRef<{
         pointerId: number;
         source: SelectedSource;
@@ -853,6 +879,53 @@ function ModSourceCarousel({
         wasActiveSelection: boolean;
         captureElement: HTMLButtonElement;
     } | null>(null);
+
+    const stopSourceAutoScroll = useCallback(() => {
+        if (autoScrollRef.current.frame !== null) {
+            cancelAnimationFrame(autoScrollRef.current.frame);
+        }
+        autoScrollRef.current = { clientY: 0, frame: null, referenceElement: null };
+    }, []);
+
+    const runSourceAutoScroll = useCallback(() => {
+        const state = autoScrollRef.current;
+        const referenceElement = state.referenceElement;
+        if (!referenceElement || dragRef.current === null) {
+            stopSourceAutoScroll();
+            return;
+        }
+
+        const renderRoot = referenceElement.getRootNode();
+        const activePanel = (renderRoot instanceof Document || renderRoot instanceof ShadowRoot)
+            ? renderRoot.querySelector<HTMLElement>('[data-role^="mobile-workspace-panel-"]:not([hidden])')
+            : null;
+        if (activePanel) {
+            const bounds = activePanel.getBoundingClientRect();
+            const edgeZone = Math.min(52, bounds.height * 0.18);
+            const distanceFromTop = state.clientY - bounds.top;
+            const distanceFromBottom = bounds.bottom - state.clientY;
+            const topStrength = distanceFromTop < edgeZone
+                ? clamp((edgeZone - Math.max(0, distanceFromTop)) / edgeZone, 0, 1)
+                : 0;
+            const bottomStrength = distanceFromBottom < edgeZone
+                ? clamp((edgeZone - Math.max(0, distanceFromBottom)) / edgeZone, 0, 1)
+                : 0;
+            const delta = (bottomStrength - topStrength) * 7;
+            if (Math.abs(delta) > 0.2) {
+                activePanel.scrollTop += delta;
+            }
+        }
+
+        autoScrollRef.current.frame = requestAnimationFrame(runSourceAutoScroll);
+    }, [stopSourceAutoScroll]);
+
+    const updateSourceAutoScroll = useCallback((referenceElement: HTMLElement, clientY: number) => {
+        autoScrollRef.current.clientY = clientY;
+        autoScrollRef.current.referenceElement = referenceElement;
+        if (autoScrollRef.current.frame === null) {
+            autoScrollRef.current.frame = requestAnimationFrame(runSourceAutoScroll);
+        }
+    }, [runSourceAutoScroll]);
 
     const finishSourceGesture = useCallback((
         pointerId: number,
@@ -871,6 +944,8 @@ function ModSourceCarousel({
         const targetEndpointID = targetElement?.dataset.rackModTarget;
         dragRef.current = null;
         handlersRef.current.onHoverTarget(null);
+        handlersRef.current.onSourceDragChange?.(null);
+        stopSourceAutoScroll();
 
         try {
             if (drag.captureElement.hasPointerCapture(pointerId)) {
@@ -893,7 +968,7 @@ function ModSourceCarousel({
                 handlersRef.current.onSourceSelect(drag.source);
             }
         }
-    }, []);
+    }, [stopSourceAutoScroll]);
 
     useEffect(() => {
         const handlePointerUp = (event: PointerEvent) => {
@@ -924,8 +999,9 @@ function ModSourceCarousel({
             window.removeEventListener("blur", cancelActiveGesture);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             cancelActiveGesture();
+            stopSourceAutoScroll();
         };
-    }, [finishSourceGesture]);
+    }, [finishSourceGesture, stopSourceAutoScroll]);
 
     return (
         <div className="rack-mod-dock" role="group" aria-label="Rack modulation sources">
@@ -1000,7 +1076,15 @@ function ModSourceCarousel({
                                                     );
                                                     return;
                                                 }
-                                                drag.moved ||= Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 5;
+                                                drag.moved ||= Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 7;
+                                                if (drag.moved) {
+                                                    handlersRef.current.onSourceDragChange?.({
+                                                        source: drag.source,
+                                                        clientX: event.clientX,
+                                                        clientY: event.clientY,
+                                                    });
+                                                    updateSourceAutoScroll(event.currentTarget, event.clientY);
+                                                }
                                                 const target = rackModulationTargetAtPoint(
                                                     event.currentTarget,
                                                     event.clientX,
@@ -1052,6 +1136,384 @@ function ModSourceCarousel({
                     onClick={() => onPageChange((pageIndex + 1) % RACK_MODULATION_SOURCE_PAGES.length)}
                 >›</button>
             </div>
+        </div>
+    );
+}
+
+const MOBILE_MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
+const MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX = 7;
+const MOBILE_MOD_RAIL_SNAP_DISTANCE_PX = 28;
+
+type RailVerticalBounds = {
+    readonly min: number;
+    readonly max: number;
+};
+
+function readStoredRailPosition() {
+    try {
+        const stored = localStorage.getItem(MOBILE_MOD_RAIL_POSITION_KEY);
+        if (stored === null) {
+            return 0.42;
+        }
+        const parsed = JSON.parse(stored) as unknown;
+        const candidate = typeof parsed === "number"
+            ? parsed
+            : Number((parsed as { normalizedY?: unknown } | null)?.normalizedY);
+        return Number.isFinite(candidate) ? clamp(candidate, 0, 1) : 0.42;
+    } catch {
+        return 0.42;
+    }
+}
+
+function triggerLightHaptic() {
+    try {
+        (globalThis as { cmaj_triggerHaptic?: (style?: string) => unknown })
+            .cmaj_triggerHaptic?.("light");
+    } catch {
+        // Haptics are progressive enhancement; interaction cannot depend on them.
+    }
+}
+
+function MobileGlobalModRail({
+    selectedSource,
+    routeCount,
+    sourceActivity,
+    sourceDrag,
+    accent,
+    onStateChange,
+    children,
+}: {
+    selectedSource: RackModulationSource;
+    routeCount: number;
+    sourceActivity: number | null;
+    sourceDrag: SourceDragPresentation | null;
+    accent: string;
+    onStateChange?: (state: GlobalModRailState) => void;
+    children: React.ReactNode;
+}) {
+    const layerRef = useRef<HTMLDivElement | null>(null);
+    const railRef = useRef<HTMLElement | null>(null);
+    const positionRef = useRef(0);
+    const normalizedPositionRef = useRef<number | null>(null);
+    const boundsRef = useRef<RailVerticalBounds>({ min: 12, max: 12 });
+    const gestureRef = useRef<{
+        pointerId: number;
+        startClientY: number;
+        startNormalizedY: number;
+        startTop: number;
+        moved: boolean;
+        captureElement: HTMLButtonElement;
+    } | null>(null);
+    const [expanded, setExpanded] = useState(false);
+    const [top, setTop] = useState(12);
+    const mappingActive = sourceDrag !== null;
+
+    const measureAndClamp = useCallback(() => {
+        const layer = layerRef.current;
+        const rail = railRef.current;
+        if (!layer || !rail) {
+            return;
+        }
+
+        const layerBounds = layer.getBoundingClientRect();
+        const layerStyle = getComputedStyle(layer);
+        const keyboard = layer.closest(".cosimo-surface")
+            ?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
+        const keyboardBounds = keyboard?.getBoundingClientRect();
+        const safeTop = 8 + (Number.parseFloat(layerStyle.paddingTop) || 0);
+        const safeBottom = 8 + (Number.parseFloat(layerStyle.paddingBottom) || 0);
+        const availableBottom = keyboardBounds
+            ? Math.min(layerBounds.height, keyboardBounds.top - layerBounds.top)
+            : layerBounds.height;
+        const railHeight = rail.getBoundingClientRect().height || 142;
+        const nextBounds = {
+            min: safeTop,
+            max: Math.max(safeTop, availableBottom - railHeight - safeBottom),
+        };
+        boundsRef.current = nextBounds;
+
+        normalizedPositionRef.current ??= readStoredRailPosition();
+        const nextTop = nextBounds.min
+            + ((nextBounds.max - nextBounds.min) * normalizedPositionRef.current);
+        positionRef.current = nextTop;
+        setTop(nextTop);
+    }, []);
+
+    useLayoutEffect(() => {
+        measureAndClamp();
+        const layer = layerRef.current;
+        const keyboard = layer?.closest(".cosimo-surface")
+            ?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
+        const observer = typeof ResizeObserver === "function"
+            ? new ResizeObserver(measureAndClamp)
+            : null;
+        if (layer) {
+            observer?.observe(layer);
+        }
+        if (keyboard) {
+            observer?.observe(keyboard);
+        }
+        window.addEventListener("resize", measureAndClamp);
+        window.visualViewport?.addEventListener("resize", measureAndClamp);
+        window.visualViewport?.addEventListener("scroll", measureAndClamp);
+        return () => {
+            observer?.disconnect();
+            window.removeEventListener("resize", measureAndClamp);
+            window.visualViewport?.removeEventListener("resize", measureAndClamp);
+            window.visualViewport?.removeEventListener("scroll", measureAndClamp);
+        };
+    }, [measureAndClamp]);
+
+    useEffect(() => {
+        onStateChange?.({
+            expanded,
+            selectedSource: {
+                sourceKind: selectedSource.sourceKind,
+                sourceSlot: selectedSource.sourceSlot,
+            },
+        });
+    }, [expanded, onStateChange, selectedSource.sourceKind, selectedSource.sourceSlot]);
+
+    useEffect(() => {
+        const surface = layerRef.current?.closest(".cosimo-surface");
+        const previousSourceColor = surface instanceof HTMLElement
+            ? surface.style.getPropertyValue("--active-source-color")
+            : "";
+        surface?.classList.toggle("is-mod-source-mapping", mappingActive);
+        if (surface instanceof HTMLElement && mappingActive) {
+            surface.style.setProperty("--active-source-color", selectedSource.accent);
+        }
+        return () => {
+            surface?.classList.remove("is-mod-source-mapping");
+            if (surface instanceof HTMLElement) {
+                if (previousSourceColor) {
+                    surface.style.setProperty("--active-source-color", previousSourceColor);
+                } else {
+                    surface.style.removeProperty("--active-source-color");
+                }
+            }
+        };
+    }, [mappingActive, selectedSource.accent]);
+
+    const finishRailGesture = useCallback((pointerId: number, cancelled: boolean) => {
+        const gesture = gestureRef.current;
+        if (!gesture || gesture.pointerId !== pointerId) {
+            return;
+        }
+        gestureRef.current = null;
+        try {
+            if (gesture.captureElement.hasPointerCapture(pointerId)) {
+                gesture.captureElement.releasePointerCapture(pointerId);
+            }
+        } catch {
+            // Window listeners remain authoritative after platform capture loss.
+        }
+
+        if (cancelled) {
+            normalizedPositionRef.current = gesture.startNormalizedY;
+            positionRef.current = gesture.startTop;
+            setTop(gesture.startTop);
+            return;
+        }
+        if (!gesture.moved) {
+            setExpanded((current) => !current);
+            return;
+        }
+
+        const bounds = boundsRef.current;
+        const middle = bounds.min + ((bounds.max - bounds.min) / 2);
+        const anchors = [bounds.min, middle, bounds.max];
+        const nearest = anchors.reduce((candidate, anchor) => (
+            Math.abs(anchor - positionRef.current) < Math.abs(candidate - positionRef.current)
+                ? anchor
+                : candidate
+        ), anchors[0] ?? bounds.min);
+        const settledTop = Math.abs(nearest - positionRef.current) <= MOBILE_MOD_RAIL_SNAP_DISTANCE_PX
+            ? nearest
+            : clamp(positionRef.current, bounds.min, bounds.max);
+        if (settledTop !== positionRef.current) {
+            triggerLightHaptic();
+        }
+        positionRef.current = settledTop;
+        setTop(settledTop);
+        const span = bounds.max - bounds.min;
+        const normalizedY = span > 0 ? (settledTop - bounds.min) / span : 0;
+        normalizedPositionRef.current = normalizedY;
+        try {
+            localStorage.setItem(MOBILE_MOD_RAIL_POSITION_KEY, JSON.stringify({ normalizedY }));
+        } catch {
+            // A private browsing storage failure must not break rail movement.
+        }
+    }, []);
+
+    useEffect(() => {
+        const handlePointerUp = (event: PointerEvent) => finishRailGesture(event.pointerId, false);
+        const handlePointerCancel = (event: PointerEvent) => finishRailGesture(event.pointerId, true);
+        const cancelActiveGesture = () => {
+            const gesture = gestureRef.current;
+            if (gesture) {
+                finishRailGesture(gesture.pointerId, true);
+            }
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                cancelActiveGesture();
+            }
+        };
+        window.addEventListener("pointerup", handlePointerUp, true);
+        window.addEventListener("pointercancel", handlePointerCancel, true);
+        window.addEventListener("blur", cancelActiveGesture);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointerup", handlePointerUp, true);
+            window.removeEventListener("pointercancel", handlePointerCancel, true);
+            window.removeEventListener("blur", cancelActiveGesture);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            cancelActiveGesture();
+        };
+    }, [finishRailGesture]);
+
+    const clampedActivity = sourceActivity === null ? null : clamp(sourceActivity, 0, 1);
+
+    return (
+        <div ref={layerRef} data-role="mobile-global-mod-rail-layer" className="mobile-global-mod-rail-layer">
+            <aside
+                ref={railRef}
+                data-role="mobile-global-mod-rail"
+                data-expanded={expanded}
+                data-mapping-active={mappingActive}
+                className="mobile-global-mod-rail"
+                style={{
+                    top,
+                    "--source-color": selectedSource.accent,
+                    "--editor-accent": accent,
+                } as CSSProperties}
+                aria-label="Global modulation bar"
+            >
+                <div
+                    data-role="mobile-global-mod-rail-drawer"
+                    className="mobile-global-mod-rail-drawer"
+                    aria-hidden={!expanded || mappingActive}
+                    inert={!expanded || mappingActive}
+                >
+                    {children}
+                </div>
+                <button
+                    type="button"
+                    data-role="mobile-global-mod-rail-grip"
+                    className="mobile-global-mod-rail-grip"
+                    aria-label={expanded ? "Collapse global modulation bar" : "Expand global modulation bar"}
+                    aria-expanded={expanded}
+                    onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") {
+                            return;
+                        }
+                        event.preventDefault();
+                        setExpanded((current) => !current);
+                    }}
+                    onPointerDown={(event) => {
+                        if (event.pointerType === "mouse" && event.button !== 0) {
+                            return;
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        gestureRef.current = {
+                            pointerId: event.pointerId,
+                            startClientY: event.clientY,
+                            startNormalizedY: normalizedPositionRef.current ?? readStoredRailPosition(),
+                            startTop: positionRef.current,
+                            moved: false,
+                            captureElement: event.currentTarget,
+                        };
+                        try {
+                            event.currentTarget.setPointerCapture(event.pointerId);
+                        } catch {
+                            // Window-level termination still owns unsupported pointers.
+                        }
+                    }}
+                    onPointerMove={(event) => {
+                        const gesture = gestureRef.current;
+                        if (!gesture || gesture.pointerId !== event.pointerId) {
+                            return;
+                        }
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const deltaY = event.clientY - gesture.startClientY;
+                        gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
+                        if (!gesture.moved) {
+                            return;
+                        }
+                        const bounds = boundsRef.current;
+                        const nextTop = clamp(gesture.startTop + deltaY, bounds.min, bounds.max);
+                        positionRef.current = nextTop;
+                        const span = bounds.max - bounds.min;
+                        normalizedPositionRef.current = span > 0
+                            ? (nextTop - bounds.min) / span
+                            : 0;
+                        setTop(nextTop);
+                    }}
+                    onPointerUp={(event) => finishRailGesture(event.pointerId, false)}
+                    onPointerCancel={(event) => finishRailGesture(event.pointerId, true)}
+                    onLostPointerCapture={(event) => finishRailGesture(event.pointerId, true)}
+                >
+                    <svg
+                        data-role="mobile-global-mod-rail-silhouette"
+                        className="mobile-global-mod-rail-silhouette"
+                        viewBox="0 0 48 142"
+                        preserveAspectRatio="none"
+                        aria-hidden="true"
+                    >
+                        <path d="M48 0 C31 0 24 10 24 28 L24 114 C24 132 31 142 48 142 Z" />
+                    </svg>
+                    <span
+                        data-role="mobile-global-mod-rail-selected"
+                        className="mobile-global-mod-rail-selected"
+                        aria-label={`${selectedSource.label} selected`}
+                    >
+                        <span className="rack-mod-art" aria-hidden="true">
+                            <img className="rack-mod-icon" src={selectedSource.iconUrl} alt="" draggable={false} />
+                            <span className="rack-mod-number">{selectedSource.sourceSlot}</span>
+                        </span>
+                    </span>
+                    {clampedActivity !== null ? (
+                        <span
+                            className="mobile-global-mod-rail-activity"
+                            aria-label={`${selectedSource.label} activity`}
+                            style={{ "--source-activity": clampedActivity } as CSSProperties}
+                        ><span /></span>
+                    ) : null}
+                    <span
+                        data-role="mobile-global-mod-rail-route-count"
+                        className="mobile-global-mod-rail-route-count"
+                        aria-label={`${routeCount} modulation routes`}
+                    >{routeCount}</span>
+                    <span className="mobile-global-mod-rail-chevron" aria-hidden="true">{expanded ? "›" : "‹"}</span>
+                </button>
+            </aside>
+            {sourceDrag ? (
+                <div
+                    data-role="mobile-global-mod-source-ghost"
+                    className="mobile-global-mod-source-ghost"
+                    style={{
+                        left: sourceDrag.clientX,
+                        top: sourceDrag.clientY,
+                        "--source-color": findRackModulationSource(
+                            sourceDrag.source.sourceKind,
+                            sourceDrag.source.sourceSlot,
+                        ).accent,
+                    } as CSSProperties}
+                    aria-hidden="true"
+                >
+                    <img
+                        src={findRackModulationSource(
+                            sourceDrag.source.sourceKind,
+                            sourceDrag.source.sourceSlot,
+                        ).iconUrl}
+                        alt=""
+                        draggable={false}
+                    />
+                </div>
+            ) : null}
         </div>
     );
 }
@@ -1412,7 +1874,11 @@ export function EffectsRackWorkspace({
     onRouteChange,
     onBackToVoice,
     onOpenModSource,
+    onGlobalModRailStateChange,
     onSelectedEffectChange,
+    mobileGlobalModRail = false,
+    mobileModRailPortalTarget = null,
+    globalModSourceActivity = null,
     className,
 }: EffectsRackWorkspaceProps) {
     const { rackState, commit } = useRackState();
@@ -1431,6 +1897,7 @@ export function EffectsRackWorkspace({
     const [selectedTargetEndpointID, setSelectedTargetEndpointID] = useState("distortionDriveDb");
     const [hoverTargetEndpointID, setHoverTargetEndpointID] = useState<string | null>(null);
     const [routeStatus, setRouteStatus] = useState("");
+    const [sourceDrag, setSourceDrag] = useState<SourceDragPresentation | null>(null);
     const [parameterHud, setParameterHud] = useState<RackParameterHud | null>(null);
     const [parameterMenu, setParameterMenu] = useState<RackParameterMenuState | null>(null);
     const [parameterValueSheetEndpointID, setParameterValueSheetEndpointID] = useState<string | null>(null);
@@ -1768,6 +2235,44 @@ export function EffectsRackWorkspace({
         parameterOverlayRouteIndex,
     ]);
 
+    const modulationControls = (
+        <>
+            <ModSourceCarousel
+                pageIndex={sourcePageIndex}
+                selectedSource={selectedSource}
+                sourceIsArmed={sourceIsArmed}
+                onPageChange={changeSourcePage}
+                onSourcePreview={(source) => {
+                    setSelectedSource(source);
+                    setSourcePageIndex(source.sourceSlot - 1);
+                }}
+                onSourceSelect={selectSource}
+                onSourceDrop={dropSource}
+                onOpenSelectedSource={(source) => onOpenModSource?.(source)}
+                onHoverTarget={setHoverTargetEndpointID}
+                onSourceDragChange={setSourceDrag}
+            />
+            {selectedRoute ? (
+                <ModulationAmountControl
+                    source={activeSource}
+                    target={selectedTarget}
+                    amount={selectedRoute.amount}
+                    onChange={changeModulationAmount}
+                />
+            ) : sourceIsArmed ? (
+                <UnmappedModulationPair
+                    source={activeSource}
+                    target={selectedTarget}
+                    routeLimitReached={routes.length >= MODULATION_MAX_ROUTES}
+                    onCreate={() => createRoute(selectedSource, selectedTarget.endpointID)}
+                />
+            ) : null}
+            <output className="rack-route-status" aria-live="polite">
+                {routeStatus || (hoverTargetEndpointID ? `Route to ${hoverTargetEndpointID}` : "")}
+            </output>
+        </>
+    );
+
     return (
         <section
             data-role="effects-rack-card"
@@ -1952,41 +2457,23 @@ export function EffectsRackWorkspace({
                         />
                     </div>
                     <div className="rack-editor-modulation">
-                        <ModSourceCarousel
-                            pageIndex={sourcePageIndex}
-                            selectedSource={selectedSource}
-                            sourceIsArmed={sourceIsArmed}
-                            onPageChange={changeSourcePage}
-                            onSourcePreview={(source) => {
-                                setSelectedSource(source);
-                                setSourcePageIndex(source.sourceSlot - 1);
-                            }}
-                            onSourceSelect={selectSource}
-                            onSourceDrop={dropSource}
-                            onOpenSelectedSource={(source) => onOpenModSource?.(source)}
-                            onHoverTarget={setHoverTargetEndpointID}
-                        />
-                        {selectedRoute ? (
-                            <ModulationAmountControl
-                                source={activeSource}
-                                target={selectedTarget}
-                                amount={selectedRoute.amount}
-                                onChange={changeModulationAmount}
-                            />
-                        ) : sourceIsArmed ? (
-                            <UnmappedModulationPair
-                                source={activeSource}
-                                target={selectedTarget}
-                                routeLimitReached={routes.length >= MODULATION_MAX_ROUTES}
-                                onCreate={() => createRoute(selectedSource, selectedTarget.endpointID)}
-                            />
-                        ) : null}
-                        <output className="rack-route-status" aria-live="polite">
-                            {routeStatus || (hoverTargetEndpointID ? `Route to ${hoverTargetEndpointID}` : "")}
-                        </output>
+                        {mobileGlobalModRail ? null : modulationControls}
                     </div>
                 </section>
             </div>
+            {mobileGlobalModRail && mobileModRailPortalTarget ? createPortal(
+                <MobileGlobalModRail
+                    selectedSource={activeSource}
+                    routeCount={routes.length}
+                    sourceActivity={globalModSourceActivity}
+                    sourceDrag={sourceDrag}
+                    accent={EFFECT_ACCENTS[selectedEffectId]}
+                    onStateChange={onGlobalModRailStateChange}
+                >
+                    {modulationControls}
+                </MobileGlobalModRail>,
+                mobileModRailPortalTarget,
+            ) : null}
         </section>
     );
 }

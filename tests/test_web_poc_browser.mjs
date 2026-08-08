@@ -202,7 +202,7 @@ async function holdTouchKeyboardNote(page, {
     });
 }
 
-async function dispatchTouchDrag(page, start, end, { steps = 10 } = {}) {
+async function dispatchTouchDrag(page, start, end, { afterFirstMove, steps = 10 } = {}) {
     const client = await page.context().newCDPSession(page);
 
     try {
@@ -231,6 +231,9 @@ async function dispatchTouchDrag(page, start, end, { steps = 10 } = {}) {
                     id: 1,
                 }],
             });
+            if (index === 1) {
+                await afterFirstMove?.();
+            }
         }
 
         await client.send("Input.dispatchTouchEvent", {
@@ -833,9 +836,24 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
     const page = await openStartedMobileRackPage();
 
     try {
+        const railGripCenter = await centerOf(page.locator('[data-role="mobile-global-mod-rail-grip"]'));
+        await page.touchscreen.tap(railGripCenter.x, railGripCenter.y);
+        await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="true"]').waitFor();
+        await page.waitForTimeout(220);
         const sourceStart = await centerOf(page.locator('[data-role="rack-mod-source-mseg-1"]'));
         const targetEnd = await centerOf(page.locator('[data-rack-mod-target="distortionKnee"]'));
-        await dispatchTouchDrag(page, sourceStart, targetEnd);
+        await dispatchTouchDrag(page, sourceStart, targetEnd, {
+            afterFirstMove: async () => {
+                await page
+                    .locator('[data-role="mobile-global-mod-rail"][data-mapping-active="true"]')
+                    .waitFor();
+                await page.waitForFunction(() => {
+                    const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+                    const rail = root?.querySelector('[data-role="mobile-global-mod-rail"]');
+                    return rail instanceof HTMLElement && getComputedStyle(rail).pointerEvents === "none";
+                });
+            },
+        });
 
         await page.waitForFunction(async () => {
             const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
@@ -859,7 +877,10 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
             && candidate.sourceSlot === 1
             && candidate.targetKind === "rack.distortionKnee"
         ));
-        assert.ok(route, "Touch drag from MSEG 1 did not create the Distortion Knee route.");
+        assert.ok(
+            route,
+            `Touch drag from MSEG 1 did not create the Distortion Knee route: ${String(modulationState)}`,
+        );
     } finally {
         await page.close();
     }

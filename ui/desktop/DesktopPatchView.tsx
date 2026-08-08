@@ -55,7 +55,10 @@ import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import { DesktopModMatrix } from "./desktop-mod-matrix";
 import { MobileModMatrix } from "./mobile-mod-matrix";
-import { EffectsRackWorkspace } from "./effects-rack-workspace";
+import {
+    EffectsRackWorkspace,
+    type GlobalModRailState,
+} from "./effects-rack-workspace";
 import {
     SYNTH_PRESET_EFFECT_ID,
     useSynthPatchViewModel,
@@ -3168,6 +3171,11 @@ function DesktopPatchViewBody({
     const [mobileWorkspaceSection, setMobileWorkspaceSection] = useState<MobileWorkspaceSection>("voice");
     const [mobileModSource, setMobileModSource] = useState<MobileModSource | null>(null);
     const [mobileReturnSection, setMobileReturnSection] = useState<MobileWorkspaceSection | null>(null);
+    const [mobileModRailPortalTarget, setMobileModRailPortalTarget] = useState<HTMLElement | null>(null);
+    const [globalModRailState, setGlobalModRailState] = useState<GlobalModRailState>({
+        expanded: false,
+        selectedSource: { sourceKind: "mseg", sourceSlot: 1 },
+    });
     const [selectedRackEffectId, setSelectedRackEffectId] = useState<EffectModuleId>("drive");
     useEffect(() => {
         if (typeof window.matchMedia !== "function") {
@@ -3217,7 +3225,9 @@ function DesktopPatchViewBody({
             || (mobileWorkspaceSection === "fx" && selectedRackEffectId === "filter"),
         observeDistortionVisuals: selectedRackEffectId === "drive"
             && (!isCompactViewport || mobileWorkspaceSection === "fx"),
-        observeMsegPlayhead: !isCompactViewport || mobileWorkspaceSection === "mod",
+        observeMsegPlayhead: !isCompactViewport
+            || mobileWorkspaceSection === "mod"
+            || globalModRailState.selectedSource.sourceKind === "mseg",
         onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
         onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false }),
     });
@@ -3227,6 +3237,24 @@ function DesktopPatchViewBody({
     const [keyboardControlMode, setKeyboardControlMode] = useState<"articulation" | "voice">("articulation");
     const [isArticulationEditorExpanded, setIsArticulationEditorExpanded] = useState(false);
     const [dismissedContextualToolbarKey, setDismissedContextualToolbarKey] = useState<string | null>(null);
+    const selectedGlobalModSourceKind = globalModRailState.selectedSource.sourceKind;
+    const selectedGlobalModSourceSlot = globalModRailState.selectedSource.sourceSlot;
+    useEffect(() => {
+        if (
+            !isCompactViewport
+            || selectedGlobalModSourceKind !== "mseg"
+            || synthView.selectedMsegSlot === selectedGlobalModSourceSlot - 1
+        ) {
+            return;
+        }
+        synthView.handleSelectMsegSlot(selectedGlobalModSourceSlot - 1);
+    }, [
+        isCompactViewport,
+        selectedGlobalModSourceKind,
+        selectedGlobalModSourceSlot,
+        synthView.handleSelectMsegSlot,
+        synthView.selectedMsegSlot,
+    ]);
     const selectedArticulationId = synthView.selectedArticulationSlot?.id ?? null;
     const selectedArticulationName = synthView.selectedArticulationSlot?.name ?? null;
     const articulationMode = synthView.articulationBank.activeTriggerMode as ArticulationUiTriggerMode;
@@ -3647,6 +3675,10 @@ function DesktopPatchViewBody({
     );
 
     const isMobileEffectsPage = isCompactViewport && mobileWorkspaceSection === "fx";
+    const globalModSourceActivity = globalModRailState.selectedSource.sourceKind === "mseg"
+        && synthView.observedMsegPlayhead.hasActive
+        ? synthView.observedMsegPlayhead.progress
+        : null;
     const effectsRackWorkspace = (
         <EffectsRackWorkspace
             routes={synthView.routes}
@@ -3657,7 +3689,11 @@ function DesktopPatchViewBody({
             onRemoveRoute={synthView.handleRemoveRoute}
             onRouteChange={synthView.handleRouteChange}
             onOpenModSource={openMobileModSource}
+            onGlobalModRailStateChange={setGlobalModRailState}
             onSelectedEffectChange={setSelectedRackEffectId}
+            mobileGlobalModRail={isCompactViewport}
+            mobileModRailPortalTarget={mobileModRailPortalTarget}
+            globalModSourceActivity={globalModSourceActivity}
             onBackToVoice={() => {
                 if (isCompactViewport) {
                     setMobileWorkspaceSection("voice");
@@ -3701,6 +3737,15 @@ function DesktopPatchViewBody({
                     {modulationWorkspace}
                 </main>
             )}
+
+            {isCompactViewport ? (
+                <div
+                    ref={setMobileModRailPortalTarget}
+                    data-role="mobile-global-mod-rail-portal"
+                    className="mobile-global-mod-rail-portal"
+                    aria-hidden={false}
+                />
+            ) : null}
 
             <div
                 data-role="sticky-keyboard"

@@ -1,4 +1,272 @@
 @media (max-width: 639px) {
+    .mobile-global-mod-rail-portal,
+    .mobile-global-mod-rail-layer {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-portal {
+        z-index: 32;
+    }
+
+    .mobile-global-mod-rail-layer {
+        overflow: hidden;
+        box-sizing: border-box;
+        padding-top: env(safe-area-inset-top, 0px);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+
+    .mobile-global-mod-rail {
+        --rail-height: 142px;
+        position: absolute;
+        right: 0;
+        width: 48px;
+        height: var(--rail-height);
+        pointer-events: auto;
+        transition: top 180ms cubic-bezier(0.22, 0.72, 0.22, 1);
+    }
+
+    .mobile-global-mod-rail:has(.mobile-global-mod-rail-grip:active) {
+        transition: none;
+    }
+
+    .mobile-global-mod-rail-drawer {
+        position: absolute;
+        top: 3px;
+        right: 48px;
+        width: min(244px, calc(100vw - 72px));
+        min-height: 90px;
+        overflow: visible;
+        border: 1px solid color-mix(in srgb, var(--source-color) 28%, rgb(255 255 255 / 0.08));
+        border-radius: 14px 4px 4px 14px;
+        background:
+            linear-gradient(135deg, color-mix(in srgb, var(--source-color) 8%, transparent), transparent 46%),
+            rgb(8 13 15 / 0.97);
+        box-shadow:
+            0 10px 28px rgb(0 0 0 / 0.48),
+            inset 0 1px rgb(255 255 255 / 0.035);
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(28px) scaleX(0.94);
+        transform-origin: right center;
+        transition:
+            opacity 150ms ease,
+            transform 190ms cubic-bezier(0.22, 0.72, 0.22, 1);
+    }
+
+    .mobile-global-mod-rail-drawer::after {
+        position: absolute;
+        top: 26px;
+        right: -25px;
+        bottom: 22px;
+        width: 25px;
+        background: linear-gradient(90deg, rgb(8 13 15 / 0.97), rgb(13 20 23 / 0.94));
+        clip-path: polygon(0 0, 100% 18%, 100% 82%, 0 100%);
+        content: "";
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail[data-expanded="true"] .mobile-global-mod-rail-drawer {
+        opacity: 1;
+        pointer-events: auto;
+        transform: translateX(0) scaleX(1);
+    }
+
+    .mobile-global-mod-rail[data-mapping-active="true"] .mobile-global-mod-rail-drawer {
+        opacity: 0;
+        pointer-events: none;
+        transform: translateX(40px) scaleX(0.92);
+    }
+
+    .mobile-global-mod-rail[data-mapping-active="true"] {
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-drawer .rack-mod-dock {
+        border: 0;
+        border-radius: 13px 3px 0 0;
+        background: transparent;
+        box-shadow: none;
+    }
+
+    .mobile-global-mod-rail-drawer .rack-mod-amount,
+    .mobile-global-mod-rail-drawer .rack-mod-unmapped {
+        border-right: 0;
+        border-bottom: 0;
+        border-left: 0;
+        border-radius: 0 0 0 13px;
+        background: rgb(7 11 13 / 0.78);
+    }
+
+    .mobile-global-mod-rail-drawer .rack-route-status {
+        min-height: 14px;
+        padding: 2px 6px 3px;
+        border-top: 1px solid rgb(255 255 255 / 0.055);
+        color: rgb(209 218 221 / 0.58);
+        background: rgb(7 11 13 / 0.72);
+        font-size: 7px;
+    }
+
+    .mobile-global-mod-rail-grip {
+        position: absolute;
+        top: 0;
+        right: 0;
+        display: grid;
+        width: 48px;
+        height: var(--rail-height);
+        grid-template-rows: 1fr auto auto auto 1fr;
+        place-items: center;
+        overflow: visible;
+        padding: 17px 0 13px 18px;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        color: #dbe3e5;
+        cursor: ns-resize;
+        touch-action: none;
+        user-select: none;
+        -webkit-user-select: none;
+    }
+
+    .mobile-global-mod-rail-silhouette {
+        position: absolute;
+        inset: 0;
+        width: 48px;
+        height: var(--rail-height);
+        overflow: visible;
+        filter: drop-shadow(-5px 7px 10px rgb(0 0 0 / 0.42));
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-silhouette path {
+        fill: rgb(13 20 23 / 0.97);
+        stroke: color-mix(in srgb, var(--source-color) 34%, rgb(255 255 255 / 0.08));
+        stroke-width: 1;
+        vector-effect: non-scaling-stroke;
+    }
+
+    .mobile-global-mod-rail-selected {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        width: 34px;
+        height: 38px;
+        place-items: center;
+        grid-row: 2;
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-selected .rack-mod-art,
+    .mobile-global-mod-rail-selected .rack-mod-icon {
+        width: 32px;
+        height: 32px;
+    }
+
+    .mobile-global-mod-rail-selected .rack-mod-art {
+        filter:
+            drop-shadow(0 0 2px rgb(255 255 255 / 0.72))
+            drop-shadow(0 0 5px var(--source-color));
+    }
+
+    .mobile-global-mod-rail-selected .rack-mod-number {
+        top: 10px;
+        right: 3px;
+    }
+
+    .mobile-global-mod-rail-activity {
+        position: relative;
+        z-index: 1;
+        width: 24px;
+        height: 4px;
+        grid-row: 3;
+        overflow: hidden;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.09);
+        box-shadow: inset 0 0 0 1px rgb(0 0 0 / 0.32);
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-activity > span {
+        display: block;
+        width: 5px;
+        height: 4px;
+        border-radius: 999px;
+        background: var(--source-color);
+        box-shadow: 0 0 5px var(--source-color);
+        transform: translateX(calc(var(--source-activity) * 19px));
+        transition: transform 60ms linear;
+    }
+
+    .mobile-global-mod-rail-route-count {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        min-width: 19px;
+        height: 18px;
+        margin-top: 4px;
+        place-items: center;
+        grid-row: 4;
+        padding-inline: 4px;
+        border: 1px solid color-mix(in srgb, var(--source-color) 38%, rgb(255 255 255 / 0.09));
+        border-radius: 999px;
+        background: rgb(0 0 0 / 0.28);
+        color: color-mix(in srgb, var(--source-color) 72%, #f3f6f7);
+        font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
+        font-size: 8px;
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-chevron {
+        position: absolute;
+        z-index: 1;
+        bottom: 7px;
+        left: 27px;
+        color: rgb(225 233 235 / 0.52);
+        font-size: 17px;
+        line-height: 1;
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-source-ghost {
+        position: fixed;
+        z-index: 100;
+        display: grid;
+        width: 42px;
+        height: 42px;
+        place-items: center;
+        border-radius: 999px;
+        background: rgb(7 10 12 / 0.72);
+        box-shadow:
+            0 0 0 2px var(--source-color),
+            0 0 14px var(--source-color),
+            0 6px 16px rgb(0 0 0 / 0.48);
+        opacity: 0.92;
+        pointer-events: none;
+        transform: translate(-50%, -50%) scale(1.06);
+    }
+
+    .mobile-global-mod-source-ghost img {
+        width: 36px;
+        height: 36px;
+        border-radius: 999px;
+    }
+
+    .cosimo-surface.is-mod-source-mapping [data-rack-mod-target] {
+        outline: 2px solid color-mix(in srgb, var(--active-source-color, #df74cf) 78%, white);
+        outline-offset: -2px;
+        box-shadow:
+            inset 0 0 16px color-mix(in srgb, var(--active-source-color, #df74cf) 17%, transparent),
+            0 0 8px color-mix(in srgb, var(--active-source-color, #df74cf) 34%, transparent);
+    }
+
+    .cosimo-surface.is-mod-source-mapping .rack-editor-controls > :not([data-rack-mod-target]) {
+        opacity: 0.42;
+    }
+}
+
+@media (max-width: 639px) {
     .cosimo-surface.is-mobile-accordion {
         gap: 4px;
         padding: 4px;
