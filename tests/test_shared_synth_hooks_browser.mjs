@@ -533,6 +533,70 @@ test("useStagePositionDrag closes the host gesture when the window blurs", async
     }
 });
 
+test("useStagePositionDrag keeps tracking touch outside the stage when pointer capture is unavailable", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installStagePositionDragHookHarness");
+        const captureRejects = await page.evaluate(() => {
+            const stage = document.querySelector("#stage");
+            if (!(stage instanceof HTMLElement)) {
+                throw new Error("Missing stage.");
+            }
+            stage.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+            try {
+                stage.setPointerCapture(32);
+                return false;
+            } catch {
+                return true;
+            }
+        });
+        assert.equal(captureRejects, true);
+        await invokeHarness(page, "dispatchPointer", "#stage", "pointerdown", {
+            pointerId: 32,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: 32,
+            clientY: 160,
+        });
+        await page.evaluate(() => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId: 32,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: 32,
+                clientY: 60,
+                bubbles: true,
+            }));
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureLog, ["begin"]);
+        assert.equal(snapshot.setValues.length, 1);
+        assertAlmostEqual(snapshot.setValues[0], 0.9, 1e-9);
+
+        await page.evaluate(() => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId: 32,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: 32,
+                clientY: 60,
+                bubbles: true,
+            }));
+        });
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureLog, ["begin", "end"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("useStagePositionDrag ignores pointer starts on select, button, and input controls", async () => {
     const page = await openModulePage();
 
@@ -824,6 +888,47 @@ test("useMsegEditorInteractions deletes an interior point on click-release, move
         assert.equal(snapshot.actionLog.filter(({ type }) => type === "delete").length, 0);
     } finally {
         await movePage.close();
+    }
+});
+
+test("useMsegEditorInteractions keeps editing when platform pointer capture is unavailable", async () => {
+    const page = await openModulePage();
+    const pageErrors = [];
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+
+    try {
+        await installHarness(page, "installMsegEditorInteractionsHookHarness");
+        await invokeHarness(page, "openEditor");
+        await invokeHarness(page, "setPointerCaptureFailure", true);
+
+        const middlePoint = await invokeHarness(page, "getPointCoordinates", 1);
+        const movedPoint = await invokeHarness(page, "getNormalizedCoordinates", 0.62, 0.54);
+        await invokeHarness(page, "dispatchPointer", "pointerdown", {
+            pointerId: 24,
+            button: 0,
+            clientX: middlePoint.x,
+            clientY: middlePoint.y,
+        });
+        await invokeHarness(page, "dispatchPointer", "pointermove", {
+            pointerId: 24,
+            button: 0,
+            clientX: movedPoint.x,
+            clientY: movedPoint.y,
+        });
+        await invokeHarness(page, "dispatchPointer", "pointerup", {
+            pointerId: 24,
+            button: 0,
+            clientX: movedPoint.x,
+            clientY: movedPoint.y,
+        });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.actionLog.at(-1).type, "move");
+        assertAlmostEqual(snapshot.points[1].x, 0.62, 1e-6);
+        assertAlmostEqual(snapshot.points[1].y, 0.54, 1e-6);
+        assert.deepEqual(pageErrors, []);
+    } finally {
+        await page.close();
     }
 });
 

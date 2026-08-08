@@ -1133,7 +1133,62 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
         }
     }, [stageRef]);
 
+    const updateStageGestureFromPointer = useCallback((event: Pick<
+        PointerEvent,
+        "pointerId" | "pointerType" | "buttons" | "clientX" | "clientY" | "preventDefault"
+    >) => {
+        const activeStageGesture = activeStageGestureRef.current;
+        if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
+            return;
+        }
+
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            finishStageGesture(event.pointerId, true);
+            return;
+        }
+
+        const deltaX = event.clientX - activeStageGesture.startClientX;
+        const deltaY = event.clientY - activeStageGesture.startClientY;
+        const gestureAxis = resolveDisplayGestureAxis(deltaX, deltaY);
+
+        if (activeStageGesture.mode === "pending" && gestureAxis !== "pending") {
+            activeStageGesture.mode = gestureAxis;
+
+            if (gestureAxis === "vertical") {
+                wavetablePositionRef.current.beginGesture();
+            }
+        }
+
+        if (activeStageGesture.mode === "horizontal") {
+            activeStageGesture.currentDeltaX = deltaX;
+            event.preventDefault();
+            return;
+        }
+
+        if (activeStageGesture.mode !== "vertical") {
+            return;
+        }
+
+        const nextPosition = clampDisplayPosition(
+            activeStageGesture.startPosition
+                + ((activeStageGesture.startClientY - event.clientY) / Math.max(1, activeStageGesture.dragSpanY)),
+        );
+        wavetablePositionRef.current.setValue(nextPosition);
+        event.preventDefault();
+    }, [finishStageGesture]);
+
     useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            const activeStageGesture = activeStageGestureRef.current;
+            if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
+                return;
+            }
+            const stage = stageRef.current;
+            if (event.target instanceof Node && stage?.contains(event.target)) {
+                return;
+            }
+            updateStageGestureFromPointer(event);
+        };
         const handlePointerUp = (event: PointerEvent) => finishStageGesture(event.pointerId);
         const handlePointerCancel = (event: PointerEvent) => finishStageGesture(event.pointerId, true);
         const handleBlur = () => finishStageGesture(undefined, true);
@@ -1143,19 +1198,21 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
             }
         };
 
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
         window.addEventListener("pointerup", handlePointerUp, true);
         window.addEventListener("pointercancel", handlePointerCancel, true);
         window.addEventListener("blur", handleBlur);
         document.addEventListener("visibilitychange", handleVisibilityChange);
 
         return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
             window.removeEventListener("pointerup", handlePointerUp, true);
             window.removeEventListener("pointercancel", handlePointerCancel, true);
             window.removeEventListener("blur", handleBlur);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             finishStageGesture(undefined, true);
         };
-    }, [finishStageGesture]);
+    }, [finishStageGesture, stageRef, updateStageGestureFromPointer]);
 
     const handleStagePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         if (event.pointerType === "mouse" && event.button !== 0) {
@@ -1188,45 +1245,8 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
     }, [displayedTableIndex, finishStageGesture, observedPosition]);
 
     const handleStagePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        const activeStageGesture = activeStageGestureRef.current;
-        if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
-            return;
-        }
-
-        if (event.pointerType === "mouse" && event.buttons === 0) {
-            finishStageGesture(event.pointerId, true);
-            return;
-        }
-
-        const deltaX = event.clientX - activeStageGesture.startClientX;
-        const deltaY = event.clientY - activeStageGesture.startClientY;
-        const gestureAxis = resolveDisplayGestureAxis(deltaX, deltaY);
-
-        if (activeStageGesture.mode === "pending" && gestureAxis !== "pending") {
-            activeStageGesture.mode = gestureAxis;
-
-            if (gestureAxis === "vertical") {
-                wavetablePosition.beginGesture();
-            }
-        }
-
-        if (activeStageGesture.mode === "horizontal") {
-            activeStageGesture.currentDeltaX = deltaX;
-            event.preventDefault();
-            return;
-        }
-
-        if (activeStageGesture.mode !== "vertical") {
-            return;
-        }
-
-        const nextPosition = clampDisplayPosition(
-            activeStageGesture.startPosition
-                + ((activeStageGesture.startClientY - event.clientY) / Math.max(1, activeStageGesture.dragSpanY)),
-        );
-        wavetablePosition.setValue(nextPosition);
-        event.preventDefault();
-    }, [finishStageGesture, wavetablePosition]);
+        updateStageGestureFromPointer(event.nativeEvent);
+    }, [updateStageGestureFromPointer]);
 
     const endStageGesture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         finishStageGesture(event.pointerId);

@@ -1100,52 +1100,10 @@ export function useStagePositionDrag({
         endPositionGesture();
     }, [endPositionGesture, stageRef]);
 
-    useEffect(() => {
-        const handlePointerEnd = (event: PointerEvent) => finishPositionGesture(event.pointerId);
-        const handleBlur = () => finishPositionGesture();
-        const handleVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                finishPositionGesture();
-            }
-        };
-
-        window.addEventListener("pointerup", handlePointerEnd, true);
-        window.addEventListener("pointercancel", handlePointerEnd, true);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => {
-            window.removeEventListener("pointerup", handlePointerEnd, true);
-            window.removeEventListener("pointercancel", handlePointerEnd, true);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            finishPositionGesture();
-        };
-    }, [finishPositionGesture]);
-
-    const handleStagePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        if (event.button !== 0) {
-            return;
-        }
-
-        if ((event.target as HTMLElement | null)?.closest?.("select, button, input")) {
-            return;
-        }
-
-        finishPositionGesture();
-        beginPositionGesture();
-        activeDisplayDragRef.current = {
-            pointerId: event.pointerId,
-            startPosition: observedPosition,
-            startClientY: event.clientY,
-        };
-        try {
-            event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-            // Window-level termination still owns unsupported or synthetic pointers.
-        }
-    }, [beginPositionGesture, finishPositionGesture, observedPosition]);
-
-    const handleStagePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+    const updatePositionFromPointer = useCallback((event: Pick<
+        PointerEvent,
+        "pointerId" | "pointerType" | "buttons" | "clientY"
+    >) => {
         const activeDisplayDrag = activeDisplayDragRef.current;
         if (!activeDisplayDrag || activeDisplayDrag.pointerId !== event.pointerId || !stageRef.current) {
             return;
@@ -1169,6 +1127,68 @@ export function useStagePositionDrag({
         );
         bindingRef.current.setValue(nextPosition);
     }, [finishPositionGesture, stageRef]);
+
+    useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            const activeDisplayDrag = activeDisplayDragRef.current;
+            if (!activeDisplayDrag || activeDisplayDrag.pointerId !== event.pointerId) {
+                return;
+            }
+            const stage = stageRef.current;
+            if (event.target instanceof Node && stage?.contains(event.target)) {
+                return;
+            }
+            updatePositionFromPointer(event);
+        };
+        const handlePointerEnd = (event: PointerEvent) => finishPositionGesture(event.pointerId);
+        const handleBlur = () => finishPositionGesture();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                finishPositionGesture();
+            }
+        };
+
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishPositionGesture();
+        };
+    }, [finishPositionGesture, stageRef, updatePositionFromPointer]);
+
+    const handleStagePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        if (event.button !== 0) {
+            return;
+        }
+
+        if ((event.target as HTMLElement | null)?.closest?.("select, button, input")) {
+            return;
+        }
+
+        finishPositionGesture();
+        beginPositionGesture();
+        activeDisplayDragRef.current = {
+            pointerId: event.pointerId,
+            startPosition: observedPosition,
+            startClientY: event.clientY,
+        };
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // The window-level move fallback keeps owning unsupported pointers.
+        }
+    }, [beginPositionGesture, finishPositionGesture, observedPosition]);
+
+    const handleStagePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        updatePositionFromPointer(event.nativeEvent);
+    }, [updatePositionFromPointer]);
 
     const handleStagePointerUp = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         finishPositionGesture(event.pointerId);
@@ -1371,7 +1391,11 @@ export function useMsegEditorInteractions({
                     pointerLocation.pointIndex > 0 &&
                     pointerLocation.pointIndex < msegState.shape.points.length - 1,
             };
-            event.currentTarget.setPointerCapture(event.pointerId);
+            try {
+                event.currentTarget.setPointerCapture(event.pointerId);
+            } catch {
+                // Window-level termination still owns unsupported or synthetic pointers.
+            }
             event.preventDefault();
             return;
         }
@@ -1416,7 +1440,11 @@ export function useMsegEditorInteractions({
                 };
             }
 
-            event.currentTarget.setPointerCapture(event.pointerId);
+            try {
+                event.currentTarget.setPointerCapture(event.pointerId);
+            } catch {
+                // Window-level termination still owns unsupported or synthetic pointers.
+            }
             event.preventDefault();
             return;
         }

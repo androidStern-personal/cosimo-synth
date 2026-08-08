@@ -105,6 +105,54 @@ async function sampleAudioRms(page, sampleCount = 16, intervalMs = 60) {
     return Math.sqrt(values.reduce((sum, value) => sum + (value * value), 0) / values.length);
 }
 
+async function readServedFactoryCatalog(page) {
+    if (!remoteBaseUrl) {
+        return JSON.parse(await fs.readFile(
+            path.join(webRoot, "assets", "factory-bank-catalog.json"),
+            "utf8",
+        ));
+    }
+
+    const catalogUrl = new URL("assets/factory-bank-catalog.json", baseUrl).href;
+    const response = await page.request.get(catalogUrl);
+    assert.equal(response.ok(), true, `Failed to load the served factory catalog: ${response.status()} ${catalogUrl}`);
+    return response.json();
+}
+
+function observePageFailures(page) {
+    const consoleErrors = [];
+    const failedRequests = [];
+    const failedResponses = [];
+    const pageErrors = [];
+
+    page.on("console", (message) => {
+        if (message.type() === "error") {
+            const location = message.location();
+            consoleErrors.push(`${message.text()}${location.url ? ` @ ${location.url}` : ""}`);
+        }
+    });
+    page.on("pageerror", (error) => {
+        pageErrors.push(error instanceof Error ? error.stack || error.message : String(error));
+    });
+    page.on("requestfailed", (request) => {
+        failedRequests.push(`${request.failure()?.errorText ?? "Request failed"} ${request.url()}`);
+    });
+    page.on("response", (response) => {
+        if (response.status() >= 400) {
+            failedResponses.push(`${response.status()} ${response.url()}`);
+        }
+    });
+
+    return {
+        assertClean() {
+            assert.deepEqual(failedResponses, [], `Unexpected HTTP failures:\n${failedResponses.join("\n")}`);
+            assert.deepEqual(failedRequests, [], `Unexpected request failures:\n${failedRequests.join("\n")}`);
+            assert.deepEqual(consoleErrors, [], `Unexpected console errors:\n${consoleErrors.join("\n")}`);
+            assert.deepEqual(pageErrors, [], `Unexpected page errors:\n${pageErrors.join("\n")}`);
+        },
+    };
+}
+
 async function measureHeldNote(page, note = 48) {
     await page.evaluate((noteNumber) => {
         globalThis.__COSIMO_WEB_POC__.resetAudioMetrics();
@@ -244,7 +292,6 @@ async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = fals
 }
 
 before(async () => {
-    await fs.access(path.join(webRoot, "index.html"));
     if (remoteBaseUrl) {
         baseUrl = new URL("/", remoteBaseUrl).href;
         browser = browserEngine === "webkit"
@@ -258,6 +305,8 @@ before(async () => {
             });
         return;
     }
+
+    await fs.access(path.join(webRoot, "index.html"));
 
     server = createServer((request, response) => {
         void serveWebProof(request, response);
@@ -299,22 +348,8 @@ after(async () => {
 
 test("generated browser proof keeps the real keyboard pinned and renders non-silent audio from it", async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
-    const factoryCatalog = JSON.parse(await fs.readFile(
-        path.join(webRoot, "assets", "factory-bank-catalog.json"),
-        "utf8",
-    ));
-    const consoleErrors = [];
-    const failedResponses = [];
-
-    page.on("console", (message) => {
-        if (message.type() === "error") {
-            const location = message.location();
-            consoleErrors.push(`${message.text()}${location.url ? ` @ ${location.url}` : ""}`);
-        }
-    });
-    page.on("response", (response) => {
-        if (response.status() >= 400) failedResponses.push(`${response.status()} ${response.url()}`);
-    });
+    const factoryCatalog = await readServedFactoryCatalog(page);
+    const pageFailures = observePageFailures(page);
 
     try {
         await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
@@ -477,8 +512,7 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         assert.ok(mobileLayout.stickyTop >= 0);
         assert.ok(mobileLayout.stickyBottom <= mobileLayout.viewportHeight);
         assert.ok(mobileLayout.documentScrollWidth <= mobileLayout.viewportWidth);
-        assert.deepEqual(failedResponses, [], `Unexpected HTTP failures:\n${failedResponses.join("\n")}`);
-        assert.deepEqual(consoleErrors, [], `Unexpected console errors:\n${consoleErrors.join("\n")}`);
+        pageFailures.assertClean();
     } finally {
         await page.close();
     }
@@ -554,14 +588,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
     const page = await browser.newPage(browserEngine === "webkit"
         ? { ...devices["iPhone 13"] }
         : { viewport: { width: 1280, height: 820 } });
-    const consoleErrors = [];
-    const failedResponses = [];
-    page.on("console", (message) => {
-        if (message.type() === "error") consoleErrors.push(message.text());
-    });
-    page.on("response", (response) => {
-        if (response.status() >= 400) failedResponses.push(`${response.status()} ${response.url()}`);
-    });
+    const pageFailures = observePageFailures(page);
     await page.addInitScript(() => {
         if (sessionStorage.getItem("cosimo-rack-test-initialised") !== "1") {
             localStorage.removeItem("cosimo.web.patch-state.v1");
@@ -675,8 +702,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
             usedJSHeapSize: sustainedSnapshot.usedJSHeapSize,
         }));
 
-        assert.deepEqual(failedResponses, []);
-        assert.deepEqual(consoleErrors, []);
+        pageFailures.assertClean();
     } finally {
         await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v1")).catch(() => {});
         await page.close();

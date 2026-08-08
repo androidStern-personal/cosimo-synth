@@ -1445,6 +1445,7 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
     let setOrientationState: ((nextValue: "horizontal" | "vertical") => void) | null = null;
     let setCurveEditModeState: ((nextValue: "immediate" | "hold-or-drag") => void) | null = null;
     let setCurveEditHoldDelayMsState: ((nextValue: number) => void) | null = null;
+    let rejectPointerCapture = false;
     let currentOrientation: "horizontal" | "vertical" = "horizontal";
     let currentCurveEditMode: "immediate" | "hold-or-drag" = "immediate";
     let currentMsegState: MsegState = {
@@ -1530,7 +1531,11 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
                     return;
                 }
 
-                surfaceRef.current.setPointerCapture = (() => {}) as typeof surfaceRef.current.setPointerCapture;
+                surfaceRef.current.setPointerCapture = (() => {
+                    if (rejectPointerCapture) {
+                        throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+                    }
+                }) as typeof surfaceRef.current.setPointerCapture;
                 surfaceRef.current.releasePointerCapture = (() => {}) as typeof surfaceRef.current.releasePointerCapture;
             }, []);
 
@@ -1602,6 +1607,9 @@ export async function installMsegEditorInteractionsHookHarness(target: HTMLEleme
         async setCurveEditHoldDelayMs(nextValue: number) {
             setCurveEditHoldDelayMsState?.(nextValue);
             await waitForMicrotask();
+        },
+        setPointerCaptureFailure(nextValue: boolean) {
+            rejectPointerCapture = nextValue;
         },
         getPointCoordinates(pointIndex: number) {
             const point = currentMsegState.shape.points[pointIndex];

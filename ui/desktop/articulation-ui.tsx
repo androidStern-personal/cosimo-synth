@@ -85,6 +85,7 @@ type ArticulationRangePointerDragState = {
     pointerId: number;
     startX: number;
     moved: boolean;
+    captureFailed: boolean;
 } | {
     kind: "boundary-resize";
     leftSegment: ArticulationRangeSegmentView;
@@ -93,6 +94,7 @@ type ArticulationRangePointerDragState = {
     pointerId: number;
     startX: number;
     moved: boolean;
+    captureFailed: boolean;
 };
 
 const RANGE_EDGE_RESIZE_HIT_PX = 8;
@@ -719,6 +721,14 @@ function ArticulationCard({
     onOpenMenu,
 }: ArticulationCardProps) {
     const longPressTimerRef = useRef<number | null>(null);
+    const activePlayPointerRef = useRef<{
+        pointerId: number;
+        captureElement: HTMLButtonElement;
+    } | null>(null);
+    const cardIdRef = useRef(card.id);
+    const onPlayPressEndRef = useRef(onPlayPressEnd);
+    cardIdRef.current = card.id;
+    onPlayPressEndRef.current = onPlayPressEnd;
     const handleDragStart = useCallback((event: ReactDragEvent<HTMLDivElement>) => {
         activeArticulationDragId = card.id;
         event.dataTransfer.setData(ARTICULATION_DRAG_MIME, card.id);
@@ -741,21 +751,65 @@ function ArticulationCard({
 
     useEffect(() => clearLongPressTimer, [clearLongPressTimer]);
 
+    const finishPlayPress = useCallback((pointerId?: number) => {
+        const activePointer = activePlayPointerRef.current;
+        if (!activePointer || (pointerId !== undefined && activePointer.pointerId !== pointerId)) {
+            return;
+        }
+
+        activePlayPointerRef.current = null;
+        try {
+            if (activePointer.captureElement.hasPointerCapture(activePointer.pointerId)) {
+                activePointer.captureElement.releasePointerCapture(activePointer.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation or window deactivation.
+        }
+        onPlayPressEndRef.current(cardIdRef.current);
+    }, []);
+
+    useEffect(() => {
+        const handlePointerEnd = (event: PointerEvent) => finishPlayPress(event.pointerId);
+        const handleWindowBlur = () => finishPlayPress();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                finishPlayPress();
+            }
+        };
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
+        window.addEventListener("blur", handleWindowBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
+            window.removeEventListener("blur", handleWindowBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishPlayPress();
+        };
+    }, [finishPlayPress]);
+
     const handlePlayDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
         event.preventDefault();
         event.stopPropagation();
         clearLongPressTimer();
-        event.currentTarget.setPointerCapture?.(event.pointerId);
+        finishPlayPress();
+        activePlayPointerRef.current = {
+            pointerId: event.pointerId,
+            captureElement: event.currentTarget,
+        };
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // Window-level termination still owns unsupported or synthetic pointers.
+        }
         onPlayPressStart(card.id);
-    }, [card.id, clearLongPressTimer, onPlayPressStart]);
+    }, [card.id, clearLongPressTimer, finishPlayPress, onPlayPressStart]);
 
     const handlePlayUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
         event.stopPropagation();
-        if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        onPlayPressEnd(card.id);
-    }, [card.id, onPlayPressEnd]);
+        finishPlayPress(event.pointerId);
+    }, [finishPlayPress]);
 
     const handleCardPointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const target = event.target as HTMLElement | null;
@@ -1365,6 +1419,7 @@ function resolveBoundaryResizeState(
         pointerId: dragState.pointerId,
         startX: dragState.startX,
         moved: true,
+        captureFailed: dragState.captureFailed,
     };
 }
 
@@ -1424,6 +1479,10 @@ function ArticulationRangeLane({
     const [toast, setToast] = useState<string | null>(null);
     const [rangeMenu, setRangeMenu] = useState<ArticulationRangeMenuState | null>(null);
     const dragStateRef = useRef<ArticulationRangePointerDragState | null>(null);
+    const finishPointerEditRef = useRef<(clientX: number, cancelled?: boolean) => void>(() => undefined);
+    const handleSegmentPointerMoveRef = useRef<(
+        event: Pick<PointerEvent, "pointerId" | "pointerType" | "buttons" | "clientX">,
+    ) => void>(() => undefined);
     const rangeThirds = useMemo(() => buildRangeThirds(minValue, maxValue), [maxValue, minValue]);
     const [activeThird, setActiveThird] = useState<ArticulationRangeThird>(0);
     const fullTotalSlots = Math.max(1, maxValue - minValue + 1);
@@ -1676,7 +1735,12 @@ function ArticulationRangeLane({
         }
         event.preventDefault();
         event.stopPropagation();
-        event.currentTarget.setPointerCapture?.(event.pointerId);
+        let captureFailed = false;
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            captureFailed = true;
+        }
         setFocusedSegmentId(segment.id);
         setHoveredSegmentId(segment.id);
         setActiveResizeSegmentId(segment.id);
@@ -1690,6 +1754,7 @@ function ArticulationRangeLane({
                 pointerId: event.pointerId,
                 startX: event.clientX,
                 moved: false,
+                captureFailed,
             }
             : {
                 kind: "resize",
@@ -1698,6 +1763,7 @@ function ArticulationRangeLane({
                 pointerId: event.pointerId,
                 startX: event.clientX,
                 moved: false,
+                captureFailed,
             };
     }, [fullSegments]);
 
@@ -1724,7 +1790,12 @@ function ArticulationRangeLane({
 
         event.preventDefault();
         event.stopPropagation();
-        event.currentTarget.setPointerCapture?.(event.pointerId);
+        let captureFailed = false;
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            captureFailed = true;
+        }
         setHoveredSegmentId(segment.id);
         dragStateRef.current = {
             kind: "move",
@@ -1732,6 +1803,7 @@ function ArticulationRangeLane({
             pointerId: event.pointerId,
             startX: event.clientX,
             moved: false,
+            captureFailed,
         };
     }, [startResizePointerDrag, viewMaxValue, viewMinValue]);
 
@@ -1743,10 +1815,14 @@ function ArticulationRangeLane({
         startResizePointerDrag(event, segment, edge);
     }, [startResizePointerDrag]);
 
-    const handleSegmentPointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const handleSegmentPointerMove = useCallback((event: Pick<PointerEvent, "pointerId" | "pointerType" | "buttons" | "clientX">) => {
         const currentDragState = dragStateRef.current;
 
         if (!currentDragState || currentDragState.pointerId !== event.pointerId) {
+            return;
+        }
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            finishPointerEdit(event.clientX);
             return;
         }
 
@@ -1782,20 +1858,73 @@ function ArticulationRangeLane({
             targetSegment: dragState.segment,
             projectedSegments,
         });
-    }, [fullSegments, maxValue, minValue, positionFromClientX]);
+    }, [finishPointerEdit, fullSegments, maxValue, minValue, positionFromClientX]);
+    finishPointerEditRef.current = finishPointerEdit;
+    handleSegmentPointerMoveRef.current = handleSegmentPointerMove;
+
+    useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            if (dragStateRef.current?.captureFailed) {
+                handleSegmentPointerMoveRef.current(event);
+            }
+        };
+        const handlePointerUp = (event: PointerEvent) => {
+            if (dragStateRef.current?.pointerId === event.pointerId) {
+                finishPointerEditRef.current(event.clientX);
+            }
+        };
+        const handlePointerCancel = (event: PointerEvent) => {
+            if (dragStateRef.current?.pointerId === event.pointerId) {
+                finishPointerEditRef.current(event.clientX, true);
+            }
+        };
+        const cancelActivePointer = () => {
+            const dragState = dragStateRef.current;
+            if (dragState) {
+                finishPointerEditRef.current(dragState.startX, true);
+            }
+        };
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                cancelActivePointer();
+            }
+        };
+
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
+        window.addEventListener("pointerup", handlePointerUp, true);
+        window.addEventListener("pointercancel", handlePointerCancel, true);
+        window.addEventListener("blur", cancelActivePointer);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
+            window.removeEventListener("pointerup", handlePointerUp, true);
+            window.removeEventListener("pointercancel", handlePointerCancel, true);
+            window.removeEventListener("blur", cancelActivePointer);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            cancelActivePointer();
+        };
+    }, []);
 
     const handleSegmentPointerUp = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         event.preventDefault();
         event.stopPropagation();
-        if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
+        try {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation or window deactivation.
         }
         finishPointerEdit(event.clientX);
     }, [finishPointerEdit]);
 
     const handleSegmentPointerCancel = useCallback((event: ReactPointerEvent<HTMLElement>) => {
-        if (event.currentTarget.hasPointerCapture?.(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
+        try {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation or window deactivation.
         }
         finishPointerEdit(event.clientX, true);
     }, [finishPointerEdit]);
@@ -2104,7 +2233,7 @@ function ArticulationRangeLane({
                                 onContextMenu={(event) => openRangeMenu(event, segment)}
                                 title={`${segment.label} ${valueLabel}`}
                                 className={joinClasses(
-                                    "group pointer-events-auto absolute inset-y-0.5 flex cursor-grab items-center overflow-hidden rounded-[3px] text-[#0a0d18] transition active:cursor-grabbing focus-visible:outline-none",
+                                    "group pointer-events-auto absolute inset-y-0.5 flex touch-none cursor-grab items-center overflow-hidden rounded-[3px] text-[#0a0d18] transition active:cursor-grabbing focus-visible:outline-none",
                                     isPreview
                                         ? "z-[2] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.80),0_0_0_1px_rgba(103,232,249,0.75),0_0_14px_rgba(103,232,249,0.28)]"
                                         : isHighlighted
@@ -2179,7 +2308,7 @@ function ArticulationRangeLane({
                                         onPointerUp={handleSegmentPointerUp}
                                         onPointerCancel={handleSegmentPointerCancel}
                                         className={joinClasses(
-                                            "absolute inset-y-0 left-0 z-10 flex w-1 cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-[2px] before:rounded-full before:bg-black/65 before:opacity-0 before:transition before:content-['']",
+                                            "absolute inset-y-0 left-0 z-10 flex w-1 touch-none cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-[2px] before:rounded-full before:bg-black/65 before:opacity-0 before:transition before:content-['']",
                                             resizeHandlesAreInteractive ? "pointer-events-auto hover:bg-black/18 hover:before:opacity-95" : "pointer-events-none",
                                             resizeHandlesAreVisible ? "before:opacity-65" : "",
                                             isHighlighted ? "before:bg-black/80" : "",
@@ -2198,7 +2327,7 @@ function ArticulationRangeLane({
                                         onPointerUp={handleSegmentPointerUp}
                                         onPointerCancel={handleSegmentPointerCancel}
                                         className={joinClasses(
-                                            "absolute inset-y-0 right-0 z-10 flex w-1 cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-[2px] before:rounded-full before:bg-black/65 before:opacity-0 before:transition before:content-['']",
+                                            "absolute inset-y-0 right-0 z-10 flex w-1 touch-none cursor-ew-resize items-center justify-center bg-black/0 transition before:block before:h-3 before:w-[2px] before:rounded-full before:bg-black/65 before:opacity-0 before:transition before:content-['']",
                                             resizeHandlesAreInteractive ? "pointer-events-auto hover:bg-black/18 hover:before:opacity-95" : "pointer-events-none",
                                             resizeHandlesAreVisible ? "before:opacity-65" : "",
                                             isHighlighted ? "before:bg-black/80" : "",

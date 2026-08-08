@@ -1851,7 +1851,12 @@ export function EffectsRackWorkspace({
                                     if (!captureElement) {
                                         return;
                                     }
-                                    captureElement.setPointerCapture(event.pointerId);
+                                    try {
+                                        captureElement.setPointerCapture(event.pointerId);
+                                    } catch {
+                                        // The list and window handlers remain authoritative when
+                                        // capture is unavailable or the platform has already lost it.
+                                    }
                                     reorderRef.current = {
                                         pointerId: event.pointerId,
                                         effectId,

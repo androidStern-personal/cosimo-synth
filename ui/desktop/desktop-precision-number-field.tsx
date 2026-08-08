@@ -90,6 +90,10 @@ export function PrecisionNumberField({
     const [isEditing, setIsEditing] = useState(false);
     const [draftValue, setDraftValue] = useState("");
     const [isWheelCursorHidden, setIsWheelCursorHidden] = useState(false);
+    const updateDragFromPointerRef = useRef<(event: Pick<
+        PointerEvent,
+        "pointerId" | "pointerType" | "buttons" | "clientX" | "shiftKey"
+    >) => void>(() => undefined);
     const normalizedMin = useMemo(
         () => Math.min(normalizedFromValue(min), normalizedFromValue(max)),
         [max, min, normalizedFromValue],
@@ -106,9 +110,15 @@ export function PrecisionNumberField({
     const isInlineDark = variant === "inlineDark";
     const shouldShowLeadingLabel = isInlineDark && Boolean(leadingLabel);
 
-    useEffect(() => {
-        draftValueRef.current = draftValue;
-    }, [draftValue]);
+    const updateDraftValue = useCallback((nextValue: string) => {
+        draftValueRef.current = nextValue;
+        setDraftValue(nextValue);
+    }, []);
+
+    const beginTextEntry = useCallback(() => {
+        updateDraftValue(formatEditingValue(bindingRef.current.value));
+        setIsEditing(true);
+    }, [formatEditingValue, updateDraftValue]);
 
     const finishDrag = useCallback((pointerId?: number) => {
         const activeDrag = activeDragRef.current;
@@ -129,8 +139,58 @@ export function PrecisionNumberField({
         return activeDrag;
     }, []);
 
+    const updateDragFromPointer = (event: Pick<
+        PointerEvent,
+        "pointerId" | "pointerType" | "buttons" | "clientX" | "shiftKey"
+    >) => {
+        const activeDrag = activeDragRef.current;
+
+        if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
+            return;
+        }
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            finishDrag(event.pointerId);
+            return;
+        }
+
+        const deltaX = event.clientX - activeDrag.startClientX;
+        if (Math.abs(deltaX) >= DRAG_START_THRESHOLD_PX) {
+            activeDrag.moved = true;
+        }
+
+        const normalizedSpan = Math.max(1e-9, normalizedMax - normalizedMin);
+        const scaledDelta = (deltaX / Math.max(1, pixelsPerFullRange))
+            * normalizedSpan
+            * (event.shiftKey ? fineDragMultiplier : 1);
+        const nextNormalizedValue = clampNumber(
+            activeDrag.startNormalizedValue + scaledDelta,
+            normalizedMin,
+            normalizedMax,
+        );
+        const nextBindingValue = quantizeToStep(
+            clampNumber(valueFromNormalized(nextNormalizedValue), min, max),
+            min,
+            max,
+            step,
+        );
+
+        bindingRef.current.setValue(nextBindingValue);
+    };
+    updateDragFromPointerRef.current = updateDragFromPointer;
+
     useEffect(() => {
         isMountedRef.current = true;
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            const activeDrag = activeDragRef.current;
+            if (!activeDrag || activeDrag.pointerId !== event.pointerId) {
+                return;
+            }
+            const input = inputRef.current;
+            if (event.target instanceof Node && input?.contains(event.target)) {
+                return;
+            }
+            updateDragFromPointerRef.current(event);
+        };
         const handlePointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
         const handleBlur = () => finishDrag();
         const handleVisibilityChange = () => {
@@ -139,6 +199,7 @@ export function PrecisionNumberField({
             }
         };
 
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
         window.addEventListener("pointerup", handlePointerEnd);
         window.addEventListener("pointercancel", handlePointerEnd);
         window.addEventListener("blur", handleBlur);
@@ -146,6 +207,7 @@ export function PrecisionNumberField({
         return () => {
             isMountedRef.current = false;
             clearTimeout(wheelCursorTimerRef.current);
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
             window.removeEventListener("pointerup", handlePointerEnd);
             window.removeEventListener("pointercancel", handlePointerEnd);
             window.removeEventListener("blur", handleBlur);
@@ -159,8 +221,6 @@ export function PrecisionNumberField({
             return;
         }
 
-        setDraftValue(formatEditingValue(binding.value));
-
         const animationFrameID = window.requestAnimationFrame(() => {
             inputRef.current?.focus();
             inputRef.current?.select();
@@ -169,7 +229,7 @@ export function PrecisionNumberField({
         return () => {
             window.cancelAnimationFrame(animationFrameID);
         };
-    }, [binding.value, formatEditingValue, isEditing]);
+    }, [isEditing]);
 
     useEffect(() => {
         if (isEditing) {
@@ -180,18 +240,18 @@ export function PrecisionNumberField({
     const commitTextEntry = (rawText: string) => {
         const parsedValue = parseText(rawText);
         const nextValue = quantizeToStep(
-            clampNumber(parsedValue ?? binding.value, min, max),
+            clampNumber(parsedValue ?? bindingRef.current.value, min, max),
             min,
             max,
             step,
         );
 
-        setDraftValue(formatEditingValue(nextValue));
-        if (Math.abs(nextValue - binding.value) <= Math.max(step / 10, 1e-9)) {
+        updateDraftValue(formatEditingValue(nextValue));
+        if (Math.abs(nextValue - bindingRef.current.value) <= Math.max(step / 10, 1e-9)) {
             return;
         }
 
-        binding.commitValue(nextValue);
+        bindingRef.current.commitValue(nextValue);
     };
 
     const adjustByWheel = useCallback((deltaDirection: number) => {
@@ -256,7 +316,7 @@ export function PrecisionNumberField({
             return;
         }
 
-        setDraftValue(formatEditingValue(binding.value));
+        updateDraftValue(formatEditingValue(bindingRef.current.value));
     };
 
     return (
@@ -326,40 +386,7 @@ export function PrecisionNumberField({
                         }
                         event.preventDefault();
                     }}
-                    onPointerMove={(event) => {
-                        const activeDrag = activeDragRef.current;
-
-                        if (!activeDrag || activeDrag.pointerId !== event.pointerId || isEditing) {
-                            return;
-                        }
-                        if (event.pointerType === "mouse" && event.buttons === 0) {
-                            finishDrag(event.pointerId);
-                            return;
-                        }
-
-                        const deltaX = event.clientX - activeDrag.startClientX;
-                        if (Math.abs(deltaX) >= DRAG_START_THRESHOLD_PX) {
-                            activeDrag.moved = true;
-                        }
-
-                        const normalizedSpan = Math.max(1e-9, normalizedMax - normalizedMin);
-                        const scaledDelta = (deltaX / Math.max(1, pixelsPerFullRange))
-                            * normalizedSpan
-                            * (event.shiftKey ? fineDragMultiplier : 1);
-                        const nextNormalizedValue = clampNumber(
-                            activeDrag.startNormalizedValue + scaledDelta,
-                            normalizedMin,
-                            normalizedMax,
-                        );
-                        const nextBindingValue = quantizeToStep(
-                            clampNumber(valueFromNormalized(nextNormalizedValue), min, max),
-                            min,
-                            max,
-                            step,
-                        );
-
-                        binding.setValue(nextBindingValue);
-                    }}
+                    onPointerMove={(event) => updateDragFromPointer(event.nativeEvent)}
                     onPointerUp={(event) => {
                         const activeDrag = finishDrag(event.pointerId);
                         if (!activeDrag || isEditing) {
@@ -368,11 +395,7 @@ export function PrecisionNumberField({
 
                         if (!activeDrag.moved) {
                             if (isInlineDark) {
-                                setIsEditing(true);
-                                window.requestAnimationFrame(() => {
-                                    inputRef.current?.focus();
-                                    inputRef.current?.select();
-                                });
+                                beginTextEntry();
                             } else {
                                 inputRef.current?.focus();
                             }
@@ -388,14 +411,14 @@ export function PrecisionNumberField({
                         }
 
                         event.preventDefault();
-                        setIsEditing(true);
+                        beginTextEntry();
                     }}
                     onChange={(event) => {
                         if (!isEditing) {
                             return;
                         }
 
-                        setDraftValue(event.currentTarget.value);
+                        updateDraftValue(event.currentTarget.value);
                     }}
                     onBlur={() => {
                         const shouldCommit = !skipCommitOnBlurRef.current;
@@ -406,7 +429,7 @@ export function PrecisionNumberField({
                         if (!isEditing) {
                             if (event.key === "Enter") {
                                 event.preventDefault();
-                                setIsEditing(true);
+                                beginTextEntry();
                             }
                             return;
                         }

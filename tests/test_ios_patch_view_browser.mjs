@@ -1639,6 +1639,81 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
     }
 });
 
+test("mounted iPhone stage keeps tracking touch when pointer capture is unavailable", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        await clearIOSHarnessDebugLog(page);
+        const stage = await getShadowLocator(page, ".wavetable-stage");
+        const bounds = await stage.boundingBox();
+        assert.ok(bounds);
+        await stage.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        const pointerId = 93;
+        const start = {
+            x: bounds.x + (bounds.width * 0.5),
+            y: bounds.y + (bounds.height * 0.72),
+        };
+        const moved = {
+            x: start.x + 2,
+            y: start.y - 54,
+        };
+        await stage.dispatchEvent("pointerdown", {
+            pointerId,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+
+        let snapshot = await waitForSnapshot(
+            page,
+            "capture-free iPhone scan gesture",
+            (nextSnapshot) => nextSnapshot.gestureStarts.includes("wavetablePosition")
+                && nextSnapshot.sentMessages.some((message) => message.endpointID === "wavetablePosition"),
+        );
+        assert.deepEqual(snapshot.gestureEnds, []);
+
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        snapshot = await waitForSnapshot(
+            page,
+            "capture-free iPhone scan release",
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("wavetablePosition"),
+        );
+        assert.deepEqual(snapshot.gestureEnds, ["wavetablePosition"]);
+    } finally {
+        await closeIOSHarnessPage(page);
+    }
+});
+
 test("mounted iPhone octave controls update the footer keyboard root note and clamp at the configured bounds", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },

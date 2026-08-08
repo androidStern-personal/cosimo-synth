@@ -517,6 +517,67 @@ test("shared filter range editor ends an active edit when the window blurs", asy
     }
 });
 
+test("shared filter range editor keeps tracking touch when pointer capture is unavailable", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSharedFilterRangeEditorHarness");
+        const surface = page.locator('[data-role="filter-range-editor-surface"]');
+        const handle = page.locator('[data-role="filter-range-value-hit-target"]');
+        const handleBox = await handle.boundingBox();
+        assert.ok(handleBox, "Expected the filter value handle to be visible.");
+        await surface.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        const pointerId = 95;
+        const start = {
+            x: handleBox.x + (handleBox.width * 0.5),
+            y: handleBox.y + (handleBox.height * 0.5),
+        };
+        const moved = { x: start.x + 80, y: start.y + 30 };
+        await handle.dispatchEvent("pointerdown", {
+            pointerId,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().valueLog?.length >= 1);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.editLog, ["start:value"]);
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.editLog, ["start:value", "end:value"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("shared filter range editor keeps bottom chips aligned at compact widths", async () => {
     const page = await openModulePage();
 

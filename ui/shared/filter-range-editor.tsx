@@ -696,7 +696,10 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
     const viewportRef = useRef<HTMLDivElement | null>(null);
     const surfaceRef = useRef<SVGSVGElement | null>(null);
     const dragStateRef = useRef<DragState | null>(null);
+    const applyDragPositionRef = useRef<(clientX: number, clientY: number) => void>(() => undefined);
+    const onEditStartRef = useRef(onEditStart);
     const onEditEndRef = useRef(onEditEnd);
+    onEditStartRef.current = onEditStart;
     onEditEndRef.current = onEditEnd;
     const [activeDragTarget, setActiveDragTarget] = useState<FilterRangeEditTarget | null>(null);
     const size = useEditorSurfaceSize(viewportRef);
@@ -861,6 +864,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                 : { ...safeRange, endCutoffHz: nextCutoffHz },
         );
     };
+    applyDragPositionRef.current = applyDragPosition;
 
     const handleValueKeyDown = (event: ReactKeyboardEvent<SVGCircleElement>) => {
         if (!isValueEditable(props)) {
@@ -931,7 +935,47 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
         setActiveDragTarget(null);
     }, []);
 
+    const updateDragFromPointer = useCallback((event: Pick<
+        PointerEvent,
+        "pointerId" | "pointerType" | "buttons" | "clientX" | "clientY"
+    >) => {
+        const dragState = dragStateRef.current;
+
+        if (!dragState || dragState.pointerId !== event.pointerId) {
+            return;
+        }
+
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            endDrag(event.pointerId);
+            return;
+        }
+
+        const deltaX = event.clientX - dragState.startClientX;
+        const deltaY = event.clientY - dragState.startClientY;
+        if (!dragState.hasMoved && Math.abs(deltaX) < EDITOR_DRAG_START_THRESHOLD_PX && Math.abs(deltaY) < EDITOR_DRAG_START_THRESHOLD_PX) {
+            return;
+        }
+
+        if (!dragState.hasMoved) {
+            dragState.hasMoved = true;
+            onEditStartRef.current?.(dragState.target);
+        }
+
+        applyDragPositionRef.current(event.clientX, event.clientY);
+    }, [endDrag]);
+
     useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            const dragState = dragStateRef.current;
+            if (!dragState || dragState.pointerId !== event.pointerId) {
+                return;
+            }
+            const surface = surfaceRef.current;
+            if (event.target instanceof Node && surface?.contains(event.target)) {
+                return;
+            }
+            updateDragFromPointer(event);
+        };
         const handlePointerEnd = (event: PointerEvent) => endDrag(event.pointerId);
         const handleBlur = () => endDrag();
         const handleVisibilityChange = () => {
@@ -940,18 +984,20 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
             }
         };
 
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
         window.addEventListener("pointerup", handlePointerEnd, true);
         window.addEventListener("pointercancel", handlePointerEnd, true);
         window.addEventListener("blur", handleBlur);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
             window.removeEventListener("pointerup", handlePointerEnd, true);
             window.removeEventListener("pointercancel", handlePointerEnd, true);
             window.removeEventListener("blur", handleBlur);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             endDrag();
         };
-    }, [endDrag]);
+    }, [endDrag, updateDragFromPointer]);
 
     const beginDrag = (
         target: FilterRangeEditTarget,
@@ -1021,31 +1067,7 @@ export function FilterRangeEditor(props: FilterRangeEditorProps) {
                         WebkitUserSelect: "none",
                     }}
                     widthPx={size.width}
-                    onPointerMove={(event) => {
-                        const dragState = dragStateRef.current;
-
-                        if (!dragState || dragState.pointerId !== event.pointerId) {
-                            return;
-                        }
-
-                        if (event.pointerType === "mouse" && event.buttons === 0) {
-                            endDrag(event.pointerId);
-                            return;
-                        }
-
-                        const deltaX = event.clientX - dragState.startClientX;
-                        const deltaY = event.clientY - dragState.startClientY;
-                        if (!dragState.hasMoved && Math.abs(deltaX) < EDITOR_DRAG_START_THRESHOLD_PX && Math.abs(deltaY) < EDITOR_DRAG_START_THRESHOLD_PX) {
-                            return;
-                        }
-
-                        if (!dragState.hasMoved) {
-                            dragState.hasMoved = true;
-                            onEditStart?.(dragState.target);
-                        }
-
-                        applyDragPosition(event.clientX, event.clientY);
-                    }}
+                    onPointerMove={(event) => updateDragFromPointer(event.nativeEvent)}
                     onPointerUp={(event) => endDrag(event.pointerId)}
                     onPointerCancel={(event) => endDrag(event.pointerId)}
                     onLostPointerCapture={(event) => endDrag(event.pointerId)}

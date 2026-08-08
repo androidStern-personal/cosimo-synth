@@ -4,7 +4,6 @@ import {
     useMemo,
     useRef,
     useState,
-    type DragEvent as ReactDragEvent,
     type ReactNode,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
@@ -20,22 +19,6 @@ import {
     usePatchParameterBinding,
     type PatchControlBinding,
 } from "../shared/patch-controls";
-import {
-    RACK_EFFECT_DESCRIPTORS,
-    formatRackParameterValue,
-    getRackEffectDescriptor,
-    type RackParameterDescriptor,
-} from "../shared/rack-parameter-descriptors";
-import {
-    EFFECTIVE_RACK_STATE_ENDPOINT_ID,
-    RACK_STATE_KEY,
-    commitRackState,
-    createDefaultRackState,
-    deserializeRackState,
-    parseEffectiveRackState,
-    serializeRackState,
-    type RackState,
-} from "../shared/rack-state";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import {
     type SynthFocusBindings,
@@ -58,14 +41,10 @@ import {
     SYNTH_GRID_CARD_INSET_SHADOW_CLASS,
     SYNTH_GRID_CARD_SHELL_CLASS,
     SYNTH_GRID_CARD_SIZE_CLASS,
-    VerticalSlider,
     VOICE_MODE_OPTIONS,
     VoiceGlideControlSurface,
     WavetableStageSection,
 } from "../shared/synth-components";
-import { useSliderDrag } from "../shared/use-slider-drag";
-import { DistortionVisualizer } from "../shared/distortion-visualizer";
-import type { DistortionHistoryFrame, DistortionScopeFrame } from "../shared/distortion-visualization";
 import {
     DEFAULT_KEYBOARD_NOTE_COUNT,
     KeyboardDock,
@@ -150,17 +129,6 @@ const FILTER_MODE_OPTIONS = [
     { value: 4, label: "Notch" },
     { value: 5, label: "Peak" },
 ] as const;
-const DISTORTION_MODE_OPTIONS = [
-    { value: 0, label: "Classic", summary: "Equal-power crossfade between dry and clipped wet." },
-    { value: 1, label: "Harmonics", summary: "Keep the dry body and add only the nonlinear residue." },
-] as const;
-const DISTORTION_WET_HP_MIN_HZ = 20;
-const DISTORTION_WET_HP_MAX_HZ = 4_000;
-const DISTORTION_WET_LP_MIN_HZ = 20;
-const DISTORTION_WET_LP_MAX_HZ = 20_000;
-const CHORUS_MOTION_MODE_OPTIONS = ["Subtle", "Wide", "Classic", "Fast"] as const;
-const CHORUS_BLOOM_MODE_OPTIONS = ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"] as const;
-const CHORUS_RING_OFFSET_MODE_OPTIONS = ["+5th", "Low 5th", "+Oct", "-Oct"] as const;
 const ARTICULATION_CARD_COLORS = [
     "#87d7f5",
     "#f472b6",
@@ -302,35 +270,6 @@ type FilterSectionProps = {
     className?: string;
 };
 
-type DistortionSectionProps = {
-    distortionMode: PatchControlBinding<number>;
-    distortionDriveDb: PatchControlBinding<number>;
-    distortionKnee: PatchControlBinding<number>;
-    distortionWet: PatchControlBinding<number>;
-    distortionWetHPHz: PatchControlBinding<number>;
-    distortionWetLPHz: PatchControlBinding<number>;
-    observedDistortionHistory: DistortionHistoryFrame | null;
-    observedDistortionScope: DistortionScopeFrame | null;
-    className?: string;
-};
-
-type ChorusParameterBindings = {
-    chorusMix: PatchControlBinding<number>;
-    chorusMotionMode: PatchControlBinding<number>;
-    chorusBloomMode: PatchControlBinding<number>;
-    chorusTone: PatchControlBinding<number>;
-    chorusFeedback: PatchControlBinding<number>;
-    chorusRingAmount: PatchControlBinding<number>;
-    chorusRingOffsetMode: PatchControlBinding<number>;
-    chorusRingFineSemitones: PatchControlBinding<number>;
-};
-
-type EffectsRackSectionProps = Omit<DistortionSectionProps, "className"> & ChorusParameterBindings & {
-    className?: string;
-};
-
-type ChorusEffectColumnProps = ChorusParameterBindings;
-
 type MsegEditorModalProps = {
     isOpen: boolean;
     slotLabel: string;
@@ -400,10 +339,6 @@ function formatSignedPercent(value: number) {
 
 function formatDriveDb(value: number) {
     return `${value.toFixed(1)} dB`;
-}
-
-function formatUnitPercent(value: number) {
-    return `${Math.round(clamp(value, 0, 1) * 100)}%`;
 }
 
 function formatSemitoneOffset(value: number) {
@@ -592,15 +527,6 @@ function formatFrequencyHz(value: number) {
     }
 
     return `${Math.round(safeValue)} Hz`;
-}
-
-function frequencyHzToLogNormalized(value: number, minHz: number, maxHz: number) {
-    const safeValue = clamp(value, minHz, maxHz);
-    return Math.log(safeValue / minHz) / Math.log(maxHz / minHz);
-}
-
-function normalizedToLogFrequencyHz(normalized: number, minHz: number, maxHz: number) {
-    return minHz * Math.pow(maxHz / minHz, clamp(normalized, 0, 1));
 }
 
 function formatCutoffEditingValue(value: number) {
@@ -845,9 +771,13 @@ function MsegMorphRail({
     className?: string;
 }) {
     const railRef = useRef<HTMLDivElement | null>(null);
-    const activePointerRef = useRef<number | null>(null);
+    const activePointerRef = useRef<{
+        pointerId: number;
+        captureFailed: boolean;
+    } | null>(null);
     const bindingRef = useRef(binding);
     const onAdjustingChangeRef = useRef(onAdjustingChange);
+    const updateFromClientXRef = useRef<(clientX: number) => void>(() => undefined);
     bindingRef.current = binding;
     onAdjustingChangeRef.current = onAdjustingChange;
     const value = clamp(Number(binding.value) || 0, 0, 1);
@@ -862,17 +792,18 @@ function MsegMorphRail({
         const nextValue = clamp((clientX - bounds.left) / Math.max(1, bounds.width), 0, 1);
         onChange(nextValue);
     }, [onChange]);
+    updateFromClientXRef.current = updateFromClientX;
 
     const finishDrag = useCallback((pointerId?: number) => {
-        const activePointerId = activePointerRef.current;
-        if (activePointerId === null || (pointerId !== undefined && activePointerId !== pointerId)) {
+        const activePointer = activePointerRef.current;
+        if (!activePointer || (pointerId !== undefined && activePointer.pointerId !== pointerId)) {
             return;
         }
 
         activePointerRef.current = null;
         try {
-            if (railRef.current?.hasPointerCapture(activePointerId)) {
-                railRef.current.releasePointerCapture(activePointerId);
+            if (railRef.current?.hasPointerCapture(activePointer.pointerId)) {
+                railRef.current.releasePointerCapture(activePointer.pointerId);
             }
         } catch {
             // Capture may already be gone after cancellation, blur, or unmount.
@@ -882,6 +813,22 @@ function MsegMorphRail({
     }, []);
 
     useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            const activePointer = activePointerRef.current;
+            if (!activePointer?.captureFailed || activePointer.pointerId !== event.pointerId) {
+                return;
+            }
+            const rail = railRef.current;
+            if (event.target instanceof Node && rail?.contains(event.target)) {
+                return;
+            }
+            if (event.pointerType === "mouse" && event.buttons === 0) {
+                finishDrag(event.pointerId);
+                return;
+            }
+            event.preventDefault();
+            updateFromClientXRef.current(event.clientX);
+        };
         const handlePointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
         const handleBlur = () => finishDrag();
         const handleVisibilityChange = () => {
@@ -890,11 +837,13 @@ function MsegMorphRail({
             }
         };
 
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
         window.addEventListener("pointerup", handlePointerEnd, true);
         window.addEventListener("pointercancel", handlePointerEnd, true);
         window.addEventListener("blur", handleBlur);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
             window.removeEventListener("pointerup", handlePointerEnd, true);
             window.removeEventListener("pointercancel", handlePointerEnd, true);
             window.removeEventListener("blur", handleBlur);
@@ -925,11 +874,14 @@ function MsegMorphRail({
                     }
 
                     finishDrag();
-                    activePointerRef.current = event.pointerId;
+                    activePointerRef.current = {
+                        pointerId: event.pointerId,
+                        captureFailed: false,
+                    };
                     try {
                         event.currentTarget.setPointerCapture(event.pointerId);
                     } catch {
-                        // Window-level termination still owns unsupported or synthetic pointers.
+                        activePointerRef.current.captureFailed = true;
                     }
                     bindingRef.current.beginGesture();
                     onAdjustingChangeRef.current?.(true);
@@ -938,7 +890,7 @@ function MsegMorphRail({
                     event.stopPropagation();
                 }}
                 onPointerMove={(event) => {
-                    if (activePointerRef.current !== event.pointerId) {
+                    if (activePointerRef.current?.pointerId !== event.pointerId) {
                         return;
                     }
 
@@ -1926,785 +1878,6 @@ function FilterSection({
     );
 }
 
-function DistortionSection({
-    distortionMode,
-    distortionDriveDb,
-    distortionKnee,
-    distortionWet,
-    distortionWetHPHz,
-    distortionWetLPHz,
-    observedDistortionHistory,
-    observedDistortionScope,
-    className,
-}: DistortionSectionProps) {
-    const distortionModeOption = DISTORTION_MODE_OPTIONS.find((option) => option.value === distortionMode.value)
-        ?? DISTORTION_MODE_OPTIONS[0];
-    const inputPeak = observedDistortionScope?.inputPeak ?? 0;
-    const outputPeak = observedDistortionScope?.outputPeak ?? 0;
-    const removedPeak = observedDistortionScope?.removedPeak ?? 0;
-    const overshoot = Math.max(0, inputPeak - 1);
-    const headroom = Math.max(0, 1 - inputPeak);
-    const wetHPNormalized = frequencyHzToLogNormalized(
-        distortionWetHPHz.value,
-        DISTORTION_WET_HP_MIN_HZ,
-        DISTORTION_WET_HP_MAX_HZ,
-    );
-    const wetLPNormalized = frequencyHzToLogNormalized(
-        distortionWetLPHz.value,
-        DISTORTION_WET_LP_MIN_HZ,
-        DISTORTION_WET_LP_MAX_HZ,
-    );
-
-    const handleWetHPChange = useCallback((nextNormalized: number) => {
-        const nextValue = clamp(
-            normalizedToLogFrequencyHz(nextNormalized, DISTORTION_WET_HP_MIN_HZ, DISTORTION_WET_HP_MAX_HZ),
-            DISTORTION_WET_HP_MIN_HZ,
-            Math.min(DISTORTION_WET_HP_MAX_HZ, distortionWetLPHz.value),
-        );
-        distortionWetHPHz.setValue(nextValue);
-    }, [distortionWetHPHz, distortionWetLPHz.value]);
-
-    const handleWetLPChange = useCallback((nextNormalized: number) => {
-        const nextValue = clamp(
-            normalizedToLogFrequencyHz(nextNormalized, DISTORTION_WET_LP_MIN_HZ, DISTORTION_WET_LP_MAX_HZ),
-            Math.max(DISTORTION_WET_LP_MIN_HZ, distortionWetHPHz.value),
-            DISTORTION_WET_LP_MAX_HZ,
-        );
-        distortionWetLPHz.setValue(nextValue);
-    }, [distortionWetHPHz.value, distortionWetLPHz]);
-
-    const hpTrackRef = useRef<HTMLDivElement>(null);
-    const { handlePointerDown: handleSliderPointerDown, handlePointerMove: handleSliderPointerMove, handlePointerUp: handleSliderPointerUp } = useSliderDrag();
-
-    return (
-        <section
-            data-role="distortion-card"
-            data-layout-card="desktop-grid-card"
-            data-section-accent="coral"
-            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${className ?? ""}`}
-        >
-            <input
-                data-role="distortion-wet-lp-field"
-                type="range"
-                min={0}
-                max={1}
-                step={0.001}
-                value={wetLPNormalized}
-                className="sr-only"
-                tabIndex={-1}
-                onInput={(event) => handleWetLPChange(Number(event.currentTarget.value))}
-                onChange={(event) => handleWetLPChange(Number(event.currentTarget.value))}
-            />
-            <div className="flex min-h-0 flex-1">
-                <VerticalSlider
-                    label="Drv"
-                    binding={distortionDriveDb}
-                    min={0}
-                    max={36}
-                    fillClassName="cosimo-distortion-drive-fill"
-                    handleClassName="cosimo-distortion-drive-handle"
-                    fillDataRole="distortion-drive-fill"
-                    handleDataRole="distortion-drive-handle"
-                    inputDataRole="distortion-drive-field"
-                    formatValue={(v) => v.toFixed(1)}
-                    className="w-7"
-                />
-                <VerticalSlider
-                    label="Kne"
-                    binding={distortionKnee}
-                    min={0}
-                    max={1}
-                    fillClassName="cosimo-distortion-knee-fill"
-                    handleClassName="cosimo-distortion-knee-handle"
-                    fillDataRole="distortion-knee-fill"
-                    handleDataRole="distortion-knee-handle"
-                    formatValue={formatUnitPercent}
-                    className="w-7"
-                />
-
-                {/* Center: SVG + overlays */}
-                <div className="relative min-h-0 min-w-0 flex-1">
-                    <DistortionVisualizer
-                        compact
-                        knee={distortionKnee.value}
-                        transferFrame={observedDistortionScope}
-                        historyFrame={observedDistortionHistory}
-                    />
-
-                    {/* Top-left overlay: DIST label + mode toggle */}
-                    <div className="absolute left-3 top-2 flex items-center gap-2">
-                        <span className="synth-section-title">Dist</span>
-                        <button
-                            data-role="distortion-mode-option-1"
-                            type="button"
-                            className={`rounded px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-[0.08em] transition ${
-                                distortionMode.value === 0
-                                    ? "bg-white/[0.06] text-slate-300/60"
-                                    : "synth-accent-soft-bg"
-                            }`}
-                            onClick={() => distortionMode.commitValue(distortionMode.value === 0 ? 1 : 0)}
-                        >
-                            {distortionModeOption.label}
-                        </button>
-                    </div>
-
-                    {/* Bottom-right overlay: peak readouts */}
-                    <div className="absolute bottom-5 right-2 grid gap-0.5 rounded-[5px] bg-black/50 px-2 py-1.5">
-                        <span className="font-mono text-[8px] text-slate-200/55">In <span className="text-slate-200/85">{inputPeak.toFixed(3)}</span></span>
-                        <span className="synth-readout-text text-[8px] opacity-80">Out <span>{outputPeak.toFixed(3)}</span></span>
-                        <span className="synth-readout-text text-[8px] opacity-55">Rem <span>{removedPeak.toFixed(3)}</span></span>
-                    </div>
-
-                    {/* Bottom strip: HP/LP frequency range selector */}
-                    <div
-                        ref={hpTrackRef}
-                        className="absolute bottom-1 left-3 right-3 h-3.5"
-                        onPointerMove={handleSliderPointerMove}
-                        onPointerUp={handleSliderPointerUp}
-                    >
-                        <div className="absolute inset-0 rounded bg-white/[0.02]" />
-                        <div
-                            className="synth-accent-faint-bg absolute bottom-0 left-0 top-0 rounded-l"
-                            style={{ width: `${wetHPNormalized * 100}%` }}
-                        />
-                        <div
-                            className="synth-accent-strip-bg absolute bottom-0 top-0"
-                            style={{ left: `${wetHPNormalized * 100}%`, right: `${(1 - wetLPNormalized) * 100}%` }}
-                        />
-                        <div
-                            className="synth-accent-faint-bg absolute bottom-0 right-0 top-0 rounded-r"
-                            style={{ width: `${(1 - wetLPNormalized) * 100}%` }}
-                        />
-                        <div
-                            className="synth-accent-solid-bg absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[var(--cosimo-recess)] opacity-70"
-                            style={{ left: `${wetHPNormalized * 100}%` }}
-                            onPointerDown={(e) => handleSliderPointerDown(e, hpTrackRef.current, distortionWetHPHz, wetHPNormalized, 0, 1, "horizontal", handleWetHPChange)}
-                        />
-                        <div
-                            className="synth-accent-solid-bg absolute top-1/2 size-[11px] -translate-x-1/2 -translate-y-1/2 cursor-ew-resize rounded-full border-2 border-[var(--cosimo-recess)] opacity-70"
-                            style={{ left: `${wetLPNormalized * 100}%` }}
-                            onPointerDown={(e) => handleSliderPointerDown(e, hpTrackRef.current, distortionWetLPHz, wetLPNormalized, 0, 1, "horizontal", handleWetLPChange)}
-                        />
-                        <span
-                            className="synth-readout-text absolute -top-3 -translate-x-1/2 text-[7px] opacity-55"
-                            style={{ left: `${wetHPNormalized * 100}%` }}
-                        >
-                            {formatFrequencyHz(distortionWetHPHz.value)}
-                        </span>
-                        <span
-                            className="synth-readout-text absolute -top-3 -translate-x-1/2 text-[7px] opacity-55"
-                            style={{ left: `${wetLPNormalized * 100}%` }}
-                        >
-                            {formatFrequencyHz(distortionWetLPHz.value)}
-                        </span>
-                    </div>
-                </div>
-
-                <VerticalSlider
-                    label="Mix"
-                    binding={distortionWet}
-                    min={0}
-                    max={1}
-                    fillClassName="cosimo-distortion-mix-fill"
-                    handleClassName="cosimo-distortion-mix-handle"
-                    fillDataRole="distortion-mix-fill"
-                    handleDataRole="distortion-mix-handle"
-                    inputDataRole="distortion-mix-field"
-                    formatValue={formatUnitPercent}
-                    className="w-7"
-                />
-            </div>
-        </section>
-    );
-}
-
-function ChorusModeRow({
-    label,
-    value,
-    dataRole,
-    onClick,
-}: {
-    label: string;
-    value: string;
-    dataRole: string;
-    onClick: () => void;
-}) {
-    return (
-        <button
-            data-role={dataRole}
-            type="button"
-            aria-label={`${label}: ${value}. Click to cycle.`}
-            title={`${label}: ${value}`}
-            className="flex min-w-0 items-center justify-between overflow-hidden rounded px-1.5 py-0.5 text-left transition hover:bg-white/[0.04]"
-            onClick={onClick}
-        >
-            <span className="text-[7px] font-bold uppercase tracking-[0.10em] text-slate-400/50">
-                {label}
-            </span>
-            <span className="synth-readout-text text-[8px] opacity-80">
-                {value}
-            </span>
-        </button>
-    );
-}
-
-function ChorusEffectColumn({
-    chorusMix,
-    chorusMotionMode,
-    chorusBloomMode,
-    chorusTone,
-    chorusFeedback,
-    chorusRingAmount,
-    chorusRingOffsetMode,
-    chorusRingFineSemitones,
-}: ChorusEffectColumnProps) {
-    const motionIndex = clamp(Math.round(Number(chorusMotionMode.value) || 0), 0, CHORUS_MOTION_MODE_OPTIONS.length - 1);
-    const bloomIndex = clamp(Math.round(Number(chorusBloomMode.value) || 0), 0, CHORUS_BLOOM_MODE_OPTIONS.length - 1);
-    const ringOffsetIndex = clamp(Math.round(Number(chorusRingOffsetMode.value) || 0), 0, CHORUS_RING_OFFSET_MODE_OPTIONS.length - 1);
-
-    return (
-        <section
-            data-role="chorus-effect-column"
-            data-section-accent="ion"
-            className="synth-grid-card-shell relative flex h-full min-h-[220px] min-w-0 flex-col gap-1.5 rounded-[12px] p-2"
-        >
-            <div className="flex items-center justify-between gap-2">
-                <span className="synth-section-title">Chorus</span>
-                <span className="text-[8px] uppercase tracking-[0.12em] text-slate-400/55">Rack enabled</span>
-            </div>
-
-            <div className="grid min-w-0 gap-0.5">
-                <ChorusModeRow
-                    label="Motion"
-                    value={CHORUS_MOTION_MODE_OPTIONS[motionIndex]}
-                    dataRole="chorus-motion-mode-control"
-                    onClick={() => chorusMotionMode.commitValue((motionIndex + 1) % CHORUS_MOTION_MODE_OPTIONS.length)}
-                />
-                <ChorusModeRow
-                    label="Bloom"
-                    value={CHORUS_BLOOM_MODE_OPTIONS[bloomIndex]}
-                    dataRole="chorus-bloom-mode-control"
-                    onClick={() => chorusBloomMode.commitValue((bloomIndex + 1) % CHORUS_BLOOM_MODE_OPTIONS.length)}
-                />
-                <ChorusModeRow
-                    label="Pitch"
-                    value={CHORUS_RING_OFFSET_MODE_OPTIONS[ringOffsetIndex]}
-                    dataRole="chorus-ring-offset-mode-control"
-                    onClick={() => chorusRingOffsetMode.commitValue((ringOffsetIndex + 1) % CHORUS_RING_OFFSET_MODE_OPTIONS.length)}
-                />
-            </div>
-
-            <div className="h-px bg-white/[0.06]" />
-
-            <div className="flex min-h-0 flex-1 gap-0.5">
-                <VerticalSlider
-                    label="Mix"
-                    binding={chorusMix}
-                    min={0}
-                    max={1}
-                    fillClassName="cosimo-chorus-mix-fill"
-                    handleClassName="cosimo-chorus-mix-handle"
-                    fillDataRole="chorus-mix-fill"
-                    handleDataRole="chorus-mix-handle"
-                    inputDataRole="chorus-mix-control"
-                    trackDataRole="chorus-mix-track"
-                    formatValue={formatUnitPercent}
-                    className="flex-1"
-                />
-                <VerticalSlider
-                    label="Tn"
-                    binding={chorusTone}
-                    min={0}
-                    max={1}
-                    fillClassName="cosimo-chorus-tone-fill"
-                    handleClassName="cosimo-chorus-tone-handle"
-                    fillDataRole="chorus-tone-fill"
-                    handleDataRole="chorus-tone-handle"
-                    inputDataRole="chorus-tone-control"
-                    formatValue={formatUnitPercent}
-                    className="flex-1"
-                />
-                <VerticalSlider
-                    label="Fb"
-                    binding={chorusFeedback}
-                    min={0}
-                    max={0.95}
-                    fillClassName="cosimo-chorus-feedback-fill"
-                    handleClassName="cosimo-chorus-feedback-handle"
-                    fillDataRole="chorus-feedback-fill"
-                    handleDataRole="chorus-feedback-handle"
-                    inputDataRole="chorus-feedback-control"
-                    formatValue={formatUnitPercent}
-                    className="flex-1"
-                />
-                <VerticalSlider
-                    label="Rg"
-                    binding={chorusRingAmount}
-                    min={0}
-                    max={1}
-                    fillClassName="cosimo-chorus-ring-fill"
-                    handleClassName="cosimo-chorus-ring-handle"
-                    fillDataRole="chorus-ring-fill"
-                    handleDataRole="chorus-ring-handle"
-                    inputDataRole="chorus-ring-amount-control"
-                    formatValue={formatUnitPercent}
-                    className="flex-1"
-                />
-                <VerticalSlider
-                    label="Fn"
-                    binding={chorusRingFineSemitones}
-                    min={-2}
-                    max={2}
-                    bipolar
-                    fillClassName="cosimo-chorus-fine-fill"
-                    handleClassName="cosimo-chorus-fine-handle"
-                    fillDataRole="chorus-fine-fill"
-                    handleDataRole="chorus-fine-handle"
-                    inputDataRole="chorus-ring-fine-control"
-                    formatValue={formatSemitoneOffset}
-                    className="flex-1"
-                />
-            </div>
-        </section>
-    );
-}
-
-function readRackStateFromFullStoredState(fullState: Record<string, unknown>) {
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-    return Object.hasOwn(values, RACK_STATE_KEY) ? values[RACK_STATE_KEY] : fullState[RACK_STATE_KEY];
-}
-
-function useRackState() {
-    const patchConnection = usePatchConnection();
-    const [rackState, setRackState] = useState<RackState>(createDefaultRackState);
-
-    useEffect(() => {
-        const storedStateListener = (message: unknown) => {
-            if (typeof message !== "object" || message === null || Array.isArray(message)) {
-                return;
-            }
-            const key = Reflect.get(message, "key");
-            if (key === RACK_STATE_KEY) {
-                setRackState(deserializeRackState(Reflect.get(message, "value")));
-            }
-        };
-        const effectiveStateListener = (message: unknown) => {
-            const effectiveState = parseEffectiveRackState(message);
-            if (effectiveState === null) {
-                return;
-            }
-            setRackState({
-                format: "cosimo.rack",
-                version: 1,
-                order: effectiveState.order,
-                enabled: effectiveState.enabled,
-            });
-        };
-
-        patchConnection.addStoredStateValueListener?.(storedStateListener);
-        patchConnection.addEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
-        patchConnection.requestFullStoredState?.((fullState) => {
-            setRackState(deserializeRackState(readRackStateFromFullStoredState(fullState)));
-        });
-
-        return () => {
-            patchConnection.removeStoredStateValueListener?.(storedStateListener);
-            patchConnection.removeEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
-        };
-    }, [patchConnection]);
-
-    const commit = useCallback((nextState: RackState) => {
-        setRackState(nextState);
-        commitRackState(patchConnection, nextState);
-        patchConnection.sendStoredStateValue?.(RACK_STATE_KEY, serializeRackState(nextState));
-    }, [patchConnection]);
-
-    return { rackState, commit };
-}
-
-function normalizedRackParameterValue(descriptor: RackParameterDescriptor, value: number) {
-    if (descriptor.scale === "log") {
-        return Math.log(clamp(value, descriptor.min, descriptor.max) / descriptor.min)
-            / Math.log(descriptor.max / descriptor.min);
-    }
-    return (clamp(value, descriptor.min, descriptor.max) - descriptor.min) / (descriptor.max - descriptor.min);
-}
-
-function rackParameterValueFromNormalized(descriptor: RackParameterDescriptor, normalizedValue: number) {
-    const normalized = clamp(normalizedValue, 0, 1);
-    return descriptor.scale === "log"
-        ? descriptor.min * (descriptor.max / descriptor.min) ** normalized
-        : descriptor.min + (descriptor.max - descriptor.min) * normalized;
-}
-
-function RackParameterControl({ descriptor, compact = false }: {
-    descriptor: RackParameterDescriptor;
-    compact?: boolean;
-}) {
-    const binding = usePatchParameterBinding<number>({
-        endpointID: descriptor.endpointID,
-        initialValue: descriptor.initial,
-        coerce: (value) => clamp(Number(value) || descriptor.initial, descriptor.min, descriptor.max),
-    });
-
-    if (descriptor.choices !== undefined) {
-        return (
-            <label className="grid min-w-0 gap-1 text-[8px] font-bold uppercase tracking-[0.11em] text-slate-400/65">
-                {!compact ? descriptor.label : descriptor.shortLabel}
-                <select
-                    data-role={`rack-parameter-${descriptor.endpointID}`}
-                    aria-label={descriptor.label}
-                    value={String(Math.round(binding.value))}
-                    onChange={(event) => binding.commitValue(Number(event.target.value))}
-                    className="min-w-0 rounded-[7px] border border-white/[0.08] bg-black/25 px-2 py-1.5 text-[10px] normal-case tracking-normal text-slate-100 outline-none"
-                >
-                    {descriptor.choices.map((item) => (
-                        <option key={item.value} value={item.value}>{item.label}</option>
-                    ))}
-                </select>
-            </label>
-        );
-    }
-
-    const normalizedValue = normalizedRackParameterValue(descriptor, binding.value);
-    return (
-        <label className="grid min-w-0 gap-1" title={`${descriptor.label}: ${formatRackParameterValue(descriptor, binding.value)}`}>
-            <span className="flex items-center justify-between gap-2 text-[8px] font-bold uppercase tracking-[0.11em] text-slate-400/65">
-                <span>{compact ? descriptor.shortLabel : descriptor.label}</span>
-                <span className="synth-readout-text text-[9px] normal-case tracking-normal text-slate-200/85">
-                    {formatRackParameterValue(descriptor, binding.value)}
-                </span>
-            </span>
-            <input
-                data-role={`rack-parameter-${descriptor.endpointID}`}
-                aria-label={descriptor.label}
-                type="range"
-                min={0}
-                max={1}
-                step={0.001}
-                value={normalizedValue}
-                onPointerDown={binding.beginGesture}
-                onPointerUp={binding.endGesture}
-                onPointerCancel={binding.endGesture}
-                onChange={(event) => binding.setValue(rackParameterValueFromNormalized(descriptor, Number(event.target.value)))}
-                className="h-2 w-full cursor-ew-resize accent-cyan-300"
-            />
-        </label>
-    );
-}
-
-function RackSyncParameterControls({
-    effectId,
-    compact = false,
-}: {
-    effectId: "phaser" | "delay";
-    compact?: boolean;
-}) {
-    const effectDescriptor = getRackEffectDescriptor(effectId);
-    const modeEndpointID = effectId === "phaser" ? "phaserRateMode" : "delayTimeMode";
-    const freeEndpointID = effectId === "phaser" ? "phaserRate" : "delayTime";
-    const syncEndpointID = effectId === "phaser" ? "phaserRateDivision" : "delayDivision";
-    const modeDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === modeEndpointID)!;
-    const freeDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === freeEndpointID)!;
-    const syncDescriptor = effectDescriptor.parameters.find((parameter) => parameter.endpointID === syncEndpointID)!;
-    const modeBinding = usePatchParameterBinding<number>({
-        endpointID: modeDescriptor.endpointID,
-        initialValue: modeDescriptor.initial,
-        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
-    });
-    const timingDescriptor = modeBinding.value >= 0.5 ? syncDescriptor : freeDescriptor;
-
-    if (compact) {
-        return <RackParameterControl descriptor={timingDescriptor} compact />;
-    }
-
-    const hiddenEndpointIDs = new Set([modeEndpointID, freeEndpointID, syncEndpointID]);
-    return (
-        <>
-            <RackParameterControl descriptor={modeDescriptor} />
-            <RackParameterControl descriptor={timingDescriptor} />
-            {effectDescriptor.parameters
-                .filter((parameter) => !hiddenEndpointIDs.has(parameter.endpointID))
-                .map((parameter) => (
-                    <RackParameterControl key={parameter.endpointID} descriptor={parameter} />
-                ))}
-        </>
-    );
-}
-
-function RackModuleQuickControl({ effectId }: { effectId: EffectModuleId }) {
-    if (effectId === "phaser" || effectId === "delay") {
-        return <RackSyncParameterControls effectId={effectId} compact />;
-    }
-    const quickParameter = getRackEffectDescriptor(effectId).parameters.find((parameter) => parameter.quick);
-    return quickParameter ? <RackParameterControl descriptor={quickParameter} compact /> : null;
-}
-
-function RackModuleCard({
-    effectId,
-    enabled,
-    selected,
-    position,
-    positionCount,
-    onSelect,
-    onToggle,
-    onMove,
-    onDragStart,
-    onDragEnter,
-    onDrop,
-    onDragEnd,
-}: {
-    effectId: EffectModuleId;
-    enabled: boolean;
-    selected: boolean;
-    position: number;
-    positionCount: number;
-    onSelect: () => void;
-    onToggle: () => void;
-    onMove: (offset: -1 | 1) => void;
-    onDragStart: (event: ReactDragEvent<HTMLDivElement>) => void;
-    onDragEnter: () => void;
-    onDrop: () => void;
-    onDragEnd: () => void;
-}) {
-    const descriptor = getRackEffectDescriptor(effectId);
-
-    return (
-        <div
-            data-role={`rack-module-${effectId}`}
-            data-rack-position={position}
-            draggable
-            onDragStart={onDragStart}
-            onDragOver={(event) => event.preventDefault()}
-            onDragEnter={onDragEnter}
-            onDrop={(event) => { event.preventDefault(); onDrop(); }}
-            onDragEnd={onDragEnd}
-            className={`grid min-w-0 gap-2 rounded-[12px] border p-2 transition ${selected
-                ? "border-cyan-300/45 bg-cyan-300/[0.08]"
-                : "border-white/[0.07] bg-white/[0.025] hover:bg-white/[0.04]"
-            }`}
-        >
-            <div className="flex min-w-0 items-center gap-2">
-                <button
-                    data-role={`rack-select-${effectId}`}
-                    type="button"
-                    onClick={onSelect}
-                    className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                >
-                    <img src={descriptor.iconUrl} alt="" className="h-4 w-4 opacity-75 invert" />
-                    <span className="truncate text-[9px] font-bold uppercase tracking-[0.10em] text-slate-200">
-                        {descriptor.label}
-                    </span>
-                </button>
-                <button
-                    data-role={`rack-enabled-${effectId}`}
-                    type="button"
-                    aria-pressed={enabled}
-                    onClick={onToggle}
-                    className={`rounded-[6px] border px-1.5 py-1 text-[7px] font-bold uppercase tracking-[0.10em] ${enabled
-                        ? "synth-accent-active-button"
-                        : "border-white/[0.07] bg-black/15 text-slate-500"
-                    }`}
-                >
-                    {enabled ? "On" : "Off"}
-                </button>
-            </div>
-            <RackModuleQuickControl effectId={effectId} />
-            <div className="flex justify-between sm:hidden">
-                <button type="button" disabled={position === 0} onClick={() => onMove(-1)} aria-label={`Move ${descriptor.label} earlier`} className="px-2 text-xs text-slate-400 disabled:opacity-20">‹</button>
-                <span className="text-[7px] uppercase tracking-[0.12em] text-slate-500">{position + 1}/{positionCount}</span>
-                <button type="button" disabled={position === positionCount - 1} onClick={() => onMove(1)} aria-label={`Move ${descriptor.label} later`} className="px-2 text-xs text-slate-400 disabled:opacity-20">›</button>
-            </div>
-        </div>
-    );
-}
-
-function EffectsRackSection({
-    distortionMode,
-    distortionDriveDb,
-    distortionKnee,
-    distortionWet,
-    distortionWetHPHz,
-    distortionWetLPHz,
-    observedDistortionHistory,
-    observedDistortionScope,
-    chorusMix,
-    chorusMotionMode,
-    chorusBloomMode,
-    chorusTone,
-    chorusFeedback,
-    chorusRingAmount,
-    chorusRingOffsetMode,
-    chorusRingFineSemitones,
-    className,
-}: EffectsRackSectionProps) {
-    const { rackState, commit } = useRackState();
-    const [selectedEffectId, setSelectedEffectId] = useState<EffectModuleId>("filter");
-    const [draggedEffectId, setDraggedEffectId] = useState<EffectModuleId | null>(null);
-    const draggedEffectIdRef = useRef<EffectModuleId | null>(null);
-    const [previewOrder, setPreviewOrder] = useState<ReadonlyArray<EffectModuleId>>(rackState.order);
-    const previewOrderRef = useRef<ReadonlyArray<EffectModuleId>>(rackState.order);
-    const dropCommittedRef = useRef(false);
-    const selectedDescriptor = getRackEffectDescriptor(selectedEffectId);
-
-    useEffect(() => {
-        previewOrderRef.current = rackState.order;
-        setPreviewOrder(rackState.order);
-    }, [rackState.order]);
-
-    const setEnabled = useCallback((effectId: EffectModuleId, enabled: boolean) => {
-        commit({ ...rackState, enabled: { ...rackState.enabled, [effectId]: enabled } });
-    }, [commit, rackState]);
-
-    const commitOrder = useCallback((order: ReadonlyArray<EffectModuleId>) => {
-        commit({ ...rackState, order: [...order] });
-    }, [commit, rackState]);
-
-    const previewMove = useCallback((effectId: EffectModuleId, overEffectId: EffectModuleId) => {
-        setPreviewOrder((currentOrder) => {
-            const sourceIndex = currentOrder.indexOf(effectId);
-            const targetIndex = currentOrder.indexOf(overEffectId);
-            if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return currentOrder;
-            const nextOrder = [...currentOrder];
-            nextOrder.splice(sourceIndex, 1);
-            nextOrder.splice(targetIndex, 0, effectId);
-            previewOrderRef.current = nextOrder;
-            return nextOrder;
-        });
-    }, []);
-
-    const moveBy = useCallback((effectId: EffectModuleId, offset: -1 | 1) => {
-        const sourceIndex = previewOrder.indexOf(effectId);
-        const targetIndex = clamp(sourceIndex + offset, 0, previewOrder.length - 1);
-        if (sourceIndex === targetIndex) return;
-        const nextOrder = [...previewOrder];
-        nextOrder.splice(sourceIndex, 1);
-        nextOrder.splice(targetIndex, 0, effectId);
-        previewOrderRef.current = nextOrder;
-        setPreviewOrder(nextOrder);
-        commitOrder(nextOrder);
-    }, [commitOrder, previewOrder]);
-
-    return (
-        <section
-            data-role="effects-rack-card"
-            data-layout-card="desktop-grid-card"
-            data-section-accent="ion"
-            data-liquid-detail="edge-rail"
-            className={`grid min-h-[410px] gap-3 ${SYNTH_GRID_CARD_SHELL_CLASS} border p-3 ${className ?? ""}`}
-        >
-            <div className="flex items-center justify-between gap-3">
-                <div>
-                    <h2 className="synth-section-title">Effects Rack</h2>
-                    <p className="mt-0.5 text-[8px] uppercase tracking-[0.12em] text-slate-500">Drag to reorder · structure commits on drop</p>
-                </div>
-                <span className="text-[8px] uppercase tracking-[0.12em] text-slate-400/55">8 modules</span>
-            </div>
-
-            <div data-role="rack-module-list" className="grid min-w-0 grid-cols-2 gap-2 sm:grid-cols-4">
-                {previewOrder.map((effectId, position) => (
-                    <RackModuleCard
-                        key={effectId}
-                        effectId={effectId}
-                        enabled={rackState.enabled[effectId]}
-                        selected={selectedEffectId === effectId}
-                        position={position}
-                        positionCount={previewOrder.length}
-                        onSelect={() => setSelectedEffectId(effectId)}
-                        onToggle={() => setEnabled(effectId, !rackState.enabled[effectId])}
-                        onMove={(offset) => moveBy(effectId, offset)}
-                        onDragStart={(event) => {
-                            setDraggedEffectId(effectId);
-                            draggedEffectIdRef.current = effectId;
-                            dropCommittedRef.current = false;
-                            event.dataTransfer.effectAllowed = "move";
-                            event.dataTransfer.setData("text/plain", effectId);
-                        }}
-                        onDragEnter={() => {
-                            if (draggedEffectIdRef.current !== null) {
-                                previewMove(draggedEffectIdRef.current, effectId);
-                            }
-                        }}
-                        onDrop={() => {
-                            dropCommittedRef.current = true;
-                            const dragged = draggedEffectIdRef.current;
-                            if (dragged !== null && rackState.order.indexOf(dragged) !== rackState.order.indexOf(effectId)) {
-                                const nextOrder = [...rackState.order];
-                                const sourceIndex = nextOrder.indexOf(dragged);
-                                const targetIndex = nextOrder.indexOf(effectId);
-                                nextOrder.splice(sourceIndex, 1);
-                                nextOrder.splice(targetIndex, 0, dragged);
-                                previewOrderRef.current = nextOrder;
-                            }
-                            commitOrder(previewOrderRef.current);
-                            draggedEffectIdRef.current = null;
-                            setDraggedEffectId(null);
-                        }}
-                        onDragEnd={() => {
-                            if (!dropCommittedRef.current && draggedEffectId !== null) {
-                                previewOrderRef.current = rackState.order;
-                                setPreviewOrder(rackState.order);
-                            }
-                            dropCommittedRef.current = false;
-                            draggedEffectIdRef.current = null;
-                            setDraggedEffectId(null);
-                        }}
-                    />
-                ))}
-            </div>
-
-            <div data-role={`rack-editor-${selectedEffectId}`} className="min-h-[215px] rounded-[14px] border border-white/[0.06] bg-black/15 p-2">
-                <div className="mb-2 flex items-start gap-2 px-1">
-                    <img src={selectedDescriptor.iconUrl} alt="" className="mt-0.5 h-5 w-5 opacity-75 invert" />
-                    <div>
-                        <h3 className="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-100">{selectedDescriptor.label}</h3>
-                        <p className="text-[9px] text-slate-400/70">{selectedDescriptor.summary}</p>
-                    </div>
-                </div>
-
-                {selectedEffectId === "drive" ? (
-                    <DistortionSection
-                        distortionMode={distortionMode}
-                        distortionDriveDb={distortionDriveDb}
-                        distortionKnee={distortionKnee}
-                        distortionWet={distortionWet}
-                        distortionWetHPHz={distortionWetHPHz}
-                        distortionWetLPHz={distortionWetLPHz}
-                        observedDistortionHistory={observedDistortionHistory}
-                        observedDistortionScope={observedDistortionScope}
-                        className="min-h-[220px]"
-                    />
-                ) : selectedEffectId === "chorus" ? (
-                    <div className="min-h-[220px]">
-                        <ChorusEffectColumn
-                            chorusMix={chorusMix}
-                            chorusMotionMode={chorusMotionMode}
-                            chorusBloomMode={chorusBloomMode}
-                            chorusTone={chorusTone}
-                            chorusFeedback={chorusFeedback}
-                            chorusRingAmount={chorusRingAmount}
-                            chorusRingOffsetMode={chorusRingOffsetMode}
-                            chorusRingFineSemitones={chorusRingFineSemitones}
-                        />
-                    </div>
-                ) : selectedEffectId === "phaser" || selectedEffectId === "delay" ? (
-                    <div className="grid gap-x-4 gap-y-3 rounded-[10px] border border-white/[0.05] bg-white/[0.018] p-3 sm:grid-cols-2 lg:grid-cols-3">
-                        <RackSyncParameterControls effectId={selectedEffectId} />
-                    </div>
-                ) : (
-                    <div className="grid gap-x-4 gap-y-3 rounded-[10px] border border-white/[0.05] bg-white/[0.018] p-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {selectedDescriptor.parameters.map((parameter) => (
-                            <RackParameterControl key={parameter.endpointID} descriptor={parameter} />
-                        ))}
-                    </div>
-                )}
-            </div>
-        </section>
-    );
-}
-
 function KeyboardToolbar({
     playMode,
     glideTime,
@@ -3108,6 +2281,7 @@ function ModulationMatrixSection({
         startClientX: number;
         startValue: number;
         moved: boolean;
+        captureFailed: boolean;
     } | null>(null);
     const [isEditingMsegRate, setIsEditingMsegRate] = useState(false);
     const [draftMsegRate, setDraftMsegRate] = useState("");
@@ -3153,6 +2327,39 @@ function ModulationMatrixSection({
 
     const currentMsegRate = clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1));
 
+    const updateMsegRateDrag = useCallback((event: Pick<PointerEvent, "pointerId" | "pointerType" | "buttons" | "clientX" | "preventDefault">) => {
+        const drag = msegRateDragRef.current;
+        if (!drag || drag.pointerId !== event.pointerId || isEditingMsegRate) {
+            return;
+        }
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            cancelMsegRateDrag(event.pointerId);
+            return;
+        }
+
+        event.preventDefault();
+        const deltaX = event.clientX - drag.startClientX;
+        if (Math.abs(deltaX) >= 2) {
+            drag.moved = true;
+        }
+        const range = MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS;
+        const scaled = (deltaX / 120) * range;
+        onMsegRateChange(clamp(drag.startValue + scaled, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
+    }, [cancelMsegRateDrag, isEditingMsegRate, onMsegRateChange]);
+
+    useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            if (msegRateDragRef.current?.captureFailed && event.target !== msegRateRef.current) {
+                updateMsegRateDrag(event);
+            }
+        };
+
+        window.addEventListener("pointermove", handleFallbackPointerMove, { passive: false });
+        return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove);
+        };
+    }, [updateMsegRateDrag]);
+
     useEffect(() => {
         const el = msegRateRef.current;
         if (!el) return;
@@ -3187,16 +2394,28 @@ function ModulationMatrixSection({
     const [draftDecay, setDraftDecay] = useState("");
     const [draftSustain, setDraftSustain] = useState("");
     const [draftRelease, setDraftRelease] = useState("");
+    const [activeEnvelopeDraftField, setActiveEnvelopeDraftField] = useState<
+        "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds" | null
+    >(null);
 
     useEffect(() => {
         if (!selectedEnvelope) {
             return;
         }
-        setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
-        setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
-        setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
-        setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+        if (activeEnvelopeDraftField !== "attackSeconds") {
+            setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
+        }
+        if (activeEnvelopeDraftField !== "decaySeconds") {
+            setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
+        }
+        if (activeEnvelopeDraftField !== "sustain") {
+            setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
+        }
+        if (activeEnvelopeDraftField !== "releaseSeconds") {
+            setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+        }
     }, [
+        activeEnvelopeDraftField,
         selectedEnvelope?.attackSeconds,
         selectedEnvelope?.decaySeconds,
         selectedEnvelope?.releaseSeconds,
@@ -3233,6 +2452,7 @@ function ModulationMatrixSection({
         if (event.key === "Enter") {
             event.preventDefault();
             commitEnvelopeDurationField(field, draftValue, currentSeconds);
+            event.currentTarget.blur();
             return;
         }
         if (event.key === "Escape") {
@@ -3388,7 +2608,7 @@ function ModulationMatrixSection({
                             spellCheck={false}
                             readOnly={!isEditingMsegRate}
                             aria-label="MSEG rate"
-                            className={`synth-readout-text w-[56px] select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center text-[10px] leading-none outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
+                            className={`synth-readout-text w-[56px] touch-none select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center text-[10px] leading-none outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
                                 isEditingMsegRate
                                     ? "cursor-text"
                                     : "cursor-ew-resize"
@@ -3403,27 +2623,16 @@ function ModulationMatrixSection({
                                     startClientX: event.clientX,
                                     startValue: currentMsegRate,
                                     moved: false,
+                                    captureFailed: false,
                                 };
                                 try {
                                     event.currentTarget.setPointerCapture(event.pointerId);
                                 } catch {
-                                    // Window-level termination still owns unsupported or synthetic pointers.
+                                    msegRateDragRef.current.captureFailed = true;
                                 }
                                 event.preventDefault();
                             }}
-                            onPointerMove={(event) => {
-                                const drag = msegRateDragRef.current;
-                                if (!drag || drag.pointerId !== event.pointerId || isEditingMsegRate) return;
-                                if (event.pointerType === "mouse" && event.buttons === 0) {
-                                    cancelMsegRateDrag(event.pointerId);
-                                    return;
-                                }
-                                const deltaX = event.clientX - drag.startClientX;
-                                if (Math.abs(deltaX) >= 2) drag.moved = true;
-                                const range = MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS;
-                                const scaled = (deltaX / 120) * range;
-                                onMsegRateChange(clamp(drag.startValue + scaled, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
-                            }}
+                            onPointerMove={updateMsegRateDrag}
                             onPointerUp={(event) => {
                                 const drag = msegRateDragRef.current;
                                 if (!drag || drag.pointerId !== event.pointerId || isEditingMsegRate) return;
@@ -3491,6 +2700,7 @@ function ModulationMatrixSection({
                                     inputMode="decimal"
                                     className="synth-readout-text w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-left text-[9px] leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[44px] max-[480px]:text-[10px]"
                                     value={param.draft}
+                                    onFocus={() => setActiveEnvelopeDraftField(param.field ?? "sustain")}
                                     onChange={(e) => param.setDraft(e.target.value)}
                                     onBlur={() => {
                                         if (param.field) {
@@ -3499,10 +2709,11 @@ function ModulationMatrixSection({
                                             const parsed = parseFloat(param.draft);
                                             if (!Number.isFinite(parsed)) {
                                                 param.setDraft((selectedEnvelope.sustain * 100).toFixed(1));
-                                                return;
+                                            } else {
+                                                onEnvelopeChange("sustain", clamp(parsed / 100, 0, 1));
                                             }
-                                            onEnvelopeChange("sustain", clamp(parsed / 100, 0, 1));
                                         }
+                                        setActiveEnvelopeDraftField(null);
                                     }}
                                     onKeyDown={(e) => {
                                         if (param.field) {
@@ -3513,6 +2724,7 @@ function ModulationMatrixSection({
                                             if (Number.isFinite(parsed)) {
                                                 onEnvelopeChange("sustain", clamp(parsed / 100, 0, 1));
                                             }
+                                            e.currentTarget.blur();
                                         } else if (e.key === "Escape") {
                                             e.preventDefault();
                                             param.setDraft((selectedEnvelope.sustain * 100).toFixed(1));

@@ -1372,7 +1372,10 @@ export function FilterResponseGraph({
         pointerOffsetY: number;
         hasMoved: boolean;
     } | null>(null);
+    const applyHandlePointerPositionRef = useRef<(clientX: number, clientY: number) => void>(() => undefined);
+    const onGestureStartRef = useRef(onGestureStart);
     const onGestureEndRef = useRef(onGestureEnd);
+    onGestureStartRef.current = onGestureStart;
     onGestureEndRef.current = onGestureEnd;
     const baseModel = useMemo(() => createFilterResponseModel({
         mode: baseMode,
@@ -1495,6 +1498,7 @@ export function FilterResponseGraph({
         onCutoffSet(clamp(normalizedToFilterCutoffHz(nextCutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
         onQSet(clamp(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN, FILTER_Q_MAX));
     };
+    applyHandlePointerPositionRef.current = applyHandlePointerPosition;
 
     const endDrag = useCallback((pointerId?: number) => {
         const dragState = dragStateRef.current;
@@ -1520,7 +1524,47 @@ export function FilterResponseGraph({
         }
     }, []);
 
+    const updateFilterDragFromPointer = useCallback((event: Pick<
+        PointerEvent,
+        "pointerId" | "pointerType" | "buttons" | "clientX" | "clientY"
+    >) => {
+        const dragState = dragStateRef.current;
+
+        if (!dragState || dragState.pointerId !== event.pointerId) {
+            return;
+        }
+
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            endDrag(event.pointerId);
+            return;
+        }
+
+        const deltaX = event.clientX - dragState.startClientX;
+        const deltaY = event.clientY - dragState.startClientY;
+
+        if (!dragState.hasMoved && Math.abs(deltaX) < 1.5 && Math.abs(deltaY) < 1.5) {
+            return;
+        }
+
+        if (!dragState.hasMoved) {
+            dragState.hasMoved = true;
+            onGestureStartRef.current?.();
+        }
+        applyHandlePointerPositionRef.current(event.clientX, event.clientY);
+    }, [endDrag]);
+
     useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            const dragState = dragStateRef.current;
+            if (!dragState || dragState.pointerId !== event.pointerId) {
+                return;
+            }
+            const surface = surfaceRef.current;
+            if (event.target instanceof Node && surface?.contains(event.target)) {
+                return;
+            }
+            updateFilterDragFromPointer(event);
+        };
         const handlePointerEnd = (event: PointerEvent) => endDrag(event.pointerId);
         const handleBlur = () => endDrag();
         const handleVisibilityChange = () => {
@@ -1529,18 +1573,20 @@ export function FilterResponseGraph({
             }
         };
 
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
         window.addEventListener("pointerup", handlePointerEnd, true);
         window.addEventListener("pointercancel", handlePointerEnd, true);
         window.addEventListener("blur", handleBlur);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
             window.removeEventListener("pointerup", handlePointerEnd, true);
             window.removeEventListener("pointercancel", handlePointerEnd, true);
             window.removeEventListener("blur", handleBlur);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             endDrag();
         };
-    }, [endDrag]);
+    }, [endDrag, updateFilterDragFromPointer]);
 
     const debugState = useMemo(() => ({
         base: {
@@ -1673,31 +1719,7 @@ export function FilterResponseGraph({
                     data-role="filter-response-graph"
                     className="absolute inset-0 h-full w-full touch-none overflow-hidden"
                     viewBox={`0 0 ${size.width} ${size.height}`}
-                    onPointerMove={(event) => {
-                        const dragState = dragStateRef.current;
-
-                        if (!dragState || dragState.pointerId !== event.pointerId) {
-                            return;
-                        }
-
-                        if (event.pointerType === "mouse" && event.buttons === 0) {
-                            endDrag(event.pointerId);
-                            return;
-                        }
-
-                        const deltaX = event.clientX - dragState.startClientX;
-                        const deltaY = event.clientY - dragState.startClientY;
-
-                        if (!dragState.hasMoved && Math.abs(deltaX) < 1.5 && Math.abs(deltaY) < 1.5) {
-                            return;
-                        }
-
-                        if (!dragState.hasMoved) {
-                            dragState.hasMoved = true;
-                            onGestureStart?.();
-                        }
-                        applyHandlePointerPosition(event.clientX, event.clientY);
-                    }}
+                    onPointerMove={(event) => updateFilterDragFromPointer(event.nativeEvent)}
                     onPointerUp={(event) => {
                         endDrag(event.pointerId);
                     }}

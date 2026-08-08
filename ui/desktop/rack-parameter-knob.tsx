@@ -198,10 +198,14 @@ export function RackParameterKnob({
     const suppressClickRef = useRef(false);
     const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const bindingRef = useRef(binding);
+    const descriptorRef = useRef(descriptor);
+    const routePolarityRef = useRef(route?.polarity);
     const onHudChangeRef = useRef(onHudChange);
     const onModulationAmountChangeRef = useRef(onModulationAmountChange);
     const onRequestContextMenuRef = useRef(onRequestContextMenu);
     bindingRef.current = binding;
+    descriptorRef.current = descriptor;
+    routePolarityRef.current = route?.polarity;
     onHudChangeRef.current = onHudChange;
     onModulationAmountChangeRef.current = onModulationAmountChange;
     onRequestContextMenuRef.current = onRequestContextMenu;
@@ -252,7 +256,77 @@ export function RackParameterKnob({
         onHudChangeRef.current(null);
     }, []);
 
+    const updateGestureFromPointer = useCallback((event: Pick<
+        PointerEvent,
+        "pointerId" | "pointerType" | "buttons" | "clientX" | "clientY" | "shiftKey" | "preventDefault" | "stopPropagation"
+    >) => {
+        const gesture = gestureRef.current;
+        if (!gesture || gesture.pointerId !== event.pointerId) {
+            return;
+        }
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            finishGesture(event.pointerId);
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        const deltaY = gesture.startClientY - event.clientY;
+        const distance = Math.hypot(
+            event.clientX - gesture.startClientX,
+            event.clientY - gesture.startClientY,
+        );
+        if (!gesture.moved && distance >= GESTURE_MOVE_THRESHOLD_PX) {
+            gesture.moved = true;
+            if (holdTimerRef.current !== null) {
+                clearTimeout(holdTimerRef.current);
+                holdTimerRef.current = null;
+            }
+            if (gesture.mode === "base") {
+                bindingRef.current.beginGesture();
+                gesture.baseGestureStarted = true;
+            }
+        }
+        if (!gesture.moved || gesture.holdActivated) {
+            return;
+        }
+        const currentDescriptor = descriptorRef.current;
+        const currentTargetKind = `rack.${currentDescriptor.endpointID}` as RackModulationTargetKind;
+        const sensitivity = event.shiftKey ? 720 : 180;
+        const nextNormalized = clamp(gesture.startNormalized + (deltaY / sensitivity), 0, 1);
+        if (gesture.mode === "modulation") {
+            const nextAmount = composeModulationAmount(currentTargetKind, nextNormalized);
+            onModulationAmountChangeRef.current(nextAmount);
+            onHudChangeRef.current({
+                endpointID: currentDescriptor.endpointID,
+                label: currentDescriptor.label,
+                value: formatModulationAmountReadout(currentTargetKind, nextAmount, routePolarityRef.current),
+                mode: "modulation",
+            });
+            return;
+        }
+
+        const nextValue = valueFromNormalized(currentDescriptor, nextNormalized);
+        bindingRef.current.setValue(nextValue);
+        onHudChangeRef.current({
+            endpointID: currentDescriptor.endpointID,
+            label: currentDescriptor.label,
+            value: formatRackParameterValue(currentDescriptor, nextValue),
+            mode: "base",
+        });
+    }, [finishGesture]);
+
     useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            const gesture = gestureRef.current;
+            if (!gesture || gesture.pointerId !== event.pointerId) {
+                return;
+            }
+            if (event.target instanceof Node && gesture.element.contains(event.target)) {
+                return;
+            }
+            updateGestureFromPointer(event);
+        };
         const handlePointerEnd = (event: PointerEvent) => finishGesture(event.pointerId);
         const handleBlur = () => finishGesture();
         const handleVisibilityChange = () => {
@@ -261,18 +335,20 @@ export function RackParameterKnob({
             }
         };
 
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
         window.addEventListener("pointerup", handlePointerEnd, true);
         window.addEventListener("pointercancel", handlePointerEnd, true);
         window.addEventListener("blur", handleBlur);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
             window.removeEventListener("pointerup", handlePointerEnd, true);
             window.removeEventListener("pointercancel", handlePointerEnd, true);
             window.removeEventListener("blur", handleBlur);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             finishGesture();
         };
-    }, [finishGesture]);
+    }, [finishGesture, updateGestureFromPointer]);
 
     const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
         if (event.pointerType === "mouse" && event.button !== 0) {
@@ -344,62 +420,8 @@ export function RackParameterKnob({
     ]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
-        const gesture = gestureRef.current;
-        if (!gesture || gesture.pointerId !== event.pointerId) {
-            return;
-        }
-        if (event.pointerType === "mouse" && event.buttons === 0) {
-            finishGesture(event.pointerId);
-            return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        const deltaY = gesture.startClientY - event.clientY;
-        const distance = Math.hypot(
-            event.clientX - gesture.startClientX,
-            event.clientY - gesture.startClientY,
-        );
-        if (!gesture.moved && distance >= GESTURE_MOVE_THRESHOLD_PX) {
-            gesture.moved = true;
-            if (holdTimerRef.current !== null) {
-                clearTimeout(holdTimerRef.current);
-                holdTimerRef.current = null;
-            }
-            if (gesture.mode === "base") {
-                bindingRef.current.beginGesture();
-                gesture.baseGestureStarted = true;
-            }
-        }
-        if (!gesture.moved || gesture.holdActivated) {
-            return;
-        }
-        const sensitivity = event.shiftKey ? 720 : 180;
-        const nextNormalized = clamp(gesture.startNormalized + (deltaY / sensitivity), 0, 1);
-        if (gesture.mode === "modulation") {
-            const nextAmount = composeModulationAmount(targetKind, nextNormalized);
-            onModulationAmountChangeRef.current(nextAmount);
-            onHudChange({
-                endpointID: descriptor.endpointID,
-                label: descriptor.label,
-                value: formatModulationAmountReadout(targetKind, nextAmount, route?.polarity),
-                mode: "modulation",
-            });
-            return;
-        }
-
-        const nextValue = valueFromNormalized(
-            descriptor,
-            nextNormalized,
-        );
-        binding.setValue(nextValue);
-        onHudChange({
-            endpointID: descriptor.endpointID,
-            label: descriptor.label,
-            value: formatRackParameterValue(descriptor, nextValue),
-            mode: "base",
-        });
-    }, [binding, descriptor, finishGesture, onHudChange, route?.polarity, targetKind]);
+        updateGestureFromPointer(event.nativeEvent);
+    }, [updateGestureFromPointer]);
 
     return (
         <button

@@ -2155,6 +2155,31 @@ test("precision value entry commits the newest text when Enter follows in the sa
     }
 });
 
+test("precision value entry keeps the focused draft when a host echo arrives", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await showVoiceControls(page);
+        const detuneInput = page.locator('[data-role="unison-detune-control"] input');
+        await detuneInput.dblclick();
+        await detuneInput.fill("25");
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("unisonDetune", 0.8, true);
+        });
+        await page.waitForTimeout(50);
+
+        assert.equal(await detuneInput.inputValue(), "25");
+        await clearHarnessDebugLog(page);
+        await detuneInput.press("Enter");
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return Math.abs(Number(snapshot.parameterValues.unisonDetune) - 0.5) < 0.0001;
+        });
+    } finally {
+        await page.close();
+    }
+});
+
 test("precision fields end their host gesture when mouse movement reports no pressed button", async () => {
     const page = await openHarnessPage();
 
@@ -2198,6 +2223,73 @@ test("precision fields end their host gesture when mouse movement reports no pre
 
         const snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.gestureStarts, ["unisonDetune"]);
+        assert.deepEqual(snapshot.gestureEnds, ["unisonDetune"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("precision fields keep tracking touch when pointer capture is unavailable", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await showVoiceControls(page);
+        const detuneInput = page.locator('[data-role="unison-detune-control"] input');
+        const box = await detuneInput.boundingBox();
+        assert.ok(box);
+        await detuneInput.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        await clearHarnessDebugLog(page);
+        const pointerId = 48;
+        const start = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        const moved = { x: start.x + 40, y: start.y };
+        await detuneInput.dispatchEvent("pointerdown", {
+            pointerId,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free precision touch move",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "unisonDetune"),
+        );
+        assert.deepEqual(snapshot.gestureStarts, ["unisonDetune"]);
+        assert.deepEqual(snapshot.gestureEnds, []);
+
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free precision touch release",
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("unisonDetune"),
+        );
         assert.deepEqual(snapshot.gestureEnds, ["unisonDetune"]);
     } finally {
         await page.close();
@@ -3196,7 +3288,7 @@ test("desktop articulation shared-boundary resize shrinks the range in the drag 
     }
 });
 
-test("desktop articulation shared-boundary resize works on the first cold drag", async () => {
+test("desktop articulation shared-boundary resize works on the first cold drag without pointer capture", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3241,6 +3333,13 @@ test("desktop articulation shared-boundary resize works on the first cold drag",
         const bowSegment = page.locator('[data-role="articulation-range-segment"][data-articulation-id="bow"]').first();
         const bowBox = await bowSegment.boundingBox();
         assert.notEqual(bowBox, null);
+        await bowSegment.evaluate((element) => {
+            [element, ...element.querySelectorAll("*")].forEach((candidate) => {
+                candidate.setPointerCapture = () => {
+                    throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+                };
+            });
+        });
 
         const xForValue = (value) => (
             laneBox.x + laneBox.width * ((value - viewport.min) / (viewport.max - viewport.min))
@@ -4107,6 +4206,60 @@ test("articulation card audition is press-hold and follows the most recently pla
     }
 });
 
+test("articulation card audition survives a platform pointer-capture rejection", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => {
+            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
+            return addButton instanceof HTMLButtonElement && !addButton.disabled;
+        });
+        const bank = normalizeArticulationBank({
+            selectedSlotId: "bow",
+            activeTriggerMode: "chain",
+            slots: [
+                { id: "bow", runtimeSlot: 0, name: "Bow" },
+            ],
+        });
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+
+        const playButton = page.locator('[data-role="articulation-card-play"]').first();
+        await playButton.waitFor();
+        await playButton.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        await clearHarnessDebugLog(page);
+        await playButton.dispatchEvent("pointerdown", {
+            pointerId: 79,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+        });
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1);
+        await playButton.dispatchEvent("pointerup", {
+            pointerId: 79,
+            pointerType: "touch",
+            button: 0,
+            buttons: 0,
+        });
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2);
+
+        assert.deepEqual((await getHarnessSnapshot(page)).midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 60, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 60) },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("articulation card audition releases its note when the window blurs", async () => {
     const page = await openHarnessPage();
 
@@ -4536,6 +4689,128 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
     }
 });
 
+test("mod matrix amount entry preserves the focused draft across a host echo", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
+        await page.locator('[aria-label="Route 1 amount"]').dblclick();
+
+        const amountInput = page.locator('input[aria-label="Route 1 amount value"]');
+        await amountInput.waitFor({ state: "visible" });
+        await amountInput.fill("12");
+        await page.evaluate(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v2"]));
+            modulationState.routes[0].amount = 0.77;
+            harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
+        });
+        await page.waitForFunction(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v2"]));
+            return Math.abs(Number(modulationState.routes[0]?.amount) - 0.77) <= 1e-9;
+        });
+
+        assert.equal(await amountInput.inputValue(), "12");
+        await amountInput.press("Enter");
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "focused route amount draft committed after host echo",
+            (nextSnapshot) => {
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                return route?.targetKind === "warpAmount"
+                    && Math.abs(Number(route.amount) - 0.12) <= 1e-9;
+            },
+        );
+        assert.equal(readStoredModulationState(snapshot).routes[0].amount, 0.12);
+        assert.equal(await amountInput.count(), 0, "Enter must close the exact-value editor instead of reopening it through the slider.");
+    } finally {
+        await page.close();
+    }
+});
+
+test("mod matrix amount knob tracks a Safari-style touch drag", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const amountKnob = page.locator('[aria-label="Route 1 amount"]');
+        const bounds = await amountKnob.boundingBox();
+        assert.ok(bounds);
+        await clearHarnessDebugLog(page);
+
+        const pointer = {
+            pointerId: 93,
+            pointerType: "touch",
+            button: 0,
+            clientX: bounds.x + (bounds.width / 2),
+        };
+        await amountKnob.dispatchEvent("pointerdown", {
+            ...pointer,
+            buttons: 1,
+            clientY: bounds.y + (bounds.height / 2),
+        });
+        await amountKnob.dispatchEvent("pointermove", {
+            ...pointer,
+            buttons: 0,
+            clientY: bounds.y + bounds.height + 24,
+        });
+        await amountKnob.dispatchEvent("pointerup", {
+            ...pointer,
+            buttons: 0,
+            clientY: bounds.y + bounds.height + 24,
+        });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "touch-adjusted modulation amount",
+            (nextSnapshot) => Number(readStoredModulationState(nextSnapshot).routes[0]?.amount) < 0.95,
+        );
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationRoute"),
+            true,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("mod matrix amount knob supports standard slider keyboard controls", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
+        const amountKnob = page.locator('[aria-label="Route 1 amount"]');
+        await amountKnob.focus();
+        await amountKnob.press("Home");
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "route amount keyboard minimum",
+            (nextSnapshot) => Math.abs(Number(readStoredModulationState(nextSnapshot).routes[0]?.amount) - (-1)) <= 1e-9,
+        );
+        assert.equal(readStoredModulationState(snapshot).routes[0].amount, -1);
+
+        await amountKnob.press("End");
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "route amount keyboard maximum",
+            (nextSnapshot) => Math.abs(Number(readStoredModulationState(nextSnapshot).routes[0]?.amount) - 1) <= 1e-9,
+        );
+        assert.equal(readStoredModulationState(snapshot).routes[0].amount, 1);
+
+        await amountKnob.press("ArrowDown");
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "route amount keyboard decrement",
+            (nextSnapshot) => Math.abs(Number(readStoredModulationState(nextSnapshot).routes[0]?.amount) - 0.999) <= 1e-9,
+        );
+        assert.equal(readStoredModulationState(snapshot).routes[0].amount, 0.999);
+    } finally {
+        await page.close();
+    }
+});
+
 test("desktop envelope editor drags handles and commits compact rail values for the selected slot", async () => {
     const page = await openHarnessPage();
 
@@ -4622,6 +4897,43 @@ test("desktop envelope editor drags handles and commits compact rail values for 
         );
 
         assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[1].releaseSeconds) - 0.8) <= 1e-9, true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop envelope exact entry preserves the focused draft across a host echo", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("button", { name: "Select envelope 2" }).click();
+        const attackInput = page.locator('input[aria-label="Envelope attack value"]');
+        await attackInput.fill("250 ms");
+        const echoedModulationState = readStoredModulationState(await getHarnessSnapshot(page));
+        echoedModulationState.envelopeSlots[1].attackSeconds = 0.9;
+        await page.evaluate((nextModulationState) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(
+                "modulation.v2",
+                JSON.stringify(nextModulationState),
+            );
+        }, echoedModulationState);
+        await page.waitForFunction(() => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v2"]));
+            return Math.abs(Number(modulationState.envelopeSlots[1]?.attackSeconds) - 0.9) <= 1e-9;
+        });
+
+        assert.equal(await attackInput.inputValue(), "250 ms");
+        await attackInput.press("Enter");
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "focused envelope draft committed after host echo",
+            (nextSnapshot) => Math.abs(
+                Number(readStoredModulationState(nextSnapshot).envelopeSlots[1]?.attackSeconds) - 0.25,
+            ) <= 1e-9,
+        );
+        assert.equal(readStoredModulationState(snapshot).envelopeSlots[1].attackSeconds, 0.25);
     } finally {
         await page.close();
     }
@@ -5055,6 +5367,77 @@ test("desktop filter graph closes both host gestures when the window blurs mid-d
         const snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.gestureEnds, ["filterCutoff", "filterQ"]);
         await page.mouse.up();
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop filter graph keeps tracking touch when pointer capture is unavailable", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const graph = page.locator('[data-role="filter-response-graph"]');
+        const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+        const bounds = await handle.boundingBox();
+        assert.ok(bounds);
+        await graph.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        await clearHarnessDebugLog(page);
+        const pointerId = 96;
+        const start = {
+            x: bounds.x + (bounds.width / 2),
+            y: bounds.y + (bounds.height / 2),
+        };
+        const moved = { x: start.x + 80, y: start.y - 40 };
+        await handle.dispatchEvent("pointerdown", {
+            pointerId,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free filter graph touch move",
+            (nextSnapshot) => nextSnapshot.gestureStarts.includes("filterCutoff")
+                && nextSnapshot.gestureStarts.includes("filterQ")
+                && nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "filterCutoff"),
+        );
+        assert.deepEqual(snapshot.gestureEnds, []);
+
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free filter graph touch release",
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("filterCutoff")
+                && nextSnapshot.gestureEnds.includes("filterQ"),
+        );
+        assert.deepEqual(snapshot.gestureEnds, ["filterCutoff", "filterQ"]);
     } finally {
         await page.close();
     }
@@ -5656,6 +6039,80 @@ test("main MSEG morph control closes its host gesture when the window blurs", as
     }
 });
 
+test("main MSEG morph touch drag survives unavailable pointer capture", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const morphSlider = page.locator('[data-role="mseg-morph-slider"]').first();
+        await morphSlider.scrollIntoViewIfNeeded();
+        const sliderBox = await morphSlider.boundingBox();
+        assert.ok(sliderBox, "Expected the main MSEG morph control to be visible.");
+        await morphSlider.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        await clearHarnessDebugLog(page);
+
+        const pointerId = 94;
+        const clientY = sliderBox.y + (sliderBox.height * 0.5);
+        await morphSlider.dispatchEvent("pointerdown", {
+            pointerId,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: sliderBox.x + 2,
+            clientY,
+        });
+        await page.evaluate(({ pointerId, clientX, clientY }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX,
+                clientY,
+                bubbles: true,
+            }));
+        }, {
+            pointerId,
+            clientX: sliderBox.x + (sliderBox.width * 0.75),
+            clientY,
+        });
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free MSEG morph touch move",
+            (nextSnapshot) => Number(nextSnapshot.parameterValues.mseg1Morph) > 0.7,
+        );
+        assert.deepEqual(snapshot.gestureStarts, ["mseg1Morph"]);
+
+        await page.evaluate(({ pointerId, clientX, clientY }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX,
+                clientY,
+                bubbles: true,
+            }));
+        }, {
+            pointerId,
+            clientX: sliderBox.x + (sliderBox.width * 0.75),
+            clientY,
+        });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free MSEG morph touch release",
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("mseg1Morph"),
+        );
+        assert.deepEqual(snapshot.gestureEnds, ["mseg1Morph"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("MSEG rate drag stops changing values after the window blurs", async () => {
     const page = await openHarnessPage();
 
@@ -5680,6 +6137,71 @@ test("MSEG rate drag stops changing values after the window blurs", async () => 
         );
     } finally {
         await page.mouse.up().catch(() => {});
+        await page.close();
+    }
+});
+
+test("MSEG rate touch drag survives unavailable pointer capture", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const rateInput = page.locator('input[aria-label="MSEG rate"]').first();
+        await rateInput.scrollIntoViewIfNeeded();
+        const inputBox = await rateInput.boundingBox();
+        assert.ok(inputBox, "Expected the MSEG rate input to be visible.");
+        await rateInput.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        await clearHarnessDebugLog(page);
+        const pointer = {
+            pointerId: 83,
+            pointerType: "touch",
+            button: 0,
+            clientY: inputBox.y + (inputBox.height * 0.5),
+        };
+        await rateInput.dispatchEvent("pointerdown", {
+            ...pointer,
+            buttons: 1,
+            clientX: inputBox.x + (inputBox.width * 0.5),
+        });
+        await page.evaluate(({ clientX, clientY }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                bubbles: true,
+                cancelable: true,
+                pointerId: 83,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX,
+                clientY,
+            }));
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                bubbles: true,
+                pointerId: 83,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX,
+                clientY,
+            }));
+        }, {
+            clientX: inputBox.x + (inputBox.width * 0.5) + 20,
+            clientY: inputBox.y + (inputBox.height * 0.5),
+        });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "touch-adjusted MSEG rate without pointer capture",
+            (nextSnapshot) => {
+                const playback = readStoredMsegPlayback(nextSnapshot);
+                return Number(playback.rate?.seconds) > 1.2
+                    && nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback");
+            },
+        );
+        assert.equal(readStoredMsegPlayback(snapshot).rate.seconds > 1.2, true);
+    } finally {
         await page.close();
     }
 });
@@ -6214,6 +6736,84 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
         snapshot = await getHarnessSnapshot(page);
         assert.equal(Number(snapshot.parameterValues.reverbSize), valueAfterRelease);
         assert.deepEqual(snapshot.sentMessages, []);
+    } finally {
+        await page.close();
+    }
+});
+
+test("rack knob touch drag survives unavailable pointer capture outside the knob", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.5, true);
+        });
+        await clearHarnessDebugLog(page);
+
+        const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        const artBox = await knob.locator(".rack-knob-art").boundingBox();
+        assert.ok(artBox);
+        await knob.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        const pointerId = 97;
+        const start = {
+            x: artBox.x + (artBox.width / 2),
+            y: artBox.y + (artBox.height / 2),
+        };
+        const moved = { x: start.x, y: start.y - 40 };
+        await knob.dispatchEvent("pointerdown", {
+            pointerId,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free rack knob touch move",
+            (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
+                && Number(nextSnapshot.parameterValues.reverbSize) > 0.5,
+        );
+        assert.deepEqual(snapshot.gestureEnds, []);
+
+        await page.evaluate(({ pointerId, moved }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX: moved.x,
+                clientY: moved.y,
+                bubbles: true,
+            }));
+        }, { pointerId, moved });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free rack knob touch release",
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("reverbSize"),
+        );
+        assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
+        assert.equal(await page.locator('[data-role="rack-parameter-hud"]').count(), 0);
     } finally {
         await page.close();
     }
@@ -6806,6 +7406,74 @@ test("phone touch drags are captured by rack grips and modulation chips without 
     }
 });
 
+test("rack reorder survives a platform pointer-capture rejection", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="rack-module-list"]');
+        await clearHarnessDebugLog(page);
+
+        await page.evaluate(() => {
+            const list = document.querySelector('[data-role="rack-module-list"]');
+            const handle = document.querySelector('[data-role="rack-reorder-handle-reverb"]');
+            const target = document.querySelector('[data-role="rack-module-filter"]');
+            if (!(list instanceof HTMLElement) || !(handle instanceof HTMLElement) || !(target instanceof HTMLElement)) {
+                throw new Error("Expected rack reorder elements.");
+            }
+
+            Object.defineProperty(list, "setPointerCapture", {
+                configurable: true,
+                value() {
+                    throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+                },
+            });
+            const handleBounds = handle.getBoundingClientRect();
+            const targetBounds = target.getBoundingClientRect();
+            const pointerId = 92;
+            handle.dispatchEvent(new PointerEvent("pointerdown", {
+                bubbles: true,
+                pointerId,
+                pointerType: "mouse",
+                button: 0,
+                buttons: 1,
+                clientX: handleBounds.left + (handleBounds.width / 2),
+                clientY: handleBounds.top + (handleBounds.height / 2),
+            }));
+            list.dispatchEvent(new PointerEvent("pointermove", {
+                bubbles: true,
+                pointerId,
+                pointerType: "mouse",
+                button: 0,
+                buttons: 1,
+                clientX: targetBounds.left + (targetBounds.width / 2),
+                clientY: targetBounds.top + (targetBounds.height / 2),
+            }));
+            list.dispatchEvent(new PointerEvent("pointerup", {
+                bubbles: true,
+                pointerId,
+                pointerType: "mouse",
+                button: 0,
+                buttons: 0,
+                clientX: targetBounds.left + (targetBounds.width / 2),
+                clientY: targetBounds.top + (targetBounds.height / 2),
+            }));
+        });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "pointer-capture fallback rack reorder",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "rackOrder"
+                && Array.isArray(value?.moduleIds)
+                && Number(value.moduleIds[0]) === 7
+            )),
+        );
+        assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "rackOrder").length, 1);
+    } finally {
+        await page.close();
+    }
+});
+
 test("mobile FX subpage keeps all eight approved rack rows visible and confines modulation controls to the editor", async () => {
     for (const width of [320, 375, 390, 430]) {
         const page = await openHarnessPage({
@@ -7231,6 +7899,86 @@ test("rack quick controls keep tracking Safari touch moves that report zero butt
     }
 });
 
+test("rack quick controls keep tracking touch outside the card when pointer capture is unavailable", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        const quick = page.locator('[data-role="rack-quick-reverb"]');
+        await quick.scrollIntoViewIfNeeded();
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.3, true);
+        });
+        await clearHarnessDebugLog(page);
+
+        const bounds = await quick.boundingBox();
+        assert.ok(bounds);
+        await quick.evaluate((element) => {
+            element.setPointerCapture = () => {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            };
+        });
+        const pointer = {
+            pointerId: 92,
+            pointerType: "touch",
+            button: 0,
+        };
+        const startX = bounds.x + (bounds.width * 0.35);
+        const clientY = bounds.y + (bounds.height * 0.5);
+        await quick.dispatchEvent("pointerdown", {
+            ...pointer,
+            buttons: 1,
+            clientX: startX,
+            clientY,
+        });
+        await page.evaluate(({ pointerId, clientX, clientY }) => {
+            window.dispatchEvent(new PointerEvent("pointermove", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX,
+                clientY,
+                bubbles: true,
+            }));
+        }, {
+            pointerId: pointer.pointerId,
+            clientX: startX + (bounds.width * 0.3),
+            clientY,
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
+        assert.ok(Number(snapshot.parameterValues.reverbSize) > 0.3);
+
+        await page.evaluate(({ pointerId, clientX, clientY }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                pointerId,
+                pointerType: "touch",
+                button: 0,
+                buttons: 0,
+                clientX,
+                clientY,
+                bubbles: true,
+            }));
+        }, {
+            pointerId: pointer.pointerId,
+            clientX: startX + (bounds.width * 0.3),
+            clientY,
+        });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "capture-free rack quick-control release",
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("reverbSize"),
+        );
+        assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("every rack editor binds live controls and one drop commits one complete DSP order", async () => {
     const page = await openHarnessPage();
 
@@ -7526,6 +8274,37 @@ test("desktop chorus knob closes host gesture on pointer cancellation", async ()
         const snapshot = await waitForHarnessSnapshot(
             page,
             "chorus cancelled gesture",
+            (nextSnapshot) => (
+                nextSnapshot.gestureStarts.includes("chorusMix")
+                && nextSnapshot.gestureEnds.includes("chorusMix")
+            ),
+        );
+
+        assert.deepEqual(snapshot.gestureStarts, ["chorusMix"]);
+        assert.deepEqual(snapshot.gestureEnds, ["chorusMix"]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop chorus knob closes host gesture when pointer capture is lost", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await selectRackEffect(page, "chorus");
+        await page.waitForSelector('[data-role="chorus-mix-track"]');
+        await clearHarnessDebugLog(page);
+
+        await dispatchRackKnobPointerEvents(page.locator('[data-role="chorus-mix-control"]'), [
+            { type: "pointerdown", pointerId: 8, buttons: 1, deltaY: 0 },
+            { type: "pointermove", pointerId: 8, buttons: 1, deltaY: -12 },
+            { type: "lostpointercapture", pointerId: 8, buttons: 0, deltaY: -12 },
+        ]);
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "chorus lost pointer capture cleanup",
             (nextSnapshot) => (
                 nextSnapshot.gestureStarts.includes("chorusMix")
                 && nextSnapshot.gestureEnds.includes("chorusMix")

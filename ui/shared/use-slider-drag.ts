@@ -17,7 +17,13 @@ type DragState = {
     max: number;
     trackElement: HTMLElement;
     onChange?: (normalized: number) => void;
+    captureFailed: boolean;
 };
+
+type SliderPointerMoveEvent = Pick<
+    PointerEvent,
+    "pointerId" | "pointerType" | "buttons" | "clientX" | "clientY" | "preventDefault" | "stopPropagation"
+>;
 
 export function useSliderDrag() {
     const dragRef = useRef<DragState | null>(null);
@@ -39,67 +45,7 @@ export function useSliderDrag() {
         drag.binding.endGesture();
     }, []);
 
-    useEffect(() => {
-        const handlePointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
-        const handleBlur = () => finishDrag();
-        const handleVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                finishDrag();
-            }
-        };
-
-        window.addEventListener("pointerup", handlePointerEnd, true);
-        window.addEventListener("pointercancel", handlePointerEnd, true);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-
-        return () => {
-            window.removeEventListener("pointerup", handlePointerEnd, true);
-            window.removeEventListener("pointercancel", handlePointerEnd, true);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            finishDrag();
-        };
-    }, [finishDrag]);
-
-    const handlePointerDown = useCallback((
-        event: ReactPointerEvent<HTMLElement>,
-        trackElement: HTMLElement | null,
-        binding: PatchControlBinding<number>,
-        currentNormalized: number,
-        min: number,
-        max: number,
-        axis: "vertical" | "horizontal" | "horizontal-relative",
-        onChange?: (normalized: number) => void,
-    ) => {
-        if (!trackElement || (event.pointerType === "mouse" && event.button !== 0)) {
-            return;
-        }
-
-        event.preventDefault();
-        event.stopPropagation();
-        finishDrag();
-        try {
-            trackElement.setPointerCapture(event.pointerId);
-        } catch {
-            // Synthetic pointer events in tests may not own a real pointer.
-        }
-        binding.beginGesture();
-        dragRef.current = {
-            pointerId: event.pointerId,
-            startClientY: event.clientY,
-            startClientX: event.clientX,
-            startNormalized: currentNormalized,
-            binding,
-            axis,
-            min,
-            max,
-            trackElement,
-            onChange,
-        };
-    }, [finishDrag]);
-
-    const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    const updateDragFromPointer = useCallback((event: SliderPointerMoveEvent) => {
         const drag = dragRef.current;
         if (!drag || event.pointerId !== drag.pointerId) return;
         if (event.pointerType === "mouse" && event.buttons === 0) {
@@ -129,6 +75,85 @@ export function useSliderDrag() {
             drag.binding.setValue(denormalized);
         }
     }, [finishDrag]);
+
+    useEffect(() => {
+        const handleFallbackPointerMove = (event: PointerEvent) => {
+            const drag = dragRef.current;
+            if (!drag?.captureFailed) {
+                return;
+            }
+            const target = event.target;
+            if (target instanceof Node && drag.trackElement.contains(target)) {
+                return;
+            }
+            updateDragFromPointer(event);
+        };
+        const handlePointerEnd = (event: PointerEvent) => finishDrag(event.pointerId);
+        const handleBlur = () => finishDrag();
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                finishDrag();
+            }
+        };
+
+        window.addEventListener("pointermove", handleFallbackPointerMove, true);
+        window.addEventListener("pointerup", handlePointerEnd, true);
+        window.addEventListener("pointercancel", handlePointerEnd, true);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
+            window.removeEventListener("pointerup", handlePointerEnd, true);
+            window.removeEventListener("pointercancel", handlePointerEnd, true);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishDrag();
+        };
+    }, [finishDrag, updateDragFromPointer]);
+
+    const handlePointerDown = useCallback((
+        event: ReactPointerEvent<HTMLElement>,
+        trackElement: HTMLElement | null,
+        binding: PatchControlBinding<number>,
+        currentNormalized: number,
+        min: number,
+        max: number,
+        axis: "vertical" | "horizontal" | "horizontal-relative",
+        onChange?: (normalized: number) => void,
+    ) => {
+        if (!trackElement || (event.pointerType === "mouse" && event.button !== 0)) {
+            return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        finishDrag();
+        let captureFailed = false;
+        try {
+            trackElement.setPointerCapture(event.pointerId);
+        } catch {
+            captureFailed = true;
+        }
+        binding.beginGesture();
+        dragRef.current = {
+            pointerId: event.pointerId,
+            startClientY: event.clientY,
+            startClientX: event.clientX,
+            startNormalized: currentNormalized,
+            binding,
+            axis,
+            min,
+            max,
+            trackElement,
+            onChange,
+            captureFailed,
+        };
+    }, [finishDrag]);
+
+    const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+        updateDragFromPointer(event.nativeEvent);
+    }, [updateDragFromPointer]);
 
     const endDrag = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         finishDrag(event.pointerId);

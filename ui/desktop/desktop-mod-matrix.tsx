@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent } from "react";
+import {
+    useCallback,
+    useEffect,
+    useMemo,
+    useRef,
+    useState,
+    type KeyboardEvent as ReactKeyboardEvent,
+    type PointerEvent as ReactPointerEvent,
+} from "react";
 
 import {
     MODULATION_MAX_ROUTES,
@@ -26,6 +34,14 @@ const MINI_KNOB_CENTER = MINI_KNOB_VIEWBOX_SIZE / 2;
 const MINI_KNOB_RADIUS = 12;
 const MINI_KNOB_SIDE_SWEEP_DEGREES = 135;
 const MINI_KNOB_PIXELS_PER_FULL_TRAVEL = 240;
+
+type MiniKnobGesture = {
+    pointerId: number;
+    startClientY: number;
+    startSliderPosition: number;
+    captureElement: HTMLDivElement;
+    removeFallbackListeners: () => void;
+};
 
 function polarPointFromTop(center: number, radius: number, degreesFromTop: number) {
     const radians = ((degreesFromTop - 90) * Math.PI) / 180;
@@ -163,6 +179,7 @@ function MiniKnob({
     value,
     min,
     max,
+    step,
     onChange,
     ariaLabel,
 }: {
@@ -171,13 +188,20 @@ function MiniKnob({
     value: number;
     min: number;
     max: number;
+    step: number;
     onChange: (value: number) => void;
     ariaLabel: string;
 }) {
-    const isDragging = useRef(false);
-    const startY = useRef(0);
-    const startSliderPosition = useRef(0.5);
+    const gestureRef = useRef<MiniKnobGesture | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
+    const draftValueRef = useRef("");
+    const isEditingRef = useRef(false);
+    const onChangeRef = useRef(onChange);
+    const targetKindRef = useRef(targetKind);
+    const valueRef = useRef(value);
+    onChangeRef.current = onChange;
+    targetKindRef.current = targetKind;
+    valueRef.current = value;
     const [isEditing, setIsEditing] = useState(false);
     const [draftValue, setDraftValue] = useState("");
     const sliderPosition = getModulationAmountSliderPosition(targetKind, value);
@@ -223,7 +247,6 @@ function MiniKnob({
             return;
         }
 
-        setDraftValue(formatModulationAmountEditingValue(targetKind, value));
         const animationFrameID = window.requestAnimationFrame(() => {
             inputRef.current?.focus();
             inputRef.current?.select();
@@ -232,56 +255,164 @@ function MiniKnob({
         return () => {
             window.cancelAnimationFrame(animationFrameID);
         };
-    }, [isEditing, value]);
+    }, [isEditing]);
+
+    const updateDraftValue = useCallback((nextValue: string) => {
+        draftValueRef.current = nextValue;
+        setDraftValue(nextValue);
+    }, []);
+
+    const beginEditing = useCallback(() => {
+        updateDraftValue(formatModulationAmountEditingValue(targetKindRef.current, valueRef.current));
+        isEditingRef.current = true;
+        setIsEditing(true);
+    }, [updateDraftValue]);
 
     const finishEditing = useCallback((commit: boolean) => {
-        if (!isEditing) {
+        if (!isEditingRef.current) {
             return;
         }
 
+        isEditingRef.current = false;
         if (commit) {
-            const parsedValue = parseModulationAmountEditingValue(targetKind, draftValue);
+            const parsedValue = parseModulationAmountEditingValue(targetKindRef.current, draftValueRef.current);
             if (parsedValue !== null) {
-                onChange(parsedValue);
+                onChangeRef.current(parsedValue);
             }
         }
 
         setIsEditing(false);
-        setDraftValue("");
-    }, [draftValue, isEditing, onChange, targetKind]);
+        updateDraftValue("");
+    }, [updateDraftValue]);
 
-    const handleMouseDown = useCallback((event: ReactMouseEvent<HTMLDivElement>) => {
-        if (isEditing) {
+    const finishGesture = useCallback((pointerId?: number) => {
+        const gesture = gestureRef.current;
+        if (!gesture || (pointerId !== undefined && gesture.pointerId !== pointerId)) {
+            return;
+        }
+
+        gestureRef.current = null;
+        gesture.removeFallbackListeners();
+        try {
+            if (gesture.captureElement.hasPointerCapture(gesture.pointerId)) {
+                gesture.captureElement.releasePointerCapture(gesture.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation or window deactivation.
+        }
+    }, []);
+
+    const updateGesture = useCallback((event: PointerEvent) => {
+        const gesture = gestureRef.current;
+        if (!gesture || gesture.pointerId !== event.pointerId) {
+            return;
+        }
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            finishGesture(event.pointerId);
+            return;
+        }
+
+        if (event.cancelable) {
+            event.preventDefault();
+        }
+        const delta = gesture.startClientY - event.clientY;
+        const nextSliderPosition = Math.max(
+            0,
+            Math.min(1, gesture.startSliderPosition + (delta / MINI_KNOB_PIXELS_PER_FULL_TRAVEL)),
+        );
+        onChangeRef.current(composeModulationAmount(targetKindRef.current, nextSliderPosition));
+    }, [finishGesture]);
+
+    useEffect(() => () => {
+        finishGesture();
+        isEditingRef.current = false;
+    }, [finishGesture]);
+
+    const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        if (isEditingRef.current || (event.pointerType === "mouse" && event.button !== 0)) {
             return;
         }
 
         event.preventDefault();
-        isDragging.current = true;
-        startY.current = event.clientY;
-        startSliderPosition.current = sliderPosition;
-
-        const handleMouseMove = (moveEvent: MouseEvent) => {
-            if (!isDragging.current) {
-                return;
+        event.stopPropagation();
+        finishGesture();
+        const captureElement = event.currentTarget;
+        const ownerDocument = captureElement.ownerDocument;
+        const ownerWindow = ownerDocument.defaultView ?? window;
+        const handlePointerMove = (moveEvent: PointerEvent) => updateGesture(moveEvent);
+        const handlePointerEnd = (endEvent: PointerEvent) => finishGesture(endEvent.pointerId);
+        const handleWindowBlur = () => finishGesture();
+        const handleVisibilityChange = () => {
+            if (ownerDocument.visibilityState !== "visible") {
+                finishGesture();
             }
-
-            const delta = startY.current - moveEvent.clientY;
-            const nextSliderPosition = Math.max(
-                0,
-                Math.min(1, startSliderPosition.current + (delta / MINI_KNOB_PIXELS_PER_FULL_TRAVEL)),
-            );
-            onChange(composeModulationAmount(targetKind, nextSliderPosition));
         };
-
-        const handleMouseUp = () => {
-            isDragging.current = false;
-            window.removeEventListener("mousemove", handleMouseMove);
-            window.removeEventListener("mouseup", handleMouseUp);
+        const removeFallbackListeners = () => {
+            ownerWindow.removeEventListener("pointermove", handlePointerMove, true);
+            ownerWindow.removeEventListener("pointerup", handlePointerEnd, true);
+            ownerWindow.removeEventListener("pointercancel", handlePointerEnd, true);
+            ownerWindow.removeEventListener("blur", handleWindowBlur);
+            ownerDocument.removeEventListener("visibilitychange", handleVisibilityChange);
         };
+        gestureRef.current = {
+            pointerId: event.pointerId,
+            startClientY: event.clientY,
+            startSliderPosition: sliderPosition,
+            captureElement,
+            removeFallbackListeners,
+        };
+        ownerWindow.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
+        ownerWindow.addEventListener("pointerup", handlePointerEnd, true);
+        ownerWindow.addEventListener("pointercancel", handlePointerEnd, true);
+        ownerWindow.addEventListener("blur", handleWindowBlur);
+        ownerDocument.addEventListener("visibilitychange", handleVisibilityChange);
+        try {
+            captureElement.setPointerCapture(event.pointerId);
+        } catch {
+            // The window listeners remain authoritative when capture is unavailable.
+        }
+    }, [finishGesture, sliderPosition, updateGesture]);
 
-        window.addEventListener("mousemove", handleMouseMove);
-        window.addEventListener("mouseup", handleMouseUp);
-    }, [isEditing, onChange, sliderPosition, targetKind]);
+    const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLDivElement>) => {
+        if (event.target !== event.currentTarget || isEditingRef.current) {
+            return;
+        }
+
+        let nextValue: number | null = null;
+        switch (event.key) {
+            case "ArrowDown":
+            case "ArrowLeft":
+                nextValue = valueRef.current - step;
+                break;
+            case "ArrowUp":
+            case "ArrowRight":
+                nextValue = valueRef.current + step;
+                break;
+            case "PageDown":
+                nextValue = valueRef.current - (step * 10);
+                break;
+            case "PageUp":
+                nextValue = valueRef.current + (step * 10);
+                break;
+            case "Home":
+                nextValue = min;
+                break;
+            case "End":
+                nextValue = max;
+                break;
+            case "Enter":
+                event.preventDefault();
+                event.stopPropagation();
+                beginEditing();
+                return;
+            default:
+                return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        onChangeRef.current(clampModulationRouteAmount(targetKindRef.current, nextValue));
+    }, [beginEditing, max, min, step]);
 
     return (
         <div
@@ -291,13 +422,18 @@ function MiniKnob({
             aria-valuemin={min}
             aria-valuemax={max}
             aria-valuenow={value}
-            onMouseDown={handleMouseDown}
+            aria-valuetext={formatModulationAmountReadout(targetKind, value, polarity)}
+            onPointerDown={handlePointerDown}
+            onPointerUp={(event) => finishGesture(event.pointerId)}
+            onPointerCancel={(event) => finishGesture(event.pointerId)}
+            onLostPointerCapture={(event) => finishGesture(event.pointerId)}
+            onKeyDown={handleKeyDown}
             onDoubleClick={(event) => {
                 event.preventDefault();
                 event.stopPropagation();
-                setIsEditing(true);
+                beginEditing();
             }}
-            className="relative h-8 w-8 cursor-ns-resize select-none"
+            className="relative h-8 w-8 touch-none cursor-ns-resize select-none"
         >
             <svg className="absolute inset-0" viewBox="0 0 32 32">
                 <circle
@@ -352,8 +488,11 @@ function MiniKnob({
                     ref={inputRef}
                     aria-label={`${ariaLabel} value`}
                     type="text"
+                    inputMode="decimal"
+                    autoComplete="off"
+                    spellCheck={false}
                     value={draftValue}
-                    onChange={(event) => setDraftValue(event.currentTarget.value)}
+                    onChange={(event) => updateDraftValue(event.currentTarget.value)}
                     onBlur={() => finishEditing(true)}
                     onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
                         if (event.key === "Enter") {
@@ -499,6 +638,7 @@ function RouteRow({
                 value={route.amount}
                 min={targetBounds.min}
                 max={targetBounds.max}
+                step={targetBounds.step}
                 onChange={(nextAmount) => onUpdate({ amount: clampModulationRouteAmount(route.targetKind, nextAmount) })}
             />
 
