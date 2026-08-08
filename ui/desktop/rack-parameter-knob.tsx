@@ -36,6 +36,7 @@ export type RackParameterKnobProps = {
     readonly descriptor: RackParameterDescriptor;
     readonly binding: PatchControlBinding<number>;
     readonly route: ModulationRoute | null;
+    readonly sourceIsSelected: boolean;
     readonly sourceAccent: string;
     readonly dataRole: string;
     readonly trackDataRole: string;
@@ -56,10 +57,11 @@ export type RackParameterHud = {
 type KnobGesture = {
     readonly pointerId: number;
     readonly element: HTMLButtonElement;
-    readonly mode: "base" | "modulation";
     readonly startClientX: number;
     readonly startClientY: number;
-    readonly startNormalized: number;
+    readonly startBaseNormalized: number;
+    readonly startModulationNormalized: number;
+    mode: "pending" | "base" | "modulation";
     moved: boolean;
     baseGestureStarted: boolean;
     holdActivated: boolean;
@@ -147,7 +149,7 @@ function modulationRange(
     baseValue: number,
     route: ModulationRoute | null,
 ) {
-    if (!route || !route.enabled || Math.abs(route.amount) <= 1e-9) {
+    if (!route || Math.abs(route.amount) <= 1e-9) {
         return null;
     }
 
@@ -184,6 +186,7 @@ export function RackParameterKnob({
     descriptor,
     binding,
     route,
+    sourceIsSelected,
     sourceAccent,
     dataRole,
     trackDataRole,
@@ -200,12 +203,16 @@ export function RackParameterKnob({
     const bindingRef = useRef(binding);
     const descriptorRef = useRef(descriptor);
     const routePolarityRef = useRef(route?.polarity);
+    const routeRef = useRef(route);
+    const sourceIsSelectedRef = useRef(sourceIsSelected);
     const onHudChangeRef = useRef(onHudChange);
     const onModulationAmountChangeRef = useRef(onModulationAmountChange);
     const onRequestContextMenuRef = useRef(onRequestContextMenu);
     bindingRef.current = binding;
     descriptorRef.current = descriptor;
     routePolarityRef.current = route?.polarity;
+    routeRef.current = route;
+    sourceIsSelectedRef.current = sourceIsSelected;
     onHudChangeRef.current = onHudChange;
     onModulationAmountChangeRef.current = onModulationAmountChange;
     onRequestContextMenuRef.current = onRequestContextMenu;
@@ -220,6 +227,7 @@ export function RackParameterKnob({
         ? normalizedValue(descriptor, 0)
         : 0;
     const routeRange = modulationRange(descriptor, binding.value, route);
+    const routePresencePoint = pointOnCircle(angleForNormalized(baseNormalized), (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2);
     const handlePoint = pointOnCircle(angleForNormalized(baseNormalized), BASE_RADIUS * 0.72);
     const defaultPoint = pointOnCircle(
         angleForNormalized(normalizedValue(descriptor, descriptor.initial)),
@@ -271,6 +279,7 @@ export function RackParameterKnob({
 
         event.preventDefault();
         event.stopPropagation();
+        const deltaX = event.clientX - gesture.startClientX;
         const deltaY = gesture.startClientY - event.clientY;
         const distance = Math.hypot(
             event.clientX - gesture.startClientX,
@@ -278,6 +287,8 @@ export function RackParameterKnob({
         );
         if (!gesture.moved && distance >= GESTURE_MOVE_THRESHOLD_PX) {
             gesture.moved = true;
+            gesture.mode = Math.abs(deltaX) > Math.abs(deltaY) ? "modulation" : "base";
+            gesture.element.dataset.dragging = gesture.mode;
             if (holdTimerRef.current !== null) {
                 clearTimeout(holdTimerRef.current);
                 holdTimerRef.current = null;
@@ -285,6 +296,8 @@ export function RackParameterKnob({
             if (gesture.mode === "base") {
                 bindingRef.current.beginGesture();
                 gesture.baseGestureStarted = true;
+            } else if (!sourceIsSelectedRef.current || routeRef.current === null) {
+                triggerRackControlHaptic();
             }
         }
         if (!gesture.moved || gesture.holdActivated) {
@@ -293,13 +306,30 @@ export function RackParameterKnob({
         const currentDescriptor = descriptorRef.current;
         const currentTargetKind = `rack.${currentDescriptor.endpointID}` as RackModulationTargetKind;
         const sensitivity = event.shiftKey ? 720 : 180;
-        const nextNormalized = clamp(gesture.startNormalized + (deltaY / sensitivity), 0, 1);
+        const nextNormalized = clamp(
+            gesture.mode === "base"
+                ? gesture.startBaseNormalized + (deltaY / sensitivity)
+                : gesture.startModulationNormalized + (deltaX / sensitivity),
+            0,
+            1,
+        );
         if (gesture.mode === "modulation") {
+            if (!sourceIsSelectedRef.current || routeRef.current === null) {
+                onHudChangeRef.current({
+                    endpointID: currentDescriptor.endpointID,
+                    label: "MOD",
+                    value: sourceIsSelectedRef.current
+                        ? "NOT MAPPED · CREATE MAPPING +"
+                        : "SELECT A SOURCE",
+                    mode: "modulation",
+                });
+                return;
+            }
             const nextAmount = composeModulationAmount(currentTargetKind, nextNormalized);
             onModulationAmountChangeRef.current(nextAmount);
             onHudChangeRef.current({
                 endpointID: currentDescriptor.endpointID,
-                label: currentDescriptor.label,
+                label: `MOD · ${currentDescriptor.label}`,
                 value: formatModulationAmountReadout(currentTargetKind, nextAmount, routePolarityRef.current),
                 mode: "modulation",
             });
@@ -310,7 +340,7 @@ export function RackParameterKnob({
         bindingRef.current.setValue(nextValue);
         onHudChangeRef.current({
             endpointID: currentDescriptor.endpointID,
-            label: currentDescriptor.label,
+            label: `BASE · ${currentDescriptor.label}`,
             value: formatRackParameterValue(currentDescriptor, nextValue),
             mode: "base",
         });
@@ -363,25 +393,20 @@ export function RackParameterKnob({
         event.stopPropagation();
         finishGesture();
         onSelect();
-        const artBounds = art.getBoundingClientRect();
-        const normalizedX = ((event.clientX - artBounds.left) / Math.max(1, artBounds.width)) * 106 - 3;
-        const normalizedY = ((event.clientY - artBounds.top) / Math.max(1, artBounds.height)) * 106 - 3;
-        const distance = Math.hypot(normalizedX - KNOB_CENTER, normalizedY - KNOB_CENTER);
-        const mode = distance >= MOD_INNER_RADIUS - 2 ? "modulation" : "base";
-
         try {
             event.currentTarget.setPointerCapture(event.pointerId);
         } catch {
             // Synthetic pointer events may not own a platform pointer.
         }
-        event.currentTarget.dataset.dragging = mode;
+        event.currentTarget.dataset.dragging = "pending";
         gestureRef.current = {
             pointerId: event.pointerId,
             element: event.currentTarget,
-            mode,
+            mode: "pending",
             startClientX: event.clientX,
             startClientY: event.clientY,
-            startNormalized: mode === "base" ? baseNormalized : modulationNormalized,
+            startBaseNormalized: baseNormalized,
+            startModulationNormalized: modulationNormalized,
             moved: false,
             baseGestureStarted: false,
             holdActivated: false,
@@ -398,25 +423,12 @@ export function RackParameterKnob({
             triggerRackControlHaptic();
             onRequestContextMenuRef.current(event.clientX, event.clientY);
         }, LONG_PRESS_DELAY_MS);
-        onHudChange({
-            endpointID: descriptor.endpointID,
-            label: descriptor.label,
-            value: mode === "base"
-                ? formatRackParameterValue(descriptor, binding.value)
-                : formatModulationAmountReadout(targetKind, modulationAmount, route?.polarity),
-            mode,
-        });
     }, [
         baseNormalized,
-        binding,
         descriptor,
         finishGesture,
-        modulationAmount,
         modulationNormalized,
-        onHudChange,
         onSelect,
-        route?.polarity,
-        targetKind,
     ]);
 
     const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
@@ -433,6 +445,7 @@ export function RackParameterKnob({
             aria-valuemin={descriptor.min}
             aria-valuemax={descriptor.max}
             aria-valuenow={binding.value}
+            data-route-state={!sourceIsSelected ? "no-source" : route === null ? "unmapped" : route.enabled ? "mapped" : "bypassed"}
             className="rack-parameter-knob"
             style={style}
             onPointerDown={handlePointerDown}
@@ -494,17 +507,25 @@ export function RackParameterKnob({
                     d={pieSectorPath(0, 1, BASE_RADIUS)}
                     fill={`url(#${baseTrackPatternID})`}
                 />
+                {route ? (
+                    <circle
+                        className={`rack-knob-route-presence${route.enabled ? "" : " is-bypassed"}`}
+                        cx={routePresencePoint.x}
+                        cy={routePresencePoint.y}
+                        r="2.25"
+                    />
+                ) : null}
                 <path
                     className="rack-knob-base-fill"
                     d={pieSectorPath(baseOrigin, baseNormalized, BASE_RADIUS)}
                 />
                 <path
-                    className="rack-knob-mod-track"
+                    className={`rack-knob-mod-track${sourceIsSelected ? route ? " is-mapped" : " is-unmapped" : " is-hidden"}${route && !route.enabled ? " is-bypassed" : ""}`}
                     d={annularSectorPath(0, 1, MOD_INNER_RADIUS, MOD_OUTER_RADIUS)}
                     fill={`url(#${modTrackPatternID})`}
                 />
                 <path
-                    className="rack-knob-mod-fill"
+                    className={`rack-knob-mod-fill${route && !route.enabled ? " is-bypassed" : ""}`}
                     d={routeRange === null
                         ? ""
                         : annularSectorPath(routeRange.low, routeRange.high, MOD_INNER_RADIUS, MOD_OUTER_RADIUS)}

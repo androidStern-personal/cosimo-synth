@@ -54,6 +54,7 @@ import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import { DesktopModMatrix } from "./desktop-mod-matrix";
+import { MobileModMatrix } from "./mobile-mod-matrix";
 import { EffectsRackWorkspace } from "./effects-rack-workspace";
 import {
     SYNTH_PRESET_EFFECT_ID,
@@ -279,7 +280,9 @@ type MsegEditorModalProps = {
     selectedPointIndex: number;
     hoveredSegmentIndex: number;
     activeSegmentIndex: number;
+    canUndo: boolean;
     onClose: () => void;
+    onUndo: () => void;
     onSelectShape: (shapeIndex: number) => void;
     onMorphChange: (nextValue: number) => void;
     onRateChange: (nextValue: number) => void;
@@ -292,6 +295,7 @@ type MsegEditorModalProps = {
 };
 
 type ModulationMatrixSectionProps = {
+    compact?: boolean;
     focusedSource?: MobileModSource | null;
     selectedMsegSlot: number;
     msegState: MsegState | null;
@@ -2045,7 +2049,9 @@ function MsegEditorModal({
     selectedPointIndex,
     hoveredSegmentIndex,
     activeSegmentIndex,
+    canUndo,
     onClose,
+    onUndo,
     onSelectShape,
     onMorphChange,
     onRateChange,
@@ -2057,6 +2063,8 @@ function MsegEditorModal({
     rateFocusBindings,
 }: MsegEditorModalProps) {
     const [isMorphAdjusting, setIsMorphAdjusting] = useState(false);
+    const backdropRef = useRef<HTMLDivElement | null>(null);
+    const doneButtonRef = useRef<HTMLButtonElement | null>(null);
 
     useEffect(() => {
         if (!isOpen) {
@@ -2064,31 +2072,76 @@ function MsegEditorModal({
         }
     }, [isOpen]);
 
+    useEffect(() => {
+        if (!isOpen || !backdropRef.current) {
+            return;
+        }
+
+        const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        const modalRoot = backdropRef.current;
+        const siblings = Array.from(modalRoot.parentElement?.children ?? []).filter(
+            (candidate): candidate is HTMLElement => candidate instanceof HTMLElement && candidate !== modalRoot,
+        );
+        const inertStates = siblings.map((element) => ({ element, inert: element.inert }));
+        for (const sibling of siblings) {
+            sibling.inert = true;
+        }
+        doneButtonRef.current?.focus({ preventScroll: true });
+
+        const keepFocusInside = (event: KeyboardEvent) => {
+            if (event.key !== "Tab") {
+                return;
+            }
+            const focusable = Array.from(modalRoot.querySelectorAll<HTMLElement>(
+                'button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])',
+            ));
+            if (focusable.length === 0) {
+                return;
+            }
+            const currentIndex = focusable.indexOf(document.activeElement as HTMLElement);
+            const nextIndex = event.shiftKey
+                ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+                : (currentIndex >= focusable.length - 1 ? 0 : currentIndex + 1);
+            event.preventDefault();
+            focusable[nextIndex]?.focus();
+        };
+
+        modalRoot.addEventListener("keydown", keepFocusInside);
+        return () => {
+            modalRoot.removeEventListener("keydown", keepFocusInside);
+            for (const state of inertStates) {
+                state.element.inert = state.inert;
+            }
+            previouslyFocused?.focus({ preventScroll: true });
+        };
+    }, [isOpen]);
+
     if (!isOpen || !msegState) {
         return null;
     }
 
     return (
-        <div className="synth-modal-backdrop absolute inset-0 z-20 flex items-center justify-center p-6">
+        <div ref={backdropRef} className="synth-modal-backdrop mseg-editor-backdrop fixed inset-0 z-50 flex items-center justify-center">
             <div
+                role="dialog"
+                aria-modal="true"
+                aria-label={`${slotLabel} editor`}
+                data-role="mseg-editor-dialog"
                 data-section-accent="mint"
                 data-liquid-detail="routing-node"
-                className="synth-modal-frame relative grid h-full w-full max-w-[1080px] grid-rows-[auto_minmax(0,1fr)_auto] gap-5 rounded-[28px] p-6"
+                className="synth-modal-frame mseg-editor-frame"
             >
-                <div className="flex items-start justify-between gap-4">
-                    <div>
-                        <div className="synth-section-title text-[11px]">{slotLabel}</div>
-                        <div className="synth-readout-text mt-2 text-2xl">Modulation Shape Editor</div>
-                        <div className="mt-2 text-sm text-slate-300/70">Drag a point to move it. Click and drag a segment up or down to bend it. Click an empty spot to add a point. Click an interior point without dragging to delete it.</div>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-[14px] border border-white/8 bg-white/[0.03] p-1">
+                <header className="mseg-editor-header">
+                    <div className="synth-section-title mseg-editor-title">{slotLabel}</div>
+                    <div className="mseg-editor-shapes" role="group" aria-label="MSEG shape">
                         {[0, 1].map((shapeIndex) => (
                             <button
                                 key={`mseg-editor-shape-${shapeIndex}`}
                                 type="button"
                                 aria-label={`Edit shape ${shapeIndex === 0 ? "A" : "B"}`}
                                 aria-pressed={msegState.editShapeIndex === shapeIndex}
-                                className={`h-9 min-w-10 rounded-[10px] px-3 text-[11px] font-semibold uppercase tracking-[0.16em] transition ${
+                                data-role={shapeIndex === 0 ? "mseg-shape-a" : "mseg-shape-b"}
+                                className={`mseg-editor-action ${
                                     msegState.editShapeIndex === shapeIndex
                                         ? "synth-accent-active-button"
                                         : "text-slate-300/55 hover:bg-white/[0.05] hover:text-slate-100"
@@ -2101,73 +2154,95 @@ function MsegEditorModal({
                     </div>
                     <button
                         type="button"
-                        className="cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]"
+                        data-role="mseg-editor-undo"
+                        className="mseg-editor-action"
+                        disabled={!canUndo}
+                        onClick={onUndo}
+                    >
+                        Undo
+                    </button>
+                    <button
+                        ref={doneButtonRef}
+                        type="button"
+                        data-role="mseg-editor-done"
+                        className="cosimo-button mseg-editor-action"
                         onClick={onClose}
                     >
                         Done
                     </button>
+                </header>
+
+                <div className="mseg-editor-graph" data-role="mseg-editor-graph">
+                    <EditableMsegSurface
+                        surfaceRef={surfaceRef}
+                        points={msegState.shape.points}
+                        referencePoints={msegState.referenceShape?.points ?? null}
+                        morphShapeAPoints={msegState.shapeA?.points ?? null}
+                        morphShapeBPoints={msegState.shapeB?.points ?? null}
+                        morphValue={morphBinding.value}
+                        showMorphCurve={isMorphAdjusting}
+                        selectedPointIndex={selectedPointIndex}
+                        hoveredSegmentIndex={hoveredSegmentIndex}
+                        activeSegmentIndex={activeSegmentIndex}
+                        onPointerDown={onPointerDown}
+                        onPointerMove={onPointerMove}
+                        onPointerLeave={onPointerLeave}
+                        onPointerUp={onPointerUp}
+                        className="h-full w-full"
+                        dataRole="mseg-editor-surface"
+                    />
+                    <output className="mseg-coordinate-hud" data-role="mseg-coordinate-hud">
+                        T {msegState.shape.points[selectedPointIndex]?.x.toFixed(3) ?? "0.000"}
+                        {" · "}
+                        V {msegState.shape.points[selectedPointIndex]?.y.toFixed(3) ?? "0.000"}
+                    </output>
                 </div>
 
-                <EditableMsegSurface
-                    surfaceRef={surfaceRef}
-                    points={msegState.shape.points}
-                    referencePoints={msegState.referenceShape?.points ?? null}
-                    morphShapeAPoints={msegState.shapeA?.points ?? null}
-                    morphShapeBPoints={msegState.shapeB?.points ?? null}
-                    morphValue={morphBinding.value}
-                    showMorphCurve={isMorphAdjusting}
-                    selectedPointIndex={selectedPointIndex}
-                    hoveredSegmentIndex={hoveredSegmentIndex}
-                    activeSegmentIndex={activeSegmentIndex}
-                    onPointerDown={onPointerDown}
-                    onPointerMove={onPointerMove}
-                    onPointerLeave={onPointerLeave}
-                    onPointerUp={onPointerUp}
-                    className="h-[320px]"
-                    dataRole="mseg-editor-surface"
-                />
-
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-5 rounded-[22px] border border-white/8 bg-white/[0.03] p-5">
-                    <div className="grid gap-4">
-                        <RangeField
-                            label="Morph"
+                <div className="mseg-editor-controls" data-role="mseg-editor-controls">
+                    <label className="mseg-editor-range">
+                        <span>Morph</span>
+                        <input
+                            className="cosimo-range"
+                            type="range"
                             min={0}
                             max={1}
                             step={0.001}
-                            value={morphBinding.value}
-                            displayValue={formatPercent(morphBinding.value)}
-                            onChange={onMorphChange}
+                            value={morphBinding.value.toFixed(3)}
+                            aria-label="MSEG morph"
+                            data-role="mseg-morph-slider"
+                            onChange={(event) => onMorphChange(Number(event.currentTarget.value))}
                             onPointerDown={() => setIsMorphAdjusting(true)}
                             onPointerUp={() => setIsMorphAdjusting(false)}
                             onPointerCancel={() => setIsMorphAdjusting(false)}
-                            ariaLabel="MSEG morph"
-                            dataRole="mseg-morph-slider"
                         />
-                        <RangeField
-                            label="Time In Seconds"
+                        <output className="synth-readout-text">{formatPercent(morphBinding.value)}</output>
+                    </label>
+                    <label className="mseg-editor-range mseg-editor-time">
+                        <span>Time</span>
+                        <input
+                            className="cosimo-range"
+                            type="range"
                             min={MSEG_RATE_MIN_SECONDS}
                             max={MSEG_RATE_MAX_SECONDS}
                             step={0.001}
-                            value={clampMsegRateSeconds(msegState.playback.rate.seconds)}
-                            displayValue={formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
-                            onChange={onRateChange}
-                            ariaLabel="MSEG rate"
-                            focusBindings={rateFocusBindings}
+                            value={clampMsegRateSeconds(msegState.playback.rate.seconds).toFixed(3)}
+                            aria-label="MSEG rate"
+                            onChange={(event) => onRateChange(Number(event.currentTarget.value))}
+                            {...rateFocusBindings}
                         />
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                        <div className="synth-readout-text text-sm">
+                        <output className="synth-readout-text" data-role="mseg-rate-readout">
                             {formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
-                        </div>
-                        <button
-                            type="button"
-                            className="cosimo-button h-11 rounded-2xl px-4 text-[11px] uppercase tracking-[0.18em]"
-                            onClick={onToggleLoop}
-                        >
-                            {msegState.playback.loop ? "Looping" : "One Shot"}
-                        </button>
-                    </div>
+                        </output>
+                    </label>
+                    <button
+                        type="button"
+                        data-role="mseg-loop-toggle"
+                        className="cosimo-button mseg-loop-toggle"
+                        aria-pressed={msegState.playback.loop !== null}
+                        onClick={onToggleLoop}
+                    >
+                        {msegState.playback.loop ? "Loop" : "1 Shot"}
+                    </button>
                 </div>
             </div>
         </div>
@@ -2208,6 +2283,7 @@ function MacroSourceEditor({ slotIndex }: { slotIndex: number }) {
 }
 
 function ModulationMatrixSection({
+    compact = false,
     focusedSource = null,
     selectedMsegSlot,
     msegState,
@@ -2476,7 +2552,7 @@ function ModulationMatrixSection({
             data-role-source-editor="true"
             data-layout-card="desktop-grid-card"
             data-section-accent="mint"
-            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${DESKTOP_GRID_CARD_CLASS}`}
+            className={`flex h-full flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} ${compact ? "mobile-mod-source-editor w-full" : DESKTOP_GRID_CARD_CLASS}`}
         >
             <span
                 data-role="mod-source-editor"
@@ -3401,8 +3477,9 @@ function DesktopPatchViewBody({
                 </div>
             ) : null}
 
-            <section className="grid min-h-0 items-stretch gap-4 md:grid-cols-2">
+            <section className={`grid min-h-0 items-stretch ${isCompactViewport ? "mobile-mod-workspace gap-2" : "gap-4 md:grid-cols-2"}`}>
                 <ModulationMatrixSection
+                    compact={isCompactViewport}
                     focusedSource={mobileModSource}
                     selectedMsegSlot={synthView.selectedMsegSlot}
                     msegState={synthView.msegState}
@@ -3425,20 +3502,30 @@ function DesktopPatchViewBody({
                     msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
                 />
 
-                <section
-                    data-role="mod-matrix-card"
-                    data-layout-card="desktop-grid-card"
-                    data-section-accent="amber"
-                    data-liquid-detail="edge-rail"
-                    className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border p-4 ${DESKTOP_GRID_CARD_CLASS}`}
-                >
-                    <DesktopModMatrix
+                {isCompactViewport ? (
+                    <MobileModMatrix
                         routes={synthView.routes}
-                        onAddRoute={synthView.handleAddRoute}
+                        focusedSource={mobileModSource}
+                        onCreateRoute={synthView.handleAddRouteWithOverrides}
                         onRemoveRoute={synthView.handleRemoveRoute}
                         onRouteChange={synthView.handleRouteChange}
                     />
-                </section>
+                ) : (
+                    <section
+                        data-role="mod-matrix-card"
+                        data-layout-card="desktop-grid-card"
+                        data-section-accent="amber"
+                        data-liquid-detail="edge-rail"
+                        className={`flex flex-col ${SYNTH_GRID_CARD_SHELL_CLASS} border p-4 ${DESKTOP_GRID_CARD_CLASS}`}
+                    >
+                        <DesktopModMatrix
+                            routes={synthView.routes}
+                            onAddRoute={synthView.handleAddRoute}
+                            onRemoveRoute={synthView.handleRemoveRoute}
+                            onRouteChange={synthView.handleRouteChange}
+                        />
+                    </section>
+                )}
             </section>
 
         </>
@@ -3539,7 +3626,9 @@ function DesktopPatchViewBody({
                 selectedPointIndex={synthView.msegEditor.selectedPointIndex}
                 hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
                 activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
+                canUndo={synthView.msegEditor.canUndo}
                 onClose={synthView.msegEditor.closeEditor}
+                onUndo={synthView.msegEditor.undoLastEdit}
                 onSelectShape={synthView.handleSelectMsegShape}
                 onMorphChange={synthView.handleMsegMorphChange}
                 onRateChange={synthView.handleMsegRateChange}

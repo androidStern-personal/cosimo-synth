@@ -5767,7 +5767,7 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
 
     try {
         await page.click('button[aria-label="Open MSEG editor"]');
-        await page.waitForSelector("text=Modulation Shape Editor");
+        await page.waitForSelector('[data-role="mseg-editor-dialog"]');
 
         const presetBarHost = page.locator('[data-role="synth-preset-bar-host"]');
         assert.equal(
@@ -5851,11 +5851,86 @@ test("MSEG editor wiring can open, add a point, move it, and close with Escape",
         );
 
         await page.keyboard.press("Escape");
-        await page.waitForSelector("text=Modulation Shape Editor", { state: "detached" });
+        await page.waitForSelector('[data-role="mseg-editor-dialog"]', { state: "detached" });
         assert.notEqual(
             await presetBarHost.evaluate((element) => getComputedStyle(element).display),
             "none",
             "The preset bar must return after the MSEG editor closes.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("mobile MSEG editor is a contained synth surface with a dominant graph and recovery controls", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-mod"]');
+        await page.click('button[aria-label="Open MSEG editor"]');
+
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        await dialog.waitFor();
+        assert.equal(await dialog.getAttribute("role"), "dialog");
+        assert.equal(await dialog.getAttribute("aria-modal"), "true");
+        assert.equal(await dialog.getAttribute("aria-label"), "MSEG 1 editor");
+        assert.equal(await dialog.locator('text="Modulation Shape Editor"').count(), 0);
+        assert.equal(await dialog.locator('text=/Drag a point to move/i').count(), 0);
+
+        const layout = await dialog.evaluate((element) => {
+            const graph = element.querySelector('[data-role="mseg-editor-graph"]');
+            const footer = element.querySelector('[data-role="mseg-editor-controls"]');
+            const bounds = element.getBoundingClientRect();
+            if (!(graph instanceof HTMLElement) || !(footer instanceof HTMLElement)) {
+                return null;
+            }
+            const graphBounds = graph.getBoundingClientRect();
+            const footerBounds = footer.getBoundingClientRect();
+            return {
+                bounds: { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom, height: bounds.height },
+                graphHeight: graphBounds.height,
+                footerHeight: footerBounds.height,
+                documentScrollWidth: document.documentElement.scrollWidth,
+                bodyScrollWidth: document.body.scrollWidth,
+                activeRole: document.activeElement?.getAttribute("data-role") ?? "",
+            };
+        });
+        assert.ok(layout);
+        assert.equal(layout.bounds.left >= 0 && layout.bounds.right <= 393, true);
+        assert.equal(layout.bounds.top >= 0 && layout.bounds.bottom <= 852, true);
+        assert.equal(layout.documentScrollWidth <= 393 && layout.bodyScrollWidth <= 393, true);
+        assert.equal(layout.graphHeight > layout.footerHeight * 1.5, true);
+        assert.equal(layout.graphHeight >= layout.bounds.height * 0.48, true);
+        assert.equal(layout.activeRole, "mseg-editor-done");
+
+        for (const role of ["mseg-editor-done", "mseg-shape-a", "mseg-shape-b", "mseg-editor-undo", "mseg-loop-toggle"]) {
+            const target = dialog.locator(`[data-role="${role}"]`);
+            const box = await target.boundingBox();
+            assert.ok(box, `${role} should be visible`);
+            assert.equal(box.width >= 44 && box.height >= 44, true, `${role} must be touchable`);
+        }
+        assert.equal(await dialog.locator('[data-role="mseg-editor-undo"]').isDisabled(), true);
+        assert.equal(await dialog.locator('[data-role="mseg-rate-readout"]').count(), 1);
+
+        const surface = dialog.locator('svg[data-role="mseg-editor-surface"]');
+        const surfaceBox = await surface.boundingBox();
+        assert.ok(surfaceBox);
+        await page.mouse.click(surfaceBox.x + surfaceBox.width * 0.5, surfaceBox.y + surfaceBox.height * 0.25);
+        await waitForHarnessSnapshot(
+            page,
+            "mobile MSEG point",
+            (snapshot) => readStoredMsegShape(snapshot).points.length === 3,
+        );
+        assert.equal(await dialog.locator('[data-role="mseg-editor-undo"]').isEnabled(), true);
+        assert.match(await dialog.locator('[data-role="mseg-coordinate-hud"]').innerText(), /T\s+\d+\.\d{3}\s+·\s+V\s+[+-]?\d+\.\d{3}/);
+
+        await dialog.locator('[data-role="mseg-editor-undo"]').click();
+        await waitForHarnessSnapshot(
+            page,
+            "undone mobile MSEG point",
+            (snapshot) => readStoredMsegShape(snapshot).points.length === 2,
         );
     } finally {
         await page.close();
@@ -6476,7 +6551,7 @@ test("mobile workspace keeps Voice FX and Mod visible while exactly one accordio
         assert.deepEqual(await sectionButtons.evaluateAll((buttons) => (
             buttons.map((button) => button.getAttribute("aria-expanded"))
         )), ["false", "false", "true"]);
-        assert.equal(await accordion.locator('[data-role="mobile-workspace-panel-mod"] [data-role="mod-matrix-card"]').count(), 1);
+        assert.equal(await accordion.locator('[data-role="mobile-workspace-panel-mod"] [data-role="mobile-mod-matrix"]').count(), 1);
         await page.waitForFunction(() => {
             const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
             return (counts.filterSpectrum ?? 0) === 0
@@ -6574,6 +6649,16 @@ test("a second tap on the selected rack source deep-links Mod and Back restores 
         const editor = page.locator('[data-role="mod-source-editor"]');
         assert.equal(await editor.getAttribute("data-source-kind"), "mseg");
         assert.equal(await editor.getAttribute("data-source-slot"), "1");
+        assert.match(
+            (await page.locator('[data-role="mobile-mod-filter-token"]').innerText()).trim(),
+            /MSEG 1\s*×/,
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-mod-route-row"]').evaluateAll((rows) => (
+                rows.every((row) => /MSEG 1/.test(row.textContent ?? ""))
+            )),
+            true,
+        );
 
         await page.click('[data-role="mobile-workspace-back"]');
         assert.equal(
@@ -6705,7 +6790,10 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
 
         await page.mouse.move(centerX, centerY);
         await page.mouse.down();
+        assert.equal(await page.locator('[data-role="rack-parameter-hud"]').count(), 0);
+        await page.mouse.move(centerX, centerY - 10, { steps: 3 });
         await page.waitForSelector('[data-role="rack-parameter-hud"]');
+        assert.match(await page.locator('[data-role="rack-parameter-hud"]').innerText(), /BASE.*Size/i);
         const hudLayout = await page.locator('[data-role="rack-parameter-hud"]').evaluate((element) => {
             const hud = element.getBoundingClientRect();
             const workspace = element.closest('[data-role="effects-rack-card"]')?.getBoundingClientRect();
@@ -6828,6 +6916,7 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
             "initial zero-depth reverb route",
@@ -6843,15 +6932,20 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
         await clearHarnessDebugLog(page);
 
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        assert.equal(await knob.getAttribute("data-route-state"), "mapped");
+        assert.equal(await knob.locator(".rack-knob-route-presence").count(), 1);
         const art = knob.locator(".rack-knob-art");
         const box = await art.boundingBox();
         assert.ok(box);
-        const outerX = box.x + (box.width * 0.92);
+        const outerX = box.x + (box.width * 0.75);
         const centerY = box.y + (box.height * 0.5);
         await page.mouse.move(outerX, centerY);
         await page.mouse.down();
-        assert.equal(await page.locator('[data-role="rack-parameter-hud"]').getAttribute("data-mode"), "modulation");
-        await page.mouse.move(outerX, centerY - 38, { steps: 8 });
+        await page.mouse.move(outerX + 38, centerY, { steps: 8 });
+        assert.equal(await knob.getAttribute("data-dragging"), "modulation");
+        const hud = page.locator('[data-role="rack-parameter-hud"]');
+        assert.equal(await hud.getAttribute("data-mode"), "modulation");
+        assert.match(await hud.innerText(), /MOD.*Size/i);
         await page.mouse.up();
 
         const snapshot = await waitForHarnessSnapshot(
@@ -6879,6 +6973,88 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
     }
 });
 
+test("an unmapped rack knob shows a neutral outer track and horizontal drag cannot create a route", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        let knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        assert.equal(await knob.getAttribute("data-route-state"), "no-source");
+        assert.equal(await knob.locator(".rack-knob-mod-track.is-hidden").count(), 1);
+
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        assert.equal(await knob.getAttribute("data-route-state"), "unmapped");
+        assert.equal(await knob.locator(".rack-knob-mod-track.is-unmapped").count(), 1);
+        const box = await knob.locator(".rack-knob-art").boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        await clearHarnessDebugLog(page);
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x + 42, start.y, { steps: 8 });
+        assert.match(await page.locator('[data-role="rack-parameter-hud"]').innerText(), /NOT MAPPED.*CREATE MAPPING/i);
+        await page.mouse.up();
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.reverbSize"
+            )),
+            false,
+        );
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "rackModulationRoute"), false);
+    } finally {
+        await page.close();
+    }
+});
+
+test("editing a bypassed rack route preserves bypass and renders the outer ring as bypassed", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await page.click('[data-role="rack-create-mapping"]');
+        await waitForHarnessSnapshot(page, "route before bypass-preserving edit", (snapshot) => (
+            readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "rack.reverbSize")
+        ));
+        const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        await knob.click({ button: "right" });
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="toggle-route"]').click();
+        await waitForHarnessSnapshot(page, "bypassed route before amount edit", (snapshot) => (
+            readStoredModulationState(snapshot).routes.find((route) => route.targetKind === "rack.reverbSize")?.enabled === false
+        ));
+        assert.equal(await knob.getAttribute("data-route-state"), "bypassed");
+        assert.equal(await knob.locator(".rack-knob-route-presence.is-bypassed").count(), 1);
+
+        const box = await knob.locator(".rack-knob-art").boundingBox();
+        assert.ok(box);
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        await page.mouse.down();
+        await page.mouse.move(box.x + box.width / 2 + 36, box.y + box.height / 2, { steps: 8 });
+        await page.mouse.up();
+        const snapshot = await waitForHarnessSnapshot(page, "bypassed route amount edit", (nextSnapshot) => {
+            const route = readStoredModulationState(nextSnapshot).routes.find((candidate) => candidate.targetKind === "rack.reverbSize");
+            return route !== undefined && route.amount > 0.01;
+        });
+        assert.equal(
+            readStoredModulationState(snapshot).routes.find((route) => route.targetKind === "rack.reverbSize")?.enabled,
+            false,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("a stationary touch hold on a rack knob opens its routing menu with one haptic bump", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
@@ -6894,6 +7070,7 @@ test("a stationary touch hold on a rack knob opens its routing menu with one hap
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
             "route before rack parameter hold",
@@ -7031,6 +7208,7 @@ test("rack parameter reset restores the base default without deleting modulation
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
             "route before base reset",
@@ -7076,6 +7254,7 @@ test("rack parameter menu edits the active route enablement polarity and voice r
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
             "route before context edits",
@@ -7139,6 +7318,7 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
             "route before exact rack edit",
@@ -7232,7 +7412,9 @@ test("rack parameter route removal targets one source or confirms removal of eve
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await page.click('[data-role="rack-create-mapping"]');
         await page.click('[data-role="rack-mod-source-env-1"]');
+        await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
             "two source routes before removal",
@@ -7322,6 +7504,156 @@ test("mobile Mod exposes the fixed performance sources and never introduces an L
             ["VEL", "AT", "SLIDE"],
         );
         assert.equal(/\blfo\b/i.test(await page.locator('[data-role="mobile-workspace-panel-mod"]').innerText()), false);
+    } finally {
+        await page.close();
+    }
+});
+
+test("mobile Mod uses a complete one-dimensional route list with detail, filters, and hierarchical creation", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.clear();
+            });
+        },
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "mobile-route-1", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "bipolar", targetKind: "rack.flangerDepth", amount: -0.39, reducer: "max" },
+                { id: "mobile-route-2", enabled: true, sourceKind: "macro", sourceSlot: 1, polarity: "unipolar", targetKind: "wavetablePosition", amount: 0.2, reducer: "max" },
+                { id: "mobile-route-3", enabled: false, sourceKind: "env", sourceSlot: 2, polarity: "unipolar", targetKind: "filterCutoffOctaves", amount: 1.5, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setStoredStateValue("modulation.v2", JSON.stringify(state));
+        }, seededState);
+        await page.waitForFunction(() => {
+            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v2"]));
+            return state.routes?.length === 3;
+        });
+        await page.click('[data-role="mobile-workspace-toggle-mod"]');
+
+        const matrix = page.locator('[data-role="mobile-mod-matrix"]');
+        await matrix.waitFor();
+        assert.equal(await page.locator('[data-role="desktop-mod-matrix"]').count(), 0);
+        assert.match(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), /3\s*\/\s*12/);
+        assert.equal(await matrix.locator('[data-role="mobile-mod-route-row"]').count(), 3);
+
+        const geometry = await matrix.evaluate((element) => ({
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            documentScrollWidth: document.documentElement.scrollWidth,
+            rows: Array.from(element.querySelectorAll('[data-role="mobile-mod-route-row"]')).map((row) => {
+                const bounds = row.getBoundingClientRect();
+                return { left: bounds.left, right: bounds.right, height: bounds.height };
+            }),
+        }));
+        assert.equal(geometry.scrollWidth <= geometry.clientWidth + 1, true);
+        assert.equal(geometry.documentScrollWidth <= 393, true);
+        assert.equal(geometry.rows.every((row) => row.left >= 0 && row.right <= 393 && row.height >= 56), true);
+        const msegRouteRow = matrix.locator('[data-role="mobile-mod-route-row"]', { hasText: "MSEG 1" });
+        assert.match(await msegRouteRow.innerText(), /MSEG 1.*Flanger.*Depth.*-39%/s);
+
+        await matrix.locator('[data-role="mobile-mod-route-open-0"]').click();
+        const detail = matrix.locator('[data-role="mobile-mod-route-detail"]');
+        await detail.waitFor();
+        for (const role of ["mobile-mod-detail-back", "mobile-mod-polarity", "mobile-mod-bypass", "mobile-mod-delete"]) {
+            const bounds = await detail.locator(`[data-role="${role}"]`).boundingBox();
+            assert.ok(bounds);
+            assert.equal(bounds.width >= 44 && bounds.height >= 44, true, `${role} must be touchable`);
+        }
+        assert.equal(await detail.locator('[data-role="mobile-mod-reducer"]').count(), 1);
+        assert.equal(await detail.locator('[data-role="mobile-mod-amount-slider"]').count(), 1);
+        assert.equal(await detail.locator('[data-role="mobile-mod-amount-input"]').count(), 1);
+        await detail.locator('[data-role="mobile-mod-amount-input"]').fill("-25");
+        await detail.locator('[data-role="mobile-mod-amount-input"]').press("Enter");
+        await waitForHarnessSnapshot(
+            page,
+            "mobile exact route amount",
+            (snapshot) => Math.abs(readStoredModulationState(snapshot).routes[0]?.amount - (-0.25)) < 0.0001,
+        );
+        await detail.locator('[data-role="mobile-mod-detail-back"]').click();
+
+        await matrix.locator('[data-role="mobile-mod-filter"]').click();
+        const filters = matrix.locator('[data-role="mobile-mod-filter-sheet"]');
+        await filters.locator('[data-role="mobile-mod-filter-source-mseg-1"]').click();
+        await filters.locator('[data-role="mobile-mod-filter-done"]').click();
+        assert.equal(await matrix.locator('[data-role="mobile-mod-filter-token"]').count(), 1);
+        assert.equal(await matrix.locator('[data-role="mobile-mod-route-row"]').count(), 1);
+        await matrix.locator('[data-role="mobile-mod-filter-token-remove"]').click();
+        assert.equal(await matrix.locator('[data-role="mobile-mod-route-row"]').count(), 3);
+
+        await matrix.locator('[data-role="mobile-mod-add"]').click();
+        await matrix.locator('[data-role="mobile-mod-create-source-macro-2"]').click();
+        await matrix.locator('[data-role="mobile-mod-create-category-fx"]').click();
+        await matrix.locator('[data-role="mobile-mod-create-effect-reverb"]').click();
+        await matrix.locator('[data-role="mobile-mod-create-target-rack-reverbSize"]').click();
+        await waitForHarnessSnapshot(
+            page,
+            "hierarchically-created mobile route",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "macro"
+                && route.sourceSlot === 2
+                && route.targetKind === "rack.reverbSize"
+            )),
+        );
+        assert.match(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), /4\s*\/\s*12/);
+    } finally {
+        await page.close();
+    }
+});
+
+test("mobile Mod exposes the measured 12-route ceiling without draft or phantom creation", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const targets = [
+            "wavetablePosition",
+            "warpAmount",
+            "filterCutoffOctaves",
+            "filterQ",
+            "pitchSemitones",
+            "ampGainDb",
+            "pan",
+            "unisonDetune",
+            "unisonBlend",
+            "unisonWidth",
+            "unisonWavetablePositionSpread",
+            "unisonWarpSpread",
+        ];
+        const seededState = normalizeModulationState({
+            routes: targets.map((targetKind, routeIndex) => ({
+                id: `route-cap-${routeIndex}`,
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind,
+                amount: 0,
+                reducer: "max",
+            })),
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-toggle-mod"]');
+        const matrix = page.locator('[data-role="mobile-mod-matrix"]');
+        await matrix.waitFor();
+        assert.equal(await matrix.locator('[data-role="mobile-mod-add"]').isDisabled(), true);
+        assert.match(await matrix.innerText(), /ROUTE LIMIT REACHED.*12\s*\/\s*12/is);
+
+        const before = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        await matrix.locator('[data-role="mobile-mod-add"]').click({ force: true });
+        await page.waitForTimeout(50);
+        const after = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        assert.deepEqual(routeSummaries(after), routeSummaries(before));
+        assert.equal(await matrix.locator('[data-role="mobile-mod-create-source-mseg-1"]').count(), 0);
     } finally {
         await page.close();
     }
@@ -7499,7 +7831,7 @@ test("mobile FX subpage keeps all eight approved rack rows visible and confines 
                 const units = Array.from(document.querySelectorAll("[data-rack-position]"));
                 const list = document.querySelector(".rack-list");
                 const editor = document.querySelector(".rack-effect-editor");
-                const amount = document.querySelector(".rack-mod-amount");
+                const amount = document.querySelector(".rack-mod-amount, [data-role=\"rack-unmapped-pair\"]");
                 const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
                 const wordmarks = Array.from(document.querySelectorAll(".rack-wordmark"));
                 const powers = Array.from(document.querySelectorAll(".rack-power"));
@@ -7510,7 +7842,6 @@ test("mobile FX subpage keeps all eight approved rack rows visible and confines 
 
                 if (!(list instanceof HTMLElement)
                     || !(editor instanceof HTMLElement)
-                    || !(amount instanceof HTMLElement)
                     || !(keyboard instanceof HTMLElement)) {
                     return null;
                 }
@@ -7521,7 +7852,7 @@ test("mobile FX subpage keeps all eight approved rack rows visible and confines 
                     units: units.map(rectOf),
                     list: rectOf(list),
                     editor: rectOf(editor),
-                    amount: rectOf(amount),
+                    amount: amount instanceof HTMLElement ? rectOf(amount) : null,
                     keyboard: rectOf(keyboard),
                     wordmarks: wordmarks.map((wordmark, index) => ({
                         ...rectOf(wordmark),
@@ -7556,9 +7887,11 @@ test("mobile FX subpage keeps all eight approved rack rows visible and confines 
             );
             assert.equal(layout.units[7].bottom <= layout.keyboard.top + 0.5, true, `Last rack row clips keyboard at ${width}px.`);
             assert.equal(layout.units[7].bottom <= 667, true, `All rack rows must remain in the viewport at ${width}px.`);
-            assert.equal(layout.amount.left >= layout.editor.left - 0.5, true, `Amount control escapes editor at ${width}px.`);
-            assert.equal(layout.amount.right <= layout.editor.right + 0.5, true, `Amount control escapes editor at ${width}px.`);
-            assert.equal(layout.amount.left >= layout.list.right - 0.5, true, `Amount control steals rack width at ${width}px.`);
+            if (layout.amount) {
+                assert.equal(layout.amount.left >= layout.editor.left - 0.5, true, `Amount control escapes editor at ${width}px.`);
+                assert.equal(layout.amount.right <= layout.editor.right + 0.5, true, `Amount control escapes editor at ${width}px.`);
+                assert.equal(layout.amount.left >= layout.list.right - 0.5, true, `Amount control steals rack width at ${width}px.`);
+            }
             assert.equal(layout.list.bottom >= layout.units[7].bottom - 0.5, true);
             assert.equal(
                 layout.wordmarks.every(({ left, top, row }) => left >= row.left && top >= row.top && top - row.top <= 9),
@@ -7610,6 +7943,80 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
         assert.equal(/\blfo\b/i.test(initial.rackText), false);
         assert.equal(initial.transitionDuration, "0.28s");
 
+        const visualContract = await page.evaluate(() => {
+            const activePage = document.querySelector('.rack-mod-page[aria-hidden="false"]');
+            const sources = Array.from(activePage?.querySelectorAll(".rack-mod-source") ?? []);
+            const previous = document.querySelector('[aria-label="Previous modulation-source group"]');
+            if (!(activePage instanceof HTMLElement)
+                || sources.length !== 3
+                || !(previous instanceof HTMLButtonElement)) {
+                return null;
+            }
+            return {
+                sources: sources.map((source) => {
+                    const button = source;
+                    const art = source.querySelector(".rack-mod-art");
+                    const image = source.querySelector(".rack-mod-icon");
+                    const number = source.querySelector(".rack-mod-number");
+                    if (!(button instanceof HTMLButtonElement)
+                        || !(art instanceof HTMLElement)
+                        || !(image instanceof HTMLImageElement)
+                        || !(number instanceof HTMLElement)) {
+                        return null;
+                    }
+                    const buttonStyle = getComputedStyle(button);
+                    const artStyle = getComputedStyle(art);
+                    return {
+                        label: button.getAttribute("aria-label"),
+                        buttonWidth: button.getBoundingClientRect().width,
+                        buttonHeight: button.getBoundingClientRect().height,
+                        artWidth: art.getBoundingClientRect().width,
+                        artHeight: art.getBoundingClientRect().height,
+                        background: buttonStyle.backgroundColor,
+                        boxShadow: buttonStyle.boxShadow,
+                        overflow: buttonStyle.overflow,
+                        accent: buttonStyle.getPropertyValue("--source-color").trim(),
+                        imageSource: image.src,
+                        number: number.textContent?.trim(),
+                        artFilter: artStyle.filter,
+                    };
+                }),
+                paddleWidth: previous.getBoundingClientRect().width,
+            };
+        });
+
+        assert.ok(visualContract);
+        assert.equal(visualContract.sources.every(Boolean), true);
+        assert.deepEqual(visualContract.sources.map((source) => source.number), ["1", "1", "1"]);
+        assert.deepEqual(visualContract.sources.map((source) => source.accent), ["#cc59d2", "#b8e236", "#ff6428"]);
+        assert.equal(visualContract.sources.every((source) => source.buttonWidth === 36 && source.buttonHeight === 44), true);
+        assert.equal(visualContract.sources.every((source) => source.artWidth === 36 && source.artHeight === 36), true);
+        assert.equal(visualContract.sources.every((source) => source.background === "rgba(0, 0, 0, 0)"), true);
+        assert.equal(visualContract.sources.every((source) => source.boxShadow === "none"), true);
+        assert.equal(visualContract.sources.every((source) => source.overflow === "visible"), true);
+        assert.equal(visualContract.sources.every((source) => /approved-generated\/.+\.png/.test(source.imageSource)), true);
+        assert.equal(Math.abs(visualContract.paddleWidth - 20) <= 0.5, true);
+
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        const selectedVisual = await page.locator('[data-role="rack-mod-source-mseg-1"]').evaluate((button) => {
+            const art = button.querySelector(".rack-mod-art");
+            const underline = getComputedStyle(button, "::after");
+            return {
+                buttonFilter: getComputedStyle(button).filter,
+                buttonShadow: getComputedStyle(button).boxShadow,
+                artFilter: art instanceof HTMLElement ? getComputedStyle(art).filter : "",
+                artTransform: art instanceof HTMLElement ? getComputedStyle(art).transform : "",
+                underlineHeight: underline.height,
+                underlineShadow: underline.boxShadow,
+            };
+        });
+        assert.equal(selectedVisual.buttonFilter, "none");
+        assert.equal(selectedVisual.buttonShadow, "none");
+        assert.match(selectedVisual.artFilter, /drop-shadow/);
+        assert.notEqual(selectedVisual.artTransform, "none");
+        assert.equal(selectedVisual.underlineHeight, "2px");
+        assert.notEqual(selectedVisual.underlineShadow, "none");
+
         const animation = await page.evaluate(async () => {
             const track = document.querySelector('[data-role="rack-mod-source-track"]');
             const viewport = document.querySelector(".rack-mod-viewport");
@@ -7656,7 +8063,7 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
     }
 });
 
-test("rack mod bar supports source-first and target-first routes with one real bipolar amount control", async () => {
+test("rack mod bar keeps source and target selection unassigned until explicit route creation", async () => {
     const sourceFirstPage = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -7666,9 +8073,28 @@ test("rack mod bar supports source-first and target-first routes with one real b
         await clearHarnessDebugLog(sourceFirstPage);
         await sourceFirstPage.click('[data-role="rack-mod-source-mseg-1"]');
 
-        let snapshot = await waitForHarnessSnapshot(
+        let snapshot = await getHarnessSnapshot(sourceFirstPage);
+        assert.equal(
+            readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.distortionDriveDb"
+            )),
+            false,
+            "Selecting a source must not imply a modulation route.",
+        );
+        assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 0);
+        const createMapping = sourceFirstPage.locator('[data-role="rack-create-mapping"]');
+        assert.match(await createMapping.innerText(), /create mapping \+/i);
+        assert.match(
+            await sourceFirstPage.locator('[data-role="rack-unmapped-pair"]').innerText(),
+            /MSEG 1.*Distortion.*Drive/i,
+        );
+        await createMapping.click();
+
+        snapshot = await waitForHarnessSnapshot(
             sourceFirstPage,
-            "source-first rack route",
+            "explicit source-first rack route",
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
@@ -7728,9 +8154,21 @@ test("rack mod bar supports source-first and target-first routes with one real b
         await clearHarnessDebugLog(targetFirstPage);
         await targetFirstPage.click('[data-role="rack-mod-source-macro-2"]');
 
-        const snapshot = await waitForHarnessSnapshot(
+        let snapshot = await getHarnessSnapshot(targetFirstPage);
+        assert.equal(
+            readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "macro"
+                && route.sourceSlot === 2
+                && route.targetKind === "rack.reverbSize"
+            )),
+            false,
+            "Target-first selection must remain context-only.",
+        );
+        await targetFirstPage.click('[data-role="rack-create-mapping"]');
+
+        snapshot = await waitForHarnessSnapshot(
             targetFirstPage,
-            "target-first rack route",
+            "explicit target-first rack route",
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "macro"
                 && route.sourceSlot === 2

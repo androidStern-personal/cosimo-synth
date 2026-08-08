@@ -17,7 +17,7 @@ type SourceFamily = {
     readonly label: string;
     readonly shortLabel: string;
     readonly accent: string;
-    readonly icons: readonly [string, string, string];
+    readonly iconUrl: string;
 };
 
 const SOURCE_FAMILIES: ReadonlyArray<SourceFamily> = [
@@ -25,34 +25,22 @@ const SOURCE_FAMILIES: ReadonlyArray<SourceFamily> = [
         sourceKind: "mseg",
         label: "MSEG",
         shortLabel: "MSEG",
-        accent: "#d978e5",
-        icons: [
-            new URL("../assets/modulation-sources/svg/fixed/mseg-1.svg", import.meta.url).href,
-            new URL("../assets/modulation-sources/svg/fixed/mseg-2.svg", import.meta.url).href,
-            new URL("../assets/modulation-sources/svg/fixed/mseg-3.svg", import.meta.url).href,
-        ],
+        accent: "#cc59d2",
+        iconUrl: new URL("../assets/modulation-sources/approved-generated/mseg-face.png", import.meta.url).href,
     },
     {
         sourceKind: "env",
         label: "Envelope",
         shortLabel: "ENV",
-        accent: "#d978e5",
-        icons: [
-            new URL("../assets/modulation-sources/svg/fixed/envelope-1.svg", import.meta.url).href,
-            new URL("../assets/modulation-sources/svg/fixed/envelope-2.svg", import.meta.url).href,
-            new URL("../assets/modulation-sources/svg/fixed/envelope-3.svg", import.meta.url).href,
-        ],
+        accent: "#b8e236",
+        iconUrl: new URL("../assets/modulation-sources/approved-generated/envelope-face.png", import.meta.url).href,
     },
     {
         sourceKind: "macro",
         label: "Macro",
         shortLabel: "MAC",
-        accent: "#ff6b2c",
-        icons: [
-            new URL("../assets/modulation-sources/svg/fixed/macro-1.svg", import.meta.url).href,
-            new URL("../assets/modulation-sources/svg/fixed/macro-2.svg", import.meta.url).href,
-            new URL("../assets/modulation-sources/svg/fixed/macro-3.svg", import.meta.url).href,
-        ],
+        accent: "#ff6428",
+        iconUrl: new URL("../assets/modulation-sources/approved-generated/macro-face.png", import.meta.url).href,
     },
 ];
 
@@ -63,7 +51,7 @@ export const RACK_MODULATION_SOURCE_PAGES: ReadonlyArray<ReadonlyArray<RackModul
         sourceSlot: sourceSlot as 1 | 2 | 3,
         label: `${family.label} ${sourceSlot}`,
         shortLabel: family.shortLabel,
-        iconUrl: family.icons[sourceSlot - 1],
+        iconUrl: family.iconUrl,
         accent: family.accent,
     })),
 );

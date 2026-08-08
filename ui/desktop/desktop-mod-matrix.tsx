@@ -707,7 +707,7 @@ export function DesktopModMatrix({
     }, [onAddRoute, routes.length]);
 
     return (
-        <div className={`cosimo-mod-prototype-theme flex h-full min-h-0 w-full flex-col ${className}`}>
+        <div data-role="desktop-mod-matrix" className={`cosimo-mod-prototype-theme flex h-full min-h-0 w-full flex-col ${className}`}>
             <div className="mb-3 flex items-center justify-between">
                 <h2 className="synth-section-title text-sm">Mod Matrix</h2>
                 <button

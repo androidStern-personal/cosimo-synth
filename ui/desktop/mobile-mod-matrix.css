@@ -1,0 +1,497 @@
+.mobile-mod-matrix {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 16px;
+    background: linear-gradient(180deg, #111619, #090d0f);
+    box-shadow: inset 0 1px rgb(255 255 255 / 0.035);
+}
+
+.mobile-mod-workspace {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.mobile-mod-source-editor {
+    min-height: min(430px, 64vh);
+    aspect-ratio: auto;
+}
+
+.mobile-mod-list-screen,
+.mobile-mod-screen {
+    display: grid;
+    min-width: 0;
+    gap: 8px;
+    padding: 8px;
+}
+
+.mobile-mod-list-header,
+.mobile-mod-screen-header {
+    display: flex;
+    min-width: 0;
+    min-height: 44px;
+    align-items: center;
+    gap: 6px;
+}
+
+.mobile-mod-list-header > div {
+    min-width: 0;
+    margin-right: auto;
+}
+
+.mobile-mod-list-header h2,
+.mobile-mod-screen-header h3 {
+    margin: 0;
+    color: #dce4e6;
+    font-size: 11px;
+    font-weight: 650;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+}
+
+.mobile-mod-list-header > div > span {
+    color: #8d989c;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+}
+
+.mobile-mod-list-header > button,
+.mobile-mod-back,
+.mobile-mod-header-spacer {
+    display: grid;
+    min-width: 44px;
+    height: 44px;
+    place-items: center;
+    padding: 0 8px;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 10px;
+    background: rgb(255 255 255 / 0.025);
+    color: #aeb8bb;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+
+.mobile-mod-list-header > button:disabled {
+    opacity: 0.28;
+}
+
+.mobile-mod-list-header > [data-role="mobile-mod-add"] {
+    color: var(--section-accent);
+    font-size: 20px;
+}
+
+.mobile-mod-screen-header {
+    display: grid;
+    grid-template-columns: 66px minmax(0, 1fr) 66px;
+}
+
+.mobile-mod-screen-header h3 {
+    overflow: hidden;
+    text-align: center;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-mod-back {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+}
+
+.mobile-mod-back > span {
+    color: var(--section-accent);
+    font-size: 20px;
+    line-height: 1;
+}
+
+.mobile-mod-header-spacer {
+    visibility: hidden;
+}
+
+.mobile-mod-filter-tokens {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 5px;
+}
+
+.mobile-mod-filter-tokens > span {
+    display: flex;
+    min-height: 30px;
+    align-items: center;
+    gap: 4px;
+    padding-left: 9px;
+    border: 1px solid rgb(var(--section-accent-rgb) / 0.25);
+    border-radius: 999px;
+    background: rgb(var(--section-accent-rgb) / 0.07);
+    color: #b9c3c6;
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.mobile-mod-filter-tokens button {
+    width: 30px;
+    height: 30px;
+    color: var(--section-accent);
+    font-size: 16px;
+}
+
+.mobile-mod-route-list {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+}
+
+.mobile-mod-route-list article {
+    display: grid;
+    min-width: 0;
+    min-height: 58px;
+    grid-template-columns: minmax(0, 1fr) 44px;
+    align-items: stretch;
+    overflow: hidden;
+    border: 1px solid rgb(255 255 255 / 0.075);
+    border-radius: 10px;
+    background: rgb(255 255 255 / 0.025);
+}
+
+.mobile-mod-route-list article.is-bypassed {
+    opacity: 0.48;
+}
+
+.mobile-mod-route-open {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: 34px minmax(40px, auto) 14px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 5px;
+    padding: 6px;
+    color: #cbd3d5;
+    text-align: left;
+}
+
+.mobile-mod-source-art {
+    position: relative;
+    display: block;
+    width: 32px;
+    height: 32px;
+    flex: none;
+    border-radius: 999px;
+}
+
+.mobile-mod-source-art img {
+    display: block;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    object-fit: cover;
+}
+
+.mobile-mod-source-art > span {
+    position: absolute;
+    top: 10px;
+    right: 4px;
+    display: grid;
+    width: 9px;
+    height: 12px;
+    place-items: center;
+    border-radius: 3px;
+    background: #1a1b1b;
+    color: var(--source-color);
+    font-size: 8px;
+    font-weight: 750;
+    line-height: 1;
+}
+
+.mobile-mod-fixed-source {
+    display: grid;
+    width: 32px;
+    height: 32px;
+    place-items: center;
+    border: 1px solid rgb(var(--section-accent-rgb) / 0.36);
+    border-radius: 999px;
+    background: rgb(var(--section-accent-rgb) / 0.08);
+    color: var(--section-accent);
+    font-size: 7px;
+    font-weight: 700;
+}
+
+.mobile-mod-route-source {
+    overflow: hidden;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-mod-route-arrow {
+    color: #687378;
+}
+
+.mobile-mod-route-target {
+    display: grid;
+    min-width: 0;
+    gap: 1px;
+}
+
+.mobile-mod-route-target strong,
+.mobile-mod-route-target span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-mod-route-target strong {
+    color: #98a3a7;
+    font-size: 8px;
+    font-weight: 500;
+}
+
+.mobile-mod-route-target span {
+    color: #d5dcde;
+    font-size: 10px;
+}
+
+.mobile-mod-route-amount {
+    color: var(--section-accent);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 9px;
+    white-space: nowrap;
+}
+
+.mobile-mod-route-power {
+    display: grid;
+    width: 44px;
+    min-width: 44px;
+    height: 100%;
+    min-height: 56px;
+    place-items: center;
+    border-left: 1px solid rgb(255 255 255 / 0.06);
+    color: var(--section-accent);
+    font-size: 18px;
+}
+
+.mobile-mod-empty,
+.mobile-mod-limit {
+    margin: 0;
+    padding: 10px;
+    color: #7f8a8f;
+    font-size: 9px;
+    text-align: center;
+    text-transform: uppercase;
+}
+
+.mobile-mod-limit {
+    color: #d0a567;
+}
+
+.mobile-mod-detail-pair {
+    display: grid;
+    min-height: 58px;
+    grid-template-columns: 40px minmax(0, 1fr);
+    align-items: center;
+    gap: 8px;
+    padding: 7px;
+    border: 1px solid rgb(255 255 255 / 0.07);
+    border-radius: 10px;
+    background: rgb(255 255 255 / 0.025);
+}
+
+.mobile-mod-detail-pair > div {
+    display: grid;
+    min-width: 0;
+    gap: 2px;
+}
+
+.mobile-mod-detail-pair span,
+.mobile-mod-detail-pair strong {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.mobile-mod-detail-pair span {
+    color: var(--section-accent);
+    font-size: 10px;
+}
+
+.mobile-mod-detail-pair strong {
+    color: #c6d0d2;
+    font-size: 11px;
+    font-weight: 500;
+}
+
+.mobile-mod-amount-editor {
+    display: grid;
+    min-width: 0;
+    gap: 9px;
+    padding: 10px;
+    border: 1px solid rgb(255 255 255 / 0.07);
+    border-radius: 10px;
+    background: #080c0e;
+}
+
+.mobile-mod-field-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: #8f9a9e;
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.mobile-mod-field-heading strong {
+    color: var(--section-accent);
+    font-family: var(--font-mono, ui-monospace, monospace);
+    font-size: 11px;
+}
+
+.mobile-mod-exact-row {
+    display: grid;
+    min-width: 0;
+    min-height: 44px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    color: #7f8b8f;
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.mobile-mod-exact-row input {
+    width: 100%;
+    min-width: 0;
+    height: 40px;
+    padding: 0 9px;
+    border: 1px solid rgb(255 255 255 / 0.09);
+    border-radius: 8px;
+    background: rgb(255 255 255 / 0.035);
+    color: #d7dfe1;
+    font-family: var(--font-mono, ui-monospace, monospace);
+    outline: none;
+}
+
+.mobile-mod-detail-actions {
+    display: grid;
+    min-width: 0;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+}
+
+.mobile-mod-detail-actions button {
+    display: grid;
+    min-width: 44px;
+    min-height: 52px;
+    align-content: center;
+    gap: 2px;
+    padding: 6px;
+    border: 1px solid rgb(255 255 255 / 0.075);
+    border-radius: 10px;
+    background: rgb(255 255 255 / 0.025);
+    color: #8f9a9d;
+    font-size: 8px;
+    text-align: left;
+    text-transform: uppercase;
+}
+
+.mobile-mod-detail-actions button strong {
+    color: #d3dbdd;
+    font-size: 10px;
+    font-weight: 550;
+}
+
+.mobile-mod-detail-actions button.is-destructive {
+    color: #f08d80;
+    text-align: center;
+}
+
+.mobile-mod-filter-group {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    gap: 4px;
+    padding: 7px;
+    border: 1px solid rgb(255 255 255 / 0.07);
+    border-radius: 10px;
+}
+
+.mobile-mod-filter-group legend {
+    padding: 0 4px;
+    color: #859095;
+    font-size: 8px;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+}
+
+.mobile-mod-filter-group button {
+    min-width: 44px;
+    min-height: 44px;
+    padding: 5px 8px;
+    border: 1px solid rgb(255 255 255 / 0.07);
+    border-radius: 8px;
+    color: #a3adb0;
+    font-size: 8px;
+    text-transform: uppercase;
+}
+
+.mobile-mod-filter-group button[aria-pressed="true"] {
+    border-color: rgb(var(--section-accent-rgb) / 0.55);
+    background: rgb(var(--section-accent-rgb) / 0.1);
+    color: var(--section-accent);
+}
+
+.mobile-mod-primary {
+    min-height: 44px;
+    border: 1px solid rgb(var(--section-accent-rgb) / 0.48);
+    border-radius: 10px;
+    background: rgb(var(--section-accent-rgb) / 0.1);
+    color: var(--section-accent);
+    font-size: 9px;
+    text-transform: uppercase;
+}
+
+.mobile-mod-option-list {
+    display: grid;
+    min-width: 0;
+    gap: 4px;
+}
+
+.mobile-mod-option-list > button {
+    display: grid;
+    min-width: 0;
+    min-height: 52px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px;
+    border: 1px solid rgb(255 255 255 / 0.07);
+    border-radius: 9px;
+    background: rgb(255 255 255 / 0.025);
+    color: #c4ced0;
+    font-size: 10px;
+    text-align: left;
+}
+
+.mobile-mod-option-list > button:has(.mobile-mod-source-art),
+.mobile-mod-option-list > button:has(.mobile-mod-fixed-source) {
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+}
+
+.mobile-mod-option-list > button > span:last-child {
+    color: var(--section-accent);
+    font-size: 18px;
+}
+
+@media (max-width: 355px) {
+    .mobile-mod-route-open {
+        grid-template-columns: 30px minmax(0, 1fr) 12px minmax(0, 1fr);
+    }
+
+    .mobile-mod-route-source {
+        grid-column: 2;
+    }
+
+    .mobile-mod-route-amount {
+        grid-column: 4;
+    }
+}
