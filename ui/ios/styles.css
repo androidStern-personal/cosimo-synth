@@ -1,4 +1,6 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+@source ".";
+@source "../shared";
 @import "../shared/synth-style-guide.css";
 
 :host {

@@ -338,6 +338,18 @@ test("desktop and iPhone React UI tooling are wired for Vite dev and build loops
     assert.match(desktopDevLauncherScript, /open -na "\$app_path"/);
 });
 
+test("Tailwind scans authored UI sources instead of generated patch bundles", async () => {
+    const desktopStyles = await fs.readFile(path.join(repoRoot, "ui", "desktop", "styles.css"), "utf8");
+    const iosStyles = await fs.readFile(path.join(repoRoot, "ui", "ios", "styles.css"), "utf8");
+
+    for (const styles of [desktopStyles, iosStyles]) {
+        assert.match(styles, /@import "tailwindcss" source\(none\);/);
+        assert.match(styles, /@source "\.";/);
+        assert.match(styles, /@source "\.\.\/shared";/);
+        assert.doesNotMatch(styles, /patch_gui|build\/web|dist\/assets/);
+    }
+});
+
 test("desktop and shared effect dev entries load React Grab only in Vite dev mode", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const desktopPatchEntry = await fs.readFile(
