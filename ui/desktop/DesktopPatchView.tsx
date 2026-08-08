@@ -1418,9 +1418,11 @@ function UnisonControlSurface({
 function DesktopEnvelopeEditor({
     selectedEnvelope,
     onEnvelopeChange,
+    compact = false,
 }: {
     selectedEnvelope: NonNullable<ModulationMatrixSectionProps["selectedEnvelope"]>;
     onEnvelopeChange: ModulationMatrixSectionProps["onEnvelopeChange"];
+    compact?: boolean;
 }) {
     const svgRef = useRef<SVGSVGElement | null>(null);
     const [activeHandle, setActiveHandle] = useState<null | "attack" | "decay-sustain" | "release">(null);
@@ -1561,6 +1563,7 @@ function DesktopEnvelopeEditor({
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${ENVELOPE_VIEWBOX.width} ${ENVELOPE_VIEWBOX.height}`}
+                    preserveAspectRatio={compact ? "none" : undefined}
                     className="relative z-10 block h-full w-full touch-none"
                     data-role="adsr-editor-surface"
                     aria-label="Envelope editor"
@@ -2249,7 +2252,13 @@ function MsegEditorModal({
     );
 }
 
-function MacroSourceEditor({ slotIndex }: { slotIndex: number }) {
+function MacroSourceEditor({
+    slotIndex,
+    compact = false,
+}: {
+    slotIndex: number;
+    compact?: boolean;
+}) {
     const endpointID = `macro${slotIndex + 1}`;
     const coerce = useCallback((rawValue: unknown) => clamp(Number(rawValue) || 0, 0, 1), []);
     const binding = usePatchParameterBinding<number>({
@@ -2257,6 +2266,23 @@ function MacroSourceEditor({ slotIndex }: { slotIndex: number }) {
         initialValue: 0,
         coerce,
     });
+
+    if (compact) {
+        return (
+            <div data-role="mobile-mod-macro-editor" className="mobile-mod-macro-editor">
+                <RangeField
+                    label="Value"
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    value={binding.value}
+                    displayValue={formatPercent(binding.value)}
+                    onChange={binding.commitValue}
+                    dataRole={`macro-source-value-${slotIndex + 1}`}
+                />
+            </div>
+        );
+    }
 
     return (
         <div className="grid h-full place-items-center p-5">
@@ -2315,6 +2341,11 @@ function ModulationMatrixSection({
 
     const activeMsegSlot = activeEditorTab.kind === "mseg" ? activeEditorTab.slotIndex : selectedMsegSlot;
     const activeEnvelopeSlot = activeEditorTab.kind === "envelope" ? activeEditorTab.slotIndex : selectedEnvelopeSlot;
+    const activeEditorSlotCount = activeEditorTab.kind === "macro"
+        ? MODULATION_MACRO_SLOT_COUNT
+        : activeEditorTab.kind === "envelope"
+            ? MODULATION_ENV_SLOT_COUNT
+            : MODULATION_MSEG_SLOT_COUNT;
 
     useEffect(() => {
         if (!focusedSource) {
@@ -2485,7 +2516,7 @@ function ModulationMatrixSection({
             setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
         }
         if (activeEnvelopeDraftField !== "sustain") {
-            setDraftSustain((selectedEnvelope.sustain * 100).toFixed(1));
+            setDraftSustain(formatPercent(selectedEnvelope.sustain));
         }
         if (activeEnvelopeDraftField !== "releaseSeconds") {
             setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
@@ -2560,11 +2591,74 @@ function ModulationMatrixSection({
                 data-source-slot={(activeEditorTab.slotIndex + 1).toString()}
                 hidden
             />
+            <div
+                data-role={compact ? "mobile-mod-integrated-editor" : undefined}
+                className={compact ? "mobile-mod-integrated-editor" : "contents"}
+            >
             {/* ── Pip selector top-bar ── */}
             <div
                 data-role="mobile-mod-source-tabs"
                 className="mod-source-tabs flex shrink-0 items-center gap-1.5 px-2.5 py-1.5"
             >
+                {compact ? (
+                    <div
+                        data-role="mobile-mod-source-selector"
+                        className="mobile-mod-source-selector"
+                        aria-label="Modulation source selector"
+                    >
+                        <label className="mobile-mod-source-select mobile-mod-source-select-kind">
+                            <span className="sr-only">Modulation source type</span>
+                            <select
+                                data-role="mobile-mod-source-type"
+                                aria-label="Modulation source type"
+                                value={activeEditorTab.kind}
+                                onChange={(event) => {
+                                    const nextKind = event.currentTarget.value;
+                                    if (nextKind === "mseg") {
+                                        onSelectMsegSlot(0);
+                                        setActiveEditorTab({ kind: "mseg", slotIndex: 0 });
+                                    } else if (nextKind === "envelope") {
+                                        onSelectEnvelopeSlot(0);
+                                        setActiveEditorTab({ kind: "envelope", slotIndex: 0 });
+                                    } else if (nextKind === "macro") {
+                                        setActiveEditorTab({ kind: "macro", slotIndex: 0 });
+                                    }
+                                }}
+                            >
+                                <option value="mseg">MSEG</option>
+                                <option value="envelope">ENV</option>
+                                <option value="macro">MACRO</option>
+                            </select>
+                        </label>
+                        <label className="mobile-mod-source-select mobile-mod-source-select-number">
+                            <span className="sr-only">Modulation source number</span>
+                            <select
+                                data-role="mobile-mod-source-number"
+                                aria-label="Modulation source number"
+                                value={activeEditorTab.slotIndex + 1}
+                                onChange={(event) => {
+                                    const nextSlotIndex = Number(event.currentTarget.value) - 1;
+                                    if (!Number.isInteger(nextSlotIndex) || nextSlotIndex < 0 || nextSlotIndex >= activeEditorSlotCount) {
+                                        return;
+                                    }
+                                    if (activeEditorTab.kind === "mseg") {
+                                        onSelectMsegSlot(nextSlotIndex);
+                                    } else if (activeEditorTab.kind === "envelope") {
+                                        onSelectEnvelopeSlot(nextSlotIndex);
+                                    }
+                                    setActiveEditorTab({ kind: activeEditorTab.kind, slotIndex: nextSlotIndex });
+                                }}
+                            >
+                                {Array.from({ length: activeEditorSlotCount }, (_, slotIndex) => (
+                                    <option key={`mobile-mod-source-slot-${slotIndex}`} value={slotIndex + 1}>
+                                        {slotIndex + 1}
+                                    </option>
+                                ))}
+                            </select>
+                        </label>
+                    </div>
+                ) : (
+                    <>
                 {/* MSEG pips */}
                 <div data-role="mobile-mod-source-family" data-source-family="mseg" className="mod-source-family flex items-center gap-1">
                     <div className="flex gap-[3px]">
@@ -2640,6 +2734,8 @@ function ModulationMatrixSection({
                     </div>
                     <span className="synth-section-title ml-0.5">Macro</span>
                 </div>
+                    </>
+                )}
 
                 {/* Right-aligned controls — fixed-height container, both layers always rendered */}
                 <div
@@ -2776,13 +2872,15 @@ function ModulationMatrixSection({
                     {/* Envelope ADSR controls */}
                     <div className={`absolute inset-0 flex items-center justify-end gap-1.5 ${activeEditorTab.kind === "envelope" && selectedEnvelope ? "visible" : "invisible"}`}>
                         {selectedEnvelope ? ([
-                            { label: "A", ariaLabel: "Envelope attack value", field: "attackSeconds" as const, draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds },
-                            { label: "D", ariaLabel: "Envelope decay value", field: "decaySeconds" as const, draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds },
-                            { label: "S", ariaLabel: "Envelope sustain value", field: null, draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain },
-                            { label: "R", ariaLabel: "Envelope release value", field: "releaseSeconds" as const, draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds },
+                            { label: "A", compactLabel: "Attack", ariaLabel: "Envelope attack value", field: "attackSeconds" as const, draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds },
+                            { label: "D", compactLabel: "Decay", ariaLabel: "Envelope decay value", field: "decaySeconds" as const, draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds },
+                            { label: "S", compactLabel: "Sustain", ariaLabel: "Envelope sustain value", field: null, draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain },
+                            { label: "R", compactLabel: "Release", ariaLabel: "Envelope release value", field: "releaseSeconds" as const, draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds },
                         ] as const).map((param) => (
                             <label key={param.label} className="flex items-center gap-[3px]">
-                                <span className="text-[9px] font-semibold uppercase text-slate-400/60">{param.label}</span>
+                                <span className="text-[9px] font-semibold uppercase text-slate-400/60">
+                                    {compact ? param.compactLabel : param.label}
+                                </span>
                                 <input
                                     aria-label={param.ariaLabel}
                                     type="text"
@@ -2797,7 +2895,7 @@ function ModulationMatrixSection({
                                         } else {
                                             const parsed = parseFloat(param.draft);
                                             if (!Number.isFinite(parsed)) {
-                                                param.setDraft((selectedEnvelope.sustain * 100).toFixed(1));
+                                                param.setDraft(formatPercent(selectedEnvelope.sustain));
                                             } else {
                                                 onEnvelopeChange("sustain", clamp(parsed / 100, 0, 1));
                                             }
@@ -2816,7 +2914,7 @@ function ModulationMatrixSection({
                                             e.currentTarget.blur();
                                         } else if (e.key === "Escape") {
                                             e.preventDefault();
-                                            param.setDraft((selectedEnvelope.sustain * 100).toFixed(1));
+                                            param.setDraft(formatPercent(selectedEnvelope.sustain));
                                             e.currentTarget.blur();
                                         }
                                     }}
@@ -2828,30 +2926,32 @@ function ModulationMatrixSection({
                 </div>
             </div>
 
-            <div
-                data-role="mod-fixed-sources"
-                className="flex shrink-0 items-center gap-1.5 border-y border-white/[0.05] bg-white/[0.018] px-2.5 py-1.5"
-            >
-                <span className="synth-section-title mr-1">Fixed</span>
-                {[
-                    { label: "VEL", title: "Note velocity" },
-                    { label: "AT", title: "Polyphonic pressure" },
-                    { label: "SLIDE", title: "Per-note slide" },
-                ].map((source) => (
-                    <span
-                        key={source.label}
-                        data-role="mod-fixed-source"
-                        title={source.title}
-                        className="grid min-h-7 min-w-11 place-items-center rounded-[7px] border border-cyan-200/[0.10] bg-cyan-200/[0.035] px-2 font-mono text-[9px] font-semibold tracking-[0.08em] text-cyan-100/60"
-                    >
-                        {source.label}
-                    </span>
-                ))}
-                <span className="ml-auto truncate font-mono text-[8px] text-slate-400/40">performance inputs</span>
-            </div>
+            {!compact ? (
+                <div
+                    data-role="mod-fixed-sources"
+                    className="flex shrink-0 items-center gap-1.5 border-y border-white/[0.05] bg-white/[0.018] px-2.5 py-1.5"
+                >
+                    <span className="synth-section-title mr-1">Fixed</span>
+                    {[
+                        { label: "VEL", title: "Note velocity" },
+                        { label: "AT", title: "Polyphonic pressure" },
+                        { label: "SLIDE", title: "Per-note slide" },
+                    ].map((source) => (
+                        <span
+                            key={source.label}
+                            data-role="mod-fixed-source"
+                            title={source.title}
+                            className="grid min-h-7 min-w-11 place-items-center rounded-[7px] border border-cyan-200/[0.10] bg-cyan-200/[0.035] px-2 font-mono text-[9px] font-semibold tracking-[0.08em] text-cyan-100/60"
+                        >
+                            {source.label}
+                        </span>
+                    ))}
+                    <span className="ml-auto truncate font-mono text-[8px] text-slate-400/40">performance inputs</span>
+                </div>
+            ) : null}
 
             {/* ── Body: MSEG preview or envelope editor ── */}
-            <div className="min-h-0 flex-1">
+            <div data-role="mobile-mod-editor-body" className="mobile-mod-editor-body min-h-0 flex-1">
                 {activeEditorTab.kind === "mseg" ? (
                     <div className="relative h-full w-full">
                         <button
@@ -2892,10 +2992,12 @@ function ModulationMatrixSection({
                     <DesktopEnvelopeEditor
                         selectedEnvelope={selectedEnvelope}
                         onEnvelopeChange={onEnvelopeChange}
+                        compact={compact}
                     />
                 ) : activeEditorTab.kind === "macro" ? (
-                    <MacroSourceEditor slotIndex={activeEditorTab.slotIndex} />
+                    <MacroSourceEditor slotIndex={activeEditorTab.slotIndex} compact={compact} />
                 ) : null}
+            </div>
             </div>
         </section>
     );

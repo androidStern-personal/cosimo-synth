@@ -15,63 +15,239 @@
 .mobile-mod-source-editor {
     min-height: min(430px, 64vh);
     aspect-ratio: auto;
+    padding: 35px 5px 5px;
+    overflow: hidden;
+    background: #080d0f;
+}
+
+.mobile-mod-source-editor[data-source-kind="mseg"] {
+    --section-accent: #d77bcc;
+    --section-accent-rgb: 215 123 204;
+}
+
+.mobile-mod-source-editor[data-source-kind="env"] {
+    --section-accent: #7fe3af;
+    --section-accent-rgb: 127 227 175;
+}
+
+.mobile-mod-source-editor[data-source-kind="macro"] {
+    --section-accent: #ef9258;
+    --section-accent-rgb: 239 146 88;
+}
+
+.mobile-mod-integrated-editor {
+    position: relative;
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    flex: 1;
+    flex-direction: column;
+    overflow: visible;
+    border: 1px solid rgb(226 238 239 / 0.17);
+    border-radius: 11px 0 11px 11px;
+    background: #070c0e;
+    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.012);
+}
+
+.mobile-mod-integrated-editor::before {
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    right: 0;
+    left: 0;
+    height: 1px;
+    background: linear-gradient(
+        90deg,
+        transparent 4%,
+        rgb(var(--section-accent-rgb) / 0.32) 32%,
+        transparent 75%
+    );
+    content: "";
+    pointer-events: none;
 }
 
 .mobile-mod-source-editor .mod-source-tabs {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 4px 8px;
-    padding: 4px 6px;
+    display: contents;
 }
 
-.mobile-mod-source-editor .mod-source-family {
-    min-width: 0;
-    min-height: 44px;
+.mobile-mod-source-selector {
+    position: absolute;
+    z-index: 4;
+    top: -30px;
+    right: -1px;
+    display: flex;
+    height: 31px;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 3px 4px 2px;
+    border: 1px solid rgb(226 238 239 / 0.17);
+    border-bottom: 0;
+    border-radius: 10px 10px 0 0;
+    background: #070c0e;
 }
 
-.mobile-mod-source-editor .mod-source-family:nth-of-type(1) {
-    justify-self: start;
+.mobile-mod-source-selector::after {
+    position: absolute;
+    right: 0;
+    bottom: -2px;
+    left: 0;
+    height: 3px;
+    background: #070c0e;
+    content: "";
 }
 
-.mobile-mod-source-editor .mod-source-family[data-source-family="env"] {
-    justify-self: end;
+.mobile-mod-source-select {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    width: 62px;
+    min-height: 24px;
+    align-items: center;
+    padding: 0 17px 0 9px;
+    overflow: hidden;
+    border: 0;
+    border-radius: 7px;
+    background: rgb(var(--section-accent-rgb) / 0.10);
 }
 
-.mobile-mod-source-editor .mod-source-family[data-source-family="macro"],
-.mobile-mod-source-editor .mod-source-active-controls {
-    grid-column: 1 / -1;
+.mobile-mod-source-select-number {
+    width: 40px;
+    background: rgb(221 234 235 / 0.055);
 }
 
-.mobile-mod-source-editor .mod-source-family[data-source-family="macro"] {
-    justify-self: center;
+.mobile-mod-source-editor[data-source-kind="env"] .mobile-mod-source-select-kind {
+    width: 53px;
 }
 
-.mobile-mod-source-editor .mod-source-family button,
-.mobile-mod-source-editor .mod-source-active-controls button {
-    width: 36px;
-    height: 44px;
+.mobile-mod-source-editor[data-source-kind="mseg"] .mobile-mod-source-select-kind {
+    width: 65px;
 }
 
-.mobile-mod-source-editor .mod-source-separator {
-    display: none;
+.mobile-mod-source-editor[data-source-kind="macro"] .mobile-mod-source-select-kind {
+    width: 72px;
 }
 
-.mobile-mod-source-editor .mod-source-active-controls {
+.mobile-mod-source-select select {
+    position: relative;
+    z-index: 1;
     width: 100%;
-    height: 44px;
-    margin-left: 0;
+    min-height: 24px;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    appearance: none;
+    background: transparent;
+    color: rgb(218 229 230 / 0.88);
+    font-family: "Departure Mono", "SFMono-Regular", Menlo, ui-monospace, monospace;
+    font-size: 9px;
+    font-weight: 650;
+    letter-spacing: 0.055em;
+    text-transform: uppercase;
+}
+
+.mobile-mod-source-select::after {
+    position: absolute;
+    top: 50%;
+    right: 7px;
+    color: rgb(207 220 222 / 0.46);
+    content: "⌄";
+    font-size: 9px;
+    pointer-events: none;
+    transform: translateY(-45%);
+}
+
+.mobile-mod-source-editor .mobile-mod-editor-body {
+    order: 1;
+    min-height: 260px;
+    margin: 7px;
+    overflow: hidden;
+    border-radius: 8px;
+    background: rgb(var(--cosimo-recess-rgb) / 0.92);
+}
+
+.mobile-mod-source-editor .mod-source-active-controls {
+    position: relative;
+    order: 2;
+    width: auto;
+    height: 52px;
+    margin: 0 7px 7px;
+    border: 0;
+    border-radius: 8px;
+    background: rgb(221 234 235 / 0.035);
 }
 
 .mobile-mod-source-editor .mod-source-active-controls > div {
+    position: absolute;
+    display: flex;
+    min-width: 0;
+    align-items: stretch;
     justify-content: center;
+    gap: 0;
 }
 
-.mobile-mod-source-editor .mod-source-active-controls input {
+.mobile-mod-source-editor .mod-source-active-controls > div:last-child {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.mobile-mod-source-editor .mod-source-active-controls > div:last-child label {
+    display: grid;
+    min-width: 0;
+    min-height: 48px;
+    align-content: center;
+    gap: 4px;
+    padding: 5px 7px 6px;
+    border-right: 1px solid rgb(222 236 237 / 0.06);
+}
+
+.mobile-mod-source-editor .mod-source-active-controls > div:last-child label:last-child {
+    border-right: 0;
+}
+
+.mobile-mod-source-editor .mod-source-active-controls > div:last-child label > span {
+    color: #6e7a7d;
+    font-size: 7px;
+    letter-spacing: 0.10em;
+}
+
+.mobile-mod-source-editor .mod-source-active-controls > div:last-child input {
+    width: 100%;
+    min-width: 0;
+    min-height: 20px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #cbd5d6;
+    font-size: 9px;
+}
+
+.mobile-mod-source-editor .mod-source-active-controls > div:first-child {
+    padding: 4px;
+    gap: 5px;
+}
+
+.mobile-mod-source-editor .mod-source-active-controls > div:first-child > * {
     min-height: 44px;
 }
 
 .mobile-mod-source-editor .mod-source-active-controls[data-active-source-kind="macro"] {
     display: none;
+}
+
+.mobile-mod-macro-editor {
+    display: grid;
+    height: 100%;
+    place-items: center;
+    padding: 18px;
+    background:
+        radial-gradient(circle, rgb(var(--section-accent-rgb) / 0.09), transparent 38%),
+        linear-gradient(180deg, rgb(var(--section-accent-rgb) / 0.025), transparent);
+}
+
+.mobile-mod-macro-editor > label {
+    width: min(100%, 280px);
+    margin: 0;
 }
 
 .mobile-mod-list-screen,

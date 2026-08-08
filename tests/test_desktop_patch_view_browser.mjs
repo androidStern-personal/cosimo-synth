@@ -7488,28 +7488,33 @@ test("short-phone rack knobs form a touchable three-column matrix", async () => 
     }
 });
 
-test("mobile Mod exposes the fixed performance sources and never introduces an LFO", async () => {
+test("mobile Mod joins one compact source selector to its editor without the legacy chip grid", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
 
     try {
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
-        const fixedSources = page.locator('[data-role="mod-fixed-sources"]');
-        await fixedSources.waitFor();
-        assert.deepEqual(
-            await fixedSources.locator('[data-role="mod-fixed-source"]').evaluateAll((items) => (
-                items.map((item) => item.textContent?.trim())
-            )),
-            ["VEL", "AT", "SLIDE"],
-        );
+        const editor = page.locator('.mobile-mod-source-editor');
+        const frame = editor.locator('[data-role="mobile-mod-integrated-editor"]');
+        const selector = frame.locator('[data-role="mobile-mod-source-selector"]');
+        const typeSelect = selector.locator('[data-role="mobile-mod-source-type"]');
+        const numberSelect = selector.locator('[data-role="mobile-mod-source-number"]');
+
+        await selector.waitFor();
+        assert.equal(await typeSelect.inputValue(), "mseg");
+        assert.equal(await numberSelect.inputValue(), "1");
+        assert.deepEqual(await typeSelect.locator("option").allTextContents(), ["MSEG", "ENV", "MACRO"]);
+        assert.deepEqual(await numberSelect.locator("option").allTextContents(), ["1", "2", "3"]);
+        assert.equal(await editor.locator('[data-role="mobile-mod-source-family"]').count(), 0);
+        assert.equal(await editor.locator('[data-role="mod-fixed-sources"]').count(), 0);
         assert.equal(/\blfo\b/i.test(await page.locator('[data-role="mobile-workspace-panel-mod"]').innerText()), false);
     } finally {
         await page.close();
     }
 });
 
-test("mobile Mod source navigation stays touchable and contained at iPhone width", async () => {
+test("mobile Mod selector drives the attached editor and stays contained at iPhone width", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -7521,38 +7526,66 @@ test("mobile Mod source navigation stays touchable and contained at iPhone width
         await source.click();
 
         const editor = page.locator('.mobile-mod-source-editor');
-        const tabs = editor.locator('[data-role="mobile-mod-source-tabs"]');
-        await tabs.waitFor();
+        const frame = editor.locator('[data-role="mobile-mod-integrated-editor"]');
+        const selector = frame.locator('[data-role="mobile-mod-source-selector"]');
+        const typeSelect = selector.locator('[data-role="mobile-mod-source-type"]');
+        const numberSelect = selector.locator('[data-role="mobile-mod-source-number"]');
+        const editorState = editor.locator('[data-role="mod-source-editor"]');
+
+        await selector.waitFor();
         for (const width of [393, 320]) {
             await page.setViewportSize({ width, height: 852 });
             await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-            const layout = await editor.evaluate((element) => {
+            const layout = await frame.evaluate((element) => {
                 const bounds = element.getBoundingClientRect();
-                const contained = (candidate) => {
-                    const candidateBounds = candidate.getBoundingClientRect();
-                    return candidateBounds.left >= bounds.left - 0.5
-                        && candidateBounds.right <= bounds.right + 0.5;
+                const dock = element.querySelector('[data-role="mobile-mod-source-selector"]');
+                const body = element.querySelector('[data-role="mobile-mod-editor-body"]');
+                const controls = element.querySelector('[data-role="mobile-mod-active-controls"]');
+                const typeControl = element.querySelector('[data-role="mobile-mod-source-type"]')?.parentElement;
+                const numberControl = element.querySelector('[data-role="mobile-mod-source-number"]')?.parentElement;
+
+                if (!dock || !body || !controls || !typeControl || !numberControl) {
+                    throw new Error("Expected the integrated mobile Mod editor structure.");
+                }
+
+                const dockBounds = dock.getBoundingClientRect();
+                const bodyBounds = body.getBoundingClientRect();
+                const controlsBounds = controls.getBoundingClientRect();
+                const readControl = (control) => {
+                    const controlBounds = control.getBoundingClientRect();
+                    const style = getComputedStyle(control);
+                    return {
+                        width: controlBounds.width,
+                        height: controlBounds.height,
+                        borderWidth: style.borderTopWidth,
+                        borderRadius: parseFloat(style.borderTopLeftRadius),
+                        backgroundColor: style.backgroundColor,
+                    };
                 };
-                const targets = Array.from(element.querySelectorAll(
-                    '[data-role="mobile-mod-source-family"] button, [data-role="mobile-mod-active-controls"] button, [data-role="mobile-mod-active-controls"] input',
-                ));
+
                 return {
                     clientWidth: element.clientWidth,
                     scrollWidth: element.scrollWidth,
-                    allContained: targets.every(contained),
-                    touchTargets: targets.map((target) => {
-                        const targetBounds = target.getBoundingClientRect();
-                        return { width: targetBounds.width, height: targetBounds.height };
-                    }),
+                    documentScrollWidth: document.documentElement.scrollWidth,
+                    dockRightAligned: Math.abs(dockBounds.right - bounds.right) <= 1,
+                    dockLoopsAboveFrame: dockBounds.top < bounds.top && dockBounds.bottom >= bounds.top,
+                    bodyPrecedesControls: bodyBounds.bottom <= controlsBounds.top + 1,
+                    typeControl: readControl(typeControl),
+                    numberControl: readControl(numberControl),
                 };
             });
             assert.equal(layout.scrollWidth <= layout.clientWidth + 1, true, `Source editor overflows at ${width}px.`);
-            assert.equal(layout.allContained, true, `Source controls escape at ${width}px.`);
-            assert.equal(
-                layout.touchTargets.every(({ width: targetWidth, height }) => targetWidth >= 36 && height >= 44),
-                true,
-                `Source controls are not touchable at ${width}px.`,
-            );
+            assert.equal(layout.documentScrollWidth <= width, true, `Document overflows at ${width}px.`);
+            assert.equal(layout.dockRightAligned, true);
+            assert.equal(layout.dockLoopsAboveFrame, true);
+            assert.equal(layout.bodyPrecedesControls, true);
+            assert.equal(layout.typeControl.borderWidth, "0px");
+            assert.equal(layout.numberControl.borderWidth, "0px");
+            assert.equal(layout.typeControl.borderRadius >= 6 && layout.numberControl.borderRadius >= 6, true);
+            assert.notEqual(layout.typeControl.backgroundColor, "rgba(0, 0, 0, 0)");
+            assert.notEqual(layout.numberControl.backgroundColor, "rgba(0, 0, 0, 0)");
+            assert.equal(layout.typeControl.height >= 24 && layout.typeControl.width <= 72, true);
+            assert.equal(layout.numberControl.height >= 24 && layout.numberControl.width <= 40, true);
 
             const back = page.locator('[data-role="mobile-workspace-back"]');
             const backBounds = await back.boundingBox();
@@ -7560,6 +7593,32 @@ test("mobile Mod source navigation stays touchable and contained at iPhone width
             assert.equal(backBounds.width >= 120 && backBounds.height >= 44, true);
             assert.equal(backBounds.x >= 0 && backBounds.x + backBounds.width <= width, true);
         }
+
+        await typeSelect.selectOption("envelope");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mod-source-editor"]')?.getAttribute("data-source-kind") === "env"
+        ));
+        assert.deepEqual(await numberSelect.locator("option").allTextContents(), ["1", "2", "3"]);
+        const envelopeSurface = frame.locator('[data-role="adsr-editor-surface"]');
+        assert.equal(await envelopeSurface.count(), 1);
+        assert.equal(await envelopeSurface.getAttribute("preserveAspectRatio"), "none");
+        assert.deepEqual(
+            await frame.locator('[data-role="mobile-mod-active-controls"] label > span').allTextContents(),
+            ["Attack", "Decay", "Sustain", "Release"],
+        );
+        assert.equal(await frame.getByLabel("Envelope sustain value").inputValue(), "50%");
+        await numberSelect.selectOption("3");
+        assert.equal(await editorState.getAttribute("data-source-slot"), "3");
+
+        await typeSelect.selectOption("macro");
+        assert.deepEqual(await numberSelect.locator("option").allTextContents(), ["1", "2", "3", "4"]);
+        assert.equal(/\bmacro 1\b/i.test(await frame.innerText()), false, "The selector must be the only source title.");
+
+        await typeSelect.selectOption("mseg");
+        await numberSelect.selectOption("2");
+        assert.equal(await editorState.getAttribute("data-source-kind"), "mseg");
+        assert.equal(await editorState.getAttribute("data-source-slot"), "2");
+        assert.equal(await frame.getByRole("button", { name: "Open MSEG editor" }).count(), 1);
     } finally {
         await page.close();
     }
