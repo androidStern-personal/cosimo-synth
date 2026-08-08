@@ -86,8 +86,8 @@ export function installBrowserPatchStatePersistence(connection, {
     }
 
     connection.sendStoredStateValue = (key, value) => {
-        persistValue(key, value);
         sendStoredStateValue(key, value);
+        persistValue(key, value);
     };
     connection.addStoredStateValueListener?.((message) => {
         const storedStateMessage = message?.event ?? message;

@@ -7165,6 +7165,72 @@ test("rack quick controls never reorder or stick after release and reorder is gr
     }
 });
 
+test("rack quick controls keep tracking Safari touch moves that report zero buttons", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        const quick = page.locator('[data-role="rack-quick-reverb"]');
+        await quick.scrollIntoViewIfNeeded();
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.3, true);
+        });
+        await clearHarnessDebugLog(page);
+
+        const bounds = await quick.boundingBox();
+        assert.ok(bounds);
+        const start = {
+            x: bounds.x + (bounds.width * 0.35),
+            y: bounds.y + (bounds.height * 0.5),
+        };
+        const moved = {
+            x: start.x + (bounds.width * 0.3),
+            y: start.y,
+        };
+
+        await quick.dispatchEvent("pointerdown", {
+            pointerId: 91,
+            pointerType: "touch",
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        await quick.dispatchEvent("pointermove", {
+            pointerId: 91,
+            pointerType: "touch",
+            button: 0,
+            buttons: 0,
+            clientX: moved.x,
+            clientY: moved.y,
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
+        assert.deepEqual(snapshot.gestureEnds, [], "A live Safari touch move must not end the gesture.");
+        assert.ok(Number(snapshot.parameterValues.reverbSize) > 0.3);
+
+        await quick.dispatchEvent("pointerup", {
+            pointerId: 91,
+            pointerType: "touch",
+            button: 0,
+            buttons: 0,
+            clientX: moved.x,
+            clientY: moved.y,
+        });
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "Safari quick-control touch release",
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("reverbSize"),
+        );
+        assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("every rack editor binds live controls and one drop commits one complete DSP order", async () => {
     const page = await openHarnessPage();
 

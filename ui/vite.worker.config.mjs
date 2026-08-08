@@ -7,14 +7,14 @@ const thisDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(thisDirectory, "..");
 const workerSource = path.join(repoRoot, "ui", "worker", "wavetable-worker.ts");
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
     root: repoRoot,
     clearScreen: false,
     build: {
         outDir: path.join(repoRoot, "patch_gui"),
         emptyOutDir: false,
         sourcemap: false,
-        minify: false,
+        minify: command === "build",
         lib: {
             entry: workerSource,
             formats: ["es"],
@@ -26,4 +26,4 @@ export default defineConfig({
             },
         },
     },
-});
+}));

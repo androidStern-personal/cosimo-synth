@@ -102,7 +102,7 @@ export function useSliderDrag() {
     const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         const drag = dragRef.current;
         if (!drag || event.pointerId !== drag.pointerId) return;
-        if (event.buttons === 0) {
+        if (event.pointerType === "mouse" && event.buttons === 0) {
             finishDrag(event.pointerId);
             return;
         }

@@ -11736,7 +11736,7 @@ function kl() {
   }, [e]), g = Y.useCallback((i) => {
     const a = t.current;
     if (!a || i.pointerId !== a.pointerId) return;
-    if (i.buttons === 0) {
+    if (i.pointerType === "mouse" && i.buttons === 0) {
       e(i.pointerId);
       return;
     }

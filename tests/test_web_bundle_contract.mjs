@@ -15,6 +15,7 @@ import { copyWebHostAssets } from "../web/web-host-assets.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const desktopBundleBudgetBytes = 3_200_000;
+const wavetableWorkerBudgetBytes = 100_000;
 
 test("compiled desktop production entry stays within its browser parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");
@@ -23,6 +24,16 @@ test("compiled desktop production entry stays within its browser parse budget", 
     assert.ok(
         bundle.size <= desktopBundleBudgetBytes,
         `Expected ${bundlePath} to be at most ${desktopBundleBudgetBytes} bytes, received ${bundle.size}.`,
+    );
+});
+
+test("compiled wavetable worker stays within its startup parse budget", async () => {
+    const bundlePath = path.join(repoRoot, "patch_gui", "wavetable-worker.js");
+    const bundle = await fs.stat(bundlePath);
+
+    assert.ok(
+        bundle.size <= wavetableWorkerBudgetBytes,
+        `Expected ${bundlePath} to be at most ${wavetableWorkerBudgetBytes} bytes, received ${bundle.size}.`,
     );
 });
 
@@ -118,6 +129,31 @@ test("browser patch persistence never blocks a runtime state write when storage 
 
     assert.doesNotThrow(() => connection.sendStoredStateValue("rack.v1", "enabled"));
     assert.deepEqual(runtimeWrites, [["rack.v1", "enabled"]]);
+});
+
+test("browser patch persistence does not store a state write rejected by the runtime", () => {
+    const storageWrites = [];
+    const connection = {
+        sendStoredStateValue() {
+            throw new Error("Runtime rejected stored state.");
+        },
+    };
+    const storage = {
+        getItem() {
+            return "{}";
+        },
+        setItem(key, value) {
+            storageWrites.push([key, value]);
+        },
+    };
+
+    installBrowserPatchStatePersistence(connection, { storage });
+
+    assert.throws(
+        () => connection.sendStoredStateValue("rack.v1", "rejected"),
+        /Runtime rejected stored state/,
+    );
+    assert.deepEqual(storageWrites, []);
 });
 
 test("browser patch persistence restores once and coalesces echoed storage writes", () => {

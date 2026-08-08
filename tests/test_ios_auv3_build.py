@@ -608,20 +608,26 @@ def ios_host_smoke_result(tmp_path_factory: pytest.TempPathFactory) -> dict[str,
     output_dir = tmp_path_factory.mktemp("ios-host-smoke")
     output_path = output_dir / "host-smoke.json"
 
-    subprocess.run(
-        [
-            "python3",
-            str(IOS_AUV3_HOST_SMOKE),
-            "--build-dir",
-            str(output_dir / "build"),
-            "--output",
-            str(output_path),
-        ],
-        cwd=REPO_ROOT,
-        check=True,
-        capture_output=True,
-        text=True,
-    )
+    try:
+        subprocess.run(
+            [
+                "python3",
+                str(IOS_AUV3_HOST_SMOKE),
+                "--build-dir",
+                str(output_dir / "build"),
+                "--output",
+                str(output_path),
+            ],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except subprocess.CalledProcessError as error:
+        stderr = error.stderr or ""
+        if "Could not find an available" in stderr and "simulator" in stderr:
+            pytest.skip(stderr.strip())
+        raise
 
     return json.loads(output_path.read_text(encoding="utf-8"))
 

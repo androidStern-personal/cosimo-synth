@@ -1088,9 +1088,77 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
     onRetryLoad: () => void;
 }) {
     const activeStageGestureRef = useRef<ActiveStageGesture | null>(null);
+    const wavetablePositionRef = useRef(wavetablePosition);
+    const onSelectWavetableRef = useRef(onSelectWavetable);
+    const tableOptionCountRef = useRef(tableOptions.length);
+    wavetablePositionRef.current = wavetablePosition;
+    onSelectWavetableRef.current = onSelectWavetable;
+    tableOptionCountRef.current = tableOptions.length;
+
+    const finishStageGesture = useCallback((pointerId?: number, cancelled = false) => {
+        const activeStageGesture = activeStageGestureRef.current;
+        if (!activeStageGesture || (pointerId !== undefined && activeStageGesture.pointerId !== pointerId)) {
+            return;
+        }
+
+        activeStageGestureRef.current = null;
+        try {
+            if (stageRef.current?.hasPointerCapture(activeStageGesture.pointerId)) {
+                stageRef.current.releasePointerCapture(activeStageGesture.pointerId);
+            }
+        } catch {
+            // Capture may already be gone after cancellation, blur, or a synthetic event.
+        }
+
+        if (activeStageGesture.mode === "vertical") {
+            wavetablePositionRef.current.endGesture();
+            return;
+        }
+
+        if (cancelled || activeStageGesture.mode !== "horizontal") {
+            return;
+        }
+
+        const swipeTarget = resolveHorizontalSwipeTarget(
+            activeStageGesture.startTableIndex,
+            activeStageGesture.currentDeltaX,
+            tableOptionCountRef.current,
+        );
+
+        if (
+            swipeTarget.hasTarget
+            && shouldCommitHorizontalSwipe(activeStageGesture.currentDeltaX, activeStageGesture.dragSpanX)
+        ) {
+            onSelectWavetableRef.current(swipeTarget.targetTableIndex);
+        }
+    }, [stageRef]);
+
+    useEffect(() => {
+        const handlePointerUp = (event: PointerEvent) => finishStageGesture(event.pointerId);
+        const handlePointerCancel = (event: PointerEvent) => finishStageGesture(event.pointerId, true);
+        const handleBlur = () => finishStageGesture(undefined, true);
+        const handleVisibilityChange = () => {
+            if (document.visibilityState !== "visible") {
+                finishStageGesture(undefined, true);
+            }
+        };
+
+        window.addEventListener("pointerup", handlePointerUp, true);
+        window.addEventListener("pointercancel", handlePointerCancel, true);
+        window.addEventListener("blur", handleBlur);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+
+        return () => {
+            window.removeEventListener("pointerup", handlePointerUp, true);
+            window.removeEventListener("pointercancel", handlePointerCancel, true);
+            window.removeEventListener("blur", handleBlur);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+            finishStageGesture(undefined, true);
+        };
+    }, [finishStageGesture]);
 
     const handleStagePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        if (event.button !== 0) {
+        if (event.pointerType === "mouse" && event.button !== 0) {
             return;
         }
 
@@ -1098,6 +1166,7 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
             return;
         }
 
+        finishStageGesture(undefined, true);
         const bounds = event.currentTarget.getBoundingClientRect();
         activeStageGestureRef.current = {
             pointerId: event.pointerId,
@@ -1110,13 +1179,22 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
             currentDeltaX: 0,
             mode: "pending",
         };
-        event.currentTarget.setPointerCapture(event.pointerId);
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // Window-level termination still owns unsupported or synthetic pointers.
+        }
         event.preventDefault();
-    }, [displayedTableIndex, observedPosition]);
+    }, [displayedTableIndex, finishStageGesture, observedPosition]);
 
     const handleStagePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const activeStageGesture = activeStageGestureRef.current;
         if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
+            return;
+        }
+
+        if (event.pointerType === "mouse" && event.buttons === 0) {
+            finishStageGesture(event.pointerId, true);
             return;
         }
 
@@ -1148,41 +1226,17 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
         );
         wavetablePosition.setValue(nextPosition);
         event.preventDefault();
-    }, [wavetablePosition]);
+    }, [finishStageGesture, wavetablePosition]);
 
     const endStageGesture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        const activeStageGesture = activeStageGestureRef.current;
-        if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
-            return;
-        }
-
-        event.currentTarget.releasePointerCapture?.(event.pointerId);
-
-        if (activeStageGesture.mode === "vertical") {
-            wavetablePosition.endGesture();
-            activeStageGestureRef.current = null;
-            event.preventDefault();
-            return;
-        }
-
-        if (activeStageGesture.mode === "horizontal") {
-            const swipeTarget = resolveHorizontalSwipeTarget(
-                activeStageGesture.startTableIndex,
-                activeStageGesture.currentDeltaX,
-                tableOptions.length,
-            );
-
-            if (
-                swipeTarget.hasTarget &&
-                shouldCommitHorizontalSwipe(activeStageGesture.currentDeltaX, activeStageGesture.dragSpanX)
-            ) {
-                onSelectWavetable(swipeTarget.targetTableIndex);
-            }
-        }
-
-        activeStageGestureRef.current = null;
+        finishStageGesture(event.pointerId);
         event.preventDefault();
-    }, [onSelectWavetable, tableOptions.length, wavetablePosition]);
+    }, [finishStageGesture]);
+
+    const cancelStageGesture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
+        finishStageGesture(event.pointerId, true);
+        event.preventDefault();
+    }, [finishStageGesture]);
 
     return (
         <div className="wavetable-panel ios-section-panel" data-section-accent="cyan" data-liquid-detail="display-lip">
@@ -1193,7 +1247,8 @@ const IOSWavetablePanel = memo(function IOSWavetablePanel({
                 onPointerDown={handleStagePointerDown}
                 onPointerMove={handleStagePointerMove}
                 onPointerUp={endStageGesture}
-                onPointerCancel={endStageGesture}
+                onPointerCancel={cancelStageGesture}
+                onLostPointerCapture={cancelStageGesture}
             >
                 <div className="wavetable-display-stack">
                     <div className="wavetable-layer">

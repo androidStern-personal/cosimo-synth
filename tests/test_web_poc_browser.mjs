@@ -505,6 +505,51 @@ test("generated production-mode browser keeps acceptance diagnostics off the aud
     }
 });
 
+test("generated browser starts audio when the optional playback-session hint is rejected", async () => {
+    const page = await browser.newPage({
+        ...devices["iPhone 13"],
+    });
+
+    try {
+        await page.addInitScript(() => {
+            const audioSession = {
+                get type() {
+                    return "ambient";
+                },
+                set type(_nextType) {
+                    throw new DOMException("Playback sessions are unavailable.", "NotSupportedError");
+                },
+            };
+            Object.defineProperty(navigator, "audioSession", {
+                configurable: true,
+                value: audioSession,
+            });
+        });
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+
+        const startBounds = await page.locator("#cosimo-start-overlay").boundingBox();
+        assert.ok(startBounds, "Expected the Start audio control to be visible.");
+        await page.touchscreen.tap(
+            startBounds.x + (startBounds.width / 2),
+            startBounds.y + (startBounds.height / 2),
+        );
+        await page.waitForFunction(() => {
+            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
+            return snapshot?.phase === "running" || snapshot?.phase === "error";
+        }, null, { timeout: 30_000 });
+
+        const snapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
+        assert.equal(snapshot.phase, "running");
+        assert.equal(snapshot.error, null);
+        assert.equal(snapshot.audioSessionType, "ambient");
+    } finally {
+        await page.close();
+    }
+});
+
 test("generated WebAssembly rack changes audio, modulates a real target, and stays gain-safe", async (t) => {
     const page = await browser.newPage(browserEngine === "webkit"
         ? { ...devices["iPhone 13"] }

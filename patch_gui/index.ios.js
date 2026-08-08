@@ -20447,14 +20447,20 @@ function usePatchParameter(endpointID, initialValue = 0, active = true) {
   const initialValueRef = reactExports.useRef(initialValue);
   initialValueRef.current = initialValue;
   reactExports.useEffect(() => {
+    setValue(initialValueRef.current);
     if (!active) {
-      setValue(initialValueRef.current);
       return void 0;
     }
-    const listener = (nextValue) => setValue(nextValue);
+    let listening = true;
+    const listener = (nextValue) => {
+      if (listening) {
+        setValue(nextValue);
+      }
+    };
     patchConnection.addParameterListener?.(endpointID, listener);
     patchConnection.requestParameterValue?.(endpointID);
     return () => {
+      listening = false;
       patchConnection.removeParameterListener?.(endpointID, listener);
     };
   }, [active, endpointID, patchConnection]);
@@ -20481,13 +20487,19 @@ function usePatchEndpoint(endpointID, initialValue, active = true) {
   const initialValueRef = reactExports.useRef(initialValue);
   initialValueRef.current = initialValue;
   reactExports.useEffect(() => {
+    setValue(initialValueRef.current);
     if (!active) {
-      setValue(initialValueRef.current);
       return void 0;
     }
-    const listener = (nextValue) => setValue(nextValue);
+    let listening = true;
+    const listener = (nextValue) => {
+      if (listening) {
+        setValue(nextValue);
+      }
+    };
     patchConnection.addEndpointListener?.(endpointID, listener);
     return () => {
+      listening = false;
       patchConnection.removeEndpointListener?.(endpointID, listener);
     };
   }, [active, endpointID, patchConnection]);
@@ -23740,6 +23752,7 @@ function EditableMsegSurface({
       onPointerLeave,
       onPointerUp,
       onPointerCancel: onPointerUp,
+      onLostPointerCapture: onPointerUp,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("g", { children: [
           MSEG_GRID_STEPS.map((step) => /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -26961,13 +26974,49 @@ function useStagePositionDrag({
   observedPosition,
   binding
 }) {
-  const [activeDisplayDrag, setActiveDisplayDrag] = reactExports.useState(null);
+  const bindingRef = reactExports.useRef(binding);
+  bindingRef.current = binding;
+  const activeDisplayDragRef = reactExports.useRef(null);
   const beginPositionGesture = reactExports.useCallback(() => {
-    binding.beginGesture();
-  }, [binding]);
+    bindingRef.current.beginGesture();
+  }, []);
   const endPositionGesture = reactExports.useCallback(() => {
-    binding.endGesture();
-  }, [binding]);
+    bindingRef.current.endGesture();
+  }, []);
+  const finishPositionGesture = reactExports.useCallback((pointerId) => {
+    const activeDisplayDrag = activeDisplayDragRef.current;
+    if (!activeDisplayDrag || pointerId !== void 0 && activeDisplayDrag.pointerId !== pointerId) {
+      return;
+    }
+    activeDisplayDragRef.current = null;
+    try {
+      if (stageRef.current?.hasPointerCapture(activeDisplayDrag.pointerId)) {
+        stageRef.current.releasePointerCapture(activeDisplayDrag.pointerId);
+      }
+    } catch {
+    }
+    endPositionGesture();
+  }, [endPositionGesture, stageRef]);
+  reactExports.useEffect(() => {
+    const handlePointerEnd = (event) => finishPositionGesture(event.pointerId);
+    const handleBlur = () => finishPositionGesture();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        finishPositionGesture();
+      }
+    };
+    window.addEventListener("pointerup", handlePointerEnd, true);
+    window.addEventListener("pointercancel", handlePointerEnd, true);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("pointerup", handlePointerEnd, true);
+      window.removeEventListener("pointercancel", handlePointerEnd, true);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      finishPositionGesture();
+    };
+  }, [finishPositionGesture]);
   const handleStagePointerDown = reactExports.useCallback((event) => {
     if (event.button !== 0) {
       return;
@@ -26975,16 +27024,25 @@ function useStagePositionDrag({
     if (event.target?.closest?.("select, button, input")) {
       return;
     }
+    finishPositionGesture();
     beginPositionGesture();
-    setActiveDisplayDrag({
+    activeDisplayDragRef.current = {
       pointerId: event.pointerId,
       startPosition: observedPosition,
       startClientY: event.clientY
-    });
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }, [beginPositionGesture, observedPosition]);
+    };
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+    }
+  }, [beginPositionGesture, finishPositionGesture, observedPosition]);
   const handleStagePointerMove = reactExports.useCallback((event) => {
+    const activeDisplayDrag = activeDisplayDragRef.current;
     if (!activeDisplayDrag || activeDisplayDrag.pointerId !== event.pointerId || !stageRef.current) {
+      return;
+    }
+    if (event.pointerType === "mouse" && event.buttons === 0) {
+      finishPositionGesture(event.pointerId);
       return;
     }
     if (Math.abs(event.clientY - activeDisplayDrag.startClientY) < DISPLAY_SWIPE_THRESHOLD_PX) {
@@ -26997,16 +27055,11 @@ function useStagePositionDrag({
       event.clientY,
       bounds.height
     );
-    binding.setValue(nextPosition);
-  }, [activeDisplayDrag, binding, stageRef]);
+    bindingRef.current.setValue(nextPosition);
+  }, [finishPositionGesture, stageRef]);
   const handleStagePointerUp = reactExports.useCallback((event) => {
-    if (!activeDisplayDrag || activeDisplayDrag.pointerId !== event.pointerId) {
-      return;
-    }
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    setActiveDisplayDrag(null);
-    endPositionGesture();
-  }, [activeDisplayDrag, endPositionGesture]);
+    finishPositionGesture(event.pointerId);
+  }, [finishPositionGesture]);
   return {
     handleStagePointerDown,
     handleStagePointerMove,
@@ -27033,6 +27086,22 @@ function useMsegEditorInteractions({
       pointerState.holdTimeoutId = null;
     }
   }, []);
+  const cancelActivePointer = reactExports.useCallback((pointerId) => {
+    const activePointer = activePointerRef.current;
+    if (!activePointer || pointerId !== void 0 && activePointer.pointerId !== pointerId) {
+      return;
+    }
+    activePointerRef.current = null;
+    clearPendingSegmentTimer(activePointer);
+    try {
+      if (surfaceRef.current?.hasPointerCapture(activePointer.pointerId)) {
+        surfaceRef.current.releasePointerCapture(activePointer.pointerId);
+      }
+    } catch {
+    }
+    setHoveredSegmentIndex(-1);
+    setActiveSegmentIndex(-1);
+  }, [clearPendingSegmentTimer, surfaceRef]);
   reactExports.useEffect(() => {
     if (!msegState) {
       return;
@@ -27084,10 +27153,7 @@ function useMsegEditorInteractions({
   }, [resolvePointerLocation]);
   reactExports.useEffect(() => {
     if (!isOpen) {
-      clearPendingSegmentTimer(activePointerRef.current);
-      activePointerRef.current = null;
-      setHoveredSegmentIndex(-1);
-      setActiveSegmentIndex(-1);
+      cancelActivePointer();
       return;
     }
     const handleEscapeKey = (event) => {
@@ -27095,21 +27161,29 @@ function useMsegEditorInteractions({
         setIsOpen(false);
       }
     };
+    const handleBlur = () => cancelActivePointer();
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        cancelActivePointer();
+      }
+    };
     window.addEventListener("keydown", handleEscapeKey);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.removeEventListener("keydown", handleEscapeKey);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      cancelActivePointer();
     };
-  }, [clearPendingSegmentTimer, isOpen]);
+  }, [cancelActivePointer, isOpen]);
   const openEditor = reactExports.useCallback(() => {
     setIsOpen(true);
   }, []);
   const closeEditor = reactExports.useCallback(() => {
     setIsOpen(false);
-    clearPendingSegmentTimer(activePointerRef.current);
-    activePointerRef.current = null;
-    setHoveredSegmentIndex(-1);
-    setActiveSegmentIndex(-1);
-  }, [clearPendingSegmentTimer]);
+    cancelActivePointer();
+  }, [cancelActivePointer]);
   const applyCurveEditFromClientCoordinates = reactExports.useCallback((segmentIndex, clientX, clientY) => {
     if (!surfaceRef.current || !msegController.current) {
       return;
@@ -27295,10 +27369,20 @@ function useMsegEditorInteractions({
     if (!activePointer || activePointer.pointerId !== event.pointerId) {
       return;
     }
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
+    if (event.type !== "pointerup") {
+      cancelActivePointer(event.pointerId);
+      event.preventDefault();
+      return;
+    }
     const pointerState = activePointer;
     activePointerRef.current = null;
     setActiveSegmentIndex(-1);
+    try {
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+    } catch {
+    }
     if (pointerState.kind === "pending-segment") {
       clearPendingSegmentTimer(pointerState);
       if (surfaceRef.current) {
@@ -27336,6 +27420,7 @@ function useMsegEditorInteractions({
     setHoveredSegmentIndex(resolvePointerLocation(event.clientX, event.clientY)?.segmentIndex ?? -1);
     event.preventDefault();
   }, [
+    cancelActivePointer,
     clearPendingSegmentTimer,
     msegController,
     orientation,
@@ -29556,13 +29641,69 @@ const IOSWavetablePanel = reactExports.memo(function IOSWavetablePanel2({
   onRetryLoad
 }) {
   const activeStageGestureRef = reactExports.useRef(null);
+  const wavetablePositionRef = reactExports.useRef(wavetablePosition);
+  const onSelectWavetableRef = reactExports.useRef(onSelectWavetable);
+  const tableOptionCountRef = reactExports.useRef(tableOptions.length);
+  wavetablePositionRef.current = wavetablePosition;
+  onSelectWavetableRef.current = onSelectWavetable;
+  tableOptionCountRef.current = tableOptions.length;
+  const finishStageGesture = reactExports.useCallback((pointerId, cancelled = false) => {
+    const activeStageGesture = activeStageGestureRef.current;
+    if (!activeStageGesture || pointerId !== void 0 && activeStageGesture.pointerId !== pointerId) {
+      return;
+    }
+    activeStageGestureRef.current = null;
+    try {
+      if (stageRef.current?.hasPointerCapture(activeStageGesture.pointerId)) {
+        stageRef.current.releasePointerCapture(activeStageGesture.pointerId);
+      }
+    } catch {
+    }
+    if (activeStageGesture.mode === "vertical") {
+      wavetablePositionRef.current.endGesture();
+      return;
+    }
+    if (cancelled || activeStageGesture.mode !== "horizontal") {
+      return;
+    }
+    const swipeTarget = resolveHorizontalSwipeTarget(
+      activeStageGesture.startTableIndex,
+      activeStageGesture.currentDeltaX,
+      tableOptionCountRef.current
+    );
+    if (swipeTarget.hasTarget && shouldCommitHorizontalSwipe(activeStageGesture.currentDeltaX, activeStageGesture.dragSpanX)) {
+      onSelectWavetableRef.current(swipeTarget.targetTableIndex);
+    }
+  }, [stageRef]);
+  reactExports.useEffect(() => {
+    const handlePointerUp = (event) => finishStageGesture(event.pointerId);
+    const handlePointerCancel = (event) => finishStageGesture(event.pointerId, true);
+    const handleBlur = () => finishStageGesture(void 0, true);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        finishStageGesture(void 0, true);
+      }
+    };
+    window.addEventListener("pointerup", handlePointerUp, true);
+    window.addEventListener("pointercancel", handlePointerCancel, true);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("pointerup", handlePointerUp, true);
+      window.removeEventListener("pointercancel", handlePointerCancel, true);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      finishStageGesture(void 0, true);
+    };
+  }, [finishStageGesture]);
   const handleStagePointerDown = reactExports.useCallback((event) => {
-    if (event.button !== 0) {
+    if (event.pointerType === "mouse" && event.button !== 0) {
       return;
     }
     if (event.target?.closest?.(".bank-picker-trigger, select, button, input")) {
       return;
     }
+    finishStageGesture(void 0, true);
     const bounds = event.currentTarget.getBoundingClientRect();
     activeStageGestureRef.current = {
       pointerId: event.pointerId,
@@ -29575,12 +29716,19 @@ const IOSWavetablePanel = reactExports.memo(function IOSWavetablePanel2({
       currentDeltaX: 0,
       mode: "pending"
     };
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+    }
     event.preventDefault();
-  }, [displayedTableIndex, observedPosition]);
+  }, [displayedTableIndex, finishStageGesture, observedPosition]);
   const handleStagePointerMove = reactExports.useCallback((event) => {
     const activeStageGesture = activeStageGestureRef.current;
     if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
+      return;
+    }
+    if (event.pointerType === "mouse" && event.buttons === 0) {
+      finishStageGesture(event.pointerId, true);
       return;
     }
     const deltaX = event.clientX - activeStageGesture.startClientX;
@@ -29605,32 +29753,15 @@ const IOSWavetablePanel = reactExports.memo(function IOSWavetablePanel2({
     );
     wavetablePosition.setValue(nextPosition);
     event.preventDefault();
-  }, [wavetablePosition]);
+  }, [finishStageGesture, wavetablePosition]);
   const endStageGesture = reactExports.useCallback((event) => {
-    const activeStageGesture = activeStageGestureRef.current;
-    if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
-      return;
-    }
-    event.currentTarget.releasePointerCapture?.(event.pointerId);
-    if (activeStageGesture.mode === "vertical") {
-      wavetablePosition.endGesture();
-      activeStageGestureRef.current = null;
-      event.preventDefault();
-      return;
-    }
-    if (activeStageGesture.mode === "horizontal") {
-      const swipeTarget = resolveHorizontalSwipeTarget(
-        activeStageGesture.startTableIndex,
-        activeStageGesture.currentDeltaX,
-        tableOptions.length
-      );
-      if (swipeTarget.hasTarget && shouldCommitHorizontalSwipe(activeStageGesture.currentDeltaX, activeStageGesture.dragSpanX)) {
-        onSelectWavetable(swipeTarget.targetTableIndex);
-      }
-    }
-    activeStageGestureRef.current = null;
+    finishStageGesture(event.pointerId);
     event.preventDefault();
-  }, [onSelectWavetable, tableOptions.length, wavetablePosition]);
+  }, [finishStageGesture]);
+  const cancelStageGesture = reactExports.useCallback((event) => {
+    finishStageGesture(event.pointerId, true);
+    event.preventDefault();
+  }, [finishStageGesture]);
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "wavetable-panel ios-section-panel", "data-section-accent": "cyan", "data-liquid-detail": "display-lip", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -29640,7 +29771,8 @@ const IOSWavetablePanel = reactExports.memo(function IOSWavetablePanel2({
       onPointerDown: handleStagePointerDown,
       onPointerMove: handleStagePointerMove,
       onPointerUp: endStageGesture,
-      onPointerCancel: endStageGesture,
+      onPointerCancel: cancelStageGesture,
+      onLostPointerCapture: cancelStageGesture,
       children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "wavetable-display-stack", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "wavetable-layer", children: /* @__PURE__ */ jsxRuntimeExports.jsx(

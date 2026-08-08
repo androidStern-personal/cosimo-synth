@@ -119,8 +119,13 @@ function markAudioRunning() {
 }
 
 function usePlaybackAudioSession() {
-    if (navigator.audioSession) {
-        navigator.audioSession.type = "playback";
+    try {
+        if (navigator.audioSession) {
+            navigator.audioSession.type = "playback";
+        }
+    } catch {
+        // Playback mode is an optional Safari hint. Web Audio must remain usable
+        // when a browser exposes the API but rejects the requested session type.
     }
 }
 
