@@ -182,6 +182,16 @@ async function expandGlobalModRail(page) {
     await page.waitForTimeout(220);
 }
 
+async function collapseGlobalModRail(page) {
+    const grip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
+    await grip.waitFor();
+    if (await grip.getAttribute("aria-expanded") === "true") {
+        await grip.click();
+    }
+    await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="false"]').waitFor();
+    await page.waitForTimeout(240);
+}
+
 async function editRackParameterValue(page, controlRole, editingValue) {
     await page.locator(`[data-role="${controlRole}"]`).click({ button: "right" });
     await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
@@ -6703,6 +6713,7 @@ test("rack deep links open the exact Envelope and Macro editor slots without int
         assert.equal(await editor.getAttribute("data-source-slot"), "1");
 
         await page.click('[data-role="mobile-workspace-back"]');
+        await expandGlobalModRail(page);
         await page.click('[aria-label="Next modulation-source group"]');
         await page.waitForTimeout(300);
         const macro = page.locator('[data-role="rack-mod-source-macro-2"]');
@@ -6811,11 +6822,18 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
         assert.match(await page.locator('[data-role="rack-parameter-hud"]').innerText(), /BASE.*Size/i);
         const hudLayout = await page.locator('[data-role="rack-parameter-hud"]').evaluate((element) => {
             const hud = element.getBoundingClientRect();
-            const workspace = element.closest('[data-role="effects-rack-card"]')?.getBoundingClientRect();
-            return workspace ? { hudTop: hud.top, workspaceTop: workspace.top } : null;
+            const knob = document.querySelector('[data-role="rack-parameter-reverbSize"]')?.getBoundingClientRect();
+            const style = getComputedStyle(element);
+            return knob ? {
+                pointerEvents: style.pointerEvents,
+                intersectsKnob: !(hud.right <= knob.left || hud.left >= knob.right || hud.bottom <= knob.top || hud.top >= knob.bottom),
+                onScreen: hud.left >= 0 && hud.top >= 0 && hud.right <= window.innerWidth && hud.bottom <= window.innerHeight,
+            } : null;
         });
         assert.ok(hudLayout);
-        assert.equal(hudLayout.hudTop <= hudLayout.workspaceTop + 18, true);
+        assert.equal(hudLayout.pointerEvents, "none");
+        assert.equal(hudLayout.intersectsKnob, false, "The gesture HUD must not cover the active knob.");
+        assert.equal(hudLayout.onScreen, true, "The gesture HUD must remain fully on screen.");
 
         await page.mouse.move(centerX, centerY - 34, { steps: 8 });
         await page.mouse.up();
@@ -6942,6 +6960,7 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
                 && route.targetKind === "rack.reverbSize"
             )),
         );
+        await collapseGlobalModRail(page);
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.5, true);
         });
@@ -7003,6 +7022,7 @@ test("an unmapped rack knob shows a neutral outer track and horizontal drag cann
 
         await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await collapseGlobalModRail(page);
         knob = page.locator('[data-role="rack-parameter-reverbSize"]');
         assert.equal(await knob.getAttribute("data-route-state"), "unmapped");
         assert.equal(await knob.locator(".rack-knob-mod-track.is-unmapped").count(), 1);
@@ -7045,6 +7065,7 @@ test("editing a bypassed rack route preserves bypass and renders the outer ring 
         await waitForHarnessSnapshot(page, "route before bypass-preserving edit", (snapshot) => (
             readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "rack.reverbSize")
         ));
+        await collapseGlobalModRail(page);
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
         await knob.click({ button: "right" });
         await page.locator('[data-role="rack-parameter-menu-item"][data-action="toggle-route"]').click();
@@ -7238,6 +7259,7 @@ test("rack parameter reset restores the base default without deleting modulation
                 && route.targetKind === "rack.reverbSize"
             )),
         );
+        await collapseGlobalModRail(page);
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.84, true);
         });
@@ -7285,6 +7307,7 @@ test("rack parameter menu edits the active route enablement polarity and voice r
                 && route.targetKind === "rack.reverbSize"
             )),
         );
+        await collapseGlobalModRail(page);
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
         const routeForSize = (snapshot) => readStoredModulationState(snapshot).routes.find((route) => (
             route.sourceKind === "mseg"
@@ -7350,6 +7373,7 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
                 && route.targetKind === "rack.reverbSize"
             )),
         );
+        await collapseGlobalModRail(page);
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.5, true);
         });
@@ -7445,6 +7469,7 @@ test("rack parameter route removal targets one source or confirms removal of eve
                 (route) => route.targetKind === "rack.reverbSize",
             ).length === 2,
         );
+        await collapseGlobalModRail(page);
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
 
         await knob.click({ button: "right" });
@@ -7463,7 +7488,9 @@ test("rack parameter route removal targets one source or confirms removal of eve
             1,
         );
 
+        await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await collapseGlobalModRail(page);
         await knob.click({ button: "right" });
         await page.locator('[data-role="rack-parameter-menu-item"][data-action="remove-all-target-routes"]').click();
         const confirmation = page.locator('[data-role="rack-remove-target-routes-confirmation"]');
@@ -8063,16 +8090,28 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
 
         const initial = await rail.evaluate((element) => {
             const layer = element.closest('[data-role="mobile-global-mod-rail-layer"]');
-            const silhouette = element.querySelector('[data-role="mobile-global-mod-rail-silhouette"] path');
+            const body = element.querySelector('[data-role="mobile-global-mod-rail-body"]');
+            const shoulders = Array.from(element.querySelectorAll('[data-role="mobile-global-mod-rail-shoulder"]'));
             const selected = element.querySelector('[data-role="mobile-global-mod-rail-selected"]');
             const routeCount = element.querySelector('[data-role="mobile-global-mod-rail-route-count"]');
             const drawer = element.querySelector('[data-role="mobile-global-mod-rail-drawer"]');
+            const bodyStyle = body instanceof HTMLElement ? getComputedStyle(body) : null;
             return {
                 expanded: element.getAttribute("data-expanded"),
                 layerPointerEvents: layer instanceof HTMLElement ? getComputedStyle(layer).pointerEvents : null,
                 railPointerEvents: getComputedStyle(element).pointerEvents,
                 gripTouchAction: getComputedStyle(element.querySelector('[data-role="mobile-global-mod-rail-grip"]')).touchAction,
-                path: silhouette?.getAttribute("d") ?? "",
+                shoulderCount: shoulders.length,
+                shouldersCurved: shoulders.length > 0 && shoulders.every((shoulder) => (
+                    getComputedStyle(shoulder).backgroundImage.includes("radial-gradient")
+                )),
+                bodyLeftRadius: bodyStyle
+                    ? Math.min(Number.parseFloat(bodyStyle.borderTopLeftRadius), Number.parseFloat(bodyStyle.borderBottomLeftRadius))
+                    : null,
+                bodyRightRadius: bodyStyle
+                    ? Math.max(Number.parseFloat(bodyStyle.borderTopRightRadius), Number.parseFloat(bodyStyle.borderBottomRightRadius))
+                    : null,
+                railFlushRight: Math.abs(element.getBoundingClientRect().right - window.innerWidth) <= 0.5,
                 selectedLabel: selected?.getAttribute("aria-label") ?? null,
                 routeCount: routeCount?.textContent?.trim() ?? null,
                 insideFxPanel: element.closest('[data-role="mobile-workspace-panel-fx"]') !== null,
@@ -8088,7 +8127,11 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
             layerPointerEvents: "none",
             railPointerEvents: "auto",
             gripTouchAction: "none",
-            path: initial.path,
+            shoulderCount: 2,
+            shouldersCurved: true,
+            bodyLeftRadius: initial.bodyLeftRadius,
+            bodyRightRadius: 0,
+            railFlushRight: true,
             selectedLabel: "MSEG 1 selected",
             routeCount: initial.routeCount,
             insideFxPanel: false,
@@ -8096,7 +8139,11 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
             drawerHidden: "true",
             drawerInert: true,
         });
-        assert.match(initial.path, /C/);
+        assert.equal(
+            typeof initial.bodyLeftRadius === "number" && initial.bodyLeftRadius >= 12,
+            true,
+            "The tab face must keep smoothly rounded left corners joining the curved shoulders.",
+        );
         assert.match(initial.routeCount, /^\d+$/);
         assert.equal(await page.locator('.rack-editor-modulation [data-role="rack-mod-source-track"]').count(), 0);
         assert.equal(await grip.getAttribute("aria-expanded"), "false");
@@ -8284,6 +8331,353 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
             initialRouteCount + 1,
         );
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+function rectsIntersect(a, b) {
+    return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+}
+
+function rectContains(outer, inner, tolerance = 0.5) {
+    return inner.left >= outer.left - tolerance
+        && inner.right <= outer.right + tolerance
+        && inner.top >= outer.top - tolerance
+        && inner.bottom <= outer.bottom + tolerance;
+}
+
+async function readGlobalModRailGeometry(page) {
+    return await page.evaluate(() => {
+        const rectOf = (element) => {
+            if (!element) {
+                return null;
+            }
+            const bounds = element.getBoundingClientRect();
+            return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom, width: bounds.width, height: bounds.height };
+        };
+        const rail = document.querySelector('[data-role="mobile-global-mod-rail"]');
+        if (!(rail instanceof HTMLElement)) {
+            return null;
+        }
+        const body = rail.querySelector('[data-role="mobile-global-mod-rail-body"]');
+        return {
+            rail: rectOf(rail),
+            body: rectOf(body),
+            art: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-selected"] .rack-mod-art')),
+            routeCount: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-route-count"]')),
+            chevron: rectOf(rail.querySelector(".mobile-global-mod-rail-chevron")),
+            drawer: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-drawer"]')),
+            track: rectOf(rail.querySelector('[data-role="rack-mod-source-track"]')),
+            amount: rectOf(rail.querySelector(".rack-mod-amount")),
+            keyboard: rectOf(document.querySelector('[data-role="sticky-keyboard"]')),
+            transitionProperty: getComputedStyle(rail).transitionProperty,
+            viewportWidth: window.innerWidth,
+            documentFits: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+        };
+    });
+}
+
+test("the global modulation rail is one continuous edge tab that widens in place when expanded", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        const collapsed = await readGlobalModRailGeometry(page);
+        assert.ok(collapsed?.rail && collapsed.body && collapsed.art && collapsed.routeCount, "The tab must render its body surface, source art, and route count.");
+        assert.equal(
+            Math.abs(collapsed.rail.right - collapsed.viewportWidth) <= 0.5,
+            true,
+            "The collapsed tab must attach flush to the right screen edge.",
+        );
+        assert.match(
+            collapsed.transitionProperty,
+            /(^|, )(width|all)(,|$)/,
+            "Expansion must be an animated width transition on the tab element itself.",
+        );
+        for (const [label, part] of Object.entries({ art: collapsed.art, routeCount: collapsed.routeCount, chevron: collapsed.chevron })) {
+            if (part === null) {
+                continue;
+            }
+            assert.equal(
+                rectContains(collapsed.rail, part),
+                true,
+                `Collapsed ${label} must fit inside the tab: ${JSON.stringify(part)} vs ${JSON.stringify(collapsed.rail)}`,
+            );
+            assert.equal(
+                rectContains(collapsed.body, part),
+                true,
+                `Collapsed ${label} must sit on the filled tab body: ${JSON.stringify(part)} vs ${JSON.stringify(collapsed.body)}`,
+            );
+        }
+        assert.equal(
+            collapsed.art.bottom <= collapsed.routeCount.top + 0.5,
+            true,
+            "Collapsed contents must stack vertically (art above route count).",
+        );
+        assert.equal(
+            Math.abs(((collapsed.art.left + collapsed.art.right) / 2) - ((collapsed.routeCount.left + collapsed.routeCount.right) / 2)) <= 8,
+            true,
+            "Collapsed contents must share one vertical column.",
+        );
+
+        await expandGlobalModRail(page);
+        await page.waitForTimeout(120);
+        const expanded = await readGlobalModRailGeometry(page);
+        assert.ok(expanded?.rail && expanded.drawer && expanded.track, "The expanded tab must render the drawer and source track.");
+        assert.equal(
+            Math.abs(expanded.rail.right - expanded.viewportWidth) <= 0.5,
+            true,
+            "The expanded tab must stay flush to the right screen edge.",
+        );
+        assert.equal(
+            expanded.rail.width >= collapsed.rail.width + 120,
+            true,
+            `Expansion must widen the same tab surface (collapsed ${collapsed.rail.width}px, expanded ${expanded.rail.width}px).`,
+        );
+        for (const [label, part] of Object.entries({ drawer: expanded.drawer, track: expanded.track, amount: expanded.amount })) {
+            if (part === null) {
+                continue;
+            }
+            assert.equal(
+                rectContains(expanded.rail, part),
+                true,
+                `Expanded ${label} must live inside the tab surface, not a detached popup: ${JSON.stringify(part)} vs ${JSON.stringify(expanded.rail)}`,
+            );
+        }
+        if (expanded.keyboard) {
+            assert.equal(
+                expanded.rail.bottom <= expanded.keyboard.top + 0.5,
+                true,
+                "The expanded tab must stay clear of the sticky keyboard.",
+            );
+        }
+        assert.equal(expanded.documentFits, true, "The expanded tab must not create horizontal page overflow.");
+
+        await page.locator('[data-role="mobile-global-mod-rail-grip"]').click();
+        await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="false"]').waitFor();
+        await page.waitForTimeout(260);
+        const collapsedAgain = await readGlobalModRailGeometry(page);
+        assert.ok(collapsedAgain?.rail);
+        assert.equal(
+            Math.abs(collapsedAgain.rail.width - collapsed.rail.width) <= 1,
+            true,
+            "Collapsing must return the same tab to its compact width.",
+        );
+
+        await page.setViewportSize({ width: 320, height: 568 });
+        await page.waitForTimeout(240);
+        await expandGlobalModRail(page);
+        await page.waitForTimeout(120);
+        const narrow = await readGlobalModRailGeometry(page);
+        assert.ok(narrow?.rail && narrow.drawer && narrow.track, "The expanded tab must survive a 320px viewport.");
+        assert.equal(Math.abs(narrow.rail.right - narrow.viewportWidth) <= 0.5, true, "The tab must stay flush at 320px.");
+        assert.equal(narrow.rail.left >= 4, true, "The expanded tab must keep a margin from the left screen edge at 320px.");
+        for (const [label, part] of Object.entries({ drawer: narrow.drawer, track: narrow.track, amount: narrow.amount })) {
+            if (part === null) {
+                continue;
+            }
+            assert.equal(
+                rectContains(narrow.rail, part),
+                true,
+                `Expanded ${label} must stay inside the tab at 320px: ${JSON.stringify(part)} vs ${JSON.stringify(narrow.rail)}`,
+            );
+        }
+        assert.equal(narrow.documentFits, true, "The expanded tab must not overflow a 320px viewport.");
+    } finally {
+        await page.close();
+    }
+});
+
+test("the parameter gesture HUD avoids the active control, the global rail, the keyboard, and the finger", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ normalizedY: 0 }),
+                );
+            });
+        },
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        const createMapping = page.locator('[data-role="rack-create-mapping"]');
+        if (await createMapping.count() > 0) {
+            await createMapping.click();
+        }
+        await page.locator('[data-role="rack-modulation-amount"]').waitFor();
+
+        const readHudCollisions = async (knobRole, finger) => {
+            const layout = await page.evaluate(({ role }) => {
+                const rectOf = (element) => {
+                    if (!element) {
+                        return null;
+                    }
+                    const bounds = element.getBoundingClientRect();
+                    return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom };
+                };
+                const hud = document.querySelector('[data-role="rack-parameter-hud"]');
+                return {
+                    hud: rectOf(hud),
+                    hudPosition: hud ? getComputedStyle(hud).position : null,
+                    hudPointerEvents: hud ? getComputedStyle(hud).pointerEvents : null,
+                    knob: rectOf(document.querySelector(`[data-role="${role}"]`)),
+                    rail: rectOf(document.querySelector('[data-role="mobile-global-mod-rail"]')),
+                    drawer: rectOf(document.querySelector('[data-role="mobile-global-mod-rail-drawer"]')),
+                    amount: rectOf(document.querySelector('[data-role="rack-modulation-amount"]')),
+                    keyboard: rectOf(document.querySelector('[data-role="sticky-keyboard"]')),
+                    viewport: { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight },
+                };
+            }, { role: knobRole });
+            assert.ok(layout.hud && layout.knob && layout.rail && layout.keyboard, "Expected the HUD and its exclusion surfaces.");
+            assert.equal(layout.hudPointerEvents, "none", "The HUD must remain pointer-events none.");
+            assert.equal(rectsIntersect(layout.hud, layout.knob), false, `HUD covers the active control ${knobRole}.`);
+            assert.equal(rectsIntersect(layout.hud, layout.rail), false, "HUD covers the global modulation rail.");
+            if (layout.drawer) {
+                assert.equal(rectsIntersect(layout.hud, layout.drawer), false, "HUD covers the rail drawer.");
+            }
+            if (layout.amount) {
+                assert.equal(rectsIntersect(layout.hud, layout.amount), false, "HUD covers the modulation amount slider.");
+            }
+            assert.equal(rectsIntersect(layout.hud, layout.keyboard), false, "HUD covers the sticky keyboard.");
+            assert.equal(
+                rectsIntersect(layout.hud, {
+                    left: finger.x - 40,
+                    right: finger.x + 40,
+                    top: finger.y - 40,
+                    bottom: finger.y + 40,
+                }),
+                false,
+                "HUD sits inside the active finger zone.",
+            );
+            assert.equal(rectContains(layout.viewport, layout.hud, 0), true, "HUD must remain fully on screen.");
+            return layout.hud;
+        };
+
+        const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        const artBox = await knob.locator(".rack-knob-art").boundingBox();
+        assert.ok(artBox);
+        const start = { x: artBox.x + (artBox.width / 2), y: artBox.y + (artBox.height / 2) };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x + 42, start.y, { steps: 8 });
+        await page.locator('[data-role="rack-parameter-hud"]').waitFor();
+        const firstPlacement = await readHudCollisions("rack-parameter-reverbSize", { x: start.x + 42, y: start.y });
+        await page.mouse.move(start.x + 58, start.y, { steps: 4 });
+        const secondPlacement = await readHudCollisions("rack-parameter-reverbSize", { x: start.x + 58, y: start.y });
+        assert.equal(
+            Math.abs(firstPlacement.left - secondPlacement.left) <= 1.5 && Math.abs(firstPlacement.top - secondPlacement.top) <= 1.5,
+            true,
+            "The HUD must keep one stable placement during an uninterrupted gesture.",
+        );
+        await page.mouse.up();
+        await page.waitForFunction(() => document.querySelector('[data-role="rack-parameter-hud"]') === null);
+
+        const lastKnob = page.locator(".rack-editor-controls .rack-parameter-knob").last();
+        await lastKnob.scrollIntoViewIfNeeded();
+        const lastKnobRole = await lastKnob.getAttribute("data-role");
+        const lastArtBox = await lastKnob.locator(".rack-knob-art").boundingBox();
+        assert.ok(lastKnobRole && lastArtBox);
+        const lastStart = { x: lastArtBox.x + (lastArtBox.width / 2), y: lastArtBox.y + (lastArtBox.height / 2) };
+        await page.mouse.move(lastStart.x, lastStart.y);
+        await page.mouse.down();
+        await page.mouse.move(lastStart.x, lastStart.y - 24, { steps: 6 });
+        await page.locator('[data-role="rack-parameter-hud"]').waitFor();
+        await readHudCollisions(lastKnobRole, { x: lastStart.x, y: lastStart.y - 24 });
+        await page.mouse.up();
+        await page.waitForFunction(() => document.querySelector('[data-role="rack-parameter-hud"]') === null);
+    } finally {
+        await page.close();
+    }
+});
+
+test("rail grip drags own the touch without page scroll, persist across reload, and cancel cleanly", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        const grip = rail.locator('[data-role="mobile-global-mod-rail-grip"]');
+        await rail.waitFor();
+
+        const readScrollState = () => page.evaluate(() => ({
+            documentTop: document.documentElement.scrollTop,
+            panels: Array.from(document.querySelectorAll(".mobile-workspace-panel")).map((panel) => panel.scrollTop),
+        }));
+
+        const before = await rail.boundingBox();
+        const scrollBefore = await readScrollState();
+        const gripBox = await grip.boundingBox();
+        assert.ok(before && gripBox);
+        const gripStart = { x: gripBox.x + (gripBox.width / 2), y: gripBox.y + (gripBox.height / 2) };
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...gripStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 6; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: gripStart.x, y: gripStart.y + (step * 15), radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+        const scrollDuring = await readScrollState();
+        assert.deepEqual(scrollDuring, scrollBefore, "A grip drag must not scroll the page or any panel.");
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForTimeout(240);
+
+        const moved = await rail.boundingBox();
+        assert.ok(moved);
+        assert.equal(moved.y - before.y >= 24, true, "The grip drag must reposition the rail.");
+        assert.deepEqual(await readScrollState(), scrollBefore);
+        assert.equal(await page.evaluate(() => localStorage.getItem("cosimo.mobile-global-mod-rail.position.v1") !== null), true);
+
+        await page.reload({ waitUntil: "commit" });
+        await waitForHarnessReady(page);
+        await rail.waitFor();
+        await page.waitForTimeout(120);
+        const restored = await rail.boundingBox();
+        assert.ok(restored);
+        assert.equal(
+            Math.abs(restored.y - moved.y) <= 2,
+            true,
+            `Reload must restore the persisted rail position (was ${moved.y}, restored ${restored.y}).`,
+        );
+
+        const topBeforeCancel = (await rail.boundingBox())?.y;
+        const cancelGripBox = await grip.boundingBox();
+        assert.ok(topBeforeCancel !== undefined && cancelGripBox);
+        const cancelStart = { x: cancelGripBox.x + (cancelGripBox.width / 2), y: cancelGripBox.y + (cancelGripBox.height / 2) };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...cancelStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: cancelStart.x, y: cancelStart.y + 40, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] });
+        await page.waitForTimeout(240);
+        assert.equal(
+            Math.abs(((await rail.boundingBox())?.y ?? 0) - topBeforeCancel) <= 1,
+            true,
+            "A cancelled grip drag must restore the rail position.",
+        );
+
+        await grip.click();
+        assert.equal(await grip.getAttribute("aria-expanded"), "true", "The grip must still toggle after cancelled gestures.");
     } finally {
         await cdp.detach();
         await page.close();

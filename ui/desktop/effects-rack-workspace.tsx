@@ -1140,6 +1140,176 @@ function ModSourceCarousel({
     );
 }
 
+type HudRect = {
+    readonly left: number;
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+};
+
+type HudPlacementSide = "above" | "below" | "start" | "end";
+
+const HUD_VIEWPORT_MARGIN_PX = 4;
+const HUD_ANCHOR_GAP_PX = 14;
+const HUD_FINGER_CLEARANCE_PX = 48;
+
+function inflateHudRect(rect: HudRect, amount: number): HudRect {
+    return {
+        left: rect.left - amount,
+        top: rect.top - amount,
+        right: rect.right + amount,
+        bottom: rect.bottom + amount,
+    };
+}
+
+function hudRectsIntersect(a: HudRect, b: HudRect) {
+    return !(a.right <= b.left || a.left >= b.right || a.bottom <= b.top || a.top >= b.bottom);
+}
+
+function boundingHudRect(element: Element | null): HudRect | null {
+    if (!element) {
+        return null;
+    }
+    const bounds = element.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) {
+        return null;
+    }
+    return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
+}
+
+function RackParameterHudOverlay({ hud }: { hud: RackParameterHud }) {
+    const elementRef = useRef<HTMLDivElement | null>(null);
+    const stickyRef = useRef<{ gestureKey: string; side: HudPlacementSide | "dock" } | null>(null);
+    const [offset, setOffset] = useState<{ left: number; top: number } | null>(null);
+
+    useLayoutEffect(() => {
+        const element = elementRef.current;
+        const host = element?.parentElement;
+        if (!element || !host) {
+            return;
+        }
+
+        const hudWidth = element.offsetWidth;
+        const hudHeight = element.offsetHeight;
+        const hostBounds = host.getBoundingClientRect();
+        const viewport: HudRect = {
+            left: HUD_VIEWPORT_MARGIN_PX,
+            top: HUD_VIEWPORT_MARGIN_PX,
+            right: window.innerWidth - HUD_VIEWPORT_MARGIN_PX,
+            bottom: window.innerHeight - HUD_VIEWPORT_MARGIN_PX,
+        };
+        const exclusions: HudRect[] = [
+            inflateHudRect(hud.anchor, 6),
+            {
+                left: hud.pointer.x - HUD_FINGER_CLEARANCE_PX,
+                top: hud.pointer.y - HUD_FINGER_CLEARANCE_PX,
+                right: hud.pointer.x + HUD_FINGER_CLEARANCE_PX,
+                bottom: hud.pointer.y + HUD_FINGER_CLEARANCE_PX,
+            },
+        ];
+        const railBounds = boundingHudRect(document.querySelector('[data-role="mobile-global-mod-rail"]'));
+        if (railBounds) {
+            exclusions.push(inflateHudRect(railBounds, 4));
+        }
+        const keyboardBounds = boundingHudRect(document.querySelector('[data-role="sticky-keyboard"]'));
+        if (keyboardBounds) {
+            exclusions.push(keyboardBounds);
+        }
+
+        const anchorCenterX = (hud.anchor.left + hud.anchor.right) / 2;
+        const anchorCenterY = (hud.anchor.top + hud.anchor.bottom) / 2;
+        const clampLeft = (left: number) => Math.min(Math.max(left, viewport.left), viewport.right - hudWidth);
+        const clampTop = (top: number) => Math.min(Math.max(top, viewport.top), viewport.bottom - hudHeight);
+        const placementRect = (side: HudPlacementSide): HudRect => {
+            const left = side === "start"
+                ? hud.anchor.left - HUD_ANCHOR_GAP_PX - hudWidth
+                : side === "end"
+                    ? hud.anchor.right + HUD_ANCHOR_GAP_PX
+                    : clampLeft(anchorCenterX - (hudWidth / 2));
+            const top = side === "above"
+                ? hud.anchor.top - HUD_ANCHOR_GAP_PX - hudHeight
+                : side === "below"
+                    ? hud.anchor.bottom + HUD_ANCHOR_GAP_PX
+                    : clampTop(anchorCenterY - (hudHeight / 2));
+            return { left, top, right: left + hudWidth, bottom: top + hudHeight };
+        };
+        const rectIsClear = (rect: HudRect) => (
+            rect.left >= viewport.left
+            && rect.top >= viewport.top
+            && rect.right <= viewport.right
+            && rect.bottom <= viewport.bottom
+            && exclusions.every((exclusion) => !hudRectsIntersect(rect, exclusion))
+        );
+        const dockRect = (): HudRect | null => {
+            const dockTop = Math.max(viewport.top, hostBounds.top + 6);
+            const dockLefts = [
+                clampLeft(((hostBounds.left + hostBounds.right) / 2) - (hudWidth / 2)),
+                ...(railBounds ? [clampLeft(railBounds.left - HUD_ANCHOR_GAP_PX - hudWidth)] : []),
+                clampLeft(hostBounds.left + 6),
+            ];
+            for (const left of dockLefts) {
+                const rect = { left, top: dockTop, right: left + hudWidth, bottom: dockTop + hudHeight };
+                if (rectIsClear(rect)) {
+                    return rect;
+                }
+            }
+            return null;
+        };
+
+        const sideOrder: HudPlacementSide[] = hud.mode === "modulation"
+            ? ["above", "below", "start", "end"]
+            : ["start", "end", "above", "below"];
+        const gestureKey = `${hud.endpointID}:${hud.mode}`;
+        const sticky = stickyRef.current;
+        let chosenSide: HudPlacementSide | "dock" = "dock";
+        let chosenRect: HudRect | null = null;
+
+        if (sticky?.gestureKey === gestureKey) {
+            const stickyRect = sticky.side === "dock" ? dockRect() : placementRect(sticky.side);
+            if (stickyRect && (sticky.side === "dock" || rectIsClear(stickyRect))) {
+                chosenSide = sticky.side;
+                chosenRect = stickyRect;
+            }
+        }
+        if (!chosenRect) {
+            for (const side of sideOrder) {
+                const rect = placementRect(side);
+                if (rectIsClear(rect)) {
+                    chosenSide = side;
+                    chosenRect = rect;
+                    break;
+                }
+            }
+        }
+        chosenRect ??= dockRect();
+        if (!chosenRect) {
+            const left = clampLeft(hostBounds.left + 6);
+            const top = Math.max(viewport.top, hostBounds.top + 6);
+            chosenRect = { left, top, right: left + hudWidth, bottom: top + hudHeight };
+        }
+
+        stickyRef.current = { gestureKey, side: chosenSide };
+        setOffset({
+            left: chosenRect.left - hostBounds.left,
+            top: chosenRect.top - hostBounds.top,
+        });
+    }, [hud]);
+
+    return (
+        <div
+            ref={elementRef}
+            data-role="rack-parameter-hud"
+            data-mode={hud.mode}
+            className="rack-parameter-hud"
+            aria-live="polite"
+            style={offset ? { left: offset.left, top: offset.top } : { visibility: "hidden" }}
+        >
+            <span>{hud.label}</span>
+            <strong>{hud.value}</strong>
+        </div>
+    );
+}
+
 const MOBILE_MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
 const MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX = 7;
 const MOBILE_MOD_RAIL_SNAP_DISTANCE_PX = 28;
@@ -1180,6 +1350,7 @@ function MobileGlobalModRail({
     sourceActivity,
     sourceDrag,
     accent,
+    collapseSignal,
     onStateChange,
     children,
 }: {
@@ -1188,6 +1359,7 @@ function MobileGlobalModRail({
     sourceActivity: number | null;
     sourceDrag: SourceDragPresentation | null;
     accent: string;
+    collapseSignal: number;
     onStateChange?: (state: GlobalModRailState) => void;
     children: React.ReactNode;
 }) {
@@ -1211,7 +1383,7 @@ function MobileGlobalModRail({
     const measureAndClamp = useCallback(() => {
         const layer = layerRef.current;
         const rail = railRef.current;
-        if (!layer || !rail) {
+        if (!layer || !rail || gestureRef.current !== null) {
             return;
         }
 
@@ -1225,7 +1397,7 @@ function MobileGlobalModRail({
         const availableBottom = keyboardBounds
             ? Math.min(layerBounds.height, keyboardBounds.top - layerBounds.top)
             : layerBounds.height;
-        const railHeight = rail.getBoundingClientRect().height || 142;
+        const railHeight = rail.getBoundingClientRect().height || 168;
         const nextBounds = {
             min: safeTop,
             max: Math.max(safeTop, availableBottom - railHeight - safeBottom),
@@ -1250,6 +1422,9 @@ function MobileGlobalModRail({
         if (layer) {
             observer?.observe(layer);
         }
+        if (railRef.current) {
+            observer?.observe(railRef.current);
+        }
         if (keyboard) {
             observer?.observe(keyboard);
         }
@@ -1273,6 +1448,14 @@ function MobileGlobalModRail({
             },
         });
     }, [expanded, onStateChange, selectedSource.sourceKind, selectedSource.sourceSlot]);
+
+    useEffect(() => {
+        // A source deep-link navigates into that source's full editor; the
+        // widened tab would otherwise sit over the destination's Back bar.
+        if (collapseSignal > 0) {
+            setExpanded(false);
+        }
+    }, [collapseSignal]);
 
     useEffect(() => {
         const surface = layerRef.current?.closest(".cosimo-surface");
@@ -1390,105 +1573,109 @@ function MobileGlobalModRail({
                 } as CSSProperties}
                 aria-label="Global modulation bar"
             >
-                <div
-                    data-role="mobile-global-mod-rail-drawer"
-                    className="mobile-global-mod-rail-drawer"
-                    aria-hidden={!expanded || mappingActive}
-                    inert={!expanded || mappingActive}
-                >
-                    {children}
-                </div>
-                <button
-                    type="button"
-                    data-role="mobile-global-mod-rail-grip"
-                    className="mobile-global-mod-rail-grip"
-                    aria-label={expanded ? "Collapse global modulation bar" : "Expand global modulation bar"}
-                    aria-expanded={expanded}
-                    onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") {
-                            return;
-                        }
-                        event.preventDefault();
-                        setExpanded((current) => !current);
-                    }}
-                    onPointerDown={(event) => {
-                        if (event.pointerType === "mouse" && event.button !== 0) {
-                            return;
-                        }
-                        event.preventDefault();
-                        event.stopPropagation();
-                        gestureRef.current = {
-                            pointerId: event.pointerId,
-                            startClientY: event.clientY,
-                            startNormalizedY: normalizedPositionRef.current ?? readStoredRailPosition(),
-                            startTop: positionRef.current,
-                            moved: false,
-                            captureElement: event.currentTarget,
-                        };
-                        try {
-                            event.currentTarget.setPointerCapture(event.pointerId);
-                        } catch {
-                            // Window-level termination still owns unsupported pointers.
-                        }
-                    }}
-                    onPointerMove={(event) => {
-                        const gesture = gestureRef.current;
-                        if (!gesture || gesture.pointerId !== event.pointerId) {
-                            return;
-                        }
-                        event.preventDefault();
-                        event.stopPropagation();
-                        const deltaY = event.clientY - gesture.startClientY;
-                        gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
-                        if (!gesture.moved) {
-                            return;
-                        }
-                        const bounds = boundsRef.current;
-                        const nextTop = clamp(gesture.startTop + deltaY, bounds.min, bounds.max);
-                        positionRef.current = nextTop;
-                        const span = bounds.max - bounds.min;
-                        normalizedPositionRef.current = span > 0
-                            ? (nextTop - bounds.min) / span
-                            : 0;
-                        setTop(nextTop);
-                    }}
-                    onPointerUp={(event) => finishRailGesture(event.pointerId, false)}
-                    onPointerCancel={(event) => finishRailGesture(event.pointerId, true)}
-                    onLostPointerCapture={(event) => finishRailGesture(event.pointerId, true)}
-                >
-                    <svg
-                        data-role="mobile-global-mod-rail-silhouette"
-                        className="mobile-global-mod-rail-silhouette"
-                        viewBox="0 0 48 142"
-                        preserveAspectRatio="none"
-                        aria-hidden="true"
+                <span
+                    data-role="mobile-global-mod-rail-shoulder"
+                    className="mobile-global-mod-rail-shoulder is-top"
+                    aria-hidden="true"
+                />
+                <span
+                    data-role="mobile-global-mod-rail-shoulder"
+                    className="mobile-global-mod-rail-shoulder is-bottom"
+                    aria-hidden="true"
+                />
+                <div data-role="mobile-global-mod-rail-body" className="mobile-global-mod-rail-body">
+                    <div
+                        data-role="mobile-global-mod-rail-drawer"
+                        className="mobile-global-mod-rail-drawer"
+                        aria-hidden={!expanded || mappingActive}
+                        inert={!expanded || mappingActive}
                     >
-                        <path d="M48 0 C31 0 24 10 24 28 L24 114 C24 132 31 142 48 142 Z" />
-                    </svg>
-                    <span
-                        data-role="mobile-global-mod-rail-selected"
-                        className="mobile-global-mod-rail-selected"
-                        aria-label={`${selectedSource.label} selected`}
+                        {children}
+                    </div>
+                    <button
+                        type="button"
+                        data-role="mobile-global-mod-rail-grip"
+                        className="mobile-global-mod-rail-grip"
+                        aria-label={expanded ? "Collapse global modulation bar" : "Expand global modulation bar"}
+                        aria-expanded={expanded}
+                        onKeyDown={(event) => {
+                            if (event.key !== "Enter" && event.key !== " ") {
+                                return;
+                            }
+                            event.preventDefault();
+                            setExpanded((current) => !current);
+                        }}
+                        onPointerDown={(event) => {
+                            if (event.pointerType === "mouse" && event.button !== 0) {
+                                return;
+                            }
+                            event.preventDefault();
+                            event.stopPropagation();
+                            gestureRef.current = {
+                                pointerId: event.pointerId,
+                                startClientY: event.clientY,
+                                startNormalizedY: normalizedPositionRef.current ?? readStoredRailPosition(),
+                                startTop: positionRef.current,
+                                moved: false,
+                                captureElement: event.currentTarget,
+                            };
+                            try {
+                                event.currentTarget.setPointerCapture(event.pointerId);
+                            } catch {
+                                // Window-level termination still owns unsupported pointers.
+                            }
+                        }}
+                        onPointerMove={(event) => {
+                            const gesture = gestureRef.current;
+                            if (!gesture || gesture.pointerId !== event.pointerId) {
+                                return;
+                            }
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const deltaY = event.clientY - gesture.startClientY;
+                            gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
+                            if (!gesture.moved) {
+                                return;
+                            }
+                            const bounds = boundsRef.current;
+                            const nextTop = clamp(gesture.startTop + deltaY, bounds.min, bounds.max);
+                            positionRef.current = nextTop;
+                            const span = bounds.max - bounds.min;
+                            normalizedPositionRef.current = span > 0
+                                ? (nextTop - bounds.min) / span
+                                : 0;
+                            setTop(nextTop);
+                        }}
+                        onPointerUp={(event) => finishRailGesture(event.pointerId, false)}
+                        onPointerCancel={(event) => finishRailGesture(event.pointerId, true)}
+                        onLostPointerCapture={(event) => finishRailGesture(event.pointerId, true)}
                     >
-                        <span className="rack-mod-art" aria-hidden="true">
-                            <img className="rack-mod-icon" src={selectedSource.iconUrl} alt="" draggable={false} />
-                            <span className="rack-mod-number">{selectedSource.sourceSlot}</span>
-                        </span>
-                    </span>
-                    {clampedActivity !== null ? (
+                        <span className="mobile-global-mod-rail-handle" aria-hidden="true" />
                         <span
-                            className="mobile-global-mod-rail-activity"
-                            aria-label={`${selectedSource.label} activity`}
-                            style={{ "--source-activity": clampedActivity } as CSSProperties}
-                        ><span /></span>
-                    ) : null}
-                    <span
-                        data-role="mobile-global-mod-rail-route-count"
-                        className="mobile-global-mod-rail-route-count"
-                        aria-label={`${routeCount} modulation routes`}
-                    >{routeCount}</span>
-                    <span className="mobile-global-mod-rail-chevron" aria-hidden="true">{expanded ? "›" : "‹"}</span>
-                </button>
+                            data-role="mobile-global-mod-rail-selected"
+                            className="mobile-global-mod-rail-selected"
+                            aria-label={`${selectedSource.label} selected`}
+                        >
+                            <span className="rack-mod-art" aria-hidden="true">
+                                <img className="rack-mod-icon" src={selectedSource.iconUrl} alt="" draggable={false} />
+                                <span className="rack-mod-number">{selectedSource.sourceSlot}</span>
+                            </span>
+                        </span>
+                        {clampedActivity !== null ? (
+                            <span
+                                className="mobile-global-mod-rail-activity"
+                                aria-label={`${selectedSource.label} activity`}
+                                style={{ "--source-activity": clampedActivity } as CSSProperties}
+                            ><span /></span>
+                        ) : null}
+                        <span
+                            data-role="mobile-global-mod-rail-route-count"
+                            className="mobile-global-mod-rail-route-count"
+                            aria-label={`${routeCount} modulation routes`}
+                        >{routeCount}</span>
+                        <span className="mobile-global-mod-rail-chevron" aria-hidden="true">{expanded ? "›" : "‹"}</span>
+                    </button>
+                </div>
             </aside>
             {sourceDrag ? (
                 <div
@@ -1899,6 +2086,7 @@ export function EffectsRackWorkspace({
     const [routeStatus, setRouteStatus] = useState("");
     const [sourceDrag, setSourceDrag] = useState<SourceDragPresentation | null>(null);
     const [parameterHud, setParameterHud] = useState<RackParameterHud | null>(null);
+    const [railCollapseSignal, setRailCollapseSignal] = useState(0);
     const [parameterMenu, setParameterMenu] = useState<RackParameterMenuState | null>(null);
     const [parameterValueSheetEndpointID, setParameterValueSheetEndpointID] = useState<string | null>(null);
     const [removeTargetRoutesEndpointID, setRemoveTargetRoutesEndpointID] = useState<string | null>(null);
@@ -2248,7 +2436,10 @@ export function EffectsRackWorkspace({
                 }}
                 onSourceSelect={selectSource}
                 onSourceDrop={dropSource}
-                onOpenSelectedSource={(source) => onOpenModSource?.(source)}
+                onOpenSelectedSource={(source) => {
+                    setRailCollapseSignal((current) => current + 1);
+                    onOpenModSource?.(source);
+                }}
                 onHoverTarget={setHoverTargetEndpointID}
                 onSourceDragChange={setSourceDrag}
             />
@@ -2279,17 +2470,7 @@ export function EffectsRackWorkspace({
             data-layout-card="mobile-effects-workspace"
             className={`effects-rack-workspace ${className ?? ""}`}
         >
-            {parameterHud ? (
-                <div
-                    data-role="rack-parameter-hud"
-                    data-mode={parameterHud.mode}
-                    className="rack-parameter-hud"
-                    aria-live="polite"
-                >
-                    <span>{parameterHud.label}</span>
-                    <strong>{parameterHud.value}</strong>
-                </div>
-            ) : null}
+            {parameterHud ? <RackParameterHudOverlay hud={parameterHud} /> : null}
             {parameterMenu ? (
                 <RackParameterContextMenu
                     state={parameterMenu}
@@ -2468,6 +2649,7 @@ export function EffectsRackWorkspace({
                     sourceActivity={globalModSourceActivity}
                     sourceDrag={sourceDrag}
                     accent={EFFECT_ACCENTS[selectedEffectId]}
+                    collapseSignal={railCollapseSignal}
                     onStateChange={onGlobalModRailStateChange}
                 >
                     {modulationControls}

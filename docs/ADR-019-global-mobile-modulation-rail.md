@@ -1,6 +1,6 @@
 # ADR-019: Global mobile modulation rail
 
-Status: accepted — 2026-08-08
+Status: accepted — 2026-08-08; corrected 2026-08-08 (see "2026-08-08 correction: true edge tab")
 
 ## Context
 
@@ -23,3 +23,33 @@ The approved Mod Bar was embedded in the FX editor footer. That made modulation 
 - Position persistence survives materially different phone viewports instead of replaying a stale pixel offset.
 - The activity display stays honest but is intentionally incomplete for source families whose live value is not currently exposed by the engine.
 - ADR-018 remains authoritative for explicit mapping, route limits, source artwork, the no-LFO product model, and source/target semantics.
+
+## 2026-08-08 correction: true edge tab
+
+The first shipped rail was rejected on geometry: collapsed art spilled past the tab
+silhouette, expansion opened a detached horizontal popup joined by an angular
+connector wedge, and the parameter gesture HUD docked at the workspace top where
+the expanded drawer (and its modulation amount slider) could sit underneath it.
+
+- The silhouette is now composed in CSS instead of a fixed-viewBox SVG: an opaque
+  body with convex left corners plus two concave radial-gradient shoulder fillets
+  that merge tangentially into the right screen edge — a browser tab rotated onto
+  the edge. The rail layer is fixed to the visual viewport so the tab is flush with
+  the physical screen edge rather than the padded app surface.
+- Expansion animates `width`/`height` of the same element. The drawer content is
+  laid out inside the tab body at a fixed inner width and is revealed by the
+  widening surface; the grip remains the tab's right column at every width, so
+  there is no second surface, no popup, and no exposed sharp corners. Collapsed
+  contents (grip handle, selected art, activity, route count, chevron) stack in
+  one vertical column that fits inside the tab from 320px to 430px widths.
+- Vertical bounds are re-clamped from the rail's own ResizeObserver entry so the
+  expanded height stays clear of the sticky keyboard, and measure-driven
+  reprojection is suppressed while a grip gesture owns the position.
+- The gesture HUD now carries its anchor rect and live pointer, and the renderer
+  chooses a stable placement (side order depends on drag axis) that must not
+  intersect the active control, the rail, the sticky keyboard, the finger zone, or
+  the viewport edges, falling back to a safe top dock. It remains pointer-events
+  none and positions absolutely, so layout never moves.
+- Source mapping still compacts the tab to its collapsed geometry, keeps the
+  ghost, makes the rail hit-transparent, and feeds the explicit route-creation
+  flow unchanged.

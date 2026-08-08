@@ -1,127 +1,183 @@
 @media (max-width: 639px) {
-    .mobile-global-mod-rail-portal,
-    .mobile-global-mod-rail-layer {
+    .mobile-global-mod-rail-portal {
         position: absolute;
         inset: 0;
+        z-index: 32;
         pointer-events: none;
     }
 
-    .mobile-global-mod-rail-portal {
-        z-index: 32;
-    }
-
+    /* The layer is fixed to the visual viewport so the tab can sit truly flush
+       against the right screen edge, outside the padded app surface. */
     .mobile-global-mod-rail-layer {
+        position: fixed;
+        inset: 0;
         overflow: hidden;
         box-sizing: border-box;
         padding-top: env(safe-area-inset-top, 0px);
         padding-bottom: env(safe-area-inset-bottom, 0px);
+        pointer-events: none;
     }
 
+    /* One continuous browser-tab silhouette rotated onto the right edge:
+       concave shoulder fillets merge tangentially into the screen edge and the
+       body keeps convex left corners. Expansion widens this same element. */
     .mobile-global-mod-rail {
-        --rail-height: 142px;
+        --rail-shoulder: 14px;
+        --rail-corner: 15px;
+        --rail-collapsed-w: 56px;
+        --rail-expanded-w: min(302px, calc(100vw - 26px));
+        --rail-collapsed-h: 168px;
+        --rail-expanded-h: 224px;
+        --rail-fill: rgb(13 20 23);
+        --rail-stroke: color-mix(in srgb, var(--source-color) 34%, rgb(255 255 255 / 0.09));
+        --rail-top-duration: 180ms;
         position: absolute;
         right: 0;
-        width: 48px;
-        height: var(--rail-height);
+        width: var(--rail-collapsed-w);
+        height: var(--rail-collapsed-h);
         pointer-events: auto;
-        transition: top 180ms cubic-bezier(0.22, 0.72, 0.22, 1);
+        filter: drop-shadow(-6px 8px 12px rgb(0 0 0 / 0.4));
+        transition:
+            top var(--rail-top-duration) cubic-bezier(0.22, 0.72, 0.22, 1),
+            width 200ms cubic-bezier(0.22, 0.72, 0.22, 1),
+            height 200ms cubic-bezier(0.22, 0.72, 0.22, 1);
     }
 
     .mobile-global-mod-rail:has(.mobile-global-mod-rail-grip:active) {
-        transition: none;
+        --rail-top-duration: 0ms;
+    }
+
+    .mobile-global-mod-rail[data-expanded="true"] {
+        width: var(--rail-expanded-w);
+        height: var(--rail-expanded-h);
+    }
+
+    .mobile-global-mod-rail[data-mapping-active="true"] {
+        width: var(--rail-collapsed-w);
+        height: var(--rail-collapsed-h);
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-shoulder {
+        position: absolute;
+        right: 0;
+        width: var(--rail-shoulder);
+        height: calc(var(--rail-shoulder) + 2px);
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail-shoulder.is-top {
+        top: 0;
+        background: radial-gradient(
+            circle var(--rail-shoulder) at 0 0,
+            transparent calc(var(--rail-shoulder) - 1.5px),
+            var(--rail-stroke) calc(var(--rail-shoulder) - 1px) calc(var(--rail-shoulder) - 0.25px),
+            var(--rail-fill) calc(var(--rail-shoulder) + 0.75px)
+        );
+    }
+
+    .mobile-global-mod-rail-shoulder.is-bottom {
+        bottom: 0;
+        background: radial-gradient(
+            circle var(--rail-shoulder) at 0 100%,
+            transparent calc(var(--rail-shoulder) - 1.5px),
+            var(--rail-stroke) calc(var(--rail-shoulder) - 1px) calc(var(--rail-shoulder) - 0.25px),
+            var(--rail-fill) calc(var(--rail-shoulder) + 0.75px)
+        );
+    }
+
+    .mobile-global-mod-rail-body {
+        position: absolute;
+        inset: var(--rail-shoulder) 0;
+        overflow: hidden;
+        border: 1px solid var(--rail-stroke);
+        border-right: 0;
+        border-radius: var(--rail-corner) 0 0 var(--rail-corner);
+        background:
+            linear-gradient(135deg, color-mix(in srgb, var(--source-color) 9%, transparent), transparent 46%),
+            var(--rail-fill);
     }
 
     .mobile-global-mod-rail-drawer {
         position: absolute;
-        top: 3px;
-        right: 48px;
-        width: min(244px, calc(100vw - 72px));
-        min-height: 90px;
-        overflow: visible;
-        border: 1px solid color-mix(in srgb, var(--source-color) 28%, rgb(255 255 255 / 0.08));
-        border-radius: 14px 4px 4px 14px;
-        background:
-            linear-gradient(135deg, color-mix(in srgb, var(--source-color) 8%, transparent), transparent 46%),
-            rgb(8 13 15 / 0.97);
-        box-shadow:
-            0 10px 28px rgb(0 0 0 / 0.48),
-            inset 0 1px rgb(255 255 255 / 0.035);
+        top: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1;
+        display: flex;
+        width: calc(var(--rail-expanded-w) - var(--rail-collapsed-w));
+        flex-direction: column;
+        justify-content: center;
+        gap: 4px;
+        padding: 5px 2px 5px 8px;
         opacity: 0;
+        visibility: hidden;
         pointer-events: none;
-        transform: translateX(28px) scaleX(0.94);
-        transform-origin: right center;
         transition:
-            opacity 150ms ease,
-            transform 190ms cubic-bezier(0.22, 0.72, 0.22, 1);
-    }
-
-    .mobile-global-mod-rail-drawer::after {
-        position: absolute;
-        top: 26px;
-        right: -25px;
-        bottom: 22px;
-        width: 25px;
-        background: linear-gradient(90deg, rgb(8 13 15 / 0.97), rgb(13 20 23 / 0.94));
-        clip-path: polygon(0 0, 100% 18%, 100% 82%, 0 100%);
-        content: "";
-        pointer-events: none;
+            opacity 140ms ease,
+            visibility 0s linear 140ms;
     }
 
     .mobile-global-mod-rail[data-expanded="true"] .mobile-global-mod-rail-drawer {
         opacity: 1;
+        visibility: visible;
         pointer-events: auto;
-        transform: translateX(0) scaleX(1);
+        transition-delay: 40ms, 0s;
     }
 
     .mobile-global-mod-rail[data-mapping-active="true"] .mobile-global-mod-rail-drawer {
         opacity: 0;
+        visibility: hidden;
         pointer-events: none;
-        transform: translateX(40px) scaleX(0.92);
-    }
-
-    .mobile-global-mod-rail[data-mapping-active="true"] {
-        pointer-events: none;
+        transition-delay: 0s, 0s;
     }
 
     .mobile-global-mod-rail-drawer .rack-mod-dock {
         border: 0;
-        border-radius: 13px 3px 0 0;
+        border-radius: 0;
         background: transparent;
         box-shadow: none;
     }
 
     .mobile-global-mod-rail-drawer .rack-mod-amount,
     .mobile-global-mod-rail-drawer .rack-mod-unmapped {
-        border-right: 0;
-        border-bottom: 0;
-        border-left: 0;
-        border-radius: 0 0 0 13px;
-        background: rgb(7 11 13 / 0.78);
+        border: 1px solid rgb(255 255 255 / 0.05);
+        border-radius: 8px;
+        background: rgb(7 11 13 / 0.66);
     }
 
     .mobile-global-mod-rail-drawer .rack-route-status {
         min-height: 14px;
         padding: 2px 6px 3px;
-        border-top: 1px solid rgb(255 255 255 / 0.055);
+        border: 0;
+        border-radius: 6px;
         color: rgb(209 218 221 / 0.58);
-        background: rgb(7 11 13 / 0.72);
+        background: rgb(7 11 13 / 0.5);
         font-size: 7px;
     }
 
+    .mobile-global-mod-rail-drawer .rack-route-status:empty {
+        background: transparent;
+    }
+
+    /* The grip column is the dedicated move/toggle region. It stays the tab's
+       right column at every width, so the drawer can never slide beneath it. */
     .mobile-global-mod-rail-grip {
         position: absolute;
         top: 0;
         right: 0;
-        display: grid;
-        width: 48px;
-        height: var(--rail-height);
-        grid-template-rows: 1fr auto auto auto 1fr;
-        place-items: center;
-        overflow: visible;
-        padding: 17px 0 13px 18px;
+        bottom: 0;
+        z-index: 2;
+        display: flex;
+        width: var(--rail-collapsed-w);
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        padding: 22px 0;
         border: 0;
         border-radius: 0;
-        background: transparent;
+        background: var(--rail-fill);
         box-shadow: none;
         color: #dbe3e5;
         cursor: ns-resize;
@@ -130,38 +186,38 @@
         -webkit-user-select: none;
     }
 
-    .mobile-global-mod-rail-silhouette {
+    .mobile-global-mod-rail[data-expanded="true"] .mobile-global-mod-rail-grip {
+        border-left: 1px solid rgb(255 255 255 / 0.06);
+    }
+
+    .mobile-global-mod-rail-handle {
         position: absolute;
-        inset: 0;
-        width: 48px;
-        height: var(--rail-height);
-        overflow: visible;
-        filter: drop-shadow(-5px 7px 10px rgb(0 0 0 / 0.42));
+        top: 8px;
+        left: 50%;
+        width: 18px;
+        height: 11px;
+        border-radius: 1px;
+        background: repeating-linear-gradient(
+            180deg,
+            rgb(213 223 226 / 0.5) 0 2px,
+            transparent 2px 5px
+        );
+        transform: translateX(-50%);
         pointer-events: none;
     }
 
-    .mobile-global-mod-rail-silhouette path {
-        fill: rgb(13 20 23 / 0.97);
-        stroke: color-mix(in srgb, var(--source-color) 34%, rgb(255 255 255 / 0.08));
-        stroke-width: 1;
-        vector-effect: non-scaling-stroke;
-    }
-
     .mobile-global-mod-rail-selected {
-        position: relative;
-        z-index: 1;
         display: grid;
-        width: 34px;
-        height: 38px;
+        width: 38px;
+        height: 40px;
         place-items: center;
-        grid-row: 2;
         pointer-events: none;
     }
 
     .mobile-global-mod-rail-selected .rack-mod-art,
     .mobile-global-mod-rail-selected .rack-mod-icon {
-        width: 32px;
-        height: 32px;
+        width: 36px;
+        height: 36px;
     }
 
     .mobile-global-mod-rail-selected .rack-mod-art {
@@ -171,16 +227,13 @@
     }
 
     .mobile-global-mod-rail-selected .rack-mod-number {
-        top: 10px;
-        right: 3px;
+        top: 11px;
+        right: 4px;
     }
 
     .mobile-global-mod-rail-activity {
-        position: relative;
-        z-index: 1;
         width: 24px;
         height: 4px;
-        grid-row: 3;
         overflow: hidden;
         border-radius: 999px;
         background: rgb(255 255 255 / 0.09);
@@ -200,14 +253,10 @@
     }
 
     .mobile-global-mod-rail-route-count {
-        position: relative;
-        z-index: 1;
         display: grid;
         min-width: 19px;
         height: 18px;
-        margin-top: 4px;
         place-items: center;
-        grid-row: 4;
         padding-inline: 4px;
         border: 1px solid color-mix(in srgb, var(--source-color) 38%, rgb(255 255 255 / 0.09));
         border-radius: 999px;
@@ -220,12 +269,12 @@
 
     .mobile-global-mod-rail-chevron {
         position: absolute;
-        z-index: 1;
-        bottom: 7px;
-        left: 27px;
+        bottom: 5px;
+        left: 50%;
         color: rgb(225 233 235 / 0.52);
         font-size: 17px;
         line-height: 1;
+        transform: translateX(-50%);
         pointer-events: none;
     }
 

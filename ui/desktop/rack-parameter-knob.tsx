@@ -47,11 +47,20 @@ export type RackParameterKnobProps = {
     readonly onRequestContextMenu: (clientX: number, clientY: number) => void;
 };
 
+export type RackParameterHudAnchor = {
+    readonly left: number;
+    readonly top: number;
+    readonly right: number;
+    readonly bottom: number;
+};
+
 export type RackParameterHud = {
     readonly endpointID: string;
     readonly label: string;
     readonly value: string;
     readonly mode: "base" | "modulation";
+    readonly anchor: RackParameterHudAnchor;
+    readonly pointer: { readonly x: number; readonly y: number };
 };
 
 type KnobGesture = {
@@ -305,6 +314,14 @@ export function RackParameterKnob({
         }
         const currentDescriptor = descriptorRef.current;
         const currentTargetKind = `rack.${currentDescriptor.endpointID}` as RackModulationTargetKind;
+        const anchorBounds = gesture.element.getBoundingClientRect();
+        const hudAnchor = {
+            left: anchorBounds.left,
+            top: anchorBounds.top,
+            right: anchorBounds.right,
+            bottom: anchorBounds.bottom,
+        };
+        const hudPointer = { x: event.clientX, y: event.clientY };
         const sensitivity = event.shiftKey ? 720 : 180;
         const nextNormalized = clamp(
             gesture.mode === "base"
@@ -322,6 +339,8 @@ export function RackParameterKnob({
                         ? "NOT MAPPED · CREATE MAPPING +"
                         : "SELECT A SOURCE",
                     mode: "modulation",
+                    anchor: hudAnchor,
+                    pointer: hudPointer,
                 });
                 return;
             }
@@ -332,6 +351,8 @@ export function RackParameterKnob({
                 label: `MOD · ${currentDescriptor.label}`,
                 value: formatModulationAmountReadout(currentTargetKind, nextAmount, routePolarityRef.current),
                 mode: "modulation",
+                anchor: hudAnchor,
+                pointer: hudPointer,
             });
             return;
         }
@@ -343,6 +364,8 @@ export function RackParameterKnob({
             label: `BASE · ${currentDescriptor.label}`,
             value: formatRackParameterValue(currentDescriptor, nextValue),
             mode: "base",
+            anchor: hudAnchor,
+            pointer: hudPointer,
         });
     }, [finishGesture]);
 
