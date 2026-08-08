@@ -13267,8 +13267,8 @@ const MSEG_DEFAULT_NAME = "MSEG 1";
 const MSEG_DEFAULT_DEPTH = 1;
 const MSEG_RATE_MIN_SECONDS = 0;
 const MSEG_RATE_MAX_SECONDS = 2;
-const MSEG_POINT_HIT_RADIUS_PX = 16;
-const MSEG_SEGMENT_HIT_RADIUS_PX = 10;
+const MSEG_POINT_HIT_RADIUS_PX = 22;
+const MSEG_SEGMENT_HIT_RADIUS_PX = 14;
 const MSEG_POINT_RADIUS_PX = 8;
 const MSEG_SELECTED_POINT_RADIUS_PX = 10;
 const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
@@ -19535,7 +19535,23 @@ function useMsegEditorInteractions({
   const [selectedPointIndex, setSelectedPointIndex] = reactExports.useState(0);
   const [hoveredSegmentIndex, setHoveredSegmentIndex] = reactExports.useState(-1);
   const [activeSegmentIndex, setActiveSegmentIndex] = reactExports.useState(-1);
+  const [undoShape, setUndoShape] = reactExports.useState(null);
   const activePointerRef = reactExports.useRef(null);
+  const activeGestureUndoCapturedRef = reactExports.useRef(false);
+  const captureUndoShape = reactExports.useCallback(() => {
+    if (activeGestureUndoCapturedRef.current) {
+      return;
+    }
+    const shape = msegController.current?.getState().shape ?? msegState?.shape;
+    if (!shape) {
+      return;
+    }
+    setUndoShape({
+      ...shape,
+      points: shape.points.map((point) => ({ ...point }))
+    });
+    activeGestureUndoCapturedRef.current = true;
+  }, [msegController, msegState?.shape]);
   const clearPendingSegmentTimer = reactExports.useCallback((pointerState) => {
     if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
       window.clearTimeout(pointerState.holdTimeoutId);
@@ -19548,6 +19564,7 @@ function useMsegEditorInteractions({
       return;
     }
     activePointerRef.current = null;
+    activeGestureUndoCapturedRef.current = false;
     clearPendingSegmentTimer(activePointer);
     try {
       if (surfaceRef.current?.hasPointerCapture(activePointer.pointerId)) {
@@ -19634,12 +19651,27 @@ function useMsegEditorInteractions({
     };
   }, [cancelActivePointer, isOpen]);
   const openEditor = reactExports.useCallback(() => {
+    setUndoShape(null);
+    activeGestureUndoCapturedRef.current = false;
     setIsOpen(true);
   }, []);
   const closeEditor = reactExports.useCallback(() => {
     setIsOpen(false);
     cancelActivePointer();
   }, [cancelActivePointer]);
+  const undoLastEdit = reactExports.useCallback(() => {
+    if (!undoShape || !msegController.current) {
+      return;
+    }
+    msegController.current.setShape(undoShape);
+    setSelectedPointIndex((previousIndex) => clamp$1(
+      previousIndex,
+      0,
+      Math.max(0, undoShape.points.length - 1)
+    ));
+    setUndoShape(null);
+    activeGestureUndoCapturedRef.current = false;
+  }, [msegController, undoShape]);
   const applyCurveEditFromClientCoordinates = reactExports.useCallback((segmentIndex, clientX, clientY) => {
     if (!surfaceRef.current || !msegController.current) {
       return;
@@ -19657,8 +19689,9 @@ function useMsegEditorInteractions({
       { orientation }
     );
     const curvePower = deriveMsegSegmentCurvePower(currentShape, segmentIndex, point.x, point.y);
+    captureUndoShape();
     msegController.current.setSegmentCurvePower(segmentIndex, curvePower);
-  }, [msegController, msegState?.shape, orientation, surfaceRef]);
+  }, [captureUndoShape, msegController, msegState?.shape, orientation, surfaceRef]);
   const handlePointerDown = reactExports.useCallback((event) => {
     if (event.button !== 0 || !msegState || !surfaceRef.current) {
       return;
@@ -19668,6 +19701,7 @@ function useMsegEditorInteractions({
       return;
     }
     if (pointerLocation.pointIndex >= 0) {
+      activeGestureUndoCapturedRef.current = false;
       setSelectedPointIndex(pointerLocation.pointIndex);
       setActiveSegmentIndex(-1);
       activePointerRef.current = {
@@ -19687,6 +19721,7 @@ function useMsegEditorInteractions({
       return;
     }
     if (pointerLocation.segmentIndex >= 0) {
+      activeGestureUndoCapturedRef.current = false;
       setActiveSegmentIndex(pointerLocation.segmentIndex);
       setHoveredSegmentIndex(pointerLocation.segmentIndex);
       if (curveEditActivationMode === "immediate") {
@@ -19733,6 +19768,8 @@ function useMsegEditorInteractions({
       pointerLocation.bounds.height,
       { orientation }
     );
+    activeGestureUndoCapturedRef.current = false;
+    captureUndoShape();
     msegController.current?.addPoint(point.x, point.y);
     const points = msegController.current?.getState().shape.points ?? [];
     const nextPointIndex = points.findIndex(
@@ -19746,6 +19783,7 @@ function useMsegEditorInteractions({
   }, [
     curveEditActivationMode,
     curveEditHoldDelayMs,
+    captureUndoShape,
     msegController,
     msegState,
     onCurveEditHoldActivated,
@@ -19802,6 +19840,7 @@ function useMsegEditorInteractions({
       { orientation }
     );
     if (!activePointer.moved) {
+      captureUndoShape();
       activePointerRef.current = {
         ...activePointer,
         moved: true
@@ -19814,6 +19853,7 @@ function useMsegEditorInteractions({
     event.preventDefault();
   }, [
     applyCurveEditFromClientCoordinates,
+    captureUndoShape,
     clearPendingSegmentTimer,
     msegController,
     orientation,
@@ -19856,6 +19896,7 @@ function useMsegEditorInteractions({
           bounds.height,
           { orientation }
         );
+        captureUndoShape();
         msegController.current?.addPoint(point.x, point.y);
         const points = msegController.current?.getState().shape.points ?? [];
         const nextPointIndex = points.findIndex(
@@ -19875,6 +19916,7 @@ function useMsegEditorInteractions({
       return;
     }
     if (!pointerState.moved && pointerState.deleteOnRelease && msegController.current) {
+      captureUndoShape();
       msegController.current.deletePoint(pointerState.pointIndex);
       const pointCount = msegController.current.getState().shape.points.length;
       setSelectedPointIndex(clamp$1(pointerState.pointIndex - 1, 0, Math.max(0, pointCount - 1)));
@@ -19883,6 +19925,7 @@ function useMsegEditorInteractions({
     event.preventDefault();
   }, [
     cancelActivePointer,
+    captureUndoShape,
     clearPendingSegmentTimer,
     msegController,
     orientation,
@@ -19894,8 +19937,10 @@ function useMsegEditorInteractions({
     selectedPointIndex,
     hoveredSegmentIndex,
     activeSegmentIndex,
+    canUndo: undoShape !== null,
     openEditor,
     closeEditor,
+    undoLastEdit,
     handlePointerDown,
     handlePointerMove,
     handlePointerLeave,

@@ -75,6 +75,41 @@
         overscroll-behavior: contain;
     }
 
+    .mobile-mod-return-bar {
+        display: flex;
+        min-height: 44px;
+        margin-bottom: 4px;
+        overflow: hidden;
+        border: 1px solid rgb(223 116 207 / 0.22);
+        border-radius: 10px;
+        background:
+            linear-gradient(90deg, rgb(223 116 207 / 0.09), transparent 58%),
+            #0a0f11;
+    }
+
+    .mobile-mod-return-bar > button {
+        display: flex;
+        width: 100%;
+        min-height: 44px;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px;
+        border: 0;
+        background: transparent;
+        color: rgb(226 232 234 / 0.76);
+        font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
+        font-size: 10px;
+        font-weight: 650;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .mobile-mod-return-bar > button > span {
+        color: #df74cf;
+        font-size: 22px;
+        line-height: 1;
+    }
+
     .mobile-voice-grid {
         grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 4px;

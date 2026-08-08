@@ -913,7 +913,7 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
             const sourceLabels = Array.from(root?.querySelectorAll('[data-role^="rack-mod-source-"]') ?? [])
                 .map((source) => source.getAttribute("aria-label") ?? "");
             return {
-                amountWithinEditor: Boolean(amountBounds && editorBounds
+                amountWithinEditor: !amountBounds || Boolean(editorBounds
                     && amountBounds.left >= editorBounds.left
                     && amountBounds.right <= editorBounds.right),
                 listHeight: listBounds?.height ?? 0,

@@ -7509,6 +7509,62 @@ test("mobile Mod exposes the fixed performance sources and never introduces an L
     }
 });
 
+test("mobile Mod source navigation stays touchable and contained at iPhone width", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        await source.click();
+        await source.click();
+
+        const editor = page.locator('.mobile-mod-source-editor');
+        const tabs = editor.locator('[data-role="mobile-mod-source-tabs"]');
+        await tabs.waitFor();
+        for (const width of [393, 320]) {
+            await page.setViewportSize({ width, height: 852 });
+            await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+            const layout = await editor.evaluate((element) => {
+                const bounds = element.getBoundingClientRect();
+                const contained = (candidate) => {
+                    const candidateBounds = candidate.getBoundingClientRect();
+                    return candidateBounds.left >= bounds.left - 0.5
+                        && candidateBounds.right <= bounds.right + 0.5;
+                };
+                const targets = Array.from(element.querySelectorAll(
+                    '[data-role="mobile-mod-source-family"] button, [data-role="mobile-mod-active-controls"] button, [data-role="mobile-mod-active-controls"] input',
+                ));
+                return {
+                    clientWidth: element.clientWidth,
+                    scrollWidth: element.scrollWidth,
+                    allContained: targets.every(contained),
+                    touchTargets: targets.map((target) => {
+                        const targetBounds = target.getBoundingClientRect();
+                        return { width: targetBounds.width, height: targetBounds.height };
+                    }),
+                };
+            });
+            assert.equal(layout.scrollWidth <= layout.clientWidth + 1, true, `Source editor overflows at ${width}px.`);
+            assert.equal(layout.allContained, true, `Source controls escape at ${width}px.`);
+            assert.equal(
+                layout.touchTargets.every(({ width: targetWidth, height }) => targetWidth >= 36 && height >= 44),
+                true,
+                `Source controls are not touchable at ${width}px.`,
+            );
+
+            const back = page.locator('[data-role="mobile-workspace-back"]');
+            const backBounds = await back.boundingBox();
+            assert.ok(backBounds);
+            assert.equal(backBounds.width >= 120 && backBounds.height >= 44, true);
+            assert.equal(backBounds.x >= 0 && backBounds.x + backBounds.width <= width, true);
+        }
+    } finally {
+        await page.close();
+    }
+});
+
 test("mobile Mod uses a complete one-dimensional route list with detail, filters, and hierarchical creation", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {

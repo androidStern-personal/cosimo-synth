@@ -17,6 +17,63 @@
     aspect-ratio: auto;
 }
 
+.mobile-mod-source-editor .mod-source-tabs {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 8px;
+    padding: 4px 6px;
+}
+
+.mobile-mod-source-editor .mod-source-family {
+    min-width: 0;
+    min-height: 44px;
+}
+
+.mobile-mod-source-editor .mod-source-family:nth-of-type(1) {
+    justify-self: start;
+}
+
+.mobile-mod-source-editor .mod-source-family[data-source-family="env"] {
+    justify-self: end;
+}
+
+.mobile-mod-source-editor .mod-source-family[data-source-family="macro"],
+.mobile-mod-source-editor .mod-source-active-controls {
+    grid-column: 1 / -1;
+}
+
+.mobile-mod-source-editor .mod-source-family[data-source-family="macro"] {
+    justify-self: center;
+}
+
+.mobile-mod-source-editor .mod-source-family button,
+.mobile-mod-source-editor .mod-source-active-controls button {
+    width: 36px;
+    height: 44px;
+}
+
+.mobile-mod-source-editor .mod-source-separator {
+    display: none;
+}
+
+.mobile-mod-source-editor .mod-source-active-controls {
+    width: 100%;
+    height: 44px;
+    margin-left: 0;
+}
+
+.mobile-mod-source-editor .mod-source-active-controls > div {
+    justify-content: center;
+}
+
+.mobile-mod-source-editor .mod-source-active-controls input {
+    min-height: 44px;
+}
+
+.mobile-mod-source-editor .mod-source-active-controls[data-active-source-kind="macro"] {
+    display: none;
+}
+
 .mobile-mod-list-screen,
 .mobile-mod-screen {
     display: grid;

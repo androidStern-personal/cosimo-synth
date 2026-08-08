@@ -2561,79 +2561,92 @@ function ModulationMatrixSection({
                 hidden
             />
             {/* ── Pip selector top-bar ── */}
-            <div className="flex shrink-0 items-center gap-1.5 px-2.5 py-1.5">
+            <div
+                data-role="mobile-mod-source-tabs"
+                className="mod-source-tabs flex shrink-0 items-center gap-1.5 px-2.5 py-1.5"
+            >
                 {/* MSEG pips */}
-                <div className="flex gap-[3px]">
-                    {Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => (
-                        <button
-                            key={`mseg-pip-${slotIndex}`}
-                            type="button"
-                            aria-label={`Select MSEG ${slotIndex + 1}`}
-                            className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
-                                activeEditorTab.kind === "mseg" && activeMsegSlot === slotIndex
-                                    ? "synth-accent-active-button"
-                                    : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
-                            }`}
-                            onClick={() => {
-                                onSelectMsegSlot(slotIndex);
-                                setActiveEditorTab({ kind: "mseg", slotIndex });
-                            }}
-                        >
-                            {slotIndex + 1}
-                        </button>
-                    ))}
+                <div data-role="mobile-mod-source-family" data-source-family="mseg" className="mod-source-family flex items-center gap-1">
+                    <div className="flex gap-[3px]">
+                        {Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => (
+                            <button
+                                key={`mseg-pip-${slotIndex}`}
+                                type="button"
+                                aria-label={`Select MSEG ${slotIndex + 1}`}
+                                className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
+                                    activeEditorTab.kind === "mseg" && activeMsegSlot === slotIndex
+                                        ? "synth-accent-active-button"
+                                        : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
+                                }`}
+                                onClick={() => {
+                                    onSelectMsegSlot(slotIndex);
+                                    setActiveEditorTab({ kind: "mseg", slotIndex });
+                                }}
+                            >
+                                {slotIndex + 1}
+                            </button>
+                        ))}
+                    </div>
+                    <span className="synth-section-title ml-0.5">Mseg</span>
                 </div>
-                <span className="synth-section-title ml-0.5">Mseg</span>
 
                 {/* Separator */}
-                <div className="mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" />
+                <div className="mod-source-separator mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" />
 
                 {/* ENV pips */}
-                <div className="flex gap-[3px]">
-                    {Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
-                        <button
-                            key={`env-pip-${slotIndex}`}
-                            type="button"
-                            aria-label={`Select envelope ${slotIndex + 1}`}
-                            className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
-                                activeEditorTab.kind === "envelope" && activeEnvelopeSlot === slotIndex
-                                    ? "synth-accent-active-button"
-                                    : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
-                            }`}
-                            onClick={() => {
-                                onSelectEnvelopeSlot(slotIndex);
-                                setActiveEditorTab({ kind: "envelope", slotIndex });
-                            }}
-                        >
-                            {slotIndex + 1}
-                        </button>
-                    ))}
+                <div data-role="mobile-mod-source-family" data-source-family="env" className="mod-source-family flex items-center gap-1">
+                    <div className="flex gap-[3px]">
+                        {Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
+                            <button
+                                key={`env-pip-${slotIndex}`}
+                                type="button"
+                                aria-label={`Select envelope ${slotIndex + 1}`}
+                                className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
+                                    activeEditorTab.kind === "envelope" && activeEnvelopeSlot === slotIndex
+                                        ? "synth-accent-active-button"
+                                        : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
+                                }`}
+                                onClick={() => {
+                                    onSelectEnvelopeSlot(slotIndex);
+                                    setActiveEditorTab({ kind: "envelope", slotIndex });
+                                }}
+                            >
+                                {slotIndex + 1}
+                            </button>
+                        ))}
+                    </div>
+                    <span className="synth-section-title ml-0.5">Env</span>
                 </div>
-                <span className="synth-section-title ml-0.5">Env</span>
 
-                <div className="mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" />
+                <div className="mod-source-separator mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" />
 
-                <div className="flex gap-[3px]">
-                    {Array.from({ length: MODULATION_MACRO_SLOT_COUNT }, (_, slotIndex) => (
-                        <button
-                            key={`macro-pip-${slotIndex}`}
-                            type="button"
-                            aria-label={`Select macro ${slotIndex + 1}`}
-                            className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
-                                activeEditorTab.kind === "macro" && activeEditorTab.slotIndex === slotIndex
-                                    ? "synth-accent-active-button"
-                                    : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
-                            }`}
-                            onClick={() => setActiveEditorTab({ kind: "macro", slotIndex })}
-                        >
-                            {slotIndex + 1}
-                        </button>
-                    ))}
+                <div data-role="mobile-mod-source-family" data-source-family="macro" className="mod-source-family flex items-center gap-1">
+                    <div className="flex gap-[3px]">
+                        {Array.from({ length: MODULATION_MACRO_SLOT_COUNT }, (_, slotIndex) => (
+                            <button
+                                key={`macro-pip-${slotIndex}`}
+                                type="button"
+                                aria-label={`Select macro ${slotIndex + 1}`}
+                                className={`grid size-[18px] place-items-center rounded-[5px] border p-0 text-[8px] leading-none font-bold transition max-[480px]:size-7 max-[480px]:rounded-[6px] max-[480px]:text-[10px] ${
+                                    activeEditorTab.kind === "macro" && activeEditorTab.slotIndex === slotIndex
+                                        ? "synth-accent-active-button"
+                                        : "border-white/[0.06] bg-white/[0.02] text-slate-300/40 hover:border-white/10 hover:text-slate-300/65"
+                                }`}
+                                onClick={() => setActiveEditorTab({ kind: "macro", slotIndex })}
+                            >
+                                {slotIndex + 1}
+                            </button>
+                        ))}
+                    </div>
+                    <span className="synth-section-title ml-0.5">Macro</span>
                 </div>
-                <span className="synth-section-title ml-0.5">Macro</span>
 
                 {/* Right-aligned controls — fixed-height container, both layers always rendered */}
-                <div className="relative ml-auto h-[24px] shrink-0 max-[480px]:h-7">
+                <div
+                    data-role="mobile-mod-active-controls"
+                    data-active-source-kind={activeEditorTab.kind}
+                    className="mod-source-active-controls relative ml-auto h-[24px] shrink-0 max-[480px]:h-7"
+                >
                     {/* MSEG controls */}
                     <div className={`absolute inset-0 flex items-center justify-end gap-2 ${activeEditorTab.kind === "mseg" ? "visible" : "invisible"}`}>
                         <div className="flex items-center gap-1 rounded-[7px] border border-white/[0.05] bg-white/[0.025] p-[2px]">
