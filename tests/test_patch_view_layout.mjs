@@ -350,6 +350,35 @@ test("Tailwind scans authored UI sources instead of generated patch bundles", as
     }
 });
 
+test("rack wordmark fonts use lossless web compression without changing the approved faces", async () => {
+    const rackStyles = await fs.readFile(
+        path.join(repoRoot, "ui", "desktop", "effects-rack-workspace.css"),
+        "utf8",
+    );
+    const fontDirectory = path.join(repoRoot, "ui", "assets", "rack", "wordmark-fonts");
+    const fontNames = [
+        "Audiowide-Regular",
+        "BlackOpsOne-Regular",
+        "FascinateInline-Regular",
+        "Monoton-Regular",
+        "Orbitron-Medium",
+        "RubikGlitch-Regular",
+        "UnifrakturMaguntia-Regular",
+        "ZenDots-Regular",
+    ];
+
+    assert.doesNotMatch(rackStyles, /\.ttf\b|format\(["']truetype["']\)/);
+
+    for (const fontName of fontNames) {
+        const compressedFont = await fs.readFile(path.join(fontDirectory, `${fontName}.woff2`));
+
+        assert.ok(compressedFont.length > 0, `${fontName}.woff2 must not be empty`);
+        assert.match(rackStyles, new RegExp(`${fontName}\\.woff2`));
+    }
+
+    assert.equal((rackStyles.match(/format\(["']woff2["']\)/g) ?? []).length, fontNames.length);
+});
+
 test("desktop and shared effect dev entries load React Grab only in Vite dev mode", async () => {
     const packageJson = JSON.parse(await fs.readFile(path.join(repoRoot, "package.json"), "utf8"));
     const desktopPatchEntry = await fs.readFile(

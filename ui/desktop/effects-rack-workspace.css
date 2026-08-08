@@ -1,48 +1,48 @@
 @font-face {
     font-family: "Rack Audiowide";
-    src: url("../assets/rack/wordmark-fonts/Audiowide-Regular.ttf") format("truetype");
+    src: url("../assets/rack/wordmark-fonts/Audiowide-Regular.woff2") format("woff2");
     font-display: swap;
 }
 
 @font-face {
     font-family: "Rack Black Ops";
-    src: url("../assets/rack/wordmark-fonts/BlackOpsOne-Regular.ttf") format("truetype");
+    src: url("../assets/rack/wordmark-fonts/BlackOpsOne-Regular.woff2") format("woff2");
     font-display: swap;
 }
 
 @font-face {
     font-family: "Rack Fascinate";
-    src: url("../assets/rack/wordmark-fonts/FascinateInline-Regular.ttf") format("truetype");
+    src: url("../assets/rack/wordmark-fonts/FascinateInline-Regular.woff2") format("woff2");
     font-display: swap;
 }
 
 @font-face {
     font-family: "Rack Monoton";
-    src: url("../assets/rack/wordmark-fonts/Monoton-Regular.ttf") format("truetype");
+    src: url("../assets/rack/wordmark-fonts/Monoton-Regular.woff2") format("woff2");
     font-display: swap;
 }
 
 @font-face {
     font-family: "Rack Orbitron";
-    src: url("../assets/rack/wordmark-fonts/Orbitron-Medium.ttf") format("truetype");
+    src: url("../assets/rack/wordmark-fonts/Orbitron-Medium.woff2") format("woff2");
     font-display: swap;
 }
 
 @font-face {
     font-family: "Rack Rubik Glitch";
-    src: url("../assets/rack/wordmark-fonts/RubikGlitch-Regular.ttf") format("truetype");
+    src: url("../assets/rack/wordmark-fonts/RubikGlitch-Regular.woff2") format("woff2");
     font-display: swap;
 }
 
 @font-face {
     font-family: "Rack Unifraktur";
-    src: url("../assets/rack/wordmark-fonts/UnifrakturMaguntia-Regular.ttf") format("truetype");
+    src: url("../assets/rack/wordmark-fonts/UnifrakturMaguntia-Regular.woff2") format("woff2");
     font-display: swap;
 }
 
 @font-face {
     font-family: "Rack Zen Dots";
-    src: url("../assets/rack/wordmark-fonts/ZenDots-Regular.ttf") format("truetype");
+    src: url("../assets/rack/wordmark-fonts/ZenDots-Regular.woff2") format("woff2");
     font-display: swap;
 }
 
