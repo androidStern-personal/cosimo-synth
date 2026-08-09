@@ -39,6 +39,15 @@
     }
 }
 
+.cosimo-wavetable-native-select {
+    color-scheme: light;
+}
+
+.cosimo-wavetable-native-select option {
+    background-color: Canvas;
+    color: CanvasText;
+}
+
 .cosimo-mod-prototype-theme {
     --cosimo-mod-background: var(--cosimo-body);
     --cosimo-mod-foreground: var(--cosimo-text);

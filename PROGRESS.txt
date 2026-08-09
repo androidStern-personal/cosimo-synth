@@ -1,3 +1,9 @@
+Desktop wavetable native-menu contrast fix completed on 2026-08-08
+- The desktop wavetable's invisible native select now has a dedicated styling hook with `color-scheme: light`; its options use system `Canvas`/`CanvasText` colors so macOS WebKit cannot pair the synth's pale foreground with a native white menu. The separate iPhone select path is unchanged.
+- A real `WavetableStageSection` browser regression test reproduces the desktop theme inheritance. It measured 1.23:1 contrast before the option policy and passes the 4.5:1 minimum with the fix.
+- Verified the focused browser test, desktop production bundle build, fresh HMR standalone launch at `http://127.0.0.1:5174`, native popup opening in the standalone app, and signed VST3 install at `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
+- Unrelated baseline limitation: `tests/test_shared_synth_components_browser.mjs` is 11/12 because its older wavetable test still expects the removed `Pos 0.500` readout; HEAD already has that source/test mismatch.
+
 Cosimo web effects rack integration — 2026-08-01
 
 Branch, deployment, rollback

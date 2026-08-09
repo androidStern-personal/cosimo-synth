@@ -77,6 +77,22 @@ function assertAlmostEqual(actual, expected, epsilon = 1e-3) {
     );
 }
 
+function contrastAgainstWhite(cssColor) {
+    const colorChannels = cssColor.match(/[\d.]+/g)?.slice(0, 3).map(Number) ?? [];
+    assert.equal(colorChannels.length, 3, `Expected an RGB color, received ${cssColor}`);
+
+    const relativeLuminance = colorChannels
+        .map((channel) => channel / 255)
+        .map((channel) => (
+            channel <= 0.04045
+                ? channel / 12.92
+                : ((channel + 0.055) / 1.055) ** 2.4
+        ))
+        .reduce((sum, channel, index) => sum + (channel * [0.2126, 0.7152, 0.0722][index]), 0);
+
+    return 1.05 / (relativeLuminance + 0.05);
+}
+
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
@@ -152,6 +168,29 @@ before(async () => {
 after(async () => {
     await browser?.close();
     await server?.stop();
+});
+
+test("desktop wavetable options contrast against the native light menu", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installSharedWavetableStageHarness");
+        await page.waitForSelector('select[aria-label="Select wavetable"]');
+
+        const nativeSelect = page.locator('select[aria-label="Select wavetable"]');
+        assert.match(await nativeSelect.getAttribute("class"), /cosimo-wavetable-native-select/);
+
+        const optionColor = await nativeSelect.locator("option").nth(1)
+            .evaluate((element) => getComputedStyle(element).color);
+        const nativeMenuContrast = contrastAgainstWhite(optionColor);
+        assert.equal(
+            nativeMenuContrast >= 4.5,
+            true,
+            `Expected desktop wavetable options to remain readable on the native light menu; ${optionColor} has ${nativeMenuContrast.toFixed(2)}:1 contrast`,
+        );
+    } finally {
+        await page.close();
+    }
 });
 
 test("shared wavetable stage mounts with plain props and reports select and retry actions", async () => {

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
+import desktopCssText from "../../ui/desktop/styles.css?inline";
 import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
 import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
 import filterRangeEditorCssText from "../../ui/shared/filter-range-editor.css?inline";
@@ -1864,6 +1865,9 @@ export async function installSynthKeyboardRoutingHookHarness(
 export async function installSharedWavetableStageHarness(target: HTMLElement) {
     const changeLog: number[] = [];
     let retryCount = 0;
+
+    installInlineTestStyle("shared-wavetable-desktop-styles", desktopCssText);
+    target.style.color = "rgb(226 232 240)";
 
     const mounted = mountHarness(target, (root) => {
         function Harness() {

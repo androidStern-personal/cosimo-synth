@@ -2071,7 +2071,7 @@ export function WavetableStageSection({
                     </div>
                     <SelectChevron className="pointer-events-none absolute right-1.5 top-1/2 h-2.5 w-2.5 -translate-y-1/2 text-[var(--section-accent)] opacity-70" />
                     <select
-                        className="absolute inset-0 cursor-pointer opacity-0"
+                        className="cosimo-wavetable-native-select absolute inset-0 cursor-pointer opacity-0"
                         value={String(desiredTableIndex)}
                         onChange={(event) => onTableChange(Number(event.target.value))}
                         aria-label="Select wavetable"
