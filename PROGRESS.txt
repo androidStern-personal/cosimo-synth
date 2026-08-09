@@ -1,3 +1,8 @@
+Desktop voice visualization layout decision recorded on 2026-08-09
+- Wavetable and filter are sequential full-width cards; the filter now occupies its own row beneath the wavetable instead of sharing a two-column row.
+- Below the desktop breakpoint the cards keep the established 50:27 aspect ratio; at desktop widths they use 3:1 so the 775 px layout leaves the wavetable graphic visible around its overlays.
+- The focused browser test verifies the full-width stack and retained compact two-column panel grid at 775×700 and 976×768.
+
 Desktop wavetable native-menu contrast fix completed on 2026-08-08
 - The desktop wavetable's invisible native select now has a dedicated styling hook with `color-scheme: light`; its options use system `Canvas`/`CanvasText` colors so macOS WebKit cannot pair the synth's pale foreground with a native white menu. The separate iPhone select path is unchanged.
 - A real `WavetableStageSection` browser regression test reproduces the desktop theme inheritance. It measured 1.23:1 contrast before the option policy and passes the 4.5:1 minimum with the fix.

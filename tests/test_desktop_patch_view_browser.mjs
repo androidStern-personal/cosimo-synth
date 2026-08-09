@@ -1344,9 +1344,9 @@ test("desktop patch view scrolls vertically when the window is shorter than the 
     }
 });
 
-test("desktop grid cards share the compact panel shell at narrow and standalone widths", async () => {
+test("desktop voice visuals stack full-width above the compact panel grid", async () => {
     const viewportCases = [
-        { label: "narrow two-column", width: 775, height: 700 },
+        { label: "narrow desktop", width: 775, height: 700 },
         { label: "standalone desktop", width: 976, height: 768 },
     ];
 
@@ -1375,6 +1375,9 @@ test("desktop grid cards share the compact panel shell at narrow and standalone 
                 const style = getComputedStyle(element);
 
                 return {
+                    x: rect.x,
+                    y: rect.y,
+                    bottom: rect.bottom,
                     width: rect.width,
                     height: rect.height,
                     borderRadius: style.borderRadius,
@@ -1440,16 +1443,46 @@ test("desktop grid cards share the compact panel shell at narrow and standalone 
                 `desktop grid panels should share the same compact shell radius instead of per-panel hero shells at ${viewportCase.label}`,
             );
 
-            for (const card of metrics.cards) {
+            assert.equal(
+                Math.abs(metrics.filter.width - metrics.wavetable.width) <= 1,
+                true,
+                `Expected the filter to match the full-width wavetable shell at ${viewportCase.label}: ${JSON.stringify({ filter: metrics.filter, wavetable: metrics.wavetable })}`,
+            );
+            assert.equal(
+                Math.abs(metrics.filter.x - metrics.wavetable.x) <= 1,
+                true,
+                `Expected the filter to align beneath the wavetable at ${viewportCase.label}: ${JSON.stringify({ filter: metrics.filter, wavetable: metrics.wavetable })}`,
+            );
+            assert.equal(
+                metrics.filter.y >= metrics.wavetable.bottom + 12,
+                true,
+                `Expected the filter to occupy its own row beneath the wavetable at ${viewportCase.label}: ${JSON.stringify({ filter: metrics.filter, wavetable: metrics.wavetable })}`,
+            );
+            assert.equal(
+                metrics.wavetable.height >= 230,
+                true,
+                `Expected enough wavetable height to keep the graphic visible at ${viewportCase.label}: ${JSON.stringify(metrics.wavetable)}`,
+            );
+
+            const compactGridCards = metrics.cards.slice(2);
+            const compactReferenceCard = compactGridCards[0];
+
+            assert.equal(
+                metrics.wavetable.width >= compactReferenceCard.width * 1.9,
+                true,
+                `Expected voice visualizations to span both compact-card columns at ${viewportCase.label}: ${JSON.stringify({ wavetable: metrics.wavetable, compactReferenceCard })}`,
+            );
+
+            for (const card of compactGridCards) {
                 assert.equal(
-                    Math.abs(card.width - metrics.wavetable.width) <= 1,
+                    Math.abs(card.width - compactReferenceCard.width) <= 1,
                     true,
-                    `Expected ${card.role || "grid card"} width to match the wavetable shell at ${viewportCase.label}: ${JSON.stringify({ card, wavetable: metrics.wavetable })}`,
+                    `Expected ${card.role || "grid card"} width to match the compact grid at ${viewportCase.label}: ${JSON.stringify({ card, compactReferenceCard })}`,
                 );
                 assert.equal(
-                    Math.abs(card.height - metrics.wavetable.height) <= 1,
+                    Math.abs(card.height - compactReferenceCard.height) <= 1,
                     true,
-                    `Expected ${card.role || "grid card"} height to match the wavetable shell at ${viewportCase.label}: ${JSON.stringify({ card, wavetable: metrics.wavetable })}`,
+                    `Expected ${card.role || "grid card"} height to match the compact grid at ${viewportCase.label}: ${JSON.stringify({ card, compactReferenceCard })}`,
                 );
             }
 

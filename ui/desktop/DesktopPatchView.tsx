@@ -118,6 +118,7 @@ const ENVELOPE_VIEWBOX = {
     bottom: 118,
 } as const;
 const DESKTOP_GRID_CARD_CLASS = `w-full ${SYNTH_GRID_CARD_SIZE_CLASS}`;
+const DESKTOP_VOICE_VISUALIZATION_CARD_CLASS = `w-full ${SYNTH_GRID_CARD_SIZE_CLASS} md:aspect-[3/1]`;
 const WARP_MODE_OPTIONS = [
     { value: 0, label: "Off" },
     { value: 1, label: "Bend +/-" },
@@ -3552,7 +3553,10 @@ function DesktopPatchViewBody({
 
     const voiceWorkspace = (
         <>
-        <section className="mobile-voice-grid grid min-h-0 grid-cols-1 items-stretch gap-4 md:grid-cols-2">
+        <section
+            data-role="voice-visualization-stack"
+            className="mobile-voice-grid grid min-h-0 grid-cols-1 items-stretch gap-4"
+        >
             <WavetableStageSection
                 stageRef={stageRef}
                 frames={synthView.frames}
@@ -3574,7 +3578,7 @@ function DesktopPatchViewBody({
                 onPointerUp={synthView.stageBindings.handleStagePointerUp}
                 bottomLeftAccessory={warpControlCluster}
                 bottomRightAccessory={panField}
-                className={DESKTOP_GRID_CARD_CLASS}
+                className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
             />
 
             <FilterSection
@@ -3586,7 +3590,7 @@ function DesktopPatchViewBody({
                 resonanceNormalizedFromQ={resonanceNormalizedFromQ}
                 resonanceQFromSurface={resonanceQFromSurface}
                 resonanceCurveDebugState={filterResonanceCurveProfile}
-                className={DESKTOP_GRID_CARD_CLASS}
+                className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
             />
         </section>
         <section
