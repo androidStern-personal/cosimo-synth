@@ -53,3 +53,30 @@ the expanded drawer (and its modulation amount slider) could sit underneath it.
 - Source mapping still compacts the tab to its collapsed geometry, keeps the
   ghost, makes the rail hit-transparent, and feeds the explicit route-creation
   flow unchanged.
+
+## 2026-08-08 correction: fixed tab with downward source drawer
+
+The widening edge tab was rejected because disclosure changed the persistent
+tab's dimensions and exposed the source page as a horizontal tray. The source
+art also combined a generated face with a white identity glyph, so each control
+looked like two overlapping icons.
+
+- The persistent tab now keeps one fixed width, height, and top position.
+  Disclosure extends a same-width drawer downward beneath it; low stored
+  positions cap the drawer at the sticky keyboard instead of reprojecting the
+  tab. The preset bar is part of the top safe boundary, so the movable tab never
+  becomes trapped behind it.
+- The established three numbered source groups remain. Each group is one
+  vertical page containing MSEG, Envelope, and Macro, and the existing 280 ms
+  page transition runs vertically through up/down paddles.
+- Every source uses one source-colored fontaudio identity glyph plus its slot
+  number. The generated face artwork remains available to surfaces that still
+  own that visual treatment, but it is no longer layered underneath the glyph
+  in the Mod Bar.
+- The active source in the collapsed tab is a real source button. It shares the
+  canonical source-drag lifecycle with drawer sources, so a drag can create a
+  route without expanding or moving the rail; a stationary tap still toggles
+  disclosure. The remaining tab surface continues to own rail movement.
+- Route amount, unmapped creation, and route-status feedback remain in the FX
+  editor. The narrow drawer owns source navigation only and therefore does not
+  distort the authoritative amount control.

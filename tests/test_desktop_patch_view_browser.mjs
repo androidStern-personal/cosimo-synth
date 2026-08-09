@@ -176,7 +176,7 @@ async function expandGlobalModRail(page) {
     const grip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
     await grip.waitFor();
     if (await grip.getAttribute("aria-expanded") !== "true") {
-        await grip.click();
+        await grip.click({ position: { x: 28, y: 12 } });
     }
     await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="true"]').waitFor();
     await page.waitForTimeout(220);
@@ -186,7 +186,7 @@ async function collapseGlobalModRail(page) {
     const grip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
     await grip.waitFor();
     if (await grip.getAttribute("aria-expanded") === "true") {
-        await grip.click();
+        await grip.click({ position: { x: 28, y: 12 } });
     }
     await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="false"]').waitFor();
     await page.waitForTimeout(240);
@@ -8364,6 +8364,7 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
         const rail = page.locator('[data-role="mobile-global-mod-rail"]');
         const grip = rail.locator('[data-role="mobile-global-mod-rail-grip"]');
         await rail.waitFor();
+        await page.waitForTimeout(240);
 
         const initial = await rail.evaluate((element) => {
             const layer = element.closest('[data-role="mobile-global-mod-rail-layer"]');
@@ -8456,16 +8457,18 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
         assert.equal(Math.abs(beforeNavigation.x - afterNavigation.x) <= 1, true);
         assert.equal(await grip.getAttribute("aria-expanded"), "true");
 
+        await collapseGlobalModRail(page);
         const beforeResizeNormalized = await rail.evaluate((element) => {
             const layer = element.closest('[data-role="mobile-global-mod-rail-layer"]');
             const keyboard = element.closest(".cosimo-surface")?.querySelector('[data-role="sticky-keyboard"]');
-            if (!(layer instanceof HTMLElement) || !(keyboard instanceof HTMLElement)) {
+            const presetBar = element.closest(".cosimo-surface")?.querySelector('[data-role="synth-preset-bar-host"]');
+            if (!(layer instanceof HTMLElement) || !(keyboard instanceof HTMLElement) || !(presetBar instanceof HTMLElement)) {
                 return null;
             }
             const railBounds = element.getBoundingClientRect();
             const layerBounds = layer.getBoundingClientRect();
             const keyboardBounds = keyboard.getBoundingClientRect();
-            const min = 8;
+            const min = Math.max(8, presetBar.getBoundingClientRect().bottom - layerBounds.top + 8);
             const max = Math.max(min, keyboardBounds.top - layerBounds.top - railBounds.height - 8);
             return (railBounds.top - layerBounds.top - min) / Math.max(1, max - min);
         });
@@ -8475,28 +8478,31 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
             const railElement = document.querySelector('[data-role="mobile-global-mod-rail"]');
             const layer = railElement?.closest('[data-role="mobile-global-mod-rail-layer"]');
             const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
+            const presetBar = document.querySelector('[data-role="synth-preset-bar-host"]');
             if (
                 !(railElement instanceof HTMLElement)
                 || !(layer instanceof HTMLElement)
                 || !(keyboard instanceof HTMLElement)
+                || !(presetBar instanceof HTMLElement)
             ) {
                 return null;
             }
             const railBounds = railElement.getBoundingClientRect();
             const layerBounds = layer.getBoundingClientRect();
             const keyboardBounds = keyboard.getBoundingClientRect();
-            const min = 8;
+            const min = Math.max(8, presetBar.getBoundingClientRect().bottom - layerBounds.top + 8);
             const max = Math.max(min, keyboardBounds.top - layerBounds.top - railBounds.height - 8);
             return {
                 railTop: railBounds.top,
                 railBottom: railBounds.bottom,
                 keyboardTop: keyboardBounds.top,
+                minimumTop: layerBounds.top + min,
                 normalized: (railBounds.top - layerBounds.top - min) / Math.max(1, max - min),
             };
         });
         assert.ok(safeLayout);
         assert.notEqual(beforeResizeNormalized, null);
-        assert.equal(safeLayout.railTop >= 8, true);
+        assert.equal(safeLayout.railTop >= safeLayout.minimumTop - 0.5, true);
         assert.equal(safeLayout.railBottom <= safeLayout.keyboardTop - 8, true);
         assert.equal(
             Math.abs(safeLayout.normalized - beforeResizeNormalized) <= 0.04,
@@ -8607,6 +8613,56 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
             Number(await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText()),
             initialRouteCount + 1,
         );
+
+        await collapseGlobalModRail(page);
+        const collapsedRailTop = (await rail.boundingBox())?.y;
+        const collapsedSource = page.locator('[data-role="mobile-global-mod-rail-selected"]');
+        const collapsedSourceBox = await collapsedSource.boundingBox();
+        const secondTarget = page.locator('[data-role="rack-parameter-surface-reverbMix"]');
+        const secondTargetBox = await secondTarget.boundingBox();
+        assert.ok(collapsedRailTop !== undefined && collapsedSourceBox && secondTargetBox);
+        const collapsedSourceStart = {
+            x: collapsedSourceBox.x + (collapsedSourceBox.width / 2),
+            y: collapsedSourceBox.y + (collapsedSourceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...collapsedSourceStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: collapsedSourceStart.x - 18, y: collapsedSourceStart.y, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        assert.equal(await rail.getAttribute("data-expanded"), "false", "Dragging the collapsed armed source must not expand the drawer.");
+        assert.equal(await rail.getAttribute("data-mapping-active"), "true", "The collapsed armed source must begin route mapping.");
+        assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 1);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{
+                x: secondTargetBox.x + (secondTargetBox.width / 2),
+                y: secondTargetBox.y + (secondTargetBox.height / 2),
+                radiusX: 5,
+                radiusY: 5,
+                force: 1,
+            }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await waitForHarnessSnapshot(
+            page,
+            "collapsed armed source drop",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
+                route.sourceKind === "env"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.reverbMix"
+            )),
+        );
+        assert.equal(await rail.getAttribute("data-expanded"), "false");
+        assert.equal(await rail.getAttribute("data-mapping-active"), "false");
+        assert.equal(Math.abs(((await rail.boundingBox())?.y ?? 0) - collapsedRailTop) <= 1, true, "Dragging the collapsed source moved the bar.");
+        assert.equal(
+            Number(await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText()),
+            initialRouteCount + 2,
+        );
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
     } finally {
         await cdp.detach();
@@ -8642,6 +8698,7 @@ async function readGlobalModRailGeometry(page) {
         return {
             rail: rectOf(rail),
             body: rectOf(body),
+            tab: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-tab"]')),
             art: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-selected"] .rack-mod-art')),
             routeCount: rectOf(rail.querySelector('[data-role="mobile-global-mod-rail-route-count"]')),
             chevron: rectOf(rail.querySelector(".mobile-global-mod-rail-chevron")),
@@ -8656,24 +8713,28 @@ async function readGlobalModRailGeometry(page) {
     });
 }
 
-test("the global modulation rail is one continuous edge tab that widens in place when expanded", async () => {
+test("the global modulation rail keeps a fixed tab and opens its source drawer downward", async () => {
     const page = await openHarnessPage({
-        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ normalizedY: 0.25 }),
+                );
+            });
+        },
     });
 
     try {
         await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
         const collapsed = await readGlobalModRailGeometry(page);
-        assert.ok(collapsed?.rail && collapsed.body && collapsed.art && collapsed.routeCount, "The tab must render its body surface, source art, and route count.");
+        assert.ok(collapsed?.rail && collapsed.body && collapsed.tab && collapsed.art && collapsed.routeCount, "The rail must render its fixed tab, source art, and route count.");
         assert.equal(
             Math.abs(collapsed.rail.right - collapsed.viewportWidth) <= 0.5,
             true,
             "The collapsed tab must attach flush to the right screen edge.",
-        );
-        assert.match(
-            collapsed.transitionProperty,
-            /(^|, )(width|all)(,|$)/,
-            "Expansion must be an animated width transition on the tab element itself.",
         );
         for (const [label, part] of Object.entries({ art: collapsed.art, routeCount: collapsed.routeCount, chevron: collapsed.chevron })) {
             if (part === null) {
@@ -8704,18 +8765,36 @@ test("the global modulation rail is one continuous edge tab that widens in place
         await expandGlobalModRail(page);
         await page.waitForTimeout(120);
         const expanded = await readGlobalModRailGeometry(page);
-        assert.ok(expanded?.rail && expanded.drawer && expanded.track, "The expanded tab must render the drawer and source track.");
+        assert.ok(expanded?.rail && expanded.tab && expanded.drawer && expanded.track, "The expanded rail must render its fixed tab and source drawer.");
         assert.equal(
             Math.abs(expanded.rail.right - expanded.viewportWidth) <= 0.5,
             true,
             "The expanded tab must stay flush to the right screen edge.",
         );
+        for (const key of ["left", "right", "top", "width", "height"]) {
+            assert.equal(
+                Math.abs(expanded.tab[key] - collapsed.tab[key]) <= 1.5,
+                true,
+                `Expansion changed the persistent tab's ${key}: ${collapsed.tab[key]} -> ${expanded.tab[key]}.`,
+            );
+        }
         assert.equal(
-            expanded.rail.width >= collapsed.rail.width + 120,
+            Math.abs(expanded.rail.width - collapsed.rail.width) <= 1,
             true,
-            `Expansion must widen the same tab surface (collapsed ${collapsed.rail.width}px, expanded ${expanded.rail.width}px).`,
+            `Expansion must not widen sideways (collapsed ${collapsed.rail.width}px, expanded ${expanded.rail.width}px).`,
         );
-        for (const [label, part] of Object.entries({ drawer: expanded.drawer, track: expanded.track, amount: expanded.amount })) {
+        assert.equal(Math.abs(expanded.rail.top - collapsed.rail.top) <= 1.5, true, "Expansion must not move the tab's top edge.");
+        assert.equal(
+            expanded.rail.height >= collapsed.rail.height + 120,
+            true,
+            "The source drawer must extend the rail downward.",
+        );
+        assert.equal(
+            expanded.drawer.top >= expanded.tab.bottom - 1,
+            true,
+            `The source drawer must begin beneath the tab: ${JSON.stringify(expanded.drawer)} vs ${JSON.stringify(expanded.tab)}.`,
+        );
+        for (const [label, part] of Object.entries({ drawer: expanded.drawer, track: expanded.track })) {
             if (part === null) {
                 continue;
             }
@@ -8734,15 +8813,15 @@ test("the global modulation rail is one continuous edge tab that widens in place
         }
         assert.equal(expanded.documentFits, true, "The expanded tab must not create horizontal page overflow.");
 
-        await page.locator('[data-role="mobile-global-mod-rail-grip"]').click();
+        await page.locator('[data-role="mobile-global-mod-rail-grip"]').click({ position: { x: 28, y: 12 } });
         await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="false"]').waitFor();
         await page.waitForTimeout(260);
         const collapsedAgain = await readGlobalModRailGeometry(page);
         assert.ok(collapsedAgain?.rail);
         assert.equal(
-            Math.abs(collapsedAgain.rail.width - collapsed.rail.width) <= 1,
+            Math.abs(collapsedAgain.rail.height - collapsed.rail.height) <= 1,
             true,
-            "Collapsing must return the same tab to its compact width.",
+            "Collapsing must remove only the downward drawer.",
         );
 
         await page.setViewportSize({ width: 320, height: 568 });
@@ -8750,10 +8829,10 @@ test("the global modulation rail is one continuous edge tab that widens in place
         await expandGlobalModRail(page);
         await page.waitForTimeout(120);
         const narrow = await readGlobalModRailGeometry(page);
-        assert.ok(narrow?.rail && narrow.drawer && narrow.track, "The expanded tab must survive a 320px viewport.");
+        assert.ok(narrow?.rail && narrow.tab && narrow.drawer && narrow.track, "The expanded rail must survive a 320px viewport.");
         assert.equal(Math.abs(narrow.rail.right - narrow.viewportWidth) <= 0.5, true, "The tab must stay flush at 320px.");
-        assert.equal(narrow.rail.left >= 4, true, "The expanded tab must keep a margin from the left screen edge at 320px.");
-        for (const [label, part] of Object.entries({ drawer: narrow.drawer, track: narrow.track, amount: narrow.amount })) {
+        assert.equal(Math.abs(narrow.rail.width - narrow.tab.width) <= 1, true, "The drawer must retain the tab's narrow width at 320px.");
+        for (const [label, part] of Object.entries({ drawer: narrow.drawer, track: narrow.track })) {
             if (part === null) {
                 continue;
             }
@@ -8961,7 +9040,7 @@ test("rail grip drags own the touch without page scroll, persist across reload, 
     }
 });
 
-test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly carousels for 280 ms", async () => {
+test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity per source", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -9006,30 +9085,34 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
                 sources: sources.map((source) => {
                     const button = source;
                     const art = source.querySelector(".rack-mod-art");
-                    const image = source.querySelector(".rack-mod-icon");
-                    const identity = source.querySelector(".rack-mod-identity-glyph");
+                    const glyph = source.querySelector('[data-role="rack-mod-glyph"]');
                     const number = source.querySelector(".rack-mod-number");
                     if (!(button instanceof HTMLButtonElement)
                         || !(art instanceof HTMLElement)
-                        || !(image instanceof HTMLImageElement)
-                        || !(identity instanceof HTMLImageElement)
+                        || !(glyph instanceof HTMLElement)
                         || !(number instanceof HTMLElement)) {
                         return null;
                     }
                     const buttonStyle = getComputedStyle(button);
                     const artStyle = getComputedStyle(art);
+                    const glyphStyle = getComputedStyle(glyph);
+                    const bounds = button.getBoundingClientRect();
                     return {
                         label: button.getAttribute("aria-label"),
-                        buttonWidth: button.getBoundingClientRect().width,
-                        buttonHeight: button.getBoundingClientRect().height,
+                        buttonWidth: bounds.width,
+                        buttonHeight: bounds.height,
+                        centerX: bounds.left + (bounds.width / 2),
+                        top: bounds.top,
+                        bottom: bounds.bottom,
                         artWidth: art.getBoundingClientRect().width,
                         artHeight: art.getBoundingClientRect().height,
                         background: buttonStyle.backgroundColor,
                         boxShadow: buttonStyle.boxShadow,
                         overflow: buttonStyle.overflow,
                         accent: buttonStyle.getPropertyValue("--source-color").trim(),
-                        imageSource: image.src,
-                        identitySource: identity.src,
+                        visualCount: art.querySelectorAll('img, [data-role="rack-mod-glyph"]').length,
+                        glyphColor: glyphStyle.backgroundColor,
+                        glyphMask: glyphStyle.maskImage || glyphStyle.webkitMaskImage,
                         number: number.textContent?.trim(),
                         artFilter: artStyle.filter,
                     };
@@ -9047,11 +9130,21 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
         assert.equal(visualContract.sources.every((source) => source.background === "rgba(0, 0, 0, 0)"), true);
         assert.equal(visualContract.sources.every((source) => source.boxShadow === "none"), true);
         assert.equal(visualContract.sources.every((source) => source.overflow === "visible"), true);
-        assert.equal(visualContract.sources.every((source) => /approved-generated\/.+\.png/.test(source.imageSource)), true);
-        assert.match(visualContract.sources[0].identitySource, /^data:image\/svg\+xml/);
-        assert.match(visualContract.sources[1].identitySource, /^data:image\/svg\+xml/);
-        assert.notEqual(visualContract.sources[0].identitySource, visualContract.sources[1].identitySource);
-        assert.equal(Math.abs(visualContract.paddleWidth - 20) <= 0.5, true);
+        assert.equal(visualContract.sources.every((source) => source.visualCount === 1), true, "Each source must render exactly one identity icon.");
+        assert.deepEqual(visualContract.sources.map((source) => source.glyphColor), ["rgb(204, 89, 210)", "rgb(184, 226, 54)", "rgb(255, 100, 40)"]);
+        assert.equal(visualContract.sources.every((source) => source.glyphMask !== "none"), true);
+        assert.equal(
+            Math.max(...visualContract.sources.map((source) => source.centerX))
+                - Math.min(...visualContract.sources.map((source) => source.centerX)) <= 1,
+            true,
+            "The active source page must be one vertical column.",
+        );
+        assert.equal(
+            visualContract.sources.every((source, index, sources) => index === 0 || source.top >= sources[index - 1].bottom - 1),
+            true,
+            "The three source controls must stack downward without overlap.",
+        );
+        assert.equal(Math.abs(visualContract.paddleWidth - 44) <= 0.5, true);
 
         await page.click('[data-role="rack-mod-source-mseg-1"]');
         const selectedVisual = await page.locator('[data-role="rack-mod-source-mseg-1"]').evaluate((button) => {
@@ -9086,20 +9179,20 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
             if (!(track instanceof HTMLElement) || !(viewport instanceof HTMLElement) || !(next instanceof HTMLButtonElement)) {
                 return null;
             }
-            const startLeft = track.getBoundingClientRect().left;
-            const travel = viewport.getBoundingClientRect().width;
+            const startTop = track.getBoundingClientRect().top;
+            const travel = viewport.getBoundingClientRect().height;
             next.click();
             await new Promise((resolve) => window.setTimeout(resolve, 80));
-            const duringLeft = track.getBoundingClientRect().left;
+            const duringTop = track.getBoundingClientRect().top;
             await new Promise((resolve) => window.setTimeout(resolve, 260));
-            const endLeft = track.getBoundingClientRect().left;
+            const endTop = track.getBoundingClientRect().top;
             const activePage = document.querySelector('.rack-mod-page[aria-hidden="false"]');
             const selected = activePage?.querySelector('[aria-pressed="true"]');
             const header = document.querySelector('.rack-mod-header strong');
             return {
-                startLeft,
-                duringLeft,
-                endLeft,
+                startTop,
+                duringTop,
+                endTop,
                 travel,
                 labels: Array.from(activePage?.querySelectorAll("button") ?? [])
                     .map((button) => button.getAttribute("aria-label")),
@@ -9109,16 +9202,16 @@ test("rack mod bar has only numbered MSEG Envelope and Macro sources and visibly
         });
 
         assert.ok(animation);
-        assert.equal(animation.duringLeft < animation.startLeft - 1, true, "Carousel did not begin moving.");
+        assert.equal(animation.duringTop < animation.startTop - 1, true, "The vertical source page did not begin moving.");
         assert.equal(
-            animation.duringLeft > animation.startLeft - animation.travel + 1,
+            animation.duringTop > animation.startTop - animation.travel + 1,
             true,
-            "Carousel switched instantly instead of animating.",
+            "The vertical source page switched instantly instead of animating.",
         );
         assert.equal(
-            Math.abs((animation.startLeft - animation.endLeft) - animation.travel) <= 2,
+            Math.abs((animation.startTop - animation.endTop) - animation.travel) <= 2,
             true,
-            `Carousel did not finish one page away: ${JSON.stringify(animation)}`,
+            `The vertical source track did not finish one page away: ${JSON.stringify(animation)}`,
         );
         assert.deepEqual(animation.labels, ["MSEG 2", "Envelope 2", "Macro 2"]);
         assert.equal(animation.selectedLabel, null);

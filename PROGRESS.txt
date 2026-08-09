@@ -210,6 +210,11 @@ Browser-comment correction pass — 2026-08-08
 - Approved Variant-D source faces remain byte-identical; distinct fontaudio MSEG/ADSR/Macro identity glyphs now disambiguate them. The browser harness gives wavetable selection a deterministic loading-to-active lifecycle and the UI names the pending table without replacing the still-audible active title.
 - Validation: responsive browser 130/130, shared hooks 26/26, shared components/wavetable 64/64, rack presentation/assets 6/6, rack DSP 59/59, and TypeScript clean. The canonical iPhone bundle built, simulator standalone built/installed/launched, and its packaged `patch_gui` contains exactly the five approved runtime files. A fresh 5175 HMR standalone is running; the compiled VST3 was rebuilt afterward and installed at `/Users/winterfell/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
 
+Global Mod Bar vertical-drawer correction — 2026-08-08
+- The persistent right-edge tab now keeps fixed geometry while disclosure extends a same-width drawer downward. Its current MSEG/Envelope/Macro group is a vertical three-source page; numbered group paging and its 280 ms transition remain intact.
+- Each source now renders one source-colored fontaudio identity glyph rather than a generated face plus white glyph overlay. Route amount and mapping feedback remain inline in the FX editor because the narrow drawer owns source navigation only.
+- The collapsed active source is independently draggable through the same canonical source gesture/drop guard as drawer sources. The rest of the tab remains the rail move/toggle surface, and the preset bar is included in the rail's safe top bound.
+
 Master integration regression — 2026-08-08
 - The FX parameter-state correction was merged with the global mobile modulation rail. The Mod Bar amount gesture now supplies its live control bounds and pointer position to the rail's collision-aware `MOD` HUD instead of bypassing the merged HUD contract.
 - A source drag no longer gives every eligible parameter an armed-source-colored outline. Only the hovered valid target receives the transient drag-source halo; the neutral external accessibility focus indicator remains independently visible.

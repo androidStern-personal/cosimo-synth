@@ -958,48 +958,30 @@ function SyncParameterList({
     );
 }
 
-function ModSourceCarousel({
-    pageIndex,
-    selectedSource,
-    sourceIsArmed,
-    onPageChange,
-    onDragSourceChange,
-    onSourceSelect,
-    onSourceDrop,
-    onOpenSelectedSource,
-    onHoverTarget,
-    onSourceDragChange,
-}: {
-    pageIndex: number;
-    selectedSource: SelectedSource;
-    sourceIsArmed: boolean;
-    onPageChange: (pageIndex: number) => void;
-    onDragSourceChange: (source: SelectedSource | null) => void;
-    onSourceSelect: (source: SelectedSource) => void;
-    onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
-    onOpenSelectedSource: (source: SelectedSource) => void;
-    onHoverTarget: (source: SelectedSource, endpointID: string | null) => void;
-    onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
-}) {
-    const armedSourceLabel = sourceIsArmed
-        ? findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot).label
-        : null;
-    const handlersRef = useRef({
-        onHoverTarget,
-        onDragSourceChange,
-        onOpenSelectedSource,
-        onSourceDrop,
-        onSourceSelect,
-        onSourceDragChange,
-    });
-    handlersRef.current = {
-        onHoverTarget,
-        onDragSourceChange,
-        onOpenSelectedSource,
-        onSourceDrop,
-        onSourceSelect,
-        onSourceDragChange,
-    };
+function ModSourceArt({ source }: { source: RackModulationSource }) {
+    return (
+        <span
+            className="rack-mod-art"
+            style={{ "--glyph-url": `url("${source.identityIconUrl}")` } as CSSProperties}
+            aria-hidden="true"
+        >
+            <span data-role="rack-mod-glyph" className="rack-mod-glyph" />
+            <span className="rack-mod-number">{source.sourceSlot}</span>
+        </span>
+    );
+}
+
+type ModSourceDragCallbacks = {
+    readonly onHoverTarget: (source: SelectedSource, endpointID: string | null) => void;
+    readonly onDragSourceChange: (source: SelectedSource | null) => void;
+    readonly onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
+    readonly onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
+    readonly onTap: (source: SelectedSource, wasActiveSelection: boolean) => void;
+};
+
+function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
+    const handlersRef = useRef(callbacks);
+    handlersRef.current = callbacks;
     const autoScrollRef = useRef<{
         clientY: number;
         frame: number | null;
@@ -1094,15 +1076,12 @@ function ModSourceCarousel({
         if (cancelled) {
             return;
         }
-
         if (targetEndpointID) {
             handlersRef.current.onSourceDrop(drag.source, targetEndpointID);
-        } else if (!drag.moved) {
-            if (drag.wasActiveSelection) {
-                handlersRef.current.onOpenSelectedSource(drag.source);
-            } else {
-                handlersRef.current.onSourceSelect(drag.source);
-            }
+            return;
+        }
+        if (!drag.moved) {
+            handlersRef.current.onTap(drag.source, drag.wasActiveSelection);
         }
     }, [stopSourceAutoScroll]);
 
@@ -1139,8 +1118,109 @@ function ModSourceCarousel({
         };
     }, [finishSourceGesture, stopSourceAutoScroll]);
 
+    return useCallback((source: SelectedSource, wasActiveSelection: boolean) => ({
+        onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+            if (event.pointerType === "mouse" && event.button !== 0) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            handlersRef.current.onDragSourceChange(source);
+            dragRef.current = {
+                pointerId: event.pointerId,
+                source,
+                moved: false,
+                startX: event.clientX,
+                startY: event.clientY,
+                wasActiveSelection,
+                captureElement: event.currentTarget,
+            };
+            try {
+                event.currentTarget.setPointerCapture(event.pointerId);
+            } catch {
+                // Window-level termination still owns unsupported or synthetic pointers.
+            }
+        },
+        onPointerMove: (event: ReactPointerEvent<HTMLButtonElement>) => {
+            const drag = dragRef.current;
+            if (!drag || drag.pointerId !== event.pointerId) {
+                return;
+            }
+            event.preventDefault();
+            event.stopPropagation();
+            if (hasReleasedMouseButton(event)) {
+                finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
+                return;
+            }
+            drag.moved ||= Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 7;
+            if (drag.moved) {
+                handlersRef.current.onSourceDragChange?.({
+                    source: drag.source,
+                    clientX: event.clientX,
+                    clientY: event.clientY,
+                });
+                updateSourceAutoScroll(event.currentTarget, event.clientY);
+            }
+            const target = rackModulationTargetAtPoint(event.currentTarget, event.clientX, event.clientY);
+            handlersRef.current.onHoverTarget(drag.source, target?.dataset.rackModTarget ?? null);
+        },
+        onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
+            finishSourceGesture(event.pointerId, event.clientX, event.clientY, false);
+        },
+        onPointerCancel: (event: ReactPointerEvent<HTMLButtonElement>) => {
+            finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
+        },
+        onLostPointerCapture: (event: ReactPointerEvent<HTMLButtonElement>) => {
+            finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
+        },
+    }), [finishSourceGesture, updateSourceAutoScroll]);
+}
+
+function ModSourceCarousel({
+    pageIndex,
+    selectedSource,
+    sourceIsArmed,
+    orientation = "horizontal",
+    onPageChange,
+    onDragSourceChange,
+    onSourceSelect,
+    onSourceDrop,
+    onOpenSelectedSource,
+    onHoverTarget,
+    onSourceDragChange,
+}: {
+    pageIndex: number;
+    selectedSource: SelectedSource;
+    sourceIsArmed: boolean;
+    orientation?: "horizontal" | "vertical";
+    onPageChange: (pageIndex: number) => void;
+    onDragSourceChange: (source: SelectedSource | null) => void;
+    onSourceSelect: (source: SelectedSource) => void;
+    onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
+    onOpenSelectedSource: (source: SelectedSource) => void;
+    onHoverTarget: (source: SelectedSource, endpointID: string | null) => void;
+    onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
+}) {
+    const armedSourceLabel = sourceIsArmed
+        ? findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot).label
+        : null;
+    const sourceHandlers = useModSourceDrag({
+        onHoverTarget,
+        onDragSourceChange,
+        onSourceDrop,
+        onSourceDragChange,
+        onTap: (source, wasActiveSelection) => {
+            if (wasActiveSelection) {
+                onOpenSelectedSource(source);
+            } else {
+                onSourceSelect(source);
+            }
+        },
+    });
+    const vertical = orientation === "vertical";
+
     return (
-        <div className="rack-mod-dock" role="group" aria-label="Rack modulation sources">
+        <div className={`rack-mod-dock${vertical ? " is-vertical" : ""}`} role="group" aria-label="Rack modulation sources">
             <header className="rack-mod-header">
                 <strong>MOD BAR{armedSourceLabel === null ? "" : ` · ${armedSourceLabel}`}</strong>
                 <span>GROUP {pageIndex + 1} / {RACK_MODULATION_SOURCE_PAGES.length}</span>
@@ -1151,12 +1231,17 @@ function ModSourceCarousel({
                     className="rack-mod-paddle"
                     aria-label="Previous modulation-source group"
                     onClick={() => onPageChange((pageIndex + RACK_MODULATION_SOURCE_PAGES.length - 1) % RACK_MODULATION_SOURCE_PAGES.length)}
-                >‹</button>
+                >{vertical ? "↑" : "‹"}</button>
                 <div className="rack-mod-viewport">
                     <div
                         className="rack-mod-track"
                         data-role="rack-mod-source-track"
-                        style={{ transform: `translateX(-${pageIndex * 100}%)`, transitionDuration: "280ms" }}
+                        style={{
+                            transform: vertical
+                                ? `translateY(-${pageIndex * 100}%)`
+                                : `translateX(-${pageIndex * 100}%)`,
+                            transitionDuration: "280ms",
+                        }}
                     >
                         {RACK_MODULATION_SOURCE_PAGES.map((page, candidatePageIndex) => (
                             <div className="rack-mod-page" key={candidatePageIndex} aria-hidden={candidatePageIndex !== pageIndex}>
@@ -1174,96 +1259,9 @@ function ModSourceCarousel({
                                             className={`rack-mod-source${isSelected ? " is-selected" : ""}`}
                                             style={{ "--source-color": source.accent } as CSSProperties}
                                             tabIndex={candidatePageIndex === pageIndex ? 0 : -1}
-                                            onPointerDown={(event) => {
-                                                if (event.pointerType === "mouse" && event.button !== 0) {
-                                                    return;
-                                                }
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                onDragSourceChange(source);
-                                                dragRef.current = {
-                                                    pointerId: event.pointerId,
-                                                    source,
-                                                    moved: false,
-                                                    startX: event.clientX,
-                                                    startY: event.clientY,
-                                                    wasActiveSelection: isSelected && sourceIsArmed,
-                                                    captureElement: event.currentTarget,
-                                                };
-                                                try {
-                                                    event.currentTarget.setPointerCapture(event.pointerId);
-                                                } catch {
-                                                    // Window-level termination still owns unsupported or synthetic pointers.
-                                                }
-                                            }}
-                                            onPointerMove={(event) => {
-                                                const drag = dragRef.current;
-                                                if (!drag || drag.pointerId !== event.pointerId) {
-                                                    return;
-                                                }
-                                                event.preventDefault();
-                                                event.stopPropagation();
-                                                if (hasReleasedMouseButton(event)) {
-                                                    finishSourceGesture(
-                                                        event.pointerId,
-                                                        event.clientX,
-                                                        event.clientY,
-                                                        true,
-                                                    );
-                                                    return;
-                                                }
-                                                drag.moved ||= Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 7;
-                                                if (drag.moved) {
-                                                    handlersRef.current.onSourceDragChange?.({
-                                                        source: drag.source,
-                                                        clientX: event.clientX,
-                                                        clientY: event.clientY,
-                                                    });
-                                                    updateSourceAutoScroll(event.currentTarget, event.clientY);
-                                                }
-                                                const target = rackModulationTargetAtPoint(
-                                                    event.currentTarget,
-                                                    event.clientX,
-                                                    event.clientY,
-                                                );
-                                                onHoverTarget(drag.source, target?.dataset.rackModTarget ?? null);
-                                            }}
-                                            onPointerUp={(event) => finishSourceGesture(
-                                                event.pointerId,
-                                                event.clientX,
-                                                event.clientY,
-                                                false,
-                                            )}
-                                            onPointerCancel={(event) => finishSourceGesture(
-                                                event.pointerId,
-                                                event.clientX,
-                                                event.clientY,
-                                                true,
-                                            )}
-                                            onLostPointerCapture={(event) => {
-                                                finishSourceGesture(
-                                                    event.pointerId,
-                                                    event.clientX,
-                                                    event.clientY,
-                                                    true,
-                                                );
-                                            }}
+                                            {...sourceHandlers(source, isSelected && sourceIsArmed)}
                                         >
-                                            <span className="rack-mod-art" aria-hidden="true">
-                                                <img
-                                                    className="rack-mod-icon"
-                                                    src={source.iconUrl}
-                                                    alt=""
-                                                    draggable={false}
-                                                />
-                                                <img
-                                                    className="rack-mod-identity-glyph"
-                                                    src={source.identityIconUrl}
-                                                    alt=""
-                                                    draggable={false}
-                                                />
-                                                <span className="rack-mod-number">{source.sourceSlot}</span>
-                                            </span>
+                                            <ModSourceArt source={source} />
                                         </button>
                                     );
                                 })}
@@ -1276,7 +1274,7 @@ function ModSourceCarousel({
                     className="rack-mod-paddle"
                     aria-label="Next modulation-source group"
                     onClick={() => onPageChange((pageIndex + 1) % RACK_MODULATION_SOURCE_PAGES.length)}
-                >›</button>
+                >{vertical ? "↓" : "›"}</button>
             </div>
         </div>
     );
@@ -1494,6 +1492,10 @@ function MobileGlobalModRail({
     accent,
     collapseSignal,
     onStateChange,
+    onDragSourceChange,
+    onSourceDrop,
+    onHoverTarget,
+    onSourceDragChange,
     children,
 }: {
     selectedSource: RackModulationSource;
@@ -1503,10 +1505,15 @@ function MobileGlobalModRail({
     accent: string;
     collapseSignal: number;
     onStateChange?: (state: GlobalModRailState) => void;
+    onDragSourceChange: (source: SelectedSource | null) => void;
+    onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
+    onHoverTarget: (source: SelectedSource, endpointID: string | null) => void;
+    onSourceDragChange: (drag: SourceDragPresentation | null) => void;
     children: React.ReactNode;
 }) {
     const layerRef = useRef<HTMLDivElement | null>(null);
     const railRef = useRef<HTMLElement | null>(null);
+    const tabRef = useRef<HTMLDivElement | null>(null);
     const positionRef = useRef(0);
     const normalizedPositionRef = useRef<number | null>(null);
     const boundsRef = useRef<RailVerticalBounds>({ min: 12, max: 12 });
@@ -1520,7 +1527,16 @@ function MobileGlobalModRail({
     } | null>(null);
     const [expanded, setExpanded] = useState(false);
     const [top, setTop] = useState(12);
+    const [drawerCeiling, setDrawerCeiling] = useState(12);
+    const [tabSilhouetteHeight, setTabSilhouetteHeight] = useState(168);
     const mappingActive = sourceDrag !== null;
+    const selectedSourceHandlers = useModSourceDrag({
+        onHoverTarget,
+        onDragSourceChange,
+        onSourceDrop,
+        onSourceDragChange,
+        onTap: () => setExpanded((current) => !current),
+    });
 
     const measureAndClamp = useCallback(() => {
         const layer = layerRef.current;
@@ -1531,20 +1547,36 @@ function MobileGlobalModRail({
 
         const layerBounds = layer.getBoundingClientRect();
         const layerStyle = getComputedStyle(layer);
-        const keyboard = layer.closest(".cosimo-surface")
-            ?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
+        const surface = layer.closest(".cosimo-surface");
+        const keyboard = surface?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
+        const presetBar = surface?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"]');
         const keyboardBounds = keyboard?.getBoundingClientRect();
-        const safeTop = 8 + (Number.parseFloat(layerStyle.paddingTop) || 0);
+        const presetBarBounds = presetBar?.getBoundingClientRect();
+        const safeTopInset = 8 + (Number.parseFloat(layerStyle.paddingTop) || 0);
+        const safeTop = presetBarBounds
+            ? Math.max(safeTopInset, presetBarBounds.bottom - layerBounds.top + 8)
+            : safeTopInset;
         const safeBottom = 8 + (Number.parseFloat(layerStyle.paddingBottom) || 0);
         const availableBottom = keyboardBounds
             ? Math.min(layerBounds.height, keyboardBounds.top - layerBounds.top)
             : layerBounds.height;
-        const railHeight = rail.getBoundingClientRect().height || 168;
+        const railStyle = getComputedStyle(rail);
+        const shoulderHeight = Number.parseFloat(railStyle.getPropertyValue("--rail-shoulder")) || 14;
+        const tabHeight = tabRef.current?.getBoundingClientRect().height || 140;
+        const body = rail.querySelector<HTMLElement>('[data-role="mobile-global-mod-rail-body"]');
+        const bodyStyle = body ? getComputedStyle(body) : null;
+        const bodyBorderHeight = bodyStyle
+            ? (Number.parseFloat(bodyStyle.borderTopWidth) || 0)
+                + (Number.parseFloat(bodyStyle.borderBottomWidth) || 0)
+            : 2;
+        const railHeight = tabHeight + (2 * shoulderHeight) + bodyBorderHeight;
         const nextBounds = {
             min: safeTop,
             max: Math.max(safeTop, availableBottom - railHeight - safeBottom),
         };
         boundsRef.current = nextBounds;
+        setDrawerCeiling(availableBottom - safeBottom);
+        setTabSilhouetteHeight(railHeight);
 
         normalizedPositionRef.current ??= readStoredRailPosition();
         const nextTop = nextBounds.min
@@ -1556,19 +1588,23 @@ function MobileGlobalModRail({
     useLayoutEffect(() => {
         measureAndClamp();
         const layer = layerRef.current;
-        const keyboard = layer?.closest(".cosimo-surface")
-            ?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
+        const surface = layer?.closest(".cosimo-surface");
+        const keyboard = surface?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
+        const presetBar = surface?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"]');
         const observer = typeof ResizeObserver === "function"
             ? new ResizeObserver(measureAndClamp)
             : null;
         if (layer) {
             observer?.observe(layer);
         }
-        if (railRef.current) {
-            observer?.observe(railRef.current);
+        if (tabRef.current) {
+            observer?.observe(tabRef.current);
         }
         if (keyboard) {
             observer?.observe(keyboard);
+        }
+        if (presetBar) {
+            observer?.observe(presetBar);
         }
         window.addEventListener("resize", measureAndClamp);
         window.visualViewport?.addEventListener("resize", measureAndClamp);
@@ -1592,8 +1628,8 @@ function MobileGlobalModRail({
     }, [expanded, onStateChange, selectedSource.sourceKind, selectedSource.sourceSlot]);
 
     useEffect(() => {
-        // A source deep-link navigates into that source's full editor; the
-        // widened tab would otherwise sit over the destination's Back bar.
+        // A source deep-link navigates into that source's full editor; collapse
+        // the drawer so it cannot cover the destination's Back bar.
         if (collapseSignal > 0) {
             setExpanded(false);
         }
@@ -1712,6 +1748,7 @@ function MobileGlobalModRail({
                     top,
                     "--source-color": selectedSource.accent,
                     "--editor-accent": accent,
+                    "--rail-drawer-max-height": `${Math.max(0, drawerCeiling - top - tabSilhouetteHeight)}px`,
                 } as CSSProperties}
                 aria-label="Global modulation bar"
             >
@@ -1727,6 +1764,95 @@ function MobileGlobalModRail({
                 />
                 <div data-role="mobile-global-mod-rail-body" className="mobile-global-mod-rail-body">
                     <div
+                        ref={tabRef}
+                        data-role="mobile-global-mod-rail-tab"
+                        className="mobile-global-mod-rail-tab"
+                    >
+                        <button
+                            type="button"
+                            data-role="mobile-global-mod-rail-grip"
+                            className="mobile-global-mod-rail-grip"
+                            aria-label={expanded ? "Collapse global modulation bar" : "Expand global modulation bar"}
+                            aria-expanded={expanded}
+                            onKeyDown={(event) => {
+                                if (event.key !== "Enter" && event.key !== " ") {
+                                    return;
+                                }
+                                event.preventDefault();
+                                setExpanded((current) => !current);
+                            }}
+                            onPointerDown={(event) => {
+                                if (event.pointerType === "mouse" && event.button !== 0) {
+                                    return;
+                                }
+                                event.preventDefault();
+                                event.stopPropagation();
+                                gestureRef.current = {
+                                    pointerId: event.pointerId,
+                                    startClientY: event.clientY,
+                                    startNormalizedY: normalizedPositionRef.current ?? readStoredRailPosition(),
+                                    startTop: positionRef.current,
+                                    moved: false,
+                                    captureElement: event.currentTarget,
+                                };
+                                try {
+                                    event.currentTarget.setPointerCapture(event.pointerId);
+                                } catch {
+                                    // Window-level termination still owns unsupported pointers.
+                                }
+                            }}
+                            onPointerMove={(event) => {
+                                const gesture = gestureRef.current;
+                                if (!gesture || gesture.pointerId !== event.pointerId) {
+                                    return;
+                                }
+                                event.preventDefault();
+                                event.stopPropagation();
+                                const deltaY = event.clientY - gesture.startClientY;
+                                gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
+                                if (!gesture.moved) {
+                                    return;
+                                }
+                                const bounds = boundsRef.current;
+                                const nextTop = clamp(gesture.startTop + deltaY, bounds.min, bounds.max);
+                                positionRef.current = nextTop;
+                                const span = bounds.max - bounds.min;
+                                normalizedPositionRef.current = span > 0
+                                    ? (nextTop - bounds.min) / span
+                                    : 0;
+                                setTop(nextTop);
+                            }}
+                            onPointerUp={(event) => finishRailGesture(event.pointerId, false)}
+                            onPointerCancel={(event) => finishRailGesture(event.pointerId, true)}
+                            onLostPointerCapture={(event) => finishRailGesture(event.pointerId, true)}
+                        >
+                            <span className="mobile-global-mod-rail-handle" aria-hidden="true" />
+                            <span className="mobile-global-mod-rail-chip-slot" aria-hidden="true" />
+                            {clampedActivity !== null ? (
+                                <span
+                                    className="mobile-global-mod-rail-activity"
+                                    aria-label={`${selectedSource.label} activity`}
+                                    style={{ "--source-activity": clampedActivity } as CSSProperties}
+                                ><span /></span>
+                            ) : null}
+                            <span
+                                data-role="mobile-global-mod-rail-route-count"
+                                className="mobile-global-mod-rail-route-count"
+                                aria-label={`${routeCount} modulation routes`}
+                            >{routeCount}</span>
+                            <span className="mobile-global-mod-rail-chevron" aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
+                        </button>
+                        <button
+                            type="button"
+                            data-role="mobile-global-mod-rail-selected"
+                            className="mobile-global-mod-rail-selected"
+                            aria-label={`${selectedSource.label} selected`}
+                            {...selectedSourceHandlers(selectedSource, false)}
+                        >
+                            <ModSourceArt source={selectedSource} />
+                        </button>
+                    </div>
+                    <div
                         data-role="mobile-global-mod-rail-drawer"
                         className="mobile-global-mod-rail-drawer"
                         aria-hidden={!expanded || mappingActive}
@@ -1734,89 +1860,6 @@ function MobileGlobalModRail({
                     >
                         {children}
                     </div>
-                    <button
-                        type="button"
-                        data-role="mobile-global-mod-rail-grip"
-                        className="mobile-global-mod-rail-grip"
-                        aria-label={expanded ? "Collapse global modulation bar" : "Expand global modulation bar"}
-                        aria-expanded={expanded}
-                        onKeyDown={(event) => {
-                            if (event.key !== "Enter" && event.key !== " ") {
-                                return;
-                            }
-                            event.preventDefault();
-                            setExpanded((current) => !current);
-                        }}
-                        onPointerDown={(event) => {
-                            if (event.pointerType === "mouse" && event.button !== 0) {
-                                return;
-                            }
-                            event.preventDefault();
-                            event.stopPropagation();
-                            gestureRef.current = {
-                                pointerId: event.pointerId,
-                                startClientY: event.clientY,
-                                startNormalizedY: normalizedPositionRef.current ?? readStoredRailPosition(),
-                                startTop: positionRef.current,
-                                moved: false,
-                                captureElement: event.currentTarget,
-                            };
-                            try {
-                                event.currentTarget.setPointerCapture(event.pointerId);
-                            } catch {
-                                // Window-level termination still owns unsupported pointers.
-                            }
-                        }}
-                        onPointerMove={(event) => {
-                            const gesture = gestureRef.current;
-                            if (!gesture || gesture.pointerId !== event.pointerId) {
-                                return;
-                            }
-                            event.preventDefault();
-                            event.stopPropagation();
-                            const deltaY = event.clientY - gesture.startClientY;
-                            gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
-                            if (!gesture.moved) {
-                                return;
-                            }
-                            const bounds = boundsRef.current;
-                            const nextTop = clamp(gesture.startTop + deltaY, bounds.min, bounds.max);
-                            positionRef.current = nextTop;
-                            const span = bounds.max - bounds.min;
-                            normalizedPositionRef.current = span > 0
-                                ? (nextTop - bounds.min) / span
-                                : 0;
-                            setTop(nextTop);
-                        }}
-                        onPointerUp={(event) => finishRailGesture(event.pointerId, false)}
-                        onPointerCancel={(event) => finishRailGesture(event.pointerId, true)}
-                        onLostPointerCapture={(event) => finishRailGesture(event.pointerId, true)}
-                    >
-                        <span className="mobile-global-mod-rail-handle" aria-hidden="true" />
-                        <span
-                            data-role="mobile-global-mod-rail-selected"
-                            className="mobile-global-mod-rail-selected"
-                            aria-label={`${selectedSource.label} selected`}
-                        >
-                            <span className="rack-mod-art" aria-hidden="true">
-                                <img className="rack-mod-icon" src={selectedSource.iconUrl} alt="" draggable={false} />
-                                <span className="rack-mod-number">{selectedSource.sourceSlot}</span>
-                            </span>
-                        </span>
-                        {clampedActivity !== null ? (
-                            <span
-                                className="mobile-global-mod-rail-activity"
-                                aria-label={`${selectedSource.label} activity`}
-                                style={{ "--source-activity": clampedActivity } as CSSProperties}
-                            ><span /></span>
-                        ) : null}
-                        <span
-                            data-role="mobile-global-mod-rail-route-count"
-                            className="mobile-global-mod-rail-route-count"
-                            aria-label={`${routeCount} modulation routes`}
-                        >{routeCount}</span>
-                        <span className="mobile-global-mod-rail-chevron" aria-hidden="true">{expanded ? "›" : "‹"}</span>
-                    </button>
                 </div>
             </aside>
             {sourceDrag ? (
@@ -1833,13 +1876,11 @@ function MobileGlobalModRail({
                     } as CSSProperties}
                     aria-hidden="true"
                 >
-                    <img
-                        src={findRackModulationSource(
+                    <ModSourceArt
+                        source={findRackModulationSource(
                             sourceDrag.source.sourceKind,
                             sourceDrag.source.sourceSlot,
-                        ).iconUrl}
-                        alt=""
-                        draggable={false}
+                        )}
                     />
                 </div>
             ) : null}
@@ -2678,32 +2719,38 @@ export function EffectsRackWorkspace({
         parameterOverlayRouteIndex,
     ]);
 
-    const modulationControls = (
+    const hoverSourceTarget = useCallback((source: SelectedSource, endpointID: string | null) => {
+        if (endpointID === null) {
+            setHoverTargetEndpointID(null);
+            return;
+        }
+        const creation = getPairCreation(source, endpointID);
+        setHoverTargetEndpointID(
+            creation === "existing" || creation === "creatable" ? endpointID : null,
+        );
+    }, [getPairCreation]);
+
+    const modulationSourceControls = (
+        <ModSourceCarousel
+            pageIndex={sourcePageIndex}
+            selectedSource={selectedSource}
+            sourceIsArmed={sourceIsArmed}
+            orientation={mobileGlobalModRail ? "vertical" : "horizontal"}
+            onPageChange={changeSourcePage}
+            onDragSourceChange={setDragSource}
+            onSourceSelect={selectSource}
+            onSourceDrop={dropSource}
+            onOpenSelectedSource={(source) => {
+                setRailCollapseSignal((current) => current + 1);
+                onOpenModSource?.(source);
+            }}
+            onHoverTarget={hoverSourceTarget}
+            onSourceDragChange={setSourceDrag}
+        />
+    );
+
+    const modulationRouteControls = (
         <>
-            <ModSourceCarousel
-                pageIndex={sourcePageIndex}
-                selectedSource={selectedSource}
-                sourceIsArmed={sourceIsArmed}
-                onPageChange={changeSourcePage}
-                onDragSourceChange={setDragSource}
-                onSourceSelect={selectSource}
-                onSourceDrop={dropSource}
-                onOpenSelectedSource={(source) => {
-                    setRailCollapseSignal((current) => current + 1);
-                    onOpenModSource?.(source);
-                }}
-                onHoverTarget={(source, endpointID) => {
-                    if (endpointID === null) {
-                        setHoverTargetEndpointID(null);
-                        return;
-                    }
-                    const creation = getPairCreation(source, endpointID);
-                    setHoverTargetEndpointID(
-                        creation === "existing" || creation === "creatable" ? endpointID : null,
-                    );
-                }}
-                onSourceDragChange={setSourceDrag}
-            />
             {selectedRoute ? (
                 <ModulationAmountControl
                     source={activeSource}
@@ -2724,6 +2771,13 @@ export function EffectsRackWorkspace({
             <output className="rack-route-status" aria-live="polite">
                 {routeStatus || (hoverTargetEndpointID ? `Route to ${hoverTargetEndpointID}` : "")}
             </output>
+        </>
+    );
+
+    const modulationControls = (
+        <>
+            {modulationSourceControls}
+            {modulationRouteControls}
         </>
     );
 
@@ -2906,7 +2960,7 @@ export function EffectsRackWorkspace({
                         />
                     </div>
                     <div className="rack-editor-modulation">
-                        {mobileGlobalModRail ? null : modulationControls}
+                        {mobileGlobalModRail ? modulationRouteControls : modulationControls}
                     </div>
                 </section>
             </div>
@@ -2919,8 +2973,12 @@ export function EffectsRackWorkspace({
                     accent={EFFECT_ACCENTS[selectedEffectId]}
                     collapseSignal={railCollapseSignal}
                     onStateChange={onGlobalModRailStateChange}
+                    onDragSourceChange={setDragSource}
+                    onSourceDrop={dropSource}
+                    onHoverTarget={hoverSourceTarget}
+                    onSourceDragChange={setSourceDrag}
                 >
-                    {modulationControls}
+                    {modulationSourceControls}
                 </MobileGlobalModRail>,
                 mobileModRailPortalTarget,
             ) : null}
