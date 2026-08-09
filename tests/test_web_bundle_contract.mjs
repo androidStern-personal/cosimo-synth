@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -208,8 +209,18 @@ test("web host packaging includes every runtime-owned module", async (context) =
     await Promise.all(fixtureFiles.map(async (relativePath) => {
         const filePath = path.join(sourceDirectory, relativePath);
         await fs.mkdir(path.dirname(filePath), { recursive: true });
-        await fs.writeFile(filePath, relativePath);
+        await fs.writeFile(
+            filePath,
+            relativePath === "desktop-production-loader.js"
+                ? "export { default } from \"./app.js?v=__COSIMO_DESKTOP_APP_HASH__\";\n"
+                : relativePath,
+        );
     }));
+
+    const desktopAppSource = "export default function createDesktopPatchView() {}\n";
+    const desktopAppPath = path.join(outputDirectory, "patch_gui", "desktop", "app.js");
+    await fs.mkdir(path.dirname(desktopAppPath), { recursive: true });
+    await fs.writeFile(desktopAppPath, desktopAppSource);
 
     await copyWebHostAssets({ sourceDirectory, outputDirectory });
 
@@ -220,4 +231,12 @@ test("web host packaging includes every runtime-owned module", async (context) =
         fs.access(path.join(outputDirectory, "browser-patch-state.mjs")),
         fs.access(path.join(outputDirectory, "patch_gui", "desktop", "index.js")),
     ]);
+
+    const expectedFingerprint = createHash("sha256").update(desktopAppSource).digest("hex").slice(0, 16);
+    const productionLoader = await fs.readFile(
+        path.join(outputDirectory, "patch_gui", "desktop", "index.js"),
+        "utf8",
+    );
+    assert.match(productionLoader, new RegExp(`\\./app\\.js\\?v=${expectedFingerprint}`));
+    assert.doesNotMatch(productionLoader, /__COSIMO_DESKTOP_APP_HASH__/);
 });
