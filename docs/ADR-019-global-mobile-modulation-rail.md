@@ -1,6 +1,6 @@
 # ADR-019: Global mobile modulation rail
 
-Status: accepted — 2026-08-08; corrected 2026-08-08 (see "2026-08-08 correction: true edge tab")
+Status: accepted — 2026-08-08; corrected 2026-08-08 (see "2026-08-08 correction: one vector silhouette")
 
 ## Context
 
@@ -86,3 +86,19 @@ looked like two overlapping icons.
 - Route amount, unmapped creation, and route-status feedback remain in the FX
   editor. The narrow drawer owns source navigation only and therefore does not
   distort the authoritative amount control.
+
+## 2026-08-08 correction: one vector silhouette
+
+The CSS-composed shoulders produced an invalid visual ownership split: radial
+gradients painted the concave shoulders, inset shadows painted the body edges,
+and an opaque grip covered part of those edges. The bottom body shadow also
+crossed the independently painted shoulder curve.
+
+- One closed, height-aware SVG path now owns the complete tab shape, including
+  both concave shoulders, the convex left corners, the fill, and the external
+  stroke. Expansion changes that path's height without changing its radii.
+- The grip and body are transparent and draw no external border. Interactive
+  content remains ordinary HTML above the SVG, preserving touch, focus, and
+  accessibility behavior without participating in the silhouette.
+- The drawer divider is inset from the external contour. It cannot intersect or
+  visually continue the outer stroke in either expansion direction.

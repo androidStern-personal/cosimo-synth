@@ -1,6 +1,7 @@
 import {
     useCallback,
     useEffect,
+    useId,
     useLayoutEffect,
     useMemo,
     useRef,
@@ -1466,6 +1467,29 @@ const MOBILE_MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1"
 const MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX = 7;
 const MOBILE_MOD_RAIL_SNAP_DISTANCE_PX = 28;
 const MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX = 234;
+const MOBILE_MOD_RAIL_WIDTH_PX = 56;
+const MOBILE_MOD_RAIL_SHOULDER_PX = 14;
+const MOBILE_MOD_RAIL_CORNER_PX = 15;
+const MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX = 140;
+
+function buildMobileModRailSilhouettePath(height: number) {
+    const width = MOBILE_MOD_RAIL_WIDTH_PX;
+    const shoulder = MOBILE_MOD_RAIL_SHOULDER_PX;
+    const bodyTop = shoulder;
+    const bodyBottom = height - shoulder;
+    const corner = Math.min(MOBILE_MOD_RAIL_CORNER_PX, (bodyBottom - bodyTop) / 2);
+    return [
+        `M ${width} 0`,
+        `A ${shoulder} ${shoulder} 0 0 1 ${width - shoulder} ${bodyTop}`,
+        `H ${corner}`,
+        `A ${corner} ${corner} 0 0 0 0 ${bodyTop + corner}`,
+        `V ${bodyBottom - corner}`,
+        `A ${corner} ${corner} 0 0 0 ${corner} ${bodyBottom}`,
+        `H ${width - shoulder}`,
+        `A ${shoulder} ${shoulder} 0 0 1 ${width} ${height}`,
+        "Z",
+    ].join(" ");
+}
 
 type RailVerticalBounds = {
     readonly min: number;
@@ -1578,6 +1602,7 @@ function MobileGlobalModRail({
         direction: "down",
         extent: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
     });
+    const silhouetteGradientId = `mobile-mod-rail-fill-${useId().replaceAll(":", "")}`;
     const mappingActive = sourceDrag !== null;
     const selectedSourceHandlers = useModSourceDrag({
         onHoverTarget,
@@ -1800,6 +1825,10 @@ function MobileGlobalModRail({
 
     const clampedActivity = sourceActivity === null ? null : clamp(sourceActivity, 0, 1);
     const drawerOpen = expanded && !mappingActive;
+    const silhouetteHeight = MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX
+        + (2 * MOBILE_MOD_RAIL_SHOULDER_PX)
+        + (drawerOpen ? drawerPlacement.extent : 0);
+    const silhouettePath = buildMobileModRailSilhouettePath(silhouetteHeight);
     const upwardDrawerOffset = drawerOpen && drawerPlacement.direction === "up" ? -drawerPlacement.extent : 0;
     let disclosureDirection = drawerPlacement.direction;
     if (expanded) {
@@ -1824,16 +1853,27 @@ function MobileGlobalModRail({
                 } as CSSProperties}
                 aria-label="Global modulation bar"
             >
-                <span
-                    data-role="mobile-global-mod-rail-shoulder"
-                    className="mobile-global-mod-rail-shoulder is-top"
+                <svg
+                    data-role="mobile-global-mod-rail-silhouette"
+                    className="mobile-global-mod-rail-silhouette"
+                    viewBox={`0 0 ${MOBILE_MOD_RAIL_WIDTH_PX} ${silhouetteHeight}`}
+                    preserveAspectRatio="none"
+                    focusable="false"
                     aria-hidden="true"
-                />
-                <span
-                    data-role="mobile-global-mod-rail-shoulder"
-                    className="mobile-global-mod-rail-shoulder is-bottom"
-                    aria-hidden="true"
-                />
+                >
+                    <defs>
+                        <linearGradient id={silhouetteGradientId} x1="0" y1="0" x2="1" y2="1">
+                            <stop className="mobile-global-mod-rail-silhouette-accent" offset="0" />
+                            <stop className="mobile-global-mod-rail-silhouette-fill" offset="46%" />
+                            <stop className="mobile-global-mod-rail-silhouette-fill" offset="100%" />
+                        </linearGradient>
+                    </defs>
+                    <path
+                        d={silhouettePath}
+                        fill={`url(#${silhouetteGradientId})`}
+                        vectorEffect="non-scaling-stroke"
+                    />
+                </svg>
                 <div data-role="mobile-global-mod-rail-body" className="mobile-global-mod-rail-body">
                     <div
                         ref={tabRef}

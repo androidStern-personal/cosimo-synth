@@ -45,48 +45,43 @@
         pointer-events: none;
     }
 
-    .mobile-global-mod-rail-shoulder {
+    .mobile-global-mod-rail-silhouette {
         position: absolute;
-        right: 0;
-        width: var(--rail-shoulder);
-        height: calc(var(--rail-shoulder) + 2px);
+        inset: 0;
+        z-index: 0;
+        display: block;
+        width: 100%;
+        height: 100%;
+        overflow: visible;
         pointer-events: none;
     }
 
-    .mobile-global-mod-rail-shoulder.is-top {
-        top: 0;
-        background: radial-gradient(
-            circle var(--rail-shoulder) at 0 0,
-            transparent calc(var(--rail-shoulder) - 1.5px),
-            var(--rail-stroke) calc(var(--rail-shoulder) - 1px) calc(var(--rail-shoulder) - 0.25px),
-            var(--rail-fill) calc(var(--rail-shoulder) + 0.75px)
-        );
+    .mobile-global-mod-rail-silhouette path {
+        stroke: var(--rail-stroke);
+        stroke-width: 1px;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        shape-rendering: geometricPrecision;
     }
 
-    .mobile-global-mod-rail-shoulder.is-bottom {
-        bottom: 0;
-        background: radial-gradient(
-            circle var(--rail-shoulder) at 0 100%,
-            transparent calc(var(--rail-shoulder) - 1.5px),
-            var(--rail-stroke) calc(var(--rail-shoulder) - 1px) calc(var(--rail-shoulder) - 0.25px),
-            var(--rail-fill) calc(var(--rail-shoulder) + 0.75px)
-        );
+    .mobile-global-mod-rail-silhouette-accent {
+        stop-color: color-mix(in srgb, var(--source-color) 9%, var(--rail-fill));
+    }
+
+    .mobile-global-mod-rail-silhouette-fill {
+        stop-color: var(--rail-fill);
     }
 
     .mobile-global-mod-rail-body {
         position: relative;
+        z-index: 1;
         display: flex;
         flex-direction: column;
         margin: var(--rail-shoulder) 0;
         overflow: hidden;
         border-radius: var(--rail-corner) 0 0 var(--rail-corner);
-        background:
-            linear-gradient(135deg, color-mix(in srgb, var(--source-color) 9%, transparent), transparent 46%),
-            var(--rail-fill);
-        box-shadow:
-            inset 1px 0 var(--rail-stroke),
-            inset 0 1px var(--rail-stroke),
-            inset 0 -1px var(--rail-stroke);
+        background: transparent;
+        box-shadow: none;
     }
 
     .mobile-global-mod-rail[data-drawer-direction="up"] .mobile-global-mod-rail-body {
@@ -116,7 +111,7 @@
     .mobile-global-mod-rail[data-expanded="true"] .mobile-global-mod-rail-drawer {
         height: var(--rail-drawer-size);
         overflow-y: auto;
-        box-shadow: inset 0 1px rgb(255 255 255 / 0.06);
+        box-shadow: none;
         opacity: 1;
         visibility: visible;
         pointer-events: auto;
@@ -124,7 +119,24 @@
     }
 
     .mobile-global-mod-rail[data-expanded="true"][data-drawer-direction="up"] .mobile-global-mod-rail-drawer {
-        box-shadow: inset 0 -1px rgb(255 255 255 / 0.06);
+        box-shadow: none;
+    }
+
+    .mobile-global-mod-rail[data-expanded="true"] .mobile-global-mod-rail-drawer::before {
+        position: absolute;
+        top: 0;
+        right: 8px;
+        left: 8px;
+        z-index: 2;
+        height: 1px;
+        background: rgb(255 255 255 / 0.06);
+        content: "";
+        pointer-events: none;
+    }
+
+    .mobile-global-mod-rail[data-expanded="true"][data-drawer-direction="up"] .mobile-global-mod-rail-drawer::before {
+        top: auto;
+        bottom: 0;
     }
 
     .mobile-global-mod-rail[data-mapping-active="true"] .mobile-global-mod-rail-drawer {
@@ -160,7 +172,7 @@
         padding: 0;
         border: 0;
         border-radius: 0;
-        background: var(--rail-fill);
+        background: transparent;
         box-shadow: none;
         color: #dbe3e5;
         cursor: ns-resize;

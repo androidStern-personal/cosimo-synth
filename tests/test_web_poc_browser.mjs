@@ -886,6 +886,55 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
     }
 });
 
+test("generated mobile modulation rail keeps one continuous vector silhouette", async () => {
+    const page = await openStartedMobileRackPage();
+
+    const readSilhouette = async () => await page.evaluate(() => {
+        const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+        const rail = root?.querySelector('[data-role="mobile-global-mod-rail"]');
+        const silhouette = rail?.querySelector('[data-role="mobile-global-mod-rail-silhouette"]');
+        const paths = silhouette ? Array.from(silhouette.querySelectorAll("path")) : [];
+        const path = paths[0] ?? null;
+        const pathStyle = path ? getComputedStyle(path) : null;
+        return {
+            expanded: rail?.getAttribute("data-expanded") ?? null,
+            pathCount: paths.length,
+            closed: /Z\s*$/i.test(path?.getAttribute("d") ?? ""),
+            fill: pathStyle?.fill ?? null,
+            stroke: pathStyle?.stroke ?? null,
+            fragmentShoulderCount: rail?.querySelectorAll('[data-role="mobile-global-mod-rail-shoulder"]').length ?? -1,
+            gripBackground: rail
+                ? getComputedStyle(rail.querySelector('[data-role="mobile-global-mod-rail-grip"]')).backgroundColor
+                : null,
+        };
+    });
+
+    try {
+        const collapsed = await readSilhouette();
+        assert.deepEqual(collapsed, {
+            expanded: "false",
+            pathCount: 1,
+            closed: true,
+            fill: collapsed.fill,
+            stroke: collapsed.stroke,
+            fragmentShoulderCount: 0,
+            gripBackground: "rgba(0, 0, 0, 0)",
+        });
+        assert.notEqual(collapsed.fill, "none");
+        assert.notEqual(collapsed.stroke, "none");
+
+        const gripCenter = await centerOf(page.locator('[data-role="mobile-global-mod-rail-grip"]'));
+        await page.touchscreen.tap(gripCenter.x, gripCenter.y);
+        await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="true"]').waitFor();
+        const expanded = await readSilhouette();
+        assert.equal(expanded.pathCount, 1);
+        assert.equal(expanded.closed, true);
+        assert.equal(expanded.fragmentShoulderCount, 0);
+    } finally {
+        await page.close();
+    }
+});
+
 test("generated browser proof plays and visibly presses notes from a touchscreen", {
     skip: browserEngine !== "webkit",
 }, async () => {

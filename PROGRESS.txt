@@ -220,6 +220,7 @@ Global Mod Bar spacing and edge-disclosure refinement — 2026-08-08
 - The tab and drawer now share a measured rhythm: centered 44px source targets, 4px source gaps, compact 28px paging controls with geometric chevrons, symmetric collapsed handle/source/disclosure spacing, and a notification-style route-count badge on the active source's upper-right corner.
 - Browser coverage is 137/137, including bottom-up expansion, exact centering, compact-control geometry, live touch rail/source ownership, persistence/cancel handling, and HUD collision avoidance. TypeScript is clean.
 - Sites packaging fingerprints the compiled desktop module in the web-only loader import. This keeps the native stable loader untouched while preventing a prior deployment's cached `app.js` response from surviving a new production publish.
+- The tab outline is now one closed SVG contour. The former radial-gradient shoulder fragments, body inset strokes, and opaque grip edge were removed, eliminating missing border sections and the crossed bottom lines while retaining mandatory concave shoulders in collapsed, expanded-down, and expanded-up states.
 
 Master integration regression — 2026-08-08
 - The FX parameter-state correction was merged with the global mobile modulation rail. The Mod Bar amount gesture now supplies its live control bounds and pointer position to the rail's collision-aware `MOD` HUD instead of bypassing the merged HUD contract.

@@ -8369,7 +8369,7 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
         const initial = await rail.evaluate((element) => {
             const layer = element.closest('[data-role="mobile-global-mod-rail-layer"]');
             const body = element.querySelector('[data-role="mobile-global-mod-rail-body"]');
-            const shoulders = Array.from(element.querySelectorAll('[data-role="mobile-global-mod-rail-shoulder"]'));
+            const silhouette = element.querySelector('[data-role="mobile-global-mod-rail-silhouette"]');
             const selected = element.querySelector('[data-role="mobile-global-mod-rail-selected"]');
             const routeCount = element.querySelector('[data-role="mobile-global-mod-rail-route-count"]');
             const drawer = element.querySelector('[data-role="mobile-global-mod-rail-drawer"]');
@@ -8379,10 +8379,8 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
                 layerPointerEvents: layer instanceof HTMLElement ? getComputedStyle(layer).pointerEvents : null,
                 railPointerEvents: getComputedStyle(element).pointerEvents,
                 gripTouchAction: getComputedStyle(element.querySelector('[data-role="mobile-global-mod-rail-grip"]')).touchAction,
-                shoulderCount: shoulders.length,
-                shouldersCurved: shoulders.length > 0 && shoulders.every((shoulder) => (
-                    getComputedStyle(shoulder).backgroundImage.includes("radial-gradient")
-                )),
+                silhouettePathCount: silhouette?.querySelectorAll("path").length ?? 0,
+                fragmentShoulderCount: element.querySelectorAll('[data-role="mobile-global-mod-rail-shoulder"]').length,
                 bodyLeftRadius: bodyStyle
                     ? Math.min(Number.parseFloat(bodyStyle.borderTopLeftRadius), Number.parseFloat(bodyStyle.borderBottomLeftRadius))
                     : null,
@@ -8405,8 +8403,8 @@ test("mobile Mod Bar is a curved global edge rail that survives accordion naviga
             layerPointerEvents: "none",
             railPointerEvents: "auto",
             gripTouchAction: "none",
-            shoulderCount: 2,
-            shouldersCurved: true,
+            silhouettePathCount: 1,
+            fragmentShoulderCount: 0,
             bodyLeftRadius: initial.bodyLeftRadius,
             bodyRightRadius: 0,
             railFlushRight: true,
@@ -8713,6 +8711,78 @@ async function readGlobalModRailGeometry(page) {
         };
     });
 }
+
+test("the global modulation rail owns one continuous SVG silhouette", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ normalizedY: 0.25 }),
+                );
+            });
+        },
+    });
+
+    const readSilhouette = async () => await page.locator('[data-role="mobile-global-mod-rail"]').evaluate((rail) => {
+        const silhouette = rail.querySelector('[data-role="mobile-global-mod-rail-silhouette"]');
+        const paths = silhouette ? Array.from(silhouette.querySelectorAll("path")) : [];
+        const path = paths[0] ?? null;
+        const grip = rail.querySelector('[data-role="mobile-global-mod-rail-grip"]');
+        const body = rail.querySelector('[data-role="mobile-global-mod-rail-body"]');
+        const railBounds = rail.getBoundingClientRect();
+        const silhouetteBounds = silhouette?.getBoundingClientRect() ?? null;
+        const pathStyle = path ? getComputedStyle(path) : null;
+        return {
+            pathCount: paths.length,
+            pathData: path?.getAttribute("d") ?? "",
+            pathFill: pathStyle?.fill ?? null,
+            pathStroke: pathStyle?.stroke ?? null,
+            pathStrokeWidth: pathStyle?.strokeWidth ?? null,
+            fragmentShoulderCount: rail.querySelectorAll('[data-role="mobile-global-mod-rail-shoulder"]').length,
+            gripBackground: grip ? getComputedStyle(grip).backgroundColor : null,
+            bodyBoxShadow: body ? getComputedStyle(body).boxShadow : null,
+            railBounds: {
+                left: railBounds.left,
+                top: railBounds.top,
+                width: railBounds.width,
+                height: railBounds.height,
+            },
+            silhouetteBounds: silhouetteBounds ? {
+                left: silhouetteBounds.left,
+                top: silhouetteBounds.top,
+                width: silhouetteBounds.width,
+                height: silhouetteBounds.height,
+            } : null,
+        };
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        const collapsed = await readSilhouette();
+        assert.equal(collapsed.pathCount, 1, "One SVG path must own the complete tab outline.");
+        assert.match(collapsed.pathData, /Z\s*$/i, "The silhouette must be one closed contour.");
+        assert.notEqual(collapsed.pathFill, "none", "The silhouette path must own the tab fill.");
+        assert.notEqual(collapsed.pathStroke, "none", "The silhouette path must own the complete outline.");
+        assert.equal(collapsed.pathStrokeWidth, "1px");
+        assert.equal(collapsed.fragmentShoulderCount, 0, "Separate shoulder fragments must not paint the outline.");
+        assert.equal(collapsed.gripBackground, "rgba(0, 0, 0, 0)", "The grip must not cover the silhouette stroke.");
+        assert.equal(collapsed.bodyBoxShadow, "none", "The body must not draw a competing outline.");
+        assert.deepEqual(collapsed.silhouetteBounds, collapsed.railBounds, "The single silhouette must cover the full rail bounds.");
+
+        await expandGlobalModRail(page);
+        await page.waitForTimeout(120);
+        const expanded = await readSilhouette();
+        assert.equal(expanded.pathCount, 1, "Expansion must retain one outline path.");
+        assert.match(expanded.pathData, /Z\s*$/i);
+        assert.notEqual(expanded.pathData, collapsed.pathData, "The contour must extend with the drawer.");
+        assert.deepEqual(expanded.silhouetteBounds, expanded.railBounds, "The expanded contour must cover the full rail bounds.");
+    } finally {
+        await page.close();
+    }
+});
 
 test("the global modulation rail keeps a fixed tab and opens its source drawer toward available space", async () => {
     const page = await openHarnessPage({
