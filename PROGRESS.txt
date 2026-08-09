@@ -215,6 +215,11 @@ Global Mod Bar vertical-drawer correction — 2026-08-08
 - Each source now renders one source-colored fontaudio identity glyph rather than a generated face plus white glyph overlay. Route amount and mapping feedback remain inline in the FX editor because the narrow drawer owns source navigation only.
 - The collapsed active source is independently draggable through the same canonical source gesture/drop guard as drawer sources. The rest of the tab remains the rail move/toggle surface, and the preset bar is included in the rail's safe top bound.
 
+Global Mod Bar spacing and edge-disclosure refinement — 2026-08-08
+- Disclosure remains downward when the complete drawer fits below the fixed tab. A bottom-positioned tab opens the same drawer upward; constrained short viewports choose the larger side and keep overflow contained. The tab itself does not move during disclosure.
+- The tab and drawer now share a measured rhythm: centered 44px source targets, 4px source gaps, compact 28px paging controls with geometric chevrons, symmetric collapsed handle/source/disclosure spacing, and a notification-style route-count badge on the active source's upper-right corner.
+- Browser coverage is 137/137, including bottom-up expansion, exact centering, compact-control geometry, live touch rail/source ownership, persistence/cancel handling, and HUD collision avoidance. TypeScript is clean.
+
 Master integration regression — 2026-08-08
 - The FX parameter-state correction was merged with the global mobile modulation rail. The Mod Bar amount gesture now supplies its live control bounds and pointer position to the rail's collision-aware `MOD` HUD instead of bypassing the merged HUD contract.
 - A source drag no longer gives every eligible parameter an armed-source-colored outline. Only the hovered valid target receives the transient drag-source halo; the neutral external accessibility focus indicator remains independently visible.

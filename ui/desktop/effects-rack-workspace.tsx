@@ -1231,7 +1231,13 @@ function ModSourceCarousel({
                     className="rack-mod-paddle"
                     aria-label="Previous modulation-source group"
                     onClick={() => onPageChange((pageIndex + RACK_MODULATION_SOURCE_PAGES.length - 1) % RACK_MODULATION_SOURCE_PAGES.length)}
-                >{vertical ? "↑" : "‹"}</button>
+                >
+                    <span
+                        className="rack-mod-chevron"
+                        data-direction={vertical ? "up" : "left"}
+                        aria-hidden="true"
+                    />
+                </button>
                 <div className="rack-mod-viewport">
                     <div
                         className="rack-mod-track"
@@ -1274,7 +1280,13 @@ function ModSourceCarousel({
                     className="rack-mod-paddle"
                     aria-label="Next modulation-source group"
                     onClick={() => onPageChange((pageIndex + 1) % RACK_MODULATION_SOURCE_PAGES.length)}
-                >{vertical ? "↓" : "›"}</button>
+                >
+                    <span
+                        className="rack-mod-chevron"
+                        data-direction={vertical ? "down" : "right"}
+                        aria-hidden="true"
+                    />
+                </button>
             </div>
         </div>
     );
@@ -1453,11 +1465,39 @@ function RackParameterHudOverlay({ hud }: { hud: RackParameterHud }) {
 const MOBILE_MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1";
 const MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX = 7;
 const MOBILE_MOD_RAIL_SNAP_DISTANCE_PX = 28;
+const MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX = 234;
 
 type RailVerticalBounds = {
     readonly min: number;
     readonly max: number;
 };
+
+type RailDrawerDirection = "down" | "up";
+
+type RailDrawerMetrics = {
+    readonly safeTop: number;
+    readonly safeBottom: number;
+    readonly collapsedHeight: number;
+    readonly desiredHeight: number;
+};
+
+type RailDrawerPlacement = {
+    readonly direction: RailDrawerDirection;
+    readonly extent: number;
+};
+
+function projectRailDrawerPlacement(tabTop: number, metrics: RailDrawerMetrics): RailDrawerPlacement {
+    const spaceAbove = Math.max(0, tabTop - metrics.safeTop);
+    const spaceBelow = Math.max(0, metrics.safeBottom - tabTop - metrics.collapsedHeight);
+    let direction: RailDrawerDirection = "down";
+    if (spaceBelow < metrics.desiredHeight && (spaceAbove >= metrics.desiredHeight || spaceAbove > spaceBelow)) {
+        direction = "up";
+    }
+    return {
+        direction,
+        extent: Math.min(metrics.desiredHeight, direction === "up" ? spaceAbove : spaceBelow),
+    };
+}
 
 function readStoredRailPosition() {
     try {
@@ -1514,9 +1554,16 @@ function MobileGlobalModRail({
     const layerRef = useRef<HTMLDivElement | null>(null);
     const railRef = useRef<HTMLElement | null>(null);
     const tabRef = useRef<HTMLDivElement | null>(null);
+    const drawerRef = useRef<HTMLDivElement | null>(null);
     const positionRef = useRef(0);
     const normalizedPositionRef = useRef<number | null>(null);
     const boundsRef = useRef<RailVerticalBounds>({ min: 12, max: 12 });
+    const drawerMetricsRef = useRef<RailDrawerMetrics>({
+        safeTop: 12,
+        safeBottom: 12,
+        collapsedHeight: 168,
+        desiredHeight: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
+    });
     const gestureRef = useRef<{
         pointerId: number;
         startClientY: number;
@@ -1527,8 +1574,10 @@ function MobileGlobalModRail({
     } | null>(null);
     const [expanded, setExpanded] = useState(false);
     const [top, setTop] = useState(12);
-    const [drawerCeiling, setDrawerCeiling] = useState(12);
-    const [tabSilhouetteHeight, setTabSilhouetteHeight] = useState(168);
+    const [drawerPlacement, setDrawerPlacement] = useState<RailDrawerPlacement>({
+        direction: "down",
+        extent: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
+    });
     const mappingActive = sourceDrag !== null;
     const selectedSourceHandlers = useModSourceDrag({
         onHoverTarget,
@@ -1537,6 +1586,10 @@ function MobileGlobalModRail({
         onSourceDragChange,
         onTap: () => setExpanded((current) => !current),
     });
+
+    const updateDrawerPlacement = useCallback((nextTop: number) => {
+        setDrawerPlacement(projectRailDrawerPlacement(nextTop, drawerMetricsRef.current));
+    }, []);
 
     const measureAndClamp = useCallback(() => {
         const layer = layerRef.current;
@@ -1575,15 +1628,21 @@ function MobileGlobalModRail({
             max: Math.max(safeTop, availableBottom - railHeight - safeBottom),
         };
         boundsRef.current = nextBounds;
-        setDrawerCeiling(availableBottom - safeBottom);
-        setTabSilhouetteHeight(railHeight);
+        const drawerHeight = drawerRef.current?.scrollHeight || MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX;
+        drawerMetricsRef.current = {
+            safeTop,
+            safeBottom: availableBottom - safeBottom,
+            collapsedHeight: railHeight,
+            desiredHeight: drawerHeight,
+        };
 
         normalizedPositionRef.current ??= readStoredRailPosition();
         const nextTop = nextBounds.min
             + ((nextBounds.max - nextBounds.min) * normalizedPositionRef.current);
         positionRef.current = nextTop;
         setTop(nextTop);
-    }, []);
+        updateDrawerPlacement(nextTop);
+    }, [updateDrawerPlacement]);
 
     useLayoutEffect(() => {
         measureAndClamp();
@@ -1599,6 +1658,9 @@ function MobileGlobalModRail({
         }
         if (tabRef.current) {
             observer?.observe(tabRef.current);
+        }
+        if (drawerRef.current) {
+            observer?.observe(drawerRef.current);
         }
         if (keyboard) {
             observer?.observe(keyboard);
@@ -1674,6 +1736,7 @@ function MobileGlobalModRail({
             normalizedPositionRef.current = gesture.startNormalizedY;
             positionRef.current = gesture.startTop;
             setTop(gesture.startTop);
+            updateDrawerPlacement(gesture.startTop);
             return;
         }
         if (!gesture.moved) {
@@ -1697,6 +1760,7 @@ function MobileGlobalModRail({
         }
         positionRef.current = settledTop;
         setTop(settledTop);
+        updateDrawerPlacement(settledTop);
         const span = bounds.max - bounds.min;
         const normalizedY = span > 0 ? (settledTop - bounds.min) / span : 0;
         normalizedPositionRef.current = normalizedY;
@@ -1705,7 +1769,7 @@ function MobileGlobalModRail({
         } catch {
             // A private browsing storage failure must not break rail movement.
         }
-    }, []);
+    }, [updateDrawerPlacement]);
 
     useEffect(() => {
         const handlePointerUp = (event: PointerEvent) => finishRailGesture(event.pointerId, false);
@@ -1735,6 +1799,12 @@ function MobileGlobalModRail({
     }, [finishRailGesture]);
 
     const clampedActivity = sourceActivity === null ? null : clamp(sourceActivity, 0, 1);
+    const drawerOpen = expanded && !mappingActive;
+    const upwardDrawerOffset = drawerOpen && drawerPlacement.direction === "up" ? -drawerPlacement.extent : 0;
+    let disclosureDirection = drawerPlacement.direction;
+    if (expanded) {
+        disclosureDirection = drawerPlacement.direction === "up" ? "down" : "up";
+    }
 
     return (
         <div ref={layerRef} data-role="mobile-global-mod-rail-layer" className="mobile-global-mod-rail-layer">
@@ -1742,13 +1812,15 @@ function MobileGlobalModRail({
                 ref={railRef}
                 data-role="mobile-global-mod-rail"
                 data-expanded={expanded}
+                data-drawer-direction={drawerPlacement.direction}
                 data-mapping-active={mappingActive}
                 className="mobile-global-mod-rail"
                 style={{
                     top,
+                    transform: `translateY(${upwardDrawerOffset}px)`,
                     "--source-color": selectedSource.accent,
                     "--editor-accent": accent,
-                    "--rail-drawer-max-height": `${Math.max(0, drawerCeiling - top - tabSilhouetteHeight)}px`,
+                    "--rail-drawer-size": `${drawerPlacement.extent}px`,
                 } as CSSProperties}
                 aria-label="Global modulation bar"
             >
@@ -1821,6 +1893,7 @@ function MobileGlobalModRail({
                                     ? (nextTop - bounds.min) / span
                                     : 0;
                                 setTop(nextTop);
+                                updateDrawerPlacement(nextTop);
                             }}
                             onPointerUp={(event) => finishRailGesture(event.pointerId, false)}
                             onPointerCancel={(event) => finishRailGesture(event.pointerId, true)}
@@ -1836,11 +1909,10 @@ function MobileGlobalModRail({
                                 ><span /></span>
                             ) : null}
                             <span
-                                data-role="mobile-global-mod-rail-route-count"
-                                className="mobile-global-mod-rail-route-count"
-                                aria-label={`${routeCount} modulation routes`}
-                            >{routeCount}</span>
-                            <span className="mobile-global-mod-rail-chevron" aria-hidden="true">{expanded ? "⌃" : "⌄"}</span>
+                                className="rack-mod-chevron mobile-global-mod-rail-chevron"
+                                data-direction={disclosureDirection}
+                                aria-hidden="true"
+                            />
                         </button>
                         <button
                             type="button"
@@ -1851,8 +1923,14 @@ function MobileGlobalModRail({
                         >
                             <ModSourceArt source={selectedSource} />
                         </button>
+                        <span
+                            data-role="mobile-global-mod-rail-route-count"
+                            className="mobile-global-mod-rail-route-count"
+                            aria-label={`${routeCount} modulation routes`}
+                        >{routeCount}</span>
                     </div>
                     <div
+                        ref={drawerRef}
                         data-role="mobile-global-mod-rail-drawer"
                         className="mobile-global-mod-rail-drawer"
                         aria-hidden={!expanded || mappingActive}

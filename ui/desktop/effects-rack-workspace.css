@@ -643,9 +643,11 @@
 }
 
 .rack-mod-paddle {
+    display: grid;
     width: 20px;
     min-width: 20px;
     min-height: 44px;
+    place-items: center;
     padding: 0;
     border: 0;
     background: transparent;
@@ -654,6 +656,20 @@
     cursor: pointer;
     font-size: 25px;
 }
+
+.rack-mod-chevron {
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-right: 2px solid currentColor;
+    border-bottom: 2px solid currentColor;
+    pointer-events: none;
+}
+
+.rack-mod-chevron[data-direction="right"] { transform: rotate(-45deg); }
+.rack-mod-chevron[data-direction="down"] { transform: rotate(45deg); }
+.rack-mod-chevron[data-direction="left"] { transform: rotate(135deg); }
+.rack-mod-chevron[data-direction="up"] { transform: rotate(-135deg); }
 
 .rack-mod-viewport {
     min-width: 0;
@@ -678,8 +694,9 @@
 }
 
 .rack-mod-dock.is-vertical .rack-mod-header {
+    min-height: 18px;
     justify-content: center;
-    padding-bottom: 0;
+    padding: 0;
 }
 
 .rack-mod-dock.is-vertical .rack-mod-header > strong {
@@ -694,35 +711,45 @@
 .rack-mod-dock.is-vertical .rack-mod-row {
     display: flex;
     flex-direction: column;
+    align-items: center;
+    gap: 4px;
 }
 
 .rack-mod-dock.is-vertical .rack-mod-paddle {
-    width: 44px;
-    min-width: 44px;
-    min-height: 24px;
-    font-size: 16px;
-    line-height: 1;
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+    min-height: 28px;
+    border-radius: 999px;
+    font-size: inherit;
 }
 
 .rack-mod-dock.is-vertical .rack-mod-viewport {
     width: 44px;
-    height: 132px;
-    flex: 0 0 132px;
+    height: 140px;
+    flex: 0 0 140px;
 }
 
 .rack-mod-dock.is-vertical .rack-mod-track {
     width: 44px;
-    height: 132px;
+    height: 140px;
     flex-direction: column;
 }
 
 .rack-mod-dock.is-vertical .rack-mod-page {
     width: 44px;
     min-width: 0;
-    min-height: 132px;
-    flex: 0 0 132px;
-    grid-template-columns: 36px;
+    min-height: 140px;
+    flex: 0 0 140px;
+    grid-template-columns: 44px;
     grid-template-rows: repeat(3, 44px);
+    gap: 4px 0;
+}
+
+.rack-mod-dock.is-vertical .rack-mod-source {
+    width: 44px;
+    height: 44px;
+    padding: 4px;
 }
 
 .rack-mod-source {

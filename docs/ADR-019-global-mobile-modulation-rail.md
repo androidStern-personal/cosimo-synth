@@ -54,7 +54,7 @@ the expanded drawer (and its modulation amount slider) could sit underneath it.
   ghost, makes the rail hit-transparent, and feeds the explicit route-creation
   flow unchanged.
 
-## 2026-08-08 correction: fixed tab with downward source drawer
+## 2026-08-08 correction: fixed tab with space-aware vertical drawer
 
 The widening edge tab was rejected because disclosure changed the persistent
 tab's dimensions and exposed the source page as a horizontal tray. The source
@@ -62,10 +62,11 @@ art also combined a generated face with a white identity glyph, so each control
 looked like two overlapping icons.
 
 - The persistent tab now keeps one fixed width, height, and top position.
-  Disclosure extends a same-width drawer downward beneath it; low stored
-  positions cap the drawer at the sticky keyboard instead of reprojecting the
-  tab. The preset bar is part of the top safe boundary, so the movable tab never
-  becomes trapped behind it.
+  Disclosure extends a same-width drawer downward when its full contents fit.
+  When the tab is too close to the sticky keyboard, the drawer opens upward
+  instead; if neither side can fit the full drawer, the larger side owns a
+  contained scroller. The preset bar is part of the top safe boundary, so the
+  movable tab never becomes trapped behind it.
 - The established three numbered source groups remain. Each group is one
   vertical page containing MSEG, Envelope, and Macro, and the existing 280 ms
   page transition runs vertically through up/down paddles.
@@ -73,6 +74,11 @@ looked like two overlapping icons.
   number. The generated face artwork remains available to surfaces that still
   own that visual treatment, but it is no longer layered underneath the glyph
   in the Mod Bar.
+- The compact rail follows one measured rhythm: a centered 44-pixel source
+  target, compact geometric chevrons in 28-pixel paging controls, four-pixel
+  gaps between source rows, and symmetric visual spacing above and below the
+  collapsed source. The route count is a notification-style badge on the
+  source's upper-right corner rather than a separate row.
 - The active source in the collapsed tab is a real source button. It shares the
   canonical source-drag lifecycle with drawer sources, so a drag can create a
   route without expanding or moving the rail; a stationary tap still toggles
