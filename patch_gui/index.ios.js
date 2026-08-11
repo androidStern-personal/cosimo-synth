@@ -937,8 +937,8 @@ function requireReactDom() {
     }
     try {
       __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE(checkDCE);
-    } catch (err) {
-      console.error(err);
+    } catch (err2) {
+      console.error(err2);
     }
   }
   {
@@ -1341,7 +1341,7 @@ function requireReactDomClient_production() {
     if (injectedHook && "function" === typeof injectedHook.setStrictMode)
       try {
         injectedHook.setStrictMode(rendererID, newIsStrictMode);
-      } catch (err) {
+      } catch (err2) {
       }
   }
   var clz32 = Math.clz32 ? Math.clz32 : clz32Fallback, log = Math.log, LN2 = Math.LN2;
@@ -2531,7 +2531,7 @@ function requireReactDomClient_production() {
     for (var element = getActiveElement(containerInfo.document); element instanceof containerInfo.HTMLIFrameElement; ) {
       try {
         var JSCompiler_inline_result = "string" === typeof element.contentWindow.location.href;
-      } catch (err) {
+      } catch (err2) {
         JSCompiler_inline_result = false;
       }
       if (JSCompiler_inline_result) containerInfo = element.contentWindow;
@@ -7428,7 +7428,7 @@ function requireReactDomClient_production() {
     if (injectedHook && "function" === typeof injectedHook.onCommitFiberUnmount)
       try {
         injectedHook.onCommitFiberUnmount(rendererID, deletedFiber);
-      } catch (err) {
+      } catch (err2) {
       }
     switch (deletedFiber.tag) {
       case 26:
@@ -9309,7 +9309,7 @@ function requireReactDomClient_production() {
             void 0,
             128 === (finishedWork.current.flags & 128)
           );
-        } catch (err) {
+        } catch (err2) {
         }
       if (null !== recoverableErrors) {
         finishedWork = ReactSharedInternals.T;
@@ -9372,7 +9372,7 @@ function requireReactDomClient_production() {
       if (injectedHook && "function" === typeof injectedHook.onPostCommitFiberRoot)
         try {
           injectedHook.onPostCommitFiberRoot(rendererID, root$jscomp$0);
-        } catch (err) {
+        } catch (err2) {
         }
       return true;
     } finally {
@@ -12412,7 +12412,7 @@ function requireReactDomClient_production() {
         rendererID = hook$jscomp$inline_2348.inject(
           internals$jscomp$inline_2347
         ), injectedHook = hook$jscomp$inline_2348;
-      } catch (err) {
+      } catch (err2) {
       }
   }
   reactDomClient_production.createRoot = function(container, options2) {
@@ -12483,8 +12483,8 @@ function requireClient() {
     }
     try {
       __REACT_DEVTOOLS_GLOBAL_HOOK__.checkDCE(checkDCE);
-    } catch (err) {
-      console.error(err);
+    } catch (err2) {
+      console.error(err2);
     }
   }
   {
@@ -15072,8 +15072,145 @@ new Map(
 function allRackParameterDescriptors() {
   return RACK_PARAMETER_DESCRIPTORS;
 }
+const MODULATION_VOICE_SOURCE_COUNT = 9;
+const MODULATION_MACRO_SOURCE_COUNT = 4;
+const MODULATION_VOICE_TARGET_COUNT = 12;
+const MODULATION_RACK_TARGET_COUNT = 36;
+const MODULATION_VOICE_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_VOICE_TARGET_COUNT;
+function compileRackModulationTargetCatalog(descriptors) {
+  const targetIndexByKind = /* @__PURE__ */ new Map();
+  const endpointByTargetIndex = /* @__PURE__ */ new Map();
+  for (const descriptor of descriptors) {
+    const targetIndex = descriptor.modulationTargetIndex;
+    if (targetIndex === null) {
+      continue;
+    }
+    if (!Number.isInteger(targetIndex) || targetIndex < 0 || targetIndex >= MODULATION_RACK_TARGET_COUNT) {
+      throw new Error(
+        `Invalid rack modulation target index ${String(targetIndex)} for ${descriptor.endpointID}`
+      );
+    }
+    const existingEndpointID = endpointByTargetIndex.get(targetIndex);
+    if (existingEndpointID !== void 0) {
+      throw new Error(
+        `Duplicate rack modulation target index ${targetIndex}: ${existingEndpointID} and ${descriptor.endpointID}`
+      );
+    }
+    endpointByTargetIndex.set(targetIndex, descriptor.endpointID);
+    targetIndexByKind.set(`rack.${descriptor.endpointID}`, targetIndex);
+  }
+  return targetIndexByKind;
+}
+const rackTargetIndexByKind = compileRackModulationTargetCatalog(allRackParameterDescriptors());
+function requireSlot(slot, maximum, sourceKind) {
+  if (slot === null || !Number.isInteger(slot) || slot < 1 || slot > maximum) {
+    throw new Error(`Invalid ${sourceKind} modulation source slot: ${String(slot)}`);
+  }
+  return slot - 1;
+}
+function voiceSourceIndex(route) {
+  switch (route.sourceKind) {
+    case "mseg":
+      return requireSlot(route.sourceSlot, 3, route.sourceKind);
+    case "env":
+      return 3 + requireSlot(route.sourceSlot, 3, route.sourceKind);
+    case "velocity":
+      return 6;
+    case "pressure":
+      return 7;
+    case "slide":
+      return 8;
+    case "macro":
+      throw new Error("Macro is not a per-voice modulation source");
+  }
+}
+function voiceTargetIndex(targetKind) {
+  switch (targetKind) {
+    case "wavetablePosition":
+      return 0;
+    case "warpAmount":
+      return 1;
+    case "filterCutoffOctaves":
+      return 2;
+    case "filterQ":
+      return 3;
+    case "pitchSemitones":
+      return 4;
+    case "ampGainDb":
+      return 5;
+    case "pan":
+      return 6;
+    case "unisonDetune":
+      return 7;
+    case "unisonBlend":
+      return 8;
+    case "unisonWidth":
+      return 9;
+    case "unisonWavetablePositionSpread":
+      return 10;
+    case "unisonWarpSpread":
+      return 11;
+    default:
+      return null;
+  }
+}
+function getModulationRuntimeCell(route) {
+  const voiceTarget = voiceTargetIndex(route.targetKind);
+  const rackTarget = rackTargetIndexByKind.get(route.targetKind);
+  if (voiceTarget === null && rackTarget === void 0) {
+    throw new Error(`Unknown modulation target: ${route.targetKind}`);
+  }
+  if (route.sourceKind === "macro") {
+    const sourceIndex2 = requireSlot(route.sourceSlot, MODULATION_MACRO_SOURCE_COUNT, route.sourceKind);
+    if (voiceTarget !== null) {
+      const cellIndex = sourceIndex2 * MODULATION_VOICE_TARGET_COUNT + voiceTarget;
+      return {
+        path: "macroVoice",
+        cellIndex,
+        sourceIndex: sourceIndex2,
+        targetIndex: voiceTarget,
+        articulationCellIndex: MODULATION_VOICE_ROUTE_CELL_COUNT + cellIndex
+      };
+    }
+    const targetIndex2 = rackTarget ?? 0;
+    return {
+      path: "macroRack",
+      cellIndex: sourceIndex2 * MODULATION_RACK_TARGET_COUNT + targetIndex2,
+      sourceIndex: sourceIndex2,
+      targetIndex: targetIndex2,
+      articulationCellIndex: null
+    };
+  }
+  const sourceIndex = voiceSourceIndex(route);
+  if (voiceTarget !== null) {
+    const cellIndex = sourceIndex * MODULATION_VOICE_TARGET_COUNT + voiceTarget;
+    return {
+      path: "voice",
+      cellIndex,
+      sourceIndex,
+      targetIndex: voiceTarget,
+      articulationCellIndex: cellIndex
+    };
+  }
+  const targetIndex = rackTarget ?? 0;
+  return {
+    path: "voiceRack",
+    cellIndex: sourceIndex * MODULATION_RACK_TARGET_COUNT + targetIndex,
+    sourceIndex,
+    targetIndex,
+    articulationCellIndex: null
+  };
+}
+function getModulationArticulationCellIndex(route) {
+  return getModulationRuntimeCell(route).articulationCellIndex;
+}
+function ok(value) {
+  return { _tag: "ok", value };
+}
+function err(error) {
+  return { _tag: "err", error };
+}
 const MODULATION_STATE_KEY = "modulation.v2";
-const MODULATION_MAX_ROUTES = 12;
 const MODULATION_MSEG_SLOT_COUNT = 3;
 const MODULATION_ENV_SLOT_COUNT = 3;
 const MODULATION_MACRO_SLOT_COUNT = 4;
@@ -15102,6 +15239,9 @@ const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((paramet
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
   RACK_MODULATION_PARAMETERS.map((parameter) => [`rack.${parameter.endpointID}`, parameter])
 );
+class ModulationStateParseError extends Error {
+  name = "ModulationStateParseError";
+}
 const MODULATION_SOURCE_OPTIONS = [
   { value: "mseg-1", label: "MSEG 1", sourceKind: "mseg", sourceSlot: 1 },
   { value: "mseg-2", label: "MSEG 2", sourceKind: "mseg", sourceSlot: 2 },
@@ -15338,20 +15478,29 @@ function getModulationTargetClampHint(targetKind) {
       return "";
   }
 }
-function normalizeSourceKind(value) {
+function parseSourceKind(value) {
   if (value === "mseg" || value === "env" || value === "velocity" || value === "pressure" || value === "slide" || value === "macro") {
     return value;
   }
-  return "mseg";
+  return null;
 }
-function normalizeTargetKind(value) {
-  if (typeof value === "string" && RACK_MODULATION_PARAMETER_BY_KIND.has(value)) {
-    return value;
+function normalizeSourceKind(value) {
+  return parseSourceKind(value) ?? "mseg";
+}
+function parseTargetKind(value) {
+  if (typeof value === "string") {
+    const rackTargetKind = value;
+    if (RACK_MODULATION_PARAMETER_BY_KIND.has(rackTargetKind)) {
+      return rackTargetKind;
+    }
   }
   if (value === "wavetablePosition" || value === "warpAmount" || value === "filterCutoffOctaves" || value === "filterQ" || value === "pitchSemitones" || value === "ampGainDb" || value === "pan" || value === "unisonDetune" || value === "unisonBlend" || value === "unisonWidth" || value === "unisonWavetablePositionSpread" || value === "unisonWarpSpread") {
     return value;
   }
-  return "wavetablePosition";
+  return null;
+}
+function normalizeTargetKind(value) {
+  return parseTargetKind(value) ?? "wavetablePosition";
 }
 function normalizeMacroName(value, slotIndex) {
   const fallback = MACRO_SLOT_NAMES[slotIndex] ?? `Macro ${slotIndex + 1}`;
@@ -15398,26 +15547,7 @@ function createDefaultRoute(overrides = {}) {
     ...overrides
   };
 }
-function createAvailableDefaultRoute(existingRoutes) {
-  const occupiedPairs = new Set(existingRoutes.map(routePairKey));
-  for (const source of MODULATION_SOURCE_OPTIONS) {
-    for (const target of MODULATION_TARGET_OPTIONS) {
-      const candidate = createDefaultRoute({
-        sourceKind: source.sourceKind,
-        sourceSlot: source.sourceSlot,
-        targetKind: target.value
-      });
-      if (!occupiedPairs.has(routePairKey(candidate))) {
-        return candidate;
-      }
-    }
-  }
-  return null;
-}
-function normalizeRoute(value, routeIndex = 0) {
-  const nextValue = value && typeof value === "object" ? value : {};
-  const sourceKind = normalizeSourceKind(nextValue.sourceKind);
-  const targetKind = normalizeTargetKind(nextValue.targetKind);
+function normalizeRouteRecord(nextValue, routeIndex, sourceKind, targetKind) {
   const numericAmount = Number(nextValue.amount);
   return {
     id: normalizeRouteId(nextValue.id, routeIndex),
@@ -15429,6 +15559,67 @@ function normalizeRoute(value, routeIndex = 0) {
     amount: clampModulationRouteAmount(targetKind, numericAmount),
     reducer: nextValue.reducer === "mean" ? "mean" : "max"
   };
+}
+function normalizeRoute(value, routeIndex = 0) {
+  const isObject = value !== null && typeof value === "object";
+  const nextValue = isObject ? value : {};
+  const sourceKind = normalizeSourceKind(nextValue.sourceKind);
+  const targetKind = normalizeTargetKind(nextValue.targetKind);
+  return normalizeRouteRecord(nextValue, routeIndex, sourceKind, targetKind);
+}
+function modulationRoutePairKey(route) {
+  return `${route.sourceKind}:${route.sourceSlot ?? 0}->${route.targetKind}`;
+}
+function normalizeRoutes(value) {
+  const inputRoutes = Array.isArray(value) ? value : [];
+  return inputRoutes.map((route, routeIndex) => normalizeRoute(route, routeIndex));
+}
+function routesHaveUniqueIdentity(routes) {
+  const routeIds = /* @__PURE__ */ new Set();
+  const routePairs = /* @__PURE__ */ new Set();
+  for (const route of routes) {
+    const pairKey = modulationRoutePairKey(route);
+    if (routeIds.has(route.id) || routePairs.has(pairKey)) {
+      return false;
+    }
+    routeIds.add(route.id);
+    routePairs.add(pairKey);
+  }
+  return true;
+}
+function canonicalJsonValuesEqual(left, right) {
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
+    return Object.is(left, right);
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((value, index) => canonicalJsonValuesEqual(value, right[index]));
+  }
+  const leftRecord = left;
+  const rightRecord = right;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return leftKeys.length === rightKeys.length && leftKeys.every((key) => hasOwnValue(rightRecord, key) && canonicalJsonValuesEqual(leftRecord[key], rightRecord[key]));
+}
+function createFirstAvailableModulationRoute(routes) {
+  const usedPairs = new Set(routes.map(modulationRoutePairKey));
+  const usedIds = new Set(routes.map((route) => route.id));
+  for (const source of MODULATION_SOURCE_OPTIONS) {
+    for (const target of MODULATION_TARGET_OPTIONS) {
+      const candidateShape = {
+        sourceKind: source.sourceKind,
+        sourceSlot: source.sourceSlot,
+        targetKind: target.value
+      };
+      if (usedPairs.has(modulationRoutePairKey(candidateShape))) continue;
+      let route = createDefaultRoute(candidateShape);
+      while (usedIds.has(route.id)) route = createDefaultRoute(candidateShape);
+      return route;
+    }
+  }
+  return null;
 }
 function normalizeMsegSlot(value, slotIndex) {
   const nextValue = value && typeof value === "object" ? value : {};
@@ -15458,38 +15649,17 @@ function createDefaultModulationState() {
     macroNames: MACRO_SLOT_NAMES.slice()
   };
 }
-function routePairKey(route) {
-  return `${route.sourceKind}:${route.sourceSlot ?? 0}:${route.targetKind}`;
-}
-function normalizeUniqueRoutes(inputRoutes) {
-  const seenPairs = /* @__PURE__ */ new Set();
-  const routes = [];
-  for (const inputRoute of inputRoutes) {
-    const normalizedRoute = normalizeRoute(inputRoute, routes.length);
-    const pairKey = routePairKey(normalizedRoute);
-    if (seenPairs.has(pairKey)) {
-      continue;
-    }
-    seenPairs.add(pairKey);
-    routes.push(normalizedRoute);
-    if (routes.length >= MODULATION_MAX_ROUTES) {
-      break;
-    }
-  }
-  return routes;
-}
 function normalizeModulationState(value = createDefaultModulationState()) {
   const nextValue = value && typeof value === "object" ? value : {};
   const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
   const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
-  const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
   const inputMacroNames = Array.isArray(nextValue.macroNames) ? nextValue.macroNames : [];
   return {
     format: "cosimo.modulation",
     version: 2,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
     envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
-    routes: normalizeUniqueRoutes(inputRoutes),
+    routes: normalizeRoutes(nextValue.routes),
     macroNames: Array.from(
       { length: MODULATION_MACRO_SLOT_COUNT },
       (_, slotIndex) => normalizeMacroName(inputMacroNames[slotIndex], slotIndex)
@@ -15497,22 +15667,37 @@ function normalizeModulationState(value = createDefaultModulationState()) {
   };
 }
 function serializeModulationState(state) {
-  return JSON.stringify(normalizeModulationState(state));
+  const parsedState = parseModulationState(state);
+  if (parsedState._tag === "err") {
+    throw parsedState.error;
+  }
+  return JSON.stringify(parsedState.value);
 }
-function deserializeModulationState(value) {
-  if (typeof value !== "string" || value.trim() === "") {
-    return createDefaultModulationState();
+function parseModulationState(value) {
+  let parsedValue = value;
+  if (typeof value === "string") {
+    if (value.trim() === "") {
+      return err(new ModulationStateParseError("Expected a modulation document"));
+    }
+    try {
+      parsedValue = JSON.parse(value);
+    } catch {
+      return err(new ModulationStateParseError("Expected valid modulation JSON"));
+    }
   }
-  try {
-    return normalizeModulationState(JSON.parse(value));
-  } catch {
-    return createDefaultModulationState();
+  const normalizedState = normalizeModulationState(parsedValue);
+  if (!canonicalJsonValuesEqual(parsedValue, normalizedState) || !routesHaveUniqueIdentity(normalizedState.routes)) {
+    return err(new ModulationStateParseError("Expected the current modulation schema"));
   }
+  return ok(normalizedState);
 }
 function modulationStatesEqual(left, right) {
   return serializeModulationState(left) === serializeModulationState(right);
 }
 function toStoredStateEchoToken(value) {
+  if (typeof value === "string") {
+    return value;
+  }
   try {
     return `${typeof value}:${JSON.stringify(value)}`;
   } catch {
@@ -15579,7 +15764,6 @@ class ModulationMsegSlotController {
 class ModulationRuntimeBridge {
   patchConnection;
   state = createDefaultModulationState();
-  suppressStoredStateEvents = 0;
   pendingStoredStateEchoes = /* @__PURE__ */ new Map();
   stateListeners = /* @__PURE__ */ new Set();
   msegSlotEditShapeIndexes = Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0);
@@ -15635,13 +15819,18 @@ class ModulationRuntimeBridge {
     this.emitStateChange();
   }
   setState(nextState) {
-    const normalizedState = normalizeModulationState(nextState);
+    const parsedState = parseModulationState(nextState);
+    if (parsedState._tag === "err") {
+      return false;
+    }
+    const normalizedState = parsedState.value;
     if (modulationStatesEqual(this.state, normalizedState)) {
-      return;
+      return true;
     }
     this.state = normalizedState;
     this.persistState();
     this.emitStateChange();
+    return true;
   }
   setMsegSlotShape(slotIndex, shapeIndex, nextShape) {
     const normalizedShape = normalizeMsegShape(nextShape);
@@ -15695,7 +15884,7 @@ class ModulationRuntimeBridge {
     }));
   }
   replaceRoutes(nextRoutes) {
-    const normalizedRoutes = Array.isArray(nextRoutes) ? normalizeUniqueRoutes(nextRoutes) : [];
+    const normalizedRoutes = normalizeRoutes(nextRoutes);
     if (JSON.stringify(this.state.routes) === JSON.stringify(normalizedRoutes)) {
       return;
     }
@@ -15705,26 +15894,43 @@ class ModulationRuntimeBridge {
     }));
   }
   setRoute(routeIndex, nextRoute) {
+    if (routeIndex < 0 || routeIndex >= this.state.routes.length) {
+      return false;
+    }
     const normalizedRoute = normalizeRoute(nextRoute, routeIndex);
     const currentRoutes = [...this.state.routes];
-    while (currentRoutes.length <= routeIndex) {
-      currentRoutes.push(createDefaultRoute());
-    }
+    const conflicts = currentRoutes.some((route, index) => index !== routeIndex && (route.id === normalizedRoute.id || modulationRoutePairKey(route) === modulationRoutePairKey(normalizedRoute)));
+    if (conflicts) return false;
     if (JSON.stringify(currentRoutes[routeIndex]) === JSON.stringify(normalizedRoute)) {
-      return;
+      return true;
     }
     currentRoutes[routeIndex] = normalizedRoute;
     this.replaceRoutes(currentRoutes);
+    return true;
   }
-  addRoute(nextRoute) {
-    if (this.state.routes.length >= MODULATION_MAX_ROUTES) {
-      return;
+  /** Hot-path amount edit: the route is already normalized, so avoid rebuilding every mapping. */
+  setRouteAmount(routeIndex, nextAmount) {
+    const currentRoute = this.state.routes[routeIndex];
+    if (currentRoute === void 0) {
+      return false;
     }
-    const normalizedRoute = nextRoute === void 0 ? createAvailableDefaultRoute(this.state.routes) : normalizeRoute(nextRoute, this.state.routes.length);
-    if (!normalizedRoute) {
-      return;
+    const amount = clampModulationRouteAmount(currentRoute.targetKind, nextAmount);
+    if (currentRoute.amount === amount) {
+      return true;
     }
+    const routes = [...this.state.routes];
+    routes[routeIndex] = { ...currentRoute, amount };
+    this.state = { ...this.state, routes };
+    this.persistState();
+    this.emitStateChange("routeAmount");
+    return true;
+  }
+  addRoute(nextRoute = createDefaultRoute()) {
+    const normalizedRoute = normalizeRoute(nextRoute, this.state.routes.length);
+    const pairKey = modulationRoutePairKey(normalizedRoute);
+    if (this.state.routes.some((route) => route.id === normalizedRoute.id || modulationRoutePairKey(route) === pairKey)) return null;
     this.replaceRoutes([...this.state.routes, normalizedRoute]);
+    return normalizedRoute;
   }
   removeRoute(routeIndex) {
     if (routeIndex < 0 || routeIndex >= this.state.routes.length) {
@@ -15743,8 +15949,15 @@ class ModulationRuntimeBridge {
     this.emitStateChange();
   }
   applyStoredState(rawValue) {
-    const nextState = deserializeModulationState(rawValue);
-    this.state = nextState;
+    if (rawValue === void 0) {
+      this.emitStateChange();
+      return;
+    }
+    const parsedState = parseModulationState(rawValue);
+    if (parsedState._tag === "err") {
+      return;
+    }
+    this.state = parsedState.value;
     this.emitStateChange();
   }
   handleStoredStateValue(message) {
@@ -15752,9 +15965,6 @@ class ModulationRuntimeBridge {
       return;
     }
     const nextMessage = message;
-    if (this.suppressStoredStateEvents > 0) {
-      return;
-    }
     if (typeof nextMessage.key === "string" && this.consumePendingStoredStateEcho(nextMessage.key, nextMessage.value)) {
       return;
     }
@@ -15766,23 +15976,23 @@ class ModulationRuntimeBridge {
     if (typeof this.patchConnection.sendStoredStateValue !== "function") {
       return;
     }
-    const persistedModulationState = serializeModulationState(this.state);
-    this.suppressStoredStateEvents += 1;
+    const persistedModulationState = JSON.stringify(this.state);
+    this.rememberPendingStoredStateEcho(MODULATION_STATE_KEY, persistedModulationState);
     try {
-      this.rememberPendingStoredStateEcho(MODULATION_STATE_KEY, persistedModulationState);
       this.patchConnection.sendStoredStateValue(MODULATION_STATE_KEY, persistedModulationState);
-    } finally {
-      this.suppressStoredStateEvents -= 1;
+    } catch (error) {
+      this.consumePendingStoredStateEcho(MODULATION_STATE_KEY, persistedModulationState);
+      throw error;
     }
   }
-  emitStateChange() {
+  emitStateChange(changeKind = "general") {
     const stateSnapshot = {
       ...this.state,
       msegSlots: [...this.state.msegSlots],
       envelopeSlots: [...this.state.envelopeSlots],
       routes: [...this.state.routes]
     };
-    this.stateListeners.forEach((listener) => listener(stateSnapshot));
+    this.stateListeners.forEach((listener) => listener(stateSnapshot, changeKind));
   }
   rememberPendingStoredStateEcho(key, value) {
     const token = toStoredStateEchoToken(value);
@@ -17482,9 +17692,9 @@ function usePatchEventTrigger(endpointID) {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
 }
-const ARTICULATION_STATE_KEY = "articulations.v2";
 const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 const ARTICULATION_MAX_SLOTS = 128;
+const ARTICULATION_ROUTE_AMOUNT_MAX_ABS = 48;
 const ARTICULATION_UNASSIGNED_RUNTIME_SLOT = -1;
 const ARTICULATION_DEFAULT_NAMES = [
   "Bow Forte",
@@ -17576,8 +17786,6 @@ function createUniqueCopiedName(slots, sourceName) {
 function createDefaultArticulationParameterSnapshot() {
   return {
     wavetablePosition: 0,
-    playMode: 0,
-    glideTime: 0,
     pan: 0,
     warpMode: 0,
     warpAmount: 0,
@@ -17595,21 +17803,7 @@ function createDefaultArticulationParameterSnapshot() {
     unisonStackMode: 0,
     unisonWavetablePositionSpread: 0,
     unisonWarpSpread: 0,
-    msegMorphs: [0, 0, 0],
-    distortionMode: 0,
-    distortionDriveDb: 12,
-    distortionKnee: 0.35,
-    distortionWet: 0,
-    distortionWetHPHz: 40,
-    distortionWetLPHz: 18e3,
-    chorusMix: 0,
-    chorusMotionMode: 1,
-    chorusBloomMode: 0,
-    chorusTone: 0.5,
-    chorusFeedback: 0.42,
-    chorusRingAmount: 0,
-    chorusRingOffsetMode: 0,
-    chorusRingFineSemitones: 0
+    msegMorphs: [0, 0, 0]
   };
 }
 function normalizeArticulationParameterSnapshot(value) {
@@ -17618,8 +17812,6 @@ function normalizeArticulationParameterSnapshot(value) {
   const msegMorphs = Array.isArray(nextValue.msegMorphs) ? nextValue.msegMorphs : [];
   return {
     wavetablePosition: normalizeNumber(nextValue.wavetablePosition, defaults.wavetablePosition, 0, 1),
-    playMode: normalizeInteger(nextValue.playMode, defaults.playMode, 0, 2),
-    glideTime: normalizeNumber(nextValue.glideTime, defaults.glideTime, 0, 2),
     pan: normalizeNumber(nextValue.pan, defaults.pan, -1, 1),
     warpMode: normalizeInteger(nextValue.warpMode, defaults.warpMode, 0, 4),
     warpAmount: normalizeNumber(nextValue.warpAmount, defaults.warpAmount, 0, 1),
@@ -17646,21 +17838,7 @@ function normalizeArticulationParameterSnapshot(value) {
       clamp01(Number(msegMorphs[0])),
       clamp01(Number(msegMorphs[1])),
       clamp01(Number(msegMorphs[2]))
-    ],
-    distortionMode: normalizeInteger(nextValue.distortionMode, defaults.distortionMode, 0, 1),
-    distortionDriveDb: normalizeNumber(nextValue.distortionDriveDb, defaults.distortionDriveDb, 0, 36),
-    distortionKnee: normalizeNumber(nextValue.distortionKnee, defaults.distortionKnee, 0, 1),
-    distortionWet: normalizeNumber(nextValue.distortionWet, defaults.distortionWet, 0, 1),
-    distortionWetHPHz: normalizeNumber(nextValue.distortionWetHPHz, defaults.distortionWetHPHz, 20, 4e3),
-    distortionWetLPHz: normalizeNumber(nextValue.distortionWetLPHz, defaults.distortionWetLPHz, 20, 2e4),
-    chorusMix: normalizeNumber(nextValue.chorusMix, defaults.chorusMix, 0, 1),
-    chorusMotionMode: normalizeInteger(nextValue.chorusMotionMode, defaults.chorusMotionMode, 0, 3),
-    chorusBloomMode: normalizeInteger(nextValue.chorusBloomMode, defaults.chorusBloomMode, 0, 4),
-    chorusTone: normalizeNumber(nextValue.chorusTone, defaults.chorusTone, 0, 1),
-    chorusFeedback: normalizeNumber(nextValue.chorusFeedback, defaults.chorusFeedback, 0, 0.95),
-    chorusRingAmount: normalizeNumber(nextValue.chorusRingAmount, defaults.chorusRingAmount, 0, 1),
-    chorusRingOffsetMode: normalizeInteger(nextValue.chorusRingOffsetMode, defaults.chorusRingOffsetMode, 0, 3),
-    chorusRingFineSemitones: normalizeNumber(nextValue.chorusRingFineSemitones, defaults.chorusRingFineSemitones, -2, 2)
+    ]
   };
 }
 function normalizeArticulationRouteAmountSnapshot(value) {
@@ -17675,6 +17853,15 @@ function normalizeArticulationRouteAmountSnapshot(value) {
   return {
     routeId,
     amount: normalizeNumber(nextValue.amount, 0, -48, 48)
+  };
+}
+function createDefaultArticulationSnapshot() {
+  return {
+    format: "cosimo.articulation.snapshot",
+    version: 1,
+    parameters: createDefaultArticulationParameterSnapshot(),
+    envelopes: [0, 1, 2].map((slotIndex) => createDefaultEnvelope(slotIndex)),
+    modRouteAmounts: []
   };
 }
 function normalizeArticulationSnapshot(value) {
@@ -17780,10 +17967,8 @@ function normalizeKeyAssignments(value, validArticulationIds) {
   }
   return assignments;
 }
-function createDefaultArticulationBank() {
+function createDefaultArticulationEditorState() {
   return {
-    format: "cosimo.articulations",
-    version: 2,
     selectedSlotId: null,
     activeTriggerMode: "chain",
     slots: [],
@@ -17792,16 +17977,8 @@ function createDefaultArticulationBank() {
     velocityAssignments: []
   };
 }
-function normalizeArticulationBank(value) {
-  let parsedValue = value;
-  if (typeof parsedValue === "string" && parsedValue.trim()) {
-    try {
-      parsedValue = JSON.parse(parsedValue);
-    } catch {
-      parsedValue = null;
-    }
-  }
-  const nextValue = parsedValue && typeof parsedValue === "object" ? parsedValue : {};
+function normalizeArticulationEditorState(value) {
+  const nextValue = value && typeof value === "object" ? value : {};
   const inputSlots = Array.isArray(nextValue.slots) ? nextValue.slots : [];
   const usedRuntimeSlots = /* @__PURE__ */ new Set();
   const usedIds = /* @__PURE__ */ new Set();
@@ -17818,8 +17995,6 @@ function normalizeArticulationBank(value) {
   const selectedSlotId = typeof nextValue.selectedSlotId === "string" && slots.some((slot) => slot.id === nextValue.selectedSlotId) ? nextValue.selectedSlotId : null;
   const validArticulationIds = new Set(slots.map((slot) => slot.id));
   return {
-    format: "cosimo.articulations",
-    version: 2,
     selectedSlotId,
     activeTriggerMode: normalizeTriggerMode(nextValue.activeTriggerMode),
     slots,
@@ -17828,17 +18003,17 @@ function normalizeArticulationBank(value) {
     velocityAssignments: normalizeRangeAssignments(nextValue.velocityAssignments, validArticulationIds, "velocity", 1)
   };
 }
-function serializeArticulationBank(value) {
-  return JSON.stringify(normalizeArticulationBank(value));
+function serializeArticulationEditorState(value) {
+  return JSON.stringify(normalizeArticulationEditorState(value));
 }
-function articulationBanksEqual(left, right) {
-  return serializeArticulationBank(left) === serializeArticulationBank(right);
+function articulationEditorStatesEqual(left, right) {
+  return serializeArticulationEditorState(left) === serializeArticulationEditorState(right);
 }
 function articulationSnapshotsEqual(left, right) {
   return JSON.stringify(normalizeArticulationSnapshot(left)) === JSON.stringify(normalizeArticulationSnapshot(right));
 }
 function createArticulationSlotFromSnapshot(bankValue, snapshotValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const usedRuntimeSlots = new Set(bank.slots.map((slot) => slot.runtimeSlot));
   const usedIds = new Set(bank.slots.map((slot) => slot.id));
   let runtimeSlot = -1;
@@ -17876,7 +18051,7 @@ function collectRangeAssignedValues(assignments) {
   return assignedValues;
 }
 function assignArticulationToNextAvailableTrigger(bankValue, articulationId, modeValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const mode = normalizeTriggerMode(modeValue ?? bank.activeTriggerMode);
   if (!bank.slots.some((slot) => slot.id === articulationId)) {
     return bank;
@@ -17886,7 +18061,7 @@ function assignArticulationToNextAvailableTrigger(bankValue, articulationId, mod
     if (nextSelector === null) {
       return bank;
     }
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
       ...bank,
       chainAssignments: [
         ...bank.chainAssignments,
@@ -17905,7 +18080,7 @@ function assignArticulationToNextAvailableTrigger(bankValue, articulationId, mod
     if (nextNote === null) {
       return bank;
     }
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
       ...bank,
       keyAssignments: [
         ...bank.keyAssignments,
@@ -17920,7 +18095,7 @@ function assignArticulationToNextAvailableTrigger(bankValue, articulationId, mod
   if (nextVelocity === null) {
     return bank;
   }
-  return normalizeArticulationBank({
+  return normalizeArticulationEditorState({
     ...bank,
     velocityAssignments: [
       ...bank.velocityAssignments,
@@ -17934,12 +18109,12 @@ function assignArticulationToNextAvailableTrigger(bankValue, articulationId, mod
   });
 }
 function addCapturedArticulationToBank(bankValue, snapshotValue, options = {}) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const nextSlot = createArticulationSlotFromSnapshot(bank, snapshotValue);
   if (!nextSlot) {
     return bank;
   }
-  const nextBank = normalizeArticulationBank({
+  const nextBank = normalizeArticulationEditorState({
     ...bank,
     selectedSlotId: nextSlot.id,
     slots: [...bank.slots, nextSlot]
@@ -17950,34 +18125,34 @@ function addCapturedArticulationToBank(bankValue, snapshotValue, options = {}) {
   return assignArticulationToNextAvailableTrigger(nextBank, nextSlot.id, bank.activeTriggerMode);
 }
 function upsertSelectedArticulationSnapshot(bankValue, slotId, snapshotValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const snapshot = normalizeArticulationSnapshot(snapshotValue);
   const slots = bank.slots.map((slot) => slot.id === slotId ? { ...slot, snapshot } : slot);
-  return normalizeArticulationBank({
+  return normalizeArticulationEditorState({
     ...bank,
     slots
   });
 }
 function setArticulationTriggerMode(bankValue, modeValue) {
-  const bank = normalizeArticulationBank(bankValue);
-  return normalizeArticulationBank({
+  const bank = normalizeArticulationEditorState(bankValue);
+  return normalizeArticulationEditorState({
     ...bank,
     activeTriggerMode: normalizeTriggerMode(modeValue)
   });
 }
 function renameArticulationSlot(bankValue, slotId, nextNameValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const nextName = typeof nextNameValue === "string" ? nextNameValue.trim() : "";
   if (!nextName) {
     return bank;
   }
-  return normalizeArticulationBank({
+  return normalizeArticulationEditorState({
     ...bank,
     slots: bank.slots.map((slot) => slot.id === slotId ? { ...slot, name: nextName } : slot)
   });
 }
 function duplicateArticulationSlot(bankValue, slotId) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const sourceSlot = bank.slots.find((slot) => slot.id === slotId);
   if (!sourceSlot) {
     return bank;
@@ -17986,7 +18161,7 @@ function duplicateArticulationSlot(bankValue, slotId) {
   if (!nextSlot) {
     return bank;
   }
-  return normalizeArticulationBank({
+  return normalizeArticulationEditorState({
     ...bank,
     selectedSlotId: nextSlot.id,
     slots: [
@@ -17999,12 +18174,12 @@ function duplicateArticulationSlot(bankValue, slotId) {
   });
 }
 function deleteArticulationSlot(bankValue, slotId) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   if (bank.slots.length <= 1 || !bank.slots.some((slot) => slot.id === slotId)) {
     return bank;
   }
   const slots = bank.slots.filter((slot) => slot.id !== slotId);
-  return normalizeArticulationBank({
+  return normalizeArticulationEditorState({
     ...bank,
     selectedSlotId: bank.selectedSlotId === slotId ? slots[0]?.id ?? null : bank.selectedSlotId,
     slots,
@@ -18086,13 +18261,13 @@ function getTriggerLaneInfo(bank, modeValue) {
 function setTriggerLaneAssignments(bank, mode, assignments) {
   const sortedAssignments = sortRangeAssignments(assignments);
   if (mode === "key") {
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
       ...bank,
       keyAssignments: rangeAssignmentsToKeyAssignments(sortedAssignments)
     });
   }
   const { field } = getRangeAssignmentField(mode);
-  return normalizeArticulationBank({
+  return normalizeArticulationEditorState({
     ...bank,
     [field]: sortedAssignments
   });
@@ -18152,7 +18327,7 @@ function carveAssignmentAroundRange(assignment, carvedMin, carvedMax) {
   return leftWidth >= rightWidth ? [left] : [right];
 }
 function assignArticulationToRangePosition(bankValue, modeValue, positionValue, articulationId) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   if (!bank.slots.some((slot) => slot.id === articulationId)) {
     return bank;
   }
@@ -18182,7 +18357,7 @@ function assignArticulationToRangePosition(bankValue, modeValue, positionValue, 
   return setTriggerLaneAssignments(bank, mode, nextAssignments);
 }
 function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, articulationId, preserveSide) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   if (!bank.slots.some((slot) => slot.id === articulationId)) {
     return bank;
   }
@@ -18225,7 +18400,7 @@ function insertArticulationRangeAtPosition(bankValue, modeValue, positionValue, 
   ]);
 }
 function moveArticulationRangeAssignment(bankValue, modeValue, segmentValue, targetPositionValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
   const target = findMatchingRangeAssignment(assignments, segmentValue);
   if (!target) {
@@ -18250,7 +18425,7 @@ function moveArticulationRangeAssignment(bankValue, modeValue, segmentValue, tar
   return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
 }
 function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, edge, positionValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
   const target = findMatchingRangeAssignment(assignments, segmentValue);
   if (!target) {
@@ -18275,7 +18450,7 @@ function resizeArticulationRangeAssignment(bankValue, modeValue, segmentValue, e
   return setTriggerLaneAssignments(bank, mode, [...otherAssignments, nextTarget]);
 }
 function clearArticulationRangeAssignment(bankValue, modeValue, segmentValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const { mode, assignments } = getTriggerLaneInfo(bank, modeValue);
   const target = findMatchingRangeAssignment(assignments, segmentValue);
   if (!target) {
@@ -18288,12 +18463,12 @@ function clearArticulationRangeAssignment(bankValue, modeValue, segmentValue) {
   );
 }
 function clearArticulationTriggerAssignments(bankValue, modeValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const mode = normalizeTriggerMode(modeValue);
   return setTriggerLaneAssignments(bank, mode, []);
 }
 function distributeArticulationRanges(bankValue, modeValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
   const firstAssignmentByArticulation = /* @__PURE__ */ new Map();
   for (const assignment of [...assignments].sort((left, right) => left.min - right.min)) {
@@ -18332,7 +18507,7 @@ function fillRangeTriggerMap(target, assignments, runtimeSlotByArticulationId) {
   }
 }
 function buildArticulationTriggerConfig(bankValue) {
-  const bank = normalizeArticulationBank(bankValue);
+  const bank = normalizeArticulationEditorState(bankValue);
   const runtimeSlotByArticulationId = new Map(bank.slots.map((slot) => [slot.id, slot.runtimeSlot]));
   const chain = createUnassignedRuntimeMap();
   const key = createUnassignedRuntimeMap();
@@ -18374,6 +18549,319 @@ function sendNativeArticulationTriggerConfig(configValue, patchConnection) {
   if (typeof globalObject.cosimo_set_articulation_trigger_config === "function") {
     globalObject.cosimo_set_articulation_trigger_config(serializedConfig);
   }
+}
+const ARTICULATIONS_V3_STATE_KEY = "articulations.v3";
+const ARTICULATION_VOICE_PARAMETER_IDS = [
+  "framePosition",
+  "pan",
+  "warpMode",
+  "warpAmount",
+  "filterMode",
+  "filterCutoffHz",
+  "filterQ",
+  "unisonVoices",
+  "unisonDetune",
+  "unisonBlend",
+  "unisonWidth",
+  "unisonPhase",
+  "unisonRandom",
+  "unisonPhaseMode",
+  "unisonDetuneMode",
+  "unisonStackMode",
+  "unisonWavetablePositionSpread",
+  "unisonWarpSpread",
+  "msegMorph1",
+  "msegMorph2",
+  "msegMorph3",
+  "env1.attackSeconds",
+  "env1.decaySeconds",
+  "env1.sustain",
+  "env1.releaseSeconds",
+  "env2.attackSeconds",
+  "env2.decaySeconds",
+  "env2.sustain",
+  "env2.releaseSeconds",
+  "env3.attackSeconds",
+  "env3.decaySeconds",
+  "env3.sustain",
+  "env3.releaseSeconds"
+];
+class ArticulationsParseError extends Error {
+  /** @param detail Human-readable detail naming the offending field or slot. */
+  constructor(reason, detail) {
+    super(`articulations.v3 parse failed (${reason}): ${detail}`);
+    this.reason = reason;
+    this.detail = detail;
+  }
+  _tag = "ArticulationsParseError";
+}
+function malformed(detail) {
+  return err(new ArticulationsParseError("malformed", detail));
+}
+function isObjectRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function findExactShapeOffense(value, expectedKeys, label) {
+  const expected = new Set(expectedKeys);
+  for (const key of expectedKeys) {
+    if (!Object.hasOwn(value, key)) {
+      return `${label} is missing field "${key}"`;
+    }
+  }
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== "string") {
+      return `${label} has a non-string field key`;
+    }
+    if (!expected.has(key)) {
+      return `${label} has unexpected field "${key}"`;
+    }
+  }
+  return null;
+}
+function isMidiInteger(value) {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value < ARTICULATION_MAX_SLOTS;
+}
+function isTriggerMode(value) {
+  return value === "chain" || value === "key" || value === "vel";
+}
+function isVoiceParameterId(value) {
+  return ARTICULATION_VOICE_PARAMETER_IDS.some((parameterId) => parameterId === value);
+}
+function parseRange(input, label) {
+  if (!isObjectRecord(input)) {
+    return malformed(`${label} must be an object`);
+  }
+  const shapeOffense = findExactShapeOffense(input, ["min", "max"], label);
+  if (shapeOffense !== null) {
+    return malformed(shapeOffense);
+  }
+  if (!isMidiInteger(input.min)) {
+    return malformed(`${label}.min must be an integer in 0..127`);
+  }
+  if (!isMidiInteger(input.max)) {
+    return malformed(`${label}.max must be an integer in 0..127`);
+  }
+  if (input.min > input.max) {
+    return malformed(`${label}.min must be less than or equal to ${label}.max`);
+  }
+  return ok({ min: input.min, max: input.max });
+}
+function parseOverrides(input, label) {
+  if (!isObjectRecord(input)) {
+    return malformed(`${label} must be an object`);
+  }
+  const overrides = {};
+  for (const key of Reflect.ownKeys(input)) {
+    if (typeof key !== "string") {
+      return malformed(`${label} has a non-string parameter id`);
+    }
+    if (!isVoiceParameterId(key)) {
+      return malformed(`${label} has unknown parameter id "${key}"`);
+    }
+    const value = input[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return malformed(`${label}.${key} must be a finite number`);
+    }
+    overrides[key] = value;
+  }
+  return ok(overrides);
+}
+function defineOwnNumber(target, key, value) {
+  Object.defineProperty(target, key, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true
+  });
+}
+function createRouteAmountRecord() {
+  return {};
+}
+function parseRouteAmounts(input, label, acceptedRouteIds) {
+  if (!isObjectRecord(input)) {
+    return malformed(`${label} must be an object`);
+  }
+  const routeAmounts = createRouteAmountRecord();
+  for (const key of Reflect.ownKeys(input)) {
+    if (typeof key !== "string") {
+      return malformed(`${label} has a non-string route id`);
+    }
+    const value = input[key];
+    if (typeof value !== "number" || !Number.isFinite(value) || Math.abs(value) > ARTICULATION_ROUTE_AMOUNT_MAX_ABS) {
+      return malformed(
+        `${label}.${key} must be a finite route amount within ±${ARTICULATION_ROUTE_AMOUNT_MAX_ABS}`
+      );
+    }
+    if (!acceptedRouteIds.has(key)) {
+      return malformed(`${label}.${key} does not name a current articulable mapping`);
+    }
+    defineOwnNumber(routeAmounts, key, value);
+  }
+  return ok(routeAmounts);
+}
+function parseSlot(input, index, acceptedRouteIds) {
+  const label = `slots[${index}]`;
+  if (!isObjectRecord(input)) {
+    return malformed(`${label} must be an object`);
+  }
+  const shapeOffense = findExactShapeOffense(
+    input,
+    ["id", "runtimeSlot", "name", "color", "key", "velRange", "chainRange", "overrides", "routeAmounts"],
+    label
+  );
+  if (shapeOffense !== null) {
+    return malformed(shapeOffense);
+  }
+  if (typeof input.id !== "string") {
+    return malformed(`${label}.id must be a string`);
+  }
+  if (!isMidiInteger(input.runtimeSlot)) {
+    return malformed(`${label}.runtimeSlot must be an integer in 0..127`);
+  }
+  if (typeof input.name !== "string") {
+    return malformed(`${label}.name must be a string`);
+  }
+  if (typeof input.color !== "string") {
+    return malformed(`${label}.color must be a string`);
+  }
+  if (!isMidiInteger(input.key)) {
+    return malformed(`${label}.key must be an integer in 0..127`);
+  }
+  const velRange = parseRange(input.velRange, `${label}.velRange`);
+  if (velRange._tag === "err") {
+    return velRange;
+  }
+  const chainRange = parseRange(input.chainRange, `${label}.chainRange`);
+  if (chainRange._tag === "err") {
+    return chainRange;
+  }
+  const overrides = parseOverrides(input.overrides, `${label}.overrides`);
+  if (overrides._tag === "err") {
+    return overrides;
+  }
+  const routeAmounts = parseRouteAmounts(input.routeAmounts, `${label}.routeAmounts`, acceptedRouteIds);
+  if (routeAmounts._tag === "err") {
+    return routeAmounts;
+  }
+  return ok({
+    id: input.id,
+    runtimeSlot: input.runtimeSlot,
+    name: input.name,
+    color: input.color,
+    key: input.key,
+    velRange: velRange.value,
+    chainRange: chainRange.value,
+    overrides: overrides.value,
+    routeAmounts: routeAmounts.value
+  });
+}
+function copyOverrides(source) {
+  const copy = {};
+  for (const parameterId of ARTICULATION_VOICE_PARAMETER_IDS) {
+    if (!Object.hasOwn(source, parameterId)) {
+      continue;
+    }
+    const value = source[parameterId];
+    if (value !== void 0) {
+      copy[parameterId] = value;
+    }
+  }
+  return copy;
+}
+function copyRouteAmounts(source) {
+  const copy = createRouteAmountRecord();
+  for (const [routeId, amount] of Object.entries(source)) {
+    defineOwnNumber(copy, routeId, amount);
+  }
+  return copy;
+}
+function parseArticulationsV3(input, acceptedRouteIds) {
+  if (!isObjectRecord(input)) {
+    return malformed("payload must be an object");
+  }
+  if (input.format !== "cosimo.articulations") {
+    return malformed('format must be exactly "cosimo.articulations"');
+  }
+  if (input.version !== 3) {
+    return malformed("version must be exactly 3");
+  }
+  const shapeOffense = findExactShapeOffense(
+    input,
+    ["format", "version", "selectedSlotId", "activeTriggerMode", "slots"],
+    "payload"
+  );
+  if (shapeOffense !== null) {
+    return malformed(shapeOffense);
+  }
+  if (input.selectedSlotId !== null && typeof input.selectedSlotId !== "string") {
+    return malformed("selectedSlotId must be null or a string");
+  }
+  if (!isTriggerMode(input.activeTriggerMode)) {
+    return malformed('activeTriggerMode must be "chain", "key", or "vel"');
+  }
+  if (!Array.isArray(input.slots)) {
+    return malformed("slots must be an array");
+  }
+  if (input.slots.length > ARTICULATION_MAX_SLOTS) {
+    return malformed(`slots must contain at most ${ARTICULATION_MAX_SLOTS} entries`);
+  }
+  const slots = [];
+  const slotIds = /* @__PURE__ */ new Set();
+  const runtimeSlots = /* @__PURE__ */ new Set();
+  for (let index = 0; index < input.slots.length; index += 1) {
+    const parsedSlot = parseSlot(input.slots[index], index, acceptedRouteIds);
+    if (parsedSlot._tag === "err") {
+      return parsedSlot;
+    }
+    const slot = parsedSlot.value;
+    if (slotIds.has(slot.id)) {
+      return malformed(`slots[${index}].id duplicates "${slot.id}"`);
+    }
+    if (runtimeSlots.has(slot.runtimeSlot)) {
+      return malformed(`slots[${index}].runtimeSlot duplicates ${slot.runtimeSlot}`);
+    }
+    slotIds.add(slot.id);
+    runtimeSlots.add(slot.runtimeSlot);
+    slots.push(slot);
+  }
+  if (input.selectedSlotId !== null && !slotIds.has(input.selectedSlotId)) {
+    return malformed(`selectedSlotId "${input.selectedSlotId}" does not identify an existing slot`);
+  }
+  return ok({
+    format: input.format,
+    version: input.version,
+    selectedSlotId: input.selectedSlotId,
+    activeTriggerMode: input.activeTriggerMode,
+    slots
+  });
+}
+function serializeArticulationsV3(state) {
+  return {
+    format: state.format,
+    version: state.version,
+    selectedSlotId: state.selectedSlotId,
+    activeTriggerMode: state.activeTriggerMode,
+    slots: state.slots.map((slot) => ({
+      id: slot.id,
+      runtimeSlot: slot.runtimeSlot,
+      name: slot.name,
+      color: slot.color,
+      key: slot.key,
+      velRange: { min: slot.velRange.min, max: slot.velRange.max },
+      chainRange: { min: slot.chainRange.min, max: slot.chainRange.max },
+      overrides: copyOverrides(slot.overrides),
+      routeAmounts: copyRouteAmounts(slot.routeAmounts)
+    }))
+  };
+}
+function createEmptyArticulationsState() {
+  return {
+    format: "cosimo.articulations",
+    version: 3,
+    selectedSlotId: null,
+    activeTriggerMode: "chain",
+    slots: []
+  };
 }
 const EFFECTIVE_MSEG_STATE_ENDPOINT_ID = "effectiveMsegState";
 const EFFECTIVE_MSEG_SLOT_COUNT = 3;
@@ -19207,17 +19695,47 @@ function useObservedUnisonState({
   }, [fallbackState, message]);
   return message ? observedState : fallbackState;
 }
+const modulationAmountRenderIdleMilliseconds = 50;
 function useModulationState() {
   const patchConnection = usePatchConnection();
   const [state, setState] = reactExports.useState(null);
   const bridgeRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     const bridge = acquireModulationRuntimeBridge(patchConnection);
+    let pendingAmountState = null;
+    let pendingAmountTimer = null;
+    const clearPendingAmountState = () => {
+      if (pendingAmountTimer !== null) {
+        clearTimeout(pendingAmountTimer);
+        pendingAmountTimer = null;
+      }
+      pendingAmountState = null;
+    };
+    const handleStateChange = (nextState, changeKind) => {
+      if (changeKind === "routeAmount") {
+        pendingAmountState = nextState;
+        if (pendingAmountTimer !== null) {
+          clearTimeout(pendingAmountTimer);
+        }
+        pendingAmountTimer = setTimeout(() => {
+          pendingAmountTimer = null;
+          const latestState = pendingAmountState;
+          pendingAmountState = null;
+          if (latestState) {
+            setState(latestState);
+          }
+        }, modulationAmountRenderIdleMilliseconds);
+        return;
+      }
+      clearPendingAmountState();
+      setState(nextState);
+    };
     bridgeRef.current = bridge;
     setState(bridge.getState());
-    bridge.subscribe(setState);
+    bridge.subscribe(handleStateChange);
     return () => {
-      bridge.unsubscribe(setState);
+      clearPendingAmountState();
+      bridge.unsubscribe(handleStateChange);
       releaseModulationRuntimeBridge(patchConnection);
       bridgeRef.current = null;
     };
@@ -19241,12 +19759,207 @@ function readFullStoredStateValue(storedState, key) {
   }
   return void 0;
 }
-function useStoredArticulationBank() {
+function currentArticulationRouteIds(routes) {
+  return new Set(routes.flatMap((route) => getModulationArticulationCellIndex(route) === null ? [] : [route.id]));
+}
+function decodeArticulationDocument(rawValue) {
+  if (typeof rawValue !== "string") {
+    return rawValue;
+  }
+  try {
+    return JSON.parse(rawValue);
+  } catch {
+    return rawValue;
+  }
+}
+function readArticulationOverride(slot, parameterId, fallback) {
+  const value = slot.overrides[parameterId];
+  return value === void 0 ? fallback : value;
+}
+const ENVELOPE_ARTICULATION_PARAMETER_IDS = [
+  {
+    attackSeconds: "env1.attackSeconds",
+    decaySeconds: "env1.decaySeconds",
+    sustain: "env1.sustain",
+    releaseSeconds: "env1.releaseSeconds"
+  },
+  {
+    attackSeconds: "env2.attackSeconds",
+    decaySeconds: "env2.decaySeconds",
+    sustain: "env2.sustain",
+    releaseSeconds: "env2.releaseSeconds"
+  },
+  {
+    attackSeconds: "env3.attackSeconds",
+    decaySeconds: "env3.decaySeconds",
+    sustain: "env3.sustain",
+    releaseSeconds: "env3.releaseSeconds"
+  }
+];
+function resolveEditorEnvelope(slot, envelope, parameterIds) {
+  return {
+    ...envelope,
+    attackSeconds: readArticulationOverride(slot, parameterIds.attackSeconds, envelope.attackSeconds),
+    decaySeconds: readArticulationOverride(slot, parameterIds.decaySeconds, envelope.decaySeconds),
+    sustain: readArticulationOverride(slot, parameterIds.sustain, envelope.sustain),
+    releaseSeconds: readArticulationOverride(slot, parameterIds.releaseSeconds, envelope.releaseSeconds)
+  };
+}
+function resolveEditorSnapshot(slot, baseSnapshot, routes) {
+  const base = normalizeArticulationSnapshot(baseSnapshot);
+  const parameters = base.parameters;
+  const routeAmounts = routes.flatMap((route) => {
+    if (getModulationArticulationCellIndex(route) === null) {
+      return [];
+    }
+    const amount = slot.routeAmounts[route.id] ?? route.amount;
+    return Math.abs(amount) <= 1e-6 ? [] : [{ routeId: route.id, amount }];
+  });
+  return normalizeArticulationSnapshot({
+    parameters: {
+      ...parameters,
+      wavetablePosition: readArticulationOverride(slot, "framePosition", parameters.wavetablePosition),
+      pan: readArticulationOverride(slot, "pan", parameters.pan),
+      warpMode: readArticulationOverride(slot, "warpMode", parameters.warpMode),
+      warpAmount: readArticulationOverride(slot, "warpAmount", parameters.warpAmount),
+      filterMode: readArticulationOverride(slot, "filterMode", parameters.filterMode),
+      filterCutoff: readArticulationOverride(slot, "filterCutoffHz", parameters.filterCutoff),
+      filterQ: readArticulationOverride(slot, "filterQ", parameters.filterQ),
+      unisonVoices: readArticulationOverride(slot, "unisonVoices", parameters.unisonVoices),
+      unisonDetune: readArticulationOverride(slot, "unisonDetune", parameters.unisonDetune),
+      unisonBlend: readArticulationOverride(slot, "unisonBlend", parameters.unisonBlend),
+      unisonWidth: readArticulationOverride(slot, "unisonWidth", parameters.unisonWidth),
+      unisonPhase: readArticulationOverride(slot, "unisonPhase", parameters.unisonPhase),
+      unisonRandom: readArticulationOverride(slot, "unisonRandom", parameters.unisonRandom),
+      unisonPhaseMode: readArticulationOverride(slot, "unisonPhaseMode", parameters.unisonPhaseMode),
+      unisonDetuneMode: readArticulationOverride(slot, "unisonDetuneMode", parameters.unisonDetuneMode),
+      unisonStackMode: readArticulationOverride(slot, "unisonStackMode", parameters.unisonStackMode),
+      unisonWavetablePositionSpread: readArticulationOverride(
+        slot,
+        "unisonWavetablePositionSpread",
+        parameters.unisonWavetablePositionSpread
+      ),
+      unisonWarpSpread: readArticulationOverride(slot, "unisonWarpSpread", parameters.unisonWarpSpread),
+      msegMorphs: [
+        readArticulationOverride(slot, "msegMorph1", parameters.msegMorphs[0]),
+        readArticulationOverride(slot, "msegMorph2", parameters.msegMorphs[1]),
+        readArticulationOverride(slot, "msegMorph3", parameters.msegMorphs[2])
+      ]
+    },
+    envelopes: [0, 1, 2].map((index) => resolveEditorEnvelope(
+      slot,
+      base.envelopes[index] ?? createDefaultEnvelope(index),
+      ENVELOPE_ARTICULATION_PARAMETER_IDS[index] ?? ENVELOPE_ARTICULATION_PARAMETER_IDS[0]
+    )),
+    modRouteAmounts: routeAmounts
+  });
+}
+function projectCurrentArticulationsToEditorBank(state, baseSnapshot, routes) {
+  return normalizeArticulationEditorState({
+    selectedSlotId: state.selectedSlotId,
+    activeTriggerMode: state.activeTriggerMode,
+    slots: state.slots.map((slot) => ({
+      id: slot.id,
+      runtimeSlot: slot.runtimeSlot,
+      name: slot.name,
+      snapshot: resolveEditorSnapshot(slot, baseSnapshot, routes)
+    })),
+    keyAssignments: state.slots.map((slot) => ({ articulationId: slot.id, note: slot.key })),
+    velocityAssignments: state.slots.map((slot) => ({
+      id: `velocity-${slot.id}`,
+      articulationId: slot.id,
+      ...slot.velRange
+    })),
+    chainAssignments: state.slots.map((slot) => ({
+      id: `chain-${slot.id}`,
+      articulationId: slot.id,
+      ...slot.chainRange
+    }))
+  });
+}
+function snapshotOverrides(snapshotValue) {
+  const snapshot = normalizeArticulationSnapshot(snapshotValue);
+  const parameters = snapshot.parameters;
+  const envelope1 = snapshot.envelopes[0] ?? createDefaultEnvelope(0);
+  const envelope2 = snapshot.envelopes[1] ?? createDefaultEnvelope(1);
+  const envelope3 = snapshot.envelopes[2] ?? createDefaultEnvelope(2);
+  return {
+    framePosition: parameters.wavetablePosition,
+    pan: parameters.pan,
+    warpMode: parameters.warpMode,
+    warpAmount: parameters.warpAmount,
+    filterMode: parameters.filterMode,
+    filterCutoffHz: parameters.filterCutoff,
+    filterQ: parameters.filterQ,
+    unisonVoices: parameters.unisonVoices,
+    unisonDetune: parameters.unisonDetune,
+    unisonBlend: parameters.unisonBlend,
+    unisonWidth: parameters.unisonWidth,
+    unisonPhase: parameters.unisonPhase,
+    unisonRandom: parameters.unisonRandom,
+    unisonPhaseMode: parameters.unisonPhaseMode,
+    unisonDetuneMode: parameters.unisonDetuneMode,
+    unisonStackMode: parameters.unisonStackMode,
+    unisonWavetablePositionSpread: parameters.unisonWavetablePositionSpread,
+    unisonWarpSpread: parameters.unisonWarpSpread,
+    msegMorph1: parameters.msegMorphs[0],
+    msegMorph2: parameters.msegMorphs[1],
+    msegMorph3: parameters.msegMorphs[2],
+    "env1.attackSeconds": envelope1.attackSeconds,
+    "env1.decaySeconds": envelope1.decaySeconds,
+    "env1.sustain": envelope1.sustain,
+    "env1.releaseSeconds": envelope1.releaseSeconds,
+    "env2.attackSeconds": envelope2.attackSeconds,
+    "env2.decaySeconds": envelope2.decaySeconds,
+    "env2.sustain": envelope2.sustain,
+    "env2.releaseSeconds": envelope2.releaseSeconds,
+    "env3.attackSeconds": envelope3.attackSeconds,
+    "env3.decaySeconds": envelope3.decaySeconds,
+    "env3.sustain": envelope3.sustain,
+    "env3.releaseSeconds": envelope3.releaseSeconds
+  };
+}
+function compileEditorBankToCurrentArticulations(bank, previousBank, previousState, routes) {
+  const acceptedRouteIds = currentArticulationRouteIds(routes);
+  const previousSlots = new Map(previousState.slots.map((slot) => [slot.id, slot]));
+  const previousEditorSlots = new Map(previousBank.slots.map((slot) => [slot.id, slot]));
+  const slots = bank.slots.map((slot) => {
+    const previousSlot = previousSlots.get(slot.id);
+    const previousEditorSlot = previousEditorSlots.get(slot.id);
+    const snapshotUnchanged = previousSlot !== void 0 && previousEditorSlot !== void 0 && articulationSnapshotsEqual(previousEditorSlot.snapshot, slot.snapshot);
+    const key = bank.keyAssignments.find((assignment) => assignment.articulationId === slot.id)?.note ?? previousSlot?.key ?? slot.runtimeSlot;
+    const velRange = bank.velocityAssignments.find((assignment) => assignment.articulationId === slot.id) ?? previousSlot?.velRange ?? { min: 0, max: 127 };
+    const chainRange = bank.chainAssignments.find((assignment) => assignment.articulationId === slot.id) ?? previousSlot?.chainRange ?? { min: 0, max: 127 };
+    const routeAmounts = snapshotUnchanged && previousSlot ? previousSlot.routeAmounts : Object.fromEntries(slot.snapshot.modRouteAmounts.flatMap(({ routeId, amount }) => acceptedRouteIds.has(routeId) ? [[routeId, amount]] : []));
+    return {
+      id: slot.id,
+      runtimeSlot: slot.runtimeSlot,
+      name: slot.name,
+      color: previousSlot?.color ?? "#d2a128",
+      key,
+      velRange: { min: velRange.min, max: velRange.max },
+      chainRange: { min: chainRange.min, max: chainRange.max },
+      overrides: snapshotUnchanged && previousSlot ? previousSlot.overrides : snapshotOverrides(slot.snapshot),
+      routeAmounts
+    };
+  });
+  return {
+    format: "cosimo.articulations",
+    version: 3,
+    selectedSlotId: bank.selectedSlotId,
+    activeTriggerMode: bank.activeTriggerMode,
+    slots
+  };
+}
+function useStoredArticulationEditorState(modulationBridge, getBaseSnapshot) {
   const patchConnection = usePatchConnection();
-  const [bank, setBank] = reactExports.useState(() => createDefaultArticulationBank());
+  const [bank, setBank] = reactExports.useState(() => createDefaultArticulationEditorState());
   const [hasHydrated, setHasHydrated] = reactExports.useState(false);
   const bankRef = reactExports.useRef(bank);
+  const storedStateRef = reactExports.useRef(createEmptyArticulationsState());
+  const getBaseSnapshotRef = reactExports.useRef(getBaseSnapshot);
   const pendingEchoTokensRef = reactExports.useRef(/* @__PURE__ */ new Map());
+  getBaseSnapshotRef.current = getBaseSnapshot;
   reactExports.useEffect(() => {
     bankRef.current = bank;
   }, [bank]);
@@ -19267,71 +19980,138 @@ function useStoredArticulationBank() {
     }
     return true;
   }, []);
-  const applyIncomingBank = reactExports.useCallback((rawValue) => {
-    const nextBank = normalizeArticulationBank(rawValue);
-    setHasHydrated(true);
+  const applyCurrentState = reactExports.useCallback((nextState) => {
+    const routes = modulationBridge.current?.getState().routes ?? [];
+    const nextBank = projectCurrentArticulationsToEditorBank(
+      nextState,
+      getBaseSnapshotRef.current(),
+      routes
+    );
+    storedStateRef.current = nextState;
     bankRef.current = nextBank;
-    setBank((previousBank) => articulationBanksEqual(previousBank, nextBank) ? previousBank : nextBank);
+    setBank((previousBank) => articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank);
     sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
-  }, [patchConnection]);
+  }, [modulationBridge, patchConnection]);
+  const applyIncomingState = reactExports.useCallback((rawValue, isHydration) => {
+    if (rawValue === void 0) {
+      if (isHydration) {
+        setHasHydrated(true);
+        applyCurrentState(createEmptyArticulationsState());
+      }
+      return;
+    }
+    const routes = modulationBridge.current?.getState().routes ?? [];
+    const parsedState = parseArticulationsV3(
+      decodeArticulationDocument(rawValue),
+      currentArticulationRouteIds(routes)
+    );
+    if (parsedState._tag === "err") {
+      if (isHydration) {
+        setHasHydrated(true);
+      }
+      return;
+    }
+    const serializedState = JSON.stringify(serializeArticulationsV3(parsedState.value));
+    if (consumePendingEcho(serializedState)) {
+      return;
+    }
+    setHasHydrated(true);
+    applyCurrentState(parsedState.value);
+  }, [applyCurrentState, consumePendingEcho, modulationBridge]);
   reactExports.useEffect(() => {
     const handleStoredStateValue = (message) => {
       if (!message || typeof message !== "object") {
         return;
       }
       const nextMessage = message;
-      if (nextMessage.key !== ARTICULATION_STATE_KEY) {
+      if (nextMessage.key !== ARTICULATIONS_V3_STATE_KEY) {
         return;
       }
-      const serializedBank = serializeArticulationBank(nextMessage.value);
-      if (consumePendingEcho(serializedBank)) {
-        return;
-      }
-      applyIncomingBank(nextMessage.value);
+      applyIncomingState(nextMessage.value, false);
     };
     patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
     if (typeof patchConnection.requestFullStoredState === "function") {
       patchConnection.requestFullStoredState((storedState) => {
-        applyIncomingBank(readFullStoredStateValue(storedState, ARTICULATION_STATE_KEY));
+        applyIncomingState(readFullStoredStateValue(storedState, ARTICULATIONS_V3_STATE_KEY), true);
       });
     } else if (typeof patchConnection.requestStoredStateValue === "function") {
-      patchConnection.requestStoredStateValue(ARTICULATION_STATE_KEY);
+      patchConnection.requestStoredStateValue(ARTICULATIONS_V3_STATE_KEY);
     } else {
-      applyIncomingBank(void 0);
+      applyIncomingState(void 0, true);
     }
     return () => {
       patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
     };
-  }, [applyIncomingBank, consumePendingEcho, patchConnection]);
+  }, [applyIncomingState, patchConnection]);
   const setAndPersistBank = reactExports.useCallback((nextBankValue) => {
     const previousBank = bankRef.current;
-    const nextBank = normalizeArticulationBank(
+    const nextBank = normalizeArticulationEditorState(
       typeof nextBankValue === "function" ? nextBankValue(previousBank) : nextBankValue
     );
-    if (articulationBanksEqual(previousBank, nextBank)) {
+    if (articulationEditorStatesEqual(previousBank, nextBank)) {
       return;
     }
+    const routes = modulationBridge.current?.getState().routes ?? [];
+    const nextStoredState = compileEditorBankToCurrentArticulations(
+      nextBank,
+      previousBank,
+      storedStateRef.current,
+      routes
+    );
+    const canonicalNextBank = projectCurrentArticulationsToEditorBank(
+      nextStoredState,
+      getBaseSnapshotRef.current(),
+      routes
+    );
+    bankRef.current = canonicalNextBank;
+    storedStateRef.current = nextStoredState;
+    setHasHydrated(true);
+    setBank(canonicalNextBank);
+    if (typeof patchConnection.sendStoredStateValue === "function") {
+      const serializedBank = JSON.stringify(serializeArticulationsV3(nextStoredState));
+      const serializedTriggerConfig = serializeArticulationTriggerConfig(
+        buildArticulationTriggerConfig(canonicalNextBank)
+      );
+      rememberPendingEcho(serializedBank);
+      patchConnection.sendStoredStateValue(ARTICULATIONS_V3_STATE_KEY, serializedBank);
+      patchConnection.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serializedTriggerConfig);
+    }
+    sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(canonicalNextBank), patchConnection);
+  }, [modulationBridge, patchConnection, rememberPendingEcho]);
+  const setAndPersistStoredState = reactExports.useCallback((nextState) => {
+    const routes = modulationBridge.current?.getState().routes ?? [];
+    const nextBank = projectCurrentArticulationsToEditorBank(
+      nextState,
+      getBaseSnapshotRef.current(),
+      routes
+    );
+    const previousSerialized = JSON.stringify(serializeArticulationsV3(storedStateRef.current));
+    const nextSerialized = JSON.stringify(serializeArticulationsV3(nextState));
+    if (previousSerialized === nextSerialized) {
+      return;
+    }
+    storedStateRef.current = nextState;
     bankRef.current = nextBank;
     setHasHydrated(true);
     setBank(nextBank);
     if (typeof patchConnection.sendStoredStateValue === "function") {
-      const serializedBank = serializeArticulationBank(nextBank);
-      const serializedTriggerConfig = serializeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank));
-      rememberPendingEcho(serializedBank);
-      patchConnection.sendStoredStateValue(ARTICULATION_STATE_KEY, serializedBank);
-      patchConnection.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serializedTriggerConfig);
+      rememberPendingEcho(nextSerialized);
+      patchConnection.sendStoredStateValue(ARTICULATIONS_V3_STATE_KEY, nextSerialized);
+      patchConnection.sendStoredStateValue(
+        ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
+        serializeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank))
+      );
     }
     sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
-  }, [patchConnection, rememberPendingEcho]);
+  }, [modulationBridge, patchConnection, rememberPendingEcho]);
   return reactExports.useMemo(() => ({
     bank,
     bankRef,
+    storedStateRef,
     hasHydrated,
-    setAndPersistBank
-  }), [bank, hasHydrated, setAndPersistBank]);
-}
-function isPlainRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+    setAndPersistBank,
+    setAndPersistStoredState
+  }), [bank, hasHydrated, setAndPersistBank, setAndPersistStoredState]);
 }
 function parsePresetStoredStateValue(rawValue, label) {
   if (typeof rawValue !== "string") {
@@ -19343,25 +20123,21 @@ function parsePresetStoredStateValue(rawValue, label) {
     throw new Error(`${label} must be valid JSON.`);
   }
 }
-function parseStrictArticulationPresetBank(rawValue) {
+function parseStrictArticulationPresetState(rawValue, acceptedRouteIds) {
   const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
-  if (!isPlainRecord(parsedValue)) {
-    throw new Error("Articulation preset state must be an object.");
+  const parsedState = parseArticulationsV3(parsedValue, acceptedRouteIds);
+  if (parsedState._tag === "err") {
+    throw parsedState.error;
   }
-  if (parsedValue.format !== "cosimo.articulations" || parsedValue.version !== 2) {
-    throw new Error("Articulation preset state must be cosimo.articulations version 2.");
-  }
-  return normalizeArticulationBank(parsedValue);
+  return parsedState.value;
 }
 function parseStrictModulationPresetState(rawValue) {
   const parsedValue = parsePresetStoredStateValue(rawValue, "Modulation preset state");
-  if (!isPlainRecord(parsedValue)) {
-    throw new Error("Modulation preset state must be an object.");
+  const parsedState = parseModulationState(parsedValue);
+  if (parsedState._tag === "err") {
+    throw parsedState.error;
   }
-  if (parsedValue.format !== "cosimo.modulation" || parsedValue.version !== 2) {
-    throw new Error("Modulation preset state must be cosimo.modulation version 2.");
-  }
-  return normalizeModulationState(parsedValue);
+  return parsedState.value;
 }
 function useSynthPresetStoredStateAdapters({
   articulationBankState,
@@ -19369,7 +20145,7 @@ function useSynthPresetStoredStateAdapters({
   modulationState
 }) {
   const patchConnection = usePatchConnection();
-  const { bankRef, setAndPersistBank } = articulationBankState;
+  const { storedStateRef, setAndPersistStoredState } = articulationBankState;
   const latestModulationStateRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     latestModulationStateRef.current = modulationState;
@@ -19389,66 +20165,74 @@ function useSynthPresetStoredStateAdapters({
         patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
       };
     };
-    return [
-      {
-        key: ARTICULATION_STATE_KEY,
-        schemaVersion: 2,
-        getContract() {
-          return {
-            key: ARTICULATION_STATE_KEY,
-            schemaVersion: 2,
-            required: true
-          };
-        },
-        capture() {
-          return bankRef.current;
-        },
-        normalizeForPreset(value) {
-          return parseStrictArticulationPresetBank(value);
-        },
-        serializeForPreset(value) {
-          return serializeArticulationBank(parseStrictArticulationPresetBank(value));
-        },
-        apply(value) {
-          setAndPersistBank(parseStrictArticulationPresetBank(value));
-        },
-        subscribe(listener) {
-          return subscribeToStoredStateKey(ARTICULATION_STATE_KEY, listener);
-        }
-      },
-      {
-        key: MODULATION_STATE_KEY,
-        schemaVersion: 2,
-        getContract() {
-          return {
-            key: MODULATION_STATE_KEY,
-            schemaVersion: 2,
-            required: true
-          };
-        },
-        capture() {
-          return modulationBridge.current?.getState() ?? latestModulationStateRef.current ?? createDefaultModulationState();
-        },
-        normalizeForPreset(value) {
-          return parseStrictModulationPresetState(value);
-        },
-        serializeForPreset(value) {
-          return serializeModulationState(parseStrictModulationPresetState(value));
-        },
-        apply(value) {
-          const nextState = parseStrictModulationPresetState(value);
-          if (modulationBridge.current) {
-            modulationBridge.current.setState(nextState);
-            return;
-          }
-          patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
-        },
-        subscribe(listener) {
-          return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
-        }
+    const presetModulationState = (context) => {
+      if (!context || !(MODULATION_STATE_KEY in context.storedState)) {
+        throw new Error("Synth preset modulation state is required before articulation validation.");
       }
-    ];
-  }, [bankRef, modulationBridge, patchConnection, setAndPersistBank]);
+      return parseStrictModulationPresetState(context.storedState[MODULATION_STATE_KEY]);
+    };
+    const modulationAdapter = {
+      key: MODULATION_STATE_KEY,
+      schemaVersion: 2,
+      getContract() {
+        return {
+          key: MODULATION_STATE_KEY,
+          schemaVersion: 2,
+          required: true
+        };
+      },
+      capture() {
+        return modulationBridge.current?.getState() ?? latestModulationStateRef.current ?? createDefaultModulationState();
+      },
+      normalizeForPreset(value) {
+        return parseStrictModulationPresetState(value);
+      },
+      serializeForPreset(value) {
+        return serializeModulationState(parseStrictModulationPresetState(value));
+      },
+      apply(value) {
+        const nextState = parseStrictModulationPresetState(value);
+        if (modulationBridge.current) {
+          modulationBridge.current.setState(nextState);
+          return;
+        }
+        patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
+      },
+      subscribe(listener) {
+        return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
+      }
+    };
+    const articulationAdapter = {
+      key: ARTICULATIONS_V3_STATE_KEY,
+      schemaVersion: 3,
+      getContract() {
+        return {
+          key: ARTICULATIONS_V3_STATE_KEY,
+          schemaVersion: 3,
+          required: true
+        };
+      },
+      capture() {
+        return storedStateRef.current;
+      },
+      normalizeForPreset(value, context) {
+        const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
+        return parseStrictArticulationPresetState(value, routeIds);
+      },
+      serializeForPreset(value, context) {
+        const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
+        return serializeArticulationsV3(parseStrictArticulationPresetState(value, routeIds));
+      },
+      apply(value, context) {
+        const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
+        setAndPersistStoredState(parseStrictArticulationPresetState(value, routeIds));
+      },
+      subscribe(listener) {
+        return subscribeToStoredStateKey(ARTICULATIONS_V3_STATE_KEY, listener);
+      }
+    };
+    return [modulationAdapter, articulationAdapter];
+  }, [modulationBridge, patchConnection, setAndPersistStoredState, storedStateRef]);
 }
 function useStagePositionDrag({
   stageRef,
@@ -20285,7 +21069,14 @@ function useSynthPatchViewModel({
     VOICE_ARTICULATION_START_ENDPOINT_ID,
     null
   );
-  const articulationBankState = useStoredArticulationBank();
+  const { state: modulationState, bridge: modulationBridge } = useModulationState();
+  const captureCurrentArticulationSnapshotRef = reactExports.useRef(
+    createDefaultArticulationSnapshot
+  );
+  const articulationBankState = useStoredArticulationEditorState(
+    modulationBridge,
+    () => captureCurrentArticulationSnapshotRef.current()
+  );
   const runtimePresentation = reactExports.useMemo(
     () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
     [runtimeStateMessage, wavetableSelect.value]
@@ -20293,7 +21084,6 @@ function useSynthPatchViewModel({
   const presentedTableIndex = runtimePresentation.presentedTableIndex ?? 0;
   const desiredTableIndex = runtimePresentation.desiredTableIndex ?? 0;
   const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
-  const { state: modulationState, bridge: modulationBridge } = useModulationState();
   const articulationBank = articulationBankState.bank;
   const articulationSlots = articulationBank.slots;
   const selectedArticulationSlot = reactExports.useMemo(() => articulationSlots.find((slot) => slot.id === articulationBank.selectedSlotId) ?? null, [articulationBank.selectedSlotId, articulationSlots]);
@@ -20455,7 +21245,10 @@ function useSynthPatchViewModel({
     });
   }, [modulationBridge, selectedEnvelope, selectedEnvelopeSlot]);
   const handleAddRoute = reactExports.useCallback(() => {
-    modulationBridge.current?.addRoute();
+    const bridge = modulationBridge.current;
+    if (!bridge) return;
+    const route = createFirstAvailableModulationRoute(bridge.getState().routes);
+    if (route) bridge.addRoute(route);
   }, [modulationBridge]);
   const handleAddRouteWithOverrides = reactExports.useCallback((overrides) => {
     modulationBridge.current?.addRoute(createDefaultRoute(overrides));
@@ -20469,6 +21262,10 @@ function useSynthPatchViewModel({
     if (!bridge || !currentRoute) {
       return;
     }
+    if (Object.keys(update).length === 1 && typeof update.amount === "number") {
+      bridge.setRouteAmount(routeIndex, update.amount);
+      return;
+    }
     bridge.setRoute(routeIndex, { ...currentRoute, ...update });
   }, [modulationBridge]);
   const captureCurrentArticulationSnapshot = reactExports.useCallback(() => {
@@ -20476,8 +21273,6 @@ function useSynthPatchViewModel({
     return normalizeArticulationSnapshot({
       parameters: {
         wavetablePosition: wavetablePosition.value,
-        playMode: playMode.value,
-        glideTime: glideTime.value,
         pan: pan.value,
         warpMode: warpMode.value,
         warpAmount: warpAmount.value,
@@ -20495,21 +21290,7 @@ function useSynthPatchViewModel({
         unisonStackMode: unisonStackMode.value,
         unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
         unisonWarpSpread: unisonWarpSpread.value,
-        msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value],
-        distortionMode: distortionMode.value,
-        distortionDriveDb: distortionDriveDb.value,
-        distortionKnee: distortionKnee.value,
-        distortionWet: distortionWet.value,
-        distortionWetHPHz: distortionWetHPHz.value,
-        distortionWetLPHz: distortionWetLPHz.value,
-        chorusMix: chorusMix.value,
-        chorusMotionMode: chorusMotionMode.value,
-        chorusBloomMode: chorusBloomMode.value,
-        chorusTone: chorusTone.value,
-        chorusFeedback: chorusFeedback.value,
-        chorusRingAmount: chorusRingAmount.value,
-        chorusRingOffsetMode: chorusRingOffsetMode.value,
-        chorusRingFineSemitones: chorusRingFineSemitones.value
+        msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value]
       },
       envelopes: currentModulationState?.envelopeSlots ?? [0, 1, 2].map((slotIndex) => createDefaultEnvelope(slotIndex)),
       modRouteAmounts: (currentModulationState?.routes ?? []).map((route) => ({
@@ -20518,31 +21299,15 @@ function useSynthPatchViewModel({
       })).filter((routeAmount) => Math.abs(routeAmount.amount) > 1e-6)
     });
   }, [
-    chorusBloomMode.value,
-    chorusFeedback.value,
-    chorusMix.value,
-    chorusMotionMode.value,
-    chorusRingAmount.value,
-    chorusRingFineSemitones.value,
-    chorusRingOffsetMode.value,
-    chorusTone.value,
-    distortionDriveDb.value,
-    distortionKnee.value,
-    distortionMode.value,
-    distortionWet.value,
-    distortionWetHPHz.value,
-    distortionWetLPHz.value,
     filterCutoff.value,
     filterMode.value,
     filterQ.value,
-    glideTime.value,
     modulationBridge,
     modulationState,
     mseg1Morph.value,
     mseg2Morph.value,
     mseg3Morph.value,
     pan.value,
-    playMode.value,
     unisonBlend.value,
     unisonDetune.value,
     unisonDetuneMode.value,
@@ -20558,12 +21323,11 @@ function useSynthPatchViewModel({
     warpMode.value,
     wavetablePosition.value
   ]);
+  captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
   const applyArticulationSnapshot = reactExports.useCallback((snapshotValue) => {
     const snapshot = normalizeArticulationSnapshot(snapshotValue);
     const parameters = snapshot.parameters;
     wavetablePosition.setValue(parameters.wavetablePosition);
-    playMode.setValue(parameters.playMode);
-    glideTime.setValue(parameters.glideTime);
     pan.setValue(parameters.pan);
     warpMode.setValue(parameters.warpMode);
     warpAmount.setValue(parameters.warpAmount);
@@ -20584,20 +21348,6 @@ function useSynthPatchViewModel({
     mseg1Morph.setValue(parameters.msegMorphs[0]);
     mseg2Morph.setValue(parameters.msegMorphs[1]);
     mseg3Morph.setValue(parameters.msegMorphs[2]);
-    distortionMode.setValue(parameters.distortionMode);
-    distortionDriveDb.setValue(parameters.distortionDriveDb);
-    distortionKnee.setValue(parameters.distortionKnee);
-    distortionWet.setValue(parameters.distortionWet);
-    distortionWetHPHz.setValue(parameters.distortionWetHPHz);
-    distortionWetLPHz.setValue(parameters.distortionWetLPHz);
-    chorusMix.setValue(parameters.chorusMix);
-    chorusMotionMode.setValue(parameters.chorusMotionMode);
-    chorusBloomMode.setValue(parameters.chorusBloomMode);
-    chorusTone.setValue(parameters.chorusTone);
-    chorusFeedback.setValue(parameters.chorusFeedback);
-    chorusRingAmount.setValue(parameters.chorusRingAmount);
-    chorusRingOffsetMode.setValue(parameters.chorusRingOffsetMode);
-    chorusRingFineSemitones.setValue(parameters.chorusRingFineSemitones);
     const bridge = modulationBridge.current;
     bridge?.setMsegSlotMorph(0, parameters.msegMorphs[0]);
     bridge?.setMsegSlotMorph(1, parameters.msegMorphs[1]);
@@ -20629,31 +21379,15 @@ function useSynthPatchViewModel({
       bridge?.replaceRoutes(nextRoutes);
     }
   }, [
-    chorusBloomMode,
-    chorusFeedback,
-    chorusMix,
-    chorusMotionMode,
-    chorusRingAmount,
-    chorusRingFineSemitones,
-    chorusRingOffsetMode,
-    chorusTone,
-    distortionDriveDb,
-    distortionKnee,
-    distortionMode,
-    distortionWet,
-    distortionWetHPHz,
-    distortionWetLPHz,
     filterCutoff,
     filterMode,
     filterQ,
-    glideTime,
     modulationBridge,
     modulationState?.routes,
     mseg1Morph,
     mseg2Morph,
     mseg3Morph,
     pan,
-    playMode,
     unisonBlend,
     unisonDetune,
     unisonDetuneMode,
@@ -20707,7 +21441,7 @@ function useSynthPatchViewModel({
     setTimeout(() => {
       isApplyingArticulationRef.current = false;
     }, 0);
-    articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+    articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationEditorState({
       ...previousBank,
       selectedSlotId: slotId
     }));
@@ -20764,7 +21498,7 @@ function useSynthPatchViewModel({
     isApplyingArticulationRef.current = true;
     setDiscardedArticulationEdit(null);
     applyArticulationSnapshot(edit.snapshot);
-    articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+    articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationEditorState({
       ...previousBank,
       selectedSlotId: edit.slotId
     }));
@@ -20776,30 +21510,30 @@ function useSynthPatchViewModel({
   const handleSetArticulationTriggerMode = reactExports.useCallback((mode) => {
     articulationBankState.setAndPersistBank((previousBank) => setArticulationTriggerMode(previousBank, mode));
   }, [articulationBankState]);
-  const updateArticulationBankIfChanged = reactExports.useCallback((update) => {
+  const updateArticulationEditorStateIfChanged = reactExports.useCallback((update) => {
     const previousBank = articulationBankState.bankRef.current;
     const nextBank = update(previousBank);
-    if (articulationBanksEqual(previousBank, nextBank)) {
+    if (articulationEditorStatesEqual(previousBank, nextBank)) {
       return false;
     }
     articulationBankState.setAndPersistBank(nextBank);
     return true;
   }, [articulationBankState]);
   const handleAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId) => {
-    return updateArticulationBankIfChanged((previousBank) => assignArticulationToRangePosition(previousBank, mode, position, articulationId));
-  }, [updateArticulationBankIfChanged]);
+    return updateArticulationEditorStateIfChanged((previousBank) => assignArticulationToRangePosition(previousBank, mode, position, articulationId));
+  }, [updateArticulationEditorStateIfChanged]);
   const handleInsertArticulationRangeAtPosition = reactExports.useCallback((mode, position, articulationId, preserveSide) => {
-    return updateArticulationBankIfChanged((previousBank) => insertArticulationRangeAtPosition(previousBank, mode, position, articulationId, preserveSide));
-  }, [updateArticulationBankIfChanged]);
+    return updateArticulationEditorStateIfChanged((previousBank) => insertArticulationRangeAtPosition(previousBank, mode, position, articulationId, preserveSide));
+  }, [updateArticulationEditorStateIfChanged]);
   const handleDuplicateAndAssignArticulationRangePosition = reactExports.useCallback((mode, position, articulationId, operation) => {
     const previousBank = articulationBankState.bankRef.current;
     const duplicatedBank = duplicateArticulationSlot(previousBank, articulationId);
     const nextSlotId = duplicatedBank.selectedSlotId;
-    if (articulationBanksEqual(previousBank, duplicatedBank) || !nextSlotId) {
+    if (articulationEditorStatesEqual(previousBank, duplicatedBank) || !nextSlotId) {
       return false;
     }
     const assignedBank = operation === "insert" ? insertArticulationRangeAtPosition(duplicatedBank, mode, position, nextSlotId) : assignArticulationToRangePosition(duplicatedBank, mode, position, nextSlotId);
-    if (articulationBanksEqual(duplicatedBank, assignedBank)) {
+    if (articulationEditorStatesEqual(duplicatedBank, assignedBank)) {
       return false;
     }
     const nextSlot = assignedBank.slots.find((slot) => slot.id === nextSlotId);
@@ -20815,14 +21549,14 @@ function useSynthPatchViewModel({
     return true;
   }, [applyArticulationSnapshot, articulationBankState]);
   const handleMoveArticulationRangeAssignment = reactExports.useCallback((mode, segment, targetPosition) => {
-    return updateArticulationBankIfChanged((previousBank) => moveArticulationRangeAssignment(previousBank, mode, segment, targetPosition));
-  }, [updateArticulationBankIfChanged]);
+    return updateArticulationEditorStateIfChanged((previousBank) => moveArticulationRangeAssignment(previousBank, mode, segment, targetPosition));
+  }, [updateArticulationEditorStateIfChanged]);
   const handleResizeArticulationRangeAssignment = reactExports.useCallback((mode, segment, edge, position) => {
-    return updateArticulationBankIfChanged((previousBank) => resizeArticulationRangeAssignment(previousBank, mode, segment, edge, position));
-  }, [updateArticulationBankIfChanged]);
+    return updateArticulationEditorStateIfChanged((previousBank) => resizeArticulationRangeAssignment(previousBank, mode, segment, edge, position));
+  }, [updateArticulationEditorStateIfChanged]);
   const handleClearArticulationRangeAssignment = reactExports.useCallback((mode, segment) => {
-    return updateArticulationBankIfChanged((previousBank) => clearArticulationRangeAssignment(previousBank, mode, segment));
-  }, [updateArticulationBankIfChanged]);
+    return updateArticulationEditorStateIfChanged((previousBank) => clearArticulationRangeAssignment(previousBank, mode, segment));
+  }, [updateArticulationEditorStateIfChanged]);
   const handleClearArticulationTriggerAssignments = reactExports.useCallback((mode) => {
     articulationBankState.setAndPersistBank((previousBank) => clearArticulationTriggerAssignments(previousBank, mode));
   }, [articulationBankState]);
