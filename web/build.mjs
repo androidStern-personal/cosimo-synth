@@ -37,6 +37,7 @@ async function buildWebProof() {
 
     run("npm", ["run", "ui:desktop:build"]);
     run("npm", ["run", "ui:worker:build"]);
+    run("npm", ["run", "ui:worker:test:build"]);
     run("cmaj", [
         "generate",
         "--target=webaudio-html",
@@ -45,6 +46,10 @@ async function buildWebProof() {
     ]);
 
     await instrumentAudioWorklet();
+    await fs.copyFile(
+        path.join(repoRoot, "patch_gui", "wavetable-test-worker.js"),
+        path.join(outputDirectory, "patch_gui", "wavetable-test-worker.js"),
+    );
     await copyWebHostAssets({
         sourceDirectory: webDirectory,
         outputDirectory,

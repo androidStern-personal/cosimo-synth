@@ -19,6 +19,7 @@ from bench import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
+VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
 DISTORTION_SOURCE = REPO_ROOT / "cmajor" / "Distortion.cmajor"
 WAVETABLE_SYNTH_SOURCE = REPO_ROOT / "cmajor" / "WavetableSynth.cmajor"
 OSCILLATOR_MIP_COUNT = 11
@@ -157,20 +158,25 @@ def _build_stereo_splitter_source() -> str:
     )
 
 
-def _build_distortion_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
-    wavetable_support_source = WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8").split(
-        "graph WavetableSynth [[ main ]]",
+def _wavetable_stereo_trim_source() -> str:
+    stereo_trim_source = WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8").split(
+        "    processor StereoTrim",
         maxsplit=1,
-    )[0]
+    )[1].split("    processor StereoToMonoAverage", maxsplit=1)[0]
+    return "namespace wt\n{\n    processor StereoTrim" + stereo_trim_source + "}\n"
 
+
+def _build_distortion_probe_source(scheduled_events: list[tuple[int, str]]) -> str:
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
+        + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
+        + "\n"
         + DISTORTION_SOURCE.read_text(encoding="utf-8")
         + "\n"
-        + wavetable_support_source
+        + _wavetable_stereo_trim_source()
         + "\n"
         + _build_runtime_session_adapter_source()
         + _build_stereo_splitter_source()

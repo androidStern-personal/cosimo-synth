@@ -92,6 +92,10 @@ function makeMinimalSlot(index) {
     };
 }
 
+function storedRouteIds(state) {
+    return new Set(state.slots.flatMap((slot) => Object.keys(slot.routeAmounts)));
+}
+
 function applyBaseChange(base, change, newValue) {
     if (change.kind === "voiceParameter") {
         return { ...base, parameters: { ...base.parameters, [change.parameterId]: newValue } };
@@ -120,7 +124,10 @@ test("serialize→parse roundtrips arbitrary banks unchanged", async () => {
     const { image, arb } = await modules();
     fc.assert(
         fc.property(arb.articulationsStateArbitrary(fc), (state) => {
-            const parsed = expectOk(image.parseArticulationsV3(image.serializeArticulationsV3(state)), "roundtrip");
+            const parsed = expectOk(
+                image.parseArticulationsV3(image.serializeArticulationsV3(state), storedRouteIds(state)),
+                "roundtrip",
+            );
             assert.deepEqual(parsed, state);
         }),
     );
@@ -131,13 +138,13 @@ test("serialized banks survive actual JSON encoding", async () => {
     fc.assert(
         fc.property(arb.articulationsStateArbitrary(fc), (state) => {
             const viaJson = JSON.parse(JSON.stringify(image.serializeArticulationsV3(state)));
-            const parsed = expectOk(image.parseArticulationsV3(viaJson), "json roundtrip");
+            const parsed = expectOk(image.parseArticulationsV3(viaJson, storedRouteIds(state)), "json roundtrip");
             assert.deepEqual(parsed, state);
         }),
     );
 });
 
-test("a legacy v2 payload is rejected with the dedicated hard-cut reason", async () => {
+test("a v2 payload is just a malformed current-schema document", async () => {
     const { image } = await modules();
     const v2Payload = {
         format: "cosimo.articulations",
@@ -149,9 +156,9 @@ test("a legacy v2 payload is rejected with the dedicated hard-cut reason", async
         keyAssignments: [],
         velocityAssignments: [],
     };
-    const error = expectErr(image.parseArticulationsV3(v2Payload), "v2 payload");
+    const error = expectErr(image.parseArticulationsV3(v2Payload, new Set()), "v2 payload");
     assert.equal(error._tag, "ArticulationsParseError");
-    assert.equal(error.reason, "legacy-v2-rejected");
+    assert.equal(error.reason, "malformed");
 });
 
 test("malformed payloads are rejected, never repaired", async () => {
@@ -181,12 +188,38 @@ test("malformed payloads are rejected, never repaired", async () => {
         ["selected id not in bank", { ...base(), selectedSlotId: "ghost" }],
         ["bad trigger mode", { ...base(), activeTriggerMode: "hold" }],
         ["route amount not a number", { ...base(), slots: [{ ...makeMinimalSlot(0), routeAmounts: { "route-a": "loud" } }] }],
+        ["current route amount above the articulation domain", {
+            ...base(),
+            slots: [{ ...makeMinimalSlot(0), routeAmounts: { "route-a": 360 } }],
+        }],
+        ["route amount cannot impersonate the runtime inherit sentinel", {
+            ...base(),
+            slots: [{ ...makeMinimalSlot(0), routeAmounts: { "route-a": 1_000_000 } }],
+        }],
     ];
 
     for (const [label, payload] of cases) {
-        const error = expectErr(image.parseArticulationsV3(payload), label);
+        const error = expectErr(image.parseArticulationsV3(payload, new Set(["route-a"])), label);
         assert.equal(error.reason, "malformed", `${label}: expected malformed, got ${error.reason}`);
     }
+});
+
+test("a finite phantom route amount rejects the complete current document", async () => {
+    const { image } = await modules();
+    const payload = {
+        format: "cosimo.articulations",
+        version: 3,
+        selectedSlotId: "slot-0",
+        activeTriggerMode: "chain",
+        slots: [{
+            ...makeMinimalSlot(0),
+            routeAmounts: { "unknown-route": 0.5 },
+        }],
+    };
+
+    const error = expectErr(image.parseArticulationsV3(payload, new Set(["current-route"])), "phantom route");
+    assert.equal(error.reason, "malformed");
+    assert.match(error.detail, /unknown-route.*current articulable mapping/);
 });
 
 test("the empty bank is valid and roundtrips", async () => {
@@ -194,11 +227,11 @@ test("the empty bank is valid and roundtrips", async () => {
     const empty = image.createEmptyArticulationsState();
     assert.equal(empty.slots.length, 0);
     assert.equal(empty.selectedSlotId, null);
-    const parsed = expectOk(image.parseArticulationsV3(image.serializeArticulationsV3(empty)), "empty roundtrip");
+    const parsed = expectOk(image.parseArticulationsV3(image.serializeArticulationsV3(empty), new Set()), "empty roundtrip");
     assert.deepEqual(parsed, empty);
 });
 
-test("resolution: every image field is override-if-present else base", async () => {
+test("resolution: scalar fields are complete while route amounts stay sparse until note latch", async () => {
     const { image, arb } = await modules();
     const table = imageAccessorTable();
     fc.assert(
@@ -224,15 +257,24 @@ test("resolution: every image field is override-if-present else base", async () 
                             `${slot.id}: ${parameterId}`,
                         );
                     }
-                    assert.equal(resolved.routeAmounts.length, image.MODULATION_MAX_ROUTES);
-                    base.routeOrder.forEach((routeId, routeIndex) => {
+                    assert.equal(resolved.routeAmounts.length, image.MODULATION_ARTICULATION_ROUTE_CELL_COUNT);
+                    const assignedCells = new Set();
+                    base.routeOrder.forEach((routeId) => {
+                        const cellIndex = base.routeCells[routeId];
+                        assignedCells.add(cellIndex);
                         const expected = Object.hasOwn(slot.routeAmounts, routeId)
                             ? slot.routeAmounts[routeId]
-                            : base.routeAmounts[routeId] ?? 0;
-                        assert.equal(resolved.routeAmounts[routeIndex], expected, `${slot.id}: route ${routeId}`);
+                            : image.ARTICULATION_ROUTE_AMOUNT_INHERIT;
+                        assert.equal(resolved.routeAmounts[cellIndex], expected, `${slot.id}: route ${routeId}`);
                     });
-                    for (let padIndex = base.routeOrder.length; padIndex < image.MODULATION_MAX_ROUTES; padIndex += 1) {
-                        assert.equal(resolved.routeAmounts[padIndex], 0, `${slot.id}: pad ${padIndex}`);
+                    for (let cellIndex = 0; cellIndex < image.MODULATION_ARTICULATION_ROUTE_CELL_COUNT; cellIndex += 1) {
+                        if (!assignedCells.has(cellIndex)) {
+                            assert.equal(
+                                resolved.routeAmounts[cellIndex],
+                                image.ARTICULATION_ROUTE_AMOUNT_INHERIT,
+                                `${slot.id}: empty cell ${cellIndex}`,
+                            );
+                        }
                     }
                 });
             },
@@ -275,9 +317,7 @@ test("affectedSelectors matches its specification exactly", async () => {
                         .filter((slot) => !Object.hasOwn(slot.overrides, change.parameterId))
                         .map((slot) => slot.runtimeSlot);
                 } else if (change.kind === "routeAmount") {
-                    expected = state.slots
-                        .filter((slot) => !Object.hasOwn(slot.routeAmounts, change.routeId))
-                        .map((slot) => slot.runtimeSlot);
+                    expected = [];
                 } else {
                     expected = state.slots.map((slot) => slot.runtimeSlot);
                 }

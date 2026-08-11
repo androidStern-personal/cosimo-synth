@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import runWavetableWorker, { createWavetableWorkerController } from "../patch_gui/wavetable-worker.js";
+import runWavetableWorker, {
+    WAVETABLE_RUNTIME_STATE_SYNC_SERIAL,
+    createWavetableWorkerController,
+} from "../patch_gui/wavetable-worker.js";
 import {
     MODULATION_STATE_KEY,
     createDefaultModulationState,
@@ -224,7 +227,11 @@ class FakeWorkerPatchConnection {
         this.endpointListeners = new Map();
         this.storedStateListeners = new Set();
         this.sentEvents = [];
+        this.sentTimeouts = [];
         this.storedWrites = [];
+        this.acceptedModulationSerial = 0;
+        this.acceptedArticulationSerial = 0;
+        this.rejectionsRemainingByEndpoint = new Map();
     }
 
     addEndpointListener(endpointID, listener) {
@@ -257,16 +264,66 @@ class FakeWorkerPatchConnection {
         this.storedWrites.push({ key, value });
     }
 
-    sendEventOrValue(endpointID, value) {
+    rejectNext(endpointID, count = 1) {
+        this.rejectionsRemainingByEndpoint.set(endpointID, Math.max(0, Math.trunc(count)));
+    }
+
+    emitStoredStateValue(key, value) {
+        this.storedState[key] = value;
+        for (const listener of this.storedStateListeners) {
+            listener({ key, value });
+        }
+    }
+
+    sendEventOrValue(endpointID, value, _rampFrames, timeoutMilliseconds) {
         this.sentEvents.push({ endpointID, value });
+        this.sentTimeouts.push({ endpointID, timeoutMilliseconds });
 
         if (endpointID === "runtimeSyncRequest") {
             queueMicrotask(() => {
                 this.emitEndpoint("runtimeState", {
                     dspSessionId: 0,
                 });
+                this.emitRuntimeInstallAck(value);
             });
+            return;
         }
+
+        const deliverySerial = Math.trunc(Number(value?.deliverySerial) || 0);
+        const rejectionsRemaining = this.rejectionsRemainingByEndpoint.get(endpointID) ?? 0;
+        if (deliverySerial > 0 && rejectionsRemaining > 0) {
+            assert.equal(deliverySerial, this.acceptedModulationSerial + 1);
+            this.rejectionsRemainingByEndpoint.set(endpointID, rejectionsRemaining - 1);
+            queueMicrotask(() => this.emitEndpoint("runtimeInstallAck", {
+                dspSessionId: 0,
+                acceptedModulationSerial: this.acceptedModulationSerial,
+                acceptedArticulationSerial: this.acceptedArticulationSerial,
+                rejectedSerial: deliverySerial,
+                rejectionReason: 3,
+                syncSerial: 0,
+            }));
+            return;
+        }
+        if (deliverySerial > 0) {
+            assert.equal(deliverySerial, this.acceptedModulationSerial + 1);
+            this.acceptedModulationSerial = deliverySerial;
+            queueMicrotask(() => this.emitRuntimeInstallAck(0));
+        } else if (deliverySerial < 0) {
+            assert.equal(deliverySerial, this.acceptedArticulationSerial - 1);
+            this.acceptedArticulationSerial = deliverySerial;
+            queueMicrotask(() => this.emitRuntimeInstallAck(0));
+        }
+    }
+
+    emitRuntimeInstallAck(syncSerial = 0) {
+        this.emitEndpoint("runtimeInstallAck", {
+            dspSessionId: 0,
+            acceptedModulationSerial: this.acceptedModulationSerial,
+            acceptedArticulationSerial: this.acceptedArticulationSerial,
+            rejectedSerial: 0,
+            rejectionReason: 0,
+            syncSerial,
+        });
     }
 
     emitEndpoint(endpointID, payload) {
@@ -322,17 +379,30 @@ async function withPatchedFetch(fakeFetch, callback) {
     }
 }
 
-test("default worker starts the modulation stored-state mirror without writing stored state", async () => {
+test("headless worker restore installs 101 stored mappings without opening an editor", async () => {
     const modulationState = createDefaultModulationState();
-    modulationState.routes = [{
-        id: "worker-route",
-        enabled: true,
-        sourceKind: "env",
-        sourceSlot: 3,
-        polarity: "unipolar",
-        targetKind: "filterCutoffOctaves",
-        amount: 4,
-    }];
+    const sources = [
+        ["mseg", 1], ["mseg", 2], ["mseg", 3],
+        ["env", 1], ["env", 2], ["env", 3],
+        ["velocity", null], ["pressure", null], ["slide", null],
+    ];
+    const targets = [
+        "wavetablePosition", "warpAmount", "filterCutoffOctaves", "filterQ",
+        "pitchSemitones", "ampGainDb", "pan", "unisonDetune", "unisonBlend",
+        "unisonWidth", "unisonWavetablePositionSpread", "unisonWarpSpread",
+    ];
+    modulationState.routes = sources.flatMap(([sourceKind, sourceSlot]) => (
+        targets.map((targetKind) => ({
+            id: `${targetKind}::${sourceKind}-${sourceSlot ?? "fixed"}`,
+            enabled: true,
+            sourceKind,
+            sourceSlot,
+            polarity: "unipolar",
+            targetKind,
+            amount: 0.5,
+            reducer: "max",
+        }))
+    )).slice(0, 101);
 
     const connection = new FakeWorkerPatchConnection({
         [MODULATION_STATE_KEY]: serializeModulationState(modulationState),
@@ -341,29 +411,188 @@ test("default worker starts the modulation stored-state mirror without writing s
         logger: () => {},
         maxFramesInFlight: 1,
     });
-    await flushMicrotasks();
+    await flushMicrotasks(512);
 
     try {
-        const firstRouteUpload = connection.sentEvents.find(({ endpointID, value }) => (
-            endpointID === "modulationRoute" && value.routeIndex === 0
-        ));
+        const programUpload = connection.sentEvents.find(({ endpointID }) => endpointID === "modulationProgram");
 
-        assert.deepEqual(firstRouteUpload, {
-            endpointID: "modulationRoute",
-            value: {
-                routeIndex: 0,
-                enabled: true,
-                sourceKind: 2,
-                sourceSlot: 3,
-                polarityKind: 0,
-                targetKind: 3,
-                amount: 4,
-            },
-        });
+        assert.equal(programUpload.value.voiceRouteCount, 101);
+        assert.equal(new Set(programUpload.value.voiceRouteCells.slice(0, 101)).size, 101);
+        assert.deepEqual(programUpload.value.voiceRouteCells.slice(0, 4), [0, 1, 2, 3]);
+        assert.equal(programUpload.value.voiceRouteAmounts[100], 0.5);
+        assert.equal(programUpload.value.dspSessionId, 0);
+        assert.ok(programUpload.value.deliverySerial > 0);
         assert.equal(connection.sentEvents.some(({ endpointID }) => endpointID === "runtimeSyncRequest"), true);
+        assert.ok(
+            connection.sentEvents.findIndex(({ endpointID }) => endpointID === "runtimeSyncRequest")
+                < connection.sentEvents.findIndex(({ endpointID }) => endpointID === "modulationProgram"),
+            "stored modulation waits for a DSP session and acknowledged frontier",
+        );
+        assert.equal(connection.sentTimeouts.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        ).every(({ timeoutMilliseconds }) => timeoutMilliseconds === 0), true);
+
+        connection.emitEndpoint("modulationRejectedRouteCount", 1);
+        connection.emitEndpoint("modulationRejectedRouteCount", 2);
+        await flushMicrotasks(32);
+        assert.equal(
+            connection.sentEvents.filter(({ endpointID }) => endpointID === "modulationProgram").length,
+            1,
+            "the unscoped legacy diagnostic cannot drive session-unsafe retries",
+        );
         assert.deepEqual(connection.storedWrites, []);
     } finally {
         await host.stop();
+    }
+});
+
+test("headless worker rejects malformed modulation state without installing defaults or replacing the last valid program", async () => {
+    const malformedConnection = new FakeWorkerPatchConnection({
+        [MODULATION_STATE_KEY]: JSON.stringify({ format: "legacy", routes: [] }),
+    });
+    const malformedHost = await runWavetableWorker(malformedConnection, {
+        logger: () => {},
+        maxFramesInFlight: 1,
+    });
+    await flushMicrotasks(256);
+
+    try {
+        assert.equal(
+            malformedConnection.sentEvents.some(({ endpointID }) => endpointID === "modulationProgram"),
+            false,
+            "invalid stored state must not become the default two-route program",
+        );
+    } finally {
+        await malformedHost.stop();
+    }
+
+    const validState = createDefaultModulationState();
+    validState.routes = [validState.routes[0]];
+    const connection = new FakeWorkerPatchConnection({
+        [MODULATION_STATE_KEY]: serializeModulationState(validState),
+    });
+    const host = await runWavetableWorker(connection, {
+        logger: () => {},
+        maxFramesInFlight: 1,
+    });
+    await flushMicrotasks(256);
+
+    try {
+        const installedPrograms = () => connection.sentEvents.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        );
+        assert.equal(installedPrograms().length, 1);
+        assert.equal(installedPrograms()[0].value.voiceRouteCount, 1);
+
+        const duplicateState = structuredClone(validState);
+        duplicateState.routes.push({
+            ...duplicateState.routes[0],
+            id: "duplicate-cell",
+        });
+        connection.emitStoredStateValue(MODULATION_STATE_KEY, JSON.stringify(duplicateState));
+        await flushMicrotasks(256);
+
+        assert.equal(installedPrograms().length, 1, "invalid live state retains the installed program");
+    } finally {
+        await host.stop();
+    }
+});
+
+test("a rejected modulation batch gets one guarded full-state recovery", async () => {
+    const initialState = createDefaultModulationState();
+    const connection = new FakeWorkerPatchConnection({
+        [MODULATION_STATE_KEY]: serializeModulationState(initialState),
+    });
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    const host = await runWavetableWorker(connection, {
+        logger: () => {},
+        maxFramesInFlight: 1,
+    });
+    await flushMicrotasks(512);
+
+    try {
+        const initialProgramCount = connection.sentEvents.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        ).length;
+        const nextState = structuredClone(initialState);
+        nextState.msegSlots[0].shapeA.points[1].y = 0.75;
+        nextState.routes[0].polarity = "bipolar";
+
+        connection.rejectNext("modulationProgram");
+        connection.emitStoredStateValue(MODULATION_STATE_KEY, serializeModulationState(nextState));
+        await flushMicrotasks(512);
+
+        assert.equal(connection.sentEvents.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        ).length, initialProgramCount + 1, "the edited batch reaches its rejected program once");
+
+        await new Promise((resolve) => setTimeout(resolve, 1_100));
+        await flushMicrotasks(1_024);
+
+        const programs = connection.sentEvents.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        );
+        assert.equal(programs.length, initialProgramCount + 2, "one full replay repairs the accepted prefix");
+        assert.equal(programs.at(-1).value.voiceRoutePolarities[0], 1);
+        assert.equal(connection.rejectionsRemainingByEndpoint.get("modulationProgram"), 0);
+    } finally {
+        await host.stop();
+        console.error = originalConsoleError;
+    }
+});
+
+test("a repeatedly rejected modulation image does not enter a recovery loop", async () => {
+    const initialState = createDefaultModulationState();
+    const connection = new FakeWorkerPatchConnection({
+        [MODULATION_STATE_KEY]: serializeModulationState(initialState),
+    });
+    const originalConsoleError = console.error;
+    console.error = () => {};
+    const host = await runWavetableWorker(connection, {
+        logger: () => {},
+        maxFramesInFlight: 1,
+    });
+    await flushMicrotasks(512);
+
+    try {
+        const initialProgramCount = connection.sentEvents.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        ).length;
+        const nextState = structuredClone(initialState);
+        nextState.routes[0].polarity = "bipolar";
+
+        connection.rejectNext("modulationProgram", 2);
+        connection.emitStoredStateValue(MODULATION_STATE_KEY, serializeModulationState(nextState));
+        await flushMicrotasks(512);
+        await new Promise((resolve) => setTimeout(resolve, 2_200));
+        await flushMicrotasks(1_024);
+
+        assert.equal(connection.sentEvents.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        ).length, initialProgramCount + 2, "the original rejection gets at most one full replay");
+        assert.equal(connection.rejectionsRemainingByEndpoint.get("modulationProgram"), 0);
+
+        const distinctState = structuredClone(nextState);
+        distinctState.routes[0].targetKind = "warpAmount";
+        connection.rejectNext("modulationProgram");
+        connection.emitStoredStateValue(MODULATION_STATE_KEY, serializeModulationState(distinctState));
+        await flushMicrotasks(512);
+        assert.equal(connection.sentEvents.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        ).length, initialProgramCount + 3, "a distinct program gets its own first attempt");
+
+        await new Promise((resolve) => setTimeout(resolve, 1_100));
+        await flushMicrotasks(1_024);
+
+        const programs = connection.sentEvents.filter(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        );
+        assert.equal(programs.length, initialProgramCount + 4, "a distinct rejection gets one full replay");
+        assert.equal(programs.at(-1).value.voiceRouteCells[0], 1);
+    } finally {
+        await host.stop();
+        console.error = originalConsoleError;
     }
 });
 
@@ -380,7 +609,7 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
 
     assert.deepEqual(
         connection.sentEvents.filter(({ endpointID }) => endpointID === "runtimeSyncRequest").map(({ value }) => value),
-        [1]
+        [WAVETABLE_RUNTIME_STATE_SYNC_SERIAL]
     );
     assert.deepEqual(connection.requestedParameters, []);
 

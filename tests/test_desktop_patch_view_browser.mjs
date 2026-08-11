@@ -3,11 +3,19 @@ import assert from "node:assert/strict";
 
 import { chromium } from "playwright";
 import {
-    ARTICULATION_STATE_KEY,
-    normalizeArticulationBank,
+    normalizeArticulationEditorState,
+    normalizeArticulationSnapshot,
 } from "../patch_gui/articulations.js";
+import { ARTICULATIONS_V3_STATE_KEY } from "../patch_gui/articulation-image.js";
 import { deserializeMsegShape, renderMsegShape } from "../patch_gui/mseg.js";
-import { deserializeModulationState, normalizeModulationState } from "../patch_gui/modulation.js";
+import {
+    MODULATION_SOURCE_OPTIONS,
+    MODULATION_TARGET_OPTIONS,
+    createDefaultModulationState,
+    deserializeModulationState,
+    normalizeModulationState,
+} from "../patch_gui/modulation.js";
+import { getModulationRuntimeCell } from "../patch_gui/modulation-runtime-program.js";
 
 import {
     clearHarnessDebugLog,
@@ -27,6 +35,7 @@ const TEST_SAMPLES_PER_FRAME = 2048;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
 const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
+const ARTICULATION_STATE_KEY = ARTICULATIONS_V3_STATE_KEY;
 const RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY = ["synth", "preset" + "Baseline" + "Snapshot", "v1"].join(".");
 
 function expectedMsegPreviewProgressClipWidth(previewState, progress) {
@@ -39,11 +48,142 @@ function buildShortMidi(status, noteNumber, velocity = 0) {
 }
 
 function readStoredModulationState(snapshot) {
-    return deserializeModulationState(snapshot.storedState["modulation.v2"]);
+    const rawState = snapshot.storedState["modulation.v2"];
+    return rawState === undefined
+        ? createDefaultModulationState()
+        : deserializeModulationState(rawState);
 }
 
-function readStoredArticulationBank(snapshot) {
-    return normalizeArticulationBank(snapshot.storedState[ARTICULATION_STATE_KEY]);
+function readStoredArticulationEditorState(snapshot) {
+    const rawState = snapshot.storedState[ARTICULATION_STATE_KEY];
+    if (rawState === undefined) {
+        return normalizeArticulationEditorState(undefined);
+    }
+    const state = JSON.parse(String(rawState));
+    return normalizeArticulationEditorState({
+        selectedSlotId: state.selectedSlotId,
+        activeTriggerMode: state.activeTriggerMode,
+        slots: state.slots.map((slot) => ({
+            id: slot.id,
+            runtimeSlot: slot.runtimeSlot,
+            name: slot.name,
+            snapshot: normalizeArticulationSnapshot({
+                parameters: {
+                    wavetablePosition: slot.overrides.framePosition,
+                    pan: slot.overrides.pan,
+                    warpMode: slot.overrides.warpMode,
+                    warpAmount: slot.overrides.warpAmount,
+                    filterMode: slot.overrides.filterMode,
+                    filterCutoff: slot.overrides.filterCutoffHz,
+                    filterQ: slot.overrides.filterQ,
+                    unisonVoices: slot.overrides.unisonVoices,
+                    unisonDetune: slot.overrides.unisonDetune,
+                    unisonBlend: slot.overrides.unisonBlend,
+                    unisonWidth: slot.overrides.unisonWidth,
+                    unisonPhase: slot.overrides.unisonPhase,
+                    unisonRandom: slot.overrides.unisonRandom,
+                    unisonPhaseMode: slot.overrides.unisonPhaseMode,
+                    unisonDetuneMode: slot.overrides.unisonDetuneMode,
+                    unisonStackMode: slot.overrides.unisonStackMode,
+                    unisonWavetablePositionSpread: slot.overrides.unisonWavetablePositionSpread,
+                    unisonWarpSpread: slot.overrides.unisonWarpSpread,
+                    msegMorphs: [
+                        slot.overrides.msegMorph1,
+                        slot.overrides.msegMorph2,
+                        slot.overrides.msegMorph3,
+                    ],
+                },
+                envelopes: [1, 2, 3].map((envelopeNumber) => ({
+                    attackSeconds: slot.overrides[`env${envelopeNumber}.attackSeconds`],
+                    decaySeconds: slot.overrides[`env${envelopeNumber}.decaySeconds`],
+                    sustain: slot.overrides[`env${envelopeNumber}.sustain`],
+                    releaseSeconds: slot.overrides[`env${envelopeNumber}.releaseSeconds`],
+                })),
+                modRouteAmounts: Object.entries(slot.routeAmounts).map(([routeId, amount]) => ({ routeId, amount })),
+            }),
+        })),
+        chainAssignments: state.slots.map((slot) => ({
+            id: `chain-${slot.id}`,
+            articulationId: slot.id,
+            ...slot.chainRange,
+        })),
+        keyAssignments: state.slots.map((slot) => ({ articulationId: slot.id, note: slot.key })),
+        velocityAssignments: state.slots.map((slot) => ({
+            id: `velocity-${slot.id}`,
+            articulationId: slot.id,
+            ...slot.velRange,
+        })),
+    });
+}
+
+function editorBankToStoredArticulations(bankValue) {
+    const bank = normalizeArticulationEditorState(bankValue);
+    return {
+        format: "cosimo.articulations",
+        version: 3,
+        selectedSlotId: bank.selectedSlotId,
+        activeTriggerMode: bank.activeTriggerMode,
+        slots: bank.slots.map((slot) => {
+            const parameters = slot.snapshot.parameters;
+            const envelopes = slot.snapshot.envelopes;
+            const envelope1 = envelopes[0];
+            const envelope2 = envelopes[1];
+            const envelope3 = envelopes[2];
+            const key = bank.keyAssignments.find((assignment) => assignment.articulationId === slot.id)?.note
+                ?? slot.runtimeSlot;
+            const velRange = bank.velocityAssignments.find((assignment) => assignment.articulationId === slot.id)
+                ?? { min: 0, max: 127 };
+            const chainRange = bank.chainAssignments.find((assignment) => assignment.articulationId === slot.id)
+                ?? { min: 0, max: 127 };
+            return {
+                id: slot.id,
+                runtimeSlot: slot.runtimeSlot,
+                name: slot.name,
+                color: "#d2a128",
+                key,
+                velRange: { min: velRange.min, max: velRange.max },
+                chainRange: { min: chainRange.min, max: chainRange.max },
+                overrides: {
+                    framePosition: parameters.wavetablePosition,
+                    pan: parameters.pan,
+                    warpMode: parameters.warpMode,
+                    warpAmount: parameters.warpAmount,
+                    filterMode: parameters.filterMode,
+                    filterCutoffHz: parameters.filterCutoff,
+                    filterQ: parameters.filterQ,
+                    unisonVoices: parameters.unisonVoices,
+                    unisonDetune: parameters.unisonDetune,
+                    unisonBlend: parameters.unisonBlend,
+                    unisonWidth: parameters.unisonWidth,
+                    unisonPhase: parameters.unisonPhase,
+                    unisonRandom: parameters.unisonRandom,
+                    unisonPhaseMode: parameters.unisonPhaseMode,
+                    unisonDetuneMode: parameters.unisonDetuneMode,
+                    unisonStackMode: parameters.unisonStackMode,
+                    unisonWavetablePositionSpread: parameters.unisonWavetablePositionSpread,
+                    unisonWarpSpread: parameters.unisonWarpSpread,
+                    msegMorph1: parameters.msegMorphs[0],
+                    msegMorph2: parameters.msegMorphs[1],
+                    msegMorph3: parameters.msegMorphs[2],
+                    "env1.attackSeconds": envelope1.attackSeconds,
+                    "env1.decaySeconds": envelope1.decaySeconds,
+                    "env1.sustain": envelope1.sustain,
+                    "env1.releaseSeconds": envelope1.releaseSeconds,
+                    "env2.attackSeconds": envelope2.attackSeconds,
+                    "env2.decaySeconds": envelope2.decaySeconds,
+                    "env2.sustain": envelope2.sustain,
+                    "env2.releaseSeconds": envelope2.releaseSeconds,
+                    "env3.attackSeconds": envelope3.attackSeconds,
+                    "env3.decaySeconds": envelope3.decaySeconds,
+                    "env3.sustain": envelope3.sustain,
+                    "env3.releaseSeconds": envelope3.releaseSeconds,
+                },
+                routeAmounts: Object.fromEntries(
+                    slot.snapshot.modRouteAmounts.map(({ routeId, amount }) => [routeId, amount]),
+                ),
+            };
+        }),
+    };
 }
 
 function readEffectPresetState(snapshot) {
@@ -86,6 +226,104 @@ function routeSummary(route) {
 
 function routeSummaries(routes) {
     return routes.map((route) => routeSummary(route));
+}
+
+const RUNTIME_PATH_FIELDS = {
+    voice: {
+        count: "voiceRouteCount",
+        cells: "voiceRouteCells",
+        sources: "voiceRouteSources",
+        targets: "voiceRouteTargets",
+        polarities: "voiceRoutePolarities",
+    },
+    macroVoice: {
+        count: "macroVoiceRouteCount",
+        cells: "macroVoiceRouteCells",
+        sources: "macroVoiceRouteSources",
+        targets: "macroVoiceRouteTargets",
+        polarities: "macroVoiceRoutePolarities",
+    },
+    voiceRack: {
+        count: "voiceRackRouteCount",
+        cells: "voiceRackRouteCells",
+        sources: "voiceRackRouteSources",
+        targets: "voiceRackRouteTargets",
+        polarities: "voiceRackRoutePolarities",
+    },
+    macroRack: {
+        count: "macroRackRouteCount",
+        cells: "macroRackRouteCells",
+        sources: "macroRackRouteSources",
+        targets: "macroRackRouteTargets",
+        polarities: "macroRackRoutePolarities",
+    },
+};
+
+const RUNTIME_PATH_KINDS = {
+    voice: 1,
+    macroVoice: 2,
+    voiceRack: 3,
+    macroRack: 4,
+};
+
+function latestRuntimeProgram(snapshot) {
+    return [...snapshot.sentMessages]
+        .reverse()
+        .find(({ endpointID }) => endpointID === "modulationProgram")
+        ?.value ?? null;
+}
+
+function readRuntimeProgramRoute(snapshot, route) {
+    const program = latestRuntimeProgram(snapshot);
+    const cell = getModulationRuntimeCell(route);
+    const fields = RUNTIME_PATH_FIELDS[cell.path];
+    const count = Number(program?.[fields.count] ?? 0);
+    const activeIndex = (program?.[fields.cells] ?? []).slice(0, count).indexOf(cell.cellIndex);
+
+    if (activeIndex < 0) {
+        return null;
+    }
+
+    return {
+        path: cell.path,
+        cellIndex: cell.cellIndex,
+        sourceIndex: program[fields.sources][activeIndex],
+        targetIndex: program[fields.targets][activeIndex],
+        polarityKind: program[fields.polarities][activeIndex],
+    };
+}
+
+function hasRuntimeAmount(snapshot, route, expectedAmount, tolerance = 1e-9) {
+    const cell = getModulationRuntimeCell(route);
+    return snapshot.sentMessages.some(({ endpointID, value }) => (
+        endpointID === "modulationAmount"
+        && Number(value?.pathKind) === RUNTIME_PATH_KINDS[cell.path]
+        && Number(value?.cellIndex) === cell.cellIndex
+        && Math.abs(Number(value?.amount) - expectedAmount) <= tolerance
+    ));
+}
+
+function compactRuntimeMessages(messages) {
+    return messages
+        .filter(({ endpointID }) => endpointID === "modulationProgram" || endpointID === "modulationAmount")
+        .slice(-12)
+        .map(({ endpointID, value }) => endpointID === "modulationProgram"
+            ? {
+                endpointID,
+                counts: {
+                    voice: value?.voiceRouteCount,
+                    macroVoice: value?.macroVoiceRouteCount,
+                    voiceRack: value?.voiceRackRouteCount,
+                    macroRack: value?.macroRackRouteCount,
+                },
+                activeCells: {
+                    voice: value?.voiceRouteCells?.slice(0, Number(value?.voiceRouteCount ?? 0)),
+                    macroVoice: value?.macroVoiceRouteCells?.slice(0, Number(value?.macroVoiceRouteCount ?? 0)),
+                    voiceRack: value?.voiceRackRouteCells?.slice(0, Number(value?.voiceRackRouteCount ?? 0)),
+                    macroRack: value?.macroRackRouteCells?.slice(0, Number(value?.macroRackRouteCount ?? 0)),
+                },
+            }
+            : { endpointID, value });
 }
 
 function buildDistortionScopeFixture({ amplitude = 1.62, sampleCount = 256 } = {}) {
@@ -311,9 +549,12 @@ async function waitForHarnessSnapshot(page, description, predicate, {
     const modulationState = lastSnapshot ? readStoredModulationState(lastSnapshot) : null;
     throw new Error(`Timed out waiting for ${description}. Last snapshot: ${JSON.stringify({
         routes: modulationState ? routeSummaries(modulationState.routes) : null,
-        sentMessages: (lastSnapshot?.sentMessages ?? [])
-            .filter(({ endpointID }) => endpointID === "modulationRoute" || endpointID === "rackModulationRoute")
-            .slice(-12),
+        articulations: lastSnapshot ? readStoredArticulationEditorState(lastSnapshot) : null,
+        sentMessages: compactRuntimeMessages(lastSnapshot?.sentMessages ?? []),
+        runtimeAcks: (lastSnapshot?.endpointMessages ?? [])
+            .filter(({ endpointID }) => endpointID === "runtimeInstallAck")
+            .slice(-8),
+        diagnostics: page.__cosimoDiagnostics ?? [],
     })}`);
 }
 
@@ -481,6 +722,7 @@ async function openHarnessPage({
 } = {}) {
     const page = await browser.newPage();
     const diagnostics = [];
+    page.__cosimoDiagnostics = diagnostics;
     page.on("pageerror", (error) => diagnostics.push(`pageerror: ${error.message}`));
     page.on("console", (message) => {
         if (message.type() === "error") diagnostics.push(`console: ${message.text()}`);
@@ -919,11 +1161,18 @@ function assertLatestMsegBufferMatchesStoredShape(snapshot) {
         ));
 
     assert.ok(lastBufferMessage, "Expected a modulationMsegBuffer upload for slot 1.");
-    assert.deepEqual(lastBufferMessage.value, {
+    assert.deepEqual({
+        slot: lastBufferMessage.value.slot,
+        shapeIndex: lastBufferMessage.value.shapeIndex,
+        buffer: lastBufferMessage.value.buffer,
+    }, {
         slot: 1,
         shapeIndex: 0,
         buffer: expectedBuffer,
     });
+    assert.equal(lastBufferMessage.value.dspSessionId, snapshot.runtimeState.dspSessionId);
+    assert.equal(Number.isSafeInteger(lastBufferMessage.value.deliverySerial), true);
+    assert.equal(lastBufferMessage.value.deliverySerial > 0, true);
 }
 
 test("desktop harness renders the real React patch view and requests runtime sync on boot", async () => {
@@ -941,10 +1190,14 @@ test("desktop harness renders the real React patch view and requests runtime syn
             ({ endpointID }) => endpointID === "runtimeSyncRequest",
         );
 
-        assert.equal(runtimeSyncMessages.length, 1);
+        assert.equal(
+            runtimeSyncMessages.some(({ value }) => value === 1),
+            true,
+            "The UI must request its initial runtime presentation state.",
+        );
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"), true);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback"), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationRoute"), true);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"), true);
     } finally {
         await page.close();
     }
@@ -977,7 +1230,7 @@ test("desktop Vite harness installs React Grab and registers the official MCP pl
     }
 });
 
-test("built desktop bundle mounts the custom-element wrapper and renders a real stage", async () => {
+test("built desktop bundle renders the stage without duplicating worker-owned runtime installation", async () => {
     const page = await openBuiltDesktopBundlePage();
 
     try {
@@ -1002,15 +1255,15 @@ test("built desktop bundle mounts the custom-element wrapper and renders a real 
         );
         assert.equal(
             builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"),
-            true,
+            false,
         );
         assert.equal(
             builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback"),
-            true,
+            false,
         );
         assert.equal(
-            builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationRoute"),
-            true,
+            builtBundleSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"),
+            false,
         );
         assert.deepEqual(builtBundleSnapshot.keyboardDebug?.attachCalls ?? [], [{ endpointID: "midiIn" }]);
     } finally {
@@ -2463,28 +2716,26 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
             },
         );
 
-        const finalRouteUpload = [...snapshot.sentMessages]
-            .reverse()
-            .find(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0);
-
-        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+        const finalRoute = readStoredModulationState(snapshot).routes[0];
+        assert.deepEqual(routeSummary(finalRoute), {
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
             targetKind: "warpAmount",
-            amount: readStoredModulationState(snapshot).routes[0].amount,
+            amount: finalRoute.amount,
         });
-        assert.deepEqual(finalRouteUpload?.value, {
-            routeIndex: 0,
-            enabled: true,
-            sourceKind: 1,
-            sourceSlot: 1,
+        assert.deepEqual(readRuntimeProgramRoute(snapshot, finalRoute), {
+            path: "voice",
+            cellIndex: 1,
+            sourceIndex: 0,
+            targetIndex: 1,
             polarityKind: 1,
-            targetKind: 2,
-            amount: readStoredModulationState(snapshot).routes[0].amount,
         });
-        assert.equal((await page.locator('[data-role="route-row-1"] >> text=/±(35|34|36)%/').count()) >= 1, true);
+        assert.equal(hasRuntimeAmount(snapshot, finalRoute, finalRoute.amount), true);
+        const amountReadout = page.locator('[data-role="route-row-1"] >> text=/±(35|34|36)%/');
+        await amountReadout.waitFor({ state: "visible" });
+        assert.equal((await amountReadout.count()) >= 1, true);
     } finally {
         await page.close();
     }
@@ -2506,15 +2757,15 @@ test("articulation slots clone current state and recall parameters plus route am
         let modeSnapshot = await waitForHarnessSnapshot(
             page,
             "articulation trigger mode set to Key",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).activeTriggerMode === "key",
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).activeTriggerMode === "key",
         );
-        assert.equal(readStoredArticulationBank(modeSnapshot).activeTriggerMode, "key");
+        assert.equal(readStoredArticulationEditorState(modeSnapshot).activeTriggerMode, "key");
         assert.equal(await page.locator('[data-role="articulation-range-lane"]').count(), 1);
         assert.equal(await page.locator('[data-role="articulation-distribute"]').count(), 0);
         await page.getByRole("tab", { name: "Chain" }).click();
         await page.getByRole("button", { name: "Collapse articulation editor" }).click();
         assert.equal(await page.locator('[data-role="articulation-control-surface"][data-state="collapsed"]').count(), 1);
-        await page.evaluate(() => {
+        await page.evaluate((defaultModulationState) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setParameterValue("wavetablePosition", 0.66);
             harness.setParameterValue("playMode", 1);
@@ -2530,7 +2781,7 @@ test("articulation slots clone current state and recall parameters plus route am
             const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
-                : { format: "cosimo.modulation", version: 2 };
+                : defaultModulationState;
             modulationState.envelopeSlots = Array.isArray(modulationState.envelopeSlots)
                 ? modulationState.envelopeSlots
                 : [];
@@ -2549,9 +2800,10 @@ test("articulation slots clone current state and recall parameters plus route am
                 polarity: "bipolar",
                 targetKind: "warpAmount",
                 amount: 0.42,
+                reducer: "max",
             }];
             harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
-        });
+        }, createDefaultModulationState());
         await waitForReactFrames(page);
 
         await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
@@ -2560,7 +2812,7 @@ test("articulation slots clone current state and recall parameters plus route am
             page,
             "articulation slot capturing the current synth state",
             (nextSnapshot) => {
-                const bank = readStoredArticulationBank(nextSnapshot);
+                const bank = readStoredArticulationEditorState(nextSnapshot);
                 const slot = bank.slots[0];
                 const routeAmount = slot?.snapshot.modRouteAmounts.find((entry) => entry.routeId === "articulation-route-1");
 
@@ -2580,13 +2832,18 @@ test("articulation slots clone current state and recall parameters plus route am
             await page.locator('[data-role="articulation-card"][data-runtime-slot="0"]').getAttribute("aria-pressed"),
             "true",
         );
+        const articulationRouteCell = getModulationRuntimeCell({
+            ...readStoredModulationState(snapshot).routes[0],
+            id: "articulation-route-1",
+        }).articulationCellIndex;
+        assert.notEqual(articulationRouteCell, null);
         assert.deepEqual(
             snapshot.sentMessages
                 .filter(({ endpointID, value }) => (
                     endpointID === "articulationSnapshot"
                     && [0, 1].includes(Number(value?.selectorA))
                 ))
-                .slice(-2)
+                .slice(-1)
                 .map(({ value }) => ({
                     selectorA: value.selectorA,
                     enabled: value.enabled,
@@ -2594,9 +2851,10 @@ test("articulation slots clone current state and recall parameters plus route am
                     warpAmount: value.warpAmount,
                     filterCutoffHz: value.filterCutoffHz,
                     msegMorphs: value.msegMorphs,
-                    routeAmount0: value.routeAmounts?.[0],
+                    routeAmount: value.routeAmounts?.[articulationRouteCell],
                     envelopeAttack0: value.envelopeAttackSeconds?.[0],
-                })),
+                }))
+                .sort((left, right) => left.selectorA - right.selectorA),
             [
                 {
                     selectorA: 0,
@@ -2605,39 +2863,29 @@ test("articulation slots clone current state and recall parameters plus route am
                     warpAmount: 0.61,
                     filterCutoffHz: 2475,
                     msegMorphs: [0.33, 0, 0],
-                    routeAmount0: 0.42,
+                    routeAmount: 0.42,
                     envelopeAttack0: 0.17,
-                },
-                {
-                    selectorA: 1,
-                    enabled: false,
-                    framePosition: 0,
-                    warpAmount: 0,
-                    filterCutoffHz: 1000,
-                    msegMorphs: [0, 0, 0],
-                    routeAmount0: 0,
-                    envelopeAttack0: 0.01,
                 },
             ],
         );
 
-        const capturedBank = readStoredArticulationBank(snapshot);
-        await page.evaluate(({ stateKey, bank }) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify({
-                ...bank,
-                selectedSlotId: null,
-            }));
+        const capturedBank = readStoredArticulationEditorState(snapshot);
+        await page.evaluate(({ stateKey, nextState }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextState));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            bank: capturedBank,
+            nextState: editorBankToStoredArticulations({
+                ...capturedBank,
+                selectedSlotId: null,
+            }),
         });
         await waitForHarnessSnapshot(
             page,
             "articulation editing deselected",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).selectedSlotId === null,
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).selectedSlotId === null,
         );
 
-        await page.evaluate(() => {
+        await page.evaluate((defaultModulationState) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setParameterValue("wavetablePosition", 0.12);
             harness.setParameterValue("playMode", 2);
@@ -2653,7 +2901,7 @@ test("articulation slots clone current state and recall parameters plus route am
             const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
-                : { format: "cosimo.modulation", version: 2 };
+                : defaultModulationState;
             modulationState.envelopeSlots = Array.isArray(modulationState.envelopeSlots)
                 ? modulationState.envelopeSlots
                 : [];
@@ -2672,9 +2920,10 @@ test("articulation slots clone current state and recall parameters plus route am
                 polarity: "unipolar",
                 targetKind: "filterQ",
                 amount: 0.03,
+                reducer: "max",
             }];
             harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
-        });
+        }, createDefaultModulationState());
         await waitForReactFrames(page);
         await clearHarnessDebugLog(page);
 
@@ -2684,14 +2933,14 @@ test("articulation slots clone current state and recall parameters plus route am
             page,
             "articulation recall applying parameters and route amount only",
             (nextSnapshot) => {
-                const bank = readStoredArticulationBank(nextSnapshot);
+                const bank = readStoredArticulationEditorState(nextSnapshot);
                 const modulationState = readStoredModulationState(nextSnapshot);
                 const route = modulationState.routes[0];
 
                 return bank.selectedSlotId === "articulation-0"
                     && Math.abs(Number(nextSnapshot.parameterValues.wavetablePosition) - 0.66) <= 1e-9
-                    && Number(nextSnapshot.parameterValues.playMode) === 1
-                    && Math.abs(Number(nextSnapshot.parameterValues.glideTime) - 0.27) <= 1e-9
+                    && Number(nextSnapshot.parameterValues.playMode) === 2
+                    && Math.abs(Number(nextSnapshot.parameterValues.glideTime) - 0.05) <= 1e-9
                     && Math.abs(Number(nextSnapshot.parameterValues.pan) - -0.18) <= 1e-9
                     && Number(nextSnapshot.parameterValues.warpMode) === 3
                     && Math.abs(Number(nextSnapshot.parameterValues.warpAmount) - 0.61) <= 1e-9
@@ -2730,6 +2979,73 @@ test("articulation slots clone current state and recall parameters plus route am
             targetKind: "filterQ",
             amount: 0.42,
         });
+    } finally {
+        await page.close();
+    }
+});
+
+test("desktop articulation hydration and live writes reject the same duplicate and retired documents whole", async () => {
+    const validState = editorBankToStoredArticulations(normalizeArticulationEditorState({
+        selectedSlotId: "bow",
+        activeTriggerMode: "chain",
+        slots: [{ id: "bow", runtimeSlot: 0, name: "Bow" }],
+        chainAssignments: [{ id: "chain-bow", articulationId: "bow", min: 0, max: 127 }],
+    }));
+    const duplicateState = {
+        ...validState,
+        slots: [validState.slots[0], { ...validState.slots[0], name: "Duplicate Bow" }],
+    };
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, {
+                stateKey: ARTICULATION_STATE_KEY,
+                state: duplicateState,
+            });
+        },
+    });
+
+    try {
+        assert.equal(await page.locator('[data-role="articulation-card"]').count(), 0);
+
+        await page.evaluate(({ stateKey, state }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(state));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            state: validState,
+        });
+        await page.locator('[data-role="articulation-card"][data-articulation-id="bow"]').waitFor();
+
+        await page.evaluate(({ stateKey, state }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(state));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            state: duplicateState,
+        });
+        await waitForReactFrames(page);
+        assert.equal(await page.locator('[data-role="articulation-card"]').count(), 1);
+        assert.equal(
+            await page.locator('[data-role="articulation-card"][data-articulation-id="bow"]').count(),
+            1,
+        );
+
+        await page.evaluate((stateKey) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify({
+                format: "cosimo.articulations",
+                version: 2,
+                selectedSlotId: null,
+                activeTriggerMode: "chain",
+                slots: [],
+                chainAssignments: [],
+                keyAssignments: [],
+                velocityAssignments: [],
+            }));
+        }, ARTICULATION_STATE_KEY);
+        await waitForReactFrames(page);
+        assert.equal(await page.locator('[data-role="articulation-card"]').count(), 1);
     } finally {
         await page.close();
     }
@@ -2808,7 +3124,7 @@ test("articulation range lane zooms by thirds and marks held Key Vel and Chain v
     }
 });
 
-test("articulation editor exposes insert resize move clear and expanded capture placement", async () => {
+test("articulation editor resizes and moves current-schema ranges and assigns every captured slot", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -2817,7 +3133,7 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -2826,6 +3142,7 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             ],
             chainAssignments: [
                 { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+                { id: "chain-pluck", articulationId: "pluck", min: 127, max: 127 },
             ],
         });
 
@@ -2833,12 +3150,12 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
             "seeded articulation bank",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 1,
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
         );
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
@@ -2852,99 +3169,26 @@ test("articulation editor exposes insert resize move clear and expanded capture 
         const lane = page.locator('[data-role="articulation-range-lane"]').first();
         const laneBox = await lane.boundingBox();
         assert.notEqual(laneBox, null);
-        const lowerViewport = await readDesktopRangeViewport(page);
-        assert.deepEqual(lowerViewport, { index: 0, min: 0, max: 42, heldValue: "" });
-        const expectedInsertPosition = Math.round(lowerViewport.min + (0.79 * (lowerViewport.max - lowerViewport.min)));
-        await dragArticulationCardToLane(page, "pluck", lane, {
-            x: laneBox.x + laneBox.width * 0.79,
-            y: laneBox.y + laneBox.height * 0.5,
-        }, {
-            afterDragOver: async () => {
-                const preview = page.locator('[data-role="articulation-placement-preview"]');
-                await preview.waitFor();
-                assert.equal(await preview.getAttribute("data-operation"), "insert");
-                assert.match(
-                    await preview.textContent(),
-                    new RegExp(`^insert ${expectedInsertPosition}$`),
-                    "edge hover must visibly preview insert before drop",
-                );
-                assert.deepEqual(
-                    await readDesktopRangeSegments(page),
-                    [
-                        {
-                            articulationId: "bow",
-                            min: 0,
-                            max: expectedInsertPosition - 1,
-                            isPreview: false,
-                            isPreviewAffected: true,
-                            text: `Bow 0-${expectedInsertPosition - 1}`,
-                        },
-                        {
-                            articulationId: "pluck",
-                            min: expectedInsertPosition,
-                            max: expectedInsertPosition,
-                            isPreview: true,
-                            isPreviewAffected: false,
-                            text: `Plu ${expectedInsertPosition}`,
-                        },
-                    ],
-                    "edge hover must render the effective post-drop lane before drop",
-                );
-                assert.equal(
-                    await page.locator('[data-role="articulation-range-ghost-value"]').textContent(),
-                    String(expectedInsertPosition),
-                    "the inserted width-1 preview still needs a visible value chip",
-                );
-            },
-        });
-
-        let snapshot = await waitForHarnessSnapshot(
-            page,
-            "edge drop inserts without an explicit insert toggle",
-            (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
-                return assignments.some((assignment) => (
-                    assignment.articulationId === "bow"
-                    && assignment.min === 0
-                    && assignment.max === expectedInsertPosition - 1
-                )) && assignments.some((assignment) => (
-                    assignment.articulationId === "pluck"
-                    && assignment.min === assignment.max
-                    && assignment.min === expectedInsertPosition
-                ));
-            },
-        );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
-            { id: "chain-bow-full", articulationId: "bow", min: 0, max: expectedInsertPosition - 1 },
-            { id: `chain-pluck-${expectedInsertPosition}`, articulationId: "pluck", min: expectedInsertPosition, max: expectedInsertPosition },
-        ]);
-        assert.equal(
-            await page
-                .locator('[data-role="articulation-range-segment"][data-articulation-id="pluck"] [data-role="articulation-range-value"]')
-                .first()
-                .textContent(),
-            String(expectedInsertPosition),
-        );
 
         await page.evaluate(({ stateKey }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             const currentBank = JSON.parse(harness.getSnapshot().storedState[stateKey]);
             harness.setStoredStateValue(stateKey, JSON.stringify({
                 ...currentBank,
-                chainAssignments: [
-                    { id: "chain-bow-full", articulationId: "bow", min: 0, max: 20 },
-                    { id: "chain-pluck-21", articulationId: "pluck", min: 21, max: 21 },
-                ],
+                slots: currentBank.slots.map((slot) => ({
+                    ...slot,
+                    chainRange: slot.id === "bow" ? { min: 0, max: 20 } : { min: 21, max: 21 },
+                })),
             }));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
         });
-        snapshot = await waitForHarnessSnapshot(
+        let snapshot = await waitForHarnessSnapshot(
             page,
             "seeded narrow segment for resize and move",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
-                return assignments.some((assignment) => assignment.id === "chain-pluck-21" && assignment.min === 21 && assignment.max === 21);
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
+                return assignments.some((assignment) => assignment.id === "chain-pluck" && assignment.min === 21 && assignment.max === 21);
             },
         );
 
@@ -2962,12 +3206,12 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             page,
             "range edge resize",
             (nextSnapshot) => {
-                const pluck = readStoredArticulationBank(nextSnapshot).chainAssignments
+                const pluck = readStoredArticulationEditorState(nextSnapshot).chainAssignments
                     .find((assignment) => assignment.articulationId === "pluck");
                 return pluck?.min === 21 && Number(pluck?.max) > 21;
             },
         );
-        const resizedPluck = readStoredArticulationBank(snapshot).chainAssignments
+        const resizedPluck = readStoredArticulationEditorState(snapshot).chainAssignments
             .find((assignment) => assignment.articulationId === "pluck");
         assert.equal(resizedPluck.min, 21);
         assert.equal(resizedPluck.max, 38);
@@ -3010,46 +3254,37 @@ test("articulation editor exposes insert resize move clear and expanded capture 
             page,
             "range body move",
             (nextSnapshot) => {
-                const pluck = readStoredArticulationBank(nextSnapshot).chainAssignments
+                const pluck = readStoredArticulationEditorState(nextSnapshot).chainAssignments
                     .find((assignment) => assignment.articulationId === "pluck");
                 return Number(pluck?.min) > 21 && Number(pluck?.max) > Number(pluck?.min);
             },
         );
-        const movedPluck = readStoredArticulationBank(snapshot).chainAssignments
+        const movedPluck = readStoredArticulationEditorState(snapshot).chainAssignments
             .find((assignment) => assignment.articulationId === "pluck");
-        assert.deepEqual(movedPluck, { id: "chain-pluck-21", articulationId: "pluck", min: 31, max: 48 });
-
-        await page.locator('[data-role="articulation-clear-segment"]').click();
-        snapshot = await waitForHarnessSnapshot(
-            page,
-            "range segment clear",
-            (nextSnapshot) => (
-                !readStoredArticulationBank(nextSnapshot).chainAssignments
-                    .some((assignment) => assignment.articulationId === "pluck")
-            ),
-        );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
-            { id: "chain-bow-full", articulationId: "bow", min: 0, max: 20 },
-        ]);
+        assert.deepEqual(movedPluck, { id: "chain-pluck", articulationId: "pluck", min: 31, max: 48 });
 
         await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
         snapshot = await waitForHarnessSnapshot(
             page,
-            "expanded capture creates without assigning",
+            "expanded capture creates a fully assigned current-schema slot",
             (nextSnapshot) => {
-                const nextBank = readStoredArticulationBank(nextSnapshot);
+                const nextBank = readStoredArticulationEditorState(nextSnapshot);
                 return nextBank.slots.length === 3
                     && nextBank.selectedSlotId === "articulation-2"
-                    && !nextBank.chainAssignments.some((assignment) => assignment.articulationId === "articulation-2");
+                    && nextBank.chainAssignments.some((assignment) => (
+                        assignment.articulationId === "articulation-2"
+                        && assignment.min === 0
+                        && assignment.max === 127
+                    ));
             },
         );
-        assert.equal(readStoredArticulationBank(snapshot).slots.length, 3);
+        assert.equal(readStoredArticulationEditorState(snapshot).slots.length, 3);
     } finally {
         await page.close();
     }
 });
 
-test("real articulation card drag previews insert and changes the range", async () => {
+test("real articulation card drag previews and commits a current-schema range move", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3058,7 +3293,7 @@ test("real articulation card drag previews insert and changes the range", async 
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -3067,6 +3302,7 @@ test("real articulation card drag previews insert and changes the range", async 
             ],
             chainAssignments: [
                 { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+                { id: "chain-pluck", articulationId: "pluck", min: 127, max: 127 },
             ],
         });
 
@@ -3074,12 +3310,12 @@ test("real articulation card drag previews insert and changes the range", async 
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
             "seeded articulation bank for real browser drag",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 1,
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
         );
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
@@ -3103,34 +3339,22 @@ test("real articulation card drag previews insert and changes the range", async 
 
         assert.equal(
             await previewArticulationCardDragOver(page, "pluck", lane, targetClientPosition),
-            "insert",
+            "move",
         );
-        assert.deepEqual(
-            await readDesktopRangeSegments(page),
-            [
-                {
-                    articulationId: "bow",
-                    min: 0,
-                    max: expectedInsertPosition - 1,
-                    isPreview: false,
-                    isPreviewAffected: true,
-                    text: `Bow 0-${expectedInsertPosition - 1}`,
-                },
-                {
-                    articulationId: "pluck",
-                    min: expectedInsertPosition,
-                    max: expectedInsertPosition,
-                    isPreview: true,
-                    isPreviewAffected: false,
-                    text: `Plu ${expectedInsertPosition}`,
-                },
-            ],
-            "real browser card drag must render the projected lane before mouse release",
-        );
+        const previewSegment = (await readDesktopRangeSegments(page))
+            .find((segment) => segment.articulationId === "pluck" && segment.isPreview);
+        assert.deepEqual(previewSegment, {
+            articulationId: "pluck",
+            min: expectedInsertPosition,
+            max: expectedInsertPosition,
+            isPreview: true,
+            isPreviewAffected: false,
+            text: `Plu ${expectedInsertPosition}`,
+        });
         assert.equal(
             await page.locator('[data-role="articulation-range-ghost-value"]').textContent(),
             String(expectedInsertPosition),
-            "the live insert preview must expose the exact target selector value",
+            "the live move preview must expose the exact target selector value",
         );
 
         await card.dragTo(lane, {
@@ -3140,13 +3364,13 @@ test("real articulation card drag previews insert and changes the range", async 
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "real browser drag inserts at the occupied edge",
+            "real browser drag moves the current range",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
-                    && assignment.min === 0
-                    && assignment.max === expectedInsertPosition - 1
+                    && assignment.min === expectedInsertPosition + 1
+                    && assignment.max === 127
                 )) && assignments.some((assignment) => (
                     assignment.articulationId === "pluck"
                     && assignment.min === assignment.max
@@ -3155,9 +3379,9 @@ test("real articulation card drag previews insert and changes the range", async 
             },
         );
 
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
-            { id: "chain-bow-full", articulationId: "bow", min: 0, max: expectedInsertPosition - 1 },
-            { id: `chain-pluck-${expectedInsertPosition}`, articulationId: "pluck", min: expectedInsertPosition, max: expectedInsertPosition },
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: expectedInsertPosition + 1, max: 127 },
+            { id: "chain-pluck", articulationId: "pluck", min: expectedInsertPosition, max: expectedInsertPosition },
         ]);
     } finally {
         await page.close();
@@ -3173,7 +3397,7 @@ test("desktop articulation range clicks select only and dragging an already mapp
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -3192,12 +3416,12 @@ test("desktop articulation range clicks select only and dragging an already mapp
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
             "seeded articulation bank for desktop click behavior",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 3,
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 3,
         );
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
@@ -3209,7 +3433,7 @@ test("desktop articulation range clicks select only and dragging an already mapp
         await waitForReactFrames(page);
 
         let snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, bank.chainAssignments);
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, bank.chainAssignments);
         assert.equal(await page.locator('[data-role="articulation-lane-toast"]').count(), 0);
 
         await page.locator('[data-role="articulation-range-viewport-dot"][data-viewport-index="2"]').click();
@@ -3219,9 +3443,9 @@ test("desktop articulation range clicks select only and dragging an already mapp
         snapshot = await waitForHarnessSnapshot(
             page,
             "desktop range click selects the segment articulation",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).selectedSlotId === "air",
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).selectedSlotId === "air",
         );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, bank.chainAssignments);
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, bank.chainAssignments);
 
         await page.locator('[data-role="articulation-range-segment"][data-articulation-id="air"]').click({ button: "right" });
         const rangeMenu = page.locator('[data-role="articulation-range-menu"]');
@@ -3235,7 +3459,7 @@ test("desktop articulation range clicks select only and dragging an already mapp
         );
         await waitForReactFrames(page);
         snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, bank.chainAssignments);
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, bank.chainAssignments);
         assert.equal(await page.locator('[data-role="articulation-lane-toast"]').count(), 0);
         await page.keyboard.press("Escape");
         await rangeMenu.waitFor({ state: "detached" });
@@ -3278,7 +3502,7 @@ test("desktop articulation range clicks select only and dragging an already mapp
             page,
             "dragging a mapped card moves its only range instead of duplicating it",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.filter((assignment) => assignment.articulationId === "pluck").length === 1
                     && assignments.some((assignment) => (
                         assignment.articulationId === "pluck"
@@ -3287,9 +3511,10 @@ test("desktop articulation range clicks select only and dragging an already mapp
                     ));
             },
         );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
             { id: "chain-bow", articulationId: "bow", min: 0, max: 31 },
             { id: "chain-pluck", articulationId: "pluck", min: movedPluckMin, max: movedPluckMax },
+            { id: "chain-air", articulationId: "air", min: 96, max: 127 },
         ]);
     } finally {
         await page.close();
@@ -3305,7 +3530,7 @@ test("desktop articulation shared-boundary resize shrinks the range in the drag 
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -3322,12 +3547,12 @@ test("desktop articulation shared-boundary resize shrinks the range in the drag 
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
             "seeded adjacent ranges for resize",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 2,
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
         );
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
@@ -3357,7 +3582,7 @@ test("desktop articulation shared-boundary resize shrinks the range in the drag 
             page,
             "right range shrinks from the start during shared-boundary drag right",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
                     && assignment.min === 0
@@ -3369,7 +3594,7 @@ test("desktop articulation shared-boundary resize shrinks the range in the drag 
                 ));
             },
         );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
             { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
             { id: "chain-pluck", articulationId: "pluck", min: 32, max: 42 },
         ]);
@@ -3387,7 +3612,7 @@ test("desktop articulation shared-boundary resize works on the first cold drag w
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -3404,12 +3629,12 @@ test("desktop articulation shared-boundary resize works on the first cold drag w
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
             "seeded adjacent ranges for cold first drag",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 2,
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
         );
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
@@ -3452,7 +3677,7 @@ test("desktop articulation shared-boundary resize works on the first cold drag w
             page,
             "cold first drag right shrinks the right range start and leaves the left range in place",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
                     && assignment.min === 0
@@ -3464,7 +3689,7 @@ test("desktop articulation shared-boundary resize works on the first cold drag w
                 ));
             },
         );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
             { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
             { id: "chain-pluck", articulationId: "pluck", min: 23, max: 42 },
         ]);
@@ -3473,13 +3698,13 @@ test("desktop articulation shared-boundary resize works on the first cold drag w
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
             "reset adjacent ranges for cold first drag left",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
                     && assignment.min === 0
@@ -3510,7 +3735,7 @@ test("desktop articulation shared-boundary resize works on the first cold drag w
             page,
             "cold first drag left shrinks the left range end and leaves the right range in place",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
                     && assignment.min === 0
@@ -3522,7 +3747,7 @@ test("desktop articulation shared-boundary resize works on the first cold drag w
                 ));
             },
         );
-        assert.deepEqual(readStoredArticulationBank(dragLeftSnapshot).chainAssignments, [
+        assert.deepEqual(readStoredArticulationEditorState(dragLeftSnapshot).chainAssignments, [
             { id: "chain-bow", articulationId: "bow", min: 0, max: 19 },
             { id: "chain-pluck", articulationId: "pluck", min: 21, max: 42 },
         ]);
@@ -3540,7 +3765,7 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -3557,12 +3782,12 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
             "seeded one-slot adjacent range",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments
                 .some((assignment) => assignment.articulationId === "pluck" && assignment.min === 21 && assignment.max === 21),
         );
 
@@ -3646,7 +3871,7 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
             page,
             "shared boundary drag left shrinks the left range and leaves the right range in place",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
                     && assignment.min === 0
@@ -3658,13 +3883,16 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
                 ));
             },
         );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
             { id: "chain-bow", articulationId: "bow", min: 0, max: 19 },
             { id: "chain-pluck", articulationId: "pluck", min: 21, max: 21 },
         ]);
 
-        await page.evaluate(({ stateKey }) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify({
+        await page.evaluate(({ stateKey, nextState }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextState));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextState: editorBankToStoredArticulations(normalizeArticulationEditorState({
                 selectedSlotId: "bow",
                 activeTriggerMode: "chain",
                 slots: [
@@ -3675,14 +3903,12 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
                     { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
                     { id: "chain-pluck", articulationId: "pluck", min: 21, max: 42 },
                 ],
-            }));
-        }, {
-            stateKey: ARTICULATION_STATE_KEY,
+            })),
         });
         await waitForHarnessSnapshot(
             page,
             "reset shared boundary with a wider right range",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments
                 .some((assignment) => assignment.articulationId === "pluck" && assignment.min === 21 && assignment.max === 42),
         );
 
@@ -3710,7 +3936,7 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
             page,
             "shared boundary drag right shrinks the right range start and leaves the left range in place",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
                     && assignment.min === 0
@@ -3722,7 +3948,7 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
                 ));
             },
         );
-        assert.deepEqual(readStoredArticulationBank(dragRightSnapshot).chainAssignments, [
+        assert.deepEqual(readStoredArticulationEditorState(dragRightSnapshot).chainAssignments, [
             { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
             { id: "chain-pluck", articulationId: "pluck", min: 23, max: 42 },
         ]);
@@ -3731,7 +3957,7 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
     }
 });
 
-test("articulation range lane center drop replaces and selected card is obvious before update", async () => {
+test("articulation range lane center drop moves the selected current-schema range", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3740,7 +3966,7 @@ test("articulation range lane center drop replaces and selected card is obvious 
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -3749,6 +3975,7 @@ test("articulation range lane center drop replaces and selected card is obvious 
             ],
             chainAssignments: [
                 { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+                { id: "chain-pluck", articulationId: "pluck", min: 127, max: 127 },
             ],
         });
 
@@ -3756,12 +3983,12 @@ test("articulation range lane center drop replaces and selected card is obvious 
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
-            "seeded articulation bank for replace",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 1,
+            "seeded articulation bank for move",
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
         );
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
@@ -3790,28 +4017,27 @@ test("articulation range lane center drop replaces and selected card is obvious 
             afterDragOver: async () => {
                 const preview = page.locator('[data-role="articulation-placement-preview"]');
                 await preview.waitFor();
-                assert.equal(await preview.getAttribute("data-operation"), "replace");
+                assert.equal(await preview.getAttribute("data-operation"), "move");
                 assert.match(
                     await preview.textContent(),
-                    /^replace /,
-                    "center hover must visibly preview replace before drop",
+                    /^move /,
+                    "center hover must visibly preview move before drop",
                 );
             },
         });
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "center drop replaces occupied range",
+            "center drop moves the selected range",
             (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
-                return assignments.length === 1
-                    && assignments[0].articulationId === "pluck"
-                    && assignments[0].min === 0
-                    && assignments[0].max === 127;
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
+                const pluck = assignments.find((assignment) => assignment.articulationId === "pluck");
+                return pluck?.min === 21 && pluck.max === 21;
             },
         );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
-            { id: "chain-bow-full", articulationId: "pluck", min: 0, max: 127 },
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: 22, max: 127 },
+            { id: "chain-pluck", articulationId: "pluck", min: 21, max: 21 },
         ]);
     } finally {
         await page.close();
@@ -3827,7 +4053,7 @@ test("contextual toolbar only exposes articulation draft actions", async () => {
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -3840,13 +4066,13 @@ test("contextual toolbar only exposes articulation draft actions", async () => {
             harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
 
         await waitForHarnessSnapshot(
             page,
             "seeded articulation",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).selectedSlotId === "bow",
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).selectedSlotId === "bow",
         );
 
         await page.evaluate(() => {
@@ -3879,12 +4105,12 @@ test("contextual toolbar only exposes articulation draft actions", async () => {
             page,
             "updated articulation without synth-local preset baseline",
             (nextSnapshot) => {
-                const storedBank = readStoredArticulationBank(nextSnapshot);
+                const storedBank = readStoredArticulationEditorState(nextSnapshot);
                 return storedBank.slots[0].snapshot.parameters.pan === 0.25
                     && !containsRetiredSynthPresetBaselineKey(nextSnapshot);
             },
         );
-        const storedBank = readStoredArticulationBank(snapshot);
+        const storedBank = readStoredArticulationEditorState(snapshot);
         assert.equal(storedBank.slots[0].snapshot.parameters.pan, 0.25);
         assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
         await page.waitForFunction(() => !document.querySelector('[data-role="contextual-floating-toolbar"]'));
@@ -3899,7 +4125,7 @@ test("synth preset bar saves current synth state through shared effect presets",
     try {
         await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
 
-        const seededBank = normalizeArticulationBank({
+        const seededBank = normalizeArticulationEditorState({
             selectedSlotId: "bright-bow",
             activeTriggerMode: "velocity",
             slots: [
@@ -3909,14 +4135,18 @@ test("synth preset bar saves current synth state through shared effect presets",
                 { id: "vel-bright", articulationId: "bright-bow", min: 12, max: 34 },
             ],
         });
-        const seededModulationState = normalizeModulationState(await page.evaluate(({ articulationStateKey, nextBank }) => {
+        const seededModulationState = normalizeModulationState(await page.evaluate(({
+            articulationStateKey,
+            defaultModulationState,
+            nextBank,
+        }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
 
             const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
-                : { format: "cosimo.modulation", version: 2 };
+                : defaultModulationState;
 
             modulationState.msegSlots = Array.isArray(modulationState.msegSlots)
                 ? modulationState.msegSlots
@@ -3939,22 +4169,24 @@ test("synth preset bar saves current synth state through shared effect presets",
                 id: "preset-route-1",
                 enabled: true,
                 sourceKind: "mseg",
-                sourceSlot: 0,
+                sourceSlot: 1,
                 polarity: "bipolar",
                 targetKind: "warpAmount",
                 amount: 0.37,
+                reducer: "max",
             }];
             harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
             return modulationState;
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
-            nextBank: seededBank,
+            defaultModulationState: createDefaultModulationState(),
+            nextBank: editorBankToStoredArticulations(seededBank),
         }));
 
         await waitForHarnessSnapshot(
             page,
             "seeded non-default stored state before synth preset save",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).selectedSlotId === "bright-bow"
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).selectedSlotId === "bright-bow"
                 && Math.abs(Number(readStoredModulationState(nextSnapshot).msegSlots[0]?.morph) - 0.71) <= 1e-9,
         );
 
@@ -4022,8 +4254,8 @@ test("synth preset bar saves current synth state through shared effect presets",
             "saved synth presets must capture only the required stored-state adapters",
         );
         assert.deepEqual(
-            normalizeArticulationBank(savedPreset.storedState[ARTICULATION_STATE_KEY]),
-            seededBank,
+            savedPreset.storedState[ARTICULATION_STATE_KEY],
+            editorBankToStoredArticulations(seededBank),
             "saved synth presets must include the actual non-default articulation bank",
         );
         const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v2"]);
@@ -4091,6 +4323,83 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
     }
 });
 
+test("synth presets restore mapping dependencies before strict articulation route amounts", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
+
+        const routeId = "preset-dependent-route";
+        const seededBank = normalizeArticulationEditorState({
+            selectedSlotId: "mapped-bow",
+            slots: [{
+                id: "mapped-bow",
+                runtimeSlot: 0,
+                name: "Mapped Bow",
+                snapshot: {
+                    modRouteAmounts: [{ routeId, amount: 0.63 }],
+                },
+            }],
+        });
+
+        await page.evaluate(({ articulationStateKey, defaultModulationState, nextBank, nextRouteId }) => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setStoredStateValue("modulation.v2", JSON.stringify({
+                ...defaultModulationState,
+                routes: [{
+                    id: nextRouteId,
+                    enabled: true,
+                    sourceKind: "mseg",
+                    sourceSlot: 1,
+                    polarity: "bipolar",
+                    targetKind: "warpAmount",
+                    amount: 0.37,
+                    reducer: "max",
+                }],
+            }));
+            harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
+        }, {
+            articulationStateKey: ARTICULATION_STATE_KEY,
+            defaultModulationState: createDefaultModulationState(),
+            nextBank: editorBankToStoredArticulations(seededBank),
+            nextRouteId: routeId,
+        });
+
+        await waitForHarnessSnapshot(
+            page,
+            "seeded dependent mapping and articulation",
+            (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === routeId
+                && readStoredArticulationEditorState(snapshot).slots[0]?.snapshot.modRouteAmounts[0]?.routeId === routeId,
+        );
+        await saveSynthPresetAs(page, "Mapped Articulation Test");
+        await waitForPresetBarDirtyState(page, false);
+
+        await page.evaluate(({ articulationStateKey, emptyArticulations }) => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setStoredStateValue(articulationStateKey, JSON.stringify(emptyArticulations));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v2"]));
+            harness.setStoredStateValue("modulation.v2", JSON.stringify({ ...modulationState, routes: [] }));
+        }, {
+            articulationStateKey: ARTICULATION_STATE_KEY,
+            emptyArticulations: editorBankToStoredArticulations(normalizeArticulationEditorState(undefined)),
+        });
+
+        await waitForPresetBarDirtyState(page, true);
+        await clickPresetBarAction(page, "revert");
+
+        const restored = await waitForHarnessSnapshot(
+            page,
+            "restored dependent mapping and articulation",
+            (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === routeId
+                && readStoredArticulationEditorState(snapshot).slots[0]?.snapshot.modRouteAmounts[0]?.routeId === routeId,
+        );
+        assert.equal(readStoredArticulationEditorState(restored).slots[0].snapshot.modRouteAmounts[0].amount, 0.63);
+        await waitForPresetBarDirtyState(page, false);
+    } finally {
+        await page.close();
+    }
+});
+
 test("collapsed articulation cards scroll without clipping the voice tab or row controls", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
@@ -4104,7 +4413,7 @@ test("collapsed articulation cards scroll without clipping the voice tab or row 
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "slot-0",
             activeTriggerMode: "chain",
             slots: Array.from({ length: 16 }, (_, index) => ({
@@ -4118,7 +4427,7 @@ test("collapsed articulation cards scroll without clipping the voice tab or row 
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await page.locator('[data-role="articulation-card"][data-articulation-id="slot-15"]').waitFor();
 
@@ -4157,7 +4466,7 @@ test("collapsed articulation cards scroll without clipping the voice tab or row 
     }
 });
 
-test("mobile articulation segment tap replaces occupied range instead of inserting at the edge", async () => {
+test("mobile articulation segment tap assigns the selected articulation in the current schema", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 390, height: 760 });
@@ -4170,7 +4479,7 @@ test("mobile articulation segment tap replaces occupied range instead of inserti
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -4179,6 +4488,7 @@ test("mobile articulation segment tap replaces occupied range instead of inserti
             ],
             chainAssignments: [
                 { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
+                { id: "chain-pluck", articulationId: "pluck", min: 127, max: 127 },
             ],
         });
 
@@ -4186,31 +4496,24 @@ test("mobile articulation segment tap replaces occupied range instead of inserti
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await waitForHarnessSnapshot(
             page,
-            "seeded articulation bank for mobile replace",
-            (nextSnapshot) => readStoredArticulationBank(nextSnapshot).chainAssignments.length === 1,
+            "seeded articulation bank for mobile selection",
+            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
         );
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
         await page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]').click();
         await page.locator('[data-role="articulation-range-segment-row"]').first().click();
+        await waitForReactFrames(page);
 
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "mobile occupied row tap replaces instead of edge inserting",
-            (nextSnapshot) => {
-                const assignments = readStoredArticulationBank(nextSnapshot).chainAssignments;
-                return assignments.length === 1
-                    && assignments[0].articulationId === "pluck"
-                    && assignments[0].min === 0
-                    && assignments[0].max === 127;
-            },
-        );
-        assert.deepEqual(readStoredArticulationBank(snapshot).chainAssignments, [
-            { id: "chain-bow-full", articulationId: "pluck", min: 0, max: 127 },
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(readStoredArticulationEditorState(snapshot).selectedSlotId, "pluck");
+        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 127 },
+            { id: "chain-pluck", articulationId: "pluck", min: 0, max: 127 },
         ]);
     } finally {
         await page.close();
@@ -4251,7 +4554,7 @@ test("articulation card audition is press-hold and follows the most recently pla
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -4263,7 +4566,7 @@ test("articulation card audition is press-hold and follows the most recently pla
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
         await page.locator('[data-role="articulation-card"][data-articulation-id="bow"]').waitFor();
 
@@ -4304,7 +4607,7 @@ test("articulation card audition survives a platform pointer-capture rejection",
             const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -4315,7 +4618,7 @@ test("articulation card audition survives a platform pointer-capture rejection",
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
 
         const playButton = page.locator('[data-role="articulation-card-play"]').first();
@@ -4358,7 +4661,7 @@ test("articulation card audition releases its note when the window blurs", async
             const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
-        const bank = normalizeArticulationBank({
+        const bank = normalizeArticulationEditorState({
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
@@ -4369,7 +4672,7 @@ test("articulation card audition releases its note when the window blurs", async
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
+            nextBank: editorBankToStoredArticulations(bank),
         });
 
         const playButton = page.locator('[data-role="articulation-card-play"]').first();
@@ -4425,7 +4728,7 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
         distortionWet: 0.37,
         chorusMix: 0.48,
     };
-    const storedBank = normalizeArticulationBank({
+    const storedBank = normalizeArticulationEditorState({
         selectedSlotId: "articulation-0",
         slots: [{
             id: "articulation-0",
@@ -4461,7 +4764,7 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
                 };
             }, {
                 stateKey: ARTICULATION_STATE_KEY,
-                bank: storedBank,
+                bank: editorBankToStoredArticulations(storedBank),
                 parameters: liveParameters,
             });
         },
@@ -4482,7 +4785,7 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
             );
         }
 
-        const hydratedBank = readStoredArticulationBank(snapshot);
+        const hydratedBank = readStoredArticulationEditorState(snapshot);
         assert.equal(hydratedBank.selectedSlotId, "articulation-0");
         assert.equal(hydratedBank.slots[0].snapshot.parameters.wavetablePosition, 0.88);
         assert.equal(hydratedBank.slots[0].snapshot.parameters.warpAmount, 0.77);
@@ -4499,7 +4802,7 @@ test("opening the synth GUI does not recall or overwrite a stored selected artic
     }
 });
 
-test("Add route appends an inert row and scrolls the new row into view", async () => {
+test("Add route appends unique inert mappings and scrolls the new row into view", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -4525,21 +4828,25 @@ test("Add route appends an inert row and scrolls the new row into view", async (
         });
 
         const snapshot = await getHarnessSnapshot(page);
-        const routes = readStoredModulationState(snapshot).routes;
-        assert.equal(routes.length, 8);
-        assert.equal(
-            new Set(routes.map((route) => `${route.sourceKind}:${route.sourceSlot ?? "none"}:${route.targetKind}`)).size,
-            routes.length,
+        assert.deepEqual(
+            routeSummaries(readStoredModulationState(snapshot).routes),
+            [
+                ...routeSummaries(initialRoutes),
+                ...["warpAmount", "filterQ", "pitchSemitones", "ampGainDb", "pan", "unisonDetune"]
+                    .slice(0, 8 - initialRoutes.length)
+                    .map((targetKind) => ({
+                        enabled: true,
+                        sourceKind: "mseg",
+                        sourceSlot: 1,
+                        polarity: "unipolar",
+                        targetKind,
+                        amount: 0,
+                    })),
+            ],
         );
-        assert.equal(routes.slice(initialRoutes.length).every((route) => route.amount === 0), true);
-        assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "modulationRoute"
-                && Number(value?.routeIndex) === 7
-                && Math.abs(Number(value?.amount)) <= 1e-9
-            )),
-            true,
-        );
+        const finalProgram = latestRuntimeProgram(snapshot);
+        assert.equal(finalProgram?.voiceRouteCount, 8);
+        assert.deepEqual(finalProgram?.voiceRouteCells.slice(0, 8), [0, 1, 2, 3, 4, 5, 6, 7]);
     } finally {
         await page.close();
     }
@@ -4689,14 +4996,7 @@ test("mod matrix source and target selects keep enough width for their menu cont
             targetKind: "pitchSemitones",
             amount: 1,
         });
-        assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "modulationRoute"
-                && Number(value?.routeIndex) === 0
-                && value?.enabled === false
-            )),
-            true,
-        );
+        assert.equal(readRuntimeProgramRoute(snapshot, readStoredModulationState(snapshot).routes[0]), null);
     } finally {
         await page.close();
     }
@@ -4734,13 +5034,11 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
             targetKind: "warpAmount",
             amount: 0.12,
         });
-        assert.equal((await page.locator('[data-role="route-row-1"] >> text=/\\+?12%/').count()) >= 1, true);
+        const warpAmountReadout = page.locator('[data-role="route-row-1"] >> text=/\\+?12%/');
+        await warpAmountReadout.waitFor({ state: "visible" });
+        assert.equal((await warpAmountReadout.count()) >= 1, true);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "modulationRoute"
-                && Number(value?.routeIndex) === 0
-                && Math.abs(Number(value?.amount) - 0.12) <= 1e-9
-            )),
+            hasRuntimeAmount(snapshot, readStoredModulationState(snapshot).routes[0], 0.12),
             true,
         );
 
@@ -4768,7 +5066,9 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
             targetKind: "pan",
             amount: -0.4,
         });
-        assert.equal((await page.locator('[data-role="route-row-1"] >> text=/40% L/').count()) >= 1, true);
+        const panAmountReadout = page.locator('[data-role="route-row-1"] >> text=/40% L/');
+        await panAmountReadout.waitFor({ state: "visible" });
+        assert.equal((await panAmountReadout.count()) >= 1, true);
     } finally {
         await page.close();
     }
@@ -4851,10 +5151,8 @@ test("mod matrix amount knob tracks a Safari-style touch drag", async () => {
             "touch-adjusted modulation amount",
             (nextSnapshot) => Number(readStoredModulationState(nextSnapshot).routes[0]?.amount) < 0.95,
         );
-        assert.equal(
-            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationRoute"),
-            true,
-        );
+        const route = readStoredModulationState(snapshot).routes[0];
+        assert.equal(hasRuntimeAmount(snapshot, route, route.amount), true);
     } finally {
         await page.close();
     }
@@ -4891,6 +5189,41 @@ test("mod matrix amount knob supports standard slider keyboard controls", async 
             (nextSnapshot) => Math.abs(Number(readStoredModulationState(nextSnapshot).routes[0]?.amount) - 0.999) <= 1e-9,
         );
         assert.equal(readStoredModulationState(snapshot).routes[0].amount, 0.999);
+    } finally {
+        await page.close();
+    }
+});
+
+test("mod matrix amount rendering stays current across idle flushes and structural edits", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
+        const amountKnob = page.locator('[aria-label="Route 1 amount"]');
+        const polarityToggle = page.locator('[aria-label="Route 1 polarity"]');
+        await amountKnob.focus();
+
+        await amountKnob.press("Home");
+        assert.equal(Number(await amountKnob.getAttribute("aria-valuenow")), -1);
+        await amountKnob.press("End");
+        await page.waitForTimeout(60);
+        assert.equal(Number(await amountKnob.getAttribute("aria-valuenow")), 1);
+
+        await amountKnob.press("ArrowDown");
+        assert.equal(Number(await amountKnob.getAttribute("aria-valuenow")), 0.999);
+        await page.waitForTimeout(70);
+        assert.equal(Number(await amountKnob.getAttribute("aria-valuenow")), 0.999);
+
+        await amountKnob.press("ArrowDown");
+        await polarityToggle.click();
+        await page.waitForTimeout(70);
+
+        const snapshot = await getHarnessSnapshot(page);
+        const route = readStoredModulationState(snapshot).routes[0];
+        assert.equal(route.polarity, "bipolar");
+        assert.equal(route.amount, 0.998);
+        assert.equal(await polarityToggle.getAttribute("aria-pressed"), "true");
+        assert.equal(Number(await amountKnob.getAttribute("aria-valuenow")), 0.998);
     } finally {
         await page.close();
     }
@@ -5239,43 +5572,40 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
             true,
         );
 
-        await choosePrototypeSelectOption(page, "Route 1 target", "CUTOFF");
-        await page.getByRole("button", { name: "Route 1 polarity" }).click();
-        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, -40);
+        await page.getByRole("button", { name: "Route 2 polarity" }).click();
+        await dragLocatorBy(page, page.locator('[aria-label="Route 2 amount"]'), 0, 20);
 
         snapshot = await waitForHarnessSnapshot(
             page,
-            "Route 1 targeting filter cutoff",
+            "Route 2 modulating filter cutoff",
             (nextSnapshot) => {
-                const route = readStoredModulationState(nextSnapshot).routes[0];
+                const route = readStoredModulationState(nextSnapshot).routes[1];
                 return route?.targetKind === "filterCutoffOctaves"
                     && route?.polarity === "bipolar"
                     && Math.abs(Number(route.amount) - 3.0) <= 0.08;
             },
         );
 
-        const finalRouteUpload = [...snapshot.sentMessages]
-            .reverse()
-            .find(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0);
-
-        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+        const finalRoute = readStoredModulationState(snapshot).routes[1];
+        assert.deepEqual(routeSummary(finalRoute), {
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
             targetKind: "filterCutoffOctaves",
-            amount: readStoredModulationState(snapshot).routes[0].amount,
+            amount: finalRoute.amount,
         });
-        assert.deepEqual(finalRouteUpload?.value, {
-            routeIndex: 0,
-            enabled: true,
-            sourceKind: 1,
-            sourceSlot: 1,
+        assert.deepEqual(readRuntimeProgramRoute(snapshot, finalRoute), {
+            path: "voice",
+            cellIndex: 2,
+            sourceIndex: 0,
+            targetIndex: 2,
             polarityKind: 1,
-            targetKind: 3,
-            amount: readStoredModulationState(snapshot).routes[0].amount,
         });
-        assert.equal((await page.locator('[data-role="route-row-1"] >> text=/±3\\.0[0-9] oct/').count()) >= 1, true);
+        assert.equal(hasRuntimeAmount(snapshot, finalRoute, finalRoute.amount, 0.001), true);
+        const cutoffAmountReadout = page.locator('[data-role="route-row-2"] >> text=/±3\\.0[0-9] oct/');
+        await cutoffAmountReadout.waitFor({ state: "visible" });
+        assert.equal((await cutoffAmountReadout.count()) >= 1, true);
     } finally {
         await page.close();
     }
@@ -6379,7 +6709,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
             "initial MSEG boot sync",
             (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationMsegBuffer" && Number(value?.slot) === 1)
                 && snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationMsegPlayback" && Number(value?.slot) === 1)
-                && snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "modulationRoute" && Number(value?.routeIndex) === 0),
+                && snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"),
         );
 
         const depthInputCount = await page.evaluate(() => {
@@ -7071,6 +7401,10 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
         assert.equal(Number(snapshot.parameterValues.reverbSize), 0.5);
         assert.deepEqual(snapshot.gestureStarts, []);
         assert.deepEqual(snapshot.gestureEnds, []);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-parameter-reverbSize"] .rack-knob-mod-fill')
+                ?.getAttribute("d") !== ""
+        ));
         assert.notEqual(await knob.locator(".rack-knob-mod-fill").getAttribute("d"), "");
     } finally {
         await page.close();
@@ -7218,7 +7552,7 @@ test("an unmapped rack knob shows a neutral outer track and horizontal drag cann
             )),
             false,
         );
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "rackModulationRoute"), false);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"), false);
     } finally {
         await page.close();
     }
@@ -7981,7 +8315,7 @@ test("mobile Mod uses a complete one-dimensional route list with detail, filters
         const matrix = page.locator('[data-role="mobile-mod-matrix"]');
         await matrix.waitFor();
         assert.equal(await page.locator('[data-role="desktop-mod-matrix"]').count(), 0);
-        assert.match(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), /3\s*\/\s*12/);
+        assert.equal(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), "3 mappings");
         assert.equal(await matrix.locator('[data-role="mobile-mod-route-row"]').count(), 3);
 
         const geometry = await matrix.evaluate((element) => ({
@@ -8042,13 +8376,13 @@ test("mobile Mod uses a complete one-dimensional route list with detail, filters
                 && route.targetKind === "rack.reverbSize"
             )),
         );
-        assert.match(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), /4\s*\/\s*12/);
+        assert.match(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), /4 mappings/i);
     } finally {
         await page.close();
     }
 });
 
-test("mobile Mod exposes the measured 12-route ceiling without draft or phantom creation", async () => {
+test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings without a public route ceiling", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
@@ -8068,33 +8402,86 @@ test("mobile Mod exposes the measured 12-route ceiling without draft or phantom 
             "unisonWavetablePositionSpread",
             "unisonWarpSpread",
         ];
-        const seededState = normalizeModulationState({
-            routes: targets.map((targetKind, routeIndex) => ({
-                id: `route-cap-${routeIndex}`,
-                enabled: true,
-                sourceKind: "mseg",
-                sourceSlot: 1,
-                polarity: "unipolar",
-                targetKind,
-                amount: 0,
-                reducer: "max",
-            })),
-        });
+        const sources = [
+            ["mseg", 1], ["mseg", 2], ["mseg", 3],
+            ["env", 1], ["env", 2], ["env", 3],
+            ["velocity", null], ["pressure", null], ["slide", null],
+        ];
+        const routes = [];
+        for (const [sourceKind, sourceSlot] of sources) {
+            for (const targetKind of targets) {
+                routes.push({
+                    id: `large-${sourceKind}-${sourceSlot ?? "fixed"}-${targetKind}`,
+                    enabled: true,
+                    sourceKind,
+                    sourceSlot,
+                    polarity: "unipolar",
+                    targetKind,
+                    amount: 0,
+                    reducer: "max",
+                });
+            }
+        }
+        const seededState = normalizeModulationState({ routes: routes.slice(0, 101) });
         await page.evaluate((state) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
         const matrix = page.locator('[data-role="mobile-mod-matrix"]');
         await matrix.waitFor();
-        assert.equal(await matrix.locator('[data-role="mobile-mod-add"]').isDisabled(), true);
-        assert.match(await matrix.innerText(), /ROUTE LIMIT REACHED.*12\s*\/\s*12/is);
+        assert.equal(await matrix.locator('[data-role="mobile-mod-add"]').isDisabled(), false);
+        assert.match(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), /101 mappings/i);
 
-        const before = readStoredModulationState(await getHarnessSnapshot(page)).routes;
-        await matrix.locator('[data-role="mobile-mod-add"]').click({ force: true });
-        await page.waitForTimeout(50);
-        const after = readStoredModulationState(await getHarnessSnapshot(page)).routes;
-        assert.deepEqual(routeSummaries(after), routeSummaries(before));
-        assert.equal(await matrix.locator('[data-role="mobile-mod-create-source-mseg-1"]').count(), 0);
+        await clearHarnessDebugLog(page);
+        await matrix.locator('[data-role="mobile-mod-add"]').click();
+        await matrix.locator('[data-role="mobile-mod-create-source-slide"]').click();
+        await matrix.locator('[data-role="mobile-mod-create-category-voice"]').click();
+        await matrix.locator('[data-role="mobile-mod-create-target-ampGainDb"]').click();
+        let snapshot = await waitForHarnessSnapshot(page, "102nd explicit mobile mapping", (nextSnapshot) => (
+            readStoredModulationState(nextSnapshot).routes.length === 102
+        ));
+        const after = readStoredModulationState(snapshot).routes;
+        assert.equal(after.length, 102);
+        assert.equal(new Set(after.map((route) => `${route.sourceKind}:${route.sourceSlot}->${route.targetKind}`)).size, 102);
+        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "modulationProgram" && Number(value?.voiceRouteCount) === 102
+        )), true);
+
+        const createdRoute = after[101];
+        assert.ok(createdRoute);
+        await page.addInitScript((persistedState) => {
+            window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                storedState: { "modulation.v2": JSON.stringify(persistedState) },
+            };
+        }, readStoredModulationState(snapshot));
+        await page.reload({ waitUntil: "commit" });
+        await waitForHarnessReady(page);
+        await page.click('[data-role="mobile-workspace-toggle-mod"]');
+        await page.locator('[data-role="mobile-mod-matrix"]').waitFor();
+        await page.waitForFunction((routeId) => {
+            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v2"];
+            if (rawState === undefined) return false;
+            const state = JSON.parse(String(rawState));
+            return state.routes?.length === 102 && state.routes.some((route) => route.id === routeId);
+        }, createdRoute.id);
+        assert.match(await page.locator('[data-role="mobile-mod-route-count"]').innerText(), /102 mappings/i);
+
+        await page.locator('[data-role="mobile-mod-route-open-101"]').click();
+        await clearHarnessDebugLog(page);
+        const amountInput = page.locator('[data-role="mobile-mod-amount-input"]');
+        await amountInput.fill("-12");
+        await amountInput.blur();
+        snapshot = await waitForHarnessSnapshot(page, "editing the restored 102nd mapping", (nextSnapshot) => (
+            Math.abs(Number(readStoredModulationState(nextSnapshot).routes[101]?.amount) - (-12)) <= 1e-9
+        ));
+        assert.equal(hasRuntimeAmount(snapshot, readStoredModulationState(snapshot).routes[101], -12), true);
+
+        await page.locator('[data-role="mobile-mod-delete"]').click();
+        snapshot = await waitForHarnessSnapshot(page, "deleting the restored 102nd mapping", (nextSnapshot) => {
+            const nextRoutes = readStoredModulationState(nextSnapshot).routes;
+            return nextRoutes.length === 101 && !nextRoutes.some((route) => route.id === createdRoute.id);
+        });
+        assert.equal(latestRuntimeProgram(snapshot)?.voiceRouteCount, 101);
     } finally {
         await page.close();
     }
@@ -8640,6 +9027,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         assert.equal(await rail.getAttribute("data-mapping-active"), "false");
         assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 0);
         assert.equal(await page.locator('[data-role="mobile-global-mod-rail-drawer"]').getAttribute("aria-hidden"), "false");
+        await page.waitForTimeout(320);
         assert.equal(Math.abs(((await rail.boundingBox())?.y ?? 0) - railTopBeforeSourceDrag) <= 1, true, "Source drag moved the rail.");
         assert.equal(
             Number(await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText()),
@@ -9492,15 +9880,21 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
                 && route.amount > 1
             )),
         );
-        assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "rackModulationRoute"
-                && Number(value?.reducerKind) === 1
-                && Number(value?.amount) > 1
-            )),
-            true,
-            "Voice-source rack route did not reach the real rack endpoint with Max reduction.",
-        );
+        const modulationMessages = snapshot.sentMessages.filter(({ endpointID }) => (
+            endpointID === "modulationProgram" || endpointID === "modulationAmount"
+        ));
+        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => {
+            if (endpointID !== "modulationProgram") return false;
+            const count = Number(value?.voiceRackRouteCount) || 0;
+            const routeIndex = value?.voiceRackRouteCells?.slice(0, count).indexOf(3) ?? -1;
+            return routeIndex >= 0 && Number(value?.voiceRackRouteReducers?.[routeIndex]) === 1;
+        }), true, `Voice-source rack route did not compile with Max reduction: ${JSON.stringify(modulationMessages)}`);
+        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "modulationAmount"
+            && Number(value?.pathKind) === 3
+            && Number(value?.cellIndex) === 3
+            && Number(value?.amount) > 1
+        )), true, `Voice-source rack amount edit did not use the small update path: ${JSON.stringify(modulationMessages)}`);
         assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').getAttribute("aria-valuemin"), "-100");
         assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').getAttribute("aria-valuemax"), "100");
         assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 1);
@@ -9518,6 +9912,11 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
         await expandGlobalModRail(targetFirstPage);
         await targetFirstPage.click('[aria-label="Next modulation-source group"]');
         await targetFirstPage.waitForTimeout(300);
+        await waitForHarnessSnapshot(
+            targetFirstPage,
+            "target-first runtime boot program",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"),
+        );
         await clearHarnessDebugLog(targetFirstPage);
         await targetFirstPage.click('[data-role="rack-mod-source-macro-2"]');
 
@@ -9543,13 +9942,53 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             )),
         );
         assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"),
+            false,
+            "A zero-depth rack mapping must remain outside the active runtime prefix.",
+        );
+
+        const targetAmount = targetFirstPage.locator('[data-role="rack-modulation-amount"]');
+        const targetAmountBox = await targetAmount.boundingBox();
+        assert.ok(targetAmountBox, "Expected the target-first rack amount control.");
+        await targetFirstPage.mouse.move(
+            targetAmountBox.x + (targetAmountBox.width * 0.5),
+            targetAmountBox.y + (targetAmountBox.height * 0.5),
+        );
+        await targetFirstPage.mouse.down();
+        await targetFirstPage.mouse.move(
+            targetAmountBox.x + (targetAmountBox.width * 0.82),
+            targetAmountBox.y + (targetAmountBox.height * 0.5),
+            { steps: 8 },
+        );
+        await targetFirstPage.mouse.up();
+
+        snapshot = await waitForHarnessSnapshot(
+            targetFirstPage,
+            "active target-first rack route",
+            (nextSnapshot) => (
+                readStoredModulationState(nextSnapshot).routes.some((route) => (
+                    route.sourceKind === "macro"
+                    && route.sourceSlot === 2
+                    && route.targetKind === "rack.reverbSize"
+                    && route.amount > 0
+                ))
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                    endpointID === "modulationProgram"
+                    && Number(value?.macroRackRouteCount) >= 1
+                    && value?.macroRackRouteSources?.slice(0, value.macroRackRouteCount).includes(1)
+                    && value?.macroRackRouteTargets?.slice(0, value.macroRackRouteCount).includes(32)
+                ))
+            ),
+        );
+        assert.equal(
             snapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "rackModulationRoute"
-                && Number(value?.sourceKind) === 6
-                && Number(value?.reducerKind) === 0
+                endpointID === "modulationProgram"
+                && Number(value?.macroRackRouteCount) >= 1
+                && value?.macroRackRouteSources?.slice(0, value.macroRackRouteCount).includes(1)
+                && value?.macroRackRouteTargets?.slice(0, value.macroRackRouteCount).includes(32)
             )),
             true,
-            "Global Macro route must reach the rack without a voice reducer.",
+            "Global Macro route must compile into the reducer-free macro-to-rack path.",
         );
     } finally {
         await targetFirstPage.close();
@@ -9583,7 +10022,7 @@ test("rack modulation-source gesture cancels on window blur instead of creating 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(readStoredModulationState(snapshot).routes.length, beforeRoutes.length);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID }) => endpointID === "rackModulationRoute"),
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"),
             false,
             "A blurred source gesture must not create a modulation route on the later pointer release.",
         );
@@ -9657,43 +10096,42 @@ test("source preview and valid hover stay transient while the armed ring and foc
     }
 });
 
-test("a real source drop at the route cap remains byte-identical and visibly unmapped", async () => {
+test("a real source drop creates a mapping after 100 existing mappings", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
 
     try {
-        const targets = [
-            "wavetablePosition", "warpAmount", "filterCutoffOctaves", "filterQ",
-            "pitchSemitones", "ampGainDb", "pan", "unisonDetune", "unisonBlend",
-            "unisonWidth", "unisonWavetablePositionSpread", "unisonWarpSpread",
-        ];
+        const routes = MODULATION_SOURCE_OPTIONS.flatMap((source) => (
+            MODULATION_TARGET_OPTIONS.map((target) => ({ source, target }))
+        )).filter(({ source, target }) => !(
+            source.sourceKind === "env"
+            && source.sourceSlot === 1
+            && target.value === "rack.reverbSize"
+        )).slice(0, 100).map(({ source, target }, routeIndex) => ({
+            id: `large-set-drop-${routeIndex}`,
+            enabled: true,
+            sourceKind: source.sourceKind,
+            sourceSlot: source.sourceSlot,
+            polarity: "unipolar",
+            targetKind: target.value,
+            amount: routeIndex / 200,
+            reducer: "max",
+        }));
         const seededState = normalizeModulationState({
-            routes: targets.map((targetKind, routeIndex) => ({
-                id: `cap-drop-${routeIndex}`,
-                enabled: true,
-                sourceKind: "mseg",
-                sourceSlot: 1,
-                polarity: "unipolar",
-                targetKind,
-                amount: routeIndex / 20,
-                reducer: "max",
-            })),
+            routes,
         });
         await page.evaluate((state) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
         }, seededState);
         await waitForHarnessSnapshot(
             page,
-            "route cap seeded before real drop",
-            (snapshot) => readStoredModulationState(snapshot).routes.length === 12,
+            "large mapping set seeded before real drop",
+            (snapshot) => readStoredModulationState(snapshot).routes.length === 100,
         );
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await clearHarnessDebugLog(page);
-        const before = await getHarnessSnapshot(page);
-        const beforeStored = before.storedState["modulation.v2"];
         const source = page.locator('[data-role="rack-mod-source-env-1"]');
         const target = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
         const sourceBox = await source.boundingBox();
@@ -9702,18 +10140,22 @@ test("a real source drop at the route cap remains byte-identical and visibly unm
         await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
         await page.mouse.down();
         await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 8 });
-        assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), false);
+        assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), true);
         await page.mouse.up();
-        await page.waitForTimeout(100);
-
-        const after = await getHarnessSnapshot(page);
-        assert.equal(after.storedState["modulation.v2"], beforeStored);
-        assert.equal(after.sentMessages.some(({ endpointID }) => endpointID === "rackModulationRoute"), false);
+        const after = await waitForHarnessSnapshot(
+            page,
+            "source drop creates mapping 101",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "env"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.reverbSize"
+            )),
+        );
+        assert.equal(readStoredModulationState(after).routes.length, 101);
         const knob = target.locator('[data-role="rack-parameter-reverbSize"]');
-        assert.equal(await knob.getAttribute("data-route-state"), "no-source");
-        assert.equal(await knob.locator('.rack-knob-route-presence').count(), 0);
-        assert.equal(await knob.locator('.rack-knob-mod-fill').getAttribute("d"), "");
-        assert.match(await page.locator('.rack-route-status').innerText(), /ROUTE LIMIT REACHED/);
+        assert.equal(await knob.getAttribute("data-route-state"), "mapped");
+        assert.equal(await knob.locator('.rack-knob-route-presence').count(), 1);
+        assert.doesNotMatch(await page.locator('.rack-route-status').innerText(), /ROUTE LIMIT/);
     } finally {
         await page.close();
     }

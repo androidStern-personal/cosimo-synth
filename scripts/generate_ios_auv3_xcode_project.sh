@@ -56,8 +56,19 @@ cmake -S "$repo_root/ios_auv3" \
       -DCMAJOR_VERSION="$cmajor_version" \
       -DCOSIMO_WEBVIEW_DEV_SERVER_URL="${COSIMO_WEBVIEW_DEV_SERVER_URL:-}" \
       -DCOSIMO_ENABLE_EDITOR_INSPECTION="${COSIMO_ENABLE_EDITOR_INSPECTION:-}" \
+      -DCOSIMO_PRODUCT_NAME="${COSIMO_PRODUCT_NAME:-Cosimo Synth}" \
+      -DCOSIMO_BUNDLE_ID="${COSIMO_BUNDLE_ID:-dev.cosimo.wavetable-synth}" \
+      -DCOSIMO_HOST_BUNDLE_ID="${COSIMO_HOST_BUNDLE_ID:-dev.cosimo.wavetable-synth-host}" \
+      -DCOSIMO_PLUGIN_CODE="${COSIMO_PLUGIN_CODE:-CmDv}" \
+      -DCOSIMO_PLUGIN_MANUFACTURER_CODE="${COSIMO_PLUGIN_MANUFACTURER_CODE:-Manu}" \
+      -DCOSIMO_ENABLE_APP_GROUP="${COSIMO_ENABLE_APP_GROUP:-ON}" \
+      -DCOSIMO_USE_BUNDLED_WAVETABLE_LIBRARY="${COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY:-OFF}" \
+      -DCOSIMO_ENABLE_MODULATION_BENCHMARK_METRICS="${COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS:-OFF}" \
+      -DCOSIMO_MODULATION_BENCHMARK_PROFILES_PATH="${COSIMO_MODULATION_BENCHMARK_PROFILES_PATH:-}" \
       -DJUCE_PATH="$juce_path"
 
-enable_app_groups_capability "$build_dir/CosimoSynthAUv3.xcodeproj/project.pbxproj"
+if [[ "${COSIMO_ENABLE_APP_GROUP:-ON}" == "ON" ]]; then
+  enable_app_groups_capability "$build_dir/CosimoSynthAUv3.xcodeproj/project.pbxproj"
+fi
 
 printf 'Generated Xcode project in %s for %s\n' "$build_dir" "$ios_sysroot"

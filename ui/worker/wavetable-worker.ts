@@ -22,6 +22,9 @@ import { createModulationWorkerService } from "./modulation-worker-service";
 import { createRackStateWorkerService } from "./rack-state-worker-service";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
+// Reserved outside the practical modulation/articulation delivery range so this
+// runtime-state wake-up cannot masquerade as a correlated install-lane proof.
+export const WAVETABLE_RUNTIME_STATE_SYNC_SERIAL = 2_147_483_647;
 const runtimeStateEndpointID = "runtimeState";
 const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 const workerLoadFailureEndpointID = "workerLoadFailure";
@@ -52,7 +55,7 @@ type Spectrum = ReturnType<typeof buildFrameSpectrum>;
 type ServiceTargetKind = "loading" | "active";
 type TimerHandle = ReturnType<NonNullable<typeof globalThis.setTimeout>> | number;
 
-type WorkerOptions = {
+export type WavetableWorkerOptions = {
     catalogPath?: string;
     maxFramesInFlight?: number;
     mipLevelCount?: number;
@@ -383,7 +386,7 @@ export class WavetableWorkerController {
     private tableCacheBytes = 0;
     private cacheUseSerial = 1;
 
-    constructor(connection: PatchConnectionLike, options: WorkerOptions = {}) {
+    constructor(connection: PatchConnectionLike, options: WavetableWorkerOptions = {}) {
         this.connection = connection;
         this.resourceClient = asResourceClient(options.resourceClient ?? connection);
         this.catalogPath = options.catalogPath ?? defaultCatalogPath;
@@ -417,7 +420,10 @@ export class WavetableWorkerController {
         this.connection.addEndpointListener?.(mipRequestEndpointID, this.handleMipRequest);
         this.connection.addEndpointListener?.(prewarmRequestEndpointID, this.handlePrewarmRequest);
         this.connection.addEndpointListener?.(prewarmNotificationEndpointID, this.handlePrewarmRequest);
-        this.connection.sendEventOrValue?.(runtimeSyncRequestEndpointID, 1);
+        this.connection.sendEventOrValue?.(
+            runtimeSyncRequestEndpointID,
+            WAVETABLE_RUNTIME_STATE_SYNC_SERIAL,
+        );
         return this;
     }
 
@@ -1368,11 +1374,11 @@ function describeErrorDetail(error: unknown) {
     return String(error);
 }
 
-export function createWavetableWorkerController(connection: PatchConnectionLike, options: WorkerOptions = {}) {
+export function createWavetableWorkerController(connection: PatchConnectionLike, options: WavetableWorkerOptions = {}) {
     return new WavetableWorkerController(connection, options);
 }
 
-export default async function runWavetableWorker(connection: PatchConnectionLike, options: WorkerOptions = {}) {
+export default async function runWavetableWorker(connection: PatchConnectionLike, options: WavetableWorkerOptions = {}) {
     return startPatchWorkerServices(connection, [
         createModulationWorkerService,
         createRackStateWorkerService,

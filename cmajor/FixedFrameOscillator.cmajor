@@ -28,7 +28,31 @@ namespace wt
     let filterQMax = 20.0f;
     let modulationMsegSlotCount = 3;
     let modulationEnvSlotCount = 3;
-    let modulationRouteCount = 12;
+    let modulationVoiceSourceCount = 9;
+    let modulationMacroSourceCount = 4;
+    let modulationVoiceTargetCount = 12;
+    // Shared rack destination domain. Kept here because several isolated oscillator
+    // tests compile this module without VoiceReducer.cmajor.
+    let rackModTargetCount = 36;
+    let modulationVoiceRouteCellCount = modulationVoiceSourceCount * modulationVoiceTargetCount;
+    let modulationMacroVoiceRouteCellCount = modulationMacroSourceCount * modulationVoiceTargetCount;
+    let modulationVoiceRackRouteCellCount = modulationVoiceSourceCount * rackModTargetCount;
+    let modulationMacroRackRouteCellCount = modulationMacroSourceCount * rackModTargetCount;
+
+    struct VoiceModulationTargets
+    {
+        float32<modulationVoiceTargetCount> values;
+    }
+    let modulationArticulationRouteCellCount = modulationVoiceRouteCellCount + modulationMacroVoiceRouteCellCount;
+    let modulationArticulationInheritAmount = 1000000.0f;
+    let modulationPathVoice = 1;
+    let modulationPathMacroVoice = 2;
+    let modulationPathVoiceRack = 3;
+    let modulationPathMacroRack = 4;
+    // Shared reducer wire values. Zero remains invalid so a zero-initialised
+    // voice-to-rack instruction cannot be published accidentally.
+    let modulationReducerMaximum = 1;
+    let modulationReducerMean = 2;
     let modulationSourceMseg = 1;
     let modulationSourceEnv = 2;
     let modulationSourceVelocity = 3;
@@ -38,6 +62,10 @@ namespace wt
     let macroSlotCount = 4;
     let modulationPolarityUnipolar = 0;
     let modulationPolarityBipolar = 1;
+    let runtimeInstallRejectionNone = 0;
+    let runtimeInstallRejectionSession = 1;
+    let runtimeInstallRejectionGap = 2;
+    let runtimeInstallRejectionInvalid = 3;
     let modulationTargetWavetablePosition = 1;
     let modulationTargetWarpAmount = 2;
     let modulationTargetFilterCutoffOctaves = 3;
@@ -126,6 +154,21 @@ namespace wt
         int32 loadingGeneration;
     }
 
+    struct RuntimeInstallAck
+    {
+        int32 dspSessionId;
+        int32 acceptedModulationSerial;
+        int32 acceptedModulationProgramSerial;
+        int32 installedVoiceRouteCount;
+        int32 installedMacroVoiceRouteCount;
+        int32 installedVoiceRackRouteCount;
+        int32 installedMacroRackRouteCount;
+        int32 acceptedArticulationSerial;
+        int32 rejectedSerial;
+        int32 rejectionReason;
+        int32 syncSerial;
+    }
+
     struct VoiceRetune
     {
         int32 channel;
@@ -187,11 +230,13 @@ namespace wt
         float32 filterCutoffHz;
         float32 filterQ;
         float32[modulationMsegSlotCount] msegMorphs;
-        float32[modulationRouteCount] routeAmounts;
+        float32[modulationArticulationRouteCellCount] routeAmounts;
         float32[modulationEnvSlotCount] envelopeAttackSeconds;
         float32[modulationEnvSlotCount] envelopeDecaySeconds;
         float32[modulationEnvSlotCount] envelopeSustain;
         float32[modulationEnvSlotCount] envelopeReleaseSeconds;
+        int32 dspSessionId;
+        int32 deliverySerial;
     }
 
     struct VoiceArticulationMonitor
@@ -212,6 +257,8 @@ namespace wt
         int32 slot;
         int32 shapeIndex;
         float32[msegPaddedSamples] buffer;
+        int32 dspSessionId;
+        int32 deliverySerial;
     }
 
     struct ModulationMsegPlaybackUpload
@@ -225,6 +272,8 @@ namespace wt
         float32 loopEnd;
         int32 noteOffPolicy;
         bool legatoRestarts;
+        int32 dspSessionId;
+        int32 deliverySerial;
     }
 
     struct ModulationEnvelopeUpload
@@ -234,32 +283,197 @@ namespace wt
         float32 decaySeconds;
         float32 sustain;
         float32 releaseSeconds;
+        int32 dspSessionId;
+        int32 deliverySerial;
     }
 
-    struct ModulationRouteUpload
+    struct ModulationProgramUpload
     {
-        int32 routeIndex;
-        bool enabled;
-        int32 sourceKind;
-        int32 sourceSlot;
-        int32 polarityKind;
-        int32 targetKind;
-        float32 amount;
+        int32 voiceRouteCount;
+        int32[modulationVoiceRouteCellCount] voiceRouteCells;
+        int32[modulationVoiceRouteCellCount] voiceRouteSources;
+        int32[modulationVoiceRouteCellCount] voiceRouteTargets;
+        int32[modulationVoiceRouteCellCount] voiceRoutePolarities;
+        float32[modulationVoiceRouteCellCount] voiceRouteAmounts;
+
+        int32 macroVoiceRouteCount;
+        int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteCells;
+        int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteSources;
+        int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteTargets;
+        int32[modulationMacroVoiceRouteCellCount] macroVoiceRoutePolarities;
+        float32[modulationMacroVoiceRouteCellCount] macroVoiceRouteAmounts;
+
+        int32 voiceRackRouteCount;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRouteCells;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRouteSources;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRouteTargets;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRoutePolarities;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRouteReducers;
+        float32[modulationVoiceRackRouteCellCount] voiceRackRouteAmounts;
+
+        int32 macroRackRouteCount;
+        int32[modulationMacroRackRouteCellCount] macroRackRouteCells;
+        int32[modulationMacroRackRouteCellCount] macroRackRouteSources;
+        int32[modulationMacroRackRouteCellCount] macroRackRouteTargets;
+        int32[modulationMacroRackRouteCellCount] macroRackRoutePolarities;
+        float32[modulationMacroRackRouteCellCount] macroRackRouteAmounts;
+        int32 dspSessionId;
+        int32 deliverySerial;
     }
 
-    // Rack routes use a distinct wire shape so the long-shipped voice-route event
-    // remains byte-for-byte stable. Both endpoint types share the same twelve slots;
-    // uploading one disables the other representation at that slot.
-    struct RackModulationRouteUpload
+    struct ModulationAmountUpload
     {
-        int32 routeIndex;
-        bool enabled;
-        int32 sourceKind;
-        int32 sourceSlot;
-        int32 polarityKind;
-        int32 targetKind;
+        int32 pathKind;
+        int32 cellIndex;
         float32 amount;
-        int32 reducerKind;
+        int32 dspSessionId;
+        int32 deliverySerial;
+    }
+
+    bool isValidModulationPolarity (int32 polarityKind)
+    {
+        return polarityKind == modulationPolarityUnipolar
+            || polarityKind == modulationPolarityBipolar;
+    }
+
+    bool isFiniteRuntimeValue (float32 value)
+    {
+        return ! isnan (value) && ! isinf (value);
+    }
+
+    // Validate the complete sparse program before publishing any of it. Keeping
+    // this free of processor state makes every wire invariant directly testable.
+    bool isValidModulationProgram (ModulationProgramUpload& upload)
+    {
+        if (upload.voiceRouteCount < 0 || upload.voiceRouteCount > modulationVoiceRouteCellCount
+            || upload.macroVoiceRouteCount < 0 || upload.macroVoiceRouteCount > modulationMacroVoiceRouteCellCount
+            || upload.voiceRackRouteCount < 0 || upload.voiceRackRouteCount > modulationVoiceRackRouteCellCount
+            || upload.macroRackRouteCount < 0 || upload.macroRackRouteCount > modulationMacroRackRouteCellCount)
+            return false;
+
+        // Amount arrays are deterministic-cell indexed, including inactive tails
+        // that may later become articulation inheritance inputs. Reject poison at
+        // the runtime seam before any part of the program is published.
+        for (int32 cellIndex = 0; cellIndex < modulationVoiceRouteCellCount; ++cellIndex)
+            if (! isFiniteRuntimeValue (upload.voiceRouteAmounts.at (cellIndex)))
+                return false;
+
+        for (int32 cellIndex = 0; cellIndex < modulationMacroVoiceRouteCellCount; ++cellIndex)
+            if (! isFiniteRuntimeValue (upload.macroVoiceRouteAmounts.at (cellIndex)))
+                return false;
+
+        for (int32 cellIndex = 0; cellIndex < modulationVoiceRackRouteCellCount; ++cellIndex)
+            if (! isFiniteRuntimeValue (upload.voiceRackRouteAmounts.at (cellIndex)))
+                return false;
+
+        for (int32 cellIndex = 0; cellIndex < modulationMacroRackRouteCellCount; ++cellIndex)
+            if (! isFiniteRuntimeValue (upload.macroRackRouteAmounts.at (cellIndex)))
+                return false;
+
+        int32 previousCell = -1;
+        for (int32 routeIndex = 0; routeIndex < upload.voiceRouteCount; ++routeIndex)
+        {
+            let cellIndex = upload.voiceRouteCells.at (routeIndex);
+            let sourceIndex = upload.voiceRouteSources.at (routeIndex);
+            let targetIndex = upload.voiceRouteTargets.at (routeIndex);
+            if (cellIndex <= previousCell
+                || cellIndex < 0 || cellIndex >= modulationVoiceRouteCellCount
+                || sourceIndex < 0 || sourceIndex >= modulationVoiceSourceCount
+                || targetIndex < 0 || targetIndex >= modulationVoiceTargetCount
+                || cellIndex != (sourceIndex * modulationVoiceTargetCount) + targetIndex
+                || ! isValidModulationPolarity (upload.voiceRoutePolarities.at (routeIndex)))
+                return false;
+            previousCell = cellIndex;
+        }
+
+        previousCell = -1;
+        for (int32 routeIndex = 0; routeIndex < upload.macroVoiceRouteCount; ++routeIndex)
+        {
+            let cellIndex = upload.macroVoiceRouteCells.at (routeIndex);
+            let sourceIndex = upload.macroVoiceRouteSources.at (routeIndex);
+            let targetIndex = upload.macroVoiceRouteTargets.at (routeIndex);
+            if (cellIndex <= previousCell
+                || cellIndex < 0 || cellIndex >= modulationMacroVoiceRouteCellCount
+                || sourceIndex < 0 || sourceIndex >= modulationMacroSourceCount
+                || targetIndex < 0 || targetIndex >= modulationVoiceTargetCount
+                || cellIndex != (sourceIndex * modulationVoiceTargetCount) + targetIndex
+                || ! isValidModulationPolarity (upload.macroVoiceRoutePolarities.at (routeIndex)))
+                return false;
+            previousCell = cellIndex;
+        }
+
+        previousCell = -1;
+        for (int32 routeIndex = 0; routeIndex < upload.voiceRackRouteCount; ++routeIndex)
+        {
+            let cellIndex = upload.voiceRackRouteCells.at (routeIndex);
+            let sourceIndex = upload.voiceRackRouteSources.at (routeIndex);
+            let targetIndex = upload.voiceRackRouteTargets.at (routeIndex);
+            let reducerKind = upload.voiceRackRouteReducers.at (routeIndex);
+            if (cellIndex <= previousCell
+                || cellIndex < 0 || cellIndex >= modulationVoiceRackRouteCellCount
+                || sourceIndex < 0 || sourceIndex >= modulationVoiceSourceCount
+                || targetIndex < 0 || targetIndex >= rackModTargetCount
+                || cellIndex != (sourceIndex * rackModTargetCount) + targetIndex
+                || ! isValidModulationPolarity (upload.voiceRackRoutePolarities.at (routeIndex))
+                || (reducerKind != modulationReducerMaximum && reducerKind != modulationReducerMean))
+                return false;
+            previousCell = cellIndex;
+        }
+
+        previousCell = -1;
+        for (int32 routeIndex = 0; routeIndex < upload.macroRackRouteCount; ++routeIndex)
+        {
+            let cellIndex = upload.macroRackRouteCells.at (routeIndex);
+            let sourceIndex = upload.macroRackRouteSources.at (routeIndex);
+            let targetIndex = upload.macroRackRouteTargets.at (routeIndex);
+            if (cellIndex <= previousCell
+                || cellIndex < 0 || cellIndex >= modulationMacroRackRouteCellCount
+                || sourceIndex < 0 || sourceIndex >= modulationMacroSourceCount
+                || targetIndex < 0 || targetIndex >= rackModTargetCount
+                || cellIndex != (sourceIndex * rackModTargetCount) + targetIndex
+                || ! isValidModulationPolarity (upload.macroRackRoutePolarities.at (routeIndex)))
+                return false;
+            previousCell = cellIndex;
+        }
+
+        return true;
+    }
+
+    bool isValidArticulationSnapshot (ArticulationSnapshotUpload& upload)
+    {
+        if (! upload.enabled)
+            return true;
+
+        if (! isFiniteRuntimeValue (upload.framePosition)
+            || ! isFiniteRuntimeValue (upload.pan)
+            || ! isFiniteRuntimeValue (upload.unisonDetune)
+            || ! isFiniteRuntimeValue (upload.unisonBlend)
+            || ! isFiniteRuntimeValue (upload.unisonWidth)
+            || ! isFiniteRuntimeValue (upload.unisonPhase)
+            || ! isFiniteRuntimeValue (upload.unisonRandom)
+            || ! isFiniteRuntimeValue (upload.unisonWavetablePositionSpread)
+            || ! isFiniteRuntimeValue (upload.unisonWarpSpread)
+            || ! isFiniteRuntimeValue (upload.warpAmount)
+            || ! isFiniteRuntimeValue (upload.filterCutoffHz)
+            || ! isFiniteRuntimeValue (upload.filterQ))
+            return false;
+
+        for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
+            if (! isFiniteRuntimeValue (upload.msegMorphs.at (slotIndex)))
+                return false;
+
+        for (int32 routeIndex = 0; routeIndex < modulationArticulationRouteCellCount; ++routeIndex)
+            if (! isFiniteRuntimeValue (upload.routeAmounts.at (routeIndex)))
+                return false;
+
+        for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
+            if (! isFiniteRuntimeValue (upload.envelopeAttackSeconds.at (slotIndex))
+                || ! isFiniteRuntimeValue (upload.envelopeDecaySeconds.at (slotIndex))
+                || ! isFiniteRuntimeValue (upload.envelopeSustain.at (slotIndex))
+                || ! isFiniteRuntimeValue (upload.envelopeReleaseSeconds.at (slotIndex)))
+                return false;
+
+        return true;
     }
 
     float32 catmullRom (float32 p0, float32 p1, float32 p2, float32 p3, float32 t)
@@ -1440,13 +1654,12 @@ namespace wt
         input event WavetableMipFrame wavetableMipFrameIn;
         input event ServiceLoadAbort serviceLoadAbortIn;
         input event ArticulationSnapshotUpload articulationSnapshotIn;
-        input event int32 modulationClearIn;
-        input event int32 modulationEnableIn;
         input event ModulationMsegBufferUpload modulationMsegBufferIn;
         input event ModulationMsegPlaybackUpload modulationMsegPlaybackIn;
         input event ModulationEnvelopeUpload modulationEnvelopeIn;
-        input event ModulationRouteUpload modulationRouteIn;
-        input event RackModulationRouteUpload rackModulationRouteIn;
+        input event ModulationProgramUpload modulationProgramIn;
+        input event ModulationAmountUpload modulationAmountIn;
+        input event int32 runtimeInstallSyncIn;
         input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
         input value float32 glideTimeIn [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
         input value float32 warpModeIn [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
@@ -1485,7 +1698,8 @@ namespace wt
         output stream float32<2> out;
         output stream float32 trackingPitchHzOut;
         output stream float32 rackModOut[rackModTargetCount];
-        output value int32 modulationRejectedRouteCountOut;
+        output event int32 modulationRejectedRouteCountOut;
+        output event RuntimeInstallAck runtimeInstallAckOut;
 
         node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
         node mseg1 = wt::MsegReader[voiceCount];
@@ -1510,7 +1724,6 @@ namespace wt
         float32[voiceCount] voiceVelocity;
         float32[voiceCount] voicePitchGlideStep;
         int32[voiceCount] voiceGlideSamplesRemaining;
-        float32[voiceCount] voiceFrequencyHz;
         int32[voiceCount] voiceActive;
         int32[voiceCount] voiceGeneration;
         int32[voiceCount] voiceTrackingSerial;
@@ -1552,7 +1765,7 @@ namespace wt
         float32[articulationSlotCount] articulationFilterCutoffHz;
         float32[articulationSlotCount] articulationFilterQ;
         float32[articulationSlotCount * modulationMsegSlotCount] articulationMsegMorphs;
-        float32[articulationSlotCount * modulationRouteCount] articulationRouteAmounts;
+        float32[articulationSlotCount * modulationArticulationRouteCellCount] articulationRouteAmounts;
         float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeAttackSeconds;
         float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeDecaySeconds;
         float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeSustain;
@@ -1581,7 +1794,7 @@ namespace wt
         float32[voiceCount] voiceArticulationFilterCutoffHz;
         float32[voiceCount] voiceArticulationFilterQ;
         float32[voiceCount * modulationMsegSlotCount] voiceArticulationMsegMorphs;
-        float32[voiceCount * modulationRouteCount] voiceArticulationRouteAmounts;
+        float32[voiceCount * modulationArticulationRouteCellCount] voiceArticulationRouteAmounts;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeAttackSeconds;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeDecaySeconds;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeSustain;
@@ -1591,15 +1804,65 @@ namespace wt
         int32[voiceCount] voiceWarpHistoryWriteIndex;
         float32[voiceCount * maxUnisonVoiceCount * warpDecimatorTapCount] unisonWarpHistory;
         int32[voiceCount * maxUnisonVoiceCount] unisonWarpHistoryWriteIndex;
-        ModulationRouteUpload[modulationRouteCount] modulationRoutes;
-        RackModulationRouteUpload[modulationRouteCount] rackModulationRoutes;
-        bool modulationEnabled = true;
-        RackRouteReducer[modulationRouteCount] rackRouteReducers;
+        int32 voiceRouteCount;
+        int32[modulationVoiceRouteCellCount] voiceRouteCells;
+        int32[modulationVoiceRouteCellCount] voiceRouteSources;
+        int32[modulationVoiceRouteCellCount] voiceRouteTargets;
+        int32[modulationVoiceRouteCellCount] voiceRoutePolarities;
+        float32[modulationVoiceRouteCellCount] voiceRouteAmounts;
+        float32[modulationVoiceRouteCellCount] voiceRouteScales;
+        float32[modulationVoiceRouteCellCount] voiceRouteBiases;
+        bool[modulationVoiceSourceCount] voiceRouteSourceUsed;
+        float32<modulationVoiceTargetCount>[modulationVoiceSourceCount] voiceRouteScaleVectors;
+        float32<modulationVoiceTargetCount>[modulationVoiceSourceCount] voiceRouteBiasVectors;
+        int32 macroVoiceRouteCount;
+        int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteCells;
+        int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteSources;
+        int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteTargets;
+        int32[modulationMacroVoiceRouteCellCount] macroVoiceRoutePolarities;
+        float32[modulationMacroVoiceRouteCellCount] macroVoiceRouteAmounts;
+        bool[modulationMacroSourceCount] macroVoiceRouteSourceUsed;
+        float32<modulationVoiceTargetCount>[modulationMacroSourceCount] macroVoiceRouteScaleVectors;
+        float32<modulationVoiceTargetCount>[modulationMacroSourceCount] macroVoiceRouteBiasVectors;
+        int32 voiceRackRouteCount;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRouteCells;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRouteSources;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRouteTargets;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRoutePolarities;
+        int32[modulationVoiceRackRouteCellCount] voiceRackRouteReducers;
+        float32[modulationVoiceRackRouteCellCount] voiceRackRouteAmounts;
+        int32 macroRackRouteCount;
+        int32[modulationMacroRackRouteCellCount] macroRackRouteCells;
+        int32[modulationMacroRackRouteCellCount] macroRackRouteSources;
+        int32[modulationMacroRackRouteCellCount] macroRackRouteTargets;
+        int32[modulationMacroRackRouteCellCount] macroRackRoutePolarities;
+        float32[modulationMacroRackRouteCellCount] macroRackRouteAmounts;
+        bool[modulationMacroSourceCount] macroRackRouteSourceUsed;
+        float32<rackModTargetCount>[modulationMacroSourceCount] macroRackRouteScaleVectors;
+        float32<rackModTargetCount>[modulationMacroSourceCount] macroRackRouteBiasVectors;
+        bool[modulationVoiceSourceCount] voiceRackSourceUsed;
+        VoiceModulationTargets[voiceCount] voiceTargetOffsets;
+        float32[modulationMacroSourceCount] macroSourceValues;
+        float32<modulationVoiceTargetCount> macroVoiceBaseTargetOffsets;
+        float32<rackModTargetCount> macroRackBaseTargetOffsets;
+        float32[modulationVoiceSourceCount] voiceRackSourceSums;
+        float32[modulationVoiceSourceCount] voiceRackSourceMaxima;
+        float32[modulationVoiceSourceCount] voiceRackSourceBipolarStrongest;
+        float32[modulationVoiceSourceCount] voiceRackSourceBipolarMagnitudes;
+        int32 voiceRackParticipantCount;
+        float32 voiceRackParticipantReciprocal;
+        bool[modulationVoiceRackRouteCellCount] voiceRackCellActive;
+        bool[modulationVoiceRackRouteCellCount] voiceRackCellNextActive;
+        float32[modulationVoiceRackRouteCellCount] voiceRackCellHeldSources;
+        float32[modulationVoiceRackRouteCellCount] voiceRackCellGates;
         float32[rackModTargetCount] rackModAccumulator;
         float32[rackModTargetCount] rackModSmoothed;
         float32 rackModGateReleaseStepState;
         float32 rackModSmoothingCoefficientState;
         int32 rejectedModulationRouteCount;
+        int32 acceptedModulationSerial;
+        int32 acceptedModulationProgramSerial;
+        int32 acceptedArticulationSerial;
 
         float32[maxMipSampleCount] mip0Bank0Samples;
         float32[maxMipSampleCount] mip0Bank1Samples;
@@ -1814,29 +2077,6 @@ namespace wt
                 resetFilterState (int32 (voice));
         }
 
-        void clearModulationRoutes()
-        {
-            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
-            {
-                modulationRoutes.at (routeIndex).routeIndex = routeIndex;
-                modulationRoutes.at (routeIndex).enabled = false;
-                modulationRoutes.at (routeIndex).sourceKind = modulationSourceMseg;
-                modulationRoutes.at (routeIndex).sourceSlot = 0;
-                modulationRoutes.at (routeIndex).polarityKind = modulationPolarityUnipolar;
-                modulationRoutes.at (routeIndex).targetKind = modulationTargetWavetablePosition;
-                modulationRoutes.at (routeIndex).amount = 0.0f;
-
-                rackModulationRoutes.at (routeIndex).routeIndex = routeIndex;
-                rackModulationRoutes.at (routeIndex).enabled = false;
-                rackModulationRoutes.at (routeIndex).sourceKind = modulationSourceMseg;
-                rackModulationRoutes.at (routeIndex).sourceSlot = 0;
-                rackModulationRoutes.at (routeIndex).polarityKind = modulationPolarityUnipolar;
-                rackModulationRoutes.at (routeIndex).targetKind = modulationTargetRackBase;
-                rackModulationRoutes.at (routeIndex).amount = 0.0f;
-                rackModulationRoutes.at (routeIndex).reducerKind = modulationReducerUnset;
-            }
-        }
-
         float32 unisonSpreadScalar (int32 subVoiceIndex, int32 voiceCountForNote, int32 detuneMode)
         {
             if (voiceCountForNote <= 1)
@@ -1930,7 +2170,7 @@ namespace wt
 
         int32 articulationRouteIndex (int32 selectorA, int32 routeIndex)
         {
-            return (selectorA * modulationRouteCount) + routeIndex;
+            return (selectorA * modulationArticulationRouteCellCount) + routeIndex;
         }
 
         int32 articulationEnvelopeIndex (int32 selectorA, int32 slotIndex)
@@ -1945,7 +2185,7 @@ namespace wt
 
         int32 voiceArticulationRouteIndex (int32 voiceIndex, int32 routeIndex)
         {
-            return (voiceIndex * modulationRouteCount) + routeIndex;
+            return (voiceIndex * modulationArticulationRouteCellCount) + routeIndex;
         }
 
         int32 voiceArticulationEnvelopeIndex (int32 voiceIndex, int32 slotIndex)
@@ -2029,10 +2269,14 @@ namespace wt
                     = articulationMsegMorphs.at (articulationMsegIndex (selectorA, slotIndex));
             }
 
-            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+            for (int32 routeIndex = 0; routeIndex < modulationArticulationRouteCellCount; ++routeIndex)
             {
+                let storedAmount = articulationRouteAmounts.at (articulationRouteIndex (selectorA, routeIndex));
+                let baseAmount = routeIndex < modulationVoiceRouteCellCount
+                    ? voiceRouteAmounts.at (routeIndex)
+                    : macroVoiceRouteAmounts.at (routeIndex - modulationVoiceRouteCellCount);
                 voiceArticulationRouteAmounts.at (voiceArticulationRouteIndex (int32 (voice), routeIndex))
-                    = articulationRouteAmounts.at (articulationRouteIndex (selectorA, routeIndex));
+                    = storedAmount == modulationArticulationInheritAmount ? baseAmount : storedAmount;
             }
 
             for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
@@ -2236,31 +2480,6 @@ namespace wt
             return 0.0f;
         }
 
-        float32 resolveRouteSourceValue (int32 voiceIndex, ModulationRouteUpload route)
-        {
-            if (route.sourceKind == modulationSourceMseg)
-                return resolveMsegValue (voiceIndex, route.sourceSlot);
-
-            if (route.sourceKind == modulationSourceEnv)
-                return resolveEnvValue (voiceIndex, route.sourceSlot);
-
-            let voice = wrap<voiceCount> (voiceIndex);
-
-            if (route.sourceKind == modulationSourceVelocity)
-                return std::intrinsics::clamp (voiceVelocity.at (voice), 0.0f, 1.0f);
-
-            if (route.sourceKind == modulationSourcePressure)
-                return std::intrinsics::clamp (voicePressure.at (voice), 0.0f, 1.0f);
-
-            if (route.sourceKind == modulationSourceSlide)
-                return std::intrinsics::clamp (voiceSlide.at (voice), 0.0f, 1.0f);
-
-            if (route.sourceKind == modulationSourceMacro)
-                return resolveMacroValue (route.sourceSlot);
-
-            return 0.0f;
-        }
-
         float32 resolveMacroValue (int32 slot)
         {
             if (slot == 1) return std::intrinsics::clamp (macro1In, 0.0f, 1.0f);
@@ -2271,14 +2490,182 @@ namespace wt
             return 0.0f;
         }
 
-        float32 applyRoutePolarity (float32 sourceValue, ModulationRouteUpload route)
+        float32 resolveVoiceSourceValue (int32 voiceIndex, int32 sourceIndex)
         {
-            let clampedSourceValue = std::intrinsics::clamp (sourceValue, 0.0f, 1.0f);
+            if (sourceIndex < 3)
+                return resolveMsegValue (voiceIndex, sourceIndex + 1);
 
-            if (route.polarityKind == modulationPolarityBipolar)
-                return (clampedSourceValue * 2.0f) - 1.0f;
+            if (sourceIndex < 6)
+                return resolveEnvValue (voiceIndex, sourceIndex - 2);
 
-            return clampedSourceValue;
+            let voice = wrap<voiceCount> (voiceIndex);
+
+            if (sourceIndex == 6)
+                return std::intrinsics::clamp (voiceVelocity.at (voice), 0.0f, 1.0f);
+
+            if (sourceIndex == 7)
+                return std::intrinsics::clamp (voicePressure.at (voice), 0.0f, 1.0f);
+
+            if (sourceIndex == 8)
+                return std::intrinsics::clamp (voiceSlide.at (voice), 0.0f, 1.0f);
+
+            return 0.0f;
+        }
+
+        void beginModulationFrame()
+        {
+            for (wrap<modulationMacroSourceCount> macroIndex)
+                macroSourceValues[macroIndex] = resolveMacroValue (int32 (macroIndex) + 1);
+
+            macroVoiceBaseTargetOffsets = float32<modulationVoiceTargetCount> (0.0f);
+
+            for (wrap<modulationMacroSourceCount> sourceIndex)
+            {
+                if (macroVoiceRouteSourceUsed[sourceIndex])
+                    macroVoiceBaseTargetOffsets += (
+                        macroVoiceRouteScaleVectors[sourceIndex] * macroSourceValues[sourceIndex]
+                    ) + macroVoiceRouteBiasVectors[sourceIndex];
+            }
+
+            for (wrap<modulationVoiceSourceCount> sourceIndex)
+            {
+                voiceRackSourceSums[sourceIndex] = 0.0f;
+                voiceRackSourceMaxima[sourceIndex] = 0.0f;
+                voiceRackSourceBipolarStrongest[sourceIndex] = 0.0f;
+                voiceRackSourceBipolarMagnitudes[sourceIndex] = 0.0f;
+            }
+
+            voiceRackParticipantCount = 0;
+        }
+
+        void accumulateVoiceModulationTargets (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let usesArticulation = voiceUsesArticulation.at (voice);
+
+            if (usesArticulation)
+            {
+                for (wrap<modulationVoiceTargetCount> targetIndex)
+                    voiceTargetOffsets[voice].values[targetIndex] = 0.0f;
+
+                int32 resolvedSourceIndex = -1;
+                float32 sourceValue = 0.0f;
+                for (wrap<modulationVoiceRouteCellCount> routeIndex)
+                {
+                    if (int32 (routeIndex) >= voiceRouteCount)
+                        break;
+
+                    let sourceIndex = voiceRouteSources[routeIndex];
+                    if (sourceIndex != resolvedSourceIndex)
+                    {
+                        resolvedSourceIndex = sourceIndex;
+                        sourceValue = std::intrinsics::clamp (
+                            resolveVoiceSourceValue (voiceIndex, sourceIndex),
+                            0.0f,
+                            1.0f
+                        );
+                    }
+
+                    let targetIndex = wrap<modulationVoiceTargetCount> (voiceRouteTargets[routeIndex]);
+                    let cellIndex = voiceRouteCells[routeIndex];
+                    let amount = voiceArticulationRouteAmounts.at (
+                        voiceArticulationRouteIndex (voiceIndex, cellIndex)
+                    );
+                    voiceTargetOffsets[voice].values[targetIndex] += applyModulationPolarity (
+                        sourceValue,
+                        voiceRoutePolarities[routeIndex]
+                    ) * amount;
+                }
+
+                for (wrap<modulationMacroVoiceRouteCellCount> routeIndex)
+                {
+                    if (int32 (routeIndex) >= macroVoiceRouteCount)
+                        break;
+
+                    let sourceIndex = macroVoiceRouteSources[routeIndex];
+                    let targetIndex = wrap<modulationVoiceTargetCount> (macroVoiceRouteTargets[routeIndex]);
+                    let cellIndex = macroVoiceRouteCells[routeIndex];
+                    let articulationCellIndex = modulationVoiceRouteCellCount + cellIndex;
+                    let amount = voiceArticulationRouteAmounts.at (
+                        voiceArticulationRouteIndex (voiceIndex, articulationCellIndex)
+                    );
+                    voiceTargetOffsets[voice].values[targetIndex] += applyModulationPolarity (
+                        macroSourceValues.at (sourceIndex),
+                        macroVoiceRoutePolarities[routeIndex]
+                    ) * amount;
+                }
+
+                return;
+            }
+
+            voiceTargetOffsets[voice].values = macroVoiceBaseTargetOffsets;
+            for (wrap<modulationVoiceSourceCount> sourceIndex)
+            {
+                if (! voiceRouteSourceUsed[sourceIndex])
+                    continue;
+
+                let sourceValue = std::intrinsics::clamp (
+                    resolveVoiceSourceValue (voiceIndex, int32 (sourceIndex)),
+                    0.0f,
+                    1.0f
+                );
+                voiceTargetOffsets[voice].values += (voiceRouteScaleVectors[sourceIndex] * sourceValue)
+                    + voiceRouteBiasVectors[sourceIndex];
+            }
+        }
+
+        float32 voiceTargetOffset (int32 voiceIndex, int32 targetIndex)
+        {
+            return voiceTargetOffsets[wrap<voiceCount> (voiceIndex)]
+                .values[wrap<modulationVoiceTargetCount> (targetIndex)];
+        }
+
+        void accumulateVoiceRackSources (int32 voiceIndex)
+        {
+            if (voiceRackRouteCount == 0)
+                return;
+
+            for (wrap<modulationVoiceSourceCount> sourceIndex)
+            {
+                if (! voiceRackSourceUsed[sourceIndex])
+                    continue;
+
+                let sourceValue = std::intrinsics::clamp (
+                    resolveVoiceSourceValue (voiceIndex, int32 (sourceIndex)),
+                    0.0f,
+                    1.0f
+                );
+                let bipolarValue = (sourceValue * 2.0f) - 1.0f;
+                let bipolarMagnitude = std::intrinsics::abs (bipolarValue);
+                voiceRackSourceSums[sourceIndex] += sourceValue;
+                voiceRackSourceMaxima[sourceIndex] = std::intrinsics::max (
+                    voiceRackSourceMaxima[sourceIndex],
+                    sourceValue
+                );
+
+                if (voiceRackParticipantCount == 0
+                    || bipolarMagnitude > voiceRackSourceBipolarMagnitudes[sourceIndex])
+                {
+                    voiceRackSourceBipolarStrongest[sourceIndex] = bipolarValue;
+                    voiceRackSourceBipolarMagnitudes[sourceIndex] = bipolarMagnitude;
+                }
+            }
+
+            voiceRackParticipantCount += 1;
+        }
+
+        float32 resolveVoiceRackSource (int32 sourceIndex, int32 polarityKind, int32 reducerKind)
+        {
+            if (reducerKind == modulationReducerMean)
+            {
+                let mean = voiceRackSourceSums.at (sourceIndex) * voiceRackParticipantReciprocal;
+                return applyModulationPolarity (mean, polarityKind);
+            }
+
+            if (polarityKind == modulationPolarityBipolar)
+                return voiceRackSourceBipolarStrongest.at (sourceIndex);
+
+            return voiceRackSourceMaxima.at (sourceIndex);
         }
 
         bool voiceIsSoundingForRackModulation (int32 voiceIndex)
@@ -2287,64 +2674,59 @@ namespace wt
             return voiceActive.at (voice) != 0 || envelopes[voice].gainOut > 0.0f;
         }
 
-        float32 resolveRackRouteSourceValue (int32 voiceIndex, RackModulationRouteUpload route)
-        {
-            ModulationRouteUpload voiceRoute;
-            voiceRoute.sourceKind = route.sourceKind;
-            voiceRoute.sourceSlot = route.sourceSlot;
-            return resolveRouteSourceValue (voiceIndex, voiceRoute);
-        }
-
-        void beginRackModulationFrame()
-        {
-            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
-                rackRouteReducers.at (routeIndex).beginRackRouteFrame();
-        }
-
-        void accumulateRackModulationForVoice (int32 voiceIndex)
-        {
-            if (! modulationEnabled || ! voiceIsSoundingForRackModulation (voiceIndex))
-                return;
-
-            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
-            {
-                let route = rackModulationRoutes.at (routeIndex);
-
-                if (route.enabled && isVoiceModulationSource (route.sourceKind))
-                    rackRouteReducers.at (routeIndex).accumulateRackRouteVoice (
-                        resolveRackRouteSourceValue (voiceIndex, route),
-                        route.polarityKind);
-            }
-        }
-
         void updateRackModulationOutputs()
         {
             for (wrap<rackModTargetCount> target)
                 rackModAccumulator[target] = 0.0f;
 
-            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+            if (voiceRackParticipantCount > 0)
+                voiceRackParticipantReciprocal = 1.0f / float32 (voiceRackParticipantCount);
+
+            for (wrap<modulationVoiceRackRouteCellCount> routeIndex)
             {
-                let route = rackModulationRoutes.at (routeIndex);
-                let reducedOffset = rackRouteReducers.at (routeIndex)
-                                      .resolveRackRouteOffset (route.reducerKind,
-                                                               route.amount,
-                                                               rackModGateReleaseStepState);
+                if (int32 (routeIndex) >= voiceRackRouteCount)
+                    break;
 
-                if (! modulationEnabled || ! route.enabled)
-                    continue;
+                let cellIndex = wrap<modulationVoiceRackRouteCellCount> (voiceRackRouteCells[routeIndex]);
+                let sourceIndex = voiceRackRouteSources[routeIndex];
 
-                let target = wrap<rackModTargetCount> (rackModTargetIndex (route.targetKind));
-                rackModAccumulator[target] += isVoiceModulationSource (route.sourceKind)
-                    ? reducedOffset
-                    : resolveGlobalRackOffset (resolveMacroValue (route.sourceSlot),
-                                               route.polarityKind,
-                                               route.amount);
+                if (voiceRackParticipantCount > 0)
+                {
+                    voiceRackCellHeldSources[cellIndex] = resolveVoiceRackSource (
+                        sourceIndex,
+                        voiceRackRoutePolarities[routeIndex],
+                        voiceRackRouteReducers[routeIndex]
+                    );
+                    voiceRackCellGates[cellIndex] = 1.0f;
+                }
+                else
+                {
+                    voiceRackCellGates[cellIndex] = std::intrinsics::max (
+                        0.0f,
+                        voiceRackCellGates[cellIndex] - rackModGateReleaseStepState
+                    );
+                }
+
+                let target = wrap<rackModTargetCount> (voiceRackRouteTargets[routeIndex]);
+                rackModAccumulator[target] += voiceRackCellHeldSources[cellIndex]
+                    * voiceRackCellGates[cellIndex]
+                    * voiceRackRouteAmounts[cellIndex];
+            }
+
+            macroRackBaseTargetOffsets = float32<rackModTargetCount> (0.0f);
+            for (wrap<modulationMacroSourceCount> sourceIndex)
+            {
+                if (macroRackRouteSourceUsed[sourceIndex])
+                    macroRackBaseTargetOffsets += (
+                        macroRackRouteScaleVectors[sourceIndex] * macroSourceValues[sourceIndex]
+                    ) + macroRackRouteBiasVectors[sourceIndex];
             }
 
             for (wrap<rackModTargetCount> target)
             {
                 rackModSmoothed[target] = rackModSmoothTowards (rackModSmoothed[target],
-                                                                rackModAccumulator[target],
+                                                                rackModAccumulator[target]
+                                                                    + macroRackBaseTargetOffsets[target],
                                                                 rackModSmoothingCoefficientState);
                 rackModOut[target] <- rackModSmoothed[target];
             }
@@ -3195,15 +3577,6 @@ namespace wt
             }
         }
 
-        void updateVoiceFrequencyHz (int32 voiceIndex)
-        {
-            let voice = wrap<voiceCount> (voiceIndex);
-            let resolvedPitch = voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice);
-            let frequencyHz = std::notes::noteToFrequency (resolvedPitch);
-            voiceFrequencyHz.at (voice) = frequencyHz;
-            phasors.at (voice).setFrequency (processor.frequency, frequencyHz);
-        }
-
         void clearVoiceGlide (int32 voiceIndex)
         {
             let voice = wrap<voiceCount> (voiceIndex);
@@ -3218,7 +3591,6 @@ namespace wt
             voiceCurrentPitch.at (voice) = pitch;
             voiceTargetPitch.at (voice) = pitch;
             clearVoiceGlide (voiceIndex);
-            updateVoiceFrequencyHz (voiceIndex);
         }
 
         void startVoiceGlideToPitch (int32 voiceIndex, float32 targetPitch)
@@ -3240,7 +3612,6 @@ namespace wt
 
             voiceGlideSamplesRemaining.at (voice) = glideSamples;
             voicePitchGlideStep.at (voice) = (targetPitch - voiceCurrentPitch.at (voice)) / float32 (glideSamples);
-            updateVoiceFrequencyHz (voiceIndex);
         }
 
         void advanceVoicePitchState (int32 voiceIndex)
@@ -3258,8 +3629,6 @@ namespace wt
                     clearVoiceGlide (voiceIndex);
                 }
             }
-
-            updateVoiceFrequencyHz (voiceIndex);
         }
 
         void startVoiceFromNote (int32 index,
@@ -3337,7 +3706,6 @@ namespace wt
         {
             let voice = wrap<voiceCount> (index);
             voiceBendSemitones.at (voice) = bend.bendSemitones;
-            updateVoiceFrequencyHz (index);
         }
 
         event voiceEventIn (int index, std::notes::Slide slide)
@@ -3411,26 +3779,386 @@ namespace wt
             }
         }
 
-        event modulationClearIn (int32 unused)
+        void rejectModulationProgram()
         {
-            clearModulationRoutes();
+            rejectedModulationRouteCount += 1;
+            modulationRejectedRouteCountOut <- rejectedModulationRouteCount;
         }
 
-        event modulationEnableIn (int32 enabled)
+        void emitRuntimeInstallAck (int32 rejectedSerial, int32 rejectionReason, int32 syncSerial)
         {
-            modulationEnabled = enabled != 0;
+            RuntimeInstallAck ack;
+            ack.dspSessionId = currentDspSessionId;
+            ack.acceptedModulationSerial = acceptedModulationSerial;
+            ack.acceptedModulationProgramSerial = acceptedModulationProgramSerial;
+            ack.installedVoiceRouteCount = voiceRouteCount;
+            ack.installedMacroVoiceRouteCount = macroVoiceRouteCount;
+            ack.installedVoiceRackRouteCount = voiceRackRouteCount;
+            ack.installedMacroRackRouteCount = macroRackRouteCount;
+            ack.acceptedArticulationSerial = acceptedArticulationSerial;
+            ack.rejectedSerial = rejectedSerial;
+            ack.rejectionReason = rejectionReason;
+            ack.syncSerial = syncSerial;
+            runtimeInstallAckOut <- ack;
+        }
+
+        int32 beginModulationRuntimeInstall (int32 dspSessionId, int32 deliverySerial)
+        {
+            if (dspSessionId != currentDspSessionId)
+            {
+                emitRuntimeInstallAck (deliverySerial, runtimeInstallRejectionSession, 0);
+                return 0;
+            }
+
+            if (deliverySerial <= 0 || deliverySerial > acceptedModulationSerial + 1)
+            {
+                emitRuntimeInstallAck (deliverySerial, runtimeInstallRejectionGap, 0);
+                return 0;
+            }
+
+            if (deliverySerial <= acceptedModulationSerial)
+            {
+                emitRuntimeInstallAck (0, runtimeInstallRejectionNone, 0);
+                return 0;
+            }
+
+            return 2;
+        }
+
+        int32 beginArticulationRuntimeInstall (int32 dspSessionId, int32 deliverySerial)
+        {
+            if (dspSessionId != currentDspSessionId)
+            {
+                emitRuntimeInstallAck (deliverySerial, runtimeInstallRejectionSession, 0);
+                return 0;
+            }
+
+            if (deliverySerial >= 0 || deliverySerial < acceptedArticulationSerial - 1)
+            {
+                emitRuntimeInstallAck (deliverySerial, runtimeInstallRejectionGap, 0);
+                return 0;
+            }
+
+            if (deliverySerial >= acceptedArticulationSerial)
+            {
+                emitRuntimeInstallAck (0, runtimeInstallRejectionNone, 0);
+                return 0;
+            }
+
+            return 2;
+        }
+
+        void completeModulationRuntimeInstall (int32 deliverySerial)
+        {
+            if (deliverySerial > 0)
+            {
+                acceptedModulationSerial = deliverySerial;
+                emitRuntimeInstallAck (0, runtimeInstallRejectionNone, 0);
+            }
+        }
+
+        void completeArticulationRuntimeInstall (int32 deliverySerial)
+        {
+            if (deliverySerial < 0)
+            {
+                acceptedArticulationSerial = deliverySerial;
+                emitRuntimeInstallAck (0, runtimeInstallRejectionNone, 0);
+            }
+        }
+
+        void rejectRuntimeInstall (int32 deliverySerial)
+        {
+            if (deliverySerial != 0)
+                emitRuntimeInstallAck (deliverySerial, runtimeInstallRejectionInvalid, 0);
+        }
+
+        event runtimeInstallSyncIn (int32 syncSerial)
+        {
+            emitRuntimeInstallAck (0, runtimeInstallRejectionNone, syncSerial);
+        }
+
+        event modulationProgramIn (ModulationProgramUpload upload)
+        {
+            let installKind = beginModulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
+            if (installKind == 0)
+                return;
+
+            if (! isValidModulationProgram (upload))
+            {
+                rejectModulationProgram();
+                rejectRuntimeInstall (upload.deliverySerial);
+                return;
+            }
+
+            for (int32 sourceIndex = 0; sourceIndex < modulationVoiceSourceCount; ++sourceIndex)
+            {
+                voiceRackSourceUsed.at (sourceIndex) = false;
+                voiceRouteSourceUsed.at (sourceIndex) = false;
+                voiceRouteScaleVectors.at (sourceIndex)
+                    = float32<modulationVoiceTargetCount> (0.0f);
+                voiceRouteBiasVectors.at (sourceIndex)
+                    = float32<modulationVoiceTargetCount> (0.0f);
+            }
+
+            for (int32 sourceIndex = 0; sourceIndex < modulationMacroSourceCount; ++sourceIndex)
+            {
+                macroVoiceRouteSourceUsed.at (sourceIndex) = false;
+                macroVoiceRouteScaleVectors.at (sourceIndex)
+                    = float32<modulationVoiceTargetCount> (0.0f);
+                macroVoiceRouteBiasVectors.at (sourceIndex)
+                    = float32<modulationVoiceTargetCount> (0.0f);
+                macroRackRouteSourceUsed.at (sourceIndex) = false;
+                macroRackRouteScaleVectors.at (sourceIndex)
+                    = float32<rackModTargetCount> (0.0f);
+                macroRackRouteBiasVectors.at (sourceIndex)
+                    = float32<rackModTargetCount> (0.0f);
+            }
+
+            for (int32 cellIndex = 0; cellIndex < modulationVoiceRouteCellCount; ++cellIndex)
+                voiceRouteAmounts.at (cellIndex) = upload.voiceRouteAmounts.at (cellIndex);
+
+            for (int32 routeIndex = 0; routeIndex < upload.voiceRouteCount; ++routeIndex)
+            {
+                let cellIndex = upload.voiceRouteCells.at (routeIndex);
+                let sourceIndex = upload.voiceRouteSources.at (routeIndex);
+                let targetIndex = upload.voiceRouteTargets.at (routeIndex);
+                let polarityKind = upload.voiceRoutePolarities.at (routeIndex);
+                let amount = upload.voiceRouteAmounts.at (cellIndex);
+                voiceRouteCells.at (routeIndex) = cellIndex;
+                voiceRouteSources.at (routeIndex) = sourceIndex;
+                voiceRouteTargets.at (routeIndex) = targetIndex;
+                voiceRoutePolarities.at (routeIndex) = polarityKind;
+                voiceRouteScales.at (routeIndex) = modulationRouteScale (amount, polarityKind);
+                voiceRouteBiases.at (routeIndex) = modulationRouteBias (amount, polarityKind);
+                voiceRouteSourceUsed.at (sourceIndex) = true;
+                voiceRouteScaleVectors.at (sourceIndex).at (targetIndex)
+                    = modulationRouteScale (amount, polarityKind);
+                voiceRouteBiasVectors.at (sourceIndex).at (targetIndex)
+                    = modulationRouteBias (amount, polarityKind);
+            }
+
+            for (int32 cellIndex = 0; cellIndex < modulationMacroVoiceRouteCellCount; ++cellIndex)
+                macroVoiceRouteAmounts.at (cellIndex) = upload.macroVoiceRouteAmounts.at (cellIndex);
+
+            for (int32 routeIndex = 0; routeIndex < upload.macroVoiceRouteCount; ++routeIndex)
+            {
+                let cellIndex = upload.macroVoiceRouteCells.at (routeIndex);
+                let sourceIndex = upload.macroVoiceRouteSources.at (routeIndex);
+                let targetIndex = upload.macroVoiceRouteTargets.at (routeIndex);
+                let polarityKind = upload.macroVoiceRoutePolarities.at (routeIndex);
+                let amount = upload.macroVoiceRouteAmounts.at (cellIndex);
+                macroVoiceRouteCells.at (routeIndex) = cellIndex;
+                macroVoiceRouteSources.at (routeIndex) = sourceIndex;
+                macroVoiceRouteTargets.at (routeIndex) = targetIndex;
+                macroVoiceRoutePolarities.at (routeIndex) = polarityKind;
+                macroVoiceRouteSourceUsed.at (sourceIndex) = true;
+                macroVoiceRouteScaleVectors.at (sourceIndex).at (targetIndex)
+                    = modulationRouteScale (amount, polarityKind);
+                macroVoiceRouteBiasVectors.at (sourceIndex).at (targetIndex)
+                    = modulationRouteBias (amount, polarityKind);
+            }
+
+            // Reconcile only the old and new sparse prefixes. A topology edit must
+            // not scan the complete rack-routing domain on the audio thread.
+            for (int32 routeIndex = 0; routeIndex < voiceRackRouteCount; ++routeIndex)
+                voiceRackCellNextActive.at (voiceRackRouteCells.at (routeIndex)) = false;
+
+            for (int32 routeIndex = 0; routeIndex < upload.voiceRackRouteCount; ++routeIndex)
+            {
+                let cellIndex = upload.voiceRackRouteCells.at (routeIndex);
+                let sourceIndex = upload.voiceRackRouteSources.at (routeIndex);
+                voiceRackSourceUsed.at (sourceIndex) = true;
+                voiceRackCellNextActive.at (cellIndex) = true;
+            }
+
+            for (int32 routeIndex = 0; routeIndex < voiceRackRouteCount; ++routeIndex)
+            {
+                let cellIndex = voiceRackRouteCells.at (routeIndex);
+                if (! voiceRackCellNextActive.at (cellIndex))
+                {
+                    voiceRackCellHeldSources.at (cellIndex) = 0.0f;
+                    voiceRackCellGates.at (cellIndex) = 0.0f;
+                    voiceRackCellActive.at (cellIndex) = false;
+                }
+            }
+
+            for (int32 routeIndex = 0; routeIndex < upload.voiceRackRouteCount; ++routeIndex)
+            {
+                let cellIndex = upload.voiceRackRouteCells.at (routeIndex);
+                voiceRackRouteCells.at (routeIndex) = cellIndex;
+                voiceRackRouteSources.at (routeIndex) = upload.voiceRackRouteSources.at (routeIndex);
+                voiceRackRouteTargets.at (routeIndex) = upload.voiceRackRouteTargets.at (routeIndex);
+                voiceRackRoutePolarities.at (routeIndex) = upload.voiceRackRoutePolarities.at (routeIndex);
+                voiceRackRouteReducers.at (routeIndex) = upload.voiceRackRouteReducers.at (routeIndex);
+                voiceRackRouteAmounts.at (cellIndex) = upload.voiceRackRouteAmounts.at (cellIndex);
+
+                if (! voiceRackCellActive.at (cellIndex))
+                {
+                    voiceRackCellHeldSources.at (cellIndex) = 0.0f;
+                    voiceRackCellGates.at (cellIndex) = 0.0f;
+                }
+                voiceRackCellActive.at (cellIndex) = true;
+            }
+
+            for (int32 routeIndex = 0; routeIndex < upload.macroRackRouteCount; ++routeIndex)
+            {
+                let cellIndex = upload.macroRackRouteCells.at (routeIndex);
+                let sourceIndex = upload.macroRackRouteSources.at (routeIndex);
+                let targetIndex = upload.macroRackRouteTargets.at (routeIndex);
+                let polarityKind = upload.macroRackRoutePolarities.at (routeIndex);
+                let amount = upload.macroRackRouteAmounts.at (cellIndex);
+                macroRackRouteCells.at (routeIndex) = cellIndex;
+                macroRackRouteSources.at (routeIndex) = sourceIndex;
+                macroRackRouteTargets.at (routeIndex) = targetIndex;
+                macroRackRoutePolarities.at (routeIndex) = polarityKind;
+                macroRackRouteAmounts.at (cellIndex) = amount;
+                macroRackRouteSourceUsed.at (sourceIndex) = true;
+                macroRackRouteScaleVectors.at (sourceIndex).at (targetIndex)
+                    = modulationRouteScale (amount, polarityKind);
+                macroRackRouteBiasVectors.at (sourceIndex).at (targetIndex)
+                    = modulationRouteBias (amount, polarityKind);
+            }
+
+            voiceRouteCount = upload.voiceRouteCount;
+            macroVoiceRouteCount = upload.macroVoiceRouteCount;
+            voiceRackRouteCount = upload.voiceRackRouteCount;
+            macroRackRouteCount = upload.macroRackRouteCount;
+            acceptedModulationProgramSerial = upload.deliverySerial;
+            completeModulationRuntimeInstall (upload.deliverySerial);
+        }
+
+        event modulationAmountIn (ModulationAmountUpload upload)
+        {
+            let installKind = beginModulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
+            if (installKind == 0)
+                return;
+
+            if (! isFiniteRuntimeValue (upload.amount))
+            {
+                rejectModulationProgram();
+                rejectRuntimeInstall (upload.deliverySerial);
+                return;
+            }
+
+            bool applied = false;
+            if (upload.pathKind == modulationPathVoice
+                && upload.cellIndex >= 0 && upload.cellIndex < modulationVoiceRouteCellCount)
+            {
+                for (int32 routeIndex = 0; routeIndex < voiceRouteCount; ++routeIndex)
+                {
+                    if (voiceRouteCells.at (routeIndex) == upload.cellIndex)
+                    {
+                        voiceRouteAmounts.at (upload.cellIndex) = upload.amount;
+                        voiceRouteScales.at (routeIndex) = modulationRouteScale (
+                            upload.amount,
+                            voiceRoutePolarities.at (routeIndex)
+                        );
+                        voiceRouteBiases.at (routeIndex) = modulationRouteBias (
+                            upload.amount,
+                            voiceRoutePolarities.at (routeIndex)
+                        );
+                        let sourceIndex = voiceRouteSources.at (routeIndex);
+                        let targetIndex = voiceRouteTargets.at (routeIndex);
+                        voiceRouteScaleVectors.at (sourceIndex).at (targetIndex)
+                            = voiceRouteScales.at (routeIndex);
+                        voiceRouteBiasVectors.at (sourceIndex).at (targetIndex)
+                            = voiceRouteBiases.at (routeIndex);
+                        applied = true;
+                        break;
+                    }
+                }
+            }
+            else if (upload.pathKind == modulationPathMacroVoice
+                && upload.cellIndex >= 0 && upload.cellIndex < modulationMacroVoiceRouteCellCount)
+            {
+                for (int32 routeIndex = 0; routeIndex < macroVoiceRouteCount; ++routeIndex)
+                {
+                    if (macroVoiceRouteCells.at (routeIndex) == upload.cellIndex)
+                    {
+                        macroVoiceRouteAmounts.at (upload.cellIndex) = upload.amount;
+                        let sourceIndex = macroVoiceRouteSources.at (routeIndex);
+                        let targetIndex = macroVoiceRouteTargets.at (routeIndex);
+                        let polarityKind = macroVoiceRoutePolarities.at (routeIndex);
+                        macroVoiceRouteScaleVectors.at (sourceIndex).at (targetIndex)
+                            = modulationRouteScale (upload.amount, polarityKind);
+                        macroVoiceRouteBiasVectors.at (sourceIndex).at (targetIndex)
+                            = modulationRouteBias (upload.amount, polarityKind);
+                        applied = true;
+                        break;
+                    }
+                }
+            }
+            else if (upload.pathKind == modulationPathVoiceRack
+                && upload.cellIndex >= 0 && upload.cellIndex < modulationVoiceRackRouteCellCount)
+            {
+                for (int32 routeIndex = 0; routeIndex < voiceRackRouteCount; ++routeIndex)
+                {
+                    if (voiceRackRouteCells.at (routeIndex) == upload.cellIndex)
+                    {
+                        voiceRackRouteAmounts.at (upload.cellIndex) = upload.amount;
+                        applied = true;
+                        break;
+                    }
+                }
+            }
+            else if (upload.pathKind == modulationPathMacroRack
+                && upload.cellIndex >= 0 && upload.cellIndex < modulationMacroRackRouteCellCount)
+            {
+                for (int32 routeIndex = 0; routeIndex < macroRackRouteCount; ++routeIndex)
+                {
+                    if (macroRackRouteCells.at (routeIndex) == upload.cellIndex)
+                    {
+                        macroRackRouteAmounts.at (upload.cellIndex) = upload.amount;
+                        let sourceIndex = macroRackRouteSources.at (routeIndex);
+                        let targetIndex = macroRackRouteTargets.at (routeIndex);
+                        let polarityKind = macroRackRoutePolarities.at (routeIndex);
+                        macroRackRouteScaleVectors.at (sourceIndex).at (targetIndex)
+                            = modulationRouteScale (upload.amount, polarityKind);
+                        macroRackRouteBiasVectors.at (sourceIndex).at (targetIndex)
+                            = modulationRouteBias (upload.amount, polarityKind);
+                        applied = true;
+                        break;
+                    }
+                }
+            }
+
+            if (applied)
+            {
+                completeModulationRuntimeInstall (upload.deliverySerial);
+            }
+            else
+            {
+                rejectModulationProgram();
+                rejectRuntimeInstall (upload.deliverySerial);
+            }
         }
 
         event articulationSnapshotIn (ArticulationSnapshotUpload upload)
         {
-            if (upload.selectorA < 0 || upload.selectorA >= articulationSlotCount)
+            let installKind = beginArticulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
+            if (installKind == 0)
                 return;
+
+            if (upload.selectorA < 0 || upload.selectorA >= articulationSlotCount)
+            {
+                rejectRuntimeInstall (upload.deliverySerial);
+                return;
+            }
+
+            if (! isValidArticulationSnapshot (upload))
+            {
+                rejectRuntimeInstall (upload.deliverySerial);
+                return;
+            }
 
             let selectorA = upload.selectorA;
             articulationSlotDefined.at (selectorA) = upload.enabled;
 
             if (! upload.enabled)
+            {
+                completeArticulationRuntimeInstall (upload.deliverySerial);
                 return;
+            }
 
             articulationFramePosition.at (selectorA) = std::intrinsics::clamp (upload.framePosition, 0.0f, 1.0f);
             articulationPan.at (selectorA) = clampPan (upload.pan);
@@ -3454,7 +4182,7 @@ namespace wt
             for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
                 articulationMsegMorphs.at (articulationMsegIndex (selectorA, slotIndex)) = std::intrinsics::clamp (upload.msegMorphs.at (slotIndex), 0.0f, 1.0f);
 
-            for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
+            for (int32 routeIndex = 0; routeIndex < modulationArticulationRouteCellCount; ++routeIndex)
                 articulationRouteAmounts.at (articulationRouteIndex (selectorA, routeIndex)) = upload.routeAmounts.at (routeIndex);
 
             for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
@@ -3464,15 +4192,34 @@ namespace wt
                 articulationEnvelopeSustain.at (articulationEnvelopeIndex (selectorA, slotIndex)) = std::intrinsics::clamp (upload.envelopeSustain.at (slotIndex), 0.0f, 1.0f);
                 articulationEnvelopeReleaseSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex)) = std::intrinsics::max (0.001f, upload.envelopeReleaseSeconds.at (slotIndex));
             }
+            completeArticulationRuntimeInstall (upload.deliverySerial);
         }
 
         event modulationMsegBufferIn (ModulationMsegBufferUpload upload)
         {
+            let installKind = beginModulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
+            if (installKind == 0)
+                return;
+            if (upload.slot < 1 || upload.slot > modulationMsegSlotCount
+                || upload.shapeIndex < 0 || upload.shapeIndex > 1)
+            {
+                rejectRuntimeInstall (upload.deliverySerial);
+                return;
+            }
             uploadMsegBufferToSlot (upload.slot, upload.shapeIndex, upload.buffer);
+            completeModulationRuntimeInstall (upload.deliverySerial);
         }
 
         event modulationMsegPlaybackIn (ModulationMsegPlaybackUpload upload)
         {
+            let installKind = beginModulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
+            if (installKind == 0)
+                return;
+            if (upload.slot < 1 || upload.slot > modulationMsegSlotCount)
+            {
+                rejectRuntimeInstall (upload.deliverySerial);
+                return;
+            }
             wt::MsegPlaybackConfig config;
             config.seconds = upload.seconds;
             config.holdFinalValue = upload.holdFinalValue;
@@ -3483,37 +4230,21 @@ namespace wt
             config.noteOffPolicy = upload.noteOffPolicy;
             config.legatoRestarts = upload.legatoRestarts;
             uploadMsegPlaybackToSlot (upload.slot, config);
+            completeModulationRuntimeInstall (upload.deliverySerial);
         }
 
         event modulationEnvelopeIn (ModulationEnvelopeUpload upload)
         {
-            uploadEnvelopeToSlot (upload.slot, upload);
-        }
-
-        event modulationRouteIn (ModulationRouteUpload upload)
-        {
-            if (upload.routeIndex < 0 || upload.routeIndex >= modulationRouteCount)
+            let installKind = beginModulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
+            if (installKind == 0)
                 return;
-
-            rackModulationRoutes.at (upload.routeIndex).enabled = false;
-            modulationRoutes.at (upload.routeIndex) = upload;
-        }
-
-        event rackModulationRouteIn (RackModulationRouteUpload upload)
-        {
-            if (upload.routeIndex < 0 || upload.routeIndex >= modulationRouteCount)
-                return;
-
-            if (! isValidRackModulationRoute (upload.sourceKind, upload.targetKind, upload.reducerKind))
+            if (upload.slot < 1 || upload.slot > modulationEnvSlotCount)
             {
-                rackModulationRoutes.at (upload.routeIndex).enabled = false;
-                rejectedModulationRouteCount += 1;
-                modulationRejectedRouteCountOut <- rejectedModulationRouteCount;
+                rejectRuntimeInstall (upload.deliverySerial);
                 return;
             }
-
-            modulationRoutes.at (upload.routeIndex).enabled = false;
-            rackModulationRoutes.at (upload.routeIndex) = upload;
+            uploadEnvelopeToSlot (upload.slot, upload);
+            completeModulationRuntimeInstall (upload.deliverySerial);
         }
 
         event wavetableLoadBeginIn (WavetableLoadBegin request)
@@ -3654,7 +4385,7 @@ namespace wt
                 float32 trackingPitchHz = 0.0f;
                 int32 trackingSerial = -1;
 
-                beginRackModulationFrame();
+                beginModulationFrame();
 
                 for (wrap<voiceCount> voice)
                 {
@@ -3672,61 +4403,23 @@ namespace wt
 
                     let processorFrequency = float32 (processor.frequency);
                     let envelopeGain = envelopes[voice].gainOut;
-                    float32 routePosition = 0.0f;
-                    float32 routeWarpAmount = 0.0f;
-                    float32 routeFilterCutoffOctaves = 0.0f;
-                    float32 routeFilterQ = 0.0f;
-                    float32 routePitchSemitones = 0.0f;
-                    float32 routeAmpGainDb = 0.0f;
-                    float32 routePan = 0.0f;
-                    float32 routeUnisonDetune = 0.0f;
-                    float32 routeUnisonBlend = 0.0f;
-                    float32 routeUnisonWidth = 0.0f;
-                    float32 routeUnisonWavetablePositionSpread = 0.0f;
-                    float32 routeUnisonWarpSpread = 0.0f;
+                    if (! voiceIsSoundingForRackModulation (int32 (voice)))
+                        continue;
 
-                    if (modulationEnabled)
-                    {
-                        for (int32 routeIndex = 0; routeIndex < modulationRouteCount; ++routeIndex)
-                        {
-                            let route = modulationRoutes.at (routeIndex);
-                            if (! route.enabled)
-                                continue;
-
-                            let sourceValue = applyRoutePolarity (resolveRouteSourceValue (int32 (voice), route), route);
-                            let routeAmount = voiceUsesArticulation.at (voice)
-                                ? voiceArticulationRouteAmounts.at (voiceArticulationRouteIndex (int32 (voice), routeIndex))
-                                : route.amount;
-                            let routedValue = sourceValue * routeAmount;
-
-                            if (route.targetKind == modulationTargetWavetablePosition)
-                                routePosition += routedValue;
-                            else if (route.targetKind == modulationTargetWarpAmount)
-                                routeWarpAmount += routedValue;
-                            else if (route.targetKind == modulationTargetFilterCutoffOctaves)
-                                routeFilterCutoffOctaves += routedValue;
-                            else if (route.targetKind == modulationTargetFilterQ)
-                                routeFilterQ += routedValue;
-                            else if (route.targetKind == modulationTargetPitchSemitones)
-                                routePitchSemitones += routedValue;
-                            else if (route.targetKind == modulationTargetAmpGainDb)
-                                routeAmpGainDb += routedValue;
-                            else if (route.targetKind == modulationTargetPan)
-                                routePan += routedValue;
-                            else if (route.targetKind == modulationTargetUnisonDetune)
-                                routeUnisonDetune += routedValue;
-                            else if (route.targetKind == modulationTargetUnisonBlend)
-                                routeUnisonBlend += routedValue;
-                            else if (route.targetKind == modulationTargetUnisonWidth)
-                                routeUnisonWidth += routedValue;
-                            else if (route.targetKind == modulationTargetUnisonWavetablePositionSpread)
-                                routeUnisonWavetablePositionSpread += routedValue;
-                            else if (route.targetKind == modulationTargetUnisonWarpSpread)
-                                routeUnisonWarpSpread += routedValue;
-                        }
-                    }
-
-                    accumulateRackModulationForVoice (int32 (voice));
+                    accumulateVoiceModulationTargets (int32 (voice));
+                    accumulateVoiceRackSources (int32 (voice));
+                    let routePosition = voiceTargetOffset (int32 (voice), 0);
+                    let routeWarpAmount = voiceTargetOffset (int32 (voice), 1);
+                    let routeFilterCutoffOctaves = voiceTargetOffset (int32 (voice), 2);
+                    let routeFilterQ = voiceTargetOffset (int32 (voice), 3);
+                    let routePitchSemitones = voiceTargetOffset (int32 (voice), 4);
+                    let routeAmpGainDb = voiceTargetOffset (int32 (voice), 5);
+                    let routePan = voiceTargetOffset (int32 (voice), 6);
+                    let routeUnisonDetune = voiceTargetOffset (int32 (voice), 7);
+                    let routeUnisonBlend = voiceTargetOffset (int32 (voice), 8);
+                    let routeUnisonWidth = voiceTargetOffset (int32 (voice), 9);
+                    let routeUnisonWavetablePositionSpread = voiceTargetOffset (int32 (voice), 10);
+                    let routeUnisonWarpSpread = voiceTargetOffset (int32 (voice), 11);
 
                     let baseFramePosition = voiceUsesArticulation.at (voice)
                         ? voiceArticulationFramePosition.at (voice)
@@ -3854,7 +4547,10 @@ namespace wt
                         let phase = phasors.at (voice).next();
                         float32 sample = 0.0f;
 
-                        if (playableMipIndex >= 0)
+                        if (playableMipIndex >= 0
+                            && (! shouldRenderWarpBackground
+                                || shouldBypassWarpOutput
+                                || warpPlayableMipIndex < 0))
                             sample = readVoiceSampleForMip (playableMipIndex, effectivePosition, phase);
 
                         if (shouldRenderWarpBackground && warpPlayableMipIndex >= 0)
@@ -3900,11 +4596,8 @@ namespace wt
                         float32 weightSum = 0.0f;
                         let detuneCents = effectiveUnisonDetune * 50.0f;
 
-                        for (int32 subVoiceIndex = 0; subVoiceIndex < maxUnisonVoiceCount; ++subVoiceIndex)
+                        for (int32 subVoiceIndex = 0; subVoiceIndex < effectiveUnisonVoices; ++subVoiceIndex)
                         {
-                            if (subVoiceIndex >= effectiveUnisonVoices)
-                                continue;
-
                             let spreadScalar = unisonSpreadScalar (subVoiceIndex, effectiveUnisonVoices, baseUnisonDetuneMode);
                             let stackSemitones = unisonStackSemitones (subVoiceIndex, effectiveUnisonVoices, baseUnisonStackMode);
                             let subPitchSemitones = effectivePitchSemitones + (spreadScalar * detuneCents * 0.01f) + stackSemitones;
@@ -3923,6 +4616,7 @@ namespace wt
                                 0.0f,
                                 1.0f
                             );
+                            let shouldBypassSubWarpOutput = isIdentityWarp (warpMode, subWarpAmount);
                             let subPan = clampPan (effectivePan + (spreadScalar * effectiveUnisonWidth));
                             let subWeight = unisonSubVoiceWeight (subVoiceIndex, effectiveUnisonVoices, effectiveUnisonBlend);
                             let currentPhaseIncrement = subFrequencyHz / float32 (processor.frequency);
@@ -3946,7 +4640,10 @@ namespace wt
                             let phase = unisonPhasors.at (subStateIndex).next();
                             float32 sample = 0.0f;
 
-                            if (playableMipIndex >= 0)
+                            if (playableMipIndex >= 0
+                                && (! shouldRenderWarpBackground
+                                    || shouldBypassSubWarpOutput
+                                    || warpPlayableMipIndex < 0))
                                 sample = readVoiceSampleForMip (playableMipIndex, subPosition, phase);
 
                             if (shouldRenderWarpBackground && warpPlayableMipIndex >= 0)
@@ -3962,7 +4659,7 @@ namespace wt
                                     subWarpAmount
                                 );
 
-                                if (! isIdentityWarp (warpMode, subWarpAmount))
+                                if (! shouldBypassSubWarpOutput)
                                     sample = warpedSample;
                             }
 

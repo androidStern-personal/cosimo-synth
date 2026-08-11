@@ -22,6 +22,7 @@ const mockModulePromise = loadUIModule(repoRoot, "ui/shared/patch-connection-moc
 const descriptorModulePromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
 const articulationModulePromise = loadUIModule(repoRoot, "ui/shared/articulation-image.ts");
 const modulationModulePromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
+const modulationProgramModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts");
 
 async function modules() {
     return {
@@ -30,6 +31,7 @@ async function modules() {
         descriptors: await descriptorModulePromise,
         articulations: await articulationModulePromise,
         modulation: await modulationModulePromise,
+        modulationProgram: await modulationProgramModulePromise,
     };
 }
 
@@ -85,6 +87,12 @@ async function waitForHydration(adapter) {
     assert.fail("adapter did not finish hydration");
 }
 
+async function flushMicrotasks(turns = 16) {
+    for (let index = 0; index < turns; index += 1) {
+        await Promise.resolve();
+    }
+}
+
 async function createHarness({ storedState = {} } = {}) {
     const loaded = await modules();
     const connection = new loaded.mock.MockPatchConnection({
@@ -96,13 +104,17 @@ async function createHarness({ storedState = {} } = {}) {
     }
     const adapter = loaded.adapter.createCosimoBridgeAdapter({ connection });
     await waitForHydration(adapter);
+    await flushMicrotasks(64);
     return { ...loaded, connection, adapter };
 }
 
 function parseStoredArticulations(harness) {
     const storedValue = harness.connection.getDebugSnapshot().storedState["articulations.v3"];
+    const acceptedRouteIds = new Set(storedModulationState(harness).routes.flatMap((route) => (
+        harness.modulationProgram.getModulationArticulationCellIndex(route) === null ? [] : [route.id]
+    )));
     return expectOk(
-        harness.articulations.parseArticulationsV3(decodeStoredDocument(storedValue)),
+        harness.articulations.parseArticulationsV3(decodeStoredDocument(storedValue), acceptedRouteIds),
         "stored articulations.v3",
     );
 }
@@ -112,7 +124,7 @@ function storedModulationState(harness) {
     return harness.modulation.deserializeModulationState(storedValue);
 }
 
-test("boot hydrates ready and uploads every bound base endpoint plus every occupied selector", async (t) => {
+test("boot hydrates ready and the acknowledged worker uploads every occupied selector", async (t) => {
     const initialArticulations = articulationState([
         articulationSlot({
             id: "Pluck",
@@ -158,7 +170,7 @@ test("boot hydrates ready and uploads every bound base endpoint plus every occup
     assert.deepEqual(occupiedSelectors, [7, 19]);
 });
 
-test("a bound voice base edit uploads its endpoint and only non-overriding selectors", async (t) => {
+test("a bound voice base edit persists immediately and the worker updates only inheriting selectors", async (t) => {
     const initialArticulations = articulationState([
         articulationSlot({ id: "Inherits Warp", runtimeSlot: 4, key: 24 }),
         articulationSlot({
@@ -186,7 +198,13 @@ test("a bound voice base edit uploads its endpoint and only non-overriding selec
         [{ endpointID: "warpAmount", value: 0.73 }],
     );
     assert.deepEqual(
-        debug.sentMessages
+        debug.sentMessages.filter((message) => message.endpointID === "articulationSnapshot"),
+        [],
+        "the UI adapter does not publish articulation runtime images",
+    );
+    await flushMicrotasks();
+    assert.deepEqual(
+        harness.connection.getDebugSnapshot().sentMessages
             .filter((message) => message.endpointID === "articulationSnapshot")
             .map((message) => message.value.selectorA),
         [4],
@@ -302,7 +320,7 @@ test("macro value events and macro-name persistence use their engine protocols",
     assert.equal(storedModulationState(harness).macroNames[0], "Shimmer");
 });
 
-test("articulation add, override, and clear persist v3 and upload only that selector", async (t) => {
+test("articulation add, override, and clear persist v3 for sole-owner worker publication", async (t) => {
     const harness = await createHarness();
     t.after(() => harness.adapter.dispose());
     harness.connection.clearDebugLog();
@@ -312,6 +330,13 @@ test("articulation add, override, and clear persist v3 and upload only that sele
     let slot = stored.slots.find((candidate) => candidate.id === articulationId);
     assert.notEqual(slot, undefined);
     const selector = slot.runtimeSlot;
+    assert.deepEqual(
+        harness.connection.getDebugSnapshot().sentMessages
+            .filter((message) => message.endpointID === "articulationSnapshot"),
+        [],
+        "the adapter only persists the declarative change",
+    );
+    await flushMicrotasks();
     assert.deepEqual(
         harness.connection.getDebugSnapshot().sentMessages
             .filter((message) => message.endpointID === "articulationSnapshot")
@@ -330,6 +355,12 @@ test("articulation add, override, and clear persist v3 and upload only that sele
     assert.equal(slot.overrides.warpAmount, 0.42);
     assert.deepEqual(
         harness.connection.getDebugSnapshot().sentMessages
+            .filter((message) => message.endpointID === "articulationSnapshot"),
+        [],
+    );
+    await flushMicrotasks();
+    assert.deepEqual(
+        harness.connection.getDebugSnapshot().sentMessages
             .filter((message) => message.endpointID === "articulationSnapshot")
             .map((message) => message.value.selectorA),
         [selector],
@@ -340,6 +371,12 @@ test("articulation add, override, and clear persist v3 and upload only that sele
     stored = parseStoredArticulations(harness);
     slot = stored.slots.find((candidate) => candidate.id === articulationId);
     assert.equal(Object.hasOwn(slot.overrides, "warpAmount"), false);
+    assert.deepEqual(
+        harness.connection.getDebugSnapshot().sentMessages
+            .filter((message) => message.endpointID === "articulationSnapshot"),
+        [],
+    );
+    await flushMicrotasks();
     assert.deepEqual(
         harness.connection.getDebugSnapshot().sentMessages
             .filter((message) => message.endpointID === "articulationSnapshot")
@@ -364,8 +401,8 @@ test("audition begin and end send paired MIDI note-on/note-off events", async (t
     ]);
 });
 
-test("legacy articulations.v2 storage detaches during fail-fast hydration", async (t) => {
-    const legacyPayload = {
+test("a version-2 articulation document is rejected as malformed current state", async (t) => {
+    const retiredPayload = {
         format: "cosimo.articulations",
         version: 2,
         selectedSlotId: null,
@@ -375,14 +412,21 @@ test("legacy articulations.v2 storage detaches during fail-fast hydration", asyn
         keyAssignments: [],
         velocityAssignments: [],
     };
-    const harness = await createHarness({
-        storedState: { "articulations.v3": JSON.stringify(legacyPayload) },
-    });
+    const originalError = console.error;
+    console.error = () => {};
+    let harness;
+    try {
+        harness = await createHarness({
+            storedState: { "articulations.v3": JSON.stringify(retiredPayload) },
+        });
+    } finally {
+        console.error = originalError;
+    }
     t.after(() => harness.adapter.dispose());
 
     const connection = harness.adapter.getSnapshot().connection;
     assert.equal(connection._tag, "detached");
-    assert.match(connection.reason, /legacy-v2-rejected/);
+    assert.match(connection.reason, /version must be exactly 3/);
 });
 
 test("full state roundtrip: a second bridge over the first one's stored state is snapshot-identical", async () => {

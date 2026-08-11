@@ -10,6 +10,7 @@ export function createIOSHarnessInitScript(baseUrl) {
         const fetchedUrls = [];
         const resourceReads = [];
         const sentMessages = [];
+        const storedStateWrites = [];
         const gestureStarts = [];
         const gestureEnds = [];
         const hapticEvents = [];
@@ -335,6 +336,7 @@ export function createIOSHarnessInitScript(baseUrl) {
 
             case "send_state_value":
                 storedState.set(message.key, message.value);
+                storedStateWrites.push({ key: message.key, value: message.value });
                 queueMicrotask(() => emitStoredStateValue(message.key));
                 return;
 
@@ -740,6 +742,7 @@ export function createIOSHarnessInitScript(baseUrl) {
             getSnapshot() {
                 return {
                     sentMessages: sentMessages.map(({ endpointID, value }) => ({ endpointID, value })),
+                    storedStateWrites: storedStateWrites.map(({ key, value }) => ({ key, value })),
                     parameterValues: Object.fromEntries(parameterValues.entries()),
                     runtimeState: { ...runtimeState },
                     resourceReads: resourceReads.map((entry) => ({ ...entry })),
@@ -843,6 +846,7 @@ export function createIOSHarnessInitScript(baseUrl) {
             },
             clearDebugLog() {
                 sentMessages.length = 0;
+                storedStateWrites.length = 0;
                 resourceReads.length = 0;
                 fetchedUrls.length = 0;
                 gestureStarts.length = 0;

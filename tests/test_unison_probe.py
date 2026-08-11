@@ -12,12 +12,14 @@ from test_modulation_matrix_probe import (
     OSCILLATOR_MIP_COUNT,
     _build_mip_frame_events,
     _build_load_begin_event,
+    _compile_runtime_program,
     _note_on_expr,
 )
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
+VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
 
 
@@ -60,14 +62,18 @@ def _build_probe_source(events: list[tuple[int, str]], *, voice_count: int = 2) 
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
+        + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
+        + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + "processor RuntimeSessionAdapter\n"
         + "{\n"
         + "    input event wt::WavetableLoadBegin loadBeginIn;\n"
         + "    input event wt::WavetableMipFrame mipFrameIn;\n"
+        + "    input event wt::ModulationProgramUpload modulationProgramIn;\n"
         + "    output event wt::WavetableLoadBegin loadBeginOut;\n"
         + "    output event wt::WavetableMipFrame mipFrameOut;\n"
+        + "    output event wt::ModulationProgramUpload modulationProgramOut;\n"
         + "    event loadBeginIn (wt::WavetableLoadBegin load)\n"
         + "    {\n"
         + "        wt::WavetableLoadBegin rewritten = load;\n"
@@ -79,6 +85,12 @@ def _build_probe_source(events: list[tuple[int, str]], *, voice_count: int = 2) 
         + "        wt::WavetableMipFrame rewritten = frame;\n"
         + "        rewritten.dspSessionId = int32 (processor.session);\n"
         + "        mipFrameOut <- rewritten;\n"
+        + "    }\n"
+        + "    event modulationProgramIn (wt::ModulationProgramUpload upload)\n"
+        + "    {\n"
+        + "        wt::ModulationProgramUpload rewritten = upload;\n"
+        + "        rewritten.dspSessionId = int32 (processor.session);\n"
+        + "        modulationProgramOut <- rewritten;\n"
         + "    }\n"
         + "    void main() { loop { advance(); } }\n"
         + "}\n"
@@ -94,9 +106,7 @@ def _build_probe_source(events: list[tuple[int, str]], *, voice_count: int = 2) 
         + "{\n"
         + "    input event wt::WavetableLoadBegin wavetableLoadBegin;\n"
         + "    input event wt::WavetableMipFrame wavetableMipFrame;\n"
-        + "    input event int32 modulationClear;\n"
-        + "    input event int32 modulationEnable;\n"
-        + "    input event wt::ModulationRouteUpload modulationRoute;\n"
+        + "    input event wt::ModulationProgramUpload modulationProgram;\n"
         + "    input value float32 unisonVoices [[ init: 1.0f ]];\n"
         + "    input value float32 unisonDetune [[ init: 0.1f ]];\n"
         + "    input value float32 unisonBlend [[ init: 0.75f ]];\n"
@@ -120,9 +130,8 @@ def _build_probe_source(events: list[tuple[int, str]], *, voice_count: int = 2) 
         + "        allocator.voiceEventOut -> engine.voiceEventIn;\n"
         + "        adapter.loadBeginOut -> engine.wavetableLoadBeginIn;\n"
         + "        adapter.mipFrameOut -> engine.wavetableMipFrameIn;\n"
-        + "        modulationClear -> engine.modulationClearIn;\n"
-        + "        modulationEnable -> engine.modulationEnableIn;\n"
-        + "        modulationRoute -> engine.modulationRouteIn;\n"
+        + "        modulationProgram -> adapter.modulationProgramIn;\n"
+        + "        adapter.modulationProgramOut -> engine.modulationProgramIn;\n"
         + "        unisonVoices -> engine.unisonVoicesIn;\n"
         + "        unisonDetune -> engine.unisonDetuneIn;\n"
         + "        unisonBlend -> engine.unisonBlendIn;\n"
@@ -161,6 +170,7 @@ def _build_setup_js(
     unison_warp_spread: float = 0.0,
     warp_mode: float = 0.0,
     warp_amount: float = 0.0,
+    routes: list[dict[str, object]] | None = None,
     extra_events: list[tuple[str, dict[str, object]]] | None = None,
 ) -> str:
     bank = make_sine_bank()
@@ -182,6 +192,12 @@ def _build_setup_js(
 
     for endpoint_id, payload in extra_events or []:
         statements.append(f"patch.sendInputEvent_{endpoint_id}({json.dumps(payload)});")
+    if routes:
+        statements.append(
+            "patch.sendInputEvent_modulationProgram("
+            + json.dumps(_compile_runtime_program(routes))
+            + ");"
+        )
 
     return "\n".join(statements)
 
@@ -277,12 +293,12 @@ def test_maximum_polyphony_times_maximum_unison_renders_finite_audio() -> None:
 def test_modulation_can_drive_unison_width() -> None:
     schedule = [(1024, _note_on_expr(1, 60.0, 1.0))]
     route = {
-        "routeIndex": 0,
+        "id": "velocity-unison-width",
         "enabled": True,
-        "sourceKind": 3,
-        "sourceSlot": 0,
-        "polarityKind": 0,
-        "targetKind": 10,
+        "sourceKind": "velocity",
+        "sourceSlot": None,
+        "polarity": "unipolar",
+        "targetKind": "unisonWidth",
         "amount": 1.0,
     }
     setup_js = _build_setup_js(
@@ -290,7 +306,7 @@ def test_modulation_can_drive_unison_width() -> None:
         unison_detune=0.25,
         unison_blend=0.75,
         unison_width=0.0,
-        extra_events=[("modulationClear", 1), ("modulationRoute", route), ("modulationEnable", 1)],
+        routes=[route],
     )
 
     left = _render_probe(schedule, setup_js=setup_js, output_endpoint_id="leftOut")

@@ -17,7 +17,7 @@ if (typeof globalThis.HTMLElement === "undefined") {
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
-const portPromise = loadUIModule(repoRoot, "ui/shared/cosimo-adapter-port.ts");
+const targetDescriptorPromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
 const mockFactoryPromise = loadUIModule(
     repoRoot,
     "prototypes/mobile-sound-design-wireframe/src/adapters/createMockCosimoAdapter.ts",
@@ -28,6 +28,7 @@ const fixturesPromise = loadUIModule(
 );
 const bridgeFactoryPromise = loadUIModule(repoRoot, "ui/shared/cosimo-bridge-adapter.ts");
 const mockConnectionPromise = loadUIModule(repoRoot, "ui/shared/patch-connection-mock.ts");
+const modulationPromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
 
 function expectOkValue(result, label) {
     assert.equal(result._tag, "ok", `${label}: ${result._tag === "err" ? result.error.message : ""}`);
@@ -56,7 +57,7 @@ function seedDemoPatch(adapter) {
     commands.setArticulationRange(b, "chain", "max", 89);
     expectOkValue(commands.addMapping({ targetId: "wavetable.warp", sourceId: "envelope-1" }), "seed warp mapping");
     commands.setMappingAmount("wavetable.warp::envelope-1", 40, { _tag: "patchBase" });
-    expectOkValue(commands.addMapping({ targetId: "wavetable.index", sourceId: "mseg-1" }), "seed index mapping");
+    expectOkValue(commands.addMapping({ targetId: "wavetable.tune", sourceId: "mseg-1" }), "seed tune mapping");
     expectOkValue(commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" }), "seed rack mapping");
     return { articulationIds: [a, b, c] };
 }
@@ -161,36 +162,55 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(second.error._tag, "MappingAlreadyExists");
     });
 
-    t("the 13th route is refused with RouteBudgetExceeded", async (adapter) => {
-        const port = await portPromise;
+    t("more than 100 unique mappings are accepted", async (adapter) => {
+        const { allTargetDescriptors } = await targetDescriptorPromise;
         const snapshot = adapter.getSnapshot();
         const sources = snapshot.patch.sources.map((source) => source.id);
-        const targets = [
-            "filter.globalFilterCutoff", "filter.globalFilterResonance", "filter.globalFilterDrive",
-            "drive.distortionDriveDb", "drive.distortionKnee", "drive.distortionWet",
-            "ott.ottAmount", "ott.ottTimePercent", "ott.ottMix", "chorus.chorusMix",
-            "chorus.chorusTone", "chorus.chorusFeedback", "chorus.chorusRingAmount",
-            "flanger.flangerRate", "flanger.flangerDepth",
-        ];
-        let refused = null;
+        const targets = allTargetDescriptors()
+            .filter((descriptor) => descriptor.modulationTargetKind !== null)
+            .map((descriptor) => descriptor.targetId);
+        const initialCount = snapshot.patch.mappings.length;
         let added = 0;
         outer: for (const targetId of targets) {
             for (const sourceId of sources) {
-                const count = adapter.getSnapshot().patch.mappings.length;
-                if (count < port.ROUTE_BUDGET) {
-                    const result = adapter.commands.addMapping({ targetId, sourceId });
-                    if (result._tag === "ok") added += 1;
-                    continue;
+                const result = adapter.commands.addMapping({ targetId, sourceId });
+                if (result._tag === "ok") {
+                    added += 1;
+                    if (added === 101) {
+                        break outer;
+                    }
                 }
-                refused = adapter.commands.addMapping({ targetId, sourceId });
-                break outer;
             }
         }
-        assert.notEqual(refused, null, "the budget was never reached");
-        assert.equal(refused._tag, "err");
-        assert.equal(refused.error._tag, "RouteBudgetExceeded");
-        assert.equal(refused.error.budget, port.ROUTE_BUDGET);
-        assert.equal(adapter.getSnapshot().patch.mappings.length, port.ROUTE_BUDGET);
+        assert.equal(added, 101);
+        assert.equal(adapter.getSnapshot().patch.mappings.length, initialCount + 101);
+    });
+
+    t("the complete 624-pair product domain is reachable", async (adapter) => {
+        const { allTargetDescriptors } = await targetDescriptorPromise;
+        for (const sourceType of ["mseg", "envelope", "macro"]) {
+            while (adapter.commands.createSource(sourceType)._tag === "ok") {
+                // Fill every declared source slot.
+            }
+        }
+
+        const sources = adapter.getSnapshot().patch.sources.map((source) => source.id);
+        const targets = allTargetDescriptors()
+            .filter((descriptor) => descriptor.modulationTargetKind !== null)
+            .map((descriptor) => descriptor.targetId);
+        assert.equal(sources.length, 13);
+        assert.equal(targets.length, 48);
+
+        for (const targetId of targets) {
+            for (const sourceId of sources) {
+                const result = adapter.commands.addMapping({ targetId, sourceId });
+                if (result._tag === "err") {
+                    assert.equal(result.error._tag, "MappingAlreadyExists");
+                }
+            }
+        }
+
+        assert.equal(adapter.getSnapshot().patch.mappings.length, 624);
     });
 
     t("mapping setters are reflected verbatim", (adapter) => {
@@ -211,6 +231,27 @@ function contractSuite(adapterName, makeAdapter) {
         const { patch } = adapter.getSnapshot();
         assert.equal(patch.mappings.find((m) => m.id === mappingId).amount, 40, "base amount must not move");
         assert.equal(patch.articulationMappingAmounts[articulationId][mappingId], 80);
+    });
+
+    t("global rack mappings never create inaudible per-note amount overrides", (adapter) => {
+        const mapping = adapter.getSnapshot().patch.mappings.find((candidate) => (
+            candidate.targetId === "phaser.phaserDepth" && candidate.sourceId === "macro-1"
+        ));
+        const articulationId = adapter.getSnapshot().patch.articulations[0].id;
+        const baseAmount = mapping.amount;
+
+        adapter.commands.setMappingAmount(
+            mapping.id,
+            91,
+            { _tag: "articulationOverride", articulationId },
+        );
+
+        const { patch } = adapter.getSnapshot();
+        assert.equal(patch.mappings.find((candidate) => candidate.id === mapping.id).amount, baseAmount);
+        assert.equal(
+            Object.hasOwn(patch.articulationMappingAmounts[articulationId] ?? {}, mapping.id),
+            false,
+        );
     });
 
     t("removeMapping prunes the mapping and every articulation amount override for it", (adapter) => {
@@ -488,6 +529,15 @@ async function waitForReady(adapter) {
     assert.fail("adapter never became ready");
 }
 
+async function waitForDetached(adapter) {
+    for (let attempt = 0; attempt < 50; attempt += 1) {
+        const { connection } = adapter.getSnapshot();
+        if (connection._tag === "detached") return connection.reason;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    assert.fail("adapter never detached");
+}
+
 contractSuite("mock", async () => {
     const { createMockCosimoAdapter } = await mockFactoryPromise;
     const { createNewPatchMockCosimoState } = await fixturesPromise;
@@ -501,4 +551,218 @@ contractSuite("bridge", async () => {
     const adapter = createCosimoBridgeAdapter({ connection });
     await waitForReady(adapter);
     return adapter;
+});
+
+test("bridge rejects a duplicate mapping document without migration", async () => {
+    const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
+    const { MockPatchConnection } = await mockConnectionPromise;
+    const { createDefaultModulationState } = await modulationPromise;
+    const connection = new MockPatchConnection({ name: "Duplicate pair regression", version: 1 });
+    const modulationState = createDefaultModulationState();
+    const storedModulation = JSON.stringify({
+        ...modulationState,
+        routes: [
+            {
+                id: "earlier-legacy-duplicate",
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "wavetablePosition",
+                amount: 0.25,
+                reducer: "max",
+            },
+            {
+                id: "legacy-route-without-canonical-product-identity",
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "wavetablePosition",
+                amount: 0.75,
+                reducer: "max",
+            },
+        ],
+    });
+    connection.setStoredStateValue("modulation.v2", storedModulation);
+    connection.setStoredStateValue("articulations.v3", JSON.stringify({
+        format: "cosimo.articulations",
+        version: 3,
+        selectedSlotId: "legacy-articulation",
+        activeTriggerMode: "chain",
+        slots: [{
+            id: "legacy-articulation",
+            runtimeSlot: 0,
+            name: "Legacy",
+            color: "#d2a128",
+            key: 0,
+            velRange: { min: 0, max: 127 },
+            chainRange: { min: 0, max: 127 },
+            overrides: {},
+            routeAmounts: {
+                "earlier-legacy-duplicate": 0.5,
+                "legacy-route-without-canonical-product-identity": 0.75,
+            },
+        }],
+    }));
+    const adapter = createCosimoBridgeAdapter({ connection });
+    assert.match(await waitForDetached(adapter), /current modulation schema/);
+});
+
+test("bridge rejects a hydration document containing a non-articulable rack mapping amount", async () => {
+    const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
+    const { MockPatchConnection } = await mockConnectionPromise;
+    const { createDefaultModulationState } = await modulationPromise;
+    const connection = new MockPatchConnection({ name: "Strict rack articulation rejection", version: 1 });
+    connection.setStoredStateValue("modulation.v2", JSON.stringify({
+        ...createDefaultModulationState(),
+        routes: [
+            {
+                id: "wavetable.index::mseg-1",
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "wavetablePosition",
+                amount: 1,
+                reducer: "max",
+            },
+            {
+                id: "phaser.phaserPhase::macro-1",
+                enabled: true,
+                sourceKind: "macro",
+                sourceSlot: 1,
+                polarity: "bipolar",
+                targetKind: "rack.phaserPhase",
+                amount: 180,
+                reducer: "max",
+            },
+        ],
+    }));
+    connection.setStoredStateValue("articulations.v3", JSON.stringify({
+        format: "cosimo.articulations",
+        version: 3,
+        selectedSlotId: "legacy-articulation",
+        activeTriggerMode: "chain",
+        slots: [{
+            id: "legacy-articulation",
+            runtimeSlot: 0,
+            name: "Legacy",
+            color: "#d2a128",
+            key: 0,
+            velRange: { min: 0, max: 127 },
+            chainRange: { min: 0, max: 127 },
+            overrides: { pan: 0.25 },
+            routeAmounts: {
+                "wavetable.index::mseg-1": 0.75,
+                "phaser.phaserPhase::macro-1": 0.5,
+            },
+        }],
+    }));
+
+    const adapter = createCosimoBridgeAdapter({ connection });
+    assert.match(await waitForDetached(adapter), /phaser\.phaserPhase::macro-1.*current articulable mapping/);
+});
+
+test("live articulation writes use the same strict route-reference parser as hydration", async () => {
+    const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
+    const { MockPatchConnection } = await mockConnectionPromise;
+    const connection = new MockPatchConnection({ name: "Strict current articulation write", version: 1 });
+    const adapter = createCosimoBridgeAdapter({ connection });
+    await waitForReady(adapter);
+
+    connection.setStoredStateValue("articulations.v3", JSON.stringify({
+        format: "cosimo.articulations",
+        version: 3,
+        selectedSlotId: "current-articulation",
+        activeTriggerMode: "chain",
+        slots: [{
+            id: "current-articulation",
+            runtimeSlot: 0,
+            name: "Current",
+            color: "#d2a128",
+            key: 0,
+            velRange: { min: 0, max: 127 },
+            chainRange: { min: 0, max: 127 },
+            overrides: {},
+            routeAmounts: { "new-phantom-route": 0.5 },
+        }],
+    }));
+
+    assert.match(await waitForDetached(adapter), /new-phantom-route.*current articulable mapping/);
+});
+
+test("bridge rejects a non-finite phantom articulation amount without sanitizing it", async () => {
+    const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
+    const { MockPatchConnection } = await mockConnectionPromise;
+    const connection = new MockPatchConnection({ name: "Non-finite legacy articulation", version: 1 });
+    connection.setStoredStateValue("articulations.v3", {
+        format: "cosimo.articulations",
+        version: 3,
+        selectedSlotId: "legacy-articulation",
+        activeTriggerMode: "chain",
+        slots: [{
+            id: "legacy-articulation",
+            runtimeSlot: 0,
+            name: "Legacy",
+            color: "#d2a128",
+            key: 0,
+            velRange: { min: 0, max: 127 },
+            chainRange: { min: 0, max: 127 },
+            overrides: {},
+            routeAmounts: { "phantom-route": Number.NaN },
+        }],
+    });
+
+    const adapter = createCosimoBridgeAdapter({ connection });
+    assert.match(await waitForDetached(adapter), /phantom-route must be a finite route amount/);
+});
+
+test("mock DSP session changes reset both acknowledged install frontiers", async () => {
+    const { MockPatchConnection } = await mockConnectionPromise;
+    const connection = new MockPatchConnection({ name: "Runtime frontier reset", version: 1 });
+
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    connection.setRuntimeState({ dspSessionId: 2 });
+
+    const acknowledgement = await new Promise((resolve) => {
+        const handleAcknowledgement = (value) => {
+            if (value?.syncSerial !== 73) return;
+            connection.removeEndpointListener("runtimeInstallAck", handleAcknowledgement);
+            resolve(value);
+        };
+        connection.addEndpointListener("runtimeInstallAck", handleAcknowledgement);
+        connection.sendEventOrValue("runtimeSyncRequest", 73);
+    });
+
+    assert.equal(acknowledgement.dspSessionId, 2);
+    assert.equal(acknowledgement.acceptedModulationSerial, 0);
+    assert.equal(acknowledgement.acceptedArticulationSerial, 0);
+    assert.equal(acknowledgement.syncSerial, 73);
+});
+
+test("bridge never persists an inaudible articulation amount for an engine-gapped UI mapping", async () => {
+    const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
+    const { MockPatchConnection } = await mockConnectionPromise;
+    const connection = new MockPatchConnection({ name: "UI mapping articulation guard", version: 1 });
+    const adapter = createCosimoBridgeAdapter({ connection });
+    await waitForReady(adapter);
+
+    const articulationId = expectOkValue(adapter.commands.addArticulation(), "add articulation");
+    const mappingId = expectOkValue(adapter.commands.addMapping({
+        targetId: "amp-pan.attack",
+        sourceId: "mseg-1",
+    }), "add engine-gapped mapping");
+    adapter.commands.setMappingAmount(
+        mappingId,
+        100,
+        { _tag: "articulationOverride", articulationId },
+    );
+
+    assert.equal(
+        Object.hasOwn(adapter.getSnapshot().patch.articulationMappingAmounts[articulationId] ?? {}, mappingId),
+        false,
+    );
+    const stored = JSON.parse(connection.getDebugSnapshot().storedState["articulations.v3"]);
+    assert.equal(Object.hasOwn(stored.slots[0].routeAmounts, mappingId), false);
 });

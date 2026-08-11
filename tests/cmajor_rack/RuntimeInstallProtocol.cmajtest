@@ -1,0 +1,237 @@
+// Production proof for the session-scoped, idempotent restore frontiers used by
+// the native worker. Positive serials are modulation; negative serials are
+// articulation, so both services can share one acknowledgement endpoint.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
+
+## testProcessor()
+
+graph RuntimeInstallProtocol [[ main ]]
+{
+    output event int32 out;
+
+    node source = RuntimeInstallProtocolSource;
+    node engine = wt::SharedVoiceEngine (1);
+    node witness = RuntimeInstallAckWitness;
+
+    connection
+    {
+        source.modulationProgramOut -> engine.modulationProgramIn;
+        source.modulationAmountOut -> engine.modulationAmountIn;
+        source.articulationSnapshotOut -> engine.articulationSnapshotIn;
+        source.syncOut -> engine.runtimeInstallSyncIn;
+        engine.runtimeInstallAckOut -> witness.ackIn;
+        witness.out -> out;
+    }
+}
+
+processor RuntimeInstallProtocolSource
+{
+    output event wt::ModulationProgramUpload modulationProgramOut;
+    output event wt::ModulationAmountUpload modulationAmountOut;
+    output event wt::ArticulationSnapshotUpload articulationSnapshotOut;
+    output event int32 syncOut;
+
+    wt::ModulationProgramUpload modulationProgram (int32 deliverySerial)
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = deliverySerial;
+        return upload;
+    }
+
+    wt::ModulationProgramUpload voiceModulationProgram (int32 deliverySerial)
+    {
+        wt::ModulationProgramUpload upload = modulationProgram (deliverySerial);
+        upload.voiceRouteCount = 1;
+        upload.voiceRouteCells.at (0) = 0;
+        upload.voiceRouteSources.at (0) = 0;
+        upload.voiceRouteTargets.at (0) = 0;
+        upload.voiceRoutePolarities.at (0) = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts.at (0) = 0.5f;
+        return upload;
+    }
+
+    wt::ArticulationSnapshotUpload articulationSnapshot (int32 deliverySerial)
+    {
+        wt::ArticulationSnapshotUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = deliverySerial;
+        upload.selectorA = 0;
+        upload.enabled = false;
+        return upload;
+    }
+
+    wt::ModulationAmountUpload modulationAmount (int32 deliverySerial,
+                                                  int32 cellIndex,
+                                                  float32 amount)
+    {
+        wt::ModulationAmountUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = deliverySerial;
+        upload.pathKind = wt::modulationPathVoice;
+        upload.cellIndex = cellIndex;
+        upload.amount = amount;
+        return upload;
+    }
+
+    void main()
+    {
+        // Baseline probe.
+        syncOut <- 77;
+        advance();
+
+        // Runtime mutation is never accepted outside the addressed protocol.
+        modulationProgramOut <- modulationProgram (0);
+        advance();
+        articulationSnapshotOut <- articulationSnapshot (0);
+        advance();
+
+        // Exact next, duplicate, then a gap.
+        modulationProgramOut <- modulationProgram (1);
+        advance();
+        modulationProgramOut <- modulationProgram (1);
+        advance();
+        modulationProgramOut <- modulationProgram (3);
+        advance();
+
+        // Invalid exact-next does not advance the frontier; the corrected
+        // payload with the same serial is then accepted.
+        wt::ModulationProgramUpload invalid = modulationProgram (2);
+        invalid.voiceRouteCount = -1;
+        modulationProgramOut <- invalid;
+        advance();
+        modulationProgramOut <- modulationProgram (2);
+        advance();
+
+        // Non-finite amounts are rejected even when hidden in an inactive tail.
+        wt::ModulationProgramUpload nonFiniteProgram = modulationProgram (3);
+        nonFiniteProgram.voiceRouteAmounts.at (0) = float32 (nan);
+        modulationProgramOut <- nonFiniteProgram;
+        advance();
+
+        // The corrected same-serial program publishes one active cell.
+        modulationProgramOut <- voiceModulationProgram (3);
+        advance();
+
+        // A non-finite tiny edit cannot poison an active destination.
+        modulationAmountOut <- modulationAmount (4, 0, float32 (inf));
+        advance();
+        modulationAmountOut <- modulationAmount (4, 0, 0.75f);
+        advance();
+
+        // A tiny amount edit may only address a cell in the active program.
+        modulationAmountOut <- modulationAmount (5, 1, 0.5f);
+        advance();
+        modulationProgramOut <- modulationProgram (5);
+        advance();
+
+        // Articulation owns its independent descending frontier. Invalid
+        // snapshots do not mutate a slot or advance the frontier; a corrected
+        // snapshot with the same serial remains acceptable.
+        wt::ArticulationSnapshotUpload nonFiniteRoute = articulationSnapshot (-1);
+        nonFiniteRoute.enabled = true;
+        nonFiniteRoute.routeAmounts.at (0) = float32 (nan);
+        articulationSnapshotOut <- nonFiniteRoute;
+        advance();
+        articulationSnapshotOut <- articulationSnapshot (-1);
+        advance();
+
+        wt::ArticulationSnapshotUpload nonFiniteEnvelope = articulationSnapshot (-2);
+        nonFiniteEnvelope.enabled = true;
+        nonFiniteEnvelope.envelopeReleaseSeconds.at (2) = float32 (inf);
+        articulationSnapshotOut <- nonFiniteEnvelope;
+        advance();
+        articulationSnapshotOut <- articulationSnapshot (-2);
+        advance();
+        articulationSnapshotOut <- articulationSnapshot (-2);
+        advance();
+        articulationSnapshotOut <- articulationSnapshot (-4);
+        advance();
+
+        // A payload addressed to another DSP session is rejected without
+        // changing either accepted frontier.
+        wt::ModulationProgramUpload wrongSession = modulationProgram (6);
+        wrongSession.dspSessionId += 1;
+        modulationProgramOut <- wrongSession;
+        advance();
+
+        loop advance();
+    }
+}
+
+processor RuntimeInstallAckWitness
+{
+    input event wt::RuntimeInstallAck ackIn;
+    output event int32 out;
+
+    int32 ackIndex;
+    bool finished;
+
+    bool hasState (wt::RuntimeInstallAck ack,
+                   int32 modulationSerial,
+                   int32 modulationProgramSerial,
+                   int32 voiceRouteCount,
+                   int32 articulationSerial,
+                   int32 rejectedSerial,
+                   int32 rejectionReason,
+                   int32 syncSerial)
+    {
+        return ack.dspSessionId == int32 (processor.session)
+            && ack.acceptedModulationSerial == modulationSerial
+            && ack.acceptedModulationProgramSerial == modulationProgramSerial
+            && ack.installedVoiceRouteCount == voiceRouteCount
+            && ack.installedMacroVoiceRouteCount == 0
+            && ack.installedVoiceRackRouteCount == 0
+            && ack.installedMacroRackRouteCount == 0
+            && ack.acceptedArticulationSerial == articulationSerial
+            && ack.rejectedSerial == rejectedSerial
+            && ack.rejectionReason == rejectionReason
+            && ack.syncSerial == syncSerial;
+    }
+
+    event ackIn (wt::RuntimeInstallAck ack)
+    {
+        bool correct;
+        if (ackIndex == 0) correct = hasState (ack, 0, 0, 0, 0, 0, 0, 77);
+        else if (ackIndex == 1) correct = hasState (ack, 0, 0, 0, 0, 0, wt::runtimeInstallRejectionGap, 0);
+        else if (ackIndex == 2) correct = hasState (ack, 0, 0, 0, 0, 0, wt::runtimeInstallRejectionGap, 0);
+        else if (ackIndex == 3) correct = hasState (ack, 1, 1, 0, 0, 0, 0, 0);
+        else if (ackIndex == 4) correct = hasState (ack, 1, 1, 0, 0, 0, 0, 0);
+        else if (ackIndex == 5) correct = hasState (ack, 1, 1, 0, 0, 3, wt::runtimeInstallRejectionGap, 0);
+        else if (ackIndex == 6) correct = hasState (ack, 1, 1, 0, 0, 2, wt::runtimeInstallRejectionInvalid, 0);
+        else if (ackIndex == 7) correct = hasState (ack, 2, 2, 0, 0, 0, 0, 0);
+        else if (ackIndex == 8) correct = hasState (ack, 2, 2, 0, 0, 3, wt::runtimeInstallRejectionInvalid, 0);
+        else if (ackIndex == 9) correct = hasState (ack, 3, 3, 1, 0, 0, 0, 0);
+        else if (ackIndex == 10) correct = hasState (ack, 3, 3, 1, 0, 4, wt::runtimeInstallRejectionInvalid, 0);
+        else if (ackIndex == 11) correct = hasState (ack, 4, 3, 1, 0, 0, 0, 0);
+        else if (ackIndex == 12) correct = hasState (ack, 4, 3, 1, 0, 5, wt::runtimeInstallRejectionInvalid, 0);
+        else if (ackIndex == 13) correct = hasState (ack, 5, 5, 0, 0, 0, 0, 0);
+        else if (ackIndex == 14) correct = hasState (ack, 5, 5, 0, 0, -1, wt::runtimeInstallRejectionInvalid, 0);
+        else if (ackIndex == 15) correct = hasState (ack, 5, 5, 0, -1, 0, 0, 0);
+        else if (ackIndex == 16) correct = hasState (ack, 5, 5, 0, -1, -2, wt::runtimeInstallRejectionInvalid, 0);
+        else if (ackIndex == 17) correct = hasState (ack, 5, 5, 0, -2, 0, 0, 0);
+        else if (ackIndex == 18) correct = hasState (ack, 5, 5, 0, -2, 0, 0, 0);
+        else if (ackIndex == 19) correct = hasState (ack, 5, 5, 0, -2, -4, wt::runtimeInstallRejectionGap, 0);
+        else if (ackIndex == 20) correct = hasState (ack, 5, 5, 0, -2, 6, wt::runtimeInstallRejectionSession, 0);
+
+        out <- correct ? 1 : 0;
+        ackIndex += 1;
+        if (ackIndex == 21)
+            finished = true;
+    }
+
+    void main()
+    {
+        loop
+        {
+            advance();
+            if (finished)
+            {
+                out <- -1;
+                advance();
+                return;
+            }
+        }
+    }
+}

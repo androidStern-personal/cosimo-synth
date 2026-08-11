@@ -53,17 +53,17 @@ test("rack route presentation separates the armed pair from target-wide topology
             expected: ["route-bypassed", "existing", 1, "hollow"],
         },
         {
-            label: "route cap blocks a new pair",
+            label: "a large mapping set does not impose an arbitrary public cap",
             input: {
-                routes: Array.from({ length: 12 }, (_, index) => route({
-                    id: `cap-${index}`,
+                routes: Array.from({ length: 100 }, (_, index) => route({
+                    id: `existing-${index}`,
                     sourceKind: "mseg",
                     sourceSlot: (index % 3) + 1,
-                    targetKind: `rack.cap-${index}`,
+                    targetKind: `rack.existing-${index}`,
                 })),
                 armedSource: SOURCE,
             },
-            expected: ["unmapped", "blocked-at-cap", 0, "hidden"],
+            expected: ["unmapped", "creatable", 0, "hidden"],
         },
         {
             label: "pending creation remains visibly unmapped",

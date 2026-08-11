@@ -275,11 +275,6 @@ export function useMobileSynthController(adapter, initialSession = {}) {
   const addMapping = (targetId, sourceId) => {
     const result = commands.addMapping({ targetId, sourceId });
     if (result._tag === "err") {
-      if (result.error._tag === "RouteBudgetExceeded") {
-        showReadout(`ROUTE BUDGET FULL · ${result.error.budget} OF ${result.error.budget}`);
-        triggerHaptic("light");
-        return null;
-      }
       if (result.error._tag === "MappingAlreadyExists") {
         setActiveMappingByTarget((current) => ({
           ...current,

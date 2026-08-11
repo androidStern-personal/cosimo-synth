@@ -1,0 +1,10 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.quickjs-worker-error-probe",
+  "version": "1.0",
+  "name": "QuickJS Worker Error Probe",
+  "description": "Proves worker delivery errors do not unload working audio",
+  "category": "generator",
+  "source": "WorkerErrorSignal.cmajor",
+  "worker": "worker-error.js"
+}

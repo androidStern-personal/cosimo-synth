@@ -51,6 +51,7 @@ import {
     type MsegState,
 } from "../../ui/shared/mseg";
 import {
+    createDefaultRoute,
     createDefaultModulationState,
     serializeModulationState,
 } from "../../ui/shared/modulation";
@@ -1283,14 +1284,14 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
         morph: 0,
         playback: createDefaultMsegPlayback(),
     };
-    bootModulationState.routes = [{
+    bootModulationState.routes = [createDefaultRoute({
         enabled: true,
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
         targetKind: "wavetablePosition",
         amount: 0.42,
-    }];
+    })];
     const bootState = {
         "modulation.v2": serializeModulationState(bootModulationState),
     };

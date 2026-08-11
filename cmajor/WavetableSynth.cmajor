@@ -1204,13 +1204,11 @@ graph WavetableSynth [[ main ]]
     input event int32 wavetablePrewarmRequest;
     input event int32 runtimeSyncRequest;
     input event int32 retryDesiredTableRequest;
-    input event int32 modulationClear;
-    input event int32 modulationEnable;
     input event wt::ModulationMsegBufferUpload modulationMsegBuffer;
     input event wt::ModulationMsegPlaybackUpload modulationMsegPlayback;
     input event wt::ModulationEnvelopeUpload modulationEnvelope;
-    input event wt::ModulationRouteUpload modulationRoute;
-    input event wt::RackModulationRouteUpload rackModulationRoute;
+    input event wt::ModulationProgramUpload modulationProgram;
+    input event wt::ModulationAmountUpload modulationAmount;
     input event wt::ArticulationNoteMeta articulationNoteMeta;
     input event wt::ArticulatedNoteOn articulatedNoteOn;
     input event wt::ArticulationSnapshotUpload articulationSnapshot;
@@ -1332,6 +1330,12 @@ graph WavetableSynth [[ main ]]
     // actually running instead of assuming its upload landed. Declared last, out of
     // group, so that the emitted endpoint list stays a pure append.
     output event wt::EffectiveRackState effectiveRackState;
+    // Test/diagnostic readback for the compiled modulation-program protocol. A rejected
+    // install leaves the previous program active, so acceptance observes a rejection event.
+    output event int32 modulationRejectedRouteCount;
+    // Worker-only restore receipt. Signed session-scoped frontiers let the two
+    // restore lanes prove delivery without filling the native event FIFO.
+    output event wt::RuntimeInstallAck runtimeInstallAck;
 
     let voiceCount = 16;
 
@@ -1369,13 +1373,11 @@ graph WavetableSynth [[ main ]]
         wavetableMipFrame -> sharedEngine.wavetableMipFrameIn;
         serviceLoadAbort -> sharedEngine.serviceLoadAbortIn;
         articulationSnapshot -> sharedEngine.articulationSnapshotIn;
-        modulationClear -> sharedEngine.modulationClearIn;
-        modulationEnable -> sharedEngine.modulationEnableIn;
         modulationMsegBuffer -> sharedEngine.modulationMsegBufferIn;
         modulationMsegPlayback -> sharedEngine.modulationMsegPlaybackIn;
         modulationEnvelope -> sharedEngine.modulationEnvelopeIn;
-        modulationRoute -> sharedEngine.modulationRouteIn;
-        rackModulationRoute -> sharedEngine.rackModulationRouteIn;
+        modulationProgram -> sharedEngine.modulationProgramIn;
+        modulationAmount -> sharedEngine.modulationAmountIn;
         wavetablePosition -> sharedEngine.framePositionIn;
         wavetableSelect -> desiredTableMonitor.tableSelectIn;
         glideTime -> sharedEngine.glideTimeIn;
@@ -1409,7 +1411,8 @@ graph WavetableSynth [[ main ]]
         desiredTableMonitor.desiredTableChangeOut -> runtimeStateCoordinator.desiredTableChangeIn;
         workerLoadFailure -> runtimeStateCoordinator.workerLoadFailureIn;
         wavetablePrewarmRequest -> wavetablePrewarmNotification;
-        runtimeSyncRequest -> runtimeStateCoordinator.runtimeSyncRequestIn;
+        runtimeSyncRequest -> runtimeStateCoordinator.runtimeSyncRequestIn,
+                              sharedEngine.runtimeInstallSyncIn;
         retryDesiredTableRequest -> runtimeStateCoordinator.retryDesiredTableRequestIn;
         runtimeStateCoordinator.runtimeStateOut -> runtimeState;
         sharedEngine.effectiveWavetablePositionOut -> effectiveWavetablePosition;
@@ -1445,5 +1448,7 @@ graph WavetableSynth [[ main ]]
         rack.rackRejectedOrderCount -> rackStateMonitor.rejectedOrderCountIn;
         rack.rackRejectedEnableCount -> rackStateMonitor.rejectedEnableCountIn;
         rackStateMonitor.effectiveRackStateOut -> effectiveRackState;
+        sharedEngine.modulationRejectedRouteCountOut -> modulationRejectedRouteCount;
+        sharedEngine.runtimeInstallAckOut -> runtimeInstallAck;
     }
 }

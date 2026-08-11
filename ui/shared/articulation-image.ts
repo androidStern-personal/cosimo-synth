@@ -12,10 +12,12 @@
 
 import {
     ARTICULATION_MAX_SLOTS,
+    ARTICULATION_ROUTE_AMOUNT_INHERIT,
+    ARTICULATION_ROUTE_AMOUNT_MAX_ABS,
     type ArticulationSnapshotRuntimeUpload,
     type ArticulationTriggerMode,
 } from "./articulations";
-import { MODULATION_MAX_ROUTES } from "./modulation";
+import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program";
 import { err, ok, type Result } from "./result";
 
 /** Stored-state key for the v3 articulation bank. */
@@ -106,13 +108,14 @@ export type ArticulationsState = {
 /**
  * The patch-base voice values every un-overridden articulation key inherits.
  * `parameters` is COMPLETE (every id present — the type makes partial bases
- * unrepresentable). `routeOrder` fixes the engine's positional route-array
- * layout; `routeAmounts` holds each route's base amount.
+ * unrepresentable). `routeCells` compiles stable mapping ids to deterministic
+ * voice-destination cells; `routeAmounts` holds each mapping's base amount.
  */
 export type PatchVoiceBase = {
     readonly parameters: Readonly<Record<ArticulationVoiceParameterId, number>>;
     readonly routeAmounts: Readonly<Record<string, number>>;
     readonly routeOrder: ReadonlyArray<string>;
+    readonly routeCells: Readonly<Record<string, number>>;
 };
 
 /**
@@ -128,12 +131,8 @@ export type ArticulationBaseChange =
 export class ArticulationsParseError extends Error {
     readonly _tag = "ArticulationsParseError" as const;
 
-    constructor(
-        /** `legacy-v2-rejected` marks the deliberate hard cut (ADR-014); `malformed` is any other shape violation. */
-        readonly reason: "legacy-v2-rejected" | "malformed",
-        /** Human-readable detail naming the offending field or slot. */
-        readonly detail: string,
-    ) {
+    /** @param detail Human-readable detail naming the offending field or slot. */
+    constructor(readonly reason: "malformed", readonly detail: string) {
         super(`articulations.v3 parse failed (${reason}): ${detail}`);
     }
 }
@@ -264,6 +263,7 @@ function createRouteAmountRecord(): Record<string, number> {
 function parseRouteAmounts(
     input: unknown,
     label: string,
+    acceptedRouteIds: ReadonlySet<string>,
 ): Result<Readonly<Record<string, number>>, ArticulationsParseError> {
     if (!isObjectRecord(input)) {
         return malformed(`${label} must be an object`);
@@ -277,8 +277,15 @@ function parseRouteAmounts(
         }
 
         const value = input[key];
-        if (typeof value !== "number" || !Number.isFinite(value)) {
-            return malformed(`${label}.${key} must be a finite number`);
+        if (typeof value !== "number"
+            || !Number.isFinite(value)
+            || Math.abs(value) > ARTICULATION_ROUTE_AMOUNT_MAX_ABS) {
+            return malformed(
+                `${label}.${key} must be a finite route amount within ±${ARTICULATION_ROUTE_AMOUNT_MAX_ABS}`,
+            );
+        }
+        if (!acceptedRouteIds.has(key)) {
+            return malformed(`${label}.${key} does not name a current articulable mapping`);
         }
 
         defineOwnNumber(routeAmounts, key, value);
@@ -290,6 +297,7 @@ function parseRouteAmounts(
 function parseSlot(
     input: unknown,
     index: number,
+    acceptedRouteIds: ReadonlySet<string>,
 ): Result<ArticulationSlotV3, ArticulationsParseError> {
     const label = `slots[${index}]`;
     if (!isObjectRecord(input)) {
@@ -340,7 +348,7 @@ function parseSlot(
         return overrides;
     }
 
-    const routeAmounts = parseRouteAmounts(input.routeAmounts, `${label}.routeAmounts`);
+    const routeAmounts = parseRouteAmounts(input.routeAmounts, `${label}.routeAmounts`, acceptedRouteIds);
     if (routeAmounts._tag === "err") {
         return routeAmounts;
     }
@@ -416,27 +424,26 @@ function resolveRouteAmount(base: PatchVoiceBase, slot: ArticulationSlotV3, rout
 /**
  * Parse untrusted stored state into a v3 articulation bank.
  *
- * Strict, fail-fast: `format`/`version` must match exactly (a v2 payload is
- * rejected with reason `legacy-v2-rejected` — the hard cut, no migration);
+ * Strict, fail-fast: `format`/`version` must match exactly;
  * every slot needs a unique id, a unique in-range `runtimeSlot`, finite
  * numbers, integer ranges with `min <= max` inside 0..127, and override keys
  * drawn from `ARTICULATION_VOICE_PARAMETER_IDS` (unknown keys are malformed,
  * never dropped).
  *
  * @param input - Untrusted stored-state value.
+ * @param acceptedRouteIds - Current voice-mapping ids that may be overridden.
  * @returns The parsed bank, or a tagged parse error.
  */
-export function parseArticulationsV3(input: unknown): Result<ArticulationsState, ArticulationsParseError> {
+export function parseArticulationsV3(
+    input: unknown,
+    acceptedRouteIds: ReadonlySet<string>,
+): Result<ArticulationsState, ArticulationsParseError> {
     if (!isObjectRecord(input)) {
         return malformed("payload must be an object");
     }
 
     if (input.format !== "cosimo.articulations") {
         return malformed('format must be exactly "cosimo.articulations"');
-    }
-
-    if (input.version === 2) {
-        return err(new ArticulationsParseError("legacy-v2-rejected", "version 2 is deliberately unsupported"));
     }
 
     if (input.version !== 3) {
@@ -473,7 +480,7 @@ export function parseArticulationsV3(input: unknown): Result<ArticulationsState,
     const runtimeSlots = new Set<number>();
 
     for (let index = 0; index < input.slots.length; index += 1) {
-        const parsedSlot = parseSlot(input.slots[index], index);
+        const parsedSlot = parseSlot(input.slots[index], index, acceptedRouteIds);
         if (parsedSlot._tag === "err") {
             return parsedSlot;
         }
@@ -507,7 +514,8 @@ export function parseArticulationsV3(input: unknown): Result<ArticulationsState,
 
 /**
  * Project a v3 bank to a JSON-safe plain value such that
- * `parseArticulationsV3(serializeArticulationsV3(state))` is identity.
+ * `parseArticulationsV3(serializeArticulationsV3(state), acceptedRouteIds)` is
+ * identity when `acceptedRouteIds` contains the state's route-amount keys.
  *
  * @param state - The bank to serialize.
  * @returns A JSON-safe deep copy.
@@ -568,10 +576,9 @@ export function lowestFreeRuntimeSlot(state: ArticulationsState): number | null 
 /**
  * Compile ONE slot's sparse overrides over the patch base into the complete
  * engine image (ADR-014: storage sparse, runtime complete). Every scalar is
- * `override ?? base`; the route array follows `base.routeOrder` positionally
- * with `slot.routeAmounts[routeId] ?? base.routeAmounts[routeId] ?? 0`,
- * padded with zeros to `MODULATION_MAX_ROUTES`; `selectorA` is the slot's
- * `runtimeSlot` and `enabled` is true.
+ * `override ?? base`; mapping amounts are placed at deterministic runtime cells,
+ * independent of stored ordering. `selectorA` is the slot's `runtimeSlot` and
+ * `enabled` is true.
  *
  * @param base - The complete patch-base voice values.
  * @param slot - The slot to resolve.
@@ -581,10 +588,18 @@ export function resolveArticulationImage(
     base: PatchVoiceBase,
     slot: ArticulationSlotV3,
 ): ArticulationSnapshotRuntimeUpload {
-    const routeAmounts: Array<number> = [];
-    for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
-        const routeId = base.routeOrder[routeIndex];
-        routeAmounts.push(routeId === undefined ? 0 : resolveRouteAmount(base, slot, routeId));
+    const routeAmounts = Array.from(
+        { length: MODULATION_ARTICULATION_ROUTE_CELL_COUNT },
+        () => ARTICULATION_ROUTE_AMOUNT_INHERIT,
+    );
+    for (const routeId of base.routeOrder) {
+        const cellIndex = base.routeCells[routeId];
+        if (cellIndex !== undefined && Object.hasOwn(slot.routeAmounts, routeId)) {
+            const override = slot.routeAmounts[routeId];
+            if (override !== undefined) {
+                routeAmounts[cellIndex] = override;
+            }
+        }
     }
 
     return {
@@ -672,13 +687,18 @@ export function affectedSelectors(
                 .filter((slot) => !Object.hasOwn(slot.overrides, change.parameterId))
                 .map((slot) => slot.runtimeSlot);
         case "routeAmount":
-            return state.slots
-                .filter((slot) => !Object.hasOwn(slot.routeAmounts, change.routeId))
-                .map((slot) => slot.runtimeSlot);
+            // Runtime images store sparse mapping overrides. Inherited base
+            // amounts are read when a note latches, so a base knob drag needs
+            // no articulation uploads.
+            return [];
         case "routeOrder":
             return state.slots.map((slot) => slot.runtimeSlot);
     }
 }
 
-// Re-exported so resolver consumers size positional arrays without importing modulation.
-export { ARTICULATION_MAX_SLOTS, MODULATION_MAX_ROUTES };
+// Re-exported so resolver consumers size and interpret positional arrays without extra imports.
+export {
+    ARTICULATION_MAX_SLOTS,
+    ARTICULATION_ROUTE_AMOUNT_INHERIT,
+    MODULATION_ARTICULATION_ROUTE_CELL_COUNT,
+};

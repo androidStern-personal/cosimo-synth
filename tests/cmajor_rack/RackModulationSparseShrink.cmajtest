@@ -1,0 +1,337 @@
+// A live three-instruction prefix is replaced by a one-instruction prefix while
+// the two removed records remain populated behind the active count. This runs
+// through the production program endpoint and rack output streams.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
+
+## testProcessor (undefined, { frequency: 1000, maxFrequency: 1000 })
+
+graph RackSparsePrefixShrink [[ main ]]
+{
+    output event int32 out;
+
+    node source = RackSparsePrefixShrinkSource;
+    node engine = wt::SharedVoiceEngine (2);
+    node witness = RackSparsePrefixShrinkWitness;
+
+    connection
+    {
+        source.programOut -> engine.modulationProgramIn;
+        source.voice0Out -> engine.voiceEventIn[0];
+        source.voice1Out -> engine.voiceEventIn[1];
+        engine.rackModOut[wt::rackModTargetGlobalFilterCutoffOctaves] -> witness.cutoffIn;
+        engine.rackModOut[wt::rackModTargetGlobalFilterResonance] -> witness.resonanceIn;
+        engine.rackModOut[wt::rackModTargetGlobalFilterDrive] -> witness.driveIn;
+        witness.out -> out;
+    }
+}
+
+processor RackSparsePrefixShrinkSource
+{
+    output event wt::ModulationProgramUpload programOut;
+    output event std::notes::NoteOn voice0Out;
+    output event std::notes::NoteOn voice1Out;
+
+    wt::ModulationProgramUpload program (int32 deliverySerial, int32 activeCount)
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = deliverySerial;
+        upload.voiceRackRouteCount = activeCount;
+
+        let sourceIndex = 6;
+        let cutoffTarget = wt::rackModTargetGlobalFilterCutoffOctaves;
+        let resonanceTarget = wt::rackModTargetGlobalFilterResonance;
+        let driveTarget = wt::rackModTargetGlobalFilterDrive;
+        let cutoffCell = sourceIndex * wt::rackModTargetCount + cutoffTarget;
+        let resonanceCell = sourceIndex * wt::rackModTargetCount + resonanceTarget;
+        let driveCell = sourceIndex * wt::rackModTargetCount + driveTarget;
+
+        upload.voiceRackRouteCells[0] = cutoffCell;
+        upload.voiceRackRouteSources[0] = sourceIndex;
+        upload.voiceRackRouteTargets[0] = cutoffTarget;
+        upload.voiceRackRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRackRouteReducers[0] = wt::modulationReducerMaximum;
+        upload.voiceRackRouteAmounts[cutoffCell] = -3.0f;
+
+        upload.voiceRackRouteCells[1] = resonanceCell;
+        upload.voiceRackRouteSources[1] = sourceIndex;
+        upload.voiceRackRouteTargets[1] = resonanceTarget;
+        upload.voiceRackRoutePolarities[1] = wt::modulationPolarityUnipolar;
+        upload.voiceRackRouteReducers[1] = wt::modulationReducerMaximum;
+        upload.voiceRackRouteAmounts[resonanceCell] = 2.0f;
+
+        upload.voiceRackRouteCells[2] = driveCell;
+        upload.voiceRackRouteSources[2] = sourceIndex;
+        upload.voiceRackRouteTargets[2] = driveTarget;
+        upload.voiceRackRoutePolarities[2] = wt::modulationPolarityUnipolar;
+        upload.voiceRackRouteReducers[2] = wt::modulationReducerMaximum;
+        upload.voiceRackRouteAmounts[driveCell] = 1.0f;
+        return upload;
+    }
+
+    std::notes::NoteOn noteOn (float32 velocity)
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = velocity;
+        return note;
+    }
+
+    void main()
+    {
+        programOut <- program (1, 3);
+        voice0Out <- noteOn (0.2f);
+        voice1Out <- noteOn (0.6f);
+        advance();
+
+        for (int32 frame = 0; frame < 24; ++frame)
+            advance();
+
+        programOut <- program (2, 1);
+        loop advance();
+    }
+}
+
+processor RackSparsePrefixShrinkWitness
+{
+    input stream float32 cutoffIn;
+    input stream float32 resonanceIn;
+    input stream float32 driveIn;
+    output event int32 out;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 20)
+                out <- (std::intrinsics::abs (cutoffIn) > 1.0f
+                     && std::intrinsics::abs (resonanceIn) > 0.6f
+                     && std::intrinsics::abs (driveIn) > 0.3f) ? 1 : 0;
+
+            if (frame == 96)
+                out <- (std::intrinsics::abs (cutoffIn + 1.8f) < 0.001f
+                     && resonanceIn == 0.0f
+                     && driveIn == 0.0f) ? 1 : 0;
+
+            if (frame == 97)
+                out <- -1;
+
+            advance();
+        }
+    }
+}
+
+// A new participant restores the gate immediately; only the retained 5 ms
+// destination smoother may shape onset.
+## testProcessor (undefined, { frequency: 1000, maxFrequency: 1000 })
+
+graph RackGateOnset [[ main ]]
+{
+    output event int32 out;
+
+    node source = RackGateOnsetSource;
+    node engine = wt::SharedVoiceEngine (1);
+    node witness = RackGateOnsetWitness;
+
+    connection
+    {
+        source.programOut -> engine.modulationProgramIn;
+        source.noteOut -> engine.voiceEventIn[0];
+        engine.rackModOut[wt::rackModTargetGlobalFilterCutoffOctaves] -> witness.cutoffIn;
+        witness.out -> out;
+    }
+}
+
+processor RackGateOnsetSource
+{
+    output event wt::ModulationProgramUpload programOut;
+    output event std::notes::NoteOn noteOut;
+
+    wt::ModulationProgramUpload program()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 1;
+        upload.voiceRackRouteCount = 1;
+        let sourceIndex = 6;
+        let targetIndex = wt::rackModTargetGlobalFilterCutoffOctaves;
+        let cellIndex = sourceIndex * wt::rackModTargetCount + targetIndex;
+        upload.voiceRackRouteCells[0] = cellIndex;
+        upload.voiceRackRouteSources[0] = sourceIndex;
+        upload.voiceRackRouteTargets[0] = targetIndex;
+        upload.voiceRackRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRackRouteReducers[0] = wt::modulationReducerMaximum;
+        upload.voiceRackRouteAmounts[cellIndex] = 1.0f;
+        return upload;
+    }
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 0.6f;
+        return note;
+    }
+
+    void main()
+    {
+        programOut <- program();
+        advance();
+        for (int32 frame = 0; frame < 19; ++frame)
+            advance();
+        noteOut <- noteOn();
+        loop advance();
+    }
+}
+
+processor RackGateOnsetWitness
+{
+    input stream float32 cutoffIn;
+    output event int32 out;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 19)
+                out <- cutoffIn == 0.0f ? 1 : 0;
+
+            if (frame == 26)
+                out <- (cutoffIn > 0.30f && cutoffIn < 0.50f) ? 1 : 0;
+
+            if (frame == 36)
+                out <- -1;
+
+            advance();
+        }
+    }
+}
+
+// Rack/global modulation must observe a one-sample source change on both sides
+// of the voice-to-global reduction seam. This crosses the production program
+// endpoint, Macro and per-voice Slide sources, SharedVoiceEngine, reducer,
+// destination smoother, and rack output streams.
+## testProcessor (undefined, { frequency: 48000, maxFrequency: 48000 })
+
+graph RackShortPulseCapture [[ main ]]
+{
+    output event int32 out;
+
+    node source = RackShortPulseCaptureSource;
+    node engine = wt::SharedVoiceEngine (1);
+    node witness = RackShortPulseCaptureWitness;
+
+    connection
+    {
+        source.programOut -> engine.modulationProgramIn;
+        source.macroOut -> engine.macro1In;
+        source.voiceOut -> engine.voiceEventIn[0];
+        engine.rackModOut[wt::rackModTargetGlobalFilterCutoffOctaves] -> witness.slideIn;
+        engine.rackModOut[wt::rackModTargetGlobalFilterResonance] -> witness.macroIn;
+        witness.out -> out;
+    }
+}
+
+processor RackShortPulseCaptureSource
+{
+    output event wt::ModulationProgramUpload programOut;
+    output value float32 macroOut;
+    output event (std::notes::NoteOn, std::notes::Slide) voiceOut;
+
+    wt::ModulationProgramUpload program()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 1;
+        let slideSource = 8;
+        let slideTarget = wt::rackModTargetGlobalFilterCutoffOctaves;
+        let slideCell = slideSource * wt::rackModTargetCount + slideTarget;
+        upload.voiceRackRouteCount = 1;
+        upload.voiceRackRouteCells[0] = slideCell;
+        upload.voiceRackRouteSources[0] = slideSource;
+        upload.voiceRackRouteTargets[0] = slideTarget;
+        upload.voiceRackRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRackRouteReducers[0] = wt::modulationReducerMaximum;
+        upload.voiceRackRouteAmounts[slideCell] = 1.0f;
+
+        let macroTarget = wt::rackModTargetGlobalFilterResonance;
+        upload.macroRackRouteCount = 1;
+        upload.macroRackRouteCells[0] = macroTarget;
+        upload.macroRackRouteSources[0] = 0;
+        upload.macroRackRouteTargets[0] = macroTarget;
+        upload.macroRackRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.macroRackRouteAmounts[macroTarget] = 1.0f;
+        return upload;
+    }
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    std::notes::Slide slide (float32 value)
+    {
+        std::notes::Slide expression;
+        expression.channel = 0;
+        expression.slide = value;
+        return expression;
+    }
+
+    void main()
+    {
+        programOut <- program();
+        macroOut <- 0.0f;
+        voiceOut <- noteOn();
+        voiceOut <- slide (0.0f);
+
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 17)
+            {
+                macroOut <- 1.0f;
+                voiceOut <- slide (1.0f);
+            }
+            if (frame == 18)
+            {
+                macroOut <- 0.0f;
+                voiceOut <- slide (0.0f);
+            }
+            advance();
+        }
+    }
+}
+
+processor RackShortPulseCaptureWitness
+{
+    input stream float32 slideIn;
+    input stream float32 macroIn;
+    output event int32 out;
+    float32 slidePeak;
+    float32 macroPeak;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame >= 17 && frame < 40)
+            {
+                slidePeak = std::intrinsics::max (slidePeak, std::intrinsics::abs (slideIn));
+                macroPeak = std::intrinsics::max (macroPeak, std::intrinsics::abs (macroIn));
+            }
+
+            if (frame == 40)
+                out <- (slidePeak > 0.001f && macroPeak > 0.001f) ? 1 : 0;
+            if (frame == 41)
+                out <- -1;
+
+            advance();
+        }
+    }
+}

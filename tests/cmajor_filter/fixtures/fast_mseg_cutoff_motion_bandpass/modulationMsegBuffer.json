@@ -3,6 +3,7 @@
     "frameOffset": 0,
     "event": {
       "slot": 1,
+      "shapeIndex": 0,
       "buffer": [
         0,
         0,

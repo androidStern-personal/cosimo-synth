@@ -5,6 +5,22 @@
 #import <CoreAudioKit/AUViewController.h>
 #import <WebKit/WebKit.h>
 
+#include <algorithm>
+#include <array>
+#include <cmath>
+#include <memory>
+#include <vector>
+
+#include <mach/mach_time.h>
+
+#ifndef COSIMO_HOST_PLUGIN_SUBTYPE
+#define COSIMO_HOST_PLUGIN_SUBTYPE "CmDv"
+#endif
+
+#ifndef COSIMO_HOST_PLUGIN_MANUFACTURER
+#define COSIMO_HOST_PLUGIN_MANUFACTURER "Manu"
+#endif
+
 static NSString * const CosimoHostHarnessErrorDomain = @"CosimoHostHarnessError";
 static NSString * const CosimoPrimaryParameterIdentifier = @"wavetablePosition";
 static NSString * const CosimoTableSelectParameterIdentifier = @"wavetableSelect";
@@ -17,6 +33,87 @@ static const NSTimeInterval CosimoNoteCaptureDurationSeconds = 4.2;
 static const NSInteger CosimoEditorStateCaptureAttempts = 12;
 static const NSTimeInterval CosimoEditorStateInitialDelaySeconds = 0.35;
 static const NSTimeInterval CosimoEditorStateRetryDelaySeconds = 0.25;
+static const double CosimoBenchmarkSampleRate = 48000.0;
+static const AVAudioFrameCount CosimoBenchmarkBufferFrames = 128;
+static const NSUInteger CosimoBenchmarkVoiceCount = 16;
+static const NSUInteger CosimoBenchmarkMaximumGapSamples = 65536;
+static const NSTimeInterval CosimoNeutralSourceSettleSeconds = 0.05;
+static NSString * const CosimoBenchmarkProfileParameter = @"cosimoBenchmarkProfile";
+static NSString * const CosimoBenchmarkRuntimeReadyParameter = @"cosimoBenchmarkRuntimeReady";
+static NSString * const CosimoBenchmarkRuntimeReadyRequestParameter = @"cosimoBenchmarkRuntimeReadyRequest";
+static NSString * const CosimoBenchmarkInstallParameter = @"cosimoBenchmarkInstall";
+static NSString * const CosimoBenchmarkInstallStatusParameter = @"cosimoBenchmarkInstallStatus";
+static NSString * const CosimoBenchmarkInstallGenerationParameter = @"cosimoBenchmarkInstallGeneration";
+static NSString * const CosimoBenchmarkCaptureParameter = @"cosimoBenchmarkCapture";
+static NSString * const CosimoBenchmarkCaptureGenerationParameter = @"cosimoBenchmarkCaptureGeneration";
+static NSString * const CosimoBenchmarkCaptureStopGenerationParameter = @"cosimoBenchmarkCaptureStopGeneration";
+static NSString * const CosimoBenchmarkResultGenerationParameter = @"cosimoBenchmarkResultGeneration";
+static NSString * const CosimoBenchmarkResultFieldRequestParameter = @"cosimoBenchmarkResultFieldRequest";
+static NSString * const CosimoBenchmarkResultFieldResponseParameter = @"cosimoBenchmarkResultFieldResponse";
+static const NSUInteger CosimoBenchmarkInstallFieldCount = 5;
+static const NSUInteger CosimoBenchmarkRenderFieldStart = CosimoBenchmarkInstallFieldCount;
+
+static NSArray<NSString *> *CosimoBenchmarkResultFieldIdentifiers()
+{
+    return @[
+        @"acceptedModulationProgramSerial", @"installedVoiceRouteCount", @"installedMacroVoiceRouteCount",
+        @"installedVoiceRackRouteCount", @"installedMacroRackRouteCount",
+        @"renderBlockCount", @"capturedRenderSampleCount", @"dspSampleRate", @"audioFrames", @"minimumFrames",
+        @"maximumFrames", @"renderLoadPercent", @"p99RenderLoadPercent", @"p999RenderLoadPercent",
+        @"maximumRenderLoadPercent", @"deadlineMissCount", @"voiceMask", @"rackEnableMask",
+    ];
+}
+
+static NSArray<NSNumber *> *CosimoBenchmarkResultFieldScales()
+{
+    return @[ @100000.0, @624.0, @624.0, @624.0, @624.0,
+              @100000.0, @100000.0, @192000.0, @10000000.0, @4096.0, @4096.0, @200.0,
+              @200.0, @200.0, @1000.0, @10000.0, @65535.0, @255.0 ];
+}
+
+struct CosimoModulationPhaseCapture
+{
+    uint64_t callbackCount = 0;
+    uint64_t audioFrames = 0;
+    uint64_t sampleCount = 0;
+    uint64_t nonFiniteSampleCount = 0;
+    uint64_t clippedSampleCount = 0;
+    uint64_t tapArrivalGapOver125PercentCount = 0;
+    uint64_t sampleTimeDiscontinuityCount = 0;
+    AVAudioFrameCount minimumBufferFrames = UINT32_MAX;
+    AVAudioFrameCount maximumBufferFrames = 0;
+    double energy = 0.0;
+    double peak = 0.0;
+    double maximumTapArrivalGapRatio = 0.0;
+    uint64_t previousTapArrivalTime = 0;
+    AVAudioFramePosition previousSampleTime = -1;
+    AVAudioFrameCount previousFrameCount = 0;
+    std::array<double, CosimoBenchmarkMaximumGapSamples> gapRatios {};
+    NSUInteger recordedGapCount = 0;
+};
+
+static double CosimoTimeIntervalSeconds (uint64_t start, uint64_t end)
+{
+    static mach_timebase_info_data_t timebase = []
+    {
+        mach_timebase_info_data_t result {};
+        mach_timebase_info (&result);
+        return result;
+    }();
+    return (double) (end - start) * (double) timebase.numer / (double) timebase.denom / 1.0e9;
+}
+
+static NSString * CosimoThermalStateName (NSProcessInfoThermalState state)
+{
+    switch (state)
+    {
+        case NSProcessInfoThermalStateNominal: return @"nominal";
+        case NSProcessInfoThermalStateFair: return @"fair";
+        case NSProcessInfoThermalStateSerious: return @"serious";
+        case NSProcessInfoThermalStateCritical: return @"critical";
+    }
+    return @"unknown";
+}
 
 static NSError * CosimoMakeError (NSInteger code, NSString *description)
 {
@@ -48,8 +145,8 @@ static AudioComponentDescription CosimoComponentDescription()
 {
     AudioComponentDescription description {};
     description.componentType = kAudioUnitType_MusicDevice;
-    description.componentSubType = CosimoFourCC ("CmDv");
-    description.componentManufacturer = CosimoFourCC ("Manu");
+    description.componentSubType = CosimoFourCC (COSIMO_HOST_PLUGIN_SUBTYPE);
+    description.componentManufacturer = CosimoFourCC (COSIMO_HOST_PLUGIN_MANUFACTURER);
     return description;
 }
 
@@ -63,11 +160,39 @@ static AudioComponentDescription CosimoComponentDescription()
 @property (nonatomic, strong) UIViewController *editorController;
 @property (nonatomic, strong) NSDictionary<NSString *, id> *lastDiscoverySummary;
 @property (nonatomic, strong) NSArray<NSDictionary<NSString *, id> *> *parameterSnapshot;
+@property (nonatomic, assign) uint64_t benchmarkCaptureBaselineGeneration;
+@property (nonatomic, assign) BOOL benchmarkRuntimeReadyRequestToggle;
 
 - (void)captureEditorStateAfterDelay:(NSTimeInterval)delay
                     remainingAttempts:(NSInteger)remainingAttempts
                            completion:(CosimoHostResultBlock)completion;
 - (BOOL)hostPageInspectionIsReady:(NSDictionary<NSString *, id> * _Nullable)hostPageResult;
+- (void)beginModulationBenchmarkCaptureWithCompletion:(CosimoHostResultBlock)completion;
+- (void)prepareNeutralModulationBenchmarkSourcesWithCompletion:(CosimoHostResultBlock)completion;
+- (void)finishModulationBenchmarkCaptureWithCompletion:(CosimoHostResultBlock)completion;
+- (void)waitForModulationProfileInstallAtIndex:(NSUInteger)profileIndex
+                            baselineGeneration:(uint64_t)baselineGeneration
+                                      deadline:(NSDate *)deadline
+                                    completion:(CosimoHostResultBlock)completion;
+- (void)waitForModulationRuntimeReadyUntil:(NSDate *)deadline
+                                 completion:(CosimoHostResultBlock)completion;
+- (void)readCompletedModulationBenchmarkAfterAttempts:(NSInteger)remainingAttempts
+                                           completion:(CosimoHostResultBlock)completion;
+- (void)readModulationBenchmarkFieldsFromIndex:(NSUInteger)fieldIndex
+                                  endingBefore:(NSUInteger)endIndex
+                                         values:(NSMutableDictionary<NSString *, NSNumber *> *)values
+                                     completion:(CosimoHostResultBlock)completion;
+- (void)waitForModulationBenchmarkFieldAtIndex:(NSUInteger)fieldIndex
+                                   endingBefore:(NSUInteger)endIndex
+                                         values:(NSMutableDictionary<NSString *, NSNumber *> *)values
+                              remainingAttempts:(NSInteger)remainingAttempts
+                                     completion:(CosimoHostResultBlock)completion;
+- (void)waitForModulationBenchmarkCaptureStartedUntil:(NSDate *)deadline
+                             baselineCaptureGeneration:(uint64_t)baselineCaptureGeneration
+                                            completion:(CosimoHostResultBlock)completion;
+- (void)measureStartedModulationPhaseNamed:(NSString *)phaseName
+                            durationSeconds:(NSTimeInterval)durationSeconds
+                                 completion:(CosimoHostResultBlock)completion;
 
 @end
 
@@ -129,7 +254,7 @@ static AudioComponentDescription CosimoComponentDescription()
             {
                 [self discoverExtensionWithCompletion:^ (NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable discoverError)
                 {
-                    completion (nil, discoverError ?: error);
+                    completion (nil, error ?: discoverError);
                 }];
                 return;
             }
@@ -519,6 +644,563 @@ static AudioComponentDescription CosimoComponentDescription()
     [self inspectFactoryCatalogAfterDelay:0.0 remainingAttempts:12 completion:completion];
 }
 
+- (void)installModulationProfileIndex:(NSUInteger)profileIndex completion:(CosimoHostResultBlock)completion
+{
+    AUParameter *profile = [self findParameterWithIdentifier:CosimoBenchmarkProfileParameter];
+    AUParameter *install = [self findParameterWithIdentifier:CosimoBenchmarkInstallParameter];
+    AUParameter *status = [self findParameterWithIdentifier:CosimoBenchmarkInstallStatusParameter];
+    AUParameter *generation = [self findParameterWithIdentifier:CosimoBenchmarkInstallGenerationParameter];
+    if (profile == nil || install == nil || status == nil || generation == nil || profileIndex >= 7)
+    {
+        completion (nil, CosimoMakeError (40, @"Benchmark-only cross-process modulation controls are unavailable."));
+        return;
+    }
+
+    [self waitForModulationRuntimeReadyUntil:[NSDate dateWithTimeIntervalSinceNow:90.0]
+                                   completion:^(__unused NSDictionary<NSString *,id> * _Nullable readyResult,
+                                                NSError * _Nullable readyError)
+    {
+        if (readyError != nil)
+        {
+            completion (nil, readyError);
+            return;
+        }
+
+        const uint64_t baselineGeneration = llround (generation.value * 10000.0f);
+        install.value = 0.0f;
+        profile.value = (float) profileIndex;
+        install.value = 1.0f;
+        [self waitForModulationProfileInstallAtIndex:profileIndex
+                                  baselineGeneration:baselineGeneration
+                                            deadline:[NSDate dateWithTimeIntervalSinceNow:12.0]
+                                          completion:completion];
+    }];
+}
+
+- (void)waitForModulationRuntimeReadyUntil:(NSDate *)deadline
+                                 completion:(CosimoHostResultBlock)completion
+{
+    AUParameter *runtimeReady = [self findParameterWithIdentifier:CosimoBenchmarkRuntimeReadyParameter];
+    AUParameter *runtimeReadyRequest = [self findParameterWithIdentifier:CosimoBenchmarkRuntimeReadyRequestParameter];
+    if (runtimeReady == nil || runtimeReadyRequest == nil)
+    {
+        completion (nil, CosimoMakeError (40, @"Benchmark modulation runtime readiness control is unavailable."));
+        return;
+    }
+    if (runtimeReady.value >= 0.5f)
+    {
+        completion (@{ @"ready": @YES }, nil);
+        return;
+    }
+    if ([deadline timeIntervalSinceNow] <= 0.0)
+    {
+        completion (nil, CosimoMakeError (42, @"Timed out waiting for the production modulation runtime to become ready."));
+        return;
+    }
+
+    self.benchmarkRuntimeReadyRequestToggle = ! self.benchmarkRuntimeReadyRequestToggle;
+    runtimeReadyRequest.value = self.benchmarkRuntimeReadyRequestToggle ? 1.0f : 0.0f;
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.05 * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self waitForModulationRuntimeReadyUntil:deadline completion:completion];
+    });
+}
+
+- (void)waitForModulationProfileInstallAtIndex:(NSUInteger)profileIndex
+                            baselineGeneration:(uint64_t)baselineGeneration
+                                      deadline:(NSDate *)deadline
+                                    completion:(CosimoHostResultBlock)completion
+{
+    AUParameter *install = [self findParameterWithIdentifier:CosimoBenchmarkInstallParameter];
+    AUParameter *status = [self findParameterWithIdentifier:CosimoBenchmarkInstallStatusParameter];
+    AUParameter *generation = [self findParameterWithIdentifier:CosimoBenchmarkInstallGenerationParameter];
+    const uint64_t observedGeneration = llround (generation.value * 10000.0f);
+    const float observed = status.value;
+    if (observedGeneration > baselineGeneration && observed >= 2.5f)
+    {
+        install.value = 0.0f;
+        completion (nil, CosimoMakeError (41, @"The production modulation worker rejected the strict benchmark profile."));
+        return;
+    }
+    if (observedGeneration > baselineGeneration && observed >= 1.5f)
+    {
+        install.value = 0.0f;
+        NSMutableDictionary<NSString *, NSNumber *> *values = [[NSMutableDictionary alloc] init];
+        [self readModulationBenchmarkFieldsFromIndex:0
+                                        endingBefore:CosimoBenchmarkInstallFieldCount
+                                               values:values
+                                           completion:^(NSDictionary<NSString *, id> * _Nullable evidence,
+                                                        NSError * _Nullable evidenceError)
+        {
+            if (evidenceError != nil)
+            {
+                completion (nil, evidenceError);
+                return;
+            }
+            completion (@{
+                @"profileIndex": @(profileIndex),
+                @"accepted": @YES,
+                @"acceptedModulationProgramSerial": @(llround ([evidence[@"acceptedModulationProgramSerial"] doubleValue])),
+                @"installedCounts": @{
+                    @"voice": @(llround ([evidence[@"installedVoiceRouteCount"] doubleValue])),
+                    @"macroVoice": @(llround ([evidence[@"installedMacroVoiceRouteCount"] doubleValue])),
+                    @"voiceRack": @(llround ([evidence[@"installedVoiceRackRouteCount"] doubleValue])),
+                    @"macroRack": @(llround ([evidence[@"installedMacroRackRouteCount"] doubleValue])),
+                },
+            }, nil);
+        }];
+        return;
+    }
+    if ([deadline timeIntervalSinceNow] <= 0.0)
+    {
+        install.value = 0.0f;
+        AUParameter *profile = [self findParameterWithIdentifier:CosimoBenchmarkProfileParameter];
+        completion (nil, CosimoMakeError (42, [NSString stringWithFormat:@"Timed out waiting for the production modulation worker acknowledgement (profile=%.3f, install=%.3f, status=%.3f, generation=%llu, baseline=%llu).",
+                                              profile.value,
+                                              install.value,
+                                              observed,
+                                              observedGeneration,
+                                              baselineGeneration]));
+        return;
+    }
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.05 * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self waitForModulationProfileInstallAtIndex:profileIndex
+                                  baselineGeneration:baselineGeneration
+                                            deadline:deadline
+                                          completion:completion];
+    });
+}
+
+- (void)beginModulationBenchmarkCaptureWithCompletion:(CosimoHostResultBlock)completion
+{
+    AUParameter *capture = [self findParameterWithIdentifier:CosimoBenchmarkCaptureParameter];
+    AUParameter *captureGeneration = [self findParameterWithIdentifier:CosimoBenchmarkCaptureGenerationParameter];
+    AUParameter *generation = [self findParameterWithIdentifier:CosimoBenchmarkResultGenerationParameter];
+    if (capture == nil || captureGeneration == nil || generation == nil)
+    {
+        completion (nil, CosimoMakeError (43, @"Benchmark-only cross-process render telemetry is unavailable."));
+        return;
+    }
+    self.benchmarkCaptureBaselineGeneration = llround (generation.value * 10000.0f);
+    const uint64_t baselineCaptureGeneration = llround (captureGeneration.value * 10000.0f);
+    capture.value = 0.0f;
+    capture.value = 1.0f;
+    [self waitForModulationBenchmarkCaptureStartedUntil:[NSDate dateWithTimeIntervalSinceNow:2.0]
+                              baselineCaptureGeneration:baselineCaptureGeneration
+                                              completion:completion];
+}
+
+- (void)waitForModulationBenchmarkCaptureStartedUntil:(NSDate *)deadline
+                             baselineCaptureGeneration:(uint64_t)baselineCaptureGeneration
+                                            completion:(CosimoHostResultBlock)completion
+{
+    AUParameter *generation = [self findParameterWithIdentifier:CosimoBenchmarkCaptureGenerationParameter];
+    const uint64_t observedGeneration = llround (generation.value * 10000.0f);
+    if (observedGeneration > baselineCaptureGeneration)
+    {
+        completion (@{ @"started": @YES }, nil);
+        return;
+    }
+    if ([deadline timeIntervalSinceNow] <= 0.0)
+    {
+        completion (nil, CosimoMakeError (46, [NSString stringWithFormat:@"Timed out starting cross-process render telemetry (generation=%llu, baseline=%llu).",
+                                              observedGeneration,
+                                              baselineCaptureGeneration]));
+        return;
+    }
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.1 * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self waitForModulationBenchmarkCaptureStartedUntil:deadline
+                                  baselineCaptureGeneration:baselineCaptureGeneration
+                                                  completion:completion];
+    });
+}
+
+- (void)finishModulationBenchmarkCaptureWithCompletion:(CosimoHostResultBlock)completion
+{
+    AUParameter *capture = [self findParameterWithIdentifier:CosimoBenchmarkCaptureParameter];
+    if (capture == nil)
+    {
+        completion (nil, CosimoMakeError (44, @"Benchmark-only cross-process render telemetry is unavailable."));
+        return;
+    }
+    capture.value = 0.0f;
+    capture.value = 2.0f;
+    [self readCompletedModulationBenchmarkAfterAttempts:40 completion:completion];
+}
+
+- (void)readCompletedModulationBenchmarkAfterAttempts:(NSInteger)remainingAttempts
+                                           completion:(CosimoHostResultBlock)completion
+{
+    AUParameter *generation = [self findParameterWithIdentifier:CosimoBenchmarkResultGenerationParameter];
+    const uint64_t observedGeneration = llround (generation.value * 10000.0f);
+    if (observedGeneration <= self.benchmarkCaptureBaselineGeneration && remainingAttempts > 0)
+    {
+        dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.05 * NSEC_PER_SEC)),
+                        dispatch_get_main_queue(), ^
+        {
+            [self readCompletedModulationBenchmarkAfterAttempts:remainingAttempts - 1 completion:completion];
+        });
+        return;
+    }
+    if (observedGeneration <= self.benchmarkCaptureBaselineGeneration)
+    {
+        AUParameter *captureGeneration = [self findParameterWithIdentifier:CosimoBenchmarkCaptureGenerationParameter];
+        AUParameter *captureStopGeneration = [self findParameterWithIdentifier:CosimoBenchmarkCaptureStopGenerationParameter];
+        const uint64_t observedCaptureGeneration = llround (captureGeneration.value * 10000.0f);
+        const uint64_t observedCaptureStopGeneration = llround (captureStopGeneration.value * 10000.0f);
+        completion (nil, CosimoMakeError (47, [NSString stringWithFormat:@"Timed out reading completed cross-process render telemetry (generation=%llu, baseline=%llu, captureGeneration=%llu, captureStopGeneration=%llu).",
+                                              observedGeneration,
+                                              self.benchmarkCaptureBaselineGeneration,
+                                              observedCaptureGeneration,
+                                              observedCaptureStopGeneration]));
+        return;
+    }
+
+    NSMutableDictionary<NSString *, NSNumber *> *values = [[NSMutableDictionary alloc] init];
+    [self readModulationBenchmarkFieldsFromIndex:CosimoBenchmarkRenderFieldStart
+                                    endingBefore:CosimoBenchmarkResultFieldIdentifiers().count
+                                           values:values
+                                       completion:^(NSDictionary<NSString *, id> * _Nullable fields,
+                                                    NSError * _Nullable fieldsError)
+    {
+        if (fieldsError != nil)
+        {
+            completion (nil, fieldsError);
+            return;
+        }
+
+        const uint64_t blockCount = llround ([fields[@"renderBlockCount"] doubleValue]);
+        const uint32_t voiceMask = (uint32_t) llround ([fields[@"voiceMask"] doubleValue]);
+        NSMutableArray<NSNumber *> *voiceIndexes = [[NSMutableArray alloc] init];
+        for (NSUInteger voiceIndex = 0; voiceIndex < CosimoBenchmarkVoiceCount; ++voiceIndex)
+            if ((voiceMask & (1u << voiceIndex)) != 0)
+                [voiceIndexes addObject:@(voiceIndex)];
+
+        completion (@{
+            @"renderMetrics": @{
+                @"renderBlockCount": @(blockCount),
+                @"capturedRenderSampleCount": @(llround ([fields[@"capturedRenderSampleCount"] doubleValue])),
+                @"dspSampleRate": fields[@"dspSampleRate"],
+                @"audioFrames": @(llround ([fields[@"audioFrames"] doubleValue])),
+                @"minimumFrames": @(llround ([fields[@"minimumFrames"] doubleValue])),
+                @"maximumFrames": @(llround ([fields[@"maximumFrames"] doubleValue])),
+                @"renderLoadPercent": fields[@"renderLoadPercent"],
+                @"p99RenderLoadPercent": fields[@"p99RenderLoadPercent"],
+                @"p999RenderLoadPercent": fields[@"p999RenderLoadPercent"],
+                @"maximumRenderLoadPercent": fields[@"maximumRenderLoadPercent"],
+                @"deadlineMissCount": @(llround ([fields[@"deadlineMissCount"] doubleValue])),
+            },
+            @"uniqueVoiceIndexes": voiceIndexes,
+            @"uniqueVoiceCount": @(voiceIndexes.count),
+            @"rackEnableMask": @(llround ([fields[@"rackEnableMask"] doubleValue])),
+        }, nil);
+    }];
+}
+
+- (void)readModulationBenchmarkFieldsFromIndex:(NSUInteger)fieldIndex
+                                  endingBefore:(NSUInteger)endIndex
+                                         values:(NSMutableDictionary<NSString *, NSNumber *> *)values
+                                     completion:(CosimoHostResultBlock)completion
+{
+    NSArray<NSString *> *identifiers = CosimoBenchmarkResultFieldIdentifiers();
+
+    if (fieldIndex >= endIndex)
+    {
+        completion ([values copy], nil);
+        return;
+    }
+    if (endIndex > identifiers.count)
+    {
+        completion (nil, CosimoMakeError (45, @"Benchmark result field range is invalid."));
+        return;
+    }
+
+    AUParameter *request = [self findParameterWithIdentifier:CosimoBenchmarkResultFieldRequestParameter];
+    AUParameter *response = [self findParameterWithIdentifier:CosimoBenchmarkResultFieldResponseParameter];
+    if (request == nil || response == nil)
+    {
+        completion (nil, CosimoMakeError (45, @"Benchmark result request/response parameters are unavailable."));
+        return;
+    }
+
+    request.value = (float) (fieldIndex + 1);
+    [self waitForModulationBenchmarkFieldAtIndex:fieldIndex
+                                     endingBefore:endIndex
+                                           values:values
+                                remainingAttempts:40
+                                       completion:completion];
+}
+
+- (void)waitForModulationBenchmarkFieldAtIndex:(NSUInteger)fieldIndex
+                                   endingBefore:(NSUInteger)endIndex
+                                         values:(NSMutableDictionary<NSString *, NSNumber *> *)values
+                              remainingAttempts:(NSInteger)remainingAttempts
+                                     completion:(CosimoHostResultBlock)completion
+{
+    NSArray<NSString *> *identifiers = CosimoBenchmarkResultFieldIdentifiers();
+    NSArray<NSNumber *> *scales = CosimoBenchmarkResultFieldScales();
+
+    AUParameter *response = [self findParameterWithIdentifier:CosimoBenchmarkResultFieldResponseParameter];
+    const double encoded = response.value * (double) identifiers.count;
+    const double minimum = (double) fieldIndex + 0.24;
+    const double maximum = (double) fieldIndex + 0.76;
+    if (encoded >= minimum && encoded <= maximum)
+    {
+        const double normalized = std::clamp ((encoded - (double) fieldIndex - 0.25) / 0.5, 0.0, 1.0);
+        values[identifiers[fieldIndex]] = @(normalized * scales[fieldIndex].doubleValue);
+        [self readModulationBenchmarkFieldsFromIndex:fieldIndex + 1
+                                        endingBefore:endIndex
+                                               values:values
+                                           completion:completion];
+        return;
+    }
+
+    if (remainingAttempts <= 0)
+    {
+        completion (nil, CosimoMakeError (48, [NSString stringWithFormat:@"Timed out reading modulation benchmark result field %lu (response=%.6f).",
+                                              (unsigned long) fieldIndex,
+                                              response.value]));
+        return;
+    }
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.05 * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self waitForModulationBenchmarkFieldAtIndex:fieldIndex
+                                         endingBefore:endIndex
+                                               values:values
+                                    remainingAttempts:remainingAttempts - 1
+                                           completion:completion];
+    });
+}
+
+- (void)measureModulationPhaseNamed:(NSString *)phaseName
+                    durationSeconds:(NSTimeInterval)durationSeconds
+                         completion:(CosimoHostResultBlock)completion
+{
+    if (self.instrumentUnit == nil || self.engine == nil)
+    {
+        completion (nil, CosimoMakeError (46, @"Instantiate the AUv3 before measuring modulation."));
+        return;
+    }
+    if (!(durationSeconds > 0.0))
+    {
+        completion (nil, CosimoMakeError (47, @"Benchmark phase duration must be positive."));
+        return;
+    }
+
+    [self prepareNeutralModulationBenchmarkSourcesWithCompletion:^(__unused NSDictionary<NSString *,id> * _Nullable prepareResult,
+                                                                   NSError * _Nullable prepareError)
+    {
+        if (prepareError != nil)
+        {
+            completion (nil, prepareError);
+            return;
+        }
+        [self beginModulationBenchmarkCaptureWithCompletion:^(__unused NSDictionary<NSString *,id> * _Nullable beginResult,
+                                                              NSError * _Nullable beginError)
+        {
+            if (beginError != nil)
+            {
+                completion (nil, beginError);
+                return;
+            }
+            [self measureStartedModulationPhaseNamed:phaseName
+                                     durationSeconds:durationSeconds
+                                          completion:completion];
+        }];
+    }];
+}
+
+- (void)prepareNeutralModulationBenchmarkSourcesWithCompletion:(CosimoHostResultBlock)completion
+{
+    AUScheduleMIDIEventBlock midiBlock = self.instrumentUnit.AUAudioUnit.scheduleMIDIEventBlock;
+    if (midiBlock == nil)
+    {
+        completion (nil, CosimoMakeError (48, @"The AUv3 did not provide a MIDI schedule block."));
+        return;
+    }
+
+    for (NSUInteger macroIndex = 1; macroIndex <= 4; ++macroIndex)
+    {
+        AUParameter *parameter = [self findParameterWithIdentifier:[NSString stringWithFormat:@"macro%lu", (unsigned long) macroIndex]];
+        if (parameter != nil)
+            parameter.value = 0.75f;
+    }
+
+    for (NSUInteger voiceIndex = 0; voiceIndex < CosimoBenchmarkVoiceCount; ++voiceIndex)
+    {
+        const uint8_t noteOn[] = { 0x90, (uint8_t) (48 + voiceIndex), 100 };
+        midiBlock (AUEventSampleTimeImmediate, 0, 3, noteOn);
+    }
+    const uint8_t pressure[] = { 0xd0, 100 };
+    const uint8_t slide[] = { 0xb0, 74, 100 };
+    midiBlock (AUEventSampleTimeImmediate, 0, 2, pressure);
+    midiBlock (AUEventSampleTimeImmediate, 0, 3, slide);
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW,
+                                   (int64_t) (CosimoNeutralSourceSettleSeconds * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        completion (@{ @"settled": @YES }, nil);
+    });
+}
+
+- (void)measureStartedModulationPhaseNamed:(NSString *)phaseName
+                            durationSeconds:(NSTimeInterval)durationSeconds
+                                 completion:(CosimoHostResultBlock)completion
+{
+
+    AUScheduleMIDIEventBlock midiBlock = self.instrumentUnit.AUAudioUnit.scheduleMIDIEventBlock;
+    if (midiBlock == nil)
+    {
+        completion (nil, CosimoMakeError (48, @"The AUv3 did not provide a MIDI schedule block."));
+        return;
+    }
+
+    AVAudioMixerNode *mixer = self.engine.mainMixerNode;
+    AVAudioFormat *format = [mixer outputFormatForBus:0];
+    auto capture = std::make_shared<CosimoModulationPhaseCapture>();
+    const auto thermalBefore = NSProcessInfo.processInfo.thermalState;
+    const uint64_t wallStart = mach_absolute_time();
+
+    [mixer removeTapOnBus:0];
+    [mixer installTapOnBus:0
+                bufferSize:CosimoBenchmarkBufferFrames
+                    format:format
+                     block:^ (AVAudioPCMBuffer *buffer, AVAudioTime *when)
+    {
+        const AVAudioFrameCount frameCount = buffer.frameLength;
+        if (frameCount == 0 || buffer.floatChannelData == nullptr)
+            return;
+
+        const uint64_t tapArrivalTime = mach_absolute_time();
+        if (capture->previousTapArrivalTime != 0 && tapArrivalTime > capture->previousTapArrivalTime)
+        {
+            const double expectedSeconds = (double) capture->previousFrameCount / format.sampleRate;
+            const double gapRatio = expectedSeconds > 0.0
+                ? CosimoTimeIntervalSeconds (capture->previousTapArrivalTime, tapArrivalTime) / expectedSeconds
+                : 0.0;
+            capture->maximumTapArrivalGapRatio = std::max (capture->maximumTapArrivalGapRatio, gapRatio);
+            if (gapRatio > 1.25) ++capture->tapArrivalGapOver125PercentCount;
+            if (capture->recordedGapCount < capture->gapRatios.size())
+                capture->gapRatios[capture->recordedGapCount++] = gapRatio;
+        }
+
+        if (when.isSampleTimeValid && capture->previousSampleTime >= 0)
+        {
+            const AVAudioFramePosition expectedSampleTime = capture->previousSampleTime + capture->previousFrameCount;
+            if (when.sampleTime != expectedSampleTime)
+                ++capture->sampleTimeDiscontinuityCount;
+        }
+        if (when.isSampleTimeValid)
+            capture->previousSampleTime = when.sampleTime;
+
+        capture->previousTapArrivalTime = tapArrivalTime;
+        capture->previousFrameCount = frameCount;
+        capture->callbackCount += 1;
+        capture->audioFrames += frameCount;
+        capture->minimumBufferFrames = std::min (capture->minimumBufferFrames, frameCount);
+        capture->maximumBufferFrames = std::max (capture->maximumBufferFrames, frameCount);
+
+        for (UInt32 channel = 0; channel < buffer.format.channelCount; ++channel)
+        {
+            const float *samples = buffer.floatChannelData[channel];
+            for (AVAudioFrameCount frame = 0; frame < frameCount; ++frame)
+            {
+                const double sample = samples[frame];
+                capture->sampleCount += 1;
+                if (!std::isfinite (sample))
+                {
+                    capture->nonFiniteSampleCount += 1;
+                    continue;
+                }
+                capture->energy += sample * sample;
+                capture->peak = std::max (capture->peak, std::abs (sample));
+                if (std::abs (sample) > 1.0) ++capture->clippedSampleCount;
+            }
+        }
+    }];
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (durationSeconds * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        for (NSUInteger voiceIndex = 0; voiceIndex < CosimoBenchmarkVoiceCount; ++voiceIndex)
+        {
+            const uint8_t noteOff[] = { 0x80, (uint8_t) (48 + voiceIndex), 0 };
+            midiBlock (AUEventSampleTimeImmediate, 0, 3, noteOff);
+        }
+        [mixer removeTapOnBus:0];
+
+        const uint64_t wallEnd = mach_absolute_time();
+        const auto thermalAfter = NSProcessInfo.processInfo.thermalState;
+        const double wallSeconds = CosimoTimeIntervalSeconds (wallStart, wallEnd);
+        const double audioSeconds = format.sampleRate > 0.0
+            ? (double) capture->audioFrames / format.sampleRate
+            : 0.0;
+        const double rms = capture->sampleCount > capture->nonFiniteSampleCount
+            ? std::sqrt (capture->energy / (double) (capture->sampleCount - capture->nonFiniteSampleCount))
+            : 0.0;
+
+        std::vector<double> sortedGaps (capture->gapRatios.begin(),
+                                        capture->gapRatios.begin() + capture->recordedGapCount);
+        std::sort (sortedGaps.begin(), sortedGaps.end());
+        const NSUInteger p99Index = sortedGaps.empty()
+            ? 0
+            : std::min (sortedGaps.size() - 1,
+                        (NSUInteger) std::floor ((double) sortedGaps.size() * 0.99));
+        const double p99GapRatio = sortedGaps.empty() ? 0.0 : sortedGaps[p99Index];
+        const uint64_t measuredGapCount = capture->callbackCount > 0 ? capture->callbackCount - 1 : 0;
+
+        NSMutableDictionary<NSString *, id> *hostMetrics = [@{
+            @"phase": phaseName,
+            @"durationSeconds": @(durationSeconds),
+            @"wallSeconds": @(wallSeconds),
+            @"audioSeconds": @(audioSeconds),
+            @"wallToAudioRatio": @(audioSeconds > 0.0 ? wallSeconds / audioSeconds : 0.0),
+            @"sampleRate": @(format.sampleRate),
+            @"callbackCount": @(capture->callbackCount),
+            @"measuredGapCount": @(measuredGapCount),
+            @"minimumBufferFrames": @(capture->minimumBufferFrames == UINT32_MAX ? 0 : capture->minimumBufferFrames),
+            @"maximumBufferFrames": @(capture->maximumBufferFrames),
+            @"p99TapArrivalGapRatio": @(p99GapRatio),
+            @"maximumTapArrivalGapRatio": @(capture->maximumTapArrivalGapRatio),
+            @"tapArrivalGapOver125PercentCount": @(capture->tapArrivalGapOver125PercentCount),
+            @"tapArrivalGapOver125PercentRate": @(measuredGapCount > 0 ? (double) capture->tapArrivalGapOver125PercentCount / measuredGapCount : 0.0),
+            @"sampleTimeDiscontinuityCount": @(capture->sampleTimeDiscontinuityCount),
+            @"rms": @(rms),
+            @"peak": @(capture->peak),
+            @"nonFiniteSampleCount": @(capture->nonFiniteSampleCount),
+            @"clippedSampleCount": @(capture->clippedSampleCount),
+            @"thermalStateBefore": CosimoThermalStateName (thermalBefore),
+            @"thermalStateAfter": CosimoThermalStateName (thermalAfter),
+            @"requestedVoiceCount": @(CosimoBenchmarkVoiceCount),
+        } mutableCopy];
+
+        [self finishModulationBenchmarkCaptureWithCompletion:^(NSDictionary<NSString *,id> * _Nullable renderResult,
+                                                               NSError * _Nullable renderError)
+        {
+            if (renderError != nil)
+            {
+                completion (nil, renderError);
+                return;
+            }
+            hostMetrics[@"renderMetrics"] = renderResult[@"renderMetrics"] ?: @{};
+            hostMetrics[@"uniqueVoiceIndexes"] = renderResult[@"uniqueVoiceIndexes"] ?: @[];
+            hostMetrics[@"uniqueVoiceCount"] = renderResult[@"uniqueVoiceCount"] ?: @0;
+            hostMetrics[@"rackEnableMask"] = renderResult[@"rackEnableMask"] ?: @(-1);
+            completion (hostMetrics, nil);
+        }];
+    });
+}
+
 - (void)inspectFactoryCatalogAfterDelay:(NSTimeInterval)delay
                       remainingAttempts:(NSInteger)remainingAttempts
                              completion:(CosimoHostResultBlock)completion
@@ -851,21 +1533,7 @@ static AudioComponentDescription CosimoComponentDescription()
 {
     AudioComponentDescription description = CosimoComponentDescription();
     AVAudioUnitComponentManager *manager = [AVAudioUnitComponentManager sharedAudioUnitComponentManager];
-    NSArray<AVAudioUnitComponent *> *components = [manager componentsMatchingDescription:description];
-
-    if (components.count > 0)
-        return components;
-
-    return [manager componentsPassingTest:^ BOOL (AVAudioUnitComponent *component, BOOL *stop)
-    {
-        AudioComponentDescription candidate = component.audioComponentDescription;
-        BOOL isMusicDevice = candidate.componentType == description.componentType;
-        BOOL subtypeMatches = candidate.componentSubType == description.componentSubType;
-        BOOL manufacturerMatches = candidate.componentManufacturer == description.componentManufacturer;
-        BOOL namedCosimo = [component.name localizedCaseInsensitiveContainsString:@"Cosimo"];
-
-        return isMusicDevice && ((subtypeMatches && manufacturerMatches) || namedCosimo);
-    }];
+    return [manager componentsMatchingDescription:description];
 }
 
 - (NSString *)unavailableComponentMessage
@@ -914,8 +1582,11 @@ static AudioComponentDescription CosimoComponentDescription()
 - (void)instantiateAudioUnitWithDescription:(AudioComponentDescription)description
                                  completion:(void (^ _Nonnull)(AVAudioUnit * _Nullable audioUnit, NSError * _Nullable error))completion
 {
-    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-    [[AVAudioSession sharedInstance] setActive:YES error:nil];
+    AVAudioSession *session = [AVAudioSession sharedInstance];
+    [session setCategory:AVAudioSessionCategoryPlayback error:nil];
+    [session setPreferredSampleRate:CosimoBenchmarkSampleRate error:nil];
+    [session setPreferredIOBufferDuration:(CosimoBenchmarkBufferFrames / CosimoBenchmarkSampleRate) error:nil];
+    [session setActive:YES error:nil];
 
     [AVAudioUnit instantiateWithComponentDescription:description
                                              options:kAudioComponentInstantiation_LoadOutOfProcess
@@ -938,8 +1609,15 @@ static AudioComponentDescription CosimoComponentDescription()
 
     self.engine = [[AVAudioEngine alloc] init];
     self.instrumentUnit = audioUnit;
+    // AVAudioSession's preferred I/O duration does not constrain an out-of-process
+    // AUv3 render slice. The AU host must set this before AVAudioEngine allocates the
+    // unit's render resources; the physical benchmark asserts the observed callback
+    // size at GeneratedPlugin::processBlock.
+    audioUnit.AUAudioUnit.maximumFramesToRender = CosimoBenchmarkBufferFrames;
     [self.engine attachNode:audioUnit];
-    [self.engine connect:audioUnit to:self.engine.mainMixerNode format:nil];
+    AVAudioFormat *benchmarkFormat = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:CosimoBenchmarkSampleRate
+                                                                                   channels:2];
+    [self.engine connect:audioUnit to:self.engine.mainMixerNode format:benchmarkFormat];
 
     NSError *startError = nil;
 

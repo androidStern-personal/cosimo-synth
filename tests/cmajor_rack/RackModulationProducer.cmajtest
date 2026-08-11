@@ -1,6 +1,4 @@
-// Production proof that a voice-domain route reaches the global rack without changing
-// the shipped ModulationRouteUpload wire shape. Rack routes use their own endpoint but
-// share the same twelve route indices.
+// Production proof that a sparse voice-domain instruction reaches the global rack.
 
 ## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
 
@@ -30,26 +28,42 @@ processor RackModulationReachesRealDsp [[ main ]]
         return upload;
     }
 
-    wt::RackModulationRouteUpload cutoffRoute()
+    wt::ModulationProgramUpload cutoffProgram (int32 deliverySerial)
     {
-        wt::RackModulationRouteUpload route;
-        route.routeIndex = 0;
-        route.enabled = true;
-        route.sourceKind = wt::modulationSourceVelocity;
-        route.sourceSlot = 0;
-        route.polarityKind = wt::modulationPolarityUnipolar;
-        route.targetKind = wt::modulationTargetRackBase + cutoffTarget;
-        route.amount = -3.0f;
-        route.reducerKind = wt::modulationReducerMaximum;
-        return route;
+        wt::ModulationProgramUpload program;
+        program.dspSessionId = int32 (processor.session);
+        program.deliverySerial = deliverySerial;
+        let cutoffCell = 6 * wt::rackModTargetCount + cutoffTarget;
+        let resonanceCell = cutoffCell + 1;
+        let driveCell = cutoffCell + 2;
+        program.voiceRackRouteCount = 3;
+        program.voiceRackRouteCells[0] = cutoffCell;
+        program.voiceRackRouteSources[0] = 6;
+        program.voiceRackRouteTargets[0] = cutoffTarget;
+        program.voiceRackRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        program.voiceRackRouteReducers[0] = wt::modulationReducerMaximum;
+        program.voiceRackRouteAmounts[cutoffCell] = -3.0f;
+        program.voiceRackRouteCells[1] = resonanceCell;
+        program.voiceRackRouteSources[1] = 6;
+        program.voiceRackRouteTargets[1] = wt::rackModTargetGlobalFilterResonance;
+        program.voiceRackRoutePolarities[1] = wt::modulationPolarityBipolar;
+        program.voiceRackRouteReducers[1] = wt::modulationReducerMean;
+        program.voiceRackRouteAmounts[resonanceCell] = 2.0f;
+        program.voiceRackRouteCells[2] = driveCell;
+        program.voiceRackRouteSources[2] = 6;
+        program.voiceRackRouteTargets[2] = wt::rackModTargetGlobalFilterDrive;
+        program.voiceRackRoutePolarities[2] = wt::modulationPolarityBipolar;
+        program.voiceRackRouteReducers[2] = wt::modulationReducerMaximum;
+        program.voiceRackRouteAmounts[driveCell] = 1.0f;
+        return program;
     }
 
-    std::notes::NoteOn noteOn()
+    std::notes::NoteOn noteOn (float32 velocity)
     {
         std::notes::NoteOn note;
         note.channel = 0;
         note.pitch = 60.0f;
-        note.velocity = 0.9f;
+        note.velocity = velocity;
         return note;
     }
 
@@ -98,9 +112,11 @@ processor RackModulationReachesRealDsp [[ main ]]
     void main()
     {
         configure();
-        engineModulated.rackModulationRouteIn <- cutoffRoute();
-        engineDry.voiceEventIn[0] <- noteOn();
-        engineModulated.voiceEventIn[0] <- noteOn();
+        engineModulated.modulationProgramIn <- cutoffProgram (1);
+        engineDry.voiceEventIn[0] <- noteOn (0.2f);
+        engineDry.voiceEventIn[1] <- noteOn (0.6f);
+        engineModulated.voiceEventIn[0] <- noteOn (0.2f);
+        engineModulated.voiceEventIn[1] <- noteOn (0.6f);
 
         float32 maxDifference;
         int32 differingFrames;
@@ -119,7 +135,9 @@ processor RackModulationReachesRealDsp [[ main ]]
                     differingFrames += 1;
 
                 for (wrap<wt::rackModTargetCount> target)
-                    if (int32 (target) != cutoffTarget)
+                    if (int32 (target) != cutoffTarget
+                        && int32 (target) != wt::rackModTargetGlobalFilterResonance
+                        && int32 (target) != wt::rackModTargetGlobalFilterDrive)
                         unroutedResidue = std::intrinsics::max (
                             unroutedResidue,
                             std::intrinsics::abs (engineModulated.rackModOut[target]));
@@ -130,11 +148,77 @@ processor RackModulationReachesRealDsp [[ main ]]
         advance();
         out <- (differingFrames > measureFrames / 2) ? 1 : 0;
         advance();
-        out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget] + 2.7f) < 0.001f) ? 1 : 0;
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget] + 1.8f) < 0.001f) ? 1 : 0;
+        advance();
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[wt::rackModTargetGlobalFilterResonance] + 0.4f) < 0.001f) ? 1 : 0;
+        advance();
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[wt::rackModTargetGlobalFilterDrive] + 0.6f) < 0.001f) ? 1 : 0;
         advance();
         out <- (engineDry.rackModOut[cutoffTarget] == 0.0f) ? 1 : 0;
         advance();
         out <- (unroutedResidue == 0.0f) ? 1 : 0;
+        advance();
+
+        wt::ModulationProgramUpload invalidProgram = cutoffProgram (2);
+        invalidProgram.voiceRackRouteTargets[0] = wt::rackModTargetGlobalFilterResonance;
+        engineModulated.modulationProgramIn <- invalidProgram;
+        engineModulated.advance();
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget] + 1.8f) < 0.001f) ? 1 : 0;
+        advance();
+
+        wt::ModulationAmountUpload amountUpdate;
+        amountUpdate.dspSessionId = int32 (processor.session);
+        amountUpdate.deliverySerial = 2;
+        amountUpdate.pathKind = wt::modulationPathVoiceRack;
+        amountUpdate.cellIndex = 6 * wt::rackModTargetCount + cutoffTarget;
+        amountUpdate.amount = -1.0f;
+        engineModulated.modulationAmountIn <- amountUpdate;
+        for (int32 frame = 0; frame < 4096; ++frame)
+            engineModulated.advance();
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget] + 0.6f) < 0.001f) ? 1 : 0;
+        advance();
+
+        // A note release remains a participant until the fixed 200 ms amp tail
+        // retires. The rack then executes its pinned 180 ms gate release at the
+        // audio rate and the 5 ms smoother settles to exact zero.
+        engineModulated.voiceEventIn[0] <- std::notes::NoteOff (0, 60.0f, 0.0f);
+        engineModulated.voiceEventIn[1] <- std::notes::NoteOff (0, 60.0f, 0.0f);
+        for (int32 frame = 0; frame < int32 (0.21f * float32 (processor.frequency)); ++frame)
+            engineModulated.advance();
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget]) > 0.4f) ? 1 : 0;
+        advance();
+        for (int32 frame = 0; frame < int32 (0.23f * float32 (processor.frequency)); ++frame)
+            engineModulated.advance();
+        out <- (engineModulated.rackModOut[cutoffTarget] == 0.0f) ? 1 : 0;
+        advance();
+
+        // Removing then re-adding a route that was in release must not resurrect
+        // the removed cell's held source or gate after the output settles.
+        engineModulated.voiceEventIn[0] <- noteOn (0.6f);
+        for (int32 frame = 0; frame < 4096; ++frame)
+            engineModulated.advance();
+        engineModulated.voiceEventIn[0] <- std::notes::NoteOff (0, 60.0f, 0.0f);
+        for (int32 frame = 0; frame < int32 (0.30f * float32 (processor.frequency)); ++frame)
+            engineModulated.advance();
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget]) > 0.1f) ? 1 : 0;
+        advance();
+
+        // Preserve a fully populated payload behind a zero active count. Removal
+        // must clear the old held sources/gates and the inactive tail must never
+        // contribute to rack output.
+        wt::ModulationProgramUpload inactiveTailProgram = cutoffProgram (3);
+        inactiveTailProgram.voiceRackRouteCount = 0;
+        engineModulated.modulationProgramIn <- inactiveTailProgram;
+        for (int32 frame = 0; frame < int32 (0.10f * float32 (processor.frequency)); ++frame)
+            engineModulated.advance();
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget]) < 0.001f) ? 1 : 0;
+        advance();
+        wt::ModulationProgramUpload readdedProgram = cutoffProgram (4);
+        readdedProgram.voiceRackRouteAmounts[6 * wt::rackModTargetCount + cutoffTarget] = -1.0f;
+        engineModulated.modulationProgramIn <- readdedProgram;
+        for (int32 frame = 0; frame < int32 (0.02f * float32 (processor.frequency)); ++frame)
+            engineModulated.advance();
+        out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget]) < 0.001f) ? 1 : 0;
         advance();
         out <- -1;
         advance();

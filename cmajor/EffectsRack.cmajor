@@ -55,11 +55,8 @@ namespace wt
     //     landed.
     //   - `rackModIn` carries the 36 reduced modulation offsets from
     //     wt::SharedVoiceEngine's `rackModOut` in ONE graph connection. The destination
-    //     vocabulary and the reduction itself live in VoiceReducer.cmajor. Note the
-    //     budget that surrounds them: the whole modulation system has TWELVE route slots
-    //     (`let modulationRouteCount = 12;`, FixedFrameOscillator.cmajor:31), shared with
-    //     the twelve existing voice targets. Thirty-six eligible destinations do not
-    //     mean thirty-six simultaneous mappings.
+    //     vocabulary and reduction rules live in VoiceReducer.cmajor; the engine runs
+    //     only active instructions from its compiled sparse route program.
     //   - THE DEFAULT ENABLE MASK IS EMPTY. This preserves the deployed pre-rack sound
     //     until the adapter restores the canonical rack.v1 document. A module's host
     //     parameter default is never allowed to opt it into the audio path implicitly.

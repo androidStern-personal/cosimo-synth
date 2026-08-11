@@ -31,11 +31,14 @@ IOS_AUV3_GENERATOR = REPO_ROOT / "scripts" / "generate_ios_auv3_plugin.sh"
 IOS_FACTORY_LIBRARY_ZIP = REPO_ROOT / "scripts" / "build_ios_factory_library_zip.sh"
 IOS_AUV3_XCODE_PROJECT = REPO_ROOT / "scripts" / "generate_ios_auv3_xcode_project.sh"
 IOS_AUV3_HOST_SMOKE = REPO_ROOT / "scripts" / "run_ios_auv3_host_smoke.py"
+IOS_MODULATION_BENCHMARK_PROFILE_GENERATOR = REPO_ROOT / "scripts" / "generate_modulation_benchmark_profiles.mjs"
+IOS_MODULATION_BENCHMARK_RUNNER = REPO_ROOT / "scripts" / "run_ios_modulation_benchmark.py"
 IOS_AUV3_PATCH = REPO_ROOT / "WavetableSynth.iOS.cmajorpatch"
 IOS_AUV3_HOST_SNAPSHOT = REPO_ROOT / "ios_auv3" / "expected_host_smoke.json"
 IOS_SHARED_LIBRARY_HELPER = REPO_ROOT / "ios_auv3" / "Source" / "CosimoSharedWavetableLibrary.mm"
 IOS_SHARED_LIBRARY_HELPER_HEADER = REPO_ROOT / "ios_auv3" / "Source" / "CosimoSharedWavetableLibrary.h"
 IOS_SHARED_LIBRARY_ENTITLEMENTS = REPO_ROOT / "ios_auv3" / "Entitlements" / "CosimoSharedWavetableLibrary.entitlements"
+IOS_AUV3_HOST_ENTITLEMENTS = REPO_ROOT / "ios_auv3" / "Entitlements" / "CosimoAUv3Host.entitlements"
 IOS_PLUGIN_MAIN = REPO_ROOT / "ios_auv3" / "Source" / "CosimoPluginMain.cpp"
 IOS_PLUGIN_SHELL = REPO_ROOT / "ios_auv3" / "Source" / "CosimoCmajorPlugin.h"
 IOS_VITE_CONFIG = REPO_ROOT / "ios_auv3" / "vite.config.mjs"
@@ -137,6 +140,11 @@ def _load_python_module(module_path: Path, module_name: str) -> ModuleType:
 @functools.lru_cache(maxsize=1)
 def _load_ios_host_smoke_module() -> ModuleType:
     return _load_python_module(IOS_AUV3_HOST_SMOKE, "cosimo_ios_host_smoke")
+
+
+@functools.lru_cache(maxsize=1)
+def _load_ios_modulation_benchmark_module() -> ModuleType:
+    return _load_python_module(IOS_MODULATION_BENCHMARK_RUNNER, "cosimo_ios_modulation_benchmark")
 
 
 def _find_bundle_by_identifier(search_root: Path, bundle_id: str, suffix: str) -> Path:
@@ -796,6 +804,568 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "cosimo_ios_auv3_generated_plugin" not in cmake_text
 
 
+def test_ios_modulation_benchmark_build_can_be_installed_without_replacing_cosimo() -> None:
+    cmake_text = IOS_AUV3_CMAKE.read_text(encoding="utf-8")
+    project_script = IOS_AUV3_XCODE_PROJECT.read_text(encoding="utf-8")
+    host_harness = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.mm").read_text(encoding="utf-8")
+
+    for setting, default in (
+        ("COSIMO_PRODUCT_NAME", "Cosimo Synth"),
+        ("COSIMO_BUNDLE_ID", CONTAINER_BUNDLE_ID),
+        ("COSIMO_HOST_BUNDLE_ID", HOST_BUNDLE_ID),
+        ("COSIMO_PLUGIN_CODE", "CmDv"),
+        ("COSIMO_PLUGIN_MANUFACTURER_CODE", "Manu"),
+    ):
+        assert f"{setting}" in cmake_text
+        assert default in cmake_text
+        assert setting in project_script
+
+    assert "COSIMO_HOST_PLUGIN_SUBTYPE" in cmake_text
+    assert "COSIMO_HOST_PLUGIN_MANUFACTURER" in cmake_text
+    assert "COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS" in cmake_text
+    assert "COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY" in cmake_text
+    assert "COSIMO_ENABLE_APP_GROUP" in cmake_text
+    assert "CosimoAUv3Host.entitlements" in cmake_text
+    assert "localizedCaseInsensitiveContainsString" not in host_harness
+
+    host_entitlements = plistlib.loads(IOS_AUV3_HOST_ENTITLEMENTS.read_bytes())
+    assert host_entitlements == {"inter-app-audio": True}
+
+
+def test_ios_uses_the_native_quickjs_patch_worker() -> None:
+    cmake_text = IOS_AUV3_CMAKE.read_text(encoding="utf-8")
+    plugin_shell = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
+
+    assert "CMAJ_USE_QUICKJS_WORKER=1" in cmake_text
+    assert "enableQuickJSPatchWorker (*patch);" in plugin_shell
+
+
+def test_ios_modulation_benchmark_installs_state_through_the_production_worker() -> None:
+    host_harness = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.mm").read_text(encoding="utf-8")
+    host_controller = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoHostViewController.mm").read_text(encoding="utf-8")
+
+    assert "installModulationProfileIndex" in host_harness
+    assert "cosimoBenchmarkInstallGeneration" in host_harness
+    assert "modulationProgram" not in host_harness
+    assert 'isEqualToString:@"modulation-benchmark"' in host_controller
+    assert "measureModulationPhaseNamed" in host_controller
+    assert "waitForModulationRuntimeReadyUntil" in host_harness
+    assert host_harness.index("waitForModulationRuntimeReadyUntil") < host_harness.index("install.value = 1.0f")
+    assert "cosimoBenchmarkRuntimeReady" in host_harness
+    assert "cosimoBenchmarkRuntimeReadyRequest" in host_harness
+    assert "llround ([evidence[@\"installedVoiceRouteCount\"] doubleValue])" in host_harness
+    assert "llround ([evidence[@\"installedMacroVoiceRouteCount\"] doubleValue])" in host_harness
+    assert "llround ([evidence[@\"installedVoiceRackRouteCount\"] doubleValue])" in host_harness
+    assert "llround ([evidence[@\"installedMacroRackRouteCount\"] doubleValue])" in host_harness
+    assert "initStandardFormatWithSampleRate:CosimoBenchmarkSampleRate" in host_harness
+    assert "payload[@\"warmup\"]" in host_controller
+
+    plugin_shell = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
+    assert 'patch->setStoredStateValue ("modulation.v2"' in plugin_shell
+    assert 'endpointID == "runtimeInstallAck"' in plugin_shell
+    assert "acceptedModulationProgramSerial" in plugin_shell
+    assert "installedVoiceRouteCount" in plugin_shell
+    assert "installedMacroVoiceRouteCount" in plugin_shell
+    assert "installedVoiceRackRouteCount" in plugin_shell
+    assert "installedMacroRackRouteCount" in plugin_shell
+    assert "benchmarkInstallStatus.load() == 1 && rejectedSerial > baseline" in plugin_shell
+    assert "benchmarkInstallStatus.load() == 1 && acceptedProgramSerial > programBaseline" in plugin_shell
+    assert 'addBenchmark (BenchmarkParameterKind::runtimeReady,                  "cosimoBenchmarkRuntimeReady"' in plugin_shell
+    assert 'addBenchmark (BenchmarkParameterKind::runtimeReadyRequest,           "cosimoBenchmarkRuntimeReadyRequest"' in plugin_shell
+    assert "publishBenchmarkParameter (BenchmarkParameterKind::runtimeReady);" in plugin_shell
+    assert "case BenchmarkParameterKind::runtimeReady:              return isBenchmarkRuntimeReady() ? 1.0f : 0.0f" in plugin_shell
+    assert "acceptedProgramDspSessionId == observedDspSessionId" in plugin_shell
+    assert "activeWavetableDspSessionId == observedDspSessionId" in plugin_shell
+    assert 'value["hasActive"].getWithDefault<int32_t> (0)' in plugin_shell
+    assert "benchmarkWorkerReady" not in plugin_shell
+    assert "dateWithTimeIntervalSinceNow:90.0" in host_harness
+    assert "cosimoBenchmarkCapture" in plugin_shell
+    assert "cosimoBenchmarkCaptureGeneration" in plugin_shell
+    assert "cosimoBenchmarkCaptureStopGeneration" in plugin_shell
+    assert "baselineCaptureGeneration" in host_harness
+    assert "capture.value = 2.0f" in host_harness
+    assert "if (kind == BenchmarkParameterKind::capture) return 3" in plugin_shell
+    assert plugin_shell.count("while (benchmarkWriters.load") == 1
+    assert "callAsync ([this] { endModulationBenchmarkCapture(); })" in plugin_shell
+    assert "observedCaptureStopGeneration" in host_harness
+    assert "cosimoBenchmarkResultGeneration" in plugin_shell
+    assert "publishBenchmarkParameter (BenchmarkParameterKind::resultGeneration);" in plugin_shell
+    assert "cosimoBenchmarkResultFieldRequest" in plugin_shell
+    assert "cosimoBenchmarkResultFieldResponse" in plugin_shell
+    assert "readModulationBenchmarkFieldsFromIndex" in host_harness
+    assert "benchmarkResultFieldResponse" in plugin_shell
+    assert "addBenchmark (BenchmarkParameterKind::renderBlockCount" not in plugin_shell
+    assert "benchmarkRenderTicks" in plugin_shell
+    assert "getHighResolutionTicks" in plugin_shell
+    assert "renderLoadPercent" in plugin_shell
+    assert "deadlineMissCount" in plugin_shell
+    assert 'endpointID == "voiceArticulationStart"' in plugin_shell
+    assert 'endpointID == "effectiveRackState"' in plugin_shell
+    assert 'value["committedEnableMask"]' in plugin_shell
+    assert "benchmarkRackEnableMask.store" in plugin_shell
+    assert '"rackEnableMask"' in host_harness
+    assert "uniqueVoiceIndexes" in host_harness
+    assert "TapArrivalGapRatio" in host_harness
+    assert "gapOver200PercentCount" not in host_harness
+    assert "cpuPercent" not in host_harness
+
+    install_body = plugin_shell.split("void installBenchmarkProfile", 1)[1].split("void beginModulationBenchmarkCapture", 1)[0]
+    assert plugin_shell.count("benchmarkInstallStatus.store (1);") == 1
+    assert install_body.index("benchmarkInstallBaselineProgramSerial.store") < install_body.index("benchmarkInstallStatus.store (1);")
+    assert install_body.index("benchmarkInstallStatus.store (1);") < install_body.index("patch->setStoredStateValue")
+    assert "benchmarkCurrentVoiceRouteCount.store (installedVoice);" in plugin_shell
+    assert "benchmarkCurrentMacroVoiceRouteCount.store (installedMacroVoice);" in plugin_shell
+    assert "benchmarkCurrentVoiceRackRouteCount.store (installedVoiceRack);" in plugin_shell
+    assert "benchmarkCurrentMacroRackRouteCount.store (installedMacroRack);" in plugin_shell
+    assert "currentState->second.getString() == stateJSON" in install_body
+    assert "completeBenchmarkProfileInstall" in install_body
+
+
+def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_torture_contracts(tmp_path: Path) -> None:
+    output_path = tmp_path / "modulation-benchmark-profiles.json"
+    subprocess.run(
+        [
+            "node",
+            str(IOS_MODULATION_BENCHMARK_PROFILE_GENERATOR),
+            "--output",
+            str(output_path),
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(output_path.read_text(encoding="utf-8"))
+    profiles = {profile["name"]: profile for profile in payload["profiles"]}
+
+    assert profiles["empty"]["storedRouteCount"] == 0
+    assert profiles["voice-100"]["activeRouteCount"] == 100
+    assert profiles["voice-rack-100"]["activeRouteCount"] == 100
+    assert profiles["mixed-100"]["activeRouteCount"] == 100
+    assert profiles["stored-624-active-100"]["storedRouteCount"] == 624
+    assert profiles["stored-624-active-100"]["activeRouteCount"] == 100
+    assert profiles["combined-200"]["activeRouteCount"] == 200
+    assert profiles["combined-200"]["compiledCounts"]["voice"] == 100
+    assert profiles["combined-200"]["compiledCounts"]["voiceRack"] == 100
+    assert profiles["active-624"]["activeRouteCount"] == 624
+
+    voice_rack_sources = {
+        (route["sourceKind"], route["sourceSlot"])
+        for route in json.loads(profiles["voice-rack-100"]["stateJSON"])["routes"]
+    }
+    voice_rack_targets = {
+        route["targetKind"]
+        for route in json.loads(profiles["voice-rack-100"]["stateJSON"])["routes"]
+    }
+    assert len(voice_rack_sources) == 9
+    assert len(voice_rack_targets) == 36
+
+    for profile_index, profile in enumerate(payload["profiles"]):
+        assert profile["profileIndex"] == profile_index
+        document = json.loads(profile["stateJSON"])
+        assert document["format"] == "cosimo.modulation"
+        assert document["version"] == 2
+        assert len({route["id"] for route in document["routes"]}) == len(document["routes"])
+        assert profile["compiledRouteCount"] == profile["activeRouteCount"]
+        assert all(0.0 < abs(float(route["amount"])) <= 0.03125 for route in document["routes"])
+        assert all(
+            point["y"] == 0.0
+            for slot in document["msegSlots"]
+            for shape in (slot["shapeA"], slot["shapeB"])
+            for point in shape["points"]
+        )
+        assert all(envelope["sustain"] == 0.0 for envelope in document["envelopeSlots"])
+        assert all(
+            envelope[field] == 0.001
+            for envelope in document["envelopeSlots"]
+            for field in ("attackSeconds", "decaySeconds", "releaseSeconds")
+        )
+
+        route_groups: dict[tuple[object, ...], list[dict[str, object]]] = {}
+        for route in document["routes"]:
+            source_kind = route["sourceKind"]
+            source_family = (
+                "macro" if source_kind == "macro"
+                else "expression" if source_kind in {"velocity", "pressure", "slide"}
+                else "zero"
+            )
+            target_kind = route["targetKind"]
+            path_kind = (
+                "macroRack" if source_kind == "macro" and str(target_kind).startswith("rack.")
+                else "macroVoice" if source_kind == "macro"
+                else "voiceRack" if str(target_kind).startswith("rack.")
+                else "voice"
+            )
+            key = (path_kind, target_kind, source_family, route["polarity"], route["reducer"])
+            route_groups.setdefault(key, []).append(route)
+
+        for key, routes in route_groups.items():
+            if all(route["enabled"] for route in routes):
+                assert math.fsum(float(route["amount"]) for route in routes) == 0.0, key
+
+
+def test_ios_modulation_benchmark_runner_uses_unique_device_bundle_and_component_ids() -> None:
+    runner = IOS_MODULATION_BENCHMARK_RUNNER.read_text(encoding="utf-8")
+
+    assert "dev.cosimo.wavetable-synth-modulation-benchmark" in runner
+    assert "dev.cosimo.wavetable-synth-modulation-benchmark-host" in runner
+    assert '"CmBm"' in runner
+    assert '"COSIMO_ENABLE_APP_GROUP": "OFF"' in runner
+    assert '"COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY": "ON"' in runner
+    assert '"COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS": "ON"' in runner
+    assert "COSIMO_HOST_AUDIO_UNIT_IN_PROCESS" not in runner
+    assert "renderLoadPercent" in runner
+    assert "uniqueVoiceCount" in runner
+    assert "gapOver200PercentCount" not in runner
+    assert "validate_benchmark_products" in runner
+    assert "dev.cosimo.wavetable-synth\"" not in runner
+    assert "dev.cosimo.wavetable-synth-host\"" not in runner
+
+
+def test_ios_modulation_benchmark_caps_the_real_auv3_render_slice_before_engine_start() -> None:
+    source = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.mm").read_text(encoding="utf-8")
+    cap = source.index("audioUnit.AUAudioUnit.maximumFramesToRender = CosimoBenchmarkBufferFrames")
+    attach = source.index("[self.engine attachNode:audioUnit]")
+    start = source.index("[self.engine startAndReturnError:&startError]")
+
+    assert cap < attach < start
+
+
+def test_ios_modulation_benchmark_settles_identical_neutral_sources_before_capture() -> None:
+    harness = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.mm").read_text(encoding="utf-8")
+    plugin = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
+
+    prepare = harness.index("prepareNeutralModulationBenchmarkSourcesWithCompletion")
+    begin_capture = harness.index("beginModulationBenchmarkCaptureWithCompletion", prepare)
+    assert prepare < begin_capture
+    assert "const uint8_t noteOn[] = { 0x90, (uint8_t) (48 + voiceIndex), 100 };" in harness
+    assert "const uint8_t pressure[] = { 0xd0, 100 };" in harness
+    assert "const uint8_t slide[] = { 0xb0, 74, 100 };" in harness
+    assert "CosimoNeutralSourceSettleSeconds" in harness
+    assert 'endpointID == "voiceArticulationStart"' in plugin
+    assert 'endpointID == "voiceArticulationStart" && modulationBenchmarkCaptureActive.load()' not in plugin
+    assert "benchmarkVoiceMask.store (0" not in plugin
+
+
+def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
+    base_durations = {
+        "empty": 20.0,
+        "voice-100": 45.0,
+        "voice-rack-100": 45.0,
+        "mixed-100": 45.0,
+        "combined-200": 45.0,
+        "stored-624-active-100": 45.0,
+        "active-624": 20.0,
+    }
+    compiled_counts = {
+        "empty": {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
+        "voice-100": {"voice": 100, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
+        "voice-rack-100": {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
+        "mixed-100": {"voice": 25, "macroVoice": 25, "voiceRack": 25, "macroRack": 25},
+        "combined-200": {"voice": 100, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
+        "stored-624-active-100": {"voice": 25, "macroVoice": 25, "voiceRack": 25, "macroRack": 25},
+        "active-624": {"voice": 108, "macroVoice": 48, "voiceRack": 324, "macroRack": 144},
+    }
+    phases = []
+    for name in _load_ios_modulation_benchmark_module().PROFILE_NAMES:
+        expected_counts = dict(compiled_counts[name])
+        installed_counts = dict(expected_counts)
+        render_block_count = int(base_durations[name] * 48000 / 128)
+        phase = {
+            "name": name,
+            "compiledCounts": expected_counts,
+            "installAck": {
+                "accepted": True,
+                "acceptedModulationProgramSerial": 42,
+                "installedCounts": installed_counts,
+            },
+            "metrics": {
+                "durationSeconds": base_durations[name],
+                "audioSeconds": base_durations[name],
+                "wallToAudioRatio": 1.0,
+                "sampleRate": 48000.0,
+                "measuredGapCount": 1000,
+                "maximumBufferFrames": 128,
+                "p99TapArrivalGapRatio": 1.05,
+                "maximumTapArrivalGapRatio": 1.25,
+                "tapArrivalGapOver125PercentRate": 0.001,
+                "nonFiniteSampleCount": 0,
+                "sampleTimeDiscontinuityCount": 0,
+                "rms": 0.1,
+                "thermalStateBefore": "nominal",
+                "thermalStateAfter": "nominal",
+                "uniqueVoiceCount": 16,
+                "uniqueVoiceIndexes": list(range(16)),
+                "maximumTapArrivalGapRatio": 1.0,
+                "renderMetrics": {
+                    "renderBlockCount": render_block_count,
+                    "capturedRenderSampleCount": render_block_count,
+                    "dspSampleRate": 48000.0,
+                    "audioFrames": int(base_durations[name] * 48000),
+                    "minimumFrames": 128,
+                    "maximumFrames": 128,
+                    "renderLoadPercent": 20.0,
+                    "p99RenderLoadPercent": 30.0,
+                    "p999RenderLoadPercent": 40.0,
+                    "maximumRenderLoadPercent": 60.0,
+                    "deadlineMissCount": 0,
+                },
+                "rackEnableMask": 0,
+            },
+        }
+        if name != "empty":
+            paired_duration = 10.0
+            paired_block_count = int(paired_duration * 48000 / 128)
+            paired_metrics = json.loads(json.dumps(phase["metrics"]))
+            paired_metrics["durationSeconds"] = paired_duration
+            paired_metrics["audioSeconds"] = paired_duration
+            paired_metrics["renderMetrics"]["renderBlockCount"] = paired_block_count
+            paired_metrics["renderMetrics"]["capturedRenderSampleCount"] = paired_block_count
+            paired_metrics["renderMetrics"]["audioFrames"] = int(paired_duration * 48000)
+            empty_ack = {
+                "accepted": True,
+                "acceptedModulationProgramSerial": 41,
+                "installedCounts": {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
+            }
+            phase["pairedEmptyBefore"] = {
+                "installAck": json.loads(json.dumps(empty_ack)),
+                "metrics": json.loads(json.dumps(paired_metrics)),
+            }
+            phase["pairedEmptyAfter"] = {
+                "installAck": json.loads(json.dumps(empty_ack)),
+                "metrics": json.loads(json.dumps(paired_metrics)),
+            }
+        phases.append(phase)
+    return {"durationScale": 1.0, "phases": phases}
+
+
+@pytest.mark.parametrize(
+    ("path", "bad_value"),
+    (
+        (("renderMetrics", "deadlineMissCount"), 1),
+        (("renderMetrics", "p99RenderLoadPercent"), 50.01),
+        (("renderMetrics", "p999RenderLoadPercent"), 75.01),
+        (("renderMetrics", "maximumRenderLoadPercent"), 100.0),
+        (("renderMetrics", "capturedRenderSampleCount"), 999),
+        (("renderMetrics", "dspSampleRate"), 44100.0),
+        (("renderMetrics", "audioFrames"), 128),
+        (("maximumBufferFrames",), 0),
+        (("p99TapArrivalGapRatio",), 1.251),
+        (("maximumTapArrivalGapRatio",), 2.001),
+        (("tapArrivalGapOver125PercentRate",), 0.011),
+        (("uniqueVoiceCount",), 15),
+        (("sampleTimeDiscontinuityCount",), 1),
+        (("rackEnableMask",), 1),
+    ),
+)
+def test_ios_modulation_benchmark_shipping_contract_rejects_false_evidence(
+    path: tuple[str, ...], bad_value: object
+) -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    phase_metrics = payload["phases"][1]["metrics"]
+    target = phase_metrics
+    for key in path[:-1]:
+        target = target[key]
+    target[path[-1]] = bad_value
+
+    with pytest.raises(AssertionError):
+        module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_benchmark_shipping_contract_accepts_real_render_seam() -> None:
+    _load_ios_modulation_benchmark_module().assert_shipping_contract(_valid_ios_modulation_benchmark_payload())
+
+
+def test_ios_modulation_benchmark_rejects_expensive_matrix_delta() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    by_name = {phase["name"]: phase for phase in payload["phases"]}
+    by_name["voice-100"]["metrics"]["renderMetrics"]["renderLoadPercent"] = (
+        by_name["empty"]["metrics"]["renderMetrics"]["renderLoadPercent"]
+        + module.MATRIX_100_MAX_ADDED_RENDER_LOAD_PERCENT
+        + 0.01
+    )
+
+    with pytest.raises(AssertionError, match="matrix cost"):
+        module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_benchmark_requires_adjacent_empty_brackets() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    del payload["phases"][1]["pairedEmptyAfter"]
+
+    with pytest.raises(AssertionError, match="paired empty"):
+        module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_matrix_delta_uses_its_adjacent_empty_pair() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    phase = next(phase for phase in payload["phases"] if phase["name"] == "voice-100")
+    phase["pairedEmptyBefore"]["metrics"]["renderMetrics"]["renderLoadPercent"] = 30.0
+    phase["pairedEmptyAfter"]["metrics"]["renderMetrics"]["renderLoadPercent"] = 30.0
+    phase["metrics"]["renderMetrics"]["renderLoadPercent"] = 35.0
+
+    module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_benchmark_does_not_treat_mixer_tap_batches_as_dsp_blocks() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    payload["phases"][1]["metrics"]["maximumBufferFrames"] = 4800
+
+    module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_benchmark_allows_mixer_conversion_while_dsp_is_48khz() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    payload["phases"][1]["metrics"]["sampleRate"] = 44100.0
+
+    module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_benchmark_allows_only_float_transport_rounding_in_audio_frames() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    render = payload["phases"][1]["metrics"]["renderMetrics"]
+    render["audioFrames"] -= module.AUDIO_FRAME_TRANSPORT_TOLERANCE
+
+    module.assert_shipping_contract(payload)
+
+    render["audioFrames"] -= 1
+    with pytest.raises(AssertionError):
+        module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_benchmark_rejects_shortened_declared_phase() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    payload["phases"][1]["metrics"]["durationSeconds"] = 20.0
+    payload["phases"][1]["metrics"]["audioSeconds"] = 20.0
+    payload["phases"][1]["metrics"]["renderMetrics"]["audioFrames"] = 960000
+    payload["phases"][1]["metrics"]["renderMetrics"]["renderBlockCount"] = 7500
+    payload["phases"][1]["metrics"]["renderMetrics"]["capturedRenderSampleCount"] = 7500
+
+    with pytest.raises(AssertionError):
+        module.assert_shipping_contract(payload, expected_duration_scale=1.0)
+
+
+def test_ios_modulation_benchmark_rejects_payload_duration_scale_mismatch() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    payload["durationScale"] = 0.1
+
+    with pytest.raises(AssertionError):
+        module.assert_shipping_contract(payload, expected_duration_scale=1.0)
+
+
+def test_ios_modulation_benchmark_rejects_hot_phase_start() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    payload["phases"][1]["metrics"]["thermalStateBefore"] = "serious"
+
+    with pytest.raises(AssertionError):
+        module.assert_shipping_contract(payload)
+
+
+@pytest.mark.parametrize("thermal_state", ("unknown", "missing"))
+def test_ios_modulation_benchmark_requires_positive_thermal_evidence(thermal_state: str) -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    payload["phases"][1]["metrics"]["thermalStateAfter"] = thermal_state
+
+    with pytest.raises(AssertionError):
+        module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_benchmark_rejects_a_physical_ipad() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    result = {
+        "identifier": "physical-ipad",
+        "deviceProperties": {"name": "iPad", "osVersionNumber": "27.0", "osBuildUpdate": "24A"},
+        "hardwareProperties": {
+            "reality": "physical",
+            "marketingName": "iPad Pro",
+            "productType": "iPad16,6",
+            "platform": "iOS",
+            "udid": "ipad-udid",
+        },
+    }
+
+    with pytest.raises(RuntimeError, match="physical iPhone"):
+        module.validate_physical_iphone_provenance(result)
+
+
+def test_ios_modulation_benchmark_rejects_unproven_install_counts() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    payload["phases"][3]["installAck"]["installedCounts"]["voiceRack"] = 24
+
+    with pytest.raises(AssertionError):
+        module.assert_shipping_contract(payload)
+
+
+def test_ios_modulation_benchmark_labels_short_runs_smoke_only() -> None:
+    module = _load_ios_modulation_benchmark_module()
+
+    assert module.is_qualifying_run(duration_scale=1.0, repeat=3)
+    assert not module.is_qualifying_run(duration_scale=0.99, repeat=3)
+    assert not module.is_qualifying_run(duration_scale=1.0, repeat=2)
+    assert not module.is_qualifying_run(duration_scale=1.0, repeat=3, no_build=True)
+
+
+def test_ios_modulation_benchmark_counterbalances_the_exact_profiles(tmp_path: Path) -> None:
+    module = _load_ios_modulation_benchmark_module()
+    source = tmp_path / "source.json"
+    source.write_text(json.dumps({
+        "format": "cosimo.modulation-benchmark-profiles",
+        "version": 1,
+        "profiles": [{"name": name} for name in module.PROFILE_NAMES],
+    }), encoding="utf-8")
+    observed_orders = []
+    for run_index in range(3):
+        destination = tmp_path / f"run-{run_index}.json"
+        module.write_counterbalanced_profiles(source, destination, run_index)
+        observed_orders.append(tuple(json.loads(destination.read_text(encoding="utf-8"))["counterbalanceOrder"]))
+
+    assert len(set(observed_orders)) == 3
+    assert all(set(order) == set(module.PROFILE_NAMES) for order in observed_orders)
+    flattened = [name for order in observed_orders for name in order]
+    assert all(left != right for left, right in zip(flattened, flattened[1:]))
+
+
+def test_ios_modulation_benchmark_validates_built_bundle_ids_and_component(tmp_path: Path) -> None:
+    module = _load_ios_modulation_benchmark_module()
+    container = tmp_path / "Benchmark.app"
+    host = tmp_path / "Host.app"
+    extension = container / "PlugIns" / "Benchmark.appex"
+    extension.mkdir(parents=True)
+    host.mkdir()
+    (container / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": module.CONTAINER_BUNDLE_ID}))
+    (host / "Info.plist").write_bytes(plistlib.dumps({"CFBundleIdentifier": module.HOST_BUNDLE_ID}))
+    (extension / "Info.plist").write_bytes(plistlib.dumps({
+        "CFBundleIdentifier": f"{module.CONTAINER_BUNDLE_ID}.benchmarkAUv3",
+        "NSExtension": {"NSExtensionAttributes": {"AudioComponents": [{
+            "type": "aumu",
+            "subtype": module.PLUGIN_CODE,
+            "manufacturer": module.PLUGIN_MANUFACTURER_CODE,
+        }]}},
+    }))
+
+    assert module.validate_benchmark_product_plists(container, host) == extension
+    with pytest.raises(RuntimeError):
+        module.assert_no_production_app_group(container, {
+            "com.apple.security.application-groups": [APP_GROUP_ID],
+        })
+    module.assert_audio_unit_host_entitlement(host, {"inter-app-audio": True})
+    with pytest.raises(RuntimeError, match="Audio Unit host entitlement"):
+        module.assert_audio_unit_host_entitlement(host, {})
+
+
 def test_repo_owned_patch_shell_keeps_the_bridge_entrypoints_the_ui_depends_on() -> None:
     plugin_main = IOS_PLUGIN_MAIN.read_text(encoding="utf-8")
     plugin_shell = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
@@ -905,6 +1475,7 @@ def test_ios_auv3_xcode_project_script_generates_an_xcode_project(tmp_path: Path
 
     assert "CosimoSharedWavetableLibrary.mm" in project_text
     assert "CosimoSharedWavetableLibrary.entitlements" in project_text
+    assert "CosimoAUv3Host.entitlements" in project_text
 
     project_json = json.loads(
         subprocess.run(
@@ -1671,7 +2242,11 @@ def test_release_editor_ignores_the_dev_server_url(
         public_host=ios_release_host_session["dev_server_host"],
     ) as root_url:
         assert root_url == ios_release_host_session["dev_server_url"]
-        result = _run_host_mode(ios_release_host_session, "inspect")
+        for _ in range(3):
+            result = _run_host_mode(ios_release_host_session, "inspect")
+
+            if isinstance(result.get("editor", {}).get("hostPage"), dict):
+                break
 
     host_page = result["editor"]["hostPage"]
     assert host_page["bootSource"] == "bundle"

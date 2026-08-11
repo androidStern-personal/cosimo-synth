@@ -37,12 +37,11 @@ export type NormalizedValue = Brand<number, "NormalizedValue">;
 export class ValueOutOfRange extends Error {
     readonly _tag = "ValueOutOfRange" as const;
 
-    constructor(
-        /** The offending input. */
-        readonly input: number,
-        /** The inclusive bounds that were violated. */
-        readonly bounds: { readonly min: number; readonly max: number },
-    ) {
+    /**
+     * @param input The offending input.
+     * @param bounds The inclusive bounds that were violated.
+     */
+    constructor(readonly input: number, readonly bounds: { readonly min: number; readonly max: number }) {
         super(`Value ${input} outside [${bounds.min}, ${bounds.max}]`);
     }
 }

@@ -5,6 +5,7 @@ const buildOnlyRelativePaths = Object.freeze([
     "README.md",
     path.join("assets", "factory-table-catalog.json"),
     path.join("assets", "incoming"),
+    path.join("patch_gui", "wavetable-test-worker.js"),
 ]);
 
 async function pathExists(filePath) {

@@ -130,6 +130,10 @@ type BoundEndpointId =
     | "wavetablePosition"
     | "warpAmount"
     | "unisonDetune"
+    | "unisonBlend"
+    | "unisonWidth"
+    | "unisonWavetablePositionSpread"
+    | "unisonWarpSpread"
     | "filterCutoff"
     | "filterQ"
     | "pan";
@@ -159,6 +163,10 @@ const MODULE_DEFINITIONS: ReadonlyArray<ModuleDefinition> = [
             parameter("index", "Index", 44, 0),
             parameter("warp", "Warp", 58, 50),
             parameter("unison", "Unison", 35, 0),
+            parameter("unison-blend", "Uni Blend", 75, 75),
+            parameter("unison-width", "Uni Width", 100, 100),
+            parameter("unison-wt-spread", "Uni WT Spread", 0, 0),
+            parameter("unison-warp-spread", "Uni Warp Spread", 0, 0),
             parameter("tune", "Tune", 50, 50, "semitone"),
         ],
     },
@@ -283,6 +291,30 @@ function connectivityFor(targetId: TargetId, workspace: "voice" | "effects"): Ta
                 binding: boundEndpoint("unisonDetune", identityToEngine, identityFromEngine),
                 articulationParameterId: "unisonDetune",
                 modulationTargetKind: "unisonDetune",
+            };
+        case "wavetable.unison-blend":
+            return {
+                binding: boundEndpoint("unisonBlend", identityToEngine, identityFromEngine),
+                articulationParameterId: "unisonBlend",
+                modulationTargetKind: "unisonBlend",
+            };
+        case "wavetable.unison-width":
+            return {
+                binding: boundEndpoint("unisonWidth", identityToEngine, identityFromEngine),
+                articulationParameterId: "unisonWidth",
+                modulationTargetKind: "unisonWidth",
+            };
+        case "wavetable.unison-wt-spread":
+            return {
+                binding: boundEndpoint("unisonWavetablePositionSpread", identityToEngine, identityFromEngine),
+                articulationParameterId: "unisonWavetablePositionSpread",
+                modulationTargetKind: "unisonWavetablePositionSpread",
+            };
+        case "wavetable.unison-warp-spread":
+            return {
+                binding: boundEndpoint("unisonWarpSpread", identityToEngine, identityFromEngine),
+                articulationParameterId: "unisonWarpSpread",
+                modulationTargetKind: "unisonWarpSpread",
             };
         case "voice-filter.cutoff":
             return {

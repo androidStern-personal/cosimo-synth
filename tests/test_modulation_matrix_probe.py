@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
 import tempfile
 
 import numpy as np
@@ -19,9 +20,11 @@ from bench import (
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
+VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
 SAMPLES_PER_FRAME = 2048
 OSCILLATOR_MIP_COUNT = 11
+MODULATION_PROGRAM_COMPILER = REPO_ROOT / "tests" / "helpers" / "compile_modulation_probe_program.mjs"
 
 
 def _note_on_expr(channel: int, pitch: float, velocity: float = 1.0) -> str:
@@ -116,8 +119,16 @@ def _build_runtime_session_adapter_source() -> str:
         + "{\n"
         + "    input event wt::WavetableLoadBegin loadBeginIn;\n"
         + "    input event wt::WavetableMipFrame mipFrameIn;\n"
+        + "    input event wt::ModulationMsegBufferUpload modulationMsegBufferIn;\n"
+        + "    input event wt::ModulationMsegPlaybackUpload modulationMsegPlaybackIn;\n"
+        + "    input event wt::ModulationEnvelopeUpload modulationEnvelopeIn;\n"
+        + "    input event wt::ModulationProgramUpload modulationProgramIn;\n"
         + "    output event wt::WavetableLoadBegin loadBeginOut;\n"
         + "    output event wt::WavetableMipFrame mipFrameOut;\n"
+        + "    output event wt::ModulationMsegBufferUpload modulationMsegBufferOut;\n"
+        + "    output event wt::ModulationMsegPlaybackUpload modulationMsegPlaybackOut;\n"
+        + "    output event wt::ModulationEnvelopeUpload modulationEnvelopeOut;\n"
+        + "    output event wt::ModulationProgramUpload modulationProgramOut;\n"
         + "    event loadBeginIn (wt::WavetableLoadBegin load)\n"
         + "    {\n"
         + "        wt::WavetableLoadBegin rewritten = load;\n"
@@ -129,6 +140,30 @@ def _build_runtime_session_adapter_source() -> str:
         + "        wt::WavetableMipFrame rewritten = frame;\n"
         + "        rewritten.dspSessionId = int32 (processor.session);\n"
         + "        mipFrameOut <- rewritten;\n"
+        + "    }\n"
+        + "    event modulationMsegBufferIn (wt::ModulationMsegBufferUpload upload)\n"
+        + "    {\n"
+        + "        wt::ModulationMsegBufferUpload rewritten = upload;\n"
+        + "        rewritten.dspSessionId = int32 (processor.session);\n"
+        + "        modulationMsegBufferOut <- rewritten;\n"
+        + "    }\n"
+        + "    event modulationMsegPlaybackIn (wt::ModulationMsegPlaybackUpload upload)\n"
+        + "    {\n"
+        + "        wt::ModulationMsegPlaybackUpload rewritten = upload;\n"
+        + "        rewritten.dspSessionId = int32 (processor.session);\n"
+        + "        modulationMsegPlaybackOut <- rewritten;\n"
+        + "    }\n"
+        + "    event modulationEnvelopeIn (wt::ModulationEnvelopeUpload upload)\n"
+        + "    {\n"
+        + "        wt::ModulationEnvelopeUpload rewritten = upload;\n"
+        + "        rewritten.dspSessionId = int32 (processor.session);\n"
+        + "        modulationEnvelopeOut <- rewritten;\n"
+        + "    }\n"
+        + "    event modulationProgramIn (wt::ModulationProgramUpload upload)\n"
+        + "    {\n"
+        + "        wt::ModulationProgramUpload rewritten = upload;\n"
+        + "        rewritten.dspSessionId = int32 (processor.session);\n"
+        + "        modulationProgramOut <- rewritten;\n"
         + "    }\n"
         + "    void main()\n"
         + "    {\n"
@@ -165,6 +200,8 @@ def _build_modulation_probe_source(scheduled_events: list[tuple[int, str]]) -> s
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
+        + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
+        + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + _build_runtime_session_adapter_source()
@@ -174,12 +211,10 @@ def _build_modulation_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "{\n"
         + "    input event wt::WavetableLoadBegin wavetableLoadBegin;\n"
         + "    input event wt::WavetableMipFrame wavetableMipFrame;\n"
-        + "    input event int32 modulationClear;\n"
-        + "    input event int32 modulationEnable;\n"
         + "    input event wt::ModulationMsegBufferUpload modulationMsegBuffer;\n"
         + "    input event wt::ModulationMsegPlaybackUpload modulationMsegPlayback;\n"
         + "    input event wt::ModulationEnvelopeUpload modulationEnvelope;\n"
-        + "    input event wt::ModulationRouteUpload modulationRoute;\n"
+        + "    input event wt::ModulationProgramUpload modulationProgram;\n"
         + "    input value float32 framePosition [[ init: 0.0f ]];\n"
         + "    input value float32 glideTime [[ init: 0.0f ]];\n"
         + "    input value float32 pan [[ init: 0.0f ]];\n"
@@ -207,12 +242,14 @@ def _build_modulation_probe_source(scheduled_events: list[tuple[int, str]]) -> s
         + "        allocator.voiceEventOut -> engine.voiceEventIn;\n"
         + "        adapter.loadBeginOut -> engine.wavetableLoadBeginIn;\n"
         + "        adapter.mipFrameOut -> engine.wavetableMipFrameIn;\n"
-        + "        modulationClear -> engine.modulationClearIn;\n"
-        + "        modulationEnable -> engine.modulationEnableIn;\n"
-        + "        modulationMsegBuffer -> engine.modulationMsegBufferIn;\n"
-        + "        modulationMsegPlayback -> engine.modulationMsegPlaybackIn;\n"
-        + "        modulationEnvelope -> engine.modulationEnvelopeIn;\n"
-        + "        modulationRoute -> engine.modulationRouteIn;\n"
+        + "        modulationMsegBuffer -> adapter.modulationMsegBufferIn;\n"
+        + "        modulationMsegPlayback -> adapter.modulationMsegPlaybackIn;\n"
+        + "        modulationEnvelope -> adapter.modulationEnvelopeIn;\n"
+        + "        adapter.modulationMsegBufferOut -> engine.modulationMsegBufferIn;\n"
+        + "        adapter.modulationMsegPlaybackOut -> engine.modulationMsegPlaybackIn;\n"
+        + "        adapter.modulationEnvelopeOut -> engine.modulationEnvelopeIn;\n"
+        + "        modulationProgram -> adapter.modulationProgramIn;\n"
+        + "        adapter.modulationProgramOut -> engine.modulationProgramIn;\n"
         + "        framePosition -> engine.framePositionIn;\n"
         + "        glideTime -> engine.glideTimeIn;\n"
         + "        pan -> engine.panIn;\n"
@@ -247,7 +284,8 @@ def _build_manifest(source_filename: str) -> dict[str, object]:
 
 def _build_setup_js(
     *,
-    extra_events: list[tuple[str, dict[str, object]]],
+    routes: list[dict[str, object]],
+    extra_events: list[tuple[str, dict[str, object]]] | None = None,
     frame_position: float = 0.0,
     glide_time: float = 0.0,
     pan: float = 0.0,
@@ -276,10 +314,43 @@ def _build_setup_js(
     for event in _build_mip_frame_events(bank, generation=9, table_index=0):
         statements.append(f"patch.sendInputEvent_wavetableMipFrame({json.dumps(event)});")
 
-    for endpoint_id, payload in extra_events:
-        statements.append(f"patch.sendInputEvent_{endpoint_id}({json.dumps(payload)});")
+    delivery_serial = 1
+    for endpoint_id, payload in extra_events or []:
+        addressed_payload = {
+            **payload,
+            "dspSessionId": 1,
+            "deliverySerial": delivery_serial,
+        }
+        statements.append(f"patch.sendInputEvent_{endpoint_id}({json.dumps(addressed_payload)});")
+        delivery_serial += 1
+
+    statements.append(
+        "patch.sendInputEvent_modulationProgram("
+        + json.dumps(_compile_runtime_program(routes, delivery_serial=delivery_serial))
+        + ");"
+    )
 
     return "\n".join(statements)
+
+
+def _compile_runtime_program(
+    routes: list[dict[str, object]],
+    *,
+    delivery_serial: int = 1,
+) -> dict[str, object]:
+    completed = subprocess.run(
+        ["node", str(MODULATION_PROGRAM_COMPILER)],
+        input=json.dumps({
+            "routes": routes,
+            "dspSessionId": 1,
+            "deliverySerial": delivery_serial,
+        }),
+        text=True,
+        capture_output=True,
+        check=True,
+        cwd=REPO_ROOT,
+    )
+    return json.loads(completed.stdout)
 
 
 def _render_probe_audio(
@@ -344,23 +415,16 @@ def _collect_probe_events(
 
 @pytest.mark.cmajor
 def test_velocity_route_can_pan_a_voice_hard_right() -> None:
-    extra_events = [
-        ("modulationClear", 1),
-        ("modulationEnable", 1),
-        (
-            "modulationRoute",
-            {
-                "routeIndex": 0,
-                "enabled": True,
-                "sourceKind": 3,
-                "sourceSlot": 0,
-                "polarityKind": 0,
-                "targetKind": 7,
-                "amount": 1.0,
-            },
-        ),
-    ]
-    setup_js = _build_setup_js(extra_events=extra_events)
+    route = {
+        "id": "velocity-pan",
+        "enabled": True,
+        "sourceKind": "velocity",
+        "sourceSlot": None,
+        "polarity": "unipolar",
+        "targetKind": "pan",
+        "amount": 1.0,
+    }
+    setup_js = _build_setup_js(routes=[route])
     schedule = [(0, _note_on_expr(1, 60.0, 1.0))]
 
     left = _render_probe_audio(schedule, setup_js=setup_js, output_endpoint_id="leftOut", num_samples=16_384)
@@ -372,23 +436,16 @@ def test_velocity_route_can_pan_a_voice_hard_right() -> None:
 
 @pytest.mark.cmajor
 def test_bipolar_velocity_route_can_pull_a_voice_left_of_center() -> None:
-    extra_events = [
-        ("modulationClear", 1),
-        ("modulationEnable", 1),
-        (
-            "modulationRoute",
-            {
-                "routeIndex": 0,
-                "enabled": True,
-                "sourceKind": 3,
-                "sourceSlot": 0,
-                "polarityKind": 1,
-                "targetKind": 7,
-                "amount": 1.0,
-            },
-        ),
-    ]
-    setup_js = _build_setup_js(extra_events=extra_events)
+    route = {
+        "id": "velocity-pan",
+        "enabled": True,
+        "sourceKind": "velocity",
+        "sourceSlot": None,
+        "polarity": "bipolar",
+        "targetKind": "pan",
+        "amount": 1.0,
+    }
+    setup_js = _build_setup_js(routes=[route])
     schedule = [(0, _note_on_expr(1, 60.0, 0.25))]
 
     left = _render_probe_audio(schedule, setup_js=setup_js, output_endpoint_id="leftOut", num_samples=16_384)
@@ -402,7 +459,6 @@ def test_bipolar_velocity_route_can_pull_a_voice_left_of_center() -> None:
 def test_mseg_pitch_route_adds_on_top_of_pitch_bend() -> None:
     mseg_buffer = [1.0] * 2051
     extra_events = [
-        ("modulationClear", 1),
         (
             "modulationMsegBuffer",
             {
@@ -425,21 +481,17 @@ def test_mseg_pitch_route_adds_on_top_of_pitch_bend() -> None:
                 "legatoRestarts": False,
             },
         ),
-        (
-            "modulationRoute",
-            {
-                "routeIndex": 0,
-                "enabled": True,
-                "sourceKind": 1,
-                "sourceSlot": 1,
-                "polarityKind": 1,
-                "targetKind": 5,
-                "amount": 12.0,
-            },
-        ),
-        ("modulationEnable", 1),
     ]
-    setup_js = _build_setup_js(extra_events=extra_events)
+    route = {
+        "id": "mseg-pitch",
+        "enabled": True,
+        "sourceKind": "mseg",
+        "sourceSlot": 1,
+        "polarity": "bipolar",
+        "targetKind": "pitchSemitones",
+        "amount": 12.0,
+    }
+    setup_js = _build_setup_js(routes=[route], extra_events=extra_events)
     schedule = [
         (1024, _note_on_expr(1, 60.0, 1.0)),
         (17_408, _pitch_bend_expr(1, 12.0)),
@@ -456,7 +508,6 @@ def test_mseg_pitch_route_adds_on_top_of_pitch_bend() -> None:
 @pytest.mark.cmajor
 def test_envelope_route_can_raise_the_effective_filter_cutoff_monitor() -> None:
     extra_events = [
-        ("modulationClear", 1),
         (
             "modulationEnvelope",
             {
@@ -467,21 +518,18 @@ def test_envelope_route_can_raise_the_effective_filter_cutoff_monitor() -> None:
                 "releaseSeconds": 0.01,
             },
         ),
-        (
-            "modulationRoute",
-            {
-                "routeIndex": 0,
-                "enabled": True,
-                "sourceKind": 2,
-                "sourceSlot": 1,
-                "polarityKind": 0,
-                "targetKind": 3,
-                "amount": 2.0,
-            },
-        ),
-        ("modulationEnable", 1),
     ]
+    route = {
+        "id": "envelope-filter-cutoff",
+        "enabled": True,
+        "sourceKind": "env",
+        "sourceSlot": 1,
+        "polarity": "unipolar",
+        "targetKind": "filterCutoffOctaves",
+        "amount": 2.0,
+    }
     setup_js = _build_setup_js(
+        routes=[route],
         extra_events=extra_events,
         filter_mode=1.0,
         filter_cutoff=400.0,

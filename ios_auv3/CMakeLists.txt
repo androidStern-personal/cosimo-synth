@@ -38,6 +38,20 @@ set(
     "Optional override for the in-extension editor inspection hook. Leave empty to enable it only in Debug builds."
 )
 
+set(COSIMO_PRODUCT_NAME "Cosimo Synth" CACHE STRING "Standalone and AUv3 product name")
+set(COSIMO_BUNDLE_ID "dev.cosimo.wavetable-synth" CACHE STRING "Standalone bundle identifier")
+set(COSIMO_HOST_BUNDLE_ID "dev.cosimo.wavetable-synth-host" CACHE STRING "AUv3 test-host bundle identifier")
+set(COSIMO_PLUGIN_CODE "CmDv" CACHE STRING "Four-character AUv3 component subtype")
+set(COSIMO_PLUGIN_MANUFACTURER_CODE "Manu" CACHE STRING "Four-character AUv3 manufacturer code")
+option(COSIMO_ENABLE_APP_GROUP "Sign the production app and AUv3 with the shared wavetable App Group" ON)
+option(COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY "Read deterministic bundled wavetable assets instead of shared user storage" OFF)
+option(COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS "Expose allocation-free processBlock timing telemetry to the isolated benchmark host" OFF)
+set(COSIMO_MODULATION_BENCHMARK_PROFILES_PATH "" CACHE FILEPATH "Strict benchmark profile document bundled only in benchmark builds")
+
+if (COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS AND NOT EXISTS "${COSIMO_MODULATION_BENCHMARK_PROFILES_PATH}")
+    message(FATAL_ERROR "Benchmark metrics require COSIMO_MODULATION_BENCHMARK_PROFILES_PATH")
+endif()
+
 set(COSIMO_IOS_GENERATOR_SCRIPT "${COSIMO_REPO_ROOT}/scripts/generate_ios_auv3_plugin.sh")
 
 if (NOT EXISTS "${COSIMO_CMAJOR_PATCH_FILE}")
@@ -140,6 +154,10 @@ set(
     COSIMO_SHARED_WAVETABLE_ENTITLEMENTS
     "${CMAKE_CURRENT_LIST_DIR}/Entitlements/CosimoSharedWavetableLibrary.entitlements"
 )
+set(
+    COSIMO_AUV3_HOST_ENTITLEMENTS
+    "${CMAKE_CURRENT_LIST_DIR}/Entitlements/CosimoAUv3Host.entitlements"
+)
 
 set(
     COSIMO_GENERATED_PERFORMER_CPP
@@ -182,14 +200,14 @@ add_custom_target(
 )
 
 juce_add_plugin(CosimoSynth
-    PRODUCT_NAME "Cosimo Synth"
-    BUNDLE_ID "dev.cosimo.wavetable-synth"
+    PRODUCT_NAME "${COSIMO_PRODUCT_NAME}"
+    BUNDLE_ID "${COSIMO_BUNDLE_ID}"
     COMPANY_NAME "Cosimo"
     COMPANY_COPYRIGHT "(C)2026 Cosimo"
     FILE_SHARING_ENABLED TRUE
     PLIST_TO_MERGE "<plist><dict><key>LSSupportsOpeningDocumentsInPlace</key><true/></dict></plist>"
-    PLUGIN_CODE CmDv
-    PLUGIN_MANUFACTURER_CODE Manu
+    PLUGIN_CODE ${COSIMO_PLUGIN_CODE}
+    PLUGIN_MANUFACTURER_CODE ${COSIMO_PLUGIN_MANUFACTURER_CODE}
     FORMATS Standalone AUv3
     NEEDS_MIDI_INPUT TRUE
     NEEDS_MIDI_OUTPUT FALSE
@@ -224,6 +242,9 @@ target_compile_definitions(CosimoSynth PRIVATE
     COSIMO_ENABLE_EDITOR_INSPECTION=${COSIMO_ENABLE_EDITOR_INSPECTION_DEFINE}
     COSIMO_GENERATED_CPP_PATH=${COSIMO_GENERATED_CPP_PATH_DEFINE}
     COSIMO_WEBVIEW_DEV_SERVER_URL=${COSIMO_WEBVIEW_DEV_SERVER_URL_DEFINE}
+    COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY=$<BOOL:${COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY}>
+    COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS=$<BOOL:${COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS}>
+    CMAJ_USE_QUICKJS_WORKER=1
     CMAJ_ENABLE_WEBVIEW_DEV_TOOLS=0
     JUCE_DISABLE_JUCE_VERSION_PRINTING=1
     JUCE_USE_CURL=0
@@ -244,9 +265,14 @@ add_dependencies(CosimoSynth cosimo_ios_auv3_generated_performer)
 
 foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
     set_target_properties(${bundle_target} PROPERTIES
-        XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${COSIMO_SHARED_WAVETABLE_ENTITLEMENTS}"
         XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "18.0"
     )
+
+    if (COSIMO_ENABLE_APP_GROUP)
+        set_target_properties(${bundle_target} PROPERTIES
+            XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${COSIMO_SHARED_WAVETABLE_ENTITLEMENTS}"
+        )
+    endif()
 
     add_custom_command(
         TARGET ${bundle_target}
@@ -303,6 +329,19 @@ foreach(bundle_target CosimoSynth_Standalone CosimoSynth_AUv3)
             "Copying the runtime patch, iPhone UI runtime files, Cmajor web API, and factory assets into ${bundle_target}"
         VERBATIM
     )
+
+    if (COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS)
+        add_custom_command(
+            TARGET ${bundle_target}
+            POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "$<TARGET_FILE_DIR:${bundle_target}>/benchmark"
+            COMMAND "${CMAKE_COMMAND}" -E copy_if_different
+                    "${COSIMO_MODULATION_BENCHMARK_PROFILES_PATH}"
+                    "$<TARGET_FILE_DIR:${bundle_target}>/benchmark/modulation-benchmark-profiles.json"
+            COMMENT "Copying strict modulation benchmark profiles into ${bundle_target}"
+            VERBATIM
+        )
+    endif()
 endforeach()
 
 add_executable(CosimoSynthHost MACOSX_BUNDLE
@@ -313,13 +352,19 @@ add_executable(CosimoSynthHost MACOSX_BUNDLE
 
 set_target_properties(CosimoSynthHost PROPERTIES
     MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoHost-Info.plist.in"
-    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "dev.cosimo.wavetable-synth-host"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "${COSIMO_HOST_BUNDLE_ID}"
+    XCODE_ATTRIBUTE_CODE_SIGN_ENTITLEMENTS "${COSIMO_AUV3_HOST_ENTITLEMENTS}"
     XCODE_ATTRIBUTE_TARGETED_DEVICE_FAMILY "1,2"
     XCODE_ATTRIBUTE_CLANG_ENABLE_OBJC_ARC YES
     XCODE_ATTRIBUTE_IPHONEOS_DEPLOYMENT_TARGET "18.0"
 )
 
 target_compile_features(CosimoSynthHost PRIVATE cxx_std_17)
+
+target_compile_definitions(CosimoSynthHost PRIVATE
+    COSIMO_HOST_PLUGIN_SUBTYPE="${COSIMO_PLUGIN_CODE}"
+    COSIMO_HOST_PLUGIN_MANUFACTURER="${COSIMO_PLUGIN_MANUFACTURER_CODE}"
+)
 
 target_link_libraries(CosimoSynthHost PRIVATE
     "-framework UIKit"

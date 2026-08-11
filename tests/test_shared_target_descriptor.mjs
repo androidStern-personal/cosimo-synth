@@ -34,6 +34,14 @@ const EXPECTED_VOICE_BINDINGS = {
     "wavetable.index": ["endpoint", "wavetablePosition", "framePosition"],
     "wavetable.warp": ["endpoint", "warpAmount", "warpAmount"],
     "wavetable.unison": ["endpoint", "unisonDetune", "unisonDetune"],
+    "wavetable.unison-blend": ["endpoint", "unisonBlend", "unisonBlend"],
+    "wavetable.unison-width": ["endpoint", "unisonWidth", "unisonWidth"],
+    "wavetable.unison-wt-spread": [
+        "endpoint",
+        "unisonWavetablePositionSpread",
+        "unisonWavetablePositionSpread",
+    ],
+    "wavetable.unison-warp-spread": ["endpoint", "unisonWarpSpread", "unisonWarpSpread"],
     "wavetable.tune": ["unbacked", "no-endpoint", null],
     "voice-filter.cutoff": ["endpoint", "filterCutoff", "filterCutoffHz"],
     "voice-filter.resonance": ["endpoint", "filterQ", "filterQ"],
@@ -54,7 +62,7 @@ test("the catalog is the complete eight-effect DSP inventory plus the voice surf
 
     assert.equal(rackCatalog.RACK_EFFECT_DESCRIPTORS.length, 8);
     assert.equal(rackTargets.length, rackParameters.length);
-    assert.equal(voiceTargets.length, 11);
+    assert.equal(voiceTargets.length, 15);
     assert.deepEqual(
         rackTargets.map((descriptor) => descriptor.targetId),
         rackParameters.map((parameter) => `${parameter.effectId}.${parameter.endpointID}`),

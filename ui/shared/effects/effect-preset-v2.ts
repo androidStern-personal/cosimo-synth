@@ -10,13 +10,17 @@ import { assertNoDuplicateJsonKeys } from "./effect-preset-schema";
 export const EFFECT_PRESET_V2_KIND = "cosimo.effectPreset";
 export const EFFECT_PRESET_V2_SCHEMA_VERSION = 2;
 
+export type EffectStoredStateContext = {
+    storedState: Readonly<Record<string, unknown>>;
+};
+
 export type EffectStoredStateAdapter<TValue = unknown> = {
     key: string;
     schemaVersion: number;
     capture?: () => TValue;
-    normalizeForPreset: (value: unknown) => TValue;
-    serializeForPreset: (value: TValue) => unknown;
-    apply?: (value: TValue) => void;
+    normalizeForPreset: (value: unknown, context?: EffectStoredStateContext) => TValue;
+    serializeForPreset: (value: TValue, context?: EffectStoredStateContext) => unknown;
+    apply?: (value: TValue, context?: EffectStoredStateContext) => void;
     getContract?: () => { key: string; schemaVersion: number; required: true };
     subscribe?: (listener: () => void) => () => void;
 };
@@ -258,6 +262,7 @@ function validateExactPreset(
 
     const adaptersByKey = adapterByKey(adapters);
     const normalizedStoredState: Record<string, unknown> = {};
+    const context: EffectStoredStateContext = { storedState: preset.storedState };
 
     for (const entry of currentContract.storedState) {
         const adapter = adaptersByKey.get(entry.key);
@@ -268,8 +273,8 @@ function validateExactPreset(
             continue;
         }
 
-        const normalizedValue = adapter.normalizeForPreset(rawValue);
-        normalizedStoredState[entry.key] = adapter.serializeForPreset(normalizedValue);
+        const normalizedValue = adapter.normalizeForPreset(rawValue, context);
+        normalizedStoredState[entry.key] = adapter.serializeForPreset(normalizedValue, context);
     }
 
     return {
@@ -409,7 +414,7 @@ export function captureEffectPresetV2({
             throw new Error(`Cannot save preset because stored-state adapter "${entry.key}" is unavailable.`);
         }
 
-        storedState[entry.key] = adapter.serializeForPreset(adapter.normalizeForPreset(adapter.capture()));
+        storedState[entry.key] = adapter.capture();
     }
 
     return normalizeEffectPresetV2({
@@ -454,14 +459,32 @@ export function applyEffectPresetV2({
         }
     }
 
-    for (const entry of currentContract.storedState) {
-        const adapter = adaptersByKey.get(entry.key);
-        const value = normalizedPreset.storedState[entry.key];
+    const context: EffectStoredStateContext = { storedState: normalizedPreset.storedState };
+    const contractStoredKeys = new Set(currentContract.storedState.map((entry) => entry.key));
+    const appliedStoredKeys = new Set<string>();
+    const applyStoredState = (key: string, adapter?: EffectStoredStateAdapter) => {
+        const value = normalizedPreset.storedState[key];
 
         if (adapter?.apply) {
-            adapter.apply(adapter.normalizeForPreset(value));
+            adapter.apply(adapter.normalizeForPreset(value, context), context);
         } else {
-            patchConnection.sendStoredStateValue?.(entry.key, value);
+            patchConnection.sendStoredStateValue?.(key, value);
+        }
+
+        appliedStoredKeys.add(key);
+    };
+
+    // Adapter order is dependency order. The canonical contract remains key-sorted
+    // for a stable hash, while dependent state can install its prerequisite first.
+    for (const adapter of storedStateAdapters) {
+        if (contractStoredKeys.has(adapter.key) && !appliedStoredKeys.has(adapter.key)) {
+            applyStoredState(adapter.key, adapter);
+        }
+    }
+
+    for (const entry of currentContract.storedState) {
+        if (!appliedStoredKeys.has(entry.key)) {
+            applyStoredState(entry.key, adaptersByKey.get(entry.key));
         }
     }
 

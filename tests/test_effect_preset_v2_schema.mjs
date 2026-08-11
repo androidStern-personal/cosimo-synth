@@ -282,6 +282,74 @@ test("v2_apply_validates_full_payload_before_first_write", async () => {
     assert.deepEqual(patchConnection.storedWrites, []);
 });
 
+test("stored-state adapters validate one complete document and apply in declared dependency order", async () => {
+    const { applyEffectPresetV2, buildCanonicalPluginStateContract } = await loadModules();
+    const contract = baseContract({
+        buildContract: buildCanonicalPluginStateContract,
+        effectID: "dependent-state",
+        parameters: [{ endpointID: "mix", type: "number", min: 0, max: 1, defaultValue: 0 }],
+        storedState: [
+            { key: "mapping.v1", schemaVersion: 1, required: true },
+            { key: "articulation.v1", schemaVersion: 1, required: true },
+        ],
+    });
+    const patchConnection = new Recorder();
+    const applied = [];
+    const adapters = [
+        {
+            key: "mapping.v1",
+            schemaVersion: 1,
+            normalizeForPreset(value, context) {
+                assert.deepEqual(context.storedState, {
+                    "mapping.v1": { routeIDs: ["route-1"] },
+                    "articulation.v1": { routeID: "route-1" },
+                });
+                return value;
+            },
+            serializeForPreset: (value) => value,
+            apply(value) {
+                applied.push(["mapping.v1", value]);
+            },
+        },
+        {
+            key: "articulation.v1",
+            schemaVersion: 1,
+            normalizeForPreset(value, context) {
+                assert.ok(
+                    context.storedState["mapping.v1"].routeIDs.includes(value.routeID),
+                    "articulation validation must see the companion mapping document",
+                );
+                return value;
+            },
+            serializeForPreset: (value) => value,
+            apply(value) {
+                applied.push(["articulation.v1", value]);
+            },
+        },
+    ];
+
+    applyEffectPresetV2({
+        preset: {
+            kind: "cosimo.effectPreset",
+            version: 2,
+            effectID: "dependent-state",
+            presetID: "user.dependent-state.test",
+            label: "Dependent state",
+            contract,
+            parameters: { mix: 0.5 },
+            storedState: {
+                "mapping.v1": { routeIDs: ["route-1"] },
+                "articulation.v1": { routeID: "route-1" },
+            },
+        },
+        currentContract: contract,
+        patchConnection,
+        storedStateAdapters: adapters,
+    });
+
+    assert.deepEqual(applied.map(([key]) => key), ["mapping.v1", "articulation.v1"]);
+});
+
 test("duplicate_json_keys_fail_before_import", async () => {
     const { parseEffectPresetV2Text } = await loadModules();
 

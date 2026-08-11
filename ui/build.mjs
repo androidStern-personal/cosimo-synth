@@ -98,13 +98,20 @@ async function runBuild(configRelativePath) {
 if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild("--ios")) {
     await emitGeneratedPatchGuiModule("ui/shared/resource-client.ts", "patch_gui/resource-client.js");
     await emitGeneratedPatchGuiModule("ui/shared/patch-worker-services.ts", "patch_gui/patch-worker-services.js");
+    await emitGeneratedPatchGuiModule("ui/shared/runtime-install-channel.ts", "patch_gui/runtime-install-channel.js");
     await emitGeneratedPatchGuiModule("ui/shared/stored-state-runtime-mirror.ts", "patch_gui/stored-state-runtime-mirror.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg.ts", "patch_gui/mseg.js");
     await emitGeneratedPatchGuiModule("ui/shared/mseg-controller.ts", "patch_gui/mseg-controller.js");
     await emitGeneratedPatchGuiModule("ui/shared/rack-parameter-descriptors.ts", "patch_gui/rack-parameter-descriptors.js");
+    await emitGeneratedPatchGuiModule("ui/shared/result.ts", "patch_gui/result.js");
+    await emitGeneratedPatchGuiModule("ui/shared/cosimo-ids.ts", "patch_gui/cosimo-ids.js");
+    await emitGeneratedPatchGuiModule("ui/shared/target-descriptor.ts", "patch_gui/target-descriptor.js");
+    await emitGeneratedPatchGuiModule("ui/shared/modulation-runtime-program.ts", "patch_gui/modulation-runtime-program.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation.ts", "patch_gui/modulation.js");
     await emitGeneratedPatchGuiModule("ui/shared/rack-route-presentation.ts", "patch_gui/rack-route-presentation.js");
     await emitGeneratedPatchGuiModule("ui/shared/articulations.ts", "patch_gui/articulations.js");
+    await emitGeneratedPatchGuiModule("ui/shared/articulation-image.ts", "patch_gui/articulation-image.js");
+    await emitGeneratedPatchGuiModule("ui/shared/articulation-runtime-base.ts", "patch_gui/articulation-runtime-base.js");
     await emitGeneratedPatchGuiModule("ui/shared/articulation-worker-service.ts", "patch_gui/articulation-worker-service.js");
 }
 

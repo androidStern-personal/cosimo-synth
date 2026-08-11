@@ -7,7 +7,6 @@ import {
 } from "react";
 
 import {
-    MODULATION_MAX_ROUTES,
     MODULATION_SOURCE_OPTIONS,
     MODULATION_TARGET_OPTIONS,
     clampModulationRouteAmount,
@@ -512,13 +511,12 @@ export function MobileModMatrix({
                     <header className="mobile-mod-list-header">
                         <div>
                             <h2>Mappings</h2>
-                            <span data-role="mobile-mod-route-count">{routes.length} / {MODULATION_MAX_ROUTES}</span>
+                            <span data-role="mobile-mod-route-count">{routes.length} mappings</span>
                         </div>
                         <button type="button" data-role="mobile-mod-filter" onClick={() => setView({ kind: "filters" })}>Filter</button>
                         <button
                             type="button"
                             data-role="mobile-mod-add"
-                            disabled={routes.length >= MODULATION_MAX_ROUTES}
                             onClick={() => setView({ kind: "create-source" })}
                         >
                             +
@@ -537,7 +535,6 @@ export function MobileModMatrix({
                             {statusFilter !== "all" ? <span>{statusFilter}<button type="button" aria-label="Remove state filter" onClick={() => setStatusFilter("all")}>×</button></span> : null}
                         </div>
                     ) : null}
-                    {routes.length >= MODULATION_MAX_ROUTES ? <p className="mobile-mod-limit">Route limit reached · 12 / 12</p> : null}
                     <div className="mobile-mod-route-list">
                         {displayedRoutes.map(({ route, routeIndex }) => {
                             const source = sourceOptionForRoute(route);

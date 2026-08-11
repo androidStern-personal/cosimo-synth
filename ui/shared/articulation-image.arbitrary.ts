@@ -9,6 +9,7 @@
 
 import {
     ARTICULATION_VOICE_PARAMETER_IDS,
+    MODULATION_ARTICULATION_ROUTE_CELL_COUNT,
     type ArticulationBaseChange,
     type ArticulationRange,
     type ArticulationSlotV3,
@@ -20,10 +21,10 @@ import {
 type FastCheck = typeof import("fast-check");
 type Arbitrary<T> = import("fast-check").Arbitrary<T>;
 
-const ROUTE_ID_POOL = [
-    "route-a", "route-b", "route-c", "route-d", "route-e", "route-f",
-    "route-g", "route-h", "route-i", "route-j", "route-k", "route-l",
-] as const;
+const ROUTE_ID_POOL = Array.from(
+    { length: MODULATION_ARTICULATION_ROUTE_CELL_COUNT },
+    (_, index) => `route-${index}`,
+) as [string, ...string[]];
 
 /**
  * A finite engine-unit scalar.
@@ -37,6 +38,12 @@ export function engineValueArbitrary(fc: FastCheck): Arbitrary<number> {
     // unit carries.
     return fc
         .double({ min: -20000, max: 20000, noNaN: true, noDefaultInfinity: true })
+        .map((value) => (Object.is(value, -0) ? 0 : value));
+}
+
+function routeAmountArbitrary(fc: FastCheck): Arbitrary<number> {
+    return fc
+        .double({ min: -48, max: 48, noNaN: true, noDefaultInfinity: true })
         .map((value) => (Object.is(value, -0) ? 0 : value));
 }
 
@@ -95,7 +102,7 @@ export function articulationSlotArbitrary(
             // Plain prototypes only: stored banks are ordinary JSON objects, and
             // fc.dictionary's adversarial null-prototype default would fail
             // strict deep-equality for a distinction the domain doesn't carry.
-            routeAmounts: fc.dictionary(fc.constantFrom(...ROUTE_ID_POOL), engineValueArbitrary(fc), {
+            routeAmounts: fc.dictionary(fc.constantFrom(...ROUTE_ID_POOL), routeAmountArbitrary(fc), {
                 maxKeys: ROUTE_ID_POOL.length,
                 noNullPrototype: true,
             }),
@@ -136,7 +143,7 @@ export function articulationsStateArbitrary(fc: FastCheck): Arbitrary<Articulati
 
 /**
  * A complete patch base: EVERY voice parameter present, a route order of
- * unique ids (0..12), and base amounts for exactly those routes.
+ * unique ids, deterministic runtime cells, and base amounts for those routes.
  *
  * @param fc - The fast-check module.
  * @returns Arbitrary complete PatchVoiceBase values.
@@ -145,7 +152,7 @@ export function patchVoiceBaseArbitrary(fc: FastCheck): Arbitrary<PatchVoiceBase
     return fc
         .tuple(
             fc.tuple(...ARTICULATION_VOICE_PARAMETER_IDS.map(() => engineValueArbitrary(fc))),
-            fc.uniqueArray(fc.constantFrom(...ROUTE_ID_POOL), { maxLength: 12 }),
+            fc.uniqueArray(fc.constantFrom(...ROUTE_ID_POOL), { maxLength: ROUTE_ID_POOL.length }),
         )
         .chain(([values, routeOrder]) =>
             fc.tuple(...routeOrder.map(() => engineValueArbitrary(fc))).map((amounts) => ({
@@ -154,6 +161,7 @@ export function patchVoiceBaseArbitrary(fc: FastCheck): Arbitrary<PatchVoiceBase
                 ) as Record<ArticulationVoiceParameterId, number>,
                 routeAmounts: Object.fromEntries(routeOrder.map((routeId, index) => [routeId, amounts[index]])),
                 routeOrder,
+                routeCells: Object.fromEntries(routeOrder.map((routeId, index) => [routeId, index])),
             })),
         );
 }

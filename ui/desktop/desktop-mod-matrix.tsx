@@ -1,4 +1,5 @@
 import {
+    memo,
     useCallback,
     useEffect,
     useMemo,
@@ -9,7 +10,6 @@ import {
 } from "react";
 
 import {
-    MODULATION_MAX_ROUTES,
     MODULATION_SOURCE_OPTIONS,
     MODULATION_TARGET_OPTIONS,
     applyModulationSourceOption,
@@ -198,13 +198,14 @@ function MiniKnob({
     const isEditingRef = useRef(false);
     const onChangeRef = useRef(onChange);
     const targetKindRef = useRef(targetKind);
-    const valueRef = useRef(value);
+    const [displayValue, setDisplayValue] = useState(value);
+    const valueRef = useRef(displayValue);
     onChangeRef.current = onChange;
     targetKindRef.current = targetKind;
-    valueRef.current = value;
+    valueRef.current = displayValue;
     const [isEditing, setIsEditing] = useState(false);
     const [draftValue, setDraftValue] = useState("");
-    const sliderPosition = getModulationAmountSliderPosition(targetKind, value);
+    const sliderPosition = getModulationAmountSliderPosition(targetKind, displayValue);
     const angle = (sliderPosition - 0.5) * (MINI_KNOB_SIDE_SWEEP_DEGREES * 2);
     const fillExtentDegrees = Math.abs(angle);
     const trackPath = useMemo(
@@ -243,6 +244,11 @@ function MiniKnob({
     }, [angle, fillExtentDegrees, polarity]);
 
     useEffect(() => {
+        valueRef.current = value;
+        setDisplayValue(value);
+    }, [value]);
+
+    useEffect(() => {
         if (!isEditing) {
             return;
         }
@@ -262,6 +268,13 @@ function MiniKnob({
         setDraftValue(nextValue);
     }, []);
 
+    const publishValue = useCallback((nextValue: number) => {
+        const clampedValue = clampModulationRouteAmount(targetKindRef.current, nextValue);
+        valueRef.current = clampedValue;
+        setDisplayValue(clampedValue);
+        onChangeRef.current(clampedValue);
+    }, []);
+
     const beginEditing = useCallback(() => {
         updateDraftValue(formatModulationAmountEditingValue(targetKindRef.current, valueRef.current));
         isEditingRef.current = true;
@@ -277,13 +290,13 @@ function MiniKnob({
         if (commit) {
             const parsedValue = parseModulationAmountEditingValue(targetKindRef.current, draftValueRef.current);
             if (parsedValue !== null) {
-                onChangeRef.current(parsedValue);
+                publishValue(parsedValue);
             }
         }
 
         setIsEditing(false);
         updateDraftValue("");
-    }, [updateDraftValue]);
+    }, [publishValue, updateDraftValue]);
 
     const finishGesture = useCallback((pointerId?: number) => {
         const gesture = gestureRef.current;
@@ -320,8 +333,8 @@ function MiniKnob({
             0,
             Math.min(1, gesture.startSliderPosition + (delta / MINI_KNOB_PIXELS_PER_FULL_TRAVEL)),
         );
-        onChangeRef.current(composeModulationAmount(targetKindRef.current, nextSliderPosition));
-    }, [finishGesture]);
+        publishValue(composeModulationAmount(targetKindRef.current, nextSliderPosition));
+    }, [finishGesture, publishValue]);
 
     useEffect(() => () => {
         finishGesture();
@@ -411,8 +424,8 @@ function MiniKnob({
 
         event.preventDefault();
         event.stopPropagation();
-        onChangeRef.current(clampModulationRouteAmount(targetKindRef.current, nextValue));
-    }, [beginEditing, max, min, step]);
+        publishValue(nextValue);
+    }, [beginEditing, max, min, publishValue, step]);
 
     return (
         <div
@@ -421,8 +434,8 @@ function MiniKnob({
             aria-label={ariaLabel}
             aria-valuemin={min}
             aria-valuemax={max}
-            aria-valuenow={value}
-            aria-valuetext={formatModulationAmountReadout(targetKind, value, polarity)}
+            aria-valuenow={displayValue}
+            aria-valuetext={formatModulationAmountReadout(targetKind, displayValue, polarity)}
             onPointerDown={handlePointerDown}
             onPointerUp={(event) => finishGesture(event.pointerId)}
             onPointerCancel={(event) => finishGesture(event.pointerId)}
@@ -543,25 +556,25 @@ function RoutePolarityToggle({
     );
 }
 
-function RouteRow({
+const RouteRow = memo(function RouteRow({
     route,
     routeIndex,
-    onUpdate,
-    onDelete,
-    rowRef,
+    onRouteChange,
+    onRemoveRoute,
+    registerRow,
 }: {
     route: ModulationRoute;
     routeIndex: number;
-    onUpdate: (update: ModulationRouteUpdate) => void;
-    onDelete: () => void;
-    rowRef: (element: HTMLDivElement | null) => void;
+    onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
+    onRemoveRoute: (routeIndex: number) => void;
+    registerRow: (routeIndex: number, element: HTMLDivElement | null) => void;
 }) {
     const sourceValue = getModulationSourceOptionValue(route);
     const targetBounds = getModulationAmountBounds(route.targetKind);
 
     return (
         <div
-            ref={rowRef}
+            ref={(element) => registerRow(routeIndex, element)}
             data-role={`route-row-${routeIndex + 1}`}
             className={`synth-control-rail group flex items-center gap-2 rounded-lg px-3 py-2 transition-all hover:border-[rgb(var(--section-accent-rgb)/0.22)] hover:bg-[rgb(var(--section-accent-rgb)/0.045)] ${
                 route.enabled ? "" : "opacity-40"
@@ -570,7 +583,7 @@ function RouteRow({
             <button
                 type="button"
                 aria-label={`Route ${routeIndex + 1} ${route.enabled ? "bypass" : "enable"}`}
-                onClick={() => onUpdate({ enabled: !route.enabled })}
+                onClick={() => onRouteChange(routeIndex, { enabled: !route.enabled })}
                 className={`shrink-0 rounded p-1 transition-all ${
                     route.enabled
                         ? "synth-readout-text hover:text-[rgb(var(--section-accent-rgb)/0.78)]"
@@ -588,7 +601,10 @@ function RouteRow({
                     options={MODULATION_SOURCE_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
                     onChange={(nextSourceValue) => {
                         const nextSource = applyModulationSourceOption(route, nextSourceValue);
-                        onUpdate({ sourceKind: nextSource.sourceKind, sourceSlot: nextSource.sourceSlot });
+                        onRouteChange(routeIndex, {
+                            sourceKind: nextSource.sourceKind,
+                            sourceSlot: nextSource.sourceSlot,
+                        });
                     }}
                     minWidthPx={118}
                 />
@@ -602,7 +618,7 @@ function RouteRow({
                 options={MODULATION_TARGET_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
                 onChange={(nextTargetKind) => {
                     const targetKind = nextTargetKind as ModulationTargetKind;
-                    onUpdate({
+                    onRouteChange(routeIndex, {
                         targetKind,
                         amount: clampModulationRouteAmount(targetKind, route.amount),
                     });
@@ -615,7 +631,7 @@ function RouteRow({
             <RoutePolarityToggle
                 ariaLabel={`Route ${routeIndex + 1} polarity`}
                 value={route.polarity}
-                onChange={(polarity) => onUpdate({ polarity })}
+                onChange={(polarity) => onRouteChange(routeIndex, { polarity })}
             />
 
             {isRackModulationTarget(route.targetKind) && isVoiceModulationSource(route.sourceKind) ? (
@@ -626,7 +642,9 @@ function RouteRow({
                         { value: "max", label: "MAX" },
                         { value: "mean", label: "MEAN" },
                     ]}
-                    onChange={(reducer) => onUpdate({ reducer: reducer === "mean" ? "mean" : "max" })}
+                    onChange={(reducer) => onRouteChange(routeIndex, {
+                        reducer: reducer === "mean" ? "mean" : "max",
+                    })}
                     minWidthPx={72}
                 />
             ) : null}
@@ -639,7 +657,9 @@ function RouteRow({
                 min={targetBounds.min}
                 max={targetBounds.max}
                 step={targetBounds.step}
-                onChange={(nextAmount) => onUpdate({ amount: clampModulationRouteAmount(route.targetKind, nextAmount) })}
+                onChange={(nextAmount) => onRouteChange(routeIndex, {
+                    amount: clampModulationRouteAmount(route.targetKind, nextAmount),
+                })}
             />
 
             <span className="synth-readout-text hidden w-16 shrink-0 text-right text-xs tabular-nums sm:block">
@@ -649,14 +669,14 @@ function RouteRow({
             <button
                 type="button"
                 aria-label={`Remove route ${routeIndex + 1}`}
-                onClick={onDelete}
+                onClick={() => onRemoveRoute(routeIndex)}
                 className="shrink-0 rounded p-1 text-[rgb(var(--cosimo-control-rgb)/0.55)] opacity-0 transition-all hover:bg-[rgb(var(--section-accent-rgb)/0.08)] hover:text-[var(--section-accent)] focus-visible:opacity-100 group-hover:opacity-100"
             >
                 <XIcon className="h-3.5 w-3.5" />
             </button>
         </div>
     );
-}
+});
 
 export function DesktopModMatrix({
     routes,
@@ -673,6 +693,9 @@ export function DesktopModMatrix({
 }) {
     const routeRowRefs = useRef<Array<HTMLDivElement | null>>([]);
     const pendingRouteScrollIndexRef = useRef<number | null>(null);
+    const registerRouteRow = useCallback((routeIndex: number, element: HTMLDivElement | null) => {
+        routeRowRefs.current[routeIndex] = element;
+    }, []);
 
     useEffect(() => {
         const pendingRouteIndex = pendingRouteScrollIndexRef.current;
@@ -698,10 +721,6 @@ export function DesktopModMatrix({
     }, [routes.length]);
 
     const handleAddRouteClick = useCallback(() => {
-        if (routes.length >= MODULATION_MAX_ROUTES) {
-            return;
-        }
-
         pendingRouteScrollIndexRef.current = routes.length;
         onAddRoute();
     }, [onAddRoute, routes.length]);
@@ -727,11 +746,9 @@ export function DesktopModMatrix({
                         key={route.id}
                         route={route}
                         routeIndex={routeIndex}
-                        rowRef={(element) => {
-                            routeRowRefs.current[routeIndex] = element;
-                        }}
-                        onUpdate={(nextRoute) => onRouteChange(routeIndex, nextRoute)}
-                        onDelete={() => onRemoveRoute(routeIndex)}
+                        registerRow={registerRouteRow}
+                        onRouteChange={onRouteChange}
+                        onRemoveRoute={onRemoveRoute}
                     />
                 ))}
             </div>

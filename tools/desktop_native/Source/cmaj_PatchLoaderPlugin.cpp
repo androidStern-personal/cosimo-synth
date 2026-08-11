@@ -3,7 +3,6 @@
 #include <atomic>
 #include <mutex>
 
-#include "../../../native/ModulationRuntimeRestore.h"
 #include "../../../native/ArticulationTriggerConfigState.h"
 
 #define CHOC_ASSERT(x) assert(x)
@@ -707,7 +706,6 @@ private:
             applyCurrentRateAndBlockSize();
 
         patch->loadPatch (loadParams, true);
-        cosimo::modulation::uploadStoredModulationStateToPatch (*patch);
     }
 
     std::filesystem::path manifestLocation;

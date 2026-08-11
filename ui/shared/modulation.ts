@@ -22,45 +22,16 @@ import {
     type MsegShape,
     type MsegState,
 } from "./mseg";
+import { buildModulationRuntimeProgramEvents } from "./modulation-runtime-program";
+import { err, ok, type Result } from "./result";
 
 export const MODULATION_STATE_KEY = "modulation.v2";
-export const MODULATION_MAX_ROUTES = 12;
 export const MODULATION_MSEG_SLOT_COUNT = 3;
 export const MODULATION_ENV_SLOT_COUNT = 3;
-export const MODULATION_CLEAR_ENDPOINT_ID = "modulationClear";
-export const MODULATION_ENABLE_ENDPOINT_ID = "modulationEnable";
 export const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
 export const MODULATION_MSEG_PLAYBACK_ENDPOINT_ID = "modulationMsegPlayback";
 export const MODULATION_ENV_ENDPOINT_ID = "modulationEnvelope";
-export const MODULATION_ROUTE_ENDPOINT_ID = "modulationRoute";
-export const RACK_MODULATION_ROUTE_ENDPOINT_ID = "rackModulationRoute";
-export const MOD_TARGET_RACK_BASE = 100;
-export const MOD_REDUCER_UNSET = 0;
-export const MOD_REDUCER_MAX = 1;
-export const MOD_REDUCER_MEAN = 2;
-
-export const MOD_SOURCE_MSEG = 1;
-export const MOD_SOURCE_ENV = 2;
-export const MOD_SOURCE_VELOCITY = 3;
-export const MOD_SOURCE_PRESSURE = 4;
-export const MOD_SOURCE_SLIDE = 5;
-export const MOD_SOURCE_MACRO = 6;
 export const MODULATION_MACRO_SLOT_COUNT = 4;
-export const MOD_POLARITY_UNIPOLAR = 0;
-export const MOD_POLARITY_BIPOLAR = 1;
-
-export const MOD_TARGET_WAVETABLE_POSITION = 1;
-export const MOD_TARGET_WARP_AMOUNT = 2;
-export const MOD_TARGET_FILTER_CUTOFF_OCTAVES = 3;
-export const MOD_TARGET_FILTER_Q = 4;
-export const MOD_TARGET_PITCH_SEMITONES = 5;
-export const MOD_TARGET_AMP_GAIN_DB = 6;
-export const MOD_TARGET_PAN = 7;
-export const MOD_TARGET_UNISON_DETUNE = 8;
-export const MOD_TARGET_UNISON_BLEND = 9;
-export const MOD_TARGET_UNISON_WIDTH = 10;
-export const MOD_TARGET_UNISON_WT_POSITION_SPREAD = 11;
-export const MOD_TARGET_UNISON_WARP_SPREAD = 12;
 
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"] as const;
 const MACRO_SLOT_NAMES = ["Macro 1", "Macro 2", "Macro 3", "Macro 4"] as const;
@@ -174,6 +145,13 @@ export type ModulationState = {
     macroNames: string[];
 };
 
+export type ModulationStateChangeKind = "general" | "routeAmount";
+
+/** Expected boundary failure for a non-current modulation document. */
+export class ModulationStateParseError extends Error {
+    override readonly name = "ModulationStateParseError";
+}
+
 export type ModulationMsegBufferUpload = {
     slot: number;
     shapeIndex: number;
@@ -198,20 +176,6 @@ export type ModulationEnvelopeUpload = {
     decaySeconds: number;
     sustain: number;
     releaseSeconds: number;
-};
-
-export type ModulationRouteUpload = {
-    routeIndex: number;
-    enabled: boolean;
-    sourceKind: number;
-    sourceSlot: number;
-    polarityKind: number;
-    targetKind: number;
-    amount: number;
-};
-
-export type RackModulationRouteUpload = ModulationRouteUpload & {
-    reducerKind: number;
 };
 
 export type ModulationRuntimeEvent = {
@@ -385,10 +349,6 @@ function normalizeRouteId(value: unknown, routeIndex: number) {
 
 function normalizePolarity(value: unknown): ModulationPolarity {
     return value === "bipolar" ? "bipolar" : "unipolar";
-}
-
-function polarityToCode(polarity: ModulationPolarity) {
-    return polarity === "bipolar" ? MOD_POLARITY_BIPOLAR : MOD_POLARITY_UNIPOLAR;
 }
 
 export function getModulationAmountBounds(targetKind: ModulationTargetKind) {
@@ -659,7 +619,7 @@ export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
     }
 }
 
-function normalizeSourceKind(value: unknown): ModulationSourceKind {
+function parseSourceKind(value: unknown): ModulationSourceKind | null {
     if (
         value === "mseg" || value === "env" || value === "velocity"
         || value === "pressure" || value === "slide" || value === "macro"
@@ -667,12 +627,21 @@ function normalizeSourceKind(value: unknown): ModulationSourceKind {
         return value;
     }
 
-    return "mseg";
+    return null;
 }
 
-function normalizeTargetKind(value: unknown): ModulationTargetKind {
-    if (typeof value === "string" && RACK_MODULATION_PARAMETER_BY_KIND.has(value as RackModulationTargetKind)) {
-        return value as RackModulationTargetKind;
+function normalizeSourceKind(value: unknown): ModulationSourceKind {
+    return parseSourceKind(value) ?? "mseg";
+}
+
+function parseTargetKind(value: unknown): ModulationTargetKind | null {
+    if (typeof value === "string") {
+        // SAFETY: Membership in the authored rack-target map establishes the
+        // `rack.${string}` domain identity before it is returned.
+        const rackTargetKind = value as RackModulationTargetKind;
+        if (RACK_MODULATION_PARAMETER_BY_KIND.has(rackTargetKind)) {
+            return rackTargetKind;
+        }
     }
     if (
         value === "wavetablePosition"
@@ -691,7 +660,11 @@ function normalizeTargetKind(value: unknown): ModulationTargetKind {
         return value;
     }
 
-    return "wavetablePosition";
+    return null;
+}
+
+function normalizeTargetKind(value: unknown): ModulationTargetKind {
+    return parseTargetKind(value) ?? "wavetablePosition";
 }
 
 export function normalizeMacroName(value: unknown, slotIndex: number): string {
@@ -751,33 +724,12 @@ export function createDefaultRoute(overrides: Partial<ModulationRoute> = {}): Mo
     };
 }
 
-/** Returns the first deterministic source/target pair not already present. */
-export function createAvailableDefaultRoute(
-    existingRoutes: ReadonlyArray<ModulationRoute>,
-): ModulationRoute | null {
-    const occupiedPairs = new Set(existingRoutes.map(routePairKey));
-
-    for (const source of MODULATION_SOURCE_OPTIONS) {
-        for (const target of MODULATION_TARGET_OPTIONS) {
-            const candidate = createDefaultRoute({
-                sourceKind: source.sourceKind,
-                sourceSlot: source.sourceSlot,
-                targetKind: target.value,
-            });
-
-            if (!occupiedPairs.has(routePairKey(candidate))) {
-                return candidate;
-            }
-        }
-    }
-
-    return null;
-}
-
-export function normalizeRoute(value: unknown, routeIndex = 0): ModulationRoute {
-    const nextValue = value && typeof value === "object" ? value as Partial<ModulationRoute> : {};
-    const sourceKind = normalizeSourceKind(nextValue.sourceKind);
-    const targetKind = normalizeTargetKind(nextValue.targetKind);
+function normalizeRouteRecord(
+    nextValue: Readonly<Record<string, unknown>>,
+    routeIndex: number,
+    sourceKind: ModulationSourceKind,
+    targetKind: ModulationTargetKind,
+): ModulationRoute {
     const numericAmount = Number(nextValue.amount);
 
     return {
@@ -790,6 +742,93 @@ export function normalizeRoute(value: unknown, routeIndex = 0): ModulationRoute 
         amount: clampModulationRouteAmount(targetKind, numericAmount),
         reducer: nextValue.reducer === "mean" ? "mean" : "max",
     };
+}
+
+export function normalizeRoute(value: unknown, routeIndex = 0): ModulationRoute {
+    const isObject = value !== null && typeof value === "object";
+    // SAFETY: The object check establishes safe property access; every field is
+    // normalized while constructing the returned domain route.
+    const nextValue = isObject ? value as Record<string, unknown> : {};
+    const sourceKind = normalizeSourceKind(nextValue.sourceKind);
+    const targetKind = normalizeTargetKind(nextValue.targetKind);
+    return normalizeRouteRecord(nextValue, routeIndex, sourceKind, targetKind);
+}
+
+/** Stable product identity for the one legal mapping between a source and target. */
+export function modulationRoutePairKey(
+    route: Pick<ModulationRoute, "sourceKind" | "sourceSlot" | "targetKind">,
+): string {
+    return `${route.sourceKind}:${route.sourceSlot ?? 0}->${route.targetKind}`;
+}
+
+function normalizeRoutes(value: unknown): ModulationRoute[] {
+    const inputRoutes = Array.isArray(value) ? value : [];
+    return inputRoutes.map((route, routeIndex) => normalizeRoute(route, routeIndex));
+}
+
+function routesHaveUniqueIdentity(routes: ReadonlyArray<ModulationRoute>) {
+    const routeIds = new Set<string>();
+    const routePairs = new Set<string>();
+
+    for (const route of routes) {
+        const pairKey = modulationRoutePairKey(route);
+        if (routeIds.has(route.id) || routePairs.has(pairKey)) {
+            return false;
+        }
+        routeIds.add(route.id);
+        routePairs.add(pairKey);
+    }
+
+    return true;
+}
+
+function canonicalJsonValuesEqual(left: unknown, right: unknown): boolean {
+    if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
+        return Object.is(left, right);
+    }
+
+    if (Array.isArray(left) || Array.isArray(right)) {
+        if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+            return false;
+        }
+        return left.every((value, index) => canonicalJsonValuesEqual(value, right[index]));
+    }
+
+    // SAFETY: Both values are non-null, non-array objects. Their keys and each
+    // recursively parsed JSON value are compared before accepting the boundary.
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const leftKeys = Object.keys(leftRecord);
+    const rightKeys = Object.keys(rightRecord);
+    return leftKeys.length === rightKeys.length && leftKeys.every((key) => (
+        hasOwnValue(rightRecord, key)
+        && canonicalJsonValuesEqual(leftRecord[key], rightRecord[key])
+    ));
+}
+
+/** Pick the first unused cell in the closed 624-pair domain for generic Add. */
+export function createFirstAvailableModulationRoute(
+    routes: ReadonlyArray<ModulationRoute>,
+): ModulationRoute | null {
+    const usedPairs = new Set(routes.map(modulationRoutePairKey));
+    const usedIds = new Set(routes.map((route) => route.id));
+
+    for (const source of MODULATION_SOURCE_OPTIONS) {
+        for (const target of MODULATION_TARGET_OPTIONS) {
+            const candidateShape = {
+                sourceKind: source.sourceKind,
+                sourceSlot: source.sourceSlot,
+                targetKind: target.value,
+            };
+            if (usedPairs.has(modulationRoutePairKey(candidateShape))) continue;
+
+            let route = createDefaultRoute(candidateShape);
+            while (usedIds.has(route.id)) route = createDefaultRoute(candidateShape);
+            return route;
+        }
+    }
+
+    return null;
 }
 
 function normalizeMsegSlot(value: unknown, slotIndex: number): ModulationMsegSlot {
@@ -823,35 +862,10 @@ export function createDefaultModulationState(): ModulationState {
     };
 }
 
-function routePairKey(route: Pick<ModulationRoute, "sourceKind" | "sourceSlot" | "targetKind">) {
-    return `${route.sourceKind}:${route.sourceSlot ?? 0}:${route.targetKind}`;
-}
-
-function normalizeUniqueRoutes(inputRoutes: ReadonlyArray<unknown>) {
-    const seenPairs = new Set<string>();
-    const routes: ModulationRoute[] = [];
-
-    for (const inputRoute of inputRoutes) {
-        const normalizedRoute = normalizeRoute(inputRoute, routes.length);
-        const pairKey = routePairKey(normalizedRoute);
-        if (seenPairs.has(pairKey)) {
-            continue;
-        }
-        seenPairs.add(pairKey);
-        routes.push(normalizedRoute);
-        if (routes.length >= MODULATION_MAX_ROUTES) {
-            break;
-        }
-    }
-
-    return routes;
-}
-
 export function normalizeModulationState(value: unknown = createDefaultModulationState()): ModulationState {
     const nextValue = value && typeof value === "object" ? value as Partial<ModulationState> : {};
     const inputMsegSlots = Array.isArray(nextValue.msegSlots) ? nextValue.msegSlots : [];
     const inputEnvelopeSlots = Array.isArray(nextValue.envelopeSlots) ? nextValue.envelopeSlots : [];
-    const inputRoutes = Array.isArray(nextValue.routes) ? nextValue.routes : [];
     const inputMacroNames = Array.isArray(nextValue.macroNames) ? nextValue.macroNames : [];
 
     return {
@@ -859,7 +873,7 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
         version: 2,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
-        routes: normalizeUniqueRoutes(inputRoutes),
+        routes: normalizeRoutes(nextValue.routes),
         macroNames: Array.from(
             { length: MODULATION_MACRO_SLOT_COUNT },
             (_, slotIndex) => normalizeMacroName(inputMacroNames[slotIndex], slotIndex),
@@ -867,20 +881,45 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
     };
 }
 
-export function serializeModulationState(state: unknown) {
-    return JSON.stringify(normalizeModulationState(state));
+export function serializeModulationState(state: ModulationState) {
+    const parsedState = parseModulationState(state);
+    if (parsedState._tag === "err") {
+        throw parsedState.error;
+    }
+    return JSON.stringify(parsedState.value);
+}
+
+/** Parse exactly the current persisted modulation schema without repair or migration. */
+export function parseModulationState(value: unknown): Result<ModulationState, ModulationStateParseError> {
+    let parsedValue = value;
+    if (typeof value === "string") {
+        if (value.trim() === "") {
+            return err(new ModulationStateParseError("Expected a modulation document"));
+        }
+        try {
+            parsedValue = JSON.parse(value);
+        } catch {
+            return err(new ModulationStateParseError("Expected valid modulation JSON"));
+        }
+    }
+
+    const normalizedState = normalizeModulationState(parsedValue);
+    if (
+        !canonicalJsonValuesEqual(parsedValue, normalizedState)
+        || !routesHaveUniqueIdentity(normalizedState.routes)
+    ) {
+        return err(new ModulationStateParseError("Expected the current modulation schema"));
+    }
+
+    return ok(normalizedState);
 }
 
 export function deserializeModulationState(value: unknown): ModulationState {
-    if (typeof value !== "string" || value.trim() === "") {
-        return createDefaultModulationState();
+    const parsedState = parseModulationState(value);
+    if (parsedState._tag === "err") {
+        throw parsedState.error;
     }
-
-    try {
-        return normalizeModulationState(JSON.parse(value));
-    } catch {
-        return createDefaultModulationState();
-    }
+    return parsedState.value;
 }
 
 function modulationStatesEqual(left: ModulationState, right: ModulationState) {
@@ -888,39 +927,14 @@ function modulationStatesEqual(left: ModulationState, right: ModulationState) {
 }
 
 function toStoredStateEchoToken(value: unknown) {
+    if (typeof value === "string") {
+        return value;
+    }
     try {
         return `${typeof value}:${JSON.stringify(value)}`;
     } catch {
         return `${typeof value}:${String(value)}`;
     }
-}
-
-function sourceKindToCode(sourceKind: ModulationSourceKind) {
-    if (sourceKind === "mseg") return MOD_SOURCE_MSEG;
-    if (sourceKind === "env") return MOD_SOURCE_ENV;
-    if (sourceKind === "velocity") return MOD_SOURCE_VELOCITY;
-    if (sourceKind === "pressure") return MOD_SOURCE_PRESSURE;
-    if (sourceKind === "slide") return MOD_SOURCE_SLIDE;
-    return MOD_SOURCE_MACRO;
-}
-
-function targetKindToCode(targetKind: ModulationTargetKind) {
-    const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
-    if (rackParameter?.modulationTargetIndex !== null && rackParameter?.modulationTargetIndex !== undefined) {
-        return MOD_TARGET_RACK_BASE + rackParameter.modulationTargetIndex;
-    }
-    if (targetKind === "wavetablePosition") return MOD_TARGET_WAVETABLE_POSITION;
-    if (targetKind === "warpAmount") return MOD_TARGET_WARP_AMOUNT;
-    if (targetKind === "filterCutoffOctaves") return MOD_TARGET_FILTER_CUTOFF_OCTAVES;
-    if (targetKind === "filterQ") return MOD_TARGET_FILTER_Q;
-    if (targetKind === "pitchSemitones") return MOD_TARGET_PITCH_SEMITONES;
-    if (targetKind === "ampGainDb") return MOD_TARGET_AMP_GAIN_DB;
-    if (targetKind === "unisonDetune") return MOD_TARGET_UNISON_DETUNE;
-    if (targetKind === "unisonBlend") return MOD_TARGET_UNISON_BLEND;
-    if (targetKind === "unisonWidth") return MOD_TARGET_UNISON_WIDTH;
-    if (targetKind === "unisonWavetablePositionSpread") return MOD_TARGET_UNISON_WT_POSITION_SPREAD;
-    if (targetKind === "unisonWarpSpread") return MOD_TARGET_UNISON_WARP_SPREAD;
-    return MOD_TARGET_PAN;
 }
 
 function toMsegPlaybackUpload(slotIndex: number, playback: MsegPlayback): ModulationMsegPlaybackUpload {
@@ -960,74 +974,47 @@ function toEnvelopeUpload(slotIndex: number, envelope: ModulationEnvelope): Modu
     };
 }
 
-function toRouteUpload(routeIndex: number, route: ModulationRoute | null): ModulationRouteUpload {
-    const normalizedRoute = route ? normalizeRoute(route) : null;
-    const isEnabled = normalizedRoute?.enabled ?? false;
-
-    return {
-        routeIndex,
-        enabled: isEnabled,
-        sourceKind: sourceKindToCode(normalizedRoute?.sourceKind ?? "mseg"),
-        sourceSlot: isEnabled ? (normalizedRoute?.sourceSlot ?? 0) : 0,
-        polarityKind: polarityToCode(normalizedRoute?.polarity ?? "unipolar"),
-        targetKind: targetKindToCode(normalizedRoute?.targetKind ?? "wavetablePosition"),
-        amount: isEnabled ? (normalizedRoute?.amount ?? 0.0) : 0.0,
-    };
-}
-
-function toRackRouteUpload(routeIndex: number, route: ModulationRoute): RackModulationRouteUpload {
-    const normalizedRoute = normalizeRoute(route);
-    return {
-        ...toRouteUpload(routeIndex, normalizedRoute),
-        reducerKind: isVoiceModulationSource(normalizedRoute.sourceKind)
-            ? normalizedRoute.reducer === "mean" ? MOD_REDUCER_MEAN : MOD_REDUCER_MAX
-            : MOD_REDUCER_UNSET,
-    };
-}
-
-export function buildModulationRuntimeEvents(stateValue: unknown): ModulationRuntimeEvent[] {
-    const state = normalizeModulationState(stateValue);
-    const events: ModulationRuntimeEvent[] = [
-        { endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 0 },
-        { endpointID: MODULATION_CLEAR_ENDPOINT_ID, value: 1 },
-    ];
+export function buildModulationRuntimeEvents(
+    state: ModulationState,
+    previousState: ModulationState | null = null,
+): ModulationRuntimeEvent[] {
+    const events: ModulationRuntimeEvent[] = [];
 
     for (let slotIndex = 0; slotIndex < MODULATION_MSEG_SLOT_COUNT; slotIndex += 1) {
         const slot = state.msegSlots[slotIndex];
-        events.push({
-            endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
-            value: toMsegBufferUpload(slotIndex, 0, slot.shapeA),
-        });
-        events.push({
-            endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
-            value: toMsegBufferUpload(slotIndex, 1, slot.shapeB),
-        });
-        events.push({
-            endpointID: MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
-            value: toMsegPlaybackUpload(slotIndex, slot.playback),
-        });
+        const previousSlot = previousState?.msegSlots[slotIndex];
+        if (previousSlot === undefined || !msegShapesEqual(previousSlot.shapeA, slot.shapeA)) {
+            events.push({
+                endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
+                value: toMsegBufferUpload(slotIndex, 0, slot.shapeA),
+            });
+        }
+        if (previousSlot === undefined || !msegShapesEqual(previousSlot.shapeB, slot.shapeB)) {
+            events.push({
+                endpointID: MODULATION_MSEG_BUFFER_ENDPOINT_ID,
+                value: toMsegBufferUpload(slotIndex, 1, slot.shapeB),
+            });
+        }
+        if (previousSlot === undefined || !msegPlaybacksEqual(previousSlot.playback, slot.playback)) {
+            events.push({
+                endpointID: MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
+                value: toMsegPlaybackUpload(slotIndex, slot.playback),
+            });
+        }
     }
 
     for (let slotIndex = 0; slotIndex < MODULATION_ENV_SLOT_COUNT; slotIndex += 1) {
-        events.push({
-            endpointID: MODULATION_ENV_ENDPOINT_ID,
-            value: toEnvelopeUpload(slotIndex, state.envelopeSlots[slotIndex]),
-        });
+        const envelope = state.envelopeSlots[slotIndex];
+        const previousEnvelope = previousState?.envelopeSlots[slotIndex];
+        if (previousEnvelope === undefined || JSON.stringify(previousEnvelope) !== JSON.stringify(envelope)) {
+            events.push({
+                endpointID: MODULATION_ENV_ENDPOINT_ID,
+                value: toEnvelopeUpload(slotIndex, envelope),
+            });
+        }
     }
 
-    for (let routeIndex = 0; routeIndex < MODULATION_MAX_ROUTES; routeIndex += 1) {
-        const route = state.routes[routeIndex] ?? null;
-        events.push({
-            endpointID: route !== null && isRackModulationTarget(route.targetKind)
-                ? RACK_MODULATION_ROUTE_ENDPOINT_ID
-                : MODULATION_ROUTE_ENDPOINT_ID,
-            value: route !== null && isRackModulationTarget(route.targetKind)
-                ? toRackRouteUpload(routeIndex, route)
-                : toRouteUpload(routeIndex, route),
-        });
-    }
-
-    events.push({ endpointID: MODULATION_ENABLE_ENDPOINT_ID, value: 1 });
+    events.push(...buildModulationRuntimeProgramEvents(previousState?.routes ?? null, state.routes));
     return events;
 }
 
@@ -1113,9 +1100,11 @@ class ModulationMsegSlotController implements MsegEditorControllerLike {
 export class ModulationRuntimeBridge {
     private readonly patchConnection: PatchConnectionLike;
     private state = createDefaultModulationState();
-    private suppressStoredStateEvents = 0;
     private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
-    private readonly stateListeners = new Set<(state: ModulationState) => void>();
+    private readonly stateListeners = new Set<(
+        state: ModulationState,
+        changeKind: ModulationStateChangeKind,
+    ) => void>();
     private readonly msegSlotEditShapeIndexes = Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0 as 0 | 1);
     private readonly slotControllers = Array.from(
         { length: MODULATION_MSEG_SLOT_COUNT },
@@ -1155,11 +1144,11 @@ export class ModulationRuntimeBridge {
         return this.state;
     }
 
-    subscribe(listener: (state: ModulationState) => void) {
+    subscribe(listener: (state: ModulationState, changeKind: ModulationStateChangeKind) => void) {
         this.stateListeners.add(listener);
     }
 
-    unsubscribe(listener: (state: ModulationState) => void) {
+    unsubscribe(listener: (state: ModulationState, changeKind: ModulationStateChangeKind) => void) {
         this.stateListeners.delete(listener);
     }
 
@@ -1183,16 +1172,21 @@ export class ModulationRuntimeBridge {
         this.emitStateChange();
     }
 
-    setState(nextState: unknown) {
-        const normalizedState = normalizeModulationState(nextState);
+    setState(nextState: unknown): boolean {
+        const parsedState = parseModulationState(nextState);
+        if (parsedState._tag === "err") {
+            return false;
+        }
+        const normalizedState = parsedState.value;
 
         if (modulationStatesEqual(this.state, normalizedState)) {
-            return;
+            return true;
         }
 
         this.state = normalizedState;
         this.persistState();
         this.emitStateChange();
+        return true;
     }
 
     setMsegSlotShape(slotIndex: number, shapeIndex: number, nextShape: unknown) {
@@ -1275,9 +1269,7 @@ export class ModulationRuntimeBridge {
     }
 
     replaceRoutes(nextRoutes: unknown) {
-        const normalizedRoutes = Array.isArray(nextRoutes)
-            ? normalizeUniqueRoutes(nextRoutes)
-            : [];
+        const normalizedRoutes = normalizeRoutes(nextRoutes);
 
         if (JSON.stringify(this.state.routes) === JSON.stringify(normalizedRoutes)) {
             return;
@@ -1289,36 +1281,56 @@ export class ModulationRuntimeBridge {
         }));
     }
 
-    setRoute(routeIndex: number, nextRoute: unknown) {
-        const normalizedRoute = normalizeRoute(nextRoute, routeIndex);
-        const currentRoutes = [...this.state.routes];
-
-        while (currentRoutes.length <= routeIndex) {
-            currentRoutes.push(createDefaultRoute());
+    setRoute(routeIndex: number, nextRoute: unknown): boolean {
+        if (routeIndex < 0 || routeIndex >= this.state.routes.length) {
+            return false;
         }
 
+        const normalizedRoute = normalizeRoute(nextRoute, routeIndex);
+        const currentRoutes = [...this.state.routes];
+        const conflicts = currentRoutes.some((route, index) => index !== routeIndex && (
+            route.id === normalizedRoute.id
+            || modulationRoutePairKey(route) === modulationRoutePairKey(normalizedRoute)
+        ));
+        if (conflicts) return false;
+
         if (JSON.stringify(currentRoutes[routeIndex]) === JSON.stringify(normalizedRoute)) {
-            return;
+            return true;
         }
 
         currentRoutes[routeIndex] = normalizedRoute;
         this.replaceRoutes(currentRoutes);
+        return true;
     }
 
-    addRoute(nextRoute?: unknown) {
-        if (this.state.routes.length >= MODULATION_MAX_ROUTES) {
-            return;
+    /** Hot-path amount edit: the route is already normalized, so avoid rebuilding every mapping. */
+    setRouteAmount(routeIndex: number, nextAmount: number): boolean {
+        const currentRoute = this.state.routes[routeIndex];
+        if (currentRoute === undefined) {
+            return false;
+        }
+        const amount = clampModulationRouteAmount(currentRoute.targetKind, nextAmount);
+        if (currentRoute.amount === amount) {
+            return true;
         }
 
-        const normalizedRoute = nextRoute === undefined
-            ? createAvailableDefaultRoute(this.state.routes)
-            : normalizeRoute(nextRoute, this.state.routes.length);
+        const routes = [...this.state.routes];
+        routes[routeIndex] = { ...currentRoute, amount };
+        this.state = { ...this.state, routes };
+        this.persistState();
+        this.emitStateChange("routeAmount");
+        return true;
+    }
 
-        if (!normalizedRoute) {
-            return;
-        }
+    addRoute(nextRoute: unknown = createDefaultRoute()): ModulationRoute | null {
+        const normalizedRoute = normalizeRoute(nextRoute, this.state.routes.length);
+        const pairKey = modulationRoutePairKey(normalizedRoute);
+        if (this.state.routes.some((route) => (
+            route.id === normalizedRoute.id || modulationRoutePairKey(route) === pairKey
+        ))) return null;
 
         this.replaceRoutes([...this.state.routes, normalizedRoute]);
+        return normalizedRoute;
     }
 
     removeRoute(routeIndex: number) {
@@ -1343,8 +1355,17 @@ export class ModulationRuntimeBridge {
     }
 
     private applyStoredState(rawValue: unknown) {
-        const nextState = deserializeModulationState(rawValue);
-        this.state = nextState;
+        if (rawValue === undefined) {
+            this.emitStateChange();
+            return;
+        }
+
+        const parsedState = parseModulationState(rawValue);
+        if (parsedState._tag === "err") {
+            return;
+        }
+
+        this.state = parsedState.value;
 
         this.emitStateChange();
     }
@@ -1355,10 +1376,6 @@ export class ModulationRuntimeBridge {
         }
 
         const nextMessage = message as StoredStateMessage;
-        if (this.suppressStoredStateEvents > 0) {
-            return;
-        }
-
         if (typeof nextMessage.key === "string" && this.consumePendingStoredStateEcho(nextMessage.key, nextMessage.value)) {
             return;
         }
@@ -1373,24 +1390,27 @@ export class ModulationRuntimeBridge {
             return;
         }
 
-        const persistedModulationState = serializeModulationState(this.state);
-        this.suppressStoredStateEvents += 1;
+        // Every state entry point normalizes before assignment. Persist the
+        // trusted state directly so live amount edits perform one stringify,
+        // not another full-domain normalize plus stringify.
+        const persistedModulationState = JSON.stringify(this.state);
+        this.rememberPendingStoredStateEcho(MODULATION_STATE_KEY, persistedModulationState);
         try {
-            this.rememberPendingStoredStateEcho(MODULATION_STATE_KEY, persistedModulationState);
             this.patchConnection.sendStoredStateValue(MODULATION_STATE_KEY, persistedModulationState);
-        } finally {
-            this.suppressStoredStateEvents -= 1;
+        } catch (error) {
+            this.consumePendingStoredStateEcho(MODULATION_STATE_KEY, persistedModulationState);
+            throw error;
         }
     }
 
-    private emitStateChange() {
+    private emitStateChange(changeKind: ModulationStateChangeKind = "general") {
         const stateSnapshot = {
             ...this.state,
             msegSlots: [...this.state.msegSlots],
             envelopeSlots: [...this.state.envelopeSlots],
             routes: [...this.state.routes],
         };
-        this.stateListeners.forEach((listener) => listener(stateSnapshot));
+        this.stateListeners.forEach((listener) => listener(stateSnapshot, changeKind));
     }
 
     private rememberPendingStoredStateEcho(key: string, value: unknown) {

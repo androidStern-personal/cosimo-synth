@@ -1,0 +1,13 @@
+processor WorkerErrorSignal [[ main ]]
+{
+    output stream float32 out [[ name: "Output" ]];
+
+    void main()
+    {
+        loop
+        {
+            out <- 0.25f;
+            advance();
+        }
+    }
+}

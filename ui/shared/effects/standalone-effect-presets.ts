@@ -789,7 +789,19 @@ export class StandaloneEffectPresetController {
         }
 
         const activePresetPayload = this.findPresetByID(activePreset.presetID);
-        const currentStoredState = adapter.serializeForPreset(adapter.normalizeForPreset(adapter.capture()));
+        const capturedStoredState: Record<string, unknown> = {};
+
+        for (const currentAdapter of this.storedStateAdapters) {
+            if (typeof currentAdapter.capture === "function") {
+                capturedStoredState[currentAdapter.key] = currentAdapter.capture();
+            }
+        }
+
+        const context = { storedState: capturedStoredState };
+        const currentStoredState = adapter.serializeForPreset(
+            adapter.normalizeForPreset(capturedStoredState[adapter.key], context),
+            context,
+        );
 
         if (activePresetPayload && storedStateValuesEqual(activePresetPayload.storedState[adapter.key], currentStoredState)) {
             return;

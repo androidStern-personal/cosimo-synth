@@ -4,6 +4,7 @@
 
 static NSString * const CosimoSmokeStateName = @"host-smoke-state";
 static const float CosimoSmokeTableSelectValue = 5.0f;
+static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
 
 @interface CosimoHostViewController ()
 
@@ -21,6 +22,16 @@ static const float CosimoSmokeTableSelectValue = 5.0f;
 - (void)captureEditorStateUntilRuntimeShowsTableIndex:(NSInteger)expectedIndex
                                     remainingAttempts:(NSInteger)remainingAttempts
                                            completion:(CosimoHostResultBlock)completion;
+- (void)runModulationBenchmarkWithOutputName:(NSString *)outputName;
+- (void)runModulationBenchmarkProfiles:(NSArray<NSDictionary<NSString *, id> *> *)profiles
+                                  index:(NSUInteger)index
+                          durationScale:(double)durationScale
+                                payload:(NSMutableDictionary<NSString *, id> *)payload
+                             outputName:(NSString *)outputName;
+- (void)installAndMeasureModulationProfileAtIndex:(NSUInteger)profileIndex
+                                        phaseName:(NSString *)phaseName
+                                  durationSeconds:(NSTimeInterval)durationSeconds
+                                       completion:(CosimoHostResultBlock)completion;
 
 @end
 
@@ -389,8 +400,246 @@ static const float CosimoSmokeTableSelectValue = 5.0f;
         return;
     }
 
+    if ([mode isEqualToString:@"modulation-benchmark"])
+    {
+        [self runModulationBenchmarkWithOutputName:outputName];
+        return;
+    }
+
     [self completeAutomationWithPayload:@{ @"error": [NSString stringWithFormat:@"Unknown automation mode: %@", mode] }
                               outputName:outputName];
+}
+
+- (void)runModulationBenchmarkWithOutputName:(NSString *)outputName
+{
+    NSDictionary<NSString *, NSString *> *environment = NSProcessInfo.processInfo.environment;
+    NSString *profileFileName = environment[@"COSIMO_MODULATION_BENCHMARK_PROFILE_FILE"]
+        ?: @"modulation-benchmark-profiles.json";
+    NSURL *documentsDirectory = [[[NSFileManager defaultManager] URLsForDirectory:NSDocumentDirectory
+                                                                         inDomains:NSUserDomainMask] firstObject];
+    NSURL *profileURL = [documentsDirectory URLByAppendingPathComponent:profileFileName];
+    NSError *readError = nil;
+    NSData *profileData = [NSData dataWithContentsOfURL:profileURL options:0 error:&readError];
+    if (profileData == nil)
+    {
+        [self completeAutomationWithPayload:@{ @"error": readError.localizedDescription ?: @"Could not read modulation benchmark profiles." }
+                                  outputName:outputName];
+        return;
+    }
+
+    NSError *jsonError = nil;
+    NSDictionary<NSString *, id> *profileDocument = [NSJSONSerialization JSONObjectWithData:profileData
+                                                                                     options:0
+                                                                                       error:&jsonError];
+    NSArray<NSDictionary<NSString *, id> *> *profiles = [profileDocument[@"profiles"] isKindOfClass:[NSArray class]]
+        ? profileDocument[@"profiles"]
+        : nil;
+    if (![profileDocument[@"format"] isEqual:@"cosimo.modulation-benchmark-profiles"]
+        || ![profileDocument[@"version"] isEqual:@1]
+        || profiles.count == 0)
+    {
+        [self completeAutomationWithPayload:@{ @"error": jsonError.localizedDescription ?: @"Invalid modulation benchmark profile document." }
+                                  outputName:outputName];
+        return;
+    }
+
+    double durationScale = [environment[@"COSIMO_MODULATION_BENCHMARK_DURATION_SCALE"] doubleValue];
+    if (!(durationScale > 0.0))
+        durationScale = 1.0;
+
+    NSMutableDictionary<NSString *, id> *payload = [@{
+        @"format": @"cosimo.ios-modulation-benchmark",
+        @"version": @1,
+        @"status": @"running",
+        @"durationScale": @(durationScale),
+        @"operatingSystem": NSProcessInfo.processInfo.operatingSystemVersionString ?: @"",
+        @"processorCount": @(NSProcessInfo.processInfo.processorCount),
+        @"physicalMemoryBytes": @(NSProcessInfo.processInfo.physicalMemory),
+        @"phases": [[NSMutableArray alloc] init],
+    } mutableCopy];
+    [self completeAutomationWithPayload:payload outputName:outputName];
+
+    [self.harness instantiateExtensionWithCompletion:^(NSDictionary<NSString *,id> * _Nullable instantiateResult, NSError * _Nullable instantiateError)
+    {
+        if ([self handleAutomationError:instantiateError outputName:outputName])
+            return;
+        payload[@"instantiate"] = instantiateResult;
+
+        [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
+        {
+            if ([self handleAutomationError:editorError outputName:outputName])
+                return;
+            payload[@"editor"] = editorResult;
+            [self presentEditorOverlay:YES];
+            [self.harness installModulationProfileIndex:0 completion:^(NSDictionary<NSString *,id> * _Nullable warmupAck,
+                                                                       NSError * _Nullable warmupInstallError)
+            {
+                if ([self handleAutomationError:warmupInstallError outputName:outputName])
+                    return;
+                [self.harness measureModulationPhaseNamed:@"warmup"
+                                          durationSeconds:2.0
+                                               completion:^(NSDictionary<NSString *,id> * _Nullable warmupMetrics,
+                                                            NSError * _Nullable warmupError)
+                {
+                    if ([self handleAutomationError:warmupError outputName:outputName])
+                        return;
+                    if ([warmupMetrics[@"rms"] doubleValue] <= 1.0e-5)
+                    {
+                        [self completeAutomationWithPayload:@{ @"error": @"The physical AUv3 emitted silence during benchmark warmup." }
+                                                  outputName:outputName];
+                        return;
+                    }
+                    payload[@"warmup"] = @{
+                        @"installAck": warmupAck ?: @{},
+                        @"metrics": warmupMetrics ?: @{},
+                    };
+                    [self runModulationBenchmarkProfiles:profiles
+                                                    index:0
+                                            durationScale:durationScale
+                                                  payload:payload
+                                               outputName:outputName];
+                }];
+            }];
+        }];
+    }];
+}
+
+- (void)installAndMeasureModulationProfileAtIndex:(NSUInteger)profileIndex
+                                        phaseName:(NSString *)phaseName
+                                  durationSeconds:(NSTimeInterval)durationSeconds
+                                       completion:(CosimoHostResultBlock)completion
+{
+    [self setStatus:[NSString stringWithFormat:@"Installing modulation benchmark phase %@…", phaseName]];
+    [self.harness installModulationProfileIndex:profileIndex completion:^(NSDictionary<NSString *,id> * _Nullable ack,
+                                                                         NSError * _Nullable installError)
+    {
+        if (installError != nil)
+        {
+            completion (nil, installError);
+            return;
+        }
+
+        dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.5 * NSEC_PER_SEC)),
+                        dispatch_get_main_queue(), ^
+        {
+            [self setStatus:[NSString stringWithFormat:@"Measuring %@ for %.1f seconds…", phaseName, durationSeconds]];
+            [self.harness measureModulationPhaseNamed:phaseName
+                                      durationSeconds:durationSeconds
+                                           completion:^(NSDictionary<NSString *,id> * _Nullable metrics,
+                                                        NSError * _Nullable measureError)
+            {
+                if (measureError != nil)
+                {
+                    completion (nil, measureError);
+                    return;
+                }
+                completion (@{
+                    @"installAck": ack ?: @{},
+                    @"metrics": metrics ?: @{},
+                }, nil);
+            }];
+        });
+    }];
+}
+
+- (void)runModulationBenchmarkProfiles:(NSArray<NSDictionary<NSString *, id> *> *)profiles
+                                  index:(NSUInteger)index
+                          durationScale:(double)durationScale
+                                payload:(NSMutableDictionary<NSString *, id> *)payload
+                             outputName:(NSString *)outputName
+{
+    if (index >= profiles.count)
+    {
+        payload[@"status"] = @"complete";
+        payload[@"completedAt"] = @([[NSDate date] timeIntervalSince1970]);
+        [self completeAutomationWithPayload:payload outputName:outputName];
+        return;
+    }
+
+    NSDictionary<NSString *, id> *profile = profiles[index];
+    NSString *profileName = [profile[@"name"] isKindOfClass:[NSString class]] ? profile[@"name"] : @"";
+    NSString *stateJSON = [profile[@"stateJSON"] isKindOfClass:[NSString class]] ? profile[@"stateJSON"] : @"";
+    NSNumber *profileIndex = [profile[@"profileIndex"] isKindOfClass:[NSNumber class]] ? profile[@"profileIndex"] : nil;
+    NSDictionary<NSString *, NSNumber *> *baseDurations = @{
+        @"empty": @20.0,
+        @"voice-100": @45.0,
+        @"voice-rack-100": @45.0,
+        @"mixed-100": @45.0,
+        @"combined-200": @45.0,
+        @"stored-624-active-100": @45.0,
+        @"active-624": @20.0,
+    };
+    NSNumber *baseDuration = baseDurations[profileName];
+    if (profileName.length == 0 || stateJSON.length == 0 || profileIndex == nil || baseDuration == nil)
+    {
+        [self completeAutomationWithPayload:@{ @"error": @"Benchmark profile is missing a supported name or strict state JSON." }
+                                  outputName:outputName];
+        return;
+    }
+
+    const NSTimeInterval durationSeconds = baseDuration.doubleValue * durationScale;
+    const NSTimeInterval pairedEmptyDuration = CosimoPairedEmptyDurationSeconds * durationScale;
+    void (^finishPhase)(NSDictionary<NSString *, id> *,
+                        NSDictionary<NSString *, id> * _Nullable,
+                        NSDictionary<NSString *, id> * _Nullable) = ^(
+        NSDictionary<NSString *, id> *measurement,
+        NSDictionary<NSString *, id> * _Nullable emptyBefore,
+        NSDictionary<NSString *, id> * _Nullable emptyAfter)
+    {
+        NSMutableDictionary<NSString *, id> *phase = [profile mutableCopy];
+        [phase removeObjectForKey:@"stateJSON"];
+        phase[@"installAck"] = measurement[@"installAck"] ?: @{};
+        phase[@"metrics"] = measurement[@"metrics"] ?: @{};
+        if (emptyBefore != nil) phase[@"pairedEmptyBefore"] = emptyBefore;
+        if (emptyAfter != nil) phase[@"pairedEmptyAfter"] = emptyAfter;
+        [(NSMutableArray<NSDictionary<NSString *, id> *> *) payload[@"phases"] addObject:phase];
+        [self completeAutomationWithPayload:payload outputName:outputName];
+        [self runModulationBenchmarkProfiles:profiles
+                                        index:index + 1
+                                durationScale:durationScale
+                                      payload:payload
+                                   outputName:outputName];
+    };
+
+    if ([profileName isEqual:@"empty"])
+    {
+        [self installAndMeasureModulationProfileAtIndex:profileIndex.unsignedIntegerValue
+                                             phaseName:profileName
+                                       durationSeconds:durationSeconds
+                                            completion:^(NSDictionary<NSString *,id> * _Nullable measurement,
+                                                         NSError * _Nullable error)
+        {
+            if ([self handleAutomationError:error outputName:outputName]) return;
+            finishPhase (measurement ?: @{}, nil, nil);
+        }];
+        return;
+    }
+
+    [self installAndMeasureModulationProfileAtIndex:0
+                                         phaseName:[profileName stringByAppendingString:@"-empty-before"]
+                                   durationSeconds:pairedEmptyDuration
+                                        completion:^(NSDictionary<NSString *,id> * _Nullable emptyBefore,
+                                                     NSError * _Nullable beforeError)
+    {
+        if ([self handleAutomationError:beforeError outputName:outputName]) return;
+        [self installAndMeasureModulationProfileAtIndex:profileIndex.unsignedIntegerValue
+                                             phaseName:profileName
+                                       durationSeconds:durationSeconds
+                                            completion:^(NSDictionary<NSString *,id> * _Nullable measurement,
+                                                         NSError * _Nullable measureError)
+        {
+            if ([self handleAutomationError:measureError outputName:outputName]) return;
+            [self installAndMeasureModulationProfileAtIndex:0
+                                                 phaseName:[profileName stringByAppendingString:@"-empty-after"]
+                                           durationSeconds:pairedEmptyDuration
+                                                completion:^(NSDictionary<NSString *,id> * _Nullable emptyAfter,
+                                                             NSError * _Nullable afterError)
+            {
+                if ([self handleAutomationError:afterError outputName:outputName]) return;
+                finishPhase (measurement ?: @{}, emptyBefore ?: @{}, emptyAfter ?: @{});
+            }];
+        }];
+    }];
 }
 
 - (void)runSaveSmokeWithOutputName:(NSString * _Nullable)outputName

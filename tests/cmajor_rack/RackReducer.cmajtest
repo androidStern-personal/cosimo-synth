@@ -1,549 +1,295 @@
-// Behavioural contract for wt::VoiceReducer - the voice-to-global modulation reducer
-// that lets a per-voice modulation source drive a global rack parameter (ADR-002).
-//
-// Everything here is pure maths on free functions and a fixed-size struct, so it is
-// asserted as pure maths in a `## testFunction()` section rather than inferred from
-// audio. The reducer runs inside wt::SharedVoiceEngine's EXISTING per-voice route loop
-// (FixedFrameOscillator.cmajor:3533-3600); this file owns the algorithm, the engine
-// owns the loop that calls it.
-//
-// The four things that are easy to get wrong, and are therefore pinned hardest:
-//
-//   1. THE SENTINEL IS NON-ZERO. Cmajor structs have no field defaults, so a zero
-//      reducerKind is indistinguishable from an omitted one. If 0 meant "maximum" the
-//      fail-fast rejection ADR-002 requires could never fire - every malformed upload
-//      would be bit-identical to a valid one. 0 is therefore "unset" and is rejected.
-//
-//   2. BIPOLAR `maximum` REDUCES BY MAGNITUDE OF THE POLARISED VALUE, KEEPING SIGN.
-//      A bipolar source of 0.0 polarises to -1.0, so a raw max() over the [0,1] source
-//      picks the most POSITIVE deflection and discards the strongest one. Two voices at
-//      source 0.0 and 0.6 with amount 0.8 must give -0.8, not +0.16.
-//
-//   3. THE GATE DOES NOT STEP. Velocity is never 0, Slide sits wherever it was left,
-//      and a bipolar source at rest is at FULL NEGATIVE - so "the offset is 0 when no
-//      voice participates" is a cliff, not a continuity, and it lands exactly when the
-//      rack's own delay and reverb tails are still sounding. The gate is held and
-//      ramped to zero instead, and it is tested with Velocity 0.9 and with an
-//      off-centre Slide, never with a source that happens to be 0.
-//
-//   4. WITH NOTHING PLAYING THE DESTINATION SITS AT EXACTLY ITS BASE VALUE (ADR-004).
-//      Not "close to" - exactly. The naive path parks a silent synth at full negative
-//      modulation, and that is asserted here as the trap it is.
-//
-// ROUTE BUDGET (stated, not assumed): the whole modulation system has TWELVE route
-// slots - `let modulationRouteCount = 12;` at FixedFrameOscillator.cmajor:31 - shared
-// with the twelve existing voice targets. A user who maps four rack parameters has
-// spent a third of the synth's entire modulation capacity. Raising that number means
-// re-measuring the per-voice per-route loop, currently 16 voices x 12 routes per frame.
+// Wire-contract and pure-math tests for production rack modulation. Stateful
+// Mean/Max reduction is tested through SharedVoiceEngine in
+// RackModulationProducer.cmajtest; this file deliberately contains no shadow
+// reducer implementation.
 
 ## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
 
 ## testFunction()
 
-//==============================================================================
-// The wire format.
-
-bool testReducerSentinelIsNonZero()
+bool testReducerWireValuesKeepZeroInvalid()
 {
-    // If unset were 0 the rejection below could never fire.
-    return wt::modulationReducerUnset == 0
-        && wt::modulationReducerMaximum == 1
+    return wt::modulationReducerMaximum == 1
         && wt::modulationReducerMean == 2;
 }
 
-bool testRouteBudgetIsTwelve()
+bool testCompleteMappingDomainHasSixHundredTwentyFourCells()
 {
-    // Pinned so that raising it is a deliberate, visible act with a test to update.
-    return wt::modulationRouteCount == 12;
+    return wt::modulationVoiceRouteCellCount
+            + wt::modulationMacroVoiceRouteCellCount
+            + wt::modulationVoiceRackRouteCellCount
+            + wt::modulationMacroRackRouteCellCount
+        == 624;
 }
 
-bool testRackDestinationCountIsThirtySix()
+bool testRackDestinationVocabularyIsCompleteAndContiguous()
 {
-    // ADR-012 grants eligibility to EVERY continuous rack parameter including Mix/Wet.
-    // Three global filter + five distortion + five OTT + five chorus + four flanger
-    // + six phaser + four delay + four reverb.
-    return wt::rackModTargetCount == 36;
-}
-
-bool testRackDestinationVocabularyIsContiguous()
-{
-    for (int32 index = 0; index < wt::rackModTargetCount; ++index)
-    {
-        let targetKind = wt::modulationTargetRackBase + index;
-
-        if (! wt::isRackModulationTarget (targetKind))
-            return false;
-
-        if (wt::rackModTargetIndex (targetKind) != index)
-            return false;
-    }
-
-    return ! wt::isRackModulationTarget (wt::modulationTargetRackBase - 1)
-        && ! wt::isRackModulationTarget (wt::modulationTargetRackBase + wt::rackModTargetCount)
-        && ! wt::isRackModulationTarget (wt::modulationTargetFilterCutoffOctaves);
-}
-
-bool testTheFiveDestinationsTheThirtyOneEntryTableOmitted()
-{
-    // Distortion's two band edges, the chorus ring's fine tuning, and OTT's band drive
-    // and envelope match are continuous, non-discrete rack parameters. Hiding them from
-    // the v1 UI is a UI decision; DSP eligibility is not the UI's to withhold.
-    return wt::rackModTargetDistortionWetHPOctaves >= 0
-        && wt::rackModTargetDistortionWetLPOctaves >= 0
-        && wt::rackModTargetChorusRingFineSemitones >= 0
-        && wt::rackModTargetOttBandDrive >= 0
-        && wt::rackModTargetOttEnvelopeMatch >= 0
+    return wt::rackModTargetCount == 36
+        && wt::rackModTargetGlobalFilterCutoffOctaves == 0
         && wt::rackModTargetReverbMix == wt::rackModTargetCount - 1;
 }
 
-bool testDiscreteSelectorsAreNotRoutable()
+bool testRackSmoothingAndReleaseTimingContractsArePinned()
 {
-    // Rack order, enabled state and discrete mode selectors are not routable in v1.
-    // There is simply no index for them, which is the strongest possible statement.
-    return wt::rackModTargetCount == 36;
+    return wt::rackModSmoothingMs == 5.0f
+        && wt::rackModGateReleaseMs == 180.0f;
 }
 
-//==============================================================================
-// Validation - fail fast, and make sure the failure is reachable.
-
-bool testVoiceSourceToRackTargetWithoutAPolicyIsRejected()
+wt::ModulationProgramUpload validProgramWithEveryLane()
 {
-    let reverbMix = wt::modulationTargetRackBase + wt::rackModTargetReverbMix;
+    wt::ModulationProgramUpload program;
 
-    return ! wt::isValidRackModulationRoute (wt::modulationSourceVelocity, reverbMix,
-                                             wt::modulationReducerUnset);
+    program.voiceRouteCount = 1;
+    program.voiceRouteCells[0] = 0;
+    program.voiceRouteSources[0] = 0;
+    program.voiceRouteTargets[0] = 0;
+    program.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+
+    program.macroVoiceRouteCount = 1;
+    program.macroVoiceRouteCells[0] = 0;
+    program.macroVoiceRouteSources[0] = 0;
+    program.macroVoiceRouteTargets[0] = 0;
+    program.macroVoiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+
+    program.voiceRackRouteCount = 1;
+    program.voiceRackRouteCells[0] = 0;
+    program.voiceRackRouteSources[0] = 0;
+    program.voiceRackRouteTargets[0] = 0;
+    program.voiceRackRoutePolarities[0] = wt::modulationPolarityUnipolar;
+    program.voiceRackRouteReducers[0] = wt::modulationReducerMaximum;
+
+    program.macroRackRouteCount = 1;
+    program.macroRackRouteCells[0] = 0;
+    program.macroRackRouteSources[0] = 0;
+    program.macroRackRouteTargets[0] = 0;
+    program.macroRackRoutePolarities[0] = wt::modulationPolarityUnipolar;
+
+    return program;
 }
 
-bool testVoiceSourceToRackTargetWithAPolicyIsAccepted()
+bool testVoiceProgramValidationRejectsEveryMalformedField()
 {
-    let reverbMix = wt::modulationTargetRackBase + wt::rackModTargetReverbMix;
+    wt::ModulationProgramUpload valid = validProgramWithEveryLane();
+    if (! wt::isValidModulationProgram (valid)) return false;
 
-    return wt::isValidRackModulationRoute (wt::modulationSourceVelocity, reverbMix,
-                                           wt::modulationReducerMaximum)
-        && wt::isValidRackModulationRoute (wt::modulationSourcePressure, reverbMix,
-                                           wt::modulationReducerMean)
-        && wt::isValidRackModulationRoute (wt::modulationSourceMseg, reverbMix,
-                                           wt::modulationReducerMean)
-        && wt::isValidRackModulationRoute (wt::modulationSourceEnv, reverbMix,
-                                           wt::modulationReducerMaximum)
-        && wt::isValidRackModulationRoute (wt::modulationSourceSlide, reverbMix,
-                                           wt::modulationReducerMaximum);
+    wt::ModulationProgramUpload malformed = valid;
+    malformed.voiceRouteCount = -1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRouteCount = wt::modulationVoiceRouteCellCount + 1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRouteCells[0] = -1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRouteSources[0] = wt::modulationVoiceSourceCount;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRouteTargets[0] = wt::modulationVoiceTargetCount;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRouteCells[0] = 1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRoutePolarities[0] = 2;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRouteCount = 2;
+    malformed.voiceRouteCells[1] = 0;
+    malformed.voiceRouteSources[1] = 0;
+    malformed.voiceRouteTargets[1] = 0;
+    malformed.voiceRoutePolarities[1] = wt::modulationPolarityUnipolar;
+    return ! wt::isValidModulationProgram (malformed);
 }
 
-bool testUnknownReducerPolicyIsRejected()
+bool testMacroVoiceProgramValidationRejectsEveryMalformedField()
 {
-    let reverbMix = wt::modulationTargetRackBase + wt::rackModTargetReverbMix;
-
-    return ! wt::isValidRackModulationRoute (wt::modulationSourceVelocity, reverbMix, 3)
-        && ! wt::isValidRackModulationRoute (wt::modulationSourceVelocity, reverbMix, -1);
+    wt::ModulationProgramUpload valid = validProgramWithEveryLane();
+    wt::ModulationProgramUpload malformed = valid;
+    malformed.macroVoiceRouteCount = -1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroVoiceRouteCount = wt::modulationMacroVoiceRouteCellCount + 1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroVoiceRouteCells[0] = -1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroVoiceRouteSources[0] = wt::modulationMacroSourceCount;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroVoiceRouteTargets[0] = wt::modulationVoiceTargetCount;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroVoiceRouteCells[0] = 1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroVoiceRoutePolarities[0] = 2;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroVoiceRouteCount = 2;
+    malformed.macroVoiceRouteCells[1] = 0;
+    malformed.macroVoiceRouteSources[1] = 0;
+    malformed.macroVoiceRouteTargets[1] = 0;
+    malformed.macroVoiceRoutePolarities[1] = wt::modulationPolarityUnipolar;
+    return ! wt::isValidModulationProgram (malformed);
 }
 
-bool testGlobalSourceNeedsNoReducerPolicy()
+bool testVoiceRackProgramValidationRejectsEveryMalformedField()
 {
-    // A macro is already global-domain: reducing it would be meaningless, and gating it
-    // on voice participation would silence a Macro -> Reverb Mix mapping whenever no
-    // notes were held. ADR-002 exempts it.
-    let reverbMix = wt::modulationTargetRackBase + wt::rackModTargetReverbMix;
-
-    return wt::isValidRackModulationRoute (wt::modulationSourceMacro, reverbMix,
-                                           wt::modulationReducerUnset)
-        && ! wt::isVoiceModulationSource (wt::modulationSourceMacro)
-        && wt::isVoiceModulationSource (wt::modulationSourceVelocity)
-        && wt::isVoiceModulationSource (wt::modulationSourceMseg)
-        && wt::isVoiceModulationSource (wt::modulationSourceEnv)
-        && wt::isVoiceModulationSource (wt::modulationSourcePressure)
-        && wt::isVoiceModulationSource (wt::modulationSourceSlide);
+    wt::ModulationProgramUpload valid = validProgramWithEveryLane();
+    wt::ModulationProgramUpload malformed = valid;
+    malformed.voiceRackRouteCount = -1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRackRouteCount = wt::modulationVoiceRackRouteCellCount + 1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRackRouteCells[0] = -1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRackRouteSources[0] = wt::modulationVoiceSourceCount;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRackRouteTargets[0] = wt::rackModTargetCount;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRackRouteCells[0] = 1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRackRoutePolarities[0] = 2;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRackRouteReducers[0] = 0;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.voiceRackRouteCount = 2;
+    malformed.voiceRackRouteCells[1] = 0;
+    malformed.voiceRackRouteSources[1] = 0;
+    malformed.voiceRackRouteTargets[1] = 0;
+    malformed.voiceRackRoutePolarities[1] = wt::modulationPolarityUnipolar;
+    malformed.voiceRackRouteReducers[1] = wt::modulationReducerMean;
+    return ! wt::isValidModulationProgram (malformed);
 }
 
-bool testVoiceTargetsAreUnaffectedByTheReducerRule()
+bool testMacroRackProgramValidationRejectsEveryMalformedField()
 {
-    // The existing twelve voice targets keep their per-voice accumulation untouched.
-    return wt::isValidRackModulationRoute (wt::modulationSourceVelocity,
-                                           wt::modulationTargetFilterCutoffOctaves,
-                                           wt::modulationReducerUnset);
+    wt::ModulationProgramUpload valid = validProgramWithEveryLane();
+    wt::ModulationProgramUpload malformed = valid;
+    malformed.macroRackRouteCount = -1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroRackRouteCount = wt::modulationMacroRackRouteCellCount + 1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroRackRouteCells[0] = -1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroRackRouteSources[0] = wt::modulationMacroSourceCount;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroRackRouteTargets[0] = wt::rackModTargetCount;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroRackRouteCells[0] = 1;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroRackRoutePolarities[0] = 2;
+    if (wt::isValidModulationProgram (malformed)) return false;
+    malformed = valid;
+    malformed.macroRackRouteCount = 2;
+    malformed.macroRackRouteCells[1] = 0;
+    malformed.macroRackRouteSources[1] = 0;
+    malformed.macroRackRouteTargets[1] = 0;
+    malformed.macroRackRoutePolarities[1] = wt::modulationPolarityUnipolar;
+    return ! wt::isValidModulationProgram (malformed);
 }
 
-bool testOutOfRangeRackTargetIsRejected()
+bool testPolaritySemanticsAreSharedByEveryPath()
 {
-    return ! wt::isValidRackModulationRoute (wt::modulationSourceVelocity,
-                                             wt::modulationTargetRackBase + wt::rackModTargetCount,
-                                             wt::modulationReducerMaximum);
+    return wt::applyModulationPolarity (0.25f, wt::modulationPolarityUnipolar) == 0.25f
+        && wt::applyModulationPolarity (0.25f, wt::modulationPolarityBipolar) == -0.5f
+        && wt::applyModulationPolarity (0.75f, wt::modulationPolarityBipolar) == 0.5f;
 }
 
-//==============================================================================
-// Reduction: unipolar.
-
-bool testUnipolarMaximumPicksTheStrongestVoice()
+bool testGateReleaseStepReachesExactZeroInTheDeclaredTime()
 {
-    wt::RackRouteReducer reducer;
+    let sampleRate = 48000.0f;
+    let step = wt::rackModGateReleaseStep (sampleRate);
+    let frameCount = int32 (wt::rackModGateReleaseMs * 0.001f * sampleRate);
+    float32 gate = 1.0f;
 
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (0.2f, wt::modulationPolarityUnipolar);
-    reducer.accumulateRackRouteVoice (0.9f, wt::modulationPolarityUnipolar);
-    reducer.accumulateRackRouteVoice (0.4f, wt::modulationPolarityUnipolar);
+    for (int32 frame = 0; frame < frameCount + 2; ++frame)
+        gate = std::intrinsics::max (0.0f, gate - step);
 
-    return reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, 0.001f) == 0.9f;
+    return wt::rackModGateReleaseMs >= 50.0f
+        && wt::rackModGateReleaseMs <= 1000.0f
+        && gate == 0.0f;
 }
 
-bool testUnipolarMeanAveragesTheParticipants()
+bool testGateReleaseRetainsItsLinearRampShape()
 {
-    wt::RackRouteReducer reducer;
+    let sampleRate = 48000.0f;
+    let step = wt::rackModGateReleaseStep (sampleRate);
+    let frameCount = int32 (wt::rackModGateReleaseMs * 0.001f * sampleRate);
+    float32 gate = 1.0f;
+    float32 quarter;
+    float32 halfway;
+    float32 threeQuarters;
+    bool monotonic = true;
 
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (0.2f, wt::modulationPolarityUnipolar);
-    reducer.accumulateRackRouteVoice (0.9f, wt::modulationPolarityUnipolar);
-    reducer.accumulateRackRouteVoice (0.4f, wt::modulationPolarityUnipolar);
-
-    return std::intrinsics::abs (reducer.resolveRackRouteOffset (wt::modulationReducerMean, 1.0f, 0.001f)
-                                  - 0.5f) < 0.000001f;
-}
-
-bool testASingleVoiceMakesTheTwoPoliciesAgree()
-{
-    wt::RackRouteReducer maximumReducer;
-    wt::RackRouteReducer meanReducer;
-
-    maximumReducer.beginRackRouteFrame();
-    maximumReducer.accumulateRackRouteVoice (0.63f, wt::modulationPolarityUnipolar);
-    meanReducer.beginRackRouteFrame();
-    meanReducer.accumulateRackRouteVoice (0.63f, wt::modulationPolarityUnipolar);
-
-    return maximumReducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, 0.001f)
-        == meanReducer.resolveRackRouteOffset (wt::modulationReducerMean, 0.8f, 0.001f);
-}
-
-bool testANonParticipatingVoiceIsInvisible()
-{
-    // A released voice's stale source value never reaches either reducer, because the
-    // engine only accumulates voices that pass its own liveness predicate. Modelled
-    // here by simply not accumulating it - the reducer has no other way to see it.
-    wt::RackRouteReducer withStaleVoice;
-    wt::RackRouteReducer withoutStaleVoice;
-
-    withStaleVoice.beginRackRouteFrame();
-    withStaleVoice.accumulateRackRouteVoice (0.3f, wt::modulationPolarityUnipolar);
-
-    withoutStaleVoice.beginRackRouteFrame();
-    withoutStaleVoice.accumulateRackRouteVoice (0.3f, wt::modulationPolarityUnipolar);
-
-    return withStaleVoice.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, 0.001f)
-        == withoutStaleVoice.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, 0.001f);
-}
-
-//==============================================================================
-// Reduction: bipolar. This is where the naive rule is wrong by 0.96 and in the wrong
-// direction.
-
-bool testBipolarMaximumUsesPolarisedMagnitudeAndKeepsItsSign()
-{
-    wt::RackRouteReducer reducer;
-
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (0.0f, wt::modulationPolarityBipolar);   // -> -1.0
-    reducer.accumulateRackRouteVoice (0.6f, wt::modulationPolarityBipolar);   // -> +0.2
-
-    let offset = reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, 0.001f);
-
-    return std::intrinsics::abs (offset + 0.8f) < 0.000001f;
-}
-
-bool testBipolarMaximumDisagreesWithRawSourceMaximum()
-{
-    // The rule this replaces would return +0.16 for the case above: 60% of the full
-    // range away, and in the opposite direction.
-    wt::RackRouteReducer reducer;
-
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (0.0f, wt::modulationPolarityBipolar);
-    reducer.accumulateRackRouteVoice (0.6f, wt::modulationPolarityBipolar);
-
-    let offset = reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, 0.001f);
-    let naive = wt::applyModulationPolarity (0.6f, wt::modulationPolarityBipolar) * 0.8f;
-
-    return std::intrinsics::abs (offset - naive) > 0.9f;
-}
-
-bool testBipolarMaximumStillPicksAPositivePeakWhenItIsTheStrongest()
-{
-    wt::RackRouteReducer reducer;
-
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (0.55f, wt::modulationPolarityBipolar);  // -> +0.10
-    reducer.accumulateRackRouteVoice (1.0f, wt::modulationPolarityBipolar);   // -> +1.00
-    reducer.accumulateRackRouteVoice (0.45f, wt::modulationPolarityBipolar);  // -> -0.10
-
-    return std::intrinsics::abs (reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, 0.001f)
-                                  - 0.8f) < 0.000001f;
-}
-
-bool testBipolarMeanAveragesThePolarisedValues()
-{
-    wt::RackRouteReducer reducer;
-
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (0.0f, wt::modulationPolarityBipolar);   // -> -1.0
-    reducer.accumulateRackRouteVoice (0.6f, wt::modulationPolarityBipolar);   // -> +0.2
-
-    return std::intrinsics::abs (reducer.resolveRackRouteOffset (wt::modulationReducerMean, 0.8f, 0.001f)
-                                  + 0.32f) < 0.000001f;
-}
-
-bool testSourceValuesAreClampedBeforePolarisation()
-{
-    wt::RackRouteReducer high;
-    wt::RackRouteReducer low;
-
-    high.beginRackRouteFrame();
-    high.accumulateRackRouteVoice (4.0f, wt::modulationPolarityBipolar);
-
-    low.beginRackRouteFrame();
-    low.accumulateRackRouteVoice (-4.0f, wt::modulationPolarityBipolar);
-
-    return high.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, 0.001f) == 1.0f
-        && low.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, 0.001f) == -1.0f;
-}
-
-//==============================================================================
-// THE TRAP: with nothing playing, the destination sits at EXACTLY its base value.
-
-bool testSilentSynthIsNotParkedAtFullNegative()
-{
-    // The naive path - reduce in the source domain, then polarise - gives exactly -0.8
-    // here, which is a bipolar Pressure -> Reverb Mix at amount 0.8 permanently pulling
-    // the reverb dry with no notes held.
-    let naive = wt::applyModulationPolarity (0.0f, wt::modulationPolarityBipolar) * 0.8f;
-
-    wt::RackRouteReducer reducer;
-    reducer.beginRackRouteFrame();
-
-    return naive == -0.8f
-        && reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, 0.001f) == 0.0f
-        && reducer.resolveRackRouteOffset (wt::modulationReducerMean, 0.8f, 0.001f) == 0.0f;
-}
-
-bool testAnUnusedRouteContributesExactlyZeroForever()
-{
-    wt::RackRouteReducer reducer;
-
-    for (int32 frame = 0; frame < 4096; ++frame)
+    for (int32 frame = 1; frame <= frameCount + 2; ++frame)
     {
-        reducer.beginRackRouteFrame();
-
-        if (reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, 0.001f) != 0.0f)
-            return false;
-    }
-
-    return true;
-}
-
-//==============================================================================
-// THE GATE DOES NOT STEP. Tested with Velocity 0.9 and with an off-centre Slide.
-
-bool testVelocityGateRampsInsteadOfStepping()
-{
-    let sampleRate = 44100.0f;
-    let releaseStep = wt::rackModGateReleaseStep (sampleRate);
-    let heldOffset = 0.72f;                       // Velocity 0.9, unipolar, amount 0.8
-
-    wt::RackRouteReducer reducer;
-
-    for (int32 frame = 0; frame < 256; ++frame)
-    {
-        reducer.beginRackRouteFrame();
-        reducer.accumulateRackRouteVoice (0.9f, wt::modulationPolarityUnipolar);
-
-        if (std::intrinsics::abs (reducer.resolveRackRouteOffset (wt::modulationReducerMaximum,
-                                                                  0.8f, releaseStep) - heldOffset) > 0.000001f)
-            return false;
-    }
-
-    // The last voice retires here. Nothing is accumulated from now on.
-    var previous = heldOffset;
-    var largestStep = 0.0f;
-    var reachedZero = false;
-    var monotonic = true;
-
-    for (int32 frame = 0; frame < 32768; ++frame)
-    {
-        reducer.beginRackRouteFrame();
-        let offset = reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, releaseStep);
-
-        largestStep = std::intrinsics::max (largestStep, std::intrinsics::abs (offset - previous));
-
-        if (offset > previous || offset < 0.0f)
+        let previous = gate;
+        gate = std::intrinsics::max (0.0f, gate - step);
+        if (gate > previous)
             monotonic = false;
-
-        if (offset == 0.0f)
-            reachedZero = true;
-
-        previous = offset;
+        if (frame == frameCount / 4) quarter = gate;
+        if (frame == frameCount / 2) halfway = gate;
+        if (frame == (frameCount * 3) / 4) threeQuarters = gate;
     }
 
-    // No step, a monotone glide, and it does reach EXACTLY zero.
-    return largestStep < heldOffset * 0.01f
-        && largestStep > 0.0f
-        && monotonic
-        && reachedZero;
+    return monotonic
+        && std::intrinsics::abs (quarter - 0.75f) < 0.001f
+        && std::intrinsics::abs (halfway - 0.50f) < 0.001f
+        && std::intrinsics::abs (threeQuarters - 0.25f) < 0.001f
+        && gate == 0.0f;
 }
 
-bool testOffCentreSlideGateRampsInsteadOfStepping()
+bool testSmootherCoefficientIsStableAtFortyEightKhz()
 {
-    let sampleRate = 44100.0f;
-    let releaseStep = wt::rackModGateReleaseStep (sampleRate);
-
-    // A bipolar Slide parked at 1.0 sits at +0.8 with a voice held.
-    wt::RackRouteReducer reducer;
-
-    for (int32 frame = 0; frame < 256; ++frame)
-    {
-        reducer.beginRackRouteFrame();
-        reducer.accumulateRackRouteVoice (1.0f, wt::modulationPolarityBipolar);
-        reducer.resolveRackRouteOffset (wt::modulationReducerMean, 0.8f, releaseStep);
-    }
-
-    reducer.beginRackRouteFrame();
-    let firstFrameAfterRetirement = reducer.resolveRackRouteOffset (wt::modulationReducerMean,
-                                                                    0.8f, releaseStep);
-
-    // The frame the last voice retires is NOT a step to zero.
-    return firstFrameAfterRetirement > 0.79f && firstFrameAfterRetirement < 0.8f;
-}
-
-bool testBipolarSourceAtRestReleasesFromFullNegative()
-{
-    // A bipolar source sitting at 0.0 is at FULL NEGATIVE while a voice is held, so
-    // retirement is the largest possible discontinuity. It must glide too.
-    let sampleRate = 44100.0f;
-    let releaseStep = wt::rackModGateReleaseStep (sampleRate);
-
-    wt::RackRouteReducer reducer;
-
-    for (int32 frame = 0; frame < 256; ++frame)
-    {
-        reducer.beginRackRouteFrame();
-        reducer.accumulateRackRouteVoice (0.0f, wt::modulationPolarityBipolar);
-        reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, releaseStep);
-    }
-
-    var previous = -0.8f;
-    var largestStep = 0.0f;
-    var signPreserved = true;
-
-    for (int32 frame = 0; frame < 32768; ++frame)
-    {
-        reducer.beginRackRouteFrame();
-        let offset = reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 0.8f, releaseStep);
-
-        largestStep = std::intrinsics::max (largestStep, std::intrinsics::abs (offset - previous));
-
-        if (offset > 0.0f)
-            signPreserved = false;
-
-        previous = offset;
-    }
-
-    return largestStep < 0.008f && largestStep > 0.0f && signPreserved && previous == 0.0f;
-}
-
-bool testGateReleaseTakesTheDeclaredTime()
-{
-    let sampleRate = 44100.0f;
-    let releaseStep = wt::rackModGateReleaseStep (sampleRate);
-    let expectedFrames = int32 (wt::rackModGateReleaseMs * 0.001f * sampleRate);
-
-    wt::RackRouteReducer reducer;
-
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (1.0f, wt::modulationPolarityUnipolar);
-    reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, releaseStep);
-
-    var framesToZero = 0;
-
-    for (int32 frame = 0; frame < expectedFrames * 4; ++frame)
-    {
-        reducer.beginRackRouteFrame();
-
-        if (reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, releaseStep) > 0.0f)
-            framesToZero += 1;
-    }
-
-    // Musically scaled: tens to hundreds of milliseconds, not one sample.
-    return framesToZero > expectedFrames / 2
-        && framesToZero <= expectedFrames + 2
-        && wt::rackModGateReleaseMs >= 50.0f
-        && wt::rackModGateReleaseMs <= 1000.0f;
-}
-
-bool testGateReturnsImmediatelyWhenAVoiceParticipatesAgain()
-{
-    // Modulation onset must not be delayed by the release time: a new note's velocity
-    // has to reach the destination now, smoothed only by the ordinary one-pole.
-    let releaseStep = wt::rackModGateReleaseStep (44100.0f);
-
-    wt::RackRouteReducer reducer;
-
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (1.0f, wt::modulationPolarityUnipolar);
-    reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, releaseStep);
-
-    for (int32 frame = 0; frame < 512; ++frame)
-    {
-        reducer.beginRackRouteFrame();
-        reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, releaseStep);
-    }
-
-    reducer.beginRackRouteFrame();
-    reducer.accumulateRackRouteVoice (0.5f, wt::modulationPolarityUnipolar);
-
-    return reducer.resolveRackRouteOffset (wt::modulationReducerMaximum, 1.0f, releaseStep) == 0.5f;
-}
-
-//==============================================================================
-// The global-source carve-out and the downstream smoother.
-
-bool testMacroRouteIgnoresVoiceParticipationEntirely()
-{
-    // No reducer, no gate: a Macro -> Reverb Mix mapping keeps working with no notes
-    // held, which is the only sane behaviour.
-    return wt::resolveGlobalRackOffset (0.75f, wt::modulationPolarityUnipolar, 0.8f) == 0.6f
-        && wt::resolveGlobalRackOffset (0.0f, wt::modulationPolarityBipolar, 0.8f) == -0.8f;
-}
-
-bool testSmootherCoefficientIsSane()
-{
-    let coefficient = wt::rackModOnePoleCoefficient (wt::rackModSmoothingMs, 44100.0f);
-
+    let coefficient = wt::rackModOnePoleCoefficient (wt::rackModSmoothingMs, 48000.0f);
     return coefficient > 0.0f && coefficient < 1.0f;
 }
 
-bool testSmootherReachesItsTargetWithoutOvershoot()
+bool testSmootherRetainsItsFiveMillisecondTimeConstant()
 {
-    let coefficient = wt::rackModOnePoleCoefficient (wt::rackModSmoothingMs, 44100.0f);
+    let sampleRate = 48000.0f;
+    let coefficient = wt::rackModOnePoleCoefficient (wt::rackModSmoothingMs, sampleRate);
+    let timeConstantFrames = int32 (wt::rackModSmoothingMs * 0.001f * sampleRate);
+    float32 value = 0.0f;
 
-    var value = 0.0f;
-    var overshot = false;
+    for (int32 frame = 0; frame < timeConstantFrames; ++frame)
+        value = wt::rackModSmoothTowards (value, 1.0f, coefficient);
+
+    return timeConstantFrames == 240
+        && value > 0.60f
+        && value < 0.68f;
+}
+
+bool testSmootherConvergesWithoutOvershootAndSnapsExactly()
+{
+    let coefficient = wt::rackModOnePoleCoefficient (wt::rackModSmoothingMs, 48000.0f);
+    float32 value = 0.0f;
 
     for (int32 frame = 0; frame < 8192; ++frame)
     {
-        value = wt::rackModOnePole (value, 0.8f, coefficient);
-
+        value = wt::rackModSmoothTowards (value, 0.8f, coefficient);
         if (value > 0.8f)
-            overshot = true;
+            return false;
     }
 
-    return ! overshot && std::intrinsics::abs (value - 0.8f) < 0.0001f;
-}
-
-bool testSmootherIsSlowEnoughToBeInaudibleAndFastEnoughToTrack()
-{
-    let coefficient = wt::rackModOnePoleCoefficient (wt::rackModSmoothingMs, 44100.0f);
-    let timeConstantFrames = int32 (wt::rackModSmoothingMs * 0.001f * 44100.0f);
-
-    var value = 0.0f;
-
-    for (int32 frame = 0; frame < timeConstantFrames; ++frame)
-        value = wt::rackModOnePole (value, 1.0f, coefficient);
-
-    // One time constant is 1 - 1/e of the way there.
-    return value > 0.60f && value < 0.68f;
+    let snapped = wt::rackModSmoothTowards (0.7999995f, 0.8f, coefficient);
+    return std::intrinsics::abs (value - 0.8f) < 0.00001f
+        && snapped == 0.8f;
 }

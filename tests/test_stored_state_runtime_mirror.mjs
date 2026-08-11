@@ -104,6 +104,15 @@ class OneTimeThrowingPatchConnection extends FakePatchConnection {
     }
 }
 
+class TimeoutCapturingPatchConnection extends FakePatchConnection {
+    timeouts = [];
+
+    sendEventOrValue(endpointID, value, _rampFrames, timeoutMilliseconds) {
+        this.timeouts.push(timeoutMilliseconds);
+        super.sendEventOrValue(endpointID, value);
+    }
+}
+
 function deserializeLabel(value) {
     return typeof value === "string" && value.trim()
         ? { label: value.trim() }
@@ -127,6 +136,22 @@ function deserializeLabelWithUiFlag(value) {
     };
 }
 
+async function flushMicrotasks(turns = 8) {
+    for (let index = 0; index < turns; index += 1) {
+        await Promise.resolve();
+    }
+}
+
+function createDeferred() {
+    let resolve;
+    let reject;
+    const promise = new Promise((nextResolve, nextReject) => {
+        resolve = nextResolve;
+        reject = nextReject;
+    });
+    return { promise, resolve, reject };
+}
+
 test("stored-state runtime mirror uploads saved state without writing stored state", () => {
     const patchConnection = new FakePatchConnection({ "label.v1": "saved label" });
     const mirror = createStoredStateRuntimeMirror(patchConnection, {
@@ -144,6 +169,19 @@ test("stored-state runtime mirror uploads saved state without writing stored sta
         { endpointID: "labelLength", value: 11 },
     ]);
     assert.deepEqual(patchConnection.storedWrites, []);
+});
+
+test("stored-state runtime mirror gives native restore sends bounded FIFO backpressure", () => {
+    const patchConnection = new TimeoutCapturingPatchConnection({ "label.v1": "saved label" });
+    const mirror = createStoredStateRuntimeMirror(patchConnection, {
+        stateKey: "label.v1",
+        deserializeStoredState: deserializeLabel,
+        buildRuntimeEvents: buildLabelRuntimeEvents,
+    });
+
+    mirror.start();
+
+    assert.deepEqual(patchConnection.timeouts, [2_000, 2_000]);
 });
 
 test("stored-state runtime mirror skips state changes that build identical runtime events", () => {
@@ -218,7 +256,7 @@ test("stored-state runtime mirror can intentionally apply runtime defaults when 
 
     mirror.start();
 
-    assert.deepEqual(patchConnection.requestedStoredKeys, ["label.v1"]);
+    assert.deepEqual(patchConnection.requestedStoredKeys, []);
     assert.deepEqual(patchConnection.events, [
         { endpointID: "labelName", value: "default-label" },
         { endpointID: "labelLength", value: 13 },
@@ -236,7 +274,7 @@ test("stored-state runtime mirror stays passive when missing state is not defaul
 
     mirror.start();
 
-    assert.deepEqual(patchConnection.requestedStoredKeys, ["label.v1"]);
+    assert.deepEqual(patchConnection.requestedStoredKeys, []);
     assert.deepEqual(patchConnection.events, []);
     assert.deepEqual(patchConnection.storedWrites, []);
 });
@@ -332,6 +370,129 @@ test("stored-state runtime mirror retries the same snapshot after a runtime send
         { endpointID: "labelLength", value: 11 },
     ]);
     assert.deepEqual(patchConnection.storedWrites, []);
+});
+
+test("acknowledged runtime delivery coalesces edits and commits only accepted snapshots", async () => {
+    const patchConnection = new FakePatchConnection({ "label.v1": "first" });
+    const deliveries = [];
+    const deferreds = [];
+    const mirror = createStoredStateRuntimeMirror(patchConnection, {
+        stateKey: "label.v1",
+        deserializeStoredState: deserializeLabel,
+        buildRuntimeEvents: buildLabelRuntimeEvents,
+        sendRuntimeEvents(events) {
+            deliveries.push(events);
+            const deferred = createDeferred();
+            deferreds.push(deferred);
+            return deferred.promise;
+        },
+    });
+
+    mirror.start();
+    assert.equal(deliveries.length, 1);
+    patchConnection.emitStoredState("label.v1", "second");
+    patchConnection.emitStoredState("label.v1", "third");
+    assert.equal(deliveries.length, 1, "only one acknowledged batch may be in flight");
+
+    deferreds[0].resolve(true);
+    await flushMicrotasks();
+    assert.equal(deliveries.length, 2);
+    assert.deepEqual(deliveries[1], [
+        { endpointID: "labelName", value: "third" },
+        { endpointID: "labelLength", value: 5 },
+    ]);
+
+    deferreds[1].resolve(true);
+    await flushMicrotasks();
+    patchConnection.emitStoredState("label.v1", "third");
+    await flushMicrotasks();
+    assert.equal(deliveries.length, 2, "an accepted snapshot is not redundantly resent");
+
+    mirror.stop();
+});
+
+test("failed acknowledged delivery is not committed and the same snapshot remains retryable", async () => {
+    const patchConnection = new FakePatchConnection({ "label.v1": "saved label" });
+    const deferreds = [];
+    let failureCount = 0;
+    const mirror = createStoredStateRuntimeMirror(patchConnection, {
+        stateKey: "label.v1",
+        deserializeStoredState: deserializeLabel,
+        buildRuntimeEvents: buildLabelRuntimeEvents,
+        sendRuntimeEvents() {
+            const deferred = createDeferred();
+            deferreds.push(deferred);
+            return deferred.promise;
+        },
+        onDeliveryFailure() {
+            failureCount += 1;
+        },
+    });
+
+    mirror.start();
+    deferreds[0].resolve(false);
+    await flushMicrotasks();
+    assert.equal(failureCount, 1);
+
+    patchConnection.emitStoredState("label.v1", "saved label");
+    assert.equal(deferreds.length, 2);
+    deferreds[1].reject(new Error("unexpected transport failure"));
+    await flushMicrotasks();
+    assert.equal(failureCount, 2);
+
+    patchConnection.emitStoredState("label.v1", "saved label");
+    assert.equal(deferreds.length, 3);
+    deferreds[2].resolve(true);
+    await flushMicrotasks();
+
+    mirror.stop();
+});
+
+test("a runtime-session change during delivery schedules a complete image for the new DSP", async () => {
+    const patchConnection = new FakePatchConnection({ "label.v1": "saved label" });
+    const deliveries = [];
+    const deferreds = [];
+    const mirror = createStoredStateRuntimeMirror(patchConnection, {
+        stateKey: "label.v1",
+        runtimeEndpointDependencies: [{
+            endpointID: "runtimeState",
+            required: true,
+            mapValue: (value) => Number(value?.dspSessionId) || 0,
+        }],
+        deserializeStoredState: deserializeLabel,
+        buildRuntimeEvents: (snapshot, previousAppliedSnapshot) => [{
+            endpointID: "labelImage",
+            value: {
+                label: snapshot.state.label,
+                session: snapshot.runtimeEndpoints.runtimeState,
+                full: previousAppliedSnapshot === null,
+            },
+        }],
+        sendRuntimeEvents(events) {
+            deliveries.push(events);
+            const deferred = createDeferred();
+            deferreds.push(deferred);
+            return deferred.promise;
+        },
+    });
+
+    mirror.start();
+    patchConnection.emitEndpoint("runtimeState", { dspSessionId: 7 });
+    assert.equal(deliveries.length, 1);
+    patchConnection.emitEndpoint("runtimeState", { dspSessionId: 8 });
+    assert.equal(deliveries.length, 1);
+
+    deferreds[0].resolve(false);
+    await flushMicrotasks();
+    assert.equal(deliveries.length, 2);
+    assert.deepEqual(deliveries[1], [{
+        endpointID: "labelImage",
+        value: { label: "saved label", session: 8, full: true },
+    }]);
+
+    deferreds[1].resolve(true);
+    await flushMicrotasks();
+    mirror.stop();
 });
 
 test("stored-state runtime mirror stops listening after stop", () => {

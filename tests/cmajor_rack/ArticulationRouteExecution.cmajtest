@@ -1,0 +1,178 @@
+// Real-engine proof that a per-note articulation amount reaches the voice
+// destination. The base mapping is deliberately 0: removing the articulated
+// lookup from the hot path must make this test fail. A rejected non-finite
+// replacement also carries +20, so mutating before validation must fail it.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph ArticulationRouteExecution [[ main ]]
+{
+    output event int32 out;
+
+    node source = ArticulationRouteExecutionSource;
+    node articulatedDispatcher = DirectVoiceEventAdapter;
+    node inheritedDispatcher = DirectVoiceEventAdapter;
+    node articulated = wt::SharedVoiceEngine (1);
+    node inherited = wt::SharedVoiceEngine (1);
+    node witness = ArticulationRouteExecutionWitness;
+
+    connection
+    {
+        source.programOut -> articulated.modulationProgramIn,
+                             inherited.modulationProgramIn;
+        source.snapshotOut -> articulated.articulationSnapshotIn;
+        source.inheritSnapshotOut -> inherited.articulationSnapshotIn;
+        source.articulatedNoteOut -> articulatedDispatcher.articulatedIn;
+        source.inheritedNoteOut -> inheritedDispatcher.articulatedIn;
+        articulatedDispatcher.voiceOut -> articulated.voiceEventIn;
+        inheritedDispatcher.voiceOut -> inherited.voiceEventIn;
+        articulated.effectiveFilterStateOut -> witness.articulatedIn;
+        inherited.effectiveFilterStateOut -> witness.inheritedIn;
+        witness.out -> out;
+    }
+}
+
+processor DirectVoiceEventAdapter
+{
+    input event wt::ArticulatedNoteOn articulatedIn;
+    input event std::notes::NoteOn inheritedIn;
+    output event (std::notes::NoteOn, wt::ArticulatedNoteOn) voiceOut[1];
+
+    event articulatedIn (wt::ArticulatedNoteOn note) { voiceOut[0] <- note; }
+    event inheritedIn (std::notes::NoteOn note) { voiceOut[0] <- note; }
+}
+
+processor ArticulationRouteExecutionSource
+{
+    output event wt::ModulationProgramUpload programOut;
+    output event wt::ArticulationSnapshotUpload snapshotOut;
+    output event wt::ArticulationSnapshotUpload inheritSnapshotOut;
+    output event wt::ArticulatedNoteOn articulatedNoteOut;
+    output event wt::ArticulatedNoteOn inheritedNoteOut;
+
+    let velocitySourceIndex = 6;
+    let filterQTargetIndex = 3;
+    let routeCellIndex = velocitySourceIndex * wt::modulationVoiceTargetCount + filterQTargetIndex;
+
+    wt::ModulationProgramUpload zeroBaseProgram()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 1;
+        upload.voiceRouteCount = 1;
+        upload.voiceRouteCells.at (0) = routeCellIndex;
+        upload.voiceRouteSources.at (0) = velocitySourceIndex;
+        upload.voiceRouteTargets.at (0) = filterQTargetIndex;
+        upload.voiceRoutePolarities.at (0) = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts.at (routeCellIndex) = 0.0f;
+        return upload;
+    }
+
+    wt::ArticulationSnapshotUpload articulationSnapshot (bool overrideRoute)
+    {
+        wt::ArticulationSnapshotUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = -1;
+        upload.selectorA = 0;
+        upload.enabled = true;
+        upload.filterCutoffHz = 1000.0f;
+        upload.filterQ = 0.707107f;
+        upload.unisonVoices = 1;
+        upload.unisonBlend = 0.75f;
+
+        for (wrap<wt::modulationArticulationRouteCellCount> cellIndex)
+            upload.routeAmounts[cellIndex] = wt::modulationArticulationInheritAmount;
+
+        upload.routeAmounts.at (routeCellIndex) = overrideRoute
+            ? 10.0f
+            : wt::modulationArticulationInheritAmount;
+        return upload;
+    }
+
+    wt::ArticulatedNoteOn articulatedNote()
+    {
+        wt::ArticulatedNoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        note.hasArticulation = true;
+        note.selectorA = 0;
+        return note;
+    }
+
+    wt::ArticulationSnapshotUpload invalidReplacementSnapshot()
+    {
+        wt::ArticulationSnapshotUpload upload = articulationSnapshot (true);
+        upload.deliverySerial = -2;
+        upload.routeAmounts.at (routeCellIndex) = 20.0f;
+        upload.envelopeReleaseSeconds.at (2) = float32 (inf);
+        return upload;
+    }
+
+    wt::ArticulatedNoteOn inheritedNote()
+    {
+        wt::ArticulatedNoteOn note = articulatedNote();
+        return note;
+    }
+
+    void main()
+    {
+        programOut <- zeroBaseProgram();
+        advance();
+        snapshotOut <- articulationSnapshot (true);
+        inheritSnapshotOut <- articulationSnapshot (false);
+        advance();
+        snapshotOut <- invalidReplacementSnapshot();
+        advance();
+        articulatedNoteOut <- articulatedNote();
+        inheritedNoteOut <- inheritedNote();
+        loop advance();
+    }
+}
+
+processor ArticulationRouteExecutionWitness
+{
+    input event wt::EffectiveFilterStateMonitor articulatedIn;
+    input event wt::EffectiveFilterStateMonitor inheritedIn;
+    output event int32 out;
+
+    bool articulatedReady;
+    bool inheritedReady;
+    bool finished;
+    float32 articulatedQ;
+    float32 inheritedQ;
+
+    event articulatedIn (wt::EffectiveFilterStateMonitor monitor)
+    {
+        if (monitor.hasActive != 0)
+        {
+            articulatedQ = monitor.q;
+            articulatedReady = true;
+        }
+    }
+
+    event inheritedIn (wt::EffectiveFilterStateMonitor monitor)
+    {
+        if (monitor.hasActive != 0)
+        {
+            inheritedQ = monitor.q;
+            inheritedReady = true;
+        }
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; frame < 90; ++frame)
+            advance();
+        out <- (inheritedQ >= wt::filterQMin && inheritedQ <= wt::filterQMax) ? 1 : 0;
+        advance();
+        out <- (std::intrinsics::abs ((articulatedQ - inheritedQ) - 10.0f) < 0.001f) ? 1 : 0;
+        advance();
+        out <- (articulatedQ - inheritedQ > 9.9f) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

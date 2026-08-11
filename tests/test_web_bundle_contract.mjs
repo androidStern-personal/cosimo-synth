@@ -5,6 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+import { gzipSync } from "node:zlib";
 
 import {
     enforcePublicAssetPolicy,
@@ -16,7 +17,11 @@ import { copyWebHostAssets } from "../web/web-host-assets.mjs";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const desktopBundleBudgetBytes = 3_200_000;
-const wavetableWorkerBudgetBytes = 100_000;
+// The worker owns stored-state parsing, sparse compilation, and acknowledged
+// delivery. Keep measured raw-parse and transfer ceilings on that complete
+// production unit instead of budgeting only the old 12-slot publisher.
+const wavetableWorkerBudgetBytes = 138_000;
+const wavetableWorkerGzipBudgetBytes = 34_000;
 
 test("compiled desktop production entry stays within its browser parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");
@@ -30,12 +35,24 @@ test("compiled desktop production entry stays within its browser parse budget", 
 
 test("compiled wavetable worker stays within its startup parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "wavetable-worker.js");
-    const bundle = await fs.stat(bundlePath);
+    const [bundle, source] = await Promise.all([
+        fs.stat(bundlePath),
+        fs.readFile(bundlePath),
+    ]);
 
     assert.ok(
         bundle.size <= wavetableWorkerBudgetBytes,
         `Expected ${bundlePath} to be at most ${wavetableWorkerBudgetBytes} bytes, received ${bundle.size}.`,
     );
+    const compressedSize = gzipSync(source, { level: 9 }).byteLength;
+    assert.ok(
+        compressedSize <= wavetableWorkerGzipBudgetBytes,
+        `Expected ${bundlePath} to gzip to at most ${wavetableWorkerGzipBudgetBytes} bytes, received ${compressedSize}.`,
+    );
+});
+
+test("browser stress artifact includes its exclusive runtime-lane worker", async () => {
+    await fs.access(path.join(repoRoot, "build", "web", "patch_gui", "wavetable-test-worker.js"));
 });
 
 test("public asset policy removes build-only artifacts without touching runtime files", async (context) => {
@@ -50,6 +67,7 @@ test("public asset policy removes build-only artifacts without touching runtime 
         "assets/incoming/source.zip",
         "patch_gui/desktop/app.js",
         "patch_gui/desktop/app.js.map",
+        "patch_gui/wavetable-test-worker.js",
     ];
     await Promise.all(files.map(async (relativePath) => {
         const filePath = path.join(fixtureRoot, relativePath);
@@ -62,11 +80,16 @@ test("public asset policy removes build-only artifacts without touching runtime 
         "assets/factory-table-catalog.json",
         "assets/incoming",
         "patch_gui/desktop/app.js.map",
+        "patch_gui/wavetable-test-worker.js",
     ]);
 
     await enforcePublicAssetPolicy(fixtureRoot);
 
     assert.deepEqual(await findPublicAssetPolicyViolations(fixtureRoot), []);
+    await assert.rejects(
+        fs.access(path.join(fixtureRoot, "patch_gui", "wavetable-test-worker.js")),
+        (error) => error?.code === "ENOENT",
+    );
     await Promise.all([
         fs.access(path.join(fixtureRoot, "assets", "factory-bank-catalog.json")),
         fs.access(path.join(fixtureRoot, "assets", "factory_sources", "default.wav")),
@@ -82,6 +105,16 @@ test("audio-worklet instrumentation measures render load without allocating a bo
                     {
                         case "req_status":
                             break;
+                        case "send_value":
+                        {
+                            const endpointID = msg.id;
+                            const inputEndpoint = {};
+                            if (inputEndpoint)
+                            {
+                                inputEndpoint.update (msg.value);
+                            }
+                            break;
+                        }
                     }
                     }
 
@@ -100,6 +133,14 @@ test("audio-worklet instrumentation measures render load without allocating a bo
     const instrumented = instrumentCosimoAudioWorkletSource(source);
 
     assert.match(instrumented, /cosimo-perf-config/);
+    assert.match(instrumented, /cosimo-perf-gap-probe/);
+    assert.match(instrumented, /cosimo-perf-process-multiplier/);
+    assert.match(instrumented, /endpointID === "modulationProgram"/);
+    assert.match(instrumented, /eventAdjacentGapLoadSum/);
+    assert.match(instrumented, /frameDiscontinuityBlocks/);
+    assert.match(instrumented, /quantizedAverageLoad/);
+    assert.match(instrumented, /clockSource/);
+    assert.doesNotMatch(instrumented, /timerResolutionMilliseconds/);
     assert.match(instrumented, /if \(! this\.cosimoPerfEnabled\)/);
     assert.match(instrumented, /const startedAt = globalThis\.performance \? globalThis\.performance\.now\(\) : Date\.now\(\);/);
     assert.match(instrumented, /type: "cosimo-perf"/);

@@ -22,12 +22,15 @@ from bench import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
+VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
 WAVETABLE_SYNTH_SOURCE = REPO_ROOT / "cmajor" / "WavetableSynth.cmajor"
 SAMPLES_PER_FRAME = 2048
 OSCILLATOR_MIP_COUNT = 11
 PLAY_MODE_POLY = 0
 PLAY_MODE_MONO = 1
 PLAY_MODE_LEGATO = 2
+ARTICULATION_ROUTE_CELL_COUNT = 156
+ARTICULATION_ROUTE_AMOUNT_INHERIT = 1_000_000.0
 
 
 def _expected_mip_frame(frame: np.ndarray, mip_index: int) -> np.ndarray:
@@ -125,7 +128,9 @@ def _strip_main_annotation(source: str) -> str:
 
 
 def _extract_wavetable_synth_prelude(source: str) -> str:
-    return _strip_main_annotation(source).split("    graph Voice", maxsplit=1)[0] + "\n}\n"
+    # The probes need the note-domain structs and NoteDispatcher, not unrelated rack,
+    # tempo, and runtime coordinators that happen to precede graph Voice in this file.
+    return _strip_main_annotation(source).split("    processor DesiredTableMonitor", maxsplit=1)[0] + "\n}\n"
 
 
 def _articulated_note_on_statement(
@@ -293,6 +298,8 @@ def _build_dispatcher_probe_source(
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
+        + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
+        + "\n"
         + _extract_wavetable_synth_prelude(WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8"))
         + "\n"
         + _build_scheduler_source(scheduled_events, scheduled_note_meta_events, scheduled_articulated_note_ons)
@@ -326,6 +333,8 @@ def _build_audio_probe_source(
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
         + "\n"
+        + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
+        + "\n"
         + _extract_wavetable_synth_prelude(WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8"))
         + "\n"
         + _build_runtime_session_adapter_source()
@@ -348,7 +357,12 @@ def _build_audio_probe_source(
         + "    node downmix = StereoToMonoProbe;\n"
         + "    event wavetableLoadBegin (wt::WavetableLoadBegin load) { adapter.loadBeginIn <- load; }\n"
         + "    event wavetableMipFrame (wt::WavetableMipFrame frame) { adapter.mipFrameIn <- frame; }\n"
-        + "    event articulationSnapshot (wt::ArticulationSnapshotUpload upload) { engine.articulationSnapshotIn <- upload; }\n"
+        + "    event articulationSnapshot (wt::ArticulationSnapshotUpload upload)\n"
+        + "    {\n"
+        + "        wt::ArticulationSnapshotUpload rewritten = upload;\n"
+        + "        rewritten.dspSessionId = int32 (processor.session);\n"
+        + "        engine.articulationSnapshotIn <- rewritten;\n"
+        + "    }\n"
         + "    connection\n"
         + "    {\n"
         + "        scheduler.noteMetaOut -> dispatcher.noteMetaIn;\n"
@@ -480,17 +494,33 @@ def _build_articulation_snapshot_upload(
     filter_q: float = 0.707107,
 ) -> dict[str, object]:
     return {
+        "dspSessionId": 1,
+        "deliverySerial": -1,
         "selectorA": int(selector_a),
         "enabled": bool(enabled),
         "framePosition": float(frame_position),
         "pan": float(pan),
+        "unisonVoices": 1,
+        "unisonDetune": 0.1,
+        "unisonBlend": 0.75,
+        "unisonWidth": 1.0,
+        "unisonPhase": 0.0,
+        "unisonRandom": 0.0,
+        "unisonPhaseMode": 0,
+        "unisonDetuneMode": 0,
+        "unisonStackMode": 0,
+        "unisonWavetablePositionSpread": 0.0,
+        "unisonWarpSpread": 0.0,
         "warpMode": int(warp_mode),
         "warpAmount": float(warp_amount),
         "filterMode": int(filter_mode),
         "filterCutoffHz": float(filter_cutoff_hz),
         "filterQ": float(filter_q),
         "msegMorphs": [float(mseg1_morph), 0.0, 0.0],
-        "routeAmounts": [float(route1_amount), *([0.0] * 11)],
+        "routeAmounts": [
+            float(route1_amount),
+            *([ARTICULATION_ROUTE_AMOUNT_INHERIT] * (ARTICULATION_ROUTE_CELL_COUNT - 1)),
+        ],
         "envelopeAttackSeconds": [0.01, 0.02, 0.03],
         "envelopeDecaySeconds": [0.10, 0.20, 0.30],
         "envelopeSustain": [0.7, 0.6, 0.5],
@@ -530,9 +560,13 @@ def _collect_audio_probe_articulation_starts(
         )
 
         setup_statements = [_build_setup_js(play_mode=play_mode, include_bank=False)]
-        for snapshot in articulation_snapshots or []:
+        for snapshot_index, snapshot in enumerate(articulation_snapshots or []):
+            protocol_snapshot = {
+                **snapshot,
+                "deliverySerial": -(snapshot_index + 1),
+            }
             setup_statements.append(
-                f"patch.sendInputEvent_articulationSnapshot({json.dumps(snapshot)});"
+                f"patch.sendInputEvent_articulationSnapshot({json.dumps(protocol_snapshot)});"
             )
 
         return _collect_cmajor_output_events_via_generated_javascript(

@@ -13,7 +13,7 @@ The approved Mod Bar was embedded in the FX editor footer. That made modulation 
 - A tap expands or collapses the drawer inward. A vertical drag on the grip repositions it after a seven-pixel threshold. The final position magnetizes near top, middle, or bottom, gives an optional light haptic, persists as a normalized value, and is reprojected within safe bounds after resize, orientation, toolbar, or keyboard changes.
 - Touch ownership is explicit. The grip only moves or toggles the rail; source art only selects, deep-links, or begins route mapping; paddles only page sources. The transparent portal layer never owns ordinary page scroll.
 - Source mapping keeps pointer capture, retracts the drawer, shows a source-colored ghost, highlights valid targets, dims invalid controls, and uses controlled edge scrolling. While mapping, the entire rail becomes hit-transparent so it cannot block a target beneath its visible or invisible bounds. Ending, cancelling, losing capture, blurring, hiding the page, or unmounting clears the gesture exactly once.
-- A successful drop uses the existing canonical explicit route-creation path and leaves the dropped target selected. Invalid drops and route-cap failures create no route and retain no draft amount.
+- A successful drop uses the existing canonical explicit route-creation path and leaves the dropped target selected. Invalid drops and duplicate/domain-exhaustion failures create no route and retain no draft amount.
 - A left-edge alternative and additional grip gestures are deferred. There is no half-open rail state or nested drawer scrolling.
 
 ## Consequences
@@ -22,7 +22,7 @@ The approved Mod Bar was embedded in the FX editor footer. That made modulation 
 - Moving the rail cannot create a route, and mapping a source cannot move the rail. Even controls directly beneath the rail remain valid drop targets during mapping.
 - Position persistence survives materially different phone viewports instead of replaying a stale pixel offset.
 - The activity display stays honest but is intentionally incomplete for source families whose live value is not currently exposed by the engine.
-- ADR-018 remains authoritative for explicit mapping, route limits, source artwork, the no-LFO product model, and source/target semantics.
+- ADR-018 remains authoritative for explicit mapping, source artwork, the no-LFO product model, and source/target semantics. ADR-020 owns scalable capacity and runtime execution.
 
 ## 2026-08-08 correction: true edge tab
 

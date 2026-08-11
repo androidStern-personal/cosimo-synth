@@ -17,10 +17,21 @@ DEFAULT_SAMPLE_RATE = 44100
 
 
 def _build_runtime_state_coordinator_probe_source() -> str:
-    coordinator_source = WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8").replace(
-        "graph WavetableSynth [[ main ]]",
-        "graph WavetableSynth"
-    ).split("graph Voice")[0]
+    wavetable_synth_source = WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8")
+    runtime_state_types = wavetable_synth_source.split(
+        "    processor NoteDispatcher",
+        maxsplit=1,
+    )[0] + "\n}\n"
+    coordinator_body = wavetable_synth_source.split(
+        "    processor RuntimeStateCoordinator",
+        maxsplit=1,
+    )[1].split("    graph Voice", maxsplit=1)[0]
+    coordinator_source = (
+        runtime_state_types
+        + "\nnamespace wt\n{\n    processor RuntimeStateCoordinator"
+        + coordinator_body
+        + "}\n"
+    )
 
     return (
         MSEG_SOURCE.read_text(encoding="utf-8")
@@ -28,7 +39,6 @@ def _build_runtime_state_coordinator_probe_source() -> str:
         + FIXED_FRAME_OSCILLATOR_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + coordinator_source
-        + "\n}\n"
         + "\n"
         + "graph RuntimeStateCoordinatorProbe [[ main ]]\n"
         + "{\n"

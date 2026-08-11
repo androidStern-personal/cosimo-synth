@@ -1,7 +1,7 @@
 // Macro modulation-source plumbing tests against the production patch.
-// Both cases must be audio-identical to the identity_sine baseline:
-// sweeping macros with no routes is inert, and an enabled macro route with
-// amount 0 contributes exactly nothing (ADR-010; roadmap Phase 2).
+// Unrouted and zero-depth Macros must remain audio-identical to the identity
+// synth as well as leaving the effective-position monitor at zero (ADR-010;
+// ADR-020).
 
 const patchPath = "../../WavetableSynth.cmajorpatch";
 
@@ -31,8 +31,7 @@ function positivePatchRun(subDir, maxDiffDb)
 
 ## runScript (patchRun("fixtures/macro_neutral_route"))
 
-// POSITIVE proof: the scan_baseline position sweep, reproduced entirely by a
-// macro→wavetablePosition route (base position pinned at 0, macro1 carries the
-// ramp, amount 1.0). Same audio within tolerance = macro modulation WORKS.
+// POSITIVE proof: an accepted current-program macro→wavetablePosition route
+// moves the production patch's effective-position monitor with Macro 1.
 
 ## runScript (positivePatchRun("fixtures/macro_drives_scan", -60.0))

@@ -24,7 +24,7 @@ import {
     type SourceId,
     type TargetId,
 } from "./cosimo-ids";
-import { type ModulationEnvelope, type ModulationMsegSlot, MODULATION_MAX_ROUTES } from "./modulation";
+import { type ModulationEnvelope, type ModulationMsegSlot } from "./modulation";
 import { type MsegPlayback, type MsegShape } from "./mseg";
 import { type Result } from "./result";
 import { type EffectModuleId } from "./target-descriptor";
@@ -128,18 +128,6 @@ export type PatchSnapshot = {
     readonly audition: AuditionState;
 };
 
-/** The engine's per-patch route capacity (compile-time constant, kept at 12). */
-export const ROUTE_BUDGET = MODULATION_MAX_ROUTES;
-
-/** Adding a mapping would exceed the engine's fixed route capacity. */
-export class RouteBudgetExceeded extends Error {
-    readonly _tag = "RouteBudgetExceeded" as const;
-
-    constructor(readonly budget: number) {
-        super(`Route budget of ${budget} is full`);
-    }
-}
-
 /** The source is already mapped to that target (one mapping per pair). */
 export class MappingAlreadyExists extends Error {
     readonly _tag = "MappingAlreadyExists" as const;
@@ -205,7 +193,7 @@ export type CosimoCommands = {
         amount?: number;
         polarity?: MappingPolarity;
         reducer?: MappingReducer;
-    }): Result<MappingId, RouteBudgetExceeded | MappingAlreadyExists>;
+    }): Result<MappingId, MappingAlreadyExists>;
     removeMapping(mappingId: MappingId): void;
     setMappingAmount(mappingId: MappingId, amount: number, layer: EditLayer): void;
     setMappingEnabled(mappingId: MappingId, enabled: boolean): void;

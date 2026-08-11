@@ -6,14 +6,9 @@ import {
     renderMsegShape,
 } from "../patch_gui/mseg.js";
 import {
-    MODULATION_CLEAR_ENDPOINT_ID,
-    MODULATION_ENABLE_ENDPOINT_ID,
     MODULATION_ENV_ENDPOINT_ID,
-    MODULATION_MAX_ROUTES,
     MODULATION_MSEG_BUFFER_ENDPOINT_ID,
     MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
-    MODULATION_ROUTE_ENDPOINT_ID,
-    RACK_MODULATION_ROUTE_ENDPOINT_ID,
     MODULATION_STATE_KEY,
     ModulationRuntimeBridge,
     buildModulationRuntimeEvents,
@@ -27,6 +22,7 @@ import {
     parseModulationAmountEditingValue,
     serializeModulationState,
 } from "../patch_gui/modulation.js";
+import { MODULATION_PROGRAM_ENDPOINT_ID } from "../patch_gui/modulation-runtime-program.js";
 
 class FakePatchConnection {
     constructor(storedState = {}) {
@@ -182,37 +178,19 @@ test("modulation state keeps one deterministic route per source-target pair", ()
 test("modulation runtime event builder converts defaults into a complete Cmajor upload batch", () => {
     const events = buildModulationRuntimeEvents(createDefaultModulationState());
 
-    assert.deepEqual(
-        endpointEvents({ events }, MODULATION_ENABLE_ENDPOINT_ID).map(({ value }) => value),
-        [0, 1],
-    );
-    assert.equal(endpointEvents({ events }, MODULATION_CLEAR_ENDPOINT_ID).length, 1);
     assert.equal(endpointEvents({ events }, MODULATION_MSEG_BUFFER_ENDPOINT_ID).length, 6);
     assert.equal(endpointEvents({ events }, MODULATION_MSEG_PLAYBACK_ENDPOINT_ID).length, 3);
     assert.equal(endpointEvents({ events }, MODULATION_ENV_ENDPOINT_ID).length, 3);
-    assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID).length, MODULATION_MAX_ROUTES);
-    assert.deepEqual(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[0].value, {
-        routeIndex: 0,
-        enabled: true,
-        sourceKind: 1,
-        sourceSlot: 1,
-        polarityKind: 0,
-        targetKind: 1,
-        amount: 1,
-    });
-    assert.deepEqual(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[1].value, {
-        routeIndex: 1,
-        enabled: true,
-        sourceKind: 1,
-        sourceSlot: 1,
-        polarityKind: 0,
-        targetKind: 3,
-        amount: 4,
-    });
-    assert.equal(endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[2].value.enabled, false);
+    const program = endpointEvents({ events }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
+    assert.equal(program.voiceRouteCount, 2);
+    assert.deepEqual(program.voiceRouteCells.slice(0, 2), [0, 2]);
+    assert.deepEqual(program.voiceRouteSources.slice(0, 2), [0, 0]);
+    assert.deepEqual(program.voiceRouteTargets.slice(0, 2), [0, 2]);
+    assert.equal(program.voiceRouteAmounts[0], 1);
+    assert.equal(program.voiceRouteAmounts[2], 4);
 });
 
-test("rack modulation uploads use the rack endpoint and the requested voice reducer", () => {
+test("rack modulation compiles into the sparse voice-rack path with its reducer", () => {
     const state = createDefaultModulationState();
     state.routes = [{
         id: "rack-route",
@@ -225,19 +203,14 @@ test("rack modulation uploads use the rack endpoint and the requested voice redu
         reducer: "mean",
     }];
     const events = buildModulationRuntimeEvents(state);
-    assert.deepEqual(endpointEvents({ events }, RACK_MODULATION_ROUTE_ENDPOINT_ID), [{
-        endpointID: RACK_MODULATION_ROUTE_ENDPOINT_ID,
-        value: {
-            routeIndex: 0,
-            enabled: true,
-            sourceKind: 1,
-            sourceSlot: 1,
-            polarityKind: 1,
-            targetKind: 133,
-            amount: 0.35,
-            reducerKind: 2,
-        },
-    }]);
+    const program = endpointEvents({ events }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
+    assert.equal(program.voiceRackRouteCount, 1);
+    assert.equal(program.voiceRackRouteCells[0], 33);
+    assert.equal(program.voiceRackRouteSources[0], 0);
+    assert.equal(program.voiceRackRouteTargets[0], 33);
+    assert.equal(program.voiceRackRoutePolarities[0], 1);
+    assert.equal(program.voiceRackRouteReducers[0], 2);
+    assert.equal(program.voiceRackRouteAmounts[33], 0.35);
 });
 
 test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploading", () => {
@@ -293,6 +266,78 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
     assert.deepEqual(patchConnection.events, []);
 });
 
+test("boot rejects a duplicate mapping document as a whole", () => {
+    const invalidState = createDefaultModulationState();
+    invalidState.routes = [
+        {
+            ...invalidState.routes[0],
+            id: "first",
+            targetKind: "pan",
+            amount: -0.25,
+        },
+        {
+            ...invalidState.routes[0],
+            id: "duplicate",
+            targetKind: "pan",
+            amount: 0.75,
+        },
+    ];
+    const patchConnection = new FakePatchConnection({
+        [MODULATION_STATE_KEY]: JSON.stringify(invalidState),
+    });
+    const bridge = new ModulationRuntimeBridge(patchConnection);
+
+    bridge.attach();
+    bridge.requestBootState();
+
+    assert.deepEqual(bridge.getState(), createDefaultModulationState());
+    assert.equal(patchConnection.storedWrites.length, 0);
+});
+
+test("live writes use the boot parser and retain the last valid state after whole-document rejection", () => {
+    const validState = createDefaultModulationState();
+    validState.routes = [{
+        ...validState.routes[0],
+        id: "valid-route",
+        targetKind: "pan",
+        amount: -0.25,
+    }];
+    const patchConnection = new FakePatchConnection({
+        [MODULATION_STATE_KEY]: serializeModulationState(validState),
+    });
+    const bridge = new ModulationRuntimeBridge(patchConnection);
+    bridge.attach();
+    bridge.requestBootState();
+
+    const invalidState = {
+        ...validState,
+        routes: [
+            validState.routes[0],
+            {
+                ...validState.routes[0],
+                id: "duplicate-route",
+                amount: 0.75,
+            },
+        ],
+    };
+    patchConnection.sendStoredStateValue(MODULATION_STATE_KEY, JSON.stringify(invalidState));
+
+    assert.deepEqual(bridge.getState(), validState);
+});
+
+test("direct live state replacement rejects malformed documents without wiping or persisting", () => {
+    const patchConnection = new FakePatchConnection();
+    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const validState = createDefaultModulationState();
+
+    bridge.setState(validState);
+    const writesBeforeRejection = patchConnection.storedWrites.length;
+
+    assert.equal(bridge.setState({ format: "legacy", routes: "broken" }), false);
+    assert.deepEqual(bridge.getState(), validState);
+    assert.equal(patchConnection.storedWrites.length, writesBeforeRejection);
+});
+
 test("modulation runtime event builder converts saved state into slot_envelope_and_route_uploads", () => {
     const customState = createDefaultModulationState();
     customState.msegSlots[1].shapeA = {
@@ -336,16 +381,12 @@ test("modulation runtime event builder converts saved state into slot_envelope_a
     assert.deepEqual(secondSlotShapeAUpload.value.buffer, Array.from(renderMsegShape(customState.msegSlots[1].shapeA)));
     assert.deepEqual(secondSlotShapeBUpload.value.buffer, Array.from(renderMsegShape(customState.msegSlots[1].shapeB)));
 
-    const firstRouteUpload = endpointEvents({ events }, MODULATION_ROUTE_ENDPOINT_ID)[0];
-    assert.deepEqual(firstRouteUpload.value, {
-        routeIndex: 0,
-        enabled: true,
-        sourceKind: 2,
-        sourceSlot: 3,
-        polarityKind: 0,
-        targetKind: 3,
-        amount: 4,
-    });
+    const program = endpointEvents({ events }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
+    assert.equal(program.voiceRouteCount, 1);
+    assert.equal(program.voiceRouteCells[0], 62);
+    assert.equal(program.voiceRouteSources[0], 5);
+    assert.equal(program.voiceRouteTargets[0], 2);
+    assert.equal(program.voiceRouteAmounts[62], 4);
 });
 
 test("editing_one_mseg_slot_persists_modulation_v2_without_runtime_uploading", () => {
@@ -421,7 +462,7 @@ test("editing_morph_persists_without_uploading_mseg_buffers_or_retriggering", ()
     assert.deepEqual(patchConnection.events, []);
 });
 
-test("replacing_routes_preserves_signed_amounts_and_disables_the_unused_tail", () => {
+test("replacing routes preserves signed amounts and compiles only active mappings", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);
 
@@ -473,27 +514,12 @@ test("replacing_routes_preserves_signed_amounts_and_disables_the_unused_tail", (
         },
     ]);
 
-    const uploads = endpointEvents({ events: buildModulationRuntimeEvents(savedState) }, MODULATION_ROUTE_ENDPOINT_ID);
-    assert.equal(uploads.length, MODULATION_MAX_ROUTES);
-    assert.deepEqual(uploads[0].value, {
-        routeIndex: 0,
-        enabled: true,
-        sourceKind: 2,
-        sourceSlot: 2,
-        polarityKind: 0,
-        targetKind: 3,
-        amount: -2.5,
-    });
-    assert.deepEqual(uploads[1].value, {
-        routeIndex: 1,
-        enabled: true,
-        sourceKind: 3,
-        sourceSlot: 0,
-        polarityKind: 1,
-        targetKind: 7,
-        amount: 0.5,
-    });
-    assert.equal(uploads.at(-1).value.enabled, false);
+    const program = endpointEvents({ events: buildModulationRuntimeEvents(savedState) }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
+    assert.equal(program.voiceRouteCount, 2);
+    assert.deepEqual(program.voiceRouteCells.slice(0, 2), [50, 78]);
+    assert.deepEqual(program.voiceRoutePolarities.slice(0, 2), [0, 1]);
+    assert.equal(program.voiceRouteAmounts[50], -2.5);
+    assert.equal(program.voiceRouteAmounts[78], 0.5);
 });
 
 test("async stored-state echoes do not retrigger modulation uploads", async () => {
@@ -510,6 +536,19 @@ test("async stored-state echoes do not retrigger modulation uploads", async () =
 
     assert.equal(uploadCountAfterEchoes, uploadCountBeforeEchoes);
     assert.equal(patchConnection.events.length, uploadCountBeforeEchoes);
+});
+
+test("synchronous stored-state echoes consume their suppression tokens", () => {
+    const patchConnection = new FakePatchConnection();
+    const bridge = new ModulationRuntimeBridge(patchConnection);
+
+    bridge.attach();
+    bridge.requestBootState();
+    for (let editIndex = 0; editIndex < 120; editIndex += 1) {
+        assert.equal(bridge.setRouteAmount(0, (editIndex % 100) / 100), true);
+    }
+
+    assert.equal(bridge.pendingStoredStateEchoes.size, 0);
 });
 
 test("zero-centered route amount mapping keeps zero at the midpoint and uses side-specific depth", () => {

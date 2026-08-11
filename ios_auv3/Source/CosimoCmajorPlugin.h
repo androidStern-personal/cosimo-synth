@@ -2,20 +2,28 @@
 
 #include <JuceHeader.h>
 
+#if JUCE_IOS
+ #include <os/log.h>
+#endif
+
+#include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 #include <unordered_map>
 #include <utility>
 #include <vector>
 
-#include "../../native/ModulationRuntimeRestore.h"
 #include "../../native/ArticulationTriggerConfigState.h"
 #include "CosimoSharedWavetableLibrary.h"
 #include "cmajor/helpers/cmaj_GeneratedCppEngine.h"
@@ -26,6 +34,10 @@
 #include "choc/network/choc_MIMETypes.h"
 
 #include "../../native/CosimoCmajorMidiBridge.h"
+
+#ifndef COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+ #define COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS 0
+#endif
 
 #if CMAJ_USE_QUICKJS_WORKER
  #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
@@ -51,8 +63,12 @@ inline std::string trimString (std::string text)
 
 inline void logRuntimeIssue (std::string_view context, std::string_view detail)
 {
-    juce::Logger::writeToLog ("[Cosimo iOS] " + juce::String (context.data(), static_cast<int> (context.size()))
-                              + ": " + juce::String (detail.data(), static_cast<int> (detail.size())));
+    const auto message = "[Cosimo iOS] " + std::string (context) + ": " + std::string (detail);
+   #if JUCE_IOS
+    os_log_with_type (OS_LOG_DEFAULT, OS_LOG_TYPE_DEFAULT, "%{public}s", message.c_str());
+   #else
+    juce::Logger::writeToLog (juce::String (message));
+   #endif
 }
 
 inline std::string normaliseURL (std::string url)
@@ -635,6 +651,11 @@ public:
         };
         patch->statusChanged = [this] (const auto& status)
         {
+           #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+            if (! status.statusMessage.empty())
+                detail::logRuntimeIssue (status.messageList.hasErrors() ? "Benchmark patch error" : "Benchmark patch status",
+                                         status.statusMessage);
+           #endif
             setStatusMessage (status.statusMessage, status.messageList.hasErrors());
         };
         patch->handleOutputEvent = [this] (uint64_t frame, std::string_view endpointID, const choc::value::ValueView& value)
@@ -745,6 +766,11 @@ public:
 
         juce::ScopedNoDenormals noDenormals;
 
+       #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+        const bool captureBenchmarkBlock = beginBenchmarkRenderBlock();
+        const auto benchmarkRenderStartedAt = captureBenchmarkBlock ? juce::Time::getHighResolutionTicks() : 0;
+       #endif
+
         if (auto* playHead = getPlayHead())
             updateTimelineFromPlayhead (*playHead);
 
@@ -759,6 +785,17 @@ public:
             {
                 midi.addEvent (message.data(), static_cast<int> (message.length()), static_cast<int> (frame));
             });
+
+       #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+        if (captureBenchmarkBlock)
+        {
+            recordBenchmarkRenderBlock (benchmarkRenderStartedAt,
+                                        juce::Time::getHighResolutionTicks(),
+                                        static_cast<uint32_t> (audio.getNumSamples()),
+                                        getSampleRate());
+            benchmarkWriters.fetch_sub (1, std::memory_order_release);
+        }
+       #endif
     }
 
     void processBlock (juce::AudioBuffer<double>&, juce::MidiBuffer&) override
@@ -828,6 +865,454 @@ public:
     }
 
 private:
+   #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+    enum class BenchmarkParameterKind
+    {
+        profileSelection,
+        runtimeReady,
+        runtimeReadyRequest,
+        install,
+        installStatus,
+        installGeneration,
+        capture,
+        captureGeneration,
+        captureStopGeneration,
+        resultGeneration,
+        resultFieldRequest,
+        resultFieldResponse,
+        acceptedModulationProgramSerial,
+        installedVoiceRouteCount,
+        installedMacroVoiceRouteCount,
+        installedVoiceRackRouteCount,
+        installedMacroRackRouteCount,
+        renderBlockCount,
+        capturedRenderSampleCount,
+        dspSampleRate,
+        audioFrames,
+        minimumFrames,
+        maximumFrames,
+        renderLoadPercent,
+        p99RenderLoadPercent,
+        p999RenderLoadPercent,
+        maximumRenderLoadPercent,
+        deadlineMissCount,
+        voiceMask,
+        rackEnableMask,
+    };
+
+    struct BenchmarkParameter final : public juce::HostedAudioProcessorParameter
+    {
+        BenchmarkParameter (GeneratedPlugin& ownerToUse,
+                            BenchmarkParameterKind kindToUse,
+                            juce::String idToUse,
+                            juce::String nameToUse)
+            : juce::HostedAudioProcessorParameter (1),
+              owner (ownerToUse),
+              kind (kindToUse),
+              id (std::move (idToUse)),
+              name (std::move (nameToUse))
+        {
+        }
+
+        juce::String getParameterID() const override        { return id; }
+        juce::String getName (int maxLength) const override { return name.substring (0, maxLength); }
+        juce::String getLabel() const override              { return {}; }
+        Category getCategory() const override               { return Category::genericParameter; }
+        bool isDiscrete() const override
+        {
+            return kind == BenchmarkParameterKind::profileSelection
+                || kind == BenchmarkParameterKind::runtimeReady
+                || kind == BenchmarkParameterKind::runtimeReadyRequest
+                || kind == BenchmarkParameterKind::install
+                || kind == BenchmarkParameterKind::installStatus
+                || kind == BenchmarkParameterKind::capture
+                || kind == BenchmarkParameterKind::resultFieldRequest;
+        }
+        bool isAutomatable() const override                 { return true; }
+        bool isMetaParameter() const override               { return false; }
+        float getDefaultValue() const override              { return 0.0f; }
+        float getValue() const override                     { return owner.getBenchmarkParameterValue (kind); }
+
+        void setValue (float value) override
+        {
+            owner.setBenchmarkParameterValue (kind, value);
+        }
+
+        juce::String getText (float value, int maximumLength) const override
+        {
+            return juce::String (value, 6).substring (0, maximumLength);
+        }
+
+        float getValueForText (const juce::String& text) const override
+        {
+            return text.getFloatValue();
+        }
+
+        int getNumSteps() const override
+        {
+            if (kind == BenchmarkParameterKind::capture) return 3;
+            if (kind == BenchmarkParameterKind::resultFieldRequest) return 19;
+            if (kind == BenchmarkParameterKind::install) return 2;
+            if (kind == BenchmarkParameterKind::runtimeReady) return 2;
+            if (kind == BenchmarkParameterKind::runtimeReadyRequest) return 2;
+            if (kind == BenchmarkParameterKind::installStatus) return 4;
+            if (kind == BenchmarkParameterKind::profileSelection) return 7;
+            return AudioProcessor::getDefaultNumParameterSteps();
+        }
+
+        void publish()
+        {
+            sendValueChangedMessageToListeners (getValue());
+        }
+
+        GeneratedPlugin& owner;
+        BenchmarkParameterKind kind;
+        juce::String id;
+        juce::String name;
+    };
+
+    static constexpr size_t modulationBenchmarkMaximumRenderSamples = 65536;
+
+    bool beginBenchmarkRenderBlock()
+    {
+        if (! modulationBenchmarkCaptureActive.load (std::memory_order_acquire))
+            return false;
+
+        benchmarkWriters.fetch_add (1, std::memory_order_acq_rel);
+        if (! modulationBenchmarkCaptureActive.load (std::memory_order_acquire))
+        {
+            benchmarkWriters.fetch_sub (1, std::memory_order_release);
+            return false;
+        }
+        return true;
+    }
+
+    void recordBenchmarkRenderBlock (int64_t startedAt, int64_t finishedAt, uint32_t frameCount, double sampleRate)
+    {
+        const auto tickCount = static_cast<uint64_t> (std::max<int64_t> (0, finishedAt - startedAt));
+        const auto ticksPerSecond = static_cast<double> (juce::Time::getHighResolutionTicksPerSecond());
+        const double renderSeconds = ticksPerSecond > 0.0 ? static_cast<double> (tickCount) / ticksPerSecond : 0.0;
+        const double deadlineSeconds = sampleRate > 0.0 ? static_cast<double> (frameCount) / sampleRate : 0.0;
+        const double renderRatio = deadlineSeconds > 0.0 ? renderSeconds / deadlineSeconds : 0.0;
+        const auto sampleIndex = benchmarkRenderSampleCount.fetch_add (1, std::memory_order_relaxed);
+        if (sampleIndex < benchmarkRenderRatios.size())
+            benchmarkRenderRatios[sampleIndex] = renderRatio;
+
+        benchmarkRenderTicks.fetch_add (tickCount, std::memory_order_relaxed);
+        benchmarkAudioFrames.fetch_add (frameCount, std::memory_order_relaxed);
+        benchmarkRenderBlockCount.fetch_add (1, std::memory_order_relaxed);
+        if (renderRatio >= 1.0)
+            benchmarkDeadlineMissCount.fetch_add (1, std::memory_order_relaxed);
+
+        auto minimumFrames = benchmarkMinimumFrames.load (std::memory_order_relaxed);
+        while (frameCount < minimumFrames
+               && ! benchmarkMinimumFrames.compare_exchange_weak (minimumFrames, frameCount, std::memory_order_relaxed)) {}
+        auto maximumFrames = benchmarkMaximumFrames.load (std::memory_order_relaxed);
+        while (frameCount > maximumFrames
+               && ! benchmarkMaximumFrames.compare_exchange_weak (maximumFrames, frameCount, std::memory_order_relaxed)) {}
+    }
+
+    static float normaliseBenchmarkValue (double value, double maximum)
+    {
+        return static_cast<float> (std::clamp (value / maximum, 0.0, 1.0));
+    }
+
+    bool isBenchmarkRuntimeReady() const
+    {
+        const auto observedDspSessionId = benchmarkLastObservedDspSessionId.load();
+        const auto acceptedProgramDspSessionId = benchmarkAcceptedProgramDspSessionId.load();
+        const auto activeWavetableDspSessionId = benchmarkActiveWavetableDspSessionId.load();
+        return observedDspSessionId > 0
+            && benchmarkLastAcceptedProgramSerial.load() > 0
+            && acceptedProgramDspSessionId == observedDspSessionId
+            && activeWavetableDspSessionId == observedDspSessionId
+            && benchmarkHasObservedRackState.load();
+    }
+
+    void publishBenchmarkParameter (BenchmarkParameterKind kind)
+    {
+        for (auto* parameter : benchmarkParameters)
+            if (parameter->kind == kind)
+                parameter->publish();
+    }
+
+    void publishBenchmarkResultParameters()
+    {
+        publishBenchmarkParameter (BenchmarkParameterKind::resultGeneration);
+    }
+
+    float getBenchmarkParameterValue (BenchmarkParameterKind kind) const
+    {
+        switch (kind)
+        {
+            case BenchmarkParameterKind::profileSelection:          return normaliseBenchmarkValue (benchmarkProfileSelection.load(), 6.0);
+            case BenchmarkParameterKind::runtimeReady:              return isBenchmarkRuntimeReady() ? 1.0f : 0.0f;
+            case BenchmarkParameterKind::runtimeReadyRequest:       return 0.0f;
+            case BenchmarkParameterKind::install:                   return benchmarkInstallRequested.load() ? 1.0f : 0.0f;
+            case BenchmarkParameterKind::installStatus:             return normaliseBenchmarkValue (benchmarkInstallStatus.load(), 3.0);
+            case BenchmarkParameterKind::installGeneration:         return normaliseBenchmarkValue (benchmarkInstallGeneration.load(), 10000.0);
+            case BenchmarkParameterKind::capture:                   return 0.0f;
+            case BenchmarkParameterKind::captureGeneration:         return normaliseBenchmarkValue (benchmarkCaptureGeneration.load(), 10000.0);
+            case BenchmarkParameterKind::captureStopGeneration:     return normaliseBenchmarkValue (benchmarkCaptureStopGeneration.load(), 10000.0);
+            case BenchmarkParameterKind::resultGeneration:          return normaliseBenchmarkValue (benchmarkResultGeneration.load(), 10000.0);
+            case BenchmarkParameterKind::resultFieldRequest:        return 0.0f;
+            case BenchmarkParameterKind::resultFieldResponse:       return benchmarkResultFieldResponse.load();
+            case BenchmarkParameterKind::acceptedModulationProgramSerial: return normaliseBenchmarkValue (benchmarkInstalledProgramSerial.load(), 100000.0);
+            case BenchmarkParameterKind::installedVoiceRouteCount:       return normaliseBenchmarkValue (benchmarkInstalledVoiceRouteCount.load(), 624.0);
+            case BenchmarkParameterKind::installedMacroVoiceRouteCount:  return normaliseBenchmarkValue (benchmarkInstalledMacroVoiceRouteCount.load(), 624.0);
+            case BenchmarkParameterKind::installedVoiceRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledVoiceRackRouteCount.load(), 624.0);
+            case BenchmarkParameterKind::installedMacroRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledMacroRackRouteCount.load(), 624.0);
+            case BenchmarkParameterKind::renderBlockCount:          return normaliseBenchmarkValue (benchmarkResultRenderBlockCount.load(), 100000.0);
+            case BenchmarkParameterKind::capturedRenderSampleCount: return normaliseBenchmarkValue (benchmarkResultSampleCount.load(), 100000.0);
+            case BenchmarkParameterKind::dspSampleRate:             return normaliseBenchmarkValue (benchmarkResultDspSampleRate.load(), 192000.0);
+            case BenchmarkParameterKind::audioFrames:               return normaliseBenchmarkValue (benchmarkResultAudioFrames.load(), 10000000.0);
+            case BenchmarkParameterKind::minimumFrames:             return normaliseBenchmarkValue (benchmarkResultMinimumFrames.load(), 4096.0);
+            case BenchmarkParameterKind::maximumFrames:             return normaliseBenchmarkValue (benchmarkResultMaximumFrames.load(), 4096.0);
+            case BenchmarkParameterKind::renderLoadPercent:         return normaliseBenchmarkValue (benchmarkResultRenderLoadPercent.load(), 200.0);
+            case BenchmarkParameterKind::p99RenderLoadPercent:      return normaliseBenchmarkValue (benchmarkResultP99RenderLoadPercent.load(), 200.0);
+            case BenchmarkParameterKind::p999RenderLoadPercent:     return normaliseBenchmarkValue (benchmarkResultP999RenderLoadPercent.load(), 200.0);
+            case BenchmarkParameterKind::maximumRenderLoadPercent:  return normaliseBenchmarkValue (benchmarkResultMaximumRenderLoadPercent.load(), 1000.0);
+            case BenchmarkParameterKind::deadlineMissCount:         return normaliseBenchmarkValue (benchmarkResultDeadlineMissCount.load(), 10000.0);
+            case BenchmarkParameterKind::voiceMask:                 return normaliseBenchmarkValue (benchmarkVoiceMask.load(), 65535.0);
+            case BenchmarkParameterKind::rackEnableMask:            return normaliseBenchmarkValue (benchmarkResultRackEnableMask.load(), 255.0);
+        }
+
+        return 0.0f;
+    }
+
+    void setBenchmarkParameterValue (BenchmarkParameterKind kind, float value)
+    {
+        if (kind == BenchmarkParameterKind::runtimeReadyRequest)
+        {
+            publishBenchmarkParameter (BenchmarkParameterKind::runtimeReady);
+            return;
+        }
+
+        if (kind == BenchmarkParameterKind::resultFieldRequest)
+        {
+            static constexpr std::array resultKinds {
+                BenchmarkParameterKind::acceptedModulationProgramSerial,
+                BenchmarkParameterKind::installedVoiceRouteCount,
+                BenchmarkParameterKind::installedMacroVoiceRouteCount,
+                BenchmarkParameterKind::installedVoiceRackRouteCount,
+                BenchmarkParameterKind::installedMacroRackRouteCount,
+                BenchmarkParameterKind::renderBlockCount,
+                BenchmarkParameterKind::capturedRenderSampleCount,
+                BenchmarkParameterKind::dspSampleRate,
+                BenchmarkParameterKind::audioFrames,
+                BenchmarkParameterKind::minimumFrames,
+                BenchmarkParameterKind::maximumFrames,
+                BenchmarkParameterKind::renderLoadPercent,
+                BenchmarkParameterKind::p99RenderLoadPercent,
+                BenchmarkParameterKind::p999RenderLoadPercent,
+                BenchmarkParameterKind::maximumRenderLoadPercent,
+                BenchmarkParameterKind::deadlineMissCount,
+                BenchmarkParameterKind::voiceMask,
+                BenchmarkParameterKind::rackEnableMask,
+            };
+            const auto command = std::clamp (std::lround (value * static_cast<float> (resultKinds.size())),
+                                             0l,
+                                             static_cast<long> (resultKinds.size()));
+            if (command > 0)
+            {
+                const auto index = static_cast<size_t> (command - 1);
+                const auto resultValue = getBenchmarkParameterValue (resultKinds[index]);
+                const auto encodedResponse = (static_cast<float> (index) + 0.25f + 0.5f * resultValue)
+                                           / static_cast<float> (resultKinds.size());
+                benchmarkResultFieldResponse.store (encodedResponse);
+                publishBenchmarkParameter (BenchmarkParameterKind::resultFieldResponse);
+            }
+            return;
+        }
+
+        if (kind == BenchmarkParameterKind::profileSelection)
+        {
+            benchmarkProfileSelection.store (static_cast<uint32_t> (std::clamp (std::lround (value * 6.0f), 0l, 6l)));
+            return;
+        }
+
+        if (kind == BenchmarkParameterKind::install)
+        {
+            const bool requested = value >= 0.5f;
+            const bool wasRequested = benchmarkInstallRequested.exchange (requested);
+            if (requested && ! wasRequested)
+            {
+                const auto profileIndex = benchmarkProfileSelection.load();
+                juce::MessageManager::callAsync ([this, profileIndex] { installBenchmarkProfile (profileIndex); });
+            }
+            return;
+        }
+
+        if (kind != BenchmarkParameterKind::capture)
+            return;
+
+        const auto command = std::clamp (std::lround (value * 2.0f), 0l, 2l);
+        if (command == 1)
+            juce::MessageManager::callAsync ([this] { beginModulationBenchmarkCapture(); });
+        else if (command == 2)
+        {
+            benchmarkCaptureStopGeneration.fetch_add (1);
+            publishBenchmarkParameter (BenchmarkParameterKind::captureStopGeneration);
+            juce::MessageManager::callAsync ([this] { endModulationBenchmarkCapture(); });
+        }
+    }
+
+    void completeBenchmarkProfileInstall (int32_t acceptedProgramSerial,
+                                            int32_t installedVoice,
+                                            int32_t installedMacroVoice,
+                                            int32_t installedVoiceRack,
+                                            int32_t installedMacroRack)
+    {
+        benchmarkInstalledProgramSerial.store (acceptedProgramSerial);
+        benchmarkInstalledVoiceRouteCount.store (installedVoice);
+        benchmarkInstalledMacroVoiceRouteCount.store (installedMacroVoice);
+        benchmarkInstalledVoiceRackRouteCount.store (installedVoiceRack);
+        benchmarkInstalledMacroRackRouteCount.store (installedMacroRack);
+        const bool countsMatch = installedVoice == benchmarkExpectedVoiceRouteCount.load()
+            && installedMacroVoice == benchmarkExpectedMacroVoiceRouteCount.load()
+            && installedVoiceRack == benchmarkExpectedVoiceRackRouteCount.load()
+            && installedMacroRack == benchmarkExpectedMacroRackRouteCount.load();
+        benchmarkInstallStatus.store (countsMatch ? 2 : 3);
+        benchmarkInstallGeneration.fetch_add (1);
+        publishBenchmarkParameter (BenchmarkParameterKind::installStatus);
+        publishBenchmarkParameter (BenchmarkParameterKind::installGeneration);
+    }
+
+    void installBenchmarkProfile (uint32_t profileIndex)
+    {
+        try
+        {
+            const auto profileFile = detail::resolveBundleResourceFile ("benchmark/modulation-benchmark-profiles.json");
+            if (! profileFile.existsAsFile())
+                throw std::runtime_error ("Benchmark profile bundle is missing");
+
+            const auto document = choc::json::parse (profileFile.loadFileAsString().toStdString());
+            const auto profiles = document["profiles"];
+            if (! profiles.isArray() || profileIndex >= profiles.size())
+                throw std::runtime_error ("Benchmark profile index is invalid");
+
+            const auto stateJSON = profiles[profileIndex]["stateJSON"].getWithDefault<std::string> ({});
+            if (stateJSON.empty())
+                throw std::runtime_error ("Benchmark profile state is missing");
+
+            const auto compiledCounts = profiles[profileIndex]["compiledCounts"];
+            const auto expectedVoice = compiledCounts["voice"].getWithDefault<int32_t> (-1);
+            const auto expectedMacroVoice = compiledCounts["macroVoice"].getWithDefault<int32_t> (-1);
+            const auto expectedVoiceRack = compiledCounts["voiceRack"].getWithDefault<int32_t> (-1);
+            const auto expectedMacroRack = compiledCounts["macroRack"].getWithDefault<int32_t> (-1);
+            if (expectedVoice < 0 || expectedMacroVoice < 0 || expectedVoiceRack < 0 || expectedMacroRack < 0)
+                throw std::runtime_error ("Benchmark profile compiled route counts are missing");
+
+            benchmarkExpectedVoiceRouteCount.store (expectedVoice);
+            benchmarkExpectedMacroVoiceRouteCount.store (expectedMacroVoice);
+            benchmarkExpectedVoiceRackRouteCount.store (expectedVoiceRack);
+            benchmarkExpectedMacroRackRouteCount.store (expectedMacroRack);
+
+            benchmarkInstallBaselineSerial.store (std::max (benchmarkLastAcceptedSerial.load(),
+                                                             benchmarkLastRejectedSerial.load()));
+            benchmarkInstallBaselineProgramSerial.store (benchmarkLastAcceptedProgramSerial.load());
+            benchmarkInstallStatus.store (1);
+            publishBenchmarkParameter (BenchmarkParameterKind::installStatus);
+            detail::logRuntimeIssue ("Benchmark profile install",
+                                     "profile=" + std::to_string (profileIndex)
+                                         + ", playable=" + std::to_string (patch->isPlayable())
+                                         + ", baseline=" + std::to_string (benchmarkInstallBaselineSerial.load()));
+
+            const auto& storedStates = patch->getStoredStateValues();
+            const auto currentState = storedStates.find ("modulation.v2");
+            const bool stateAlreadyInstalled = currentState != storedStates.end()
+                && currentState->second.isString()
+                && currentState->second.getString() == stateJSON;
+            const bool acknowledgedProgramMatches = benchmarkLastAcceptedProgramSerial.load() > 0
+                && benchmarkCurrentVoiceRouteCount.load() == expectedVoice
+                && benchmarkCurrentMacroVoiceRouteCount.load() == expectedMacroVoice
+                && benchmarkCurrentVoiceRackRouteCount.load() == expectedVoiceRack
+                && benchmarkCurrentMacroRackRouteCount.load() == expectedMacroRack;
+            if (stateAlreadyInstalled && acknowledgedProgramMatches)
+            {
+                completeBenchmarkProfileInstall (benchmarkLastAcceptedProgramSerial.load(),
+                                                 expectedVoice,
+                                                 expectedMacroVoice,
+                                                 expectedVoiceRack,
+                                                 expectedMacroRack);
+                return;
+            }
+
+            patch->setStoredStateValue ("modulation.v2", choc::value::createString (stateJSON));
+        }
+        catch (...)
+        {
+            benchmarkInstallStatus.store (3);
+            benchmarkInstallGeneration.fetch_add (1);
+            publishBenchmarkParameter (BenchmarkParameterKind::installStatus);
+            publishBenchmarkParameter (BenchmarkParameterKind::installGeneration);
+        }
+    }
+
+    void beginModulationBenchmarkCapture()
+    {
+        modulationBenchmarkCaptureActive.store (false, std::memory_order_release);
+        while (benchmarkWriters.load (std::memory_order_acquire) != 0)
+            std::this_thread::yield();
+
+        benchmarkRenderTicks.store (0, std::memory_order_relaxed);
+        benchmarkAudioFrames.store (0, std::memory_order_relaxed);
+        benchmarkRenderBlockCount.store (0, std::memory_order_relaxed);
+        benchmarkDeadlineMissCount.store (0, std::memory_order_relaxed);
+        benchmarkRenderSampleCount.store (0, std::memory_order_relaxed);
+        benchmarkMinimumFrames.store (UINT32_MAX, std::memory_order_relaxed);
+        benchmarkMaximumFrames.store (0, std::memory_order_relaxed);
+        modulationBenchmarkCaptureActive.store (true, std::memory_order_release);
+        benchmarkCaptureGeneration.fetch_add (1);
+        publishBenchmarkParameter (BenchmarkParameterKind::captureGeneration);
+    }
+
+    void endModulationBenchmarkCapture()
+    {
+        modulationBenchmarkCaptureActive.store (false, std::memory_order_release);
+        if (benchmarkWriters.load (std::memory_order_acquire) != 0)
+        {
+            juce::MessageManager::callAsync ([this] { endModulationBenchmarkCapture(); });
+            return;
+        }
+
+        const auto blockCount = benchmarkRenderBlockCount.load (std::memory_order_relaxed);
+        const auto sampleCount = std::min<uint64_t> (benchmarkRenderSampleCount.load (std::memory_order_relaxed),
+                                                     benchmarkRenderRatios.size());
+        std::vector<double> sortedRatios (benchmarkRenderRatios.begin(), benchmarkRenderRatios.begin() + sampleCount);
+        std::sort (sortedRatios.begin(), sortedRatios.end());
+        const auto percentile = [&sortedRatios] (double quantile)
+        {
+            if (sortedRatios.empty())
+                return 0.0;
+            const auto index = std::min<size_t> (sortedRatios.size() - 1,
+                                                 static_cast<size_t> (std::floor (quantile * sortedRatios.size())));
+            return sortedRatios[index] * 100.0;
+        };
+        const auto renderTicks = benchmarkRenderTicks.load (std::memory_order_relaxed);
+        const auto audioFrames = benchmarkAudioFrames.load (std::memory_order_relaxed);
+        const double ticksPerSecond = static_cast<double> (juce::Time::getHighResolutionTicksPerSecond());
+        const double renderSeconds = ticksPerSecond > 0.0 ? static_cast<double> (renderTicks) / ticksPerSecond : 0.0;
+        const double audioSeconds = getSampleRate() > 0.0 ? static_cast<double> (audioFrames) / getSampleRate() : 0.0;
+        const auto minimumFrames = benchmarkMinimumFrames.load (std::memory_order_relaxed);
+
+        benchmarkResultRenderBlockCount.store (blockCount);
+        benchmarkResultSampleCount.store (sampleCount);
+        benchmarkResultAudioFrames.store (audioFrames);
+        benchmarkResultDspSampleRate.store (getSampleRate());
+        benchmarkResultMinimumFrames.store (minimumFrames == UINT32_MAX ? 0 : minimumFrames);
+        benchmarkResultMaximumFrames.store (benchmarkMaximumFrames.load (std::memory_order_relaxed));
+        benchmarkResultRenderLoadPercent.store (audioSeconds > 0.0 ? renderSeconds * 100.0 / audioSeconds : 0.0);
+        benchmarkResultP99RenderLoadPercent.store (percentile (0.99));
+        benchmarkResultP999RenderLoadPercent.store (percentile (0.999));
+        benchmarkResultMaximumRenderLoadPercent.store (sortedRatios.empty() ? 0.0 : sortedRatios.back() * 100.0);
+        benchmarkResultDeadlineMissCount.store (benchmarkDeadlineMissCount.load (std::memory_order_relaxed));
+        benchmarkResultRackEnableMask.store (benchmarkRackEnableMask.load (std::memory_order_relaxed));
+        benchmarkResultGeneration.fetch_add (1);
+        publishBenchmarkResultParameters();
+    }
+   #endif
+
     void setPendingArticulationTriggerConfig (cosimo::future_daw::ArticulationTriggerConfig config)
     {
         std::atomic_store (&pendingArticulationTriggerConfig,
@@ -1012,7 +1497,8 @@ private:
                                                                         [&ownerToUse] (std::string serializedConfig)
                                                                         {
                                                                             ownerToUse.setPendingArticulationTriggerConfigFromJSONString (std::move (serializedConfig));
-                                                                        }))
+                                                                        }
+                                                                        ))
         {
             patchWebViewHolder = choc::ui::createJUCEWebViewHolder (patchWebView->getWebView());
             patchWebViewHolder->setSize (static_cast<int> (patchWebView->width), static_cast<int> (patchWebView->height));
@@ -1526,7 +2012,6 @@ private:
             applyCurrentRateAndBlockSize();
 
         patch->loadPatch (loadParams, true);
-        cosimo::modulation::uploadStoredModulationStateToPatch (*patch);
     }
 
     void unload (const std::string& message = {}, bool isError = false)
@@ -1633,6 +2118,100 @@ private:
 
     void handleOutputEvent (uint64_t, std::string_view endpointID, const choc::value::ValueView& value)
     {
+       #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+        if (endpointID == "runtimeInstallAck")
+        {
+            const auto dspSessionId = value["dspSessionId"].getWithDefault<int32_t> (0);
+            const auto acceptedSerial = value["acceptedModulationSerial"].getWithDefault<int32_t> (0);
+            const auto acceptedProgramSerial = value["acceptedModulationProgramSerial"].getWithDefault<int32_t> (0);
+            const auto installedVoice = value["installedVoiceRouteCount"].getWithDefault<int32_t> (-1);
+            const auto installedMacroVoice = value["installedMacroVoiceRouteCount"].getWithDefault<int32_t> (-1);
+            const auto installedVoiceRack = value["installedVoiceRackRouteCount"].getWithDefault<int32_t> (-1);
+            const auto installedMacroRack = value["installedMacroRackRouteCount"].getWithDefault<int32_t> (-1);
+            const auto rejectedSerial = value["rejectedSerial"].getWithDefault<int32_t> (0);
+            benchmarkLastAcceptedSerial.store (std::max (benchmarkLastAcceptedSerial.load(), acceptedSerial));
+            if (acceptedProgramSerial > 0)
+            {
+                if (benchmarkAcceptedProgramDspSessionId.load() == dspSessionId)
+                    benchmarkLastAcceptedProgramSerial.store (std::max (benchmarkLastAcceptedProgramSerial.load(), acceptedProgramSerial));
+                else
+                    benchmarkLastAcceptedProgramSerial.store (acceptedProgramSerial);
+
+                benchmarkAcceptedProgramDspSessionId.store (dspSessionId);
+            }
+            benchmarkLastRejectedSerial.store (std::max (benchmarkLastRejectedSerial.load(), rejectedSerial));
+            if (acceptedProgramSerial > 0)
+            {
+                benchmarkCurrentVoiceRouteCount.store (installedVoice);
+                benchmarkCurrentMacroVoiceRouteCount.store (installedMacroVoice);
+                benchmarkCurrentVoiceRackRouteCount.store (installedVoiceRack);
+                benchmarkCurrentMacroRackRouteCount.store (installedMacroRack);
+            }
+            if (isBenchmarkRuntimeReady())
+                publishBenchmarkParameter (BenchmarkParameterKind::runtimeReady);
+
+            const auto baseline = benchmarkInstallBaselineSerial.load();
+            const auto programBaseline = benchmarkInstallBaselineProgramSerial.load();
+            detail::logRuntimeIssue ("Benchmark runtime install acknowledgement",
+                                     "accepted=" + std::to_string (acceptedSerial)
+                                         + ", acceptedProgram=" + std::to_string (acceptedProgramSerial)
+                                         + ", rejected=" + std::to_string (rejectedSerial)
+                                         + ", baseline=" + std::to_string (baseline)
+                                         + ", installed=" + std::to_string (installedVoice)
+                                         + "/" + std::to_string (installedMacroVoice)
+                                         + "/" + std::to_string (installedVoiceRack)
+                                         + "/" + std::to_string (installedMacroRack)
+                                         + ", expected=" + std::to_string (benchmarkExpectedVoiceRouteCount.load())
+                                         + "/" + std::to_string (benchmarkExpectedMacroVoiceRouteCount.load())
+                                         + "/" + std::to_string (benchmarkExpectedVoiceRackRouteCount.load())
+                                         + "/" + std::to_string (benchmarkExpectedMacroRackRouteCount.load()));
+            if (benchmarkInstallStatus.load() == 1 && rejectedSerial > baseline)
+            {
+                benchmarkInstallStatus.store (3);
+                benchmarkInstallGeneration.fetch_add (1);
+                publishBenchmarkParameter (BenchmarkParameterKind::installStatus);
+                publishBenchmarkParameter (BenchmarkParameterKind::installGeneration);
+            }
+            else if (benchmarkInstallStatus.load() == 1 && acceptedProgramSerial > programBaseline)
+            {
+                completeBenchmarkProfileInstall (acceptedProgramSerial,
+                                                 installedVoice,
+                                                 installedMacroVoice,
+                                                 installedVoiceRack,
+                                                 installedMacroRack);
+            }
+        }
+        else if (endpointID == "runtimeState")
+        {
+            const auto dspSessionId = value["dspSessionId"].getWithDefault<int32_t> (0);
+            const auto hasActive = value["hasActive"].getWithDefault<int32_t> (0);
+            const auto activeWavetableDspSessionId = hasActive != 0 ? dspSessionId : 0;
+            const auto previousDspSessionId = benchmarkLastObservedDspSessionId.exchange (dspSessionId);
+            const auto previousActiveDspSessionId = benchmarkActiveWavetableDspSessionId.exchange (activeWavetableDspSessionId);
+            if (dspSessionId != previousDspSessionId || activeWavetableDspSessionId != previousActiveDspSessionId)
+                detail::logRuntimeIssue ("Benchmark runtime state",
+                                         "dspSessionId=" + std::to_string (dspSessionId)
+                                             + ", wavetableActive=" + std::to_string (hasActive));
+            publishBenchmarkParameter (BenchmarkParameterKind::runtimeReady);
+        }
+        else if (endpointID == "effectiveRackState")
+        {
+            const auto rackEnableMask = value["committedEnableMask"].getWithDefault<int32_t> (-1);
+            if (rackEnableMask >= 0 && rackEnableMask <= 255)
+            {
+                benchmarkRackEnableMask.store (static_cast<uint32_t> (rackEnableMask));
+                benchmarkHasObservedRackState.store (true);
+                publishBenchmarkParameter (BenchmarkParameterKind::runtimeReady);
+            }
+        }
+        else if (endpointID == "voiceArticulationStart")
+        {
+            const auto voiceIndex = value["voiceIndex"].getWithDefault<int32_t> (-1);
+            if (voiceIndex >= 0 && voiceIndex < 16)
+                benchmarkVoiceMask.fetch_or (static_cast<uint32_t> (1u << voiceIndex));
+        }
+       #endif
+
         if (endpointID == cmaj::getConsoleEndpointID())
             std::cout << cmaj::convertConsoleMessageToString (value) << std::flush;
     }
@@ -1702,6 +2281,15 @@ private:
                 return rawParameter;
             }
 
+           #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+            BenchmarkParameter* add (std::unique_ptr<BenchmarkParameter> parameter)
+            {
+                auto* rawParameter = parameter.get();
+                tree.addChild (std::move (parameter));
+                return rawParameter;
+            }
+           #endif
+
             juce::AudioProcessorParameterGroup& getOrCreateGroup (juce::AudioProcessorParameterGroup& targetTree,
                                                                   const std::string& parentPath,
                                                                   const std::string& subPath)
@@ -1738,6 +2326,26 @@ private:
             parameters.push_back (parameter);
             parameter->setPatchParam (patchParameter);
         }
+
+       #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+        const auto addBenchmark = [&] (BenchmarkParameterKind kind, const char* id, const char* name)
+        {
+            auto parameter = std::make_unique<BenchmarkParameter> (*this, kind, id, name);
+            benchmarkParameters.push_back (builder.add (std::move (parameter)));
+        };
+        addBenchmark (BenchmarkParameterKind::profileSelection,          "cosimoBenchmarkProfile",                   "Cosimo Benchmark Profile");
+        addBenchmark (BenchmarkParameterKind::runtimeReady,                  "cosimoBenchmarkRuntimeReady",              "Cosimo Benchmark Runtime Ready");
+        addBenchmark (BenchmarkParameterKind::runtimeReadyRequest,           "cosimoBenchmarkRuntimeReadyRequest",       "Cosimo Benchmark Runtime Ready Request");
+        addBenchmark (BenchmarkParameterKind::install,                   "cosimoBenchmarkInstall",                   "Cosimo Benchmark Install");
+        addBenchmark (BenchmarkParameterKind::installStatus,             "cosimoBenchmarkInstallStatus",             "Cosimo Benchmark Install Status");
+        addBenchmark (BenchmarkParameterKind::installGeneration,         "cosimoBenchmarkInstallGeneration",         "Cosimo Benchmark Install Generation");
+        addBenchmark (BenchmarkParameterKind::capture,                   "cosimoBenchmarkCapture",                   "Cosimo Benchmark Capture");
+        addBenchmark (BenchmarkParameterKind::captureGeneration,         "cosimoBenchmarkCaptureGeneration",         "Cosimo Benchmark Capture Generation");
+        addBenchmark (BenchmarkParameterKind::captureStopGeneration,     "cosimoBenchmarkCaptureStopGeneration",     "Cosimo Benchmark Capture Stop Generation");
+        addBenchmark (BenchmarkParameterKind::resultGeneration,          "cosimoBenchmarkResultGeneration",          "Cosimo Benchmark Result Generation");
+        addBenchmark (BenchmarkParameterKind::resultFieldRequest,        "cosimoBenchmarkResultFieldRequest",        "Cosimo Benchmark Result Field Request");
+        addBenchmark (BenchmarkParameterKind::resultFieldResponse,       "cosimoBenchmarkResultFieldResponse",       "Cosimo Benchmark Result Field Response");
+       #endif
 
         for (auto* parameter : parameters)
             parameter->forceValueChanged();
@@ -1814,6 +2422,63 @@ private:
     uint64_t lastLoadedStateHash = 0;
     int lastEditorWidth = 0;
     int lastEditorHeight = 0;
+   #if COSIMO_ENABLE_MODULATION_BENCHMARK_METRICS
+    std::vector<BenchmarkParameter*> benchmarkParameters;
+    std::atomic<uint32_t> benchmarkProfileSelection { 0 };
+    std::atomic<bool> benchmarkInstallRequested { false };
+    std::atomic<int32_t> benchmarkInstallStatus { 0 };
+    std::atomic<uint32_t> benchmarkInstallGeneration { 0 };
+    std::atomic<int32_t> benchmarkLastAcceptedSerial { 0 };
+    std::atomic<int32_t> benchmarkLastAcceptedProgramSerial { 0 };
+    std::atomic<int32_t> benchmarkAcceptedProgramDspSessionId { 0 };
+    std::atomic<int32_t> benchmarkActiveWavetableDspSessionId { 0 };
+    std::atomic<int32_t> benchmarkLastRejectedSerial { 0 };
+    std::atomic<int32_t> benchmarkLastObservedDspSessionId { 0 };
+    std::atomic<int32_t> benchmarkInstallBaselineSerial { 0 };
+    std::atomic<int32_t> benchmarkInstallBaselineProgramSerial { 0 };
+    std::atomic<int32_t> benchmarkExpectedVoiceRouteCount { 0 };
+    std::atomic<int32_t> benchmarkExpectedMacroVoiceRouteCount { 0 };
+    std::atomic<int32_t> benchmarkExpectedVoiceRackRouteCount { 0 };
+    std::atomic<int32_t> benchmarkExpectedMacroRackRouteCount { 0 };
+    std::atomic<int32_t> benchmarkCurrentVoiceRouteCount { -1 };
+    std::atomic<int32_t> benchmarkCurrentMacroVoiceRouteCount { -1 };
+    std::atomic<int32_t> benchmarkCurrentVoiceRackRouteCount { -1 };
+    std::atomic<int32_t> benchmarkCurrentMacroRackRouteCount { -1 };
+    std::atomic<int32_t> benchmarkInstalledProgramSerial { 0 };
+    std::atomic<int32_t> benchmarkInstalledVoiceRouteCount { 0 };
+    std::atomic<int32_t> benchmarkInstalledMacroVoiceRouteCount { 0 };
+    std::atomic<int32_t> benchmarkInstalledVoiceRackRouteCount { 0 };
+    std::atomic<int32_t> benchmarkInstalledMacroRackRouteCount { 0 };
+    std::atomic<uint32_t> benchmarkCaptureGeneration { 0 };
+    std::atomic<uint32_t> benchmarkCaptureStopGeneration { 0 };
+    std::atomic<bool> modulationBenchmarkCaptureActive { false };
+    std::atomic<uint32_t> benchmarkWriters { 0 };
+    std::atomic<uint64_t> benchmarkRenderTicks { 0 };
+    std::atomic<uint64_t> benchmarkAudioFrames { 0 };
+    std::atomic<uint64_t> benchmarkRenderBlockCount { 0 };
+    std::atomic<uint64_t> benchmarkDeadlineMissCount { 0 };
+    std::atomic<uint64_t> benchmarkRenderSampleCount { 0 };
+    std::atomic<uint32_t> benchmarkMinimumFrames { UINT32_MAX };
+    std::atomic<uint32_t> benchmarkMaximumFrames { 0 };
+    std::atomic<uint32_t> benchmarkVoiceMask { 0 };
+    std::atomic<uint32_t> benchmarkRackEnableMask { 0 };
+    std::atomic<bool> benchmarkHasObservedRackState { false };
+    std::array<double, modulationBenchmarkMaximumRenderSamples> benchmarkRenderRatios {};
+    std::atomic<uint64_t> benchmarkResultRenderBlockCount { 0 };
+    std::atomic<uint64_t> benchmarkResultSampleCount { 0 };
+    std::atomic<uint64_t> benchmarkResultAudioFrames { 0 };
+    std::atomic<double> benchmarkResultDspSampleRate { 0.0 };
+    std::atomic<uint32_t> benchmarkResultMinimumFrames { 0 };
+    std::atomic<uint32_t> benchmarkResultMaximumFrames { 0 };
+    std::atomic<uint32_t> benchmarkResultGeneration { 0 };
+    std::atomic<float> benchmarkResultFieldResponse { 0.0f };
+    std::atomic<double> benchmarkResultRenderLoadPercent { 0.0 };
+    std::atomic<double> benchmarkResultP99RenderLoadPercent { 0.0 };
+    std::atomic<double> benchmarkResultP999RenderLoadPercent { 0.0 };
+    std::atomic<double> benchmarkResultMaximumRenderLoadPercent { 0.0 };
+    std::atomic<uint64_t> benchmarkResultDeadlineMissCount { 0 };
+    std::atomic<uint32_t> benchmarkResultRackEnableMask { 0 };
+   #endif
 };
 
 } // namespace cosimo::ios

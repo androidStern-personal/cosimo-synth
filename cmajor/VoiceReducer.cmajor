@@ -4,32 +4,17 @@ namespace wt
     // Voice-to-global modulation reduction - the piece that lets a PER-VOICE
     // modulation source drive a GLOBAL effects-rack parameter (ADR-002).
     //
-    // WHERE THIS RUNS. Inside wt::SharedVoiceEngine's existing per-voice route loop
-    // (FixedFrameOscillator.cmajor:3533-3600), not in a new aggregator processor.
-    // Cosimo is not a per-voice-graph synth: all sixteen voices live in ONE processor
-    // holding parallel arrays, so the voice-to-global fan-in problem does not exist
-    // here - the reducer is an ordinary array loop over data already in scope. This
-    // file owns the ALGORITHM as free functions and one fixed-size struct so the
-    // engine's handler and loop are three-line delegations, and so the parts that are
-    // easy to get wrong are testable without a synth attached.
+    // WHERE THIS RUNS. SharedVoiceEngine resolves each used voice source once,
+    // reduces it once across sounding voices, then fans that result out through the
+    // sparse voice-to-rack program. Cosimo is not a per-voice-graph synth: all sixteen
+    // voices live in one processor holding parallel arrays, so reduction is an
+    // ordinary source-centric array loop over data already in scope. SharedVoiceEngine
+    // owns that stateful loop; this module owns only the wire vocabulary and reusable
+    // polarity, gate, and smoothing functions.
     //
-    // THE SHAPE OF ONE FRAME, per rack-target route r:
-    //     r.beginRackRouteFrame();                                    // before the voice loop
-    //     ... for each PARTICIPATING voice v:
-    //           r.accumulateRackRouteVoice (sourceValue, route.polarityKind);
-    //     let offset = r.resolveRackRouteOffset (route.reducerKind, route.amount, releaseStep);
-    //     rackModAccumulator[targetIndex] += offset;                  // several routes may share a target
-    //     ... then once per target: rackModOut[t] <- rackModOnePole (smoothed[t], accumulated[t], c);
-    //
-    // WHY THE SENTINEL IS NON-ZERO. Cmajor structs have no field defaults, so an
-    // omitted or zero-initialised reducerKind arrives as 0. If 0 meant "maximum", a
-    // malformed upload carrying no reducer policy would be bit-identical to one that
-    // explicitly asked for maximum, and ADR-002's invariant - "A mapping from a voice
-    // source to a global target is invalid unless it contains one of these reducer
-    // policies" - could never be enforced. 0 is therefore "unset" and is REJECTED.
-    // This is not hypothetical: docs/COSIMO_ADAPTER_COMMAND_MAP.md routes
-    // setMappingReducer to metadata today, so every route currently in flight carries
-    // no reducerKind at all.
+    // WHY MAXIMUM STARTS AT ONE. Cmajor structs have no field defaults, so an omitted
+    // or zero-initialised reducerKind arrives as 0. Keeping valid reducers non-zero
+    // lets the compiled-program installer reject malformed voice-to-rack instructions.
     //
     // WHY `maximum` REDUCES ON THE POLARISED VALUE. ADR-002 says maximum is "the
     // strongest participating voice". A bipolar source of 0.0 polarises to -1.0, so a
@@ -50,27 +35,11 @@ namespace wt
     // scaled release. Linear rather than exponential because an exponential never
     // arrives, and "exactly the base value" is the requirement.
     //
-    // ROUTE BUDGET, stated rather than assumed. The whole modulation system has TWELVE
-    // route slots - `let modulationRouteCount = 12;` at FixedFrameOscillator.cmajor:31 -
-    // and they are SHARED with the twelve existing voice targets
-    // (modulationTargetWavetablePosition..modulationTargetUnisonWarpSpread). A user who
-    // maps four rack parameters has spent a third of the synth's entire modulation
-    // capacity, and the iPhone UI has to surface that exhaustion. Raising the number
-    // means re-measuring the per-voice per-route loop, currently 16 voices x 12 routes
-    // per frame; do not raise it without that measurement.
-    //
-    // ONE SHARED POLARITY FUNCTION. SharedVoiceEngine.applyRoutePolarity
-    // (FixedFrameOscillator.cmajor:2240-2247) is a private method with identical
-    // semantics. It should be changed to `return applyModulationPolarity (sourceValue,
-    // route.polarityKind);` when the reducer lands, so the voice path and the rack path
-    // cannot drift apart. That edit belongs to the engine's owner, not to this file.
+    // ONE SHARED POLARITY FUNCTION. Both the voice and rack paths call
+    // applyModulationPolarity, so their semantics cannot drift apart.
 
     //==============================================================================
-    // Reducer policies. The sentinel MUST be non-zero - see above.
-
-    let modulationReducerUnset   = 0;
-    let modulationReducerMaximum = 1;
-    let modulationReducerMean    = 2;
+    // Reducer policies. Zero is invalid - see above.
 
     //==============================================================================
     // Rack modulation destinations.
@@ -82,16 +51,12 @@ namespace wt
     // excludes them in v1. Hiding a destination from the v1 UI is a UI-surface
     // decision; this table is where DSP eligibility lives, and it withholds nothing.
     //
-    // The indices are a WIRE CONTRACT with the adapter: targetKind =
-    // modulationTargetRackBase + index. They are grouped in rack module declaration
-    // order and must only ever be appended to.
+    // The indices are a wire contract with the compiler. They are grouped in rack
+    // module declaration order and must only ever be appended to.
     //
     // Frequency-like destinations modulate in OCTAVES, matching the engine's existing
     // modulationTargetFilterCutoffOctaves convention; everything else is in the
     // destination's own natural units.
-
-    let modulationTargetRackBase = 100;
-    let rackModTargetCount = 36;
 
     let rackModTargetGlobalFilterCutoffOctaves  = 0;
     let rackModTargetGlobalFilterResonance      = 1;
@@ -160,55 +125,17 @@ namespace wt
         return clampedSourceValue;
     }
 
-    // Voice-domain sources need a reducer policy and a participation gate to reach a
-    // global destination. A macro is already global-domain: resolveMacroValue ignores
-    // the voice index, so reducing it would be meaningless and gating it would silence
-    // a Macro -> Reverb Mix mapping whenever no notes were held.
-    bool isVoiceModulationSource (int32 sourceKind)
+    // A program install folds polarity and amount into y = (source * scale) + bias.
+    // The hot voice path resolves and clamps each source once, then needs no per-route
+    // polarity branch or cell-indexed amount load.
+    float32 modulationRouteScale (float32 amount, int32 polarityKind)
     {
-        return sourceKind == modulationSourceMseg
-            || sourceKind == modulationSourceEnv
-            || sourceKind == modulationSourceVelocity
-            || sourceKind == modulationSourcePressure
-            || sourceKind == modulationSourceSlide;
+        return polarityKind == modulationPolarityBipolar ? amount * 2.0f : amount;
     }
 
-    bool isRackModulationTarget (int32 targetKind)
+    float32 modulationRouteBias (float32 amount, int32 polarityKind)
     {
-        return targetKind >= modulationTargetRackBase
-            && targetKind < modulationTargetRackBase + rackModTargetCount;
-    }
-
-    int32 rackModTargetIndex (int32 targetKind)
-    {
-        return targetKind - modulationTargetRackBase;
-    }
-
-    // FAIL FAST. A voice source reaching a rack destination without a reducer policy is
-    // a bug at the adapter boundary, not a runtime state the engine may occupy. The
-    // caller increments its rejected-route diagnostic and leaves the slot disabled; it
-    // does NOT silently default to maximum.
-    bool isValidRackModulationRoute (int32 sourceKind, int32 targetKind, int32 reducerKind)
-    {
-        if (targetKind >= modulationTargetRackBase && ! isRackModulationTarget (targetKind))
-            return false;
-
-        if (! isRackModulationTarget (targetKind))
-            return true;
-
-        if (isVoiceModulationSource (sourceKind))
-            return reducerKind == modulationReducerMaximum
-                || reducerKind == modulationReducerMean;
-
-        // Macro is the only global-domain source. Unknown source codes must not fall
-        // through to bipolar full-negative modulation while no note is playing.
-        return sourceKind == modulationSourceMacro;
-    }
-
-    // A global-domain source reaches a rack destination with no reducer and no gate.
-    float32 resolveGlobalRackOffset (float32 sourceValue, int32 polarityKind, float32 amount)
-    {
-        return applyModulationPolarity (sourceValue, polarityKind) * amount;
+        return polarityKind == modulationPolarityBipolar ? -amount : 0.0f;
     }
 
     // Fraction of the way from the held offset to zero per frame. Linear, so the offset
@@ -241,75 +168,4 @@ namespace wt
         return rackModOnePole (current, target, coefficient);
     }
 
-    //==============================================================================
-    // One route's reduction state.
-    //
-    // Both reductions are accumulated unconditionally - a running sum and a running
-    // strongest-by-magnitude - so the per-voice inner loop carries no branch on the
-    // reducer policy. That matters: this runs 16 voices x 12 routes per frame.
-
-    struct RackRouteReducer
-    {
-        // Per frame. Cleared by beginRackRouteFrame before the voice loop.
-        float32 polarisedSum;
-        float32 strongestPolarised;
-        float32 strongestMagnitude;
-        int32   participants;
-
-        // Across frames. The gate is what keeps the destination from stepping when the
-        // last participating voice retires.
-        float32 heldOffset;
-        float32 gate;
-    }
-
-    void beginRackRouteFrame (RackRouteReducer& reducer)
-    {
-        reducer.polarisedSum = 0.0f;
-        reducer.strongestPolarised = 0.0f;
-        reducer.strongestMagnitude = 0.0f;
-        reducer.participants = 0;
-    }
-
-    // Called once per PARTICIPATING voice. The engine's own liveness predicate decides
-    // participation (voiceActive != 0 || envelopes[voice].gainOut > 0, its existing
-    // voice-monitor rule at FixedFrameOscillator.cmajor:2723) - a non-participating
-    // voice is simply never passed here, so its stale source value is invisible to both
-    // reductions by construction.
-    void accumulateRackRouteVoice (RackRouteReducer& reducer, float32 sourceValue, int32 polarityKind)
-    {
-        let polarised = applyModulationPolarity (sourceValue, polarityKind);
-        let magnitude = std::intrinsics::abs (polarised);
-
-        reducer.polarisedSum += polarised;
-
-        if (reducer.participants == 0 || magnitude > reducer.strongestMagnitude)
-        {
-            reducer.strongestPolarised = polarised;
-            reducer.strongestMagnitude = magnitude;
-        }
-
-        reducer.participants += 1;
-    }
-
-    // Called once per frame after the voice loop. Returns the route's contribution to
-    // its destination, in the destination's own units.
-    float32 resolveRackRouteOffset (RackRouteReducer& reducer, int32 reducerKind,
-                                    float32 amount, float32 releaseStep)
-    {
-        if (reducer.participants > 0)
-        {
-            let reduced = reducerKind == modulationReducerMean
-                            ? reducer.polarisedSum / float32 (reducer.participants)
-                            : reducer.strongestPolarised;
-
-            reducer.heldOffset = reduced * amount;
-            reducer.gate = 1.0f;
-        }
-        else
-        {
-            reducer.gate = std::intrinsics::max (0.0f, reducer.gate - releaseStep);
-        }
-
-        return reducer.heldOffset * reducer.gate;
-    }
 }

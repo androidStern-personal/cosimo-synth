@@ -35,7 +35,6 @@ import {
     type RackState,
 } from "../shared/rack-state";
 import {
-    MODULATION_MAX_ROUTES,
     MODULATION_SOURCE_OPTIONS,
     composeModulationAmount,
     formatModulationAmountEditingValue,
@@ -2141,12 +2140,10 @@ function ModulationAmountControl({
 function UnmappedModulationPair({
     source,
     target,
-    routeLimitReached,
     onCreate,
 }: {
     source: RackModulationSource;
     target: RackParameterDescriptor;
-    routeLimitReached: boolean;
     onCreate: () => void;
 }) {
     return (
@@ -2162,10 +2159,9 @@ function UnmappedModulationPair({
                 type="button"
                 data-role="rack-create-mapping"
                 className="rack-create-mapping"
-                disabled={routeLimitReached}
                 onClick={onCreate}
             >
-                {routeLimitReached ? `ROUTE LIMIT REACHED · ${MODULATION_MAX_ROUTES}/${MODULATION_MAX_ROUTES}` : "CREATE MAPPING +"}
+                CREATE MAPPING +
             </button>
         </section>
     );
@@ -2690,10 +2686,6 @@ export function EffectsRackWorkspace({
             setRouteStatus("");
             return true;
         }
-        if (creation === "blocked-at-cap") {
-            setRouteStatus(`ROUTE LIMIT REACHED · ${MODULATION_MAX_ROUTES}/${MODULATION_MAX_ROUTES}`);
-            return false;
-        }
         if (creation !== "creatable") {
             return false;
         }
@@ -2749,10 +2741,6 @@ export function EffectsRackWorkspace({
     const dropSource = useCallback((source: SelectedSource, targetEndpointID: string) => {
         const targetParameter = getRackParameterDescriptor(targetEndpointID);
         const creation = getPairCreation(source, targetEndpointID);
-        if (creation === "blocked-at-cap") {
-            setRouteStatus(`ROUTE LIMIT REACHED · ${MODULATION_MAX_ROUTES}/${MODULATION_MAX_ROUTES}`);
-            return;
-        }
         if (creation !== "existing" && creation !== "creatable") {
             return;
         }
@@ -2882,7 +2870,6 @@ export function EffectsRackWorkspace({
                 <UnmappedModulationPair
                     source={activeSource}
                     target={selectedTarget}
-                    routeLimitReached={routes.length >= MODULATION_MAX_ROUTES}
                     onCreate={() => createRoute(selectedSource, selectedTarget.endpointID)}
                 />
             ) : null}

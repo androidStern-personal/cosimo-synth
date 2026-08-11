@@ -34,6 +34,13 @@ juce::File getLocalApplicationSupportRoot()
 
 juce::File getResolvedLibraryRoot (bool* usingSharedContainer = nullptr)
 {
+   #if defined(COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY) && COSIMO_USE_BUNDLED_WAVETABLE_LIBRARY
+    if (usingSharedContainer != nullptr)
+        *usingSharedContainer = false;
+
+    return juce::File::getSpecialLocation (juce::File::currentExecutableFile)
+        .getParentDirectory();
+   #else
     if (auto groupRoot = getGroupContainerRoot(); groupRoot.exists())
     {
         if (usingSharedContainer != nullptr)
@@ -54,6 +61,7 @@ juce::File getResolvedLibraryRoot (bool* usingSharedContainer = nullptr)
         .getChildFile ("CosimoSynth")
         .getChildFile ("WavetableLibrary")
         .getChildFile ("current");
+   #endif
 }
 
 juce::Result setExcludedFromBackup (const juce::File& target)

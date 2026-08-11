@@ -25,7 +25,12 @@ export type PatchConnectionLike = {
     addParameterListener?: (endpointID: string, listener: (value: unknown) => void) => void;
     removeParameterListener?: (endpointID: string, listener: (value: unknown) => void) => void;
     requestParameterValue?: (endpointID: string) => void;
-    sendEventOrValue?: (endpointID: string, value: unknown) => void;
+    sendEventOrValue?: (
+        endpointID: string,
+        value: unknown,
+        rampFrames?: number,
+        timeoutMilliseconds?: number,
+    ) => void;
     sendParameterGestureStart?: (endpointID: string) => void;
     sendParameterGestureEnd?: (endpointID: string) => void;
     addEndpointListener?: (endpointID: string, listener: (value: unknown) => void) => void;

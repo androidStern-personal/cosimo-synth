@@ -19,6 +19,7 @@ from bench import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
+VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
 SAMPLES_PER_FRAME = 2048
 OSCILLATOR_MIP_COUNT = 11
 
@@ -150,6 +151,8 @@ def _build_shared_voice_probe_source(schedule: list[tuple[int, str, float]]) -> 
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + _build_stereo_to_mono_probe_source()
         + "\n"

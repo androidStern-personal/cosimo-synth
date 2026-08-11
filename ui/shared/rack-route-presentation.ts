@@ -1,5 +1,4 @@
 import {
-    MODULATION_MAX_ROUTES,
     type ModulationRoute,
     type ModulationSourceKind,
     type ModulationTargetKind,
@@ -13,7 +12,7 @@ export type RackRouteSource = {
 };
 
 export type RackRouteRelationship = "ineligible" | "no-source" | "unmapped" | "mapped" | "route-bypassed";
-export type RackRouteCreation = "ineligible" | "no-source" | "existing" | "creatable" | "blocked-at-cap" | "pending";
+export type RackRouteCreation = "ineligible" | "no-source" | "existing" | "creatable" | "pending";
 export type RackRouteEffectiveness = "active" | "effect-bypassed" | "target-suspended";
 export type RackRouteBadge = "hidden" | "solid" | "hollow";
 
@@ -63,7 +62,7 @@ export function getModulationRouteCreation(input: {
     if (input.pending) {
         return "pending";
     }
-    return input.routes.length >= MODULATION_MAX_ROUTES ? "blocked-at-cap" : "creatable";
+    return "creatable";
 }
 
 /** Project persistent route topology into the rack's source-relative visual semantics. */

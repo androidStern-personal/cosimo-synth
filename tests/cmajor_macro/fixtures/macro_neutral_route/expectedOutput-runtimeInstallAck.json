@@ -1,0 +1,18 @@
+[
+  {
+    "frameOffset": 0,
+    "event": {
+      "dspSessionId": 1,
+      "acceptedModulationSerial": 1,
+      "acceptedModulationProgramSerial": 1,
+      "installedVoiceRouteCount": 0,
+      "installedMacroVoiceRouteCount": 1,
+      "installedVoiceRackRouteCount": 0,
+      "installedMacroRackRouteCount": 0,
+      "acceptedArticulationSerial": 0,
+      "rejectedSerial": 0,
+      "rejectionReason": 0,
+      "syncSerial": 0
+    }
+  }
+]

@@ -36,42 +36,57 @@ import {
     createDefaultModulationState,
     createDefaultEnvelope,
     createDefaultRoute,
+    createFirstAvailableModulationRoute,
     normalizeModulationState,
+    parseModulationState,
     releaseModulationRuntimeBridge,
     serializeModulationState,
     type ModulationEnvelope,
     type ModulationRoute,
     type ModulationRouteUpdate,
     type ModulationState,
+    type ModulationStateChangeKind,
     type MsegEditorControllerLike,
 } from "./modulation";
-import type { EffectStoredStateAdapter } from "./effects/effect-preset-v2";
+import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
+import type {
+    EffectStoredStateAdapter,
+    EffectStoredStateContext,
+} from "./effects/effect-preset-v2";
 import {
-    ARTICULATION_STATE_KEY,
+    ARTICULATIONS_V3_STATE_KEY,
+    createEmptyArticulationsState,
+    parseArticulationsV3,
+    serializeArticulationsV3,
+    type ArticulationSlotV3,
+    type ArticulationsState,
+    type ArticulationVoiceParameterId,
+} from "./articulation-image";
+import {
     ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
     addCapturedArticulationToBank,
     assignArticulationToRangePosition,
-    articulationBanksEqual,
+    articulationEditorStatesEqual,
     articulationSnapshotsEqual,
     buildArticulationTriggerConfig,
     clearArticulationRangeAssignment,
     clearArticulationTriggerAssignments,
-    createDefaultArticulationBank,
+    createDefaultArticulationEditorState,
+    createDefaultArticulationSnapshot,
     deleteArticulationSlot,
     distributeArticulationRanges,
     duplicateArticulationSlot,
     insertArticulationRangeAtPosition,
     moveArticulationRangeAssignment,
-    normalizeArticulationBank,
+    normalizeArticulationEditorState,
     normalizeArticulationSnapshot,
     renameArticulationSlot,
     resizeArticulationRangeAssignment,
     sendNativeArticulationTriggerConfig,
-    serializeArticulationBank,
     serializeArticulationTriggerConfig,
     setArticulationTriggerMode,
     upsertSelectedArticulationSnapshot,
-    type ArticulationBank,
+    type ArticulationEditorState,
     type ArticulationInsertPreserveSide,
     type ArticulationRangeAssignment,
     type ArticulationRangeEditEdge,
@@ -313,7 +328,7 @@ export type SynthPatchViewModel = {
     observedWarpState: EffectiveWarpState;
     observedUnisonState: EffectiveUnisonState;
     modulationState: ModulationState | null;
-    articulationBank: ArticulationBank;
+    articulationBank: ArticulationEditorState;
     articulationSlots: ArticulationSlot[];
     selectedArticulationSlot: ArticulationSlot | null;
     selectedArticulationIsDirty: boolean;
@@ -739,6 +754,8 @@ export function useObservedUnisonState({
     return message ? observedState : fallbackState;
 }
 
+const modulationAmountRenderIdleMilliseconds = 50;
+
 export function useModulationState() {
     const patchConnection = usePatchConnection();
     const [state, setState] = useState<ModulationState | null>(null);
@@ -746,12 +763,45 @@ export function useModulationState() {
 
     useEffect(() => {
         const bridge = acquireModulationRuntimeBridge(patchConnection);
+        let pendingAmountState: ModulationState | null = null;
+        let pendingAmountTimer: ReturnType<typeof setTimeout> | null = null;
+        const clearPendingAmountState = () => {
+            if (pendingAmountTimer !== null) {
+                clearTimeout(pendingAmountTimer);
+                pendingAmountTimer = null;
+            }
+            pendingAmountState = null;
+        };
+        const handleStateChange = (
+            nextState: ModulationState,
+            changeKind: ModulationStateChangeKind,
+        ) => {
+            if (changeKind === "routeAmount") {
+                pendingAmountState = nextState;
+                if (pendingAmountTimer !== null) {
+                    clearTimeout(pendingAmountTimer);
+                }
+                pendingAmountTimer = setTimeout(() => {
+                    pendingAmountTimer = null;
+                    const latestState = pendingAmountState;
+                    pendingAmountState = null;
+                    if (latestState) {
+                        setState(latestState);
+                    }
+                }, modulationAmountRenderIdleMilliseconds);
+                return;
+            }
+
+            clearPendingAmountState();
+            setState(nextState);
+        };
         bridgeRef.current = bridge;
         setState(bridge.getState());
-        bridge.subscribe(setState);
+        bridge.subscribe(handleStateChange);
 
         return () => {
-            bridge.unsubscribe(setState);
+            clearPendingAmountState();
+            bridge.unsubscribe(handleStateChange);
             releaseModulationRuntimeBridge(patchConnection);
             bridgeRef.current = null;
         };
@@ -786,12 +836,271 @@ function readFullStoredStateValue(storedState: unknown, key: string) {
     return undefined;
 }
 
-function useStoredArticulationBank() {
+function currentArticulationRouteIds(routes: ReadonlyArray<ModulationRoute>): ReadonlySet<string> {
+    return new Set(routes.flatMap((route) => (
+        getModulationArticulationCellIndex(route) === null ? [] : [route.id]
+    )));
+}
+
+function decodeArticulationDocument(rawValue: unknown): unknown {
+    if (typeof rawValue !== "string") {
+        return rawValue;
+    }
+    try {
+        return JSON.parse(rawValue);
+    } catch {
+        return rawValue;
+    }
+}
+
+function readArticulationOverride(
+    slot: ArticulationSlotV3,
+    parameterId: ArticulationVoiceParameterId,
+    fallback: number,
+): number {
+    const value = slot.overrides[parameterId];
+    return value === undefined ? fallback : value;
+}
+
+type EnvelopeArticulationParameterIds = {
+    readonly attackSeconds: ArticulationVoiceParameterId;
+    readonly decaySeconds: ArticulationVoiceParameterId;
+    readonly sustain: ArticulationVoiceParameterId;
+    readonly releaseSeconds: ArticulationVoiceParameterId;
+};
+
+const ENVELOPE_ARTICULATION_PARAMETER_IDS: readonly [
+    EnvelopeArticulationParameterIds,
+    EnvelopeArticulationParameterIds,
+    EnvelopeArticulationParameterIds,
+] = [
+    {
+        attackSeconds: "env1.attackSeconds",
+        decaySeconds: "env1.decaySeconds",
+        sustain: "env1.sustain",
+        releaseSeconds: "env1.releaseSeconds",
+    },
+    {
+        attackSeconds: "env2.attackSeconds",
+        decaySeconds: "env2.decaySeconds",
+        sustain: "env2.sustain",
+        releaseSeconds: "env2.releaseSeconds",
+    },
+    {
+        attackSeconds: "env3.attackSeconds",
+        decaySeconds: "env3.decaySeconds",
+        sustain: "env3.sustain",
+        releaseSeconds: "env3.releaseSeconds",
+    },
+];
+
+function resolveEditorEnvelope(
+    slot: ArticulationSlotV3,
+    envelope: ModulationEnvelope,
+    parameterIds: EnvelopeArticulationParameterIds,
+): ModulationEnvelope {
+    return {
+        ...envelope,
+        attackSeconds: readArticulationOverride(slot, parameterIds.attackSeconds, envelope.attackSeconds),
+        decaySeconds: readArticulationOverride(slot, parameterIds.decaySeconds, envelope.decaySeconds),
+        sustain: readArticulationOverride(slot, parameterIds.sustain, envelope.sustain),
+        releaseSeconds: readArticulationOverride(slot, parameterIds.releaseSeconds, envelope.releaseSeconds),
+    };
+}
+
+function resolveEditorSnapshot(
+    slot: ArticulationSlotV3,
+    baseSnapshot: ArticulationSnapshot,
+    routes: ReadonlyArray<ModulationRoute>,
+): ArticulationSnapshot {
+    const base = normalizeArticulationSnapshot(baseSnapshot);
+    const parameters = base.parameters;
+    const routeAmounts = routes.flatMap((route) => {
+        if (getModulationArticulationCellIndex(route) === null) {
+            return [];
+        }
+        const amount = slot.routeAmounts[route.id] ?? route.amount;
+        return Math.abs(amount) <= 0.000001 ? [] : [{ routeId: route.id, amount }];
+    });
+
+    return normalizeArticulationSnapshot({
+        parameters: {
+            ...parameters,
+            wavetablePosition: readArticulationOverride(slot, "framePosition", parameters.wavetablePosition),
+            pan: readArticulationOverride(slot, "pan", parameters.pan),
+            warpMode: readArticulationOverride(slot, "warpMode", parameters.warpMode),
+            warpAmount: readArticulationOverride(slot, "warpAmount", parameters.warpAmount),
+            filterMode: readArticulationOverride(slot, "filterMode", parameters.filterMode),
+            filterCutoff: readArticulationOverride(slot, "filterCutoffHz", parameters.filterCutoff),
+            filterQ: readArticulationOverride(slot, "filterQ", parameters.filterQ),
+            unisonVoices: readArticulationOverride(slot, "unisonVoices", parameters.unisonVoices),
+            unisonDetune: readArticulationOverride(slot, "unisonDetune", parameters.unisonDetune),
+            unisonBlend: readArticulationOverride(slot, "unisonBlend", parameters.unisonBlend),
+            unisonWidth: readArticulationOverride(slot, "unisonWidth", parameters.unisonWidth),
+            unisonPhase: readArticulationOverride(slot, "unisonPhase", parameters.unisonPhase),
+            unisonRandom: readArticulationOverride(slot, "unisonRandom", parameters.unisonRandom),
+            unisonPhaseMode: readArticulationOverride(slot, "unisonPhaseMode", parameters.unisonPhaseMode),
+            unisonDetuneMode: readArticulationOverride(slot, "unisonDetuneMode", parameters.unisonDetuneMode),
+            unisonStackMode: readArticulationOverride(slot, "unisonStackMode", parameters.unisonStackMode),
+            unisonWavetablePositionSpread: readArticulationOverride(
+                slot,
+                "unisonWavetablePositionSpread",
+                parameters.unisonWavetablePositionSpread,
+            ),
+            unisonWarpSpread: readArticulationOverride(slot, "unisonWarpSpread", parameters.unisonWarpSpread),
+            msegMorphs: [
+                readArticulationOverride(slot, "msegMorph1", parameters.msegMorphs[0]),
+                readArticulationOverride(slot, "msegMorph2", parameters.msegMorphs[1]),
+                readArticulationOverride(slot, "msegMorph3", parameters.msegMorphs[2]),
+            ],
+        },
+        envelopes: [0, 1, 2].map((index) => resolveEditorEnvelope(
+            slot,
+            base.envelopes[index] ?? createDefaultEnvelope(index),
+            ENVELOPE_ARTICULATION_PARAMETER_IDS[index] ?? ENVELOPE_ARTICULATION_PARAMETER_IDS[0],
+        )),
+        modRouteAmounts: routeAmounts,
+    });
+}
+
+function projectCurrentArticulationsToEditorBank(
+    state: ArticulationsState,
+    baseSnapshot: ArticulationSnapshot,
+    routes: ReadonlyArray<ModulationRoute>,
+): ArticulationEditorState {
+    return normalizeArticulationEditorState({
+        selectedSlotId: state.selectedSlotId,
+        activeTriggerMode: state.activeTriggerMode,
+        slots: state.slots.map((slot) => ({
+            id: slot.id,
+            runtimeSlot: slot.runtimeSlot,
+            name: slot.name,
+            snapshot: resolveEditorSnapshot(slot, baseSnapshot, routes),
+        })),
+        keyAssignments: state.slots.map((slot) => ({ articulationId: slot.id, note: slot.key })),
+        velocityAssignments: state.slots.map((slot) => ({
+            id: `velocity-${slot.id}`,
+            articulationId: slot.id,
+            ...slot.velRange,
+        })),
+        chainAssignments: state.slots.map((slot) => ({
+            id: `chain-${slot.id}`,
+            articulationId: slot.id,
+            ...slot.chainRange,
+        })),
+    });
+}
+
+function snapshotOverrides(snapshotValue: ArticulationSnapshot): Readonly<Record<ArticulationVoiceParameterId, number>> {
+    const snapshot = normalizeArticulationSnapshot(snapshotValue);
+    const parameters = snapshot.parameters;
+    const envelope1 = snapshot.envelopes[0] ?? createDefaultEnvelope(0);
+    const envelope2 = snapshot.envelopes[1] ?? createDefaultEnvelope(1);
+    const envelope3 = snapshot.envelopes[2] ?? createDefaultEnvelope(2);
+    return {
+        framePosition: parameters.wavetablePosition,
+        pan: parameters.pan,
+        warpMode: parameters.warpMode,
+        warpAmount: parameters.warpAmount,
+        filterMode: parameters.filterMode,
+        filterCutoffHz: parameters.filterCutoff,
+        filterQ: parameters.filterQ,
+        unisonVoices: parameters.unisonVoices,
+        unisonDetune: parameters.unisonDetune,
+        unisonBlend: parameters.unisonBlend,
+        unisonWidth: parameters.unisonWidth,
+        unisonPhase: parameters.unisonPhase,
+        unisonRandom: parameters.unisonRandom,
+        unisonPhaseMode: parameters.unisonPhaseMode,
+        unisonDetuneMode: parameters.unisonDetuneMode,
+        unisonStackMode: parameters.unisonStackMode,
+        unisonWavetablePositionSpread: parameters.unisonWavetablePositionSpread,
+        unisonWarpSpread: parameters.unisonWarpSpread,
+        msegMorph1: parameters.msegMorphs[0],
+        msegMorph2: parameters.msegMorphs[1],
+        msegMorph3: parameters.msegMorphs[2],
+        "env1.attackSeconds": envelope1.attackSeconds,
+        "env1.decaySeconds": envelope1.decaySeconds,
+        "env1.sustain": envelope1.sustain,
+        "env1.releaseSeconds": envelope1.releaseSeconds,
+        "env2.attackSeconds": envelope2.attackSeconds,
+        "env2.decaySeconds": envelope2.decaySeconds,
+        "env2.sustain": envelope2.sustain,
+        "env2.releaseSeconds": envelope2.releaseSeconds,
+        "env3.attackSeconds": envelope3.attackSeconds,
+        "env3.decaySeconds": envelope3.decaySeconds,
+        "env3.sustain": envelope3.sustain,
+        "env3.releaseSeconds": envelope3.releaseSeconds,
+    };
+}
+
+function compileEditorBankToCurrentArticulations(
+    bank: ArticulationEditorState,
+    previousBank: ArticulationEditorState,
+    previousState: ArticulationsState,
+    routes: ReadonlyArray<ModulationRoute>,
+): ArticulationsState {
+    const acceptedRouteIds = currentArticulationRouteIds(routes);
+    const previousSlots = new Map(previousState.slots.map((slot) => [slot.id, slot]));
+    const previousEditorSlots = new Map(previousBank.slots.map((slot) => [slot.id, slot]));
+    const slots = bank.slots.map((slot): ArticulationSlotV3 => {
+        const previousSlot = previousSlots.get(slot.id);
+        const previousEditorSlot = previousEditorSlots.get(slot.id);
+        const snapshotUnchanged = previousSlot !== undefined
+            && previousEditorSlot !== undefined
+            && articulationSnapshotsEqual(previousEditorSlot.snapshot, slot.snapshot);
+        const key = bank.keyAssignments.find((assignment) => assignment.articulationId === slot.id)?.note
+            ?? previousSlot?.key
+            ?? slot.runtimeSlot;
+        const velRange = bank.velocityAssignments.find((assignment) => assignment.articulationId === slot.id)
+            ?? previousSlot?.velRange
+            ?? { min: 0, max: 127 };
+        const chainRange = bank.chainAssignments.find((assignment) => assignment.articulationId === slot.id)
+            ?? previousSlot?.chainRange
+            ?? { min: 0, max: 127 };
+        const routeAmounts = snapshotUnchanged && previousSlot
+            ? previousSlot.routeAmounts
+            : Object.fromEntries(slot.snapshot.modRouteAmounts.flatMap(({ routeId, amount }) => (
+                acceptedRouteIds.has(routeId) ? [[routeId, amount]] : []
+            )));
+
+        return {
+            id: slot.id,
+            runtimeSlot: slot.runtimeSlot,
+            name: slot.name,
+            color: previousSlot?.color ?? "#d2a128",
+            key,
+            velRange: { min: velRange.min, max: velRange.max },
+            chainRange: { min: chainRange.min, max: chainRange.max },
+            overrides: snapshotUnchanged && previousSlot
+                ? previousSlot.overrides
+                : snapshotOverrides(slot.snapshot),
+            routeAmounts,
+        };
+    });
+
+    return {
+        format: "cosimo.articulations",
+        version: 3,
+        selectedSlotId: bank.selectedSlotId,
+        activeTriggerMode: bank.activeTriggerMode,
+        slots,
+    };
+}
+
+function useStoredArticulationEditorState(
+    modulationBridge: RefObject<ReturnType<typeof acquireModulationRuntimeBridge> | null>,
+    getBaseSnapshot: () => ArticulationSnapshot,
+) {
     const patchConnection = usePatchConnection();
-    const [bank, setBank] = useState<ArticulationBank>(() => createDefaultArticulationBank());
+    const [bank, setBank] = useState<ArticulationEditorState>(() => createDefaultArticulationEditorState());
     const [hasHydrated, setHasHydrated] = useState(false);
     const bankRef = useRef(bank);
+    const storedStateRef = useRef<ArticulationsState>(createEmptyArticulationsState());
+    const getBaseSnapshotRef = useRef(getBaseSnapshot);
     const pendingEchoTokensRef = useRef(new Map<string, number>());
+
+    getBaseSnapshotRef.current = getBaseSnapshot;
 
     useEffect(() => {
         bankRef.current = bank;
@@ -819,15 +1128,50 @@ function useStoredArticulationBank() {
         return true;
     }, []);
 
-    const applyIncomingBank = useCallback((rawValue: unknown) => {
-        const nextBank = normalizeArticulationBank(rawValue);
-        setHasHydrated(true);
+    const applyCurrentState = useCallback((nextState: ArticulationsState) => {
+        const routes = modulationBridge.current?.getState().routes ?? [];
+        const nextBank = projectCurrentArticulationsToEditorBank(
+            nextState,
+            getBaseSnapshotRef.current(),
+            routes,
+        );
+        storedStateRef.current = nextState;
         bankRef.current = nextBank;
         setBank((previousBank) => (
-            articulationBanksEqual(previousBank, nextBank) ? previousBank : nextBank
+            articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank
         ));
         sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
-    }, [patchConnection]);
+    }, [modulationBridge, patchConnection]);
+
+    const applyIncomingState = useCallback((rawValue: unknown, isHydration: boolean) => {
+        if (rawValue === undefined) {
+            if (isHydration) {
+                setHasHydrated(true);
+                applyCurrentState(createEmptyArticulationsState());
+            }
+            return;
+        }
+
+        const routes = modulationBridge.current?.getState().routes ?? [];
+        const parsedState = parseArticulationsV3(
+            decodeArticulationDocument(rawValue),
+            currentArticulationRouteIds(routes),
+        );
+        if (parsedState._tag === "err") {
+            if (isHydration) {
+                setHasHydrated(true);
+            }
+            return;
+        }
+
+        const serializedState = JSON.stringify(serializeArticulationsV3(parsedState.value));
+        if (consumePendingEcho(serializedState)) {
+            return;
+        }
+
+        setHasHydrated(true);
+        applyCurrentState(parsedState.value);
+    }, [applyCurrentState, consumePendingEcho, modulationBridge]);
 
     useEffect(() => {
         const handleStoredStateValue = (message: unknown) => {
@@ -837,70 +1181,106 @@ function useStoredArticulationBank() {
 
             const nextMessage = message as { key?: unknown; value?: unknown };
 
-            if (nextMessage.key !== ARTICULATION_STATE_KEY) {
+            if (nextMessage.key !== ARTICULATIONS_V3_STATE_KEY) {
                 return;
             }
 
-            const serializedBank = serializeArticulationBank(nextMessage.value);
-
-            if (consumePendingEcho(serializedBank)) {
-                return;
-            }
-
-            applyIncomingBank(nextMessage.value);
+            applyIncomingState(nextMessage.value, false);
         };
 
         patchConnection.addStoredStateValueListener?.(handleStoredStateValue);
 
         if (typeof patchConnection.requestFullStoredState === "function") {
             patchConnection.requestFullStoredState((storedState) => {
-                applyIncomingBank(readFullStoredStateValue(storedState, ARTICULATION_STATE_KEY));
+                applyIncomingState(readFullStoredStateValue(storedState, ARTICULATIONS_V3_STATE_KEY), true);
             });
         } else if (typeof patchConnection.requestStoredStateValue === "function") {
-            patchConnection.requestStoredStateValue(ARTICULATION_STATE_KEY);
+            patchConnection.requestStoredStateValue(ARTICULATIONS_V3_STATE_KEY);
         } else {
-            applyIncomingBank(undefined);
+            applyIncomingState(undefined, true);
         }
 
         return () => {
             patchConnection.removeStoredStateValueListener?.(handleStoredStateValue);
         };
-    }, [applyIncomingBank, consumePendingEcho, patchConnection]);
+    }, [applyIncomingState, patchConnection]);
 
-    const setAndPersistBank = useCallback((nextBankValue: ArticulationBank | ((previousBank: ArticulationBank) => ArticulationBank)) => {
+    const setAndPersistBank = useCallback((nextBankValue: ArticulationEditorState | ((previousBank: ArticulationEditorState) => ArticulationEditorState)) => {
         const previousBank = bankRef.current;
-        const nextBank = normalizeArticulationBank(
+        const nextBank = normalizeArticulationEditorState(
             typeof nextBankValue === "function" ? nextBankValue(previousBank) : nextBankValue,
         );
 
-        if (articulationBanksEqual(previousBank, nextBank)) {
+        if (articulationEditorStatesEqual(previousBank, nextBank)) {
             return;
         }
 
+        const routes = modulationBridge.current?.getState().routes ?? [];
+        const nextStoredState = compileEditorBankToCurrentArticulations(
+            nextBank,
+            previousBank,
+            storedStateRef.current,
+            routes,
+        );
+        const canonicalNextBank = projectCurrentArticulationsToEditorBank(
+            nextStoredState,
+            getBaseSnapshotRef.current(),
+            routes,
+        );
+        bankRef.current = canonicalNextBank;
+        storedStateRef.current = nextStoredState;
+        setHasHydrated(true);
+        setBank(canonicalNextBank);
+
+        if (typeof patchConnection.sendStoredStateValue === "function") {
+            const serializedBank = JSON.stringify(serializeArticulationsV3(nextStoredState));
+            const serializedTriggerConfig = serializeArticulationTriggerConfig(
+                buildArticulationTriggerConfig(canonicalNextBank),
+            );
+            rememberPendingEcho(serializedBank);
+            patchConnection.sendStoredStateValue(ARTICULATIONS_V3_STATE_KEY, serializedBank);
+            patchConnection.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serializedTriggerConfig);
+        }
+        sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(canonicalNextBank), patchConnection);
+    }, [modulationBridge, patchConnection, rememberPendingEcho]);
+
+    const setAndPersistStoredState = useCallback((nextState: ArticulationsState) => {
+        const routes = modulationBridge.current?.getState().routes ?? [];
+        const nextBank = projectCurrentArticulationsToEditorBank(
+            nextState,
+            getBaseSnapshotRef.current(),
+            routes,
+        );
+        const previousSerialized = JSON.stringify(serializeArticulationsV3(storedStateRef.current));
+        const nextSerialized = JSON.stringify(serializeArticulationsV3(nextState));
+        if (previousSerialized === nextSerialized) {
+            return;
+        }
+
+        storedStateRef.current = nextState;
         bankRef.current = nextBank;
         setHasHydrated(true);
         setBank(nextBank);
 
         if (typeof patchConnection.sendStoredStateValue === "function") {
-            const serializedBank = serializeArticulationBank(nextBank);
-            const serializedTriggerConfig = serializeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank));
-            rememberPendingEcho(serializedBank);
-            patchConnection.sendStoredStateValue(ARTICULATION_STATE_KEY, serializedBank);
-            patchConnection.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serializedTriggerConfig);
+            rememberPendingEcho(nextSerialized);
+            patchConnection.sendStoredStateValue(ARTICULATIONS_V3_STATE_KEY, nextSerialized);
+            patchConnection.sendStoredStateValue(
+                ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
+                serializeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank)),
+            );
         }
         sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank), patchConnection);
-    }, [patchConnection, rememberPendingEcho]);
+    }, [modulationBridge, patchConnection, rememberPendingEcho]);
 
     return useMemo(() => ({
         bank,
         bankRef,
+        storedStateRef,
         hasHydrated,
         setAndPersistBank,
-    }), [bank, hasHydrated, setAndPersistBank]);
-}
-
-function isPlainRecord(value: unknown): value is Record<string, unknown> {
-    return typeof value === "object" && value !== null && !Array.isArray(value);
+        setAndPersistStoredState,
+    }), [bank, hasHydrated, setAndPersistBank, setAndPersistStoredState]);
 }
 
 function parsePresetStoredStateValue(rawValue: unknown, label: string) {
@@ -915,32 +1295,27 @@ function parsePresetStoredStateValue(rawValue: unknown, label: string) {
     }
 }
 
-function parseStrictArticulationPresetBank(rawValue: unknown): ArticulationBank {
+function parseStrictArticulationPresetState(
+    rawValue: unknown,
+    acceptedRouteIds: ReadonlySet<string>,
+): ArticulationsState {
     const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
-
-    if (!isPlainRecord(parsedValue)) {
-        throw new Error("Articulation preset state must be an object.");
+    const parsedState = parseArticulationsV3(parsedValue, acceptedRouteIds);
+    if (parsedState._tag === "err") {
+        throw parsedState.error;
     }
 
-    if (parsedValue.format !== "cosimo.articulations" || parsedValue.version !== 2) {
-        throw new Error("Articulation preset state must be cosimo.articulations version 2.");
-    }
-
-    return normalizeArticulationBank(parsedValue);
+    return parsedState.value;
 }
 
 function parseStrictModulationPresetState(rawValue: unknown): ModulationState {
     const parsedValue = parsePresetStoredStateValue(rawValue, "Modulation preset state");
-
-    if (!isPlainRecord(parsedValue)) {
-        throw new Error("Modulation preset state must be an object.");
+    const parsedState = parseModulationState(parsedValue);
+    if (parsedState._tag === "err") {
+        throw parsedState.error;
     }
 
-    if (parsedValue.format !== "cosimo.modulation" || parsedValue.version !== 2) {
-        throw new Error("Modulation preset state must be cosimo.modulation version 2.");
-    }
-
-    return normalizeModulationState(parsedValue);
+    return parsedState.value;
 }
 
 function useSynthPresetStoredStateAdapters({
@@ -948,12 +1323,12 @@ function useSynthPresetStoredStateAdapters({
     modulationBridge,
     modulationState,
 }: {
-    articulationBankState: ReturnType<typeof useStoredArticulationBank>;
+    articulationBankState: ReturnType<typeof useStoredArticulationEditorState>;
     modulationBridge: ReturnType<typeof useModulationState>["bridge"];
     modulationState: ModulationState | null;
 }) {
     const patchConnection = usePatchConnection();
-    const { bankRef, setAndPersistBank } = articulationBankState;
+    const { storedStateRef, setAndPersistStoredState } = articulationBankState;
     const latestModulationStateRef = useRef<ModulationState | null>(null);
 
     useEffect(() => {
@@ -979,70 +1354,81 @@ function useSynthPresetStoredStateAdapters({
             };
         };
 
-        return [
-            {
-                key: ARTICULATION_STATE_KEY,
-                schemaVersion: 2,
-                getContract() {
-                    return {
-                        key: ARTICULATION_STATE_KEY,
-                        schemaVersion: 2,
-                        required: true,
-                    };
-                },
-                capture() {
-                    return bankRef.current;
-                },
-                normalizeForPreset(value: unknown) {
-                    return parseStrictArticulationPresetBank(value);
-                },
-                serializeForPreset(value: unknown) {
-                    return serializeArticulationBank(parseStrictArticulationPresetBank(value));
-                },
-                apply(value: unknown) {
-                    setAndPersistBank(parseStrictArticulationPresetBank(value));
-                },
-                subscribe(listener: () => void) {
-                    return subscribeToStoredStateKey(ARTICULATION_STATE_KEY, listener);
-                },
-            },
-            {
-                key: MODULATION_STATE_KEY,
-                schemaVersion: 2,
-                getContract() {
-                    return {
-                        key: MODULATION_STATE_KEY,
-                        schemaVersion: 2,
-                        required: true,
-                    };
-                },
-                capture() {
-                    return modulationBridge.current?.getState()
-                        ?? latestModulationStateRef.current
-                        ?? createDefaultModulationState();
-                },
-                normalizeForPreset(value: unknown) {
-                    return parseStrictModulationPresetState(value);
-                },
-                serializeForPreset(value: unknown) {
-                    return serializeModulationState(parseStrictModulationPresetState(value));
-                },
-                apply(value: unknown) {
-                    const nextState = parseStrictModulationPresetState(value);
+        const presetModulationState = (context?: EffectStoredStateContext) => {
+            if (!context || !(MODULATION_STATE_KEY in context.storedState)) {
+                throw new Error("Synth preset modulation state is required before articulation validation.");
+            }
 
-                    if (modulationBridge.current) {
-                        modulationBridge.current.setState(nextState);
-                        return;
-                    }
+            return parseStrictModulationPresetState(context.storedState[MODULATION_STATE_KEY]);
+        };
 
-                    patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
-                },
-                subscribe(listener: () => void) {
-                    return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
-                },
+        const modulationAdapter: EffectStoredStateAdapter = {
+            key: MODULATION_STATE_KEY,
+            schemaVersion: 2,
+            getContract() {
+                return {
+                    key: MODULATION_STATE_KEY,
+                    schemaVersion: 2,
+                    required: true,
+                };
             },
-        ];
-    }, [bankRef, modulationBridge, patchConnection, setAndPersistBank]);
+            capture() {
+                return modulationBridge.current?.getState()
+                    ?? latestModulationStateRef.current
+                    ?? createDefaultModulationState();
+            },
+            normalizeForPreset(value: unknown) {
+                return parseStrictModulationPresetState(value);
+            },
+            serializeForPreset(value) {
+                return serializeModulationState(parseStrictModulationPresetState(value));
+            },
+            apply(value) {
+                const nextState = parseStrictModulationPresetState(value);
+
+                if (modulationBridge.current) {
+                    modulationBridge.current.setState(nextState);
+                    return;
+                }
+
+                patchConnection.sendStoredStateValue?.(MODULATION_STATE_KEY, serializeModulationState(nextState));
+            },
+            subscribe(listener: () => void) {
+                return subscribeToStoredStateKey(MODULATION_STATE_KEY, listener);
+            },
+        };
+        const articulationAdapter: EffectStoredStateAdapter = {
+            key: ARTICULATIONS_V3_STATE_KEY,
+            schemaVersion: 3,
+            getContract() {
+                return {
+                    key: ARTICULATIONS_V3_STATE_KEY,
+                    schemaVersion: 3,
+                    required: true,
+                };
+            },
+            capture() {
+                return storedStateRef.current;
+            },
+            normalizeForPreset(value: unknown, context?: EffectStoredStateContext) {
+                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
+                return parseStrictArticulationPresetState(value, routeIds);
+            },
+            serializeForPreset(value, context) {
+                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
+                return serializeArticulationsV3(parseStrictArticulationPresetState(value, routeIds));
+            },
+            apply(value, context) {
+                const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
+                setAndPersistStoredState(parseStrictArticulationPresetState(value, routeIds));
+            },
+            subscribe(listener: () => void) {
+                return subscribeToStoredStateKey(ARTICULATIONS_V3_STATE_KEY, listener);
+            },
+        };
+
+        return [modulationAdapter, articulationAdapter];
+    }, [modulationBridge, patchConnection, setAndPersistStoredState, storedStateRef]);
 }
 
 export function useMsegState() {
@@ -2028,7 +2414,14 @@ export function useSynthPatchViewModel({
         VOICE_ARTICULATION_START_ENDPOINT_ID,
         null,
     );
-    const articulationBankState = useStoredArticulationBank();
+    const { state: modulationState, bridge: modulationBridge } = useModulationState();
+    const captureCurrentArticulationSnapshotRef = useRef<() => ArticulationSnapshot>(
+        createDefaultArticulationSnapshot,
+    );
+    const articulationBankState = useStoredArticulationEditorState(
+        modulationBridge,
+        () => captureCurrentArticulationSnapshotRef.current(),
+    );
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
         [runtimeStateMessage, wavetableSelect.value],
@@ -2036,7 +2429,6 @@ export function useSynthPatchViewModel({
     const presentedTableIndex = runtimePresentation.presentedTableIndex ?? 0;
     const desiredTableIndex = runtimePresentation.desiredTableIndex ?? 0;
     const { frames, error: frameError } = useFactoryTableFrames(presentedTableIndex);
-    const { state: modulationState, bridge: modulationBridge } = useModulationState();
     const articulationBank = articulationBankState.bank;
     const articulationSlots = articulationBank.slots;
     const selectedArticulationSlot = useMemo(() => (
@@ -2237,7 +2629,10 @@ export function useSynthPatchViewModel({
     }, [modulationBridge, selectedEnvelope, selectedEnvelopeSlot]);
 
     const handleAddRoute = useCallback(() => {
-        modulationBridge.current?.addRoute();
+        const bridge = modulationBridge.current;
+        if (!bridge) return;
+        const route = createFirstAvailableModulationRoute(bridge.getState().routes);
+        if (route) bridge.addRoute(route);
     }, [modulationBridge]);
 
     const handleAddRouteWithOverrides = useCallback((overrides: Partial<ModulationRoute>) => {
@@ -2256,6 +2651,11 @@ export function useSynthPatchViewModel({
             return;
         }
 
+        if (Object.keys(update).length === 1 && typeof update.amount === "number") {
+            bridge.setRouteAmount(routeIndex, update.amount);
+            return;
+        }
+
         bridge.setRoute(routeIndex, { ...currentRoute, ...update });
     }, [modulationBridge]);
 
@@ -2265,8 +2665,6 @@ export function useSynthPatchViewModel({
         return normalizeArticulationSnapshot({
             parameters: {
                 wavetablePosition: wavetablePosition.value,
-                playMode: playMode.value,
-                glideTime: glideTime.value,
                 pan: pan.value,
                 warpMode: warpMode.value,
                 warpAmount: warpAmount.value,
@@ -2285,20 +2683,6 @@ export function useSynthPatchViewModel({
                 unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
                 unisonWarpSpread: unisonWarpSpread.value,
                 msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value],
-                distortionMode: distortionMode.value,
-                distortionDriveDb: distortionDriveDb.value,
-                distortionKnee: distortionKnee.value,
-                distortionWet: distortionWet.value,
-                distortionWetHPHz: distortionWetHPHz.value,
-                distortionWetLPHz: distortionWetLPHz.value,
-                chorusMix: chorusMix.value,
-                chorusMotionMode: chorusMotionMode.value,
-                chorusBloomMode: chorusBloomMode.value,
-                chorusTone: chorusTone.value,
-                chorusFeedback: chorusFeedback.value,
-                chorusRingAmount: chorusRingAmount.value,
-                chorusRingOffsetMode: chorusRingOffsetMode.value,
-                chorusRingFineSemitones: chorusRingFineSemitones.value,
             },
             envelopes: currentModulationState?.envelopeSlots ?? [0, 1, 2].map((slotIndex) => createDefaultEnvelope(slotIndex)),
             modRouteAmounts: (currentModulationState?.routes ?? [])
@@ -2309,31 +2693,15 @@ export function useSynthPatchViewModel({
                 .filter((routeAmount) => Math.abs(routeAmount.amount) > 0.000001),
         });
     }, [
-        chorusBloomMode.value,
-        chorusFeedback.value,
-        chorusMix.value,
-        chorusMotionMode.value,
-        chorusRingAmount.value,
-        chorusRingFineSemitones.value,
-        chorusRingOffsetMode.value,
-        chorusTone.value,
-        distortionDriveDb.value,
-        distortionKnee.value,
-        distortionMode.value,
-        distortionWet.value,
-        distortionWetHPHz.value,
-        distortionWetLPHz.value,
         filterCutoff.value,
         filterMode.value,
         filterQ.value,
-        glideTime.value,
         modulationBridge,
         modulationState,
         mseg1Morph.value,
         mseg2Morph.value,
         mseg3Morph.value,
         pan.value,
-        playMode.value,
         unisonBlend.value,
         unisonDetune.value,
         unisonDetuneMode.value,
@@ -2350,13 +2718,13 @@ export function useSynthPatchViewModel({
         wavetablePosition.value,
     ]);
 
+    captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
+
     const applyArticulationSnapshot = useCallback((snapshotValue: unknown) => {
         const snapshot = normalizeArticulationSnapshot(snapshotValue);
         const parameters = snapshot.parameters;
 
         wavetablePosition.setValue(parameters.wavetablePosition);
-        playMode.setValue(parameters.playMode);
-        glideTime.setValue(parameters.glideTime);
         pan.setValue(parameters.pan);
         warpMode.setValue(parameters.warpMode);
         warpAmount.setValue(parameters.warpAmount);
@@ -2377,20 +2745,6 @@ export function useSynthPatchViewModel({
         mseg1Morph.setValue(parameters.msegMorphs[0]);
         mseg2Morph.setValue(parameters.msegMorphs[1]);
         mseg3Morph.setValue(parameters.msegMorphs[2]);
-        distortionMode.setValue(parameters.distortionMode);
-        distortionDriveDb.setValue(parameters.distortionDriveDb);
-        distortionKnee.setValue(parameters.distortionKnee);
-        distortionWet.setValue(parameters.distortionWet);
-        distortionWetHPHz.setValue(parameters.distortionWetHPHz);
-        distortionWetLPHz.setValue(parameters.distortionWetLPHz);
-        chorusMix.setValue(parameters.chorusMix);
-        chorusMotionMode.setValue(parameters.chorusMotionMode);
-        chorusBloomMode.setValue(parameters.chorusBloomMode);
-        chorusTone.setValue(parameters.chorusTone);
-        chorusFeedback.setValue(parameters.chorusFeedback);
-        chorusRingAmount.setValue(parameters.chorusRingAmount);
-        chorusRingOffsetMode.setValue(parameters.chorusRingOffsetMode);
-        chorusRingFineSemitones.setValue(parameters.chorusRingFineSemitones);
 
         const bridge = modulationBridge.current;
         bridge?.setMsegSlotMorph(0, parameters.msegMorphs[0]);
@@ -2428,31 +2782,15 @@ export function useSynthPatchViewModel({
             bridge?.replaceRoutes(nextRoutes);
         }
     }, [
-        chorusBloomMode,
-        chorusFeedback,
-        chorusMix,
-        chorusMotionMode,
-        chorusRingAmount,
-        chorusRingFineSemitones,
-        chorusRingOffsetMode,
-        chorusTone,
-        distortionDriveDb,
-        distortionKnee,
-        distortionMode,
-        distortionWet,
-        distortionWetHPHz,
-        distortionWetLPHz,
         filterCutoff,
         filterMode,
         filterQ,
-        glideTime,
         modulationBridge,
         modulationState?.routes,
         mseg1Morph,
         mseg2Morph,
         mseg3Morph,
         pan,
-        playMode,
         unisonBlend,
         unisonDetune,
         unisonDetuneMode,
@@ -2520,7 +2858,7 @@ export function useSynthPatchViewModel({
             isApplyingArticulationRef.current = false;
         }, 0);
 
-        articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+        articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationEditorState({
             ...previousBank,
             selectedSlotId: slotId,
         }));
@@ -2590,7 +2928,7 @@ export function useSynthPatchViewModel({
         isApplyingArticulationRef.current = true;
         setDiscardedArticulationEdit(null);
         applyArticulationSnapshot(edit.snapshot);
-        articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationBank({
+        articulationBankState.setAndPersistBank((previousBank) => normalizeArticulationEditorState({
             ...previousBank,
             selectedSlotId: edit.slotId,
         }));
@@ -2604,13 +2942,13 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistBank((previousBank) => setArticulationTriggerMode(previousBank, mode));
     }, [articulationBankState]);
 
-    const updateArticulationBankIfChanged = useCallback((
-        update: (previousBank: ArticulationBank) => ArticulationBank,
+    const updateArticulationEditorStateIfChanged = useCallback((
+        update: (previousBank: ArticulationEditorState) => ArticulationEditorState,
     ) => {
         const previousBank = articulationBankState.bankRef.current;
         const nextBank = update(previousBank);
 
-        if (articulationBanksEqual(previousBank, nextBank)) {
+        if (articulationEditorStatesEqual(previousBank, nextBank)) {
             return false;
         }
 
@@ -2623,10 +2961,10 @@ export function useSynthPatchViewModel({
         position: number,
         articulationId: string,
     ) => {
-        return updateArticulationBankIfChanged((previousBank) => (
+        return updateArticulationEditorStateIfChanged((previousBank) => (
             assignArticulationToRangePosition(previousBank, mode, position, articulationId)
         ));
-    }, [updateArticulationBankIfChanged]);
+    }, [updateArticulationEditorStateIfChanged]);
 
     const handleInsertArticulationRangeAtPosition = useCallback((
         mode: ArticulationTriggerMode,
@@ -2634,10 +2972,10 @@ export function useSynthPatchViewModel({
         articulationId: string,
         preserveSide?: ArticulationInsertPreserveSide,
     ) => {
-        return updateArticulationBankIfChanged((previousBank) => (
+        return updateArticulationEditorStateIfChanged((previousBank) => (
             insertArticulationRangeAtPosition(previousBank, mode, position, articulationId, preserveSide)
         ));
-    }, [updateArticulationBankIfChanged]);
+    }, [updateArticulationEditorStateIfChanged]);
 
     const handleDuplicateAndAssignArticulationRangePosition = useCallback((
         mode: ArticulationTriggerMode,
@@ -2650,7 +2988,7 @@ export function useSynthPatchViewModel({
         const nextSlotId = duplicatedBank.selectedSlotId;
 
         if (
-            articulationBanksEqual(previousBank, duplicatedBank)
+            articulationEditorStatesEqual(previousBank, duplicatedBank)
             || !nextSlotId
         ) {
             return false;
@@ -2660,7 +2998,7 @@ export function useSynthPatchViewModel({
             ? insertArticulationRangeAtPosition(duplicatedBank, mode, position, nextSlotId)
             : assignArticulationToRangePosition(duplicatedBank, mode, position, nextSlotId);
 
-        if (articulationBanksEqual(duplicatedBank, assignedBank)) {
+        if (articulationEditorStatesEqual(duplicatedBank, assignedBank)) {
             return false;
         }
 
@@ -2684,10 +3022,10 @@ export function useSynthPatchViewModel({
         segment: ArticulationRangeAssignment,
         targetPosition: number,
     ) => {
-        return updateArticulationBankIfChanged((previousBank) => (
+        return updateArticulationEditorStateIfChanged((previousBank) => (
             moveArticulationRangeAssignment(previousBank, mode, segment, targetPosition)
         ));
-    }, [updateArticulationBankIfChanged]);
+    }, [updateArticulationEditorStateIfChanged]);
 
     const handleResizeArticulationRangeAssignment = useCallback((
         mode: ArticulationTriggerMode,
@@ -2695,19 +3033,19 @@ export function useSynthPatchViewModel({
         edge: ArticulationRangeEditEdge,
         position: number,
     ) => {
-        return updateArticulationBankIfChanged((previousBank) => (
+        return updateArticulationEditorStateIfChanged((previousBank) => (
             resizeArticulationRangeAssignment(previousBank, mode, segment, edge, position)
         ));
-    }, [updateArticulationBankIfChanged]);
+    }, [updateArticulationEditorStateIfChanged]);
 
     const handleClearArticulationRangeAssignment = useCallback((
         mode: ArticulationTriggerMode,
         segment: ArticulationRangeAssignment,
     ) => {
-        return updateArticulationBankIfChanged((previousBank) => (
+        return updateArticulationEditorStateIfChanged((previousBank) => (
             clearArticulationRangeAssignment(previousBank, mode, segment)
         ));
-    }, [updateArticulationBankIfChanged]);
+    }, [updateArticulationEditorStateIfChanged]);
 
     const handleClearArticulationTriggerAssignments = useCallback((mode: ArticulationTriggerMode) => {
         articulationBankState.setAndPersistBank((previousBank) => clearArticulationTriggerAssignments(previousBank, mode));

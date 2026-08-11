@@ -1,8 +1,6 @@
 import {
     ArticulationSlotsExhausted,
     MappingAlreadyExists,
-    ROUTE_BUDGET,
-    RouteBudgetExceeded,
     SourceSlotsExhausted,
     type ArticulationLayerBackup,
     type ArticulationView,
@@ -549,9 +547,6 @@ export function createMockCosimoAdapter({
         addMapping(input) {
             const targetId = requireTargetId(String(input.targetId));
             const source = requireSource(state, input.sourceId);
-            if (state.patch.mappings.length >= ROUTE_BUDGET) {
-                return err(new RouteBudgetExceeded(ROUTE_BUDGET));
-            }
             const sourceId = sourceIdFromKnownIdentity(source.id);
             const mappingId = makeMappingId(targetId, sourceId);
             if (state.patch.mappings.some((mapping) => mapping.id === String(mappingId))) {
@@ -579,6 +574,10 @@ export function createMockCosimoAdapter({
 
         setMappingAmount(mappingId, amount, layer) {
             const mapping = requireMapping(state, mappingId);
+            const targetKind = getTargetDescriptor(requireTargetId(mapping.targetKey)).modulationTargetKind;
+            if (layer._tag === "articulationOverride" && targetKind?.startsWith("rack.")) {
+                return;
+            }
             dispatch({
                 type: "SET_PORT_MAPPING_AMOUNT",
                 mappingId: mapping.id,

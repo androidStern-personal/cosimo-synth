@@ -1,11 +1,6 @@
 import type { PatchConnectionLike } from "./cmajor-react";
-import {
-    MODULATION_STATE_KEY,
-    buildModulationRuntimeEvents,
-    deserializeModulationState,
-} from "./modulation";
 import { createArticulationWorkerService } from "./articulation-worker-service";
-import { createStoredStateRuntimeMirror } from "./stored-state-runtime-mirror";
+import { createModulationWorkerService } from "../worker/modulation-worker-service";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
@@ -49,6 +44,7 @@ const chorusRingFineSemitonesEndpointID = "chorusRingFineSemitones";
 const globalFilterModeEndpointID = "globalFilterMode";
 const hiddenSynthPresetGuardEndpointID = "hiddenSynthPresetGuard";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
+const runtimeInstallAckEndpointID = "runtimeInstallAck";
 const runtimeStateEndpointID = "runtimeState";
 const effectiveWavetablePositionEndpointID = "effectiveWavetablePosition";
 const effectiveWarpStateEndpointID = "effectiveWarpState";
@@ -219,14 +215,6 @@ function createDefaultRuntimeState() {
         failurePhase: 0,
         failureReasonCode: 0,
     };
-}
-
-function getRuntimeDspSessionId(value: unknown) {
-    if (!value || typeof value !== "object") {
-        return 0;
-    }
-
-    return Math.trunc(Number((value as { dspSessionId?: unknown }).dspSessionId) || 0);
 }
 
 function buildHarnessStatus(manifest: unknown) {
@@ -642,27 +630,20 @@ export class MockPatchConnection implements PatchConnectionLike {
     private storedState = new Map<string, unknown>();
     private runtimeState = createDefaultRuntimeState();
     private wavetableActivationTimerID: number | null = null;
+    private acceptedModulationSerial = 0;
+    private acceptedArticulationSerial = 0;
     private status: unknown;
-    private readonly modulationRuntimeMirror;
+    private readonly modulationWorkerService;
     private readonly articulationWorkerService;
 
     constructor(manifest: unknown) {
         this.manifest = manifest;
         this.status = buildHarnessStatus(manifest);
-        this.modulationRuntimeMirror = createStoredStateRuntimeMirror(this, {
-            stateKey: MODULATION_STATE_KEY,
-            runtimeEndpointDependencies: [{
-                endpointID: runtimeStateEndpointID,
-                required: true,
-                mapValue: getRuntimeDspSessionId,
-            }],
-            applyDefaultRuntimeStateWhenMissing: true,
-            deserializeStoredState: deserializeModulationState,
-            buildRuntimeEvents: ({ state }) => buildModulationRuntimeEvents(state),
-        });
-        this.modulationRuntimeMirror.start();
+        this.modulationWorkerService = createModulationWorkerService(this);
+        this.modulationWorkerService.start();
         this.articulationWorkerService = createArticulationWorkerService(this);
         this.articulationWorkerService.start();
+        queueMicrotask(() => this.emitEndpoint(runtimeStateEndpointID, this.runtimeState));
     }
 
     private cancelScheduledWavetableActivation() {
@@ -726,6 +707,26 @@ export class MockPatchConnection implements PatchConnectionLike {
 
         if (endpointID === runtimeSyncRequestEndpointID) {
             this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
+            queueMicrotask(() => this.emitRuntimeInstallAck(Math.trunc(Number(value) || 0)));
+            return;
+        }
+
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+            const payload = value as { dspSessionId?: unknown; deliverySerial?: unknown };
+            const dspSessionId = Math.trunc(Number(payload.dspSessionId) || 0);
+            const deliverySerial = Math.trunc(Number(payload.deliverySerial) || 0);
+            if (dspSessionId === this.runtimeState.dspSessionId && deliverySerial !== 0) {
+                if (deliverySerial === this.acceptedModulationSerial + 1) {
+                    this.acceptedModulationSerial = deliverySerial;
+                } else if (deliverySerial === this.acceptedArticulationSerial - 1) {
+                    this.acceptedArticulationSerial = deliverySerial;
+                }
+                queueMicrotask(() => this.emitRuntimeInstallAck(0));
+                return;
+            }
+        }
+
+        if (endpointID === runtimeInstallAckEndpointID) {
             return;
         }
 
@@ -816,6 +817,17 @@ export class MockPatchConnection implements PatchConnectionLike {
     private emitEndpoint(endpointID: string, value: unknown) {
         this.endpointMessages.push({ endpointID, value });
         this.endpointListeners.get(endpointID)?.forEach((listener) => listener(value));
+    }
+
+    private emitRuntimeInstallAck(syncSerial: number) {
+        this.emitEndpoint(runtimeInstallAckEndpointID, {
+            dspSessionId: this.runtimeState.dspSessionId,
+            acceptedModulationSerial: this.acceptedModulationSerial,
+            acceptedArticulationSerial: this.acceptedArticulationSerial,
+            rejectedSerial: 0,
+            rejectionReason: 0,
+            syncSerial,
+        });
     }
 
     sendMIDIInputEvent(endpointID: string, value: number) {
@@ -915,10 +927,15 @@ export class MockPatchConnection implements PatchConnectionLike {
 
     setRuntimeState(nextState: Partial<ReturnType<typeof createDefaultRuntimeState>>) {
         this.cancelScheduledWavetableActivation();
+        const previousDspSessionId = this.runtimeState.dspSessionId;
         this.runtimeState = {
             ...this.runtimeState,
             ...nextState,
         };
+        if (this.runtimeState.dspSessionId !== previousDspSessionId) {
+            this.acceptedModulationSerial = 0;
+            this.acceptedArticulationSerial = 0;
+        }
         this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
     }
 

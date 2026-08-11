@@ -1,19 +1,19 @@
 import {
     MODULATION_ENV_SLOT_COUNT,
-    MODULATION_MAX_ROUTES,
     MODULATION_MSEG_SLOT_COUNT,
-    clampModulationRouteAmount,
     createDefaultEnvelope,
     normalizeEnvelope,
-    normalizeRoute,
     type ModulationEnvelope,
-    type ModulationRoute,
 } from "./modulation";
+import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program";
 
-export const ARTICULATION_STATE_KEY = "articulations.v2";
 export const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 export const ARTICULATION_MAX_SLOTS = 128;
+/** Largest legal absolute route amount in Cosimo's target domain. */
+export const ARTICULATION_ROUTE_AMOUNT_MAX_ABS = 48;
+/** Runtime sentinel: resolve this articulation cell from the current base mapping at note latch. */
+export const ARTICULATION_ROUTE_AMOUNT_INHERIT = 1_000_000;
 export const ARTICULATION_UNASSIGNED_RUNTIME_SLOT = -1;
 
 const ARTICULATION_DEFAULT_NAMES = [
@@ -39,8 +39,6 @@ export type ArticulationTriggerMode = "chain" | "key" | "vel";
 
 export type ArticulationParameterSnapshot = {
     wavetablePosition: number;
-    playMode: number;
-    glideTime: number;
     pan: number;
     warpMode: number;
     warpAmount: number;
@@ -59,20 +57,6 @@ export type ArticulationParameterSnapshot = {
     unisonWavetablePositionSpread: number;
     unisonWarpSpread: number;
     msegMorphs: [number, number, number];
-    distortionMode: number;
-    distortionDriveDb: number;
-    distortionKnee: number;
-    distortionWet: number;
-    distortionWetHPHz: number;
-    distortionWetLPHz: number;
-    chorusMix: number;
-    chorusMotionMode: number;
-    chorusBloomMode: number;
-    chorusTone: number;
-    chorusFeedback: number;
-    chorusRingAmount: number;
-    chorusRingOffsetMode: number;
-    chorusRingFineSemitones: number;
 };
 
 export type ArticulationRouteAmountSnapshot = {
@@ -110,9 +94,8 @@ export type ArticulationRangeAssignment = {
 export type ArticulationRangeEditEdge = "min" | "max";
 export type ArticulationInsertPreserveSide = "lower" | "upper";
 
-export type ArticulationBank = {
-    format: "cosimo.articulations";
-    version: 2;
+/** Transient desktop editing view; persisted articulation state is exclusively `articulations.v3`. */
+export type ArticulationEditorState = {
     selectedSlotId: string | null;
     activeTriggerMode: ArticulationTriggerMode;
     slots: ArticulationSlot[];
@@ -260,8 +243,6 @@ function createUniqueCopiedName(slots: ArticulationSlot[], sourceName: string) {
 export function createDefaultArticulationParameterSnapshot(): ArticulationParameterSnapshot {
     return {
         wavetablePosition: 0,
-        playMode: 0,
-        glideTime: 0,
         pan: 0,
         warpMode: 0,
         warpAmount: 0,
@@ -280,20 +261,6 @@ export function createDefaultArticulationParameterSnapshot(): ArticulationParame
         unisonWavetablePositionSpread: 0,
         unisonWarpSpread: 0,
         msegMorphs: [0, 0, 0],
-        distortionMode: 0,
-        distortionDriveDb: 12,
-        distortionKnee: 0.35,
-        distortionWet: 0,
-        distortionWetHPHz: 40,
-        distortionWetLPHz: 18_000,
-        chorusMix: 0,
-        chorusMotionMode: 1,
-        chorusBloomMode: 0,
-        chorusTone: 0.5,
-        chorusFeedback: 0.42,
-        chorusRingAmount: 0,
-        chorusRingOffsetMode: 0,
-        chorusRingFineSemitones: 0,
     };
 }
 
@@ -306,8 +273,6 @@ export function normalizeArticulationParameterSnapshot(value: unknown): Articula
 
     return {
         wavetablePosition: normalizeNumber(nextValue.wavetablePosition, defaults.wavetablePosition, 0, 1),
-        playMode: normalizeInteger(nextValue.playMode, defaults.playMode, 0, 2),
-        glideTime: normalizeNumber(nextValue.glideTime, defaults.glideTime, 0, 2),
         pan: normalizeNumber(nextValue.pan, defaults.pan, -1, 1),
         warpMode: normalizeInteger(nextValue.warpMode, defaults.warpMode, 0, 4),
         warpAmount: normalizeNumber(nextValue.warpAmount, defaults.warpAmount, 0, 1),
@@ -335,20 +300,6 @@ export function normalizeArticulationParameterSnapshot(value: unknown): Articula
             clamp01(Number(msegMorphs[1])),
             clamp01(Number(msegMorphs[2])),
         ],
-        distortionMode: normalizeInteger(nextValue.distortionMode, defaults.distortionMode, 0, 1),
-        distortionDriveDb: normalizeNumber(nextValue.distortionDriveDb, defaults.distortionDriveDb, 0, 36),
-        distortionKnee: normalizeNumber(nextValue.distortionKnee, defaults.distortionKnee, 0, 1),
-        distortionWet: normalizeNumber(nextValue.distortionWet, defaults.distortionWet, 0, 1),
-        distortionWetHPHz: normalizeNumber(nextValue.distortionWetHPHz, defaults.distortionWetHPHz, 20, 4_000),
-        distortionWetLPHz: normalizeNumber(nextValue.distortionWetLPHz, defaults.distortionWetLPHz, 20, 20_000),
-        chorusMix: normalizeNumber(nextValue.chorusMix, defaults.chorusMix, 0, 1),
-        chorusMotionMode: normalizeInteger(nextValue.chorusMotionMode, defaults.chorusMotionMode, 0, 3),
-        chorusBloomMode: normalizeInteger(nextValue.chorusBloomMode, defaults.chorusBloomMode, 0, 4),
-        chorusTone: normalizeNumber(nextValue.chorusTone, defaults.chorusTone, 0, 1),
-        chorusFeedback: normalizeNumber(nextValue.chorusFeedback, defaults.chorusFeedback, 0, 0.95),
-        chorusRingAmount: normalizeNumber(nextValue.chorusRingAmount, defaults.chorusRingAmount, 0, 1),
-        chorusRingOffsetMode: normalizeInteger(nextValue.chorusRingOffsetMode, defaults.chorusRingOffsetMode, 0, 3),
-        chorusRingFineSemitones: normalizeNumber(nextValue.chorusRingFineSemitones, defaults.chorusRingFineSemitones, -2, 2),
     };
 }
 
@@ -533,10 +484,8 @@ function normalizeKeyAssignments(value: unknown, validArticulationIds: Set<strin
     return assignments;
 }
 
-export function createDefaultArticulationBank(): ArticulationBank {
+export function createDefaultArticulationEditorState(): ArticulationEditorState {
     return {
-        format: "cosimo.articulations",
-        version: 2,
         selectedSlotId: null,
         activeTriggerMode: "chain",
         slots: [],
@@ -546,19 +495,9 @@ export function createDefaultArticulationBank(): ArticulationBank {
     };
 }
 
-export function normalizeArticulationBank(value: unknown): ArticulationBank {
-    let parsedValue = value;
-
-    if (typeof parsedValue === "string" && parsedValue.trim()) {
-        try {
-            parsedValue = JSON.parse(parsedValue);
-        } catch {
-            parsedValue = null;
-        }
-    }
-
-    const nextValue = parsedValue && typeof parsedValue === "object"
-        ? parsedValue as Partial<ArticulationBank>
+export function normalizeArticulationEditorState(value: unknown): ArticulationEditorState {
+    const nextValue = value && typeof value === "object"
+        ? value as Partial<ArticulationEditorState>
         : {};
     const inputSlots = Array.isArray(nextValue.slots) ? nextValue.slots : [];
     const usedRuntimeSlots = new Set<number>();
@@ -584,8 +523,6 @@ export function normalizeArticulationBank(value: unknown): ArticulationBank {
     const validArticulationIds = new Set(slots.map((slot) => slot.id));
 
     return {
-        format: "cosimo.articulations",
-        version: 2,
         selectedSlotId,
         activeTriggerMode: normalizeTriggerMode(nextValue.activeTriggerMode),
         slots,
@@ -595,12 +532,12 @@ export function normalizeArticulationBank(value: unknown): ArticulationBank {
     };
 }
 
-export function serializeArticulationBank(value: unknown) {
-    return JSON.stringify(normalizeArticulationBank(value));
+function serializeArticulationEditorState(value: unknown) {
+    return JSON.stringify(normalizeArticulationEditorState(value));
 }
 
-export function articulationBanksEqual(left: ArticulationBank, right: ArticulationBank) {
-    return serializeArticulationBank(left) === serializeArticulationBank(right);
+export function articulationEditorStatesEqual(left: ArticulationEditorState, right: ArticulationEditorState) {
+    return serializeArticulationEditorState(left) === serializeArticulationEditorState(right);
 }
 
 export function articulationSnapshotsEqual(left: ArticulationSnapshot, right: ArticulationSnapshot) {
@@ -611,7 +548,7 @@ export function createArticulationSlotFromSnapshot(
     bankValue: unknown,
     snapshotValue: unknown,
 ): ArticulationSlot | null {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const usedRuntimeSlots = new Set(bank.slots.map((slot) => slot.runtimeSlot));
     const usedIds = new Set(bank.slots.map((slot) => slot.id));
     let runtimeSlot = -1;
@@ -662,7 +599,7 @@ export function assignArticulationToNextAvailableTrigger(
     articulationId: string,
     modeValue?: ArticulationTriggerMode,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const mode = normalizeTriggerMode(modeValue ?? bank.activeTriggerMode);
 
     if (!bank.slots.some((slot) => slot.id === articulationId)) {
@@ -676,7 +613,7 @@ export function assignArticulationToNextAvailableTrigger(
             return bank;
         }
 
-        return normalizeArticulationBank({
+        return normalizeArticulationEditorState({
             ...bank,
             chainAssignments: [
                 ...bank.chainAssignments,
@@ -698,7 +635,7 @@ export function assignArticulationToNextAvailableTrigger(
             return bank;
         }
 
-        return normalizeArticulationBank({
+        return normalizeArticulationEditorState({
             ...bank,
             keyAssignments: [
                 ...bank.keyAssignments,
@@ -716,7 +653,7 @@ export function assignArticulationToNextAvailableTrigger(
         return bank;
     }
 
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
         ...bank,
         velocityAssignments: [
             ...bank.velocityAssignments,
@@ -735,14 +672,14 @@ export function addCapturedArticulationToBank(
     snapshotValue: unknown,
     options: { autoAssign?: boolean } = {},
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const nextSlot = createArticulationSlotFromSnapshot(bank, snapshotValue);
 
     if (!nextSlot) {
         return bank;
     }
 
-    const nextBank = normalizeArticulationBank({
+    const nextBank = normalizeArticulationEditorState({
         ...bank,
         selectedSlotId: nextSlot.id,
         slots: [...bank.slots, nextSlot],
@@ -760,7 +697,7 @@ export function upsertSelectedArticulationSnapshot(
     slotId: string,
     snapshotValue: unknown,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const snapshot = normalizeArticulationSnapshot(snapshotValue);
     const slots = bank.slots.map((slot) => (
         slot.id === slotId
@@ -768,7 +705,7 @@ export function upsertSelectedArticulationSnapshot(
             : slot
     ));
 
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
         ...bank,
         slots,
     });
@@ -778,9 +715,9 @@ export function setArticulationTriggerMode(
     bankValue: unknown,
     modeValue: unknown,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
 
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
         ...bank,
         activeTriggerMode: normalizeTriggerMode(modeValue),
     });
@@ -791,14 +728,14 @@ export function renameArticulationSlot(
     slotId: string,
     nextNameValue: unknown,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const nextName = typeof nextNameValue === "string" ? nextNameValue.trim() : "";
 
     if (!nextName) {
         return bank;
     }
 
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
         ...bank,
         slots: bank.slots.map((slot) => (
             slot.id === slotId
@@ -812,7 +749,7 @@ export function duplicateArticulationSlot(
     bankValue: unknown,
     slotId: string,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const sourceSlot = bank.slots.find((slot) => slot.id === slotId);
 
     if (!sourceSlot) {
@@ -825,7 +762,7 @@ export function duplicateArticulationSlot(
         return bank;
     }
 
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
         ...bank,
         selectedSlotId: nextSlot.id,
         slots: [
@@ -842,7 +779,7 @@ export function deleteArticulationSlot(
     bankValue: unknown,
     slotId: string,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
 
     if (bank.slots.length <= 1 || !bank.slots.some((slot) => slot.id === slotId)) {
         return bank;
@@ -850,7 +787,7 @@ export function deleteArticulationSlot(
 
     const slots = bank.slots.filter((slot) => slot.id !== slotId);
 
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
         ...bank,
         selectedSlotId: bank.selectedSlotId === slotId ? (slots[0]?.id ?? null) : bank.selectedSlotId,
         slots,
@@ -865,7 +802,7 @@ export function assignArticulationToKey(
     noteValue: unknown,
     articulationId: string,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
 
     if (!bank.slots.some((slot) => slot.id === articulationId)) {
         return bank;
@@ -873,7 +810,7 @@ export function assignArticulationToKey(
 
     const note = normalizeInteger(noteValue, 0, 0, ARTICULATION_MAX_SLOTS - 1);
 
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
         ...bank,
         keyAssignments: [
             ...bank.keyAssignments.filter((assignment) => assignment.note !== note),
@@ -948,7 +885,7 @@ function rangeAssignmentsToKeyAssignments(assignments: ArticulationRangeAssignme
     return keyAssignments;
 }
 
-function getTriggerLaneInfo(bank: ArticulationBank, modeValue: unknown) {
+function getTriggerLaneInfo(bank: ArticulationEditorState, modeValue: unknown) {
     const mode = normalizeTriggerMode(modeValue);
 
     if (mode === "key") {
@@ -973,14 +910,14 @@ function getTriggerLaneInfo(bank: ArticulationBank, modeValue: unknown) {
 }
 
 function setTriggerLaneAssignments(
-    bank: ArticulationBank,
+    bank: ArticulationEditorState,
     mode: ArticulationTriggerMode,
     assignments: ArticulationRangeAssignment[],
 ) {
     const sortedAssignments = sortRangeAssignments(assignments);
 
     if (mode === "key") {
-        return normalizeArticulationBank({
+        return normalizeArticulationEditorState({
             ...bank,
             keyAssignments: rangeAssignmentsToKeyAssignments(sortedAssignments),
         });
@@ -988,7 +925,7 @@ function setTriggerLaneAssignments(
 
     const { field } = getRangeAssignmentField(mode);
 
-    return normalizeArticulationBank({
+    return normalizeArticulationEditorState({
         ...bank,
         [field]: sortedAssignments,
     });
@@ -1095,7 +1032,7 @@ export function assignArticulationToRangePosition(
     positionValue: unknown,
     articulationId: string,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
 
     if (!bank.slots.some((slot) => slot.id === articulationId)) {
         return bank;
@@ -1145,7 +1082,7 @@ export function insertArticulationRangeAtPosition(
     articulationId: string,
     preserveSide?: ArticulationInsertPreserveSide,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
 
     if (!bank.slots.some((slot) => slot.id === articulationId)) {
         return bank;
@@ -1208,7 +1145,7 @@ export function moveArticulationRangeAssignment(
     segmentValue: unknown,
     targetPositionValue: unknown,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
     const target = findMatchingRangeAssignment(assignments, segmentValue);
 
@@ -1250,7 +1187,7 @@ export function resizeArticulationRangeAssignment(
     edge: ArticulationRangeEditEdge,
     positionValue: unknown,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const { mode, minAllowed, maxAllowed, assignments } = getTriggerLaneInfo(bank, modeValue);
     const target = findMatchingRangeAssignment(assignments, segmentValue);
 
@@ -1290,7 +1227,7 @@ export function clearArticulationRangeAssignment(
     modeValue: ArticulationTriggerMode,
     segmentValue: unknown,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const { mode, assignments } = getTriggerLaneInfo(bank, modeValue);
     const target = findMatchingRangeAssignment(assignments, segmentValue);
 
@@ -1309,7 +1246,7 @@ export function clearArticulationTriggerAssignments(
     bankValue: unknown,
     modeValue: ArticulationTriggerMode,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const mode = normalizeTriggerMode(modeValue);
 
     return setTriggerLaneAssignments(bank, mode, []);
@@ -1319,7 +1256,7 @@ export function distributeArticulationRanges(
     bankValue: unknown,
     modeValue: ArticulationTriggerMode,
 ) {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const { mode, minAllowed, maxAllowed, prefix, assignments } = getTriggerLaneInfo(bank, modeValue);
     const firstAssignmentByArticulation = new Map<string, ArticulationRangeAssignment>();
 
@@ -1353,7 +1290,7 @@ export function distributeArticulationRanges(
     return setTriggerLaneAssignments(bank, mode, nextAssignments);
 }
 
-function createDisabledRuntimeUpload(selectorA: number): ArticulationSnapshotRuntimeUpload {
+export function createDisabledArticulationRuntimeUpload(selectorA: number): ArticulationSnapshotRuntimeUpload {
     return {
         selectorA,
         enabled: false,
@@ -1376,96 +1313,12 @@ function createDisabledRuntimeUpload(selectorA: number): ArticulationSnapshotRun
         unisonWavetablePositionSpread: 0,
         unisonWarpSpread: 0,
         msegMorphs: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0),
-        routeAmounts: Array.from({ length: MODULATION_MAX_ROUTES }, () => 0),
+        routeAmounts: Array.from({ length: MODULATION_ARTICULATION_ROUTE_CELL_COUNT }, () => 0),
         envelopeAttackSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).attackSeconds),
         envelopeDecaySeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).decaySeconds),
         envelopeSustain: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).sustain),
         envelopeReleaseSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).releaseSeconds),
     };
-}
-
-function normalizeRuntimeRoutes(routesValue: unknown): ModulationRoute[] {
-    return Array.isArray(routesValue)
-        ? routesValue.slice(0, MODULATION_MAX_ROUTES).map((route, routeIndex) => normalizeRoute(route, routeIndex))
-        : [];
-}
-
-export function buildArticulationRuntimeUploads(
-    bankValue: unknown,
-    currentRoutesValue: unknown = [],
-): ArticulationSnapshotRuntimeUpload[] {
-    const bank = normalizeArticulationBank(bankValue);
-    const currentRoutes = normalizeRuntimeRoutes(currentRoutesValue);
-    const slotByRuntimeSlot = new Map(bank.slots.map((slot) => [slot.runtimeSlot, slot]));
-
-    return Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, selectorA) => {
-        const slot = slotByRuntimeSlot.get(selectorA);
-
-        if (!slot) {
-            return createDisabledRuntimeUpload(selectorA);
-        }
-
-        const snapshot = normalizeArticulationSnapshot(slot.snapshot);
-        const parameters = snapshot.parameters;
-        const routeAmountById = new Map(snapshot.modRouteAmounts.map((routeAmount) => [
-            routeAmount.routeId,
-            routeAmount.amount,
-        ]));
-
-        return {
-            selectorA,
-            enabled: true,
-            framePosition: parameters.wavetablePosition,
-            pan: parameters.pan,
-            warpMode: parameters.warpMode,
-            warpAmount: parameters.warpAmount,
-            filterMode: parameters.filterMode,
-            filterCutoffHz: parameters.filterCutoff,
-            filterQ: parameters.filterQ,
-            unisonVoices: parameters.unisonVoices,
-            unisonDetune: parameters.unisonDetune,
-            unisonBlend: parameters.unisonBlend,
-            unisonWidth: parameters.unisonWidth,
-            unisonPhase: parameters.unisonPhase,
-            unisonRandom: parameters.unisonRandom,
-            unisonPhaseMode: parameters.unisonPhaseMode,
-            unisonDetuneMode: parameters.unisonDetuneMode,
-            unisonStackMode: parameters.unisonStackMode,
-            unisonWavetablePositionSpread: parameters.unisonWavetablePositionSpread,
-            unisonWarpSpread: parameters.unisonWarpSpread,
-            msegMorphs: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => (
-                parameters.msegMorphs[slotIndex] ?? 0
-            )),
-            routeAmounts: Array.from({ length: MODULATION_MAX_ROUTES }, (_, routeIndex) => {
-                const route = currentRoutes[routeIndex];
-
-                if (!route) {
-                    return 0;
-                }
-
-                if (!routeAmountById.has(route.id)) {
-                    return route.amount;
-                }
-
-                return clampModulationRouteAmount(
-                    route.targetKind,
-                    Number(routeAmountById.get(route.id)),
-                );
-            }),
-            envelopeAttackSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
-                snapshot.envelopes[slotIndex]?.attackSeconds ?? createDefaultEnvelope(slotIndex).attackSeconds
-            )),
-            envelopeDecaySeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
-                snapshot.envelopes[slotIndex]?.decaySeconds ?? createDefaultEnvelope(slotIndex).decaySeconds
-            )),
-            envelopeSustain: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
-                snapshot.envelopes[slotIndex]?.sustain ?? createDefaultEnvelope(slotIndex).sustain
-            )),
-            envelopeReleaseSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => (
-                snapshot.envelopes[slotIndex]?.releaseSeconds ?? createDefaultEnvelope(slotIndex).releaseSeconds
-            )),
-        };
-    });
 }
 
 function fillRangeTriggerMap(
@@ -1489,7 +1342,7 @@ function fillRangeTriggerMap(
 }
 
 export function buildArticulationTriggerConfig(bankValue: unknown): ArticulationTriggerConfig {
-    const bank = normalizeArticulationBank(bankValue);
+    const bank = normalizeArticulationEditorState(bankValue);
     const runtimeSlotByArticulationId = new Map(bank.slots.map((slot) => [slot.id, slot.runtimeSlot]));
     const chain = createUnassignedRuntimeMap();
     const key = createUnassignedRuntimeMap();

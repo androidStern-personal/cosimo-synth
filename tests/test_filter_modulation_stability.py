@@ -48,10 +48,9 @@ MSEG_FILTER_FIXTURES = (
 REQUIRED_MSEG_FILTER_FIXTURE_FILES = (
     "mseg1Buffer.json",
     "mseg1Playback.json",
-    "modulationEnable.json",
     "modulationMsegBuffer.json",
     "modulationMsegPlayback.json",
-    "modulationRoute.json",
+    "modulationProgram.json",
 )
 STEADY_STATE_SLICE = slice(512, 3072)
 HIGH_FREQUENCY_RESIDUAL_START_HZ = 6_000.0

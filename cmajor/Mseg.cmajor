@@ -283,7 +283,7 @@ namespace wt
             return loopEnabled && ! stopFutureWraps;
         }
 
-        float32 sampleBufferAt (const float32[msegPaddedSamples] sourceBuffer, float32 normalizedX)
+        float32 sampleBufferAAt (float32 normalizedX)
         {
             let clampedX = std::intrinsics::clamp (normalizedX, 0.0f, 1.0f);
             let scaled = clampedX * float32 (msegBodySamples - 1);
@@ -291,10 +291,26 @@ namespace wt
             let fractional = scaled - float32 (sampleIndex);
 
             return msegCatmullRom (
-                sourceBuffer.at (sampleIndex),
-                sourceBuffer.at (sampleIndex + 1),
-                sourceBuffer.at (sampleIndex + 2),
-                sourceBuffer.at (sampleIndex + 3),
+                bufferA.at (sampleIndex),
+                bufferA.at (sampleIndex + 1),
+                bufferA.at (sampleIndex + 2),
+                bufferA.at (sampleIndex + 3),
+                fractional
+            );
+        }
+
+        float32 sampleBufferBAt (float32 normalizedX)
+        {
+            let clampedX = std::intrinsics::clamp (normalizedX, 0.0f, 1.0f);
+            let scaled = clampedX * float32 (msegBodySamples - 1);
+            let sampleIndex = int32 (std::intrinsics::floor (scaled));
+            let fractional = scaled - float32 (sampleIndex);
+
+            return msegCatmullRom (
+                bufferB.at (sampleIndex),
+                bufferB.at (sampleIndex + 1),
+                bufferB.at (sampleIndex + 2),
+                bufferB.at (sampleIndex + 3),
                 fractional
             );
         }
@@ -350,8 +366,8 @@ namespace wt
         {
             active = true;
             progress = 0.0f;
-            currentValueA = sampleBufferAt (bufferA, 0.0f);
-            currentValueB = sampleBufferAt (bufferB, 0.0f);
+            currentValueA = sampleBufferAAt (0.0f);
+            currentValueB = sampleBufferBAt (0.0f);
             stopFutureWraps = false;
         }
 
@@ -383,8 +399,8 @@ namespace wt
 
                 if (active)
                 {
-                    currentValueA = sampleBufferAt (bufferA, progress);
-                    currentValueB = sampleBufferAt (bufferB, progress);
+                    currentValueA = sampleBufferAAt (progress);
+                    currentValueB = sampleBufferBAt (progress);
 
                     if (! wrapsAreActive() && progress >= 1.0f)
                     {

@@ -23,6 +23,10 @@ typedef void (^CosimoHostResultBlock)(NSDictionary<NSString *, id> * _Nullable r
 - (void)captureEditorStateWithCompletion:(CosimoHostResultBlock)completion;
 - (void)inspectEditorHostPageWithCompletion:(CosimoHostResultBlock)completion;
 - (void)inspectFactoryCatalogWithCompletion:(CosimoHostResultBlock)completion;
+- (void)installModulationProfileIndex:(NSUInteger)profileIndex completion:(CosimoHostResultBlock)completion;
+- (void)measureModulationPhaseNamed:(NSString *)phaseName
+                    durationSeconds:(NSTimeInterval)durationSeconds
+                         completion:(CosimoHostResultBlock)completion;
 - (void)reloadEditorHostPageWithCompletion:(CosimoHostResultBlock)completion;
 - (void)closeEditorWithCompletion:(CosimoHostResultBlock _Nullable)completion;
 - (void)saveStateNamed:(NSString *)stateName completion:(CosimoHostResultBlock)completion;

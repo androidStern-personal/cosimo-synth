@@ -1,8 +1,6 @@
 import {
     ArticulationSlotsExhausted,
     MappingAlreadyExists,
-    ROUTE_BUDGET,
-    RouteBudgetExceeded,
     SourceSlotsExhausted,
     type ArticulationTriggerMode,
     type AuditionState,
@@ -17,26 +15,20 @@ import {
     type SourceType,
 } from "./cosimo-adapter-port";
 import {
-    affectedSelectors,
     createEmptyArticulationsState,
     lowestFreeRuntimeSlot,
     parseArticulationsV3,
-    resolveArticulationImage,
-    resolveArticulationImages,
     serializeArticulationsV3,
     type ArticulationSlotV3,
     type ArticulationsState,
     type ArticulationVoiceParameterId,
-    type PatchVoiceBase,
 } from "./articulation-image";
 import {
     ARTICULATION_MAX_SLOTS,
-    ARTICULATION_SNAPSHOT_ENDPOINT_ID,
     ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
     ARTICULATION_UNASSIGNED_RUNTIME_SLOT,
     createDefaultArticulationName,
     serializeArticulationTriggerConfig,
-    type ArticulationSnapshotRuntimeUpload,
     type ArticulationTriggerConfig,
 } from "./articulations";
 import type { PatchConnectionLike } from "./cmajor-react";
@@ -59,6 +51,8 @@ import {
     createDefaultEnvelope,
     createDefaultModulationState,
     getModulationAmountBounds,
+    modulationRoutePairKey,
+    parseModulationState,
     releaseModulationRuntimeBridge,
     type ModulationEnvelope,
     type ModulationRoute,
@@ -67,6 +61,7 @@ import {
     type ModulationState,
     type ModulationTargetKind,
 } from "./modulation";
+import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 import { createDefaultMsegPlayback, createDefaultMsegShape } from "./mseg";
 import { err, ok } from "./result";
 import {
@@ -434,18 +429,18 @@ function parseUiMappings(input: unknown): ParseOutcome<Map<MappingId, PendingUiM
         });
     }
 
-    if (mappings.size > ROUTE_BUDGET) {
-        return parseError(`${UI_MAPPINGS_STATE_KEY} exceeds the shared route budget of ${ROUTE_BUDGET}`);
-    }
     return { _tag: "ok", value: mappings };
 }
 
-function parseStoredArticulations(input: unknown): ParseOutcome<ArticulationsState> {
+function parseStoredArticulations(
+    input: unknown,
+    acceptedRouteIds: ReadonlySet<string>,
+): ParseOutcome<ArticulationsState> {
     const document = parseJsonDocument(input, "articulations.v3");
     if (document._tag === "err") {
         return document;
     }
-    const parsed = parseArticulationsV3(document.value);
+    const parsed = parseArticulationsV3(document.value, acceptedRouteIds);
     return parsed._tag === "ok"
         ? { _tag: "ok", value: parsed.value }
         : parseError(parsed.error.message);
@@ -548,7 +543,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const validRoutes = this.collectValidRoutes(state);
         if (validRoutes.length !== state.routes.length) {
-            this.modulationBridge.replaceRoutes(validRoutes.map(({ route }) => route));
+            this.detach("modulation.v2 contains a mapping without its canonical current identity");
             return;
         }
         this.adoptValidRoutes(validRoutes);
@@ -575,10 +570,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     };
 
     private adoptValidRoutes(validRoutes: ReadonlyArray<ValidRoute>): void {
-        if (validRoutes.length + this.uiMappings.size > ROUTE_BUDGET) {
-            this.detach(`Stored mappings exceed the shared route budget of ${ROUTE_BUDGET}`);
-            return;
-        }
         for (const validRoute of validRoutes) {
             const definition = SOURCE_DEFINITION_BY_ID.get(String(validRoute.sourceId));
             if (definition !== undefined && definition.type !== "fixed") {
@@ -609,7 +600,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 }
                 this.parameterValues = parsed.value;
                 this.uploadAllBoundBaseValues();
-                this.uploadAllArticulationImages();
                 this.markSnapshotDirty();
                 return;
             }
@@ -631,10 +621,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     return;
                 }
                 const validRoutes = this.collectValidRoutes(this.modulationBridge.getState());
-                if (validRoutes.length + parsed.value.size > ROUTE_BUDGET) {
-                    this.detach(`Stored mappings exceed the shared route budget of ${ROUTE_BUDGET}`);
-                    return;
-                }
                 this.uiMappings = parsed.value;
                 this.revealMappedSources(this.uiMappings.values());
                 this.synchronizeMappingCreationOrder(validRoutes);
@@ -642,13 +628,15 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 return;
             }
             if (message.key === "articulations.v3") {
-                const parsed = parseStoredArticulations(message.value);
+                const parsed = parseStoredArticulations(
+                    message.value,
+                    this.collectArticulationMappingIds(),
+                );
                 if (parsed._tag === "err") {
                     this.detach(parsed.message);
                     return;
                 }
                 this.articulations = parsed.value;
-                this.uploadAllArticulationImages();
                 this.sendNativeTriggerConfig();
                 this.markSnapshotDirty();
             }
@@ -818,9 +806,24 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const rawRackState = readFullStoredStateValue(storedState, RACK_STATE_KEY);
         const rawModulationState = readFullStoredStateValue(storedState, MODULATION_STATE_KEY);
 
+        let restoredModulationState = this.modulationBridge.getState();
+        if (rawModulationState !== undefined) {
+            const parsedModulationState = parseModulationState(rawModulationState);
+            if (parsedModulationState._tag === "err") {
+                this.detach(parsedModulationState.error.message);
+                return;
+            }
+            restoredModulationState = parsedModulationState.value;
+        }
+        const validRoutes = this.collectValidRoutes(restoredModulationState);
+        if (rawModulationState !== undefined && validRoutes.length !== restoredModulationState.routes.length) {
+            this.detach("modulation.v2 contains a mapping without its canonical current identity");
+            return;
+        }
+
         const parsedArticulations = rawArticulations === undefined
             ? { _tag: "ok", value: createEmptyArticulationsState() } as const
-            : parseStoredArticulations(rawArticulations);
+            : parseStoredArticulations(rawArticulations, this.collectArticulationMappingIds(validRoutes));
         if (parsedArticulations._tag === "err") {
             this.detach(parsedArticulations.message);
             return;
@@ -850,12 +853,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
 
-        const validRoutes = this.collectValidRoutes(this.modulationBridge.getState());
-        if (validRoutes.length + parsedUiMappings.value.size > ROUTE_BUDGET) {
-            this.detach(`Stored mappings exceed the shared route budget of ${ROUTE_BUDGET}`);
-            return;
-        }
-
         this.runCommand(() => {
             this.articulations = parsedArticulations.value;
             this.parameterValues = parsedParameterValues.value;
@@ -873,7 +870,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 this.modulationBridge.replaceRoutes([]);
             }
             this.uploadAllBoundBaseValues();
-            this.uploadAllArticulationImages();
             this.sendNativeTriggerConfig();
             commitRackState(this.connection, this.rackState);
             this.markSnapshotDirty();
@@ -918,6 +914,11 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private buildSnapshot(): PatchSnapshot {
         const validRoutes = this.collectValidRoutes(this.modulationBridge.getState());
         const mappings = this.projectMappingsInCreationOrder(validRoutes);
+        const articulationRouteById = new Map(validRoutes.flatMap((validRoute) => (
+            getModulationArticulationCellIndex(validRoute.route) === null
+                ? []
+                : [[validRoute.route.id, validRoute] as const]
+        )));
         const articulationOverrides: Record<string, Readonly<Record<string, NormalizedValue>>> = {};
         const articulationMappingAmounts: Record<string, Readonly<Record<string, number>>> = {};
 
@@ -936,27 +937,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             }
 
             const mappingAmounts: Record<string, number> = {};
-            for (const validRoute of validRoutes) {
-                if (!Object.hasOwn(slot.routeAmounts, validRoute.route.id)) {
-                    continue;
-                }
-                const routeAmount = slot.routeAmounts[validRoute.route.id];
-                if (routeAmount !== undefined) {
-                    mappingAmounts[validRoute.route.id] = routeAmountToSpecAmount(
+            for (const [mappingId, routeAmount] of Object.entries(slot.routeAmounts)) {
+                const validRoute = articulationRouteById.get(mappingId);
+                if (validRoute !== undefined) {
+                    mappingAmounts[mappingId] = routeAmountToSpecAmount(
                         validRoute.descriptor.modAmount,
                         validRoute.route.targetKind,
                         routeAmount,
                     );
-                }
-            }
-            for (const mapping of this.uiMappings.values()) {
-                if (!Object.hasOwn(slot.routeAmounts, mapping.id)) {
-                    continue;
-                }
-                const routeAmount = slot.routeAmounts[mapping.id];
-                if (routeAmount !== undefined) {
-                    const descriptor = getTargetDescriptor(mapping.targetId);
-                    mappingAmounts[mapping.id] = clampSpecAmount(descriptor.modAmount, routeAmount);
                 }
             }
 
@@ -1181,12 +1169,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 );
             }
             this.persistParameterValues();
-            if (descriptor.articulationParameterId !== null) {
-                this.uploadArticulationSelectors(affectedSelectors({
-                    kind: "voiceParameter",
-                    parameterId: descriptor.articulationParameterId,
-                }, this.articulations));
-            }
         } else {
             const slot = this.requireArticulation(input.layer.articulationId);
             const parameterId = descriptor.articulationParameterId;
@@ -1202,7 +1184,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             };
             this.replaceArticulationSlot(nextSlot);
             this.persistArticulations();
-            this.uploadArticulationSelectors([slot.runtimeSlot]);
         }
 
         if (this.audition.triggerActive) {
@@ -1220,9 +1201,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const targetKind = descriptor.modulationTargetKind;
         const source = this.requireSource(input.sourceId);
         const routes = this.collectValidRoutes(this.modulationBridge.getState());
-        if (routes.length + this.uiMappings.size >= ROUTE_BUDGET) {
-            return err(new RouteBudgetExceeded(ROUTE_BUDGET));
-        }
         const sourceId = sourceIdFromDefinition(source);
         const mappingId = makeMappingId(descriptor.targetId, sourceId);
         if (routes.some((validRoute) => validRoute.route.id === mappingId)
@@ -1258,9 +1236,23 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             amount: specAmountToRouteAmount(descriptor.modAmount, targetKind, amount),
             reducer: input.reducer === "Mean" ? "mean" : "max",
         };
+        const rawRoutes = this.modulationBridge.getState().routes;
+        if (rawRoutes.some((candidate) => (
+            candidate.id === mappingId
+            || modulationRoutePairKey(candidate) === modulationRoutePairKey(route)
+        ))) {
+            return err(new MappingAlreadyExists(mappingId));
+        }
+
+        const addedRoute = this.modulationBridge.addRoute(route);
+        if (addedRoute === null) {
+            return err(new MappingAlreadyExists(mappingId));
+        }
+        if (addedRoute.id !== mappingId) {
+            throw new Error(`Mapping identity collision for ${mappingId}`);
+        }
+
         this.routeReducers.set(mappingId, input.reducer ?? "Max");
-        this.modulationBridge.addRoute(route);
-        this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
         return ok(mappingId);
     }
 
@@ -1284,9 +1276,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             })),
         };
         this.persistArticulations();
-        if (mapping._tag === "engine") {
-            this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
-        }
         this.markSnapshotDirty();
     }
 
@@ -1305,17 +1294,15 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             : clampSpecAmount(mapping.descriptor.modAmount, amount);
         if (layer._tag === "patchBase") {
             if (mapping._tag === "engine") {
-                this.modulationBridge.setRoute(mapping.validRoute.routeIndex, {
-                    ...mapping.validRoute.route,
-                    amount: routeAmount,
-                });
-                this.uploadArticulationSelectors(affectedSelectors({
-                    kind: "routeAmount",
-                    routeId: mapping.validRoute.route.id,
-                }, this.articulations));
+                this.modulationBridge.setRouteAmount(mapping.validRoute.routeIndex, routeAmount);
             } else {
                 this.replaceUiMapping({ ...mapping.mapping, amount: routeAmount });
             }
+            return;
+        }
+
+        if (mapping._tag === "ui"
+            || getModulationArticulationCellIndex(mapping.validRoute.route) === null) {
             return;
         }
 
@@ -1325,7 +1312,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             routeAmounts: { ...slot.routeAmounts, [mappingId]: routeAmount },
         });
         this.persistArticulations();
-        this.uploadArticulationSelectors([slot.runtimeSlot]);
         this.markSnapshotDirty();
     }
 
@@ -1447,9 +1433,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         };
         this.resetSourceSlot(definition);
         this.persistArticulations();
-        if (removedRoutes.length > 0) {
-            this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
-        }
         this.markSnapshotDirty();
     }
 
@@ -1497,10 +1480,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         ]);
         const backedUpRoutes = new Map(backup.routes.map((route) => [route.id, route]));
         const backedUpUiMappings = new Map(backup.uiMappings.map((mapping) => [String(mapping.id), mapping]));
-        const availableMappingSlots = Math.max(0, ROUTE_BUDGET - currentIds.size);
         const restoredMappingIds: Array<string> = [];
         for (const mappingId of backup.mappingCreationOrder) {
-            if (restoredMappingIds.length >= availableMappingSlots || currentIds.has(mappingId)) {
+            if (currentIds.has(mappingId)) {
                 continue;
             }
             if (backedUpRoutes.has(mappingId) || backedUpUiMappings.has(mappingId)) {
@@ -1538,9 +1520,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         };
         this.deletedSourceBackup = null;
         this.persistArticulations();
-        if (restoredRoutes.length > 0) {
-            this.uploadArticulationSelectors(affectedSelectors({ kind: "routeOrder" }, this.articulations));
-        }
         this.markSnapshotDirty();
     }
 
@@ -1574,15 +1553,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const slotIndex = this.slotIndex(definition);
         this.modulationBridge.setMsegSlotMorph(slotIndex, input.morph);
         this.connection.sendEventOrValue?.(`mseg${slotIndex + 1}Morph`, input.morph);
-        const morphParameterIds = ["msegMorph1", "msegMorph2", "msegMorph3"] as const;
-        const morphParameterId = morphParameterIds[slotIndex];
-        if (morphParameterId === undefined) {
-            throw new Error(`MSEG slot ${slotIndex + 1} has no articulation morph field`);
-        }
-        this.uploadArticulationSelectors(affectedSelectors({
-            kind: "voiceParameter",
-            parameterId: morphParameterId,
-        }, this.articulations));
     }
 
     private addArticulation(): ReturnType<CosimoCommands["addArticulation"]> {
@@ -1609,7 +1579,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             slots: [...this.articulations.slots, slot],
         };
         this.persistArticulationsAndTriggerConfig();
-        this.uploadArticulationSelectors([slot.runtimeSlot]);
         this.markSnapshotDirty();
         return ok(articulationIdFromSlot(slot));
     }
@@ -1641,17 +1610,12 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             slots: [...this.articulations.slots, slot],
         };
         this.persistArticulationsAndTriggerConfig();
-        this.uploadArticulationSelectors([slot.runtimeSlot]);
         this.markSnapshotDirty();
         return ok(articulationIdFromSlot(slot));
     }
 
     private deleteArticulation(articulationId: ArticulationId): void {
         const slot = this.requireArticulation(articulationId);
-        const disabledImage: ArticulationSnapshotRuntimeUpload = {
-            ...resolveArticulationImage(this.makePatchVoiceBase(), slot),
-            enabled: false,
-        };
         this.articulations = {
             ...this.articulations,
             selectedSlotId: this.articulations.selectedSlotId === slot.id ? null : this.articulations.selectedSlotId,
@@ -1661,7 +1625,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             this.audition = { ...this.audition, articulation: "Default" };
         }
         this.persistArticulationsAndTriggerConfig();
-        this.connection.sendEventOrValue?.(ARTICULATION_SNAPSHOT_ENDPOINT_ID, disabledImage);
         this.markSnapshotDirty();
     }
 
@@ -1767,7 +1730,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             ),
         });
         this.persistArticulations();
-        this.uploadArticulationSelectors([slot.runtimeSlot]);
         this.markSnapshotDirty();
     }
 
@@ -1785,7 +1747,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             ),
         });
         this.persistArticulations();
-        this.uploadArticulationSelectors([slot.runtimeSlot]);
         this.markSnapshotDirty();
     }
 
@@ -1799,7 +1760,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             ),
         });
         this.persistArticulations();
-        this.uploadArticulationSelectors([slot.runtimeSlot]);
         this.markSnapshotDirty();
     }
 
@@ -1835,7 +1795,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         this.replaceArticulationSlot({ ...slot, overrides, routeAmounts });
         this.persistArticulations();
-        this.uploadArticulationSelectors([slot.runtimeSlot]);
         this.markSnapshotDirty();
     }
 
@@ -1934,8 +1893,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const descriptor = getTargetDescriptor(candidate.targetId);
         const msegDefinitions = SOURCE_DEFINITIONS.filter((definition) => definition.type === "mseg");
         const definition = msegDefinitions.find((entry) => !this.visibleSourceIds.has(entry.idRaw));
-        if (definition === undefined
-            || this.collectValidRoutes(this.modulationBridge.getState()).length + this.uiMappings.size >= ROUTE_BUDGET) {
+        if (definition === undefined) {
             return null;
         }
         this.visibleSourceIds.add(definition.idRaw);
@@ -1998,7 +1956,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         commitRackState(this.connection, this.rackState);
         this.persistArticulationsAndTriggerConfig();
         this.uploadAllBoundBaseValues();
-        this.uploadAllArticulationImages();
         this.markSnapshotDirty();
     }
 
@@ -2047,6 +2004,16 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         };
     }
 
+    private collectArticulationMappingIds(
+        validRoutes = this.collectValidRoutes(this.modulationBridge.getState()),
+    ): ReadonlySet<string> {
+        return new Set(validRoutes.flatMap((validRoute) => (
+            getModulationArticulationCellIndex(validRoute.route) === null
+                ? []
+                : [validRoute.route.id]
+        )));
+    }
+
     private slotIndex(definition: SourceDefinition): number {
         if (definition.slot === null) {
             throw new Error(`Fixed source ${definition.idRaw} has no slot index`);
@@ -2075,67 +2042,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.modulationBridge.setMsegSlotPlayback(slotIndex, createDefaultMsegPlayback());
     }
 
-    private makePatchVoiceBase(): PatchVoiceBase {
-        const modulationState = this.modulationBridge.getState();
-        const parameters: Record<ArticulationVoiceParameterId, number> = {
-            framePosition: 0,
-            pan: 0,
-            warpMode: 0,
-            warpAmount: 0,
-            filterMode: 0,
-            filterCutoffHz: 1000,
-            filterQ: 0.707107,
-            unisonVoices: 1,
-            unisonDetune: 0.1,
-            unisonBlend: 0.75,
-            unisonWidth: 1,
-            unisonPhase: 0,
-            unisonRandom: 0,
-            unisonPhaseMode: 0,
-            unisonDetuneMode: 0,
-            unisonStackMode: 0,
-            unisonWavetablePositionSpread: 0,
-            unisonWarpSpread: 0,
-            msegMorph1: modulationState.msegSlots[0]?.morph ?? 0,
-            msegMorph2: modulationState.msegSlots[1]?.morph ?? 0,
-            msegMorph3: modulationState.msegSlots[2]?.morph ?? 0,
-            "env1.attackSeconds": modulationState.envelopeSlots[0]?.attackSeconds ?? createDefaultEnvelope(0).attackSeconds,
-            "env1.decaySeconds": modulationState.envelopeSlots[0]?.decaySeconds ?? createDefaultEnvelope(0).decaySeconds,
-            "env1.sustain": modulationState.envelopeSlots[0]?.sustain ?? createDefaultEnvelope(0).sustain,
-            "env1.releaseSeconds": modulationState.envelopeSlots[0]?.releaseSeconds ?? createDefaultEnvelope(0).releaseSeconds,
-            "env2.attackSeconds": modulationState.envelopeSlots[1]?.attackSeconds ?? createDefaultEnvelope(1).attackSeconds,
-            "env2.decaySeconds": modulationState.envelopeSlots[1]?.decaySeconds ?? createDefaultEnvelope(1).decaySeconds,
-            "env2.sustain": modulationState.envelopeSlots[1]?.sustain ?? createDefaultEnvelope(1).sustain,
-            "env2.releaseSeconds": modulationState.envelopeSlots[1]?.releaseSeconds ?? createDefaultEnvelope(1).releaseSeconds,
-            "env3.attackSeconds": modulationState.envelopeSlots[2]?.attackSeconds ?? createDefaultEnvelope(2).attackSeconds,
-            "env3.decaySeconds": modulationState.envelopeSlots[2]?.decaySeconds ?? createDefaultEnvelope(2).decaySeconds,
-            "env3.sustain": modulationState.envelopeSlots[2]?.sustain ?? createDefaultEnvelope(2).sustain,
-            "env3.releaseSeconds": modulationState.envelopeSlots[2]?.releaseSeconds ?? createDefaultEnvelope(2).releaseSeconds,
-        };
-
-        for (const descriptor of allTargetDescriptors()) {
-            const parameterId = descriptor.articulationParameterId;
-            if (parameterId === null) {
-                continue;
-            }
-            if (descriptor.binding._tag !== "endpoint") {
-                throw new Error(`Articulation-capable target ${descriptor.targetId} has no endpoint binding`);
-            }
-            const normalizedValue = this.parameterValues[descriptor.targetId];
-            if (normalizedValue === undefined) {
-                throw new Error(`Patch base is missing target ${descriptor.targetId}`);
-            }
-            parameters[parameterId] = descriptor.binding.toEngine(normalizedValue);
-        }
-
-        const validRoutes = this.collectValidRoutes(modulationState);
-        return {
-            parameters,
-            routeAmounts: Object.fromEntries(validRoutes.map(({ route }) => [route.id, route.amount])),
-            routeOrder: validRoutes.map(({ route }) => route.id),
-        };
-    }
-
     private uploadAllBoundBaseValues(): void {
         for (const descriptor of allTargetDescriptors()) {
             if (descriptor.binding._tag !== "endpoint") {
@@ -2146,29 +2052,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 throw new Error(`Patch base is missing target ${descriptor.targetId}`);
             }
             this.connection.sendEventOrValue?.(descriptor.binding.endpointId, descriptor.binding.toEngine(value));
-        }
-    }
-
-    private uploadAllArticulationImages(): void {
-        const base = this.makePatchVoiceBase();
-        for (const image of resolveArticulationImages(base, this.articulations)) {
-            this.connection.sendEventOrValue?.(ARTICULATION_SNAPSHOT_ENDPOINT_ID, image);
-        }
-    }
-
-    private uploadArticulationSelectors(selectors: ReadonlyArray<number>): void {
-        if (selectors.length === 0) {
-            return;
-        }
-        const selectorSet = new Set(selectors);
-        const base = this.makePatchVoiceBase();
-        for (const slot of this.articulations.slots) {
-            if (selectorSet.has(slot.runtimeSlot)) {
-                this.connection.sendEventOrValue?.(
-                    ARTICULATION_SNAPSHOT_ENDPOINT_ID,
-                    resolveArticulationImage(base, slot),
-                );
-            }
         }
     }
 

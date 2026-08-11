@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-import re
 import tempfile
 
 import numpy as np
@@ -18,6 +17,7 @@ from bench import (
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MSEG_SOURCE = REPO_ROOT / "cmajor" / "Mseg.cmajor"
 FIXED_FRAME_SOURCE = REPO_ROOT / "cmajor" / "FixedFrameOscillator.cmajor"
+VOICE_REDUCER_SOURCE = REPO_ROOT / "cmajor" / "VoiceReducer.cmajor"
 CHORUS_SOURCE = REPO_ROOT / "cmajor" / "Chorus.cmajor"
 WAVETABLE_SYNTH_SOURCE = REPO_ROOT / "cmajor" / "WavetableSynth.cmajor"
 CHORUS_RING_OFFSET_RATIO = 2.0 ** (7.0 / 12.0)
@@ -43,11 +43,11 @@ def _pitch_bend_expr(channel: int, semitones: float) -> str:
 
 
 def _wavetable_synth_support_source() -> str:
-    return re.split(
-        r"graph\s+WavetableSynth\s+\[\[\s*main\s*\]\]",
-        WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8"),
+    note_dispatcher_source = WAVETABLE_SYNTH_SOURCE.read_text(encoding="utf-8").split(
+        "    processor DesiredTableMonitor",
         maxsplit=1,
     )[0]
+    return note_dispatcher_source + "\n}\n"
 
 
 def _build_scheduler_source(scheduled_events: list[tuple[int, str]]) -> str:
@@ -90,6 +90,8 @@ def _build_tracking_pitch_probe_source(scheduled_events: list[tuple[int, str]]) 
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + _wavetable_synth_support_source()
         + "\n"
@@ -165,6 +167,8 @@ def _build_chorus_tracking_probe_source(scheduled_events: list[tuple[int, str]])
         MSEG_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + FIXED_FRAME_SOURCE.read_text(encoding="utf-8")
+        + "\n"
+        + VOICE_REDUCER_SOURCE.read_text(encoding="utf-8")
         + "\n"
         + CHORUS_SOURCE.read_text(encoding="utf-8")
         + "\n"

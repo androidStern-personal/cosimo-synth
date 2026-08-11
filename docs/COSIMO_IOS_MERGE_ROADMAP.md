@@ -10,6 +10,10 @@ cutover, gated on the on-device pass. Companion to `COSIMO_IOS_UI_DECISION_LEDGE
 `TRANSIENT_IOS_REACT_MIGRATION_PLAN.md` is complete and covered only the legacy→React port of the
 old patch view — it is not this plan.
 
+2026-08-08 amendment: ADR-020 supersedes every route-budget statement and `RouteBudgetExceeded`
+contract below. Mappings are unique source/target relationships in a 624-cell semantic domain;
+stored state has no arbitrary public count ceiling and compiles to an active-only runtime program.
+
 ## The reframe: parity is the wrong trigger
 
 The official iOS UI (`ui/ios/IOSPatchView.tsx`) is one screen — wavetable stage, play, distortion,
@@ -36,13 +40,9 @@ existing route-amount override machinery. Scheduled as the smallest Phase-2 item
 cutover — so the locked 7×2 rail geometry stands, and both adapters carry macros identically (no
 straddle, consistent with the hard-cut policy).
 
-**Route budget: 12 is an engine compile-time constant, kept for the merge.**
-`cmajor/FixedFrameOscillator.cmajor:31` (`let modulationRouteCount = 12`) sizes fixed per-voice and
-per-articulation-slot arrays (`articulationRouteAmounts` = 128 × 12 floats;
-`voiceArticulationRouteAmounts` = voices × 12) and the per-frame route evaluation loop. Not an
-architectural wall — raising it is a one-line change + recompile — but it is a deliberate real-time
-memory/CPU budget on mobile, so it is not unbounded either. Decision: keep 12, surface the budget
-honestly in the UI (`RouteBudgetExceeded`, below); revisit the constant only with a measured need.
+**Mapping capacity (amended by ADR-020):** the inherited 12-slot execution table was removed.
+Declarative mappings now compile into four sparse active lanes with deterministic source/target
+cells. The complete current domain is 624 legal pairs; the measured execution contract is separate.
 
 ## Hard-cut policy (2026-07-18)
 
@@ -104,8 +104,8 @@ Make the mock adapter's contract the real contract, so the Phase-3 swap is a sub
   implements it; `useMobileSynthController` consumes only the port. A **behavioral contract test
   suite parameterized over an adapter factory** exists and passes against the mock. (This suite is
   the Phase-3 gate — the bridge must pass it unchanged.)
-- Route budget enforced at the seam: the 13th `addMapping` returns `RouteBudgetExceeded`; the rail's
-  assign flow shows the refusal; a contract test asserts it.
+- Mapping uniqueness is enforced at the seam: a duplicate source/target pair returns
+  `MappingAlreadyExists`; contract tests create and edit more than 100 unique mappings.
 - `SourceShapeEditor.jsx`'s fake MSEG/ADSR stubs replaced by the shared editor:
   `ui/shared/mseg.ts` model imported directly (no transliteration — divergence is the enemy),
   `EditableMsegSurface` + `useMsegEditorInteractions` with `curveEditActivationMode:"hold-or-drag"`,
@@ -117,7 +117,7 @@ Make the mock adapter's contract the real contract, so the Phase-3 swap is a sub
 - Macro sources modeled in the port and descriptor catalog against the §16 spec (the engine work is
   a small Phase-2 item); the locked 7×2 rail geometry stands unchanged.
 - 41-test parity suite and style contract still green; interaction-matrix rows amended where
-  behavior changed (rail geometry, route budget).
+  behavior changed (rail geometry, mapping uniqueness/capacity).
 
 ## Phase 2 — Engine gaps (parallel track; each gates a feature, none gates the merge)
 
@@ -278,7 +278,7 @@ export type CosimoCommands = {
 
   // Mappings
   addMapping(input: { sourceId: SourceId; targetId: TargetId }):
-    Result<MappingId, RouteBudgetExceeded | MappingAlreadyExists>;
+    Result<MappingId, MappingAlreadyExists>;
   removeMapping(input: { mappingId: MappingId }): void;
   setMappingAmount(input: { mappingId: MappingId; amount: number; layer: EditLayer }): void;
   setMappingPolarity(input: { mappingId: MappingId; polarity: Polarity }): void;
@@ -322,7 +322,7 @@ haptic layer needs — domain policies (`walkArticulationKey`, `clampArticulatio
 and move to `ui/shared` with types.
 
 Tagged errors (each `extends Error`, stable `_tag as const`, structured fields):
-`RouteBudgetExceeded { budget: number }`, `MappingAlreadyExists { mappingId }`,
+`MappingAlreadyExists { mappingId }`,
 `SourceSlotsExhausted { type, limit }`, `ArticulationSlotsExhausted { limit: 128 }`,
 `UnknownTarget { input: string }`, `ValueOutOfRange { input: number }`.
 

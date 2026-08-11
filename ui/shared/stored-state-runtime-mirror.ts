@@ -19,12 +19,24 @@ export type RuntimeEndpointDependency = {
 
 export type StoredStateRuntimeMirrorOptions<TState> = {
     stateKey: string;
-    deserializeStoredState: (value: unknown) => TState;
-    buildRuntimeEvents: (snapshot: StoredStateRuntimeSnapshot<TState>) => RuntimeEvent[];
+    /** Return null to reject an invalid document without changing the runtime snapshot. */
+    deserializeStoredState: (value: unknown) => TState | null;
+    buildRuntimeEvents: (
+        snapshot: StoredStateRuntimeSnapshot<TState>,
+        previousAppliedSnapshot: StoredStateRuntimeSnapshot<TState> | null,
+    ) => RuntimeEvent[];
     parameterEndpointIDs?: string[];
     runtimeEndpointDependencies?: RuntimeEndpointDependency[];
     applyDefaultRuntimeStateWhenMissing?: boolean;
+    sendRuntimeEvents?: (
+        events: RuntimeEvent[],
+        desiredSnapshot: StoredStateRuntimeSnapshot<TState>,
+    ) => Promise<boolean>;
+    onDeliveryFailure?: (events: RuntimeEvent[]) => void;
+    sendTimeoutMilliseconds?: number;
 };
+
+export const STORED_STATE_RUNTIME_SEND_TIMEOUT_MS = 2_000;
 
 function hasOwnValue(record: Record<string, unknown>, key: string) {
     return Object.prototype.hasOwnProperty.call(record, key);
@@ -76,9 +88,14 @@ export class StoredStateRuntimeMirror<TState> {
     private readonly runtimeEndpointValues = new Map<string, unknown>();
     private readonly runtimeEndpointListeners = new Map<string, (value: unknown) => void>();
     private state: TState | null = null;
+    private deliveryInProgress = false;
+    private deliveryRefreshPending = false;
+    private forceFullReplay = false;
     private hasState = false;
     private started = false;
     private lastAppliedToken: string | null = null;
+    private lastAppliedRuntimeEndpointsToken: string | null = null;
+    private lastAppliedSnapshot: StoredStateRuntimeSnapshot<TState> | null = null;
 
     constructor(connection: PatchConnectionLike, options: StoredStateRuntimeMirrorOptions<TState>) {
         this.connection = connection;
@@ -125,6 +142,19 @@ export class StoredStateRuntimeMirror<TState> {
         }
     }
 
+    /** Rebuild and resend the complete runtime image from the stored snapshot. */
+    replayFullRuntimeState() {
+        if (!this.started) {
+            return;
+        }
+
+        this.lastAppliedToken = null;
+        this.lastAppliedRuntimeEndpointsToken = null;
+        this.lastAppliedSnapshot = null;
+        this.forceFullReplay = true;
+        this.applyRuntimeStateIfReady();
+    }
+
     private requestStoredState() {
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => {
@@ -135,20 +165,13 @@ export class StoredStateRuntimeMirror<TState> {
                     return;
                 }
 
-                this.handleMissingStoredState();
+                if (this.options.applyDefaultRuntimeStateWhenMissing) {
+                    this.applyStoredValue(undefined);
+                }
             });
             return;
         }
 
-        if (typeof this.connection.requestStoredStateValue === "function") {
-            this.connection.requestStoredStateValue(this.options.stateKey);
-            return;
-        }
-
-        this.handleMissingStoredState();
-    }
-
-    private handleMissingStoredState() {
         if (typeof this.connection.requestStoredStateValue === "function") {
             this.connection.requestStoredStateValue(this.options.stateKey);
             return;
@@ -210,13 +233,22 @@ export class StoredStateRuntimeMirror<TState> {
     }
 
     private applyStoredValue(value: unknown) {
-        this.state = this.options.deserializeStoredState(value);
+        const state = this.options.deserializeStoredState(value);
+        if (state === null) {
+            return;
+        }
+        this.state = state;
         this.hasState = true;
         this.applyRuntimeStateIfReady();
     }
 
     private applyRuntimeStateIfReady() {
         if (!this.hasState) {
+            return;
+        }
+
+        if (this.deliveryInProgress) {
+            this.deliveryRefreshPending = true;
             return;
         }
 
@@ -247,21 +279,81 @@ export class StoredStateRuntimeMirror<TState> {
             parameters,
             runtimeEndpoints,
         };
-        const events = this.options.buildRuntimeEvents(snapshot);
+        const runtimeEndpointsToken = toStableToken(runtimeEndpoints);
+        const previousAppliedSnapshot = !this.forceFullReplay
+            && runtimeEndpointsToken === this.lastAppliedRuntimeEndpointsToken
+            ? this.lastAppliedSnapshot
+            : null;
+        const events = this.options.buildRuntimeEvents(snapshot, previousAppliedSnapshot);
         const nextAppliedToken = toStableToken({
             runtimeEndpoints,
             events,
         });
 
         if (nextAppliedToken === this.lastAppliedToken) {
+            this.lastAppliedRuntimeEndpointsToken = runtimeEndpointsToken;
+            this.lastAppliedSnapshot = snapshot;
+            return;
+        }
+
+        if (events.length === 0) {
+            this.lastAppliedToken = nextAppliedToken;
+            this.lastAppliedRuntimeEndpointsToken = runtimeEndpointsToken;
+            this.lastAppliedSnapshot = snapshot;
+            this.forceFullReplay = false;
+            return;
+        }
+
+        if (this.options.sendRuntimeEvents) {
+            this.deliveryInProgress = true;
+            this.deliveryRefreshPending = false;
+            this.forceFullReplay = false;
+            void this.options.sendRuntimeEvents(events, snapshot).then((delivered) => {
+                this.deliveryInProgress = false;
+                if (!this.started) {
+                    return;
+                }
+
+                if (delivered) {
+                    this.lastAppliedToken = nextAppliedToken;
+                    this.lastAppliedRuntimeEndpointsToken = runtimeEndpointsToken;
+                    this.lastAppliedSnapshot = snapshot;
+                } else {
+                    this.options.onDeliveryFailure?.(events);
+                }
+
+                const shouldRefresh = this.deliveryRefreshPending;
+                this.deliveryRefreshPending = false;
+                if (shouldRefresh) {
+                    this.applyRuntimeStateIfReady();
+                }
+            }).catch(() => {
+                this.deliveryInProgress = false;
+                if (!this.started) {
+                    return;
+                }
+                this.options.onDeliveryFailure?.(events);
+                const shouldRefresh = this.deliveryRefreshPending;
+                this.deliveryRefreshPending = false;
+                if (shouldRefresh) {
+                    this.applyRuntimeStateIfReady();
+                }
+            });
             return;
         }
 
         for (const event of events) {
-            this.connection.sendEventOrValue?.(event.endpointID, event.value);
+            this.connection.sendEventOrValue?.(
+                event.endpointID,
+                event.value,
+                undefined,
+                this.options.sendTimeoutMilliseconds ?? STORED_STATE_RUNTIME_SEND_TIMEOUT_MS,
+            );
         }
 
         this.lastAppliedToken = nextAppliedToken;
+        this.lastAppliedRuntimeEndpointsToken = runtimeEndpointsToken;
+        this.lastAppliedSnapshot = snapshot;
     }
 }
 
