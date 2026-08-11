@@ -2595,6 +2595,9 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
         const rackLayout = await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const listBounds = root?.querySelector('[data-role="rack-module-list"]')?.getBoundingClientRect();
+            const rowHeights = Array.from(
+                root?.querySelectorAll('[data-role="rack-module-list"] > [data-rack-effect-id]') ?? [],
+            ).map((row) => row.getBoundingClientRect().height);
             const editorBounds = root?.querySelector('[data-role^="rack-editor-"]')?.getBoundingClientRect();
             const amountBounds = root?.querySelector('[data-role="rack-modulation-amount"]')?.getBoundingClientRect();
             const sourceLabels = Array.from(root?.querySelectorAll('[data-role^="rack-mod-source-"]') ?? [])
@@ -2604,11 +2607,17 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
                     && amountBounds.left >= editorBounds.left
                     && amountBounds.right <= editorBounds.right),
                 listHeight: listBounds?.height ?? 0,
+                rowHeights,
                 sourceLabels,
             };
         });
         assert.equal(rackLayout.amountWithinEditor, true, "The mapping amount must consume only the editor column.");
-        assert.ok(rackLayout.listHeight > 400, "All eight compact rack rows must remain present in the mobile flow.");
+        assert.equal(rackLayout.rowHeights.length, 8, JSON.stringify(rackLayout));
+        assert.ok(rackLayout.rowHeights.every((height) => height >= 44), JSON.stringify(rackLayout));
+        assert.ok(
+            rackLayout.listHeight >= rackLayout.rowHeights.reduce((sum, height) => sum + height, 0),
+            JSON.stringify(rackLayout),
+        );
         assert.equal(rackLayout.sourceLabels.some((label) => /LFO/i.test(label)), false, "The rack must expose no LFO source.");
 
         const noteBounds = await page.evaluate(() => {

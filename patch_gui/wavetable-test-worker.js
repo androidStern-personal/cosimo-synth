@@ -672,8 +672,8 @@ function Ie(t, e, n = !1) {
       for (let f = 0; f < s; f += 1) {
         const A = p + f, C = A + s, W = t[C], V = e[C], $ = u * W - g * V, z = u * V + g * W, K = t[A], q = e[A];
         t[A] = K + $, e[A] = q + z, t[C] = K - $, e[C] = q - z;
-        const xe = u * o - g * c;
-        g = u * c + g * o, u = xe;
+        const we = u * o - g * c;
+        g = u * c + g * o, u = we;
       }
     }
   }
@@ -738,7 +738,7 @@ function T(t, e) {
     return e;
   }
 }
-const w = Object.freeze({
+const x = Object.freeze({
   filter: T(
     () => new URL("data:image/svg+xml,%3csvg%20width='256'%20height='256'%20xmlns='http://www.w3.org/2000/svg'%3e%3cpath%20d='M24.22%2067.796a3.995%203.995%200%200%201%204.008-3.991h85.498c8.834%200%2019.732%206.112%2024.345%2013.657l53.76%2087.936c3.46%205.66%2011.628%2010.247%2018.256%2010.247h16.718a3.996%203.996%200%200%201%203.994%204.007v8.985a4.007%204.007%200%200%201-4.007%204.008h-24.7c-8.835%200-19.709-6.13-24.283-13.683l-52.324-86.4c-3.43-5.665-11.577-10.257-18.202-10.257H28.214a3.995%203.995%200%200%201-3.993-3.992V67.796z'%20fill-rule='evenodd'/%3e%3c/svg%3e", import.meta.url).href,
     "../assets/fontaudio/fad-filter-lowpass.svg"
@@ -785,17 +785,18 @@ const w = Object.freeze({
   unit: l.unit ?? "",
   choices: l.choices,
   quick: l.quick ?? !1,
-  modulationTargetIndex: l.modulationTargetIndex ?? null
+  modulationTargetIndex: l.modulationTargetIndex ?? null,
+  modulationApplication: l.modulationApplication ?? (l.modulationTargetIndex === void 0 || l.modulationTargetIndex === null ? null : "linear")
 }), st = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"], ot = ["1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/8.", "1/4T", "1/8", "1/16.", "1/8T", "1/16", "1/16T"], lt = [
   {
     id: "filter",
     label: "Filter",
     summary: "Final tone shaping for the complete voice mix.",
-    iconUrl: w.filter,
+    iconUrl: x.filter,
     initialQuickEndpointID: "globalFilterCutoff",
     parameters: [
-      d("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 0, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(b), quick: !0 }),
-      d("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 2e4, 2e4, { unit: "Hz", scale: "log", quick: !0, modulationTargetIndex: 0 }),
+      d("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 1, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(b), quick: !0 }),
+      d("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 2e4, 2e4, { unit: "Hz", scale: "log", quick: !0, modulationTargetIndex: 0, modulationApplication: "octaves" }),
       d("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1 }),
       d("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 })
     ]
@@ -804,22 +805,22 @@ const w = Object.freeze({
     id: "drive",
     label: "Distortion",
     summary: "Classic clipping or harmonic-residue saturation.",
-    iconUrl: w.drive,
+    iconUrl: x.drive,
     initialQuickEndpointID: "distortionDriveDb",
     parameters: [
       d("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [b("Classic", 0), b("Harmonics", 1)] }),
       d("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: !0, modulationTargetIndex: 3 }),
       d("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
       d("drive", "distortionWet", "Mix", "Mix", 0, 1, 0, { quick: !0, modulationTargetIndex: 5 }),
-      d("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6 }),
-      d("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7 })
+      d("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
+      d("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" })
     ]
   },
   {
     id: "ott",
     label: "OTT",
     summary: "Upward/downward multiband dynamics with envelope matching.",
-    iconUrl: w.ott,
+    iconUrl: x.ott,
     initialQuickEndpointID: "ottAmount",
     parameters: [
       d("ott", "ottMix", "Mix", "Mix", 0, 100, 100, { unit: "%", quick: !0, modulationTargetIndex: 8 }),
@@ -833,7 +834,7 @@ const w = Object.freeze({
     id: "chorus",
     label: "Chorus",
     summary: "Modulated ensemble, bloom, and pitch-following ring colour.",
-    iconUrl: w.chorus,
+    iconUrl: x.chorus,
     initialQuickEndpointID: "chorusMix",
     parameters: [
       d("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide", "Classic", "Fast"].map(b) }),
@@ -850,7 +851,7 @@ const w = Object.freeze({
     id: "flanger",
     label: "Flanger",
     summary: "Short swept comb delay with signed feedback.",
-    iconUrl: w.flanger,
+    iconUrl: x.flanger,
     initialQuickEndpointID: "flangerRate",
     parameters: [
       d("flanger", "flangerRate", "Rate", "Rate", 0.02, 8, 0.35, { unit: "Hz", scale: "log", quick: !0, modulationTargetIndex: 18 }),
@@ -863,14 +864,14 @@ const w = Object.freeze({
     id: "phaser",
     label: "Phaser",
     summary: "Eight-pole swept all-pass network with Free/Sync rate.",
-    iconUrl: w.phaser,
+    iconUrl: x.phaser,
     initialQuickEndpointID: "phaserRate",
     parameters: [
       d("phaser", "phaserRateMode", "Rate Mode", "Mode", 0, 1, 0, { step: 1, choices: [b("Free", 0), b("Sync", 1)] }),
       d("phaser", "phaserRate", "Rate", "Rate", 0.02, 8, 0.3, { unit: "Hz", scale: "log", quick: !0, modulationTargetIndex: 22 }),
       d("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: st.map(b) }),
       d("phaser", "phaserDepth", "Depth", "Dpt", 0, 1, 0.7, { modulationTargetIndex: 23 }),
-      d("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24 }),
+      d("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24, modulationApplication: "octaves" }),
       d("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
       d("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
       d("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0, { quick: !0, modulationTargetIndex: 27 })
@@ -880,14 +881,14 @@ const w = Object.freeze({
     id: "delay",
     label: "Delay",
     summary: "Tape-gliding stereo delay with Free/Sync timing.",
-    iconUrl: w.delay,
+    iconUrl: x.delay,
     initialQuickEndpointID: "delayTime",
     parameters: [
       d("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [b("Free", 0), b("Sync", 1)] }),
-      d("delay", "delayTime", "Time", "Time", 1, 2e3, 375, { unit: "ms", scale: "log", quick: !0, modulationTargetIndex: 28 }),
+      d("delay", "delayTime", "Time", "Time", 1, 2e3, 375, { unit: "ms", scale: "log", quick: !0, modulationTargetIndex: 28, modulationApplication: "octaves" }),
       d("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: ot.map(b) }),
       d("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
-      d("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30 }),
+      d("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30, modulationApplication: "octaves" }),
       d("delay", "delayMix", "Mix", "Mix", 0, 1, 0, { quick: !0, modulationTargetIndex: 31 })
     ]
   },
@@ -895,7 +896,7 @@ const w = Object.freeze({
     id: "reverb",
     label: "Reverb",
     summary: "Modulated early reflections into a four-line stereo tank.",
-    iconUrl: w.reverb,
+    iconUrl: x.reverb,
     initialQuickEndpointID: "reverbSize",
     parameters: [
       d("reverb", "reverbSize", "Size", "Size", 0, 1, 0.5, { quick: !0, modulationTargetIndex: 32 }),
@@ -937,12 +938,12 @@ ct(Te());
 function ut(t) {
   throw new Error(`Unhandled case: ${JSON.stringify(t)}`);
 }
-const we = Te().filter((t) => t.modulationTargetIndex !== null);
+const xe = Te().filter((t) => t.modulationTargetIndex !== null);
 new Map(
-  we.map((t) => [`rack.${t.endpointID}`, t])
+  xe.map((t) => [`rack.${t.endpointID}`, t])
 );
 [
-  ...we.map((t) => ({
+  ...xe.map((t) => ({
     value: `rack.${t.endpointID}`,
     label: `${t.effectId.toUpperCase()} ${t.shortLabel.toUpperCase()}`
   }))
@@ -1001,7 +1002,7 @@ function ft(t, e) {
     throw new Error(`Invalid catalog parameter id "${e}"`);
   return `${t}.${e}`;
 }
-function x(t) {
+function w(t) {
   return t;
 }
 function R(t) {
@@ -1032,43 +1033,43 @@ function yt(t, e) {
   switch (t) {
     case "wavetable.index":
       return {
-        binding: y("wavetablePosition", x, R),
+        binding: y("wavetablePosition", w, R),
         articulationParameterId: "framePosition",
         modulationTargetKind: "wavetablePosition"
       };
     case "wavetable.warp":
       return {
-        binding: y("warpAmount", x, R),
+        binding: y("warpAmount", w, R),
         articulationParameterId: "warpAmount",
         modulationTargetKind: "warpAmount"
       };
     case "wavetable.unison":
       return {
-        binding: y("unisonDetune", x, R),
+        binding: y("unisonDetune", w, R),
         articulationParameterId: "unisonDetune",
         modulationTargetKind: "unisonDetune"
       };
     case "wavetable.unison-blend":
       return {
-        binding: y("unisonBlend", x, R),
+        binding: y("unisonBlend", w, R),
         articulationParameterId: "unisonBlend",
         modulationTargetKind: "unisonBlend"
       };
     case "wavetable.unison-width":
       return {
-        binding: y("unisonWidth", x, R),
+        binding: y("unisonWidth", w, R),
         articulationParameterId: "unisonWidth",
         modulationTargetKind: "unisonWidth"
       };
     case "wavetable.unison-wt-spread":
       return {
-        binding: y("unisonWavetablePositionSpread", x, R),
+        binding: y("unisonWavetablePositionSpread", w, R),
         articulationParameterId: "unisonWavetablePositionSpread",
         modulationTargetKind: "unisonWavetablePositionSpread"
       };
     case "wavetable.unison-warp-spread":
       return {
-        binding: y("unisonWarpSpread", x, R),
+        binding: y("unisonWarpSpread", w, R),
         articulationParameterId: "unisonWarpSpread",
         modulationTargetKind: "unisonWarpSpread"
       };
@@ -1134,7 +1135,7 @@ function St(t) {
 function Tt(t, e) {
   return t.kind === "frequency" ? { min: -6, max: 6, unit: "oct", digits: 1 } : t.kind === "semitone" ? { min: -48, max: 48, unit: "st", digits: 0 } : e === "amp-pan.level" ? { min: -48, max: 6, unit: "dB", digits: 0 } : e === "amp-pan.pan" ? { min: -100, max: 100, unit: "pan", digits: 0 } : { min: -100, max: 100, unit: "%", digits: 0 };
 }
-function wt(t, e) {
+function xt(t, e) {
   const n = ft(t.moduleId, e.id), i = St(e.format), r = yt(n, t.workspace);
   return Object.freeze({
     targetId: n,
@@ -1152,7 +1153,7 @@ function wt(t, e) {
     modulationTargetKind: r.modulationTargetKind
   });
 }
-function xt(t) {
+function wt(t) {
   return `${t.effectId}.${t.endpointID}`;
 }
 function U(t, e) {
@@ -1180,7 +1181,7 @@ function Et(t) {
   return { min: -e, max: e, unit: "%", digits: e <= 2 ? 3 : 1 };
 }
 function kt(t) {
-  const e = xt(t);
+  const e = wt(t);
   return Object.freeze({
     targetId: e,
     moduleId: t.effectId,
@@ -1207,7 +1208,7 @@ const At = Object.freeze(
     ...ye.flatMap((t) => t.parameters.map(kt)),
     ...ht.flatMap(
       (t) => t.parameters.map(
-        (e) => wt(t, e)
+        (e) => xt(t, e)
       )
     )
   ]

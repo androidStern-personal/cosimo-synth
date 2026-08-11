@@ -19,6 +19,7 @@ import {
     getModulationAmountDepth,
     getModulationAmountSliderPosition,
     normalizeModulationState,
+    parseModulationState,
     parseModulationAmountEditingValue,
     serializeModulationState,
 } from "../patch_gui/modulation.js";
@@ -131,8 +132,9 @@ test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploadi
     assert.deepEqual(patchConnection.events, []);
 });
 
-test("modulation state keeps one deterministic route per source-target pair", () => {
+test("normalization never repairs duplicate pairs and the strict parser rejects the document", () => {
     const normalized = normalizeModulationState({
+        ...createDefaultModulationState(),
         routes: [
             {
                 id: "first-pair-route",
@@ -169,10 +171,10 @@ test("modulation state keeps one deterministic route per source-target pair", ()
 
     assert.deepEqual(normalized.routes.map(({ id }) => id), [
         "first-pair-route",
+        "duplicate-pair-route",
         "different-source-route",
     ]);
-    assert.equal(normalized.routes[0].enabled, false);
-    assert.equal(normalized.routes[0].amount, -0.25);
+    assert.equal(parseModulationState(normalized)._tag, "err");
 });
 
 test("modulation runtime event builder converts defaults into a complete Cmajor upload batch", () => {

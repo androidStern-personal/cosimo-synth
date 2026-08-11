@@ -464,6 +464,7 @@ async function dispatchRackKnobPointerEvents(locator, events) {
 
 async function clickFilterGraphAt(page, normalizedX, normalizedY) {
     const graph = page.locator('[data-role="filter-response-graph"]');
+    await graph.scrollIntoViewIfNeeded();
     const box = await graph.boundingBox();
 
     if (!box) {
@@ -478,6 +479,7 @@ async function clickFilterGraphAt(page, normalizedX, normalizedY) {
 
 async function dragFilterHandleBy(page, deltaX, deltaY) {
     const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+    await handle.scrollIntoViewIfNeeded();
     const box = await handle.boundingBox();
 
     if (!box) {
@@ -512,6 +514,7 @@ async function dragEnvelopeHandleBy(page, dataRole, deltaX, deltaY) {
 }
 
 async function dragLocatorBy(page, locator, deltaX, deltaY) {
+    await locator.scrollIntoViewIfNeeded();
     const box = await locator.boundingBox();
 
     if (!box) {
@@ -5762,6 +5765,7 @@ test("desktop filter graph closes both host gestures when the window blurs mid-d
 
     try {
         const handle = page.locator('[data-role="filter-response-handle-hit-target"]');
+        await handle.scrollIntoViewIfNeeded();
         const bounds = await handle.boundingBox();
         assert.ok(bounds);
         const startX = bounds.x + (bounds.width / 2);
