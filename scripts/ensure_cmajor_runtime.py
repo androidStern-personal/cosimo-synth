@@ -34,6 +34,7 @@ CMAJOR_PATCH_WORKER_LIFETIME_PATCH_MARKER = "COSIMO_CMAJOR_PATCH_WORKER_EARLY_DE
 CMAJOR_PATCH_WORKER_NONFATAL_ERROR_PATCH_MARKER = "COSIMO_CMAJOR_PATCH_WORKER_NONFATAL_ERROR"
 CMAJOR_STORED_STATE_STRING_COMPARISON_PATCH_MARKER = "COSIMO_CMAJOR_STORED_STATE_STRING_CONTENT_COMPARISON"
 CMAJOR_QUICKJS_RESOURCE_BRIDGE_PATCH_MARKER = "COSIMO_CMAJOR_QUICKJS_RESOURCE_BRIDGE"
+CMAJOR_EXTERNAL_FUNCTION_PROVIDER_PATCH_MARKER = "COSIMO_CMAJOR_PATCH_EXTERNAL_FUNCTION_PROVIDER"
 
 HOST_KEYBOARD_RELAY_HELPERS = r'''
     static bool hostKeyboardShouldRelayToPlugin (const choc::value::ValueView& payload)
@@ -663,6 +664,65 @@ connection.readResource = (path) =>
         raise RuntimeError(f"Cmajor QuickJS resource-bridge patch marker was not written to {worker_header}.")
 
 
+def _runtime_contains_external_function_provider_patch(runtime_root: Path) -> bool:
+    patch_header = runtime_root / "include" / "cmajor" / "helpers" / "cmaj_Patch.h"
+
+    if not patch_header.exists():
+        return False
+
+    return CMAJOR_EXTERNAL_FUNCTION_PROVIDER_PATCH_MARKER in patch_header.read_text(encoding="utf-8")
+
+
+def _apply_cmajor_external_function_provider_patch(runtime_root: Path) -> None:
+    patch_header = runtime_root / "include" / "cmajor" / "helpers" / "cmaj_Patch.h"
+
+    if not patch_header.exists():
+        raise RuntimeError(f"Cmajor patch helper not found: {patch_header}")
+
+    header_text = patch_header.read_text(encoding="utf-8")
+
+    if CMAJOR_EXTERNAL_FUNCTION_PROVIDER_PATCH_MARKER in header_text:
+        return
+
+    old_create_engine = """    std::function<cmaj::Engine()> createEngine;
+"""
+    new_create_engine = f"""    std::function<cmaj::Engine()> createEngine;
+
+    // {CMAJOR_EXTERNAL_FUNCTION_PROVIDER_PATCH_MARKER}
+    // Optional native resolver used by JIT hosts for declared Cmajor external functions.
+    cmaj::Engine::ExternalFunctionProviderFn externalFunctionProvider;
+"""
+    old_engine_load = """        if (engine.load (errors, program,
+                         shouldResolveExternals ? manifest.createExternalResolverFunction()
+                                                : [] (const cmaj::ExternalVariable&) -> choc::value::Value { return {}; },
+                         {}))
+"""
+    new_engine_load = """        if (engine.load (errors, program,
+                         shouldResolveExternals ? manifest.createExternalResolverFunction()
+                                                : [] (const cmaj::ExternalVariable&) -> choc::value::Value { return {}; },
+                         patch.externalFunctionProvider))
+"""
+
+    patched_text = _replace_unique_anchor(
+        header_text,
+        old_create_engine,
+        new_create_engine,
+        label="Cmajor Patch external-function provider member",
+        path=patch_header,
+    )
+    patched_text = _replace_unique_anchor(
+        patched_text,
+        old_engine_load,
+        new_engine_load,
+        label="Cmajor Patch external-function provider forwarding",
+        path=patch_header,
+    )
+    patch_header.write_text(patched_text, encoding="utf-8")
+
+    if not _runtime_contains_external_function_provider_patch(runtime_root):
+        raise RuntimeError(f"Cmajor external-function provider patch marker was not written to {patch_header}.")
+
+
 def _runtime_contains_required_cmajor_sidechain_patch(runtime_root: Path) -> bool:
     juce_plugin_header = runtime_root / "include" / "cmajor" / "helpers" / "cmaj_JUCEPlugin.h"
 
@@ -889,6 +949,7 @@ def _prepare_runtime_submodules(runtime_root: Path) -> None:
     _apply_cmajor_patch_worker_nonfatal_error_patch(runtime_root)
     _apply_cmajor_stored_state_string_comparison_patch(runtime_root)
     _apply_cmajor_quickjs_resource_bridge_patch(runtime_root)
+    _apply_cmajor_external_function_provider_patch(runtime_root)
 
 
 def _clone_runtime(destination: Path) -> None:
@@ -921,6 +982,7 @@ def _clone_runtime(destination: Path) -> None:
     _apply_cmajor_patch_worker_nonfatal_error_patch(temp_destination)
     _apply_cmajor_stored_state_string_comparison_patch(temp_destination)
     _apply_cmajor_quickjs_resource_bridge_patch(temp_destination)
+    _apply_cmajor_external_function_provider_patch(temp_destination)
 
     fetched_head = _runtime_head(temp_destination)
 
@@ -976,6 +1038,11 @@ def _clone_runtime(destination: Path) -> None:
             "Fetched Cmajor checkout does not contain the required QuickJS resource-bridge patch."
         )
 
+    if not _runtime_contains_external_function_provider_patch(temp_destination):
+        raise RuntimeError(
+            "Fetched Cmajor checkout does not contain the required external-function provider patch."
+        )
+
     if destination.exists():
         shutil.rmtree(destination)
 
@@ -999,6 +1066,7 @@ def ensure_runtime() -> Path:
         _apply_cmajor_patch_worker_nonfatal_error_patch(RUNTIME_DESTINATION)
         _apply_cmajor_stored_state_string_comparison_patch(RUNTIME_DESTINATION)
         _apply_cmajor_quickjs_resource_bridge_patch(RUNTIME_DESTINATION)
+        _apply_cmajor_external_function_provider_patch(RUNTIME_DESTINATION)
         _apply_cmajor_sidechain_bus_patch(RUNTIME_DESTINATION)
 
         if (
@@ -1010,6 +1078,7 @@ def ensure_runtime() -> Path:
             and _runtime_contains_patch_worker_nonfatal_error_patch(RUNTIME_DESTINATION)
             and _runtime_contains_stored_state_string_comparison_patch(RUNTIME_DESTINATION)
             and _runtime_contains_quickjs_resource_bridge_patch(RUNTIME_DESTINATION)
+            and _runtime_contains_external_function_provider_patch(RUNTIME_DESTINATION)
             and _runtime_contains_required_cmajor_sidechain_patch(RUNTIME_DESTINATION)
         ):
             return RUNTIME_DESTINATION
@@ -1031,6 +1100,7 @@ def ensure_runtime() -> Path:
             and _runtime_contains_patch_worker_nonfatal_error_patch(RUNTIME_DESTINATION)
             and _runtime_contains_stored_state_string_comparison_patch(RUNTIME_DESTINATION)
             and _runtime_contains_quickjs_resource_bridge_patch(RUNTIME_DESTINATION)
+            and _runtime_contains_external_function_provider_patch(RUNTIME_DESTINATION)
             and _runtime_looks_complete(RUNTIME_DESTINATION)
         ):
             _apply_cmajor_sidechain_bus_patch(RUNTIME_DESTINATION)
@@ -1092,6 +1162,11 @@ def ensure_runtime() -> Path:
     if not _runtime_contains_quickjs_resource_bridge_patch(RUNTIME_DESTINATION):
         raise RuntimeError(
             f"Pinned Cmajor checkout is missing the QuickJS resource-bridge patch in {RUNTIME_DESTINATION / 'include/cmajor/helpers/cmaj_PatchWorker_QuickJS.h'}."
+        )
+
+    if not _runtime_contains_external_function_provider_patch(RUNTIME_DESTINATION):
+        raise RuntimeError(
+            f"Pinned Cmajor checkout is missing the external-function provider patch in {RUNTIME_DESTINATION / 'include/cmajor/helpers/cmaj_Patch.h'}."
         )
 
     _apply_cmajor_sidechain_bus_patch(RUNTIME_DESTINATION)

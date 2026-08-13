@@ -1,0 +1,10 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.tests.three-oscillator-external-smoke",
+  "version": "1.0.0",
+  "name": "Three Oscillator External Renderer Smoke",
+  "source": [
+    "../../../cmajor/ThreeOscillatorRendererExternal.cmajor",
+    "ThreeOscillatorExternalSmoke.cmajor"
+  ]
+}

@@ -1,0 +1,218 @@
+namespace CosimoExternalSmoke
+{
+    let logicalNoteCount = 16;
+    let oscillatorCount = 3;
+    let maximumUnisonCount = 8;
+    let laneCount = logicalNoteCount * oscillatorCount * maximumUnisonCount;
+    let mipLevelCount = 11;
+    let tableSlotCount = 4;
+    let maximumFrameCount = 256;
+    let samplesPerPackedFrameSet = 12811;
+    let tableSlotSampleCount = samplesPerPackedFrameSet * maximumFrameCount;
+    let tablePoolSampleCount = tableSlotCount * tableSlotSampleCount;
+    let tablePoolChunkCount = 16;
+    let tablePoolChunkSampleCount = tablePoolSampleCount / tablePoolChunkCount;
+    let voiceOscillatorCount = logicalNoteCount * oscillatorCount;
+    let familyBatchCount = laneCount / 4;
+
+    let phaseOffset = 0;
+    let historyOffset = phaseOffset + laneCount;
+    let atlasFamilyMixOffset = historyOffset + (logicalNoteCount * 4 * 79);
+    let cachedAtlasPhaseIncrementOffset = atlasFamilyMixOffset + familyBatchCount;
+    let cachedAtlasWarpAmountOffset = cachedAtlasPhaseIncrementOffset + laneCount;
+    let atlasAmountWeight0Offset = cachedAtlasWarpAmountOffset + laneCount;
+    let atlasAmountWeight1Offset = atlasAmountWeight0Offset + laneCount;
+    let atlasAmountWeight2Offset = atlasAmountWeight1Offset + laneCount;
+    let phaseIncrementOffset = atlasAmountWeight2Offset + laneCount;
+    let positionOffset = phaseIncrementOffset + laneCount;
+    let warpAmountOffset = positionOffset + laneCount;
+    let leftGainOffset = warpAmountOffset + laneCount;
+    let rightGainOffset = leftGainOffset + laneCount;
+    let atlasDcOffset = rightGainOffset + laneCount;
+    let atlasBasis0Offset = atlasDcOffset + laneCount;
+    let atlasBasis1Offset = atlasBasis0Offset + laneCount;
+    let atlasBasis2Offset = atlasBasis1Offset + laneCount;
+    let atlasBasis3Offset = atlasBasis2Offset + laneCount;
+    let basePhaseIncrementOffset = atlasBasis3Offset + laneCount;
+    let basePositionOffset = basePhaseIncrementOffset + voiceOscillatorCount;
+    let baseWarpAmountOffset = basePositionOffset + voiceOscillatorCount;
+    let basePanOffset = baseWarpAmountOffset + voiceOscillatorCount;
+    let oscillatorGainOffset = basePanOffset + voiceOscillatorCount;
+    let unisonDetuneOffset = oscillatorGainOffset + voiceOscillatorCount;
+    let unisonBlendOffset = unisonDetuneOffset + voiceOscillatorCount;
+    let unisonWidthOffset = unisonBlendOffset + voiceOscillatorCount;
+    let positionSpreadOffset = unisonWidthOffset + voiceOscillatorCount;
+    let warpSpreadOffset = positionSpreadOffset + voiceOscillatorCount;
+    let noteOutputOffset = warpSpreadOffset + voiceOscillatorCount;
+    let packedFloatCount = noteOutputOffset + (logicalNoteCount * 2);
+
+    let writeIndexOffset = 0;
+    let atlasFamilyTargetOffset = writeIndexOffset + logicalNoteCount;
+    let cachedAtlasModeOffset = atlasFamilyTargetOffset + familyBatchCount;
+    let atlasLengthOffset = cachedAtlasModeOffset + laneCount;
+    let atlasAmountBase0Offset = atlasLengthOffset + laneCount;
+    let atlasAmountBase1Offset = atlasAmountBase0Offset + laneCount;
+    let atlasAmountBase2Offset = atlasAmountBase1Offset + laneCount;
+    let warpModeOffset = atlasAmountBase2Offset + laneCount;
+    let oscillatorSlotOffset = warpModeOffset + voiceOscillatorCount;
+    let mipOffsetOffset = oscillatorSlotOffset + oscillatorCount;
+    let mipLengthOffset = mipOffsetOffset + (tableSlotCount * mipLevelCount);
+    let frameCountOffset = mipLengthOffset + (tableSlotCount * mipLevelCount);
+    let oversampleFactorOffset = frameCountOffset + tableSlotCount;
+    let use441FilterOffset = oversampleFactorOffset + 1;
+    let unisonVoicesOffset = use441FilterOffset + 1;
+    let unisonDetuneModeOffset = unisonVoicesOffset + voiceOscillatorCount;
+    let unisonStackModeOffset = unisonDetuneModeOffset + voiceOscillatorCount;
+    let packedIntCount = unisonStackModeOffset + voiceOscillatorCount;
+
+    let sourceValueBits = 18;
+    let sourceDerivativeBits = 32 - sourceValueBits;
+    let sourceValueMaximum = (1 << (sourceValueBits - 1)) - 1;
+    let sourceDerivativeMaximum = (1 << (sourceDerivativeBits - 1)) - 1;
+
+    processor ThreeOscillatorExternalSmoke
+    {
+        output stream float32<2> audioOut;
+
+        float32[packedFloatCount] packedFloats;
+        int32[packedIntCount] packedInts;
+        int32[tablePoolChunkSampleCount] slot0Chunk0;
+        int32[tablePoolChunkSampleCount] slot0Chunk1;
+        int32[tablePoolChunkSampleCount] slot0Chunk2;
+        int32[tablePoolChunkSampleCount] slot0Chunk3;
+        int32[tablePoolChunkSampleCount] slot1Chunk0;
+        int32[tablePoolChunkSampleCount] slot1Chunk1;
+        int32[tablePoolChunkSampleCount] slot1Chunk2;
+        int32[tablePoolChunkSampleCount] slot1Chunk3;
+        int32[tablePoolChunkSampleCount] slot2Chunk0;
+        int32[tablePoolChunkSampleCount] slot2Chunk1;
+        int32[tablePoolChunkSampleCount] slot2Chunk2;
+        int32[tablePoolChunkSampleCount] slot2Chunk3;
+        int32[tablePoolChunkSampleCount] slot3Chunk0;
+        int32[tablePoolChunkSampleCount] slot3Chunk1;
+        int32[tablePoolChunkSampleCount] slot3Chunk2;
+        int32[tablePoolChunkSampleCount] slot3Chunk3;
+        bool initialised = false;
+
+        int32 mipLength (int32 mipIndex)
+        {
+            let harmonicLength = (1 << mipIndex) * 32;
+            return std::intrinsics::min (2048, std::intrinsics::max (256, harmonicLength));
+        }
+
+        int32 mipOffset (int32 mipIndex)
+        {
+            int32 offset = 0;
+            for (int32 previousMip = 0; previousMip < mipIndex; ++previousMip)
+                offset += (mipLength (previousMip) + 1) * maximumFrameCount;
+            return offset;
+        }
+
+        int32 quantise (float32 value, float32 inverseScale, int32 maximum)
+        {
+            let scaled = value * inverseScale;
+            return std::intrinsics::clamp (
+                int32 (scaled + (scaled >= 0.0f ? 0.5f : -0.5f)), -maximum, maximum);
+        }
+
+        int32 packSourcePoint (float32 value, float32 derivative)
+        {
+            let valueBits = quantise (
+                value, float32 (sourceValueMaximum) / 1.5f, sourceValueMaximum)
+                & 0x3ffff;
+            let derivativeBits = quantise (
+                derivative, float32 (sourceDerivativeMaximum) / 0.5f,
+                sourceDerivativeMaximum);
+            return valueBits | (derivativeBits << sourceValueBits);
+        }
+
+        float32 sawValue (int32 point, int32 length)
+        {
+            return (float32 (point) / float32 (length)) - 0.5f;
+        }
+
+        void initialiseTable()
+        {
+            for (int32 mip = 0; mip < mipLevelCount; ++mip)
+            {
+                let length = mipLength (mip);
+                let offset = mipOffset (mip);
+
+                for (int32 point = 0; point <= length; ++point)
+                {
+                    let wrappedPoint = point == length ? 0 : point;
+                    let previousPoint = wrappedPoint == 0 ? length - 1 : wrappedPoint - 1;
+                    let nextPoint = wrappedPoint + 1 == length ? 0 : wrappedPoint + 1;
+                    let value = sawValue (wrappedPoint, length);
+                    let derivative = 0.5f * (
+                        sawValue (nextPoint, length) - sawValue (previousPoint, length));
+                    let tableIndex = offset + point;
+                    slot0Chunk0.at (tableIndex) = packSourcePoint (value, derivative);
+                }
+            }
+        }
+
+        void initialiseRenderer()
+        {
+            initialiseTable();
+
+            for (int32 slot = 0; slot < tableSlotCount; ++slot)
+            {
+                packedInts.at (frameCountOffset + slot) = slot == 0 ? 1 : 0;
+                for (int32 mip = 0; mip < mipLevelCount; ++mip)
+                {
+                    let metadata = (slot * mipLevelCount) + mip;
+                    packedInts.at (mipOffsetOffset + metadata) = mipOffset (mip);
+                    packedInts.at (mipLengthOffset + metadata) = mipLength (mip);
+                }
+            }
+
+            for (int32 oscillator = 0; oscillator < oscillatorCount; ++oscillator)
+                packedInts.at (oscillatorSlotOffset + oscillator) = 0;
+
+            packedInts.at (oversampleFactorOffset) = 1;
+            packedInts.at (use441FilterOffset) = 0;
+
+            for (int32 family = 0; family < familyBatchCount; ++family)
+                packedInts.at (atlasFamilyTargetOffset + family) = -1;
+
+            for (int32 lane = 0; lane < laneCount; ++lane)
+                packedInts.at (cachedAtlasModeOffset + lane) = -1;
+
+            for (int32 voiceOscillator = 0;
+                 voiceOscillator < voiceOscillatorCount;
+                 ++voiceOscillator)
+            {
+                packedInts.at (warpModeOffset + voiceOscillator) = 0;
+                packedInts.at (unisonVoicesOffset + voiceOscillator) = 1;
+            }
+
+            packedFloats.at (basePhaseIncrementOffset) = 220.0f / float32 (processor.frequency);
+            packedFloats.at (basePositionOffset) = 0.0f;
+            packedFloats.at (baseWarpAmountOffset) = 0.0f;
+            packedFloats.at (basePanOffset) = 0.0f;
+            packedFloats.at (oscillatorGainOffset) = 1.0f;
+            initialised = true;
+        }
+
+        void main()
+        {
+            loop
+            {
+                if (! initialised)
+                    initialiseRenderer();
+
+                let succeeded = CosimoThreeOscillatorRenderer::renderAll (
+                    packedFloats, packedInts,
+                    slot0Chunk0, slot0Chunk1, slot0Chunk2, slot0Chunk3,
+                    slot1Chunk0, slot1Chunk1, slot1Chunk2, slot1Chunk3,
+                    slot2Chunk0, slot2Chunk1, slot2Chunk2, slot2Chunk3,
+                    slot3Chunk0, slot3Chunk1, slot3Chunk2, slot3Chunk3);
+                let left = succeeded != 0 ? packedFloats.at (noteOutputOffset) : 0.0f;
+                let right = succeeded != 0 ? packedFloats.at (noteOutputOffset + 1) : 0.0f;
+                audioOut <- float32<2> (left, right);
+                advance();
+            }
+        }
+    }
+}
