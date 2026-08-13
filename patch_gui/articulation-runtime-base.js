@@ -2,8 +2,9 @@
 import { createDefaultEnvelope, } from "./modulation.js";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program.js";
 import { clampNormalizedValue } from "./cosimo-ids.js";
+import { OSCILLATOR_IDS } from "./modulation-targets.js";
 import { allTargetDescriptors } from "./target-descriptor.js";
-export const UI_PATCH_VALUES_STATE_KEY = "uiPatchValues.v1";
+export const UI_PATCH_VALUES_STATE_KEY = "uiPatchValues.v2";
 /**
  * Stable projection of modulation state that can actually change a resolved
  * articulation image. Route amounts, polarity, reducer, enabled state, MSEG
@@ -54,21 +55,23 @@ export function deserializeUiPatchValues(value) {
             throw new Error(`${UI_PATCH_VALUES_STATE_KEY} is not valid JSON.`);
         }
     }
-    if (document === undefined) {
-        return createDefaultUiPatchValues();
-    }
     if (!document || typeof document !== "object" || Array.isArray(document)) {
         throw new Error(`${UI_PATCH_VALUES_STATE_KEY} must be a flat object.`);
     }
     const record = document;
     const values = {};
     const descriptors = allTargetDescriptors();
-    for (const descriptor of descriptors) {
-        const rawValue = record[descriptor.targetId];
-        if (rawValue === undefined) {
-            values[descriptor.targetId] = descriptor.initialValue;
-            continue;
+    const descriptorIds = new Set(descriptors.map((descriptor) => String(descriptor.targetId)));
+    for (const key of Reflect.ownKeys(record)) {
+        if (typeof key !== "string" || !descriptorIds.has(key)) {
+            throw new Error(`${UI_PATCH_VALUES_STATE_KEY} has unknown target "${String(key)}".`);
         }
+    }
+    for (const descriptor of descriptors) {
+        if (!Object.hasOwn(record, descriptor.targetId)) {
+            throw new Error(`${UI_PATCH_VALUES_STATE_KEY} is missing target "${descriptor.targetId}".`);
+        }
+        const rawValue = record[descriptor.targetId];
         if (typeof rawValue !== "number" || !Number.isFinite(rawValue) || rawValue < 0 || rawValue > 1) {
             throw new Error(`${UI_PATCH_VALUES_STATE_KEY}.${descriptor.targetId} must be within 0..1.`);
         }
@@ -82,25 +85,38 @@ export function deserializeUiPatchValues(value) {
  */
 export function buildArticulationPatchVoiceBase(modulationState, patchValues) {
     const envelope = (slotIndex) => (modulationState.envelopeSlots[slotIndex] ?? createDefaultEnvelope(slotIndex));
-    const parameters = {
+    const oscillatorDefaults = {
         framePosition: 0,
         pan: 0,
+        octave: 0,
+        semitone: 0,
+        fineCents: 0,
+        phase: 0,
+        phaseRandom: 0,
+        retrigger: 1,
+        volumeDb: -9.542425,
+        mute: 0,
+        solo: 0,
         warpMode: 0,
         warpAmount: 0,
-        filterMode: 0,
-        filterCutoffHz: 1000,
-        filterQ: 0.707107,
         unisonVoices: 1,
         unisonDetune: 0.1,
         unisonBlend: 0.75,
         unisonWidth: 1,
-        unisonPhase: 0,
-        unisonRandom: 0,
-        unisonPhaseMode: 0,
         unisonDetuneMode: 0,
         unisonStackMode: 0,
         unisonWavetablePositionSpread: 0,
         unisonWarpSpread: 0,
+    };
+    const oscillatorParameters = Object.fromEntries(OSCILLATOR_IDS.flatMap((oscillatorID) => (Object.entries(oscillatorDefaults).map(([parameterID, value]) => [
+        `osc${oscillatorID}.${parameterID}`,
+        value,
+    ]))));
+    const parameters = {
+        ...oscillatorParameters,
+        filterMode: 0,
+        filterCutoffHz: 1000,
+        filterQ: 0.707107,
         msegMorph1: modulationState.msegSlots[0]?.morph ?? 0,
         msegMorph2: modulationState.msegSlots[1]?.morph ?? 0,
         msegMorph3: modulationState.msegSlots[2]?.morph ?? 0,

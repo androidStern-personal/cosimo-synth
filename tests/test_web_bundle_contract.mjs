@@ -51,6 +51,19 @@ test("compiled wavetable worker stays within its startup parse budget", async ()
     );
 });
 
+test("the generated modulation module ships its canonical identity dependency", async () => {
+    const [buildScript, generatedTargets] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "ui", "build.mjs"), "utf8"),
+        fs.readFile(path.join(repoRoot, "patch_gui", "modulation-targets.js"), "utf8"),
+    ]);
+
+    assert.match(
+        buildScript,
+        /emitGeneratedPatchGuiModule\("ui\/shared\/modulation-targets\.ts", "patch_gui\/modulation-targets\.js"\)/,
+    );
+    assert.match(generatedTargets, /^\/\/ Generated from ui\/shared\/modulation-targets\.ts /);
+});
+
 test("browser stress artifact includes its exclusive runtime-lane worker", async () => {
     await fs.access(path.join(repoRoot, "build", "web", "patch_gui", "wavetable-test-worker.js"));
 });

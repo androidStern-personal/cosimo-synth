@@ -158,10 +158,12 @@ export type ArticulationBaseChange =
 export class ArticulationsParseError extends Error {
     readonly _tag = "ArticulationsParseError" as const;
 
+    /**
+     * `reason` distinguishes the deliberate hard cut from other malformed input;
+     * `detail` names the offending field or slot.
+     */
     constructor(
-        /** `unsupported-version` marks the deliberate hard cut; `malformed` is any other violation. */
         readonly reason: "unsupported-version" | "malformed",
-        /** Human-readable detail naming the offending field or slot. */
         readonly detail: string,
     ) {
         super(`articulations.v4 parse failed (${reason}): ${detail}`);

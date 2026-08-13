@@ -46,6 +46,8 @@ const definitions = [
         summary: "Final tone shaping for the complete voice mix.",
         iconUrl: RACK_ICON_URLS.filter,
         initialQuickEndpointID: "globalFilterCutoff",
+        xEndpointID: null,
+        yEndpointID: null,
         parameters: [
             p("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 1, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(choice), quick: true }),
             p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 20_000, 20_000, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0, modulationApplication: "octaves" }),
@@ -59,6 +61,8 @@ const definitions = [
         summary: "Classic clipping or harmonic-residue saturation.",
         iconUrl: RACK_ICON_URLS.drive,
         initialQuickEndpointID: "distortionDriveDb",
+        xEndpointID: null,
+        yEndpointID: null,
         parameters: [
             p("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Classic", 0), choice("Harmonics", 1)] }),
             p("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: true, modulationTargetIndex: 3 }),
@@ -74,6 +78,8 @@ const definitions = [
         summary: "Upward/downward multiband dynamics with envelope matching.",
         iconUrl: RACK_ICON_URLS.ott,
         initialQuickEndpointID: "ottAmount",
+        xEndpointID: "ottAmount",
+        yEndpointID: "ottTimePercent",
         parameters: [
             p("ott", "ottMix", "Mix", "Mix", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 8 }),
             p("ott", "ottAmount", "Amount", "Amt", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 9 }),
@@ -88,6 +94,8 @@ const definitions = [
         summary: "Modulated ensemble, bloom, and pitch-following ring colour.",
         iconUrl: RACK_ICON_URLS.chorus,
         initialQuickEndpointID: "chorusMix",
+        xEndpointID: "chorusTone",
+        yEndpointID: "chorusFeedback",
         parameters: [
             p("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide", "Classic", "Fast"].map(choice) }),
             p("chorus", "chorusBloomMode", "Bloom", "Blm", 0, 4, 0, { step: 1, choices: ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"].map(choice) }),
@@ -105,6 +113,8 @@ const definitions = [
         summary: "Short swept comb delay with signed feedback.",
         iconUrl: RACK_ICON_URLS.flanger,
         initialQuickEndpointID: "flangerRate",
+        xEndpointID: "flangerRate",
+        yEndpointID: "flangerDepth",
         parameters: [
             p("flanger", "flangerRate", "Rate", "Rate", 0.02, 8, 0.35, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 18 }),
             p("flanger", "flangerDepth", "Depth", "Dpt", 0, 1, 0.6, { quick: true, modulationTargetIndex: 19 }),
@@ -118,6 +128,8 @@ const definitions = [
         summary: "Eight-pole swept all-pass network with Free/Sync rate.",
         iconUrl: RACK_ICON_URLS.phaser,
         initialQuickEndpointID: "phaserRate",
+        xEndpointID: "phaserFrequency",
+        yEndpointID: "phaserDepth",
         parameters: [
             p("phaser", "phaserRateMode", "Rate Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
             p("phaser", "phaserRate", "Rate", "Rate", 0.02, 8, 0.3, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 22 }),
@@ -135,6 +147,8 @@ const definitions = [
         summary: "Tape-gliding stereo delay with Free/Sync timing.",
         iconUrl: RACK_ICON_URLS.delay,
         initialQuickEndpointID: "delayTime",
+        xEndpointID: "delayTime",
+        yEndpointID: "delayFeedback",
         parameters: [
             p("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [choice("Free", 0), choice("Sync", 1)] }),
             p("delay", "delayTime", "Time", "Time", 1, 2_000, 375, { unit: "ms", scale: "log", quick: true, modulationTargetIndex: 28, modulationApplication: "octaves" }),
@@ -150,6 +164,8 @@ const definitions = [
         summary: "Modulated early reflections into a four-line stereo tank.",
         iconUrl: RACK_ICON_URLS.reverb,
         initialQuickEndpointID: "reverbSize",
+        xEndpointID: "reverbSize",
+        yEndpointID: "reverbDecay",
         parameters: [
             p("reverb", "reverbSize", "Size", "Size", 0, 1, 0.5, { quick: true, modulationTargetIndex: 32 }),
             p("reverb", "reverbDecay", "Decay", "Dcy", 0, 1, 0.4, { quick: true, modulationTargetIndex: 33 }),

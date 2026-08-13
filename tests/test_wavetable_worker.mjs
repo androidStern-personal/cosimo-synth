@@ -7,9 +7,14 @@ import runWavetableWorker, {
 } from "../patch_gui/wavetable-worker.js";
 import {
     MODULATION_STATE_KEY,
+    createDefaultRoute,
     createDefaultModulationState,
     serializeModulationState,
 } from "../patch_gui/modulation.js";
+import {
+    MODULATION_SOURCE_IDENTITIES,
+    VOICE_MODULATION_TARGET_IDENTITIES,
+} from "../patch_gui/modulation-targets.js";
 
 const samplesPerFrame = 2048;
 const failurePhaseLoadSource = 1;
@@ -381,28 +386,20 @@ async function withPatchedFetch(fakeFetch, callback) {
 
 test("headless worker restore installs 101 stored mappings without opening an editor", async () => {
     const modulationState = createDefaultModulationState();
-    const sources = [
-        ["mseg", 1], ["mseg", 2], ["mseg", 3],
-        ["env", 1], ["env", 2], ["env", 3],
-        ["velocity", null], ["pressure", null], ["slide", null],
-    ];
-    const targets = [
-        "wavetablePosition", "warpAmount", "filterCutoffOctaves", "filterQ",
-        "pitchSemitones", "ampGainDb", "pan", "unisonDetune", "unisonBlend",
-        "unisonWidth", "unisonWavetablePositionSpread", "unisonWarpSpread",
-    ];
-    modulationState.routes = sources.flatMap(([sourceKind, sourceSlot]) => (
-        targets.map((targetKind) => ({
-            id: `${targetKind}::${sourceKind}-${sourceSlot ?? "fixed"}`,
-            enabled: true,
-            sourceKind,
-            sourceSlot,
-            polarity: "unipolar",
-            targetKind,
-            amount: 0.5,
-            reducer: "max",
-        }))
-    )).slice(0, 101);
+    modulationState.routes = MODULATION_SOURCE_IDENTITIES
+        .filter(({ group }) => group === "voice")
+        .flatMap((source) => (
+            VOICE_MODULATION_TARGET_IDENTITIES.map((target) => ({
+                id: `${target.kind}::${source.id}`,
+                enabled: true,
+                sourceKind: source.sourceKind,
+                sourceSlot: source.sourceSlot,
+                polarity: "unipolar",
+                targetKind: target.kind,
+                amount: 0.5,
+                reducer: "max",
+            }))
+        )).slice(0, 101);
 
     const connection = new FakeWorkerPatchConnection({
         [MODULATION_STATE_KEY]: serializeModulationState(modulationState),
@@ -467,7 +464,10 @@ test("headless worker rejects malformed modulation state without installing defa
     }
 
     const validState = createDefaultModulationState();
-    validState.routes = [validState.routes[0]];
+    validState.routes = [createDefaultRoute({
+        id: "oscA.framePosition::mseg-1",
+        amount: 0.25,
+    })];
     const connection = new FakeWorkerPatchConnection({
         [MODULATION_STATE_KEY]: serializeModulationState(validState),
     });
@@ -500,6 +500,10 @@ test("headless worker rejects malformed modulation state without installing defa
 
 test("a rejected modulation batch gets one guarded full-state recovery", async () => {
     const initialState = createDefaultModulationState();
+    initialState.routes = [createDefaultRoute({
+        id: "oscA.framePosition::mseg-1",
+        amount: 0.25,
+    })];
     const connection = new FakeWorkerPatchConnection({
         [MODULATION_STATE_KEY]: serializeModulationState(initialState),
     });
@@ -544,6 +548,10 @@ test("a rejected modulation batch gets one guarded full-state recovery", async (
 
 test("a repeatedly rejected modulation image does not enter a recovery loop", async () => {
     const initialState = createDefaultModulationState();
+    initialState.routes = [createDefaultRoute({
+        id: "oscA.framePosition::mseg-1",
+        amount: 0.25,
+    })];
     const connection = new FakeWorkerPatchConnection({
         [MODULATION_STATE_KEY]: serializeModulationState(initialState),
     });
@@ -574,7 +582,8 @@ test("a repeatedly rejected modulation image does not enter a recovery loop", as
         assert.equal(connection.rejectionsRemainingByEndpoint.get("modulationProgram"), 0);
 
         const distinctState = structuredClone(nextState);
-        distinctState.routes[0].targetKind = "warpAmount";
+        distinctState.routes[0].id = "oscA.warpAmount::mseg-1";
+        distinctState.routes[0].targetKind = "oscA.warpAmount";
         connection.rejectNext("modulationProgram");
         connection.emitStoredStateValue(MODULATION_STATE_KEY, serializeModulationState(distinctState));
         await flushMicrotasks(512);
