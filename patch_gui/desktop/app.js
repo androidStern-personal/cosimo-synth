@@ -21358,47 +21358,48 @@ function Th({
   options: r,
   onChange: a,
   ariaLabel: o,
-  minWidthPx: s = 96
+  minWidthPx: s = 96,
+  maxTriggerWidthPx: c
 }) {
-  const [c, u] = P.useState(!1), h = r.find((p) => p.value === t) ?? r[0], m = r.reduce(
-    (p, S) => Math.max(p, S.label.length * 11 + 40),
+  const [u, h] = P.useState(!1), m = r.find((k) => k.value === t) ?? r[0], p = r.reduce(
+    (k, A) => Math.max(k, A.label.length * 11 + 40),
     s
-  );
-  return /* @__PURE__ */ f.jsxs("div", { className: "relative", children: [
+  ), S = c === void 0 ? p : Math.min(p, c);
+  return /* @__PURE__ */ f.jsxs("div", { className: "relative shrink-0", children: [
     /* @__PURE__ */ f.jsxs(
       "button",
       {
         type: "button",
         "aria-label": o,
-        "aria-expanded": c ? "true" : "false",
-        onClick: () => u((p) => !p),
+        "aria-expanded": u ? "true" : "false",
+        onClick: () => h((k) => !k),
         className: "synth-compact-control synth-compact-control-text flex items-center justify-between gap-1 rounded px-2 py-1.5 transition hover:border-[rgb(var(--section-accent-rgb)/0.34)] hover:bg-[rgb(var(--section-accent-rgb)/0.08)]",
-        style: { minWidth: `${m}px` },
+        style: { width: `${S}px` },
         children: [
-          /* @__PURE__ */ f.jsx("span", { className: "synth-readout-text whitespace-nowrap text-[10px]", children: h?.label }),
-          /* @__PURE__ */ f.jsx(y3, { className: `h-3 w-3 shrink-0 text-[rgb(var(--section-accent-rgb)/0.72)] transition-transform ${c ? "rotate-180" : ""}` })
+          /* @__PURE__ */ f.jsx("span", { className: "synth-readout-text min-w-0 truncate whitespace-nowrap text-[10px]", children: m?.label }),
+          /* @__PURE__ */ f.jsx(y3, { className: `h-3 w-3 shrink-0 text-[rgb(var(--section-accent-rgb)/0.72)] transition-transform ${u ? "rotate-180" : ""}` })
         ]
       }
     ),
-    c ? /* @__PURE__ */ f.jsxs(f.Fragment, { children: [
-      /* @__PURE__ */ f.jsx("div", { className: "fixed inset-0 z-40", onClick: () => u(!1) }),
+    u ? /* @__PURE__ */ f.jsxs(f.Fragment, { children: [
+      /* @__PURE__ */ f.jsx("div", { className: "fixed inset-0 z-40", onClick: () => h(!1) }),
       /* @__PURE__ */ f.jsx(
         "div",
         {
           className: "synth-menu-surface absolute z-50 mt-1 max-h-40 overflow-auto rounded py-0.5",
-          style: { minWidth: `${m}px` },
-          children: r.map((p) => /* @__PURE__ */ f.jsx(
+          style: { minWidth: `${p}px` },
+          children: r.map((k) => /* @__PURE__ */ f.jsx(
             "button",
             {
               type: "button",
-              "aria-label": `${o} ${p.label}`,
+              "aria-label": `${o} ${k.label}`,
               onClick: () => {
-                a(p.value), u(!1);
+                a(k.value), h(!1);
               },
-              className: `w-full px-2.5 py-1.5 text-left text-[10px] transition-colors hover:bg-[rgb(var(--section-accent-rgb)/0.08)] ${t === p.value ? "synth-readout-text synth-accent-soft-bg" : "text-[rgb(232_236_239/0.82)]"}`,
-              children: p.label
+              className: `w-full px-2.5 py-1.5 text-left text-[10px] transition-colors hover:bg-[rgb(var(--section-accent-rgb)/0.08)] ${t === k.value ? "synth-readout-text synth-accent-soft-bg" : "text-[rgb(232_236_239/0.82)]"}`,
+              children: k.label
             },
-            p.value
+            k.value
           ))
         }
       )
@@ -21561,7 +21562,7 @@ function P3({
       onDoubleClick: (C) => {
         C.preventDefault(), C.stopPropagation(), K();
       },
-      className: "relative h-8 w-8 touch-none cursor-ns-resize select-none",
+      className: "relative h-8 w-8 shrink-0 touch-none cursor-ns-resize select-none",
       children: [
         /* @__PURE__ */ f.jsxs("svg", { className: "absolute inset-0", viewBox: "0 0 32 32", children: [
           /* @__PURE__ */ f.jsx(
@@ -21725,7 +21726,8 @@ const M3 = P.memo(function({
                 amount: Sn(p, r.amount)
               });
             },
-            minWidthPx: 132
+            minWidthPx: 132,
+            maxTriggerWidthPx: 180
           }
         ),
         /* @__PURE__ */ f.jsx("div", { className: "min-w-0 flex-1" }),

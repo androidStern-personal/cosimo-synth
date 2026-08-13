@@ -116,12 +116,14 @@ function PrototypeSelect({
     onChange,
     ariaLabel,
     minWidthPx = 96,
+    maxTriggerWidthPx,
 }: {
     value: string;
     options: { value: string; label: string }[];
     onChange: (value: string) => void;
     ariaLabel: string;
     minWidthPx?: number;
+    maxTriggerWidthPx?: number;
 }) {
     const [open, setOpen] = useState(false);
     const selected = options.find((option) => option.value === value) ?? options[0];
@@ -129,18 +131,21 @@ function PrototypeSelect({
         (currentMax, option) => Math.max(currentMax, (option.label.length * 11) + 40),
         minWidthPx,
     );
+    const triggerWidthPx = maxTriggerWidthPx === undefined
+        ? longestLabelWidthPx
+        : Math.min(longestLabelWidthPx, maxTriggerWidthPx);
 
     return (
-        <div className="relative">
+        <div className="relative shrink-0">
             <button
                 type="button"
                 aria-label={ariaLabel}
                 aria-expanded={open ? "true" : "false"}
                 onClick={() => setOpen((previousOpen) => !previousOpen)}
                 className="synth-compact-control synth-compact-control-text flex items-center justify-between gap-1 rounded px-2 py-1.5 transition hover:border-[rgb(var(--section-accent-rgb)/0.34)] hover:bg-[rgb(var(--section-accent-rgb)/0.08)]"
-                style={{ minWidth: `${longestLabelWidthPx}px` }}
+                style={{ width: `${triggerWidthPx}px` }}
             >
-                <span className="synth-readout-text whitespace-nowrap text-[10px]">{selected?.label}</span>
+                <span className="synth-readout-text min-w-0 truncate whitespace-nowrap text-[10px]">{selected?.label}</span>
                 <ChevronDownIcon className={`h-3 w-3 shrink-0 text-[rgb(var(--section-accent-rgb)/0.72)] transition-transform ${open ? "rotate-180" : ""}`} />
             </button>
             {open ? (
@@ -446,7 +451,7 @@ function MiniKnob({
                 event.stopPropagation();
                 beginEditing();
             }}
-            className="relative h-8 w-8 touch-none cursor-ns-resize select-none"
+            className="relative h-8 w-8 shrink-0 touch-none cursor-ns-resize select-none"
         >
             <svg className="absolute inset-0" viewBox="0 0 32 32">
                 <circle
@@ -624,6 +629,7 @@ const RouteRow = memo(function RouteRow({
                     });
                 }}
                 minWidthPx={132}
+                maxTriggerWidthPx={180}
             />
 
             <div className="min-w-0 flex-1" />

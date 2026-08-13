@@ -6,16 +6,23 @@ import {
     normalizeArticulationEditorState,
     normalizeArticulationSnapshot,
 } from "../patch_gui/articulations.js";
-import { ARTICULATIONS_V3_STATE_KEY } from "../patch_gui/articulation-image.js";
+import {
+    ARTICULATIONS_V4_STATE_KEY,
+    parseArticulationsV4,
+} from "../patch_gui/articulation-image.js";
 import { deserializeMsegShape, renderMsegShape } from "../patch_gui/mseg.js";
 import {
     MODULATION_SOURCE_OPTIONS,
+    MODULATION_STATE_KEY,
     MODULATION_TARGET_OPTIONS,
     createDefaultModulationState,
     deserializeModulationState,
     normalizeModulationState,
 } from "../patch_gui/modulation.js";
-import { getModulationRuntimeCell } from "../patch_gui/modulation-runtime-program.js";
+import {
+    getModulationArticulationCellIndex,
+    getModulationRuntimeCell,
+} from "../patch_gui/modulation-runtime-program.js";
 
 import {
     clearHarnessDebugLog,
@@ -35,7 +42,7 @@ const TEST_SAMPLES_PER_FRAME = 2048;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
 const EFFECT_PRESETS_V2_STATE_KEY = "effects.presets.v2";
 const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
-const ARTICULATION_STATE_KEY = ARTICULATIONS_V3_STATE_KEY;
+const ARTICULATION_STATE_KEY = ARTICULATIONS_V4_STATE_KEY;
 const RETIRED_SYNTH_LOCAL_DIRTY_STATE_KEY = ["synth", "preset" + "Baseline" + "Snapshot", "v1"].join(".");
 
 function expectedMsegPreviewProgressClipWidth(previewState, progress) {
@@ -48,7 +55,7 @@ function buildShortMidi(status, noteNumber, velocity = 0) {
 }
 
 function readStoredModulationState(snapshot) {
-    const rawState = snapshot.storedState["modulation.v2"];
+    const rawState = snapshot.storedState[MODULATION_STATE_KEY];
     return rawState === undefined
         ? createDefaultModulationState()
         : deserializeModulationState(rawState);
@@ -59,7 +66,12 @@ function readStoredArticulationEditorState(snapshot) {
     if (rawState === undefined) {
         return normalizeArticulationEditorState(undefined);
     }
-    const state = JSON.parse(String(rawState));
+    const acceptedRouteIds = new Set(readStoredModulationState(snapshot).routes.flatMap((route) => (
+        getModulationArticulationCellIndex(route) === null ? [] : [route.id]
+    )));
+    const parsed = parseArticulationsV4(JSON.parse(String(rawState)), acceptedRouteIds);
+    assert.equal(parsed._tag, "ok", parsed._tag === "err" ? parsed.error.message : undefined);
+    const state = parsed.value;
     return normalizeArticulationEditorState({
         selectedSlotId: state.selectedSlotId,
         activeTriggerMode: state.activeTriggerMode,
@@ -69,24 +81,24 @@ function readStoredArticulationEditorState(snapshot) {
             name: slot.name,
             snapshot: normalizeArticulationSnapshot({
                 parameters: {
-                    wavetablePosition: slot.overrides.framePosition,
-                    pan: slot.overrides.pan,
-                    warpMode: slot.overrides.warpMode,
-                    warpAmount: slot.overrides.warpAmount,
+                    wavetablePosition: slot.overrides["oscA.framePosition"],
+                    pan: slot.overrides["oscA.pan"],
+                    warpMode: slot.overrides["oscA.warpMode"],
+                    warpAmount: slot.overrides["oscA.warpAmount"],
                     filterMode: slot.overrides.filterMode,
                     filterCutoff: slot.overrides.filterCutoffHz,
                     filterQ: slot.overrides.filterQ,
-                    unisonVoices: slot.overrides.unisonVoices,
-                    unisonDetune: slot.overrides.unisonDetune,
-                    unisonBlend: slot.overrides.unisonBlend,
-                    unisonWidth: slot.overrides.unisonWidth,
-                    unisonPhase: slot.overrides.unisonPhase,
-                    unisonRandom: slot.overrides.unisonRandom,
-                    unisonPhaseMode: slot.overrides.unisonPhaseMode,
-                    unisonDetuneMode: slot.overrides.unisonDetuneMode,
-                    unisonStackMode: slot.overrides.unisonStackMode,
-                    unisonWavetablePositionSpread: slot.overrides.unisonWavetablePositionSpread,
-                    unisonWarpSpread: slot.overrides.unisonWarpSpread,
+                    unisonVoices: slot.overrides["oscA.unisonVoices"],
+                    unisonDetune: slot.overrides["oscA.unisonDetune"],
+                    unisonBlend: slot.overrides["oscA.unisonBlend"],
+                    unisonWidth: slot.overrides["oscA.unisonWidth"],
+                    unisonPhase: slot.overrides["oscA.phase"],
+                    unisonRandom: slot.overrides["oscA.phaseRandom"],
+                    unisonPhaseMode: slot.overrides["oscA.retrigger"],
+                    unisonDetuneMode: slot.overrides["oscA.unisonDetuneMode"],
+                    unisonStackMode: slot.overrides["oscA.unisonStackMode"],
+                    unisonWavetablePositionSpread: slot.overrides["oscA.unisonWavetablePositionSpread"],
+                    unisonWarpSpread: slot.overrides["oscA.unisonWarpSpread"],
                     msegMorphs: [
                         slot.overrides.msegMorph1,
                         slot.overrides.msegMorph2,
@@ -120,7 +132,7 @@ function editorBankToStoredArticulations(bankValue) {
     const bank = normalizeArticulationEditorState(bankValue);
     return {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: bank.selectedSlotId,
         activeTriggerMode: bank.activeTriggerMode,
         slots: bank.slots.map((slot) => {
@@ -144,24 +156,24 @@ function editorBankToStoredArticulations(bankValue) {
                 velRange: { min: velRange.min, max: velRange.max },
                 chainRange: { min: chainRange.min, max: chainRange.max },
                 overrides: {
-                    framePosition: parameters.wavetablePosition,
-                    pan: parameters.pan,
-                    warpMode: parameters.warpMode,
-                    warpAmount: parameters.warpAmount,
+                    "oscA.framePosition": parameters.wavetablePosition,
+                    "oscA.pan": parameters.pan,
+                    "oscA.warpMode": parameters.warpMode,
+                    "oscA.warpAmount": parameters.warpAmount,
                     filterMode: parameters.filterMode,
                     filterCutoffHz: parameters.filterCutoff,
                     filterQ: parameters.filterQ,
-                    unisonVoices: parameters.unisonVoices,
-                    unisonDetune: parameters.unisonDetune,
-                    unisonBlend: parameters.unisonBlend,
-                    unisonWidth: parameters.unisonWidth,
-                    unisonPhase: parameters.unisonPhase,
-                    unisonRandom: parameters.unisonRandom,
-                    unisonPhaseMode: parameters.unisonPhaseMode,
-                    unisonDetuneMode: parameters.unisonDetuneMode,
-                    unisonStackMode: parameters.unisonStackMode,
-                    unisonWavetablePositionSpread: parameters.unisonWavetablePositionSpread,
-                    unisonWarpSpread: parameters.unisonWarpSpread,
+                    "oscA.unisonVoices": parameters.unisonVoices,
+                    "oscA.unisonDetune": parameters.unisonDetune,
+                    "oscA.unisonBlend": parameters.unisonBlend,
+                    "oscA.unisonWidth": parameters.unisonWidth,
+                    "oscA.phase": parameters.unisonPhase,
+                    "oscA.phaseRandom": parameters.unisonRandom,
+                    "oscA.retrigger": parameters.unisonPhaseMode,
+                    "oscA.unisonDetuneMode": parameters.unisonDetuneMode,
+                    "oscA.unisonStackMode": parameters.unisonStackMode,
+                    "oscA.unisonWavetablePositionSpread": parameters.unisonWavetablePositionSpread,
+                    "oscA.unisonWarpSpread": parameters.unisonWarpSpread,
                     msegMorph1: parameters.msegMorphs[0],
                     msegMorph2: parameters.msegMorphs[1],
                     msegMorph3: parameters.msegMorphs[2],
@@ -226,6 +238,17 @@ function routeSummary(route) {
 
 function routeSummaries(routes) {
     return routes.map((route) => routeSummary(route));
+}
+
+async function ensureFirstModulationRoute(page) {
+    if (readStoredModulationState(await getHarnessSnapshot(page)).routes.length === 0) {
+        await page.getByRole("button", { name: "Add route" }).click();
+    }
+    return waitForHarnessSnapshot(
+        page,
+        "first modulation route",
+        (snapshot) => readStoredModulationState(snapshot).routes.length > 0,
+    );
 }
 
 const RUNTIME_PATH_FIELDS = {
@@ -2646,6 +2669,7 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
     const page = await openHarnessPage();
 
     try {
+        await ensureFirstModulationRoute(page);
         assert.equal(await page.locator('select[aria-label="Warp mode"]').count(), 0);
         assert.equal(await page.getByText("Phase Warp", { exact: true }).count(), 0);
 
@@ -2704,18 +2728,30 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
         );
 
         assert.equal(await page.locator('[aria-label="Route 1 slot"]').count(), 0);
-        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
+        await choosePrototypeSelectOption(page, "Route 1 target", "A WARP");
+        await waitForHarnessSnapshot(
+            page,
+            "Route 1 target selection",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes[0]?.targetKind === "oscA.warpAmount",
+        );
         await page.getByRole("button", { name: "Route 1 polarity" }).click();
-        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, 78);
+        await waitForHarnessSnapshot(
+            page,
+            "Route 1 bipolar selection",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes[0]?.polarity === "bipolar",
+        );
+        const routeAmount = page.locator('[aria-label="Route 1 amount"]');
+        await routeAmount.focus();
+        await routeAmount.press("Home");
 
         snapshot = await waitForHarnessSnapshot(
             page,
             "Route 1 targeting warp amount",
             (nextSnapshot) => {
                 const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "warpAmount"
+                return route?.targetKind === "oscA.warpAmount"
                     && route?.polarity === "bipolar"
-                    && Math.abs(Number(route.amount) - 0.35) <= 0.03;
+                    && Number(route.amount) === -1;
             },
         );
 
@@ -2725,7 +2761,7 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
-            targetKind: "warpAmount",
+            targetKind: "oscA.warpAmount",
             amount: finalRoute.amount,
         });
         assert.deepEqual(readRuntimeProgramRoute(snapshot, finalRoute), {
@@ -2736,7 +2772,7 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
             polarityKind: 1,
         });
         assert.equal(hasRuntimeAmount(snapshot, finalRoute, finalRoute.amount), true);
-        const amountReadout = page.locator('[data-role="route-row-1"] >> text=/±(35|34|36)%/');
+        const amountReadout = page.locator('[data-role="route-row-1"] >> text=/±100%/');
         await amountReadout.waitFor({ state: "visible" });
         assert.equal((await amountReadout.count()) >= 1, true);
     } finally {
@@ -2744,256 +2780,146 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
     }
 });
 
-test("articulation slots clone current state and recall parameters plus route amounts without replacing routing", async () => {
+test("articulation recall applies sparse v4 overrides without replacing routing", async () => {
     const page = await openHarnessPage();
+    const routeId = "oscA.warpAmount::mseg-1";
 
     try {
         await page.waitForFunction(() => {
             const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
-        assert.equal(await page.locator('[data-role="articulation-slot-bar"]').count(), 0);
-        assert.equal(await page.locator('[data-role="articulation-control-surface"][data-state="collapsed"]').count(), 1);
-        await page.getByRole("button", { name: "Expand articulation editor" }).click();
-        assert.equal(await page.locator('[data-role="articulation-control-surface"][data-state="expanded"]').count(), 1);
-        await page.getByRole("tab", { name: "Key" }).click();
-        let modeSnapshot = await waitForHarnessSnapshot(
-            page,
-            "articulation trigger mode set to Key",
-            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).activeTriggerMode === "key",
-        );
-        assert.equal(readStoredArticulationEditorState(modeSnapshot).activeTriggerMode, "key");
-        assert.equal(await page.locator('[data-role="articulation-range-lane"]').count(), 1);
-        assert.equal(await page.locator('[data-role="articulation-distribute"]').count(), 0);
-        await page.getByRole("tab", { name: "Chain" }).click();
-        await page.getByRole("button", { name: "Collapse articulation editor" }).click();
-        assert.equal(await page.locator('[data-role="articulation-control-surface"][data-state="collapsed"]').count(), 1);
-        await page.evaluate((defaultModulationState) => {
-            const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setParameterValue("wavetablePosition", 0.66);
-            harness.setParameterValue("playMode", 1);
-            harness.setParameterValue("glideTime", 0.27);
-            harness.setParameterValue("pan", -0.18);
-            harness.setParameterValue("warpMode", 3);
-            harness.setParameterValue("warpAmount", 0.61);
-            harness.setParameterValue("filterMode", 2);
-            harness.setParameterValue("filterCutoff", 2475);
-            harness.setParameterValue("filterQ", 3.6);
-            harness.setParameterValue("mseg1Morph", 0.33);
 
-            const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
+        await page.evaluate(({ fallbackModulationState, nextRouteId }) => {
+            const harness = window.__COSIMO_DESKTOP_HARNESS__;
+            harness.setParameterValue("wavetablePosition", 0.12);
+            harness.setParameterValue("pan", 0.41);
+            harness.setParameterValue("warpMode", 4);
+            harness.setParameterValue("warpAmount", 0.08);
+            harness.setParameterValue("filterCutoff", 8200);
+
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v4"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
-                : defaultModulationState;
-            modulationState.envelopeSlots = Array.isArray(modulationState.envelopeSlots)
-                ? modulationState.envelopeSlots
-                : [];
-            modulationState.envelopeSlots[0] = {
-                ...(modulationState.envelopeSlots[0] ?? {}),
-                attackSeconds: 0.17,
-                decaySeconds: 0.31,
-                sustain: 0.44,
-                releaseSeconds: 0.58,
-            };
+                : fallbackModulationState;
             modulationState.routes = [{
-                id: "articulation-route-1",
+                id: nextRouteId,
                 enabled: true,
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "bipolar",
-                targetKind: "warpAmount",
-                amount: 0.42,
-                reducer: "max",
-            }];
-            harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
-        }, createDefaultModulationState());
-        await waitForReactFrames(page);
-
-        await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
-
-        let snapshot = await waitForHarnessSnapshot(
-            page,
-            "articulation slot capturing the current synth state",
-            (nextSnapshot) => {
-                const bank = readStoredArticulationEditorState(nextSnapshot);
-                const slot = bank.slots[0];
-                const routeAmount = slot?.snapshot.modRouteAmounts.find((entry) => entry.routeId === "articulation-route-1");
-
-                return bank.selectedSlotId === "articulation-0"
-                    && bank.slots.length === 1
-                    && slot?.runtimeSlot === 0
-                    && Math.abs(Number(slot?.snapshot.parameters.wavetablePosition) - 0.66) <= 1e-9
-                    && Math.abs(Number(slot?.snapshot.parameters.warpAmount) - 0.61) <= 1e-9
-                    && Math.abs(Number(slot?.snapshot.parameters.filterCutoff) - 2475) <= 1e-9
-                    && Math.abs(Number(slot?.snapshot.parameters.msegMorphs?.[0]) - 0.33) <= 1e-9
-                    && Math.abs(Number(slot?.snapshot.envelopes?.[0]?.attackSeconds) - 0.17) <= 1e-9
-                    && Math.abs(Number(routeAmount?.amount) - 0.42) <= 1e-9;
-            },
-        );
-        assert.equal(await page.locator('[data-role="articulation-card"][data-runtime-slot="0"]').count(), 1);
-        assert.equal(
-            await page.locator('[data-role="articulation-card"][data-runtime-slot="0"]').getAttribute("aria-pressed"),
-            "true",
-        );
-        const articulationRouteCell = getModulationRuntimeCell({
-            ...readStoredModulationState(snapshot).routes[0],
-            id: "articulation-route-1",
-        }).articulationCellIndex;
-        assert.notEqual(articulationRouteCell, null);
-        assert.deepEqual(
-            snapshot.sentMessages
-                .filter(({ endpointID, value }) => (
-                    endpointID === "articulationSnapshot"
-                    && [0, 1].includes(Number(value?.selectorA))
-                ))
-                .slice(-1)
-                .map(({ value }) => ({
-                    selectorA: value.selectorA,
-                    enabled: value.enabled,
-                    framePosition: value.framePosition,
-                    warpAmount: value.warpAmount,
-                    filterCutoffHz: value.filterCutoffHz,
-                    msegMorphs: value.msegMorphs,
-                    routeAmount: value.routeAmounts?.[articulationRouteCell],
-                    envelopeAttack0: value.envelopeAttackSeconds?.[0],
-                }))
-                .sort((left, right) => left.selectorA - right.selectorA),
-            [
-                {
-                    selectorA: 0,
-                    enabled: true,
-                    framePosition: 0.66,
-                    warpAmount: 0.61,
-                    filterCutoffHz: 2475,
-                    msegMorphs: [0.33, 0, 0],
-                    routeAmount: 0.42,
-                    envelopeAttack0: 0.17,
-                },
-            ],
-        );
-
-        const capturedBank = readStoredArticulationEditorState(snapshot);
-        await page.evaluate(({ stateKey, nextState }) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextState));
-        }, {
-            stateKey: ARTICULATION_STATE_KEY,
-            nextState: editorBankToStoredArticulations({
-                ...capturedBank,
-                selectedSlotId: null,
-            }),
-        });
-        await waitForHarnessSnapshot(
-            page,
-            "articulation editing deselected",
-            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).selectedSlotId === null,
-        );
-
-        await page.evaluate((defaultModulationState) => {
-            const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setParameterValue("wavetablePosition", 0.12);
-            harness.setParameterValue("playMode", 2);
-            harness.setParameterValue("glideTime", 0.05);
-            harness.setParameterValue("pan", 0.41);
-            harness.setParameterValue("warpMode", 4);
-            harness.setParameterValue("warpAmount", 0.08);
-            harness.setParameterValue("filterMode", 5);
-            harness.setParameterValue("filterCutoff", 8200);
-            harness.setParameterValue("filterQ", 9.5);
-            harness.setParameterValue("mseg1Morph", 0.91);
-
-            const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
-            const modulationState = rawModulationState
-                ? JSON.parse(String(rawModulationState))
-                : defaultModulationState;
-            modulationState.envelopeSlots = Array.isArray(modulationState.envelopeSlots)
-                ? modulationState.envelopeSlots
-                : [];
-            modulationState.envelopeSlots[0] = {
-                ...(modulationState.envelopeSlots[0] ?? {}),
-                attackSeconds: 0.92,
-                decaySeconds: 0.83,
-                sustain: 0.72,
-                releaseSeconds: 0.61,
-            };
-            modulationState.routes = [{
-                id: "articulation-route-1",
-                enabled: false,
-                sourceKind: "env",
-                sourceSlot: 2,
-                polarity: "unipolar",
-                targetKind: "filterQ",
+                targetKind: "oscA.warpAmount",
                 amount: 0.03,
                 reducer: "max",
             }];
-            harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
-        }, createDefaultModulationState());
-        await waitForReactFrames(page);
-        await clearHarnessDebugLog(page);
+            harness.setStoredStateValue("modulation.v4", JSON.stringify(modulationState));
+        }, {
+            fallbackModulationState: createDefaultModulationState(),
+            nextRouteId: routeId,
+        });
+        await waitForHarnessSnapshot(
+            page,
+            "canonical modulation route before articulation recall",
+            (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === routeId,
+        );
 
+        const bank = {
+            format: "cosimo.articulations",
+            version: 4,
+            selectedSlotId: null,
+            activeTriggerMode: "chain",
+            slots: [{
+                id: "articulation-0",
+                runtimeSlot: 0,
+                name: "Bow Forte",
+                color: "#d2a128",
+                key: 0,
+                velRange: { min: 1, max: 1 },
+                chainRange: { min: 0, max: 0 },
+                overrides: {
+                    "oscA.framePosition": 0.66,
+                    "oscA.pan": -0.18,
+                    "oscA.warpMode": 3,
+                    "oscA.warpAmount": 0.61,
+                    filterCutoffHz: 2475,
+                },
+                routeAmounts: { [routeId]: 0.42 },
+            }],
+        };
+        await page.evaluate(({ stateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
+        }, {
+            stateKey: ARTICULATION_STATE_KEY,
+            nextBank: bank,
+        });
+        await page.locator('[data-role="articulation-card"][data-runtime-slot="0"]').waitFor();
+
+        await clearHarnessDebugLog(page);
         await page.locator('[data-role="articulation-card"][data-runtime-slot="0"]').click();
 
-        snapshot = await waitForHarnessSnapshot(
+        const snapshot = await waitForHarnessSnapshot(
             page,
-            "articulation recall applying parameters and route amount only",
+            "sparse articulation recall",
             (nextSnapshot) => {
-                const bank = readStoredArticulationEditorState(nextSnapshot);
-                const modulationState = readStoredModulationState(nextSnapshot);
-                const route = modulationState.routes[0];
-
-                return bank.selectedSlotId === "articulation-0"
+                const route = readStoredModulationState(nextSnapshot).routes[0];
+                const storedBank = readStoredArticulationEditorState(nextSnapshot);
+                return storedBank.selectedSlotId === "articulation-0"
                     && Math.abs(Number(nextSnapshot.parameterValues.wavetablePosition) - 0.66) <= 1e-9
-                    && Number(nextSnapshot.parameterValues.playMode) === 2
-                    && Math.abs(Number(nextSnapshot.parameterValues.glideTime) - 0.05) <= 1e-9
                     && Math.abs(Number(nextSnapshot.parameterValues.pan) - -0.18) <= 1e-9
                     && Number(nextSnapshot.parameterValues.warpMode) === 3
                     && Math.abs(Number(nextSnapshot.parameterValues.warpAmount) - 0.61) <= 1e-9
-                    && Number(nextSnapshot.parameterValues.filterMode) === 2
                     && Math.abs(Number(nextSnapshot.parameterValues.filterCutoff) - 2475) <= 1e-9
-                    && Math.abs(Number(nextSnapshot.parameterValues.filterQ) - 3.6) <= 1e-9
-                    && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.33) <= 1e-9
-                    && Math.abs(Number(modulationState.msegSlots[0].morph) - 0.33) <= 1e-9
-                    && Math.abs(Number(modulationState.envelopeSlots[0].attackSeconds) - 0.17) <= 1e-9
-                    && route?.id === "articulation-route-1"
-                    && route?.enabled === false
-                    && route?.sourceKind === "env"
-                    && route?.sourceSlot === 2
-                    && route?.polarity === "unipolar"
-                    && route?.targetKind === "filterQ"
+                    && route?.id === routeId
+                    && route?.sourceKind === "mseg"
+                    && route?.sourceSlot === 1
+                    && route?.targetKind === "oscA.warpAmount"
                     && Math.abs(Number(route?.amount) - 0.42) <= 1e-9;
             },
         );
 
+        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "bipolar",
+            targetKind: "oscA.warpAmount",
+            amount: 0.42,
+        });
         assert.deepEqual(
             snapshot.sentMessages
-                .filter(({ endpointID }) => ["wavetablePosition", "warpAmount", "filterCutoff", "mseg1Morph"].includes(endpointID))
+                .filter(({ endpointID }) => ["wavetablePosition", "pan", "warpMode", "warpAmount", "filterCutoff"].includes(endpointID))
                 .map(({ endpointID, value }) => ({ endpointID, value })),
             [
                 { endpointID: "wavetablePosition", value: 0.66 },
+                { endpointID: "pan", value: -0.18 },
+                { endpointID: "warpMode", value: 3 },
                 { endpointID: "warpAmount", value: 0.61 },
                 { endpointID: "filterCutoff", value: 2475 },
-                { endpointID: "mseg1Morph", value: 0.33 },
             ],
         );
-        assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
-            enabled: false,
-            sourceKind: "env",
-            sourceSlot: 2,
-            polarity: "unipolar",
-            targetKind: "filterQ",
-            amount: 0.42,
-        });
     } finally {
         await page.close();
     }
 });
 
 test("desktop articulation hydration and live writes reject the same duplicate and retired documents whole", async () => {
-    const validState = editorBankToStoredArticulations(normalizeArticulationEditorState({
+    const validState = {
+        format: "cosimo.articulations",
+        version: 4,
         selectedSlotId: "bow",
         activeTriggerMode: "chain",
-        slots: [{ id: "bow", runtimeSlot: 0, name: "Bow" }],
-        chainAssignments: [{ id: "chain-bow", articulationId: "bow", min: 0, max: 127 }],
-    }));
+        slots: [{
+            id: "bow",
+            runtimeSlot: 0,
+            name: "Bow",
+            color: "test-bow",
+            key: 0,
+            velRange: { min: 1, max: 1 },
+            chainRange: { min: 0, max: 127 },
+            overrides: {},
+            routeAmounts: {},
+        }],
+    };
     const duplicateState = {
         ...validState,
         slots: [validState.slots[0], { ...validState.slots[0], name: "Duplicate Bow" }],
@@ -3127,7 +3053,7 @@ test("articulation range lane zooms by thirds and marks held Key Vel and Chain v
     }
 });
 
-test("articulation editor resizes and moves current-schema ranges and assigns every captured slot", async () => {
+test("articulation editor resizes moves and gives every captured slot mandatory v4 selectors", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3136,24 +3062,30 @@ test("articulation editor resizes and moves current-schema ranges and assigns ev
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationEditorState({
+        const bank = {
+            format: "cosimo.articulations",
+            version: 4,
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
-                { id: "bow", runtimeSlot: 0, name: "Bow" },
-                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+                {
+                    id: "bow", runtimeSlot: 0, name: "Bow", color: "test-bow", key: 0,
+                    velRange: { min: 1, max: 1 }, chainRange: { min: 0, max: 126 },
+                    overrides: {}, routeAmounts: {},
+                },
+                {
+                    id: "pluck", runtimeSlot: 1, name: "Pluck", color: "test-pluck", key: 1,
+                    velRange: { min: 2, max: 2 }, chainRange: { min: 127, max: 127 },
+                    overrides: {}, routeAmounts: {},
+                },
             ],
-            chainAssignments: [
-                { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
-                { id: "chain-pluck", articulationId: "pluck", min: 127, max: 127 },
-            ],
-        });
+        };
 
         await page.evaluate(({ stateKey, nextBank }) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: editorBankToStoredArticulations(bank),
+            nextBank: bank,
         });
         await waitForHarnessSnapshot(
             page,
@@ -3269,15 +3201,24 @@ test("articulation editor resizes and moves current-schema ranges and assigns ev
         await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
         snapshot = await waitForHarnessSnapshot(
             page,
-            "expanded capture creates a fully assigned current-schema slot",
+            "expanded capture uses the first free mandatory selectors",
             (nextSnapshot) => {
                 const nextBank = readStoredArticulationEditorState(nextSnapshot);
                 return nextBank.slots.length === 3
                     && nextBank.selectedSlotId === "articulation-2"
                     && nextBank.chainAssignments.some((assignment) => (
                         assignment.articulationId === "articulation-2"
-                        && assignment.min === 0
-                        && assignment.max === 127
+                        && assignment.min === 21
+                        && assignment.max === 21
+                    ))
+                    && nextBank.keyAssignments.some((assignment) => (
+                        assignment.articulationId === "articulation-2"
+                        && assignment.note === 2
+                    ))
+                    && nextBank.velocityAssignments.some((assignment) => (
+                        assignment.articulationId === "articulation-2"
+                        && assignment.min === 3
+                        && assignment.max === 3
                     ));
             },
         );
@@ -3287,7 +3228,7 @@ test("articulation editor resizes and moves current-schema ranges and assigns ev
     }
 });
 
-test("real articulation card drag previews and commits a current-schema range move", async () => {
+test("real articulation card drag previews and commits a mapped v4 range move", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3296,24 +3237,30 @@ test("real articulation card drag previews and commits a current-schema range mo
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationEditorState({
+        const bank = {
+            format: "cosimo.articulations",
+            version: 4,
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
-                { id: "bow", runtimeSlot: 0, name: "Bow" },
-                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+                {
+                    id: "bow", runtimeSlot: 0, name: "Bow", color: "test-bow", key: 0,
+                    velRange: { min: 1, max: 1 }, chainRange: { min: 0, max: 20 },
+                    overrides: {}, routeAmounts: {},
+                },
+                {
+                    id: "pluck", runtimeSlot: 1, name: "Pluck", color: "test-pluck", key: 1,
+                    velRange: { min: 2, max: 2 }, chainRange: { min: 21, max: 30 },
+                    overrides: {}, routeAmounts: {},
+                },
             ],
-            chainAssignments: [
-                { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
-                { id: "chain-pluck", articulationId: "pluck", min: 127, max: 127 },
-            ],
-        });
+        };
 
         await page.evaluate(({ stateKey, nextBank }) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: editorBankToStoredArticulations(bank),
+            nextBank: bank,
         });
         await waitForHarnessSnapshot(
             page,
@@ -3334,7 +3281,9 @@ test("real articulation card drag previews and commits a current-schema range mo
             x: laneBox.width * 0.79,
             y: laneBox.height * 0.5,
         };
-        const expectedInsertPosition = Math.round(lowerViewport.min + (0.79 * (lowerViewport.max - lowerViewport.min)));
+        const expectedDropPosition = Math.round(lowerViewport.min + (0.79 * (lowerViewport.max - lowerViewport.min)));
+        const expectedMovedMin = expectedDropPosition - 5;
+        const expectedMovedMax = expectedMovedMin + 9;
         const targetClientPosition = {
             x: laneBox.x + targetPosition.x,
             y: laneBox.y + targetPosition.y,
@@ -3344,20 +3293,28 @@ test("real articulation card drag previews and commits a current-schema range mo
             await previewArticulationCardDragOver(page, "pluck", lane, targetClientPosition),
             "move",
         );
-        const previewSegment = (await readDesktopRangeSegments(page))
-            .find((segment) => segment.articulationId === "pluck" && segment.isPreview);
-        assert.deepEqual(previewSegment, {
-            articulationId: "pluck",
-            min: expectedInsertPosition,
-            max: expectedInsertPosition,
-            isPreview: true,
-            isPreviewAffected: false,
-            text: `Plu ${expectedInsertPosition}`,
-        });
+        assert.deepEqual(await readDesktopRangeSegments(page), [
+            {
+                articulationId: "bow",
+                min: 0,
+                max: 20,
+                isPreview: false,
+                isPreviewAffected: false,
+                text: "Bow 0-20",
+            },
+            {
+                articulationId: "pluck",
+                min: expectedMovedMin,
+                max: expectedMovedMax,
+                isPreview: true,
+                isPreviewAffected: false,
+                text: `Pluck ${expectedMovedMin}-${expectedMovedMax}`,
+            },
+        ]);
         assert.equal(
             await page.locator('[data-role="articulation-range-ghost-value"]').textContent(),
-            String(expectedInsertPosition),
-            "the live move preview must expose the exact target selector value",
+            `${expectedMovedMin}-${expectedMovedMax}`,
+            "the live move preview must expose the exact target range",
         );
 
         await card.dragTo(lane, {
@@ -3367,24 +3324,24 @@ test("real articulation card drag previews and commits a current-schema range mo
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "real browser drag moves the current range",
+            "real browser drag moves the mapped v4 range",
             (nextSnapshot) => {
                 const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
                 return assignments.some((assignment) => (
                     assignment.articulationId === "bow"
-                    && assignment.min === expectedInsertPosition + 1
-                    && assignment.max === 127
+                    && assignment.min === 0
+                    && assignment.max === 20
                 )) && assignments.some((assignment) => (
                     assignment.articulationId === "pluck"
-                    && assignment.min === assignment.max
-                    && assignment.min === expectedInsertPosition
+                    && assignment.min === expectedMovedMin
+                    && assignment.max === expectedMovedMax
                 ));
             },
         );
 
         assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
-            { id: "chain-bow", articulationId: "bow", min: expectedInsertPosition + 1, max: 127 },
-            { id: "chain-pluck", articulationId: "pluck", min: expectedInsertPosition, max: expectedInsertPosition },
+            { id: "chain-bow", articulationId: "bow", min: 0, max: 20 },
+            { id: "chain-pluck", articulationId: "pluck", min: expectedMovedMin, max: expectedMovedMax },
         ]);
     } finally {
         await page.close();
@@ -3410,7 +3367,7 @@ test("desktop articulation range clicks select only and dragging an already mapp
             ],
             chainAssignments: [
                 { id: "chain-bow", articulationId: "bow", min: 0, max: 31 },
-                { id: "chain-pluck", articulationId: "pluck", min: 64, max: 95 },
+                { id: "chain-pluck", articulationId: "pluck", min: 64, max: 79 },
                 { id: "chain-air", articulationId: "air", min: 96, max: 127 },
             ],
         });
@@ -3467,13 +3424,15 @@ test("desktop articulation range clicks select only and dragging an already mapp
         await page.keyboard.press("Escape");
         await rangeMenu.waitFor({ state: "detached" });
 
+        await page.locator('[data-role="articulation-range-viewport-dot"][data-viewport-index="1"]').click();
         const highViewport = await readDesktopRangeViewport(page);
-        const expectedMovedPosition = Math.round(highViewport.min + (0.96 * (highViewport.max - highViewport.min)));
-        assert.equal(expectedMovedPosition, 125);
-        const movedPluckMin = 96;
-        const movedPluckMax = 127;
+        assert.deepEqual(highViewport, { index: 1, min: 43, max: 84, heldValue: "" });
+        const expectedMovedPosition = Math.round(highViewport.min + (0.2 * (highViewport.max - highViewport.min)));
+        assert.equal(expectedMovedPosition, 51);
+        const movedPluckMin = 43;
+        const movedPluckMax = 58;
         await dragArticulationCardToLane(page, "pluck", lane, {
-            x: laneBox.x + (laneBox.width * 0.96),
+            x: laneBox.x + (laneBox.width * 0.2),
             y: laneBox.y + (laneBox.height * 0.5),
         }, {
             afterDragOver: async () => {
@@ -3960,93 +3919,6 @@ test("desktop articulation one-slot ranges keep labels and avoid adjacent resize
     }
 });
 
-test("articulation range lane center drop moves the selected current-schema range", async () => {
-    const page = await openHarnessPage();
-
-    try {
-        await page.waitForFunction(() => {
-            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
-            return addButton instanceof HTMLButtonElement && !addButton.disabled;
-        });
-
-        const bank = normalizeArticulationEditorState({
-            selectedSlotId: "bow",
-            activeTriggerMode: "chain",
-            slots: [
-                { id: "bow", runtimeSlot: 0, name: "Bow" },
-                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
-            ],
-            chainAssignments: [
-                { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
-                { id: "chain-pluck", articulationId: "pluck", min: 127, max: 127 },
-            ],
-        });
-
-        await page.evaluate(({ stateKey, nextBank }) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
-        }, {
-            stateKey: ARTICULATION_STATE_KEY,
-            nextBank: editorBankToStoredArticulations(bank),
-        });
-        await waitForHarnessSnapshot(
-            page,
-            "seeded articulation bank for move",
-            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
-        );
-
-        await page.getByRole("button", { name: "Expand articulation editor" }).click();
-        const pluckCard = page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]');
-        await pluckCard.click();
-        assert.equal(await pluckCard.getAttribute("data-selected"), "true");
-        assert.equal(await pluckCard.locator('[data-role="articulation-card-selected-label"]').textContent(), "Selected");
-
-        await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("pan", 0.25);
-        });
-        await page.locator('[data-role="articulation-update"]').waitFor();
-        assert.match(
-            await page.locator('[data-role="articulation-update"]').textContent(),
-            /Pluck/,
-            "Update button must name the selected articulation it will overwrite",
-        );
-
-        const lane = page.locator('[data-role="articulation-range-lane"]').first();
-        const laneBox = await lane.boundingBox();
-        assert.notEqual(laneBox, null);
-        await dragArticulationCardToLane(page, "pluck", lane, {
-            x: laneBox.x + laneBox.width * 0.5,
-            y: laneBox.y + laneBox.height * 0.5,
-        }, {
-            afterDragOver: async () => {
-                const preview = page.locator('[data-role="articulation-placement-preview"]');
-                await preview.waitFor();
-                assert.equal(await preview.getAttribute("data-operation"), "move");
-                assert.match(
-                    await preview.textContent(),
-                    /^move /,
-                    "center hover must visibly preview move before drop",
-                );
-            },
-        });
-
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "center drop moves the selected range",
-            (nextSnapshot) => {
-                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
-                const pluck = assignments.find((assignment) => assignment.articulationId === "pluck");
-                return pluck?.min === 21 && pluck.max === 21;
-            },
-        );
-        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
-            { id: "chain-bow", articulationId: "bow", min: 22, max: 127 },
-            { id: "chain-pluck", articulationId: "pluck", min: 21, max: 21 },
-        ]);
-    } finally {
-        await page.close();
-    }
-});
-
 test("contextual toolbar only exposes articulation draft actions", async () => {
     const page = await openHarnessPage();
 
@@ -4146,7 +4018,7 @@ test("synth preset bar saves current synth state through shared effect presets",
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
 
-            const rawModulationState = harness.getSnapshot().storedState["modulation.v2"];
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v4"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
                 : defaultModulationState;
@@ -4174,11 +4046,11 @@ test("synth preset bar saves current synth state through shared effect presets",
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "bipolar",
-                targetKind: "warpAmount",
+                targetKind: "oscA.warpAmount",
                 amount: 0.37,
                 reducer: "max",
             }];
-            harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
+            harness.setStoredStateValue("modulation.v4", JSON.stringify(modulationState));
             return modulationState;
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
@@ -4253,7 +4125,7 @@ test("synth preset bar saves current synth state through shared effect presets",
         );
         assert.deepEqual(
             Object.keys(savedPreset.storedState).sort((left, right) => left.localeCompare(right)),
-            [ARTICULATION_STATE_KEY, "modulation.v2"],
+            [ARTICULATION_STATE_KEY, "modulation.v4"],
             "saved synth presets must capture only the required stored-state adapters",
         );
         assert.deepEqual(
@@ -4261,7 +4133,7 @@ test("synth preset bar saves current synth state through shared effect presets",
             editorBankToStoredArticulations(seededBank),
             "saved synth presets must include the actual non-default articulation bank",
         );
-        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v2"]);
+        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v4"]);
         assert.equal(savedModulationState.msegSlots[0].morph, seededModulationState.msegSlots[0].morph);
         assert.equal(savedModulationState.envelopeSlots[1].attackSeconds, seededModulationState.envelopeSlots[1].attackSeconds);
         assert.equal(savedModulationState.envelopeSlots[1].releaseSeconds, seededModulationState.envelopeSlots[1].releaseSeconds);
@@ -4333,21 +4205,27 @@ test("synth presets restore mapping dependencies before strict articulation rout
         await page.waitForFunction(() => Boolean(document.querySelector("cosimo-preset-bar")?.shadowRoot));
 
         const routeId = "preset-dependent-route";
-        const seededBank = normalizeArticulationEditorState({
+        const seededBank = {
+            format: "cosimo.articulations",
+            version: 4,
             selectedSlotId: "mapped-bow",
+            activeTriggerMode: "chain",
             slots: [{
                 id: "mapped-bow",
                 runtimeSlot: 0,
                 name: "Mapped Bow",
-                snapshot: {
-                    modRouteAmounts: [{ routeId, amount: 0.63 }],
-                },
+                color: "test-mapped-bow",
+                key: 0,
+                velRange: { min: 1, max: 1 },
+                chainRange: { min: 0, max: 0 },
+                overrides: {},
+                routeAmounts: { [routeId]: 0.63 },
             }],
-        });
+        };
 
-        await page.evaluate(({ articulationStateKey, defaultModulationState, nextBank, nextRouteId }) => {
+        await page.evaluate(({ defaultModulationState, nextRouteId }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setStoredStateValue("modulation.v2", JSON.stringify({
+            harness.setStoredStateValue("modulation.v4", JSON.stringify({
                 ...defaultModulationState,
                 routes: [{
                     id: nextRouteId,
@@ -4355,17 +4233,27 @@ test("synth presets restore mapping dependencies before strict articulation rout
                     sourceKind: "mseg",
                     sourceSlot: 1,
                     polarity: "bipolar",
-                    targetKind: "warpAmount",
+                    targetKind: "oscA.warpAmount",
                     amount: 0.37,
                     reducer: "max",
                 }],
             }));
-            harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
+        }, {
+            defaultModulationState: createDefaultModulationState(),
+            nextRouteId: routeId,
+        });
+
+        await waitForHarnessSnapshot(
+            page,
+            "accepted prerequisite mapping",
+            (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === routeId
+                && Number(latestRuntimeProgram(snapshot)?.voiceRouteCount) === 1,
+        );
+        await page.evaluate(({ articulationStateKey, nextBank }) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
-            defaultModulationState: createDefaultModulationState(),
-            nextBank: editorBankToStoredArticulations(seededBank),
-            nextRouteId: routeId,
+            nextBank: seededBank,
         });
 
         await waitForHarnessSnapshot(
@@ -4374,17 +4262,25 @@ test("synth presets restore mapping dependencies before strict articulation rout
             (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === routeId
                 && readStoredArticulationEditorState(snapshot).slots[0]?.snapshot.modRouteAmounts[0]?.routeId === routeId,
         );
+        await page.locator('[data-role="articulation-card"][data-articulation-id="mapped-bow"]').waitFor();
+        await waitForReactFrames(page, 3);
         await saveSynthPresetAs(page, "Mapped Articulation Test");
         await waitForPresetBarDirtyState(page, false);
 
         await page.evaluate(({ articulationStateKey, emptyArticulations }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setStoredStateValue(articulationStateKey, JSON.stringify(emptyArticulations));
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v2"]));
-            harness.setStoredStateValue("modulation.v2", JSON.stringify({ ...modulationState, routes: [] }));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v4"]));
+            harness.setStoredStateValue("modulation.v4", JSON.stringify({ ...modulationState, routes: [] }));
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
-            emptyArticulations: editorBankToStoredArticulations(normalizeArticulationEditorState(undefined)),
+            emptyArticulations: {
+                format: "cosimo.articulations",
+                version: 4,
+                selectedSlotId: null,
+                activeTriggerMode: "chain",
+                slots: [],
+            },
         });
 
         await waitForPresetBarDirtyState(page, true);
@@ -4469,7 +4365,7 @@ test("collapsed articulation cards scroll without clipping the voice tab or row 
     }
 });
 
-test("mobile articulation segment tap assigns the selected articulation in the current schema", async () => {
+test("compact desktop articulation row click replaces an occupied v4 range", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 390, height: 760 });
@@ -4482,41 +4378,58 @@ test("mobile articulation segment tap assigns the selected articulation in the c
             return addButton instanceof HTMLButtonElement && !addButton.disabled;
         });
 
-        const bank = normalizeArticulationEditorState({
+        const bank = {
+            format: "cosimo.articulations",
+            version: 4,
             selectedSlotId: "bow",
             activeTriggerMode: "chain",
             slots: [
-                { id: "bow", runtimeSlot: 0, name: "Bow" },
-                { id: "pluck", runtimeSlot: 1, name: "Pluck" },
+                {
+                    id: "bow", runtimeSlot: 0, name: "Bow", color: "test-bow", key: 0,
+                    velRange: { min: 1, max: 1 }, chainRange: { min: 0, max: 126 },
+                    overrides: {}, routeAmounts: {},
+                },
+                {
+                    id: "pluck", runtimeSlot: 1, name: "Pluck", color: "test-pluck", key: 1,
+                    velRange: { min: 2, max: 2 }, chainRange: { min: 127, max: 127 },
+                    overrides: {}, routeAmounts: {},
+                },
             ],
-            chainAssignments: [
-                { id: "chain-bow-full", articulationId: "bow", min: 0, max: 127 },
-                { id: "chain-pluck", articulationId: "pluck", min: 127, max: 127 },
-            ],
-        });
+        };
 
         await page.evaluate(({ stateKey, nextBank }) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
         }, {
             stateKey: ARTICULATION_STATE_KEY,
-            nextBank: editorBankToStoredArticulations(bank),
+            nextBank: bank,
         });
         await waitForHarnessSnapshot(
             page,
-            "seeded articulation bank for mobile selection",
+            "seeded articulation bank for compact row replacement",
             (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
         );
 
         await page.getByRole("button", { name: "Expand articulation editor" }).click();
         await page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]').click();
         await page.locator('[data-role="articulation-range-segment-row"]').first().click();
-        await waitForReactFrames(page);
 
-        const snapshot = await getHarnessSnapshot(page);
-        assert.equal(readStoredArticulationEditorState(snapshot).selectedSlotId, "pluck");
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "compact occupied row click replaces the whole range",
+            (nextSnapshot) => {
+                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
+                return assignments.length === 2
+                    && assignments[0].articulationId === "bow"
+                    && assignments[0].min === 127
+                    && assignments[0].max === 127
+                    && assignments[1].articulationId === "pluck"
+                    && assignments[1].min === 0
+                    && assignments[1].max === 126;
+            },
+        );
         assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
-            { id: "chain-bow", articulationId: "bow", min: 0, max: 127 },
-            { id: "chain-pluck", articulationId: "pluck", min: 0, max: 127 },
+            { id: "chain-bow", articulationId: "bow", min: 127, max: 127 },
+            { id: "chain-pluck", articulationId: "pluck", min: 0, max: 126 },
         ]);
     } finally {
         await page.close();
@@ -4835,7 +4748,16 @@ test("Add route appends unique inert mappings and scrolls the new row into view"
             routeSummaries(readStoredModulationState(snapshot).routes),
             [
                 ...routeSummaries(initialRoutes),
-                ...["warpAmount", "filterQ", "pitchSemitones", "ampGainDb", "pan", "unisonDetune"]
+                ...[
+                    "oscA.wavetablePosition",
+                    "oscA.warpAmount",
+                    "oscA.pitchSemitones",
+                    "oscA.ampGainDb",
+                    "oscA.pan",
+                    "oscA.unisonDetune",
+                    "oscA.unisonBlend",
+                    "oscA.unisonWidth",
+                ]
                     .slice(0, 8 - initialRoutes.length)
                     .map((targetKind) => ({
                         enabled: true,
@@ -4893,7 +4815,7 @@ test("mod matrix keeps the list shell when empty and restores the seeded route w
                     && route.sourceKind === "mseg"
                     && route.sourceSlot === 1
                     && route.polarity === "unipolar"
-                    && route.targetKind === "wavetablePosition"
+                    && route.targetKind === "oscA.wavetablePosition"
                     && Math.abs(Number(route.amount)) <= 1e-9;
             },
         );
@@ -4903,7 +4825,7 @@ test("mod matrix keeps the list shell when empty and restores the seeded route w
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "unipolar",
-            targetKind: "wavetablePosition",
+            targetKind: "oscA.wavetablePosition",
             amount: 0,
         });
     } finally {
@@ -4915,6 +4837,7 @@ test("mod matrix source and target selects keep enough width for their menu cont
     const page = await openHarnessPage();
 
     try {
+        await ensureFirstModulationRoute(page);
         await page.getByRole("button", { name: "Route 1 source" }).click();
 
         let sourceSizing = await page.evaluate(() => {
@@ -4948,8 +4871,8 @@ test("mod matrix source and target selects keep enough width for their menu cont
             sourceKind: "env",
             sourceSlot: 3,
             polarity: "unipolar",
-            targetKind: "wavetablePosition",
-            amount: 1,
+            targetKind: "oscA.wavetablePosition",
+            amount: 0,
         });
 
         await page.getByRole("button", { name: "Route 1 target" }).click();
@@ -4957,21 +4880,25 @@ test("mod matrix source and target selects keep enough width for their menu cont
         const targetSizing = await page.evaluate(() => {
             const trigger = document.querySelector('button[aria-label="Route 1 target"]');
             const optionButtons = Array.from(document.querySelectorAll('button[aria-label^="Route 1 target "]'));
+            const menu = optionButtons[0]?.parentElement;
             return {
                 triggerWidth: trigger instanceof HTMLElement ? trigger.getBoundingClientRect().width : 0,
+                menuWidth: menu instanceof HTMLElement ? menu.getBoundingClientRect().width : 0,
                 widestOptionWidth: optionButtons.reduce((widest, button) => (
                     button instanceof HTMLElement ? Math.max(widest, button.scrollWidth) : widest
                 ), 0),
             };
         });
 
-        assert.ok(targetSizing.triggerWidth >= targetSizing.widestOptionWidth);
-        await page.getByRole("button", { name: "Route 1 target PITCH" }).click();
+        assert.ok(targetSizing.triggerWidth <= 180);
+        assert.ok(targetSizing.menuWidth >= targetSizing.widestOptionWidth);
+        assert.ok(await page.locator('[aria-label="Route 1 amount"]:visible').boundingBox());
+        await page.getByRole("button", { name: "Route 1 target A TUNE" }).click();
 
         snapshot = await waitForHarnessSnapshot(
             page,
             "target selection updates to pitch",
-            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes[0]?.targetKind === "pitchSemitones",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes[0]?.targetKind === "oscA.pitchSemitones",
         );
 
         assert.deepEqual(routeSummary(readStoredModulationState(snapshot).routes[0]), {
@@ -4979,8 +4906,8 @@ test("mod matrix source and target selects keep enough width for their menu cont
             sourceKind: "env",
             sourceSlot: 3,
             polarity: "unipolar",
-            targetKind: "pitchSemitones",
-            amount: 1,
+            targetKind: "oscA.pitchSemitones",
+            amount: 0,
         });
 
         await page.getByRole("button", { name: "Route 1 bypass" }).click();
@@ -4996,8 +4923,8 @@ test("mod matrix source and target selects keep enough width for their menu cont
             sourceKind: "env",
             sourceSlot: 3,
             polarity: "unipolar",
-            targetKind: "pitchSemitones",
-            amount: 1,
+            targetKind: "oscA.pitchSemitones",
+            amount: 0,
         });
         assert.equal(readRuntimeProgramRoute(snapshot, readStoredModulationState(snapshot).routes[0]), null);
     } finally {
@@ -5009,12 +4936,13 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
     const page = await openHarnessPage();
 
     try {
-        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
+        await ensureFirstModulationRoute(page);
+        await choosePrototypeSelectOption(page, "Route 1 target", "A WARP");
 
-        const amountKnob = page.locator('[aria-label="Route 1 amount"]');
+        const amountKnob = page.locator('[aria-label="Route 1 amount"]:visible');
         await amountKnob.dblclick();
 
-        const amountInput = page.locator('input[aria-label="Route 1 amount value"]');
+        const amountInput = page.locator('input[aria-label="Route 1 amount value"]:visible');
         await amountInput.waitFor({ state: "visible" });
         await amountInput.fill("12");
         await amountInput.blur();
@@ -5024,7 +4952,7 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
             "typed route amount commit in displayed percent units",
             (nextSnapshot) => {
                 const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "warpAmount"
+                return route?.targetKind === "oscA.warpAmount"
                     && Math.abs(Number(route.amount) - 0.12) <= 1e-9;
             },
         );
@@ -5034,7 +4962,7 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "unipolar",
-            targetKind: "warpAmount",
+            targetKind: "oscA.warpAmount",
             amount: 0.12,
         });
         const warpAmountReadout = page.locator('[data-role="route-row-1"] >> text=/\\+?12%/');
@@ -5045,7 +4973,7 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
             true,
         );
 
-        await choosePrototypeSelectOption(page, "Route 1 target", "PAN");
+        await choosePrototypeSelectOption(page, "Route 1 target", "A PAN");
         await amountKnob.dblclick();
         await amountInput.waitFor({ state: "visible" });
         await amountInput.fill("-40");
@@ -5056,7 +4984,7 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
             "typed signed pan amount commit",
             (nextSnapshot) => {
                 const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "pan"
+                return route?.targetKind === "oscA.pan"
                     && Math.abs(Number(route.amount) - (-0.4)) <= 1e-9;
             },
         );
@@ -5066,7 +4994,7 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "unipolar",
-            targetKind: "pan",
+            targetKind: "oscA.pan",
             amount: -0.4,
         });
         const panAmountReadout = page.locator('[data-role="route-row-1"] >> text=/40% L/');
@@ -5081,21 +5009,22 @@ test("mod matrix amount entry preserves the focused draft across a host echo", a
     const page = await openHarnessPage();
 
     try {
-        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
-        await page.locator('[aria-label="Route 1 amount"]').dblclick();
+        await ensureFirstModulationRoute(page);
+        await choosePrototypeSelectOption(page, "Route 1 target", "A WARP");
+        await page.locator('[aria-label="Route 1 amount"]:visible').dblclick();
 
-        const amountInput = page.locator('input[aria-label="Route 1 amount value"]');
+        const amountInput = page.locator('input[aria-label="Route 1 amount value"]:visible');
         await amountInput.waitFor({ state: "visible" });
         await amountInput.fill("12");
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v2"]));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v4"]));
             modulationState.routes[0].amount = 0.77;
-            harness.setStoredStateValue("modulation.v2", JSON.stringify(modulationState));
+            harness.setStoredStateValue("modulation.v4", JSON.stringify(modulationState));
         });
         await page.waitForFunction(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v2"]));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v4"]));
             return Math.abs(Number(modulationState.routes[0]?.amount) - 0.77) <= 1e-9;
         });
 
@@ -5107,7 +5036,7 @@ test("mod matrix amount entry preserves the focused draft across a host echo", a
             "focused route amount draft committed after host echo",
             (nextSnapshot) => {
                 const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "warpAmount"
+                return route?.targetKind === "oscA.warpAmount"
                     && Math.abs(Number(route.amount) - 0.12) <= 1e-9;
             },
         );
@@ -5122,7 +5051,8 @@ test("mod matrix amount knob tracks a Safari-style touch drag", async () => {
     const page = await openHarnessPage();
 
     try {
-        const amountKnob = page.locator('[aria-label="Route 1 amount"]');
+        await ensureFirstModulationRoute(page);
+        const amountKnob = page.locator('[aria-label="Route 1 amount"]:visible');
         const bounds = await amountKnob.boundingBox();
         assert.ok(bounds);
         await clearHarnessDebugLog(page);
@@ -5165,8 +5095,9 @@ test("mod matrix amount knob supports standard slider keyboard controls", async 
     const page = await openHarnessPage();
 
     try {
-        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
-        const amountKnob = page.locator('[aria-label="Route 1 amount"]');
+        await ensureFirstModulationRoute(page);
+        await choosePrototypeSelectOption(page, "Route 1 target", "A WARP");
+        const amountKnob = page.locator('[aria-label="Route 1 amount"]:visible');
         await amountKnob.focus();
         await amountKnob.press("Home");
 
@@ -5201,9 +5132,10 @@ test("mod matrix amount rendering stays current across idle flushes and structur
     const page = await openHarnessPage();
 
     try {
-        await choosePrototypeSelectOption(page, "Route 1 target", "WARP");
-        const amountKnob = page.locator('[aria-label="Route 1 amount"]');
-        const polarityToggle = page.locator('[aria-label="Route 1 polarity"]');
+        await ensureFirstModulationRoute(page);
+        await choosePrototypeSelectOption(page, "Route 1 target", "A WARP");
+        const amountKnob = page.locator('[aria-label="Route 1 amount"]:visible');
+        const polarityToggle = page.locator('[aria-label="Route 1 polarity"]:visible');
         await amountKnob.focus();
 
         await amountKnob.press("Home");
@@ -5334,13 +5266,13 @@ test("desktop envelope exact entry preserves the focused draft across a host ech
         echoedModulationState.envelopeSlots[1].attackSeconds = 0.9;
         await page.evaluate((nextModulationState) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(
-                "modulation.v2",
+                "modulation.v4",
                 JSON.stringify(nextModulationState),
             );
         }, echoedModulationState);
         await page.waitForFunction(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v2"]));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v4"]));
             return Math.abs(Number(modulationState.envelopeSlots[1]?.attackSeconds) - 0.9) <= 1e-9;
         });
 
@@ -5575,21 +5507,23 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
             true,
         );
 
-        await page.getByRole("button", { name: "Route 2 polarity" }).click();
-        await dragLocatorBy(page, page.locator('[aria-label="Route 2 amount"]'), 0, 20);
+        await ensureFirstModulationRoute(page);
+        await choosePrototypeSelectOption(page, "Route 1 target", "CUTOFF");
+        await page.getByRole("button", { name: "Route 1 polarity" }).click();
+        await dragLocatorBy(page, page.locator('[aria-label="Route 1 amount"]'), 0, 20);
 
         snapshot = await waitForHarnessSnapshot(
             page,
-            "Route 2 modulating filter cutoff",
+            "Route 1 modulating filter cutoff",
             (nextSnapshot) => {
-                const route = readStoredModulationState(nextSnapshot).routes[1];
+                const route = readStoredModulationState(nextSnapshot).routes[0];
                 return route?.targetKind === "filterCutoffOctaves"
                     && route?.polarity === "bipolar"
-                    && Math.abs(Number(route.amount) - 3.0) <= 0.08;
+                    && Math.abs(Number(route.amount) - (-1.0)) <= 0.08;
             },
         );
 
-        const finalRoute = readStoredModulationState(snapshot).routes[1];
+        const finalRoute = readStoredModulationState(snapshot).routes[0];
         assert.deepEqual(routeSummary(finalRoute), {
             enabled: true,
             sourceKind: "mseg",
@@ -5600,13 +5534,13 @@ test("filter controls commit mode, cutoff, and Q, and the matrix can route MSEG 
         });
         assert.deepEqual(readRuntimeProgramRoute(snapshot, finalRoute), {
             path: "voice",
-            cellIndex: 2,
+            cellIndex: 30,
             sourceIndex: 0,
-            targetIndex: 2,
+            targetIndex: 30,
             polarityKind: 1,
         });
         assert.equal(hasRuntimeAmount(snapshot, finalRoute, finalRoute.amount, 0.001), true);
-        const cutoffAmountReadout = page.locator('[data-role="route-row-2"] >> text=/±3\\.0[0-9] oct/');
+        const cutoffAmountReadout = page.locator('[data-role="route-row-1"] >> text=/±1\\.00 oct/');
         await cutoffAmountReadout.waitFor({ state: "visible" });
         assert.equal((await cutoffAmountReadout.count()) >= 1, true);
     } finally {
@@ -6486,7 +6420,7 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
             page,
             "main MSEG morph changed",
             (nextSnapshot) => {
-                const rawState = nextSnapshot.storedState["modulation.v2"];
+                const rawState = nextSnapshot.storedState["modulation.v4"];
                 if (typeof rawState !== "string") {
                     return false;
                 }
@@ -6496,7 +6430,7 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
                     && Math.abs(Number(modulationState.msegSlots?.[0]?.morph) - 0.72) <= 0.04;
             },
         );
-        const modulationState = JSON.parse(String(snapshot.storedState["modulation.v2"]));
+        const modulationState = JSON.parse(String(snapshot.storedState["modulation.v4"]));
         assert.equal(
             snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"),
             false,
@@ -6739,7 +6673,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
                 const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                const rawState = snapshot.storedState["modulation.v2"];
+                const rawState = snapshot.storedState["modulation.v4"];
                 if (typeof rawState !== "string") {
                     await new Promise((resolve) => setTimeout(resolve, 50));
                     continue;
@@ -6755,7 +6689,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
             }
 
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return JSON.parse(String(snapshot.storedState["modulation.v2"])).msegSlots?.[0]?.playback;
+            return JSON.parse(String(snapshot.storedState["modulation.v4"])).msegSlots?.[0]?.playback;
         });
         assert.equal(playbackAfterRateChange.rate.seconds, 0.5);
         let snapshot = await getHarnessSnapshot(page);
@@ -6777,7 +6711,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
                 const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                const rawState = snapshot.storedState["modulation.v2"];
+                const rawState = snapshot.storedState["modulation.v4"];
                 if (typeof rawState !== "string") {
                     await new Promise((resolve) => setTimeout(resolve, 50));
                     continue;
@@ -6793,7 +6727,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
             }
 
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return JSON.parse(String(snapshot.storedState["modulation.v2"])).msegSlots?.[0]?.playback;
+            return JSON.parse(String(snapshot.storedState["modulation.v4"])).msegSlots?.[0]?.playback;
         });
         assert.equal(playbackAfterLoopToggle.loop, null);
         snapshot = await getHarnessSnapshot(page);
@@ -7427,7 +7361,7 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await expandGlobalModRail(page);
@@ -7490,7 +7424,7 @@ test("switching armed sources swaps only selected-route outer geometry and prese
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWet", 0.6, true);
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
@@ -8007,7 +7941,7 @@ test("rack parameter menus never edit a hidden default-source route while no sou
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
@@ -8302,16 +8236,16 @@ test("mobile Mod uses a complete one-dimensional route list with detail, filters
         const seededState = normalizeModulationState({
             routes: [
                 { id: "mobile-route-1", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "bipolar", targetKind: "rack.flangerDepth", amount: -0.39, reducer: "max" },
-                { id: "mobile-route-2", enabled: true, sourceKind: "macro", sourceSlot: 1, polarity: "unipolar", targetKind: "wavetablePosition", amount: 0.2, reducer: "max" },
+                { id: "mobile-route-2", enabled: true, sourceKind: "macro", sourceSlot: 1, polarity: "unipolar", targetKind: "oscA.wavetablePosition", amount: 0.2, reducer: "max" },
                 { id: "mobile-route-3", enabled: false, sourceKind: "env", sourceSlot: 2, polarity: "unipolar", targetKind: "filterCutoffOctaves", amount: 1.5, reducer: "max" },
             ],
         });
         await page.evaluate((state) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            harness.setStoredStateValue("modulation.v4", JSON.stringify(state));
         }, seededState);
         await page.waitForFunction(() => {
-            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v2"]));
+            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v4"]));
             return state.routes?.length === 3;
         });
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
@@ -8393,18 +8327,18 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
 
     try {
         const targets = [
-            "wavetablePosition",
-            "warpAmount",
+            "oscA.wavetablePosition",
+            "oscA.warpAmount",
             "filterCutoffOctaves",
             "filterQ",
-            "pitchSemitones",
-            "ampGainDb",
-            "pan",
-            "unisonDetune",
-            "unisonBlend",
-            "unisonWidth",
-            "unisonWavetablePositionSpread",
-            "unisonWarpSpread",
+            "oscA.pitchSemitones",
+            "oscA.ampGainDb",
+            "oscA.pan",
+            "oscA.unisonDetune",
+            "oscA.unisonBlend",
+            "oscA.unisonWidth",
+            "oscA.unisonWavetablePositionSpread",
+            "oscA.unisonWarpSpread",
         ];
         const sources = [
             ["mseg", 1], ["mseg", 2], ["mseg", 3],
@@ -8428,7 +8362,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         }
         const seededState = normalizeModulationState({ routes: routes.slice(0, 101) });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
         const matrix = page.locator('[data-role="mobile-mod-matrix"]');
@@ -8440,7 +8374,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         await matrix.locator('[data-role="mobile-mod-add"]').click();
         await matrix.locator('[data-role="mobile-mod-create-source-slide"]').click();
         await matrix.locator('[data-role="mobile-mod-create-category-voice"]').click();
-        await matrix.locator('[data-role="mobile-mod-create-target-ampGainDb"]').click();
+        await matrix.locator('[data-role="mobile-mod-create-target-oscA-ampGainDb"]').click();
         let snapshot = await waitForHarnessSnapshot(page, "102nd explicit mobile mapping", (nextSnapshot) => (
             readStoredModulationState(nextSnapshot).routes.length === 102
         ));
@@ -8455,7 +8389,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         assert.ok(createdRoute);
         await page.addInitScript((persistedState) => {
             window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
-                storedState: { "modulation.v2": JSON.stringify(persistedState) },
+                storedState: { "modulation.v4": JSON.stringify(persistedState) },
             };
         }, readStoredModulationState(snapshot));
         await page.reload({ waitUntil: "commit" });
@@ -8463,7 +8397,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
         await page.locator('[data-role="mobile-mod-matrix"]').waitFor();
         await page.waitForFunction((routeId) => {
-            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v2"];
+            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v4"];
             if (rawState === undefined) return false;
             const state = JSON.parse(String(rawState));
             return state.routes?.length === 102 && state.routes.some((route) => route.id === routeId);
@@ -10047,7 +9981,7 @@ test("source preview and valid hover stay transient while the armed ring and foc
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
@@ -10126,7 +10060,7 @@ test("a real source drop creates a mapping after 100 existing mappings", async (
             routes,
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
         }, seededState);
         await waitForHarnessSnapshot(
             page,
@@ -10180,7 +10114,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("globalFilterMode", 0, true);
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
@@ -10302,7 +10236,7 @@ test("a two-digit exact route badge stays contained at 320px without changing th
             })),
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v2", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         const surface = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
