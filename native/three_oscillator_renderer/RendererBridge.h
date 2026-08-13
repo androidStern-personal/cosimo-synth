@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 
 namespace cosimo::three_osc::bridge
@@ -67,18 +68,48 @@ constexpr std::int32_t samplesPerPackedFrameSet = 12811;
 constexpr std::int32_t maximumFrameCount = 256;
 constexpr std::int32_t tableSlotSampleCount = samplesPerPackedFrameSet * maximumFrameCount;
 constexpr std::int32_t tablePoolSampleCount = 4 * tableSlotSampleCount;
+constexpr std::int32_t tableChunkCountPerSlot = 4;
+constexpr std::int32_t tableChunkSampleCount
+    = (tableSlotSampleCount + tableChunkCountPerSlot - 1) / tableChunkCountPerSlot;
+constexpr std::int32_t tablePoolChunkCount = 4 * tableChunkCountPerSlot;
+using TableChunkSlices = std::array<Slice<std::int32_t>, tablePoolChunkCount>;
 
-std::int32_t renderAll (Slice<float> packedFloats,
-                        Slice<std::int32_t> packedInts,
-                        Slice<std::int32_t> tablePool) noexcept;
+std::int32_t renderAllChunks (Slice<float> packedFloats,
+                              Slice<std::int32_t> packedInts,
+                              const TableChunkSlices& tableChunks) noexcept;
 
-template <typename FloatSlice, typename IntSlice, typename TableSlice>
+std::int32_t renderAll (
+    Slice<float> packedFloats,
+    Slice<std::int32_t> packedInts,
+    Slice<std::int32_t> slot0Chunk0,
+    Slice<std::int32_t> slot0Chunk1,
+    Slice<std::int32_t> slot0Chunk2,
+    Slice<std::int32_t> slot0Chunk3,
+    Slice<std::int32_t> slot1Chunk0,
+    Slice<std::int32_t> slot1Chunk1,
+    Slice<std::int32_t> slot1Chunk2,
+    Slice<std::int32_t> slot1Chunk3,
+    Slice<std::int32_t> slot2Chunk0,
+    Slice<std::int32_t> slot2Chunk1,
+    Slice<std::int32_t> slot2Chunk2,
+    Slice<std::int32_t> slot2Chunk3,
+    Slice<std::int32_t> slot3Chunk0,
+    Slice<std::int32_t> slot3Chunk1,
+    Slice<std::int32_t> slot3Chunk2,
+    Slice<std::int32_t> slot3Chunk3) noexcept;
+
+template <typename FloatSlice, typename IntSlice, typename... TableChunkSlice>
 std::int32_t renderAllGenerated (FloatSlice packedFloats,
                                  IntSlice packedInts,
-                                 TableSlice tablePool) noexcept
+                                 TableChunkSlice... tableChunks) noexcept
 {
-    return renderAll ({ packedFloats.elements, static_cast<std::int32_t> (packedFloats.size()) },
-                      { packedInts.elements, static_cast<std::int32_t> (packedInts.size()) },
-                      { tablePool.elements, static_cast<std::int32_t> (tablePool.size()) });
+    static_assert (sizeof... (TableChunkSlice) == tablePoolChunkCount);
+    const TableChunkSlices chunkSlices {{
+        { tableChunks.elements, static_cast<std::int32_t> (tableChunks.size()) }...
+    }};
+    return renderAllChunks (
+        { packedFloats.elements, static_cast<std::int32_t> (packedFloats.size()) },
+        { packedInts.elements, static_cast<std::int32_t> (packedInts.size()) },
+        chunkSlices);
 }
 }

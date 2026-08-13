@@ -1060,7 +1060,36 @@ std::int32_t selectAtlasOutputMip (float phaseIncrement,
     return mip;
 }
 
-FloatBatch readFrames (const std::int32_t* samples,
+IntBatch gatherSourcePoints (const TablePoolLayout::PackedSourceSlice& source,
+                             const IntBatch& indices) noexcept
+{
+    if (source.samples != nullptr)
+        return IntBatch::gather (source.samples, indices);
+
+    alignas (16) std::array<std::int32_t, batchSize> unpackedIndices {};
+    alignas (16) std::array<std::int32_t, batchSize> packedPoints {};
+    indices.store_aligned (unpackedIndices.data());
+
+    for (std::size_t lane = 0; lane < batchSize; ++lane)
+    {
+        const auto index = unpackedIndices[lane];
+        if (index < 0 || index >= source.size || source.chunkSampleCount <= 0)
+            continue;
+
+        const auto chunk = static_cast<std::size_t> (index / source.chunkSampleCount);
+        const auto indexWithinChunk = index % source.chunkSampleCount;
+        if (chunk >= source.chunkSamples.size()
+            || source.chunkSamples[chunk] == nullptr
+            || indexWithinChunk >= source.chunkSizes[chunk])
+            continue;
+
+        packedPoints[lane] = source.chunkSamples[chunk][indexWithinChunk];
+    }
+
+    return IntBatch::load_aligned (packedPoints.data());
+}
+
+FloatBatch readFrames (const TablePoolLayout::PackedSourceSlice& source,
                        const FloatBatch& phase,
                        const IntBatch& lengths,
                        const IntBatch& lowerBases,
@@ -1076,13 +1105,13 @@ FloatBatch readFrames (const std::int32_t* samples,
     const auto lowerIndex = lowerBases + sampleIndex;
     const auto upperIndex = upperBases + sampleIndex;
     const auto lower = evaluateSourceHermite (
-        unpackSourcePoints (IntBatch::gather (samples, lowerIndex), valueScale, derivativeScale),
-        unpackSourcePoints (IntBatch::gather (samples, lowerIndex + IntBatch (1)),
+        unpackSourcePoints (gatherSourcePoints (source, lowerIndex), valueScale, derivativeScale),
+        unpackSourcePoints (gatherSourcePoints (source, lowerIndex + IntBatch (1)),
                             valueScale, derivativeScale),
         fractional);
     const auto upper = evaluateSourceHermite (
-        unpackSourcePoints (IntBatch::gather (samples, upperIndex), valueScale, derivativeScale),
-        unpackSourcePoints (IntBatch::gather (samples, upperIndex + IntBatch (1)),
+        unpackSourcePoints (gatherSourcePoints (source, upperIndex), valueScale, derivativeScale),
+        unpackSourcePoints (gatherSourcePoints (source, upperIndex + IntBatch (1)),
                             valueScale, derivativeScale),
         fractional);
     return lower + (upper - lower) * frameBlend;
@@ -1766,7 +1795,7 @@ static StereoSample renderWarpedNoteInternal (
                     std::clamp (tables.oscillatorSlots[oscillator], 0,
                                 static_cast<std::int32_t> (tableSlotCount - 1)));
                 generalSample = readFrames (
-                    tables.slots[slot].samples, warped,
+                    tables.slots[slot], warped,
                     IntBatch::load_unaligned (lengths.data() + laneOffset),
                     IntBatch::load_unaligned (lowerBases.data() + laneOffset),
                     IntBatch::load_unaligned (upperBases.data() + laneOffset),

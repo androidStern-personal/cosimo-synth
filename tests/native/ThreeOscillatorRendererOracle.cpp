@@ -40,6 +40,8 @@ static_assert (cosimo::three_osc::bridge::samplesPerPackedFrameSet
                == static_cast<std::int32_t> (samplesPerSlot));
 static_assert (cosimo::three_osc::bridge::tableSlotSampleCount == 3279616);
 static_assert (cosimo::three_osc::bridge::tablePoolSampleCount == 13118464);
+static_assert (cosimo::three_osc::bridge::tableChunkSampleCount == 819904);
+static_assert (cosimo::three_osc::bridge::tablePoolChunkCount == 16);
 
 alignas (64) std::array<std::int32_t, oscillatorCount * samplesPerSlot> sourceTables {};
 
@@ -224,8 +226,139 @@ std::int32_t runRuntimeOracle() noexcept
 }
 
 #if ! defined(__wasm__) && ! defined(__wasm32__)
-alignas (64) std::array<std::int32_t,
-                        cosimo::three_osc::bridge::tablePoolSampleCount> bridgeTablePool {};
+alignas (64) std::array<
+    std::array<std::int32_t, cosimo::three_osc::bridge::tableChunkSampleCount>,
+    cosimo::three_osc::bridge::tablePoolChunkCount> bridgeTableChunks {};
+
+cosimo::three_osc::bridge::TableChunkSlices bridgeTableChunkSlices() noexcept
+{
+    cosimo::three_osc::bridge::TableChunkSlices slices {};
+    for (std::size_t chunk = 0; chunk < slices.size(); ++chunk)
+        slices[chunk] = {
+            bridgeTableChunks[chunk].data(),
+            cosimo::three_osc::bridge::tableChunkSampleCount
+        };
+    return slices;
+}
+
+std::int32_t renderThroughExternalAbi (
+    cosimo::three_osc::bridge::Slice<float> packedFloats,
+    cosimo::three_osc::bridge::Slice<std::int32_t> packedInts,
+    const cosimo::three_osc::bridge::TableChunkSlices& chunks) noexcept
+{
+    return cosimo::three_osc::bridge::renderAll (
+        packedFloats, packedInts,
+        chunks[0], chunks[1], chunks[2], chunks[3],
+        chunks[4], chunks[5], chunks[6], chunks[7],
+        chunks[8], chunks[9], chunks[10], chunks[11],
+        chunks[12], chunks[13], chunks[14], chunks[15]);
+}
+
+template <typename Element>
+struct GeneratedSliceProbe
+{
+    Element* elements = nullptr;
+    std::size_t count = 0;
+
+    std::size_t size() const noexcept { return count; }
+};
+
+std::int32_t renderThroughGeneratedAbi (
+    cosimo::three_osc::bridge::Slice<float> packedFloats,
+    cosimo::three_osc::bridge::Slice<std::int32_t> packedInts,
+    const cosimo::three_osc::bridge::TableChunkSlices& chunks) noexcept
+{
+    using cosimo::three_osc::bridge::renderAllGenerated;
+    std::array<GeneratedSliceProbe<std::int32_t>,
+               cosimo::three_osc::bridge::tablePoolChunkCount> generatedChunks {};
+    for (std::size_t chunk = 0; chunk < generatedChunks.size(); ++chunk)
+        generatedChunks[chunk] = {
+            chunks[chunk].elements, static_cast<std::size_t> (chunks[chunk].size)
+        };
+
+    return renderAllGenerated (
+        GeneratedSliceProbe<float> {
+            packedFloats.elements, static_cast<std::size_t> (packedFloats.size) },
+        GeneratedSliceProbe<std::int32_t> {
+            packedInts.elements, static_cast<std::size_t> (packedInts.size) },
+        generatedChunks[0], generatedChunks[1], generatedChunks[2], generatedChunks[3],
+        generatedChunks[4], generatedChunks[5], generatedChunks[6], generatedChunks[7],
+        generatedChunks[8], generatedChunks[9], generatedChunks[10], generatedChunks[11],
+        generatedChunks[12], generatedChunks[13], generatedChunks[14], generatedChunks[15]);
+}
+
+void writeBridgeTablePoint (std::size_t slot,
+                            std::size_t virtualIndex,
+                            std::int32_t packedPoint) noexcept
+{
+    using namespace cosimo::three_osc::bridge;
+    const auto chunkWithinSlot = virtualIndex / static_cast<std::size_t> (tableChunkSampleCount);
+    const auto indexWithinChunk = virtualIndex % static_cast<std::size_t> (tableChunkSampleCount);
+    bridgeTableChunks[slot * static_cast<std::size_t> (tableChunkCountPerSlot)
+                      + chunkWithinSlot][indexWithinChunk] = packedPoint;
+}
+
+bool runChunkBoundaryOracle (
+    const cosimo::three_osc::bridge::TableChunkSlices& chunks) noexcept
+{
+    using namespace cosimo::three_osc::bridge;
+    constexpr auto normalBase = std::int32_t { 128 };
+    constexpr auto boundaryBase = tableChunkSampleCount - 1;
+    const auto point0 = packSourcePoint (-0.65f, 0.0f);
+    const auto point1 = packSourcePoint (0.65f, 0.0f);
+    writeBridgeTablePoint (0, normalBase, point0);
+    writeBridgeTablePoint (0, normalBase + 1, point1);
+    writeBridgeTablePoint (0, boundaryBase, point0);
+    writeBridgeTablePoint (0, boundaryBase + 1, point1);
+
+    std::array<float, packedFloatCount> normalFloats {};
+    std::array<float, packedFloatCount> boundaryFloats {};
+    std::array<std::int32_t, packedIntCount> normalInts {};
+    std::array<std::int32_t, packedIntCount> boundaryInts {};
+    for (std::size_t index = 0; index < warpFamilyBatchCount; ++index)
+        normalInts[atlasFamilyTargetOffset + index] = -1;
+    for (std::size_t lane = 0; lane < laneCount; ++lane)
+        normalInts[cachedAtlasModeOffset + lane] = -1;
+    for (std::size_t oscillator = 0; oscillator < oscillatorCount; ++oscillator)
+    {
+        normalInts[oscillatorSlotOffset + oscillator] = 0;
+        normalInts[unisonVoicesOffset + oscillator] = 1;
+    }
+    normalInts[frameCountOffset] = 1;
+    normalInts[oversampleFactorOffset] = 1;
+    for (std::size_t mip = 0; mip < mipLevelCount; ++mip)
+    {
+        normalInts[mipOffsetOffset + mip] = normalBase;
+        normalInts[mipLengthOffset + mip] = 1;
+    }
+    normalFloats[basePhaseIncrementOffset] = 0.0025f;
+    normalFloats[oscillatorGainOffset] = 0.5f;
+    boundaryFloats = normalFloats;
+    boundaryInts = normalInts;
+    for (std::size_t mip = 0; mip < mipLevelCount; ++mip)
+        boundaryInts[mipOffsetOffset + mip] = boundaryBase;
+
+    double energy = 0.0;
+    for (std::size_t sample = 0; sample < 256; ++sample)
+    {
+        if (renderAllChunks ({ normalFloats.data(), packedFloatCount },
+                             { normalInts.data(), packedIntCount }, chunks) != 1
+            || renderAllChunks ({ boundaryFloats.data(), packedFloatCount },
+                                { boundaryInts.data(), packedIntCount }, chunks) != 1)
+            return false;
+
+        for (std::size_t output = 0; output < logicalNoteCount * 2; ++output)
+        {
+            const auto normal = normalFloats[noteOutputOffset + output];
+            const auto boundary = boundaryFloats[noteOutputOffset + output];
+            if (! std::isfinite (normal) || ! std::isfinite (boundary)
+                || absoluteValue (normal - boundary) > comparisonTolerance)
+                return false;
+            energy += absoluteValue (boundary);
+        }
+    }
+    return energy > 1.0;
+}
 
 bool runBridgeOracle() noexcept
 {
@@ -236,9 +369,12 @@ bool runBridgeOracle() noexcept
         return false;
     for (std::size_t oscillator = 0; oscillator < oscillatorCount; ++oscillator)
         for (std::size_t sample = 0; sample < samplesPerSlot; ++sample)
-            bridgeTablePool[oscillator * static_cast<std::size_t> (tableSlotSampleCount)
-                            + sample]
-                = sourceTables[oscillator * samplesPerSlot + sample];
+            writeBridgeTablePoint (
+                oscillator, sample, sourceTables[oscillator * samplesPerSlot + sample]);
+
+    const auto tableChunks = bridgeTableChunkSlices();
+    if (! runChunkBoundaryOracle (tableChunks))
+        return false;
 
     std::array<float, packedFloatCount> packedFloatsA {};
     std::array<float, packedFloatCount> packedFloatsB {};
@@ -284,11 +420,16 @@ bool runBridgeOracle() noexcept
     packedFloatsB = packedFloatsA;
     packedIntsB = packedIntsA;
 
-    if (renderAll ({ nullptr, 0 }, { packedIntsA.data(), packedIntCount },
-                   { bridgeTablePool.data(), tablePoolSampleCount }) != 0
-        || renderAll ({ packedFloatsA.data(), packedFloatCount },
-                      { packedIntsA.data(), packedIntCount },
-                      { bridgeTablePool.data(), tablePoolSampleCount - 1 }) != 0)
+    auto nullChunks = tableChunks;
+    nullChunks[5].elements = nullptr;
+    auto undersizedChunks = tableChunks;
+    undersizedChunks[9].size = tableChunkSampleCount - 1;
+    if (renderAllChunks ({ nullptr, 0 }, { packedIntsA.data(), packedIntCount },
+                         tableChunks) != 0
+        || renderAllChunks ({ packedFloatsA.data(), packedFloatCount },
+                            { packedIntsA.data(), packedIntCount }, nullChunks) != 0
+        || renderAllChunks ({ packedFloatsA.data(), packedFloatCount },
+                            { packedIntsA.data(), packedIntCount }, undersizedChunks) != 0)
         return false;
 
     double outputEnergy = 0.0;
@@ -305,12 +446,10 @@ bool runBridgeOracle() noexcept
             packedFloatsA[basePositionOffset + oscillator] = position;
             packedFloatsB[basePositionOffset + oscillator] = position;
         }
-        if (renderAll ({ packedFloatsA.data(), packedFloatCount },
-                       { packedIntsA.data(), packedIntCount },
-                       { bridgeTablePool.data(), tablePoolSampleCount }) != 1
-            || renderAll ({ packedFloatsB.data(), packedFloatCount },
-                          { packedIntsB.data(), packedIntCount },
-                          { bridgeTablePool.data(), tablePoolSampleCount }) != 1)
+        if (renderThroughExternalAbi ({ packedFloatsA.data(), packedFloatCount },
+                                      { packedIntsA.data(), packedIntCount }, tableChunks) != 1
+            || renderThroughGeneratedAbi ({ packedFloatsB.data(), packedFloatCount },
+                                          { packedIntsB.data(), packedIntCount }, tableChunks) != 1)
         {
             countAudioThreadAllocations = false;
             return false;

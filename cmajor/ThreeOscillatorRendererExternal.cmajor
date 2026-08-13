@@ -2,5 +2,20 @@ namespace CosimoThreeOscillatorRenderer
 {
     external int32 renderAll (float32[] packedFloats,
                               int32[] packedInts,
-                              int32[] tablePool);
+                              int32[] slot0Chunk0,
+                              int32[] slot0Chunk1,
+                              int32[] slot0Chunk2,
+                              int32[] slot0Chunk3,
+                              int32[] slot1Chunk0,
+                              int32[] slot1Chunk1,
+                              int32[] slot1Chunk2,
+                              int32[] slot1Chunk3,
+                              int32[] slot2Chunk0,
+                              int32[] slot2Chunk1,
+                              int32[] slot2Chunk2,
+                              int32[] slot2Chunk3,
+                              int32[] slot3Chunk0,
+                              int32[] slot3Chunk1,
+                              int32[] slot3Chunk2,
+                              int32[] slot3Chunk3);
 }

@@ -11,6 +11,7 @@ namespace cosimo::three_osc
 constexpr std::int32_t maximumWarpOversampleFactor = 2;
 constexpr std::size_t secondHalfbandLength = 79;
 constexpr std::size_t tableSlotCount = 4;
+constexpr std::size_t tableSlotChunkCount = 4;
 constexpr std::size_t warpFamilyBatchWidth = 4;
 constexpr std::size_t warpFamilyBatchCount = laneCount / warpFamilyBatchWidth;
 constexpr std::int32_t sourceValueBits = 18;
@@ -35,6 +36,9 @@ struct TablePoolLayout
         std::int32_t size = 0;
         float valueScale = 1.5f / static_cast<float> (sourceValueMaximum);
         float derivativeScale = 0.5f / static_cast<float> (sourceDerivativeMaximum);
+        std::array<const std::int32_t*, tableSlotChunkCount> chunkSamples {};
+        std::array<std::int32_t, tableSlotChunkCount> chunkSizes {};
+        std::int32_t chunkSampleCount = 0;
     };
 
     std::array<PackedSourceSlice, tableSlotCount> slots {};

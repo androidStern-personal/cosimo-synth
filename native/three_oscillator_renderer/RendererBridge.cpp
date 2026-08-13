@@ -6,21 +6,32 @@
 
 namespace cosimo::three_osc::bridge
 {
-std::int32_t renderAll (Slice<float> packedFloats,
-                        Slice<std::int32_t> packedInts,
-                        Slice<std::int32_t> tablePool) noexcept
+static_assert (tableChunkCountPerSlot == static_cast<std::int32_t> (tableSlotChunkCount));
+
+std::int32_t renderAllChunks (Slice<float> packedFloats,
+                              Slice<std::int32_t> packedInts,
+                              const TableChunkSlices& tableChunks) noexcept
 {
     if (packedFloats.elements == nullptr || packedFloats.size < packedFloatCount
-        || packedInts.elements == nullptr || packedInts.size < packedIntCount
-        || tablePool.elements == nullptr || tablePool.size < tablePoolSampleCount)
+        || packedInts.elements == nullptr || packedInts.size < packedIntCount)
         return 0;
 
-    const std::array<TablePoolLayout::PackedSourceSlice, tableSlotCount> slots {{
-        { tablePool.elements + (0 * tableSlotSampleCount), tableSlotSampleCount },
-        { tablePool.elements + (1 * tableSlotSampleCount), tableSlotSampleCount },
-        { tablePool.elements + (2 * tableSlotSampleCount), tableSlotSampleCount },
-        { tablePool.elements + (3 * tableSlotSampleCount), tableSlotSampleCount }
-    }};
+    std::array<TablePoolLayout::PackedSourceSlice, tableSlotCount> slots {};
+    for (std::size_t slot = 0; slot < tableSlotCount; ++slot)
+    {
+        auto& source = slots[slot];
+        source.size = tableSlotSampleCount;
+        source.chunkSampleCount = tableChunkSampleCount;
+        for (std::size_t chunk = 0; chunk < tableSlotChunkCount; ++chunk)
+        {
+            const auto& chunkSlice = tableChunks[slot * tableSlotChunkCount + chunk];
+            if (chunkSlice.elements == nullptr || chunkSlice.size < tableChunkSampleCount)
+                return 0;
+
+            source.chunkSamples[chunk] = chunkSlice.elements;
+            source.chunkSizes[chunk] = chunkSlice.size;
+        }
+    }
     const WarpRendererStateView state {
         packedFloats.elements + phaseOffset,
         packedFloats.elements + historyOffset,
@@ -91,5 +102,33 @@ std::int32_t renderAll (Slice<float> packedFloats,
     }
 
     return 1;
+}
+
+std::int32_t renderAll (
+    Slice<float> packedFloats,
+    Slice<std::int32_t> packedInts,
+    Slice<std::int32_t> slot0Chunk0,
+    Slice<std::int32_t> slot0Chunk1,
+    Slice<std::int32_t> slot0Chunk2,
+    Slice<std::int32_t> slot0Chunk3,
+    Slice<std::int32_t> slot1Chunk0,
+    Slice<std::int32_t> slot1Chunk1,
+    Slice<std::int32_t> slot1Chunk2,
+    Slice<std::int32_t> slot1Chunk3,
+    Slice<std::int32_t> slot2Chunk0,
+    Slice<std::int32_t> slot2Chunk1,
+    Slice<std::int32_t> slot2Chunk2,
+    Slice<std::int32_t> slot2Chunk3,
+    Slice<std::int32_t> slot3Chunk0,
+    Slice<std::int32_t> slot3Chunk1,
+    Slice<std::int32_t> slot3Chunk2,
+    Slice<std::int32_t> slot3Chunk3) noexcept
+{
+    return renderAllChunks (packedFloats, packedInts, {{
+        slot0Chunk0, slot0Chunk1, slot0Chunk2, slot0Chunk3,
+        slot1Chunk0, slot1Chunk1, slot1Chunk2, slot1Chunk3,
+        slot2Chunk0, slot2Chunk1, slot2Chunk2, slot2Chunk3,
+        slot3Chunk0, slot3Chunk1, slot3Chunk2, slot3Chunk3
+    }});
 }
 }

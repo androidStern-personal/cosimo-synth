@@ -67,6 +67,8 @@ rg -Fq 'renderWarpedNotes (state, controls, tables, {}, nullptr,' \
     "$RENDERER_DIR/RendererBridge.cpp"
 rg -Fq 'external int32 renderAll (float32[] packedFloats,' \
     "$REPO_DIR/cmajor/ThreeOscillatorRendererExternal.cmajor"
+rg -Fq 'int32[] slot3Chunk3);' \
+    "$REPO_DIR/cmajor/ThreeOscillatorRendererExternal.cmajor"
 if find "$RENDERER_DIR" -type f \
     \( -name '*.i16' -o -name '*.bin' -o -name '*.json' \) | rg -q .; then
     print -u2 'FAIL: runtime renderer unexpectedly contains an atlas asset'
