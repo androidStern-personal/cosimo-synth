@@ -68,13 +68,34 @@ fi
 
 WASM_FINGERPRINT=$(node "$TEST_DIR/run_three_oscillator_generated_wasm.mjs" \
     "$BUILD_DIR/shared-voice-engine.wasm")
-FINGERPRINT_DELTA=$((NATIVE_FINGERPRINT - WASM_FINGERPRINT))
-if (( FINGERPRINT_DELTA < 0 )); then
-    FINGERPRINT_DELTA=$((-FINGERPRINT_DELTA))
-fi
-if (( FINGERPRINT_DELTA > 1024 )); then
-    print -u2 "FAIL: SharedVoiceEngine native/Wasm fingerprints differ: $NATIVE_FINGERPRINT vs $WASM_FINGERPRINT"
+if (( NATIVE_FINGERPRINT != 424242 || WASM_FINGERPRINT != 424242 )); then
+    print -u2 "FAIL: SharedVoiceEngine semantic gates differ: $NATIVE_FINGERPRINT vs $WASM_FINGERPRINT"
     exit 1
 fi
 
-print "PASS SharedVoiceEngine A/B/C seam: native=$NATIVE_FINGERPRINT wasm=$WASM_FINGERPRINT"
+for PRODUCT_NAME in WavetableSynth WavetableSynth.iOS; do
+    DEFAULT_CPP="$BUILD_DIR/$PRODUCT_NAME.default.cpp"
+    DEFAULT_JS="$BUILD_DIR/$PRODUCT_NAME.default.js"
+    cmaj generate --target=cpp "$REPO_DIR/$PRODUCT_NAME.cmajorpatch" --output="$DEFAULT_CPP"
+    if rg -q 'CosimoThreeOscillatorRenderer|rendererFloats|rendererInts|legacyALeftPrefilter|legacyARightPrefilter|externalLeftFilters|externalRightFilters' \
+        "$DEFAULT_CPP"; then
+        print -u2 "FAIL: $PRODUCT_NAME default-off product retains external renderer state or work"
+        exit 1
+    fi
+    cmaj generate --target=javascript --simd-only "$REPO_DIR/$PRODUCT_NAME.cmajorpatch" \
+        --output="$DEFAULT_JS"
+    DEFAULT_MEMORY_COUNT=$(rg -c 'WebAssembly.Memory \(\{ initial: 1725 \}\)' "$DEFAULT_JS")
+    if (( DEFAULT_MEMORY_COUNT != 2 )); then
+        print -u2 "FAIL: $PRODUCT_NAME default-off product exceeds the frozen 1725-page Wasm baseline"
+        exit 1
+    fi
+done
+
+if rg -qi 'selectedOscillator|oscillatorTab|activeOscillatorTab' \
+    "$TEST_DIR/fixtures/ThreeOscillatorSharedVoiceEngine.cmajor"; then
+    print -u2 'FAIL: focused sound fixture depends on UI oscillator selection'
+    exit 1
+fi
+
+print "PASS SharedVoiceEngine semantic gates: native=$NATIVE_FINGERPRINT wasm=$WASM_FINGERPRINT"
+print 'PASS default-off product: no renderer state/work and 1725-page Wasm baseline'

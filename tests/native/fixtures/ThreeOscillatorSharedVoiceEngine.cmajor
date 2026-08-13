@@ -2,7 +2,11 @@ processor Core03TableAndControlSchedule
 {
     output event wt::OscillatorWavetableLoadBegin loadBeginOut;
     output event wt::OscillatorWavetableMipFrame mipFrameOut;
-    output event std::notes::NoteOn noteOut;
+    output event (std::notes::NoteOn, std::notes::NoteOff) noteOut;
+
+    output value float32 filterModeOut;
+    output value float32 filterCutoffOut;
+    output value float32 filterQOut;
 
     output value float32 aFramePositionOut;
     output value float32 aWarpModeOut;
@@ -124,6 +128,9 @@ processor Core03TableAndControlSchedule
 
     void publishInitialControls()
     {
+        filterModeOut <- 1.0f;
+        filterCutoffOut <- 1800.0f;
+        filterQOut <- 6.0f;
         aFramePositionOut <- 0.20f;
         aWarpModeOut <- 0.0f;
         aWarpAmountOut <- 0.0f;
@@ -250,6 +257,56 @@ processor Core03TableAndControlSchedule
             {
                 bMuteOut <- 1.0f;
             }
+            else if (frameCounter == 5184)
+            {
+                bMuteOut <- 0.0f;
+                selectSolo (wt::oscillatorA);
+            }
+            else if (frameCounter == 5440)
+            {
+                aMuteOut <- 1.0f;
+            }
+            else if (frameCounter == 5504)
+            {
+                aMuteOut <- 0.0f;
+                selectSolo (wt::oscillatorB);
+            }
+            else if (frameCounter == 5760)
+            {
+                bMuteOut <- 1.0f;
+            }
+            else if (frameCounter == 5824)
+            {
+                bMuteOut <- 0.0f;
+                selectSolo (wt::oscillatorC);
+            }
+            else if (frameCounter == 6080)
+            {
+                cMuteOut <- 1.0f;
+            }
+            else if (frameCounter == 6144)
+            {
+                cMuteOut <- 0.0f;
+                selectSolo (wt::oscillatorB);
+            }
+            else if (frameCounter == 6400)
+            {
+                bVolumeDbOut <- -30.0f;
+            }
+            else if (frameCounter == 6912)
+            {
+                bVolumeDbOut <- -9.542425f;
+                bPanOut <- 0.65f;
+            }
+            else if (frameCounter == 7424)
+            {
+                bPanOut <- -0.65f;
+                noteOut <- std::notes::NoteOn (1, 57.0f, 0.90f);
+            }
+            else if (frameCounter == 7680)
+            {
+                noteOut <- std::notes::NoteOff (1, 57.0f, 0.0f);
+            }
 
             frameCounter += 1;
             advance();
@@ -269,6 +326,9 @@ graph ThreeOscillatorSharedVoiceEngine [[ main ]]
         schedule.loadBeginOut -> engine.oscillatorWavetableLoadBeginIn;
         schedule.mipFrameOut -> engine.oscillatorWavetableMipFrameIn;
         schedule.noteOut -> engine.voiceEventIn[0];
+        schedule.filterModeOut -> engine.filterModeIn;
+        schedule.filterCutoffOut -> engine.filterCutoffIn;
+        schedule.filterQOut -> engine.filterQIn;
 
         schedule.aFramePositionOut -> engine.framePositionIn;
         schedule.aWarpModeOut -> engine.warpModeIn;

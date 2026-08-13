@@ -201,6 +201,31 @@ FloatBatch wrap01 (const FloatBatch& value) noexcept
     return value - xsimd::floor (value);
 }
 
+// xsimd 13's generic exp2 path folds correctly for literals but returns 1.0
+// for small dynamic Wasm inputs, which silently disables unison detune. This
+// bounded polynomial keeps the computation in four SIMD lanes on every target.
+// The renderer's supported stack/detune domain stays inside [-8, 8], so an
+// exact power-of-two exponent plus the same minimax fractional polynomial used
+// by xsimd is both allocation-free and comfortably within float audio accuracy.
+FloatBatch unisonPitchRatio (const FloatBatch& exponent) noexcept
+{
+    const auto bounded = clamp (exponent, -8.0f, 8.0f);
+    const auto integral = xsimd::floor (bounded + FloatBatch (0.5f));
+    const auto fractional = bounded - integral;
+
+    auto polynomial = FloatBatch (0.00015524314949288964f);
+    polynomial = FloatBatch (0.0013433126732707024f) + fractional * polynomial;
+    polynomial = FloatBatch (0.009617837145924568f) + fractional * polynomial;
+    polynomial = FloatBatch (0.055502813309431076f) + fractional * polynomial;
+    polynomial = FloatBatch (0.24022652208805084f) + fractional * polynomial;
+    const auto approximation = FloatBatch (1.0f)
+        + fractional * FloatBatch (0.6931471824645996f)
+        + fractional * fractional * polynomial;
+
+    const auto exponentBits = (xsimd::to_int (integral) + IntBatch (127)) << 23;
+    return approximation * xsimd::bitwise_cast<float> (exponentBits);
+}
+
 FloatBatch quinticHermite (const FloatBatch& x,
                             const FloatBatch& x0,
                             const FloatBatch& x1,
@@ -1323,8 +1348,10 @@ void expandVoiceOscillatorControls (VoiceOscillatorControlsView controls,
                 unisonLookupTables.sideAmounts[voices] + firstSubVoice);
             alignas (16) float activeValues[batchSize];
             for (std::size_t subLane = 0; subLane < batchSize; ++subLane)
+                // Level, mute and solo control gain without freezing oscillator time.
                 activeValues[subLane]
-                    = gain > 0.0f && firstSubVoice + subLane < voices ? 1.0f : 0.0f;
+                    = controls.basePhaseIncrements[voiceOscillator] > 0.0f
+                        && firstSubVoice + subLane < voices ? 1.0f : 0.0f;
             const auto active = FloatBatch::load_aligned (activeValues);
 
             const auto pitchOffset = spread
@@ -1333,7 +1360,7 @@ void expandVoiceOscillatorControls (VoiceOscillatorControlsView controls,
                 + stack;
             const auto phaseIncrement = FloatBatch (
                 std::max (0.0f, controls.basePhaseIncrements[voiceOscillator]))
-                * xsimd::exp2 (pitchOffset * FloatBatch (1.0f / 12.0f)) * active;
+                * unisonPitchRatio (pitchOffset * FloatBatch (1.0f / 12.0f)) * active;
             const auto position = clamp (
                 FloatBatch (controls.positions[voiceOscillator])
                     + spread * FloatBatch (

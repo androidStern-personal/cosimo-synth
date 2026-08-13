@@ -38,7 +38,8 @@ NATIVE_FINGERPRINT=$("$BUILD_DIR/renderer-oracle-native")
     -nostdlib++ \
     -isystem "$WASI_CXX_DIR/include/wasm32-wasip1/c++/v1" \
     "${COMMON_FLAGS[@]}" "${COMMON_SOURCES[@]}" \
-    -Wl,--export=three_osc_renderer_oracle -Wl,--export-memory \
+    -Wl,--export=three_osc_renderer_oracle -Wl,--export=three_osc_dynamic_detune_oracle \
+    -Wl,--export-memory \
     -Wl,--strip-all -Wl,--gc-sections -Wl,-z,stack-size=524288 \
     -o "$BUILD_DIR/renderer-oracle.wasm"
 

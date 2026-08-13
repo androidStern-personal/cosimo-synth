@@ -1,6 +1,7 @@
 #include "RendererBridge.h"
 #include "WarpRenderer.h"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -223,6 +224,100 @@ std::int32_t runRuntimeOracle() noexcept
     if (! std::isfinite (weightedEnergy) || weightedEnergy < 1.0)
         return -4;
     return static_cast<std::int32_t> (weightedEnergy * 1000.0 + 0.5);
+}
+
+std::int32_t runDynamicDetuneOracle (std::int32_t detuneMilli) noexcept
+{
+    if (detuneMilli <= 0 || detuneMilli > 1000)
+        return -20;
+
+    std::array<float, logicalNoteCount * oscillatorCount> basePhaseIncrements {};
+    std::array<float, logicalNoteCount * oscillatorCount> positions {};
+    std::array<float, logicalNoteCount * oscillatorCount> warpAmounts {};
+    std::array<float, logicalNoteCount * oscillatorCount> pans {};
+    std::array<float, logicalNoteCount * oscillatorCount> gains {};
+    std::array<float, logicalNoteCount * oscillatorCount> detunes {};
+    std::array<float, logicalNoteCount * oscillatorCount> blends {};
+    std::array<float, logicalNoteCount * oscillatorCount> widths {};
+    std::array<float, logicalNoteCount * oscillatorCount> positionSpreads {};
+    std::array<float, logicalNoteCount * oscillatorCount> warpSpreads {};
+    std::array<std::int32_t, logicalNoteCount * oscillatorCount> unisonVoices {};
+    std::array<std::int32_t, logicalNoteCount * oscillatorCount> detuneModes {};
+    std::array<std::int32_t, logicalNoteCount * oscillatorCount> stackModes {};
+    std::array<float, laneCount> phaseIncrements {};
+    std::array<float, laneCount> expandedPositions {};
+    std::array<float, laneCount> expandedWarpAmounts {};
+    std::array<float, laneCount> leftGains {};
+    std::array<float, laneCount> rightGains {};
+
+    constexpr auto baseIncrement = 0.01f;
+    basePhaseIncrements[0] = baseIncrement;
+    gains[0] = 1.0f;
+    detunes[0] = static_cast<float> (detuneMilli) * 0.001f;
+    blends[0] = 1.0f;
+    unisonVoices[0] = 3;
+
+    expandVoiceOscillatorControls (
+        { basePhaseIncrements.data(), positions.data(), warpAmounts.data(), pans.data(),
+          gains.data(), detunes.data(), blends.data(), widths.data(),
+          positionSpreads.data(), warpSpreads.data(), unisonVoices.data(),
+          detuneModes.data(), stackModes.data() },
+        { phaseIncrements.data(), expandedPositions.data(), expandedWarpAmounts.data(),
+          leftGains.data(), rightGains.data() });
+
+    const auto detuneSemitones = detunes[0] * 0.5f;
+    const auto expectedLow = baseIncrement * std::exp2 (-detuneSemitones / 12.0f);
+    const auto expectedHigh = baseIncrement * std::exp2 (detuneSemitones / 12.0f);
+    if (!(phaseIncrements[0] < phaseIncrements[1]
+          && phaseIncrements[1] < phaseIncrements[2])
+        || absoluteValue (phaseIncrements[0] - expectedLow) > 2.0e-7f
+        || absoluteValue (phaseIncrements[1] - baseIncrement) > 2.0e-7f
+        || absoluteValue (phaseIncrements[2] - expectedHigh) > 2.0e-7f
+        || phaseIncrements[3] != 0.0f)
+        return -21;
+
+    // Cover the full supported unison stack domain, including the small
+    // non-constant detune values that exposed xsimd's Wasm defect.
+    unisonVoices[0] = static_cast<std::int32_t> (maximumUnisonCount);
+    for (std::int32_t stackMode = 0; stackMode <= 4; ++stackMode)
+    {
+        stackModes[0] = stackMode;
+        expandVoiceOscillatorControls (
+            { basePhaseIncrements.data(), positions.data(), warpAmounts.data(),
+              pans.data(), gains.data(), detunes.data(), blends.data(), widths.data(),
+              positionSpreads.data(), warpSpreads.data(), unisonVoices.data(),
+              detuneModes.data(), stackModes.data() },
+            { phaseIncrements.data(), expandedPositions.data(),
+              expandedWarpAmounts.data(), leftGains.data(), rightGains.data() });
+
+        for (std::size_t lane = 0; lane < maximumUnisonCount; ++lane)
+        {
+            const auto normalized = static_cast<float> (lane)
+                / static_cast<float> (maximumUnisonCount - 1) * 2.0f - 1.0f;
+            const auto centerOffset = static_cast<float> (lane)
+                - static_cast<float> (maximumUnisonCount - 1) * 0.5f;
+            float stackSemitones = 0.0f;
+            if (stackMode == 1)
+                stackSemitones = static_cast<float> (lane) * 12.0f;
+            else if (stackMode == 2)
+                stackSemitones = static_cast<float> (lane / 2) * 12.0f
+                    + ((lane & 1U) != 0U ? 7.0f : 0.0f);
+            else if (stackMode == 3)
+                stackSemitones = centerOffset * 12.0f;
+            else if (stackMode == 4)
+                stackSemitones = centerOffset * 24.0f;
+
+            const auto pitchSemitones = normalized * detunes[0] * 0.5f
+                + stackSemitones;
+            const auto expected = baseIncrement
+                * std::exp2 (pitchSemitones / 12.0f);
+            const auto tolerance = std::max (2.0e-8f, expected * 2.0e-6f);
+            if (absoluteValue (phaseIncrements[lane] - expected) > tolerance)
+                return -22;
+        }
+    }
+
+    return 4242;
 }
 
 #if ! defined(__wasm__) && ! defined(__wasm32__)
@@ -488,6 +583,12 @@ extern "C" std::int32_t three_osc_renderer_oracle() noexcept
     return runRuntimeOracle();
 }
 
+extern "C" std::int32_t three_osc_dynamic_detune_oracle (
+    std::int32_t detuneMilli) noexcept
+{
+    return runDynamicDetuneOracle (detuneMilli);
+}
+
 #if ! defined(__wasm__) && ! defined(__wasm32__)
 #include <new>
 
@@ -513,7 +614,8 @@ void operator delete (void* memory, std::size_t) noexcept
 int main()
 {
     const auto fingerprint = three_osc_renderer_oracle();
-    if (fingerprint <= 0 || ! runBridgeOracle())
+    if (fingerprint <= 0 || three_osc_dynamic_detune_oracle (250) != 4242
+        || ! runBridgeOracle())
         return 1;
     std::printf ("%d\n", fingerprint);
     return 0;
