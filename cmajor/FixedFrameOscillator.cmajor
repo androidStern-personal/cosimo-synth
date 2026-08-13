@@ -30,6 +30,16 @@ namespace wt
     let oscillatorA = 0;
     let oscillatorB = 1;
     let oscillatorC = 2;
+    // Three independently published tables plus one bounded replacement slot.
+    let wavetableSlotCount = oscillatorCount + 1;
+    let packedSourceValueBits = 18;
+    let packedSourceDerivativeBits = 32 - packedSourceValueBits;
+    let packedSourceValueMaximum = (1 << (packedSourceValueBits - 1)) - 1;
+    let packedSourceDerivativeMaximum = (1 << (packedSourceDerivativeBits - 1)) - 1;
+    // Each mip frame stores one endpoint after the cycle body. Dark mips use
+    // shorter power-of-two cycles; every length divides the 2048-sample upload.
+    let packedWavetableSamplesPerFrameSet = 12811;
+    let packedWavetableChunkCount = 4;
     let modulationMsegSlotCount = 3;
     let modulationEnvSlotCount = 3;
     let modulationVoiceSourceCount = 9;
@@ -156,6 +166,80 @@ namespace wt
         int32 hasLoading;
         int32 loadingTableIndex;
         int32 loadingGeneration;
+    }
+
+    // The existing transport remains oscillator A's stable product seam. These
+    // identity-bearing messages are the additive A/B/C transport used by the
+    // independent ownership service and, later, the per-oscillator host worker.
+    struct OscillatorWavetableLoadBegin
+    {
+        int32 dspSessionId;
+        int32 oscillatorIndex;
+        int32 generation;
+        int32 tableIndex;
+        int32 frameCount;
+    }
+
+    struct OscillatorWavetableMipFrame
+    {
+        int32 dspSessionId;
+        int32 oscillatorIndex;
+        int32 generation;
+        int32 tableIndex;
+        int32 mipIndex;
+        int32 frameIndex;
+        float32[samplesPerFrame] samples;
+    }
+
+    struct OscillatorWavetableUploadAck
+    {
+        int32 dspSessionId;
+        int32 oscillatorIndex;
+        int32 generation;
+        int32 tableIndex;
+        int32 mipIndex;
+        int32 frameIndex;
+    }
+
+    struct OscillatorWavetableMipRequest
+    {
+        int32 dspSessionId;
+        int32 oscillatorIndex;
+        int32 generation;
+        int32 tableIndex;
+        int32 mipIndex;
+        int32 urgencyLevel;
+    }
+
+    struct OscillatorServiceLoadAbort
+    {
+        int32 dspSessionId;
+        int32 oscillatorIndex;
+        int32 generation;
+        int32 tableIndex;
+        int32 failureReasonCode;
+    }
+
+    struct OscillatorRuntimeServiceState
+    {
+        int32 dspSessionId;
+        int32 oscillatorIndex;
+        int32 generationFrontier;
+        int32 serviceState;
+        int32 hasActive;
+        int32 activeTableIndex;
+        int32 activeGeneration;
+        int32 hasLoading;
+        int32 loadingTableIndex;
+        int32 loadingGeneration;
+    }
+
+    struct WavetableSlotMonitor
+    {
+        int32 oscillatorIndex;
+        int32 activeSlotIndex;
+        int32 tableIndex;
+        int32 generation;
     }
 
     struct RuntimeInstallAck
@@ -1657,7 +1741,8 @@ namespace wt
     }
 
     processor SharedVoiceEngine (int voiceCount,
-                                 float32 previewFrequencyHz = 440.0f)
+                                 float32 previewFrequencyHz = 440.0f,
+                                 int wavetableFrameCapacity = maxFramesPerTable)
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff,
@@ -1670,6 +1755,9 @@ namespace wt
         input event WavetableLoadBegin wavetableLoadBeginIn;
         input event WavetableMipFrame wavetableMipFrameIn;
         input event ServiceLoadAbort serviceLoadAbortIn;
+        input event OscillatorWavetableLoadBegin oscillatorWavetableLoadBeginIn;
+        input event OscillatorWavetableMipFrame oscillatorWavetableMipFrameIn;
+        input event OscillatorServiceLoadAbort oscillatorServiceLoadAbortIn;
         input event ArticulationSnapshotUpload articulationSnapshotIn;
         input event ModulationMsegBufferUpload modulationMsegBufferIn;
         input event ModulationMsegPlaybackUpload modulationMsegPlaybackIn;
@@ -1706,6 +1794,10 @@ namespace wt
         output event WavetableUploadAck wavetableUploadAckOut;
         output event WavetableMipRequest wavetableMipRequestOut;
         output event RuntimeServiceState runtimeServiceStateOut;
+        output event OscillatorWavetableUploadAck oscillatorWavetableUploadAckOut;
+        output event OscillatorWavetableMipRequest oscillatorWavetableMipRequestOut;
+        output event OscillatorRuntimeServiceState oscillatorRuntimeServiceStateOut;
+        output event WavetableSlotMonitor wavetableSlotMonitorOut;
         output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePositionOut;
         output event wt::EffectiveWarpStateMonitor effectiveWarpStateOut;
         output event wt::EffectiveUnisonStateMonitor effectiveUnisonStateOut;
@@ -1718,6 +1810,16 @@ namespace wt
         output stream float32 rackModOut[rackModTargetCount];
         output event int32 modulationRejectedRouteCountOut;
         output event RuntimeInstallAck runtimeInstallAckOut;
+
+        int32[oscillatorCount] makeInactiveOscillatorSlots()
+        {
+            int32[oscillatorCount] slots;
+
+            for (wrap<oscillatorCount> oscillator)
+                slots[oscillator] = -1;
+
+            return slots;
+        }
 
         node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
         node mseg1 = wt::MsegReader[voiceCount];
@@ -1883,6 +1985,53 @@ namespace wt
         int32 acceptedModulationProgramSerial;
         int32 acceptedArticulationSerial;
 
+        // Active slots are immutable while visible. Uploads write into the one
+        // spare slot and publish only after every mip/frame has arrived.
+        static_assert (wavetableFrameCapacity > 0 && wavetableFrameCapacity <= maxFramesPerTable);
+        static_assert (voiceCount > 0 && voiceCount <= 16);
+        let packedWavetableSlotSampleCount = packedWavetableSamplesPerFrameSet * wavetableFrameCapacity;
+        let packedWavetableChunkSampleCount = (packedWavetableSlotSampleCount + packedWavetableChunkCount - 1)
+                                              / packedWavetableChunkCount;
+        int32[packedWavetableChunkSampleCount] packedSlot0Chunk0;
+        int32[packedWavetableChunkSampleCount] packedSlot0Chunk1;
+        int32[packedWavetableChunkSampleCount] packedSlot0Chunk2;
+        int32[packedWavetableChunkSampleCount] packedSlot0Chunk3;
+        int32[packedWavetableChunkSampleCount] packedSlot1Chunk0;
+        int32[packedWavetableChunkSampleCount] packedSlot1Chunk1;
+        int32[packedWavetableChunkSampleCount] packedSlot1Chunk2;
+        int32[packedWavetableChunkSampleCount] packedSlot1Chunk3;
+        int32[packedWavetableChunkSampleCount] packedSlot2Chunk0;
+        int32[packedWavetableChunkSampleCount] packedSlot2Chunk1;
+        int32[packedWavetableChunkSampleCount] packedSlot2Chunk2;
+        int32[packedWavetableChunkSampleCount] packedSlot2Chunk3;
+        int32[packedWavetableChunkSampleCount] packedSlot3Chunk0;
+        int32[packedWavetableChunkSampleCount] packedSlot3Chunk1;
+        int32[packedWavetableChunkSampleCount] packedSlot3Chunk2;
+        int32[packedWavetableChunkSampleCount] packedSlot3Chunk3;
+        int32[wavetableSlotCount * mipLevelCount * wavetableFrameCapacity] packedReadyFrameFlags;
+        int32[wavetableSlotCount * mipLevelCount] packedLoadedFrameCounts;
+        int32[oscillatorCount * mipLevelCount] oscillatorRequestedGenerationByMip;
+        int32[oscillatorCount * mipLevelCount] oscillatorRequestedUrgencyByMip;
+        int32[oscillatorCount] oscillatorGenerationFrontier;
+        int32[oscillatorCount] oscillatorCurrentGeneration;
+        int32[oscillatorCount] oscillatorCurrentTableIndex;
+        int32[oscillatorCount] oscillatorFrameCount;
+        int32[oscillatorCount] oscillatorLastFrameIndex;
+        float32[oscillatorCount] oscillatorLastFrameIndexF;
+        int32[oscillatorCount] oscillatorActiveSlot = makeInactiveOscillatorSlots();
+        int32 tableStagingOscillatorIndex = -1;
+        int32 tableStagingSlotIndex = -1;
+        int32 tableStagingGeneration = 0;
+        int32 tableStagingTableIndex = 0;
+        int32 tableStagingFrameCount = 0;
+        int32 tableStagingLastFrameIndex = 0;
+        float32 tableStagingLastFrameIndexF = 0.0f;
+
+        // Temporary integration state: oscillator A keeps the established
+        // exact-float double bank until CORE-03 can pass the frozen A oracle
+        // through the external renderer. Its upload is also mirrored into the
+        // packed ownership pool. This duplication is not a product memory or
+        // performance budget; CORE-03 must remove or explicitly justify it.
         float32[maxMipSampleCount] mip0Bank0Samples;
         float32[maxMipSampleCount] mip0Bank1Samples;
         float32[maxMipSampleCount] mip1Bank0Samples;
@@ -1966,6 +2115,184 @@ namespace wt
             unisonStackModeState = resolveUnisonStackMode (unisonStackModeIn);
             unisonWavetablePositionSpreadState = clampUnison01 (unisonWavetablePositionSpreadIn);
             unisonWarpSpreadState = clampUnison01 (unisonWarpSpreadIn);
+        }
+
+        int32 oscillatorMipIndex (int32 oscillatorIndex, int32 mipIndex)
+        {
+            return (oscillatorIndex * mipLevelCount) + mipIndex;
+        }
+
+        int32 packedSlotMipIndex (int32 slotIndex, int32 mipIndex)
+        {
+            return (slotIndex * mipLevelCount) + mipIndex;
+        }
+
+        int32 packedReadinessIndex (int32 slotIndex, int32 mipIndex, int32 uploadedFrameIndex)
+        {
+            return (slotIndex * mipLevelCount * wavetableFrameCapacity)
+                 + (mipIndex * wavetableFrameCapacity) + uploadedFrameIndex;
+        }
+
+        int32 packedMipLength (int32 mipIndex)
+        {
+            let harmonicLength = (1 << std::intrinsics::clamp (mipIndex, 0, mipLevelCount - 1)) * 32;
+            return std::intrinsics::min (
+                samplesPerFrame, std::intrinsics::max (256, harmonicLength));
+        }
+
+        int32 packedMipOffset (int32 mipIndex)
+        {
+            int32 offset = 0;
+
+            for (int32 previousMip = 0; previousMip < mipIndex; ++previousMip)
+                offset += (packedMipLength (previousMip) + 1) * wavetableFrameCapacity;
+
+            return offset;
+        }
+
+        int32 packedFrameBase (int32 mipIndex, int32 uploadedFrameIndex)
+        {
+            return packedMipOffset (mipIndex)
+                 + uploadedFrameIndex * (packedMipLength (mipIndex) + 1);
+        }
+
+        int32 quantisePackedSourceValue (float32 value, float32 inverseScale, int32 maximum)
+        {
+            let scaled = value * inverseScale;
+            return std::intrinsics::clamp (
+                int32 (scaled + (scaled >= 0.0f ? 0.5f : -0.5f)), -maximum, maximum);
+        }
+
+        int32 packSourcePoint (float32 value, float32 derivative)
+        {
+            let valueBits = quantisePackedSourceValue (
+                value, float32 (packedSourceValueMaximum) / 1.5f, packedSourceValueMaximum)
+                & 0x3ffff;
+            let derivativeBits = quantisePackedSourceValue (
+                derivative, float32 (packedSourceDerivativeMaximum) / 0.5f,
+                packedSourceDerivativeMaximum);
+            return valueBits | (derivativeBits << packedSourceValueBits);
+        }
+
+        void writePackedPoolPoint (int32 slotIndex, int32 pointIndex, int32 packedPoint)
+        {
+            let chunkIndex = pointIndex / packedWavetableChunkSampleCount;
+            let indexWithinChunk = pointIndex % packedWavetableChunkSampleCount;
+
+            if (slotIndex == 0)
+            {
+                if (chunkIndex == 0) packedSlot0Chunk0.at (indexWithinChunk) = packedPoint;
+                else if (chunkIndex == 1) packedSlot0Chunk1.at (indexWithinChunk) = packedPoint;
+                else if (chunkIndex == 2) packedSlot0Chunk2.at (indexWithinChunk) = packedPoint;
+                else packedSlot0Chunk3.at (indexWithinChunk) = packedPoint;
+            }
+            else if (slotIndex == 1)
+            {
+                if (chunkIndex == 0) packedSlot1Chunk0.at (indexWithinChunk) = packedPoint;
+                else if (chunkIndex == 1) packedSlot1Chunk1.at (indexWithinChunk) = packedPoint;
+                else if (chunkIndex == 2) packedSlot1Chunk2.at (indexWithinChunk) = packedPoint;
+                else packedSlot1Chunk3.at (indexWithinChunk) = packedPoint;
+            }
+            else if (slotIndex == 2)
+            {
+                if (chunkIndex == 0) packedSlot2Chunk0.at (indexWithinChunk) = packedPoint;
+                else if (chunkIndex == 1) packedSlot2Chunk1.at (indexWithinChunk) = packedPoint;
+                else if (chunkIndex == 2) packedSlot2Chunk2.at (indexWithinChunk) = packedPoint;
+                else packedSlot2Chunk3.at (indexWithinChunk) = packedPoint;
+            }
+            else
+            {
+                if (chunkIndex == 0) packedSlot3Chunk0.at (indexWithinChunk) = packedPoint;
+                else if (chunkIndex == 1) packedSlot3Chunk1.at (indexWithinChunk) = packedPoint;
+                else if (chunkIndex == 2) packedSlot3Chunk2.at (indexWithinChunk) = packedPoint;
+                else packedSlot3Chunk3.at (indexWithinChunk) = packedPoint;
+            }
+        }
+
+        bool hasValidWavetableSamples (const float32[] sourceSamples)
+        {
+            for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                if (! isFiniteRuntimeValue (sourceSamples.at (sampleIndex)))
+                    return false;
+
+            return true;
+        }
+
+        void writePackedMipFrame (int32 slotIndex,
+                                  int32 mipIndex,
+                                  int32 uploadedFrameIndex,
+                                  const float32[] sourceSamples)
+        {
+            let length = packedMipLength (mipIndex);
+            let sourceStep = samplesPerFrame / length;
+            let destinationBase = packedFrameBase (mipIndex, uploadedFrameIndex);
+
+            for (int32 pointIndex = 0; pointIndex <= length; ++pointIndex)
+            {
+                let wrappedPoint = pointIndex == length ? 0 : pointIndex;
+                let sourceIndex = wrappedPoint * sourceStep;
+                let previousIndex = sourceIndex - sourceStep < 0
+                    ? sourceIndex - sourceStep + samplesPerFrame
+                    : sourceIndex - sourceStep;
+                let nextIndex = sourceIndex + sourceStep >= samplesPerFrame
+                    ? sourceIndex + sourceStep - samplesPerFrame
+                    : sourceIndex + sourceStep;
+                let value = sourceSamples.at (sourceIndex);
+                let derivative = 0.5f * (sourceSamples.at (nextIndex) - sourceSamples.at (previousIndex));
+                writePackedPoolPoint (
+                    slotIndex, destinationBase + pointIndex, packSourcePoint (value, derivative));
+            }
+        }
+
+        void clearPackedSlotState (int32 slotIndex)
+        {
+            for (int32 index = 0; index < mipLevelCount * wavetableFrameCapacity; ++index)
+                packedReadyFrameFlags.at (
+                    (slotIndex * mipLevelCount * wavetableFrameCapacity) + index) = 0;
+
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+                packedLoadedFrameCounts.at (packedSlotMipIndex (slotIndex, mipIndex)) = 0;
+        }
+
+        void clearOscillatorMipRequestState (int32 oscillatorIndex)
+        {
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+            {
+                let requestIndex = oscillatorMipIndex (oscillatorIndex, mipIndex);
+                oscillatorRequestedGenerationByMip.at (requestIndex) = 0;
+                oscillatorRequestedUrgencyByMip.at (requestIndex) = -1;
+            }
+        }
+
+        int32 findSparePackedSlot()
+        {
+            for (int32 slotIndex = 0; slotIndex < wavetableSlotCount; ++slotIndex)
+            {
+                bool active = false;
+
+                for (wrap<oscillatorCount> oscillator)
+                    if (oscillatorActiveSlot.at (oscillator) == slotIndex)
+                        active = true;
+
+                if (! active)
+                    return slotIndex;
+            }
+
+            return -1;
+        }
+
+        bool isPackedStagingComplete()
+        {
+            if (tableStagingOscillatorIndex < 0 || tableStagingSlotIndex < 0
+                || tableStagingGeneration <= 0 || tableStagingFrameCount <= 0)
+                return false;
+
+            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
+                if (packedLoadedFrameCounts.at (packedSlotMipIndex (
+                        tableStagingSlotIndex, mipIndex)) < tableStagingFrameCount)
+                    return false;
+
+            return true;
         }
 
         void clearTableBankState (int32 bankIndex)
@@ -2830,7 +3157,7 @@ namespace wt
             return -1;
         }
 
-        bool isStagingComplete()
+        bool isLegacyAStagingComplete()
         {
             if (stagingGeneration <= 0 || stagingFrameCount <= 0)
                 return false;
@@ -2842,7 +3169,7 @@ namespace wt
             return true;
         }
 
-        void commitStagingTable()
+        void commitLegacyAStagingTable()
         {
             let hadActiveTable = isPlayable != 0;
 
@@ -2884,7 +3211,66 @@ namespace wt
             }
 
             isPlayable = 1;
-            emitRuntimeServiceState();
+        }
+
+        void clearTableStagingIdentity()
+        {
+            tableStagingOscillatorIndex = -1;
+            tableStagingSlotIndex = -1;
+            tableStagingGeneration = 0;
+            tableStagingTableIndex = 0;
+            tableStagingFrameCount = 0;
+            tableStagingLastFrameIndex = 0;
+            tableStagingLastFrameIndexF = 0.0f;
+        }
+
+        void discardLegacyAStagingTable()
+        {
+            stagingGeneration = 0;
+            stagingTableIndex = 0;
+            stagingFrameCount = 0;
+            stagingLastFrameIndex = 0;
+            stagingLastFrameIndexF = 0.0f;
+            clearPendingTableState();
+        }
+
+        void commitPackedStagingTable()
+        {
+            let oscillator = tableStagingOscillatorIndex;
+            let committedSlot = tableStagingSlotIndex;
+            let hadActiveTable = oscillatorActiveSlot.at (oscillator) >= 0;
+
+            oscillatorCurrentGeneration.at (oscillator) = tableStagingGeneration;
+            oscillatorCurrentTableIndex.at (oscillator) = tableStagingTableIndex;
+            oscillatorFrameCount.at (oscillator) = tableStagingFrameCount;
+            oscillatorLastFrameIndex.at (oscillator) = tableStagingLastFrameIndex;
+            oscillatorLastFrameIndexF.at (oscillator) = tableStagingLastFrameIndexF;
+            oscillatorActiveSlot.at (oscillator) = committedSlot;
+
+            if (oscillator == oscillatorA)
+                commitLegacyAStagingTable();
+            else if (! hadActiveTable)
+            {
+                for (wrap<voiceCount> voice)
+                {
+                    let resolvedVoice = int32 (voice);
+                    phasors.at (oscillatorVoiceIndex (resolvedVoice, oscillator)).phase = 0.0f;
+                    resetOscillatorWarpRenderState (resolvedVoice, oscillator);
+                    resetOscillatorUnisonPhases (
+                        resolvedVoice, oscillator, maxUnisonVoiceCount, 0.0f, 0.0f);
+                    resetOscillatorUnisonWarpRenderState (resolvedVoice, oscillator);
+                }
+            }
+
+            WavetableSlotMonitor slotMonitor;
+            slotMonitor.oscillatorIndex = oscillator;
+            slotMonitor.activeSlotIndex = committedSlot;
+            slotMonitor.tableIndex = oscillatorCurrentTableIndex.at (oscillator);
+            slotMonitor.generation = oscillatorCurrentGeneration.at (oscillator);
+            wavetableSlotMonitorOut <- slotMonitor;
+
+            clearTableStagingIdentity();
+            emitRuntimeServiceState (oscillator);
         }
 
         void writeMipFrame (int32 bankIndex, int32 mipIndex, int32 frameIndex, const float32[] sourceSamples)
@@ -3205,11 +3591,14 @@ namespace wt
 
         void emitMipRequest (int32 mipIndex, int32 urgencyLevel)
         {
-            if (currentGeneration <= 0 || frameCount <= 0 || mipIndex < 0 || mipIndex >= mipLevelCount)
+            let requestIndex = oscillatorMipIndex (oscillatorA, mipIndex);
+
+            if (currentGeneration <= 0 || frameCount <= 0
+                || mipIndex < 0 || mipIndex >= mipLevelCount)
                 return;
 
-            if (requestedGenerationByMip.at (mipIndex) == currentGeneration
-                && requestedUrgencyByMip.at (mipIndex) >= urgencyLevel)
+            if (oscillatorRequestedGenerationByMip.at (requestIndex) == currentGeneration
+                && oscillatorRequestedUrgencyByMip.at (requestIndex) >= urgencyLevel)
                 return;
 
             WavetableMipRequest request;
@@ -3218,35 +3607,83 @@ namespace wt
             request.tableIndex = currentTableIndex;
             request.mipIndex = mipIndex;
             request.urgencyLevel = urgencyLevel;
-            requestedGenerationByMip.at (mipIndex) = currentGeneration;
-            requestedUrgencyByMip.at (mipIndex) = urgencyLevel;
+            oscillatorRequestedGenerationByMip.at (requestIndex) = currentGeneration;
+            oscillatorRequestedUrgencyByMip.at (requestIndex) = urgencyLevel;
             wavetableMipRequestOut <- request;
+
+            OscillatorWavetableMipRequest oscillatorRequest;
+            oscillatorRequest.dspSessionId = currentDspSessionId;
+            oscillatorRequest.oscillatorIndex = oscillatorA;
+            oscillatorRequest.generation = currentGeneration;
+            oscillatorRequest.tableIndex = currentTableIndex;
+            oscillatorRequest.mipIndex = mipIndex;
+            oscillatorRequest.urgencyLevel = urgencyLevel;
+            oscillatorWavetableMipRequestOut <- oscillatorRequest;
         }
 
-        void emitUploadAck (int32 generation, int32 tableIndex, int32 mipIndex, int32 frameIndex)
+        void emitUploadAck (int32 oscillatorIndex,
+                            int32 generation,
+                            int32 tableIndex,
+                            int32 mipIndex,
+                            int32 uploadedFrameIndex)
         {
-            WavetableUploadAck ack;
-            ack.dspSessionId = currentDspSessionId;
-            ack.generation = generation;
-            ack.tableIndex = tableIndex;
-            ack.mipIndex = mipIndex;
-            ack.frameIndex = frameIndex;
-            wavetableUploadAckOut <- ack;
+            OscillatorWavetableUploadAck oscillatorAck;
+            oscillatorAck.dspSessionId = currentDspSessionId;
+            oscillatorAck.oscillatorIndex = oscillatorIndex;
+            oscillatorAck.generation = generation;
+            oscillatorAck.tableIndex = tableIndex;
+            oscillatorAck.mipIndex = mipIndex;
+            oscillatorAck.frameIndex = uploadedFrameIndex;
+            oscillatorWavetableUploadAckOut <- oscillatorAck;
+
+            if (oscillatorIndex == oscillatorA)
+            {
+                WavetableUploadAck ack;
+                ack.dspSessionId = currentDspSessionId;
+                ack.generation = generation;
+                ack.tableIndex = tableIndex;
+                ack.mipIndex = mipIndex;
+                ack.frameIndex = uploadedFrameIndex;
+                wavetableUploadAckOut <- ack;
+            }
         }
 
-        void emitRuntimeServiceState()
+        void emitRuntimeServiceState (int32 oscillatorIndex)
         {
-            RuntimeServiceState state;
-            state.dspSessionId = currentDspSessionId;
-            state.generationFrontier = generationFrontier;
-            state.serviceState = isPlayable != 0 ? 2 : (stagingGeneration > 0 && stagingFrameCount > 0 ? 1 : 0);
-            state.hasActive = isPlayable != 0 ? 1 : 0;
-            state.activeTableIndex = isPlayable != 0 ? currentTableIndex : 0;
-            state.activeGeneration = isPlayable != 0 ? currentGeneration : 0;
-            state.hasLoading = stagingGeneration > 0 && stagingFrameCount > 0 ? 1 : 0;
-            state.loadingTableIndex = state.hasLoading != 0 ? stagingTableIndex : 0;
-            state.loadingGeneration = state.hasLoading != 0 ? stagingGeneration : 0;
-            runtimeServiceStateOut <- state;
+            let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
+
+            let hasActive = oscillatorActiveSlot.at (oscillator) >= 0 ? 1 : 0;
+            let hasLoading = tableStagingOscillatorIndex == oscillator
+                && tableStagingGeneration > 0 && tableStagingFrameCount > 0 ? 1 : 0;
+            OscillatorRuntimeServiceState oscillatorState;
+            oscillatorState.dspSessionId = currentDspSessionId;
+            oscillatorState.oscillatorIndex = oscillator;
+            oscillatorState.generationFrontier = oscillatorGenerationFrontier.at (oscillator);
+            oscillatorState.serviceState = hasLoading != 0 ? 1 : (hasActive != 0 ? 2 : 0);
+            oscillatorState.hasActive = hasActive;
+            oscillatorState.activeTableIndex = hasActive != 0
+                ? oscillatorCurrentTableIndex.at (oscillator) : 0;
+            oscillatorState.activeGeneration = hasActive != 0
+                ? oscillatorCurrentGeneration.at (oscillator) : 0;
+            oscillatorState.hasLoading = hasLoading;
+            oscillatorState.loadingTableIndex = hasLoading != 0 ? tableStagingTableIndex : 0;
+            oscillatorState.loadingGeneration = hasLoading != 0 ? tableStagingGeneration : 0;
+            oscillatorRuntimeServiceStateOut <- oscillatorState;
+
+            if (oscillator == oscillatorA)
+            {
+                RuntimeServiceState state;
+                state.dspSessionId = oscillatorState.dspSessionId;
+                state.generationFrontier = oscillatorState.generationFrontier;
+                state.serviceState = oscillatorState.serviceState;
+                state.hasActive = oscillatorState.hasActive;
+                state.activeTableIndex = oscillatorState.activeTableIndex;
+                state.activeGeneration = oscillatorState.activeGeneration;
+                state.hasLoading = oscillatorState.hasLoading;
+                state.loadingTableIndex = oscillatorState.loadingTableIndex;
+                state.loadingGeneration = oscillatorState.loadingGeneration;
+                runtimeServiceStateOut <- state;
+            }
         }
 
         int32 findNewestVisibleGeneration()
@@ -4353,84 +4790,192 @@ namespace wt
             completeModulationRuntimeInstall (upload.deliverySerial);
         }
 
-        event wavetableLoadBeginIn (WavetableLoadBegin request)
+        void beginWavetableLoad (int32 dspSessionId,
+                                 int32 oscillatorIndex,
+                                 int32 requestedGeneration,
+                                 int32 requestedTableIndex,
+                                 int32 requestedFrameCount)
         {
-            let resolvedFrameCount = resolveUploadedFrameCount (request.frameCount);
+            let resolvedFrameCount = resolveUploadedFrameCount (requestedFrameCount);
+            let oscillator = oscillatorIndex;
 
-            if (request.dspSessionId != currentDspSessionId
-                || request.generation <= 0
-                || request.generation < generationFrontier
-                || request.tableIndex < 0
-                || resolvedFrameCount == 0)
+            if (dspSessionId != currentDspSessionId
+                || oscillator < 0 || oscillator >= oscillatorCount
+                || requestedGeneration <= 0
+                || requestedGeneration < oscillatorGenerationFrontier.at (oscillator)
+                || requestedTableIndex < 0
+                || resolvedFrameCount == 0
+                || resolvedFrameCount > wavetableFrameCapacity)
                 return;
 
-            generationFrontier = std::intrinsics::max (generationFrontier, request.generation);
-            stagingGeneration = request.generation;
-            stagingTableIndex = request.tableIndex;
-            stagingFrameCount = resolvedFrameCount;
-            stagingLastFrameIndex = stagingFrameCount > 0 ? stagingFrameCount - 1 : 0;
-            stagingLastFrameIndexF = float32 (stagingLastFrameIndex);
-            clearPendingTableState();
-            emitRuntimeServiceState();
+            let nextStagingSlot = findSparePackedSlot();
+
+            if (nextStagingSlot < 0)
+                return;
+
+            let previousStagingOscillator = tableStagingOscillatorIndex;
+
+            if (previousStagingOscillator == oscillatorA)
+                discardLegacyAStagingTable();
+
+            oscillatorGenerationFrontier.at (oscillator) = std::intrinsics::max (
+                oscillatorGenerationFrontier.at (oscillator), requestedGeneration);
+            tableStagingOscillatorIndex = oscillator;
+            tableStagingSlotIndex = nextStagingSlot;
+            tableStagingGeneration = requestedGeneration;
+            tableStagingTableIndex = requestedTableIndex;
+            tableStagingFrameCount = resolvedFrameCount;
+            tableStagingLastFrameIndex = resolvedFrameCount - 1;
+            tableStagingLastFrameIndexF = float32 (tableStagingLastFrameIndex);
+            clearPackedSlotState (nextStagingSlot);
+            clearOscillatorMipRequestState (oscillator);
+
+            if (oscillator == oscillatorA)
+            {
+                generationFrontier = oscillatorGenerationFrontier.at (oscillatorA);
+                stagingGeneration = requestedGeneration;
+                stagingTableIndex = requestedTableIndex;
+                stagingFrameCount = resolvedFrameCount;
+                stagingLastFrameIndex = resolvedFrameCount - 1;
+                stagingLastFrameIndexF = float32 (stagingLastFrameIndex);
+                clearPendingTableState();
+            }
+
+            if (previousStagingOscillator >= 0 && previousStagingOscillator != oscillator)
+                emitRuntimeServiceState (previousStagingOscillator);
+
+            emitRuntimeServiceState (oscillator);
         }
 
-        event wavetableMipFrameIn (WavetableMipFrame newFrame)
+        void receiveWavetableMipFrame (int32 dspSessionId,
+                                       int32 oscillatorIndex,
+                                       int32 uploadedGeneration,
+                                       int32 uploadedTableIndex,
+                                       int32 uploadedMipIndex,
+                                       int32 uploadedFrameIndex,
+                                       const float32[] samples)
         {
-            let resolvedMipIndex = resolveMipIndex (newFrame.mipIndex);
+            let resolvedMipIndex = resolveMipIndex (uploadedMipIndex);
 
-            if (resolvedMipIndex < 0 || stagingFrameCount <= 0)
+            if (resolvedMipIndex < 0 || tableStagingFrameCount <= 0)
                 return;
 
-            if (newFrame.dspSessionId != currentDspSessionId
-                || newFrame.generation != stagingGeneration
-                || newFrame.tableIndex != stagingTableIndex)
+            if (dspSessionId != currentDspSessionId
+                || oscillatorIndex != tableStagingOscillatorIndex
+                || uploadedGeneration != tableStagingGeneration
+                || uploadedTableIndex != tableStagingTableIndex)
                 return;
 
-            if (newFrame.frameIndex < 0 || newFrame.frameIndex >= stagingFrameCount)
+            if (uploadedFrameIndex < 0 || uploadedFrameIndex >= tableStagingFrameCount
+                || ! hasValidWavetableSamples (samples))
                 return;
 
-            let readyIndex = bankedReadinessIndex (stagingBankIndex, resolvedMipIndex, newFrame.frameIndex);
+            let readyIndex = packedReadinessIndex (
+                tableStagingSlotIndex, resolvedMipIndex, uploadedFrameIndex);
 
-            if (readyFrameFlags.at (readyIndex) != 0)
+            if (packedReadyFrameFlags.at (readyIndex) != 0)
             {
                 emitUploadAck (
-                    newFrame.generation,
-                    newFrame.tableIndex,
+                    oscillatorIndex,
+                    uploadedGeneration,
+                    uploadedTableIndex,
                     resolvedMipIndex,
-                    newFrame.frameIndex
+                    uploadedFrameIndex
                 );
                 return;
             }
 
-            writeMipFrame (stagingBankIndex, resolvedMipIndex, newFrame.frameIndex, newFrame.samples);
-            readyFrameFlags.at (readyIndex) = 1;
-            loadedFrameCounts.at (bankedMipLevelIndex (stagingBankIndex, resolvedMipIndex)) += 1;
+            writePackedMipFrame (
+                tableStagingSlotIndex, resolvedMipIndex, uploadedFrameIndex, samples);
+            packedReadyFrameFlags.at (readyIndex) = 1;
+            packedLoadedFrameCounts.at (packedSlotMipIndex (
+                tableStagingSlotIndex, resolvedMipIndex)) += 1;
+
+            if (oscillatorIndex == oscillatorA)
+            {
+                let legacyReadyIndex = bankedReadinessIndex (
+                    stagingBankIndex, resolvedMipIndex, uploadedFrameIndex);
+                writeMipFrame (
+                    stagingBankIndex, resolvedMipIndex, uploadedFrameIndex, samples);
+                readyFrameFlags.at (legacyReadyIndex) = 1;
+                loadedFrameCounts.at (bankedMipLevelIndex (
+                    stagingBankIndex, resolvedMipIndex)) += 1;
+            }
 
             emitUploadAck (
-                newFrame.generation,
-                newFrame.tableIndex,
+                oscillatorIndex,
+                uploadedGeneration,
+                uploadedTableIndex,
                 resolvedMipIndex,
-                newFrame.frameIndex
+                uploadedFrameIndex
             );
 
-            if (isStagingComplete())
-                commitStagingTable();
+            if (isPackedStagingComplete())
+            {
+                if (tableStagingOscillatorIndex == oscillatorA
+                    && ! isLegacyAStagingComplete())
+                    return;
+
+                commitPackedStagingTable();
+            }
+        }
+
+        void abortWavetableLoad (int32 dspSessionId,
+                                 int32 oscillatorIndex,
+                                 int32 abortedGeneration,
+                                 int32 abortedTableIndex)
+        {
+            if (dspSessionId != currentDspSessionId
+                || oscillatorIndex != tableStagingOscillatorIndex
+                || abortedGeneration != tableStagingGeneration
+                || abortedTableIndex != tableStagingTableIndex)
+                return;
+
+            let abortedOscillator = tableStagingOscillatorIndex;
+
+            if (abortedOscillator == oscillatorA)
+                discardLegacyAStagingTable();
+
+            clearTableStagingIdentity();
+            emitRuntimeServiceState (abortedOscillator);
+        }
+
+        event wavetableLoadBeginIn (WavetableLoadBegin request)
+        {
+            beginWavetableLoad (request.dspSessionId, oscillatorA, request.generation,
+                                request.tableIndex, request.frameCount);
+        }
+
+        event oscillatorWavetableLoadBeginIn (OscillatorWavetableLoadBegin request)
+        {
+            beginWavetableLoad (request.dspSessionId, request.oscillatorIndex,
+                                request.generation, request.tableIndex, request.frameCount);
+        }
+
+        event wavetableMipFrameIn (WavetableMipFrame frame)
+        {
+            receiveWavetableMipFrame (frame.dspSessionId, oscillatorA, frame.generation,
+                                      frame.tableIndex, frame.mipIndex, frame.frameIndex,
+                                      frame.samples);
+        }
+
+        event oscillatorWavetableMipFrameIn (OscillatorWavetableMipFrame frame)
+        {
+            receiveWavetableMipFrame (frame.dspSessionId, frame.oscillatorIndex,
+                                      frame.generation, frame.tableIndex, frame.mipIndex,
+                                      frame.frameIndex, frame.samples);
         }
 
         event serviceLoadAbortIn (ServiceLoadAbort abort)
         {
-            if (abort.dspSessionId != currentDspSessionId
-                || abort.generation != stagingGeneration
-                || abort.tableIndex != stagingTableIndex)
-                return;
+            abortWavetableLoad (abort.dspSessionId, oscillatorA,
+                                abort.generation, abort.tableIndex);
+        }
 
-            stagingGeneration = 0;
-            stagingTableIndex = 0;
-            stagingFrameCount = 0;
-            stagingLastFrameIndex = 0;
-            stagingLastFrameIndexF = 0.0f;
-            clearPendingTableState();
-            emitRuntimeServiceState();
+        event oscillatorServiceLoadAbortIn (OscillatorServiceLoadAbort abort)
+        {
+            abortWavetableLoad (abort.dspSessionId, abort.oscillatorIndex,
+                                abort.generation, abort.tableIndex);
         }
 
         void main()
@@ -4438,6 +4983,8 @@ namespace wt
             previewFrequencyHzState = previewFrequencyHzState < 0.0f ? 0.0f : previewFrequencyHzState;
             glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
             updateUnisonInputState();
+            for (wrap<oscillatorCount> oscillator)
+                clearOscillatorMipRequestState (int32 (oscillator));
             initialiseWarpDecimatorTaps();
             resetAllWarpRenderState();
 
@@ -4480,7 +5027,7 @@ namespace wt
 
                 if (! hasEmittedInitialRuntimeState)
                 {
-                    emitRuntimeServiceState();
+                    emitRuntimeServiceState (oscillatorA);
                     hasEmittedInitialRuntimeState = true;
                 }
 
