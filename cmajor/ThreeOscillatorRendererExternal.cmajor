@@ -1,0 +1,6 @@
+namespace CosimoThreeOscillatorRenderer
+{
+    external int32 renderAll (float32[] packedFloats,
+                              int32[] packedInts,
+                              int32[] tablePool);
+}
