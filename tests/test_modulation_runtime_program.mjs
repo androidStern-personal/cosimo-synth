@@ -23,11 +23,9 @@ const voiceSources = [
     ["slide", null],
 ];
 
-const voiceTargets = [
+const oscillatorTargets = [
     "wavetablePosition",
     "warpAmount",
-    "filterCutoffOctaves",
-    "filterQ",
     "pitchSemitones",
     "ampGainDb",
     "pan",
@@ -37,6 +35,13 @@ const voiceTargets = [
     "unisonWavetablePositionSpread",
     "unisonWarpSpread",
 ];
+const voiceTargets = [
+    ...["A", "B", "C"].flatMap((oscillator) => (
+        oscillatorTargets.map((target) => `osc${oscillator}.${target}`)
+    )),
+    "filterCutoffOctaves",
+    "filterQ",
+];
 
 function modulationRoute(overrides = {}) {
     return {
@@ -45,7 +50,7 @@ function modulationRoute(overrides = {}) {
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
-        targetKind: "wavetablePosition",
+        targetKind: "oscA.wavetablePosition",
         amount: 0.25,
         reducer: "max",
         ...overrides,
@@ -118,7 +123,7 @@ test("101 active voice mappings compile into 101 deterministic runtime cells", a
     assert.equal(program.voiceRouteAmounts[100], 1.01);
 });
 
-test("all 624 legal mappings compile without truncation", async () => {
+test("all 884 legal mappings compile without truncation", async () => {
     const [{ compileModulationRuntimeProgram, MODULATION_MAPPING_CELL_COUNT }, modulation] = await Promise.all([
         programModulePromise,
         modulationModulePromise,
@@ -149,7 +154,7 @@ test("all 624 legal mappings compile without truncation", async () => {
     assert.equal(routes.length, MODULATION_MAPPING_CELL_COUNT);
     assert.deepEqual(
         [program.voiceRouteCount, program.macroVoiceRouteCount, program.voiceRackRouteCount, program.macroRackRouteCount],
-        [108, 48, 324, 144],
+        [288, 128, 324, 144],
     );
 });
 
@@ -187,7 +192,7 @@ test("disabled voice mappings retain their finite base amount in the determinist
     const cellIndex = getModulationArticulationCellIndex(disabledRoute);
     const program = compileModulationRuntimeProgram([disabledRoute]);
 
-    assert.equal(cellIndex, 3);
+    assert.equal(cellIndex, 31);
     assert.equal(program.voiceRouteCount, 0, "disabled mappings must emit no active instruction");
     assert.equal(program.voiceRouteAmounts[cellIndex], 0.625);
     assert.equal(Number.isFinite(program.voiceRouteAmounts[cellIndex]), true);
@@ -227,12 +232,12 @@ test("only synth-voice destinations expose a per-note articulation cell", async 
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: 0.5,
         reducer: "max",
     };
 
-    assert.equal(getModulationArticulationCellIndex(voiceRoute), 6);
+    assert.equal(getModulationArticulationCellIndex(voiceRoute), 4);
     assert.equal(getModulationArticulationCellIndex({
         ...voiceRoute,
         id: "rack-reverb",
@@ -244,12 +249,12 @@ test("stored duplicate pairs reject the complete modulation document", async () 
     const modulation = await modulationModulePromise;
     const first = modulation.createDefaultRoute({
         id: "first",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: -0.25,
     });
     const replacement = modulation.createDefaultRoute({
         id: "replacement",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: 0.75,
     });
 
@@ -272,18 +277,18 @@ test("stored duplicate pairs are rejected even when one row is disabled", async 
     const modulation = await modulationModulePromise;
     const first = modulation.createDefaultRoute({
         id: "first",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: 0.75,
     });
     const second = modulation.createDefaultRoute({
         id: "second",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: 0.75,
     });
     const disabledReplacement = modulation.createDefaultRoute({
         id: "replacement",
         enabled: false,
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: -0.5,
         polarity: "bipolar",
     });
@@ -301,12 +306,12 @@ test("runtime compilation rejects duplicate cells instead of repairing them last
     const modulation = await modulationModulePromise;
     const first = modulation.createDefaultRoute({
         id: "first",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: -0.25,
     });
     const duplicate = modulation.createDefaultRoute({
         id: "duplicate",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: 0.75,
     });
 
@@ -320,7 +325,7 @@ test("stored mappings with an unknown target reject the complete document", asyn
     const modulation = await modulationModulePromise;
     const genuine = modulation.createDefaultRoute({
         id: "genuine-wavetable",
-        targetKind: "wavetablePosition",
+        targetKind: "oscA.wavetablePosition",
         amount: 0.25,
     });
     const serialized = JSON.stringify({
@@ -339,7 +344,7 @@ test("stored mappings with an unknown source reject the complete document", asyn
     const modulation = await modulationModulePromise;
     const genuine = modulation.createDefaultRoute({
         id: "genuine-pan",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: -0.25,
     });
     const serialized = JSON.stringify({
@@ -356,8 +361,8 @@ test("stored mappings with an unknown source reject the complete document", asyn
 
 test("stored ID collisions reject the complete document", async () => {
     const modulation = await modulationModulePromise;
-    const first = modulation.createDefaultRoute({ id: "collision", targetKind: "pan" });
-    const second = modulation.createDefaultRoute({ id: "collision", targetKind: "warpAmount" });
+    const first = modulation.createDefaultRoute({ id: "collision", targetKind: "oscA.pan" });
+    const second = modulation.createDefaultRoute({ id: "collision", targetKind: "oscA.warpAmount" });
 
     const serialized = JSON.stringify({
         ...modulation.createDefaultModulationState(),
@@ -373,8 +378,8 @@ test("strict parsing exposes stored ID collisions as a typed rejection", async (
     const serialized = JSON.stringify({
         ...modulation.createDefaultModulationState(),
         routes: [
-            modulation.createDefaultRoute({ id: "collision", targetKind: "pan" }),
-            modulation.createDefaultRoute({ id: "collision", targetKind: "warpAmount" }),
+            modulation.createDefaultRoute({ id: "collision", targetKind: "oscA.pan" }),
+            modulation.createDefaultRoute({ id: "collision", targetKind: "oscA.warpAmount" }),
         ],
     });
 
@@ -387,15 +392,15 @@ test("strict parsing exposes stored ID collisions as a typed rejection", async (
 test("generic Add chooses an unused source-target pair", async () => {
     const modulation = await modulationModulePromise;
     const routes = [
-        modulation.createDefaultRoute({ id: "wavetable", targetKind: "wavetablePosition" }),
-        modulation.createDefaultRoute({ id: "warp", targetKind: "warpAmount" }),
+        modulation.createDefaultRoute({ id: "wavetable", targetKind: "oscA.wavetablePosition" }),
+        modulation.createDefaultRoute({ id: "warp", targetKind: "oscA.warpAmount" }),
     ];
 
     const next = modulation.createFirstAvailableModulationRoute(routes);
 
     assert.equal(next?.sourceKind, "mseg");
     assert.equal(next?.sourceSlot, 1);
-    assert.equal(next?.targetKind, "filterCutoffOctaves");
+    assert.equal(next?.targetKind, "oscA.pitchSemitones");
 });
 
 test("explicit Add rejects a route ID collision without changing state", async () => {
@@ -406,16 +411,21 @@ test("explicit Add rejects a route ID collision without changing state", async (
             storedWrites.push({ key, value });
         },
     });
-    const existingRoute = bridge.getState().routes[0];
+    const existingRoute = modulation.createDefaultRoute({
+        id: "collision",
+        targetKind: "oscA.wavetablePosition",
+    });
+    assert.notEqual(bridge.addRoute(existingRoute), null);
+    storedWrites.length = 0;
 
     const added = bridge.addRoute(modulation.createDefaultRoute({
         id: existingRoute.id,
-        targetKind: "pan",
+        targetKind: "oscA.pan",
     }));
 
     const routes = bridge.getState().routes;
     assert.equal(added, null);
-    assert.equal(routes.length, 2);
+    assert.deepEqual(routes, [existingRoute]);
     assert.equal(storedWrites.length, 0);
 });
 
@@ -427,7 +437,7 @@ test("changing an enabled mapping through zero emits one amount update without r
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
-        targetKind: "wavetablePosition",
+        targetKind: "oscA.wavetablePosition",
         amount: -0.25,
         reducer: "max",
     };
@@ -478,7 +488,7 @@ test("adding a mapping emits one atomic structural reinstall", async () => {
     const firstRoute = modulationRoute();
     const addedRoute = modulationRoute({
         id: "pan::mseg-1",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
     });
     await assertSingleStructuralReinstall([firstRoute], [firstRoute, addedRoute]);
 });
@@ -487,7 +497,7 @@ test("removing a mapping emits one atomic structural reinstall", async () => {
     const retainedRoute = modulationRoute();
     const removedRoute = modulationRoute({
         id: "pan::mseg-1",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
     });
     await assertSingleStructuralReinstall([retainedRoute, removedRoute], [retainedRoute]);
 });
@@ -508,14 +518,14 @@ test("reordering unchanged topology emits only changed deterministic-cell amount
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
-        targetKind: "wavetablePosition",
+        targetKind: "oscA.wavetablePosition",
         amount: 0.25,
         reducer: "max",
     };
     const panRoute = {
         ...wavetableRoute,
         id: "pan::mseg-1",
-        targetKind: "pan",
+        targetKind: "oscA.pan",
         amount: -0.25,
     };
 
@@ -526,7 +536,7 @@ test("reordering unchanged topology emits only changed deterministic-cell amount
 
     assert.deepEqual(events, [
         { endpointID: MODULATION_AMOUNT_ENDPOINT_ID, value: { pathKind: 1, cellIndex: 0, amount: 0.5 } },
-        { endpointID: MODULATION_AMOUNT_ENDPOINT_ID, value: { pathKind: 1, cellIndex: 6, amount: -0.5 } },
+        { endpointID: MODULATION_AMOUNT_ENDPOINT_ID, value: { pathKind: 1, cellIndex: 4, amount: -0.5 } },
     ]);
 });
 

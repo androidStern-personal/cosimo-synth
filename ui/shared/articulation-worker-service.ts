@@ -245,14 +245,21 @@ export class ArticulationWorkerService {
 
     private applyPatchValues(value: unknown) {
         let nextPatchValues: Record<string, number>;
-        try {
-            nextPatchValues = deserializeUiPatchValues(value);
-        } catch (error) {
-            console.error("[articulation-worker] Stored patch-base state is invalid.", error);
+        if (value === undefined) {
             if (this.hasPatchValues) {
                 return;
             }
             nextPatchValues = createDefaultUiPatchValues();
+        } else {
+            try {
+                nextPatchValues = deserializeUiPatchValues(value);
+            } catch (error) {
+                console.error("[articulation-worker] Stored patch-base state is invalid.", error);
+                if (this.hasPatchValues) {
+                    return;
+                }
+                nextPatchValues = createDefaultUiPatchValues();
+            }
         }
         const nextDependencyToken = getArticulationPatchValuesDependencyToken(nextPatchValues);
         const dependencyChanged = nextDependencyToken !== this.patchValuesDependencyToken;
@@ -267,11 +274,17 @@ export class ArticulationWorkerService {
 
     private applyModulationState(value: unknown) {
         let nextModulationState = createDefaultModulationState();
-        if (value !== undefined) {
+        if (value === undefined) {
+            if (this.hasModulationState) {
+                return;
+            }
+        } else {
             const parsedState = parseModulationState(value);
             if (parsedState._tag === "err") {
                 console.error("[articulation-worker] Stored modulation state is invalid.", parsedState.error);
-                return;
+                if (this.hasModulationState) {
+                    return;
+                }
             } else {
                 nextModulationState = parsedState.value;
             }

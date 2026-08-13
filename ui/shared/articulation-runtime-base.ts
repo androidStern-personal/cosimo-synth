@@ -10,7 +10,7 @@ import { getModulationArticulationCellIndex } from "./modulation-runtime-program
 import { clampNormalizedValue } from "./cosimo-ids";
 import { allTargetDescriptors } from "./target-descriptor";
 
-export const UI_PATCH_VALUES_STATE_KEY = "uiPatchValues.v1";
+export const UI_PATCH_VALUES_STATE_KEY = "uiPatchValues.v2";
 
 /**
  * Stable projection of modulation state that can actually change a resolved
@@ -73,9 +73,6 @@ export function deserializeUiPatchValues(value: unknown): Record<string, number>
             throw new Error(`${UI_PATCH_VALUES_STATE_KEY} is not valid JSON.`);
         }
     }
-    if (document === undefined) {
-        return createDefaultUiPatchValues();
-    }
     if (!document || typeof document !== "object" || Array.isArray(document)) {
         throw new Error(`${UI_PATCH_VALUES_STATE_KEY} must be a flat object.`);
     }
@@ -83,12 +80,18 @@ export function deserializeUiPatchValues(value: unknown): Record<string, number>
     const record = document as Record<string, unknown>;
     const values: Record<string, number> = {};
     const descriptors = allTargetDescriptors();
-    for (const descriptor of descriptors) {
-        const rawValue = record[descriptor.targetId];
-        if (rawValue === undefined) {
-            values[descriptor.targetId] = descriptor.initialValue;
-            continue;
+    const descriptorIds = new Set(descriptors.map((descriptor) => String(descriptor.targetId)));
+    for (const key of Reflect.ownKeys(record)) {
+        if (typeof key !== "string" || !descriptorIds.has(key)) {
+            throw new Error(`${UI_PATCH_VALUES_STATE_KEY} has unknown target "${String(key)}".`);
         }
+    }
+
+    for (const descriptor of descriptors) {
+        if (!Object.hasOwn(record, descriptor.targetId)) {
+            throw new Error(`${UI_PATCH_VALUES_STATE_KEY} is missing target "${descriptor.targetId}".`);
+        }
+        const rawValue = record[descriptor.targetId];
         if (typeof rawValue !== "number" || !Number.isFinite(rawValue) || rawValue < 0 || rawValue > 1) {
             throw new Error(`${UI_PATCH_VALUES_STATE_KEY}.${descriptor.targetId} must be within 0..1.`);
         }

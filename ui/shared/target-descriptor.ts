@@ -10,7 +10,7 @@
 
 import { type ArticulationVoiceParameterId } from "./articulation-image";
 import { type Brand, type NormalizedValue, type TargetId } from "./cosimo-ids";
-import { type ModulationTargetKind } from "./modulation";
+import { type ModulationTargetKind } from "./modulation-targets";
 import {
     RACK_EFFECT_DESCRIPTORS,
     type RackParameterDescriptor,
@@ -278,43 +278,43 @@ function connectivityFor(targetId: TargetId, workspace: "voice" | "effects"): Ta
             return {
                 binding: boundEndpoint("wavetablePosition", identityToEngine, identityFromEngine),
                 articulationParameterId: "framePosition",
-                modulationTargetKind: "wavetablePosition",
+                modulationTargetKind: "oscA.wavetablePosition",
             };
         case "wavetable.warp":
             return {
                 binding: boundEndpoint("warpAmount", identityToEngine, identityFromEngine),
                 articulationParameterId: "warpAmount",
-                modulationTargetKind: "warpAmount",
+                modulationTargetKind: "oscA.warpAmount",
             };
         case "wavetable.unison":
             return {
                 binding: boundEndpoint("unisonDetune", identityToEngine, identityFromEngine),
                 articulationParameterId: "unisonDetune",
-                modulationTargetKind: "unisonDetune",
+                modulationTargetKind: "oscA.unisonDetune",
             };
         case "wavetable.unison-blend":
             return {
                 binding: boundEndpoint("unisonBlend", identityToEngine, identityFromEngine),
                 articulationParameterId: "unisonBlend",
-                modulationTargetKind: "unisonBlend",
+                modulationTargetKind: "oscA.unisonBlend",
             };
         case "wavetable.unison-width":
             return {
                 binding: boundEndpoint("unisonWidth", identityToEngine, identityFromEngine),
                 articulationParameterId: "unisonWidth",
-                modulationTargetKind: "unisonWidth",
+                modulationTargetKind: "oscA.unisonWidth",
             };
         case "wavetable.unison-wt-spread":
             return {
                 binding: boundEndpoint("unisonWavetablePositionSpread", identityToEngine, identityFromEngine),
                 articulationParameterId: "unisonWavetablePositionSpread",
-                modulationTargetKind: "unisonWavetablePositionSpread",
+                modulationTargetKind: "oscA.unisonWavetablePositionSpread",
             };
         case "wavetable.unison-warp-spread":
             return {
                 binding: boundEndpoint("unisonWarpSpread", identityToEngine, identityFromEngine),
                 articulationParameterId: "unisonWarpSpread",
-                modulationTargetKind: "unisonWarpSpread",
+                modulationTargetKind: "oscA.unisonWarpSpread",
             };
         case "voice-filter.cutoff":
             return {
@@ -332,19 +332,19 @@ function connectivityFor(targetId: TargetId, workspace: "voice" | "effects"): Ta
             return {
                 binding: boundEndpoint("pan", panToEngine, panFromEngine),
                 articulationParameterId: "pan",
-                modulationTargetKind: "pan",
+                modulationTargetKind: "oscA.pan",
             };
         case "wavetable.tune":
             return {
                 binding: { _tag: "unbacked", reason: "no-endpoint" },
                 articulationParameterId: null,
-                modulationTargetKind: "pitchSemitones",
+                modulationTargetKind: "oscA.pitchSemitones",
             };
         case "amp-pan.level":
             return {
                 binding: { _tag: "unbacked", reason: "no-endpoint" },
                 articulationParameterId: null,
-                modulationTargetKind: "ampGainDb",
+                modulationTargetKind: "oscA.ampGainDb",
             };
         default:
             return {
@@ -511,6 +511,12 @@ const TARGET_DESCRIPTOR_BY_ID = new Map<string, TargetDescriptor>(
     TARGET_DESCRIPTORS.map((descriptor) => [descriptor.targetId, descriptor]),
 );
 
+const TARGET_DESCRIPTOR_BY_MODULATION_KIND = new Map<ModulationTargetKind, TargetDescriptor>(
+    TARGET_DESCRIPTORS.flatMap((descriptor) => descriptor.modulationTargetKind === null
+        ? []
+        : [[descriptor.modulationTargetKind, descriptor] as const]),
+);
+
 /** The target string was not a known parameter. */
 export class UnknownTarget extends Error {
     readonly _tag = "UnknownTarget" as const;
@@ -553,6 +559,32 @@ export function getTargetDescriptor(targetId: TargetId): TargetDescriptor {
  */
 export function allTargetDescriptors(): ReadonlyArray<TargetDescriptor> {
     return TARGET_DESCRIPTORS;
+}
+
+/**
+ * Resolve a modulation target label from the target descriptor catalog.
+ * B/C targets intentionally reuse A's display policy while retaining their own identity.
+ */
+export function getModulationTargetDisplayLabel(targetKind: ModulationTargetKind): string {
+    const oscillatorMatch = /^osc([ABC])\.(.+)$/.exec(targetKind);
+    if (oscillatorMatch !== null) {
+        // SAFETY: A/B/C modulation kinds share one closed parameter-kind union, so projecting
+        // the oscillator identity to A preserves the target's descriptor-owned display policy.
+        const descriptorKind = `oscA.${oscillatorMatch[2]}` as ModulationTargetKind;
+        const descriptor = TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(descriptorKind);
+        if (descriptor === undefined) {
+            return shouldNeverHappen(`Modulation target "${targetKind}" has no display descriptor`);
+        }
+        return `${oscillatorMatch[1]} ${descriptor.label.toUpperCase()}`;
+    }
+
+    const descriptor = TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(targetKind);
+    if (descriptor === undefined) {
+        return shouldNeverHappen(`Modulation target "${targetKind}" has no display descriptor`);
+    }
+    return descriptor.workspace === "effects"
+        ? `${descriptor.moduleId.toUpperCase()} ${descriptor.label.toUpperCase()}`
+        : descriptor.label.toUpperCase();
 }
 
 /**

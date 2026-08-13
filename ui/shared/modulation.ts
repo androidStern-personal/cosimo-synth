@@ -22,10 +22,25 @@ import {
     type MsegShape,
     type MsegState,
 } from "./mseg";
+import {
+    MODULATION_SOURCE_IDENTITIES,
+    MODULATION_TARGET_IDENTITIES,
+    getVoiceModulationParameterKind,
+    parseModulationTargetKind as parseCanonicalModulationTargetKind,
+    type ModulationSourceId,
+    type ModulationSourceKind,
+    type ModulationTargetKind,
+    type RackModulationTargetKind,
+    type VoiceModulationTargetKind,
+} from "./modulation-targets";
 import { buildModulationRuntimeProgramEvents } from "./modulation-runtime-program";
 import { err, ok, type Result } from "./result";
+import { getModulationTargetDisplayLabel } from "./target-descriptor";
 
-export const MODULATION_STATE_KEY = "modulation.v2";
+/** Persisted-state key for the hard-forked modulation contract. */
+export const MODULATION_STATE_KEY = "modulation.v4";
+/** Current strict persisted modulation envelope version. */
+export const MODULATION_STATE_VERSION = 4;
 export const MODULATION_MSEG_SLOT_COUNT = 3;
 export const MODULATION_ENV_SLOT_COUNT = 3;
 export const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
@@ -69,34 +84,23 @@ const ROUTE_AMOUNT_STEPS = {
     unisonWarpSpread: 0.001,
 } as const;
 
-export type RackModulationTargetKind = `rack.${string}`;
-
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
     .filter((parameter) => parameter.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map<RackModulationTargetKind, RackParameterDescriptor>(
     RACK_MODULATION_PARAMETERS.map((parameter) => [`rack.${parameter.endpointID}`, parameter]),
 );
 
-export type ModulationSourceKind = "mseg" | "env" | "velocity" | "pressure" | "slide" | "macro";
-export type ModulationTargetKind =
-    | "wavetablePosition"
-    | "warpAmount"
-    | "filterCutoffOctaves"
-    | "filterQ"
-    | "pitchSemitones"
-    | "ampGainDb"
-    | "pan"
-    | "unisonDetune"
-    | "unisonBlend"
-    | "unisonWidth"
-    | "unisonWavetablePositionSpread"
-    | "unisonWarpSpread"
-    | RackModulationTargetKind;
+export type {
+    ModulationSourceKind,
+    ModulationTargetKind,
+    RackModulationTargetKind,
+    VoiceModulationTargetKind,
+} from "./modulation-targets";
 export type ModulationPolarity = "unipolar" | "bipolar";
 export type ModulationReducer = "max" | "mean";
 
 export type ModulationSourceOption = {
-    value: string;
+    value: ModulationSourceId;
     label: string;
     sourceKind: ModulationSourceKind;
     sourceSlot: number | null;
@@ -137,7 +141,7 @@ export type ModulationRouteUpdate = Partial<Omit<ModulationRoute, "id">>;
 
 export type ModulationState = {
     format: "cosimo.modulation";
-    version: 2;
+    version: 4;
     msegSlots: ModulationMsegSlot[];
     envelopeSlots: ModulationEnvelope[];
     routes: ModulationRoute[];
@@ -183,40 +187,33 @@ export type ModulationRuntimeEvent = {
     value: unknown;
 };
 
-export const MODULATION_SOURCE_OPTIONS: ModulationSourceOption[] = [
-    { value: "mseg-1", label: "MSEG 1", sourceKind: "mseg", sourceSlot: 1 },
-    { value: "mseg-2", label: "MSEG 2", sourceKind: "mseg", sourceSlot: 2 },
-    { value: "mseg-3", label: "MSEG 3", sourceKind: "mseg", sourceSlot: 3 },
-    { value: "env-1", label: "ENV 1", sourceKind: "env", sourceSlot: 1 },
-    { value: "env-2", label: "ENV 2", sourceKind: "env", sourceSlot: 2 },
-    { value: "env-3", label: "ENV 3", sourceKind: "env", sourceSlot: 3 },
-    { value: "macro-1", label: "MACRO 1", sourceKind: "macro", sourceSlot: 1 },
-    { value: "macro-2", label: "MACRO 2", sourceKind: "macro", sourceSlot: 2 },
-    { value: "macro-3", label: "MACRO 3", sourceKind: "macro", sourceSlot: 3 },
-    { value: "macro-4", label: "MACRO 4", sourceKind: "macro", sourceSlot: 4 },
-    { value: "velocity", label: "VEL", sourceKind: "velocity", sourceSlot: null },
-    { value: "pressure", label: "AT", sourceKind: "pressure", sourceSlot: null },
-    { value: "slide", label: "SLIDE", sourceKind: "slide", sourceSlot: null },
-];
+const MODULATION_SOURCE_LABELS: Readonly<Record<ModulationSourceId, string>> = {
+    "mseg-1": "MSEG 1",
+    "mseg-2": "MSEG 2",
+    "mseg-3": "MSEG 3",
+    "env-1": "ENV 1",
+    "env-2": "ENV 2",
+    "env-3": "ENV 3",
+    velocity: "VEL",
+    pressure: "AT",
+    slide: "SLIDE",
+    "macro-1": "MACRO 1",
+    "macro-2": "MACRO 2",
+    "macro-3": "MACRO 3",
+    "macro-4": "MACRO 4",
+};
 
-export const MODULATION_TARGET_OPTIONS: ModulationTargetOption[] = [
-    { value: "wavetablePosition", label: "WT POS" },
-    { value: "warpAmount", label: "WARP" },
-    { value: "filterCutoffOctaves", label: "CUTOFF" },
-    { value: "filterQ", label: "RES" },
-    { value: "pitchSemitones", label: "PITCH" },
-    { value: "ampGainDb", label: "AMP" },
-    { value: "pan", label: "PAN" },
-    { value: "unisonDetune", label: "UNI DET" },
-    { value: "unisonBlend", label: "UNI BLEND" },
-    { value: "unisonWidth", label: "UNI WIDTH" },
-    { value: "unisonWavetablePositionSpread", label: "UNI WT" },
-    { value: "unisonWarpSpread", label: "UNI WARP" },
-    ...RACK_MODULATION_PARAMETERS.map((parameter) => ({
-        value: `rack.${parameter.endpointID}` as RackModulationTargetKind,
-        label: `${parameter.effectId.toUpperCase()} ${parameter.shortLabel.toUpperCase()}`,
-    })),
-];
+export const MODULATION_SOURCE_OPTIONS: ModulationSourceOption[] = MODULATION_SOURCE_IDENTITIES.map((identity) => ({
+    value: identity.id,
+    label: MODULATION_SOURCE_LABELS[identity.id],
+    sourceKind: identity.sourceKind,
+    sourceSlot: identity.sourceSlot,
+}));
+
+export const MODULATION_TARGET_OPTIONS: ModulationTargetOption[] = MODULATION_TARGET_IDENTITIES.map((identity) => ({
+    value: identity.kind,
+    label: getModulationTargetDisplayLabel(identity.kind),
+}));
 
 type StoredStateMessage = {
     key?: unknown;
@@ -303,7 +300,7 @@ function getRouteAmountLimit(targetKind: ModulationTargetKind) {
     if (rackParameter !== undefined) {
         return getRackRouteAmountLimit(rackParameter);
     }
-    return ROUTE_AMOUNT_LIMITS[targetKind as keyof typeof ROUTE_AMOUNT_LIMITS];
+    return ROUTE_AMOUNT_LIMITS[getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)];
 }
 
 function getRouteAmountStep(targetKind: ModulationTargetKind) {
@@ -311,7 +308,7 @@ function getRouteAmountStep(targetKind: ModulationTargetKind) {
     if (rackParameter !== undefined) {
         return rackParameter.modulationApplication === "octaves" ? 0.01 : (rackParameter.max - rackParameter.min) / 1000;
     }
-    return ROUTE_AMOUNT_STEPS[targetKind as keyof typeof ROUTE_AMOUNT_STEPS];
+    return ROUTE_AMOUNT_STEPS[getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)];
 }
 
 function getRouteAmountMagnitudeLimit(targetKind: ModulationTargetKind) {
@@ -447,7 +444,7 @@ export function formatModulationAmountReadout(
         return `${prefix}${formatMagnitude(clampedAmount, Math.abs(clampedAmount) < 10 ? 2 : 1)}${unit ? ` ${unit}` : ""}`;
     }
 
-    switch (targetKind) {
+    switch (getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)) {
         case "wavetablePosition":
             return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
         case "warpAmount":
@@ -495,7 +492,7 @@ export function formatModulationAmountEditingValue(targetKind: ModulationTargetK
         );
     }
 
-    switch (targetKind) {
+    switch (getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)) {
         case "wavetablePosition":
         case "warpAmount":
         case "unisonDetune":
@@ -532,7 +529,11 @@ export function parseModulationAmountEditingValue(targetKind: ModulationTargetKi
     let suffixDirection = 1;
     let numericText = normalizedText;
 
-    if (targetKind === "pan") {
+    const parameterKind = isRackModulationTarget(targetKind)
+        ? null
+        : getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind);
+
+    if (parameterKind === "pan") {
         if (numericText.endsWith("l")) {
             suffixDirection = -1;
             numericText = numericText.slice(0, -1);
@@ -560,18 +561,18 @@ export function parseModulationAmountEditingValue(targetKind: ModulationTargetKi
     }
 
     if (
-        targetKind === "wavetablePosition"
-        || targetKind === "warpAmount"
-        || targetKind === "unisonDetune"
-        || targetKind === "unisonBlend"
-        || targetKind === "unisonWidth"
-        || targetKind === "unisonWavetablePositionSpread"
-        || targetKind === "unisonWarpSpread"
+        parameterKind === "wavetablePosition"
+        || parameterKind === "warpAmount"
+        || parameterKind === "unisonDetune"
+        || parameterKind === "unisonBlend"
+        || parameterKind === "unisonWidth"
+        || parameterKind === "unisonWavetablePositionSpread"
+        || parameterKind === "unisonWarpSpread"
     ) {
         return clampModulationRouteAmount(targetKind, numericValue / 100);
     }
 
-    if (targetKind === "pan") {
+    if (parameterKind === "pan") {
         const signedValue = /^[+-]/.test(numericText)
             ? numericValue
             : (Math.abs(numericValue) * suffixDirection);
@@ -589,7 +590,7 @@ export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
     if (isRackModulationTarget(targetKind)) {
         return "Rack modulation adds to the base control and clamps to the effect's authored range.";
     }
-    switch (targetKind) {
+    switch (getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)) {
         case "wavetablePosition":
             return "Wavetable scan still clamps to the table range.";
         case "warpAmount":
@@ -635,36 +636,11 @@ function normalizeSourceKind(value: unknown): ModulationSourceKind {
 }
 
 function parseTargetKind(value: unknown): ModulationTargetKind | null {
-    if (typeof value === "string") {
-        // SAFETY: Membership in the authored rack-target map establishes the
-        // `rack.${string}` domain identity before it is returned.
-        const rackTargetKind = value as RackModulationTargetKind;
-        if (RACK_MODULATION_PARAMETER_BY_KIND.has(rackTargetKind)) {
-            return rackTargetKind;
-        }
-    }
-    if (
-        value === "wavetablePosition"
-        || value === "warpAmount"
-        || value === "filterCutoffOctaves"
-        || value === "filterQ"
-        || value === "pitchSemitones"
-        || value === "ampGainDb"
-        || value === "pan"
-        || value === "unisonDetune"
-        || value === "unisonBlend"
-        || value === "unisonWidth"
-        || value === "unisonWavetablePositionSpread"
-        || value === "unisonWarpSpread"
-    ) {
-        return value;
-    }
-
-    return null;
+    return parseCanonicalModulationTargetKind(value);
 }
 
 function normalizeTargetKind(value: unknown): ModulationTargetKind {
-    return parseTargetKind(value) ?? "wavetablePosition";
+    return parseTargetKind(value) ?? "oscA.wavetablePosition";
 }
 
 export function normalizeMacroName(value: unknown, slotIndex: number): string {
@@ -717,7 +693,7 @@ export function createDefaultRoute(overrides: Partial<ModulationRoute> = {}): Mo
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
-        targetKind: "wavetablePosition",
+        targetKind: "oscA.wavetablePosition",
         amount: 0,
         reducer: "max",
         ...overrides,
@@ -806,7 +782,7 @@ function canonicalJsonValuesEqual(left: unknown, right: unknown): boolean {
     ));
 }
 
-/** Pick the first unused cell in the closed 624-pair domain for generic Add. */
+/** Pick the first unused cell in the closed 884-pair domain for generic Add. */
 export function createFirstAvailableModulationRoute(
     routes: ReadonlyArray<ModulationRoute>,
 ): ModulationRoute | null {
@@ -847,17 +823,10 @@ function normalizeMsegSlot(value: unknown, slotIndex: number): ModulationMsegSlo
 export function createDefaultModulationState(): ModulationState {
     return {
         format: "cosimo.modulation",
-        version: 2,
+        version: MODULATION_STATE_VERSION,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
-        routes: [
-            createDefaultRoute({ id: "mod-route-1", amount: 1 }),
-            createDefaultRoute({
-                id: "mod-route-2",
-                targetKind: "filterCutoffOctaves",
-                amount: 4,
-            }),
-        ],
+        routes: [],
         macroNames: MACRO_SLOT_NAMES.slice(),
     };
 }
@@ -870,7 +839,7 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
 
     return {
         format: "cosimo.modulation",
-        version: 2,
+        version: MODULATION_STATE_VERSION,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
         envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
         routes: normalizeRoutes(nextValue.routes),

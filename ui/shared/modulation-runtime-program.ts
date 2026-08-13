@@ -6,7 +6,16 @@
 
 import type { ModulationRoute, ModulationTargetKind } from "./modulation";
 import {
-    allRackParameterDescriptors,
+    MODULATION_SOURCE_IDENTITIES,
+    MODULATION_RACK_TARGET_COUNT as CANONICAL_RACK_TARGET_COUNT,
+    MODULATION_VOICE_TARGET_COUNT as CANONICAL_VOICE_TARGET_COUNT,
+    getModulationSourceIdentity,
+    getRackModulationTargetIndex,
+    getVoiceModulationTargetIndex,
+    parseRackModulationTargetKind,
+    parseVoiceModulationTargetKind,
+} from "./modulation-targets";
+import {
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
 
@@ -17,16 +26,18 @@ export const MODULATION_PROGRAM_ENDPOINT_ID = "modulationProgram";
 export const MODULATION_AMOUNT_ENDPOINT_ID = "modulationAmount";
 
 /** Number of per-voice sources: three MSEGs, three envelopes, velocity, pressure, and slide. */
-export const MODULATION_VOICE_SOURCE_COUNT = 9;
+export const MODULATION_VOICE_SOURCE_COUNT = MODULATION_SOURCE_IDENTITIES
+    .filter((identity) => identity.group === "voice").length;
 
 /** Number of global Macro sources. */
-export const MODULATION_MACRO_SOURCE_COUNT = 4;
+export const MODULATION_MACRO_SOURCE_COUNT = MODULATION_SOURCE_IDENTITIES
+    .filter((identity) => identity.group === "macro").length;
 
 /** Number of voice-local destinations. */
-export const MODULATION_VOICE_TARGET_COUNT = 12;
+export const MODULATION_VOICE_TARGET_COUNT = CANONICAL_VOICE_TARGET_COUNT;
 
 /** Number of global rack destinations. */
-export const MODULATION_RACK_TARGET_COUNT = 36;
+export const MODULATION_RACK_TARGET_COUNT = CANONICAL_RACK_TARGET_COUNT;
 
 /** Complete voice-source to voice-target mapping domain. */
 export const MODULATION_VOICE_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_VOICE_TARGET_COUNT;
@@ -148,49 +159,17 @@ export function compileRackModulationTargetCatalog(
     return targetIndexByKind;
 }
 
-const rackTargetIndexByKind = compileRackModulationTargetCatalog(allRackParameterDescriptors());
-
-function requireSlot(slot: number | null, maximum: number, sourceKind: string): number {
-    if (slot === null || !Number.isInteger(slot) || slot < 1 || slot > maximum) {
-        throw new Error(`Invalid ${sourceKind} modulation source slot: ${String(slot)}`);
-    }
-
-    return slot - 1;
-}
-
 function voiceSourceIndex(route: ModulationRoute): number {
-    switch (route.sourceKind) {
-        case "mseg":
-            return requireSlot(route.sourceSlot, 3, route.sourceKind);
-        case "env":
-            return 3 + requireSlot(route.sourceSlot, 3, route.sourceKind);
-        case "velocity":
-            return 6;
-        case "pressure":
-            return 7;
-        case "slide":
-            return 8;
-        case "macro":
-            throw new Error("Macro is not a per-voice modulation source");
+    const identity = getModulationSourceIdentity(route.sourceKind, route.sourceSlot);
+    if (identity.group !== "voice") {
+        throw new Error("Macro is not a per-voice modulation source");
     }
+    return identity.runtimeIndex;
 }
 
 function voiceTargetIndex(targetKind: ModulationTargetKind): number | null {
-    switch (targetKind) {
-        case "wavetablePosition": return 0;
-        case "warpAmount": return 1;
-        case "filterCutoffOctaves": return 2;
-        case "filterQ": return 3;
-        case "pitchSemitones": return 4;
-        case "ampGainDb": return 5;
-        case "pan": return 6;
-        case "unisonDetune": return 7;
-        case "unisonBlend": return 8;
-        case "unisonWidth": return 9;
-        case "unisonWavetablePositionSpread": return 10;
-        case "unisonWarpSpread": return 11;
-        default: return null;
-    }
+    const voiceTargetKind = parseVoiceModulationTargetKind(targetKind);
+    return voiceTargetKind === null ? null : getVoiceModulationTargetIndex(voiceTargetKind);
 }
 
 /**
@@ -201,14 +180,19 @@ function voiceTargetIndex(targetKind: ModulationTargetKind): number | null {
  */
 export function getModulationRuntimeCell(route: ModulationRoute): ModulationRuntimeCell {
     const voiceTarget = voiceTargetIndex(route.targetKind);
-    const rackTarget = rackTargetIndexByKind.get(route.targetKind);
+    const rackTargetKind = parseRackModulationTargetKind(route.targetKind);
+    const rackTarget = rackTargetKind === null ? undefined : getRackModulationTargetIndex(rackTargetKind);
 
     if (voiceTarget === null && rackTarget === undefined) {
         throw new Error(`Unknown modulation target: ${route.targetKind}`);
     }
 
     if (route.sourceKind === "macro") {
-        const sourceIndex = requireSlot(route.sourceSlot, MODULATION_MACRO_SOURCE_COUNT, route.sourceKind);
+        const sourceIdentity = getModulationSourceIdentity(route.sourceKind, route.sourceSlot);
+        if (sourceIdentity.group !== "macro") {
+            throw new Error(`Invalid macro modulation source: ${route.sourceKind}:${String(route.sourceSlot)}`);
+        }
+        const sourceIndex = sourceIdentity.runtimeIndex;
         if (voiceTarget !== null) {
             const cellIndex = sourceIndex * MODULATION_VOICE_TARGET_COUNT + voiceTarget;
             return {

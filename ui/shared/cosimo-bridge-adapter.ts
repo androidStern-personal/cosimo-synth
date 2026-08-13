@@ -31,6 +31,7 @@ import {
     serializeArticulationTriggerConfig,
     type ArticulationTriggerConfig,
 } from "./articulations";
+import { UI_PATCH_VALUES_STATE_KEY } from "./articulation-runtime-base";
 import type { PatchConnectionLike } from "./cmajor-react";
 import {
     clampNormalizedValue,
@@ -84,7 +85,6 @@ import {
     type TargetDescriptor,
 } from "./target-descriptor";
 
-const UI_PATCH_VALUES_STATE_KEY = "uiPatchValues.v1";
 const UI_MAPPINGS_STATE_KEY = "uiMappings.v1";
 
 const ARTICULATION_COLORS = [
@@ -543,7 +543,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const validRoutes = this.collectValidRoutes(state);
         if (validRoutes.length !== state.routes.length) {
-            this.detach("modulation.v2 contains a mapping without its canonical current identity");
+            this.detach(`${MODULATION_STATE_KEY} contains a mapping without its canonical current identity`);
             return;
         }
         this.adoptValidRoutes(validRoutes);
@@ -817,7 +817,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const validRoutes = this.collectValidRoutes(restoredModulationState);
         if (rawModulationState !== undefined && validRoutes.length !== restoredModulationState.routes.length) {
-            this.detach("modulation.v2 contains a mapping without its canonical current identity");
+            this.detach(`${MODULATION_STATE_KEY} contains a mapping without its canonical current identity`);
             return;
         }
 
