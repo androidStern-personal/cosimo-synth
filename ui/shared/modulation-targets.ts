@@ -227,7 +227,7 @@ export function getRackModulationTargetIndex(targetKind: RackModulationTargetKin
     return identity.runtimeIndex;
 }
 
-/** Return the parameter policy shared by the A/B/C versions of a voice target. */
+/** Return the oscillator-local or shared parameter kind for a voice target. */
 export function getVoiceModulationParameterKind(
     targetKind: VoiceModulationTargetKind,
 ): VoiceModulationParameterKind {
@@ -235,25 +235,6 @@ export function getVoiceModulationParameterKind(
     return separatorIndex >= 0
         ? targetKind.slice(separatorIndex + 1) as OscillatorModulationParameterKind
         : targetKind as SharedVoiceModulationTargetKind;
-}
-
-/**
- * Return the descriptor-policy identity for a canonical target.
- *
- * Oscillator B/C retain their own runtime identity but deliberately share A's
- * label, formatting, and amount policy until oscillator-specific descriptors exist.
- */
-export function getModulationTargetDescriptorKind(
-    targetKind: ModulationTargetKind,
-): ModulationTargetKind {
-    const voiceTargetKind = parseVoiceModulationTargetKind(targetKind);
-    if (voiceTargetKind === null || !voiceTargetKind.includes(".")) {
-        return targetKind;
-    }
-
-    // SAFETY: A/B/C targets share the closed oscillator-parameter union; only
-    // the descriptor-policy lookup is projected. The persisted/runtime identity is unchanged.
-    return `oscA.${getVoiceModulationParameterKind(voiceTargetKind)}` as OscillatorModulationTargetKind;
 }
 
 /** All canonical sources may address all canonical targets. */

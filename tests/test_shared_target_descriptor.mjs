@@ -30,26 +30,29 @@ test("modulation-source assets deliberately contain no separate LFO family", asy
     );
 });
 
+const OSCILLATOR_MODULATION_TARGETS = [
+    "framePosition",
+    "warpAmount",
+    "pitchSemitones",
+    "volumeDb",
+    "pan",
+    "unisonDetune",
+    "unisonBlend",
+    "unisonWidth",
+    "unisonWavetablePositionSpread",
+    "unisonWarpSpread",
+];
+
 const EXPECTED_VOICE_BINDINGS = {
-    "wavetable.index": ["endpoint", "wavetablePosition", "framePosition"],
-    "wavetable.warp": ["endpoint", "warpAmount", "warpAmount"],
-    "wavetable.unison": ["endpoint", "unisonDetune", "unisonDetune"],
-    "wavetable.unison-blend": ["endpoint", "unisonBlend", "unisonBlend"],
-    "wavetable.unison-width": ["endpoint", "unisonWidth", "unisonWidth"],
-    "wavetable.unison-wt-spread": [
-        "endpoint",
-        "unisonWavetablePositionSpread",
-        "unisonWavetablePositionSpread",
-    ],
-    "wavetable.unison-warp-spread": ["endpoint", "unisonWarpSpread", "unisonWarpSpread"],
-    "wavetable.tune": ["unbacked", "no-endpoint", null],
+    ...Object.fromEntries(["A", "B", "C"].flatMap((oscillator) => (
+        OSCILLATOR_MODULATION_TARGETS.map((target) => [
+            `osc${oscillator}.${target}`,
+            ["unbacked", "no-endpoint", null],
+        ])
+    ))),
     "voice-filter.cutoff": ["endpoint", "filterCutoff", "filterCutoffHz"],
     "voice-filter.resonance": ["endpoint", "filterQ", "filterQ"],
     "voice-filter.drive": ["unbacked", "no-endpoint", null],
-    "amp-pan.level": ["unbacked", "no-endpoint", null],
-    "amp-pan.pan": ["endpoint", "pan", "pan"],
-    "amp-pan.attack": ["unbacked", "no-endpoint", null],
-    "amp-pan.release": ["unbacked", "no-endpoint", null],
 };
 
 test("the catalog is the complete eight-effect DSP inventory plus the voice surface", async () => {
@@ -62,7 +65,7 @@ test("the catalog is the complete eight-effect DSP inventory plus the voice surf
 
     assert.equal(rackCatalog.RACK_EFFECT_DESCRIPTORS.length, 8);
     assert.equal(rackTargets.length, rackParameters.length);
-    assert.equal(voiceTargets.length, 15);
+    assert.equal(voiceTargets.length, Object.keys(EXPECTED_VOICE_BINDINGS).length);
     assert.deepEqual(
         rackTargets.map((descriptor) => descriptor.targetId),
         rackParameters.map((parameter) => `${parameter.effectId}.${parameter.endpointID}`),
@@ -117,7 +120,9 @@ test("all bound endpoint conversions roundtrip across the normalized domain", as
 test("voice bindings retain their shipped endpoint and articulation contract", async () => {
     const catalog = await catalogPromise;
     for (const descriptor of catalog.allTargetDescriptors().filter((candidate) => candidate.workspace === "voice")) {
-        const [tag, detail, articulationParameterId] = EXPECTED_VOICE_BINDINGS[descriptor.targetId];
+        const expected = EXPECTED_VOICE_BINDINGS[descriptor.targetId];
+        assert.notEqual(expected, undefined, descriptor.targetId);
+        const [tag, detail, articulationParameterId] = expected;
         assert.equal(descriptor.binding._tag, tag, descriptor.targetId);
         assert.equal(
             descriptor.binding._tag === "endpoint" ? descriptor.binding.endpointId : descriptor.binding.reason,
@@ -148,7 +153,9 @@ test("parseTargetId accepts exactly the live catalog surface", async () => {
         assert.equal(parsed._tag, "ok", descriptor.targetId);
         assert.equal(catalog.getTargetDescriptor(parsed.value), descriptor);
     }
-    for (const bad of ["", "wavetable", "filter.cutoff", "chorusEnabled", "Filter.Cutoff"]) {
+    for (const bad of [
+        "", "wavetable", "wavetable.index", "amp-pan.pan", "filter.cutoff", "chorusEnabled", "Filter.Cutoff",
+    ]) {
         assert.equal(catalog.parseTargetId(bad)._tag, "err", bad);
     }
 });

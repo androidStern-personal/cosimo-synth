@@ -7,6 +7,9 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const adapterModulePromise = loadUIModule(repoRoot, "ui/shared/cosimo-bridge-adapter.ts");
 const modulationModulePromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
+const targetsModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
+const runtimeModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts");
+const descriptorsModulePromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
 
 class FakePatchConnection {
     constructor(storedState = {}) {
@@ -52,9 +55,9 @@ class FakePatchConnection {
 
 function abcWavetableRoutes(modulation) {
     return ["A", "B", "C"].map((oscillator, index) => modulation.createDefaultRoute({
-        id: `wavetable.index::mseg-${index + 1}`,
+        id: `osc${oscillator}.framePosition::mseg-1`,
         sourceKind: "mseg",
-        sourceSlot: index + 1,
+        sourceSlot: 1,
         targetKind: `osc${oscillator}.wavetablePosition`,
         amount: 0.25 + index * 0.1,
     }));
@@ -64,7 +67,7 @@ function mismatchState(modulation) {
     return {
         ...modulation.createDefaultModulationState(),
         routes: [modulation.createDefaultRoute({
-            id: "wavetable.index::mseg-1",
+            id: "oscB.framePosition::mseg-1",
             sourceKind: "mseg",
             sourceSlot: 1,
             targetKind: "oscB.warpAmount",
@@ -81,8 +84,18 @@ function mappingSummary(snapshot) {
     }));
 }
 
-test("bridge hydration accepts canonical A/B/C routes sharing one display descriptor policy", async () => {
-    const [adapterModule, modulation] = await Promise.all([adapterModulePromise, modulationModulePromise]);
+function bridgeSourceId(source) {
+    return source.sourceKind === "env" ? `envelope-${source.sourceSlot}` : source.id;
+}
+
+test("bridge hydration preserves distinct canonical A/B/C cells from the same source", async () => {
+    const [adapterModule, modulation, targets, runtime, descriptors] = await Promise.all([
+        adapterModulePromise,
+        modulationModulePromise,
+        targetsModulePromise,
+        runtimeModulePromise,
+        descriptorsModulePromise,
+    ]);
     const current = {
         ...modulation.createDefaultModulationState(),
         routes: abcWavetableRoutes(modulation),
@@ -94,10 +107,73 @@ test("bridge hydration accepts canonical A/B/C routes sharing one display descri
 
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
     assert.deepEqual(mappingSummary(adapter.getSnapshot()), [
-        { id: "wavetable.index::mseg-1", targetId: "wavetable.index", sourceId: "mseg-1" },
-        { id: "wavetable.index::mseg-2", targetId: "wavetable.index", sourceId: "mseg-2" },
-        { id: "wavetable.index::mseg-3", targetId: "wavetable.index", sourceId: "mseg-3" },
+        { id: "oscA.framePosition::mseg-1", targetId: "oscA.framePosition", sourceId: "mseg-1" },
+        { id: "oscB.framePosition::mseg-1", targetId: "oscB.framePosition", sourceId: "mseg-1" },
+        { id: "oscC.framePosition::mseg-1", targetId: "oscC.framePosition", sourceId: "mseg-1" },
     ]);
+    assert.deepEqual(adapter.getSnapshot().patch.mappings.map((mapping) => {
+        const parsedTarget = descriptors.parseTargetId(String(mapping.targetId));
+        assert.equal(parsedTarget._tag, "ok");
+        const targetKind = descriptors.getTargetDescriptor(parsedTarget.value).modulationTargetKind;
+        assert.notEqual(targetKind, null);
+        const source = targets.parseModulationSourceIdentity(String(mapping.sourceId));
+        assert.notEqual(source, null);
+        const cell = runtime.getModulationRuntimeCell(modulation.createDefaultRoute({
+            id: String(mapping.id),
+            sourceKind: source.sourceKind,
+            sourceSlot: source.sourceSlot,
+            targetKind,
+        }));
+        return {
+            id: String(mapping.id),
+            targetKind,
+            targetIndex: cell.targetIndex,
+            sourceIndex: cell.sourceIndex,
+        };
+    }), [
+        { id: "oscA.framePosition::mseg-1", targetKind: "oscA.wavetablePosition", targetIndex: 0, sourceIndex: 0 },
+        { id: "oscB.framePosition::mseg-1", targetKind: "oscB.wavetablePosition", targetIndex: 10, sourceIndex: 0 },
+        { id: "oscC.framePosition::mseg-1", targetKind: "oscC.wavetablePosition", targetIndex: 20, sourceIndex: 0 },
+    ]);
+    assert.deepEqual(connection.storedWrites, []);
+    adapter.dispose();
+});
+
+test("bridge hydration accepts all 884 canonical cells without identity collisions", async () => {
+    const [adapterModule, modulation, targets, descriptors] = await Promise.all([
+        adapterModulePromise,
+        modulationModulePromise,
+        targetsModulePromise,
+        descriptorsModulePromise,
+    ]);
+    const descriptorByKind = new Map(descriptors.allTargetDescriptors().flatMap((descriptor) => (
+        descriptor.modulationTargetKind === null ? [] : [[descriptor.modulationTargetKind, descriptor]]
+    )));
+    const routes = targets.MODULATION_SOURCE_IDENTITIES.flatMap((source) => (
+        targets.MODULATION_TARGET_IDENTITIES.map((target) => {
+            const descriptor = descriptorByKind.get(target.kind);
+            assert.notEqual(descriptor, undefined, target.kind);
+            return modulation.createDefaultRoute({
+                id: `${descriptor.targetId}::${bridgeSourceId(source)}`,
+                sourceKind: source.sourceKind,
+                sourceSlot: source.sourceSlot,
+                targetKind: target.kind,
+            });
+        })
+    ));
+    assert.equal(routes.length, 884);
+    assert.equal(new Set(routes.map((route) => route.id)).size, 884);
+    const current = { ...modulation.createDefaultModulationState(), routes };
+    const connection = new FakePatchConnection({
+        [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(current),
+    });
+    const adapter = adapterModule.createCosimoBridgeAdapter({ connection });
+    const mappings = mappingSummary(adapter.getSnapshot());
+
+    assert.equal(adapter.getSnapshot().connection._tag, "ready");
+    assert.equal(mappings.length, 884);
+    assert.equal(new Set(mappings.map((mapping) => mapping.id)).size, 884);
+    assert.equal(new Set(mappings.map((mapping) => `${mapping.targetId}->${mapping.sourceId}`)).size, 884);
     assert.deepEqual(connection.storedWrites, []);
     adapter.dispose();
 });

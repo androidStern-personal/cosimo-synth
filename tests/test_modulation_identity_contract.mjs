@@ -39,10 +39,6 @@ test("the canonical modulation domain has stable collision-free source and targe
     assert.equal(targets.getVoiceModulationTargetIndex("oscC.wavetablePosition"), 20);
     assert.equal(targets.getVoiceModulationTargetIndex("filterCutoffOctaves"), 30);
     assert.equal(targets.getVoiceModulationTargetIndex("filterQ"), 31);
-    assert.equal(targets.getModulationTargetDescriptorKind("oscA.wavetablePosition"), "oscA.wavetablePosition");
-    assert.equal(targets.getModulationTargetDescriptorKind("oscB.wavetablePosition"), "oscA.wavetablePosition");
-    assert.equal(targets.getModulationTargetDescriptorKind("oscC.wavetablePosition"), "oscA.wavetablePosition");
-    assert.equal(targets.getModulationTargetDescriptorKind("filterQ"), "filterQ");
 });
 
 test("legacy target aliases are absent and all 884 canonical pairs are legal", async () => {
@@ -97,6 +93,32 @@ test("identity records carry indexes while target descriptors retain presentatio
     assert.equal(wavetableDescriptor.format.kind, "percent");
     assert.equal(wavetableDescriptor.modAmount.unit, "%");
     assert.equal(descriptors.getModulationTargetDisplayLabel("oscB.wavetablePosition"), "B INDEX");
+
+    const modulationDescriptors = descriptors.allTargetDescriptors().filter(
+        (descriptor) => descriptor.modulationTargetKind !== null,
+    );
+    const descriptorByKind = new Map(modulationDescriptors.map((descriptor) => (
+        [descriptor.modulationTargetKind, descriptor]
+    )));
+    assert.equal(modulationDescriptors.length, 68);
+    assert.equal(descriptorByKind.size, 68);
+    for (const identity of targets.MODULATION_TARGET_IDENTITIES) {
+        const descriptor = descriptorByKind.get(identity.kind);
+        assert.notEqual(descriptor, undefined, identity.kind);
+        assert.equal(descriptor.modulationTargetKind, identity.kind);
+    }
+
+    assert.deepEqual(
+        ["A", "B", "C"].map((oscillator) => {
+            const descriptor = descriptorByKind.get(`osc${oscillator}.wavetablePosition`);
+            return [descriptor.targetId, descriptor.moduleId, descriptor.binding];
+        }),
+        [
+            ["oscA.framePosition", "oscA", { _tag: "unbacked", reason: "no-endpoint" }],
+            ["oscB.framePosition", "oscB", { _tag: "unbacked", reason: "no-endpoint" }],
+            ["oscC.framePosition", "oscC", { _tag: "unbacked", reason: "no-endpoint" }],
+        ],
+    );
 });
 
 test("the sparse runtime consumes the same canonical voice indexes", async () => {

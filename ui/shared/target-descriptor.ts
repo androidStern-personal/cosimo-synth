@@ -11,8 +11,11 @@
 import { type ArticulationVoiceParameterId } from "./articulation-image";
 import { type Brand, type NormalizedValue, type TargetId } from "./cosimo-ids";
 import {
-    getModulationTargetDescriptorKind,
+    MODULATION_TARGET_IDENTITIES,
+    OSCILLATOR_IDS,
     type ModulationTargetKind,
+    type OscillatorID,
+    type OscillatorModulationParameterKind,
 } from "./modulation-targets";
 import {
     RACK_EFFECT_DESCRIPTORS,
@@ -32,7 +35,7 @@ export type EffectModuleId =
     | "reverb";
 
 /** The per-note voice modules. */
-export type VoiceModuleId = "wavetable" | "voice-filter" | "amp-pan";
+export type VoiceModuleId = `osc${OscillatorID}` | "voice-filter";
 
 /** Any module owning parameters. */
 export type ModuleId = EffectModuleId | VoiceModuleId;
@@ -130,16 +133,8 @@ type ModuleDefinition = {
 };
 
 type BoundEndpointId =
-    | "wavetablePosition"
-    | "warpAmount"
-    | "unisonDetune"
-    | "unisonBlend"
-    | "unisonWidth"
-    | "unisonWavetablePositionSpread"
-    | "unisonWarpSpread"
     | "filterCutoff"
-    | "filterQ"
-    | "pan";
+    | "filterQ";
 
 type TargetConnectivity = Pick<
     TargetDescriptor,
@@ -159,21 +154,6 @@ function parameter(
 
 const MODULE_DEFINITIONS: ReadonlyArray<ModuleDefinition> = [
     {
-        moduleId: "wavetable",
-        workspace: "voice",
-        quickParameterId: "index",
-        parameters: [
-            parameter("index", "Index", 44, 0),
-            parameter("warp", "Warp", 58, 50),
-            parameter("unison", "Unison", 35, 0),
-            parameter("unison-blend", "Uni Blend", 75, 75),
-            parameter("unison-width", "Uni Width", 100, 100),
-            parameter("unison-wt-spread", "Uni WT Spread", 0, 0),
-            parameter("unison-warp-spread", "Uni Warp Spread", 0, 0),
-            parameter("tune", "Tune", 50, 50, "semitone"),
-        ],
-    },
-    {
         moduleId: "voice-filter",
         workspace: "voice",
         quickParameterId: "cutoff",
@@ -181,17 +161,6 @@ const MODULE_DEFINITIONS: ReadonlyArray<ModuleDefinition> = [
             parameter("cutoff", "Cutoff", 67, 70, "frequency"),
             parameter("resonance", "Resonance", 25, 0),
             parameter("drive", "Drive", 15, 0),
-        ],
-    },
-    {
-        moduleId: "amp-pan",
-        workspace: "voice",
-        quickParameterId: "level",
-        parameters: [
-            parameter("level", "Level", 80, 80),
-            parameter("pan", "Pan", 50, 50, "signed"),
-            parameter("attack", "Attack", 10, 0),
-            parameter("release", "Release", 35, 25),
         ],
     },
 ];
@@ -235,14 +204,6 @@ function endpointId(value: BoundEndpointId): EndpointId {
     return value as EndpointId;
 }
 
-function identityToEngine(value: NormalizedValue): number {
-    return value;
-}
-
-function identityFromEngine(value: number): NormalizedValue {
-    return normalized(value, "identity endpoint conversion");
-}
-
 function frequencyToEngine(value: NormalizedValue): number {
     return 20 * 1000 ** value;
 }
@@ -259,14 +220,6 @@ function resonanceFromEngine(value: number): NormalizedValue {
     return normalized(Math.log(value / 0.1) / Math.log(200), "filterQ endpoint conversion");
 }
 
-function panToEngine(value: NormalizedValue): number {
-    return value * 2 - 1;
-}
-
-function panFromEngine(value: number): NormalizedValue {
-    return normalized((value + 1) / 2, "pan endpoint conversion");
-}
-
 function boundEndpoint(
     id: BoundEndpointId,
     toEngine: (value: NormalizedValue) => number,
@@ -277,48 +230,6 @@ function boundEndpoint(
 
 function connectivityFor(targetId: TargetId, workspace: "voice" | "effects"): TargetConnectivity {
     switch (targetId) {
-        case "wavetable.index":
-            return {
-                binding: boundEndpoint("wavetablePosition", identityToEngine, identityFromEngine),
-                articulationParameterId: "framePosition",
-                modulationTargetKind: "oscA.wavetablePosition",
-            };
-        case "wavetable.warp":
-            return {
-                binding: boundEndpoint("warpAmount", identityToEngine, identityFromEngine),
-                articulationParameterId: "warpAmount",
-                modulationTargetKind: "oscA.warpAmount",
-            };
-        case "wavetable.unison":
-            return {
-                binding: boundEndpoint("unisonDetune", identityToEngine, identityFromEngine),
-                articulationParameterId: "unisonDetune",
-                modulationTargetKind: "oscA.unisonDetune",
-            };
-        case "wavetable.unison-blend":
-            return {
-                binding: boundEndpoint("unisonBlend", identityToEngine, identityFromEngine),
-                articulationParameterId: "unisonBlend",
-                modulationTargetKind: "oscA.unisonBlend",
-            };
-        case "wavetable.unison-width":
-            return {
-                binding: boundEndpoint("unisonWidth", identityToEngine, identityFromEngine),
-                articulationParameterId: "unisonWidth",
-                modulationTargetKind: "oscA.unisonWidth",
-            };
-        case "wavetable.unison-wt-spread":
-            return {
-                binding: boundEndpoint("unisonWavetablePositionSpread", identityToEngine, identityFromEngine),
-                articulationParameterId: "unisonWavetablePositionSpread",
-                modulationTargetKind: "oscA.unisonWavetablePositionSpread",
-            };
-        case "wavetable.unison-warp-spread":
-            return {
-                binding: boundEndpoint("unisonWarpSpread", identityToEngine, identityFromEngine),
-                articulationParameterId: "unisonWarpSpread",
-                modulationTargetKind: "oscA.unisonWarpSpread",
-            };
         case "voice-filter.cutoff":
             return {
                 binding: boundEndpoint("filterCutoff", frequencyToEngine, frequencyFromEngine),
@@ -330,24 +241,6 @@ function connectivityFor(targetId: TargetId, workspace: "voice" | "effects"): Ta
                 binding: boundEndpoint("filterQ", resonanceToEngine, resonanceFromEngine),
                 articulationParameterId: "filterQ",
                 modulationTargetKind: "filterQ",
-            };
-        case "amp-pan.pan":
-            return {
-                binding: boundEndpoint("pan", panToEngine, panFromEngine),
-                articulationParameterId: "pan",
-                modulationTargetKind: "oscA.pan",
-            };
-        case "wavetable.tune":
-            return {
-                binding: { _tag: "unbacked", reason: "no-endpoint" },
-                articulationParameterId: null,
-                modulationTargetKind: "oscA.pitchSemitones",
-            };
-        case "amp-pan.level":
-            return {
-                binding: { _tag: "unbacked", reason: "no-endpoint" },
-                articulationParameterId: null,
-                modulationTargetKind: "oscA.ampGainDb",
             };
         default:
             return {
@@ -380,18 +273,12 @@ function valueFormat(format: PrototypeValueFormat): ValueFormat {
     }
 }
 
-function modAmountSpec(format: ValueFormat, targetId: TargetId): ModAmountSpec {
+function modAmountSpec(format: ValueFormat): ModAmountSpec {
     if (format.kind === "frequency") {
         return { min: -6, max: 6, unit: "oct", digits: 1 };
     }
     if (format.kind === "semitone") {
         return { min: -48, max: 48, unit: "st", digits: 0 };
-    }
-    if (targetId === "amp-pan.level") {
-        return { min: -48, max: 6, unit: "dB", digits: 0 };
-    }
-    if (targetId === "amp-pan.pan") {
-        return { min: -100, max: 100, unit: "pan", digits: 0 };
     }
     return { min: -100, max: 100, unit: "%", digits: 0 };
 }
@@ -412,7 +299,7 @@ function createDescriptor(
         defaultValue: normalizePercent(parameterDefinition.defaultPercent, targetId),
         initialValue: normalizePercent(parameterDefinition.initialPercent, targetId),
         format,
-        modAmount: modAmountSpec(format, targetId),
+        modAmount: modAmountSpec(format),
         binding: connectivity.binding,
         isQuick: moduleDefinition.quickParameterId === parameterDefinition.id,
         compound: parameterDefinition.compound,
@@ -420,6 +307,79 @@ function createDescriptor(
         modulationTargetKind: connectivity.modulationTargetKind,
     });
 }
+
+type OscillatorModulationDescriptorDefinition = {
+    readonly targetIdSuffix: string;
+    readonly parameterKind: OscillatorModulationParameterKind;
+    readonly label: string;
+    readonly initialPercent: number;
+    readonly defaultPercent: number;
+    readonly format: PrototypeValueFormat;
+    readonly isQuick?: boolean;
+};
+
+// This is the canonical, modulatable oscillator surface. Non-modulation voice
+// controls and endpoint/articulation wiring remain with the voice architecture
+// and ART work; representing those unfinished seams as unbacked prevents a B/C
+// route from silently driving A's legacy endpoint.
+const OSCILLATOR_MODULATION_DESCRIPTOR_DEFINITIONS:
+ReadonlyArray<OscillatorModulationDescriptorDefinition> = [
+    { targetIdSuffix: "framePosition", parameterKind: "wavetablePosition", label: "Index", initialPercent: 44, defaultPercent: 0, format: "percent", isQuick: true },
+    { targetIdSuffix: "warpAmount", parameterKind: "warpAmount", label: "Warp", initialPercent: 58, defaultPercent: 50, format: "percent" },
+    { targetIdSuffix: "pitchSemitones", parameterKind: "pitchSemitones", label: "Tune", initialPercent: 50, defaultPercent: 50, format: "semitone" },
+    { targetIdSuffix: "volumeDb", parameterKind: "ampGainDb", label: "Level", initialPercent: 80, defaultPercent: 80, format: "percent" },
+    { targetIdSuffix: "pan", parameterKind: "pan", label: "Pan", initialPercent: 50, defaultPercent: 50, format: "signed" },
+    { targetIdSuffix: "unisonDetune", parameterKind: "unisonDetune", label: "Unison", initialPercent: 35, defaultPercent: 0, format: "percent" },
+    { targetIdSuffix: "unisonBlend", parameterKind: "unisonBlend", label: "Uni Blend", initialPercent: 75, defaultPercent: 75, format: "percent" },
+    { targetIdSuffix: "unisonWidth", parameterKind: "unisonWidth", label: "Uni Width", initialPercent: 100, defaultPercent: 100, format: "percent" },
+    { targetIdSuffix: "unisonWavetablePositionSpread", parameterKind: "unisonWavetablePositionSpread", label: "Uni WT Spread", initialPercent: 0, defaultPercent: 0, format: "percent" },
+    { targetIdSuffix: "unisonWarpSpread", parameterKind: "unisonWarpSpread", label: "Uni Warp Spread", initialPercent: 0, defaultPercent: 0, format: "percent" },
+];
+
+function oscillatorModAmountSpec(parameterKind: OscillatorModulationParameterKind): ModAmountSpec {
+    if (parameterKind === "pitchSemitones") {
+        return { min: -48, max: 48, unit: "st", digits: 0 };
+    }
+    if (parameterKind === "ampGainDb") {
+        return { min: -48, max: 6, unit: "dB", digits: 0 };
+    }
+    if (parameterKind === "pan") {
+        return { min: -100, max: 100, unit: "pan", digits: 0 };
+    }
+    return { min: -100, max: 100, unit: "%", digits: 0 };
+}
+
+function createOscillatorModulationDescriptor(
+    oscillatorID: OscillatorID,
+    definition: OscillatorModulationDescriptorDefinition,
+): TargetDescriptor {
+    const moduleId = `osc${oscillatorID}` as const;
+    const targetId = catalogTargetId(moduleId, definition.targetIdSuffix);
+
+    return Object.freeze({
+        targetId,
+        moduleId,
+        workspace: "voice",
+        label: definition.label,
+        defaultValue: normalizePercent(definition.defaultPercent, targetId),
+        initialValue: normalizePercent(definition.initialPercent, targetId),
+        format: valueFormat(definition.format),
+        modAmount: oscillatorModAmountSpec(definition.parameterKind),
+        binding: { _tag: "unbacked" as const, reason: "no-endpoint" as const },
+        isQuick: definition.isQuick === true,
+        compound: null,
+        articulationParameterId: null,
+        modulationTargetKind: `${moduleId}.${definition.parameterKind}` as ModulationTargetKind,
+    });
+}
+
+const OSCILLATOR_MODULATION_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.freeze(
+    OSCILLATOR_IDS.flatMap((oscillatorID) => (
+        OSCILLATOR_MODULATION_DESCRIPTOR_DEFINITIONS.map((definition) => (
+            createOscillatorModulationDescriptor(oscillatorID, definition)
+        ))
+    )),
+);
 
 function rackTargetId(parameter: RackParameterDescriptor): TargetId {
     // SAFETY: effect identity and endpoint id both come from the closed rack catalog.
@@ -502,6 +462,7 @@ function createRackTargetDescriptor(parameter: RackParameterDescriptor): TargetD
 const TARGET_DESCRIPTORS: ReadonlyArray<TargetDescriptor> = Object.freeze(
     [
         ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
+        ...OSCILLATOR_MODULATION_DESCRIPTORS,
         ...MODULE_DEFINITIONS.flatMap((moduleDefinition) =>
             moduleDefinition.parameters.map((parameterDefinition) =>
                 createDescriptor(moduleDefinition, parameterDefinition),
@@ -514,11 +475,26 @@ const TARGET_DESCRIPTOR_BY_ID = new Map<string, TargetDescriptor>(
     TARGET_DESCRIPTORS.map((descriptor) => [descriptor.targetId, descriptor]),
 );
 
+const MODULATION_TARGET_DESCRIPTORS = TARGET_DESCRIPTORS.filter(
+    (descriptor) => descriptor.modulationTargetKind !== null,
+);
+
 const TARGET_DESCRIPTOR_BY_MODULATION_KIND = new Map<ModulationTargetKind, TargetDescriptor>(
-    TARGET_DESCRIPTORS.flatMap((descriptor) => descriptor.modulationTargetKind === null
+    MODULATION_TARGET_DESCRIPTORS.flatMap((descriptor) => descriptor.modulationTargetKind === null
         ? []
         : [[descriptor.modulationTargetKind, descriptor] as const]),
 );
+
+if (TARGET_DESCRIPTOR_BY_ID.size !== TARGET_DESCRIPTORS.length) {
+    throw new Error("Target descriptor IDs must be unique");
+}
+if (MODULATION_TARGET_DESCRIPTORS.length !== MODULATION_TARGET_IDENTITIES.length
+    || TARGET_DESCRIPTOR_BY_MODULATION_KIND.size !== MODULATION_TARGET_IDENTITIES.length
+    || MODULATION_TARGET_IDENTITIES.some((identity) => (
+        TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(identity.kind)?.modulationTargetKind !== identity.kind
+    ))) {
+    throw new Error("Every canonical modulation target must have one exact display descriptor");
+}
 
 /** The target string was not a known parameter. */
 export class UnknownTarget extends Error {
@@ -566,13 +542,12 @@ export function allTargetDescriptors(): ReadonlyArray<TargetDescriptor> {
 
 /**
  * Resolve a modulation target label from the target descriptor catalog.
- * B/C targets intentionally reuse A's display policy while retaining their own identity.
+ * Corresponding A/B/C descriptors own equivalent policy under distinct identities.
  */
 export function getModulationTargetDisplayLabel(targetKind: ModulationTargetKind): string {
     const oscillatorMatch = /^osc([ABC])\.(.+)$/.exec(targetKind);
     if (oscillatorMatch !== null) {
-        const descriptorKind = getModulationTargetDescriptorKind(targetKind);
-        const descriptor = TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(descriptorKind);
+        const descriptor = TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(targetKind);
         if (descriptor === undefined) {
             return shouldNeverHappen(`Modulation target "${targetKind}" has no display descriptor`);
         }

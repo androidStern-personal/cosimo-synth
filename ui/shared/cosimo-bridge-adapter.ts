@@ -62,7 +62,6 @@ import {
     type ModulationState,
     type ModulationTargetKind,
 } from "./modulation";
-import { getModulationTargetDescriptorKind } from "./modulation-targets";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 import { createDefaultMsegPlayback, createDefaultMsegShape } from "./mseg";
 import { err, ok } from "./result";
@@ -1098,7 +1097,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             }
             const descriptor = getTargetDescriptor(parsedTarget.value);
             if (descriptor.modulationTargetKind === null
-                || descriptor.modulationTargetKind !== getModulationTargetDescriptorKind(route.targetKind)) {
+                || descriptor.modulationTargetKind !== route.targetKind) {
                 continue;
             }
             const sourceId = sourceIdFromDefinition(definition);

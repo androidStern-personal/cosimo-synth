@@ -63,6 +63,7 @@ test("uiPatchValues.v2 accepts only a complete flat normalized-value record", as
     const missing = { ...valid };
     delete missing[Object.keys(missing)[0]];
     const unknown = { ...valid, "future.parameter": 0.5 };
+    const oldAlias = { ...valid, "wavetable.index": 0.5 };
     const targetId = Object.keys(valid)[0];
     const invalidDocuments = [
         undefined,
@@ -77,6 +78,7 @@ test("uiPatchValues.v2 accepts only a complete flat normalized-value record", as
         { ...valid, [targetId]: 1.001 },
         missing,
         unknown,
+        oldAlias,
     ];
     for (const document of invalidDocuments) {
         assert.throws(() => state.deserializeUiPatchValues(document));
@@ -93,8 +95,8 @@ test("legacy uiPatchValues.v1 is ignored on cold boot without a rewrite", async 
 
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
     assert.equal(
-        adapter.getSnapshot().patch.parameterValues["wavetable.index"],
-        state.createDefaultUiPatchValues()["wavetable.index"],
+        adapter.getSnapshot().patch.parameterValues["oscA.framePosition"],
+        state.createDefaultUiPatchValues()["oscA.framePosition"],
     );
     assert.deepEqual(connection.storedWrites, []);
     assert.equal(Object.hasOwn(connection.storedState, "uiPatchValues.v2"), false);
@@ -117,18 +119,18 @@ test("cold invalid v2 leaves defaults installed only in memory", async () => {
 
 test("live invalid v2 retains the prior complete record atomically", async () => {
     const [state, adapterModule] = await Promise.all([stateModulePromise, adapterModulePromise]);
-    const valid = { ...state.createDefaultUiPatchValues(), "wavetable.index": 0.21 };
+    const valid = { ...state.createDefaultUiPatchValues(), "oscA.framePosition": 0.21 };
     const connection = new FakePatchConnection({
         [state.UI_PATCH_VALUES_STATE_KEY]: JSON.stringify(valid),
     });
     const adapter = adapterModule.createCosimoBridgeAdapter({ connection });
-    assert.equal(adapter.getSnapshot().patch.parameterValues["wavetable.index"], 0.21);
+    assert.equal(adapter.getSnapshot().patch.parameterValues["oscA.framePosition"], 0.21);
 
-    const invalid = { ...valid, "wavetable.index": 0.84, unknown: 0.5 };
+    const invalid = { ...valid, "oscA.framePosition": 0.84, unknown: 0.5 };
     connection.emitStoredStateValue(state.UI_PATCH_VALUES_STATE_KEY, JSON.stringify(invalid));
 
     assert.equal(adapter.getSnapshot().connection._tag, "detached");
-    assert.equal(adapter.getSnapshot().patch.parameterValues["wavetable.index"], 0.21);
+    assert.equal(adapter.getSnapshot().patch.parameterValues["oscA.framePosition"], 0.21);
     assert.deepEqual(connection.storedWrites, []);
     adapter.dispose();
 });
