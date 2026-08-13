@@ -149,6 +149,15 @@ import {
     loadFactoryBankFrames,
     type FactoryBankCatalog,
 } from "./wavetable-bank";
+import {
+    DEFAULT_SELECTED_OSCILLATOR_ID,
+    OSCILLATOR_BINDING_CONTRACTS,
+    getOscillatorBindingContract,
+    projectSelectedOscillatorWrite,
+    type OscillatorControlID,
+    type OscillatorControlWrite,
+    type OscillatorSelectionViewModel,
+} from "./oscillator-binding";
 
 export const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 export const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
@@ -265,6 +274,31 @@ export type ArticulationHeldInput = {
     velocity: number | null;
     chain: number | null;
 };
+
+/**
+ * Owns the presentation-only oscillator tab state shared by desktop and iPhone.
+ * It intentionally does not bind the reserved A/B/C endpoints: today's product
+ * root remains on its working legacy A endpoints until the indexed host graph
+ * is composed.
+ */
+export function useOscillatorSelectionViewModel(): OscillatorSelectionViewModel {
+    const [selectedOscillatorID, selectOscillator] = useState(DEFAULT_SELECTED_OSCILLATOR_ID);
+    const selectedOscillator = getOscillatorBindingContract(selectedOscillatorID);
+    const projectControlWrite = useCallback(<TValue>(
+        controlID: OscillatorControlID,
+        value: TValue,
+    ): OscillatorControlWrite<TValue> => (
+        projectSelectedOscillatorWrite(selectedOscillatorID, controlID, value)
+    ), [selectedOscillatorID]);
+
+    return useMemo(() => ({
+        options: OSCILLATOR_BINDING_CONTRACTS,
+        selectedOscillatorID,
+        selectedOscillator,
+        selectOscillator,
+        projectControlWrite,
+    }), [projectControlWrite, selectedOscillator, selectedOscillatorID]);
+}
 
 type HeldMidiNote = {
     velocity: number;
