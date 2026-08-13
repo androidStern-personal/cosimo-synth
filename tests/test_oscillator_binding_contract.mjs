@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
 import path from "node:path";
 
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
@@ -128,6 +129,19 @@ test("the shared contract accepts no oscillator or control aliases", async () =>
     assert.throws(() => binding.getOscillatorBindingContract("a"));
     assert.throws(() => binding.getOscillatorBindingContract("oscA"));
     assert.throws(() => binding.getOscillatorControlAddress("A", "wavetablePosition"));
+});
+
+test("the source contract permits only numeric oscillator control writes", async () => {
+    const [bindingSource, hookSource] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "ui/shared/oscillator-binding.ts"), "utf8"),
+        fs.readFile(path.join(repoRoot, "ui/shared/synth-hooks.ts"), "utf8"),
+    ]);
+
+    assert.match(bindingSource, /export type OscillatorControlWrite = \{[\s\S]*?readonly value: number;/);
+    assert.match(bindingSource, /function projectSelectedOscillatorWrite\([\s\S]*?value: number,[\s\S]*?OscillatorControlWrite \{/);
+    assert.match(hookSource, /const projectControlWrite = useCallback\(\([\s\S]*?value: number,[\s\S]*?OscillatorControlWrite =>/);
+    assert.doesNotMatch(bindingSource, /OscillatorControlWrite<|projectSelectedOscillatorWrite</);
+    assert.doesNotMatch(hookSource, /OscillatorControlWrite<|projectControlWrite = useCallback\(<TValue>/);
 });
 
 test("oscillator selection stays outside uiPatchValues.v2", async () => {

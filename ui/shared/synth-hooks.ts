@@ -284,10 +284,10 @@ export type ArticulationHeldInput = {
 export function useOscillatorSelectionViewModel(): OscillatorSelectionViewModel {
     const [selectedOscillatorID, selectOscillator] = useState(DEFAULT_SELECTED_OSCILLATOR_ID);
     const selectedOscillator = getOscillatorBindingContract(selectedOscillatorID);
-    const projectControlWrite = useCallback(<TValue>(
+    const projectControlWrite = useCallback((
         controlID: OscillatorControlID,
-        value: TValue,
-    ): OscillatorControlWrite<TValue> => (
+        value: number,
+    ): OscillatorControlWrite => (
         projectSelectedOscillatorWrite(selectedOscillatorID, controlID, value)
     ), [selectedOscillatorID]);
 

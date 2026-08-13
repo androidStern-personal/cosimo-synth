@@ -93,12 +93,12 @@ export type OscillatorBindingContract = {
 };
 
 /** A single endpoint write resolved from the locally selected oscillator. */
-export type OscillatorControlWrite<TValue> = {
+export type OscillatorControlWrite = {
     readonly oscillatorID: OscillatorID;
     readonly oscillatorIndex: OscillatorRuntimeIndex;
     readonly controlID: OscillatorControlID;
     readonly endpointID: OscillatorControlEndpointID;
-    readonly value: TValue;
+    readonly value: number;
 };
 
 /** Shared selection semantics; each platform remains free to render its own tabs. */
@@ -107,10 +107,10 @@ export type OscillatorSelectionViewModel = {
     readonly selectedOscillatorID: OscillatorID;
     readonly selectedOscillator: OscillatorBindingContract;
     readonly selectOscillator: (oscillatorID: OscillatorID) => void;
-    readonly projectControlWrite: <TValue>(
+    readonly projectControlWrite: (
         controlID: OscillatorControlID,
-        value: TValue,
-    ) => OscillatorControlWrite<TValue>;
+        value: number,
+    ) => OscillatorControlWrite;
 };
 
 type OscillatorControlDefinition = {
@@ -324,11 +324,11 @@ export function getOscillatorControlAddress(
  * Project a user edit through the selected oscillator contract. This is the
  * single write-routing seam for later desktop/iPhone host adapters.
  */
-export function projectSelectedOscillatorWrite<TValue>(
+export function projectSelectedOscillatorWrite(
     selectedOscillatorID: OscillatorID,
     controlID: OscillatorControlID,
-    value: TValue,
-): OscillatorControlWrite<TValue> {
+    value: number,
+): OscillatorControlWrite {
     const address = getOscillatorControlAddress(selectedOscillatorID, controlID);
     return Object.freeze({
         oscillatorID: selectedOscillatorID,
