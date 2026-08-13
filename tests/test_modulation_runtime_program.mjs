@@ -9,19 +9,8 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const programModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts");
 const modulationModulePromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
+const targetsModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
 const runtimeMirrorModulePromise = loadUIModule(repoRoot, "ui/shared/stored-state-runtime-mirror.ts");
-
-const voiceSources = [
-    ["mseg", 1],
-    ["mseg", 2],
-    ["mseg", 3],
-    ["env", 1],
-    ["env", 2],
-    ["env", 3],
-    ["velocity", null],
-    ["pressure", null],
-    ["slide", null],
-];
 
 const oscillatorTargets = [
     "wavetablePosition",
@@ -42,6 +31,110 @@ const voiceTargets = [
     "filterCutoffOctaves",
     "filterQ",
 ];
+
+const runtimeLaneSpecifications = [
+    {
+        path: "voice",
+        count: "voiceRouteCount",
+        cells: "voiceRouteCells",
+        sources: "voiceRouteSources",
+        targets: "voiceRouteTargets",
+        polarities: "voiceRoutePolarities",
+        amounts: "voiceRouteAmounts",
+    },
+    {
+        path: "macroVoice",
+        count: "macroVoiceRouteCount",
+        cells: "macroVoiceRouteCells",
+        sources: "macroVoiceRouteSources",
+        targets: "macroVoiceRouteTargets",
+        polarities: "macroVoiceRoutePolarities",
+        amounts: "macroVoiceRouteAmounts",
+    },
+    {
+        path: "voiceRack",
+        count: "voiceRackRouteCount",
+        cells: "voiceRackRouteCells",
+        sources: "voiceRackRouteSources",
+        targets: "voiceRackRouteTargets",
+        polarities: "voiceRackRoutePolarities",
+        amounts: "voiceRackRouteAmounts",
+        reducers: "voiceRackRouteReducers",
+    },
+    {
+        path: "macroRack",
+        count: "macroRackRouteCount",
+        cells: "macroRackRouteCells",
+        sources: "macroRackRouteSources",
+        targets: "macroRackRouteTargets",
+        polarities: "macroRackRoutePolarities",
+        amounts: "macroRackRouteAmounts",
+    },
+];
+
+async function createAllLegalRoutes() {
+    const targets = await targetsModulePromise;
+
+    return targets.MODULATION_SOURCE_IDENTITIES.flatMap((source) => (
+        targets.MODULATION_TARGET_IDENTITIES.map((target) => ({
+            id: `${source.id}->${target.kind}`,
+            enabled: true,
+            sourceKind: source.sourceKind,
+            sourceSlot: source.sourceSlot,
+            polarity: (source.runtimeIndex + target.runtimeIndex) % 2 === 0 ? "unipolar" : "bipolar",
+            targetKind: target.kind,
+            amount: 0.25,
+            reducer: target.runtimeIndex % 2 === 0 ? "max" : "mean",
+        }))
+    ));
+}
+
+function selectActiveRoutesByLane(routes, getRuntimeCell, countsByPath) {
+    return runtimeLaneSpecifications.flatMap(({ path }) => (
+        routes
+            .filter((route) => getRuntimeCell(route).path === path)
+            .slice(0, countsByPath[path])
+    ));
+}
+
+function projectActiveRuntimeLanes(program) {
+    return Object.fromEntries(runtimeLaneSpecifications.map((specification) => {
+        const count = program[specification.count];
+        const cells = program[specification.cells].slice(0, count);
+
+        return [specification.path, {
+            cells,
+            sources: program[specification.sources].slice(0, count),
+            targets: program[specification.targets].slice(0, count),
+            polarities: program[specification.polarities].slice(0, count),
+            amounts: cells.map((cellIndex) => program[specification.amounts][cellIndex]),
+            reducers: specification.reducers === undefined
+                ? []
+                : program[specification.reducers].slice(0, count),
+        }];
+    }));
+}
+
+function runtimeLaneCounts(program) {
+    return runtimeLaneSpecifications.map(({ count }) => program[count]);
+}
+
+function runtimeLaneTail(program, specification) {
+    const count = program[specification.count];
+    const prefixIndex = count - 1;
+    const cellIndex = program[specification.cells][prefixIndex];
+
+    return {
+        cellIndex,
+        sourceIndex: program[specification.sources][prefixIndex],
+        targetIndex: program[specification.targets][prefixIndex],
+        polarity: program[specification.polarities][prefixIndex],
+        amount: program[specification.amounts][cellIndex],
+        reducer: specification.reducers === undefined
+            ? null
+            : program[specification.reducers][prefixIndex],
+    };
+}
 
 function modulationRoute(overrides = {}) {
     return {
@@ -96,65 +189,105 @@ test("rack target catalog compilation rejects duplicate DSP indices", async () =
     );
 });
 
-test("101 active voice mappings compile into 101 deterministic runtime cells", async () => {
+test("an empty mapping document publishes four empty execution prefixes", async () => {
     const { compileModulationRuntimeProgram } = await programModulePromise;
-    const routes = [];
 
-    for (const [sourceKind, sourceSlot] of voiceSources) {
-        for (const targetKind of voiceTargets) {
-            routes.push({
-                id: `${targetKind}::${sourceKind}-${sourceSlot ?? "fixed"}`,
-                enabled: true,
-                sourceKind,
-                sourceSlot,
-                polarity: routes.length % 2 === 0 ? "unipolar" : "bipolar",
-                targetKind,
-                amount: (routes.length + 1) / 100,
-                reducer: "max",
-            });
-        }
-    }
-
-    const program = compileModulationRuntimeProgram(routes.slice(0, 101));
-
-    assert.equal(program.voiceRouteCount, 101);
-    assert.equal(new Set(program.voiceRouteCells.slice(0, 101)).size, 101);
-    assert.deepEqual(program.voiceRouteCells.slice(0, 4), [0, 1, 2, 3]);
-    assert.equal(program.voiceRouteAmounts[100], 1.01);
+    assert.deepEqual(runtimeLaneCounts(compileModulationRuntimeProgram([])), [0, 0, 0, 0]);
 });
 
-test("all 884 legal mappings compile without truncation", async () => {
-    const [{ compileModulationRuntimeProgram, MODULATION_MAPPING_CELL_COUNT }, modulation] = await Promise.all([
-        programModulePromise,
-        modulationModulePromise,
-    ]);
-    const macroSources = [["macro", 1], ["macro", 2], ["macro", 3], ["macro", 4]];
-    const rackTargets = modulation.MODULATION_TARGET_OPTIONS
-        .map((option) => option.value)
-        .filter((targetKind) => targetKind.startsWith("rack."));
-    const routes = [];
+test("100 mixed active mappings form exact source-grouped execution prefixes", async () => {
+    const runtime = await programModulePromise;
+    const routes = selectActiveRoutesByLane(
+        await createAllLegalRoutes(),
+        runtime.getModulationRuntimeCell,
+        { voice: 30, macroVoice: 20, voiceRack: 30, macroRack: 20 },
+    );
+    const program = runtime.compileModulationRuntimeProgram(routes);
 
-    for (const [sourceKind, sourceSlot] of [...voiceSources, ...macroSources]) {
-        for (const targetKind of [...voiceTargets, ...rackTargets]) {
-            routes.push({
-                id: `${targetKind}::${sourceKind}-${sourceSlot ?? "fixed"}`,
-                enabled: true,
-                sourceKind,
-                sourceSlot,
-                polarity: "unipolar",
-                targetKind,
-                amount: 0.5,
-                reducer: "mean",
-            });
-        }
+    assert.equal(routes.length, 100);
+    assert.deepEqual(runtimeLaneCounts(program), [30, 20, 30, 20]);
+    for (const lane of Object.values(projectActiveRuntimeLanes(program))) {
+        assert.equal(new Set(lane.cells).size, lane.cells.length);
+        assert.deepEqual(lane.cells, lane.cells.toSorted((left, right) => left - right));
+        assert.deepEqual(lane.sources, lane.sources.toSorted((left, right) => left - right));
     }
+});
 
-    const program = compileModulationRuntimeProgram(routes);
+test("a deliberate 101st final-legal sentinel survives in its active prefix", async () => {
+    const runtime = await programModulePromise;
+    const allRoutes = await createAllLegalRoutes();
+    const firstHundred = selectActiveRoutesByLane(
+        allRoutes,
+        runtime.getModulationRuntimeCell,
+        { voice: 30, macroVoice: 20, voiceRack: 30, macroRack: 20 },
+    );
+    const finalLegalRoute = allRoutes.find((route) => {
+        const cell = runtime.getModulationRuntimeCell(route);
+        return cell.path === "macroRack" && cell.cellIndex === 143;
+    });
+    assert.notEqual(finalLegalRoute, undefined);
+    const sentinel = {
+        ...finalLegalRoute,
+        amount: 0.5,
+        polarity: "bipolar",
+        reducer: "mean",
+    };
+    const program = runtime.compileModulationRuntimeProgram([...firstHundred, sentinel]);
+    const macroRack = runtimeLaneSpecifications.find(({ path }) => path === "macroRack");
 
-    assert.equal(routes.length, MODULATION_MAPPING_CELL_COUNT);
+    assert.equal(runtimeLaneCounts(program).reduce((total, count) => total + count, 0), 101);
+    assert.deepEqual(runtimeLaneCounts(program), [30, 20, 30, 21]);
+    assert.deepEqual(runtimeLaneTail(program, macroRack), {
+        cellIndex: 143,
+        sourceIndex: 3,
+        targetIndex: 35,
+        polarity: 1,
+        amount: 0.5,
+        reducer: null,
+    });
+});
+
+test("all 884 legal mappings publish exact deterministic lane tails without truncation", async () => {
+    const runtime = await programModulePromise;
+    const routes = await createAllLegalRoutes();
+    const program = runtime.compileModulationRuntimeProgram(routes);
+
+    assert.equal(routes.length, runtime.MODULATION_MAPPING_CELL_COUNT);
+    assert.deepEqual(runtimeLaneCounts(program), [288, 128, 324, 144]);
     assert.deepEqual(
-        [program.voiceRouteCount, program.macroVoiceRouteCount, program.voiceRackRouteCount, program.macroRackRouteCount],
-        [288, 128, 324, 144],
+        runtimeLaneSpecifications.map((specification) => runtimeLaneTail(program, specification)),
+        [
+            { cellIndex: 287, sourceIndex: 8, targetIndex: 31, polarity: 1, amount: 0.25, reducer: null },
+            { cellIndex: 127, sourceIndex: 3, targetIndex: 31, polarity: 0, amount: 0.25, reducer: null },
+            { cellIndex: 323, sourceIndex: 8, targetIndex: 35, polarity: 1, amount: 0.25, reducer: 2 },
+            { cellIndex: 143, sourceIndex: 3, targetIndex: 35, polarity: 0, amount: 0.25, reducer: null },
+        ],
+    );
+    assert.deepEqual(
+        runtime.compileModulationRuntimeProgram(routes.toReversed()),
+        program,
+        "stored route order must not change the published runtime image",
+    );
+});
+
+test("884 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
+    const runtime = await programModulePromise;
+    const allRoutes = await createAllLegalRoutes();
+    const activeRoutes = selectActiveRoutesByLane(
+        allRoutes,
+        runtime.getModulationRuntimeCell,
+        { voice: 30, macroVoice: 20, voiceRack: 30, macroRack: 20 },
+    );
+    const activeIds = new Set(activeRoutes.map(({ id }) => id));
+    const storedDomain = allRoutes.map((route) => (
+        activeIds.has(route.id) ? route : { ...route, enabled: false }
+    ));
+
+    assert.equal(activeRoutes.length, 100);
+    assert.equal(storedDomain.length, 884);
+    assert.deepEqual(
+        projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(storedDomain)),
+        projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(activeRoutes)),
     );
 });
 
