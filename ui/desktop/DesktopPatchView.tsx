@@ -53,6 +53,10 @@ import {
 import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
+import {
+    DesktopOscillatorConnectionBoundary,
+    DesktopOscillatorPresentation,
+} from "./desktop-oscillator-presentation";
 import { DesktopModMatrix } from "./desktop-mod-matrix";
 import { MobileModMatrix } from "./mobile-mod-matrix";
 import {
@@ -61,6 +65,7 @@ import {
 } from "./effects-rack-workspace";
 import {
     SYNTH_PRESET_EFFECT_ID,
+    useOscillatorSelectionViewModel,
     useSynthPatchViewModel,
     type SynthPatchViewModel,
 } from "../shared/synth-hooks";
@@ -3232,6 +3237,7 @@ function DesktopPatchViewBody({
         onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
         onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false }),
     });
+    const oscillatorSelection = useOscillatorSelectionViewModel();
     useEffect(() => {
         postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
     }, [keyboardInputMode]);
@@ -3431,7 +3437,7 @@ function DesktopPatchViewBody({
             height={20}
         />
     ), [synthView.pan]);
-    const keyboardToolbarOverride = useMemo(() => (
+    const connectedOscillatorAToolbar = useMemo(() => (
         <div data-role="keyboard-control-row" className="grid min-h-[158px] min-w-0 gap-2 overflow-hidden">
             <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5">
                 <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45">
@@ -3534,6 +3540,14 @@ function DesktopPatchViewBody({
         synthView,
         velocitySegments,
     ]);
+    const keyboardToolbarOverride = (
+        <DesktopOscillatorConnectionBoundary
+            connectedOscillatorAContent={connectedOscillatorAToolbar}
+            context="controls"
+            pendingClassName="min-h-[158px]"
+            selectedOscillator={oscillatorSelection.selectedOscillator}
+        />
+    );
 
     const selectMobileWorkspaceSection = useCallback((section: MobileWorkspaceSection) => {
         setMobileWorkspaceSection(section);
@@ -3557,28 +3571,34 @@ function DesktopPatchViewBody({
             data-role="voice-visualization-stack"
             className="mobile-voice-grid grid min-h-0 grid-cols-1 items-stretch gap-4"
         >
-            <WavetableStageSection
-                stageRef={stageRef}
-                frames={synthView.frames}
-                position={synthView.observedPosition}
-                warpMode={synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value}
-                warpAmount={synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value}
-                tableName={synthView.displayedTableName}
-                pendingTableName={synthView.runtimePresentation.isPendingSelection ? synthView.desiredTableName : null}
-                frameCount={synthView.displayedFrameCount}
-                desiredTableIndex={synthView.desiredTableIndex}
-                tableOptions={synthView.tableOptions}
-                canRetry={synthView.canRetryDesiredTableLoad}
-                onTableChange={synthView.handleSelectWavetable}
-                onTablePrewarm={synthView.handlePrewarmWavetablePicker}
-                onRetry={synthView.handleRetryLoad}
-                tableFocusBindings={synthView.keyboardRouting.wavetableFocusBindings}
-                onPointerDown={synthView.stageBindings.handleStagePointerDown}
-                onPointerMove={synthView.stageBindings.handleStagePointerMove}
-                onPointerUp={synthView.stageBindings.handleStagePointerUp}
-                bottomLeftAccessory={warpControlCluster}
-                bottomRightAccessory={panField}
-                className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
+            <DesktopOscillatorPresentation
+                selection={oscillatorSelection}
+                pendingStageClassName={`${SYNTH_GRID_CARD_SHELL_CLASS} border ${DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}`}
+                connectedOscillatorAStage={(
+                    <WavetableStageSection
+                        stageRef={stageRef}
+                        frames={synthView.frames}
+                        position={synthView.observedPosition}
+                        warpMode={synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value}
+                        warpAmount={synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value}
+                        tableName={synthView.displayedTableName}
+                        pendingTableName={synthView.runtimePresentation.isPendingSelection ? synthView.desiredTableName : null}
+                        frameCount={synthView.displayedFrameCount}
+                        desiredTableIndex={synthView.desiredTableIndex}
+                        tableOptions={synthView.tableOptions}
+                        canRetry={synthView.canRetryDesiredTableLoad}
+                        onTableChange={synthView.handleSelectWavetable}
+                        onTablePrewarm={synthView.handlePrewarmWavetablePicker}
+                        onRetry={synthView.handleRetryLoad}
+                        tableFocusBindings={synthView.keyboardRouting.wavetableFocusBindings}
+                        onPointerDown={synthView.stageBindings.handleStagePointerDown}
+                        onPointerMove={synthView.stageBindings.handleStagePointerMove}
+                        onPointerUp={synthView.stageBindings.handleStagePointerUp}
+                        bottomLeftAccessory={warpControlCluster}
+                        bottomRightAccessory={panField}
+                        className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
+                    />
+                )}
             />
 
             <FilterSection
@@ -3804,7 +3824,8 @@ function DesktopPatchViewBody({
             />
 
             <ContextualArticulationToolbar
-                articulationIsDirty={synthView.selectedArticulationIsDirty}
+                articulationIsDirty={oscillatorSelection.selectedOscillatorID === "A"
+                    && synthView.selectedArticulationIsDirty}
                 selectedArticulationName={selectedArticulationName}
                 isDismissed={Boolean(contextualToolbarKey && dismissedContextualToolbarKey === contextualToolbarKey)}
                 onDismiss={() => {
