@@ -26,6 +26,10 @@ namespace wt
     let filterCutoffMaxHz = 20000.0f;
     let filterQMin = 0.1f;
     let filterQMax = 20.0f;
+    let oscillatorCount = 3;
+    let oscillatorA = 0;
+    let oscillatorB = 1;
+    let oscillatorC = 2;
     let modulationMsegSlotCount = 3;
     let modulationEnvSlotCount = 3;
     let modulationVoiceSourceCount = 9;
@@ -250,6 +254,19 @@ namespace wt
         float32 framePosition;
         float32 mseg1Morph;
         float32 route1Amount;
+    }
+
+    // A polyphonic note owns one atomic bundle containing oscillators A, B and C.
+    // This remains an engine-internal test seam rather than a host parameter.
+    struct OscillatorVoiceStartMonitor
+    {
+        int32 voiceIndex;
+        int32 oscillatorIndex;
+        int32 voiceGeneration;
+        int32 channel;
+        float32 pitch;
+        float32 firstUnisonPhase;
+        float32 lastUnisonPhase;
     }
 
     struct ModulationMsegBufferUpload
@@ -1695,6 +1712,7 @@ namespace wt
         output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
         output event wt::EffectiveMsegStateMonitor effectiveMsegStateOut;
         output event wt::VoiceArticulationMonitor voiceArticulationStartOut;
+        output event wt::OscillatorVoiceStartMonitor oscillatorVoiceStartOut;
         output stream float32<2> out;
         output stream float32 trackingPitchHzOut;
         output stream float32 rackModOut[rackModTargetCount];
@@ -1712,8 +1730,9 @@ namespace wt
         std::filters::simper::Implementation[voiceCount] filters;
         std::filters::simper::Implementation[voiceCount] unisonLeftFilters;
         std::filters::simper::Implementation[voiceCount] unisonRightFilters;
-        std::oscillators::PhasorState[voiceCount] phasors;
-        std::oscillators::PhasorState[voiceCount * maxUnisonVoiceCount] unisonPhasors;
+        std::oscillators::PhasorState[voiceCount * oscillatorCount] phasors;
+        std::oscillators::PhasorState[voiceCount * oscillatorCount * maxUnisonVoiceCount] unisonPhasors;
+        int32[voiceCount * oscillatorCount] voiceOscillatorGeneration;
         int32[voiceCount] voiceChannel;
         float32[voiceCount] voiceBasePitch;
         float32[voiceCount] voiceCurrentPitch;
@@ -1800,10 +1819,10 @@ namespace wt
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeSustain;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeReleaseSeconds;
         float32[warpDecimatorTapCount] warpDecimatorTapsState;
-        float32[voiceCount * warpDecimatorTapCount] voiceWarpHistory;
-        int32[voiceCount] voiceWarpHistoryWriteIndex;
-        float32[voiceCount * maxUnisonVoiceCount * warpDecimatorTapCount] unisonWarpHistory;
-        int32[voiceCount * maxUnisonVoiceCount] unisonWarpHistoryWriteIndex;
+        float32[voiceCount * oscillatorCount * warpDecimatorTapCount] voiceWarpHistory;
+        int32[voiceCount * oscillatorCount] voiceWarpHistoryWriteIndex;
+        float32[voiceCount * oscillatorCount * maxUnisonVoiceCount * warpDecimatorTapCount] unisonWarpHistory;
+        int32[voiceCount * oscillatorCount * maxUnisonVoiceCount] unisonWarpHistoryWriteIndex;
         int32 voiceRouteCount;
         int32[modulationVoiceRouteCellCount] voiceRouteCells;
         int32[modulationVoiceRouteCellCount] voiceRouteSources;
@@ -1969,20 +1988,30 @@ namespace wt
             }
         }
 
-        int32 warpHistoryIndex (int32 voiceIndex, int32 tapIndex)
+        int32 oscillatorVoiceIndex (int32 voiceIndex, int32 oscillatorIndex)
         {
-            return (voiceIndex * warpDecimatorTapCount) + tapIndex;
+            return (int32 (wrap<voiceCount> (voiceIndex)) * oscillatorCount)
+                 + int32 (wrap<oscillatorCount> (oscillatorIndex));
         }
 
-        int32 unisonIndex (int32 voiceIndex, int32 subVoiceIndex)
+        int32 oscillatorLaneIndex (int32 voiceIndex, int32 oscillatorIndex, int32 subVoiceIndex)
         {
-            return (int32 (wrap<voiceCount> (voiceIndex)) * maxUnisonVoiceCount)
+            return (oscillatorVoiceIndex (voiceIndex, oscillatorIndex) * maxUnisonVoiceCount)
                  + int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
         }
 
-        int32 unisonWarpHistoryIndex (int32 voiceIndex, int32 subVoiceIndex, int32 tapIndex)
+        int32 warpHistoryIndex (int32 voiceIndex, int32 oscillatorIndex, int32 tapIndex)
         {
-            return (unisonIndex (voiceIndex, subVoiceIndex) * warpDecimatorTapCount) + tapIndex;
+            return (oscillatorVoiceIndex (voiceIndex, oscillatorIndex) * warpDecimatorTapCount) + tapIndex;
+        }
+
+        int32 unisonWarpHistoryIndex (int32 voiceIndex,
+                                      int32 oscillatorIndex,
+                                      int32 subVoiceIndex,
+                                      int32 tapIndex)
+        {
+            return (oscillatorLaneIndex (voiceIndex, oscillatorIndex, subVoiceIndex)
+                    * warpDecimatorTapCount) + tapIndex;
         }
 
         int32 resolveUnisonVoices (float32 rawVoices)
@@ -2026,41 +2055,56 @@ namespace wt
             return std::intrinsics::clamp (value, 0.0f, 1.0f);
         }
 
-        void resetWarpRenderState (int32 voiceIndex)
+        void resetOscillatorWarpRenderState (int32 voiceIndex, int32 oscillatorIndex)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
 
             for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
-                voiceWarpHistory.at (warpHistoryIndex (resolvedVoice, tapIndex)) = 0.0f;
+                voiceWarpHistory.at (
+                    warpHistoryIndex (resolvedVoice, resolvedOscillator, tapIndex)) = 0.0f;
 
-            voiceWarpHistoryWriteIndex.at (resolvedVoice) = 0;
+            voiceWarpHistoryWriteIndex.at (
+                oscillatorVoiceIndex (resolvedVoice, resolvedOscillator)) = 0;
         }
 
-        void resetUnisonWarpRenderState (int32 voiceIndex, int32 subVoiceIndex)
+        void resetOscillatorUnisonWarpRenderState (int32 voiceIndex,
+                                                    int32 oscillatorIndex,
+                                                    int32 subVoiceIndex)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
             let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
-            let stateIndex = unisonIndex (resolvedVoice, resolvedSubVoice);
+            let stateIndex = oscillatorLaneIndex (
+                resolvedVoice, resolvedOscillator, resolvedSubVoice);
 
             for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
-                unisonWarpHistory.at (unisonWarpHistoryIndex (resolvedVoice, resolvedSubVoice, tapIndex)) = 0.0f;
+                unisonWarpHistory.at (unisonWarpHistoryIndex (
+                    resolvedVoice, resolvedOscillator, resolvedSubVoice, tapIndex)) = 0.0f;
 
             unisonWarpHistoryWriteIndex.at (stateIndex) = 0;
         }
 
-        void resetVoiceUnisonWarpRenderState (int32 voiceIndex)
+        void resetOscillatorUnisonWarpRenderState (int32 voiceIndex, int32 oscillatorIndex)
         {
             for (wrap<maxUnisonVoiceCount> subVoice)
-                resetUnisonWarpRenderState (voiceIndex, int32 (subVoice));
+                resetOscillatorUnisonWarpRenderState (
+                    voiceIndex, oscillatorIndex, int32 (subVoice));
+        }
+
+        void resetVoiceWarpRenderState (int32 voiceIndex)
+        {
+            for (wrap<oscillatorCount> oscillator)
+            {
+                resetOscillatorWarpRenderState (voiceIndex, int32 (oscillator));
+                resetOscillatorUnisonWarpRenderState (voiceIndex, int32 (oscillator));
+            }
         }
 
         void resetAllWarpRenderState()
         {
             for (wrap<voiceCount> voice)
-            {
-                resetWarpRenderState (int32 (voice));
-                resetVoiceUnisonWarpRenderState (int32 (voice));
-            }
+                resetVoiceWarpRenderState (int32 (voice));
         }
 
         void resetFilterState (int32 voiceIndex)
@@ -2149,6 +2193,7 @@ namespace wt
         }
 
         float32 unisonSubVoicePhase (int32 voiceIndex,
+                                     int32 oscillatorIndex,
                                      int32 subVoiceIndex,
                                      int32 generation,
                                      float32 phase,
@@ -2157,7 +2202,10 @@ namespace wt
             let clampedPhase = clampUnison01 (phase);
             let clampedRandom = clampUnison01 (randomAmount);
             let seeded = std::intrinsics::sin (
-                float32 ((voiceIndex + 1) * 101 + (subVoiceIndex + 1) * 1009 + (generation + 1) * 9176) * 12.9898f
+                float32 ((voiceIndex + 1) * 101
+                         + oscillatorIndex * 503
+                         + (subVoiceIndex + 1) * 1009
+                         + (generation + 1) * 9176) * 12.9898f
             ) * 43758.5453f;
             let randomPhase = std::intrinsics::wrap (seeded, 1.0f);
             return std::intrinsics::wrap (clampedPhase + (randomPhase * clampedRandom), 1.0f);
@@ -2815,10 +2863,23 @@ namespace wt
             {
                 for (wrap<voiceCount> voice)
                 {
-                    phasors.at (voice).phase = 0.0f;
-                    resetWarpRenderState (int32 (voice));
-                    resetVoiceUnisonPhases (int32 (voice), maxUnisonVoiceCount, 0.0f, 0.0f);
-                    resetVoiceUnisonWarpRenderState (int32 (voice));
+                    for (wrap<oscillatorCount> oscillator)
+                    {
+                        let resolvedVoice = int32 (voice);
+                        let resolvedOscillator = int32 (oscillator);
+                        phasors.at (oscillatorVoiceIndex (
+                            resolvedVoice, resolvedOscillator)).phase = 0.0f;
+                        resetOscillatorWarpRenderState (
+                            resolvedVoice, resolvedOscillator);
+                        resetOscillatorUnisonPhases (
+                            resolvedVoice,
+                            resolvedOscillator,
+                            maxUnisonVoiceCount,
+                            0.0f,
+                            0.0f);
+                        resetOscillatorUnisonWarpRenderState (
+                            resolvedVoice, resolvedOscillator);
+                    }
                 }
             }
 
@@ -3429,23 +3490,28 @@ namespace wt
             return readFrameBlendEndpointSampleForMip (playableMipIndex, frameLo, frameHi, frameT);
         }
 
-        void pushWarpHistorySample (int32 voiceIndex, float32 sample)
+        void pushWarpHistorySample (int32 voiceIndex, int32 oscillatorIndex, float32 sample)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            let writeIndex = voiceWarpHistoryWriteIndex.at (resolvedVoice);
-            voiceWarpHistory.at (warpHistoryIndex (resolvedVoice, writeIndex)) = sample;
+            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
+            let stateIndex = oscillatorVoiceIndex (resolvedVoice, resolvedOscillator);
+            let writeIndex = voiceWarpHistoryWriteIndex.at (stateIndex);
+            voiceWarpHistory.at (
+                warpHistoryIndex (resolvedVoice, resolvedOscillator, writeIndex)) = sample;
             int32 nextWriteIndex = writeIndex + 1;
 
             if (nextWriteIndex >= warpDecimatorTapCount)
                 nextWriteIndex = 0;
 
-            voiceWarpHistoryWriteIndex.at (resolvedVoice) = nextWriteIndex;
+            voiceWarpHistoryWriteIndex.at (stateIndex) = nextWriteIndex;
         }
 
-        float32 readWarpDecimatorOutput (int32 voiceIndex)
+        float32 readWarpDecimatorOutput (int32 voiceIndex, int32 oscillatorIndex)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            int32 historyIndex = voiceWarpHistoryWriteIndex.at (resolvedVoice);
+            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
+            int32 historyIndex = voiceWarpHistoryWriteIndex.at (
+                oscillatorVoiceIndex (resolvedVoice, resolvedOscillator));
             float32 sum = 0.0f;
 
             for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
@@ -3455,7 +3521,8 @@ namespace wt
                 if (historyIndex < 0)
                     historyIndex = warpDecimatorTapCount - 1;
 
-                sum += voiceWarpHistory.at (warpHistoryIndex (resolvedVoice, historyIndex))
+                sum += voiceWarpHistory.at (
+                           warpHistoryIndex (resolvedVoice, resolvedOscillator, historyIndex))
                      * warpDecimatorTapsState.at (tapIndex);
             }
 
@@ -3463,6 +3530,7 @@ namespace wt
         }
 
         float32 renderWarpedVoiceSample (int32 voiceIndex,
+                                         int32 oscillatorIndex,
                                          int32 playableMipIndex,
                                          float32 effectivePosition,
                                          float32 basePhase,
@@ -3486,19 +3554,25 @@ namespace wt
                 else if (warpedPhase.holdCycleEndpoint)
                     oversampledSample = readVoiceEndpointSampleForMip (playableMipIndex, effectivePosition);
 
-                pushWarpHistorySample (voiceIndex, oversampledSample);
+                pushWarpHistorySample (voiceIndex, oscillatorIndex, oversampledSample);
             }
 
-            return readWarpDecimatorOutput (voiceIndex);
+            return readWarpDecimatorOutput (voiceIndex, oscillatorIndex);
         }
 
-        void pushUnisonWarpHistorySample (int32 voiceIndex, int32 subVoiceIndex, float32 sample)
+        void pushUnisonWarpHistorySample (int32 voiceIndex,
+                                          int32 oscillatorIndex,
+                                          int32 subVoiceIndex,
+                                          float32 sample)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
             let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
-            let stateIndex = unisonIndex (resolvedVoice, resolvedSubVoice);
+            let stateIndex = oscillatorLaneIndex (
+                resolvedVoice, resolvedOscillator, resolvedSubVoice);
             let writeIndex = unisonWarpHistoryWriteIndex.at (stateIndex);
-            unisonWarpHistory.at (unisonWarpHistoryIndex (resolvedVoice, resolvedSubVoice, writeIndex)) = sample;
+            unisonWarpHistory.at (unisonWarpHistoryIndex (
+                resolvedVoice, resolvedOscillator, resolvedSubVoice, writeIndex)) = sample;
             int32 nextWriteIndex = writeIndex + 1;
 
             if (nextWriteIndex >= warpDecimatorTapCount)
@@ -3507,11 +3581,15 @@ namespace wt
             unisonWarpHistoryWriteIndex.at (stateIndex) = nextWriteIndex;
         }
 
-        float32 readUnisonWarpDecimatorOutput (int32 voiceIndex, int32 subVoiceIndex)
+        float32 readUnisonWarpDecimatorOutput (int32 voiceIndex,
+                                               int32 oscillatorIndex,
+                                               int32 subVoiceIndex)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
+            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
             let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
-            int32 historyIndex = unisonWarpHistoryWriteIndex.at (unisonIndex (resolvedVoice, resolvedSubVoice));
+            int32 historyIndex = unisonWarpHistoryWriteIndex.at (
+                oscillatorLaneIndex (resolvedVoice, resolvedOscillator, resolvedSubVoice));
             float32 sum = 0.0f;
 
             for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
@@ -3521,7 +3599,8 @@ namespace wt
                 if (historyIndex < 0)
                     historyIndex = warpDecimatorTapCount - 1;
 
-                sum += unisonWarpHistory.at (unisonWarpHistoryIndex (resolvedVoice, resolvedSubVoice, historyIndex))
+                sum += unisonWarpHistory.at (unisonWarpHistoryIndex (
+                           resolvedVoice, resolvedOscillator, resolvedSubVoice, historyIndex))
                      * warpDecimatorTapsState.at (tapIndex);
             }
 
@@ -3529,6 +3608,7 @@ namespace wt
         }
 
         float32 renderWarpedUnisonSample (int32 voiceIndex,
+                                          int32 oscillatorIndex,
                                           int32 subVoiceIndex,
                                           int32 playableMipIndex,
                                           float32 effectivePosition,
@@ -3553,27 +3633,83 @@ namespace wt
                 else if (warpedPhase.holdCycleEndpoint)
                     oversampledSample = readVoiceEndpointSampleForMip (playableMipIndex, effectivePosition);
 
-                pushUnisonWarpHistorySample (voiceIndex, subVoiceIndex, oversampledSample);
+                pushUnisonWarpHistorySample (
+                    voiceIndex, oscillatorIndex, subVoiceIndex, oversampledSample);
             }
 
-            return readUnisonWarpDecimatorOutput (voiceIndex, subVoiceIndex);
+            return readUnisonWarpDecimatorOutput (
+                voiceIndex, oscillatorIndex, subVoiceIndex);
         }
 
-        void resetVoiceUnisonPhases (int32 voiceIndex,
-                                     int32 unisonVoiceCount,
-                                     float32 phase,
-                                     float32 randomAmount)
+        void resetOscillatorUnisonPhases (int32 voiceIndex,
+                                          int32 oscillatorIndex,
+                                          int32 unisonVoiceCount,
+                                          float32 phase,
+                                          float32 randomAmount)
         {
             let voice = int32 (wrap<voiceCount> (voiceIndex));
+            let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
             let generation = voiceGeneration.at (voice);
 
             for (wrap<maxUnisonVoiceCount> subVoice)
             {
                 let subIndex = int32 (subVoice);
                 let phaseForVoice = subIndex < unisonVoiceCount
-                    ? unisonSubVoicePhase (voice, subIndex, generation, phase, randomAmount)
+                    ? unisonSubVoicePhase (
+                        voice, oscillator, subIndex, generation, phase, randomAmount)
                     : 0.0f;
-                unisonPhasors.at (unisonIndex (voice, subIndex)).phase = phaseForVoice;
+                unisonPhasors.at (
+                    oscillatorLaneIndex (voice, oscillator, subIndex)).phase = phaseForVoice;
+            }
+        }
+
+        void emitOscillatorVoiceStart (int32 voiceIndex, int32 oscillatorIndex)
+        {
+            let voice = int32 (wrap<voiceCount> (voiceIndex));
+            let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
+            OscillatorVoiceStartMonitor monitor;
+            monitor.voiceIndex = voice;
+            monitor.oscillatorIndex = oscillator;
+            monitor.voiceGeneration = voiceOscillatorGeneration.at (
+                oscillatorVoiceIndex (voice, oscillator));
+            monitor.channel = voiceChannel.at (voice);
+            monitor.pitch = voiceBasePitch.at (voice);
+            monitor.firstUnisonPhase = unisonPhasors.at (
+                oscillatorLaneIndex (voice, oscillator, 0)).phase;
+            monitor.lastUnisonPhase = unisonPhasors.at (
+                oscillatorLaneIndex (voice, oscillator, maxUnisonVoiceCount - 1)).phase;
+            oscillatorVoiceStartOut <- monitor;
+        }
+
+        void resetVoiceOscillatorLifecycle (int32 voiceIndex)
+        {
+            let voice = int32 (wrap<voiceCount> (voiceIndex));
+            let unisonVoiceCount = voiceUsesArticulation.at (voice)
+                ? voiceArticulationUnisonVoices.at (voice)
+                : unisonVoicesState;
+            let phase = voiceUsesArticulation.at (voice)
+                ? voiceArticulationUnisonPhase.at (voice)
+                : unisonPhaseState;
+            let randomAmount = voiceUsesArticulation.at (voice)
+                ? voiceArticulationUnisonRandom.at (voice)
+                : unisonRandomState;
+            let phaseMode = voiceUsesArticulation.at (voice)
+                ? voiceArticulationUnisonPhaseMode.at (voice)
+                : unisonPhaseModeState;
+
+            for (wrap<oscillatorCount> oscillatorWrapped)
+            {
+                let oscillator = int32 (oscillatorWrapped);
+                voiceOscillatorGeneration.at (oscillatorVoiceIndex (voice, oscillator))
+                    = voiceGeneration.at (voice);
+                resetOscillatorWarpRenderState (voice, oscillator);
+                resetOscillatorUnisonWarpRenderState (voice, oscillator);
+
+                if (phaseMode == unisonPhaseModeReset)
+                    resetOscillatorUnisonPhases (
+                        voice, oscillator, unisonVoiceCount, phase, randomAmount);
+
+                emitOscillatorVoiceStart (voice, oscillator);
             }
         }
 
@@ -3652,22 +3788,7 @@ namespace wt
             nextVoiceGeneration += 1;
             voiceTrackingSerial.at (voice) = nextVoiceTrackingSerial;
             nextVoiceTrackingSerial += 1;
-            let baseUnisonVoices = voiceUsesArticulation.at (voice)
-                ? voiceArticulationUnisonVoices.at (voice)
-                : unisonVoicesState;
-            let baseUnisonPhase = voiceUsesArticulation.at (voice)
-                ? voiceArticulationUnisonPhase.at (voice)
-                : unisonPhaseState;
-            let baseUnisonRandom = voiceUsesArticulation.at (voice)
-                ? voiceArticulationUnisonRandom.at (voice)
-                : unisonRandomState;
-            let baseUnisonPhaseMode = voiceUsesArticulation.at (voice)
-                ? voiceArticulationUnisonPhaseMode.at (voice)
-                : unisonPhaseModeState;
-            resetWarpRenderState (index);
-            resetVoiceUnisonWarpRenderState (index);
-            if (baseUnisonPhaseMode == unisonPhaseModeReset)
-                resetVoiceUnisonPhases (index, baseUnisonVoices, baseUnisonPhase, baseUnisonRandom);
+            resetVoiceOscillatorLifecycle (index);
             resetFilterState (index);
 
             envelopes[voice].eventIn <- note;
@@ -3757,22 +3878,7 @@ namespace wt
                 note.velocity = change.velocity;
                 voiceGeneration.at (voice) = nextVoiceGeneration;
                 nextVoiceGeneration += 1;
-                resetWarpRenderState (index);
-                resetVoiceUnisonWarpRenderState (index);
-                let baseUnisonVoices = voiceUsesArticulation.at (voice)
-                    ? voiceArticulationUnisonVoices.at (voice)
-                    : unisonVoicesState;
-                let baseUnisonPhase = voiceUsesArticulation.at (voice)
-                    ? voiceArticulationUnisonPhase.at (voice)
-                    : unisonPhaseState;
-                let baseUnisonRandom = voiceUsesArticulation.at (voice)
-                    ? voiceArticulationUnisonRandom.at (voice)
-                    : unisonRandomState;
-                let baseUnisonPhaseMode = voiceUsesArticulation.at (voice)
-                    ? voiceArticulationUnisonPhaseMode.at (voice)
-                    : unisonPhaseModeState;
-                if (baseUnisonPhaseMode == unisonPhaseModeReset)
-                    resetVoiceUnisonPhases (index, baseUnisonVoices, baseUnisonPhase, baseUnisonRandom);
+                resetVoiceOscillatorLifecycle (index);
                 resetFilterState (index);
                 envelopes[voice].eventIn <- note;
                 triggerVoiceModulators (index);
@@ -4527,7 +4633,10 @@ namespace wt
 
                     if (effectiveUnisonVoices <= 1)
                     {
-                        phasors.at (voice).setFrequency (processor.frequency, effectiveFrequencyHz);
+                        let oscillatorStateIndex = oscillatorVoiceIndex (
+                            int32 (voice), oscillatorA);
+                        phasors.at (oscillatorStateIndex).setFrequency (
+                            processor.frequency, effectiveFrequencyHz);
                         let currentPhaseIncrement = effectiveFrequencyHz / float32 (processor.frequency);
                         let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
                         let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
@@ -4544,7 +4653,7 @@ namespace wt
                         if (playableMipIndex < 0 && warpPlayableMipIndex < 0)
                             continue;
 
-                        let phase = phasors.at (voice).next();
+                        let phase = phasors.at (oscillatorStateIndex).next();
                         float32 sample = 0.0f;
 
                         if (playableMipIndex >= 0
@@ -4557,6 +4666,7 @@ namespace wt
                         {
                             let warpedSample = renderWarpedVoiceSample (
                                 int32 (voice),
+                                oscillatorA,
                                 warpPlayableMipIndex,
                                 effectivePosition,
                                 phase,
@@ -4635,7 +4745,8 @@ namespace wt
                             if (playableMipIndex < 0 && warpPlayableMipIndex < 0)
                                 continue;
 
-                            let subStateIndex = unisonIndex (int32 (voice), subVoiceIndex);
+                            let subStateIndex = oscillatorLaneIndex (
+                                int32 (voice), oscillatorA, subVoiceIndex);
                             unisonPhasors.at (subStateIndex).setFrequency (processor.frequency, subFrequencyHz);
                             let phase = unisonPhasors.at (subStateIndex).next();
                             float32 sample = 0.0f;
@@ -4650,6 +4761,7 @@ namespace wt
                             {
                                 let warpedSample = renderWarpedUnisonSample (
                                     int32 (voice),
+                                    oscillatorA,
                                     subVoiceIndex,
                                     warpPlayableMipIndex,
                                     subPosition,
