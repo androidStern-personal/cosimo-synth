@@ -55,9 +55,9 @@ function seedDemoPatch(adapter) {
     commands.setArticulationRange(b, "chain", "min", 42);
     commands.setArticulationRange(c, "chain", "min", 90);
     commands.setArticulationRange(b, "chain", "max", 89);
-    expectOkValue(commands.addMapping({ targetId: "wavetable.warp", sourceId: "envelope-1" }), "seed warp mapping");
-    commands.setMappingAmount("wavetable.warp::envelope-1", 40, { _tag: "patchBase" });
-    expectOkValue(commands.addMapping({ targetId: "wavetable.tune", sourceId: "mseg-1" }), "seed tune mapping");
+    expectOkValue(commands.addMapping({ targetId: "oscA.warpAmount", sourceId: "envelope-1" }), "seed warp mapping");
+    commands.setMappingAmount("oscA.warpAmount::envelope-1", 40, { _tag: "patchBase" });
+    expectOkValue(commands.addMapping({ targetId: "oscA.pitchSemitones", sourceId: "mseg-1" }), "seed tune mapping");
     expectOkValue(commands.addMapping({ targetId: "phaser.phaserDepth", sourceId: "macro-1" }), "seed rack mapping");
     return { articulationIds: [a, b, c] };
 }
@@ -120,25 +120,25 @@ function contractSuite(adapterName, makeAdapter) {
     // ── Parameters & edit layers ──────────────────────────────────────────
 
     t("patch-base edits land in parameterValues and only there", (adapter) => {
-        adapter.commands.setParameter({ targetId: "wavetable.warp", value: 0.9, layer: { _tag: "patchBase" } });
+        adapter.commands.setParameter({ targetId: "oscA.warpAmount", value: 0.9, layer: { _tag: "patchBase" } });
         const { patch } = adapter.getSnapshot();
-        assert.equal(patch.parameterValues["wavetable.warp"], 0.9);
+        assert.equal(patch.parameterValues["oscA.warpAmount"], 0.9);
         for (const overrides of Object.values(patch.articulationOverrides)) {
-            assert.equal(Object.hasOwn(overrides, "wavetable.warp"), false);
+            assert.equal(Object.hasOwn(overrides, "oscA.warpAmount"), false);
         }
     });
 
     t("articulation-layer edits write the override and never move the base", (adapter) => {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
-        const baseBefore = adapter.getSnapshot().patch.parameterValues["wavetable.warp"];
+        const baseBefore = adapter.getSnapshot().patch.parameterValues["voice-filter.cutoff"];
         adapter.commands.setParameter({
-            targetId: "wavetable.warp",
+            targetId: "voice-filter.cutoff",
             value: 0.77,
             layer: { _tag: "articulationOverride", articulationId },
         });
         const { patch } = adapter.getSnapshot();
-        assert.equal(patch.articulationOverrides[articulationId]["wavetable.warp"], 0.77);
-        assert.equal(patch.parameterValues["wavetable.warp"], baseBefore);
+        assert.equal(patch.articulationOverrides[articulationId]["voice-filter.cutoff"], 0.77);
+        assert.equal(patch.parameterValues["voice-filter.cutoff"], baseBefore);
     });
 
     // ── Mappings ──────────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(adapter.getSnapshot().patch.mappings.length, initialCount + 101);
     });
 
-    t("the complete 624-pair product domain is reachable", async (adapter) => {
+    t("the complete 884-pair product domain is reachable", async (adapter) => {
         const { allTargetDescriptors } = await targetDescriptorPromise;
         for (const sourceType of ["mseg", "envelope", "macro"]) {
             while (adapter.commands.createSource(sourceType)._tag === "ok") {
@@ -199,7 +199,7 @@ function contractSuite(adapterName, makeAdapter) {
             .filter((descriptor) => descriptor.modulationTargetKind !== null)
             .map((descriptor) => descriptor.targetId);
         assert.equal(sources.length, 13);
-        assert.equal(targets.length, 48);
+        assert.equal(targets.length, 68);
 
         for (const targetId of targets) {
             for (const sourceId of sources) {
@@ -210,7 +210,7 @@ function contractSuite(adapterName, makeAdapter) {
             }
         }
 
-        assert.equal(adapter.getSnapshot().patch.mappings.length, 624);
+        assert.equal(adapter.getSnapshot().patch.mappings.length, 884);
     });
 
     t("mapping setters are reflected verbatim", (adapter) => {
@@ -365,14 +365,14 @@ function contractSuite(adapterName, makeAdapter) {
         const sourceArticulation = adapter.getSnapshot().patch.articulations[0].id;
         const mappingId = adapter.getSnapshot().patch.mappings[0].id;
         adapter.commands.setParameter({
-            targetId: "wavetable.index", value: 0.42,
+            targetId: "voice-filter.cutoff", value: 0.42,
             layer: { _tag: "articulationOverride", articulationId: sourceArticulation },
         });
         adapter.commands.setMappingAmount(mappingId, 71, { _tag: "articulationOverride", articulationId: sourceArticulation });
         const result = adapter.commands.duplicateArticulation(sourceArticulation);
         assert.equal(result._tag, "ok");
         const { patch } = adapter.getSnapshot();
-        assert.equal(patch.articulationOverrides[result.value]["wavetable.index"], 0.42);
+        assert.equal(patch.articulationOverrides[result.value]["voice-filter.cutoff"], 0.42);
         assert.equal(patch.articulationMappingAmounts[result.value][mappingId], 71);
     });
 
@@ -380,7 +380,7 @@ function contractSuite(adapterName, makeAdapter) {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
         adapter.commands.setAuditionArticulation(articulationId);
         adapter.commands.setParameter({
-            targetId: "wavetable.index", value: 0.9,
+            targetId: "voice-filter.cutoff", value: 0.9,
             layer: { _tag: "articulationOverride", articulationId },
         });
         adapter.commands.deleteArticulation(articulationId);
@@ -413,7 +413,11 @@ function contractSuite(adapterName, makeAdapter) {
 
     t("clearArticulationOverride removes the base override and the target's route amounts", (adapter) => {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
-        const mapping = adapter.getSnapshot().patch.mappings[0];
+        const mappingId = expectOkValue(adapter.commands.addMapping({
+            targetId: "voice-filter.cutoff",
+            sourceId: "velocity",
+        }), "add articulable filter mapping");
+        const mapping = adapter.getSnapshot().patch.mappings.find((candidate) => candidate.id === mappingId);
         adapter.commands.setParameter({
             targetId: mapping.targetId, value: 0.6,
             layer: { _tag: "articulationOverride", articulationId },
@@ -429,11 +433,11 @@ function contractSuite(adapterName, makeAdapter) {
         const articulationId = adapter.getSnapshot().patch.articulations[0].id;
         const mappingId = adapter.getSnapshot().patch.mappings[0].id;
         const backup = {
-            overrides: { "wavetable.warp": 0.11 },
+            overrides: { "voice-filter.cutoff": 0.5 },
             mappingAmounts: { [mappingId]: 12 },
         };
         adapter.commands.setParameter({
-            targetId: "wavetable.index", value: 0.5,
+            targetId: "voice-filter.cutoff", value: 0.5,
             layer: { _tag: "articulationOverride", articulationId },
         });
         adapter.commands.restoreArticulationLayer(articulationId, backup);
@@ -497,7 +501,7 @@ function contractSuite(adapterName, makeAdapter) {
 
     t("reset returns to the product-initial new patch", async (adapter) => {
         const blank = (await makeAdapter()).getSnapshot();
-        adapter.commands.setParameter({ targetId: "wavetable.warp", value: 0.9, layer: { _tag: "patchBase" } });
+        adapter.commands.setParameter({ targetId: "oscA.warpAmount", value: 0.9, layer: { _tag: "patchBase" } });
         adapter.commands.setRepeatEnabled(true);
         adapter.commands.reset();
         assert.deepEqual(adapter.getSnapshot().patch, blank.patch);
@@ -556,35 +560,35 @@ contractSuite("bridge", async () => {
 test("bridge rejects a duplicate mapping document without migration", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
-    const { createDefaultModulationState } = await modulationPromise;
+    const { MODULATION_STATE_KEY, createDefaultModulationState } = await modulationPromise;
     const connection = new MockPatchConnection({ name: "Duplicate pair regression", version: 1 });
     const modulationState = createDefaultModulationState();
     const storedModulation = JSON.stringify({
         ...modulationState,
         routes: [
             {
-                id: "earlier-legacy-duplicate",
+                id: "oscA.framePosition::mseg-1",
                 enabled: true,
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "unipolar",
-                targetKind: "wavetablePosition",
+                targetKind: "oscA.wavetablePosition",
                 amount: 0.25,
                 reducer: "max",
             },
             {
-                id: "legacy-route-without-canonical-product-identity",
+                id: "oscA.framePosition::mseg-1",
                 enabled: true,
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "unipolar",
-                targetKind: "wavetablePosition",
+                targetKind: "oscA.wavetablePosition",
                 amount: 0.75,
                 reducer: "max",
             },
         ],
     });
-    connection.setStoredStateValue("modulation.v2", storedModulation);
+    connection.setStoredStateValue(MODULATION_STATE_KEY, storedModulation);
     connection.setStoredStateValue("articulations.v3", JSON.stringify({
         format: "cosimo.articulations",
         version: 3,
@@ -612,18 +616,18 @@ test("bridge rejects a duplicate mapping document without migration", async () =
 test("bridge rejects a hydration document containing a non-articulable rack mapping amount", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
-    const { createDefaultModulationState } = await modulationPromise;
+    const { MODULATION_STATE_KEY, createDefaultModulationState } = await modulationPromise;
     const connection = new MockPatchConnection({ name: "Strict rack articulation rejection", version: 1 });
-    connection.setStoredStateValue("modulation.v2", JSON.stringify({
+    connection.setStoredStateValue(MODULATION_STATE_KEY, JSON.stringify({
         ...createDefaultModulationState(),
         routes: [
             {
-                id: "wavetable.index::mseg-1",
+                id: "oscA.framePosition::mseg-1",
                 enabled: true,
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "unipolar",
-                targetKind: "wavetablePosition",
+                targetKind: "oscA.wavetablePosition",
                 amount: 1,
                 reducer: "max",
             },
@@ -654,7 +658,7 @@ test("bridge rejects a hydration document containing a non-articulable rack mapp
             chainRange: { min: 0, max: 127 },
             overrides: { pan: 0.25 },
             routeAmounts: {
-                "wavetable.index::mseg-1": 0.75,
+                "oscA.framePosition::mseg-1": 0.75,
                 "phaser.phaserPhase::macro-1": 0.5,
             },
         }],
@@ -750,7 +754,7 @@ test("bridge never persists an inaudible articulation amount for an engine-gappe
 
     const articulationId = expectOkValue(adapter.commands.addArticulation(), "add articulation");
     const mappingId = expectOkValue(adapter.commands.addMapping({
-        targetId: "amp-pan.attack",
+        targetId: "filter.globalFilterMode",
         sourceId: "mseg-1",
     }), "add engine-gapped mapping");
     adapter.commands.setMappingAmount(
