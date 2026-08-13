@@ -30,6 +30,7 @@ import {
 } from "./mseg";
 import {
     MODULATION_STATE_KEY,
+    MODULATION_STATE_VERSION,
     acquireModulationRuntimeBridge,
     buildDisplayedMsegState,
     clampModulationRouteAmount,
@@ -938,18 +939,24 @@ function resolveEditorEnvelope(
     };
 }
 
-function resolveEditorSnapshot(
+/** Resolve today's A/shared editor view over one stable patch base. */
+export function resolveVisibleArticulationSnapshotV4(
     slot: ArticulationSlotV4,
     baseSnapshot: ArticulationSnapshot,
     routes: ReadonlyArray<ModulationRoute>,
 ): ArticulationSnapshot {
     const base = normalizeArticulationSnapshot(baseSnapshot);
     const parameters = base.parameters;
+    const baseRouteAmounts = new Map(
+        base.modRouteAmounts.map(({ routeId, amount }) => [routeId, amount]),
+    );
     const routeAmounts = routes.flatMap((route) => {
         if (getModulationArticulationCellIndex(route) === null) {
             return [];
         }
-        const amount = slot.routeAmounts[route.id] ?? route.amount;
+        const amount = slot.routeAmounts[route.id]
+            ?? baseRouteAmounts.get(route.id)
+            ?? route.amount;
         return [{ routeId: route.id, amount }];
     });
 
@@ -1005,7 +1012,7 @@ function projectCurrentArticulationsToEditorBank(
             id: slot.id,
             runtimeSlot: slot.runtimeSlot,
             name: slot.name,
-            snapshot: resolveEditorSnapshot(slot, baseSnapshot, routes),
+            snapshot: resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes),
         })),
         keyAssignments: state.slots.map((slot) => ({ articulationId: slot.id, note: slot.key })),
         velocityAssignments: state.slots.map((slot) => ({
@@ -1449,11 +1456,11 @@ function useSynthPresetStoredStateAdapters({
 
         const modulationAdapter: EffectStoredStateAdapter = {
             key: MODULATION_STATE_KEY,
-            schemaVersion: 2,
+            schemaVersion: MODULATION_STATE_VERSION,
             getContract() {
                 return {
                     key: MODULATION_STATE_KEY,
-                    schemaVersion: 2,
+                    schemaVersion: MODULATION_STATE_VERSION,
                     required: true,
                 };
             },
@@ -2966,7 +2973,7 @@ export function useSynthPatchViewModel({
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
         isApplyingArticulationRef.current = true;
         setSelectedArticulationIsDirty(false);
-        applyArticulationSnapshot(resolveEditorSnapshot(slot, baseSnapshot, routes));
+        applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes));
         setTimeout(() => {
             isApplyingArticulationRef.current = false;
         }, 0);
@@ -3032,7 +3039,7 @@ export function useSynthPatchViewModel({
         setSelectedArticulationIsDirty(false);
         const baseSnapshot = articulationPatchBaseRef.current ?? captureCurrentArticulationSnapshot();
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
-        applyArticulationSnapshot(resolveEditorSnapshot(slot, baseSnapshot, routes));
+        applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes));
         setTimeout(() => {
             isApplyingArticulationRef.current = false;
         }, 0);
@@ -3138,7 +3145,7 @@ export function useSynthPatchViewModel({
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
-            applyArticulationSnapshot(resolveEditorSnapshot(nextSlot, baseSnapshot, routes));
+            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes));
             setTimeout(() => {
                 isApplyingArticulationRef.current = false;
             }, 0);
@@ -3234,7 +3241,7 @@ export function useSynthPatchViewModel({
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
-            applyArticulationSnapshot(resolveEditorSnapshot(nextSlot, baseSnapshot, routes));
+            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes));
             setTimeout(() => {
                 isApplyingArticulationRef.current = false;
             }, 0);
@@ -3260,7 +3267,7 @@ export function useSynthPatchViewModel({
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
-            applyArticulationSnapshot(resolveEditorSnapshot(nextSlot, baseSnapshot, routes));
+            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes));
             setTimeout(() => {
                 isApplyingArticulationRef.current = false;
             }, 0);

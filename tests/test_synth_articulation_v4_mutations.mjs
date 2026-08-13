@@ -185,8 +185,49 @@ test("preset transaction rotates the sparse comparison base with parameters and 
     assert.equal(next.slots[0].overrides["oscB.pan"], -0.5);
 });
 
+test("switching from an explicit-zero articulation restores an inherited route from the stable base", async () => {
+    const [, , modulation, synthHooks] = await modulesPromise;
+    const route = modulation.createDefaultRoute({
+        id: "oscA.pan::env-1",
+        sourceKind: "env",
+        sourceSlot: 1,
+        targetKind: "oscA.pan",
+        amount: 0.25,
+    });
+    const base = {
+        modRouteAmounts: [{ routeId: route.id, amount: 0.25 }],
+    };
+    const explicit = makeSlot({}, { [route.id]: 0 });
+    const inherited = {
+        ...makeSlot({}, {}),
+        id: "layer-2",
+        runtimeSlot: 2,
+        name: "Layer 2",
+    };
+
+    const explicitSnapshot = synthHooks.resolveVisibleArticulationSnapshotV4(explicit, base, [route]);
+    assert.equal(explicitSnapshot.modRouteAmounts[0].amount, 0, "exact zero remains explicit");
+
+    const liveRouteAfterExplicitRecall = { ...route, amount: explicitSnapshot.modRouteAmounts[0].amount };
+    const inheritedSnapshot = synthHooks.resolveVisibleArticulationSnapshotV4(
+        inherited,
+        base,
+        [liveRouteAfterExplicitRecall],
+    );
+    assert.equal(inheritedSnapshot.modRouteAmounts[0].amount, 0.25, "inheritance ignores the prior slot's live amount");
+
+    const missingBaseSnapshot = synthHooks.resolveVisibleArticulationSnapshotV4(
+        inherited,
+        {},
+        [{ ...route, amount: 0.6 }],
+    );
+    assert.equal(missingBaseSnapshot.modRouteAmounts[0].amount, 0.6, "live fallback is reserved for a missing base route");
+});
+
 test("production synth hook imports direct v4 transitions and has no reverse compiler", async () => {
+    const [, , modulation] = await modulesPromise;
     const source = await readFile(new URL("../ui/shared/synth-hooks.ts", import.meta.url), "utf8");
+    assert.equal(modulation.MODULATION_STATE_VERSION, 4);
     assert.match(source, /from "\.\/articulation-v4-editor"/);
     assert.match(source, /replaceVisibleArticulationLayerV4/);
     assert.match(source, /setAndPersistState/);
@@ -194,6 +235,10 @@ test("production synth hook imports direct v4 transitions and has no reverse com
     assert.match(source, /collapseAllArticulationSegmentsV4\(previousState, mode\)/);
     assert.match(source, /setArticulationPatchBase\(buildPresetArticulationBaseSnapshot/);
     assert.match(source, /setAndPersistState\(parseStrictArticulationPresetState\(value, routeIds\), routeIds, true\)/);
+    assert.match(
+        source,
+        /const modulationAdapter:[\s\S]*?schemaVersion: MODULATION_STATE_VERSION,[\s\S]*?getContract\(\)[\s\S]*?schemaVersion: MODULATION_STATE_VERSION,/,
+    );
     assert.doesNotMatch(source, /compileEditorBankToCurrentArticulations/);
     assert.doesNotMatch(source, /setAndPersistBank/);
 });

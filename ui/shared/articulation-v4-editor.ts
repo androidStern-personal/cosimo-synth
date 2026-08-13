@@ -3,6 +3,7 @@ import {
     type ArticulationTriggerMode,
 } from "./articulations";
 import {
+    ARTICULATION_VOICE_PARAMETER_IDS,
     lowestFreeRuntimeSlot,
     type ArticulationRange,
     type ArticulationSlotV4,
@@ -34,10 +35,9 @@ export function diffCapturedArticulationLayerV4(
     base: CapturedArticulationLayer,
 ): CapturedArticulationLayer {
     const overrides: Partial<Record<ArticulationVoiceParameterId, number>> = {};
-    for (const [parameterId, value] of Object.entries(current.overrides) as Array<[
-        ArticulationVoiceParameterId,
-        number,
-    ]>) {
+    for (const parameterId of ARTICULATION_VOICE_PARAMETER_IDS) {
+        const value = current.overrides[parameterId];
+        if (value === undefined) continue;
         const baseValue = base.overrides[parameterId];
         if (baseValue === undefined || value !== baseValue) {
             overrides[parameterId] = value;
@@ -68,11 +68,9 @@ export function replaceVisibleArticulationLayerV4(
 ): ArticulationsState {
     return updateSlot(state, slotId, (slot) => {
         const overrides: Partial<Record<ArticulationVoiceParameterId, number>> = {};
-        for (const [parameterId, value] of Object.entries(slot.overrides) as Array<[
-            ArticulationVoiceParameterId,
-            number,
-        ]>) {
-            if (!visibleParameterIds.has(parameterId)) {
+        for (const parameterId of ARTICULATION_VOICE_PARAMETER_IDS) {
+            const value = slot.overrides[parameterId];
+            if (value !== undefined && !visibleParameterIds.has(parameterId)) {
                 overrides[parameterId] = value;
             }
         }

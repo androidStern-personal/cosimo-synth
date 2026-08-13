@@ -22,18 +22,18 @@ performance property.
 
 ### One declarative model, one compiler seam
 
-`modulation.v2` remains the canonical user and preset model. It stores mappings as relationships:
+`modulation.v4` is the canonical user and preset model. It stores mappings as relationships:
 source, target, amount, polarity, enabled state, and the applicable Max/Mean reducer. Mapping order
 has no sonic meaning. One source/target pair may exist at most once.
 
 `ui/shared/modulation-runtime-program.ts` is the only seam that translates those mappings into the
 engine representation. The public adapter and UI do not expose a route-table capacity.
 
-Cosimo's closed domain currently contains 13 sources and 48 destinations, so it has 624 legal
+Cosimo's closed domain currently contains 13 sources and 68 destinations, so it has 884 legal
 source/target cells:
 
-- 108 voice-source → voice-destination cells
-- 48 Macro → voice-destination cells
+- 288 voice-source → voice-destination cells
+- 128 Macro → voice-destination cells
 - 324 voice-source → rack-destination cells
 - 144 Macro → rack-destination cells
 
@@ -42,7 +42,7 @@ allocated, recycled, or coupled to list order.
 
 ### Clean break at the stored-state boundary
 
-There is one exact current `modulation.v2` schema. Hydration, live writes, and presets all use the
+There is one exact current `modulation.v4` schema. Hydration, live writes, and presets all use the
 same parser. Unknown fields, unknown sources or destinations, duplicate ids, duplicate
 source/destination pairs, non-finite values, and incomplete documents reject the whole document.
 The parser never groups rows, repairs identities, clamps persisted values, or rewrites state.
@@ -141,6 +141,11 @@ writes invoke the same strict parser; neither path drops, remaps, or repairs ent
 
 ## Performance contracts
 
+The measurements below predate the v4 target-domain expansion and were recorded against the
+then-complete 624-cell domain. They remain evidence for active-prefix cost and the 100-active-route
+contract; every reference to 624 in this section is a historical result, not the current 884-cell
+capacity claim.
+
 The committed benchmark runs at an asserted 48 kHz / 128-frame render quantum. It confirms 16 unique
 voice starts—eight ordinary notes and eight articulated notes—and measures 1,536-block epochs by
 default (configurable upward) for:
@@ -150,18 +155,19 @@ default (configurable upward) for:
 - 100 voice → rack mappings with mixed Max/Mean reduction;
 - 100 mixed mappings across all four lanes;
 - 100 voice → voice plus 100 voice → rack mappings simultaneously;
-- all 624 legal mappings as a capacity torture case;
+- all 624 mappings in the then-current domain as a capacity torture case;
 - 625 saturated, acknowledged tiny amount events plus an independently paced 60 Hz product gesture;
 - 250 saturated 100-mapping topology replacements;
-- 250 saturated complete-domain topology replacements;
+- 250 saturated then-complete-domain topology replacements;
 - an all-effects/two-way-unison nonlinear-load comparison with and without 100 voice mappings; and
 - a doubled-process route-dominant soak that amplifies modulation-loop cost while retaining wall-clock
   headroom.
 
-The doubled soak also installs all 624 mappings with every active count at zero while retaining their
-nonzero tail payload. Its average render load may exceed the doubled empty-program baseline by at most
-0.03. That timing comparison is supporting evidence, not the sole proof of the loop bound. Real DSP
-residue tests populate each of the four lane payloads, set its active count to zero, and require the
+The doubled soak also installs all 624 mappings from that historical domain with every active count
+at zero while retaining their nonzero tail payload. Its average render load may exceed the doubled
+empty-program baseline by at most 0.03. That timing comparison is supporting evidence, not the sole
+proof of the loop bound. Real DSP residue tests populate each of the four lane payloads, set its
+active count to zero, and require the
 destination to return to its unmodulated value. A source-level hot-path contract checks that every
 production loop is bounded by its active count; mutation testing one macro-to-voice loop to its fixed
 capacity makes that contract fail before the production source is restored.
@@ -185,11 +191,11 @@ limit while cadence is measured separately. With a high-resolution worklet clock
 over-budget calls. The tested generated worklets currently expose only integer-millisecond
 `Date.now()`, so a measured 3 ms call cannot distinguish a real 2.667 ms miss from clock quantization;
 that environment instead requires fewer than 0.2% flagged calls and no measured call of 4 ms or more.
-The 624-cell torture case is not a mobile real-time promise; sustained execution and complete-domain
-topology replacement must remain below 90% average with fewer than 2% over-budget render calls. Every
-epoch must also report zero rejected installs and zero silent held-note polls. Browser `currentFrame`
-jumps are kept as a separate shared-machine scheduler diagnostic and must remain below 0.2% of measured
-blocks; they are not relabeled as DSP execution time.
+The historical 624-cell torture case is not a mobile real-time promise; sustained execution and
+then-complete-domain topology replacement must remain below 90% average with fewer than 2% over-budget
+render calls. Every epoch must also report zero rejected installs and zero silent held-note polls.
+Browser `currentFrame` jumps are kept as a separate shared-machine scheduler diagnostic and must
+remain below 0.2% of measured blocks; they are not relabeled as DSP execution time.
 
 Stress-epoch environment overrides can only increase the committed defaults. A local or CI invocation
 therefore cannot make the benchmark green by silently shortening its soak.
@@ -199,9 +205,9 @@ does not cover edit stalls. Each edit phase is paired with a same-cadence, tiny-
 the same or higher steady DSP load. The worklet marks the next render callback after every probe or
 real edit and requires at least 90% one-event-per-adjacent-block coverage. For 100-route amount and
 topology edits, the real phase may add at most 0.20 average callback-gap load over its matched probe.
-The 624-cell topology torture phase allows 0.25 additional average gap load. At 48 kHz / 128 frames,
-0.20 is about 0.533 ms. The thresholded late-callback count remains a coarse-clock diagnostic; the
-average delta is the enforced edit-stall contract.
+The historical 624-cell topology torture phase allows 0.25 additional average gap load. At 48 kHz /
+128 frames, 0.20 is about 0.533 ms. The thresholded late-callback count remains a coarse-clock
+diagnostic; the average delta is the enforced edit-stall contract.
 
 The nonlinear all-effects/two-way-unison comparison is deliberately relative: the browser WebAssembly
 baseline itself can exceed realtime when nonlinear warp is active, so 100 mappings may add at most 15%
@@ -249,20 +255,22 @@ whose four installed active counts exactly match the strict profile compiler's c
 audio coverage, process-block deadlines, callback-arrival pacing, non-finite output, silence, timeline
 continuity, and thermal pressure. A qualifying result is three counterbalanced full-duration runs
 from a fresh build; shorter or reused-build runs are labelled smoke-only and cannot qualify shipping.
-Disabled-storage isolation is proved at the compiler seam: the 624-stored/100-active profile and its
-100-stored equivalent must hash to the same four active execution lanes. Their complete uploads are
-not byte-identical because disabled voice cells deliberately retain articulation base amounts, but
-those cells are outside every active audio-rate prefix.
+Disabled-storage isolation was proved at the compiler seam for the historical domain: the
+624-stored/100-active profile and its 100-stored equivalent must hash to the same four active
+execution lanes. Their complete uploads are not byte-identical because disabled voice cells
+deliberately retain articulation base amounts, but those cells are outside every active audio-rate
+prefix.
 
-The 2026-08-13 physical iPhone 14 Pro qualification passed all three counterbalanced runs at 48 kHz
-with all 16 voices and zero missed audio deadlines. Median added render load was 1.3% for 100 voice
-routes, 2.2% for 100 voice-to-rack routes, 1.7% for mixed 100 routes, 1.7% for combined 200 routes,
-0.2% for 624 stored/100 active, and 2.3% for all 624 active. Every measured endpoint remained in
-Apple's nominal or fair thermal states.
+The 2026-08-13 physical iPhone 14 Pro qualification of the historical 624-cell domain passed all
+three counterbalanced runs at 48 kHz with all 16 voices and zero missed audio deadlines. Median added
+render load was 1.3% for 100 voice routes, 2.2% for 100 voice-to-rack routes, 1.7% for mixed 100 routes,
+1.7% for combined 200 routes, 0.2% for 624 stored/100 active, and 2.3% for all 624 active. Every
+measured endpoint remained in Apple's nominal or fair thermal states.
 
-The final controlled generated-engine runs kept every normal 100-map epoch free of flagged render
-calls. Chromium averaged 22.4% empty, 38.7% for 100 voice routes, 24.0% for 100 voice-to-rack routes,
-31.6% for mixed 100 routes, 50.8% for all 624, and 70.9% for the doubled-processing 100-voice case.
+The final controlled generated-engine runs for that historical domain kept every normal 100-map
+epoch free of flagged render calls. Chromium averaged 22.4% empty, 38.7% for 100 voice routes, 24.0%
+for 100 voice-to-rack routes, 31.6% for mixed 100 routes, 50.8% for all 624, and 70.9% for the
+doubled-processing 100-voice case.
 Desktop WebKit averaged 25.6%, 42.1%, 26.9%, 36.4%, 56.3%, and 76.1% for the same cases. With 624
 stored and 100 active mappings, the real product UI accepted a paced stream of distinct amount inputs
 at 59.1 Hz in Chromium and 59.9 Hz in WebKit. Average UI dispatch cost was 1.6 ms and 1.9 ms; the
@@ -275,7 +283,7 @@ pre/post runs. These are desktop results, not a substitute for the physical-iPho
 
 - Stored mappings and maximum execution cost are no longer the same number.
 - The UI can create more than 100 mappings and reports a plain mapping count. Only duplicate pairs
-  or exhaustion of the real 624-pair domain can prevent creation.
+  or exhaustion of the real 884-pair domain can prevent creation.
 - Bypassed mappings cost no route instructions; deletion is no longer required to recover a slot.
 - The simplest measured transport won: one aggregate topology event plus one tiny amount event.
   A staged transaction protocol, slot allocator, generation checks, public rate-policy layer, and
