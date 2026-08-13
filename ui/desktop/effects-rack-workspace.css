@@ -407,7 +407,8 @@
     text-shadow: none;
 }
 
-.rack-effect-editor[data-effect-enabled="false"] .rack-visual-curve {
+.rack-effect-editor[data-effect-enabled="false"] .rack-xy-guide,
+.rack-effect-editor[data-effect-enabled="false"] .rack-xy-marker {
     filter: none;
     opacity: 0.34 !important;
 }
@@ -481,12 +482,60 @@
     vector-effect: non-scaling-stroke;
 }
 
-.rack-visual-curve {
+.rack-xy-visual {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    color: inherit;
+    background: transparent;
+    cursor: crosshair;
+    font: inherit;
+    touch-action: none;
+}
+
+.rack-xy-visual:focus-visible {
+    outline: 1px solid var(--editor-accent);
+    outline-offset: -2px;
+}
+
+.rack-xy-visual > svg {
+    pointer-events: none;
+}
+
+.rack-xy-guide {
     fill: none;
     stroke: var(--editor-accent);
-    filter: drop-shadow(0 0 4px var(--editor-accent));
+    stroke-width: 0.75;
+    opacity: 0.58;
     vector-effect: non-scaling-stroke;
 }
+
+.rack-xy-marker {
+    position: absolute;
+    width: 11px;
+    height: 11px;
+    border: 2px solid rgb(4 8 10 / 0.9);
+    border-radius: 50%;
+    background: var(--editor-accent);
+    box-shadow: 0 0 7px color-mix(in srgb, var(--editor-accent) 80%, transparent);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+}
+
+.rack-xy-axis-label {
+    position: absolute;
+    top: 5px;
+    color: rgb(225 231 234 / 0.66);
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    pointer-events: none;
+}
+
+.rack-xy-axis-label.is-x { left: 6px; }
+.rack-xy-axis-label.is-y { right: 6px; }
 
 .rack-editor-visual-readout {
     position: absolute;

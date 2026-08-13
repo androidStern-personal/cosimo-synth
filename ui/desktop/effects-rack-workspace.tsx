@@ -13,6 +13,11 @@ import {
 import { createPortal } from "react-dom";
 
 import { usePatchConnection } from "../shared/cmajor-react";
+import {
+    createEditorCurvePlotRect,
+    normalizedCurvePointToPlotPoint,
+    plotPointToNormalizedCurvePoint,
+} from "../shared/editor-curve-geometry";
 import { usePatchParameterBinding, type PatchControlBinding } from "../shared/patch-controls";
 import {
     RACK_EFFECT_DESCRIPTORS,
@@ -223,6 +228,10 @@ function rackParameterValueFromNormalized(descriptor: RackParameterDescriptor, n
     return descriptor.scale === "log"
         ? descriptor.min * (descriptor.max / descriptor.min) ** normalized
         : descriptor.min + (descriptor.max - descriptor.min) * normalized;
+}
+
+function normalizedRackParameterKeyboardStep(descriptor: RackParameterDescriptor) {
+    return Math.max(0.01, descriptor.step / (descriptor.max - descriptor.min));
 }
 
 function formatRackQuickParameterValue(descriptor: RackParameterDescriptor, value: number) {
@@ -672,32 +681,150 @@ function DistortionRackVisual({
     );
 }
 
-const EFFECT_CURVE_PATHS: Readonly<Record<Exclude<EffectModuleId, "filter" | "drive">, string>> = {
-    ott: "M 0 82 C 18 78 24 48 44 48 S 68 21 100 18",
-    chorus: "M 0 58 C 12 24 24 88 38 50 S 64 22 78 55 S 92 79 100 42",
-    flanger: "M 0 72 C 18 72 17 28 34 28 S 50 72 67 72 S 82 28 100 28",
-    phaser: "M 0 57 C 10 13 20 91 31 48 S 49 14 59 55 S 78 89 88 46 S 96 25 100 38",
-    delay: "M 0 28 L 22 28 L 22 47 L 48 47 L 48 64 L 73 64 L 73 78 L 100 78",
-    reverb: "M 0 88 C 7 21 18 68 30 39 S 48 61 58 35 S 76 51 84 28 S 95 34 100 21",
-};
+const GENERIC_RACK_XY_PLOT = createEditorCurvePlotRect(100, 100, {
+    horizontalPaddingPx: 0,
+    topPaddingPx: 0,
+    bottomPaddingPx: 0,
+});
 
-function GenericRackVisual({ descriptor }: { descriptor: RackEffectDescriptor }) {
-    const quickDescriptor = descriptor.parameters.find(
-        (parameter) => parameter.endpointID === descriptor.initialQuickEndpointID,
-    ) ?? descriptor.parameters[0];
-    const binding = useRackParameterBinding(quickDescriptor);
-    const normalized = normalizedRackParameterValue(quickDescriptor, binding.value);
-    const path = EFFECT_CURVE_PATHS[descriptor.id as Exclude<EffectModuleId, "filter" | "drive">];
+function GenericRackXYVisual({
+    descriptor,
+    onRecentParameter,
+}: {
+    descriptor: RackEffectDescriptor;
+    onRecentParameter: (endpointID: string) => void;
+}) {
+    const xDescriptor = descriptor.parameters.find(
+        (parameter) => parameter.endpointID === descriptor.xEndpointID,
+    );
+    const yDescriptor = descriptor.parameters.find(
+        (parameter) => parameter.endpointID === descriptor.yEndpointID,
+    );
+
+    if (xDescriptor === undefined || yDescriptor === undefined) {
+        throw new Error(`The ${descriptor.id} X/Y visual is missing a parameter descriptor.`);
+    }
+
+    const xBinding = useRackParameterBinding(xDescriptor);
+    const yBinding = useRackParameterBinding(yDescriptor);
+    const surfaceRef = useRef<HTMLButtonElement | null>(null);
+    const {
+        handlePointerDown,
+        handlePointerMove,
+        handlePointerUp,
+        handlePointerCancel,
+        handleLostPointerCapture,
+    } = useSliderDrag();
+    const normalizedX = normalizedRackParameterValue(xDescriptor, xBinding.value);
+    const normalizedY = normalizedRackParameterValue(yDescriptor, yBinding.value);
+    const marker = normalizedCurvePointToPlotPoint(
+        { x: normalizedX, y: normalizedY },
+        GENERIC_RACK_XY_PLOT,
+    );
+    const gestureBinding = useMemo<PatchControlBinding<number>>(() => ({
+        ...xBinding,
+        beginGesture: () => {
+            xBinding.beginGesture();
+            yBinding.beginGesture();
+        },
+        endGesture: () => {
+            xBinding.endGesture();
+            yBinding.endGesture();
+        },
+    }), [xBinding, yBinding.beginGesture, yBinding.endGesture]);
+    const setValuesFromPointer = useCallback((
+        _normalizedValue: number,
+        pointer: SliderDragPointer,
+    ) => {
+        const surface = surfaceRef.current;
+        if (surface === null) {
+            return;
+        }
+
+        const bounds = surface.getBoundingClientRect();
+        const plot = createEditorCurvePlotRect(bounds.width, bounds.height, {
+            horizontalPaddingPx: 0,
+            topPaddingPx: 0,
+            bottomPaddingPx: 0,
+        });
+        const nextPoint = plotPointToNormalizedCurvePoint({
+            x: pointer.x - bounds.left,
+            y: pointer.y - bounds.top,
+        }, plot);
+        xBinding.setValue(rackParameterValueFromNormalized(xDescriptor, nextPoint.x));
+        yBinding.setValue(rackParameterValueFromNormalized(yDescriptor, nextPoint.y));
+    }, [xBinding.setValue, xDescriptor, yBinding.setValue, yDescriptor]);
+    const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
+        const horizontal = event.key === "ArrowLeft" || event.key === "ArrowRight";
+        const vertical = event.key === "ArrowDown" || event.key === "ArrowUp";
+        if (!horizontal && !vertical) {
+            return;
+        }
+
+        event.preventDefault();
+        const axisDescriptor = horizontal ? xDescriptor : yDescriptor;
+        const axisBinding = horizontal ? xBinding : yBinding;
+        const currentNormalized = horizontal ? normalizedX : normalizedY;
+        const direction = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : -1;
+        axisBinding.commitValue(rackParameterValueFromNormalized(
+            axisDescriptor,
+            clamp(
+                currentNormalized + direction * normalizedRackParameterKeyboardStep(axisDescriptor),
+                0,
+                1,
+            ),
+        ));
+        onRecentParameter(axisDescriptor.endpointID);
+    }, [normalizedX, normalizedY, onRecentParameter, xBinding, xDescriptor, yBinding, yDescriptor]);
 
     return (
-        <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <path className="rack-visual-grid" d="M0 25H100M0 50H100M0 75H100M25 0V100M50 0V100M75 0V100" />
-            <path
-                className="rack-visual-curve"
-                d={path}
-                style={{ opacity: 0.54 + normalized * 0.46, strokeWidth: 2.2 + normalized * 1.4 }}
+        <button
+            ref={surfaceRef}
+            type="button"
+            data-role="rack-xy-visual"
+            data-effect-id={descriptor.id}
+            data-x-endpoint-id={xDescriptor.endpointID}
+            data-y-endpoint-id={yDescriptor.endpointID}
+            data-x-normalized={normalizedX.toFixed(6)}
+            data-y-normalized={normalizedY.toFixed(6)}
+            className="rack-xy-visual"
+            aria-label={`${descriptor.label} X/Y control: ${xDescriptor.label} and ${yDescriptor.label}`}
+            aria-keyshortcuts="ArrowLeft ArrowRight ArrowDown ArrowUp"
+            onKeyDown={handleKeyDown}
+            onPointerDown={(event) => {
+                if (event.pointerType === "mouse" && event.button !== 0) {
+                    return;
+                }
+                onRecentParameter(xDescriptor.endpointID);
+                handlePointerDown(
+                    event,
+                    surfaceRef.current,
+                    gestureBinding,
+                    normalizedX,
+                    xDescriptor.min,
+                    xDescriptor.max,
+                    "horizontal",
+                    setValuesFromPointer,
+                );
+                setValuesFromPointer(normalizedX, { x: event.clientX, y: event.clientY });
+            }}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerCancel}
+            onLostPointerCapture={() => handleLostPointerCapture()}
+        >
+            <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+                <path className="rack-visual-grid" d="M0 25H100M0 50H100M0 75H100M25 0V100M50 0V100M75 0V100" />
+                <path className="rack-xy-guide" d={`M ${marker.x} 0 V 100 M 0 ${marker.y} H 100`} />
+            </svg>
+            <span
+                className="rack-xy-marker"
+                style={{ left: `${marker.x}%`, top: `${marker.y}%` }}
+                aria-hidden="true"
             />
-        </svg>
+            <span className="rack-xy-axis-label is-x" aria-hidden="true">X · {xDescriptor.shortLabel}</span>
+            <span className="rack-xy-axis-label is-y" aria-hidden="true">Y · {yDescriptor.shortLabel}</span>
+        </button>
     );
 }
 
@@ -733,7 +860,12 @@ function RackEditorVisual({
         return <DistortionRackVisual history={observedDistortionHistory} scope={observedDistortionScope} />;
     }
 
-    return <GenericRackVisual descriptor={getRackEffectDescriptor(effectId)} />;
+    return (
+        <GenericRackXYVisual
+            descriptor={getRackEffectDescriptor(effectId)}
+            onRecentParameter={onRecentParameter}
+        />
+    );
 }
 
 function ParameterList({
