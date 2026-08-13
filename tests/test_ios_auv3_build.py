@@ -41,6 +41,8 @@ IOS_SHARED_LIBRARY_ENTITLEMENTS = REPO_ROOT / "ios_auv3" / "Entitlements" / "Cos
 IOS_AUV3_HOST_ENTITLEMENTS = REPO_ROOT / "ios_auv3" / "Entitlements" / "CosimoAUv3Host.entitlements"
 IOS_PLUGIN_MAIN = REPO_ROOT / "ios_auv3" / "Source" / "CosimoPluginMain.cpp"
 IOS_PLUGIN_SHELL = REPO_ROOT / "ios_auv3" / "Source" / "CosimoCmajorPlugin.h"
+IOS_AUV3_HOST_HARNESS = REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.mm"
+IOS_HOST_VIEW_CONTROLLER = REPO_ROOT / "ios_auv3" / "Source" / "CosimoHostViewController.mm"
 IOS_VITE_CONFIG = REPO_ROOT / "ios_auv3" / "vite.config.mjs"
 IOS_HOST_SOURCE_HTML = REPO_ROOT / "ui" / "ios" / "runtime-shell.html"
 IOS_HOST_SOURCE_RUNTIME = REPO_ROOT / "ui" / "ios" / "runtime-host.js"
@@ -945,6 +947,10 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
     assert profiles["mixed-100"]["activeRouteCount"] == 100
     assert profiles["stored-624-active-100"]["storedRouteCount"] == 624
     assert profiles["stored-624-active-100"]["activeRouteCount"] == 100
+    assert (
+        profiles["stored-624-active-100"]["executionFingerprint"]
+        == profiles["mixed-100"]["executionFingerprint"]
+    )
     assert profiles["combined-200"]["activeRouteCount"] == 200
     assert profiles["combined-200"]["compiledCounts"]["voice"] == 100
     assert profiles["combined-200"]["compiledCounts"]["voiceRack"] == 100
@@ -1023,13 +1029,36 @@ def test_ios_modulation_benchmark_runner_uses_unique_device_bundle_and_component
     assert "dev.cosimo.wavetable-synth-host\"" not in runner
 
 
-def test_ios_modulation_benchmark_caps_the_real_auv3_render_slice_before_engine_start() -> None:
+def test_ios_modulation_benchmark_requests_small_outer_callback_before_engine_start() -> None:
     source = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.mm").read_text(encoding="utf-8")
-    cap = source.index("audioUnit.AUAudioUnit.maximumFramesToRender = CosimoBenchmarkBufferFrames")
-    attach = source.index("[self.engine attachNode:audioUnit]")
-    start = source.index("[self.engine startAndReturnError:&startError]")
+    initialisation = source[source.index("- (void)finishInstantiatingAudioUnit:"):]
+    cap = initialisation.index("audioUnit.AUAudioUnit.maximumFramesToRender = CosimoBenchmarkBufferFrames")
+    attach = initialisation.index("[self.engine attachNode:audioUnit]")
+    start = initialisation.index("[self.engine startAndReturnError:&startError]")
 
     assert cap < attach < start
+
+
+def test_ios_modulation_benchmark_runtime_ready_poll_requests_production_sync() -> None:
+    plugin = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
+    host = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoAUv3HostHarness.mm").read_text(encoding="utf-8")
+    setter = plugin.split("void setBenchmarkParameterValue", 1)[1]
+    ready_request = setter.split("if (kind == BenchmarkParameterKind::runtimeReadyRequest)", 1)[1].split(
+        "if (kind == BenchmarkParameterKind::resultFieldRequest", 1
+    )[0]
+
+    assert 'EndpointID::create (std::string_view ("runtimeSyncRequest"))' in ready_request
+    assert "patch->sendEventOrValueToPatch" in ready_request
+    assert "benchmarkRuntimeReadyLastSyncRequest" in host
+    assert "timeIntervalSinceDate:self.benchmarkRuntimeReadyLastSyncRequest] >= 1.0" in host
+
+
+def test_ios_generated_performer_hard_limits_cmajor_slices_to_128_frames() -> None:
+    generator = IOS_AUV3_GENERATOR.read_text(encoding="utf-8")
+    plugin = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
+
+    assert '--maxFramesPerBlock=128' in generator
+    assert "static_assert (GeneratedPerformerClass::maxFramesPerBlock == 128" in plugin
 
 
 def test_ios_modulation_benchmark_settles_identical_neutral_sources_before_capture() -> None:
@@ -1178,6 +1207,18 @@ def test_ios_modulation_benchmark_shipping_contract_accepts_real_render_seam() -
     _load_ios_modulation_benchmark_module().assert_shipping_contract(_valid_ios_modulation_benchmark_payload())
 
 
+def test_ios_modulation_benchmark_accepts_outer_callbacks_larger_than_engine_slices() -> None:
+    module = _load_ios_modulation_benchmark_module()
+    payload = _valid_ios_modulation_benchmark_payload()
+    render = payload["phases"][1]["metrics"]["renderMetrics"]
+    render["minimumFrames"] = 278
+    render["maximumFrames"] = 279
+    render["renderBlockCount"] = 7742
+    render["capturedRenderSampleCount"] = 7742
+
+    module.assert_shipping_contract(payload)
+
+
 def test_ios_modulation_benchmark_rejects_expensive_matrix_delta() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
@@ -1316,6 +1357,197 @@ def test_ios_modulation_benchmark_labels_short_runs_smoke_only() -> None:
     assert not module.is_qualifying_run(duration_scale=0.99, repeat=3)
     assert not module.is_qualifying_run(duration_scale=1.0, repeat=2)
     assert not module.is_qualifying_run(duration_scale=1.0, repeat=3, no_build=True)
+
+
+def test_ios_modulation_benchmark_timeout_covers_paired_empty_brackets() -> None:
+    module = _load_ios_modulation_benchmark_module()
+
+    assert module.benchmark_result_timeout_seconds(1.0) >= 507.0
+
+
+def test_ios_modulation_benchmark_stops_registration_container_before_host_measurement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_ios_modulation_benchmark_module()
+    commands: list[list[str]] = []
+    sleeps: list[float] = []
+    registration_launch_count = 0
+    instantiate_poll_count = 0
+
+    def fake_run(command: list[str], *, env=None, check=True):
+        nonlocal registration_launch_count
+        commands.append(command)
+        if "--json-output" in command:
+            registration_launch_count += 1
+            output_path = Path(command[command.index("--json-output") + 1])
+            output_path.write_text(json.dumps({
+                "result": {"process": {"processIdentifier": 4240 + registration_launch_count}},
+            }), encoding="utf-8")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    def fake_fetch_result(device_id: str, output_name: str, destination: Path):
+        nonlocal instantiate_poll_count
+        instantiate_poll_count += 1
+        if instantiate_poll_count == 1:
+            return {"status": "running"}
+        return {"status": "running", "runtimeReady": {"ready": True}}
+
+    monkeypatch.setattr(module, "run", fake_run)
+    monkeypatch.setattr(module, "fetch_result", fake_fetch_result)
+    monkeypatch.setattr(module.time, "sleep", sleeps.append)
+
+    registration_process_id = module.prime_extension_registration("physical-iphone")
+
+    assert commands[0][:6] == [
+        "xcrun", "devicectl", "device", "process", "launch", "--device",
+    ]
+    assert module.CONTAINER_BUNDLE_ID in commands[0]
+    assert commands[1][:6] == commands[0][:6]
+    assert module.CONTAINER_BUNDLE_ID in commands[1]
+    assert registration_process_id == 4242
+
+    module.launch_benchmark(
+        "physical-iphone",
+        "profiles.json",
+        "result.json",
+        1.0,
+        registration_process_id=registration_process_id,
+    )
+
+    assert module.HOST_BUNDLE_ID in commands[2]
+    assert commands[3] == [
+        "xcrun", "devicectl", "device", "process", "terminate",
+        "--device", "physical-iphone", "--pid", "4242",
+    ]
+    assert instantiate_poll_count == 2
+    assert sleeps == [4.0, 0.25, 1.0]
+
+
+def test_ios_modulation_benchmark_primes_registration_for_every_repeat() -> None:
+    source = (REPO_ROOT / "scripts" / "run_ios_modulation_benchmark.py").read_text(encoding="utf-8")
+    loop = source.index("for run_index in range(args.repeat):")
+    prime = source.index("registration_process_id = prime_extension_registration(args.device)", loop)
+    launch = source.index("payload = launch_and_collect_benchmark(", prime)
+
+    assert loop < prime < launch
+
+
+def test_ios_modulation_benchmark_publishes_runtime_ready_before_warmup_measurement() -> None:
+    source = IOS_HOST_VIEW_CONTROLLER.read_text(encoding="utf-8")
+    ready_assignment = 'payload[@"runtimeReady"]'
+    assignment_index = source.index(ready_assignment)
+    next_measurement = source.index('measureModulationPhaseNamed:@"warmup"', assignment_index)
+
+    assert "completeAutomationWithPayload:payload" in source[assignment_index:next_measurement]
+
+
+def test_ios_modulation_benchmark_rack_state_is_fail_closed_phase_evidence() -> None:
+    source = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
+    ready_body = source[source.index("bool isBenchmarkRuntimeReady() const"):]
+    ready_body = ready_body[:ready_body.index("void publishBenchmarkParameter")]
+
+    assert "benchmarkHasObservedRackState" not in ready_body
+    assert "std::atomic<uint32_t> benchmarkRackEnableMask { 255 };" in source
+    assert "std::atomic<uint32_t> benchmarkResultRackEnableMask { 255 };" in source
+
+
+def test_ios_modulation_benchmark_cools_before_each_measurement() -> None:
+    source = IOS_AUV3_HOST_HARNESS.read_text(encoding="utf-8")
+    measure_start = source.index("- (void)measureModulationPhaseNamed:")
+    measure_end = source.index("- (void)prepareNeutralModulationBenchmarkSourcesWithCompletion:", measure_start)
+    measure_body = source[measure_start:measure_end]
+
+    assert "coolForModulationMeasurementWithCompletion:" in measure_body
+    assert measure_body.index("coolForModulationMeasurementWithCompletion:") < measure_body.index(
+        "prepareNeutralModulationBenchmarkSourcesWithCompletion:"
+    )
+    assert "CosimoThermalCooldownMinimumSeconds = 30.0" in source
+    assert "[self.engine pause]" in source
+    assert "startAndReturnError" in source
+
+
+def test_ios_modulation_benchmark_accepts_registration_container_already_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    module = _load_ios_modulation_benchmark_module()
+
+    def fake_run(command: list[str], *, env=None, check=True):
+        return subprocess.CompletedProcess(command, 1, "", "No such process")
+
+    monkeypatch.setattr(module, "run", fake_run)
+    monkeypatch.setattr(module.time, "sleep", lambda _: None)
+
+    module.stop_registration_container("physical-iphone", 4242)
+
+
+def test_ios_modulation_benchmark_retries_only_a_pre_measurement_runtime_boot_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_ios_modulation_benchmark_module()
+    launches: list[tuple[str, int | None]] = []
+    waits = iter((
+        RuntimeError(module.RUNTIME_READY_TIMEOUT_MESSAGE),
+        {"status": "complete", "phases": []},
+    ))
+
+    def fake_launch(device_id, profile_name, output_name, duration_scale, *, registration_process_id=None):
+        launches.append((output_name, registration_process_id))
+
+    def fake_wait(*args, **kwargs):
+        outcome = next(waits)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(module, "launch_benchmark", fake_launch)
+    monkeypatch.setattr(module, "wait_for_complete_result", fake_wait)
+
+    result = module.launch_and_collect_benchmark(
+        "physical-iphone",
+        "profiles.json",
+        "result.json",
+        1.0,
+        tmp_path / "result.json",
+        507.0,
+        registration_process_id=4242,
+    )
+
+    assert result == {"status": "complete", "phases": []}
+    assert [registration_process_id for _, registration_process_id in launches] == [4242, None]
+    assert launches[0][0] != launches[1][0]
+
+
+def test_ios_modulation_benchmark_does_not_retry_other_host_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    module = _load_ios_modulation_benchmark_module()
+    launches: list[int | None] = []
+
+    monkeypatch.setattr(
+        module,
+        "launch_benchmark",
+        lambda *args, registration_process_id=None, **kwargs: launches.append(registration_process_id),
+    )
+    monkeypatch.setattr(
+        module,
+        "wait_for_complete_result",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("real benchmark failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="real benchmark failure"):
+        module.launch_and_collect_benchmark(
+            "physical-iphone",
+            "profiles.json",
+            "result.json",
+            1.0,
+            tmp_path / "result.json",
+            507.0,
+            registration_process_id=4242,
+        )
+
+    assert launches == [4242]
 
 
 def test_ios_modulation_benchmark_counterbalances_the_exact_profiles(tmp_path: Path) -> None:

@@ -71,7 +71,7 @@ generated_cpp="$generated_dir/WavetableSynth.cpp"
 
 mkdir -p "$generated_dir"
 
-cmaj generate --target=cpp "$patch_path" --output="$generated_cpp"
+cmaj generate --target=cpp --maxFramesPerBlock=128 "$patch_path" --output="$generated_cpp"
 
 touch "$generated_dir/$generated_marker_filename"
 

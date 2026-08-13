@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import fs from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
@@ -61,6 +62,30 @@ function stripBenchmarkMetadata(route) {
         ...persistedRoute
     } = route;
     return persistedRoute;
+}
+
+function runtimeExecutionFingerprint(program) {
+    const lane = (prefix, count, { reducer = false } = {}) => Array.from(
+        { length: count },
+        (_, index) => {
+            const cell = program[`${prefix}Cells`][index];
+            return [
+                cell,
+                program[`${prefix}Sources`][index],
+                program[`${prefix}Targets`][index],
+                program[`${prefix}Polarities`][index],
+                ...(reducer ? [program[`${prefix}Reducers`][index]] : []),
+                program[`${prefix}Amounts`][cell],
+            ];
+        },
+    );
+    const executionProgram = {
+        voice: lane("voiceRoute", program.voiceRouteCount),
+        macroVoice: lane("macroVoiceRoute", program.macroVoiceRouteCount),
+        voiceRack: lane("voiceRackRoute", program.voiceRackRouteCount, { reducer: true }),
+        macroRack: lane("macroRackRoute", program.macroRackRouteCount),
+    };
+    return createHash("sha256").update(JSON.stringify(executionProgram)).digest("hex");
 }
 
 function buildNeutralRouteGroups() {
@@ -215,6 +240,7 @@ function createProfile(name, routes) {
     }
 
     const program = compileModulationRuntimeProgram(parsed.value.routes);
+    const executionFingerprint = runtimeExecutionFingerprint(program);
     const compiledRouteCount = program.voiceRouteCount
         + program.macroVoiceRouteCount
         + program.voiceRackRouteCount
@@ -235,6 +261,7 @@ function createProfile(name, routes) {
             voiceRack: program.voiceRackRouteCount,
             macroRack: program.macroRackRouteCount,
         },
+        executionFingerprint,
         stateJSON,
     };
 }
@@ -255,6 +282,11 @@ export function buildModulationBenchmarkProfiles() {
         }))),
         createProfile("active-624", allRoutes),
     ];
+    const mixed = profiles.find((profile) => profile.name === "mixed-100");
+    const stored = profiles.find((profile) => profile.name === "stored-624-active-100");
+    if (mixed.executionFingerprint !== stored.executionFingerprint) {
+        throw new Error("Disabled stored routes changed the compiled real-time execution program");
+    }
     return profiles.map((profile, profileIndex) => ({ ...profile, profileIndex }));
 }
 

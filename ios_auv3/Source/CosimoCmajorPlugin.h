@@ -628,6 +628,9 @@ class GeneratedPlugin final : public juce::AudioPluginInstance,
                               private juce::MessageListener
 {
 public:
+    static_assert (GeneratedPerformerClass::maxFramesPerBlock == 128,
+                   "The iOS Cmajor performer must render in 128-frame slices");
+
     GeneratedPlugin()
         : juce::AudioPluginInstance (getBusLayout()),
           patch (std::make_shared<cmaj::Patch>())
@@ -1025,8 +1028,7 @@ private:
         return observedDspSessionId > 0
             && benchmarkLastAcceptedProgramSerial.load() > 0
             && acceptedProgramDspSessionId == observedDspSessionId
-            && activeWavetableDspSessionId == observedDspSessionId
-            && benchmarkHasObservedRackState.load();
+            && activeWavetableDspSessionId == observedDspSessionId;
     }
 
     void publishBenchmarkParameter (BenchmarkParameterKind kind)
@@ -1084,6 +1086,15 @@ private:
     {
         if (kind == BenchmarkParameterKind::runtimeReadyRequest)
         {
+            if (! isBenchmarkRuntimeReady())
+            {
+                const auto syncRequest = choc::value::createInt32 (1);
+                patch->sendEventOrValueToPatch (
+                    cmaj::EndpointID::create (std::string_view ("runtimeSyncRequest")),
+                    syncRequest,
+                    0,
+                    0);
+            }
             publishBenchmarkParameter (BenchmarkParameterKind::runtimeReady);
             return;
         }
@@ -2200,7 +2211,6 @@ private:
             if (rackEnableMask >= 0 && rackEnableMask <= 255)
             {
                 benchmarkRackEnableMask.store (static_cast<uint32_t> (rackEnableMask));
-                benchmarkHasObservedRackState.store (true);
                 publishBenchmarkParameter (BenchmarkParameterKind::runtimeReady);
             }
         }
@@ -2461,8 +2471,7 @@ private:
     std::atomic<uint32_t> benchmarkMinimumFrames { UINT32_MAX };
     std::atomic<uint32_t> benchmarkMaximumFrames { 0 };
     std::atomic<uint32_t> benchmarkVoiceMask { 0 };
-    std::atomic<uint32_t> benchmarkRackEnableMask { 0 };
-    std::atomic<bool> benchmarkHasObservedRackState { false };
+    std::atomic<uint32_t> benchmarkRackEnableMask { 255 };
     std::array<double, modulationBenchmarkMaximumRenderSamples> benchmarkRenderRatios {};
     std::atomic<uint64_t> benchmarkResultRenderBlockCount { 0 };
     std::atomic<uint64_t> benchmarkResultSampleCount { 0 };
@@ -2477,7 +2486,7 @@ private:
     std::atomic<double> benchmarkResultP999RenderLoadPercent { 0.0 };
     std::atomic<double> benchmarkResultMaximumRenderLoadPercent { 0.0 };
     std::atomic<uint64_t> benchmarkResultDeadlineMissCount { 0 };
-    std::atomic<uint32_t> benchmarkResultRackEnableMask { 0 };
+    std::atomic<uint32_t> benchmarkResultRackEnableMask { 255 };
    #endif
 };
 

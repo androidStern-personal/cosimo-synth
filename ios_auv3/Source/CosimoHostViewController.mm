@@ -464,6 +464,7 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
         if ([self handleAutomationError:instantiateError outputName:outputName])
             return;
         payload[@"instantiate"] = instantiateResult;
+        [self completeAutomationWithPayload:payload outputName:outputName];
 
         [self.harness openEditorWithCompletion:^(NSDictionary<NSString *,id> * _Nullable editorResult, NSError * _Nullable editorError)
         {
@@ -476,6 +477,8 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
             {
                 if ([self handleAutomationError:warmupInstallError outputName:outputName])
                     return;
+                payload[@"runtimeReady"] = warmupAck ?: @{};
+                [self completeAutomationWithPayload:payload outputName:outputName];
                 [self.harness measureModulationPhaseNamed:@"warmup"
                                           durationSeconds:2.0
                                                completion:^(NSDictionary<NSString *,id> * _Nullable warmupMetrics,

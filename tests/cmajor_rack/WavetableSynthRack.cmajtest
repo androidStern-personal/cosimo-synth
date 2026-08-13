@@ -153,3 +153,10 @@ function wetAudioPatchRun(subDir)
 //    committed it on frame 132, which is ADR-003's 3 ms transition at 44.1 kHz.
 
 ## runScript (wetAudioPatchRun("fixtures/rack_order_chorus_then_distortion"))
+
+// 7. RUNTIME RESYNC REPLAYS THE EFFECTIVE RACK SNAPSHOT. An out-of-process AUv3
+//    listener can attach after the monitor's frame-zero event. The existing runtime
+//    sync request must therefore replay the current committed rack state, just as it
+//    already replays wavetable and modulation state.
+
+## runScript (audioPatchRun("fixtures/rack_runtime_sync_replays_state"))

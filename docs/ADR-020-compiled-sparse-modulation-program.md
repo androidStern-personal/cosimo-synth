@@ -242,12 +242,24 @@ do not add work to the audio-rate DSP loop.
 Physical iPhone AUv3 remains a separate acceptance environment. Playwright's iPhone descriptor
 changes viewport and input behavior; WebKit still runs on the Mac and does not satisfy an iPhone CPU,
 thermal, or audio-scheduler claim. The device benchmark therefore reads timing from the production
-`GeneratedPlugin::processBlock` seam, proves the DSP itself is running at 48 kHz with no buffers above
-128 frames, and requires all 16 voice indexes. Each phase must acknowledge a newer complete program
+`GeneratedPlugin::processBlock` seam and proves the DSP itself is running at 48 kHz. The generated
+Cmajor performer is compile-time limited to 128-frame inner render slices; iOS may aggregate those
+into larger outer callbacks during hardware sample-rate conversion, and those callbacks are timed
+against their actual deadlines. The benchmark requires all 16 voice indexes. Each phase must acknowledge a newer complete program
 whose four installed active counts exactly match the strict profile compiler's counts. It also checks
 audio coverage, process-block deadlines, callback-arrival pacing, non-finite output, silence, timeline
 continuity, and thermal pressure. A qualifying result is three counterbalanced full-duration runs
 from a fresh build; shorter or reused-build runs are labelled smoke-only and cannot qualify shipping.
+Disabled-storage isolation is proved at the compiler seam: the 624-stored/100-active profile and its
+100-stored equivalent must hash to the same four active execution lanes. Their complete uploads are
+not byte-identical because disabled voice cells deliberately retain articulation base amounts, but
+those cells are outside every active audio-rate prefix.
+
+The 2026-08-13 physical iPhone 14 Pro qualification passed all three counterbalanced runs at 48 kHz
+with all 16 voices and zero missed audio deadlines. Median added render load was 1.3% for 100 voice
+routes, 2.2% for 100 voice-to-rack routes, 1.7% for mixed 100 routes, 1.7% for combined 200 routes,
+0.2% for 624 stored/100 active, and 2.3% for all 624 active. Every measured endpoint remained in
+Apple's nominal or fair thermal states.
 
 The final controlled generated-engine runs kept every normal 100-map epoch free of flagged render
 calls. Chromium averaged 22.4% empty, 38.7% for 100 voice routes, 24.0% for 100 voice-to-rack routes,

@@ -884,6 +884,7 @@ namespace wt
     // emitted only on change, so it says the same thing at every block size.
     processor RackStateMonitor
     {
+        input event int32 syncIn;
         input value int32 committedStructureGenerationIn;
         input value int32 committedOrderCodeIn;
         input value int32 committedEnableMaskIn;
@@ -899,6 +900,15 @@ namespace wt
         int32 lastEnableMask = -1;
         int32 lastRejectedOrderCount = -1;
         int32 lastRejectedEnableCount = -1;
+
+        event syncIn (int32 unused)
+        {
+            lastStructureGeneration = -1;
+            lastOrderCode = -1;
+            lastEnableMask = -1;
+            lastRejectedOrderCount = -1;
+            lastRejectedEnableCount = -1;
+        }
 
         void main()
         {
@@ -1412,7 +1422,8 @@ graph WavetableSynth [[ main ]]
         workerLoadFailure -> runtimeStateCoordinator.workerLoadFailureIn;
         wavetablePrewarmRequest -> wavetablePrewarmNotification;
         runtimeSyncRequest -> runtimeStateCoordinator.runtimeSyncRequestIn,
-                              sharedEngine.runtimeInstallSyncIn;
+                              sharedEngine.runtimeInstallSyncIn,
+                              rackStateMonitor.syncIn;
         retryDesiredTableRequest -> runtimeStateCoordinator.retryDesiredTableRequestIn;
         runtimeStateCoordinator.runtimeStateOut -> runtimeState;
         sharedEngine.effectiveWavetablePositionOut -> effectiveWavetablePosition;

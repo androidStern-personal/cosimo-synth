@@ -38,6 +38,10 @@ static const AVAudioFrameCount CosimoBenchmarkBufferFrames = 128;
 static const NSUInteger CosimoBenchmarkVoiceCount = 16;
 static const NSUInteger CosimoBenchmarkMaximumGapSamples = 65536;
 static const NSTimeInterval CosimoNeutralSourceSettleSeconds = 0.05;
+static const NSTimeInterval CosimoThermalCooldownMinimumSeconds = 30.0;
+static const NSTimeInterval CosimoThermalCooldownPollSeconds = 5.0;
+static const NSTimeInterval CosimoThermalCooldownTimeoutSeconds = 900.0;
+static const NSTimeInterval CosimoThermalRestartSettleSeconds = 0.5;
 static NSString * const CosimoBenchmarkProfileParameter = @"cosimoBenchmarkProfile";
 static NSString * const CosimoBenchmarkRuntimeReadyParameter = @"cosimoBenchmarkRuntimeReady";
 static NSString * const CosimoBenchmarkRuntimeReadyRequestParameter = @"cosimoBenchmarkRuntimeReadyRequest";
@@ -162,6 +166,7 @@ static AudioComponentDescription CosimoComponentDescription()
 @property (nonatomic, strong) NSArray<NSDictionary<NSString *, id> *> *parameterSnapshot;
 @property (nonatomic, assign) uint64_t benchmarkCaptureBaselineGeneration;
 @property (nonatomic, assign) BOOL benchmarkRuntimeReadyRequestToggle;
+@property (nonatomic, strong) NSDate *benchmarkRuntimeReadyLastSyncRequest;
 
 - (void)captureEditorStateAfterDelay:(NSTimeInterval)delay
                     remainingAttempts:(NSInteger)remainingAttempts
@@ -193,6 +198,9 @@ static AudioComponentDescription CosimoComponentDescription()
 - (void)measureStartedModulationPhaseNamed:(NSString *)phaseName
                             durationSeconds:(NSTimeInterval)durationSeconds
                                  completion:(CosimoHostResultBlock)completion;
+- (void)coolForModulationMeasurementWithCompletion:(CosimoHostResultBlock)completion;
+- (void)waitForSafeThermalStateUntil:(NSDate *)deadline
+                           completion:(CosimoHostResultBlock)completion;
 
 @end
 
@@ -656,6 +664,7 @@ static AudioComponentDescription CosimoComponentDescription()
         return;
     }
 
+    self.benchmarkRuntimeReadyLastSyncRequest = nil;
     [self waitForModulationRuntimeReadyUntil:[NSDate dateWithTimeIntervalSinceNow:90.0]
                                    completion:^(__unused NSDictionary<NSString *,id> * _Nullable readyResult,
                                                 NSError * _Nullable readyError)
@@ -698,8 +707,14 @@ static AudioComponentDescription CosimoComponentDescription()
         return;
     }
 
-    self.benchmarkRuntimeReadyRequestToggle = ! self.benchmarkRuntimeReadyRequestToggle;
-    runtimeReadyRequest.value = self.benchmarkRuntimeReadyRequestToggle ? 1.0f : 0.0f;
+    NSDate *now = [NSDate date];
+    if (self.benchmarkRuntimeReadyLastSyncRequest == nil
+        || [now timeIntervalSinceDate:self.benchmarkRuntimeReadyLastSyncRequest] >= 1.0)
+    {
+        self.benchmarkRuntimeReadyLastSyncRequest = now;
+        self.benchmarkRuntimeReadyRequestToggle = ! self.benchmarkRuntimeReadyRequestToggle;
+        runtimeReadyRequest.value = self.benchmarkRuntimeReadyRequestToggle ? 1.0f : 0.0f;
+    }
 
     dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.05 * NSEC_PER_SEC)),
                     dispatch_get_main_queue(), ^
@@ -981,6 +996,63 @@ static AudioComponentDescription CosimoComponentDescription()
     });
 }
 
+- (void)coolForModulationMeasurementWithCompletion:(CosimoHostResultBlock)completion
+{
+    if (self.engine.isRunning)
+        [self.engine pause];
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW,
+                                   (int64_t) (CosimoThermalCooldownMinimumSeconds * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self waitForSafeThermalStateUntil:[NSDate dateWithTimeIntervalSinceNow:CosimoThermalCooldownTimeoutSeconds]
+                                completion:completion];
+    });
+}
+
+- (void)waitForSafeThermalStateUntil:(NSDate *)deadline
+                           completion:(CosimoHostResultBlock)completion
+{
+    const auto thermalState = NSProcessInfo.processInfo.thermalState;
+    if (thermalState == NSProcessInfoThermalStateNominal
+        || thermalState == NSProcessInfoThermalStateFair)
+    {
+        if (self.engine.isRunning)
+        {
+            completion (@{ @"thermalState": CosimoThermalStateName (thermalState) }, nil);
+            return;
+        }
+
+        NSError *startError = nil;
+        if (! [self.engine startAndReturnError:&startError])
+        {
+            completion (nil, startError ?: CosimoMakeError (53, @"Could not restart audio after thermal cooldown."));
+            return;
+        }
+
+        dispatch_after (dispatch_time (DISPATCH_TIME_NOW,
+                                       (int64_t) (CosimoThermalRestartSettleSeconds * NSEC_PER_SEC)),
+                        dispatch_get_main_queue(), ^
+        {
+            completion (@{ @"thermalState": CosimoThermalStateName (thermalState) }, nil);
+        });
+        return;
+    }
+
+    if ([deadline timeIntervalSinceNow] <= 0.0)
+    {
+        completion (nil, CosimoMakeError (52, @"Timed out cooling the iPhone to a safe state before measurement."));
+        return;
+    }
+
+    dispatch_after (dispatch_time (DISPATCH_TIME_NOW,
+                                   (int64_t) (CosimoThermalCooldownPollSeconds * NSEC_PER_SEC)),
+                    dispatch_get_main_queue(), ^
+    {
+        [self waitForSafeThermalStateUntil:deadline completion:completion];
+    });
+}
+
 - (void)measureModulationPhaseNamed:(NSString *)phaseName
                     durationSeconds:(NSTimeInterval)durationSeconds
                          completion:(CosimoHostResultBlock)completion
@@ -996,25 +1068,34 @@ static AudioComponentDescription CosimoComponentDescription()
         return;
     }
 
-    [self prepareNeutralModulationBenchmarkSourcesWithCompletion:^(__unused NSDictionary<NSString *,id> * _Nullable prepareResult,
-                                                                   NSError * _Nullable prepareError)
+    [self coolForModulationMeasurementWithCompletion:^(__unused NSDictionary<NSString *,id> * _Nullable thermalResult,
+                                                        NSError * _Nullable thermalError)
     {
-        if (prepareError != nil)
+        if (thermalError != nil)
         {
-            completion (nil, prepareError);
+            completion (nil, thermalError);
             return;
         }
-        [self beginModulationBenchmarkCaptureWithCompletion:^(__unused NSDictionary<NSString *,id> * _Nullable beginResult,
-                                                              NSError * _Nullable beginError)
+        [self prepareNeutralModulationBenchmarkSourcesWithCompletion:^(__unused NSDictionary<NSString *,id> * _Nullable prepareResult,
+                                                                       NSError * _Nullable prepareError)
         {
-            if (beginError != nil)
+            if (prepareError != nil)
             {
-                completion (nil, beginError);
+                completion (nil, prepareError);
                 return;
             }
-            [self measureStartedModulationPhaseNamed:phaseName
-                                     durationSeconds:durationSeconds
-                                          completion:completion];
+            [self beginModulationBenchmarkCaptureWithCompletion:^(__unused NSDictionary<NSString *,id> * _Nullable beginResult,
+                                                                  NSError * _Nullable beginError)
+            {
+                if (beginError != nil)
+                {
+                    completion (nil, beginError);
+                    return;
+                }
+                [self measureStartedModulationPhaseNamed:phaseName
+                                         durationSeconds:durationSeconds
+                                              completion:completion];
+            }];
         }];
     }];
 }
@@ -1609,10 +1690,10 @@ static AudioComponentDescription CosimoComponentDescription()
 
     self.engine = [[AVAudioEngine alloc] init];
     self.instrumentUnit = audioUnit;
-    // AVAudioSession's preferred I/O duration does not constrain an out-of-process
-    // AUv3 render slice. The AU host must set this before AVAudioEngine allocates the
-    // unit's render resources; the physical benchmark asserts the observed callback
-    // size at GeneratedPlugin::processBlock.
+    // Request the smallest practical outer AUv3 callback before AVAudioEngine allocates
+    // render resources. iOS sample-rate conversion may still aggregate a larger outer
+    // processBlock; the generated Cmajor performer independently hard-limits its inner
+    // render slices to 128 frames.
     audioUnit.AUAudioUnit.maximumFramesToRender = CosimoBenchmarkBufferFrames;
     [self.engine attachNode:audioUnit];
     AVAudioFormat *benchmarkFormat = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:CosimoBenchmarkSampleRate
