@@ -12,7 +12,7 @@ import {
     MODULATION_ARTICULATION_ROUTE_CELL_COUNT,
     type ArticulationBaseChange,
     type ArticulationRange,
-    type ArticulationSlotV3,
+    type ArticulationSlotV4,
     type ArticulationsState,
     type ArticulationVoiceParameterId,
     type PatchVoiceBase,
@@ -90,7 +90,7 @@ export function articulationSlotArbitrary(
     fc: FastCheck,
     id: string,
     runtimeSlot: number,
-): Arbitrary<ArticulationSlotV3> {
+): Arbitrary<ArticulationSlotV4> {
     return fc
         .record({
             name: fc.string({ minLength: 1, maxLength: 24 }),
@@ -111,7 +111,7 @@ export function articulationSlotArbitrary(
 }
 
 /**
- * A complete, well-formed v3 bank with unique slot ids and selectors.
+ * A complete, well-formed v4 bank with unique slot ids and selectors.
  *
  * @param fc - The fast-check module.
  * @returns Arbitrary valid ArticulationsState values (0..8 slots).
@@ -132,7 +132,7 @@ export function articulationsStateArbitrary(fc: FastCheck): Arbitrary<Articulati
                         })
                         .map(({ activeTriggerMode, selectedSlotId }) => ({
                             format: "cosimo.articulations" as const,
-                            version: 3 as const,
+                            version: 4 as const,
                             selectedSlotId,
                             activeTriggerMode,
                             slots,

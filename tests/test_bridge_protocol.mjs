@@ -72,7 +72,7 @@ function articulationSlot({
 function articulationState(slots = []) {
     return {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: slots[0]?.id ?? null,
         activeTriggerMode: "key",
         slots,
@@ -109,13 +109,13 @@ async function createHarness({ storedState = {} } = {}) {
 }
 
 function parseStoredArticulations(harness) {
-    const storedValue = harness.connection.getDebugSnapshot().storedState["articulations.v3"];
+    const storedValue = harness.connection.getDebugSnapshot().storedState["articulations.v4"];
     const acceptedRouteIds = new Set(storedModulationState(harness).routes.flatMap((route) => (
         harness.modulationProgram.getModulationArticulationCellIndex(route) === null ? [] : [route.id]
     )));
     return expectOk(
-        harness.articulations.parseArticulationsV3(decodeStoredDocument(storedValue), acceptedRouteIds),
-        "stored articulations.v3",
+        harness.articulations.parseArticulationsV4(decodeStoredDocument(storedValue), acceptedRouteIds),
+        "stored articulations.v4",
     );
 }
 
@@ -145,7 +145,7 @@ test("boot hydrates ready and the acknowledged worker uploads every occupied sel
     ]);
     const harness = await createHarness({
         storedState: {
-            "articulations.v3": JSON.stringify(initialArticulations),
+            "articulations.v4": JSON.stringify(initialArticulations),
         },
     });
     t.after(() => harness.adapter.dispose());
@@ -183,7 +183,7 @@ test("a bound shared-voice base edit persists immediately and the worker updates
         }),
     ]);
     const harness = await createHarness({
-        storedState: { "articulations.v3": JSON.stringify(initialArticulations) },
+        storedState: { "articulations.v4": JSON.stringify(initialArticulations) },
     });
     t.after(() => harness.adapter.dispose());
     harness.connection.clearDebugLog();
@@ -325,7 +325,7 @@ test("macro value events and macro-name persistence use their engine protocols",
     assert.equal(storedModulationState(harness).macroNames[0], "Shimmer");
 });
 
-test("articulation add, override, and clear persist v3 for sole-owner worker publication", async (t) => {
+test("articulation add, override, and clear persist v4 for sole-owner worker publication", async (t) => {
     const harness = await createHarness();
     t.after(() => harness.adapter.dispose());
     harness.connection.clearDebugLog();
@@ -409,10 +409,10 @@ test("audition begin and end send paired MIDI note-on/note-off events", async (t
     ]);
 });
 
-test("a version-2 articulation document is rejected as malformed current state", async (t) => {
+test("a lower articulation envelope is rejected by the hard v4 boundary", async (t) => {
     const retiredPayload = {
         format: "cosimo.articulations",
-        version: 2,
+        version: 3,
         selectedSlotId: null,
         activeTriggerMode: "chain",
         slots: [],
@@ -425,7 +425,7 @@ test("a version-2 articulation document is rejected as malformed current state",
     let harness;
     try {
         harness = await createHarness({
-            storedState: { "articulations.v3": JSON.stringify(retiredPayload) },
+            storedState: { "articulations.v4": JSON.stringify(retiredPayload) },
         });
     } finally {
         console.error = originalError;
@@ -434,7 +434,7 @@ test("a version-2 articulation document is rejected as malformed current state",
 
     const connection = harness.adapter.getSnapshot().connection;
     assert.equal(connection._tag, "detached");
-    assert.match(connection.reason, /version must be exactly 3/);
+    assert.match(connection.reason, /version must be exactly 4/);
 });
 
 test("full state roundtrip: a second bridge over the first one's stored state is snapshot-identical", async () => {

@@ -15,11 +15,12 @@ import {
     type SourceType,
 } from "./cosimo-adapter-port";
 import {
+    ARTICULATIONS_V4_STATE_KEY,
     createEmptyArticulationsState,
     lowestFreeRuntimeSlot,
-    parseArticulationsV3,
-    serializeArticulationsV3,
-    type ArticulationSlotV3,
+    parseArticulationsV4,
+    serializeArticulationsV4,
+    type ArticulationSlotV4,
     type ArticulationsState,
     type ArticulationVoiceParameterId,
 } from "./articulation-image";
@@ -222,8 +223,8 @@ function sourceIdFromDefinition(definition: SourceDefinition): SourceId {
     return definition.idRaw as SourceId;
 }
 
-function articulationIdFromSlot(slot: ArticulationSlotV3): ArticulationId {
-    // SAFETY: the slot was either accepted by parseArticulationsV3 or minted by
+function articulationIdFromSlot(slot: ArticulationSlotV4): ArticulationId {
+    // SAFETY: the slot was either accepted by parseArticulationsV4 or minted by
     // this adapter after uniqueness was checked against the authoritative bank.
     return slot.id as ArticulationId;
 }
@@ -436,11 +437,11 @@ function parseStoredArticulations(
     input: unknown,
     acceptedRouteIds: ReadonlySet<string>,
 ): ParseOutcome<ArticulationsState> {
-    const document = parseJsonDocument(input, "articulations.v3");
+    const document = parseJsonDocument(input, ARTICULATIONS_V4_STATE_KEY);
     if (document._tag === "err") {
         return document;
     }
-    const parsed = parseArticulationsV3(document.value, acceptedRouteIds);
+    const parsed = parseArticulationsV4(document.value, acceptedRouteIds);
     return parsed._tag === "ok"
         ? { _tag: "ok", value: parsed.value }
         : parseError(parsed.error.message);
@@ -629,7 +630,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 this.markSnapshotDirty();
                 return;
             }
-            if (message.key === "articulations.v3") {
+            if (message.key === ARTICULATIONS_V4_STATE_KEY) {
                 const parsed = parseStoredArticulations(
                     message.value,
                     this.collectArticulationMappingIds(),
@@ -802,7 +803,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
 
-        const rawArticulations = readFullStoredStateValue(storedState, "articulations.v3");
+        const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
         const rawParameterValues = readFullStoredStateValue(storedState, UI_PATCH_VALUES_STATE_KEY);
         const rawUiMappings = readFullStoredStateValue(storedState, UI_MAPPINGS_STATE_KEY);
         const rawRackState = readFullStoredStateValue(storedState, RACK_STATE_KEY);
@@ -1178,7 +1179,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             if (parameterId === null || descriptor.binding._tag !== "endpoint") {
                 throw new Error(`Target ${descriptor.targetId} cannot be articulation-overridden`);
             }
-            const nextSlot: ArticulationSlotV3 = {
+            const nextSlot: ArticulationSlotV4 = {
                 ...slot,
                 overrides: {
                     ...slot.overrides,
@@ -1565,7 +1566,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const usedIds = new Set(this.articulations.slots.map((slot) => slot.id));
         const id = this.uniqueArticulationId(`articulation-${runtimeSlot}`, usedIds);
-        const slot: ArticulationSlotV3 = {
+        const slot: ArticulationSlotV4 = {
             id,
             runtimeSlot,
             name: createDefaultArticulationName(runtimeSlot),
@@ -1596,7 +1597,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const usedIds = new Set(this.articulations.slots.map((slot) => slot.id));
         const id = this.uniqueArticulationId(`${source.id}-copy`, usedIds);
-        const slot: ArticulationSlotV3 = {
+        const slot: ArticulationSlotV4 = {
             ...source,
             id,
             runtimeSlot,
@@ -1665,7 +1666,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const range = mode === "vel" ? current.velRange : current.chainRange;
         const others = this.articulations.slots.filter((slot) => slot.id !== current.id);
         let value = clampMidiValue(wantValue);
-        let neighbor: ArticulationSlotV3 | undefined;
+        let neighbor: ArticulationSlotV4 | undefined;
 
         if (bound === "min") {
             const below = others.filter((slot) => (mode === "vel" ? slot.velRange.max : slot.chainRange.max) < range.max);
@@ -1992,7 +1993,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         throw new Error(`Unknown mapping id: ${mappingId}`);
     }
 
-    private requireArticulation(articulationId: ArticulationId): ArticulationSlotV3 {
+    private requireArticulation(articulationId: ArticulationId): ArticulationSlotV4 {
         const slot = this.articulations.slots.find((candidate) => candidate.id === articulationId);
         if (slot === undefined) {
             throw new Error(`Unknown articulation id: ${articulationId}`);
@@ -2000,7 +2001,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         return slot;
     }
 
-    private replaceArticulationSlot(nextSlot: ArticulationSlotV3): void {
+    private replaceArticulationSlot(nextSlot: ArticulationSlotV4): void {
         this.articulations = {
             ...this.articulations,
             slots: this.articulations.slots.map((slot) => slot.id === nextSlot.id ? nextSlot : slot),
@@ -2095,8 +2096,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     private persistArticulations(): void {
         this.sendStoredStateValue(
-            "articulations.v3",
-            JSON.stringify(serializeArticulationsV3(this.articulations)),
+            ARTICULATIONS_V4_STATE_KEY,
+            JSON.stringify(serializeArticulationsV4(this.articulations)),
         );
     }
 

@@ -1,7 +1,20 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
 
-import {
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const [runtime, worker, runtimeBase, modulation, program, installChannel] = await Promise.all([
+    loadUIModule(repoRoot, "ui/shared/articulations.ts"),
+    loadUIModule(repoRoot, "ui/shared/articulation-worker-service.ts"),
+    loadUIModule(repoRoot, "ui/shared/articulation-runtime-base.ts"),
+    loadUIModule(repoRoot, "ui/shared/modulation.ts"),
+    loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts"),
+    loadUIModule(repoRoot, "ui/shared/runtime-install-channel.ts"),
+]);
+
+const {
     ARTICULATION_MAX_SLOTS,
     ARTICULATION_SNAPSHOT_ENDPOINT_ID,
     ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
@@ -23,17 +36,19 @@ import {
     resizeArticulationRangeAssignment,
     setArticulationTriggerMode,
     upsertSelectedArticulationSnapshot,
-} from "../patch_gui/articulations.js";
-import { createArticulationWorkerService } from "../patch_gui/articulation-worker-service.js";
-import { getArticulationModulationDependencyToken } from "../patch_gui/articulation-runtime-base.js";
-import {
+} = runtime;
+const { createArticulationWorkerService } = worker;
+const { getArticulationModulationDependencyToken } = runtimeBase;
+const {
     createDefaultModulationState,
     deserializeModulationState,
-} from "../patch_gui/modulation.js";
-import { getModulationRuntimeCell } from "../patch_gui/modulation-runtime-program.js";
+} = modulation;
+const { getModulationRuntimeCell } = program;
+const { RUNTIME_INSTALL_SEND_TIMEOUT_MS } = installChannel;
 
-const RETIRED_ARTICULATION_STATE_KEY = "articulations.v2";
-import { RUNTIME_INSTALL_SEND_TIMEOUT_MS } from "../patch_gui/runtime-install-channel.js";
+const RETIRED_ARTICULATION_STATE_KEY = "articulations.v3";
+const WARP_ROUTE_ID = "oscA.warpAmount::mseg-1";
+const PAN_ROUTE_ID = "oscA.pan::mseg-1";
 
 async function flushMicrotasks(turns = 8) {
     for (let index = 0; index < turns; index += 1) {
@@ -65,7 +80,7 @@ function createCurrentArticulationSlot(runtimeSlot, input = {}) {
 function createCurrentArticulationState(slots = [], input = {}) {
     return {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: input.selectedSlotId ?? slots[0]?.id ?? null,
         activeTriggerMode: input.activeTriggerMode ?? "chain",
         slots,
@@ -638,29 +653,29 @@ test("articulation worker mirrors stored articulations to runtime without GUI ow
     const bank = createCurrentArticulationState([
         createCurrentArticulationSlot(3, {
             overrides: {
-                framePosition: 0.72,
-                warpAmount: 0.44,
+                "oscA.framePosition": 0.72,
+                "oscA.warpAmount": 0.44,
                 filterCutoffHz: 5432,
                 msegMorph1: 0.2,
                 msegMorph2: 0.4,
                 msegMorph3: 0.6,
             },
-            routeAmounts: { "route-a": 0.75 },
+            routeAmounts: { [WARP_ROUTE_ID]: 0.75 },
         }),
     ]);
     const modulationState = createCurrentModulationState([{
-            id: "route-a",
+            id: WARP_ROUTE_ID,
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "unipolar",
-            targetKind: "warpAmount",
+            targetKind: "oscA.warpAmount",
             amount: 0.1,
     }]);
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify(bank),
-            "modulation.v2": JSON.stringify(modulationState),
+            "articulations.v4": JSON.stringify(bank),
+            "modulation.v4": JSON.stringify(modulationState),
         },
     });
     const service = createArticulationWorkerService(connection);
@@ -678,19 +693,21 @@ test("articulation worker mirrors stored articulations to runtime without GUI ow
     assert.deepEqual({
         selectorA: slot3Upload.value.selectorA,
         enabled: slot3Upload.value.enabled,
-        framePosition: slot3Upload.value.framePosition,
-        warpAmount: slot3Upload.value.warpAmount,
+        framePositions: slot3Upload.value.framePositions,
+        warpAmounts: slot3Upload.value.warpAmounts,
         filterCutoffHz: slot3Upload.value.filterCutoffHz,
         msegMorphs: slot3Upload.value.msegMorphs,
-        routeAmountCell1: slot3Upload.value.routeAmounts[1],
+        routeAmount: slot3Upload.value.routeAmounts[
+            getModulationRuntimeCell(modulationState.routes[0]).articulationCellIndex
+        ],
     }, {
         selectorA: 3,
         enabled: true,
-        framePosition: 0.72,
-        warpAmount: 0.44,
+        framePositions: [0.72, 0, 0],
+        warpAmounts: [0.44, 0, 0],
         filterCutoffHz: 5432,
         msegMorphs: [0.2, 0.4, 0.6],
-        routeAmountCell1: 0.75,
+        routeAmount: 0.75,
     });
     assert.equal(runtimeUploads.filter(({ value }) => value.enabled).length, 1);
     assert.equal(runtimeUploads.every(
@@ -711,7 +728,7 @@ test("articulation worker mirrors stored articulations to runtime without GUI ow
     assert.deepEqual(connection.sentEvents, []);
 
     for (let editIndex = 0; editIndex < 625; editIndex += 1) {
-        connection.emitStoredState("modulation.v2", JSON.stringify({
+        connection.emitStoredState("modulation.v4", JSON.stringify({
             ...modulationState,
             routes: modulationState.routes.map((route) => ({
                 ...route,
@@ -725,34 +742,40 @@ test("articulation worker mirrors stored articulations to runtime without GUI ow
         "base amount edits remain sparse and do not rebake articulation images",
     );
 
-    connection.emitStoredState("modulation.v2", JSON.stringify({
+    const panModulationState = {
         ...modulationState,
-        routes: modulationState.routes.map((route) => ({ ...route, targetKind: "pan" })),
-    }));
+        routes: modulationState.routes.map((route) => ({
+            ...route,
+            id: PAN_ROUTE_ID,
+            targetKind: "oscA.pan",
+        })),
+    };
+    connection.emitStoredState("modulation.v4", JSON.stringify(panModulationState));
     await flushMicrotasks();
     const topologyUploads = connection.sentEvents.filter(
         ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
     );
     assert.equal(topologyUploads.length, 1);
     assert.equal(topologyUploads[0].value.selectorA, 3);
-    assert.equal(topologyUploads[0].value.routeAmounts[6], 0.75);
+    const panCell = getModulationRuntimeCell(panModulationState.routes[0]).articulationCellIndex;
+    assert.equal(topologyUploads[0].value.routeAmounts[panCell], 1_000_000);
 
     connection.sentEvents = [];
     const changedBank = {
         ...bank,
         slots: bank.slots.map((slot) => ({
             ...slot,
-            routeAmounts: { "route-a": -0.25 },
+            routeAmounts: { [PAN_ROUTE_ID]: -0.25 },
         })),
     };
-    connection.emitStoredState("articulations.v3", JSON.stringify(changedBank));
+    connection.emitStoredState("articulations.v4", JSON.stringify(changedBank));
     await flushMicrotasks();
     const overrideUploads = connection.sentEvents.filter(
         ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
     );
     assert.equal(overrideUploads.length, 1);
     assert.equal(overrideUploads[0].value.selectorA, 3);
-    assert.equal(overrideUploads[0].value.routeAmounts[6], -0.25);
+    assert.equal(overrideUploads[0].value.routeAmounts[panCell], -0.25);
 
     connection.sentEvents = [];
     connection.sentTimeouts = [];
@@ -771,14 +794,14 @@ test("articulation worker mirrors stored articulations to runtime without GUI ow
 
 test("a rejected articulation batch gets one full-state reconciliation", async () => {
     const bank = createCurrentArticulationState([
-        createCurrentArticulationSlot(0, { overrides: { warpAmount: 0.1 } }),
-        createCurrentArticulationSlot(1, { overrides: { warpAmount: 0.2 } }),
-        createCurrentArticulationSlot(2, { overrides: { warpAmount: 0.3 } }),
+        createCurrentArticulationSlot(0, { overrides: { "oscA.warpAmount": 0.1 } }),
+        createCurrentArticulationSlot(1, { overrides: { "oscA.warpAmount": 0.2 } }),
+        createCurrentArticulationSlot(2, { overrides: { "oscA.warpAmount": 0.3 } }),
     ]);
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify(bank),
-            "modulation.v2": JSON.stringify(createCurrentModulationState()),
+            "articulations.v4": JSON.stringify(bank),
+            "modulation.v4": JSON.stringify(createCurrentModulationState()),
         },
     });
     const service = createArticulationWorkerService(connection);
@@ -798,11 +821,11 @@ test("a rejected articulation batch gets one full-state reconciliation", async (
             ...bank,
             slots: bank.slots.map((slot, slotIndex) => ({
                 ...slot,
-                overrides: { ...slot.overrides, warpAmount: 0.7 + (slotIndex * 0.1) },
+                overrides: { ...slot.overrides, "oscA.warpAmount": 0.7 + (slotIndex * 0.1) },
             })),
         };
         connection.rejectNext(ARTICULATION_SNAPSHOT_ENDPOINT_ID, 1);
-        connection.emitStoredState("articulations.v3", JSON.stringify(changedBank));
+        connection.emitStoredState("articulations.v4", JSON.stringify(changedBank));
         await flushMicrotasks(512);
 
         assert.equal(connection.sentEvents.filter(
@@ -812,7 +835,7 @@ test("a rejected articulation batch gets one full-state reconciliation", async (
             ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
         ).slice(-3);
         assert.deepEqual(firstAttempt.map(({ value }) => value.selectorA), [0, 1, 2]);
-        assert.ok(Math.abs(firstAttempt[2].value.warpAmount - 0.9) < 1e-12);
+        assert.ok(Math.abs(firstAttempt[2].value.warpAmounts[0] - 0.9) < 1e-12);
 
         await new Promise((resolve) => setTimeout(resolve, 1_100));
         await flushMicrotasks(1_024);
@@ -823,9 +846,9 @@ test("a rejected articulation batch gets one full-state reconciliation", async (
         assert.equal(snapshots.length, initialSnapshotCount + 6, "one replay reconciles all changed slots");
         const replayedSnapshots = snapshots.slice(-3);
         assert.deepEqual(replayedSnapshots.map(({ value }) => value.selectorA), [0, 1, 2]);
-        assert.ok(Math.abs(replayedSnapshots[0].value.warpAmount - 0.7) < 1e-12);
-        assert.ok(Math.abs(replayedSnapshots[1].value.warpAmount - 0.8) < 1e-12);
-        assert.ok(Math.abs(replayedSnapshots[2].value.warpAmount - 0.9) < 1e-12);
+        assert.ok(Math.abs(replayedSnapshots[0].value.warpAmounts[0] - 0.7) < 1e-12);
+        assert.ok(Math.abs(replayedSnapshots[1].value.warpAmounts[0] - 0.8) < 1e-12);
+        assert.ok(Math.abs(replayedSnapshots[2].value.warpAmounts[0] - 0.9) < 1e-12);
     } finally {
         service.stop();
         console.error = originalConsoleError;
@@ -834,12 +857,12 @@ test("a rejected articulation batch gets one full-state reconciliation", async (
 
 test("repeated articulation rejection stops after one reconciliation attempt", async () => {
     const bank = createCurrentArticulationState([
-        createCurrentArticulationSlot(0, { overrides: { warpAmount: 0.1 } }),
+        createCurrentArticulationSlot(0, { overrides: { "oscA.warpAmount": 0.1 } }),
     ]);
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify(bank),
-            "modulation.v2": JSON.stringify(createCurrentModulationState()),
+            "articulations.v4": JSON.stringify(bank),
+            "modulation.v4": JSON.stringify(createCurrentModulationState()),
         },
     });
     const service = createArticulationWorkerService(connection);
@@ -859,11 +882,11 @@ test("repeated articulation rejection stops after one reconciliation attempt", a
             ...bank,
             slots: bank.slots.map((slot) => ({
                 ...slot,
-                overrides: { ...slot.overrides, warpAmount: 0.9 },
+                overrides: { ...slot.overrides, "oscA.warpAmount": 0.9 },
             })),
         };
         connection.rejectNext(ARTICULATION_SNAPSHOT_ENDPOINT_ID, 0, 2);
-        connection.emitStoredState("articulations.v3", JSON.stringify(changedBank));
+        connection.emitStoredState("articulations.v4", JSON.stringify(changedBank));
         await flushMicrotasks(512);
         assert.equal(connection.sentEvents.filter(
             ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
@@ -880,11 +903,11 @@ test("repeated articulation rejection stops after one reconciliation attempt", a
             ...changedBank,
             slots: changedBank.slots.map((slot) => ({
                 ...slot,
-                overrides: { ...slot.overrides, warpAmount: 0.6 },
+                overrides: { ...slot.overrides, "oscA.warpAmount": 0.6 },
             })),
         };
         connection.rejectNext(ARTICULATION_SNAPSHOT_ENDPOINT_ID);
-        connection.emitStoredState("articulations.v3", JSON.stringify(distinctBank));
+        connection.emitStoredState("articulations.v4", JSON.stringify(distinctBank));
         await flushMicrotasks(512);
         assert.equal(connection.sentEvents.filter(
             ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
@@ -897,17 +920,17 @@ test("repeated articulation rejection stops after one reconciliation attempt", a
             ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
         );
         assert.equal(snapshots.length, initialSnapshotCount + 4, "a distinct rejection gets one reconciliation");
-        assert.ok(Math.abs(snapshots.at(-1).value.warpAmount - 0.6) < 1e-12);
+        assert.ok(Math.abs(snapshots.at(-1).value.warpAmounts[0] - 0.6) < 1e-12);
     } finally {
         service.stop();
         console.error = originalConsoleError;
     }
 });
 
-test("headless articulation restore resolves the accepted sparse v3 model", async () => {
-    const articulationStateV3 = {
+test("headless articulation restore resolves the accepted sparse v4 model", async () => {
+    const articulationStateV4 = {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: "slot-5",
         activeTriggerMode: "key",
         slots: [{
@@ -918,20 +941,20 @@ test("headless articulation restore resolves the accepted sparse v3 model", asyn
             key: 36,
             velRange: { min: 0, max: 127 },
             chainRange: { min: 0, max: 127 },
-            overrides: { warpAmount: 0.42 },
-            routeAmounts: { "route-a": 0.66 },
+            overrides: { "oscA.warpAmount": 0.42 },
+            routeAmounts: { [WARP_ROUTE_ID]: 0.66 },
         }],
     };
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify(articulationStateV3),
-            "modulation.v2": JSON.stringify(createCurrentModulationState([{
-                    id: "route-a",
+            "articulations.v4": JSON.stringify(articulationStateV4),
+            "modulation.v4": JSON.stringify(createCurrentModulationState([{
+                    id: WARP_ROUTE_ID,
                     enabled: true,
                     sourceKind: "mseg",
                     sourceSlot: 1,
                     polarity: "unipolar",
-                    targetKind: "warpAmount",
+                    targetKind: "oscA.warpAmount",
                     amount: 0.1,
             }])),
         },
@@ -947,14 +970,14 @@ test("headless articulation restore resolves the accepted sparse v3 model", asyn
     );
     assert.equal(snapshotEvents.length, 1);
     assert.equal(snapshotEvents[0].value.selectorA, 5);
-    assert.equal(snapshotEvents[0].value.warpAmount, 0.42);
+    assert.equal(snapshotEvents[0].value.warpAmounts[0], 0.42);
     const routeCell = getModulationRuntimeCell({
-        id: "route-a",
+        id: WARP_ROUTE_ID,
         enabled: true,
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
-        targetKind: "warpAmount",
+        targetKind: "oscA.warpAmount",
         amount: 0.1,
     }).articulationCellIndex;
     assert.notEqual(routeCell, null);
@@ -965,18 +988,18 @@ test("headless articulation restore resolves the accepted sparse v3 model", asyn
     service.stop();
 });
 
-test("articulation hydration waits for a valid modulation document instead of compiling against phantom defaults", async () => {
+test("cold rejected modulation uses the accepted default dependency before articulation resolution", async () => {
     const articulationState = createCurrentArticulationState([
         createCurrentArticulationSlot(4, {
             id: "strict-slot",
-            overrides: { warpAmount: 0.42 },
+            overrides: { "oscA.warpAmount": 0.42 },
             routeAmounts: {},
         }),
     ]);
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify(articulationState),
-            "modulation.v2": JSON.stringify({ format: "legacy", routes: [] }),
+            "articulations.v4": JSON.stringify(articulationState),
+            "modulation.v4": JSON.stringify({ format: "legacy", routes: [] }),
         },
     });
     const service = createArticulationWorkerService(connection);
@@ -987,21 +1010,20 @@ test("articulation hydration waits for a valid modulation document instead of co
         service.start();
         connection.emitEndpoint("runtimeState", { dspSessionId: 43 });
         await flushMicrotasks(128);
-        assert.equal(connection.sentEvents.some(
+        const initialUpload = connection.sentEvents.find(
             ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
-        ), false, "invalid modulation leaves the articulation dependency unready");
+        );
+        assert.equal(initialUpload.value.selectorA, 4);
+        assert.equal(initialUpload.value.warpAmounts[0], 0.42);
+        connection.sentEvents = [];
 
         connection.emitStoredState(
-            "modulation.v2",
+            "modulation.v4",
             JSON.stringify(createCurrentModulationState([])),
         );
         await flushMicrotasks(128);
 
-        const upload = connection.sentEvents.find(
-            ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
-        );
-        assert.equal(upload.value.selectorA, 4);
-        assert.equal(upload.value.warpAmount, 0.42);
+        assert.equal(connection.sentEvents.length, 0, "the equivalent valid default does not republish");
     } finally {
         service.stop();
         console.error = originalConsoleError;
@@ -1011,17 +1033,17 @@ test("articulation hydration waits for a valid modulation document instead of co
 test("headless hydration and live writes both reject whole phantom-route documents", async () => {
     const modulationState = createCurrentModulationState([
             {
-                id: "voice-route",
+                id: "oscA.framePosition::mseg-1",
                 enabled: true,
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "unipolar",
-                targetKind: "wavetablePosition",
+                targetKind: "oscA.wavetablePosition",
                 amount: 1,
                 reducer: "max",
             },
             {
-                id: "rack-route",
+                id: "phaser.phaserPhase::macro-1",
                 enabled: true,
                 sourceKind: "macro",
                 sourceSlot: 1,
@@ -1033,17 +1055,17 @@ test("headless hydration and live writes both reject whole phantom-route documen
     ]);
     const validSlot = createCurrentArticulationSlot(5, {
         id: "current-articulation",
-        routeAmounts: { "voice-route": 0.75 },
+        routeAmounts: { "oscA.framePosition::mseg-1": 0.75 },
     });
     const validArticulationState = createCurrentArticulationState([validSlot]);
     const invalidArticulationState = createCurrentArticulationState([{
         ...validSlot,
-        routeAmounts: { ...validSlot.routeAmounts, "rack-route": 0.5 },
+        routeAmounts: { ...validSlot.routeAmounts, "phaser.phaserPhase::macro-1": 0.5 },
     }]);
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "modulation.v2": JSON.stringify(modulationState),
-            "articulations.v3": JSON.stringify(invalidArticulationState),
+            "modulation.v4": JSON.stringify(modulationState),
+            "articulations.v4": JSON.stringify(invalidArticulationState),
         },
     });
     const service = createArticulationWorkerService(connection);
@@ -1059,17 +1081,17 @@ test("headless hydration and live writes both reject whole phantom-route documen
             ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
         ), false, "invalid hydration keeps the initial empty bank");
 
-        connection.emitStoredState("articulations.v3", JSON.stringify(validArticulationState));
+        connection.emitStoredState("articulations.v4", JSON.stringify(validArticulationState));
         await flushMicrotasks(64);
         const acceptedUpload = connection.sentEvents.find(
             ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
         );
         assert.equal(acceptedUpload.value.selectorA, 5);
-        const voiceCell = getModulationRuntimeCell(modulationState.routes[0]).cellIndex;
+        const voiceCell = getModulationRuntimeCell(modulationState.routes[0]).articulationCellIndex;
         assert.equal(acceptedUpload.value.routeAmounts[voiceCell], 0.75);
 
         connection.sentEvents = [];
-        connection.emitStoredState("articulations.v3", JSON.stringify(invalidArticulationState));
+        connection.emitStoredState("articulations.v4", JSON.stringify(invalidArticulationState));
         await flushMicrotasks(64);
         assert.equal(
             connection.sentEvents.some(
@@ -1092,15 +1114,15 @@ test("headless hydration and live writes both reject whole phantom-route documen
     }
 });
 
-test("malformed current articulation state is ignored without reading a v2 fallback", async () => {
+test("malformed current articulation state is ignored without reading a v3 fallback", async () => {
     const retiredBank = normalizeArticulationEditorState({
         slots: [{ id: "legacy-slot", runtimeSlot: 9 }],
     });
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": "{not-json",
+            "articulations.v4": "{not-json",
             [RETIRED_ARTICULATION_STATE_KEY]: JSON.stringify(retiredBank),
-            "modulation.v2": JSON.stringify(createCurrentModulationState()),
+            "modulation.v4": JSON.stringify(createCurrentModulationState()),
         },
     });
     const service = createArticulationWorkerService(connection);
@@ -1121,12 +1143,12 @@ test("malformed current articulation state is ignored without reading a v2 fallb
     }
 });
 
-test("forward patch-value keys and newly added targets cannot wedge articulation restore", async () => {
+test("cold malformed uiPatchValues.v2 defaults atomically before articulation restore", async () => {
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify({
+            "articulations.v4": JSON.stringify({
                 format: "cosimo.articulations",
-                version: 3,
+                version: 4,
                 selectedSlotId: "future-safe-slot",
                 activeTriggerMode: "chain",
                 slots: [{
@@ -1141,11 +1163,11 @@ test("forward patch-value keys and newly added targets cannot wedge articulation
                     routeAmounts: {},
                 }],
             }),
-            "uiPatchValues.v1": JSON.stringify({
-                "wavetable.index": 0.25,
+            "uiPatchValues.v2": JSON.stringify({
+                "oscA.framePosition": 0.25,
                 "future-build.renamed-target": 0.75,
             }),
-            "modulation.v2": JSON.stringify(createCurrentModulationState()),
+            "modulation.v4": JSON.stringify(createCurrentModulationState()),
         },
     });
     const service = createArticulationWorkerService(connection);
@@ -1159,7 +1181,7 @@ test("forward patch-value keys and newly added targets cannot wedge articulation
     );
     assert.ok(upload);
     assert.equal(upload.value.selectorA, 10);
-    assert.equal(upload.value.framePosition, 0.25);
+    assert.deepEqual(upload.value.framePositions, [0, 0, 0]);
 
     service.stop();
 });
@@ -1167,27 +1189,27 @@ test("forward patch-value keys and newly added targets cannot wedge articulation
 test("separate stored-key boot requests only the current articulation schema", async () => {
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify({
+            "articulations.v4": JSON.stringify({
                 format: "cosimo.articulations",
-                version: 3,
-                selectedSlotId: "v3-slot",
+                version: 4,
+                selectedSlotId: "v4-slot",
                 activeTriggerMode: "key",
                 slots: [{
-                    id: "v3-slot",
+                    id: "v4-slot",
                     runtimeSlot: 17,
-                    name: "V3 Slot",
+                    name: "V4 Slot",
                     color: "#d2a128",
                     key: 36,
                     velRange: { min: 0, max: 127 },
                     chainRange: { min: 0, max: 127 },
-                    overrides: { warpAmount: 0.37 },
+                    overrides: { "oscA.warpAmount": 0.37 },
                     routeAmounts: {},
                 }],
             }),
             [RETIRED_ARTICULATION_STATE_KEY]: JSON.stringify(normalizeArticulationEditorState({
                 slots: [{ id: "legacy-slot", runtimeSlot: 3 }],
             })),
-            "modulation.v2": JSON.stringify(createCurrentModulationState()),
+            "modulation.v4": JSON.stringify(createCurrentModulationState()),
         },
     });
     connection.requestFullStoredState = undefined;
@@ -1204,22 +1226,22 @@ test("separate stored-key boot requests only the current articulation schema", a
         snapshotEvents.map(({ value }) => value.selectorA),
         [17],
     );
-    assert.equal(snapshotEvents[0].value.warpAmount, 0.37);
+    assert.equal(snapshotEvents[0].value.warpAmounts[0], 0.37);
     assert.deepEqual(connection.requestedKeys.sort(), [
-        "articulations.v3",
-        "modulation.v2",
-        "uiPatchValues.v1",
+        "articulations.v4",
+        "modulation.v4",
+        "uiPatchValues.v2",
     ]);
 
     service.stop();
 });
 
-test("live writes to the retired v2 key are ignored", async () => {
+test("live writes to the retired v3 key are ignored", async () => {
     const retiredBank = normalizeArticulationEditorState({
         slots: [{ id: "legacy-slot", runtimeSlot: 3 }],
     });
     const connection = new ArticulationWorkerTestConnection({
-        "modulation.v2": JSON.stringify(createCurrentModulationState()),
+        "modulation.v4": JSON.stringify(createCurrentModulationState()),
     });
     connection.requestFullStoredState = undefined;
     const service = createArticulationWorkerService(connection);
@@ -1238,12 +1260,12 @@ test("live writes to the retired v2 key are ignored", async () => {
 
 test("articulation dependency projection ignores amount-only route edits", () => {
     const base = createCurrentModulationState([{
-            id: "route-a",
+            id: WARP_ROUTE_ID,
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "unipolar",
-            targetKind: "warpAmount",
+            targetKind: "oscA.warpAmount",
             amount: 0.1,
             reducer: "max",
     }]);
@@ -1260,7 +1282,11 @@ test("articulation dependency projection ignores amount-only route edits", () =>
     }));
     const topologyEdit = deserializeModulationState(JSON.stringify({
         ...base,
-        routes: base.routes.map((route) => ({ ...route, targetKind: "pan" })),
+        routes: base.routes.map((route) => ({
+            ...route,
+            id: PAN_ROUTE_ID,
+            targetKind: "oscA.pan",
+        })),
     }));
 
     assert.equal(
@@ -1276,8 +1302,8 @@ test("articulation dependency projection ignores amount-only route edits", () =>
 test("same-DSP worker reattachment clears selectors the new worker cannot know", async () => {
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify(createCurrentArticulationState()),
-            "modulation.v2": JSON.stringify(createCurrentModulationState()),
+            "articulations.v4": JSON.stringify(createCurrentArticulationState()),
+            "modulation.v4": JSON.stringify(createCurrentModulationState()),
         },
     });
     connection.dspSessionId = 23;
@@ -1308,8 +1334,8 @@ test("a full 128-slot articulation restore is acknowledged one image at a time",
     ));
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "articulations.v3": JSON.stringify(bank),
-            "modulation.v2": JSON.stringify(createCurrentModulationState()),
+            "articulations.v4": JSON.stringify(bank),
+            "modulation.v4": JSON.stringify(createCurrentModulationState()),
         },
     });
     const service = createArticulationWorkerService(connection);

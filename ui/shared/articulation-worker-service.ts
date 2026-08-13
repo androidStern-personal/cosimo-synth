@@ -1,8 +1,8 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 import {
-    ARTICULATIONS_V3_STATE_KEY,
+    ARTICULATIONS_V4_STATE_KEY,
     createEmptyArticulationsState,
-    parseArticulationsV3,
+    parseArticulationsV4,
     resolveArticulationImages,
     type ArticulationsState,
 } from "./articulation-image";
@@ -36,7 +36,7 @@ const runtimeStateEndpointID = "runtimeState";
 const runtimeRecoveryDelayMilliseconds = 1_000;
 
 const bootStoredStateKeys = [
-    ARTICULATIONS_V3_STATE_KEY,
+    ARTICULATIONS_V4_STATE_KEY,
     UI_PATCH_VALUES_STATE_KEY,
     MODULATION_STATE_KEY,
 ] as const;
@@ -69,7 +69,7 @@ function getRuntimeDspSessionId(value: unknown) {
     return Math.trunc(Number((value as { dspSessionId?: unknown }).dspSessionId) || 0);
 }
 
-function parseStoredArticulationsV3(
+function parseStoredArticulationsV4(
     value: unknown,
     acceptedRouteIds: ReadonlySet<string>,
 ): ArticulationsState {
@@ -81,10 +81,10 @@ function parseStoredArticulationsV3(
         try {
             document = JSON.parse(document);
         } catch {
-            throw new Error(`${ARTICULATIONS_V3_STATE_KEY} is not valid JSON.`);
+            throw new Error(`${ARTICULATIONS_V4_STATE_KEY} is not valid JSON.`);
         }
     }
-    const parsed = parseArticulationsV3(document, acceptedRouteIds);
+    const parsed = parseArticulationsV4(document, acceptedRouteIds);
     if (parsed._tag === "err") {
         throw parsed.error;
     }
@@ -161,7 +161,7 @@ export class ArticulationWorkerService {
             this.connection.requestFullStoredState((storedState) => {
                 this.applyModulationState(getFullStoredStateValue(storedState, MODULATION_STATE_KEY));
                 this.applyPatchValues(getFullStoredStateValue(storedState, UI_PATCH_VALUES_STATE_KEY));
-                this.applyArticulationState(getFullStoredStateValue(storedState, ARTICULATIONS_V3_STATE_KEY));
+                this.applyArticulationState(getFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY));
             });
             return;
         }
@@ -193,11 +193,11 @@ export class ArticulationWorkerService {
                 this.pendingBootStoredValues = null;
                 this.applyModulationState(bootValues.get(MODULATION_STATE_KEY));
                 this.applyPatchValues(bootValues.get(UI_PATCH_VALUES_STATE_KEY));
-                this.applyArticulationState(bootValues.get(ARTICULATIONS_V3_STATE_KEY));
+                this.applyArticulationState(bootValues.get(ARTICULATIONS_V4_STATE_KEY));
             }
             return;
         }
-        if (nextMessage.key === ARTICULATIONS_V3_STATE_KEY) {
+        if (nextMessage.key === ARTICULATIONS_V4_STATE_KEY) {
             this.applyArticulationState(nextMessage.value);
         } else if (nextMessage.key === UI_PATCH_VALUES_STATE_KEY) {
             this.applyPatchValues(nextMessage.value);
@@ -228,9 +228,9 @@ export class ArticulationWorkerService {
     private applyArticulationState(value: unknown): boolean {
         let nextBank: ArticulationsState;
         try {
-            nextBank = parseStoredArticulationsV3(value, this.currentArticulationRouteIds());
+            nextBank = parseStoredArticulationsV4(value, this.currentArticulationRouteIds());
         } catch (error) {
-            console.error("[articulation-worker] Stored v3 articulation state is invalid.", error);
+            console.error("[articulation-worker] Stored v4 articulation state is invalid.", error);
             if (!this.hasArticulationState) {
                 this.hasArticulationState = true;
                 this.applyRuntimeStateIfReady();

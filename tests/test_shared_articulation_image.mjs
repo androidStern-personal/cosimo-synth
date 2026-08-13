@@ -41,25 +41,33 @@ function expectErr(result, label) {
  */
 function imageAccessorTable() {
     const scalar = (field) => (image) => image[field];
-    return {
-        "framePosition": scalar("framePosition"),
-        "pan": scalar("pan"),
-        "warpMode": scalar("warpMode"),
-        "warpAmount": scalar("warpAmount"),
+    const oscillatorFields = {
+        framePosition: "framePositions",
+        pan: "pans",
+        octave: "octaves",
+        semitone: "semitones",
+        fineCents: "fineCents",
+        phase: "phases",
+        phaseRandom: "phaseRandoms",
+        retrigger: "retriggers",
+        volumeDb: "volumeDbs",
+        mute: "mutes",
+        solo: "solos",
+        warpMode: "warpModes",
+        warpAmount: "warpAmounts",
+        unisonVoices: "unisonVoices",
+        unisonDetune: "unisonDetunes",
+        unisonBlend: "unisonBlends",
+        unisonWidth: "unisonWidths",
+        unisonDetuneMode: "unisonDetuneModes",
+        unisonStackMode: "unisonStackModes",
+        unisonWavetablePositionSpread: "unisonWavetablePositionSpreads",
+        unisonWarpSpread: "unisonWarpSpreads",
+    };
+    const table = {
         "filterMode": scalar("filterMode"),
         "filterCutoffHz": scalar("filterCutoffHz"),
         "filterQ": scalar("filterQ"),
-        "unisonVoices": scalar("unisonVoices"),
-        "unisonDetune": scalar("unisonDetune"),
-        "unisonBlend": scalar("unisonBlend"),
-        "unisonWidth": scalar("unisonWidth"),
-        "unisonPhase": scalar("unisonPhase"),
-        "unisonRandom": scalar("unisonRandom"),
-        "unisonPhaseMode": scalar("unisonPhaseMode"),
-        "unisonDetuneMode": scalar("unisonDetuneMode"),
-        "unisonStackMode": scalar("unisonStackMode"),
-        "unisonWavetablePositionSpread": scalar("unisonWavetablePositionSpread"),
-        "unisonWarpSpread": scalar("unisonWarpSpread"),
         "msegMorph1": (image) => image.msegMorphs[0],
         "msegMorph2": (image) => image.msegMorphs[1],
         "msegMorph3": (image) => image.msegMorphs[2],
@@ -76,6 +84,12 @@ function imageAccessorTable() {
         "env3.sustain": (image) => image.envelopeSustain[2],
         "env3.releaseSeconds": (image) => image.envelopeReleaseSeconds[2],
     };
+    ["A", "B", "C"].forEach((oscillatorID, oscillatorIndex) => {
+        Object.entries(oscillatorFields).forEach(([parameterID, imageField]) => {
+            table[`osc${oscillatorID}.${parameterID}`] = (image) => image[imageField][oscillatorIndex];
+        });
+    });
+    return table;
 }
 
 function makeMinimalSlot(index) {
@@ -125,7 +139,7 @@ test("serialize→parse roundtrips arbitrary banks unchanged", async () => {
     fc.assert(
         fc.property(arb.articulationsStateArbitrary(fc), (state) => {
             const parsed = expectOk(
-                image.parseArticulationsV3(image.serializeArticulationsV3(state), storedRouteIds(state)),
+                image.parseArticulationsV4(image.serializeArticulationsV4(state), storedRouteIds(state)),
                 "roundtrip",
             );
             assert.deepEqual(parsed, state);
@@ -137,14 +151,14 @@ test("serialized banks survive actual JSON encoding", async () => {
     const { image, arb } = await modules();
     fc.assert(
         fc.property(arb.articulationsStateArbitrary(fc), (state) => {
-            const viaJson = JSON.parse(JSON.stringify(image.serializeArticulationsV3(state)));
-            const parsed = expectOk(image.parseArticulationsV3(viaJson, storedRouteIds(state)), "json roundtrip");
+            const viaJson = JSON.parse(JSON.stringify(image.serializeArticulationsV4(state)));
+            const parsed = expectOk(image.parseArticulationsV4(viaJson, storedRouteIds(state)), "json roundtrip");
             assert.deepEqual(parsed, state);
         }),
     );
 });
 
-test("a v2 payload is just a malformed current-schema document", async () => {
+test("an earlier payload is rejected with the hard-cut reason", async () => {
     const { image } = await modules();
     const v2Payload = {
         format: "cosimo.articulations",
@@ -156,16 +170,24 @@ test("a v2 payload is just a malformed current-schema document", async () => {
         keyAssignments: [],
         velocityAssignments: [],
     };
-    const error = expectErr(image.parseArticulationsV3(v2Payload, new Set()), "v2 payload");
+    const error = expectErr(image.parseArticulationsV4(v2Payload, new Set()), "v2 payload");
     assert.equal(error._tag, "ArticulationsParseError");
-    assert.equal(error.reason, "malformed");
+    assert.equal(error.reason, "unsupported-version");
+    const futureError = expectErr(image.parseArticulationsV4({
+        ...v2Payload,
+        version: 5,
+        chainAssignments: undefined,
+        keyAssignments: undefined,
+        velocityAssignments: undefined,
+    }, new Set()), "future payload");
+    assert.equal(futureError.reason, "unsupported-version");
 });
 
 test("malformed payloads are rejected, never repaired", async () => {
     const { image } = await modules();
     const base = () => ({
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: null,
         activeTriggerMode: "chain",
         slots: [makeMinimalSlot(0)],
@@ -175,10 +197,9 @@ test("malformed payloads are rejected, never repaired", async () => {
         ["not an object", 42],
         ["null", null],
         ["wrong format", { ...base(), format: "cosimo.nonsense" }],
-        ["future version", { ...base(), version: 4 }],
         ["slots not an array", { ...base(), slots: {} }],
         ["unknown override key", { ...base(), slots: [{ ...makeMinimalSlot(0), overrides: { chorusMix: 0.5 } }] }],
-        ["non-finite override", { ...base(), slots: [{ ...makeMinimalSlot(0), overrides: { pan: Number.NaN } }] }],
+        ["non-finite override", { ...base(), slots: [{ ...makeMinimalSlot(0), overrides: { "oscA.pan": Number.NaN } }] }],
         ["runtime slot out of range", { ...base(), slots: [{ ...makeMinimalSlot(0), runtimeSlot: 128 }] }],
         ["negative runtime slot", { ...base(), slots: [{ ...makeMinimalSlot(0), runtimeSlot: -1 }] }],
         ["duplicate runtime slot", { ...base(), slots: [makeMinimalSlot(0), { ...makeMinimalSlot(1), runtimeSlot: 0 }] }],
@@ -199,16 +220,16 @@ test("malformed payloads are rejected, never repaired", async () => {
     ];
 
     for (const [label, payload] of cases) {
-        const error = expectErr(image.parseArticulationsV3(payload, new Set(["route-a"])), label);
+        const error = expectErr(image.parseArticulationsV4(payload, new Set(["route-a"])), label);
         assert.equal(error.reason, "malformed", `${label}: expected malformed, got ${error.reason}`);
     }
 });
 
-test("a finite phantom route amount rejects the complete current document", async () => {
+test("a finite phantom route rejects the complete v4 document", async () => {
     const { image } = await modules();
     const payload = {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: "slot-0",
         activeTriggerMode: "chain",
         slots: [{
@@ -217,7 +238,10 @@ test("a finite phantom route amount rejects the complete current document", asyn
         }],
     };
 
-    const error = expectErr(image.parseArticulationsV3(payload, new Set(["current-route"])), "phantom route");
+    const error = expectErr(
+        image.parseArticulationsV4(payload, new Set(["current-route"])),
+        "phantom route",
+    );
     assert.equal(error.reason, "malformed");
     assert.match(error.detail, /unknown-route.*current articulable mapping/);
 });
@@ -227,7 +251,10 @@ test("the empty bank is valid and roundtrips", async () => {
     const empty = image.createEmptyArticulationsState();
     assert.equal(empty.slots.length, 0);
     assert.equal(empty.selectedSlotId, null);
-    const parsed = expectOk(image.parseArticulationsV3(image.serializeArticulationsV3(empty), new Set()), "empty roundtrip");
+    const parsed = expectOk(
+        image.parseArticulationsV4(image.serializeArticulationsV4(empty), new Set()),
+        "empty roundtrip",
+    );
     assert.deepEqual(parsed, empty);
 });
 
@@ -374,7 +401,7 @@ test("lowestFreeRuntimeSlot returns the minimal unowned selector and null at cap
 
     const fullBank = {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: null,
         activeTriggerMode: "chain",
         slots: Array.from({ length: image.ARTICULATION_MAX_SLOTS }, (_, index) => makeMinimalSlot(index)),

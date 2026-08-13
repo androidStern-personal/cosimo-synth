@@ -54,11 +54,11 @@ import type {
     EffectStoredStateContext,
 } from "./effects/effect-preset-v2";
 import {
-    ARTICULATIONS_V3_STATE_KEY,
+    ARTICULATIONS_V4_STATE_KEY,
     createEmptyArticulationsState,
-    parseArticulationsV3,
-    serializeArticulationsV3,
-    type ArticulationSlotV3,
+    parseArticulationsV4,
+    serializeArticulationsV4,
+    type ArticulationSlotV4,
     type ArticulationsState,
     type ArticulationVoiceParameterId,
 } from "./articulation-image";
@@ -854,7 +854,7 @@ function decodeArticulationDocument(rawValue: unknown): unknown {
 }
 
 function readArticulationOverride(
-    slot: ArticulationSlotV3,
+    slot: ArticulationSlotV4,
     parameterId: ArticulationVoiceParameterId,
     fallback: number,
 ): number {
@@ -895,7 +895,7 @@ const ENVELOPE_ARTICULATION_PARAMETER_IDS: readonly [
 ];
 
 function resolveEditorEnvelope(
-    slot: ArticulationSlotV3,
+    slot: ArticulationSlotV4,
     envelope: ModulationEnvelope,
     parameterIds: EnvelopeArticulationParameterIds,
 ): ModulationEnvelope {
@@ -909,7 +909,7 @@ function resolveEditorEnvelope(
 }
 
 function resolveEditorSnapshot(
-    slot: ArticulationSlotV3,
+    slot: ArticulationSlotV4,
     baseSnapshot: ArticulationSnapshot,
     routes: ReadonlyArray<ModulationRoute>,
 ): ArticulationSnapshot {
@@ -926,28 +926,25 @@ function resolveEditorSnapshot(
     return normalizeArticulationSnapshot({
         parameters: {
             ...parameters,
-            wavetablePosition: readArticulationOverride(slot, "framePosition", parameters.wavetablePosition),
-            pan: readArticulationOverride(slot, "pan", parameters.pan),
-            warpMode: readArticulationOverride(slot, "warpMode", parameters.warpMode),
-            warpAmount: readArticulationOverride(slot, "warpAmount", parameters.warpAmount),
+            wavetablePosition: readArticulationOverride(slot, "oscA.framePosition", parameters.wavetablePosition),
+            pan: readArticulationOverride(slot, "oscA.pan", parameters.pan),
+            warpMode: readArticulationOverride(slot, "oscA.warpMode", parameters.warpMode),
+            warpAmount: readArticulationOverride(slot, "oscA.warpAmount", parameters.warpAmount),
             filterMode: readArticulationOverride(slot, "filterMode", parameters.filterMode),
             filterCutoff: readArticulationOverride(slot, "filterCutoffHz", parameters.filterCutoff),
             filterQ: readArticulationOverride(slot, "filterQ", parameters.filterQ),
-            unisonVoices: readArticulationOverride(slot, "unisonVoices", parameters.unisonVoices),
-            unisonDetune: readArticulationOverride(slot, "unisonDetune", parameters.unisonDetune),
-            unisonBlend: readArticulationOverride(slot, "unisonBlend", parameters.unisonBlend),
-            unisonWidth: readArticulationOverride(slot, "unisonWidth", parameters.unisonWidth),
-            unisonPhase: readArticulationOverride(slot, "unisonPhase", parameters.unisonPhase),
-            unisonRandom: readArticulationOverride(slot, "unisonRandom", parameters.unisonRandom),
-            unisonPhaseMode: readArticulationOverride(slot, "unisonPhaseMode", parameters.unisonPhaseMode),
-            unisonDetuneMode: readArticulationOverride(slot, "unisonDetuneMode", parameters.unisonDetuneMode),
-            unisonStackMode: readArticulationOverride(slot, "unisonStackMode", parameters.unisonStackMode),
+            unisonVoices: readArticulationOverride(slot, "oscA.unisonVoices", parameters.unisonVoices),
+            unisonDetune: readArticulationOverride(slot, "oscA.unisonDetune", parameters.unisonDetune),
+            unisonBlend: readArticulationOverride(slot, "oscA.unisonBlend", parameters.unisonBlend),
+            unisonWidth: readArticulationOverride(slot, "oscA.unisonWidth", parameters.unisonWidth),
+            unisonDetuneMode: readArticulationOverride(slot, "oscA.unisonDetuneMode", parameters.unisonDetuneMode),
+            unisonStackMode: readArticulationOverride(slot, "oscA.unisonStackMode", parameters.unisonStackMode),
             unisonWavetablePositionSpread: readArticulationOverride(
                 slot,
-                "unisonWavetablePositionSpread",
+                "oscA.unisonWavetablePositionSpread",
                 parameters.unisonWavetablePositionSpread,
             ),
-            unisonWarpSpread: readArticulationOverride(slot, "unisonWarpSpread", parameters.unisonWarpSpread),
+            unisonWarpSpread: readArticulationOverride(slot, "oscA.unisonWarpSpread", parameters.unisonWarpSpread),
             msegMorphs: [
                 readArticulationOverride(slot, "msegMorph1", parameters.msegMorphs[0]),
                 readArticulationOverride(slot, "msegMorph2", parameters.msegMorphs[1]),
@@ -991,31 +988,30 @@ function projectCurrentArticulationsToEditorBank(
     });
 }
 
-function snapshotOverrides(snapshotValue: ArticulationSnapshot): Readonly<Record<ArticulationVoiceParameterId, number>> {
+function snapshotOverrides(
+    snapshotValue: ArticulationSnapshot,
+): Readonly<Partial<Record<ArticulationVoiceParameterId, number>>> {
     const snapshot = normalizeArticulationSnapshot(snapshotValue);
     const parameters = snapshot.parameters;
     const envelope1 = snapshot.envelopes[0] ?? createDefaultEnvelope(0);
     const envelope2 = snapshot.envelopes[1] ?? createDefaultEnvelope(1);
     const envelope3 = snapshot.envelopes[2] ?? createDefaultEnvelope(2);
     return {
-        framePosition: parameters.wavetablePosition,
-        pan: parameters.pan,
-        warpMode: parameters.warpMode,
-        warpAmount: parameters.warpAmount,
+        "oscA.framePosition": parameters.wavetablePosition,
+        "oscA.pan": parameters.pan,
+        "oscA.warpMode": parameters.warpMode,
+        "oscA.warpAmount": parameters.warpAmount,
         filterMode: parameters.filterMode,
         filterCutoffHz: parameters.filterCutoff,
         filterQ: parameters.filterQ,
-        unisonVoices: parameters.unisonVoices,
-        unisonDetune: parameters.unisonDetune,
-        unisonBlend: parameters.unisonBlend,
-        unisonWidth: parameters.unisonWidth,
-        unisonPhase: parameters.unisonPhase,
-        unisonRandom: parameters.unisonRandom,
-        unisonPhaseMode: parameters.unisonPhaseMode,
-        unisonDetuneMode: parameters.unisonDetuneMode,
-        unisonStackMode: parameters.unisonStackMode,
-        unisonWavetablePositionSpread: parameters.unisonWavetablePositionSpread,
-        unisonWarpSpread: parameters.unisonWarpSpread,
+        "oscA.unisonVoices": parameters.unisonVoices,
+        "oscA.unisonDetune": parameters.unisonDetune,
+        "oscA.unisonBlend": parameters.unisonBlend,
+        "oscA.unisonWidth": parameters.unisonWidth,
+        "oscA.unisonDetuneMode": parameters.unisonDetuneMode,
+        "oscA.unisonStackMode": parameters.unisonStackMode,
+        "oscA.unisonWavetablePositionSpread": parameters.unisonWavetablePositionSpread,
+        "oscA.unisonWarpSpread": parameters.unisonWarpSpread,
         msegMorph1: parameters.msegMorphs[0],
         msegMorph2: parameters.msegMorphs[1],
         msegMorph3: parameters.msegMorphs[2],
@@ -1043,7 +1039,7 @@ function compileEditorBankToCurrentArticulations(
     const acceptedRouteIds = currentArticulationRouteIds(routes);
     const previousSlots = new Map(previousState.slots.map((slot) => [slot.id, slot]));
     const previousEditorSlots = new Map(previousBank.slots.map((slot) => [slot.id, slot]));
-    const slots = bank.slots.map((slot): ArticulationSlotV3 => {
+    const slots = bank.slots.map((slot): ArticulationSlotV4 => {
         const previousSlot = previousSlots.get(slot.id);
         const previousEditorSlot = previousEditorSlots.get(slot.id);
         const snapshotUnchanged = previousSlot !== undefined
@@ -1081,7 +1077,7 @@ function compileEditorBankToCurrentArticulations(
 
     return {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: bank.selectedSlotId,
         activeTriggerMode: bank.activeTriggerMode,
         slots,
@@ -1153,7 +1149,7 @@ function useStoredArticulationEditorState(
         }
 
         const routes = modulationBridge.current?.getState().routes ?? [];
-        const parsedState = parseArticulationsV3(
+        const parsedState = parseArticulationsV4(
             decodeArticulationDocument(rawValue),
             currentArticulationRouteIds(routes),
         );
@@ -1164,7 +1160,7 @@ function useStoredArticulationEditorState(
             return;
         }
 
-        const serializedState = JSON.stringify(serializeArticulationsV3(parsedState.value));
+        const serializedState = JSON.stringify(serializeArticulationsV4(parsedState.value));
         if (consumePendingEcho(serializedState)) {
             return;
         }
@@ -1181,7 +1177,7 @@ function useStoredArticulationEditorState(
 
             const nextMessage = message as { key?: unknown; value?: unknown };
 
-            if (nextMessage.key !== ARTICULATIONS_V3_STATE_KEY) {
+            if (nextMessage.key !== ARTICULATIONS_V4_STATE_KEY) {
                 return;
             }
 
@@ -1192,10 +1188,10 @@ function useStoredArticulationEditorState(
 
         if (typeof patchConnection.requestFullStoredState === "function") {
             patchConnection.requestFullStoredState((storedState) => {
-                applyIncomingState(readFullStoredStateValue(storedState, ARTICULATIONS_V3_STATE_KEY), true);
+                applyIncomingState(readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY), true);
             });
         } else if (typeof patchConnection.requestStoredStateValue === "function") {
-            patchConnection.requestStoredStateValue(ARTICULATIONS_V3_STATE_KEY);
+            patchConnection.requestStoredStateValue(ARTICULATIONS_V4_STATE_KEY);
         } else {
             applyIncomingState(undefined, true);
         }
@@ -1233,12 +1229,12 @@ function useStoredArticulationEditorState(
         setBank(canonicalNextBank);
 
         if (typeof patchConnection.sendStoredStateValue === "function") {
-            const serializedBank = JSON.stringify(serializeArticulationsV3(nextStoredState));
+            const serializedBank = JSON.stringify(serializeArticulationsV4(nextStoredState));
             const serializedTriggerConfig = serializeArticulationTriggerConfig(
                 buildArticulationTriggerConfig(canonicalNextBank),
             );
             rememberPendingEcho(serializedBank);
-            patchConnection.sendStoredStateValue(ARTICULATIONS_V3_STATE_KEY, serializedBank);
+            patchConnection.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, serializedBank);
             patchConnection.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serializedTriggerConfig);
         }
         sendNativeArticulationTriggerConfig(buildArticulationTriggerConfig(canonicalNextBank), patchConnection);
@@ -1251,8 +1247,8 @@ function useStoredArticulationEditorState(
             getBaseSnapshotRef.current(),
             routes,
         );
-        const previousSerialized = JSON.stringify(serializeArticulationsV3(storedStateRef.current));
-        const nextSerialized = JSON.stringify(serializeArticulationsV3(nextState));
+        const previousSerialized = JSON.stringify(serializeArticulationsV4(storedStateRef.current));
+        const nextSerialized = JSON.stringify(serializeArticulationsV4(nextState));
         if (previousSerialized === nextSerialized) {
             return;
         }
@@ -1264,7 +1260,7 @@ function useStoredArticulationEditorState(
 
         if (typeof patchConnection.sendStoredStateValue === "function") {
             rememberPendingEcho(nextSerialized);
-            patchConnection.sendStoredStateValue(ARTICULATIONS_V3_STATE_KEY, nextSerialized);
+            patchConnection.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, nextSerialized);
             patchConnection.sendStoredStateValue(
                 ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
                 serializeArticulationTriggerConfig(buildArticulationTriggerConfig(nextBank)),
@@ -1300,7 +1296,7 @@ function parseStrictArticulationPresetState(
     acceptedRouteIds: ReadonlySet<string>,
 ): ArticulationsState {
     const parsedValue = parsePresetStoredStateValue(rawValue, "Articulation preset state");
-    const parsedState = parseArticulationsV3(parsedValue, acceptedRouteIds);
+    const parsedState = parseArticulationsV4(parsedValue, acceptedRouteIds);
     if (parsedState._tag === "err") {
         throw parsedState.error;
     }
@@ -1398,12 +1394,12 @@ function useSynthPresetStoredStateAdapters({
             },
         };
         const articulationAdapter: EffectStoredStateAdapter = {
-            key: ARTICULATIONS_V3_STATE_KEY,
-            schemaVersion: 3,
+            key: ARTICULATIONS_V4_STATE_KEY,
+            schemaVersion: 4,
             getContract() {
                 return {
-                    key: ARTICULATIONS_V3_STATE_KEY,
-                    schemaVersion: 3,
+                    key: ARTICULATIONS_V4_STATE_KEY,
+                    schemaVersion: 4,
                     required: true,
                 };
             },
@@ -1416,14 +1412,14 @@ function useSynthPresetStoredStateAdapters({
             },
             serializeForPreset(value, context) {
                 const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
-                return serializeArticulationsV3(parseStrictArticulationPresetState(value, routeIds));
+                return serializeArticulationsV4(parseStrictArticulationPresetState(value, routeIds));
             },
             apply(value, context) {
                 const routeIds = currentArticulationRouteIds(presetModulationState(context).routes);
                 setAndPersistStoredState(parseStrictArticulationPresetState(value, routeIds));
             },
             subscribe(listener: () => void) {
-                return subscribeToStoredStateKey(ARTICULATIONS_V3_STATE_KEY, listener);
+                return subscribeToStoredStateKey(ARTICULATIONS_V4_STATE_KEY, listener);
             },
         };
 

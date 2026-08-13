@@ -1,11 +1,12 @@
 /**
- * Sparse articulation storage (`articulations.v3`) and its pure resolution to
+ * Sparse three-oscillator articulation storage (`articulations.v4`) and its pure resolution to
  * the engine's complete per-selector snapshot images.
  *
  * Decision record: docs/ADR-014-sparse-articulation-storage.md. Storage is
  * sparse (absent keys inherit the patch base, ledger §11.1); the engine's
- * upload contract (`ArticulationSnapshotRuntimeUpload`) is untouched — this
- * module compiles one into the other. Values are engine units throughout; the
+ * upload contract (`ArticulationSnapshotRuntimeUpload`) carries complete A/B/C
+ * scalar arrays plus sparse route cells; this module compiles one into the
+ * other. Values are engine units throughout; the
  * descriptor layer owns any normalized conversion. This module is a pure
  * Domain Module: no I/O, no engine access, no UI types.
  */
@@ -14,14 +15,17 @@ import {
     ARTICULATION_MAX_SLOTS,
     ARTICULATION_ROUTE_AMOUNT_INHERIT,
     ARTICULATION_ROUTE_AMOUNT_MAX_ABS,
+    ARTICULATION_UNASSIGNED_RUNTIME_SLOT,
+    type ArticulationTriggerConfig,
     type ArticulationSnapshotRuntimeUpload,
     type ArticulationTriggerMode,
 } from "./articulations";
 import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program";
+import { OSCILLATOR_IDS, type OscillatorID } from "./modulation-targets";
 import { err, ok, type Result } from "./result";
 
-/** Stored-state key for the v3 articulation bank. */
-export const ARTICULATIONS_V3_STATE_KEY = "articulations.v3";
+/** Sole stored-state key for the hard-forked three-oscillator articulation bank. */
+export const ARTICULATIONS_V4_STATE_KEY = "articulations.v4";
 
 /**
  * Every scalar an articulation may override, named after the runtime upload's
@@ -30,25 +34,34 @@ export const ARTICULATIONS_V3_STATE_KEY = "articulations.v3";
  * model (diff inventory, per-parameter reset, override counts) treats all
  * overrides uniformly.
  */
-export const ARTICULATION_VOICE_PARAMETER_IDS = [
+export const OSCILLATOR_ARTICULATION_PARAMETER_IDS = [
     "framePosition",
     "pan",
+    "octave",
+    "semitone",
+    "fineCents",
+    "phase",
+    "phaseRandom",
+    "retrigger",
+    "volumeDb",
+    "mute",
+    "solo",
     "warpMode",
     "warpAmount",
-    "filterMode",
-    "filterCutoffHz",
-    "filterQ",
     "unisonVoices",
     "unisonDetune",
     "unisonBlend",
     "unisonWidth",
-    "unisonPhase",
-    "unisonRandom",
-    "unisonPhaseMode",
     "unisonDetuneMode",
     "unisonStackMode",
     "unisonWavetablePositionSpread",
     "unisonWarpSpread",
+] as const;
+
+export const SHARED_ARTICULATION_VOICE_PARAMETER_IDS = [
+    "filterMode",
+    "filterCutoffHz",
+    "filterQ",
     "msegMorph1",
     "msegMorph2",
     "msegMorph3",
@@ -66,8 +79,22 @@ export const ARTICULATION_VOICE_PARAMETER_IDS = [
     "env3.releaseSeconds",
 ] as const;
 
-/** One overridable voice-parameter key. */
-export type ArticulationVoiceParameterId = (typeof ARTICULATION_VOICE_PARAMETER_IDS)[number];
+export type OscillatorArticulationParameterId =
+    (typeof OSCILLATOR_ARTICULATION_PARAMETER_IDS)[number];
+export type SharedArticulationVoiceParameterId =
+    (typeof SHARED_ARTICULATION_VOICE_PARAMETER_IDS)[number];
+export type ArticulationVoiceParameterId =
+    | `osc${OscillatorID}.${OscillatorArticulationParameterId}`
+    | SharedArticulationVoiceParameterId;
+
+export const ARTICULATION_VOICE_PARAMETER_IDS: ReadonlyArray<ArticulationVoiceParameterId> = [
+    ...OSCILLATOR_IDS.flatMap((oscillatorID) => (
+        OSCILLATOR_ARTICULATION_PARAMETER_IDS.map(
+            (parameterID) => `osc${oscillatorID}.${parameterID}` as const,
+        )
+    )),
+    ...SHARED_ARTICULATION_VOICE_PARAMETER_IDS,
+];
 
 /** An inclusive integer range over 0..127 (velocity or chain position). */
 export type ArticulationRange = {
@@ -81,7 +108,7 @@ export type ArticulationRange = {
  * engine data. `overrides` and `routeAmounts` are sparse: absent keys inherit
  * the patch base.
  */
-export type ArticulationSlotV3 = {
+export type ArticulationSlotV4 = {
     readonly id: string;
     readonly runtimeSlot: number;
     readonly name: string;
@@ -96,13 +123,13 @@ export type ArticulationSlotV3 = {
     readonly routeAmounts: Readonly<Record<string, number>>;
 };
 
-/** The complete v3 articulation bank. */
+/** The complete v4 three-oscillator articulation bank. */
 export type ArticulationsState = {
     readonly format: "cosimo.articulations";
-    readonly version: 3;
+    readonly version: 4;
     readonly selectedSlotId: string | null;
     readonly activeTriggerMode: ArticulationTriggerMode;
-    readonly slots: ReadonlyArray<ArticulationSlotV3>;
+    readonly slots: ReadonlyArray<ArticulationSlotV4>;
 };
 
 /**
@@ -127,13 +154,17 @@ export type ArticulationBaseChange =
     | { readonly kind: "routeAmount"; readonly routeId: string }
     | { readonly kind: "routeOrder" };
 
-/** Why a stored payload failed to parse as articulations.v3. */
+/** Why a stored payload failed to parse as articulations.v4. */
 export class ArticulationsParseError extends Error {
     readonly _tag = "ArticulationsParseError" as const;
 
-    /** @param detail Human-readable detail naming the offending field or slot. */
-    constructor(readonly reason: "malformed", readonly detail: string) {
-        super(`articulations.v3 parse failed (${reason}): ${detail}`);
+    constructor(
+        /** `unsupported-version` marks the deliberate hard cut; `malformed` is any other violation. */
+        readonly reason: "unsupported-version" | "malformed",
+        /** Human-readable detail naming the offending field or slot. */
+        readonly detail: string,
+    ) {
+        super(`articulations.v4 parse failed (${reason}): ${detail}`);
     }
 }
 
@@ -298,7 +329,7 @@ function parseSlot(
     input: unknown,
     index: number,
     acceptedRouteIds: ReadonlySet<string>,
-): Result<ArticulationSlotV3, ArticulationsParseError> {
+): Result<ArticulationSlotV4, ArticulationsParseError> {
     const label = `slots[${index}]`;
     if (!isObjectRecord(input)) {
         return malformed(`${label} must be an object`);
@@ -348,7 +379,11 @@ function parseSlot(
         return overrides;
     }
 
-    const routeAmounts = parseRouteAmounts(input.routeAmounts, `${label}.routeAmounts`, acceptedRouteIds);
+    const routeAmounts = parseRouteAmounts(
+        input.routeAmounts,
+        `${label}.routeAmounts`,
+        acceptedRouteIds,
+    );
     if (routeAmounts._tag === "err") {
         return routeAmounts;
     }
@@ -397,7 +432,7 @@ function copyRouteAmounts(source: Readonly<Record<string, number>>): Readonly<Re
 
 function resolveVoiceParameter(
     base: PatchVoiceBase,
-    slot: ArticulationSlotV3,
+    slot: ArticulationSlotV4,
     parameterId: ArticulationVoiceParameterId,
 ): number {
     if (Object.hasOwn(slot.overrides, parameterId)) {
@@ -410,31 +445,20 @@ function resolveVoiceParameter(
     return base.parameters[parameterId];
 }
 
-function resolveRouteAmount(base: PatchVoiceBase, slot: ArticulationSlotV3, routeId: string): number {
-    if (Object.hasOwn(slot.routeAmounts, routeId)) {
-        const override = slot.routeAmounts[routeId];
-        if (override !== undefined) {
-            return override;
-        }
-    }
-
-    return base.routeAmounts[routeId] ?? 0;
-}
-
 /**
- * Parse untrusted stored state into a v3 articulation bank.
+ * Parse untrusted stored state into the v4 articulation bank.
  *
- * Strict, fail-fast: `format`/`version` must match exactly;
+ * Strict, fail-fast: `format`/`version` must match exactly. Every earlier
+ * articulation format is rejected; there is no migration or fallback.
  * every slot needs a unique id, a unique in-range `runtimeSlot`, finite
  * numbers, integer ranges with `min <= max` inside 0..127, and override keys
  * drawn from `ARTICULATION_VOICE_PARAMETER_IDS` (unknown keys are malformed,
  * never dropped).
  *
  * @param input - Untrusted stored-state value.
- * @param acceptedRouteIds - Current voice-mapping ids that may be overridden.
  * @returns The parsed bank, or a tagged parse error.
  */
-export function parseArticulationsV3(
+export function parseArticulationsV4(
     input: unknown,
     acceptedRouteIds: ReadonlySet<string>,
 ): Result<ArticulationsState, ArticulationsParseError> {
@@ -446,8 +470,11 @@ export function parseArticulationsV3(
         return malformed('format must be exactly "cosimo.articulations"');
     }
 
-    if (input.version !== 3) {
-        return malformed("version must be exactly 3");
+    if (input.version !== 4) {
+        return err(new ArticulationsParseError(
+            "unsupported-version",
+            "version must be exactly 4; earlier articulation formats are deliberately unsupported",
+        ));
     }
 
     const shapeOffense = findExactShapeOffense(
@@ -475,7 +502,7 @@ export function parseArticulationsV3(
         return malformed(`slots must contain at most ${ARTICULATION_MAX_SLOTS} entries`);
     }
 
-    const slots: Array<ArticulationSlotV3> = [];
+    const slots: Array<ArticulationSlotV4> = [];
     const slotIds = new Set<string>();
     const runtimeSlots = new Set<number>();
 
@@ -513,14 +540,13 @@ export function parseArticulationsV3(
 }
 
 /**
- * Project a v3 bank to a JSON-safe plain value such that
- * `parseArticulationsV3(serializeArticulationsV3(state), acceptedRouteIds)` is
- * identity when `acceptedRouteIds` contains the state's route-amount keys.
+ * Project a v4 bank to a JSON-safe plain value such that
+ * `parseArticulationsV4(serializeArticulationsV4(state))` is identity.
  *
  * @param state - The bank to serialize.
  * @returns A JSON-safe deep copy.
  */
-export function serializeArticulationsV3(state: ArticulationsState): unknown {
+export function serializeArticulationsV4(state: ArticulationsState): unknown {
     return {
         format: state.format,
         version: state.version,
@@ -548,10 +574,43 @@ export function serializeArticulationsV3(state: ArticulationsState): unknown {
 export function createEmptyArticulationsState(): ArticulationsState {
     return {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: null,
         activeTriggerMode: "chain",
         slots: [],
+    };
+}
+
+/** Compile the v4 slot-owned key and range assignments for the native voice dispatcher. */
+export function buildArticulationTriggerConfigV4(state: ArticulationsState): ArticulationTriggerConfig {
+    const chain = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
+    const key = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
+    const velocity = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
+
+    for (const slot of state.slots) {
+        if (key[slot.key] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
+            key[slot.key] = slot.runtimeSlot;
+        }
+        for (let value = slot.chainRange.min; value <= slot.chainRange.max; value += 1) {
+            if (chain[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
+                chain[value] = slot.runtimeSlot;
+            }
+        }
+        for (let value = slot.velRange.min; value <= slot.velRange.max; value += 1) {
+            if (velocity[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
+                velocity[value] = slot.runtimeSlot;
+            }
+        }
+    }
+
+    velocity[0] = ARTICULATION_UNASSIGNED_RUNTIME_SLOT;
+    return {
+        format: "cosimo.articulation.triggerConfig",
+        version: 1,
+        activeMode: state.activeTriggerMode,
+        chain,
+        key,
+        velocity,
     };
 }
 
@@ -586,7 +645,7 @@ export function lowestFreeRuntimeSlot(state: ArticulationsState): number | null 
  */
 export function resolveArticulationImage(
     base: PatchVoiceBase,
-    slot: ArticulationSlotV3,
+    slot: ArticulationSlotV4,
 ): ArticulationSnapshotRuntimeUpload {
     const routeAmounts = Array.from(
         { length: MODULATION_ARTICULATION_ROUTE_CELL_COUNT },
@@ -605,24 +664,72 @@ export function resolveArticulationImage(
     return {
         selectorA: slot.runtimeSlot,
         enabled: true,
-        framePosition: resolveVoiceParameter(base, slot, "framePosition"),
-        pan: resolveVoiceParameter(base, slot, "pan"),
-        warpMode: resolveVoiceParameter(base, slot, "warpMode"),
-        warpAmount: resolveVoiceParameter(base, slot, "warpAmount"),
+        framePositions: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.framePosition`,
+        )),
+        pans: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.pan`,
+        )),
+        octaves: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.octave`,
+        )),
+        semitones: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.semitone`,
+        )),
+        fineCents: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.fineCents`,
+        )),
+        phases: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.phase`,
+        )),
+        phaseRandoms: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.phaseRandom`,
+        )),
+        retriggers: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.retrigger`,
+        )),
+        volumeDbs: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.volumeDb`,
+        )),
+        mutes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.mute`,
+        )),
+        solos: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.solo`,
+        )),
+        warpModes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.warpMode`,
+        )),
+        warpAmounts: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.warpAmount`,
+        )),
         filterMode: resolveVoiceParameter(base, slot, "filterMode"),
         filterCutoffHz: resolveVoiceParameter(base, slot, "filterCutoffHz"),
         filterQ: resolveVoiceParameter(base, slot, "filterQ"),
-        unisonVoices: resolveVoiceParameter(base, slot, "unisonVoices"),
-        unisonDetune: resolveVoiceParameter(base, slot, "unisonDetune"),
-        unisonBlend: resolveVoiceParameter(base, slot, "unisonBlend"),
-        unisonWidth: resolveVoiceParameter(base, slot, "unisonWidth"),
-        unisonPhase: resolveVoiceParameter(base, slot, "unisonPhase"),
-        unisonRandom: resolveVoiceParameter(base, slot, "unisonRandom"),
-        unisonPhaseMode: resolveVoiceParameter(base, slot, "unisonPhaseMode"),
-        unisonDetuneMode: resolveVoiceParameter(base, slot, "unisonDetuneMode"),
-        unisonStackMode: resolveVoiceParameter(base, slot, "unisonStackMode"),
-        unisonWavetablePositionSpread: resolveVoiceParameter(base, slot, "unisonWavetablePositionSpread"),
-        unisonWarpSpread: resolveVoiceParameter(base, slot, "unisonWarpSpread"),
+        unisonVoices: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.unisonVoices`,
+        )),
+        unisonDetunes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.unisonDetune`,
+        )),
+        unisonBlends: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.unisonBlend`,
+        )),
+        unisonWidths: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.unisonWidth`,
+        )),
+        unisonDetuneModes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.unisonDetuneMode`,
+        )),
+        unisonStackModes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.unisonStackMode`,
+        )),
+        unisonWavetablePositionSpreads: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.unisonWavetablePositionSpread`,
+        )),
+        unisonWarpSpreads: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
+            base, slot, `osc${oscillatorID}.unisonWarpSpread`,
+        )),
         msegMorphs: [
             resolveVoiceParameter(base, slot, "msegMorph1"),
             resolveVoiceParameter(base, slot, "msegMorph2"),

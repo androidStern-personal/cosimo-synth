@@ -1,4 +1,5 @@
 import {
+    type OscillatorArticulationParameterId,
     type ArticulationVoiceParameterId,
     type PatchVoiceBase,
 } from "./articulation-image";
@@ -8,6 +9,7 @@ import {
 } from "./modulation";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 import { clampNormalizedValue } from "./cosimo-ids";
+import { OSCILLATOR_IDS } from "./modulation-targets";
 import { allTargetDescriptors } from "./target-descriptor";
 
 export const UI_PATCH_VALUES_STATE_KEY = "uiPatchValues.v2";
@@ -111,25 +113,40 @@ export function buildArticulationPatchVoiceBase(
     const envelope = (slotIndex: number) => (
         modulationState.envelopeSlots[slotIndex] ?? createDefaultEnvelope(slotIndex)
     );
-    const parameters: Record<ArticulationVoiceParameterId, number> = {
+    const oscillatorDefaults: Record<OscillatorArticulationParameterId, number> = {
         framePosition: 0,
         pan: 0,
+        octave: 0,
+        semitone: 0,
+        fineCents: 0,
+        phase: 0,
+        phaseRandom: 0,
+        retrigger: 1,
+        volumeDb: -9.542425,
+        mute: 0,
+        solo: 0,
         warpMode: 0,
         warpAmount: 0,
-        filterMode: 0,
-        filterCutoffHz: 1000,
-        filterQ: 0.707107,
         unisonVoices: 1,
         unisonDetune: 0.1,
         unisonBlend: 0.75,
         unisonWidth: 1,
-        unisonPhase: 0,
-        unisonRandom: 0,
-        unisonPhaseMode: 0,
         unisonDetuneMode: 0,
         unisonStackMode: 0,
         unisonWavetablePositionSpread: 0,
         unisonWarpSpread: 0,
+    };
+    const oscillatorParameters = Object.fromEntries(OSCILLATOR_IDS.flatMap((oscillatorID) => (
+        Object.entries(oscillatorDefaults).map(([parameterID, value]) => [
+            `osc${oscillatorID}.${parameterID}`,
+            value,
+        ])
+    ))) as Record<`osc${typeof OSCILLATOR_IDS[number]}.${OscillatorArticulationParameterId}`, number>;
+    const parameters: Record<ArticulationVoiceParameterId, number> = {
+        ...oscillatorParameters,
+        filterMode: 0,
+        filterCutoffHz: 1000,
+        filterQ: 0.707107,
         msegMorph1: modulationState.msegSlots[0]?.morph ?? 0,
         msegMorph2: modulationState.msegSlots[1]?.morph ?? 0,
         msegMorph3: modulationState.msegSlots[2]?.morph ?? 0,

@@ -6,6 +6,7 @@ import {
     type ModulationEnvelope,
 } from "./modulation";
 import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program";
+import { OSCILLATOR_IDS } from "./modulation-targets";
 
 export const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
@@ -94,7 +95,7 @@ export type ArticulationRangeAssignment = {
 export type ArticulationRangeEditEdge = "min" | "max";
 export type ArticulationInsertPreserveSide = "lower" | "upper";
 
-/** Transient desktop editing view; persisted articulation state is exclusively `articulations.v3`. */
+/** Transient desktop editing view retained until the v4 presentation migration. */
 export type ArticulationEditorState = {
     selectedSlotId: string | null;
     activeTriggerMode: ArticulationTriggerMode;
@@ -116,24 +117,30 @@ export type ArticulationTriggerConfig = {
 export type ArticulationSnapshotRuntimeUpload = {
     selectorA: number;
     enabled: boolean;
-    framePosition: number;
-    pan: number;
-    warpMode: number;
-    warpAmount: number;
+    framePositions: number[];
+    pans: number[];
+    octaves: number[];
+    semitones: number[];
+    fineCents: number[];
+    phases: number[];
+    phaseRandoms: number[];
+    retriggers: number[];
+    volumeDbs: number[];
+    mutes: number[];
+    solos: number[];
+    warpModes: number[];
+    warpAmounts: number[];
     filterMode: number;
     filterCutoffHz: number;
     filterQ: number;
-    unisonVoices: number;
-    unisonDetune: number;
-    unisonBlend: number;
-    unisonWidth: number;
-    unisonPhase: number;
-    unisonRandom: number;
-    unisonPhaseMode: number;
-    unisonDetuneMode: number;
-    unisonStackMode: number;
-    unisonWavetablePositionSpread: number;
-    unisonWarpSpread: number;
+    unisonVoices: number[];
+    unisonDetunes: number[];
+    unisonBlends: number[];
+    unisonWidths: number[];
+    unisonDetuneModes: number[];
+    unisonStackModes: number[];
+    unisonWavetablePositionSpreads: number[];
+    unisonWarpSpreads: number[];
     msegMorphs: number[];
     routeAmounts: number[];
     envelopeAttackSeconds: number[];
@@ -1291,27 +1298,34 @@ export function distributeArticulationRanges(
 }
 
 export function createDisabledArticulationRuntimeUpload(selectorA: number): ArticulationSnapshotRuntimeUpload {
+    const perOscillator = (value: number) => OSCILLATOR_IDS.map(() => value);
     return {
         selectorA,
         enabled: false,
-        framePosition: 0,
-        pan: 0,
-        warpMode: 0,
-        warpAmount: 0,
+        framePositions: perOscillator(0),
+        pans: perOscillator(0),
+        octaves: perOscillator(0),
+        semitones: perOscillator(0),
+        fineCents: perOscillator(0),
+        phases: perOscillator(0),
+        phaseRandoms: perOscillator(0),
+        retriggers: perOscillator(1),
+        volumeDbs: perOscillator(-9.542425),
+        mutes: perOscillator(0),
+        solos: perOscillator(0),
+        warpModes: perOscillator(0),
+        warpAmounts: perOscillator(0),
         filterMode: 0,
         filterCutoffHz: 1000,
         filterQ: 0.707107,
-        unisonVoices: 1,
-        unisonDetune: 0.1,
-        unisonBlend: 0.75,
-        unisonWidth: 1,
-        unisonPhase: 0,
-        unisonRandom: 0,
-        unisonPhaseMode: 0,
-        unisonDetuneMode: 0,
-        unisonStackMode: 0,
-        unisonWavetablePositionSpread: 0,
-        unisonWarpSpread: 0,
+        unisonVoices: perOscillator(1),
+        unisonDetunes: perOscillator(0.1),
+        unisonBlends: perOscillator(0.75),
+        unisonWidths: perOscillator(1),
+        unisonDetuneModes: perOscillator(0),
+        unisonStackModes: perOscillator(0),
+        unisonWavetablePositionSpreads: perOscillator(0),
+        unisonWarpSpreads: perOscillator(0),
         msegMorphs: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0),
         routeAmounts: Array.from({ length: MODULATION_ARTICULATION_ROUTE_CELL_COUNT }, () => 0),
         envelopeAttackSeconds: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex).attackSeconds),

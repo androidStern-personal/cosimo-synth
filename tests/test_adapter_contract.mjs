@@ -589,9 +589,9 @@ test("bridge rejects a duplicate mapping document without migration", async () =
         ],
     });
     connection.setStoredStateValue(MODULATION_STATE_KEY, storedModulation);
-    connection.setStoredStateValue("articulations.v3", JSON.stringify({
+    connection.setStoredStateValue("articulations.v4", JSON.stringify({
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: "legacy-articulation",
         activeTriggerMode: "chain",
         slots: [{
@@ -643,9 +643,9 @@ test("bridge rejects a hydration document containing a non-articulable rack mapp
             },
         ],
     }));
-    connection.setStoredStateValue("articulations.v3", JSON.stringify({
+    connection.setStoredStateValue("articulations.v4", JSON.stringify({
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: "legacy-articulation",
         activeTriggerMode: "chain",
         slots: [{
@@ -656,7 +656,7 @@ test("bridge rejects a hydration document containing a non-articulable rack mapp
             key: 0,
             velRange: { min: 0, max: 127 },
             chainRange: { min: 0, max: 127 },
-            overrides: { pan: 0.25 },
+            overrides: { "oscA.pan": 0.25 },
             routeAmounts: {
                 "oscA.framePosition::mseg-1": 0.75,
                 "phaser.phaserPhase::macro-1": 0.5,
@@ -675,9 +675,9 @@ test("live articulation writes use the same strict route-reference parser as hyd
     const adapter = createCosimoBridgeAdapter({ connection });
     await waitForReady(adapter);
 
-    connection.setStoredStateValue("articulations.v3", JSON.stringify({
+    connection.setStoredStateValue("articulations.v4", JSON.stringify({
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: "current-articulation",
         activeTriggerMode: "chain",
         slots: [{
@@ -700,9 +700,9 @@ test("bridge rejects a non-finite phantom articulation amount without sanitizing
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
     const connection = new MockPatchConnection({ name: "Non-finite legacy articulation", version: 1 });
-    connection.setStoredStateValue("articulations.v3", {
+    connection.setStoredStateValue("articulations.v4", {
         format: "cosimo.articulations",
-        version: 3,
+        version: 4,
         selectedSlotId: "legacy-articulation",
         activeTriggerMode: "chain",
         slots: [{
@@ -767,6 +767,6 @@ test("bridge never persists an inaudible articulation amount for an engine-gappe
         Object.hasOwn(adapter.getSnapshot().patch.articulationMappingAmounts[articulationId] ?? {}, mappingId),
         false,
     );
-    const stored = JSON.parse(connection.getDebugSnapshot().storedState["articulations.v3"]);
+    const stored = JSON.parse(connection.getDebugSnapshot().storedState["articulations.v4"]);
     assert.equal(Object.hasOwn(stored.slots[0].routeAmounts, mappingId), false);
 });
