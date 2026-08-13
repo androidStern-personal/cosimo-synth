@@ -10,7 +10,10 @@
 
 import { type ArticulationVoiceParameterId } from "./articulation-image";
 import { type Brand, type NormalizedValue, type TargetId } from "./cosimo-ids";
-import { type ModulationTargetKind } from "./modulation-targets";
+import {
+    getModulationTargetDescriptorKind,
+    type ModulationTargetKind,
+} from "./modulation-targets";
 import {
     RACK_EFFECT_DESCRIPTORS,
     type RackParameterDescriptor,
@@ -568,9 +571,7 @@ export function allTargetDescriptors(): ReadonlyArray<TargetDescriptor> {
 export function getModulationTargetDisplayLabel(targetKind: ModulationTargetKind): string {
     const oscillatorMatch = /^osc([ABC])\.(.+)$/.exec(targetKind);
     if (oscillatorMatch !== null) {
-        // SAFETY: A/B/C modulation kinds share one closed parameter-kind union, so projecting
-        // the oscillator identity to A preserves the target's descriptor-owned display policy.
-        const descriptorKind = `oscA.${oscillatorMatch[2]}` as ModulationTargetKind;
+        const descriptorKind = getModulationTargetDescriptorKind(targetKind);
         const descriptor = TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(descriptorKind);
         if (descriptor === undefined) {
             return shouldNeverHappen(`Modulation target "${targetKind}" has no display descriptor`);

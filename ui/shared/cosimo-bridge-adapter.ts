@@ -62,6 +62,7 @@ import {
     type ModulationState,
     type ModulationTargetKind,
 } from "./modulation";
+import { getModulationTargetDescriptorKind } from "./modulation-targets";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 import { createDefaultMsegPlayback, createDefaultMsegShape } from "./mseg";
 import { err, ok } from "./result";
@@ -527,6 +528,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
     private deletedSourceBackup: DeletedSourceBackup | null = null;
     private activeMidiNote: number | null = null;
+    private acceptedModulationState = createDefaultModulationState();
     private snapshot: PatchSnapshot;
     private commandDepth = 0;
     private snapshotDirty = false;
@@ -546,6 +548,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             this.detach(`${MODULATION_STATE_KEY} contains a mapping without its canonical current identity`);
             return;
         }
+        this.acceptedModulationState = state;
         this.adoptValidRoutes(validRoutes);
     };
 
@@ -620,7 +623,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     this.detach(parsed.message);
                     return;
                 }
-                const validRoutes = this.collectValidRoutes(this.modulationBridge.getState());
+                const validRoutes = this.collectValidRoutes(this.acceptedModulationState);
                 this.uiMappings = parsed.value;
                 this.revealMappedSources(this.uiMappings.values());
                 this.synchronizeMappingCreationOrder(validRoutes);
@@ -854,6 +857,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
 
         this.runCommand(() => {
+            this.acceptedModulationState = restoredModulationState;
             this.articulations = parsedArticulations.value;
             this.parameterValues = parsedParameterValues.value;
             this.uiMappings = parsedUiMappings.value;
@@ -912,7 +916,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private buildSnapshot(): PatchSnapshot {
-        const validRoutes = this.collectValidRoutes(this.modulationBridge.getState());
+        const validRoutes = this.collectValidRoutes(this.acceptedModulationState);
         const mappings = this.projectMappingsInCreationOrder(validRoutes);
         const articulationRouteById = new Map(validRoutes.flatMap((validRoute) => (
             getModulationArticulationCellIndex(validRoute.route) === null
@@ -1010,7 +1014,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private projectSources(): ReadonlyArray<ModulationSource> {
-        const state = this.modulationBridge.getState();
+        const state = this.acceptedModulationState;
         const sources: Array<ModulationSource> = [];
         for (const definition of SOURCE_DEFINITIONS) {
             if (definition.type !== "fixed" && !this.visibleSourceIds.has(definition.idRaw)) {
@@ -1094,7 +1098,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             }
             const descriptor = getTargetDescriptor(parsedTarget.value);
             if (descriptor.modulationTargetKind === null
-                || descriptor.modulationTargetKind !== route.targetKind) {
+                || descriptor.modulationTargetKind !== getModulationTargetDescriptorKind(route.targetKind)) {
                 continue;
             }
             const sourceId = sourceIdFromDefinition(definition);
@@ -1200,7 +1204,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const descriptor = getTargetDescriptor(input.targetId);
         const targetKind = descriptor.modulationTargetKind;
         const source = this.requireSource(input.sourceId);
-        const routes = this.collectValidRoutes(this.modulationBridge.getState());
+        const routes = this.collectValidRoutes(this.acceptedModulationState);
         const sourceId = sourceIdFromDefinition(source);
         const mappingId = makeMappingId(descriptor.targetId, sourceId);
         if (routes.some((validRoute) => validRoute.route.id === mappingId)
@@ -1236,7 +1240,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             amount: specAmountToRouteAmount(descriptor.modAmount, targetKind, amount),
             reducer: input.reducer === "Mean" ? "mean" : "max",
         };
-        const rawRoutes = this.modulationBridge.getState().routes;
+        const rawRoutes = this.acceptedModulationState.routes;
         if (rawRoutes.some((candidate) => (
             candidate.id === mappingId
             || modulationRoutePairKey(candidate) === modulationRoutePairKey(route)
@@ -1383,7 +1387,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         this.requireSource(sourceId);
 
-        const state = this.modulationBridge.getState();
+        const state = this.acceptedModulationState;
         const removedRoutes = state.routes.filter((route) => {
             const validRoute = this.collectValidRoutes({ ...state, routes: [route] })[0];
             return validRoute?.sourceId === sourceId;
@@ -1454,7 +1458,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 this.connection.sendEventOrValue?.(`macro${slotIndex + 1}`, backup.macroValue);
             }
             this.modulationBridge.setState({
-                ...this.modulationBridge.getState(),
+                ...this.acceptedModulationState,
                 macroNames: [...backup.modulationState.macroNames],
             });
         } else if (backup.definition.type === "envelope") {
@@ -1473,7 +1477,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             this.modulationBridge.setMsegSlotPlayback(slotIndex, slot.playback);
         }
 
-        const currentRoutes = this.modulationBridge.getState().routes;
+        const currentRoutes = this.acceptedModulationState.routes;
         const currentIds = new Set([
             ...currentRoutes.map((route) => route.id),
             ...this.uiMappings.keys(),
@@ -1534,7 +1538,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private renameMacro(sourceId: SourceId, name: string): void {
         const definition = this.requireSource(sourceId, "macro");
         const slotIndex = this.slotIndex(definition);
-        const state = this.modulationBridge.getState();
+        const state = this.acceptedModulationState;
         const macroNames = [...state.macroNames];
         macroNames[slotIndex] = name.trim().length === 0 ? definition.label : name.trim();
         this.modulationBridge.setState({ ...state, macroNames });
@@ -1707,7 +1711,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const parameterId = descriptor.articulationParameterId;
         const targetRouteIds = new Set(
             [
-                ...this.collectValidRoutes(this.modulationBridge.getState())
+                ...this.collectValidRoutes(this.acceptedModulationState)
                     .filter((validRoute) => validRoute.targetId === targetId)
                     .map((validRoute) => validRoute.route.id),
                 ...[...this.uiMappings.values()]
@@ -1972,7 +1976,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private requireMapping(mappingId: MappingId | string): MappingReference {
-        const validRoute = this.collectValidRoutes(this.modulationBridge.getState())
+        const validRoute = this.collectValidRoutes(this.acceptedModulationState)
             .find((candidate) => candidate.route.id === mappingId);
         if (validRoute !== undefined) {
             return { _tag: "engine", validRoute };
@@ -2005,7 +2009,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private collectArticulationMappingIds(
-        validRoutes = this.collectValidRoutes(this.modulationBridge.getState()),
+        validRoutes = this.collectValidRoutes(this.acceptedModulationState),
     ): ReadonlySet<string> {
         return new Set(validRoutes.flatMap((validRoute) => (
             getModulationArticulationCellIndex(validRoute.route) === null

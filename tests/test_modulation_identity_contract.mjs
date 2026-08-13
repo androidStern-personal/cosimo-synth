@@ -39,6 +39,10 @@ test("the canonical modulation domain has stable collision-free source and targe
     assert.equal(targets.getVoiceModulationTargetIndex("oscC.wavetablePosition"), 20);
     assert.equal(targets.getVoiceModulationTargetIndex("filterCutoffOctaves"), 30);
     assert.equal(targets.getVoiceModulationTargetIndex("filterQ"), 31);
+    assert.equal(targets.getModulationTargetDescriptorKind("oscA.wavetablePosition"), "oscA.wavetablePosition");
+    assert.equal(targets.getModulationTargetDescriptorKind("oscB.wavetablePosition"), "oscA.wavetablePosition");
+    assert.equal(targets.getModulationTargetDescriptorKind("oscC.wavetablePosition"), "oscA.wavetablePosition");
+    assert.equal(targets.getModulationTargetDescriptorKind("filterQ"), "filterQ");
 });
 
 test("legacy target aliases are absent and all 884 canonical pairs are legal", async () => {
