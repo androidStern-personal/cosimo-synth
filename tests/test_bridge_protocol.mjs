@@ -120,8 +120,10 @@ function parseStoredArticulations(harness) {
 }
 
 function storedModulationState(harness) {
-    const storedValue = harness.connection.getDebugSnapshot().storedState["modulation.v2"];
-    return harness.modulation.deserializeModulationState(storedValue);
+    const storedValue = harness.connection.getDebugSnapshot().storedState[harness.modulation.MODULATION_STATE_KEY];
+    return storedValue === undefined
+        ? harness.modulation.createDefaultModulationState()
+        : harness.modulation.deserializeModulationState(storedValue);
 }
 
 test("boot hydrates ready and the acknowledged worker uploads every occupied selector", async (t) => {
@@ -170,14 +172,14 @@ test("boot hydrates ready and the acknowledged worker uploads every occupied sel
     assert.deepEqual(occupiedSelectors, [7, 19]);
 });
 
-test("a bound voice base edit persists immediately and the worker updates only inheriting selectors", async (t) => {
+test("a bound shared-voice base edit persists immediately and the worker updates only inheriting selectors", async (t) => {
     const initialArticulations = articulationState([
-        articulationSlot({ id: "Inherits Warp", runtimeSlot: 4, key: 24 }),
+        articulationSlot({ id: "Inherits Resonance", runtimeSlot: 4, key: 24 }),
         articulationSlot({
-            id: "Owns Warp",
+            id: "Owns Resonance",
             runtimeSlot: 9,
             key: 26,
-            overrides: { warpAmount: 0.21 },
+            overrides: { filterQ: 0.21 },
         }),
     ]);
     const harness = await createHarness({
@@ -186,16 +188,19 @@ test("a bound voice base edit persists immediately and the worker updates only i
     t.after(() => harness.adapter.dispose());
     harness.connection.clearDebugLog();
 
+    const resonanceDescriptor = harness.descriptors.getTargetDescriptor(
+        expectOk(harness.descriptors.parseTargetId("voice-filter.resonance"), "parse resonance target"),
+    );
     harness.adapter.commands.setParameter({
-        targetId: "wavetable.warp",
+        targetId: "voice-filter.resonance",
         value: 0.73,
         layer: { _tag: "patchBase" },
     });
 
     const debug = harness.connection.getDebugSnapshot();
     assert.deepEqual(
-        debug.sentMessages.filter((message) => message.endpointID === "warpAmount"),
-        [{ endpointID: "warpAmount", value: 0.73 }],
+        debug.sentMessages.filter((message) => message.endpointID === "filterQ"),
+        [{ endpointID: "filterQ", value: resonanceDescriptor.binding.toEngine(0.73) }],
     );
     assert.deepEqual(
         debug.sentMessages.filter((message) => message.endpointID === "articulationSnapshot"),
@@ -234,7 +239,7 @@ test("mapping commands project product source ids and target-unit amount scaling
     assert.equal(route.amount, 3);
 
     const percentMappingId = expectOk(harness.adapter.commands.addMapping({
-        targetId: "wavetable.warp",
+        targetId: "oscA.warpAmount",
         sourceId: "velocity",
     }), "add percent mapping");
     harness.adapter.commands.setMappingAmount(percentMappingId, 50, { _tag: "patchBase" });
@@ -345,14 +350,17 @@ test("articulation add, override, and clear persist v3 for sole-owner worker pub
     );
 
     harness.connection.clearDebugLog();
+    const resonanceDescriptor = harness.descriptors.getTargetDescriptor(
+        expectOk(harness.descriptors.parseTargetId("voice-filter.resonance"), "parse resonance target"),
+    );
     harness.adapter.commands.setParameter({
-        targetId: "wavetable.warp",
+        targetId: "voice-filter.resonance",
         value: 0.42,
         layer: { _tag: "articulationOverride", articulationId },
     });
     stored = parseStoredArticulations(harness);
     slot = stored.slots.find((candidate) => candidate.id === articulationId);
-    assert.equal(slot.overrides.warpAmount, 0.42);
+    assert.equal(slot.overrides.filterQ, resonanceDescriptor.binding.toEngine(0.42));
     assert.deepEqual(
         harness.connection.getDebugSnapshot().sentMessages
             .filter((message) => message.endpointID === "articulationSnapshot"),
@@ -367,10 +375,10 @@ test("articulation add, override, and clear persist v3 for sole-owner worker pub
     );
 
     harness.connection.clearDebugLog();
-    harness.adapter.commands.clearArticulationBaseOverride("wavetable.warp", articulationId);
+    harness.adapter.commands.clearArticulationBaseOverride("voice-filter.resonance", articulationId);
     stored = parseStoredArticulations(harness);
     slot = stored.slots.find((candidate) => candidate.id === articulationId);
-    assert.equal(Object.hasOwn(slot.overrides, "warpAmount"), false);
+    assert.equal(Object.hasOwn(slot.overrides, "filterQ"), false);
     assert.deepEqual(
         harness.connection.getDebugSnapshot().sentMessages
             .filter((message) => message.endpointID === "articulationSnapshot"),
@@ -431,12 +439,16 @@ test("a version-2 articulation document is rejected as malformed current state",
 
 test("full state roundtrip: a second bridge over the first one's stored state is snapshot-identical", async () => {
     const first = await createHarness();
-    first.adapter.commands.setParameter({ targetId: "wavetable.index", value: 0.77, layer: { _tag: "patchBase" } });
+    first.adapter.commands.setParameter({
+        targetId: "oscA.framePosition",
+        value: 0.77,
+        layer: { _tag: "patchBase" },
+    });
     const a1 = first.adapter.commands.addArticulation();
     assert.equal(a1._tag, "ok");
     first.adapter.commands.setArticulationKey(a1.value, 40);
     first.adapter.commands.setParameter({
-        targetId: "wavetable.warp", value: 0.61,
+        targetId: "voice-filter.resonance", value: 0.61,
         layer: { _tag: "articulationOverride", articulationId: a1.value },
     });
     const m = first.adapter.commands.addMapping({ targetId: "voice-filter.cutoff", sourceId: "envelope-1" });
