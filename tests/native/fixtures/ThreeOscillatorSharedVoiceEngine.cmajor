@@ -1,0 +1,341 @@
+processor Core03TableAndControlSchedule
+{
+    output event wt::OscillatorWavetableLoadBegin loadBeginOut;
+    output event wt::OscillatorWavetableMipFrame mipFrameOut;
+    output event std::notes::NoteOn noteOut;
+
+    output value float32 aFramePositionOut;
+    output value float32 aWarpModeOut;
+    output value float32 aWarpAmountOut;
+    output value float32 aPanOut;
+    output value float32 aUnisonVoicesOut;
+    output value float32 aUnisonDetuneOut;
+    output value float32 aUnisonBlendOut;
+    output value float32 aUnisonWidthOut;
+    output value float32 aUnisonPhaseOut;
+    output value float32 aUnisonRandomOut;
+    output value float32 aUnisonPhaseModeOut;
+    output value float32 aUnisonDetuneModeOut;
+    output value float32 aUnisonStackModeOut;
+    output value float32 aPositionSpreadOut;
+    output value float32 aWarpSpreadOut;
+
+    output value float32 bFramePositionOut;
+    output value float32 cFramePositionOut;
+    output value float32 bWarpModeOut;
+    output value float32 cWarpModeOut;
+    output value float32 bWarpAmountOut;
+    output value float32 cWarpAmountOut;
+    output value float32 bPanOut;
+    output value float32 cPanOut;
+    output value float32 bUnisonVoicesOut;
+    output value float32 cUnisonVoicesOut;
+    output value float32 bUnisonDetuneOut;
+    output value float32 cUnisonDetuneOut;
+    output value float32 bUnisonBlendOut;
+    output value float32 cUnisonBlendOut;
+    output value float32 bUnisonWidthOut;
+    output value float32 cUnisonWidthOut;
+    output value float32 bUnisonDetuneModeOut;
+    output value float32 cUnisonDetuneModeOut;
+    output value float32 bUnisonStackModeOut;
+    output value float32 cUnisonStackModeOut;
+    output value float32 bPositionSpreadOut;
+    output value float32 cPositionSpreadOut;
+    output value float32 bWarpSpreadOut;
+    output value float32 cWarpSpreadOut;
+    output value float32 bPhaseOut;
+    output value float32 cPhaseOut;
+    output value float32 bPhaseRandomOut;
+    output value float32 cPhaseRandomOut;
+    output value float32 bRetriggerOut;
+    output value float32 cRetriggerOut;
+
+    output value float32 aOctaveOut;
+    output value float32 bOctaveOut;
+    output value float32 cOctaveOut;
+    output value float32 aSemitoneOut;
+    output value float32 bSemitoneOut;
+    output value float32 cSemitoneOut;
+    output value float32 aFineCentsOut;
+    output value float32 bFineCentsOut;
+    output value float32 cFineCentsOut;
+    output value float32 aVolumeDbOut;
+    output value float32 bVolumeDbOut;
+    output value float32 cVolumeDbOut;
+    output value float32 aMuteOut;
+    output value float32 bMuteOut;
+    output value float32 cMuteOut;
+    output value float32 aSoloOut;
+    output value float32 bSoloOut;
+    output value float32 cSoloOut;
+
+    int32 frameCounter;
+
+    float32 tableSample (int32 oscillatorIndex, int32 frameIndex, int32 sampleIndex)
+    {
+        let phase = float32 (sampleIndex) / float32 (wt::samplesPerFrame);
+
+        if (oscillatorIndex == wt::oscillatorA)
+            return 0.65f * std::intrinsics::sin (
+                phase * float32 (2 * pi) * float32 (frameIndex + 1));
+
+        if (oscillatorIndex == wt::oscillatorB)
+        {
+            if (frameIndex == 0)
+                return (phase * 1.0f) - 0.5f;
+
+            return phase < 0.5f
+                ? (phase * 2.0f) - 0.5f
+                : 1.5f - (phase * 2.0f);
+        }
+
+        let duty = frameIndex == 0 ? 0.5f : 0.25f;
+        return phase < duty ? 0.40f : -0.40f;
+    }
+
+    void emitLoadBegin (int32 oscillatorIndex)
+    {
+        wt::OscillatorWavetableLoadBegin request;
+        request.dspSessionId = int32 (processor.session);
+        request.oscillatorIndex = oscillatorIndex;
+        request.generation = 1;
+        request.tableIndex = 100 + oscillatorIndex;
+        request.frameCount = 2;
+        loadBeginOut <- request;
+    }
+
+    void emitMipFrame (int32 oscillatorIndex, int32 mipIndex, int32 frameIndex)
+    {
+        wt::OscillatorWavetableMipFrame frame;
+        frame.dspSessionId = int32 (processor.session);
+        frame.oscillatorIndex = oscillatorIndex;
+        frame.generation = 1;
+        frame.tableIndex = 100 + oscillatorIndex;
+        frame.mipIndex = mipIndex;
+        frame.frameIndex = frameIndex;
+
+        for (int32 sampleIndex = 0; sampleIndex < wt::samplesPerFrame; ++sampleIndex)
+            frame.samples.at (sampleIndex)
+                = tableSample (oscillatorIndex, frameIndex, sampleIndex);
+
+        mipFrameOut <- frame;
+    }
+
+    void publishInitialControls()
+    {
+        aFramePositionOut <- 0.20f;
+        aWarpModeOut <- 0.0f;
+        aWarpAmountOut <- 0.0f;
+        aPanOut <- 0.0f;
+        aUnisonVoicesOut <- 1.0f;
+        aUnisonDetuneOut <- 0.10f;
+        aUnisonBlendOut <- 0.75f;
+        aUnisonWidthOut <- 1.0f;
+        aUnisonPhaseOut <- 0.0f;
+        aUnisonRandomOut <- 0.0f;
+        aUnisonPhaseModeOut <- 1.0f;
+        aUnisonDetuneModeOut <- 0.0f;
+        aUnisonStackModeOut <- 0.0f;
+        aPositionSpreadOut <- 0.0f;
+        aWarpSpreadOut <- 0.0f;
+
+        bFramePositionOut <- 0.35f;
+        cFramePositionOut <- 0.80f;
+        bWarpModeOut <- 1.0f;
+        cWarpModeOut <- 2.0f;
+        bWarpAmountOut <- 0.35f;
+        cWarpAmountOut <- 0.65f;
+        bPanOut <- -0.65f;
+        cPanOut <- 0.65f;
+        bUnisonVoicesOut <- 3.0f;
+        cUnisonVoicesOut <- 2.0f;
+        bUnisonDetuneOut <- 0.25f;
+        cUnisonDetuneOut <- 0.15f;
+        bUnisonBlendOut <- 0.70f;
+        cUnisonBlendOut <- 0.80f;
+        bUnisonWidthOut <- 0.40f;
+        cUnisonWidthOut <- 0.55f;
+        bUnisonDetuneModeOut <- 1.0f;
+        cUnisonDetuneModeOut <- 2.0f;
+        bUnisonStackModeOut <- 0.0f;
+        cUnisonStackModeOut <- 0.0f;
+        bPositionSpreadOut <- 0.20f;
+        cPositionSpreadOut <- 0.15f;
+        bWarpSpreadOut <- 0.10f;
+        cWarpSpreadOut <- 0.20f;
+        bPhaseOut <- 0.125f;
+        cPhaseOut <- 0.50f;
+        bPhaseRandomOut <- 0.35f;
+        cPhaseRandomOut <- 0.60f;
+        bRetriggerOut <- 1.0f;
+        cRetriggerOut <- 1.0f;
+
+        aOctaveOut <- 0.0f;
+        bOctaveOut <- 0.0f;
+        cOctaveOut <- -1.0f;
+        aSemitoneOut <- 0.0f;
+        bSemitoneOut <- 7.0f;
+        cSemitoneOut <- 0.0f;
+        aFineCentsOut <- 0.0f;
+        bFineCentsOut <- 0.0f;
+        cFineCentsOut <- -12.0f;
+        aVolumeDbOut <- -9.542425f;
+        bVolumeDbOut <- -9.542425f;
+        cVolumeDbOut <- -9.542425f;
+        aMuteOut <- 0.0f;
+        bMuteOut <- 0.0f;
+        cMuteOut <- 0.0f;
+        aSoloOut <- 1.0f;
+        bSoloOut <- 0.0f;
+        cSoloOut <- 0.0f;
+    }
+
+    void selectSolo (int32 oscillatorIndex)
+    {
+        aSoloOut <- oscillatorIndex == wt::oscillatorA ? 1.0f : 0.0f;
+        bSoloOut <- oscillatorIndex == wt::oscillatorB ? 1.0f : 0.0f;
+        cSoloOut <- oscillatorIndex == wt::oscillatorC ? 1.0f : 0.0f;
+    }
+
+    void main()
+    {
+        loop
+        {
+            if (frameCounter == 0)
+            {
+                publishInitialControls();
+                emitLoadBegin (wt::oscillatorA);
+            }
+            else if (frameCounter >= 1 && frameCounter <= 22)
+            {
+                let uploadIndex = frameCounter - 1;
+                emitMipFrame (wt::oscillatorA, uploadIndex / 2, uploadIndex % 2);
+            }
+            else if (frameCounter == 23)
+            {
+                emitLoadBegin (wt::oscillatorB);
+            }
+            else if (frameCounter >= 24 && frameCounter <= 45)
+            {
+                let uploadIndex = frameCounter - 24;
+                emitMipFrame (wt::oscillatorB, uploadIndex / 2, uploadIndex % 2);
+            }
+            else if (frameCounter == 46)
+            {
+                emitLoadBegin (wt::oscillatorC);
+            }
+            else if (frameCounter >= 47 && frameCounter <= 68)
+            {
+                let uploadIndex = frameCounter - 47;
+                emitMipFrame (wt::oscillatorC, uploadIndex / 2, uploadIndex % 2);
+            }
+            else if (frameCounter == 96)
+            {
+                noteOut <- std::notes::NoteOn (1, 57.0f, 0.90f);
+            }
+            else if (frameCounter == 1088)
+            {
+                selectSolo (wt::oscillatorB);
+            }
+            else if (frameCounter == 2112)
+            {
+                selectSolo (wt::oscillatorC);
+            }
+            else if (frameCounter == 3136)
+            {
+                selectSolo (-1);
+            }
+            else if (frameCounter == 4160)
+            {
+                bMuteOut <- 1.0f;
+            }
+
+            frameCounter += 1;
+            advance();
+        }
+    }
+}
+
+graph ThreeOscillatorSharedVoiceEngine [[ main ]]
+{
+    output stream float32<2> audioOut;
+
+    node schedule = Core03TableAndControlSchedule;
+    node engine = wt::SharedVoiceEngine (1, 440.0f, wt::maxFramesPerTable, true);
+
+    connection
+    {
+        schedule.loadBeginOut -> engine.oscillatorWavetableLoadBeginIn;
+        schedule.mipFrameOut -> engine.oscillatorWavetableMipFrameIn;
+        schedule.noteOut -> engine.voiceEventIn[0];
+
+        schedule.aFramePositionOut -> engine.framePositionIn;
+        schedule.aWarpModeOut -> engine.warpModeIn;
+        schedule.aWarpAmountOut -> engine.warpAmountIn;
+        schedule.aPanOut -> engine.panIn;
+        schedule.aUnisonVoicesOut -> engine.unisonVoicesIn;
+        schedule.aUnisonDetuneOut -> engine.unisonDetuneIn;
+        schedule.aUnisonBlendOut -> engine.unisonBlendIn;
+        schedule.aUnisonWidthOut -> engine.unisonWidthIn;
+        schedule.aUnisonPhaseOut -> engine.unisonPhaseIn;
+        schedule.aUnisonRandomOut -> engine.unisonRandomIn;
+        schedule.aUnisonPhaseModeOut -> engine.unisonPhaseModeIn;
+        schedule.aUnisonDetuneModeOut -> engine.unisonDetuneModeIn;
+        schedule.aUnisonStackModeOut -> engine.unisonStackModeIn;
+        schedule.aPositionSpreadOut -> engine.unisonWavetablePositionSpreadIn;
+        schedule.aWarpSpreadOut -> engine.unisonWarpSpreadIn;
+
+        schedule.bFramePositionOut -> engine.oscillatorFramePositionIn[wt::oscillatorB];
+        schedule.cFramePositionOut -> engine.oscillatorFramePositionIn[wt::oscillatorC];
+        schedule.bWarpModeOut -> engine.oscillatorWarpModeIn[wt::oscillatorB];
+        schedule.cWarpModeOut -> engine.oscillatorWarpModeIn[wt::oscillatorC];
+        schedule.bWarpAmountOut -> engine.oscillatorWarpAmountIn[wt::oscillatorB];
+        schedule.cWarpAmountOut -> engine.oscillatorWarpAmountIn[wt::oscillatorC];
+        schedule.bPanOut -> engine.oscillatorPanIn[wt::oscillatorB];
+        schedule.cPanOut -> engine.oscillatorPanIn[wt::oscillatorC];
+        schedule.bUnisonVoicesOut -> engine.oscillatorUnisonVoicesIn[wt::oscillatorB];
+        schedule.cUnisonVoicesOut -> engine.oscillatorUnisonVoicesIn[wt::oscillatorC];
+        schedule.bUnisonDetuneOut -> engine.oscillatorUnisonDetuneIn[wt::oscillatorB];
+        schedule.cUnisonDetuneOut -> engine.oscillatorUnisonDetuneIn[wt::oscillatorC];
+        schedule.bUnisonBlendOut -> engine.oscillatorUnisonBlendIn[wt::oscillatorB];
+        schedule.cUnisonBlendOut -> engine.oscillatorUnisonBlendIn[wt::oscillatorC];
+        schedule.bUnisonWidthOut -> engine.oscillatorUnisonWidthIn[wt::oscillatorB];
+        schedule.cUnisonWidthOut -> engine.oscillatorUnisonWidthIn[wt::oscillatorC];
+        schedule.bUnisonDetuneModeOut -> engine.oscillatorUnisonDetuneModeIn[wt::oscillatorB];
+        schedule.cUnisonDetuneModeOut -> engine.oscillatorUnisonDetuneModeIn[wt::oscillatorC];
+        schedule.bUnisonStackModeOut -> engine.oscillatorUnisonStackModeIn[wt::oscillatorB];
+        schedule.cUnisonStackModeOut -> engine.oscillatorUnisonStackModeIn[wt::oscillatorC];
+        schedule.bPositionSpreadOut -> engine.oscillatorUnisonWavetablePositionSpreadIn[wt::oscillatorB];
+        schedule.cPositionSpreadOut -> engine.oscillatorUnisonWavetablePositionSpreadIn[wt::oscillatorC];
+        schedule.bWarpSpreadOut -> engine.oscillatorUnisonWarpSpreadIn[wt::oscillatorB];
+        schedule.cWarpSpreadOut -> engine.oscillatorUnisonWarpSpreadIn[wt::oscillatorC];
+        schedule.bPhaseOut -> engine.oscillatorPhaseIn[wt::oscillatorB];
+        schedule.cPhaseOut -> engine.oscillatorPhaseIn[wt::oscillatorC];
+        schedule.bPhaseRandomOut -> engine.oscillatorPhaseRandomIn[wt::oscillatorB];
+        schedule.cPhaseRandomOut -> engine.oscillatorPhaseRandomIn[wt::oscillatorC];
+        schedule.bRetriggerOut -> engine.oscillatorRetriggerIn[wt::oscillatorB];
+        schedule.cRetriggerOut -> engine.oscillatorRetriggerIn[wt::oscillatorC];
+
+        schedule.aOctaveOut -> engine.oscillatorOctaveIn[wt::oscillatorA];
+        schedule.bOctaveOut -> engine.oscillatorOctaveIn[wt::oscillatorB];
+        schedule.cOctaveOut -> engine.oscillatorOctaveIn[wt::oscillatorC];
+        schedule.aSemitoneOut -> engine.oscillatorSemitoneIn[wt::oscillatorA];
+        schedule.bSemitoneOut -> engine.oscillatorSemitoneIn[wt::oscillatorB];
+        schedule.cSemitoneOut -> engine.oscillatorSemitoneIn[wt::oscillatorC];
+        schedule.aFineCentsOut -> engine.oscillatorFineCentsIn[wt::oscillatorA];
+        schedule.bFineCentsOut -> engine.oscillatorFineCentsIn[wt::oscillatorB];
+        schedule.cFineCentsOut -> engine.oscillatorFineCentsIn[wt::oscillatorC];
+        schedule.aVolumeDbOut -> engine.oscillatorVolumeDbIn[wt::oscillatorA];
+        schedule.bVolumeDbOut -> engine.oscillatorVolumeDbIn[wt::oscillatorB];
+        schedule.cVolumeDbOut -> engine.oscillatorVolumeDbIn[wt::oscillatorC];
+        schedule.aMuteOut -> engine.oscillatorMuteIn[wt::oscillatorA];
+        schedule.bMuteOut -> engine.oscillatorMuteIn[wt::oscillatorB];
+        schedule.cMuteOut -> engine.oscillatorMuteIn[wt::oscillatorC];
+        schedule.aSoloOut -> engine.oscillatorSoloIn[wt::oscillatorA];
+        schedule.bSoloOut -> engine.oscillatorSoloIn[wt::oscillatorB];
+        schedule.cSoloOut -> engine.oscillatorSoloIn[wt::oscillatorC];
+
+        engine.out -> audioOut;
+    }
+}

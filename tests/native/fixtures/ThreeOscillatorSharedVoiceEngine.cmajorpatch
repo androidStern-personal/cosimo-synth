@@ -1,0 +1,13 @@
+{
+  "CmajorVersion": 1,
+  "ID": "dev.cosimo.tests.three-oscillator-shared-voice-engine",
+  "version": "1.0.0",
+  "name": "Three Oscillator Shared Voice Engine",
+  "source": [
+    "../../../cmajor/Mseg.cmajor",
+    "../../../cmajor/ThreeOscillatorRendererExternal.cmajor",
+    "../../../cmajor/FixedFrameOscillator.cmajor",
+    "../../../cmajor/VoiceReducer.cmajor",
+    "ThreeOscillatorSharedVoiceEngine.cmajor"
+  ]
+}
