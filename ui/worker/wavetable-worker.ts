@@ -17,7 +17,6 @@ import {
     type ResourceClientInput,
 } from "../shared/resource-client";
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
-import { createArticulationWorkerService } from "../shared/articulation-worker-service";
 import { createModulationWorkerService } from "./modulation-worker-service";
 import { createRackStateWorkerService } from "./rack-state-worker-service";
 
@@ -1382,7 +1381,8 @@ export default async function runWavetableWorker(connection: PatchConnectionLike
     return startPatchWorkerServices(connection, [
         createModulationWorkerService,
         createRackStateWorkerService,
-        createArticulationWorkerService,
+        // RT-01 will compose the v4 articulation service after the production
+        // Cmajor endpoint consumes A/B/C arrays and all 416 sparse route cells.
         () => createWavetableWorkerController(connection, options),
     ]);
 }

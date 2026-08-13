@@ -797,7 +797,10 @@ export class StandaloneEffectPresetController {
             }
         }
 
-        const context = { storedState: capturedStoredState };
+        const context = {
+            parameters: this.getCurrentValuesRecord(),
+            storedState: capturedStoredState,
+        };
         const currentStoredState = adapter.serializeForPreset(
             adapter.normalizeForPreset(capturedStoredState[adapter.key], context),
             context,

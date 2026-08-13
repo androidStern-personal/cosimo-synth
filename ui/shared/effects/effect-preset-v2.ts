@@ -11,6 +11,7 @@ export const EFFECT_PRESET_V2_KIND = "cosimo.effectPreset";
 export const EFFECT_PRESET_V2_SCHEMA_VERSION = 2;
 
 export type EffectStoredStateContext = {
+    parameters: Readonly<Record<string, EffectParameterValue>>;
     storedState: Readonly<Record<string, unknown>>;
 };
 
@@ -262,7 +263,10 @@ function validateExactPreset(
 
     const adaptersByKey = adapterByKey(adapters);
     const normalizedStoredState: Record<string, unknown> = {};
-    const context: EffectStoredStateContext = { storedState: preset.storedState };
+    const context: EffectStoredStateContext = {
+        parameters: normalizedParameters,
+        storedState: preset.storedState,
+    };
 
     for (const entry of currentContract.storedState) {
         const adapter = adaptersByKey.get(entry.key);
@@ -459,7 +463,10 @@ export function applyEffectPresetV2({
         }
     }
 
-    const context: EffectStoredStateContext = { storedState: normalizedPreset.storedState };
+    const context: EffectStoredStateContext = {
+        parameters: normalizedPreset.parameters,
+        storedState: normalizedPreset.storedState,
+    };
     const contractStoredKeys = new Set(currentContract.storedState.map((entry) => entry.key));
     const appliedStoredKeys = new Set<string>();
     const applyStoredState = (key: string, adapter?: EffectStoredStateAdapter) => {

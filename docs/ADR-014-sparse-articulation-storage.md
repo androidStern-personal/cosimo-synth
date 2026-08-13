@@ -14,12 +14,14 @@ mapping amounts preserve sparse inheritance through the runtime upload.
   articulation slot holds only the values it overrides — a flat map of voice-parameter overrides
   plus a map of per-route amount overrides. Absent keys inherit the patch base (§11.1 sparse
   absolute inheritance).
-- **Runtime**: `articulationSnapshotIn` receives a fixed per-selector image
-  (`ArticulationSnapshotRuntimeUpload`) and `latchVoiceArticulation` copies all fields at note start.
+- **Runtime source contract**: `ArticulationSnapshotRuntimeUpload` defines the fixed per-selector
+  image that RT-01 will connect to a matching `articulationSnapshotIn` endpoint and consume in
+  `latchVoiceArticulation` at note start. ART-01 deliberately leaves the v4 worker service out of
+  today's production worker composition because the current Cmajor endpoint is still scalar/156.
   Scalar cells contain resolved A/B/C values. Each of the 416 deterministic voice-mapping cells
   (13 sources × 32 voice targets) contains either an explicit override or the out-of-range
   `ARTICULATION_ROUTE_AMOUNT_INHERIT` sentinel.
-  At note latch, the engine resolves that sentinel from the current base mapping amount. ADR-020
+  RT-01 will resolve that sentinel from the current base mapping amount at note latch. ADR-020
   replaces the old list-position route array with these deterministic cells.
 
 ## The overridable surface is exactly the runtime upload's voice fields
@@ -80,6 +82,9 @@ v4 stores these on the slot (`key`, `velRange`, `chainRange`), with the bank-lev
 `activeTriggerMode` and `selectedSlotId` retained. Non-overlap of ranges and flush keyswitch
 walking are UI policies (`clampArticulationRange`, `walkArticulationKey`), not storage
 invariants — storage only guarantees well-formed bounds.
+Every slot always has a valid assignment in all three modes; there is no unassigned sentinel.
+Until UI-01 replaces the older presentation, its former Clear actions collapse a range to one
+valid point and are labeled Collapse/Collapse All.
 
 ## Identity
 
@@ -90,10 +95,13 @@ marking). Icons remain a UI derivation, not storage.
 
 - The prototype's existing sparse model (`articulationOverrides`, `articulationMappingAmounts`)
   maps 1:1 onto v4 — the merge carries the product model into storage unchanged.
-- The engine keeps its fixed-shape latch path. ADR-020 expands the mapping amount image, changes its
+- The source contract keeps a fixed-shape latch path. ADR-020 expands the mapping amount image, changes its
   index from list position to deterministic voice-mapping cell, and resolves inherited cells there.
   This ticket compiles the sentinel; RT-01 owns the matching real-time latch implementation.
 - A 60 Hz base mapping drag emits no articulation image traffic, even with all 128 selectors stored.
+- Preset application passes the normalized parameter record and stored-state documents through one
+  transaction context. The articulation adapter derives and replaces its stable patch base from
+  that transaction before projecting the v4 bank, so a prior patch base cannot leak across presets.
 - Per-articulation envelope/morph overrides (a deferred prototype feature) need no schema work
   later: the keys already exist in the override map.
 - The three engineering obligations recorded in the prototype `AGENTS.md` are discharged by:

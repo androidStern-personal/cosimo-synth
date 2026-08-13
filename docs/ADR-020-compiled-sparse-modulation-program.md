@@ -49,7 +49,7 @@ The parser never groups rows, repairs identities, clamps persisted values, or re
 Missing state selects the current defaults. Invalid state is different: at boot it installs nothing,
 and after a valid install it leaves that last valid runtime program unchanged.
 
-There is likewise one exact current `articulations.v3` schema. A route amount may reference only a
+There is likewise one exact current `articulations.v4` schema. A route amount may reference only a
 currently valid articulable mapping. A retired schema, duplicate slot, phantom mapping reference,
 unknown field, or invalid value rejects the whole document. Presets validate the modulation and
 articulation documents together and install modulation first, so a valid articulation can reference
@@ -129,16 +129,15 @@ reported without entering a retry loop.
 
 ### Articulations remain sparse in storage
 
-Articulation storage remains `mapping id → amount`. Runtime images use 156 deterministic voice
-cells, independent of mapping list order: an explicit override is stored directly and an absent
-override uses a safe out-of-range inheritance sentinel. The DSP resolves inherited cells from the
-current base program once, when the note latches. A base amount drag therefore sends no articulation
-images. Per-note mapping amounts apply only to voice destinations. Rack destinations are global and
-cannot vary by note, so any such route amount makes the entire articulation document invalid.
-Hydration and live writes invoke the same strict parser; neither path drops, remaps, or repairs
-entries. On a fresh DSP session the worker sends only defined articulation slots because the engine's
-other slots are already disabled; removed slots still receive an explicit disabled image within a
-live session. The same acknowledged lane protects a completely populated 128-slot bank.
+Articulation storage remains `mapping id → amount`. Source-contract images use 416 deterministic
+voice cells, independent of mapping list order: an explicit override is stored directly and an
+absent override uses a safe out-of-range inheritance sentinel. RT-01 will connect those images to a
+matching Cmajor endpoint, resolve inherited cells from the current base program when the note
+latches, and restore live-session slot clearing. Until then the production worker deliberately does
+not compose the v4 articulation image service against the older scalar/156 endpoint. Per-note
+mapping amounts apply only to voice destinations. Rack destinations are global and cannot vary by
+note, so any such route amount makes the entire articulation document invalid. Hydration and live
+writes invoke the same strict parser; neither path drops, remaps, or repairs entries.
 
 ## Performance contracts
 

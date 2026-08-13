@@ -300,6 +300,7 @@ test("stored-state adapters validate one complete document and apply in declared
             key: "mapping.v1",
             schemaVersion: 1,
             normalizeForPreset(value, context) {
+                assert.deepEqual(context.parameters, { mix: 0.5 });
                 assert.deepEqual(context.storedState, {
                     "mapping.v1": { routeIDs: ["route-1"] },
                     "articulation.v1": { routeID: "route-1" },
@@ -307,7 +308,8 @@ test("stored-state adapters validate one complete document and apply in declared
                 return value;
             },
             serializeForPreset: (value) => value,
-            apply(value) {
+            apply(value, context) {
+                assert.deepEqual(context.parameters, { mix: 0.5 });
                 applied.push(["mapping.v1", value]);
             },
         },

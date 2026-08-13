@@ -25,6 +25,71 @@ export type CapturedArticulationLayer = {
     routeAmounts: Readonly<Record<string, number>>;
 };
 
+/**
+ * Return only visible values that differ from the complete patch base.
+ * Explicit zero remains an override whenever the inherited value is non-zero.
+ */
+export function diffCapturedArticulationLayerV4(
+    current: CapturedArticulationLayer,
+    base: CapturedArticulationLayer,
+): CapturedArticulationLayer {
+    const overrides: Partial<Record<ArticulationVoiceParameterId, number>> = {};
+    for (const [parameterId, value] of Object.entries(current.overrides) as Array<[
+        ArticulationVoiceParameterId,
+        number,
+    ]>) {
+        const baseValue = base.overrides[parameterId];
+        if (baseValue === undefined || value !== baseValue) {
+            overrides[parameterId] = value;
+        }
+    }
+
+    const routeAmounts: Record<string, number> = {};
+    for (const [routeId, amount] of Object.entries(current.routeAmounts)) {
+        const baseAmount = base.routeAmounts[routeId];
+        if (baseAmount === undefined || amount !== baseAmount) {
+            routeAmounts[routeId] = amount;
+        }
+    }
+
+    return { overrides, routeAmounts };
+}
+
+/**
+ * Replace the fields owned by today's visible editor while retaining every
+ * unrepresented A/B/C value and route in the authoritative v4 slot.
+ */
+export function replaceVisibleArticulationLayerV4(
+    state: ArticulationsState,
+    slotId: string,
+    layer: CapturedArticulationLayer,
+    visibleParameterIds: ReadonlySet<ArticulationVoiceParameterId>,
+    visibleRouteIds: ReadonlySet<string>,
+): ArticulationsState {
+    return updateSlot(state, slotId, (slot) => {
+        const overrides: Partial<Record<ArticulationVoiceParameterId, number>> = {};
+        for (const [parameterId, value] of Object.entries(slot.overrides) as Array<[
+            ArticulationVoiceParameterId,
+            number,
+        ]>) {
+            if (!visibleParameterIds.has(parameterId)) {
+                overrides[parameterId] = value;
+            }
+        }
+        Object.assign(overrides, layer.overrides);
+
+        const routeAmounts: Record<string, number> = {};
+        for (const [routeId, amount] of Object.entries(slot.routeAmounts)) {
+            if (!visibleRouteIds.has(routeId)) {
+                routeAmounts[routeId] = amount;
+            }
+        }
+        Object.assign(routeAmounts, layer.routeAmounts);
+
+        return { ...slot, overrides, routeAmounts };
+    });
+}
+
 const ARTICULATION_COLORS = [
     "var(--articulation-1, #67e8f9)",
     "var(--articulation-2, #fbbf24)",
@@ -312,8 +377,13 @@ export function insertArticulationPositionV4(
     }
     const occupiedRange = slotRange(occupant, mode);
     if (occupiedRange.min === occupiedRange.max) return state;
-    const keepUpper = preserveSide === "upper"
-        || (preserveSide !== "lower" && position - occupiedRange.min <= occupiedRange.max - position);
+    const canKeepLower = position > occupiedRange.min;
+    const canKeepUpper = position < occupiedRange.max;
+    const keepUpper = !canKeepLower
+        || (canKeepUpper && (
+            preserveSide === "upper"
+            || (preserveSide !== "lower" && position - occupiedRange.min <= occupiedRange.max - position)
+        ));
     const trimmed = keepUpper
         ? { min: position + 1, max: occupiedRange.max }
         : { min: occupiedRange.min, max: position - 1 };
@@ -365,7 +435,10 @@ export function moveArticulationSegmentV4(
         const min = Math.min(range.max - width + 1, Math.max(range.min, desiredMin));
         return { min, max: min + width - 1 };
     }).sort((left, right) => Math.abs(left.min - desiredMin) - Math.abs(right.min - desiredMin));
-    return updateSlot(state, slot.id, (candidate) => withSlotRange(candidate, mode, placements[0]!));
+    const placement = placements[0];
+    return placement === undefined
+        ? state
+        : updateSlot(state, slot.id, (candidate) => withSlotRange(candidate, mode, placement));
 }
 
 export function resizeArticulationSegmentV4(
@@ -438,6 +511,9 @@ export function distributeArticulationSegmentsV4(
     }));
     return {
         ...state,
-        slots: state.slots.map((slot) => withSlotRange(slot, mode, ranges.get(slot.id)!)),
+        slots: state.slots.map((slot) => {
+            const range = ranges.get(slot.id);
+            return range === undefined ? slot : withSlotRange(slot, mode, range);
+        }),
     };
 }

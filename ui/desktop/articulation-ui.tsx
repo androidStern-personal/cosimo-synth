@@ -2083,7 +2083,7 @@ function ArticulationRangeLane({
                             className={LANE_ACTION_CLASS_PINK}
                             data-role="articulation-clear-segment"
                         >
-                            Clear
+                            Collapse
                         </button>
                     ) : null}
                     <button
@@ -2092,7 +2092,7 @@ function ArticulationRangeLane({
                         className={LANE_ACTION_CLASS}
                         data-role="articulation-clear-all"
                     >
-                        Clear All
+                        Collapse All
                     </button>
                     {onDistribute ? (
                         <button
@@ -2479,7 +2479,7 @@ function ArticulationRangeLane({
                                     }}
                                     className="ml-1 inline-flex h-7 min-w-[44px] items-center justify-center rounded-[5px] border border-pink-300/15 bg-transparent px-2 text-[9px] font-semibold uppercase tracking-[0.12em] text-pink-200/75 transition hover:border-pink-200/30 hover:bg-pink-300/[0.06] hover:text-pink-100"
                                 >
-                                    Clear
+                                    Collapse
                                 </button>
                             </div>
                         </div>

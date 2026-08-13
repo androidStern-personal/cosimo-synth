@@ -79,13 +79,13 @@ export type ModulationSource = {
     readonly state: SourceState;
 };
 
-/** One articulation as the UI addresses it (storage form is ADR-014 v3). */
+/** One articulation as the UI addresses it (storage form is ADR-014 v4). */
 export type ArticulationView = {
     readonly id: ArticulationId;
     readonly label: string;
     readonly color: string;
     readonly icon: string;
-    /** Engine selector (v3 runtimeSlot) — stable for the slot's lifetime. */
+    /** Engine selector (v4 runtimeSlot) — stable for the slot's lifetime. */
     readonly selector: number;
     readonly key: number;
     readonly velRange: ArticulationRange;

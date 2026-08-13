@@ -87,3 +87,59 @@ test("range edits preserve slot identity and never use velocity zero", async () 
     assert.equal(state.slots.every(({ velRange }) => velRange.min >= 1), true);
     assert.deepEqual(state.slots.map(({ id }) => id), [first.id, second.id]);
 });
+
+test("outward insertion preserves a valid occupied range at either endpoint", async () => {
+    const { image, editor } = await modules();
+    let state = image.createEmptyArticulationsState();
+    state = editor.addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
+    const occupantId = state.slots[0].id;
+    state = editor.addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
+    const insertedId = state.slots[1].id;
+    state = {
+        ...state,
+        slots: state.slots.map((slot) => slot.id === occupantId
+            ? { ...slot, velRange: { min: 20, max: 30 } }
+            : slot),
+    };
+
+    const atLower = editor.insertArticulationPositionV4(state, "vel", 20, insertedId, "lower");
+    assert.deepEqual(atLower.slots.find(({ id }) => id === occupantId).velRange, { min: 21, max: 30 });
+    assert.deepEqual(atLower.slots.find(({ id }) => id === insertedId).velRange, { min: 20, max: 20 });
+
+    const reset = {
+        ...state,
+        slots: state.slots.map((slot) => slot.id === insertedId
+            ? { ...slot, velRange: { min: 1, max: 1 } }
+            : slot),
+    };
+    const atUpper = editor.insertArticulationPositionV4(reset, "vel", 30, insertedId, "upper");
+    assert.deepEqual(atUpper.slots.find(({ id }) => id === occupantId).velRange, { min: 20, max: 29 });
+    assert.deepEqual(atUpper.slots.find(({ id }) => id === insertedId).velRange, { min: 30, max: 30 });
+    assert.equal(atLower.slots.every((slot) => slot.velRange.min <= slot.velRange.max), true);
+    assert.equal(atUpper.slots.every((slot) => slot.velRange.min <= slot.velRange.max), true);
+});
+
+test("collapse actions keep every mandatory trigger assignment valid", async () => {
+    const { image, editor } = await modules();
+    let state = image.createEmptyArticulationsState();
+    state = editor.addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
+    state = editor.addCapturedArticulationV4(state, { overrides: {}, routeAmounts: {} });
+    state = {
+        ...state,
+        slots: state.slots.map((slot, index) => ({
+            ...slot,
+            velRange: index === 0 ? { min: 20, max: 30 } : { min: 40, max: 50 },
+        })),
+    };
+
+    const firstSegment = editor.articulationSegmentsV4(state, "vel")[0];
+    const collapsedOne = editor.collapseArticulationSegmentV4(state, "vel", firstSegment);
+    assert.deepEqual(collapsedOne.slots[0].velRange, { min: 20, max: 20 });
+
+    const collapsedAll = editor.collapseAllArticulationSegmentsV4(state, "vel");
+    assert.deepEqual(collapsedAll.slots.map(({ velRange }) => velRange), [
+        { min: 1, max: 1 },
+        { min: 2, max: 2 },
+    ]);
+    assert.equal(collapsedAll.slots.every(({ velRange }) => velRange.min >= 1), true);
+});
