@@ -51,6 +51,7 @@ import {
     type MsegState,
 } from "../../ui/shared/mseg";
 import {
+    MODULATION_STATE_KEY,
     createDefaultRoute,
     createDefaultModulationState,
     serializeModulationState,
@@ -1285,15 +1286,16 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
         playback: createDefaultMsegPlayback(),
     };
     bootModulationState.routes = [createDefaultRoute({
+        id: "oscA.framePosition::mseg-1",
         enabled: true,
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
-        targetKind: "wavetablePosition",
+        targetKind: "oscA.wavetablePosition",
         amount: 0.42,
     })];
     const bootState = {
-        "modulation.v2": serializeModulationState(bootModulationState),
+        [MODULATION_STATE_KEY]: serializeModulationState(bootModulationState),
     };
     const patchConnection: PatchConnectionLike = {
         addStoredStateValueListener(listener) {
