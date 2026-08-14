@@ -13,6 +13,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 RUNNER = REPO_ROOT / "scripts" / "run_native_modulation_benchmark.py"
+HEADER_GENERATOR = REPO_ROOT / "scripts" / "generate_native_modulation_benchmark_header.mjs"
 
 
 def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_path: Path) -> None:
@@ -129,6 +130,25 @@ def test_native_matrix_qualification_rejects_an_expensive_route_program() -> Non
         raise AssertionError("An over-budget native matrix program must fail qualification")
 
 
+def test_generated_native_loader_rejects_rt_01_blocked_profiles_without_emitting_expanded_writes(
+    tmp_path: Path,
+) -> None:
+    header_path = tmp_path / "NativeModulationBenchmarkProfiles.h"
+    subprocess.run(
+        ["node", str(HEADER_GENERATOR), "--output", str(header_path)],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    header = header_path.read_text(encoding="utf-8")
+
+    assert header.count("destination = {};") == 2
+    assert header.count("is unavailable until RT-01") == 5
+    assert "destination.voiceRouteAmounts[287]" not in header
+    assert "destination.macroVoiceRouteAmounts[127]" not in header
+    assert "destination.voiceRouteCells[287]" not in header
+    assert "destination.macroVoiceRouteCells[127]" not in header
+
+
 def test_native_main_enforces_the_rack_only_shipping_budget(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     spec = importlib.util.spec_from_file_location("native_matrix_main_runner", RUNNER)
     assert spec is not None and spec.loader is not None
@@ -161,6 +181,24 @@ def test_native_main_enforces_the_rack_only_shipping_budget(monkeypatch: pytest.
 
     with pytest.raises(RuntimeError, match="voice-rack-100 matrix cost"):
         runner.main()
+
+
+def test_native_shipping_qualification_requires_full_warmup_and_settle() -> None:
+    spec = importlib.util.spec_from_file_location("native_matrix_qualification_runner", RUNNER)
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    qualifying = {
+        "blocks": runner.QUALIFYING_BLOCKS,
+        "warmup_blocks": runner.QUALIFYING_WARMUP_BLOCKS,
+        "settle_blocks": runner.QUALIFYING_SETTLE_BLOCKS,
+        "repeats": runner.QUALIFYING_REPEATS,
+    }
+    assert runner.is_qualifying_run(**qualifying) is True
+    for field in qualifying:
+        below_contract = {**qualifying, field: qualifying[field] - 1}
+        assert runner.is_qualifying_run(**below_contract) is False, field
 
 
 def test_full_884_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:

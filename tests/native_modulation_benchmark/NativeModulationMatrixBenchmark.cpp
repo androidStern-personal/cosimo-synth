@@ -620,6 +620,38 @@ void writeUnavailableProfile (const benchmark_profiles::ProfileMetadata& profile
               << '\n';
 }
 
+void requireUnavailableProgramsRejectWithoutMutation()
+{
+    for (std::size_t profileIndex = 0; profileIndex < benchmark_profiles::profiles.size(); ++profileIndex)
+    {
+        if (benchmark_profiles::profiles[profileIndex].blockedBy == nullptr)
+            continue;
+
+        WavetableSynth::wt_ModulationProgramUpload destination {};
+        destination.voiceRouteCount = 7;
+        destination.macroVoiceRouteCount = 8;
+        destination.voiceRouteCells[0] = 9;
+        destination.voiceRouteAmounts[0] = 0.25f;
+        bool rejected = false;
+
+        try
+        {
+            benchmark_profiles::loadProgram (profileIndex, destination);
+        }
+        catch (const std::logic_error& error)
+        {
+            rejected = std::string_view (error.what()).find ("RT-01") != std::string_view::npos;
+        }
+
+        if (! rejected
+            || destination.voiceRouteCount != 7
+            || destination.macroVoiceRouteCount != 8
+            || destination.voiceRouteCells[0] != 9
+            || destination.voiceRouteAmounts[0] != 0.25f)
+            throw std::runtime_error ("An unavailable modulation profile was executable or mutated its destination");
+    }
+}
+
 std::vector<std::size_t> profileOrder (std::size_t repeatIndex)
 {
     std::vector<std::size_t> result;
@@ -641,6 +673,7 @@ int main (int argc, char** argv)
     try
     {
         const auto arguments = parseArguments (argc, argv);
+        requireUnavailableProgramsRejectWithoutMutation();
         std::cout << "META\t" << static_cast<std::int32_t> (sampleRate)
                   << '\t' << blockSize
                   << '\t' << benchmark_profiles::profileGenerator

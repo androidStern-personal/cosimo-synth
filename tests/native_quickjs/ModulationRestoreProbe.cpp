@@ -11,6 +11,7 @@
 #include <mutex>
 #include <string>
 #include <thread>
+#include <utility>
 
 #undef CHOC_ASSERT
 #define CHOC_ASSERT(x) assert(x)
@@ -30,7 +31,7 @@ constexpr auto observationTimeout = std::chrono::seconds (8);
 
 constexpr auto storedStatePrefix = R"json({
   "format": "cosimo.modulation",
-  "version": 2,
+  "version": 4,
   "msegSlots": [
     {
       "shapeA": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 1", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
@@ -64,13 +65,13 @@ constexpr auto storedStateSuffix = R"json(,
 
 const auto routedStoredState = std::string (storedStatePrefix) + R"json([
   {
-    "id": "quickjs-restore-macro-q",
+    "id": "quickjs-restore-macro-rack-filter",
     "enabled": true,
     "sourceKind": "macro",
     "sourceSlot": 1,
     "polarity": "unipolar",
-    "targetKind": "filterQ",
-    "amount": 10,
+    "targetKind": "rack.globalFilterCutoff",
+    "amount": -6,
     "reducer": "max"
   }
 ])json" + storedStateSuffix;
@@ -81,24 +82,26 @@ struct Observations
 {
     std::mutex mutex;
     int32_t dspSessionID = 0;
+    bool hasActiveTable = false;
     int32_t acceptedModulationSerial = 0;
+    int32_t installedMacroRackRouteCount = 0;
     int32_t rejectedSerial = 0;
     int32_t rejectionReason = 0;
     int32_t rejectedRouteCount = 0;
-    float latestActiveFilterQ = 0.0f;
-    bool hasActiveFilterQ = false;
+    int32_t rackEnableMask = 0;
     std::string patchError;
 };
 
 struct Snapshot
 {
     int32_t dspSessionID = 0;
+    bool hasActiveTable = false;
     int32_t acceptedModulationSerial = 0;
+    int32_t installedMacroRackRouteCount = 0;
     int32_t rejectedSerial = 0;
     int32_t rejectionReason = 0;
     int32_t rejectedRouteCount = 0;
-    float latestActiveFilterQ = 0.0f;
-    bool hasActiveFilterQ = false;
+    int32_t rackEnableMask = 0;
     std::string patchError;
 };
 
@@ -125,12 +128,13 @@ Snapshot takeSnapshot (Observations& observations)
     const std::lock_guard<std::mutex> lock (observations.mutex);
     return {
         observations.dspSessionID,
+        observations.hasActiveTable,
         observations.acceptedModulationSerial,
+        observations.installedMacroRackRouteCount,
         observations.rejectedSerial,
         observations.rejectionReason,
         observations.rejectedRouteCount,
-        observations.latestActiveFilterQ,
-        observations.hasActiveFilterQ,
+        observations.rackEnableMask,
         observations.patchError,
     };
 }
@@ -153,7 +157,7 @@ bool waitForMessageLoopBarrier()
     return state->condition.wait_for (lock, observationTimeout, [&] { return state->complete; });
 }
 
-void processBlock (cmaj::Patch& patch, PlaybackControl& playback)
+double processBlock (cmaj::Patch& patch, PlaybackControl& playback)
 {
     std::array<float, blockSize> left {};
     std::array<float, blockSize> right {};
@@ -166,7 +170,21 @@ void processBlock (cmaj::Patch& patch, PlaybackControl& playback)
             patch.process (channels, blockSize, [] (uint32_t, choc::midi::MessageView) {});
     }
 
+    double sumSquares = 0.0;
+    for (std::size_t frame = 0; frame < blockSize; ++frame)
+        sumSquares += static_cast<double> (left[frame]) * left[frame]
+            + static_cast<double> (right[frame]) * right[frame];
+
     std::this_thread::sleep_for (std::chrono::microseconds (2667));
+    return sumSquares / static_cast<double> (blockSize * 2);
+}
+
+double measureAudioRms (cmaj::Patch& patch, PlaybackControl& playback, std::size_t blocks)
+{
+    double meanSquares = 0.0;
+    for (std::size_t block = 0; block < blocks; ++block)
+        meanSquares += processBlock (patch, playback);
+    return std::sqrt (meanSquares / static_cast<double> (blocks));
 }
 
 template <typename Predicate>
@@ -196,11 +214,13 @@ void reportFailure (const std::string& message, const Snapshot& snapshot)
 {
     std::cerr << "FAIL: " << message << '\n'
               << "  dspSessionID=" << snapshot.dspSessionID << '\n'
+              << "  hasActiveTable=" << snapshot.hasActiveTable << '\n'
               << "  acceptedModulationSerial=" << snapshot.acceptedModulationSerial << '\n'
+              << "  installedMacroRackRouteCount=" << snapshot.installedMacroRackRouteCount << '\n'
               << "  rejectedSerial=" << snapshot.rejectedSerial << '\n'
               << "  rejectionReason=" << snapshot.rejectionReason << '\n'
               << "  rejectedRouteCount=" << snapshot.rejectedRouteCount << '\n'
-              << "  latestActiveFilterQ=" << snapshot.latestActiveFilterQ << '\n';
+              << "  rackEnableMask=" << snapshot.rackEnableMask << '\n';
 
     if (! snapshot.patchError.empty())
         std::cerr << "  patchError=" << snapshot.patchError << '\n';
@@ -264,12 +284,15 @@ int runProbe (const char* runtimePath, const char* patchPath)
         if (endpointID == "runtimeState")
         {
             observations.dspSessionID = value["dspSessionId"].getWithDefault<int32_t> (0);
+            observations.hasActiveTable = value["hasActive"].getWithDefault<int32_t> (0) != 0;
         }
         else if (endpointID == "runtimeInstallAck")
         {
             observations.acceptedModulationSerial = std::max (
                 observations.acceptedModulationSerial,
                 value["acceptedModulationSerial"].getWithDefault<int32_t> (0));
+            observations.installedMacroRackRouteCount =
+                value["installedMacroRackRouteCount"].getWithDefault<int32_t> (0);
 
             const auto rejectedSerial = value["rejectedSerial"].getWithDefault<int32_t> (0);
             if (rejectedSerial != 0)
@@ -282,15 +305,13 @@ int runProbe (const char* runtimePath, const char* patchPath)
         {
             observations.rejectedRouteCount = value.getWithDefault<int32_t> (0);
         }
-        else if (endpointID == "effectiveFilterState"
-                 && value["hasActive"].getWithDefault<int32_t> (0) != 0)
+        else if (endpointID == "effectiveRackState")
         {
-            observations.latestActiveFilterQ = value["q"].getWithDefault<float> (0.0f);
-            observations.hasActiveFilterQ = true;
+            observations.rackEnableMask = value["committedEnableMask"].getWithDefault<int32_t> (0);
         }
     };
 
-    patch.setStoredStateValue ("modulation.v2", choc::value::Value (routedStoredState));
+    patch.setStoredStateValue ("modulation.v4", choc::value::Value (routedStoredState));
     patch.setPlaybackParams ({ sampleRate, blockSize, 0, 2 });
 
     cmaj::Patch::LoadParams loadParams;
@@ -304,11 +325,32 @@ int runProbe (const char* runtimePath, const char* patchPath)
 
     if (! processUntil (patch, playback, observations, [] (const Snapshot& snapshot)
         {
-            return snapshot.dspSessionID != 0 && snapshot.acceptedModulationSerial >= 1;
+            return snapshot.dspSessionID != 0
+                && snapshot.hasActiveTable
+                && snapshot.acceptedModulationSerial >= 1
+                && snapshot.installedMacroRackRouteCount == 1;
         }))
     {
         reportFailure ("QuickJS worker did not restore and acknowledge the stored modulation program",
                        takeSnapshot (observations));
+        return 1;
+    }
+
+    auto enabledFlags = choc::value::createArray (8, [] (uint32_t moduleIndex)
+    {
+        return choc::value::Value (static_cast<int32_t> (moduleIndex == 0 ? 1 : 0));
+    });
+    auto rackEnable = choc::json::create ("enabledFlags", std::move (enabledFlags));
+    if (! patch.sendEventOrValueToPatch (cmaj::EndpointID::create (std::string_view { "rackEnable" }),
+                                         rackEnable,
+                                         0,
+                                         sendTimeoutMilliseconds)
+        || ! processUntil (patch, playback, observations, [] (const Snapshot& snapshot)
+        {
+            return snapshot.rackEnableMask == 1;
+        }))
+    {
+        reportFailure ("could not enable the production rack filter", takeSnapshot (observations));
         return 1;
     }
 
@@ -322,22 +364,12 @@ int runProbe (const char* runtimePath, const char* patchPath)
         return 1;
     }
 
-    const std::array<uint8_t, 3> noteOn { 0x90, 60, 127 };
+    const std::array<uint8_t, 3> noteOn { 0x90, 84, 127 };
     patch.addMIDIMessage (0, noteOn.data(), static_cast<uint32_t> (noteOn.size()));
-
-    if (! processUntil (patch, playback, observations, [] (const Snapshot& snapshot)
-        {
-            return snapshot.hasActiveFilterQ && snapshot.latestActiveFilterQ > 10.0f;
-        }))
-    {
-        reportFailure ("restored Macro 1 to Filter Q mapping did not execute in the real engine",
-                       takeSnapshot (observations));
-        return 1;
-    }
-
+    const auto routedRms = measureAudioRms (patch, playback, 256);
     const auto routedSnapshot = takeSnapshot (observations);
 
-    patch.setStoredStateValue ("modulation.v2", choc::value::Value (emptyStoredState));
+    patch.setStoredStateValue ("modulation.v4", choc::value::Value (emptyStoredState));
 
     if (! waitForMessageLoopBarrier())
     {
@@ -349,8 +381,7 @@ int runProbe (const char* runtimePath, const char* patchPath)
     if (! processUntil (patch, playback, observations, [&] (const Snapshot& snapshot)
         {
             return snapshot.acceptedModulationSerial > routedSnapshot.acceptedModulationSerial
-                && snapshot.hasActiveFilterQ
-                && snapshot.latestActiveFilterQ < 1.0f;
+                && snapshot.installedMacroRackRouteCount == 0;
         }))
     {
         reportFailure ("clearing stored mappings did not remove the live modulation program",
@@ -358,9 +389,13 @@ int runProbe (const char* runtimePath, const char* patchPath)
         return 1;
     }
 
+    const auto emptyRms = measureAudioRms (patch, playback, 256);
     const auto emptySnapshot = takeSnapshot (observations);
 
-    if (routedSnapshot.latestActiveFilterQ - emptySnapshot.latestActiveFilterQ < 9.5f
+    if (! std::isfinite (routedRms)
+        || ! std::isfinite (emptyRms)
+        || emptyRms <= 0.0001
+        || emptyRms <= routedRms * 4.0
         || emptySnapshot.rejectedSerial != 0
         || emptySnapshot.rejectionReason != 0
         || emptySnapshot.rejectedRouteCount != 0)
@@ -370,12 +405,12 @@ int runProbe (const char* runtimePath, const char* patchPath)
         return 1;
     }
 
-    std::cout << "PASS: QuickJS restored modulation.v2 through the production worker and engine\n"
+    std::cout << "PASS: QuickJS restored modulation.v4 through the production worker and rack engine\n"
               << "  dspSessionID=" << emptySnapshot.dspSessionID << '\n'
               << "  acceptedModulationSerial=" << emptySnapshot.acceptedModulationSerial << '\n'
-              << "  routedFilterQ=" << routedSnapshot.latestActiveFilterQ << '\n'
-              << "  emptyFilterQ=" << emptySnapshot.latestActiveFilterQ << '\n'
-              << "  delta=" << (routedSnapshot.latestActiveFilterQ - emptySnapshot.latestActiveFilterQ) << '\n';
+              << "  routedRms=" << routedRms << '\n'
+              << "  emptyRms=" << emptyRms << '\n'
+              << "  ratio=" << (emptyRms / std::max (routedRms, 1.0e-12)) << '\n';
 
     patch.unload();
     return 0;

@@ -100,6 +100,7 @@ function emitProgramCase(profileIndex, program) {
     const lines = [
         `        case ${profileIndex}:`,
         "        {",
+        "            destination = {};",
         `            destination.voiceRouteCount = ${cppInt(program.voiceRouteCount)};`,
         `            destination.macroVoiceRouteCount = ${cppInt(program.macroVoiceRouteCount)};`,
         `            destination.voiceRackRouteCount = ${cppInt(program.voiceRackRouteCount)};`,
@@ -116,6 +117,12 @@ function emitProgramCase(profileIndex, program) {
     }
     lines.push("            return;", "        }");
     return lines.join("\n");
+}
+
+function emitUnavailableProgramCase(profileIndex, profile) {
+    return `        case ${profileIndex}:\n            throw std::logic_error (${cppString(
+        `Profile ${profile.name} is unavailable until ${profile.execution.blockedBy}`,
+    )});`;
 }
 
 function generateHeader() {
@@ -152,7 +159,11 @@ function generateHeader() {
         .map(({ profile, stateSha256 }) => emitMetadata(profile, stateSha256))
         .join(",\n");
     const programCases = compiled
-        .map(({ program }, profileIndex) => emitProgramCase(profileIndex, program))
+        .map(({ profile, program }, profileIndex) => (
+            profile.execution.status === "available"
+                ? emitProgramCase(profileIndex, program)
+                : emitUnavailableProgramCase(profileIndex, profile)
+        ))
         .join("\n");
     const playbackRows = msegPlaybacks.map(({ value }) => (
         `    { ${cppInt(value.slot)}, ${cppFloat(value.seconds)}, ${value.holdFinalValue ? "true" : "false"}, ${cppInt(value.rateKind)}, ${value.loopEnabled ? "true" : "false"}, ${cppFloat(value.loopStart)}, ${cppFloat(value.loopEnd)}, ${cppInt(value.noteOffPolicy)}, ${value.legatoRestarts ? "true" : "false"} }`
@@ -231,7 +242,6 @@ ${envelopeRows}
 
 inline void loadProgram (std::size_t profileIndex, WavetableSynth::wt_ModulationProgramUpload& destination)
 {
-    destination = {};
     switch (profileIndex)
     {
 ${programCases}

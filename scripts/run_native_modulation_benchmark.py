@@ -51,6 +51,8 @@ MATRIX_LOAD_BUDGETS = {
     "voice-rack-100": 10.0,
 }
 QUALIFYING_BLOCKS = 4096
+QUALIFYING_WARMUP_BLOCKS = 256
+QUALIFYING_SETTLE_BLOCKS = 128
 QUALIFYING_REPEATS = 3
 
 
@@ -291,6 +293,15 @@ def assert_matrix_budgets(profiles: list[dict[str, object]]) -> None:
             )
 
 
+def is_qualifying_run(*, blocks: int, warmup_blocks: int, settle_blocks: int, repeats: int) -> bool:
+    return (
+        blocks >= QUALIFYING_BLOCKS
+        and warmup_blocks >= QUALIFYING_WARMUP_BLOCKS
+        and settle_blocks >= QUALIFYING_SETTLE_BLOCKS
+        and repeats >= QUALIFYING_REPEATS
+    )
+
+
 def build_result(
     *,
     runs: list[dict[str, object]],
@@ -313,7 +324,12 @@ def build_result(
         raise RuntimeError("Native performer did not consume the shared benchmark profile authority")
 
     profiles = [aggregate_profile(name, runs) for name in sorted(EXPECTED_PROFILE_NAMES)]
-    qualifying = blocks >= QUALIFYING_BLOCKS and len(runs) >= QUALIFYING_REPEATS
+    qualifying = is_qualifying_run(
+        blocks=blocks,
+        warmup_blocks=warmup_blocks,
+        settle_blocks=settle_blocks,
+        repeats=len(runs),
+    )
     return {
         "format": "cosimo.native-modulation-benchmark",
         "version": 2,
