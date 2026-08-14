@@ -6,6 +6,10 @@
  #error "COSIMO_GENERATED_CPP_PATH must point to generated Cmajor C++"
 #endif
 
+#ifndef COSIMO_GENERATED_BLOCK_SIZE
+ #define COSIMO_GENERATED_BLOCK_SIZE 512
+#endif
+
 #define CosimoThreeOscillatorRenderer__renderAll(...) \
     ::cosimo::three_osc::bridge::renderAllGenerated (__VA_ARGS__)
 #include COSIMO_GENERATED_CPP_PATH
@@ -19,7 +23,7 @@ namespace
 {
 constexpr auto sessionID = std::int32_t { 19081 };
 constexpr auto sampleRate = 48000.0;
-constexpr auto blockSize = std::int32_t { 512 };
+constexpr auto blockSize = std::int32_t { COSIMO_GENERATED_BLOCK_SIZE };
 
 float absoluteValue (float value) noexcept
 {

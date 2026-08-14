@@ -68,10 +68,15 @@ trap cleanup EXIT
 
 generated_dir="$temp_dir/generated"
 generated_cpp="$generated_dir/WavetableSynth.cpp"
+external_codegen="${COSIMO_CMAJOR_CPP_GENERATOR:-$repo_root/scripts/generate_cmajor_cpp_with_externals.sh}"
 
 mkdir -p "$generated_dir"
 
-cmaj generate --target=cpp --maxFramesPerBlock=128 "$patch_path" --output="$generated_cpp"
+"$external_codegen" \
+  "$patch_path" \
+  "$generated_cpp" \
+  WavetableSynth \
+  --max-frames-per-block 128
 
 touch "$generated_dir/$generated_marker_filename"
 

@@ -230,6 +230,8 @@ target_sources(CosimoSynth PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoPluginMain.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Source/cmaj_StaticLibraryShim.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoSharedWavetableLibrary.mm"
+    "${COSIMO_REPO_ROOT}/native/three_oscillator_renderer/RendererBridge.cpp"
+    "${COSIMO_REPO_ROOT}/native/three_oscillator_renderer/WarpRenderer.cpp"
 )
 
 target_compile_features(CosimoSynth PRIVATE cxx_std_17)
@@ -254,6 +256,8 @@ target_include_directories(CosimoSynth PRIVATE
     "${COSIMO_CMAJOR_RUNTIME_DIR}/include"
     "${COSIMO_CMAJOR_RUNTIME_DIR}/include/choc"
     "${CMAKE_CURRENT_LIST_DIR}/Source"
+    "${COSIMO_REPO_ROOT}/native/three_oscillator_renderer"
+    "${COSIMO_REPO_ROOT}/native/three_oscillator_renderer/third_party/xsimd/include"
 )
 
 target_link_libraries(CosimoSynth PRIVATE

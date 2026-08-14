@@ -55,6 +55,8 @@ juce_generate_juce_header(CosimoDesktopNative)
 
 target_sources(CosimoDesktopNative PRIVATE
     Source/cmaj_PatchLoaderPlugin.cpp
+    "${CMAKE_CURRENT_LIST_DIR}/../../native/three_oscillator_renderer/RendererBridge.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../../native/three_oscillator_renderer/WarpRenderer.cpp"
 )
 
 target_compile_features(CosimoDesktopNative PRIVATE cxx_std_17)
@@ -77,6 +79,8 @@ target_compile_definitions(CosimoDesktopNative PRIVATE
 target_include_directories(CosimoDesktopNative PRIVATE
     ${CMAJOR_SOURCE_PATH}/include
     ${CMAJOR_SOURCE_PATH}/include/choc
+    "${CMAKE_CURRENT_LIST_DIR}/../../native/three_oscillator_renderer"
+    "${CMAKE_CURRENT_LIST_DIR}/../../native/three_oscillator_renderer/third_party/xsimd/include"
 )
 
 target_link_libraries(CosimoDesktopNative

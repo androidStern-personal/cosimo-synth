@@ -10,7 +10,12 @@
  #error "COSIMO_GENERATED_CPP_PATH must point to the generated WavetableSynth.cpp"
 #endif
 
+#include "../../native/three_oscillator_renderer/RendererBridge.h"
+
+#define CosimoThreeOscillatorRenderer__renderAll(...) \
+    ::cosimo::three_osc::bridge::renderAllGenerated (__VA_ARGS__)
 #include COSIMO_GENERATED_CPP_PATH
+#undef CosimoThreeOscillatorRenderer__renderAll
 
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {

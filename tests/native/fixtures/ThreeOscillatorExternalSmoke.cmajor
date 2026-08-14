@@ -187,11 +187,14 @@ namespace CosimoExternalSmoke
                 packedInts.at (unisonVoicesOffset + voiceOscillator) = 1;
             }
 
-            packedFloats.at (basePhaseIncrementOffset) = 220.0f / float32 (processor.frequency);
-            packedFloats.at (basePositionOffset) = 0.0f;
-            packedFloats.at (baseWarpAmountOffset) = 0.0f;
-            packedFloats.at (basePanOffset) = 0.0f;
-            packedFloats.at (oscillatorGainOffset) = 1.0f;
+            // Oscillator B only: this cannot be masked by the staged legacy-A path.
+            let oscillatorB = 1;
+            packedFloats.at (basePhaseIncrementOffset + oscillatorB) =
+                220.0f / float32 (processor.frequency);
+            packedFloats.at (basePositionOffset + oscillatorB) = 0.0f;
+            packedFloats.at (baseWarpAmountOffset + oscillatorB) = 0.0f;
+            packedFloats.at (basePanOffset + oscillatorB) = 0.0f;
+            packedFloats.at (oscillatorGainOffset + oscillatorB) = 1.0f;
             initialised = true;
         }
 

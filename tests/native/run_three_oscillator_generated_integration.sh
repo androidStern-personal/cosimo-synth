@@ -9,6 +9,7 @@ WASI_C_DIR=${COSIMO_RENDERER_WASI_C_DIR:-/opt/homebrew/opt/wasi-libc/share/wasi-
 WASI_CXX_DIR=${COSIMO_RENDERER_WASI_CXX_DIR:-/opt/homebrew/opt/wasi-runtimes/share/wasi-sysroot}
 RENDERER_DIR="$REPO_DIR/native/three_oscillator_renderer"
 BUILD_DIR=$(mktemp -d "${TMPDIR:-/tmp}/cosimo-generated-renderer.XXXXXX")
+MAX_FRAMES_PER_BLOCK=${COSIMO_GENERATED_MAX_FRAMES:-512}
 
 cleanup() {
     rm -rf "$BUILD_DIR"
@@ -21,7 +22,9 @@ PATCH_PATH="$TEST_DIR/fixtures/ThreeOscillatorExternalSmoke.cmajorpatch"
 INTEGRATION_SOURCE="$TEST_DIR/ThreeOscillatorGeneratedIntegration.cpp"
 
 "$REPO_DIR/scripts/generate_cmajor_cpp_with_externals.sh" \
-    "$PATCH_PATH" "$GENERATED_CPP" ThreeOscillatorExternalSmoke "$GENERATED_METADATA"
+    "$PATCH_PATH" "$GENERATED_CPP" ThreeOscillatorExternalSmoke \
+    --metadata "$GENERATED_METADATA" \
+    --max-frames-per-block "$MAX_FRAMES_PER_BLOCK"
 
 rg -Fq 'CosimoThreeOscillatorRenderer__renderAll' "$GENERATED_CPP"
 rg -Fq '"endpointID": "audioOut"' "$GENERATED_METADATA"
@@ -47,6 +50,7 @@ COMMON_FLAGS=(
     -I"$RENDERER_DIR"
     -I"$RENDERER_DIR/third_party/xsimd/include"
     -DCOSIMO_GENERATED_CPP_PATH=\"$GENERATED_CPP\"
+    -DCOSIMO_GENERATED_BLOCK_SIZE="$MAX_FRAMES_PER_BLOCK"
 )
 
 # The generated performer must retain a real link-time dependency on the renderer.

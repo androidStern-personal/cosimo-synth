@@ -1098,7 +1098,8 @@ def test_ios_generated_performer_hard_limits_cmajor_slices_to_128_frames() -> No
     generator = IOS_AUV3_GENERATOR.read_text(encoding="utf-8")
     plugin = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
 
-    assert '--maxFramesPerBlock=128' in generator
+    assert "generate_cmajor_cpp_with_externals.sh" in generator
+    assert "--max-frames-per-block 128" in generator
     assert "static_assert (GeneratedPerformerClass::maxFramesPerBlock == 128" in plugin
 
 
@@ -1973,6 +1974,7 @@ def test_ios_auv3_generator_runs_npm_and_build_assets_from_the_repo_root(tmp_pat
     fake_bin.mkdir(parents=True)
     npm_log = tmp_path / "npm-log.txt"
     uv_log = tmp_path / "uv-log.txt"
+    fake_codegen = tmp_path / "fake-external-codegen"
 
     (fake_bin / "npm").write_text(
         """#!/usr/bin/env bash
@@ -2013,14 +2015,28 @@ EOF
 """,
         encoding="utf-8",
     )
+    fake_codegen.write_text(
+        """#!/usr/bin/env bash
+set -euo pipefail
+output="$2"
+mkdir -p "$(dirname "$output")"
+cat > "$output" <<'EOF'
+struct WavetableSynth {};
+constexpr auto programDetailsJSON = "{}";
+EOF
+""",
+        encoding="utf-8",
+    )
 
     for tool in ("npm", "uv", "cmaj"):
         (fake_bin / tool).chmod(0o755)
+    fake_codegen.chmod(0o755)
 
     env = os.environ.copy()
     env["PATH"] = f"{fake_bin}:{env['PATH']}"
     env["COSIMO_TEST_NPM_LOG"] = str(npm_log)
     env["COSIMO_TEST_UV_LOG"] = str(uv_log)
+    env["COSIMO_CMAJOR_CPP_GENERATOR"] = str(fake_codegen)
 
     subprocess.run(
         [str(IOS_AUV3_GENERATOR), str(output_dir)],

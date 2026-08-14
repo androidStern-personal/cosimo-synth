@@ -4,17 +4,17 @@
 
 #include "cmajor/API/cmaj_Engine.h"
 #include "cmajor/helpers/cmaj_PatchManifest.h"
+#include "../../native/three_oscillator_renderer/RendererExternalFunctionProvider.h"
 
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 namespace
 {
-constexpr auto rendererFunctionName = "CosimoThreeOscillatorRenderer::renderAll";
-
 [[noreturn]] void fail (const std::string& message)
 {
     std::cerr << "FAIL: " << message << '\n';
@@ -30,8 +30,24 @@ void require (bool condition, const std::string& message)
 
 int main (int argc, char** argv)
 {
-    require (argc == 4 || argc == 5,
-             "usage: cosimo_cmajor_external_codegen <patch.cmajorpatch> <output.cpp> <class-name> [endpoint-metadata.json]");
+    require (argc >= 4,
+             "usage: cosimo_cmajor_external_codegen <patch.cmajorpatch> <output.cpp> <class-name> [--metadata path] [--max-frames-per-block frames]");
+
+    std::filesystem::path metadataPath;
+    auto maxFramesPerBlock = 512;
+    for (auto index = 4; index < argc; ++index)
+    {
+        const auto option = std::string_view (argv[index]);
+        require (index + 1 < argc, "missing value for " + std::string (option));
+
+        if (option == "--metadata")
+            metadataPath = argv[++index];
+        else if (option == "--max-frames-per-block")
+            maxFramesPerBlock = std::stoi (argv[++index]);
+        else
+            fail ("unknown option: " + std::string (option));
+    }
+    require (maxFramesPerBlock > 0, "max frames per block must be positive");
 
     try
     {
@@ -56,19 +72,15 @@ int main (int argc, char** argv)
                      + choc::text::joinStrings (cmaj::Engine::getAvailableEngineTypes(), ", "));
         engine.setBuildSettings (cmaj::BuildSettings()
                                      .setFrequency (48000)
-                                     .setMaxBlockSize (512));
+                                     .setMaxBlockSize (maxFramesPerBlock));
 
         const auto resolveExternal = [] (
             const char* functionName,
             choc::span<choc::value::Type> parameterTypes) -> void*
         {
-            require (functionName != nullptr && std::string (functionName) == rendererFunctionName,
-                     std::string ("unexpected external function; expected ")
-                         + rendererFunctionName + ", received "
-                         + (functionName == nullptr ? "<null>" : functionName));
-            require (parameterTypes.size() == 18,
-                     "external renderer signature mismatch: expected 18 array parameters, received "
-                         + std::to_string (parameterTypes.size()));
+            require (cosimo::three_osc::bridge::matchesExternalFunction (
+                         functionName, parameterTypes),
+                     "external renderer name or signature mismatch");
 
             // Code generation needs the external declaration resolved but does not call this
             // sentinel. The generated C++ deliberately retains a link-time renderer symbol.
@@ -89,7 +101,7 @@ int main (int argc, char** argv)
             (void) engine.getEndpointHandle (endpoint.endpointID);
 
         choc::value::Value metadata;
-        if (argc == 5)
+        if (! metadataPath.empty())
         {
             const auto addEndpoint = [&engine] (choc::value::Value& list,
                                                 const cmaj::EndpointDetails& endpoint)
@@ -124,12 +136,12 @@ int main (int argc, char** argv)
         output << generated.generatedCode;
         require (output.good(), std::string ("failed writing ") + argv[2]);
 
-        if (argc == 5)
+        if (! metadataPath.empty())
         {
-            std::ofstream metadataOutput (argv[4], std::ios::binary | std::ios::trunc);
-            require (metadataOutput.good(), std::string ("could not write ") + argv[4]);
+            std::ofstream metadataOutput (metadataPath, std::ios::binary | std::ios::trunc);
+            require (metadataOutput.good(), std::string ("could not write ") + metadataPath.string());
             metadataOutput << choc::json::toString (metadata, true);
-            require (metadataOutput.good(), std::string ("failed writing ") + argv[4]);
+            require (metadataOutput.good(), std::string ("failed writing ") + metadataPath.string());
         }
 
         std::cout << "Generated C++ with external renderer call preserved\n";

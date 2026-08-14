@@ -11,6 +11,7 @@
 #include "choc/javascript/choc_javascript_QuickJS.h"
 
 #include "../../../native/CosimoCmajorMidiBridge.h"
+#include "../../../native/three_oscillator_renderer/RendererExternalFunctionProvider.h"
 
 #ifndef COSIMO_PATCH_PATH
  #error COSIMO_PATCH_PATH must be defined
@@ -729,6 +730,8 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
     auto patch = std::make_shared<cmaj::Patch>();
     patch->setAutoRebuildOnFileChange (true);
     patch->createEngine = +[] { return cmaj::Engine::create(); };
+    patch->externalFunctionProvider =
+        cosimo::three_osc::bridge::createExternalFunctionProvider();
 
    #if CMAJ_USE_QUICKJS_WORKER
     enableQuickJSPatchWorker (*patch);
