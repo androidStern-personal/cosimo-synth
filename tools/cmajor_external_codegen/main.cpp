@@ -31,10 +31,11 @@ void require (bool condition, const std::string& message)
 int main (int argc, char** argv)
 {
     require (argc >= 4,
-             "usage: cosimo_cmajor_external_codegen <patch.cmajorpatch> <output.cpp> <class-name> [--metadata path] [--max-frames-per-block frames]");
+             "usage: cosimo_cmajor_external_codegen <patch.cmajorpatch> <output> <class-name> [--target cpp|javascript] [--metadata path] [--max-frames-per-block frames]");
 
     std::filesystem::path metadataPath;
     auto maxFramesPerBlock = 512;
+    auto target = std::string { "cpp" };
     for (auto index = 4; index < argc; ++index)
     {
         const auto option = std::string_view (argv[index]);
@@ -44,10 +45,14 @@ int main (int argc, char** argv)
             metadataPath = argv[++index];
         else if (option == "--max-frames-per-block")
             maxFramesPerBlock = std::stoi (argv[++index]);
+        else if (option == "--target")
+            target = argv[++index];
         else
             fail ("unknown option: " + std::string (option));
     }
     require (maxFramesPerBlock > 0, "max frames per block must be positive");
+    require (target == "cpp" || target == "javascript",
+             "target must be cpp or javascript");
 
     try
     {
@@ -125,11 +130,14 @@ int main (int argc, char** argv)
         }
 
         auto options = choc::value::createObject ("options");
-        options.addMember ("classname", std::string (argv[3]));
+        if (target == "cpp")
+            options.addMember ("classname", std::string (argv[3]));
+        else
+            options.addMember ("SIMD", "simd-only");
         const auto generated = engine.generateCode (
-            "cpp", choc::json::toString (options, false).c_str());
+            target, choc::json::toString (options, false).c_str());
         require (! generated.messages.hasErrors(), generated.messages.toString());
-        require (! generated.generatedCode.empty(), "C++ generator returned no source");
+        require (! generated.generatedCode.empty(), "generator returned no source");
 
         std::ofstream output (argv[2], std::ios::binary | std::ios::trunc);
         require (output.good(), std::string ("could not write ") + argv[2]);
@@ -144,7 +152,7 @@ int main (int argc, char** argv)
             require (metadataOutput.good(), std::string ("failed writing ") + metadataPath.string());
         }
 
-        std::cout << "Generated C++ with external renderer call preserved\n";
+        std::cout << "Generated " << target << " with external renderer call preserved\n";
         return 0;
     }
     catch (const std::exception& error)

@@ -3,7 +3,10 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { instrumentCosimoAudioWorkletSource } from "./audio-worklet-instrumentation.mjs";
+import {
+    adaptCosimoAudioWorkletModuleLoading,
+    instrumentCosimoAudioWorkletSource,
+} from "./audio-worklet-instrumentation.mjs";
 import { copyWebHostAssets } from "./web-host-assets.mjs";
 
 const webDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -29,7 +32,10 @@ function run(command, args) {
 async function instrumentAudioWorklet() {
     const helperPath = path.join(outputDirectory, "cmaj_api", "cmaj-audio-worklet-helper.js");
     const source = await fs.readFile(helperPath, "utf8");
-    await fs.writeFile(helperPath, instrumentCosimoAudioWorkletSource(source));
+    await fs.writeFile(
+        helperPath,
+        adaptCosimoAudioWorkletModuleLoading(instrumentCosimoAudioWorkletSource(source)),
+    );
 }
 
 async function buildWebProof() {

@@ -7,6 +7,7 @@ output_path="${2:?output C++ path is required}"
 class_name="${3:-WavetableSynth}"
 metadata_path=""
 max_frames_per_block="512"
+target="cpp"
 if (( $# >= 3 )); then
   shift 3
 else
@@ -21,6 +22,10 @@ while (( $# > 0 )); do
       ;;
     --max-frames-per-block)
       max_frames_per_block="${2:?--max-frames-per-block requires a value}"
+      shift 2
+      ;;
+    --target)
+      target="${2:?--target requires a value}"
       shift 2
       ;;
     *)
@@ -70,9 +75,11 @@ if [[ -n "$metadata_path" ]]; then
   "$build_dir/cosimo_cmajor_external_codegen" \
     "$patch_path" "$output_path" "$class_name" \
     --metadata "$metadata_path" \
-    --max-frames-per-block "$max_frames_per_block"
+    --max-frames-per-block "$max_frames_per_block" \
+    --target "$target"
 else
   "$build_dir/cosimo_cmajor_external_codegen" \
     "$patch_path" "$output_path" "$class_name" \
-    --max-frames-per-block "$max_frames_per_block"
+    --max-frames-per-block "$max_frames_per_block" \
+    --target "$target"
 fi

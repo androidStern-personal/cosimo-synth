@@ -9,6 +9,35 @@ const generatedProcessBlock = `        process (inputs, outputs)
             return true;
         }`;
 
+const generatedDataUriFactory = `async function serialiseWorkletProcessorFactoryToDataURI (CmajorClass, workletName, hostDescription)
+{
+    const serialisedInvocation = \`(\${registerWorkletProcessor.toString()}) ("\${workletName}", \${CmajorClass.toString()}, "\${hostDescription}");\`
+
+    let reader = new FileReader();
+    reader.readAsDataURL (new Blob ([serialisedInvocation], { type: "text/javascript" }));
+
+    return await new Promise (res => { reader.onloadend = () => res (reader.result); });
+}`;
+
+const compatibleModuleUrlFactory = `async function serialiseWorkletProcessorFactoryToDataURI (CmajorClass, workletName, hostDescription)
+{
+    const serialisedInvocation = \`(\${registerWorkletProcessor.toString()}) ("\${workletName}", \${CmajorClass.toString()}, "\${hostDescription}");\`
+    return URL.createObjectURL (new Blob ([serialisedInvocation], { type: "text/javascript" }));
+}`;
+
+const generatedAddModule = `        const dataURI = await serialiseWorkletProcessorFactoryToDataURI (CmajorClass, workletName, hostDescription);
+        await audioContext.audioWorklet.addModule (dataURI);`;
+
+const compatibleAddModule = `        const dataURI = await serialiseWorkletProcessorFactoryToDataURI (CmajorClass, workletName, hostDescription);
+        try
+        {
+            await audioContext.audioWorklet.addModule (dataURI);
+        }
+        finally
+        {
+            URL.revokeObjectURL (dataURI);
+        }`;
+
 const generatedMessageSwitch = `                    switch (msg.type)
                     {
                         case "req_status":`;
@@ -187,4 +216,15 @@ export function instrumentCosimoAudioWorkletSource(source) {
         .replace(generatedMessageSwitch, instrumentedMessageSwitch)
         .replace(generatedInputEndpointUpdate, instrumentedInputEndpointUpdate)
         .replace(generatedProcessBlock, instrumentedProcessBlock);
+}
+
+/** Uses a same-origin blob module because WebKit rejects AudioWorklet data URLs. */
+export function adaptCosimoAudioWorkletModuleLoading(source) {
+    if (!source.includes(generatedDataUriFactory) || !source.includes(generatedAddModule)) {
+        throw new Error("Could not adapt the generated Cmajor AudioWorklet module loader.");
+    }
+
+    return source
+        .replace(generatedDataUriFactory, compatibleModuleUrlFactory)
+        .replace(generatedAddModule, compatibleAddModule);
 }

@@ -11,7 +11,10 @@ import {
     enforcePublicAssetPolicy,
     findPublicAssetPolicyViolations,
 } from "../web/public-asset-policy.mjs";
-import { instrumentCosimoAudioWorkletSource } from "../web/audio-worklet-instrumentation.mjs";
+import {
+    adaptCosimoAudioWorkletModuleLoading,
+    instrumentCosimoAudioWorkletSource,
+} from "../web/audio-worklet-instrumentation.mjs";
 import { installBrowserPatchStatePersistence } from "../web/browser-patch-state.mjs";
 import { copyWebHostAssets } from "../web/web-host-assets.mjs";
 
@@ -161,6 +164,30 @@ test("audio-worklet instrumentation measures render load without allocating a bo
     assert.throws(
         () => instrumentCosimoAudioWorkletSource("class TestProcessor {}"),
         /Could not instrument the generated Cmajor AudioWorklet process block/,
+    );
+});
+
+test("audio-worklet modules use a same-origin blob URL that WebKit accepts", () => {
+    const source = `async function serialiseWorkletProcessorFactoryToDataURI (CmajorClass, workletName, hostDescription)
+{
+    const serialisedInvocation = \`(\${registerWorkletProcessor.toString()}) ("\${workletName}", \${CmajorClass.toString()}, "\${hostDescription}");\`
+
+    let reader = new FileReader();
+    reader.readAsDataURL (new Blob ([serialisedInvocation], { type: "text/javascript" }));
+
+    return await new Promise (res => { reader.onloadend = () => res (reader.result); });
+}
+
+        const dataURI = await serialiseWorkletProcessorFactoryToDataURI (CmajorClass, workletName, hostDescription);
+        await audioContext.audioWorklet.addModule (dataURI);`;
+
+    const adapted = adaptCosimoAudioWorkletModuleLoading(source);
+    assert.match(adapted, /URL\.createObjectURL/);
+    assert.match(adapted, /URL\.revokeObjectURL/);
+    assert.doesNotMatch(adapted, /FileReader/);
+    assert.throws(
+        () => adaptCosimoAudioWorkletModuleLoading("unrecognised helper"),
+        /Could not adapt the generated Cmajor AudioWorklet module loader/,
     );
 });
 

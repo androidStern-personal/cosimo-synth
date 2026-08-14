@@ -15,6 +15,7 @@ MAKE_CMAJ_LIBRARY(
     LIBRARY_NAME cosimo_cmaj_codegen_lib
     ENABLE_PERFORMER_CPP
     ENABLE_CODEGEN_CPP
+    ENABLE_CODEGEN_LLVM_WASM
 )
 
 add_executable(cosimo_cmajor_external_codegen main.cpp)
