@@ -8505,6 +8505,70 @@ test("phone touch drags are captured by rack grips and modulation chips without 
     }
 });
 
+async function beginRackReorderWithoutPointerCapture(page, {
+    pointerId,
+    targetEffectID = null,
+}) {
+    await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID }) => {
+        const list = document.querySelector('[data-role="rack-module-list"]');
+        const handle = document.querySelector('[data-role="rack-reorder-handle-reverb"]');
+        const target = browserTargetEffectID === null
+            ? null
+            : document.querySelector(`[data-role="rack-module-${browserTargetEffectID}"]`);
+        if (!(list instanceof HTMLElement) || !(handle instanceof HTMLElement)) {
+            throw new Error("Expected rack reorder elements.");
+        }
+        if (browserTargetEffectID !== null && !(target instanceof HTMLElement)) {
+            throw new Error(`Expected ${browserTargetEffectID} rack target.`);
+        }
+
+        Object.defineProperty(list, "setPointerCapture", {
+            configurable: true,
+            value() {
+                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
+            },
+        });
+        const handleBounds = handle.getBoundingClientRect();
+        handle.dispatchEvent(new PointerEvent("pointerdown", {
+            bubbles: true,
+            pointerId: browserPointerId,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 1,
+            clientX: handleBounds.left + (handleBounds.width / 2),
+            clientY: handleBounds.top + (handleBounds.height / 2),
+        }));
+        if (target instanceof HTMLElement) {
+            const targetBounds = target.getBoundingClientRect();
+            list.dispatchEvent(new PointerEvent("pointermove", {
+                bubbles: true,
+                pointerId: browserPointerId,
+                pointerType: "mouse",
+                button: 0,
+                buttons: 1,
+                clientX: targetBounds.left + (targetBounds.width / 2),
+                clientY: targetBounds.top + (targetBounds.height / 2),
+            }));
+        }
+    }, { pointerId, targetEffectID });
+}
+
+async function endRackReorderWithoutPointerCapture(page, pointerId) {
+    await page.evaluate((browserPointerId) => {
+        const list = document.querySelector('[data-role="rack-module-list"]');
+        if (!(list instanceof HTMLElement)) {
+            throw new Error("Expected rack module list.");
+        }
+        list.dispatchEvent(new PointerEvent("pointerup", {
+            bubbles: true,
+            pointerId: browserPointerId,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 0,
+        }));
+    }, pointerId);
+}
+
 test("rack reorder survives a platform pointer-capture rejection", async () => {
     const page = await openHarnessPage();
 
@@ -8512,51 +8576,8 @@ test("rack reorder survives a platform pointer-capture rejection", async () => {
         await page.waitForSelector('[data-role="rack-module-list"]');
         await clearHarnessDebugLog(page);
 
-        await page.evaluate(() => {
-            const list = document.querySelector('[data-role="rack-module-list"]');
-            const handle = document.querySelector('[data-role="rack-reorder-handle-reverb"]');
-            const target = document.querySelector('[data-role="rack-module-filter"]');
-            if (!(list instanceof HTMLElement) || !(handle instanceof HTMLElement) || !(target instanceof HTMLElement)) {
-                throw new Error("Expected rack reorder elements.");
-            }
-
-            Object.defineProperty(list, "setPointerCapture", {
-                configurable: true,
-                value() {
-                    throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
-                },
-            });
-            const handleBounds = handle.getBoundingClientRect();
-            const targetBounds = target.getBoundingClientRect();
-            const pointerId = 92;
-            handle.dispatchEvent(new PointerEvent("pointerdown", {
-                bubbles: true,
-                pointerId,
-                pointerType: "mouse",
-                button: 0,
-                buttons: 1,
-                clientX: handleBounds.left + (handleBounds.width / 2),
-                clientY: handleBounds.top + (handleBounds.height / 2),
-            }));
-            list.dispatchEvent(new PointerEvent("pointermove", {
-                bubbles: true,
-                pointerId,
-                pointerType: "mouse",
-                button: 0,
-                buttons: 1,
-                clientX: targetBounds.left + (targetBounds.width / 2),
-                clientY: targetBounds.top + (targetBounds.height / 2),
-            }));
-            list.dispatchEvent(new PointerEvent("pointerup", {
-                bubbles: true,
-                pointerId,
-                pointerType: "mouse",
-                button: 0,
-                buttons: 0,
-                clientX: targetBounds.left + (targetBounds.width / 2),
-                clientY: targetBounds.top + (targetBounds.height / 2),
-            }));
-        });
+        await beginRackReorderWithoutPointerCapture(page, { pointerId: 92, targetEffectID: "filter" });
+        await endRackReorderWithoutPointerCapture(page, 92);
 
         const snapshot = await waitForHarnessSnapshot(
             page,
@@ -8568,6 +8589,104 @@ test("rack reorder survives a platform pointer-capture rejection", async () => {
             )),
         );
         assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "rackOrder").length, 1);
+    } finally {
+        await page.close();
+    }
+});
+
+test("rack reorder keeps the latest desired enable state across an older effective readback", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.click('[data-role="rack-enabled-chorus"]');
+        await page.waitForFunction(() => {
+            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["rack.v1"];
+            return rawState !== undefined && JSON.parse(String(rawState)).enabled.chorus === true;
+        });
+        await clearHarnessDebugLog(page);
+
+        await beginRackReorderWithoutPointerCapture(page, { pointerId: 93, targetEffectID: "filter" });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
+                ?.getAttribute("data-role") === "rack-module-reverb"
+        ), null, { timeout: 1_000 });
+        await page.evaluate(() => {
+            const identityOrderCode = [0, 1, 2, 3, 4, 5, 6, 7].reduce(
+                (code, moduleId, position) => code | (moduleId << (position * 3)),
+                0,
+            );
+            window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("effectiveRackState", {
+                committedStructureGeneration: 0,
+                committedOrderCode: identityOrderCode,
+                committedEnableMask: 0,
+                rejectedOrderCount: 0,
+                rejectedEnableCount: 0,
+            });
+        });
+        await endRackReorderWithoutPointerCapture(page, 93);
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "rack reorder after stale effective readback",
+            (nextSnapshot) => {
+                const rawState = nextSnapshot.storedState["rack.v1"];
+                if (rawState === undefined) {
+                    return false;
+                }
+                const state = JSON.parse(String(rawState));
+                return state.order[0] === "reverb";
+            },
+        );
+        const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
+        assert.equal(storedRack.enabled.chorus, true);
+        const lastEnable = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "rackEnable").at(-1);
+        assert.equal(Number(lastEnable?.value?.enabledFlags?.[3]), 1);
+    } finally {
+        await page.close();
+    }
+});
+
+test("rack no-op release adopts authoritative stored order received during the gesture", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await clearHarnessDebugLog(page);
+        await beginRackReorderWithoutPointerCapture(page, { pointerId: 94 });
+        await page.waitForSelector(".rack-unit.is-reordering");
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("rack.v1", JSON.stringify({
+                format: "cosimo.rack",
+                version: 1,
+                order: ["reverb", "filter", "drive", "ott", "chorus", "flanger", "phaser", "delay"],
+                enabled: {
+                    filter: false,
+                    drive: false,
+                    ott: false,
+                    chorus: true,
+                    flanger: false,
+                    phaser: false,
+                    delay: false,
+                    reverb: false,
+                },
+            }));
+        });
+        await page.waitForTimeout(100);
+        assert.equal(
+            await page.locator('[data-role="rack-module-list"] > :first-child').getAttribute("data-role"),
+            "rack-module-filter",
+            "authoritative order must not replace the preview while the gesture is active",
+        );
+        await endRackReorderWithoutPointerCapture(page, 94);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-module-list"]')?.firstElementChild
+                ?.getAttribute("data-role") === "rack-module-reverb"
+        ), null, { timeout: 1_000 });
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "rackOrder"), false);
+        const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
+        assert.equal(storedRack.order[0], "reverb");
+        assert.equal(storedRack.enabled.chorus, true);
     } finally {
         await page.close();
     }

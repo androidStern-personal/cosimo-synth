@@ -30,12 +30,10 @@ import {
     type RackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
 import {
-    EFFECTIVE_RACK_STATE_ENDPOINT_ID,
     RACK_STATE_KEY,
     commitRackState,
     createDefaultRackState,
     deserializeRackState,
-    parseEffectiveRackState,
     serializeRackState,
     type RackState,
 } from "../shared/rack-state";
@@ -159,6 +157,9 @@ function useRackState() {
         setRackState(nextState);
     }, []);
 
+    // rack.v1 is the editor's desired and persisted authority. effectiveRackState is
+    // diagnostic readback without a correlated intent id, so an older DSP event must
+    // never replace the base of a newer user edit.
     useEffect(() => {
         const storedStateListener = (message: unknown) => {
             if (typeof message !== "object" || message === null || Array.isArray(message)) {
@@ -169,29 +170,14 @@ function useRackState() {
                 acceptRackState(deserializeRackState(Reflect.get(message, "value")));
             }
         };
-        const effectiveStateListener = (message: unknown) => {
-            const effectiveState = parseEffectiveRackState(message);
-            if (effectiveState === null) {
-                return;
-            }
-
-            acceptRackState({
-                format: "cosimo.rack",
-                version: 1,
-                order: effectiveState.order,
-                enabled: effectiveState.enabled,
-            });
-        };
 
         patchConnection.addStoredStateValueListener?.(storedStateListener);
-        patchConnection.addEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
         patchConnection.requestFullStoredState?.((fullState) => {
             acceptRackState(deserializeRackState(readRackStateFromFullStoredState(fullState)));
         });
 
         return () => {
             patchConnection.removeStoredStateValueListener?.(storedStateListener);
-            patchConnection.removeEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
         };
     }, [acceptRackState, patchConnection]);
 
@@ -2711,7 +2697,7 @@ export function EffectsRackWorkspace({
 
         if (shouldCommit && !sameOrder(gesture.originalOrder, previewOrderRef.current)) {
             commitOrder(previewOrderRef.current);
-        } else if (!shouldCommit) {
+        } else {
             const currentOrder = rackStateRef.current.order;
             previewOrderRef.current = currentOrder;
             setPreviewOrder(currentOrder);
