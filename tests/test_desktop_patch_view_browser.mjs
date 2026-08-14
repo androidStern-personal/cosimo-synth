@@ -4601,10 +4601,7 @@ test("articulation card audition releases its note when the window blurs", async
         await page.mouse.down();
         await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1);
         await page.evaluate(() => window.dispatchEvent(new Event("blur")));
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") === "true"
-            && document.querySelector(".rack-unit.is-reordering") !== null
-        ));
+        await page.waitForTimeout(100);
 
         assert.deepEqual((await getHarnessSnapshot(page)).midiInputEvents, [
             { endpointID: "midiIn", value: buildShortMidi(0x90, 60, 100) },
@@ -8673,7 +8670,10 @@ test("rack no-op release adopts authoritative stored order received during the g
                 },
             }));
         });
-        await page.waitForTimeout(100);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") === "true"
+            && document.querySelector(".rack-unit.is-reordering") !== null
+        ));
         assert.equal(
             await page.locator('[data-role="rack-module-list"] > :first-child').getAttribute("data-role"),
             "rack-module-filter",
