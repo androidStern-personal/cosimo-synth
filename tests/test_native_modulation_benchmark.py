@@ -4,7 +4,11 @@ import json
 import importlib.util
 import math
 import subprocess
+from argparse import Namespace
 from pathlib import Path
+from types import SimpleNamespace
+
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -123,6 +127,40 @@ def test_native_matrix_qualification_rejects_an_expensive_route_program() -> Non
         assert "voice-rack-100 matrix cost" in str(error)
     else:
         raise AssertionError("An over-budget native matrix program must fail qualification")
+
+
+def test_native_main_enforces_the_rack_only_shipping_budget(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location("native_matrix_main_runner", RUNNER)
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    build_path = tmp_path / "generated"
+    monkeypatch.setattr(runner, "parse_args", lambda: Namespace(
+        build_dir=tmp_path,
+        output=None,
+        blocks=runner.QUALIFYING_BLOCKS,
+        warmup_blocks=1,
+        settle_blocks=1,
+        repeats=runner.QUALIFYING_REPEATS,
+    ))
+    monkeypatch.setattr(
+        runner,
+        "generate_and_compile",
+        lambda _build_dir: (build_path, build_path, build_path, ["fixture-compiler"]),
+    )
+    monkeypatch.setattr(runner, "run", lambda _command: SimpleNamespace(stdout="fixture"))
+    monkeypatch.setattr(runner, "parse_run", lambda _output: {})
+    monkeypatch.setattr(runner, "build_result", lambda **_arguments: {
+        "qualification": "rack-only-shipping",
+        "profiles": [{
+            "name": "voice-rack-100",
+            "addedRenderLoadPercentagePoints": runner.MATRIX_LOAD_BUDGETS["voice-rack-100"] + 0.001,
+        }],
+    })
+
+    with pytest.raises(RuntimeError, match="voice-rack-100 matrix cost"):
+        runner.main()
 
 
 def test_full_884_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:

@@ -396,7 +396,7 @@ def main() -> int:
         settle_blocks=args.settle_blocks,
         elapsed_seconds=time.monotonic() - started,
     )
-    if result["qualification"] == "shipping":
+    if result["qualification"] == "rack-only-shipping":
         assert_matrix_budgets(result["profiles"])
     encoded = json.dumps(result, indent=2) + "\n"
     if output_path is not None:
