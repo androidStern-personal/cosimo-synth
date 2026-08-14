@@ -557,6 +557,33 @@ contractSuite("bridge", async () => {
     return adapter;
 });
 
+test("bridge rack commands preserve desired state across an older effective readback", async () => {
+    const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
+    const { MockPatchConnection } = await mockConnectionPromise;
+    const connection = new MockPatchConnection({ name: "Rack intent regression", version: 1 });
+    const adapter = createCosimoBridgeAdapter({ connection });
+    await waitForReady(adapter);
+
+    adapter.commands.setEffectEnabled("chorus", true);
+    connection.emitEndpoint("effectiveRackState", {
+        committedStructureGeneration: 0,
+        committedOrderCode: [0, 1, 2, 3, 4, 5, 6, 7].reduce(
+            (code, moduleId, position) => code | (moduleId << (position * 3)),
+            0,
+        ),
+        committedEnableMask: 0,
+        rejectedOrderCount: 0,
+        rejectedEnableCount: 0,
+    });
+    adapter.commands.reorderEffect("reverb", "filter");
+
+    const storedRack = JSON.parse(String(connection.getDebugSnapshot().storedState["rack.v1"]));
+    assert.equal(storedRack.order[0], "reverb");
+    assert.equal(storedRack.enabled.chorus, true);
+    assert.equal(adapter.getSnapshot().patch.effectEnabled.chorus, true);
+    adapter.dispose();
+});
+
 test("bridge rejects a duplicate mapping document without migration", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;

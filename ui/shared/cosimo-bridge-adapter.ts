@@ -67,12 +67,10 @@ import { getModulationArticulationCellIndex } from "./modulation-runtime-program
 import { createDefaultMsegPlayback, createDefaultMsegShape } from "./mseg";
 import { err, ok } from "./result";
 import {
-    EFFECTIVE_RACK_STATE_ENDPOINT_ID,
     RACK_EFFECT_ORDER,
     RACK_STATE_KEY,
     commitRackState,
     createDefaultRackState,
-    parseEffectiveRackState,
     parseRackState as parseCanonicalRackState,
     serializeRackState,
     type RackState,
@@ -504,6 +502,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private readonly modulationBridge: ModulationRuntimeBridge;
     private parameterValues = createInitialParameterValues();
     private articulations = createEmptyArticulationsState();
+    // rack.v1 is desired state. effectiveRackState has no intent correlation and
+    // therefore cannot safely become the base for a later editor command.
     private rackState = createInitialRackState();
     private compoundSettings: Readonly<Record<TargetId, CompoundSetting>> = {};
     private connectionState: PatchSnapshot["connection"] = { _tag: "connecting" };
@@ -550,26 +550,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         this.acceptedModulationState = state;
         this.adoptValidRoutes(validRoutes);
-    };
-
-    private readonly handleEffectiveRackState = (message: unknown): void => {
-        if (this.disposed) {
-            return;
-        }
-
-        const parsed = parseEffectiveRackState(message);
-        if (parsed === null) {
-            return;
-        }
-
-        this.runCommand(() => {
-            this.rackState = {
-                ...this.rackState,
-                order: parsed.order,
-                enabled: parsed.enabled,
-            };
-            this.markSnapshotDirty();
-        });
     };
 
     private adoptValidRoutes(validRoutes: ReadonlyArray<ValidRoute>): void {
@@ -653,10 +633,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.modulationBridge.subscribe(this.handleModulationState);
         this.handleModulationState(this.modulationBridge.getState());
         this.connection.addStoredStateValueListener?.(this.handleStoredStateValue);
-        this.connection.addEndpointListener?.(
-            EFFECTIVE_RACK_STATE_ENDPOINT_ID,
-            this.handleEffectiveRackState,
-        );
 
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => this.hydrate(storedState));
@@ -789,10 +765,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         this.disposed = true;
         this.connection.removeStoredStateValueListener?.(this.handleStoredStateValue);
-        this.connection.removeEndpointListener?.(
-            EFFECTIVE_RACK_STATE_ENDPOINT_ID,
-            this.handleEffectiveRackState,
-        );
         this.modulationBridge.unsubscribe(this.handleModulationState);
         releaseModulationRuntimeBridge(this.connection);
         this.listeners.clear();
