@@ -36,7 +36,7 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
 
     result = json.loads(output_path.read_text(encoding="utf-8"))
     assert result["format"] == "cosimo.native-modulation-benchmark"
-    assert result["version"] == 1
+    assert result["version"] == 2
     assert result["productionSeam"] == {
         "generatorTarget": "cpp",
         "maxFramesPerBlock": 128,
@@ -45,7 +45,8 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
     }
     assert result["sampleRate"] == 48_000
     assert result["blockSize"] == 128
-    assert result["qualification"] == "smoke-only"
+    assert result["qualification"] == "rack-only-smoke"
+    assert result["blockedBy"] == "RT-01"
     assert result["voiceIndexes"] == list(range(16))
     assert result["rackEnableMask"] == 255
     assert result["effectConfiguration"] == {
@@ -68,38 +69,39 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
         "warpMode": 0.0,
     }
 
-    expected_counts = {
-        "voice-100": {"voice": 100, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
-        "voice-rack-100": {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
-        "mixed-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
-        "combined-200": {"voice": 100, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
-        "stored-624-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
-        "active-624": {"voice": 108, "macroVoice": 48, "voiceRack": 324, "macroRack": 144},
-    }
     profiles = {profile["name"]: profile for profile in result["profiles"]}
-    assert set(profiles) == set(expected_counts)
+    assert set(profiles) == {
+        "voice-100", "voice-rack-100", "mixed-100", "combined-200",
+        "stored-884-active-100", "active-884",
+    }
 
-    for name, compiled_counts in expected_counts.items():
-        profile = profiles[name]
-        assert profile["compiledCounts"] == compiled_counts
-        assert profile["installedCounts"] == compiled_counts
-        assert profile["emptyInstalledCounts"] == {
-            "voice": 0,
-            "macroVoice": 0,
-            "voiceRack": 0,
-            "macroRack": 0,
-        }
-        assert len(profile["stateSha256"]) == 64
-        assert profile["audioEquivalent"] is True
-        assert profile["maximumAbsoluteSampleDelta"] <= 1.0e-7
-        assert profile["nonFiniteSampleCount"] == 0
-        assert profile["emptyRms"] > 1.0e-5
-        assert profile["loadedRms"] > 1.0e-5
-        assert profile["adjacentPairCount"] == 24
-        assert profile["emptyMeanNanoseconds"] > 0
-        assert profile["loadedMeanNanoseconds"] > 0
-        assert math.isfinite(profile["pairedMeanDeltaNanoseconds"])
-        assert math.isfinite(profile["addedRenderLoadPercentagePoints"])
+    measured = profiles["voice-rack-100"]
+    assert measured["status"] == "measured"
+    assert measured["compiledCounts"] == {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0}
+    assert measured["installedCounts"] == measured["compiledCounts"]
+    assert measured["emptyInstalledCounts"] == {
+        "voice": 0,
+        "macroVoice": 0,
+        "voiceRack": 0,
+        "macroRack": 0,
+    }
+    assert len(measured["stateSha256"]) == 64
+    assert measured["audioEquivalent"] is True
+    assert measured["maximumAbsoluteSampleDelta"] <= 1.0e-7
+    assert measured["nonFiniteSampleCount"] == 0
+    assert measured["emptyRms"] > 1.0e-5
+    assert measured["loadedRms"] > 1.0e-5
+    assert measured["adjacentPairCount"] == 24
+    assert measured["emptyMeanNanoseconds"] > 0
+    assert measured["loadedMeanNanoseconds"] > 0
+    assert math.isfinite(measured["pairedMeanDeltaNanoseconds"])
+    assert math.isfinite(measured["addedRenderLoadPercentagePoints"])
+
+    unavailable = [profile for profile in profiles.values() if profile["status"] == "unavailable"]
+    assert len(unavailable) == 5
+    assert all(profile["blockedBy"] == "RT-01" for profile in unavailable)
+    assert all("addedRenderLoadPercentagePoints" not in profile for profile in unavailable)
+    assert profiles["active-884"]["storedRouteCount"] == 884
 
 
 def test_native_matrix_qualification_rejects_an_expensive_route_program() -> None:
@@ -112,12 +114,22 @@ def test_native_matrix_qualification_rejects_an_expensive_route_program() -> Non
         for name, budget in runner.MATRIX_LOAD_BUDGETS.items()
     ]
     runner.assert_matrix_budgets(profiles)
-    next(profile for profile in profiles if profile["name"] == "voice-100")[
+    next(profile for profile in profiles if profile["name"] == "voice-rack-100")[
         "addedRenderLoadPercentagePoints"
-    ] = runner.MATRIX_LOAD_BUDGETS["voice-100"] + 0.001
+    ] = runner.MATRIX_LOAD_BUDGETS["voice-rack-100"] + 0.001
     try:
         runner.assert_matrix_budgets(profiles)
     except RuntimeError as error:
-        assert "voice-100 matrix cost" in str(error)
+        assert "voice-rack-100 matrix cost" in str(error)
     else:
         raise AssertionError("An over-budget native matrix program must fail qualification")
+
+
+def test_full_884_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
+    spec = importlib.util.spec_from_file_location("native_matrix_runner", RUNNER)
+    assert spec is not None and spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    assert "active-884" in runner.EXPECTED_PROFILE_NAMES
+    assert "active-884" not in runner.MATRIX_LOAD_BUDGETS

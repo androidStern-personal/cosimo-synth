@@ -435,7 +435,7 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
         ? profileDocument[@"profiles"]
         : nil;
     if (![profileDocument[@"format"] isEqual:@"cosimo.modulation-benchmark-profiles"]
-        || ![profileDocument[@"version"] isEqual:@1]
+        || ![profileDocument[@"version"] isEqual:@2]
         || profiles.count == 0)
     {
         [self completeAutomationWithPayload:@{ @"error": jsonError.localizedDescription ?: @"Invalid modulation benchmark profile document." }
@@ -449,7 +449,7 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
 
     NSMutableDictionary<NSString *, id> *payload = [@{
         @"format": @"cosimo.ios-modulation-benchmark",
-        @"version": @1,
+        @"version": @2,
         @"status": @"running",
         @"durationScale": @(durationScale),
         @"operatingSystem": NSProcessInfo.processInfo.operatingSystemVersionString ?: @"",
@@ -563,20 +563,48 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
     NSString *profileName = [profile[@"name"] isKindOfClass:[NSString class]] ? profile[@"name"] : @"";
     NSString *stateJSON = [profile[@"stateJSON"] isKindOfClass:[NSString class]] ? profile[@"stateJSON"] : @"";
     NSNumber *profileIndex = [profile[@"profileIndex"] isKindOfClass:[NSNumber class]] ? profile[@"profileIndex"] : nil;
+    NSDictionary<NSString *, id> *execution = [profile[@"execution"] isKindOfClass:[NSDictionary class]]
+        ? profile[@"execution"]
+        : nil;
+    NSString *executionStatus = [execution[@"status"] isKindOfClass:[NSString class]] ? execution[@"status"] : @"";
     NSDictionary<NSString *, NSNumber *> *baseDurations = @{
         @"empty": @20.0,
         @"voice-100": @45.0,
         @"voice-rack-100": @45.0,
         @"mixed-100": @45.0,
         @"combined-200": @45.0,
-        @"stored-624-active-100": @45.0,
-        @"active-624": @20.0,
+        @"stored-884-active-100": @45.0,
+        @"active-884": @20.0,
     };
     NSNumber *baseDuration = baseDurations[profileName];
-    if (profileName.length == 0 || stateJSON.length == 0 || profileIndex == nil || baseDuration == nil)
+    if (profileName.length == 0 || stateJSON.length == 0 || profileIndex == nil || baseDuration == nil
+        || !([executionStatus isEqual:@"available"] || [executionStatus isEqual:@"unavailable"]))
     {
         [self completeAutomationWithPayload:@{ @"error": @"Benchmark profile is missing a supported name or strict state JSON." }
                                   outputName:outputName];
+        return;
+    }
+
+    if ([executionStatus isEqual:@"unavailable"])
+    {
+        NSString *blockedBy = [execution[@"blockedBy"] isKindOfClass:[NSString class]] ? execution[@"blockedBy"] : @"";
+        if (![blockedBy isEqual:@"RT-01"])
+        {
+            [self completeAutomationWithPayload:@{ @"error": @"Unavailable benchmark profile omitted its RT-01 dependency." }
+                                      outputName:outputName];
+            return;
+        }
+
+        NSMutableDictionary<NSString *, id> *phase = [profile mutableCopy];
+        [phase removeObjectForKey:@"stateJSON"];
+        phase[@"status"] = @"unavailable";
+        [(NSMutableArray<NSDictionary<NSString *, id> *> *) payload[@"phases"] addObject:phase];
+        [self completeAutomationWithPayload:payload outputName:outputName];
+        [self runModulationBenchmarkProfiles:profiles
+                                        index:index + 1
+                                durationScale:durationScale
+                                      payload:payload
+                                   outputName:outputName];
         return;
     }
 
@@ -591,6 +619,7 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
     {
         NSMutableDictionary<NSString *, id> *phase = [profile mutableCopy];
         [phase removeObjectForKey:@"stateJSON"];
+        phase[@"status"] = @"measured";
         phase[@"installAck"] = measurement[@"installAck"] ?: @{};
         phase[@"metrics"] = measurement[@"metrics"] ?: @{};
         if (emptyBefore != nil) phase[@"pairedEmptyBefore"] = emptyBefore;

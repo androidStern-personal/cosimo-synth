@@ -1,4 +1,4 @@
-import { useId, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
 
 import {
     getOscillatorControlAddress,
@@ -129,6 +129,7 @@ export function DesktopOscillatorPresentation({
     selection,
 }: DesktopOscillatorPresentationProps) {
     const panelID = useId();
+    const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
     return (
         <div
@@ -142,12 +143,15 @@ export function DesktopOscillatorPresentation({
                 role="tablist"
                 aria-label="Oscillator"
             >
-                {selection.options.map((oscillator) => {
+                {selection.options.map((oscillator, oscillatorIndex) => {
                     const isSelected = selection.selectedOscillatorID === oscillator.id;
 
                     return (
                         <button
                             key={oscillator.id}
+                            ref={(element) => {
+                                tabRefs.current[oscillatorIndex] = element;
+                            }}
                             id={`${panelID}-tab-${oscillator.id}`}
                             type="button"
                             role="tab"
@@ -163,6 +167,32 @@ export function DesktopOscillatorPresentation({
                                     : "text-slate-300/55 hover:text-slate-100"
                             }`}
                             onClick={() => selection.selectOscillator(oscillator.id)}
+                            onKeyDown={(event) => {
+                                const finalIndex = selection.options.length - 1;
+                                let nextIndex: number | undefined;
+
+                                switch (event.key) {
+                                    case "ArrowLeft":
+                                        nextIndex = oscillatorIndex === 0 ? finalIndex : oscillatorIndex - 1;
+                                        break;
+                                    case "ArrowRight":
+                                        nextIndex = oscillatorIndex === finalIndex ? 0 : oscillatorIndex + 1;
+                                        break;
+                                    case "Home":
+                                        nextIndex = 0;
+                                        break;
+                                    case "End":
+                                        nextIndex = finalIndex;
+                                        break;
+                                    default:
+                                        return;
+                                }
+
+                                event.preventDefault();
+                                const nextOscillator = selection.options[nextIndex];
+                                selection.selectOscillator(nextOscillator.id);
+                                tabRefs.current[nextIndex]?.focus();
+                            }}
                         >
                             {oscillator.id}
                         </button>

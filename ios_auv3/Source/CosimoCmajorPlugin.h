@@ -1060,10 +1060,10 @@ private:
             case BenchmarkParameterKind::resultFieldRequest:        return 0.0f;
             case BenchmarkParameterKind::resultFieldResponse:       return benchmarkResultFieldResponse.load();
             case BenchmarkParameterKind::acceptedModulationProgramSerial: return normaliseBenchmarkValue (benchmarkInstalledProgramSerial.load(), 100000.0);
-            case BenchmarkParameterKind::installedVoiceRouteCount:       return normaliseBenchmarkValue (benchmarkInstalledVoiceRouteCount.load(), 624.0);
-            case BenchmarkParameterKind::installedMacroVoiceRouteCount:  return normaliseBenchmarkValue (benchmarkInstalledMacroVoiceRouteCount.load(), 624.0);
-            case BenchmarkParameterKind::installedVoiceRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledVoiceRackRouteCount.load(), 624.0);
-            case BenchmarkParameterKind::installedMacroRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledMacroRackRouteCount.load(), 624.0);
+            case BenchmarkParameterKind::installedVoiceRouteCount:       return normaliseBenchmarkValue (benchmarkInstalledVoiceRouteCount.load(), 884.0);
+            case BenchmarkParameterKind::installedMacroVoiceRouteCount:  return normaliseBenchmarkValue (benchmarkInstalledMacroVoiceRouteCount.load(), 884.0);
+            case BenchmarkParameterKind::installedVoiceRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledVoiceRackRouteCount.load(), 884.0);
+            case BenchmarkParameterKind::installedMacroRackRouteCount:   return normaliseBenchmarkValue (benchmarkInstalledMacroRackRouteCount.load(), 884.0);
             case BenchmarkParameterKind::renderBlockCount:          return normaliseBenchmarkValue (benchmarkResultRenderBlockCount.load(), 100000.0);
             case BenchmarkParameterKind::capturedRenderSampleCount: return normaliseBenchmarkValue (benchmarkResultSampleCount.load(), 100000.0);
             case BenchmarkParameterKind::dspSampleRate:             return normaliseBenchmarkValue (benchmarkResultDspSampleRate.load(), 192000.0);
@@ -1193,6 +1193,7 @@ private:
     {
         try
         {
+            static constexpr auto modulationStateKey = "modulation.v4";
             const auto profileFile = detail::resolveBundleResourceFile ("benchmark/modulation-benchmark-profiles.json");
             if (! profileFile.existsAsFile())
                 throw std::runtime_error ("Benchmark profile bundle is missing");
@@ -1230,7 +1231,7 @@ private:
                                          + ", baseline=" + std::to_string (benchmarkInstallBaselineSerial.load()));
 
             const auto& storedStates = patch->getStoredStateValues();
-            const auto currentState = storedStates.find ("modulation.v2");
+            const auto currentState = storedStates.find (modulationStateKey);
             const bool stateAlreadyInstalled = currentState != storedStates.end()
                 && currentState->second.isString()
                 && currentState->second.getString() == stateJSON;
@@ -1249,7 +1250,7 @@ private:
                 return;
             }
 
-            patch->setStoredStateValue ("modulation.v2", choc::value::createString (stateJSON));
+            patch->setStoredStateValue (modulationStateKey, choc::value::createString (stateJSON));
         }
         catch (...)
         {

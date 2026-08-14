@@ -142,8 +142,8 @@ function buildNeutralRouteGroups() {
         groupsByPath.set(name, targetGroups);
     }
 
-    if (allRoutes.length !== 624) {
-        throw new Error(`Expected the complete 624-cell domain, received ${allRoutes.length}`);
+    if (allRoutes.length !== 884) {
+        throw new Error(`Expected the complete 884-cell domain, received ${allRoutes.length}`);
     }
     return { allRoutes, groupsByPath };
 }
@@ -250,6 +250,7 @@ function createProfile(name, routes) {
         throw new Error(`Profile ${name} compiled ${compiledRouteCount} of ${activeRouteCount} active routes`);
     }
 
+    const requiresExpandedVoiceRuntime = program.voiceRouteCount > 0 || program.macroVoiceRouteCount > 0;
     return {
         name,
         storedRouteCount: parsed.value.routes.length,
@@ -262,6 +263,9 @@ function createProfile(name, routes) {
             macroRack: program.macroRackRouteCount,
         },
         executionFingerprint,
+        execution: requiresExpandedVoiceRuntime
+            ? { status: "unavailable", blockedBy: "RT-01" }
+            : { status: "available" },
         stateJSON,
     };
 }
@@ -276,14 +280,14 @@ export function buildModulationBenchmarkProfiles() {
         createProfile("voice-rack-100", voiceRackHundred),
         createProfile("mixed-100", mixedHundred),
         createProfile("combined-200", [...voiceHundred, ...voiceRackHundred]),
-        createProfile("stored-624-active-100", allRoutes.map((route) => ({
+        createProfile("stored-884-active-100", allRoutes.map((route) => ({
             ...route,
             enabled: mixedActiveIDs.has(route.id),
         }))),
-        createProfile("active-624", allRoutes),
+        createProfile("active-884", allRoutes),
     ];
     const mixed = profiles.find((profile) => profile.name === "mixed-100");
-    const stored = profiles.find((profile) => profile.name === "stored-624-active-100");
+    const stored = profiles.find((profile) => profile.name === "stored-884-active-100");
     if (mixed.executionFingerprint !== stored.executionFingerprint) {
         throw new Error("Disabled stored routes changed the compiled real-time execution program");
     }
@@ -293,7 +297,7 @@ export function buildModulationBenchmarkProfiles() {
 export function buildModulationBenchmarkDocument() {
     return {
         format: "cosimo.modulation-benchmark-profiles",
-        version: 1,
+        version: 2,
         generatedFrom: path.relative(repoRoot, scriptPath),
         sourceContract: {
             msegValue: 0,

@@ -21254,7 +21254,7 @@ function v3({
   pendingStageClassName: r,
   selection: a
 }) {
-  const o = P.useId();
+  const o = P.useId(), s = P.useRef([]);
   return /* @__PURE__ */ f.jsxs(
     "div",
     {
@@ -21269,25 +21269,51 @@ function v3({
             className: "absolute left-1/2 top-3 z-20 flex h-5 -translate-x-1/2 items-center rounded-[5px] border border-white/[0.08] bg-black/55 p-px shadow-lg backdrop-blur-sm",
             role: "tablist",
             "aria-label": "Oscillator",
-            children: a.options.map((s) => {
-              const c = a.selectedOscillatorID === s.id;
+            children: a.options.map((c, u) => {
+              const h = a.selectedOscillatorID === c.id;
               return /* @__PURE__ */ f.jsx(
                 "button",
                 {
-                  id: `${o}-tab-${s.id}`,
+                  ref: (m) => {
+                    s.current[u] = m;
+                  },
+                  id: `${o}-tab-${c.id}`,
                   type: "button",
                   role: "tab",
                   "aria-controls": o,
-                  "aria-label": `Oscillator ${s.id}`,
-                  "aria-selected": c,
-                  tabIndex: c ? 0 : -1,
-                  "data-role": `oscillator-tab-${s.id.toLowerCase()}`,
-                  "data-oscillator-id": s.id,
-                  className: `h-[16px] min-w-5 rounded-[4px] px-1 text-[8px] font-semibold ${c ? "bg-cyan-300/20 text-cyan-100" : "text-slate-300/55 hover:text-slate-100"}`,
-                  onClick: () => a.selectOscillator(s.id),
-                  children: s.id
+                  "aria-label": `Oscillator ${c.id}`,
+                  "aria-selected": h,
+                  tabIndex: h ? 0 : -1,
+                  "data-role": `oscillator-tab-${c.id.toLowerCase()}`,
+                  "data-oscillator-id": c.id,
+                  className: `h-[16px] min-w-5 rounded-[4px] px-1 text-[8px] font-semibold ${h ? "bg-cyan-300/20 text-cyan-100" : "text-slate-300/55 hover:text-slate-100"}`,
+                  onClick: () => a.selectOscillator(c.id),
+                  onKeyDown: (m) => {
+                    const p = a.options.length - 1;
+                    let S;
+                    switch (m.key) {
+                      case "ArrowLeft":
+                        S = u === 0 ? p : u - 1;
+                        break;
+                      case "ArrowRight":
+                        S = u === p ? 0 : u + 1;
+                        break;
+                      case "Home":
+                        S = 0;
+                        break;
+                      case "End":
+                        S = p;
+                        break;
+                      default:
+                        return;
+                    }
+                    m.preventDefault();
+                    const k = a.options[S];
+                    a.selectOscillator(k.id), s.current[S]?.focus();
+                  },
+                  children: c.id
                 },
-                s.id
+                c.id
               );
             })
           }

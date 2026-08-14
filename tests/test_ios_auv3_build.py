@@ -863,7 +863,9 @@ def test_ios_modulation_benchmark_installs_state_through_the_production_worker()
     assert "payload[@\"warmup\"]" in host_controller
 
     plugin_shell = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
-    assert 'patch->setStoredStateValue ("modulation.v2"' in plugin_shell
+    assert 'static constexpr auto modulationStateKey = "modulation.v4";' in plugin_shell
+    assert "patch->setStoredStateValue (modulationStateKey" in plugin_shell
+    assert '"modulation.v2"' not in plugin_shell
     assert 'endpointID == "runtimeInstallAck"' in plugin_shell
     assert "acceptedModulationProgramSerial" in plugin_shell
     assert "installedVoiceRouteCount" in plugin_shell
@@ -941,20 +943,40 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     profiles = {profile["name"]: profile for profile in payload["profiles"]}
 
+    assert payload["version"] == 2
+    assert profiles["empty"]["execution"] == {"status": "available"}
+    assert profiles["voice-rack-100"]["execution"] == {"status": "available"}
+    assert {
+        name for name, profile in profiles.items()
+        if profile["execution"] == {"status": "unavailable", "blockedBy": "RT-01"}
+    } == {
+        "voice-100",
+        "mixed-100",
+        "combined-200",
+        "stored-884-active-100",
+        "active-884",
+    }
+
     assert profiles["empty"]["storedRouteCount"] == 0
     assert profiles["voice-100"]["activeRouteCount"] == 100
     assert profiles["voice-rack-100"]["activeRouteCount"] == 100
     assert profiles["mixed-100"]["activeRouteCount"] == 100
-    assert profiles["stored-624-active-100"]["storedRouteCount"] == 624
-    assert profiles["stored-624-active-100"]["activeRouteCount"] == 100
+    assert profiles["stored-884-active-100"]["storedRouteCount"] == 884
+    assert profiles["stored-884-active-100"]["activeRouteCount"] == 100
     assert (
-        profiles["stored-624-active-100"]["executionFingerprint"]
+        profiles["stored-884-active-100"]["executionFingerprint"]
         == profiles["mixed-100"]["executionFingerprint"]
     )
     assert profiles["combined-200"]["activeRouteCount"] == 200
     assert profiles["combined-200"]["compiledCounts"]["voice"] == 100
     assert profiles["combined-200"]["compiledCounts"]["voiceRack"] == 100
-    assert profiles["active-624"]["activeRouteCount"] == 624
+    assert profiles["active-884"]["activeRouteCount"] == 884
+    assert profiles["active-884"]["compiledCounts"] == {
+        "voice": 288,
+        "macroVoice": 128,
+        "voiceRack": 324,
+        "macroRack": 144,
+    }
 
     voice_rack_sources = {
         (route["sourceKind"], route["sourceSlot"])
@@ -971,7 +993,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
         assert profile["profileIndex"] == profile_index
         document = json.loads(profile["stateJSON"])
         assert document["format"] == "cosimo.modulation"
-        assert document["version"] == 2
+        assert document["version"] == 4
         assert len({route["id"] for route in document["routes"]}) == len(document["routes"])
         assert profile["compiledRouteCount"] == profile["activeRouteCount"]
         assert all(0.0 < abs(float(route["amount"])) <= 0.03125 for route in document["routes"])
@@ -1009,6 +1031,25 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
         for key, routes in route_groups.items():
             if all(route["enabled"] for route in routes):
                 assert math.fsum(float(route["amount"]) for route in routes) == 0.0, key
+
+
+def test_ios_modulation_benchmark_skips_rt_01_blocked_profiles_before_install() -> None:
+    host_controller = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoHostViewController.mm").read_text(
+        encoding="utf-8"
+    )
+    profile_runner = host_controller[
+        host_controller.index("- (void)runModulationBenchmarkProfiles:"):
+        host_controller.index("- (void)runSaveSmokeWithOutputName:")
+    ]
+    unavailable_branch = profile_runner[
+        profile_runner.index('if ([executionStatus isEqual:@"unavailable"])'):
+        profile_runner.index("const NSTimeInterval durationSeconds")
+    ]
+
+    assert 'blockedBy isEqual:@"RT-01"' in unavailable_branch
+    assert 'phase[@"status"] = @"unavailable";' in unavailable_branch
+    assert "installAndMeasureModulationProfileAtIndex" not in unavailable_branch
+    assert "measureModulationPhaseNamed" not in unavailable_branch
 
 
 def test_ios_modulation_benchmark_runner_uses_unique_device_bundle_and_component_ids() -> None:
@@ -1084,8 +1125,8 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "voice-rack-100": 45.0,
         "mixed-100": 45.0,
         "combined-200": 45.0,
-        "stored-624-active-100": 45.0,
-        "active-624": 20.0,
+        "stored-884-active-100": 45.0,
+        "active-884": 20.0,
     }
     compiled_counts = {
         "empty": {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
@@ -1093,16 +1134,27 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "voice-rack-100": {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
         "mixed-100": {"voice": 25, "macroVoice": 25, "voiceRack": 25, "macroRack": 25},
         "combined-200": {"voice": 100, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
-        "stored-624-active-100": {"voice": 25, "macroVoice": 25, "voiceRack": 25, "macroRack": 25},
-        "active-624": {"voice": 108, "macroVoice": 48, "voiceRack": 324, "macroRack": 144},
+        "stored-884-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
+        "active-884": {"voice": 288, "macroVoice": 128, "voiceRack": 324, "macroRack": 144},
     }
     phases = []
     for name in _load_ios_modulation_benchmark_module().PROFILE_NAMES:
         expected_counts = dict(compiled_counts[name])
+        if name not in _load_ios_modulation_benchmark_module().EXECUTABLE_PROFILE_NAMES:
+            phases.append({
+                "name": name,
+                "status": "unavailable",
+                "execution": {"status": "unavailable", "blockedBy": "RT-01"},
+                "compiledCounts": expected_counts,
+            })
+            continue
+
         installed_counts = dict(expected_counts)
         render_block_count = int(base_durations[name] * 48000 / 128)
         phase = {
             "name": name,
+            "status": "measured",
+            "execution": {"status": "available"},
             "compiledCounts": expected_counts,
             "installAck": {
                 "accepted": True,
@@ -1166,7 +1218,16 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
                 "metrics": json.loads(json.dumps(paired_metrics)),
             }
         phases.append(phase)
-    return {"durationScale": 1.0, "phases": phases}
+    return {
+        "format": "cosimo.ios-modulation-benchmark",
+        "version": 2,
+        "durationScale": 1.0,
+        "phases": phases,
+    }
+
+
+def _measured_ios_modulation_phase(payload: dict[str, object]) -> dict[str, object]:
+    return next(phase for phase in payload["phases"] if phase["name"] == "voice-rack-100")
 
 
 @pytest.mark.parametrize(
@@ -1193,7 +1254,7 @@ def test_ios_modulation_benchmark_shipping_contract_rejects_false_evidence(
 ) -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    phase_metrics = payload["phases"][1]["metrics"]
+    phase_metrics = _measured_ios_modulation_phase(payload)["metrics"]
     target = phase_metrics
     for key in path[:-1]:
         target = target[key]
@@ -1210,7 +1271,7 @@ def test_ios_modulation_benchmark_shipping_contract_accepts_real_render_seam() -
 def test_ios_modulation_benchmark_accepts_outer_callbacks_larger_than_engine_slices() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    render = payload["phases"][1]["metrics"]["renderMetrics"]
+    render = _measured_ios_modulation_phase(payload)["metrics"]["renderMetrics"]
     render["minimumFrames"] = 278
     render["maximumFrames"] = 279
     render["renderBlockCount"] = 7742
@@ -1223,7 +1284,7 @@ def test_ios_modulation_benchmark_rejects_expensive_matrix_delta() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
     by_name = {phase["name"]: phase for phase in payload["phases"]}
-    by_name["voice-100"]["metrics"]["renderMetrics"]["renderLoadPercent"] = (
+    by_name["voice-rack-100"]["metrics"]["renderMetrics"]["renderLoadPercent"] = (
         by_name["empty"]["metrics"]["renderMetrics"]["renderLoadPercent"]
         + module.MATRIX_100_MAX_ADDED_RENDER_LOAD_PERCENT
         + 0.01
@@ -1233,10 +1294,17 @@ def test_ios_modulation_benchmark_rejects_expensive_matrix_delta() -> None:
         module.assert_shipping_contract(payload)
 
 
+def test_ios_full_884_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
+    module = _load_ios_modulation_benchmark_module()
+
+    assert "active-884" in module.PROFILE_NAMES
+    assert "active-884" not in module.MATRIX_LOAD_BUDGETS
+
+
 def test_ios_modulation_benchmark_requires_adjacent_empty_brackets() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    del payload["phases"][1]["pairedEmptyAfter"]
+    del _measured_ios_modulation_phase(payload)["pairedEmptyAfter"]
 
     with pytest.raises(AssertionError, match="paired empty"):
         module.assert_shipping_contract(payload)
@@ -1245,7 +1313,7 @@ def test_ios_modulation_benchmark_requires_adjacent_empty_brackets() -> None:
 def test_ios_modulation_matrix_delta_uses_its_adjacent_empty_pair() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    phase = next(phase for phase in payload["phases"] if phase["name"] == "voice-100")
+    phase = _measured_ios_modulation_phase(payload)
     phase["pairedEmptyBefore"]["metrics"]["renderMetrics"]["renderLoadPercent"] = 30.0
     phase["pairedEmptyAfter"]["metrics"]["renderMetrics"]["renderLoadPercent"] = 30.0
     phase["metrics"]["renderMetrics"]["renderLoadPercent"] = 35.0
@@ -1256,7 +1324,7 @@ def test_ios_modulation_matrix_delta_uses_its_adjacent_empty_pair() -> None:
 def test_ios_modulation_benchmark_does_not_treat_mixer_tap_batches_as_dsp_blocks() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    payload["phases"][1]["metrics"]["maximumBufferFrames"] = 4800
+    _measured_ios_modulation_phase(payload)["metrics"]["maximumBufferFrames"] = 4800
 
     module.assert_shipping_contract(payload)
 
@@ -1264,7 +1332,7 @@ def test_ios_modulation_benchmark_does_not_treat_mixer_tap_batches_as_dsp_blocks
 def test_ios_modulation_benchmark_allows_mixer_conversion_while_dsp_is_48khz() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    payload["phases"][1]["metrics"]["sampleRate"] = 44100.0
+    _measured_ios_modulation_phase(payload)["metrics"]["sampleRate"] = 44100.0
 
     module.assert_shipping_contract(payload)
 
@@ -1272,7 +1340,7 @@ def test_ios_modulation_benchmark_allows_mixer_conversion_while_dsp_is_48khz() -
 def test_ios_modulation_benchmark_allows_only_float_transport_rounding_in_audio_frames() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    render = payload["phases"][1]["metrics"]["renderMetrics"]
+    render = _measured_ios_modulation_phase(payload)["metrics"]["renderMetrics"]
     render["audioFrames"] -= module.AUDIO_FRAME_TRANSPORT_TOLERANCE
 
     module.assert_shipping_contract(payload)
@@ -1285,11 +1353,12 @@ def test_ios_modulation_benchmark_allows_only_float_transport_rounding_in_audio_
 def test_ios_modulation_benchmark_rejects_shortened_declared_phase() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    payload["phases"][1]["metrics"]["durationSeconds"] = 20.0
-    payload["phases"][1]["metrics"]["audioSeconds"] = 20.0
-    payload["phases"][1]["metrics"]["renderMetrics"]["audioFrames"] = 960000
-    payload["phases"][1]["metrics"]["renderMetrics"]["renderBlockCount"] = 7500
-    payload["phases"][1]["metrics"]["renderMetrics"]["capturedRenderSampleCount"] = 7500
+    measured = _measured_ios_modulation_phase(payload)["metrics"]
+    measured["durationSeconds"] = 20.0
+    measured["audioSeconds"] = 20.0
+    measured["renderMetrics"]["audioFrames"] = 960000
+    measured["renderMetrics"]["renderBlockCount"] = 7500
+    measured["renderMetrics"]["capturedRenderSampleCount"] = 7500
 
     with pytest.raises(AssertionError):
         module.assert_shipping_contract(payload, expected_duration_scale=1.0)
@@ -1307,7 +1376,7 @@ def test_ios_modulation_benchmark_rejects_payload_duration_scale_mismatch() -> N
 def test_ios_modulation_benchmark_rejects_hot_phase_start() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    payload["phases"][1]["metrics"]["thermalStateBefore"] = "serious"
+    _measured_ios_modulation_phase(payload)["metrics"]["thermalStateBefore"] = "serious"
 
     with pytest.raises(AssertionError):
         module.assert_shipping_contract(payload)
@@ -1317,7 +1386,7 @@ def test_ios_modulation_benchmark_rejects_hot_phase_start() -> None:
 def test_ios_modulation_benchmark_requires_positive_thermal_evidence(thermal_state: str) -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    payload["phases"][1]["metrics"]["thermalStateAfter"] = thermal_state
+    _measured_ios_modulation_phase(payload)["metrics"]["thermalStateAfter"] = thermal_state
 
     with pytest.raises(AssertionError):
         module.assert_shipping_contract(payload)
@@ -1344,7 +1413,7 @@ def test_ios_modulation_benchmark_rejects_a_physical_ipad() -> None:
 def test_ios_modulation_benchmark_rejects_unproven_install_counts() -> None:
     module = _load_ios_modulation_benchmark_module()
     payload = _valid_ios_modulation_benchmark_payload()
-    payload["phases"][3]["installAck"]["installedCounts"]["voiceRack"] = 24
+    _measured_ios_modulation_phase(payload)["installAck"]["installedCounts"]["voiceRack"] = 24
 
     with pytest.raises(AssertionError):
         module.assert_shipping_contract(payload)

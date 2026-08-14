@@ -181,3 +181,47 @@ test("desktop A/B/C tabs expose exact addresses without sending unconnected sibl
         await restartedPage.close();
     }
 });
+
+test("desktop oscillator tabs provide one keyboard stop with wrapping arrow and boundary navigation", async () => {
+    const page = await openHarness();
+
+    try {
+        const selectedTab = () => page.locator('[role="tab"][tabindex="0"]');
+        const focusedLabel = () => page.evaluate(() => document.activeElement?.getAttribute("aria-label"));
+
+        const oscillatorA = page.getByRole("tab", { name: "Oscillator A" });
+        await oscillatorA.focus();
+        assert.equal(await selectedTab().count(), 1);
+        assert.equal(await selectedTab().getAttribute("aria-label"), "Oscillator A");
+
+        await page.keyboard.press("ArrowRight");
+        assert.equal(await focusedLabel(), "Oscillator B");
+        assert.equal(await selectedTab().getAttribute("aria-label"), "Oscillator B");
+        assert.equal(
+            await page.locator('[data-role="desktop-oscillator-presentation"]').getAttribute("data-selected-oscillator-id"),
+            "B",
+        );
+
+        await page.keyboard.press("End");
+        assert.equal(await focusedLabel(), "Oscillator C");
+        assert.equal(await selectedTab().getAttribute("aria-label"), "Oscillator C");
+
+        await page.keyboard.press("ArrowRight");
+        assert.equal(await focusedLabel(), "Oscillator A");
+        assert.equal(await selectedTab().getAttribute("aria-label"), "Oscillator A");
+
+        await page.keyboard.press("ArrowLeft");
+        assert.equal(await focusedLabel(), "Oscillator C");
+        assert.equal(await selectedTab().getAttribute("aria-label"), "Oscillator C");
+
+        await page.keyboard.press("Home");
+        assert.equal(await focusedLabel(), "Oscillator A");
+        assert.equal(await selectedTab().getAttribute("aria-label"), "Oscillator A");
+        assert.equal(await page.locator('[role="tab"][tabindex="-1"]').count(), 2);
+
+        await page.keyboard.press("Tab");
+        assert.equal(await focusedLabel(), "Select wavetable");
+    } finally {
+        await page.close();
+    }
+});

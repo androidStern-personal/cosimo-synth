@@ -90,7 +90,10 @@ function requireCommonSourceContract(events) {
 
 function emitMetadata(profile, stateSha256) {
     const counts = profile.compiledCounts;
-    return `    { ${cppString(profile.name)}, ${profile.storedRouteCount}, ${profile.activeRouteCount}, { ${counts.voice}, ${counts.macroVoice}, ${counts.voiceRack}, ${counts.macroRack} }, ${cppString(stateSha256)} }`;
+    const blockedBy = profile.execution.status === "unavailable"
+        ? cppString(profile.execution.blockedBy)
+        : "nullptr";
+    return `    { ${cppString(profile.name)}, ${profile.storedRouteCount}, ${profile.activeRouteCount}, { ${counts.voice}, ${counts.macroVoice}, ${counts.voiceRack}, ${counts.macroRack} }, ${cppString(stateSha256)}, ${blockedBy} }`;
 }
 
 function emitProgramCase(profileIndex, program) {
@@ -184,6 +187,7 @@ struct ProfileMetadata
     std::int32_t activeRouteCount;
     CompiledCounts compiledCounts;
     const char* stateSha256;
+    const char* blockedBy;
 };
 
 struct MsegPlayback

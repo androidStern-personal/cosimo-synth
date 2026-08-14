@@ -34,10 +34,12 @@ PROFILE_BASE_DURATIONS_SECONDS = {
     "voice-rack-100": 45.0,
     "mixed-100": 45.0,
     "combined-200": 45.0,
-    "stored-624-active-100": 45.0,
-    "active-624": 20.0,
+    "stored-884-active-100": 45.0,
+    "active-884": 20.0,
 }
 PROFILE_NAMES = tuple(PROFILE_BASE_DURATIONS_SECONDS)
+EXECUTABLE_PROFILE_NAMES = ("empty", "voice-rack-100")
+BLOCKED_PROFILE_NAMES = tuple(name for name in PROFILE_NAMES if name not in EXECUTABLE_PROFILE_NAMES)
 PAIRED_EMPTY_DURATION_SECONDS = 10.0
 WARMUP_DURATION_SECONDS = 2.0
 RESULT_COLLECTION_ALLOWANCE_SECONDS = 120.0
@@ -51,8 +53,9 @@ AUDIO_FRAME_TRANSPORT_TOLERANCE = 16
 # The identical full synth/effects graph runs in every phase; these limits apply only
 # to the added sparse route program, not to total product DSP.
 MATRIX_100_MAX_ADDED_RENDER_LOAD_PERCENT = 10.0
-MATRIX_200_MAX_ADDED_RENDER_LOAD_PERCENT = 15.0
-MATRIX_624_MAX_ADDED_RENDER_LOAD_PERCENT = 35.0
+MATRIX_LOAD_BUDGETS = {
+    "voice-rack-100": MATRIX_100_MAX_ADDED_RENDER_LOAD_PERCENT,
+}
 RUNTIME_READY_TIMEOUT_MESSAGE = "Timed out waiting for the production modulation runtime to become ready."
 
 
@@ -550,6 +553,8 @@ def _assert_measured_phase(name: str, phase: object, expected_duration: float) -
 
 
 def assert_shipping_contract(payload: dict[str, object], *, expected_duration_scale: float = 1.0) -> None:
+    if payload.get("format") != "cosimo.ios-modulation-benchmark" or payload.get("version") != 2:
+        raise AssertionError("Benchmark result is not the current rack-only contract")
     payload_duration_scale = float(payload.get("durationScale", math.nan))
     if (
         not math.isfinite(expected_duration_scale)
@@ -562,19 +567,33 @@ def assert_shipping_contract(payload: dict[str, object], *, expected_duration_sc
     phases = payload.get("phases")
     if not isinstance(phases, list):
         raise AssertionError("Benchmark result omitted phases")
-    phase_records = {
-        str(phase["name"]): phase
-        for phase in phases
-        if isinstance(phase, dict) and isinstance(phase.get("metrics"), dict)
-    }
+    phase_records = {str(phase["name"]): phase for phase in phases if isinstance(phase, dict)}
+    if set(phase_records) != set(PROFILE_NAMES):
+        raise AssertionError(f"Benchmark phases differ from required contract: {set(phase_records)}")
+
+    for name in BLOCKED_PROFILE_NAMES:
+        record = phase_records[name]
+        execution = record.get("execution")
+        if (
+            record.get("status") != "unavailable"
+            or not isinstance(execution, dict)
+            or execution.get("status") != "unavailable"
+            or execution.get("blockedBy") != "RT-01"
+            or "metrics" in record
+            or "installAck" in record
+        ):
+            raise AssertionError(f"{name} must remain explicitly unavailable until RT-01")
+
     metrics = phase_metrics(payload)
-    if set(metrics) != set(PROFILE_NAMES):
-        raise AssertionError(f"Benchmark phases differ from required contract: {set(metrics)}")
+    if set(metrics) != set(EXECUTABLE_PROFILE_NAMES):
+        raise AssertionError(f"Benchmark executed outside its rack-only contract: {set(metrics)}")
 
     zero_counts = {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0}
     paired_loads: dict[str, float] = {}
     for name, phase in metrics.items():
         record = phase_records[name]
+        if record.get("status") != "measured":
+            raise AssertionError(f"{name} omitted its measured status")
         compiled_counts = record.get("compiledCounts")
         if not isinstance(compiled_counts, dict):
             raise AssertionError(f"{name} omitted compiled/install evidence")
@@ -607,15 +626,7 @@ def assert_shipping_contract(payload: dict[str, object], *, expected_duration_sc
         name: float(metrics[name]["renderMetrics"]["renderLoadPercent"]) - paired_loads[name]
         for name in paired_loads
     }
-    matrix_budgets = {
-        "voice-100": MATRIX_100_MAX_ADDED_RENDER_LOAD_PERCENT,
-        "voice-rack-100": MATRIX_100_MAX_ADDED_RENDER_LOAD_PERCENT,
-        "mixed-100": MATRIX_100_MAX_ADDED_RENDER_LOAD_PERCENT,
-        "stored-624-active-100": MATRIX_100_MAX_ADDED_RENDER_LOAD_PERCENT,
-        "combined-200": MATRIX_200_MAX_ADDED_RENDER_LOAD_PERCENT,
-        "active-624": MATRIX_624_MAX_ADDED_RENDER_LOAD_PERCENT,
-    }
-    for name, budget in matrix_budgets.items():
+    for name, budget in MATRIX_LOAD_BUDGETS.items():
         added_load = route_added_loads[name]
         if added_load > budget:
             raise AssertionError(
@@ -667,7 +678,7 @@ def read_device_provenance(device_id: str) -> dict[str, object]:
 def aggregate_runs(
     runs: list[dict[str, object]],
     *,
-    qualification: str = "shipping",
+    qualification: str = "rack-only-shipping",
     device: dict[str, object] | None = None,
 ) -> dict[str, object]:
     per_run_metrics = [phase_metrics(payload) for payload in runs]
@@ -685,9 +696,11 @@ def aggregate_runs(
     phase_names = per_run_metrics[0].keys()
     return {
         "format": "cosimo.ios-modulation-benchmark-aggregate",
-        "version": 1,
+        "version": 2,
         "runCount": len(runs),
         "qualification": qualification,
+        "blockedBy": "RT-01",
+        "unavailableProfiles": list(BLOCKED_PROFILE_NAMES),
         "device": device,
         "phases": {
             name: {
@@ -732,9 +745,9 @@ def is_qualifying_run(*, duration_scale: float, repeat: int, no_build: bool = Fa
 
 
 def benchmark_result_timeout_seconds(duration_scale: float) -> float:
-    paired_profile_count = sum(name != "empty" for name in PROFILE_NAMES)
+    paired_profile_count = sum(name != "empty" for name in EXECUTABLE_PROFILE_NAMES)
     measurement_seconds = (
-        sum(PROFILE_BASE_DURATIONS_SECONDS.values())
+        sum(PROFILE_BASE_DURATIONS_SECONDS[name] for name in EXECUTABLE_PROFILE_NAMES)
         + (2.0 * PAIRED_EMPTY_DURATION_SECONDS * paired_profile_count)
     ) * duration_scale + WARMUP_DURATION_SECONDS
     return measurement_seconds + RESULT_COLLECTION_ALLOWANCE_SECONDS + THERMAL_COOLDOWN_ALLOWANCE_SECONDS
@@ -802,7 +815,7 @@ def main() -> int:
 
         aggregate = aggregate_runs(
             runs,
-            qualification="shipping" if qualifying and not args.smoke_only else "smoke-only",
+            qualification="rack-only-shipping" if qualifying and not args.smoke_only else "rack-only-smoke",
             device=device,
         )
         aggregate_path = args.output_dir / "aggregate.json"

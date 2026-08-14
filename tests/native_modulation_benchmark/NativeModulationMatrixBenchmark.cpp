@@ -213,7 +213,13 @@ void requireAcceptedSerial (const WavetableSynth::wt_RuntimeInstallAck& acknowle
         || acknowledgement.acceptedModulationSerial != expectedSerial
         || acknowledgement.rejectedSerial != 0
         || acknowledgement.rejectionReason != 0)
-        throw std::runtime_error ("Production performer rejected the neutral modulation source contract");
+        throw std::runtime_error (
+            "Production performer rejected the neutral modulation source contract: expected="
+            + std::to_string (expectedSerial)
+            + ", session=" + std::to_string (acknowledgement.dspSessionId)
+            + ", accepted=" + std::to_string (acknowledgement.acceptedModulationSerial)
+            + ", rejected=" + std::to_string (acknowledgement.rejectedSerial)
+            + ", reason=" + std::to_string (acknowledgement.rejectionReason));
 }
 
 std::int32_t installNeutralSourcesAndEmptyProgram (WavetableSynth& performer)
@@ -604,11 +610,24 @@ void writeResult (const ProfileResult& result)
               << '\n';
 }
 
+void writeUnavailableProfile (const benchmark_profiles::ProfileMetadata& profile)
+{
+    std::cout << "UNAVAILABLE\t" << profile.name
+              << '\t' << profile.stateSha256
+              << '\t' << profile.storedRouteCount
+              << '\t' << profile.activeRouteCount
+              << '\t' << profile.blockedBy
+              << '\n';
+}
+
 std::vector<std::size_t> profileOrder (std::size_t repeatIndex)
 {
     std::vector<std::size_t> result;
     for (std::size_t profileIndex = 1; profileIndex < benchmark_profiles::profiles.size(); ++profileIndex)
-        result.push_back (profileIndex);
+        if (benchmark_profiles::profiles[profileIndex].blockedBy == nullptr)
+            result.push_back (profileIndex);
+    if (result.empty())
+        throw std::runtime_error ("No pre-RT-01 benchmark profile is executable");
     std::rotate (result.begin(),
                  result.begin() + static_cast<std::ptrdiff_t> (repeatIndex % result.size()),
                  result.end());
@@ -630,6 +649,9 @@ int main (int argc, char** argv)
                   << '\n';
         for (const auto& setting : effectSettings)
             std::cout << "EFFECT\t" << setting.endpoint << '\t' << std::setprecision (9) << setting.value << '\n';
+        for (std::size_t profileIndex = 1; profileIndex < benchmark_profiles::profiles.size(); ++profileIndex)
+            if (benchmark_profiles::profiles[profileIndex].blockedBy != nullptr)
+                writeUnavailableProfile (benchmark_profiles::profiles[profileIndex]);
         for (const auto profileIndex : profileOrder (arguments.repeatIndex))
             writeResult (runProfile (profileIndex, arguments));
         return 0;

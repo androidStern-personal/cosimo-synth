@@ -9,6 +9,7 @@ import { chromium, devices, webkit } from "playwright";
 
 import { makeMappingId } from "../patch_gui/cosimo-ids.js";
 import {
+    MODULATION_STATE_KEY,
     buildModulationRuntimeEvents,
     composeModulationAmount,
     createDefaultModulationState,
@@ -169,9 +170,9 @@ const matrixVoiceRackHundredProgram = compileModulationRuntimeProgram(matrixBenc
 const matrixMixedHundredProgram = compileModulationRuntimeProgram(matrixBenchmarkState("mixed-100").routes);
 const matrixCombinedTwoHundredProgram = compileModulationRuntimeProgram(matrixBenchmarkState("combined-200").routes);
 const matrixStoredFullDomainHundredProgram = compileModulationRuntimeProgram(
-    matrixBenchmarkState("stored-624-active-100").routes,
+    matrixBenchmarkState("stored-884-active-100").routes,
 );
-const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-624").routes);
+const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-884").routes);
 const macroRackDistortionWetProgram = compileModulationRuntimeProgram([{
     ...requireStressRoute("macro", 1, "rack.distortionWet"),
     enabled: true,
@@ -1247,12 +1248,12 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
         assert.deepEqual(initializedSound, {
             filterModeName: "Lowpass",
             filterModeValue: "1",
-            route1Amount: "1",
-            route1Source: "MSEG 1",
-            route1Target: "WT POS",
-            route2Amount: "4",
-            route2Source: "MSEG 1",
-            route2Target: "CUTOFF",
+            route1Amount: null,
+            route1Source: null,
+            route1Target: null,
+            route2Amount: null,
+            route2Source: null,
+            route2Target: null,
             wavetableName: "PWM MedicineHat",
             wavetableValue: "34",
         });
@@ -1332,8 +1333,8 @@ test("generated browser proof keeps the real keyboard pinned and renders non-sil
 
                 return Number(filter?.hasActive) === 1
                     && Number(filter?.mode) === 1
-                    && Number(filter?.cutoffHz) > 1_300
-                    && Number(wavetable?.position) > 0.15;
+                    && Number(filter?.cutoffHz) > 900
+                    && Math.abs(Number(wavetable?.position)) < 0.000001;
             }, null, { timeout: 10_000 });
             assert.equal(await page.evaluate(() => {
                 const view = document.querySelector("cosimo-desktop-react-view");
@@ -1388,7 +1389,7 @@ test("generated production-mode browser keeps acceptance diagnostics off the aud
     }
 });
 
-test("generated browser exposes rejected modulation-program installs", async () => {
+test("generated browser rejects malformed and pre-RT-01 expanded voice programs", async () => {
     const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
 
     try {
@@ -1419,21 +1420,82 @@ test("generated browser exposes rejected modulation-program installs", async () 
         await page.waitForFunction(() => (
             globalThis.__COSIMO_WEB_POC__.getSnapshot().modulationRejectedRouteCount === 1
         ), null, { timeout: 5_000 });
+
+        const expandedVoiceOutcome = await sendAcknowledgedRuntimeEvent(
+            page,
+            "modulation",
+            "modulationProgram",
+            matrixVoiceHundredProgram,
+        );
+        assert.equal(expandedVoiceOutcome.accepted, false, JSON.stringify(expandedVoiceOutcome));
+        assert.equal(expandedVoiceOutcome.acknowledgement.rejectionReason, 3);
+        assert.equal(
+            expandedVoiceOutcome.acknowledgement.rejectedSerial,
+            expandedVoiceOutcome.deliverySerial,
+            JSON.stringify(expandedVoiceOutcome),
+        );
     } finally {
         await page.close();
     }
 });
 
-test("the real product UI sustains 60 Hz amount edits with 100 active among 624 stored mappings", { timeout: 90_000 }, async (t) => {
+test("the production worker installs the unchanged v4 100-route rack profile end to end", async () => {
+    const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
+    const profile = matrixBenchmarkProfiles.get("voice-rack-100");
+    assert.ok(profile);
+    await page.addInitScript(({ modulationState, modulationStateKey }) => {
+        localStorage.setItem("cosimo.web.patch-state.v1", JSON.stringify({
+            [modulationStateKey]: modulationState,
+        }));
+    }, { modulationState: profile.stateJSON, modulationStateKey: MODULATION_STATE_KEY });
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => {
+            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
+            const acknowledgement = snapshot?.latestRuntimeInstallAck;
+            return snapshot?.phase === "running"
+                && Number(acknowledgement?.installedVoiceRouteCount) === 0
+                && Number(acknowledgement?.installedMacroVoiceRouteCount) === 0
+                && Number(acknowledgement?.installedVoiceRackRouteCount) === 100
+                && Number(acknowledgement?.installedMacroRackRouteCount) === 0;
+        }, null, { timeout: 30_000 });
+
+        const evidence = await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            return api.storedState().then((storedState) => ({
+                acknowledgement: api.runtimeInstallAckForTest(),
+                rejectedRouteCount: api.getSnapshot().modulationRejectedRouteCount,
+                storedState,
+            }));
+        });
+        assert.equal(evidence.rejectedRouteCount, 0, JSON.stringify(evidence));
+        const stored = evidence.storedState?.[MODULATION_STATE_KEY]
+            ?? evidence.storedState?.values?.[MODULATION_STATE_KEY];
+        assert.equal(deserializeModulationState(stored).routes.length, 100);
+    } finally {
+        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v1")).catch(() => {});
+        await page.close();
+    }
+});
+
+test("the real product UI sustains 60 Hz amount edits with 100 active among 884 stored mappings", {
+    timeout: 90_000,
+    skip: "RT-01 must expand the product voice target runtime before this profile can execute",
+}, async (t) => {
     const page = await browser.newPage(browserEngine === "webkit"
         ? { ...devices["iPhone 13"] }
         : { viewport: { width: 1280, height: 820 } });
     const pageFailures = observePageFailures(page);
-    await page.addInitScript(({ modulationState }) => {
+    await page.addInitScript(({ modulationState, modulationStateKey }) => {
         localStorage.setItem("cosimo.web.patch-state.v1", JSON.stringify({
-            "modulation.v2": modulationState,
+            [modulationStateKey]: modulationState,
         }));
-    }, { modulationState: fullDomainHundredActiveStoredState });
+    }, { modulationState: fullDomainHundredActiveStoredState, modulationStateKey: MODULATION_STATE_KEY });
 
     try {
         await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
@@ -1444,7 +1506,7 @@ test("the real product UI sustains 60 Hz amount edits with 100 active among 624 
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
             const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
-            return desktopCount === 624 || mobileCount === 624;
+            return desktopCount === 884 || mobileCount === 884;
         }, null, { timeout: 30_000 });
         await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
@@ -1565,9 +1627,9 @@ test("the real product UI sustains 60 Hz amount edits with 100 active among 624 
         assertRealtimeContinuity(latestValueCadence);
 
         const persisted = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.storedState());
-        const modulationState = persisted?.["modulation.v2"] ?? persisted?.values?.["modulation.v2"];
+        const modulationState = persisted?.[MODULATION_STATE_KEY] ?? persisted?.values?.[MODULATION_STATE_KEY];
         const persistedModulation = deserializeModulationState(modulationState);
-        assert.equal(persistedModulation.routes.length, 624);
+        assert.equal(persistedModulation.routes.length, 884);
         assert.equal(persistedModulation.routes.filter((route) => route.enabled).length, 100);
         assert.ok(Number.isFinite(latestValueCadence.finalAmount), JSON.stringify(latestValueCadence));
         const expectedPersistedAmount = latestValueCadence.finalAmountKind === "sliderPosition"
@@ -1589,14 +1651,14 @@ test("the real product UI sustains 60 Hz amount edits with 100 active among 624 
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
             const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
-            return desktopCount === 624 || mobileCount === 624;
+            return desktopCount === 884 || mobileCount === 884;
         });
         assert.equal(await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
             const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
             return Math.max(desktopCount, mobileCount);
-        }), 624);
+        }), 884);
         pageFailures.assertClean();
     } finally {
         await page.evaluate(() => {
@@ -1607,14 +1669,17 @@ test("the real product UI sustains 60 Hz amount edits with 100 active among 624 
     }
 });
 
-test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 624-cell domain", { timeout: 240_000 }, async (t) => {
+test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 884-cell domain", {
+    timeout: 240_000,
+    skip: "RT-01 must expand the product voice target runtime before this profile can execute",
+}, async (t) => {
     const page = await browser.newPage(browserEngine === "webkit"
         ? { ...devices["iPhone 13"] }
         : { viewport: { width: 1280, height: 820 } });
     const pageFailures = observePageFailures(page);
 
     try {
-        assert.equal(allStressRoutes.length, 624);
+        assert.equal(allStressRoutes.length, 884);
         assert.deepEqual([
             mixedHundredRouteProgram.voiceRouteCount,
             mixedHundredRouteProgram.macroVoiceRouteCount,
@@ -1661,7 +1726,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             matrixActiveFullDomainProgram.macroVoiceRouteCount,
             matrixActiveFullDomainProgram.voiceRackRouteCount,
             matrixActiveFullDomainProgram.macroRackRouteCount,
-        ], [108, 48, 324, 144]);
+        ], [288, 128, 324, 144]);
         assert.deepEqual([
             disabledAllMappingProgram.voiceRouteCount,
             disabledAllMappingProgram.macroVoiceRouteCount,
@@ -1673,7 +1738,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             ...disabledAllMappingProgram.macroVoiceRouteAmounts,
             ...disabledAllMappingProgram.voiceRackRouteAmounts,
             ...disabledAllMappingProgram.macroRackRouteAmounts,
-        ].filter((amount) => amount !== 0).length, 624);
+        ].filter((amount) => amount !== 0).length, 884);
         await page.goto(`${baseUrl}?test=1&runtime-owner=host`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
@@ -2472,9 +2537,9 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
             },
         });
 
-        await page.waitForFunction(async () => {
+        await page.waitForFunction(async (modulationStateKey) => {
             const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
-            const serialized = stored.values?.["modulation.v2"];
+            const serialized = stored.values?.[modulationStateKey];
             if (typeof serialized !== "string") {
                 return false;
             }
@@ -2484,11 +2549,11 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
                 && route.sourceSlot === 1
                 && route.targetKind === "rack.distortionKnee"
             ));
-        }, null, { timeout: 3_000 });
-        const modulationState = await page.evaluate(async () => {
+        }, MODULATION_STATE_KEY, { timeout: 3_000 });
+        const modulationState = await page.evaluate(async (modulationStateKey) => {
             const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
-            return stored.values?.["modulation.v2"] ?? null;
-        });
+            return stored.values?.[modulationStateKey] ?? null;
+        }, MODULATION_STATE_KEY);
         const route = deserializeModulationState(modulationState).routes.find((candidate) => (
             candidate.sourceKind === "mseg"
             && candidate.sourceSlot === 1

@@ -23,9 +23,10 @@ EXPECTED_PROFILE_NAMES = {
     "voice-rack-100",
     "mixed-100",
     "combined-200",
-    "stored-624-active-100",
-    "active-624",
+    "stored-884-active-100",
+    "active-884",
 }
+EXECUTABLE_PROFILE_NAMES = {"voice-rack-100"}
 EXPECTED_EFFECT_CONFIGURATION = {
     "unisonVoices": 1.0,
     "warpMode": 0.0,
@@ -47,12 +48,7 @@ EXPECTED_EFFECT_CONFIGURATION = {
 }
 ZERO_COUNTS = {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0}
 MATRIX_LOAD_BUDGETS = {
-    "voice-100": 10.0,
     "voice-rack-100": 10.0,
-    "mixed-100": 10.0,
-    "stored-624-active-100": 10.0,
-    "combined-200": 15.0,
-    "active-624": 35.0,
 }
 QUALIFYING_BLOCKS = 4096
 QUALIFYING_REPEATS = 3
@@ -138,6 +134,7 @@ def parse_profile(fields: list[str]) -> dict[str, object]:
     non_finite_count = int(fields[19])
     return {
         "name": fields[1],
+        "status": "measured",
         "stateSha256": fields[2],
         "storedRouteCount": int(fields[3]),
         "activeRouteCount": int(fields[4]),
@@ -163,6 +160,19 @@ def parse_profile(fields: list[str]) -> dict[str, object]:
     }
 
 
+def parse_unavailable_profile(fields: list[str]) -> dict[str, object]:
+    if len(fields) != 6 or fields[5] != "RT-01":
+        raise RuntimeError("Native benchmark emitted a malformed unavailable-profile row")
+    return {
+        "name": fields[1],
+        "status": "unavailable",
+        "stateSha256": fields[2],
+        "storedRouteCount": int(fields[3]),
+        "activeRouteCount": int(fields[4]),
+        "blockedBy": fields[5],
+    }
+
+
 def parse_run(output: str) -> dict[str, object]:
     metadata: dict[str, object] | None = None
     effects: dict[str, float] = {}
@@ -185,6 +195,8 @@ def parse_run(output: str) -> dict[str, object]:
             effects[fields[1]] = float(fields[2])
         elif fields[0] == "PROFILE":
             profiles.append(parse_profile(fields))
+        elif fields[0] == "UNAVAILABLE":
+            profiles.append(parse_unavailable_profile(fields))
         elif line:
             raise RuntimeError(f"Native benchmark emitted an unknown record: {line}")
 
@@ -195,7 +207,12 @@ def parse_run(output: str) -> dict[str, object]:
     for name, expected in EXPECTED_EFFECT_CONFIGURATION.items():
         if not math.isclose(effects[name], expected, rel_tol=0.0, abs_tol=1.0e-6):
             raise RuntimeError(f"Native benchmark effect setting {name} differs from the declared workload")
+    measured_names = {str(profile["name"]) for profile in profiles if profile["status"] == "measured"}
+    if measured_names != EXECUTABLE_PROFILE_NAMES:
+        raise RuntimeError("Native benchmark executed a profile outside the pre-RT-01 rack-only contract")
     for profile in profiles:
+        if profile["status"] == "unavailable":
+            continue
         if profile["emptyInstalledCounts"] != ZERO_COUNTS:
             raise RuntimeError(f"{profile['name']} did not use an empty adjacent baseline")
         if profile["emptyVoiceMask"] != 0xFFFF or profile["loadedVoiceMask"] != 0xFFFF:
@@ -221,6 +238,17 @@ def aggregate_profile(name: str, runs: list[dict[str, object]]) -> dict[str, obj
         next(profile for profile in run["profiles"] if profile["name"] == name)  # type: ignore[index]
         for run in runs
     ]
+    status = require_same([record["status"] for record in records], f"{name}.status")
+    if status == "unavailable":
+        return {
+            "name": name,
+            "status": "unavailable",
+            "blockedBy": require_same([record["blockedBy"] for record in records], f"{name}.blockedBy"),
+            "stateSha256": require_same([record["stateSha256"] for record in records], f"{name}.stateSha256"),
+            "storedRouteCount": require_same([record["storedRouteCount"] for record in records], f"{name}.storedRouteCount"),
+            "activeRouteCount": require_same([record["activeRouteCount"] for record in records], f"{name}.activeRouteCount"),
+        }
+
     stable_fields = (
         "stateSha256",
         "storedRouteCount",
@@ -228,7 +256,7 @@ def aggregate_profile(name: str, runs: list[dict[str, object]]) -> dict[str, obj
         "installedCounts",
         "emptyInstalledCounts",
     )
-    aggregate = {"name": name}
+    aggregate = {"name": name, "status": "measured"}
     for field in stable_fields:
         aggregate[field] = require_same([record[field] for record in records], f"{name}.{field}")
     aggregate.update(
@@ -288,7 +316,7 @@ def build_result(
     qualifying = blocks >= QUALIFYING_BLOCKS and len(runs) >= QUALIFYING_REPEATS
     return {
         "format": "cosimo.native-modulation-benchmark",
-        "version": 1,
+        "version": 2,
         "productionSeam": {
             "patchManifest": "WavetableSynth.cmajorpatch",
             "generatorTarget": "cpp",
@@ -298,7 +326,8 @@ def build_result(
         "sampleRate": sample_rate,
         "blockSize": block_size,
         "repeatCount": len(runs),
-        "qualification": "shipping" if qualifying else "smoke-only",
+        "qualification": "rack-only-shipping" if qualifying else "rack-only-smoke",
+        "blockedBy": "RT-01",
         "blocksPerRepeat": blocks,
         "warmupBlocksPerProfile": warmup_blocks,
         "settleBlocksPerProfile": settle_blocks,

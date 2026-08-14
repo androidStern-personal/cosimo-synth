@@ -10,6 +10,7 @@ import {
     MSEG_POINT_RADIUS_PX,
 } from "../patch_gui/mseg.js";
 import {
+    MODULATION_STATE_KEY,
     createDefaultRoute,
     createDefaultModulationState,
     deserializeModulationState,
@@ -125,7 +126,7 @@ function buildDistortionHistoryFixture({ amplitude = 1.56, binCount = 160 } = {}
 }
 
 function readStoredModulationState(snapshot) {
-    const rawState = snapshot.storedState["modulation.v2"];
+    const rawState = snapshot.storedState[MODULATION_STATE_KEY];
     return rawState === undefined
         ? createDefaultModulationState()
         : deserializeModulationState(rawState);
@@ -143,7 +144,7 @@ function routeSummary(route) {
 }
 
 async function setIOSStoredModulationState(page, nextState) {
-    await setIOSStoredStateValue(page, "modulation.v2", serializeModulationState(nextState));
+    await setIOSStoredStateValue(page, MODULATION_STATE_KEY, serializeModulationState(nextState));
 }
 
 async function waitForSnapshot(page, description, predicate, { attempts = 80, delayMs = 50 } = {}) {
@@ -1414,7 +1415,7 @@ test("mounted iPhone no longer exposes the legacy MSEG depth control because rou
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
-            targetKind: "wavetablePosition",
+            targetKind: "oscA.wavetablePosition",
             amount: 0.25,
         })];
         await setIOSStoredModulationState(page, modulationState);
@@ -1431,7 +1432,7 @@ test("mounted iPhone no longer exposes the legacy MSEG depth control because rou
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
-            targetKind: "wavetablePosition",
+            targetKind: "oscA.wavetablePosition",
             amount: 0.25,
         });
     } finally {
@@ -1452,7 +1453,7 @@ test("mounted iPhone route rows use the compact depth control and preserve targe
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "unipolar",
-            targetKind: "pan",
+            targetKind: "oscA.pan",
             amount: 0.25,
         })];
         await setIOSStoredModulationState(page, modulationState);
@@ -1479,22 +1480,22 @@ test("mounted iPhone route rows use the compact depth control and preserve targe
             "compact pan route edit",
             (nextSnapshot) => {
                 const route = readStoredModulationState(nextSnapshot).routes[0];
-                return route?.targetKind === "pan"
+                return route?.targetKind === "oscA.pan"
                     && route?.polarity === "bipolar"
                     && Math.abs(Number(route.amount) - 0.5) <= 1e-9
-                    && nextSnapshot.storedStateWrites.some((write) => write.key === "modulation.v2");
+                    && nextSnapshot.storedStateWrites.some((write) => write.key === MODULATION_STATE_KEY);
             },
         );
 
         const latestStoredWrite = [...snapshot.storedStateWrites]
             .reverse()
-            .find((write) => write.key === "modulation.v2");
+            .find((write) => write.key === MODULATION_STATE_KEY);
         assert.deepEqual(routeSummary(deserializeModulationState(latestStoredWrite?.value).routes[0]), {
             enabled: true,
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
-            targetKind: "pan",
+            targetKind: "oscA.pan",
             amount: 0.5,
         });
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => (
@@ -1505,7 +1506,7 @@ test("mounted iPhone route rows use the compact depth control and preserve targe
             sourceKind: "mseg",
             sourceSlot: 1,
             polarity: "bipolar",
-            targetKind: "pan",
+            targetKind: "oscA.pan",
             amount: 0.5,
         });
         await page.waitForFunction(() => (
