@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -9,6 +9,8 @@ const msegBodySamples = 2048;
 const msegPaddedSamples = 2051;
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const fixtureRoot = path.join(repoRoot, "tests", "cmajor_warp", "fixtures");
+const polyWarpMsegFixtureName = "poly_warp_mseg_staggered";
+const polyWarpMsegDepth = 0.5;
 
 function samplePositions() {
     return Array.from({ length: sampleCount }, (_, index) => index / sampleCount);
@@ -94,6 +96,21 @@ function valueEvent(frameOffset, value, framesToReachValue = 0) {
 
 async function writeJson(filePath, value) {
     await writeFile(filePath, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+}
+
+async function generateModulationProgram(check) {
+    const programPath = path.join(fixtureRoot, polyWarpMsegFixtureName, "modulationProgram.json");
+    const expected = `${JSON.stringify(modulationWarpAmountProgramEvent(polyWarpMsegDepth), null, 2)}\n`;
+
+    if (check) {
+        const actual = await readFile(programPath, "utf8");
+        if (actual !== expected) {
+            throw new Error(`${path.relative(repoRoot, programPath)} is stale; run with --programs-only.`);
+        }
+        return;
+    }
+
+    await writeFile(programPath, expected, "utf8");
 }
 
 function wavetableLoadBegin(frameCount) {
@@ -277,6 +294,11 @@ async function writeFixture(name, spec) {
 }
 
 async function main() {
+    if (process.argv.includes("--programs-only") || process.argv.includes("--check-programs")) {
+        await generateModulationProgram(process.argv.includes("--check-programs"));
+        return;
+    }
+
     const sine = sineFrame();
     const saw = sawFrame();
     const square = squareFrame();
@@ -435,7 +457,7 @@ async function main() {
         ],
     });
 
-    await writeFixture("poly_warp_mseg_staggered", {
+    await writeFixture(polyWarpMsegFixtureName, {
         frames: [bright],
         midiIn: [
             noteOn(128, 60, 100, 0),
@@ -447,7 +469,7 @@ async function main() {
         mseg1Depth: [valueEvent(0, 0)],
         warpMode: [valueEvent(0, 1)],
         warpAmount: [valueEvent(0, 0.5)],
-        warpMsegDepth: [valueEvent(0, 0.5)],
+        warpMsegDepth: [valueEvent(0, polyWarpMsegDepth)],
         mseg1Buffer: msegBufferEvent(rampMsegBuffer),
         mseg1Playback: msegPlaybackEvent({
             seconds: 0.04,
