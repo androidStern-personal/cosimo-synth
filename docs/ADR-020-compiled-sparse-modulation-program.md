@@ -235,8 +235,11 @@ would only prove sequential restore and would add no overlapping-race coverage.
 
 The native QuickJS path has a separate production-patch proof rather than a mocked compiler or worker.
 It opens `WavetableSynth.cmajorpatch`, restores declarative stored state through the real worker,
-requires an accepted modulation serial, observes Macro 1 move Filter Q from 0.707 to 10.707, then
-clears the live state and requires Q to return to 0.707. Focused native regressions also exercise
+requires an accepted modulation serial and one installed macro-to-rack route, observes a strict
+`modulation.v4` Macro 1 to global-filter-cutoff route materially reduce real engine audio, then clears
+the live state and requires the installed route count to return to zero and the audio level to recover.
+This is a rack-only pre-RT-01 execution proof, not qualification of the deferred 32-target voice image.
+Focused native regressions also exercise
 Promise jobs at every QuickJS execution boundary and stored-string change detection. The pinned runtime
 fixes are reproduced by `scripts/ensure_cmajor_runtime.py`; every source anchor must occur exactly once
 or dependency preparation fails. Worker JavaScript errors report status without unloading an otherwise
