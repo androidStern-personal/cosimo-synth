@@ -53,7 +53,7 @@ processor ArticulationRouteExecutionSource
     output event wt::ArticulatedNoteOn inheritedNoteOut;
 
     let velocitySourceIndex = 6;
-    let filterQTargetIndex = 3;
+    let filterQTargetIndex = wt::modulationTargetFilterQ;
     let routeCellIndex = velocitySourceIndex * wt::modulationVoiceTargetCount + filterQTargetIndex;
 
     wt::ModulationProgramUpload zeroBaseProgram()
@@ -77,10 +77,32 @@ processor ArticulationRouteExecutionSource
         upload.deliverySerial = -1;
         upload.selectorA = 0;
         upload.enabled = true;
+        for (wrap<wt::oscillatorCount> oscillator)
+        {
+            upload.framePositions[oscillator] = 0.0f;
+            upload.pans[oscillator] = 0.0f;
+            upload.octaves[oscillator] = 0.0f;
+            upload.semitones[oscillator] = 0.0f;
+            upload.fineCents[oscillator] = 0.0f;
+            upload.phases[oscillator] = 0.0f;
+            upload.phaseRandoms[oscillator] = 0.0f;
+            upload.retriggers[oscillator] = 1;
+            upload.volumeDbs[oscillator] = -9.542425f;
+            upload.mutes[oscillator] = 0;
+            upload.solos[oscillator] = 0;
+            upload.warpModes[oscillator] = 0;
+            upload.warpAmounts[oscillator] = 0.0f;
+            upload.unisonVoices[oscillator] = 1;
+            upload.unisonDetunes[oscillator] = 0.1f;
+            upload.unisonBlends[oscillator] = 0.75f;
+            upload.unisonWidths[oscillator] = 1.0f;
+            upload.unisonDetuneModes[oscillator] = 0;
+            upload.unisonStackModes[oscillator] = 0;
+            upload.unisonWavetablePositionSpreads[oscillator] = 0.0f;
+            upload.unisonWarpSpreads[oscillator] = 0.0f;
+        }
         upload.filterCutoffHz = 1000.0f;
         upload.filterQ = 0.707107f;
-        upload.unisonVoices = 1;
-        upload.unisonBlend = 0.75f;
 
         for (wrap<wt::modulationArticulationRouteCellCount> cellIndex)
             upload.routeAmounts[cellIndex] = wt::modulationArticulationInheritAmount;

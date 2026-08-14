@@ -1,8 +1,14 @@
+// RT-01 endpoint proof only: v4 modulation and articulation reach the
+// external renderer seam supplied by this fixture. Production worker/root
+// composition remains HOST-02 work.
+
 processor Core03TableAndControlSchedule
 {
     output event wt::OscillatorWavetableLoadBegin loadBeginOut;
     output event wt::OscillatorWavetableMipFrame mipFrameOut;
-    output event (std::notes::NoteOn, std::notes::NoteOff) noteOut;
+    output event (std::notes::NoteOn, std::notes::NoteOff, wt::ArticulatedNoteOn) noteOut;
+    output event wt::ModulationProgramUpload modulationProgramOut;
+    output event wt::ArticulationSnapshotUpload articulationSnapshotOut;
 
     output value float32 filterModeOut;
     output value float32 filterCutoffOut;
@@ -205,6 +211,88 @@ processor Core03TableAndControlSchedule
         cSoloOut <- oscillatorIndex == wt::oscillatorC ? 1.0f : 0.0f;
     }
 
+    wt::ModulationProgramUpload independentModulationProgram()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 1;
+        upload.voiceRouteCount = 2;
+
+        let velocitySource = 6;
+        let bPanTarget = (wt::oscillatorB * wt::modulationOscillatorTargetCount)
+            + wt::modulationTargetPan;
+        let cPitchTarget = (wt::oscillatorC * wt::modulationOscillatorTargetCount)
+            + wt::modulationTargetPitchSemitones;
+        let bPanCell = (velocitySource * wt::modulationVoiceTargetCount) + bPanTarget;
+        let cPitchCell = (velocitySource * wt::modulationVoiceTargetCount) + cPitchTarget;
+
+        upload.voiceRouteCells[0] = bPanCell;
+        upload.voiceRouteSources[0] = velocitySource;
+        upload.voiceRouteTargets[0] = bPanTarget;
+        upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[bPanCell] = 1.0f;
+
+        upload.voiceRouteCells[1] = cPitchCell;
+        upload.voiceRouteSources[1] = velocitySource;
+        upload.voiceRouteTargets[1] = cPitchTarget;
+        upload.voiceRoutePolarities[1] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[cPitchCell] = 12.0f;
+        return upload;
+    }
+
+    wt::ModulationProgramUpload emptyModulationProgram()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 2;
+        return upload;
+    }
+
+    wt::ArticulationSnapshotUpload perOscillatorArticulationSnapshot()
+    {
+        wt::ArticulationSnapshotUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = -1;
+        upload.selectorA = 0;
+        upload.enabled = true;
+        upload.framePositions = float32[3] (0.10f, 0.42f, 0.73f);
+        upload.pans = float32[3] (0.0f, -0.25f, 0.40f);
+        upload.octaves = float32[3] (0.0f, 1.0f, -1.0f);
+        upload.semitones = float32[3] (0.0f, -2.0f, 5.0f);
+        upload.fineCents = float32[3] (0.0f, 50.0f, -25.0f);
+        upload.phases = float32[3] (0.10f, 0.20f, 0.60f);
+        upload.phaseRandoms = float32[3] (0.0f, 0.15f, 0.45f);
+        upload.retriggers = int32[3] (1, 1, 1);
+        upload.volumeDbs = float32[3] (-9.542425f, -12.0f, -6.0f);
+        upload.mutes = int32[3] (0, 0, 0);
+        upload.solos = int32[3] (0, 0, 0);
+        upload.warpModes = int32[3] (0, 3, 4);
+        upload.warpAmounts = float32[3] (0.0f, 0.30f, 0.60f);
+        upload.filterMode = 1;
+        upload.filterCutoffHz = 1800.0f;
+        upload.filterQ = 6.0f;
+        upload.unisonVoices = int32[3] (1, 4, 2);
+        upload.unisonDetunes = float32[3] (0.10f, 0.20f, 0.30f);
+        upload.unisonBlends = float32[3] (0.75f, 0.65f, 0.85f);
+        upload.unisonWidths = float32[3] (1.0f, 0.35f, 0.55f);
+        upload.unisonDetuneModes = int32[3] (0, 1, 3);
+        upload.unisonStackModes = int32[3] (0, 2, 4);
+        upload.unisonWavetablePositionSpreads = float32[3] (0.0f, 0.12f, 0.24f);
+        upload.unisonWarpSpreads = float32[3] (0.0f, 0.14f, 0.28f);
+        return upload;
+    }
+
+    wt::ArticulatedNoteOn articulatedNote()
+    {
+        wt::ArticulatedNoteOn note;
+        note.channel = 1;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        note.hasArticulation = true;
+        note.selectorA = 0;
+        return note;
+    }
+
     void main()
     {
         loop
@@ -307,6 +395,26 @@ processor Core03TableAndControlSchedule
             {
                 noteOut <- std::notes::NoteOff (1, 57.0f, 0.0f);
             }
+            else if (frameCounter == 8192)
+            {
+                modulationProgramOut <- independentModulationProgram();
+            }
+            else if (frameCounter == 8960)
+            {
+                modulationProgramOut <- emptyModulationProgram();
+            }
+            else if (frameCounter == 8961)
+            {
+                articulationSnapshotOut <- perOscillatorArticulationSnapshot();
+            }
+            else if (frameCounter == 8962)
+            {
+                noteOut <- articulatedNote();
+            }
+            else if (frameCounter == 9472)
+            {
+                noteOut <- std::notes::NoteOff (1, 60.0f, 0.0f);
+            }
 
             frameCounter += 1;
             advance();
@@ -326,6 +434,8 @@ graph ThreeOscillatorSharedVoiceEngine [[ main ]]
         schedule.loadBeginOut -> engine.oscillatorWavetableLoadBeginIn;
         schedule.mipFrameOut -> engine.oscillatorWavetableMipFrameIn;
         schedule.noteOut -> engine.voiceEventIn[0];
+        schedule.modulationProgramOut -> engine.modulationProgramIn;
+        schedule.articulationSnapshotOut -> engine.articulationSnapshotIn;
         schedule.filterModeOut -> engine.filterModeIn;
         schedule.filterCutoffOut -> engine.filterCutoffIn;
         schedule.filterQOut -> engine.filterQIn;

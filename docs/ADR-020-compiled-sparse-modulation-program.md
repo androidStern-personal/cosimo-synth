@@ -1,6 +1,6 @@
 # ADR-020: Declarative mappings compile to a sparse real-time program
 
-Status: accepted — 2026-08-08
+Status: accepted — 2026-08-08; 884-cell RT-01 consumer amendment — 2026-08-14
 
 ## Context
 
@@ -131,10 +131,10 @@ reported without entering a retry loop.
 
 Articulation storage remains `mapping id → amount`. Source-contract images use 416 deterministic
 voice cells, independent of mapping list order: an explicit override is stored directly and an
-absent override uses a safe out-of-range inheritance sentinel. RT-01 will connect those images to a
-matching Cmajor endpoint, resolve inherited cells from the current base program when the note
-latches, and restore live-session slot clearing. Until then the production worker deliberately does
-not compose the v4 articulation image service against the older scalar/156 endpoint. Per-note
+absent override uses a safe out-of-range inheritance sentinel. RT-01 connects the exact v4 shape to
+the Cmajor endpoint and resolves inherited cells from the current base program when the note
+latches. Production worker composition and live-session publication remain HOST-02 work; endpoint
+capability alone is not a live product-delivery claim. Per-note
 mapping amounts apply only to voice destinations. Rack destinations are global and cannot vary by
 note, so any such route amount makes the entire articulation document invalid. Hydration and live
 writes invoke the same strict parser; neither path drops, remaps, or repairs entries.

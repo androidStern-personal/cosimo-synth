@@ -1,0 +1,172 @@
+// An inherited articulation amount resolves when a note starts. A tiny base
+// amount edit therefore reaches the next note without republishing the image,
+// while an already-sounding note retains its original latch.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor")
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph ArticulationInheritedAmountLatch [[ main ]]
+{
+    output event int32 out;
+
+    node source = ArticulationInheritedAmountSource;
+    node oldDispatcher = ArticulationInheritedAmountDispatcher;
+    node newDispatcher = ArticulationInheritedAmountDispatcher;
+    node oldVoice = wt::SharedVoiceEngine (1);
+    node newVoice = wt::SharedVoiceEngine (1);
+    node witness = ArticulationInheritedAmountWitness;
+
+    connection
+    {
+        source.programOut -> oldVoice.modulationProgramIn,
+                             newVoice.modulationProgramIn;
+        source.amountOut -> oldVoice.modulationAmountIn,
+                            newVoice.modulationAmountIn;
+        source.snapshotOut -> oldVoice.articulationSnapshotIn,
+                              newVoice.articulationSnapshotIn;
+        source.oldNoteOut -> oldDispatcher.noteIn;
+        source.newNoteOut -> newDispatcher.noteIn;
+        oldDispatcher.voiceOut -> oldVoice.voiceEventIn;
+        newDispatcher.voiceOut -> newVoice.voiceEventIn;
+        oldVoice.effectiveFilterStateOut -> witness.oldStateIn;
+        newVoice.effectiveFilterStateOut -> witness.newStateIn;
+        witness.out -> out;
+    }
+}
+
+processor ArticulationInheritedAmountDispatcher
+{
+    input event wt::ArticulatedNoteOn noteIn;
+    output event (std::notes::NoteOn, wt::ArticulatedNoteOn) voiceOut[1];
+
+    event noteIn (wt::ArticulatedNoteOn note) { voiceOut[0] <- note; }
+}
+
+processor ArticulationInheritedAmountSource
+{
+    output event wt::ModulationProgramUpload programOut;
+    output event wt::ModulationAmountUpload amountOut;
+    output event wt::ArticulationSnapshotUpload snapshotOut;
+    output event wt::ArticulatedNoteOn oldNoteOut;
+    output event wt::ArticulatedNoteOn newNoteOut;
+
+    let velocitySourceIndex = 6;
+    let filterQTargetIndex = wt::modulationTargetFilterQ;
+    let routeCellIndex = velocitySourceIndex * wt::modulationVoiceTargetCount
+        + filterQTargetIndex;
+
+    wt::ModulationProgramUpload initialProgram()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 1;
+        upload.voiceRouteCount = 1;
+        upload.voiceRouteCells[0] = routeCellIndex;
+        upload.voiceRouteSources[0] = velocitySourceIndex;
+        upload.voiceRouteTargets[0] = filterQTargetIndex;
+        upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[routeCellIndex] = 1.0f;
+        return upload;
+    }
+
+    wt::ArticulationSnapshotUpload inheritedSnapshot()
+    {
+        wt::ArticulationSnapshotUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = -1;
+        upload.selectorA = 0;
+        upload.enabled = true;
+        upload.filterCutoffHz = 1000.0f;
+        upload.filterQ = 0.707107f;
+        upload.routeAmounts[routeCellIndex]
+            = wt::modulationArticulationInheritAmount;
+        return upload;
+    }
+
+    wt::ModulationAmountUpload changedAmount()
+    {
+        wt::ModulationAmountUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 2;
+        upload.pathKind = wt::modulationPathVoice;
+        upload.cellIndex = routeCellIndex;
+        upload.amount = 4.0f;
+        return upload;
+    }
+
+    wt::ArticulatedNoteOn note()
+    {
+        wt::ArticulatedNoteOn noteOn;
+        noteOn.channel = 0;
+        noteOn.pitch = 60.0f;
+        noteOn.velocity = 1.0f;
+        noteOn.hasArticulation = true;
+        noteOn.selectorA = 0;
+        return noteOn;
+    }
+
+    void main()
+    {
+        programOut <- initialProgram();
+        advance();
+        snapshotOut <- inheritedSnapshot();
+        advance();
+        oldNoteOut <- note();
+
+        for (int32 frame = 0; frame < 20; ++frame)
+            advance();
+
+        amountOut <- changedAmount();
+        advance();
+        newNoteOut <- note();
+        loop advance();
+    }
+}
+
+processor ArticulationInheritedAmountWitness
+{
+    input event wt::EffectiveFilterStateMonitor oldStateIn;
+    input event wt::EffectiveFilterStateMonitor newStateIn;
+    output event int32 out;
+
+    bool oldReady;
+    bool newReady;
+    float32 oldQ;
+    float32 newQ;
+
+    event oldStateIn (wt::EffectiveFilterStateMonitor state)
+    {
+        if (state.hasActive != 0)
+        {
+            oldReady = true;
+            oldQ = state.q;
+        }
+    }
+
+    event newStateIn (wt::EffectiveFilterStateMonitor state)
+    {
+        if (state.hasActive != 0)
+        {
+            newReady = true;
+            newQ = state.q;
+        }
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; frame < 90; ++frame)
+            advance();
+
+        out <- oldReady && newReady ? 1 : 0;
+        advance();
+        out <- std::intrinsics::abs (oldQ - 1.707107f) < 0.001f ? 1 : 0;
+        advance();
+        out <- std::intrinsics::abs (newQ - 4.707107f) < 0.001f ? 1 : 0;
+        advance();
+        out <- std::intrinsics::abs ((newQ - oldQ) - 3.0f) < 0.001f ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

@@ -298,7 +298,7 @@ def test_modulation_can_drive_unison_width() -> None:
         "sourceKind": "velocity",
         "sourceSlot": None,
         "polarity": "unipolar",
-        "targetKind": "unisonWidth",
+        "targetKind": "oscA.unisonWidth",
         "amount": 1.0,
     }
     setup_js = _build_setup_js(

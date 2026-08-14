@@ -13,13 +13,13 @@ bool testReducerWireValuesKeepZeroInvalid()
         && wt::modulationReducerMean == 2;
 }
 
-bool testCompleteMappingDomainHasSixHundredTwentyFourCells()
+bool testCompleteMappingDomainHasEightHundredEightyFourCells()
 {
     return wt::modulationVoiceRouteCellCount
             + wt::modulationMacroVoiceRouteCellCount
             + wt::modulationVoiceRackRouteCellCount
             + wt::modulationMacroRackRouteCellCount
-        == 624;
+        == 884;
 }
 
 bool testRackDestinationVocabularyIsCompleteAndContiguous()

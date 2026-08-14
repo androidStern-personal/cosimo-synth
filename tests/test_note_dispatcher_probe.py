@@ -29,7 +29,7 @@ OSCILLATOR_MIP_COUNT = 11
 PLAY_MODE_POLY = 0
 PLAY_MODE_MONO = 1
 PLAY_MODE_LEGATO = 2
-ARTICULATION_ROUTE_CELL_COUNT = 156
+ARTICULATION_ROUTE_CELL_COUNT = 416
 ARTICULATION_ROUTE_AMOUNT_INHERIT = 1_000_000.0
 
 
@@ -498,24 +498,30 @@ def _build_articulation_snapshot_upload(
         "deliverySerial": -1,
         "selectorA": int(selector_a),
         "enabled": bool(enabled),
-        "framePosition": float(frame_position),
-        "pan": float(pan),
-        "unisonVoices": 1,
-        "unisonDetune": 0.1,
-        "unisonBlend": 0.75,
-        "unisonWidth": 1.0,
-        "unisonPhase": 0.0,
-        "unisonRandom": 0.0,
-        "unisonPhaseMode": 0,
-        "unisonDetuneMode": 0,
-        "unisonStackMode": 0,
-        "unisonWavetablePositionSpread": 0.0,
-        "unisonWarpSpread": 0.0,
-        "warpMode": int(warp_mode),
-        "warpAmount": float(warp_amount),
+        "framePositions": [float(frame_position), 0.0, 0.0],
+        "pans": [float(pan), 0.0, 0.0],
+        "octaves": [0.0, 0.0, 0.0],
+        "semitones": [0.0, 0.0, 0.0],
+        "fineCents": [0.0, 0.0, 0.0],
+        "phases": [0.0, 0.0, 0.0],
+        "phaseRandoms": [0.0, 0.0, 0.0],
+        "retriggers": [1, 1, 1],
+        "volumeDbs": [-9.542425, -9.542425, -9.542425],
+        "mutes": [0, 0, 0],
+        "solos": [0, 0, 0],
+        "warpModes": [int(warp_mode), 0, 0],
+        "warpAmounts": [float(warp_amount), 0.0, 0.0],
         "filterMode": int(filter_mode),
         "filterCutoffHz": float(filter_cutoff_hz),
         "filterQ": float(filter_q),
+        "unisonVoices": [1, 1, 1],
+        "unisonDetunes": [0.1, 0.1, 0.1],
+        "unisonBlends": [0.75, 0.75, 0.75],
+        "unisonWidths": [1.0, 1.0, 1.0],
+        "unisonDetuneModes": [0, 0, 0],
+        "unisonStackModes": [0, 0, 0],
+        "unisonWavetablePositionSpreads": [0.0, 0.0, 0.0],
+        "unisonWarpSpreads": [0.0, 0.0, 0.0],
         "msegMorphs": [float(mseg1_morph), 0.0, 0.0],
         "routeAmounts": [
             float(route1_amount),

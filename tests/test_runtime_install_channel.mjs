@@ -172,7 +172,7 @@ test("a dropped output ack is proven by the frontier without replaying the large
 
     assert.deepEqual(await withDeadline(lane.sendBatch([{
         endpointID: "modulationProgram",
-        value: { routeCount: 624 },
+        value: { routeCount: 884 },
     }])), { _tag: "accepted" });
 
     assert.equal(connection.sends.filter(
@@ -486,7 +486,7 @@ test("an uncertain queued payload is never duplicated or timed out while the DSP
     });
     const pending = lane.sendBatch([{
         endpointID: "modulationProgram",
-        value: { routeCount: 624 },
+        value: { routeCount: 884 },
     }]);
 
     await new Promise((resolve) => setTimeout(resolve, 40));
@@ -508,7 +508,7 @@ test("two correlated proofs of dropped input bound one command to one replay", a
 
     assert.deepEqual(await withDeadline(lane.sendBatch([{
         endpointID: "modulationProgram",
-        value: { routeCount: 624 },
+        value: { routeCount: 884 },
     }])), { _tag: "transport-timeout" });
     assert.equal(connection.sends.filter(
         ({ endpointID }) => endpointID === "modulationProgram",

@@ -204,7 +204,7 @@ function modulationWarpAmountProgramEvent(amount) {
                     sourceKind: "mseg",
                     sourceSlot: 1,
                     polarity: "unipolar",
-                    targetKind: "warpAmount",
+                    targetKind: "oscA.warpAmount",
                     amount: Math.fround(amount),
                     reducer: "max",
                 }]),

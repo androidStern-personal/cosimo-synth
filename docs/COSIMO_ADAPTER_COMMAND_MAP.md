@@ -5,8 +5,9 @@ Phase-1 audit artifact (roadmap acceptance) and the build spec for the Phase-3
 what the mock does, what the bridge must do, and where the engine still has a gap.
 Mechanism vocabulary: **EP** = `sendEventOrValue(endpointId, …)`; **SS(key)** = stored-state
 write via `sendStoredStateValue`; **RESOLVE** = recompile affected selector images via
-`resolveArticulationImages`/`affectedSelectors` (ADR-014); RT-01 will connect those images to the
-matching production `articulationSnapshot` endpoint. **MODBRIDGE** = `ModulationRuntimeBridge`
+`resolveArticulationImages`/`affectedSelectors` (ADR-014); RT-01 connected the exact image shape to
+the Cmajor `articulationSnapshot` endpoint, while HOST-02 still owns production worker publication.
+**MODBRIDGE** = `ModulationRuntimeBridge`
 over `modulation.v4` (rebuild + runtime events).
 
 Persistence note: values for `unbacked` targets (rack params pending DSP, tune/level/attack/
@@ -16,12 +17,12 @@ per-adapter divergence: both adapters model it, neither sounds it.
 
 | Command | Mock | Bridge | Engine gap |
 |---|---|---|---|
-| setParameter (bound voice target, patchBase) | reducer | EP via descriptor `toEngine` + SS(uiPatchValues.v2) + RESOLVE (base change re-uploads non-overriding selectors after RT-01) | — |
-| setParameter (articulationOverride layer) | reducer override map | SS(articulations.v4) + RESOLVE (that selector after RT-01) | production worker composition deferred to RT-01 |
+| setParameter (bound voice target, patchBase) | reducer | EP via descriptor `toEngine` + SS(uiPatchValues.v2) + RESOLVE (base change re-uploads non-overriding selectors after HOST-02) | — |
+| setParameter (articulationOverride layer) | reducer override map | SS(articulations.v4) + RESOLVE (that selector after HOST-02) | production worker composition deferred to HOST-02 |
 | setParameter (unbacked target) | reducer | SS(uiPatchValues.v2) only | rack-dsp / no-endpoint per catalog |
 | addMapping / removeMapping | policy + reducer | MODBRIDGE route add/remove (targetKind via descriptor `modulationTargetKind`) + RESOLVE (route order affects all selectors) | rack targets: `modulationTargetKind` null → route unrepresentable until rack DSP (UI already scopes rail to modulatable targets) |
 | setMappingAmount (patchBase) | reducer | MODBRIDGE route amount (unit conversion: ModAmountSpec units → route units) | — |
-| setMappingAmount (articulation layer) | reducer amount map | SS(articulations.v4) routeAmounts + RESOLVE after RT-01 | production worker composition deferred to RT-01 |
+| setMappingAmount (articulation layer) | reducer amount map | SS(articulations.v4) routeAmounts + RESOLVE after HOST-02 | production worker composition deferred to HOST-02 |
 | setMappingEnabled | reducer | MODBRIDGE route enabled | — |
 | setMappingPolarity | reducer | MODBRIDGE route polarity | — |
 | setMappingReducer | reducer | SS(modulation.v4) route metadata only | engine has no reducer stage (activates with rack DSP global targets, ledger §9) |
@@ -33,13 +34,13 @@ per-adapter divergence: both adapters model it, neither sounds it.
 | setEnvelope | reducer sourceStates | MODBRIDGE envelope slot | — |
 | setMsegShape / setMsegPlayback | reducer sourceStates | MODBRIDGE mseg slot (2051-float buffer upload / playback upload) | — |
 | setMsegMorph (patchBase) | reducer sourceStates | EP mseg1..3Morph | — |
-| setMsegMorph (articulation layer) | reducer override map | SS(articulations.v4) (`msegMorphN`) | image publication deferred to RT-01 |
-| addArticulation / duplicateArticulation | policy + reducer | SS(articulations.v4) (selector = lowestFreeRuntimeSlot) + RESOLVE after RT-01 | production worker composition deferred to RT-01 |
-| deleteArticulation | reducer pruning | SS(articulations.v4); RT-01 uploads the disabled image for the freed selector | production worker composition deferred to RT-01 |
+| setMsegMorph (articulation layer) | reducer override map | SS(articulations.v4) (`msegMorphN`) | image publication deferred to HOST-02 |
+| addArticulation / duplicateArticulation | policy + reducer | SS(articulations.v4) (selector = lowestFreeRuntimeSlot) + RESOLVE after HOST-02 | production worker composition deferred to HOST-02 |
+| deleteArticulation | reducer pruning | SS(articulations.v4); HOST-02 uploads the disabled image for the freed selector | production worker composition deferred to HOST-02 |
 | setArticulationKey / setArticulationRange | walk/clamp policy + reducer | same policies + SS(articulations.v4) + `sendNativeArticulationTriggerConfig` + SS(articulationTriggerConfig.v1) | — |
 | setArticulationTriggerMode | reducer | SS(articulationTriggerConfig.v1) + native config | — |
-| clearArticulationOverride / clearArticulationBaseOverride / clearArticulationMappingAmount | reducer | SS(articulations.v4) + RESOLVE after RT-01 | production worker composition deferred to RT-01 |
-| restoreArticulationLayer | reducer | SS(articulations.v4) wholesale layer replace + RESOLVE after RT-01 | production worker composition deferred to RT-01 |
+| clearArticulationOverride / clearArticulationBaseOverride / clearArticulationMappingAmount | reducer | SS(articulations.v4) + RESOLVE after HOST-02 | production worker composition deferred to HOST-02 |
+| restoreArticulationLayer | reducer | SS(articulations.v4) wholesale layer replace + RESOLVE after HOST-02 | production worker composition deferred to HOST-02 |
 | setEffectEnabled / reorderEffect / restoreEffectOrder | reducer | SS(rackState.v1) only | rack DSP (ADR-001…009) not implemented |
 | setCompoundSetting | reducer | SS(uiPatchValues.v2) only | no Free/Sync endpoint |
 | setAuditionArticulation | reducer | force-selector path: see OPEN below | OPEN: engine articulation choice is trigger-driven (chain/key/vel); transport needs a "force selector for auditioned notes" path — candidate: temporary chain-config pin via native trigger config |

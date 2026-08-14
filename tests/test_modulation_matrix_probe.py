@@ -421,7 +421,7 @@ def test_velocity_route_can_pan_a_voice_hard_right() -> None:
         "sourceKind": "velocity",
         "sourceSlot": None,
         "polarity": "unipolar",
-        "targetKind": "pan",
+        "targetKind": "oscA.pan",
         "amount": 1.0,
     }
     setup_js = _build_setup_js(routes=[route])
@@ -442,7 +442,7 @@ def test_bipolar_velocity_route_can_pull_a_voice_left_of_center() -> None:
         "sourceKind": "velocity",
         "sourceSlot": None,
         "polarity": "bipolar",
-        "targetKind": "pan",
+        "targetKind": "oscA.pan",
         "amount": 1.0,
     }
     setup_js = _build_setup_js(routes=[route])
@@ -488,7 +488,7 @@ def test_mseg_pitch_route_adds_on_top_of_pitch_bend() -> None:
         "sourceKind": "mseg",
         "sourceSlot": 1,
         "polarity": "bipolar",
-        "targetKind": "pitchSemitones",
+        "targetKind": "oscA.pitchSemitones",
         "amount": 12.0,
     }
     setup_js = _build_setup_js(routes=[route], extra_events=extra_events)

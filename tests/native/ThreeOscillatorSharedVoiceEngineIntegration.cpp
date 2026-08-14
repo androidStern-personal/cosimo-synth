@@ -5,6 +5,9 @@
 
 #include "../../native/three_oscillator_renderer/RendererBridge.h"
 
+// This provider verifies RT-01 endpoint consumption. It does not stand in for
+// HOST-02 product worker/root activation.
+
 #ifndef COSIMO_GENERATED_CPP_PATH
  #error "COSIMO_GENERATED_CPP_PATH must point to generated Cmajor C++"
 #endif
@@ -30,10 +33,12 @@ enum Invariant : std::uint32_t
     levelTransition = 1u << 8,
     panTransition = 1u << 9,
     retriggerReset = 1u << 10,
-    inactiveVoiceCleared = 1u << 11
+    inactiveVoiceCleared = 1u << 11,
+    independentModulation = 1u << 12,
+    perOscillatorArticulation = 1u << 13
 };
 
-constexpr auto expectedInvariantMask = (1u << 12) - 1u;
+constexpr auto expectedInvariantMask = (1u << 14) - 1u;
 
 std::int32_t frameCounter = 0;
 std::int32_t forcedFailureCount = 0;
@@ -44,6 +49,7 @@ float predictedBPhase = 0.0f;
 float mutedBPhase = 0.0f;
 bool hasPredictedBPhase = false;
 bool sawBWarpAndScan = false;
+float baselineCPhaseIncrement = 0.0f;
 
 float absoluteValue (float value) noexcept
 {
@@ -121,6 +127,7 @@ std::int32_t render (FloatSlice packedFloats,
 
         const auto bIncrement = floats[basePhaseIncrementOffset + b];
         const auto cIncrement = floats[basePhaseIncrementOffset + c];
+        baselineCPhaseIncrement = cIncrement;
         if (bIncrement > cIncrement * 2.5f && bIncrement < cIncrement * 3.5f)
             invariantMask |= independentTune;
         else
@@ -205,13 +212,63 @@ std::int32_t render (FloatSlice packedFloats,
         else
             fail (113);
     }
+    else if (frame == 8704)
+    {
+        const auto cIncrement = floats[basePhaseIncrementOffset + c];
+        if (near (floats[basePanOffset + b], 0.25f, 2.0e-3f)
+            && baselineCPhaseIncrement > 0.0f
+            && cIncrement > baselineCPhaseIncrement * 1.84f
+            && cIncrement < baselineCPhaseIncrement * 1.89f)
+            invariantMask |= independentModulation;
+        else
+            fail (115);
+    }
+    else if (frame == 9216)
+    {
+        const auto bIncrement = floats[basePhaseIncrementOffset + b];
+        const auto cIncrement = floats[basePhaseIncrementOffset + c];
+        if (near (floats[basePositionOffset + b], 0.42f)
+            && near (floats[basePositionOffset + c], 0.73f)
+            && near (floats[basePanOffset + b], -0.25f)
+            && near (floats[basePanOffset + c], 0.40f)
+            && near (floats[baseWarpAmountOffset + b], 0.30f)
+            && near (floats[baseWarpAmountOffset + c], 0.60f)
+            && ints[warpModeOffset + b] == 3
+            && ints[warpModeOffset + c] == 4
+            && ints[unisonVoicesOffset + b] == 4
+            && ints[unisonVoicesOffset + c] == 2
+            && near (floats[unisonDetuneOffset + b], 0.20f)
+            && near (floats[unisonDetuneOffset + c], 0.30f)
+            && near (floats[unisonBlendOffset + b], 0.65f)
+            && near (floats[unisonBlendOffset + c], 0.85f)
+            && near (floats[unisonWidthOffset + b], 0.35f)
+            && near (floats[unisonWidthOffset + c], 0.55f)
+            && near (floats[positionSpreadOffset + b], 0.12f)
+            && near (floats[positionSpreadOffset + c], 0.24f)
+            && near (floats[warpSpreadOffset + b], 0.14f)
+            && near (floats[warpSpreadOffset + c], 0.28f)
+            && ints[unisonDetuneModeOffset + b] == 1
+            && ints[unisonDetuneModeOffset + c] == 3
+            && ints[unisonStackModeOffset + b] == 2
+            && ints[unisonStackModeOffset + c] == 4
+            && floats[oscillatorGainOffset + b] > 0.24f
+            && floats[oscillatorGainOffset + b] < 0.26f
+            && floats[oscillatorGainOffset + c] > 0.49f
+            && floats[oscillatorGainOffset + c] < 0.51f
+            && cIncrement > 0.0f
+            && bIncrement > cIncrement * 2.75f
+            && bIncrement < cIncrement * 2.82f)
+            invariantMask |= perOscillatorArticulation;
+        else
+            fail (116);
+    }
 
     const auto bPhase = floats[phaseOffset + 8];
     if (frame >= 7424 && frame <= 7426 && hasPredictedBPhase
         && circularDifference (bPhase, predictedBPhase) > 0.02f)
         invariantMask |= retriggerReset;
 
-    if (frame == 17536)
+    if (frame == 19584)
     {
         if (floats[basePhaseIncrementOffset + b] == 0.0f
             && floats[basePhaseIncrementOffset + c] == 0.0f
@@ -250,7 +307,7 @@ namespace
 constexpr auto sessionID = std::int32_t { 30103 };
 constexpr auto sampleRate = 48000.0;
 constexpr auto blockSize = std::int32_t { 128 };
-constexpr auto renderedFrameCount = std::int32_t { 18048 };
+constexpr auto renderedFrameCount = std::int32_t { 20096 };
 constexpr auto measurementFrameCount = std::int32_t { 512 };
 
 struct Window
@@ -270,7 +327,7 @@ constexpr Window oscillatorCTail { 6081, 48 };
 constexpr Window bLevelReference { 6200, 128 };
 constexpr Window bLevelLow { 6720, 128 };
 constexpr Window bPanRight { 7104, 128 };
-constexpr Window inactiveVoice { 17536, 256 };
+constexpr Window inactiveVoice { 19584, 256 };
 
 struct Stats
 {
