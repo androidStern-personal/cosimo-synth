@@ -152,6 +152,12 @@ function readRackStateFromFullStoredState(fullState: Record<string, unknown>) {
 function useRackState() {
     const patchConnection = usePatchConnection();
     const [rackState, setRackState] = useState<RackState>(createDefaultRackState);
+    const rackStateRef = useRef(rackState);
+
+    const acceptRackState = useCallback((nextState: RackState) => {
+        rackStateRef.current = nextState;
+        setRackState(nextState);
+    }, []);
 
     useEffect(() => {
         const storedStateListener = (message: unknown) => {
@@ -160,7 +166,7 @@ function useRackState() {
             }
 
             if (Reflect.get(message, "key") === RACK_STATE_KEY) {
-                setRackState(deserializeRackState(Reflect.get(message, "value")));
+                acceptRackState(deserializeRackState(Reflect.get(message, "value")));
             }
         };
         const effectiveStateListener = (message: unknown) => {
@@ -169,7 +175,7 @@ function useRackState() {
                 return;
             }
 
-            setRackState({
+            acceptRackState({
                 format: "cosimo.rack",
                 version: 1,
                 order: effectiveState.order,
@@ -180,22 +186,22 @@ function useRackState() {
         patchConnection.addStoredStateValueListener?.(storedStateListener);
         patchConnection.addEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
         patchConnection.requestFullStoredState?.((fullState) => {
-            setRackState(deserializeRackState(readRackStateFromFullStoredState(fullState)));
+            acceptRackState(deserializeRackState(readRackStateFromFullStoredState(fullState)));
         });
 
         return () => {
             patchConnection.removeStoredStateValueListener?.(storedStateListener);
             patchConnection.removeEndpointListener?.(EFFECTIVE_RACK_STATE_ENDPOINT_ID, effectiveStateListener);
         };
-    }, [patchConnection]);
+    }, [acceptRackState, patchConnection]);
 
     const commit = useCallback((nextState: RackState) => {
-        setRackState(nextState);
+        acceptRackState(nextState);
         commitRackState(patchConnection, nextState);
         patchConnection.sendStoredStateValue?.(RACK_STATE_KEY, serializeRackState(nextState));
-    }, [patchConnection]);
+    }, [acceptRackState, patchConnection]);
 
-    return { rackState, commit };
+    return { rackState, rackStateRef, commit };
 }
 
 function useRackParameterBinding(descriptor: RackParameterDescriptor, active = true) {
@@ -2561,7 +2567,7 @@ export function EffectsRackWorkspace({
     globalModSourceActivity = null,
     className,
 }: EffectsRackWorkspaceProps) {
-    const { rackState, commit } = useRackState();
+    const { rackState, rackStateRef, commit } = useRackState();
     const [selectedEffectId, setSelectedEffectId] = useState<EffectModuleId>("drive");
     const [quickEndpointByEffect, setQuickEndpointByEffect] = useState<Readonly<Record<EffectModuleId, string>>>(() => (
         Object.fromEntries(RACK_EFFECT_DESCRIPTORS.map((effect) => [effect.id, effect.initialQuickEndpointID])) as Record<EffectModuleId, string>
@@ -2601,6 +2607,9 @@ export function EffectsRackWorkspace({
     }, [parameterMenu]);
 
     useEffect(() => {
+        if (reorderRef.current !== null) {
+            return;
+        }
         previewOrderRef.current = rackState.order;
         setPreviewOrder(rackState.order);
     }, [rackState.order]);
@@ -2681,8 +2690,8 @@ export function EffectsRackWorkspace({
     }, [pendingRouteKey, routes]);
 
     const commitOrder = useCallback((order: ReadonlyArray<EffectModuleId>) => {
-        commit({ ...rackState, order: [...order] });
-    }, [commit, rackState]);
+        commit({ ...rackStateRef.current, order: [...order] });
+    }, [commit, rackStateRef]);
 
     const finishReorder = useCallback((pointerId: number, shouldCommit: boolean) => {
         const gesture = reorderRef.current;
@@ -2703,10 +2712,11 @@ export function EffectsRackWorkspace({
         if (shouldCommit && !sameOrder(gesture.originalOrder, previewOrderRef.current)) {
             commitOrder(previewOrderRef.current);
         } else if (!shouldCommit) {
-            previewOrderRef.current = gesture.originalOrder;
-            setPreviewOrder(gesture.originalOrder);
+            const currentOrder = rackStateRef.current.order;
+            previewOrderRef.current = currentOrder;
+            setPreviewOrder(currentOrder);
         }
-    }, [commitOrder]);
+    }, [commitOrder, rackStateRef]);
 
     const updateReorderPreview = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const gesture = reorderRef.current;
