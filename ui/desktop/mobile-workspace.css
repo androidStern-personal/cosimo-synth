@@ -37,7 +37,8 @@
         transition: top var(--rail-top-duration) cubic-bezier(0.22, 0.72, 0.22, 1);
     }
 
-    .mobile-global-mod-rail:has(.mobile-global-mod-rail-grip:active) {
+    .mobile-global-mod-rail:has(.mobile-global-mod-rail-grip:active),
+    .mobile-global-mod-rail[data-decelerating="true"] {
         --rail-top-duration: 0ms;
     }
 

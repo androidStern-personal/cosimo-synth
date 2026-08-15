@@ -1590,6 +1590,14 @@ const MOBILE_MOD_RAIL_POSITION_KEY = "cosimo.mobile-global-mod-rail.position.v1"
 const MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX = 7;
 const MOBILE_MOD_RAIL_SNAP_DISTANCE_PX = 28;
 const MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX = 234;
+const MOBILE_MOD_RAIL_VELOCITY_WINDOW_MS = 100;
+const MOBILE_MOD_RAIL_MIN_RELEASE_VELOCITY_PX_PER_MS = 0.08;
+const MOBILE_MOD_RAIL_MAX_RELEASE_VELOCITY_PX_PER_MS = 1.35;
+const MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS = 0.02;
+// UIScrollView.DecelerationRate.fast is 0.99. Treating that value as a
+// millisecond decay gives this short rail speed-sensitive travel without the
+// long coast that feels right for a full scroll view.
+const MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS = 0.99;
 const MOBILE_MOD_RAIL_WIDTH_PX = 56;
 const MOBILE_MOD_RAIL_SHOULDER_PX = 14;
 const MOBILE_MOD_RAIL_CORNER_PX = 15;
@@ -1632,6 +1640,60 @@ type RailDrawerPlacement = {
     readonly direction: RailDrawerDirection;
     readonly extent: number;
 };
+
+type RailMotionSample = {
+    readonly clientY: number;
+    readonly timeStamp: number;
+};
+
+function appendRailMotionSample(samples: RailMotionSample[], clientY: number, timeStamp: number) {
+    const previousTimeStamp = samples.at(-1)?.timeStamp ?? timeStamp;
+    const nextTimeStamp = Number.isFinite(timeStamp)
+        ? Math.max(previousTimeStamp, timeStamp)
+        : previousTimeStamp;
+    samples.push({ clientY, timeStamp: nextTimeStamp });
+
+    const cutoff = nextTimeStamp - MOBILE_MOD_RAIL_VELOCITY_WINDOW_MS;
+    // Retain one sample immediately before the window so a slow, continuous
+    // release still has a useful velocity baseline.
+    while (samples.length > 2) {
+        const nextOldest = samples[1];
+        if (!nextOldest || nextOldest.timeStamp >= cutoff) {
+            break;
+        }
+        samples.shift();
+    }
+}
+
+function railReleaseVelocity(samples: readonly RailMotionSample[], releaseTimeStamp: number) {
+    const last = samples.at(-1);
+    if (!last) {
+        return 0;
+    }
+
+    const releaseTime = Number.isFinite(releaseTimeStamp)
+        ? Math.max(last.timeStamp, releaseTimeStamp)
+        : last.timeStamp;
+    const cutoff = releaseTime - MOBILE_MOD_RAIL_VELOCITY_WINDOW_MS;
+    let first = samples[0] ?? last;
+    for (const sample of samples) {
+        if (sample.timeStamp > cutoff) {
+            break;
+        }
+        first = sample;
+    }
+
+    const elapsed = releaseTime - first.timeStamp;
+    if (elapsed <= 0) {
+        return 0;
+    }
+    return (last.clientY - first.clientY) / elapsed;
+}
+
+function prefersReducedRailMotion() {
+    return typeof window.matchMedia === "function"
+        && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
 
 function projectRailDrawerPlacement(tabTop: number, metrics: RailDrawerMetrics): RailDrawerPlacement {
     const spaceAbove = Math.max(0, tabTop - metrics.safeTop);
@@ -1711,16 +1773,20 @@ function MobileGlobalModRail({
         collapsedHeight: 168,
         desiredHeight: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
     });
+    const decelerationFrameRef = useRef<number | null>(null);
     const gestureRef = useRef<{
         pointerId: number;
         startClientY: number;
         startNormalizedY: number;
         startTop: number;
         moved: boolean;
+        interruptedDeceleration: boolean;
+        motionSamples: RailMotionSample[];
         captureElement: HTMLButtonElement;
     } | null>(null);
     const [expanded, setExpanded] = useState(false);
     const [top, setTop] = useState(12);
+    const [decelerating, setDecelerating] = useState(false);
     const [drawerPlacement, setDrawerPlacement] = useState<RailDrawerPlacement>({
         direction: "down",
         extent: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
@@ -1742,7 +1808,7 @@ function MobileGlobalModRail({
     const measureAndClamp = useCallback(() => {
         const layer = layerRef.current;
         const rail = railRef.current;
-        if (!layer || !rail || gestureRef.current !== null) {
+        if (!layer || !rail || gestureRef.current !== null || decelerationFrameRef.current !== null) {
             return;
         }
 
@@ -1866,7 +1932,110 @@ function MobileGlobalModRail({
         };
     }, [mappingActive, selectedSource.accent]);
 
-    const finishRailGesture = useCallback((pointerId: number, cancelled: boolean) => {
+    const persistRailPosition = useCallback((nextTop: number) => {
+        const bounds = boundsRef.current;
+        const span = bounds.max - bounds.min;
+        const normalizedY = span > 0 ? (nextTop - bounds.min) / span : 0;
+        normalizedPositionRef.current = clamp(normalizedY, 0, 1);
+        try {
+            localStorage.setItem(MOBILE_MOD_RAIL_POSITION_KEY, JSON.stringify({
+                normalizedY: normalizedPositionRef.current,
+            }));
+        } catch {
+            // A private browsing storage failure must not break rail movement.
+        }
+    }, []);
+
+    const settleRailPosition = useCallback((unsettledTop: number) => {
+        const bounds = boundsRef.current;
+        const middle = bounds.min + ((bounds.max - bounds.min) / 2);
+        const anchors = [bounds.min, middle, bounds.max];
+        const clampedTop = clamp(unsettledTop, bounds.min, bounds.max);
+        const nearest = anchors.reduce((candidate, anchor) => (
+            Math.abs(anchor - clampedTop) < Math.abs(candidate - clampedTop)
+                ? anchor
+                : candidate
+        ), anchors[0] ?? bounds.min);
+        const settledTop = Math.abs(nearest - clampedTop) <= MOBILE_MOD_RAIL_SNAP_DISTANCE_PX
+            ? nearest
+            : clampedTop;
+        if (settledTop !== clampedTop) {
+            triggerLightHaptic();
+        }
+        positionRef.current = settledTop;
+        setTop(settledTop);
+        updateDrawerPlacement(settledTop);
+        persistRailPosition(settledTop);
+    }, [persistRailPosition, updateDrawerPlacement]);
+
+    const stopRailDeceleration = useCallback(() => {
+        const frameID = decelerationFrameRef.current;
+        if (frameID === null) {
+            return false;
+        }
+        cancelAnimationFrame(frameID);
+        decelerationFrameRef.current = null;
+        setDecelerating(false);
+        return true;
+    }, []);
+
+    const startRailDeceleration = useCallback((rawReleaseVelocity: number) => {
+        const releaseVelocity = clamp(
+            rawReleaseVelocity,
+            -MOBILE_MOD_RAIL_MAX_RELEASE_VELOCITY_PX_PER_MS,
+            MOBILE_MOD_RAIL_MAX_RELEASE_VELOCITY_PX_PER_MS,
+        );
+        if (Math.abs(releaseVelocity) < MOBILE_MOD_RAIL_MIN_RELEASE_VELOCITY_PX_PER_MS) {
+            return false;
+        }
+
+        let velocity = releaseVelocity;
+        let previousTimeStamp = performance.now();
+        const decayLog = -Math.log(MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS);
+        setDecelerating(true);
+
+        const step = (timeStamp: number) => {
+            decelerationFrameRef.current = null;
+            // Use the full frame gap. Exponential integration is stable for a
+            // long interval and must catch up after main-thread jank instead of
+            // stretching a short coast into slow motion.
+            const elapsed = Math.max(0, timeStamp - previousTimeStamp);
+            previousTimeStamp = timeStamp;
+            const attenuation = MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS ** elapsed;
+            const nextVelocity = velocity * attenuation;
+            const displacement = decayLog > 0 ? (velocity - nextVelocity) / decayLog : 0;
+            const bounds = boundsRef.current;
+            const projectedTop = positionRef.current + displacement;
+            const nextTop = clamp(projectedTop, bounds.min, bounds.max);
+            const reachedBound = nextTop !== projectedTop;
+
+            positionRef.current = nextTop;
+            const span = bounds.max - bounds.min;
+            normalizedPositionRef.current = span > 0
+                ? (nextTop - bounds.min) / span
+                : 0;
+            setTop(nextTop);
+            updateDrawerPlacement(nextTop);
+
+            if (reachedBound || Math.abs(nextVelocity) <= MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS) {
+                setDecelerating(false);
+                settleRailPosition(nextTop);
+                return;
+            }
+
+            velocity = nextVelocity;
+            decelerationFrameRef.current = requestAnimationFrame(step);
+        };
+
+        decelerationFrameRef.current = requestAnimationFrame(step);
+        return true;
+    }, [settleRailPosition, updateDrawerPlacement]);
+
+    const finishRailGesture = useCallback((
+        pointerId: number,
+        cancelled: boolean,
+        releaseTimeStamp = performance.now(),
+    ) => {
         const gesture = gestureRef.current;
         if (!gesture || gesture.pointerId !== pointerId) {
             return;
@@ -1881,6 +2050,7 @@ function MobileGlobalModRail({
         }
 
         if (cancelled) {
+            stopRailDeceleration();
             normalizedPositionRef.current = gesture.startNormalizedY;
             positionRef.current = gesture.startTop;
             setTop(gesture.startTop);
@@ -1888,63 +2058,54 @@ function MobileGlobalModRail({
             return;
         }
         if (!gesture.moved) {
-            setExpanded((current) => !current);
+            if (!gesture.interruptedDeceleration) {
+                setExpanded((current) => !current);
+            }
             return;
         }
 
-        const bounds = boundsRef.current;
-        const middle = bounds.min + ((bounds.max - bounds.min) / 2);
-        const anchors = [bounds.min, middle, bounds.max];
-        const nearest = anchors.reduce((candidate, anchor) => (
-            Math.abs(anchor - positionRef.current) < Math.abs(candidate - positionRef.current)
-                ? anchor
-                : candidate
-        ), anchors[0] ?? bounds.min);
-        const settledTop = Math.abs(nearest - positionRef.current) <= MOBILE_MOD_RAIL_SNAP_DISTANCE_PX
-            ? nearest
-            : clamp(positionRef.current, bounds.min, bounds.max);
-        if (settledTop !== positionRef.current) {
-            triggerLightHaptic();
+        const releaseVelocity = railReleaseVelocity(gesture.motionSamples, releaseTimeStamp);
+        if (
+            prefersReducedRailMotion()
+            || !startRailDeceleration(releaseVelocity)
+        ) {
+            settleRailPosition(positionRef.current);
         }
-        positionRef.current = settledTop;
-        setTop(settledTop);
-        updateDrawerPlacement(settledTop);
-        const span = bounds.max - bounds.min;
-        const normalizedY = span > 0 ? (settledTop - bounds.min) / span : 0;
-        normalizedPositionRef.current = normalizedY;
-        try {
-            localStorage.setItem(MOBILE_MOD_RAIL_POSITION_KEY, JSON.stringify({ normalizedY }));
-        } catch {
-            // A private browsing storage failure must not break rail movement.
-        }
-    }, [updateDrawerPlacement]);
+    }, [settleRailPosition, startRailDeceleration, stopRailDeceleration, updateDrawerPlacement]);
 
     useEffect(() => {
-        const handlePointerUp = (event: PointerEvent) => finishRailGesture(event.pointerId, false);
-        const handlePointerCancel = (event: PointerEvent) => finishRailGesture(event.pointerId, true);
-        const cancelActiveGesture = () => {
+        const handlePointerUp = (event: PointerEvent) => (
+            finishRailGesture(event.pointerId, false, event.timeStamp)
+        );
+        const handlePointerCancel = (event: PointerEvent) => (
+            finishRailGesture(event.pointerId, true, event.timeStamp)
+        );
+        const cancelActiveInteraction = () => {
             const gesture = gestureRef.current;
             if (gesture) {
                 finishRailGesture(gesture.pointerId, true);
             }
+            if (stopRailDeceleration()) {
+                settleRailPosition(positionRef.current);
+            }
         };
         const handleVisibilityChange = () => {
             if (document.visibilityState !== "visible") {
-                cancelActiveGesture();
+                cancelActiveInteraction();
             }
         };
         window.addEventListener("pointerup", handlePointerUp, true);
         window.addEventListener("pointercancel", handlePointerCancel, true);
-        window.addEventListener("blur", cancelActiveGesture);
+        window.addEventListener("blur", cancelActiveInteraction);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
             window.removeEventListener("pointerup", handlePointerUp, true);
             window.removeEventListener("pointercancel", handlePointerCancel, true);
-            window.removeEventListener("blur", cancelActiveGesture);
+            window.removeEventListener("blur", cancelActiveInteraction);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
-            cancelActiveGesture();
+            cancelActiveInteraction();
         };
-    }, [finishRailGesture]);
+    }, [finishRailGesture, settleRailPosition, stopRailDeceleration]);
 
     const clampedActivity = sourceActivity === null ? null : clamp(sourceActivity, 0, 1);
     const drawerOpen = expanded && !mappingActive;
@@ -1966,6 +2127,7 @@ function MobileGlobalModRail({
                 data-expanded={expanded}
                 data-drawer-direction={drawerPlacement.direction}
                 data-mapping-active={mappingActive}
+                data-decelerating={decelerating}
                 className="mobile-global-mod-rail"
                 style={{
                     top,
@@ -2022,12 +2184,22 @@ function MobileGlobalModRail({
                                 }
                                 event.preventDefault();
                                 event.stopPropagation();
+                                const interruptedDeceleration = stopRailDeceleration();
+                                if (interruptedDeceleration) {
+                                    // Like touching a coasting scroll view, a new touch stops
+                                    // it exactly where it is before beginning the next gesture.
+                                    persistRailPosition(positionRef.current);
+                                }
+                                const motionSamples: RailMotionSample[] = [];
+                                appendRailMotionSample(motionSamples, event.clientY, event.timeStamp);
                                 gestureRef.current = {
                                     pointerId: event.pointerId,
                                     startClientY: event.clientY,
                                     startNormalizedY: normalizedPositionRef.current ?? readStoredRailPosition(),
                                     startTop: positionRef.current,
                                     moved: false,
+                                    interruptedDeceleration,
+                                    motionSamples,
                                     captureElement: event.currentTarget,
                                 };
                                 try {
@@ -2043,6 +2215,11 @@ function MobileGlobalModRail({
                                 }
                                 event.preventDefault();
                                 event.stopPropagation();
+                                appendRailMotionSample(
+                                    gesture.motionSamples,
+                                    event.clientY,
+                                    event.timeStamp,
+                                );
                                 const deltaY = event.clientY - gesture.startClientY;
                                 gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
                                 if (!gesture.moved) {
@@ -2058,9 +2235,9 @@ function MobileGlobalModRail({
                                 setTop(nextTop);
                                 updateDrawerPlacement(nextTop);
                             }}
-                            onPointerUp={(event) => finishRailGesture(event.pointerId, false)}
-                            onPointerCancel={(event) => finishRailGesture(event.pointerId, true)}
-                            onLostPointerCapture={(event) => finishRailGesture(event.pointerId, true)}
+                            onPointerUp={(event) => finishRailGesture(event.pointerId, false, event.timeStamp)}
+                            onPointerCancel={(event) => finishRailGesture(event.pointerId, true, event.timeStamp)}
+                            onLostPointerCapture={(event) => finishRailGesture(event.pointerId, true, event.timeStamp)}
                         >
                             <span className="mobile-global-mod-rail-handle" aria-hidden="true" />
                             <span className="mobile-global-mod-rail-chip-slot" aria-hidden="true" />

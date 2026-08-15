@@ -9788,7 +9788,10 @@ test("rail grip drags own the touch without page scroll, persist across reload, 
         const scrollDuring = await readScrollState();
         assert.deepEqual(scrollDuring, scrollBefore, "A grip drag must not scroll the page or any panel.");
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-        await page.waitForTimeout(240);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail"]')?.getAttribute("data-decelerating") === "false"
+        ));
+        await page.waitForTimeout(220);
 
         const moved = await rail.boundingBox();
         assert.ok(moved);
@@ -9833,6 +9836,128 @@ test("rail grip drags own the touch without page scroll, persist across reload, 
 
         await grip.click({ position: { x: 28, y: 26 } });
         assert.equal(await grip.getAttribute("aria-expanded"), "true", "The grip must still toggle after cancelled gestures.");
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+test("rail flick keeps moving after touch release and faster releases travel farther", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ normalizedY: 0.5 }),
+                );
+            });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        const handle = rail.locator(".mobile-global-mod-rail-handle");
+
+        const resetRailToMiddle = async () => {
+            await page.evaluate(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ normalizedY: 0.5 }),
+                );
+            });
+            await page.reload({ waitUntil: "commit" });
+            await waitForHarnessReady(page);
+            await rail.waitFor();
+            await page.waitForTimeout(140);
+        };
+
+        const releaseFlickUp = async (stepDelayMs, releasePauseMs) => {
+            const handleBox = await handle.boundingBox();
+            assert.ok(handleBox);
+            const start = {
+                x: handleBox.x + (handleBox.width / 2),
+                y: handleBox.y + (handleBox.height / 2),
+            };
+
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchStart",
+                touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+            for (let step = 1; step <= 4; step += 1) {
+                await page.waitForTimeout(stepDelayMs);
+                await cdp.send("Input.dispatchTouchEvent", {
+                    type: "touchMove",
+                    touchPoints: [{
+                        x: start.x,
+                        y: start.y - (step * 6),
+                        radiusX: 5,
+                        radiusY: 5,
+                        force: 1,
+                    }],
+                });
+            }
+            await page.waitForTimeout(releasePauseMs);
+
+            const held = await rail.boundingBox();
+            assert.ok(held);
+            await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+            return held;
+        };
+
+        const measureFlickUp = async (stepDelayMs, releasePauseMs) => {
+            const held = await releaseFlickUp(stepDelayMs, releasePauseMs);
+            await page.waitForTimeout(80);
+            const shortlyAfterRelease = await rail.boundingBox();
+            assert.ok(shortlyAfterRelease);
+            await page.waitForFunction(() => (
+                document.querySelector('[data-role="mobile-global-mod-rail"]')?.getAttribute("data-decelerating") === "false"
+            ));
+            await page.waitForTimeout(220);
+            const settled = await rail.boundingBox();
+            assert.ok(settled);
+
+            return {
+                first80Ms: held.y - shortlyAfterRelease.y,
+                totalMomentum: held.y - settled.y,
+            };
+        };
+
+        await rail.waitFor();
+        await page.waitForTimeout(140);
+        const fast = await measureFlickUp(8, 16);
+
+        await resetRailToMiddle();
+        const slow = await measureFlickUp(70, 120);
+
+        assert.equal(
+            fast.first80Ms >= 8,
+            true,
+            `A quick upward flick must keep traveling after release: ${JSON.stringify({ fast, slow })}`,
+        );
+        assert.equal(
+            fast.totalMomentum >= slow.totalMomentum + 24,
+            true,
+            `Release speed must increase momentum travel: ${JSON.stringify({ fast, slow })}`,
+        );
+
+        await resetRailToMiddle();
+        await page.evaluate(() => {
+            const nativeRequestAnimationFrame = window.requestAnimationFrame.bind(window);
+            window.requestAnimationFrame = (callback) => nativeRequestAnimationFrame((timeStamp) => {
+                callback(timeStamp + 500);
+            });
+        });
+        await releaseFlickUp(8, 16);
+        await page.evaluate(() => new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(resolve));
+        }));
+        assert.equal(
+            await rail.getAttribute("data-decelerating"),
+            "false",
+            "A delayed animation frame must consume elapsed coast time instead of resuming in slow motion.",
+        );
     } finally {
         await cdp.detach();
         await page.close();
