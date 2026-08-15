@@ -82,6 +82,7 @@ function createFloat32WaveBufferFromFrames(frames, sampleRate = 44100) {
 function createRuntimeState(overrides = {}) {
     return {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         desiredIntentSerial: 3,
         desiredTableIndex: 0,
         generationFrontier: 0,
@@ -101,6 +102,107 @@ function createRuntimeState(overrides = {}) {
         ...overrides,
     };
 }
+
+test("worker keeps oscillator identity on every table transfer message", async () => {
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckFrames: 0,
+    });
+
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        mipLevelCount: 1,
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint(
+        "runtimeState",
+        createRuntimeState({
+            oscillatorIndex: 1,
+            desiredIntentSerial: 5,
+            desiredTableIndex: 1,
+            generationFrontier: 10,
+            serviceState: 0,
+        }),
+    );
+    await flushMicrotasks(64);
+
+    const loadBegin = connection.sentEvents.find(({ endpointID }) => endpointID === "wavetableLoadBegin");
+    const mipFrame = connection.sentEvents.find(({ endpointID }) => endpointID === "wavetableMipFrame");
+
+    assert.equal(loadBegin?.value.oscillatorIndex, 1);
+    assert.equal(mipFrame?.value.oscillatorIndex, 1);
+});
+
+test("worker serializes A/B/C loads and rejects a crossed oscillator acknowledgement", async () => {
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckFrames: 0,
+    });
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        mipLevelCount: 1,
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint("runtimeState", createRuntimeState({
+        oscillatorIndex: 0,
+        desiredIntentSerial: 1,
+        desiredTableIndex: 0,
+    }));
+    connection.emitEndpoint("runtimeState", createRuntimeState({
+        oscillatorIndex: 1,
+        desiredIntentSerial: 1,
+        desiredTableIndex: 1,
+    }));
+    connection.emitEndpoint("runtimeState", createRuntimeState({
+        oscillatorIndex: 2,
+        desiredIntentSerial: 1,
+        desiredTableIndex: 1,
+    }));
+    await flushMicrotasks(64);
+
+    const loadBegins = () => connection.sentEvents.filter(
+        ({ endpointID }) => endpointID === "wavetableLoadBegin",
+    );
+    const mipFrames = () => connection.sentEvents.filter(
+        ({ endpointID }) => endpointID === "wavetableMipFrame",
+    );
+    const acknowledge = (frame, oscillatorIndex = frame.value.oscillatorIndex) => {
+        connection.emitEndpoint("wavetableUploadAck", {
+            ...frame.value,
+            oscillatorIndex,
+            samples: undefined,
+        });
+    };
+
+    assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0]);
+    const aFrame = mipFrames().at(-1);
+    acknowledge(aFrame, 1);
+    await flushMicrotasks(16);
+    assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0]);
+
+    acknowledge(aFrame);
+    await flushMicrotasks(64);
+    assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0, 1]);
+
+    const bFrame0 = mipFrames().at(-1);
+    acknowledge(bFrame0);
+    await flushMicrotasks(16);
+    const bFrame1 = mipFrames().at(-1);
+    acknowledge(bFrame1);
+    await flushMicrotasks(64);
+
+    assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0, 1, 2]);
+    assert.deepEqual(connection.readAudioPaths, [
+        "assets/factory_sources/table-0.wav",
+        "assets/factory_sources/table-1.wav",
+    ]);
+});
 
 async function flushMicrotasks(turns = 8) {
     for (let index = 0; index < turns; index += 1) {
@@ -211,6 +313,7 @@ class FakePatchConnection {
             queueMicrotask(() => {
                 this.emitEndpoint("wavetableUploadAck", {
                     dspSessionId: value.dspSessionId,
+                    oscillatorIndex: value.oscillatorIndex,
                     generation: value.generation,
                     tableIndex: value.tableIndex,
                     mipIndex: value.mipIndex,
@@ -642,6 +745,7 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
         [
             {
                 dspSessionId: 7,
+                oscillatorIndex: 0,
                 generation: 11,
                 tableIndex: 1,
                 frameCount: 2,
@@ -874,6 +978,7 @@ test("worker can load wavetable resources through an injected resource client ev
     assert.deepEqual(loadBeginEvents.map(({ value }) => value), [
         {
             dspSessionId: 7,
+            oscillatorIndex: 0,
             generation: 11,
             tableIndex: 1,
             frameCount: 2,
@@ -940,6 +1045,7 @@ test("worker prefers the resolved resource URL for factory wavetable source path
     assert.deepEqual(loadBeginEvents.map(({ value }) => value), [
         {
             dspSessionId: 7,
+            oscillatorIndex: 0,
             generation: 11,
             tableIndex: 0,
             frameCount: 2,
@@ -1007,6 +1113,7 @@ test("worker falls back to the resolved resource URL for spaced wavetable paths 
     assert.deepEqual(loadBeginEvents.map(({ value }) => value), [
         {
             dspSessionId: 7,
+            oscillatorIndex: 0,
             generation: 11,
             tableIndex: 0,
             frameCount: 2,
@@ -1153,6 +1260,7 @@ test("worker does not auto-retry an unchanged failed desired table until runtime
     const loadBeginEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableLoadBegin");
     assert.deepEqual(loadBeginEvents.at(-1)?.value, {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         generation: 13,
         tableIndex: 2,
         frameCount: 1,
@@ -1203,6 +1311,7 @@ test("worker aborts an obsolete loading generation when the desired table change
 
     assert.deepEqual(abortEvents.at(-1)?.value, {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         generation: 12,
         tableIndex: 1,
         failureReasonCode: failureReasonGeneric,
@@ -1259,6 +1368,7 @@ test("worker validates and commits a newer desired table while another table is 
         [
             {
                 dspSessionId: 7,
+                oscillatorIndex: 0,
                 generation: 10,
                 tableIndex: 2,
                 frameCount: 1,
@@ -1299,6 +1409,7 @@ test("worker reports a candidate load failure without emitting a new load begin"
     assert.deepEqual(failureEvents.map(({ value }) => value), [
         {
             dspSessionId: 7,
+            oscillatorIndex: 0,
             tableIndex: 2,
             generation: 0,
             candidateAttemptSerial: 6,
@@ -1344,6 +1455,7 @@ test("worker aborts a loading generation when the committed service table cannot
 
     assert.deepEqual(failureEvents.at(-1)?.value, {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         tableIndex: 1,
         generation: 12,
         candidateAttemptSerial: 0,
@@ -1352,6 +1464,7 @@ test("worker aborts a loading generation when the committed service table cannot
     });
     assert.deepEqual(abortEvents.at(-1)?.value, {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         generation: 12,
         tableIndex: 1,
         failureReasonCode: failureReasonGeneric,
@@ -1392,6 +1505,7 @@ test("worker classifies mip-build failures separately from source-load failures"
 
     assert.deepEqual(failureEvents.at(-1)?.value, {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         tableIndex: 1,
         generation: 12,
         candidateAttemptSerial: 0,
@@ -1400,6 +1514,7 @@ test("worker classifies mip-build failures separately from source-load failures"
     });
     assert.deepEqual(abortEvents.at(-1)?.value, {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         generation: 12,
         tableIndex: 1,
         failureReasonCode: failureReasonGeneric,
@@ -1439,6 +1554,7 @@ test("worker aborts a committed loading generation when mip upload acks stall pa
 
     connection.emitEndpoint("wavetableMipRequest", {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         generation: 12,
         tableIndex: 1,
         mipIndex: 0,
@@ -1455,6 +1571,7 @@ test("worker aborts a committed loading generation when mip upload acks stall pa
 
     assert.deepEqual(failureEvents.at(-1)?.value, {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         tableIndex: 1,
         generation: 12,
         candidateAttemptSerial: 0,
@@ -1463,6 +1580,7 @@ test("worker aborts a committed loading generation when mip upload acks stall pa
     });
     assert.deepEqual(abortEvents.at(-1)?.value, {
         dspSessionId: 7,
+        oscillatorIndex: 0,
         generation: 12,
         tableIndex: 1,
         failureReasonCode: failureReasonTimeout,
@@ -1574,7 +1692,7 @@ test("worker automatically retries one timed-out desired table load when runtime
     await flushMicrotasks(16);
 
     const retryEvents = connection.sentEvents.filter(({ endpointID }) => endpointID === "retryDesiredTableRequest");
-    assert.deepEqual(retryEvents.map(({ value }) => value), [1]);
+    assert.deepEqual(retryEvents.map(({ value }) => value), [0]);
 
     connection.emitEndpoint(
         "runtimeState",

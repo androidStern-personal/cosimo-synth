@@ -46,14 +46,14 @@ def _build_runtime_state_coordinator_probe_source() -> str:
         + "    input event int32 runtimeSyncRequest;\n"
         + "    input event int32 retryDesiredTableRequest;\n"
         + "    input event wt::WorkerLoadFailure workerLoadFailure;\n"
-        + "    input event wt::RuntimeServiceState runtimeServiceState;\n"
+        + "    input event wt::OscillatorRuntimeServiceState runtimeServiceState;\n"
         + "    output event wt::RuntimeState runtimeState;\n"
         + "    node coordinator = wt::RuntimeStateCoordinator;\n"
         + "    event desiredTableChange (wt::DesiredTableChange change) { coordinator.desiredTableChangeIn <- change; }\n"
         + "    event runtimeSyncRequest (int32 request) { coordinator.runtimeSyncRequestIn <- request; }\n"
         + "    event retryDesiredTableRequest (int32 request) { coordinator.retryDesiredTableRequestIn <- request; }\n"
         + "    event workerLoadFailure (wt::WorkerLoadFailure failure) { coordinator.workerLoadFailureIn <- failure; }\n"
-        + "    event runtimeServiceState (wt::RuntimeServiceState state) { coordinator.runtimeServiceStateIn <- state; }\n"
+        + "    event runtimeServiceState (wt::OscillatorRuntimeServiceState state) { coordinator.runtimeServiceStateIn <- state; }\n"
         + "    connection\n"
         + "    {\n"
         + "        coordinator.runtimeStateOut -> runtimeState;\n"
@@ -105,6 +105,7 @@ def _unwrap_event_payloads(events: list[dict[str, object]]) -> list[dict[str, ob
 def _runtime_service_state(
     *,
     dsp_session_id: int = 77,
+    oscillator_index: int = 0,
     generation_frontier: int,
     service_state: int,
     has_active: int,
@@ -116,6 +117,7 @@ def _runtime_service_state(
 ) -> dict[str, int]:
     return {
         "dspSessionId": dsp_session_id,
+        "oscillatorIndex": oscillator_index,
         "generationFrontier": generation_frontier,
         "serviceState": service_state,
         "hasActive": has_active,
@@ -140,6 +142,7 @@ def test_runtime_state_coordinator_sync_snapshot_combines_desired_table_and_serv
                     (
                         "runtimeServiceState",
                         _runtime_service_state(
+                            oscillator_index=1,
                             generation_frontier=5,
                             service_state=2,
                             has_active=1,
@@ -150,7 +153,7 @@ def test_runtime_state_coordinator_sync_snapshot_combines_desired_table_and_serv
                             loading_generation=0,
                         ),
                     ),
-                    ("desiredTableChange", {"tableIndex": 4}),
+                    ("desiredTableChange", {"oscillatorIndex": 1, "tableIndex": 4}),
                     ("runtimeSyncRequest", 1),
                 ]
             ),
@@ -159,8 +162,10 @@ def test_runtime_state_coordinator_sync_snapshot_combines_desired_table_and_serv
     payloads = _unwrap_event_payloads(_with_runtime_state_probe(callback=run_probe))
 
     assert payloads
-    assert payloads[-1] == {
+    oscillator_b_payloads = [payload for payload in payloads if payload["oscillatorIndex"] == 1]
+    assert oscillator_b_payloads[-1] == {
         "dspSessionId": 77,
+        "oscillatorIndex": 1,
         "desiredIntentSerial": 1,
         "desiredTableIndex": 4,
         "generationFrontier": 5,
@@ -193,6 +198,7 @@ def test_runtime_state_coordinator_ignores_stale_service_failures_but_accepts_cu
                     (
                         "runtimeServiceState",
                         _runtime_service_state(
+                            oscillator_index=2,
                             generation_frontier=5,
                             service_state=2,
                             has_active=1,
@@ -207,6 +213,7 @@ def test_runtime_state_coordinator_ignores_stale_service_failures_but_accepts_cu
                         "workerLoadFailure",
                         {
                             "dspSessionId": 77,
+                            "oscillatorIndex": 2,
                             "tableIndex": 3,
                             "generation": 4,
                             "candidateAttemptSerial": 0,
@@ -219,6 +226,7 @@ def test_runtime_state_coordinator_ignores_stale_service_failures_but_accepts_cu
                         "workerLoadFailure",
                         {
                             "dspSessionId": 77,
+                            "oscillatorIndex": 2,
                             "tableIndex": 3,
                             "generation": 5,
                             "candidateAttemptSerial": 0,
@@ -233,8 +241,10 @@ def test_runtime_state_coordinator_ignores_stale_service_failures_but_accepts_cu
 
     payloads = _unwrap_event_payloads(_with_runtime_state_probe(callback=run_probe))
 
-    assert payloads[1] == {
+    oscillator_c_payloads = [payload for payload in payloads if payload["oscillatorIndex"] == 2]
+    assert oscillator_c_payloads[1] == {
         "dspSessionId": 77,
+        "oscillatorIndex": 2,
         "desiredIntentSerial": 0,
         "desiredTableIndex": 0,
         "generationFrontier": 5,
@@ -252,8 +262,9 @@ def test_runtime_state_coordinator_ignores_stale_service_failures_but_accepts_cu
         "failurePhase": 0,
         "failureReasonCode": 0,
     }
-    assert payloads[-1] == {
+    assert oscillator_c_payloads[-1] == {
         "dspSessionId": 77,
+        "oscillatorIndex": 2,
         "desiredIntentSerial": 0,
         "desiredTableIndex": 0,
         "generationFrontier": 5,

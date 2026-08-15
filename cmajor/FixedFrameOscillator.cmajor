@@ -227,9 +227,7 @@ namespace wt
         int32 loadingGeneration;
     }
 
-    // The existing transport remains oscillator A's stable product seam. These
-    // identity-bearing messages are the additive A/B/C transport used by the
-    // independent ownership service and, later, the per-oscillator host worker.
+    // One identity-bearing transport owns table loading for all three oscillators.
     struct OscillatorWavetableLoadBegin
     {
         int32 dspSessionId;
