@@ -7,12 +7,14 @@ namespace wt
 
     struct DesiredTableChange
     {
+        int32 oscillatorIndex;
         int32 tableIndex;
     }
 
     struct WorkerLoadFailure
     {
         int32 dspSessionId;
+        int32 oscillatorIndex;
         int32 tableIndex;
         int32 generation;
         int32 candidateAttemptSerial;
@@ -37,6 +39,7 @@ namespace wt
     struct RuntimeState
     {
         int32 dspSessionId;
+        int32 oscillatorIndex;
         int32 desiredIntentSerial;
         int32 desiredTableIndex;
         int32 generationFrontier;
@@ -802,7 +805,7 @@ namespace wt
         }
     }
 
-    processor DesiredTableMonitor
+    processor DesiredTableMonitor (int32 oscillatorIndex)
     {
         input value float32 tableSelectIn;
         output event DesiredTableChange desiredTableChangeOut;
@@ -812,6 +815,7 @@ namespace wt
         void emitDesiredTableChange (int32 tableIndex)
         {
             DesiredTableChange change;
+            change.oscillatorIndex = oscillatorIndex;
             change.tableIndex = tableIndex;
             desiredTableChangeOut <- change;
         }
@@ -822,7 +826,7 @@ namespace wt
             {
                 let nextTableIndex = int32 (
                     std::intrinsics::floor (
-                        std::intrinsics::clamp (tableSelectIn, 0.0f, 255.0f) + 0.5f
+                        std::intrinsics::clamp (tableSelectIn, 0.0f, 237.0f) + 0.5f
                     )
                 );
 
@@ -946,114 +950,133 @@ namespace wt
         input event int32 runtimeSyncRequestIn;
         input event int32 retryDesiredTableRequestIn;
         input event WorkerLoadFailure workerLoadFailureIn;
-        input event RuntimeServiceState runtimeServiceStateIn;
+        input event OscillatorRuntimeServiceState runtimeServiceStateIn;
         output event RuntimeState runtimeStateOut;
 
         int32 dspSessionId = 0;
-        int32 desiredIntentSerial = 0;
-        int32 desiredTableIndex = 0;
-        int32 generationFrontier = 0;
-        int32 serviceState = 0;
-        int32 hasActive = 0;
-        int32 activeTableIndex = 0;
-        int32 activeGeneration = 0;
-        int32 hasLoading = 0;
-        int32 loadingTableIndex = 0;
-        int32 loadingGeneration = 0;
-        int32 hasFailure = 0;
-        int32 failedTableIndex = 0;
-        int32 failedGeneration = 0;
-        int32 failureScope = 0;
-        int32 failurePhase = 0;
-        int32 failureReasonCode = 0;
+        int32[oscillatorCount] desiredIntentSerial;
+        int32[oscillatorCount] desiredTableIndex;
+        int32[oscillatorCount] generationFrontier;
+        int32[oscillatorCount] serviceState;
+        int32[oscillatorCount] hasActive;
+        int32[oscillatorCount] activeTableIndex;
+        int32[oscillatorCount] activeGeneration;
+        int32[oscillatorCount] hasLoading;
+        int32[oscillatorCount] loadingTableIndex;
+        int32[oscillatorCount] loadingGeneration;
+        int32[oscillatorCount] hasFailure;
+        int32[oscillatorCount] failedTableIndex;
+        int32[oscillatorCount] failedGeneration;
+        int32[oscillatorCount] failureScope;
+        int32[oscillatorCount] failurePhase;
+        int32[oscillatorCount] failureReasonCode;
 
-        void clearFailure()
+        void clearFailure (int32 oscillatorIndex)
         {
-            hasFailure = 0;
-            failedTableIndex = 0;
-            failedGeneration = 0;
-            failureScope = 0;
-            failurePhase = 0;
-            failureReasonCode = 0;
+            let oscillator = wrap<oscillatorCount> (oscillatorIndex);
+            hasFailure.at (oscillator) = 0;
+            failedTableIndex.at (oscillator) = 0;
+            failedGeneration.at (oscillator) = 0;
+            failureScope.at (oscillator) = 0;
+            failurePhase.at (oscillator) = 0;
+            failureReasonCode.at (oscillator) = 0;
         }
 
-        void emitRuntimeState()
+        void emitRuntimeState (int32 oscillatorIndex)
         {
+            let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
             RuntimeState state;
             state.dspSessionId = dspSessionId;
-            state.desiredIntentSerial = desiredIntentSerial;
-            state.desiredTableIndex = desiredTableIndex;
-            state.generationFrontier = generationFrontier;
-            state.serviceState = serviceState;
-            state.hasActive = hasActive;
-            state.activeTableIndex = activeTableIndex;
-            state.activeGeneration = activeGeneration;
-            state.hasLoading = hasLoading;
-            state.loadingTableIndex = loadingTableIndex;
-            state.loadingGeneration = loadingGeneration;
-            state.hasFailure = hasFailure;
-            state.failedTableIndex = failedTableIndex;
-            state.failedGeneration = failedGeneration;
-            state.failureScope = failureScope;
-            state.failurePhase = failurePhase;
-            state.failureReasonCode = failureReasonCode;
+            state.oscillatorIndex = oscillator;
+            state.desiredIntentSerial = desiredIntentSerial.at (oscillator);
+            state.desiredTableIndex = desiredTableIndex.at (oscillator);
+            state.generationFrontier = generationFrontier.at (oscillator);
+            state.serviceState = serviceState.at (oscillator);
+            state.hasActive = hasActive.at (oscillator);
+            state.activeTableIndex = activeTableIndex.at (oscillator);
+            state.activeGeneration = activeGeneration.at (oscillator);
+            state.hasLoading = hasLoading.at (oscillator);
+            state.loadingTableIndex = loadingTableIndex.at (oscillator);
+            state.loadingGeneration = loadingGeneration.at (oscillator);
+            state.hasFailure = hasFailure.at (oscillator);
+            state.failedTableIndex = failedTableIndex.at (oscillator);
+            state.failedGeneration = failedGeneration.at (oscillator);
+            state.failureScope = failureScope.at (oscillator);
+            state.failurePhase = failurePhase.at (oscillator);
+            state.failureReasonCode = failureReasonCode.at (oscillator);
             runtimeStateOut <- state;
         }
 
         event desiredTableChangeIn (DesiredTableChange change)
         {
-            if (change.tableIndex == desiredTableIndex)
+            if (change.oscillatorIndex < 0 || change.oscillatorIndex >= oscillatorCount)
                 return;
 
-            desiredTableIndex = change.tableIndex;
-            desiredIntentSerial += 1;
-            clearFailure();
-            emitRuntimeState();
+            let oscillator = wrap<oscillatorCount> (change.oscillatorIndex);
+            if (change.tableIndex == desiredTableIndex.at (oscillator))
+                return;
+
+            desiredTableIndex.at (oscillator) = change.tableIndex;
+            desiredIntentSerial.at (oscillator) += 1;
+            clearFailure (change.oscillatorIndex);
+            emitRuntimeState (change.oscillatorIndex);
         }
 
         event runtimeSyncRequestIn (int32 unused)
         {
-            emitRuntimeState();
+            for (wrap<oscillatorCount> oscillator)
+                emitRuntimeState (int32 (oscillator));
         }
 
-        event retryDesiredTableRequestIn (int32 unused)
+        event retryDesiredTableRequestIn (int32 oscillatorIndex)
         {
-            if (hasFailure == 0 || failedTableIndex != desiredTableIndex)
+            if (oscillatorIndex < 0 || oscillatorIndex >= oscillatorCount)
                 return;
 
-            desiredIntentSerial += 1;
-            clearFailure();
-            emitRuntimeState();
+            let oscillator = wrap<oscillatorCount> (oscillatorIndex);
+            if (hasFailure.at (oscillator) == 0
+                || failedTableIndex.at (oscillator) != desiredTableIndex.at (oscillator))
+                return;
+
+            desiredIntentSerial.at (oscillator) += 1;
+            clearFailure (oscillatorIndex);
+            emitRuntimeState (oscillatorIndex);
         }
 
         event workerLoadFailureIn (WorkerLoadFailure failure)
         {
-            if (failure.dspSessionId != dspSessionId)
+            if (failure.dspSessionId != dspSessionId
+                || failure.oscillatorIndex < 0
+                || failure.oscillatorIndex >= oscillatorCount)
                 return;
+
+            let oscillator = wrap<oscillatorCount> (failure.oscillatorIndex);
 
             if (failure.generation == 0)
             {
-                if (failure.candidateAttemptSerial != desiredIntentSerial)
+                if (failure.candidateAttemptSerial != desiredIntentSerial.at (oscillator))
                     return;
 
-                hasFailure = 1;
-                failedTableIndex = failure.tableIndex;
-                failedGeneration = 0;
-                failureScope = 0;
-                failurePhase = failure.failurePhase;
-                failureReasonCode = failure.failureReasonCode;
-                emitRuntimeState();
+                hasFailure.at (oscillator) = 1;
+                failedTableIndex.at (oscillator) = failure.tableIndex;
+                failedGeneration.at (oscillator) = 0;
+                failureScope.at (oscillator) = 0;
+                failurePhase.at (oscillator) = failure.failurePhase;
+                failureReasonCode.at (oscillator) = failure.failureReasonCode;
+                emitRuntimeState (failure.oscillatorIndex);
                 return;
             }
 
-            if (hasLoading != 0)
+            if (hasLoading.at (oscillator) != 0)
             {
-                if (failure.generation != loadingGeneration || failure.tableIndex != loadingTableIndex)
+                if (failure.generation != loadingGeneration.at (oscillator)
+                    || failure.tableIndex != loadingTableIndex.at (oscillator))
                     return;
             }
-            else if (hasActive != 0)
+            else if (hasActive.at (oscillator) != 0)
             {
-                if (failure.generation != activeGeneration || failure.tableIndex != activeTableIndex)
+                if (failure.generation != activeGeneration.at (oscillator)
+                    || failure.tableIndex != activeTableIndex.at (oscillator))
                     return;
             }
             else
@@ -1061,35 +1084,37 @@ namespace wt
                 return;
             }
 
-            hasFailure = 1;
-            failedTableIndex = failure.tableIndex;
-            failedGeneration = failure.generation;
-            failureScope = 1;
-            failurePhase = failure.failurePhase;
-            failureReasonCode = failure.failureReasonCode;
-            emitRuntimeState();
+            hasFailure.at (oscillator) = 1;
+            failedTableIndex.at (oscillator) = failure.tableIndex;
+            failedGeneration.at (oscillator) = failure.generation;
+            failureScope.at (oscillator) = 1;
+            failurePhase.at (oscillator) = failure.failurePhase;
+            failureReasonCode.at (oscillator) = failure.failureReasonCode;
+            emitRuntimeState (failure.oscillatorIndex);
         }
 
-        event runtimeServiceStateIn (RuntimeServiceState state)
+        event runtimeServiceStateIn (OscillatorRuntimeServiceState state)
         {
+            if (state.oscillatorIndex < 0 || state.oscillatorIndex >= oscillatorCount)
+                return;
+
+            let oscillator = wrap<oscillatorCount> (state.oscillatorIndex);
             dspSessionId = state.dspSessionId;
-            generationFrontier = state.generationFrontier;
-            serviceState = state.serviceState;
-            hasActive = state.hasActive;
-            activeTableIndex = state.activeTableIndex;
-            activeGeneration = state.activeGeneration;
-            hasLoading = state.hasLoading;
-            loadingTableIndex = state.loadingTableIndex;
-            loadingGeneration = state.loadingGeneration;
-            emitRuntimeState();
+            generationFrontier.at (oscillator) = state.generationFrontier;
+            serviceState.at (oscillator) = state.serviceState;
+            hasActive.at (oscillator) = state.hasActive;
+            activeTableIndex.at (oscillator) = state.activeTableIndex;
+            activeGeneration.at (oscillator) = state.activeGeneration;
+            hasLoading.at (oscillator) = state.hasLoading;
+            loadingTableIndex.at (oscillator) = state.loadingTableIndex;
+            loadingGeneration.at (oscillator) = state.loadingGeneration;
+            emitRuntimeState (state.oscillatorIndex);
         }
 
         void main()
         {
             loop
-            {
                 advance();
-            }
         }
     }
 
@@ -1207,9 +1232,9 @@ namespace wt
 graph WavetableSynth [[ main ]]
 {
     input event std::midi::Message midiIn;
-    input event wt::WavetableLoadBegin wavetableLoadBegin;
-    input event wt::WavetableMipFrame wavetableMipFrame;
-    input event wt::ServiceLoadAbort serviceLoadAbort;
+    input event wt::OscillatorWavetableLoadBegin wavetableLoadBegin;
+    input event wt::OscillatorWavetableMipFrame wavetableMipFrame;
+    input event wt::OscillatorServiceLoadAbort serviceLoadAbort;
     input event wt::WorkerLoadFailure workerLoadFailure;
     input event int32 wavetablePrewarmRequest;
     input event int32 runtimeSyncRequest;
@@ -1226,32 +1251,86 @@ graph WavetableSynth [[ main ]]
     // JUCE wrapper can treat parameter slot 0 specially, so visible synth
     // parameters must start at slot 1.
     input value float32 hostSlot0Guard [[ name: "Host Slot 0 Guard", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, hidden: true, automatable: false, rampFrames: 0 ]];
-    input value float32 wavetablePosition [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
-    // Catalog index 34 is the stable `pwm-medicinehat` factory table.
-    input value float32 wavetableSelect [[ name: "Wavetable Select", min: 0.0f, max: 255.0f, init: 34.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    // Oscillator A, B, and C use one indexed product contract. Table selectors
+    // are parameters too, but their values are consumed only by the table scheduler.
+    input value float32 oscAWavetableSelect [[ name: "Oscillator A Wavetable Select", min: 0.0f, max: 237.0f, init: 34.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscAWavetablePosition [[ name: "Oscillator A Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscAPan [[ name: "Oscillator A Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscAOctave [[ name: "Oscillator A Octave", min: -4.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscASemitone [[ name: "Oscillator A Semitone", min: -12.0f, max: 12.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscAFineCents [[ name: "Oscillator A Fine Cents", min: -100.0f, max: 100.0f, init: 0.0f, unit: "cents", rampFrames: 64 ]];
+    input value float32 oscAPhase [[ name: "Oscillator A Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 oscAPhaseRandom [[ name: "Oscillator A Phase Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 oscARetrigger [[ name: "Oscillator A Retrigger", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscAVolumeDb [[ name: "Oscillator A Volume", min: -48.0f, max: 6.0f, init: -9.542425f, unit: "dB", rampFrames: 64 ]];
+    input value float32 oscAMute [[ name: "Oscillator A Mute", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscASolo [[ name: "Oscillator A Solo", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscAWarpMode [[ name: "Oscillator A Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscAWarpAmount [[ name: "Oscillator A Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscAUnisonVoices [[ name: "Oscillator A Unison", min: 1.0f, max: 8.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscAUnisonDetune [[ name: "Oscillator A Unison Detune", min: 0.0f, max: 1.0f, init: 0.10f, rampFrames: 64 ]];
+    input value float32 oscAUnisonBlend [[ name: "Oscillator A Unison Blend", min: 0.0f, max: 1.0f, init: 0.75f, rampFrames: 64 ]];
+    input value float32 oscAUnisonWidth [[ name: "Oscillator A Unison Width", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
+    input value float32 oscAUnisonDetuneMode [[ name: "Oscillator A Unison Detune Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Linear|Super|Exp|Inv|Random", rampFrames: 0 ]];
+    input value float32 oscAUnisonStackMode [[ name: "Oscillator A Unison Stack", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|12|12+7|Center-12|Center-24", rampFrames: 0 ]];
+    input value float32 oscAUnisonPositionSpread [[ name: "Oscillator A Unison WT Pos", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscAUnisonWarpSpread [[ name: "Oscillator A Unison Warp", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+
+    input value float32 oscBWavetableSelect [[ name: "Oscillator B Wavetable Select", min: 0.0f, max: 237.0f, init: 34.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscBWavetablePosition [[ name: "Oscillator B Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscBPan [[ name: "Oscillator B Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscBOctave [[ name: "Oscillator B Octave", min: -4.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscBSemitone [[ name: "Oscillator B Semitone", min: -12.0f, max: 12.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscBFineCents [[ name: "Oscillator B Fine Cents", min: -100.0f, max: 100.0f, init: 0.0f, unit: "cents", rampFrames: 64 ]];
+    input value float32 oscBPhase [[ name: "Oscillator B Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 oscBPhaseRandom [[ name: "Oscillator B Phase Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 oscBRetrigger [[ name: "Oscillator B Retrigger", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscBVolumeDb [[ name: "Oscillator B Volume", min: -48.0f, max: 6.0f, init: -9.542425f, unit: "dB", rampFrames: 64 ]];
+    input value float32 oscBMute [[ name: "Oscillator B Mute", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscBSolo [[ name: "Oscillator B Solo", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscBWarpMode [[ name: "Oscillator B Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscBWarpAmount [[ name: "Oscillator B Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscBUnisonVoices [[ name: "Oscillator B Unison", min: 1.0f, max: 8.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscBUnisonDetune [[ name: "Oscillator B Unison Detune", min: 0.0f, max: 1.0f, init: 0.10f, rampFrames: 64 ]];
+    input value float32 oscBUnisonBlend [[ name: "Oscillator B Unison Blend", min: 0.0f, max: 1.0f, init: 0.75f, rampFrames: 64 ]];
+    input value float32 oscBUnisonWidth [[ name: "Oscillator B Unison Width", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
+    input value float32 oscBUnisonDetuneMode [[ name: "Oscillator B Unison Detune Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Linear|Super|Exp|Inv|Random", rampFrames: 0 ]];
+    input value float32 oscBUnisonStackMode [[ name: "Oscillator B Unison Stack", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|12|12+7|Center-12|Center-24", rampFrames: 0 ]];
+    input value float32 oscBUnisonPositionSpread [[ name: "Oscillator B Unison WT Pos", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscBUnisonWarpSpread [[ name: "Oscillator B Unison Warp", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+
+    input value float32 oscCWavetableSelect [[ name: "Oscillator C Wavetable Select", min: 0.0f, max: 237.0f, init: 34.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscCWavetablePosition [[ name: "Oscillator C Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscCPan [[ name: "Oscillator C Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscCOctave [[ name: "Oscillator C Octave", min: -4.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscCSemitone [[ name: "Oscillator C Semitone", min: -12.0f, max: 12.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscCFineCents [[ name: "Oscillator C Fine Cents", min: -100.0f, max: 100.0f, init: 0.0f, unit: "cents", rampFrames: 64 ]];
+    input value float32 oscCPhase [[ name: "Oscillator C Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 oscCPhaseRandom [[ name: "Oscillator C Phase Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+    input value float32 oscCRetrigger [[ name: "Oscillator C Retrigger", min: 0.0f, max: 1.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscCVolumeDb [[ name: "Oscillator C Volume", min: -48.0f, max: 6.0f, init: -9.542425f, unit: "dB", rampFrames: 64 ]];
+    input value float32 oscCMute [[ name: "Oscillator C Mute", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscCSolo [[ name: "Oscillator C Solo", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|On", rampFrames: 0 ]];
+    input value float32 oscCWarpMode [[ name: "Oscillator C Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscCWarpAmount [[ name: "Oscillator C Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscCUnisonVoices [[ name: "Oscillator C Unison", min: 1.0f, max: 8.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
+    input value float32 oscCUnisonDetune [[ name: "Oscillator C Unison Detune", min: 0.0f, max: 1.0f, init: 0.10f, rampFrames: 64 ]];
+    input value float32 oscCUnisonBlend [[ name: "Oscillator C Unison Blend", min: 0.0f, max: 1.0f, init: 0.75f, rampFrames: 64 ]];
+    input value float32 oscCUnisonWidth [[ name: "Oscillator C Unison Width", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
+    input value float32 oscCUnisonDetuneMode [[ name: "Oscillator C Unison Detune Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Linear|Super|Exp|Inv|Random", rampFrames: 0 ]];
+    input value float32 oscCUnisonStackMode [[ name: "Oscillator C Unison Stack", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|12|12+7|Center-12|Center-24", rampFrames: 0 ]];
+    input value float32 oscCUnisonPositionSpread [[ name: "Oscillator C Unison WT Pos", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+    input value float32 oscCUnisonWarpSpread [[ name: "Oscillator C Unison Warp", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
+
     input value float32 playMode [[ name: "Play Mode", min: 0.0f, max: 2.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 glideTime [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
-    input value float32 pan [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 macro1 [[ name: "Macro 1", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 macro2 [[ name: "Macro 2", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 macro3 [[ name: "Macro 3", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 macro4 [[ name: "Macro 4", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
-    input value float32 warpMode [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-    input value float32 warpAmount [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 filterMode [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
     input value float32 filterCutoff [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
     input value float32 filterQ [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
-    input value float32 unisonVoices [[ name: "Unison", min: 1.0f, max: 8.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-    input value float32 unisonDetune [[ name: "Unison Detune", min: 0.0f, max: 1.0f, init: 0.10f, rampFrames: 64 ]];
-    input value float32 unisonBlend [[ name: "Unison Blend", min: 0.0f, max: 1.0f, init: 0.75f, rampFrames: 64 ]];
-    input value float32 unisonWidth [[ name: "Unison Width", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
-    input value float32 unisonPhase [[ name: "Unison Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
-    input value float32 unisonRandom [[ name: "Unison Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
-    input value float32 unisonPhaseMode [[ name: "Unison Phase Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Contiguous|Reset", rampFrames: 0 ]];
-    input value float32 unisonDetuneMode [[ name: "Unison Detune Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Linear|Super|Exp|Inv|Random", rampFrames: 0 ]];
-    input value float32 unisonStackMode [[ name: "Unison Stack", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|12|12+7|Center-12|Center-24", rampFrames: 0 ]];
-    input value float32 unisonWavetablePositionSpread [[ name: "Unison WT Pos", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
-    input value float32 unisonWarpSpread [[ name: "Unison Warp", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
     input value float32 mseg1Morph [[ name: "MSEG 1 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 mseg2Morph [[ name: "MSEG 2 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 mseg3Morph [[ name: "MSEG 3 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
@@ -1320,8 +1399,8 @@ graph WavetableSynth [[ main ]]
     // Host transport, not a user parameter: no `name:`, so it never becomes an
     // automation slot. See wt::TempoMonitor.
     input event std::timeline::Tempo tempo;
-    output event wt::WavetableUploadAck wavetableUploadAck;
-    output event wt::WavetableMipRequest wavetableMipRequest;
+    output event wt::OscillatorWavetableUploadAck wavetableUploadAck;
+    output event wt::OscillatorWavetableMipRequest wavetableMipRequest;
     output event int32 wavetablePrewarmNotification;
     output event wt::RuntimeState runtimeState;
     output event wt::EffectiveWavetablePositionMonitor effectiveWavetablePosition;
@@ -1367,7 +1446,9 @@ graph WavetableSynth [[ main ]]
     node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
     node distortionScopeAnalyzer = wt::DistortionScopeAnalyzer;
     node distortionHistoryAnalyzer = wt::DistortionHistoryAnalyzer;
-    node desiredTableMonitor = wt::DesiredTableMonitor;
+    node desiredTableMonitorA = wt::DesiredTableMonitor (wt::oscillatorA);
+    node desiredTableMonitorB = wt::DesiredTableMonitor (wt::oscillatorB);
+    node desiredTableMonitorC = wt::DesiredTableMonitor (wt::oscillatorC);
     node runtimeStateCoordinator = wt::RuntimeStateCoordinator;
 
     connection
@@ -1379,46 +1460,98 @@ graph WavetableSynth [[ main ]]
         playMode -> noteDispatcher.playModeIn;
         noteDispatcher.voiceEventOut -> sharedEngine.voiceEventIn;
         noteDispatcher.voiceRetuneOut -> sharedEngine.voiceRetuneIn;
-        wavetableLoadBegin -> sharedEngine.wavetableLoadBeginIn;
-        wavetableMipFrame -> sharedEngine.wavetableMipFrameIn;
-        serviceLoadAbort -> sharedEngine.serviceLoadAbortIn;
+        wavetableLoadBegin -> sharedEngine.oscillatorWavetableLoadBeginIn;
+        wavetableMipFrame -> sharedEngine.oscillatorWavetableMipFrameIn;
+        serviceLoadAbort -> sharedEngine.oscillatorServiceLoadAbortIn;
         articulationSnapshot -> sharedEngine.articulationSnapshotIn;
         modulationMsegBuffer -> sharedEngine.modulationMsegBufferIn;
         modulationMsegPlayback -> sharedEngine.modulationMsegPlaybackIn;
         modulationEnvelope -> sharedEngine.modulationEnvelopeIn;
         modulationProgram -> sharedEngine.modulationProgramIn;
         modulationAmount -> sharedEngine.modulationAmountIn;
-        wavetablePosition -> sharedEngine.framePositionIn;
-        wavetableSelect -> desiredTableMonitor.tableSelectIn;
         glideTime -> sharedEngine.glideTimeIn;
-        pan -> sharedEngine.panIn;
         macro1 -> sharedEngine.macro1In;
         macro2 -> sharedEngine.macro2In;
         macro3 -> sharedEngine.macro3In;
         macro4 -> sharedEngine.macro4In;
-        warpMode -> sharedEngine.warpModeIn;
-        warpAmount -> sharedEngine.warpAmountIn;
         filterMode -> sharedEngine.filterModeIn;
         filterCutoff -> sharedEngine.filterCutoffIn;
         filterQ -> sharedEngine.filterQIn;
-        unisonVoices -> sharedEngine.unisonVoicesIn;
-        unisonDetune -> sharedEngine.unisonDetuneIn;
-        unisonBlend -> sharedEngine.unisonBlendIn;
-        unisonWidth -> sharedEngine.unisonWidthIn;
-        unisonPhase -> sharedEngine.unisonPhaseIn;
-        unisonRandom -> sharedEngine.unisonRandomIn;
-        unisonPhaseMode -> sharedEngine.unisonPhaseModeIn;
-        unisonDetuneMode -> sharedEngine.unisonDetuneModeIn;
-        unisonStackMode -> sharedEngine.unisonStackModeIn;
-        unisonWavetablePositionSpread -> sharedEngine.unisonWavetablePositionSpreadIn;
-        unisonWarpSpread -> sharedEngine.unisonWarpSpreadIn;
         mseg1Morph -> sharedEngine.mseg1MorphIn;
         mseg2Morph -> sharedEngine.mseg2MorphIn;
         mseg3Morph -> sharedEngine.mseg3MorphIn;
-        sharedEngine.wavetableUploadAckOut -> wavetableUploadAck;
-        sharedEngine.wavetableMipRequestOut -> wavetableMipRequest;
-        sharedEngine.runtimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
-        desiredTableMonitor.desiredTableChangeOut -> runtimeStateCoordinator.desiredTableChangeIn;
+        oscAWavetableSelect -> desiredTableMonitorA.tableSelectIn;
+        oscBWavetableSelect -> desiredTableMonitorB.tableSelectIn;
+        oscCWavetableSelect -> desiredTableMonitorC.tableSelectIn;
+        oscAWavetablePosition -> sharedEngine.oscillatorFramePositionIn[0];
+        oscAPan -> sharedEngine.oscillatorPanIn[0];
+        oscAOctave -> sharedEngine.oscillatorOctaveIn[0];
+        oscASemitone -> sharedEngine.oscillatorSemitoneIn[0];
+        oscAFineCents -> sharedEngine.oscillatorFineCentsIn[0];
+        oscAPhase -> sharedEngine.oscillatorPhaseIn[0];
+        oscAPhaseRandom -> sharedEngine.oscillatorPhaseRandomIn[0];
+        oscARetrigger -> sharedEngine.oscillatorRetriggerIn[0];
+        oscAVolumeDb -> sharedEngine.oscillatorVolumeDbIn[0];
+        oscAMute -> sharedEngine.oscillatorMuteIn[0];
+        oscASolo -> sharedEngine.oscillatorSoloIn[0];
+        oscAWarpMode -> sharedEngine.oscillatorWarpModeIn[0];
+        oscAWarpAmount -> sharedEngine.oscillatorWarpAmountIn[0];
+        oscAUnisonVoices -> sharedEngine.oscillatorUnisonVoicesIn[0];
+        oscAUnisonDetune -> sharedEngine.oscillatorUnisonDetuneIn[0];
+        oscAUnisonBlend -> sharedEngine.oscillatorUnisonBlendIn[0];
+        oscAUnisonWidth -> sharedEngine.oscillatorUnisonWidthIn[0];
+        oscAUnisonDetuneMode -> sharedEngine.oscillatorUnisonDetuneModeIn[0];
+        oscAUnisonStackMode -> sharedEngine.oscillatorUnisonStackModeIn[0];
+        oscAUnisonPositionSpread -> sharedEngine.oscillatorUnisonWavetablePositionSpreadIn[0];
+        oscAUnisonWarpSpread -> sharedEngine.oscillatorUnisonWarpSpreadIn[0];
+        oscBWavetablePosition -> sharedEngine.oscillatorFramePositionIn[1];
+        oscBPan -> sharedEngine.oscillatorPanIn[1];
+        oscBOctave -> sharedEngine.oscillatorOctaveIn[1];
+        oscBSemitone -> sharedEngine.oscillatorSemitoneIn[1];
+        oscBFineCents -> sharedEngine.oscillatorFineCentsIn[1];
+        oscBPhase -> sharedEngine.oscillatorPhaseIn[1];
+        oscBPhaseRandom -> sharedEngine.oscillatorPhaseRandomIn[1];
+        oscBRetrigger -> sharedEngine.oscillatorRetriggerIn[1];
+        oscBVolumeDb -> sharedEngine.oscillatorVolumeDbIn[1];
+        oscBMute -> sharedEngine.oscillatorMuteIn[1];
+        oscBSolo -> sharedEngine.oscillatorSoloIn[1];
+        oscBWarpMode -> sharedEngine.oscillatorWarpModeIn[1];
+        oscBWarpAmount -> sharedEngine.oscillatorWarpAmountIn[1];
+        oscBUnisonVoices -> sharedEngine.oscillatorUnisonVoicesIn[1];
+        oscBUnisonDetune -> sharedEngine.oscillatorUnisonDetuneIn[1];
+        oscBUnisonBlend -> sharedEngine.oscillatorUnisonBlendIn[1];
+        oscBUnisonWidth -> sharedEngine.oscillatorUnisonWidthIn[1];
+        oscBUnisonDetuneMode -> sharedEngine.oscillatorUnisonDetuneModeIn[1];
+        oscBUnisonStackMode -> sharedEngine.oscillatorUnisonStackModeIn[1];
+        oscBUnisonPositionSpread -> sharedEngine.oscillatorUnisonWavetablePositionSpreadIn[1];
+        oscBUnisonWarpSpread -> sharedEngine.oscillatorUnisonWarpSpreadIn[1];
+        oscCWavetablePosition -> sharedEngine.oscillatorFramePositionIn[2];
+        oscCPan -> sharedEngine.oscillatorPanIn[2];
+        oscCOctave -> sharedEngine.oscillatorOctaveIn[2];
+        oscCSemitone -> sharedEngine.oscillatorSemitoneIn[2];
+        oscCFineCents -> sharedEngine.oscillatorFineCentsIn[2];
+        oscCPhase -> sharedEngine.oscillatorPhaseIn[2];
+        oscCPhaseRandom -> sharedEngine.oscillatorPhaseRandomIn[2];
+        oscCRetrigger -> sharedEngine.oscillatorRetriggerIn[2];
+        oscCVolumeDb -> sharedEngine.oscillatorVolumeDbIn[2];
+        oscCMute -> sharedEngine.oscillatorMuteIn[2];
+        oscCSolo -> sharedEngine.oscillatorSoloIn[2];
+        oscCWarpMode -> sharedEngine.oscillatorWarpModeIn[2];
+        oscCWarpAmount -> sharedEngine.oscillatorWarpAmountIn[2];
+        oscCUnisonVoices -> sharedEngine.oscillatorUnisonVoicesIn[2];
+        oscCUnisonDetune -> sharedEngine.oscillatorUnisonDetuneIn[2];
+        oscCUnisonBlend -> sharedEngine.oscillatorUnisonBlendIn[2];
+        oscCUnisonWidth -> sharedEngine.oscillatorUnisonWidthIn[2];
+        oscCUnisonDetuneMode -> sharedEngine.oscillatorUnisonDetuneModeIn[2];
+        oscCUnisonStackMode -> sharedEngine.oscillatorUnisonStackModeIn[2];
+        oscCUnisonPositionSpread -> sharedEngine.oscillatorUnisonWavetablePositionSpreadIn[2];
+        oscCUnisonWarpSpread -> sharedEngine.oscillatorUnisonWarpSpreadIn[2];
+        sharedEngine.oscillatorWavetableUploadAckOut -> wavetableUploadAck;
+        sharedEngine.oscillatorWavetableMipRequestOut -> wavetableMipRequest;
+        sharedEngine.oscillatorRuntimeServiceStateOut -> runtimeStateCoordinator.runtimeServiceStateIn;
+        desiredTableMonitorA.desiredTableChangeOut -> runtimeStateCoordinator.desiredTableChangeIn;
+        desiredTableMonitorB.desiredTableChangeOut -> runtimeStateCoordinator.desiredTableChangeIn;
+        desiredTableMonitorC.desiredTableChangeOut -> runtimeStateCoordinator.desiredTableChangeIn;
         workerLoadFailure -> runtimeStateCoordinator.workerLoadFailureIn;
         wavetablePrewarmRequest -> wavetablePrewarmNotification;
         runtimeSyncRequest -> runtimeStateCoordinator.runtimeSyncRequestIn,

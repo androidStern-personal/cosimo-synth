@@ -427,7 +427,7 @@ graph ThreeOscillatorSharedVoiceEngine [[ main ]]
     output stream float32<2> audioOut;
 
     node schedule = Core03TableAndControlSchedule;
-    node engine = wt::SharedVoiceEngine (1, 440.0f, wt::maxFramesPerTable, true);
+    node engine = wt::SharedVoiceEngine (1, 440.0f, wt::maxFramesPerTable);
 
     connection
     {
@@ -440,21 +440,21 @@ graph ThreeOscillatorSharedVoiceEngine [[ main ]]
         schedule.filterCutoffOut -> engine.filterCutoffIn;
         schedule.filterQOut -> engine.filterQIn;
 
-        schedule.aFramePositionOut -> engine.framePositionIn;
-        schedule.aWarpModeOut -> engine.warpModeIn;
-        schedule.aWarpAmountOut -> engine.warpAmountIn;
-        schedule.aPanOut -> engine.panIn;
-        schedule.aUnisonVoicesOut -> engine.unisonVoicesIn;
-        schedule.aUnisonDetuneOut -> engine.unisonDetuneIn;
-        schedule.aUnisonBlendOut -> engine.unisonBlendIn;
-        schedule.aUnisonWidthOut -> engine.unisonWidthIn;
-        schedule.aUnisonPhaseOut -> engine.unisonPhaseIn;
-        schedule.aUnisonRandomOut -> engine.unisonRandomIn;
-        schedule.aUnisonPhaseModeOut -> engine.unisonPhaseModeIn;
-        schedule.aUnisonDetuneModeOut -> engine.unisonDetuneModeIn;
-        schedule.aUnisonStackModeOut -> engine.unisonStackModeIn;
-        schedule.aPositionSpreadOut -> engine.unisonWavetablePositionSpreadIn;
-        schedule.aWarpSpreadOut -> engine.unisonWarpSpreadIn;
+        schedule.aFramePositionOut -> engine.oscillatorFramePositionIn[wt::oscillatorA];
+        schedule.aWarpModeOut -> engine.oscillatorWarpModeIn[wt::oscillatorA];
+        schedule.aWarpAmountOut -> engine.oscillatorWarpAmountIn[wt::oscillatorA];
+        schedule.aPanOut -> engine.oscillatorPanIn[wt::oscillatorA];
+        schedule.aUnisonVoicesOut -> engine.oscillatorUnisonVoicesIn[wt::oscillatorA];
+        schedule.aUnisonDetuneOut -> engine.oscillatorUnisonDetuneIn[wt::oscillatorA];
+        schedule.aUnisonBlendOut -> engine.oscillatorUnisonBlendIn[wt::oscillatorA];
+        schedule.aUnisonWidthOut -> engine.oscillatorUnisonWidthIn[wt::oscillatorA];
+        schedule.aUnisonPhaseOut -> engine.oscillatorPhaseIn[wt::oscillatorA];
+        schedule.aUnisonRandomOut -> engine.oscillatorPhaseRandomIn[wt::oscillatorA];
+        schedule.aUnisonPhaseModeOut -> engine.oscillatorRetriggerIn[wt::oscillatorA];
+        schedule.aUnisonDetuneModeOut -> engine.oscillatorUnisonDetuneModeIn[wt::oscillatorA];
+        schedule.aUnisonStackModeOut -> engine.oscillatorUnisonStackModeIn[wt::oscillatorA];
+        schedule.aPositionSpreadOut -> engine.oscillatorUnisonWavetablePositionSpreadIn[wt::oscillatorA];
+        schedule.aWarpSpreadOut -> engine.oscillatorUnisonWarpSpreadIn[wt::oscillatorA];
 
         schedule.bFramePositionOut -> engine.oscillatorFramePositionIn[wt::oscillatorB];
         schedule.cFramePositionOut -> engine.oscillatorFramePositionIn[wt::oscillatorC];

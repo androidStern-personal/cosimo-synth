@@ -1816,8 +1816,7 @@ namespace wt
 
     processor SharedVoiceEngine (int voiceCount,
                                  float32 previewFrequencyHz = 440.0f,
-                                 int wavetableFrameCapacity = maxFramesPerTable,
-                                 bool enableExternalRenderer = false)
+                                 int wavetableFrameCapacity = maxFramesPerTable)
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff,
@@ -1827,9 +1826,6 @@ namespace wt
                      std::notes::Control,
                      wt::ArticulatedNoteOn) voiceEventIn[voiceCount];
         input event VoiceRetune voiceRetuneIn[voiceCount];
-        input event WavetableLoadBegin wavetableLoadBeginIn;
-        input event WavetableMipFrame wavetableMipFrameIn;
-        input event ServiceLoadAbort serviceLoadAbortIn;
         input event OscillatorWavetableLoadBegin oscillatorWavetableLoadBeginIn;
         input event OscillatorWavetableMipFrame oscillatorWavetableMipFrameIn;
         input event OscillatorServiceLoadAbort oscillatorServiceLoadAbortIn;
@@ -1840,10 +1836,6 @@ namespace wt
         input event ModulationProgramUpload modulationProgramIn;
         input event ModulationAmountUpload modulationAmountIn;
         input event int32 runtimeInstallSyncIn;
-        // The scalar endpoints below remain oscillator A's active product seam
-        // until HOST-02 owns the product-root cutover. These indexed endpoints
-        // complete the engine contract without guessing at root wiring: B/C use
-        // indexes 1/2 now, while tune/level/mute/solo are indexed for all three.
         input value float32 oscillatorFramePositionIn[oscillatorCount];
         input value float32 oscillatorWarpModeIn[oscillatorCount];
         input value float32 oscillatorWarpAmountIn[oscillatorCount];
@@ -1865,35 +1857,17 @@ namespace wt
         input value float32 oscillatorUnisonStackModeIn[oscillatorCount];
         input value float32 oscillatorUnisonWavetablePositionSpreadIn[oscillatorCount];
         input value float32 oscillatorUnisonWarpSpreadIn[oscillatorCount];
-        input value float32 framePositionIn [[ name: "Wavetable Position", min: 0.0f, max: 1.0f, init: 0.0f ]];
         input value float32 glideTimeIn [[ name: "Glide Time", min: 0.0f, max: 2.0f, init: 0.0f, unit: "s", rampFrames: 0 ]];
-        input value float32 warpModeIn [[ name: "Warp Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-        input value float32 warpAmountIn [[ name: "Warp Amount", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 filterModeIn [[ name: "Filter Mode", min: 0.0f, max: 5.0f, init: 0.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
         input value float32 filterCutoffIn [[ name: "Filter Cutoff", min: 20.0f, max: 20000.0f, init: 1000.0f, unit: "Hz", rampFrames: 64 ]];
         input value float32 filterQIn [[ name: "Filter Q", min: 0.1f, max: 20.0f, init: 0.707107f, rampFrames: 64 ]];
-        input value float32 panIn [[ name: "Pan", min: -1.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 macro1In [[ name: "Macro 1", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 macro2In [[ name: "Macro 2", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 macro3In [[ name: "Macro 3", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 macro4In [[ name: "Macro 4", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
-        input value float32 unisonVoicesIn [[ name: "Unison", min: 1.0f, max: 8.0f, init: 1.0f, discrete: true, step: 1.0f, rampFrames: 0 ]];
-        input value float32 unisonDetuneIn [[ name: "Unison Detune", min: 0.0f, max: 1.0f, init: 0.10f, rampFrames: 64 ]];
-        input value float32 unisonBlendIn [[ name: "Unison Blend", min: 0.0f, max: 1.0f, init: 0.75f, rampFrames: 64 ]];
-        input value float32 unisonWidthIn [[ name: "Unison Width", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
-        input value float32 unisonPhaseIn [[ name: "Unison Phase", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
-        input value float32 unisonRandomIn [[ name: "Unison Random", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
-        input value float32 unisonPhaseModeIn [[ name: "Unison Phase Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Contiguous|Reset", rampFrames: 0 ]];
-        input value float32 unisonDetuneModeIn [[ name: "Unison Detune Mode", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Linear|Super|Exp|Inv|Random", rampFrames: 0 ]];
-        input value float32 unisonStackModeIn [[ name: "Unison Stack", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Off|12|12+7|Center-12|Center-24", rampFrames: 0 ]];
-        input value float32 unisonWavetablePositionSpreadIn [[ name: "Unison WT Pos", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
-        input value float32 unisonWarpSpreadIn [[ name: "Unison Warp", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
         input value float32 mseg1MorphIn [[ name: "MSEG 1 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         input value float32 mseg2MorphIn [[ name: "MSEG 2 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         input value float32 mseg3MorphIn [[ name: "MSEG 3 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
-        output event WavetableUploadAck wavetableUploadAckOut;
-        output event WavetableMipRequest wavetableMipRequestOut;
-        output event RuntimeServiceState runtimeServiceStateOut;
         output event OscillatorWavetableUploadAck oscillatorWavetableUploadAckOut;
         output event OscillatorWavetableMipRequest oscillatorWavetableMipRequestOut;
         output event OscillatorRuntimeServiceState oscillatorRuntimeServiceStateOut;
@@ -1929,11 +1903,8 @@ namespace wt
         node modEnv2 = wt::RetriggerableAdsr[voiceCount];
         node modEnv3 = wt::RetriggerableAdsr[voiceCount];
 
-        std::filters::simper::Implementation[voiceCount] filters;
         std::filters::simper::Implementation[voiceCount] unisonLeftFilters;
         std::filters::simper::Implementation[voiceCount] unisonRightFilters;
-        std::oscillators::PhasorState[voiceCount * oscillatorCount] phasors;
-        std::oscillators::PhasorState[voiceCount * oscillatorCount * maxUnisonVoiceCount] unisonPhasors;
         int32[voiceCount * oscillatorCount] voiceOscillatorGeneration;
         int32[voiceCount] voiceChannel;
         float32[voiceCount] voiceBasePitch;
@@ -2032,11 +2003,6 @@ namespace wt
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeDecaySeconds;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeSustain;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeReleaseSeconds;
-        float32[warpDecimatorTapCount] warpDecimatorTapsState;
-        float32[voiceCount * oscillatorCount * warpDecimatorTapCount] voiceWarpHistory;
-        int32[voiceCount * oscillatorCount] voiceWarpHistoryWriteIndex;
-        float32[voiceCount * oscillatorCount * maxUnisonVoiceCount * warpDecimatorTapCount] unisonWarpHistory;
-        int32[voiceCount * oscillatorCount * maxUnisonVoiceCount] unisonWarpHistoryWriteIndex;
         int32 voiceRouteCount;
         int32[modulationVoiceRouteCellCount] voiceRouteCells;
         int32[modulationVoiceRouteCellCount] voiceRouteSources;
@@ -2096,18 +2062,14 @@ namespace wt
         int32 acceptedModulationSerial;
         int32 acceptedModulationProgramSerial;
         int32 acceptedArticulationSerial;
-        let rendererFloatStorageCount = enableExternalRenderer ? rendererPackedFloatCount : 1;
-        let rendererIntStorageCount = enableExternalRenderer ? rendererPackedIntCount : 1;
-        float32[rendererFloatStorageCount] rendererFloats;
-        int32[rendererIntStorageCount] rendererInts;
-        float32[enableExternalRenderer ? voiceCount : 1] legacyALeftPrefilter;
-        float32[enableExternalRenderer ? voiceCount : 1] legacyARightPrefilter;
+        float32[rendererPackedFloatCount] rendererFloats;
+        int32[rendererPackedIntCount] rendererInts;
 
         // Active slots are immutable while visible. Uploads write into the one
         // spare slot and publish only after every mip/frame has arrived.
         static_assert (wavetableFrameCapacity > 0 && wavetableFrameCapacity <= maxFramesPerTable);
         static_assert (voiceCount > 0 && voiceCount <= 16);
-        static_assert (! enableExternalRenderer || wavetableFrameCapacity == maxFramesPerTable);
+        static_assert (wavetableFrameCapacity == maxFramesPerTable);
         let packedWavetableSlotSampleCount = packedWavetableSamplesPerFrameSet * wavetableFrameCapacity;
         let packedWavetableChunkSampleCount = (packedWavetableSlotSampleCount + packedWavetableChunkCount - 1)
                                               / packedWavetableChunkCount;
@@ -2148,57 +2110,7 @@ namespace wt
         int32 tableStagingLastFrameIndex = 0;
         float32 tableStagingLastFrameIndexF = 0.0f;
 
-        // Deliberate bounded integration state: oscillator A keeps the established
-        // exact-float double bank because external-A equivalence is not proven.
-        // Its upload remains mirrored into the packed ownership pool solely so a
-        // later differential can compare both renderers from identical tables.
-        // This adds 52,473,856 packed-pool bytes plus metadata at capacity 256;
-        // it is not a product memory/performance budget. Remove the float bank only
-        // after a representative external-renderer A differential passes the frozen
-        // master audio/state oracle across identity, warp, unison, retrigger and
-        // replacement cases.
-        float32[maxMipSampleCount] mip0Bank0Samples;
-        float32[maxMipSampleCount] mip0Bank1Samples;
-        float32[maxMipSampleCount] mip1Bank0Samples;
-        float32[maxMipSampleCount] mip1Bank1Samples;
-        float32[maxMipSampleCount] mip2Bank0Samples;
-        float32[maxMipSampleCount] mip2Bank1Samples;
-        float32[maxMipSampleCount] mip3Bank0Samples;
-        float32[maxMipSampleCount] mip3Bank1Samples;
-        float32[maxMipSampleCount] mip4Bank0Samples;
-        float32[maxMipSampleCount] mip4Bank1Samples;
-        float32[maxMipSampleCount] mip5Bank0Samples;
-        float32[maxMipSampleCount] mip5Bank1Samples;
-        float32[maxMipSampleCount] mip6Bank0Samples;
-        float32[maxMipSampleCount] mip6Bank1Samples;
-        float32[maxMipSampleCount] mip7Bank0Samples;
-        float32[maxMipSampleCount] mip7Bank1Samples;
-        float32[maxMipSampleCount] mip8Bank0Samples;
-        float32[maxMipSampleCount] mip8Bank1Samples;
-        float32[maxMipSampleCount] mip9Bank0Samples;
-        float32[maxMipSampleCount] mip9Bank1Samples;
-        float32[maxMipSampleCount] mip10Bank0Samples;
-        float32[maxMipSampleCount] mip10Bank1Samples;
-        int32[maxBankedMipFrameSlots] readyFrameFlags;
-        int32[maxBankedMipLevelSlots] loadedFrameCounts;
-        int32[mipLevelCount] requestedGenerationByMip;
-        int32[mipLevelCount] requestedUrgencyByMip;
-
         int32 currentDspSessionId = int32 (processor.session);
-        int32 currentGeneration = 0;
-        int32 currentTableIndex = 0;
-        int32 generationFrontier = 0;
-        int32 frameCount = 0;
-        int32 lastFrameIndex = 0;
-        float32 lastFrameIndexF = 0.0f;
-        int32 activeBankIndex = 0;
-        int32 stagingBankIndex = 1;
-        int32 stagingGeneration = 0;
-        int32 stagingTableIndex = 0;
-        int32 stagingFrameCount = 0;
-        int32 stagingLastFrameIndex = 0;
-        float32 stagingLastFrameIndexF = 0.0f;
-        int32 isPlayable = 0;
         bool hasEmittedInitialRuntimeState = false;
 
         int32 nextVoiceGeneration = 1;
@@ -2215,49 +2127,23 @@ namespace wt
         int32 framesUntilNextMsegMonitorUpdate = 0;
         float32 previewFrequencyHzState = previewFrequencyHz;
         float32 glideTimeSecondsState = 0.0f;
-        int32 unisonVoicesState = 1;
-        float32 unisonDetuneState = 0.10f;
-        float32 unisonBlendState = 0.75f;
-        float32 unisonWidthState = 1.0f;
-        float32 unisonPhaseState = 0.0f;
-        float32 unisonRandomState = 0.0f;
-        int32 unisonPhaseModeState = unisonPhaseModeContiguous;
-        int32 unisonDetuneModeState = unisonDetuneModeLinear;
-        int32 unisonStackModeState = unisonStackModeOff;
-        float32 unisonWavetablePositionSpreadState = 0.0f;
-        float32 unisonWarpSpreadState = 0.0f;
         int32[oscillatorCount] indexedUnisonVoicesState;
         float32[oscillatorCount] indexedPhaseState;
         float32[oscillatorCount] indexedPhaseRandomState;
         bool[oscillatorCount] indexedRetriggerState;
 
-        void updateUnisonInputState()
+        void updateOscillatorInputState()
         {
-            unisonVoicesState = resolveUnisonVoices (unisonVoicesIn);
-            unisonDetuneState = clampUnison01 (unisonDetuneIn);
-            unisonBlendState = clampUnison01 (unisonBlendIn);
-            unisonWidthState = clampUnison01 (unisonWidthIn);
-            unisonPhaseState = clampUnison01 (unisonPhaseIn);
-            unisonRandomState = clampUnison01 (unisonRandomIn);
-            unisonPhaseModeState = resolveUnisonPhaseMode (unisonPhaseModeIn);
-            unisonDetuneModeState = resolveUnisonDetuneMode (unisonDetuneModeIn);
-            unisonStackModeState = resolveUnisonStackMode (unisonStackModeIn);
-            unisonWavetablePositionSpreadState = clampUnison01 (unisonWavetablePositionSpreadIn);
-            unisonWarpSpreadState = clampUnison01 (unisonWarpSpreadIn);
-
-            if const (enableExternalRenderer)
+            for (wrap<oscillatorCount> oscillator)
             {
-                for (wrap<oscillatorCount> oscillator)
-                {
-                    indexedUnisonVoicesState.at (oscillator)
-                        = resolveUnisonVoices (oscillatorUnisonVoicesIn.at (oscillator));
-                    indexedPhaseState.at (oscillator)
-                        = clampUnison01 (oscillatorPhaseIn.at (oscillator));
-                    indexedPhaseRandomState.at (oscillator)
-                        = clampUnison01 (oscillatorPhaseRandomIn.at (oscillator));
-                    indexedRetriggerState.at (oscillator)
-                        = oscillatorRetriggerIn.at (oscillator) >= 0.5f;
-                }
+                indexedUnisonVoicesState.at (oscillator)
+                    = resolveUnisonVoices (oscillatorUnisonVoicesIn.at (oscillator));
+                indexedPhaseState.at (oscillator)
+                    = clampUnison01 (oscillatorPhaseIn.at (oscillator));
+                indexedPhaseRandomState.at (oscillator)
+                    = clampUnison01 (oscillatorPhaseRandomIn.at (oscillator));
+                indexedRetriggerState.at (oscillator)
+                    = oscillatorRetriggerIn.at (oscillator) >= 0.5f;
             }
         }
 
@@ -2439,26 +2325,6 @@ namespace wt
             return true;
         }
 
-        void clearTableBankState (int32 bankIndex)
-        {
-            for (int32 index = 0; index < maxMipFrameSlots; ++index)
-                readyFrameFlags.at ((normalizeTableBankIndex (bankIndex) * maxMipFrameSlots) + index) = 0;
-
-            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
-                loadedFrameCounts.at (bankedMipLevelIndex (bankIndex, mipIndex)) = 0;
-        }
-
-        void clearPendingTableState()
-        {
-            clearTableBankState (stagingBankIndex);
-
-            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
-            {
-                requestedGenerationByMip.at (mipIndex) = 0;
-                requestedUrgencyByMip.at (mipIndex) = -1;
-            }
-        }
-
         int32 oscillatorVoiceIndex (int32 voiceIndex, int32 oscillatorIndex)
         {
             return (int32 (wrap<voiceCount> (voiceIndex)) * oscillatorCount)
@@ -2469,20 +2335,6 @@ namespace wt
         {
             return (oscillatorVoiceIndex (voiceIndex, oscillatorIndex) * maxUnisonVoiceCount)
                  + int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
-        }
-
-        int32 warpHistoryIndex (int32 voiceIndex, int32 oscillatorIndex, int32 tapIndex)
-        {
-            return (oscillatorVoiceIndex (voiceIndex, oscillatorIndex) * warpDecimatorTapCount) + tapIndex;
-        }
-
-        int32 unisonWarpHistoryIndex (int32 voiceIndex,
-                                      int32 oscillatorIndex,
-                                      int32 subVoiceIndex,
-                                      int32 tapIndex)
-        {
-            return (oscillatorLaneIndex (voiceIndex, oscillatorIndex, subVoiceIndex)
-                    * warpDecimatorTapCount) + tapIndex;
         }
 
         int32 resolveUnisonVoices (float32 rawVoices)
@@ -2529,91 +2381,73 @@ namespace wt
         float32 oscillatorFramePosition (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? framePositionIn : oscillatorFramePositionIn.at (oscillator);
+            return oscillatorFramePositionIn.at (oscillator);
         }
 
         int32 oscillatorWarpMode (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? resolveWarpMode (warpModeIn)
-                : resolveWarpMode (oscillatorWarpModeIn.at (oscillator));
+            return resolveWarpMode (oscillatorWarpModeIn.at (oscillator));
         }
 
         float32 oscillatorWarpAmount (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? warpAmountIn : oscillatorWarpAmountIn.at (oscillator);
+            return oscillatorWarpAmountIn.at (oscillator);
         }
 
         float32 oscillatorPan (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? panIn : oscillatorPanIn.at (oscillator);
+            return oscillatorPanIn.at (oscillator);
         }
 
         int32 oscillatorUnisonVoices (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonVoicesState
-                : indexedUnisonVoicesState.at (oscillator);
+            return indexedUnisonVoicesState.at (oscillator);
         }
 
         float32 oscillatorUnisonDetune (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonDetuneState : clampUnison01 (oscillatorUnisonDetuneIn.at (oscillator));
+            return clampUnison01 (oscillatorUnisonDetuneIn.at (oscillator));
         }
 
         float32 oscillatorUnisonBlend (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonBlendState : clampUnison01 (oscillatorUnisonBlendIn.at (oscillator));
+            return clampUnison01 (oscillatorUnisonBlendIn.at (oscillator));
         }
 
         float32 oscillatorUnisonWidth (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonWidthState : clampUnison01 (oscillatorUnisonWidthIn.at (oscillator));
+            return clampUnison01 (oscillatorUnisonWidthIn.at (oscillator));
         }
 
         int32 oscillatorUnisonDetuneMode (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonDetuneModeState
-                : resolveUnisonDetuneMode (oscillatorUnisonDetuneModeIn.at (oscillator));
+            return resolveUnisonDetuneMode (oscillatorUnisonDetuneModeIn.at (oscillator));
         }
 
         int32 oscillatorUnisonStackMode (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonStackModeState
-                : resolveUnisonStackMode (oscillatorUnisonStackModeIn.at (oscillator));
+            return resolveUnisonStackMode (oscillatorUnisonStackModeIn.at (oscillator));
         }
 
         float32 oscillatorPositionSpread (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonWavetablePositionSpreadState
-                : clampUnison01 (oscillatorUnisonWavetablePositionSpreadIn.at (oscillator));
+            return clampUnison01 (oscillatorUnisonWavetablePositionSpreadIn.at (oscillator));
         }
 
         float32 oscillatorWarpSpread (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonWarpSpreadState
-                : clampUnison01 (oscillatorUnisonWarpSpreadIn.at (oscillator));
+            return clampUnison01 (oscillatorUnisonWarpSpreadIn.at (oscillator));
         }
 
         float32 oscillatorTuningSemitones (int32 oscillatorIndex)
@@ -2779,9 +2613,7 @@ namespace wt
                 return voiceArticulationPhases.at (voiceArticulationOscillatorIndex (
                     int32 (voice), int32 (wrap<oscillatorCount> (oscillatorIndex))));
 
-            let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonPhaseState : indexedPhaseState.at (oscillator);
+            return indexedPhaseState.at (wrap<oscillatorCount> (oscillatorIndex));
         }
 
         float32 voiceOscillatorPhaseRandom (int32 voiceIndex, int32 oscillatorIndex)
@@ -2791,9 +2623,7 @@ namespace wt
                 return voiceArticulationPhaseRandoms.at (voiceArticulationOscillatorIndex (
                     int32 (voice), int32 (wrap<oscillatorCount> (oscillatorIndex))));
 
-            let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonRandomState : indexedPhaseRandomState.at (oscillator);
+            return indexedPhaseRandomState.at (wrap<oscillatorCount> (oscillatorIndex));
         }
 
         bool voiceOscillatorRetriggers (int32 voiceIndex, int32 oscillatorIndex)
@@ -2803,10 +2633,7 @@ namespace wt
                 return voiceArticulationRetriggers.at (voiceArticulationOscillatorIndex (
                     int32 (voice), int32 (wrap<oscillatorCount> (oscillatorIndex))));
 
-            let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorIndex == oscillatorA
-                ? unisonPhaseModeState == unisonPhaseModeReset
-                : indexedRetriggerState.at (oscillator);
+            return indexedRetriggerState.at (wrap<oscillatorCount> (oscillatorIndex));
         }
 
         float32 voiceOscillatorTuningSemitones (int32 voiceIndex, int32 oscillatorIndex)
@@ -2857,62 +2684,9 @@ namespace wt
             return dbToGain (clampAmpGainDb (voiceArticulationVolumeDbs.at (index)));
         }
 
-        void resetOscillatorWarpRenderState (int32 voiceIndex, int32 oscillatorIndex)
-        {
-            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-
-            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
-                voiceWarpHistory.at (
-                    warpHistoryIndex (resolvedVoice, resolvedOscillator, tapIndex)) = 0.0f;
-
-            voiceWarpHistoryWriteIndex.at (
-                oscillatorVoiceIndex (resolvedVoice, resolvedOscillator)) = 0;
-        }
-
-        void resetOscillatorUnisonWarpRenderState (int32 voiceIndex,
-                                                    int32 oscillatorIndex,
-                                                    int32 subVoiceIndex)
-        {
-            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-            let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
-            let stateIndex = oscillatorLaneIndex (
-                resolvedVoice, resolvedOscillator, resolvedSubVoice);
-
-            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
-                unisonWarpHistory.at (unisonWarpHistoryIndex (
-                    resolvedVoice, resolvedOscillator, resolvedSubVoice, tapIndex)) = 0.0f;
-
-            unisonWarpHistoryWriteIndex.at (stateIndex) = 0;
-        }
-
-        void resetOscillatorUnisonWarpRenderState (int32 voiceIndex, int32 oscillatorIndex)
-        {
-            for (wrap<maxUnisonVoiceCount> subVoice)
-                resetOscillatorUnisonWarpRenderState (
-                    voiceIndex, oscillatorIndex, int32 (subVoice));
-        }
-
-        void resetVoiceWarpRenderState (int32 voiceIndex)
-        {
-            for (wrap<oscillatorCount> oscillator)
-            {
-                resetOscillatorWarpRenderState (voiceIndex, int32 (oscillator));
-                resetOscillatorUnisonWarpRenderState (voiceIndex, int32 (oscillator));
-            }
-        }
-
-        void resetAllWarpRenderState()
-        {
-            for (wrap<voiceCount> voice)
-                resetVoiceWarpRenderState (int32 (voice));
-        }
-
         void resetFilterState (int32 voiceIndex)
         {
             let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            filters.at (resolvedVoice).reset();
             unisonLeftFilters.at (resolvedVoice).reset();
             unisonRightFilters.at (resolvedVoice).reset();
         }
@@ -3015,93 +2789,81 @@ namespace wt
 
         void initialiseExternalRendererState()
         {
-            if const (enableExternalRenderer)
+            for (int32 slotIndex = 0; slotIndex < wavetableSlotCount; ++slotIndex)
             {
-                for (int32 slotIndex = 0; slotIndex < wavetableSlotCount; ++slotIndex)
+                rendererInts.at (rendererFrameCountOffset + slotIndex) = 0;
+
+                for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
                 {
-                    rendererInts.at (rendererFrameCountOffset + slotIndex) = 0;
-
-                    for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
-                    {
-                        let metadataIndex = (slotIndex * mipLevelCount) + mipIndex;
-                        rendererInts.at (rendererMipOffsetOffset + metadataIndex)
-                            = packedMipOffset (mipIndex);
-                        rendererInts.at (rendererMipLengthOffset + metadataIndex)
-                            = packedMipLength (mipIndex);
-                    }
+                    let metadataIndex = (slotIndex * mipLevelCount) + mipIndex;
+                    rendererInts.at (rendererMipOffsetOffset + metadataIndex)
+                        = packedMipOffset (mipIndex);
+                    rendererInts.at (rendererMipLengthOffset + metadataIndex)
+                        = packedMipLength (mipIndex);
                 }
+            }
 
-                for (wrap<oscillatorCount> oscillator)
-                {
-                    let oscillatorIndex = int32 (oscillator);
-                    let activeSlot = oscillatorActiveSlot.at (oscillator);
-                    rendererInts.at (rendererOscillatorSlotOffset + oscillatorIndex)
-                        = activeSlot >= 0 ? activeSlot : 0;
+            for (wrap<oscillatorCount> oscillator)
+            {
+                let oscillatorIndex = int32 (oscillator);
+                let activeSlot = oscillatorActiveSlot.at (oscillator);
+                rendererInts.at (rendererOscillatorSlotOffset + oscillatorIndex)
+                    = activeSlot >= 0 ? activeSlot : 0;
 
-                    if (activeSlot >= 0)
-                        rendererInts.at (rendererFrameCountOffset + activeSlot)
-                            = oscillatorFrameCount.at (oscillator);
-                }
+                if (activeSlot >= 0)
+                    rendererInts.at (rendererFrameCountOffset + activeSlot)
+                        = oscillatorFrameCount.at (oscillator);
+            }
 
-                rendererInts.at (rendererOversampleFactorOffset)
-                    = processor.frequency >= 88200.0 ? 1 : 2;
-                rendererInts.at (rendererUse441FilterOffset)
-                    = processor.frequency < 46000.0 ? 1 : 0;
+            rendererInts.at (rendererOversampleFactorOffset)
+                = processor.frequency >= 88200.0 ? 1 : 2;
+            rendererInts.at (rendererUse441FilterOffset)
+                = processor.frequency < 46000.0 ? 1 : 0;
 
-                for (int32 index = 0; index < rendererFamilyBatchCount; ++index)
-                    rendererInts.at (rendererAtlasFamilyTargetOffset + index) = -1;
+            for (int32 index = 0; index < rendererFamilyBatchCount; ++index)
+                rendererInts.at (rendererAtlasFamilyTargetOffset + index) = -1;
 
-                for (int32 index = 0; index < rendererLaneCount; ++index)
-                    rendererInts.at (rendererCachedAtlasModeOffset + index) = -1;
+            for (int32 index = 0; index < rendererLaneCount; ++index)
+                rendererInts.at (rendererCachedAtlasModeOffset + index) = -1;
 
-                for (int32 index = 0; index < rendererNoteOscillatorModeCount; ++index)
-                {
-                    rendererInts.at (rendererWarpModeOffset + index) = warpModeOff;
-                    rendererInts.at (rendererUnisonVoicesOffset + index) = 1;
-                    rendererFloats.at (rendererOscillatorGainOffset + index) = 0.0f;
-                }
+            for (int32 index = 0; index < rendererNoteOscillatorModeCount; ++index)
+            {
+                rendererInts.at (rendererWarpModeOffset + index) = warpModeOff;
+                rendererInts.at (rendererUnisonVoicesOffset + index) = 1;
+                rendererFloats.at (rendererOscillatorGainOffset + index) = 0.0f;
             }
         }
 
         void clearExternalRendererVoiceControls (int32 voiceIndex)
         {
-            if const (enableExternalRenderer)
-            {
-                let voice = int32 (wrap<voiceCount> (voiceIndex));
+            let voice = int32 (wrap<voiceCount> (voiceIndex));
 
-                for (wrap<oscillatorCount> oscillator)
-                {
-                    let voiceOscillator = oscillatorVoiceIndex (voice, int32 (oscillator));
-                    rendererInts.at (rendererWarpModeOffset + voiceOscillator) = warpModeOff;
-                    rendererInts.at (rendererUnisonVoicesOffset + voiceOscillator) = 1;
-                    rendererFloats.at (rendererBasePhaseIncrementOffset + voiceOscillator) = 0.0f;
-                    rendererFloats.at (rendererOscillatorGainOffset + voiceOscillator) = 0.0f;
-                }
+            for (wrap<oscillatorCount> oscillator)
+            {
+                let voiceOscillator = oscillatorVoiceIndex (voice, int32 (oscillator));
+                rendererInts.at (rendererWarpModeOffset + voiceOscillator) = warpModeOff;
+                rendererInts.at (rendererUnisonVoicesOffset + voiceOscillator) = 1;
+                rendererFloats.at (rendererBasePhaseIncrementOffset + voiceOscillator) = 0.0f;
+                rendererFloats.at (rendererOscillatorGainOffset + voiceOscillator) = 0.0f;
             }
         }
 
         void clearExternalRendererOutputs()
         {
-            if const (enableExternalRenderer)
-            {
-                for (int32 outputIndex = 0; outputIndex < 16 * 2; ++outputIndex)
-                    rendererFloats.at (rendererNoteOutputOffset + outputIndex) = 0.0f;
-            }
+            for (int32 outputIndex = 0; outputIndex < 16 * 2; ++outputIndex)
+                rendererFloats.at (rendererNoteOutputOffset + outputIndex) = 0.0f;
         }
 
         void resetExternalRendererNoteHistory (int32 voiceIndex)
         {
-            if const (enableExternalRenderer)
-            {
-                let voice = int32 (wrap<voiceCount> (voiceIndex));
-                let historyChannelStride = 2 * 79 * 16;
+            let voice = int32 (wrap<voiceCount> (voiceIndex));
+            let historyChannelStride = 2 * 79 * 16;
 
-                for (int32 channel = 0; channel < 2; ++channel)
-                    for (int32 historySample = 0; historySample < 2 * 79; ++historySample)
-                        rendererFloats.at (rendererHistoryOffset
-                            + (channel * historyChannelStride)
-                            + (historySample * 16) + voice) = 0.0f;
-            }
+            for (int32 channel = 0; channel < 2; ++channel)
+                for (int32 historySample = 0; historySample < 2 * 79; ++historySample)
+                    rendererFloats.at (rendererHistoryOffset
+                        + (channel * historyChannelStride)
+                        + (historySample * 16) + voice) = 0.0f;
         }
 
         void resetExternalRendererOscillatorPhases (int32 voiceIndex,
@@ -3110,22 +2872,19 @@ namespace wt
                                                     float32 phase,
                                                     float32 randomAmount)
         {
-            if const (enableExternalRenderer)
-            {
-                let voice = int32 (wrap<voiceCount> (voiceIndex));
-                let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-                let generation = voiceGeneration.at (voice);
+            let voice = int32 (wrap<voiceCount> (voiceIndex));
+            let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
+            let generation = voiceGeneration.at (voice);
 
-                for (wrap<maxUnisonVoiceCount> subVoice)
-                {
-                    let subVoiceIndex = int32 (subVoice);
-                    let phaseForVoice = subVoiceIndex < unisonVoiceCount
-                        ? unisonSubVoicePhase (
-                            voice, oscillator, subVoiceIndex, generation, phase, randomAmount)
-                        : 0.0f;
-                    rendererFloats.at (rendererPhaseOffset
-                        + oscillatorLaneIndex (voice, oscillator, subVoiceIndex)) = phaseForVoice;
-                }
+            for (wrap<maxUnisonVoiceCount> subVoice)
+            {
+                let subVoiceIndex = int32 (subVoice);
+                let phaseForVoice = subVoiceIndex < unisonVoiceCount
+                    ? unisonSubVoicePhase (
+                        voice, oscillator, subVoiceIndex, generation, phase, randomAmount)
+                    : 0.0f;
+                rendererFloats.at (rendererPhaseOffset
+                    + oscillatorLaneIndex (voice, oscillator, subVoiceIndex)) = phaseForVoice;
             }
         }
 
@@ -3146,48 +2905,45 @@ namespace wt
                                                 float32 effectivePositionSpread,
                                                 float32 effectiveWarpSpread)
         {
-            if const (enableExternalRenderer)
-            {
-                let voice = int32 (wrap<voiceCount> (voiceIndex));
-                let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-                let voiceOscillator = oscillatorVoiceIndex (voice, oscillator);
-                let resolvedUnisonVoices = std::intrinsics::clamp (
-                    effectiveUnisonVoices, 1, maxUnisonVoiceCount);
-                let activeSlot = oscillatorActiveSlot.at (oscillator);
-                let canRender = oscillatorGain > 0.0f
-                    && activeSlot >= 0
-                    && oscillatorFrameCount.at (oscillator) > 0;
-                let baseFrequencyHz = std::notes::noteToFrequency (effectivePitchSemitones);
+            let voice = int32 (wrap<voiceCount> (voiceIndex));
+            let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
+            let voiceOscillator = oscillatorVoiceIndex (voice, oscillator);
+            let resolvedUnisonVoices = std::intrinsics::clamp (
+                effectiveUnisonVoices, 1, maxUnisonVoiceCount);
+            let activeSlot = oscillatorActiveSlot.at (oscillator);
+            let canRender = oscillatorGain > 0.0f
+                && activeSlot >= 0
+                && oscillatorFrameCount.at (oscillator) > 0;
+            let baseFrequencyHz = std::notes::noteToFrequency (effectivePitchSemitones);
 
-                rendererFloats.at (rendererBasePhaseIncrementOffset + voiceOscillator)
-                    = baseFrequencyHz / float32 (processor.frequency);
-                rendererFloats.at (rendererBasePositionOffset + voiceOscillator)
-                    = std::intrinsics::clamp (effectivePosition, 0.0f, 1.0f);
-                rendererFloats.at (rendererBaseWarpAmountOffset + voiceOscillator)
-                    = std::intrinsics::clamp (effectiveWarpAmount, 0.0f, 1.0f);
-                rendererFloats.at (rendererBasePanOffset + voiceOscillator)
-                    = clampPan (effectivePan);
-                rendererFloats.at (rendererOscillatorGainOffset + voiceOscillator)
-                    = canRender ? oscillatorGain : 0.0f;
-                rendererFloats.at (rendererUnisonDetuneOffset + voiceOscillator)
-                    = clampUnison01 (effectiveUnisonDetune);
-                rendererFloats.at (rendererUnisonBlendOffset + voiceOscillator)
-                    = clampUnison01 (effectiveUnisonBlend);
-                rendererFloats.at (rendererUnisonWidthOffset + voiceOscillator)
-                    = clampUnison01 (effectiveUnisonWidth);
-                rendererFloats.at (rendererPositionSpreadOffset + voiceOscillator)
-                    = clampUnison01 (effectivePositionSpread);
-                rendererFloats.at (rendererWarpSpreadOffset + voiceOscillator)
-                    = clampUnison01 (effectiveWarpSpread);
-                rendererInts.at (rendererWarpModeOffset + voiceOscillator)
-                    = canRender ? effectiveWarpMode : warpModeOff;
-                rendererInts.at (rendererUnisonVoicesOffset + voiceOscillator)
-                    = resolvedUnisonVoices;
-                rendererInts.at (rendererUnisonDetuneModeOffset + voiceOscillator)
-                    = effectiveUnisonDetuneMode;
-                rendererInts.at (rendererUnisonStackModeOffset + voiceOscillator)
-                    = effectiveUnisonStackMode;
-            }
+            rendererFloats.at (rendererBasePhaseIncrementOffset + voiceOscillator)
+                = baseFrequencyHz / float32 (processor.frequency);
+            rendererFloats.at (rendererBasePositionOffset + voiceOscillator)
+                = std::intrinsics::clamp (effectivePosition, 0.0f, 1.0f);
+            rendererFloats.at (rendererBaseWarpAmountOffset + voiceOscillator)
+                = std::intrinsics::clamp (effectiveWarpAmount, 0.0f, 1.0f);
+            rendererFloats.at (rendererBasePanOffset + voiceOscillator)
+                = clampPan (effectivePan);
+            rendererFloats.at (rendererOscillatorGainOffset + voiceOscillator)
+                = canRender ? oscillatorGain : 0.0f;
+            rendererFloats.at (rendererUnisonDetuneOffset + voiceOscillator)
+                = clampUnison01 (effectiveUnisonDetune);
+            rendererFloats.at (rendererUnisonBlendOffset + voiceOscillator)
+                = clampUnison01 (effectiveUnisonBlend);
+            rendererFloats.at (rendererUnisonWidthOffset + voiceOscillator)
+                = clampUnison01 (effectiveUnisonWidth);
+            rendererFloats.at (rendererPositionSpreadOffset + voiceOscillator)
+                = clampUnison01 (effectivePositionSpread);
+            rendererFloats.at (rendererWarpSpreadOffset + voiceOscillator)
+                = clampUnison01 (effectiveWarpSpread);
+            rendererInts.at (rendererWarpModeOffset + voiceOscillator)
+                = canRender ? effectiveWarpMode : warpModeOff;
+            rendererInts.at (rendererUnisonVoicesOffset + voiceOscillator)
+                = resolvedUnisonVoices;
+            rendererInts.at (rendererUnisonDetuneModeOffset + voiceOscillator)
+                = effectiveUnisonDetuneMode;
+            rendererInts.at (rendererUnisonStackModeOffset + voiceOscillator)
+                = effectiveUnisonStackMode;
         }
 
         int32 articulationOscillatorIndex (int32 selectorA, int32 oscillatorIndex)
@@ -3799,112 +3555,6 @@ namespace wt
             }
         }
 
-        void initialiseWarpDecimatorTaps()
-        {
-            let middleIndex = float32 (warpDecimatorTapCount - 1) * 0.5f;
-            float32 coefficientSum = 0.0f;
-
-            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
-            {
-                let offsetFromMiddle = float32 (tapIndex) - middleIndex;
-                let sincValue = std::intrinsics::abs (offsetFromMiddle) <= 0.000001f
-                    ? warpDecimatorCutoffNyquist
-                    : std::intrinsics::sin (float32 (pi) * warpDecimatorCutoffNyquist * offsetFromMiddle)
-                        / (float32 (pi) * offsetFromMiddle);
-                let phase = float32 (twoPi) * float32 (tapIndex) / float32 (warpDecimatorTapCount - 1);
-                let window = 0.42f
-                           - (0.5f * std::intrinsics::cos (phase))
-                           + (0.08f * std::intrinsics::cos (2.0f * phase));
-                let coefficient = sincValue * window;
-                warpDecimatorTapsState.at (tapIndex) = coefficient;
-                coefficientSum += coefficient;
-            }
-
-            if (coefficientSum <= 0.0f)
-                return;
-
-            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
-                warpDecimatorTapsState.at (tapIndex) /= coefficientSum;
-        }
-
-        bool isMipReady (int32 mipIndex)
-        {
-            if (mipIndex < 0 || mipIndex >= mipLevelCount || frameCount <= 0)
-                return false;
-
-            return loadedFrameCounts.at (bankedMipLevelIndex (activeBankIndex, mipIndex)) >= frameCount;
-        }
-
-        int32 findPlayableMipIndex (int32 requestedMipIndex)
-        {
-            let resolvedRequestedMip = resolveMipIndex (requestedMipIndex);
-
-            if (resolvedRequestedMip < 0)
-                return -1;
-
-            for (int32 mipIndex = resolvedRequestedMip; mipIndex >= 0; --mipIndex)
-                if (isMipReady (mipIndex))
-                    return mipIndex;
-
-            return -1;
-        }
-
-        bool isLegacyAStagingComplete()
-        {
-            if (stagingGeneration <= 0 || stagingFrameCount <= 0)
-                return false;
-
-            for (int32 mipIndex = 0; mipIndex < mipLevelCount; ++mipIndex)
-                if (loadedFrameCounts.at (bankedMipLevelIndex (stagingBankIndex, mipIndex)) < stagingFrameCount)
-                    return false;
-
-            return true;
-        }
-
-        void commitLegacyAStagingTable()
-        {
-            let hadActiveTable = isPlayable != 0;
-
-            currentGeneration = stagingGeneration;
-            currentTableIndex = stagingTableIndex;
-            frameCount = stagingFrameCount;
-            lastFrameIndex = stagingLastFrameIndex;
-            lastFrameIndexF = stagingLastFrameIndexF;
-            activeBankIndex = stagingBankIndex;
-            stagingBankIndex = activeBankIndex == 0 ? 1 : 0;
-            stagingGeneration = 0;
-            stagingTableIndex = 0;
-            stagingFrameCount = 0;
-            stagingLastFrameIndex = 0;
-            stagingLastFrameIndexF = 0.0f;
-
-            if (! hadActiveTable)
-            {
-                for (wrap<voiceCount> voice)
-                {
-                    for (wrap<oscillatorCount> oscillator)
-                    {
-                        let resolvedVoice = int32 (voice);
-                        let resolvedOscillator = int32 (oscillator);
-                        phasors.at (oscillatorVoiceIndex (
-                            resolvedVoice, resolvedOscillator)).phase = 0.0f;
-                        resetOscillatorWarpRenderState (
-                            resolvedVoice, resolvedOscillator);
-                        resetOscillatorUnisonPhases (
-                            resolvedVoice,
-                            resolvedOscillator,
-                            maxUnisonVoiceCount,
-                            0.0f,
-                            0.0f);
-                        resetOscillatorUnisonWarpRenderState (
-                            resolvedVoice, resolvedOscillator);
-                    }
-                }
-            }
-
-            isPlayable = 1;
-        }
-
         void clearTableStagingIdentity()
         {
             tableStagingOscillatorIndex = -1;
@@ -3914,16 +3564,6 @@ namespace wt
             tableStagingFrameCount = 0;
             tableStagingLastFrameIndex = 0;
             tableStagingLastFrameIndexF = 0.0f;
-        }
-
-        void discardLegacyAStagingTable()
-        {
-            stagingGeneration = 0;
-            stagingTableIndex = 0;
-            stagingFrameCount = 0;
-            stagingLastFrameIndex = 0;
-            stagingLastFrameIndexF = 0.0f;
-            clearPendingTableState();
         }
 
         void commitPackedStagingTable()
@@ -3939,25 +3579,17 @@ namespace wt
             oscillatorLastFrameIndexF.at (oscillator) = tableStagingLastFrameIndexF;
             oscillatorActiveSlot.at (oscillator) = committedSlot;
 
-            if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
-            {
-                rendererInts.at (rendererOscillatorSlotOffset + oscillator) = committedSlot;
-                rendererInts.at (rendererFrameCountOffset + committedSlot)
-                    = tableStagingFrameCount;
-            }
+            rendererInts.at (rendererOscillatorSlotOffset + oscillator) = committedSlot;
+            rendererInts.at (rendererFrameCountOffset + committedSlot)
+                = tableStagingFrameCount;
 
-            if (oscillator == oscillatorA)
-                commitLegacyAStagingTable();
-            else if (! hadActiveTable)
+            if (! hadActiveTable)
             {
                 for (wrap<voiceCount> voice)
                 {
                     let resolvedVoice = int32 (voice);
-                    phasors.at (oscillatorVoiceIndex (resolvedVoice, oscillator)).phase = 0.0f;
-                    resetOscillatorWarpRenderState (resolvedVoice, oscillator);
-                    resetOscillatorUnisonPhases (
+                    resetExternalRendererOscillatorPhases (
                         resolvedVoice, oscillator, maxUnisonVoiceCount, 0.0f, 0.0f);
-                    resetOscillatorUnisonWarpRenderState (resolvedVoice, oscillator);
                 }
             }
 
@@ -3970,354 +3602,6 @@ namespace wt
 
             clearTableStagingIdentity();
             emitRuntimeServiceState (oscillator);
-        }
-
-        void writeMipFrame (int32 bankIndex, int32 mipIndex, int32 frameIndex, const float32[] sourceSamples)
-        {
-            let bank = normalizeTableBankIndex (bankIndex);
-            let base = frameBase (frameIndex);
-
-            if (mipIndex == 0)
-            {
-                if (bank == 0)
-                {
-                    mip0Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip0Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip0Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip0Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip0Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip0Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip0Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip0Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 1)
-            {
-                if (bank == 0)
-                {
-                    mip1Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip1Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip1Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip1Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip1Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip1Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip1Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip1Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 2)
-            {
-                if (bank == 0)
-                {
-                    mip2Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip2Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip2Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip2Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip2Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip2Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip2Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip2Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 3)
-            {
-                if (bank == 0)
-                {
-                    mip3Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip3Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip3Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip3Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip3Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip3Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip3Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip3Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 4)
-            {
-                if (bank == 0)
-                {
-                    mip4Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip4Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip4Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip4Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip4Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip4Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip4Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip4Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 5)
-            {
-                if (bank == 0)
-                {
-                    mip5Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip5Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip5Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip5Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip5Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip5Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip5Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip5Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 6)
-            {
-                if (bank == 0)
-                {
-                    mip6Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip6Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip6Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip6Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip6Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip6Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip6Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip6Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 7)
-            {
-                if (bank == 0)
-                {
-                    mip7Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip7Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip7Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip7Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip7Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip7Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip7Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip7Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 8)
-            {
-                if (bank == 0)
-                {
-                    mip8Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip8Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip8Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip8Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip8Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip8Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip8Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip8Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 9)
-            {
-                if (bank == 0)
-                {
-                    mip9Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip9Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip9Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip9Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip9Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip9Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip9Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip9Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-            if (mipIndex == 10)
-            {
-                if (bank == 0)
-                {
-                    mip10Bank0Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip10Bank0Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip10Bank0Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip10Bank0Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-                else
-                {
-                    mip10Bank1Samples.at (base + 0) = sourceSamples.at (samplesPerFrame - 1);
-                    for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                        mip10Bank1Samples.at (base + sampleIndex + 1) = sourceSamples.at (sampleIndex);
-                    mip10Bank1Samples.at (base + samplesPerFrame + 1) = sourceSamples.at (0);
-                    mip10Bank1Samples.at (base + samplesPerFrame + 2) = sourceSamples.at (1);
-                }
-
-                return;
-            }
-
-        }
-
-        float32 readFixedFrameSampleForMip (int32 mipIndex, int32 frameIndex, float32 phase)
-        {
-            let bank = normalizeTableBankIndex (activeBankIndex);
-            let base = frameBase (frameIndex);
-
-            if (mipIndex == 0) return bank == 0 ? readFixedFrameSampleFromBase (mip0Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip0Bank1Samples, base, phase);
-            if (mipIndex == 1) return bank == 0 ? readFixedFrameSampleFromBase (mip1Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip1Bank1Samples, base, phase);
-            if (mipIndex == 2) return bank == 0 ? readFixedFrameSampleFromBase (mip2Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip2Bank1Samples, base, phase);
-            if (mipIndex == 3) return bank == 0 ? readFixedFrameSampleFromBase (mip3Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip3Bank1Samples, base, phase);
-            if (mipIndex == 4) return bank == 0 ? readFixedFrameSampleFromBase (mip4Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip4Bank1Samples, base, phase);
-            if (mipIndex == 5) return bank == 0 ? readFixedFrameSampleFromBase (mip5Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip5Bank1Samples, base, phase);
-            if (mipIndex == 6) return bank == 0 ? readFixedFrameSampleFromBase (mip6Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip6Bank1Samples, base, phase);
-            if (mipIndex == 7) return bank == 0 ? readFixedFrameSampleFromBase (mip7Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip7Bank1Samples, base, phase);
-            if (mipIndex == 8) return bank == 0 ? readFixedFrameSampleFromBase (mip8Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip8Bank1Samples, base, phase);
-            if (mipIndex == 9) return bank == 0 ? readFixedFrameSampleFromBase (mip9Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip9Bank1Samples, base, phase);
-            if (mipIndex == 10) return bank == 0 ? readFixedFrameSampleFromBase (mip10Bank0Samples, base, phase) : readFixedFrameSampleFromBase (mip10Bank1Samples, base, phase);
-            return 0.0f;
-        }
-
-        float32 readFrameBlendSampleForMip (int32 mipIndex,
-                                            int32 frameLo,
-                                            int32 frameHi,
-                                            float32 phase,
-                                            float32 frameT)
-        {
-            let lo = readFixedFrameSampleForMip (mipIndex, frameLo, phase);
-
-            if (frameHi == frameLo)
-                return lo;
-
-            let hi = readFixedFrameSampleForMip (mipIndex, frameHi, phase);
-            return lo + (hi - lo) * frameT;
-        }
-
-        float32 readFixedFrameEndpointSampleForMip (int32 mipIndex, int32 frameIndex)
-        {
-            let bank = normalizeTableBankIndex (activeBankIndex);
-            let endpointIndex = frameBase (frameIndex) + samplesPerFrame;
-
-            if (mipIndex == 0) return bank == 0 ? mip0Bank0Samples.at (endpointIndex) : mip0Bank1Samples.at (endpointIndex);
-            if (mipIndex == 1) return bank == 0 ? mip1Bank0Samples.at (endpointIndex) : mip1Bank1Samples.at (endpointIndex);
-            if (mipIndex == 2) return bank == 0 ? mip2Bank0Samples.at (endpointIndex) : mip2Bank1Samples.at (endpointIndex);
-            if (mipIndex == 3) return bank == 0 ? mip3Bank0Samples.at (endpointIndex) : mip3Bank1Samples.at (endpointIndex);
-            if (mipIndex == 4) return bank == 0 ? mip4Bank0Samples.at (endpointIndex) : mip4Bank1Samples.at (endpointIndex);
-            if (mipIndex == 5) return bank == 0 ? mip5Bank0Samples.at (endpointIndex) : mip5Bank1Samples.at (endpointIndex);
-            if (mipIndex == 6) return bank == 0 ? mip6Bank0Samples.at (endpointIndex) : mip6Bank1Samples.at (endpointIndex);
-            if (mipIndex == 7) return bank == 0 ? mip7Bank0Samples.at (endpointIndex) : mip7Bank1Samples.at (endpointIndex);
-            if (mipIndex == 8) return bank == 0 ? mip8Bank0Samples.at (endpointIndex) : mip8Bank1Samples.at (endpointIndex);
-            if (mipIndex == 9) return bank == 0 ? mip9Bank0Samples.at (endpointIndex) : mip9Bank1Samples.at (endpointIndex);
-            if (mipIndex == 10) return bank == 0 ? mip10Bank0Samples.at (endpointIndex) : mip10Bank1Samples.at (endpointIndex);
-            return 0.0f;
-        }
-
-        float32 readFrameBlendEndpointSampleForMip (int32 mipIndex,
-                                                    int32 frameLo,
-                                                    int32 frameHi,
-                                                    float32 frameT)
-        {
-            let lo = readFixedFrameEndpointSampleForMip (mipIndex, frameLo);
-
-            if (frameHi == frameLo)
-                return lo;
-
-            let hi = readFixedFrameEndpointSampleForMip (mipIndex, frameHi);
-            return lo + (hi - lo) * frameT;
-        }
-
-        void emitMipRequest (int32 mipIndex, int32 urgencyLevel)
-        {
-            let requestIndex = oscillatorMipIndex (oscillatorA, mipIndex);
-
-            if (currentGeneration <= 0 || frameCount <= 0
-                || mipIndex < 0 || mipIndex >= mipLevelCount)
-                return;
-
-            if (oscillatorRequestedGenerationByMip.at (requestIndex) == currentGeneration
-                && oscillatorRequestedUrgencyByMip.at (requestIndex) >= urgencyLevel)
-                return;
-
-            WavetableMipRequest request;
-            request.dspSessionId = currentDspSessionId;
-            request.generation = currentGeneration;
-            request.tableIndex = currentTableIndex;
-            request.mipIndex = mipIndex;
-            request.urgencyLevel = urgencyLevel;
-            oscillatorRequestedGenerationByMip.at (requestIndex) = currentGeneration;
-            oscillatorRequestedUrgencyByMip.at (requestIndex) = urgencyLevel;
-            wavetableMipRequestOut <- request;
-
-            OscillatorWavetableMipRequest oscillatorRequest;
-            oscillatorRequest.dspSessionId = currentDspSessionId;
-            oscillatorRequest.oscillatorIndex = oscillatorA;
-            oscillatorRequest.generation = currentGeneration;
-            oscillatorRequest.tableIndex = currentTableIndex;
-            oscillatorRequest.mipIndex = mipIndex;
-            oscillatorRequest.urgencyLevel = urgencyLevel;
-            oscillatorWavetableMipRequestOut <- oscillatorRequest;
         }
 
         void emitUploadAck (int32 oscillatorIndex,
@@ -4334,17 +3618,6 @@ namespace wt
             oscillatorAck.mipIndex = mipIndex;
             oscillatorAck.frameIndex = uploadedFrameIndex;
             oscillatorWavetableUploadAckOut <- oscillatorAck;
-
-            if (oscillatorIndex == oscillatorA)
-            {
-                WavetableUploadAck ack;
-                ack.dspSessionId = currentDspSessionId;
-                ack.generation = generation;
-                ack.tableIndex = tableIndex;
-                ack.mipIndex = mipIndex;
-                ack.frameIndex = uploadedFrameIndex;
-                wavetableUploadAckOut <- ack;
-            }
         }
 
         void emitRuntimeServiceState (int32 oscillatorIndex)
@@ -4368,21 +3641,6 @@ namespace wt
             oscillatorState.loadingTableIndex = hasLoading != 0 ? tableStagingTableIndex : 0;
             oscillatorState.loadingGeneration = hasLoading != 0 ? tableStagingGeneration : 0;
             oscillatorRuntimeServiceStateOut <- oscillatorState;
-
-            if (oscillator == oscillatorA)
-            {
-                RuntimeServiceState state;
-                state.dspSessionId = oscillatorState.dspSessionId;
-                state.generationFrontier = oscillatorState.generationFrontier;
-                state.serviceState = oscillatorState.serviceState;
-                state.hasActive = oscillatorState.hasActive;
-                state.activeTableIndex = oscillatorState.activeTableIndex;
-                state.activeGeneration = oscillatorState.activeGeneration;
-                state.hasLoading = oscillatorState.hasLoading;
-                state.loadingTableIndex = oscillatorState.loadingTableIndex;
-                state.loadingGeneration = oscillatorState.loadingGeneration;
-                runtimeServiceStateOut <- state;
-            }
         }
 
         int32 findNewestVisibleGeneration()
@@ -4427,7 +3685,8 @@ namespace wt
             else
             {
                 monitor.voiceGeneration = findNewestVisibleGeneration();
-                monitor.position = std::intrinsics::clamp (framePositionIn, 0.0f, 1.0f);
+                monitor.position = std::intrinsics::clamp (
+                    oscillatorFramePosition (oscillatorA), 0.0f, 1.0f);
             }
 
             effectiveWavetablePositionOut <- monitor;
@@ -4449,8 +3708,9 @@ namespace wt
             {
                 monitor.voiceGeneration = findNewestVisibleGeneration();
                 monitor.hasActive = 0;
-                monitor.mode = resolveWarpMode (warpModeIn);
-                monitor.amount = std::intrinsics::clamp (warpAmountIn, 0.0f, 1.0f);
+                monitor.mode = oscillatorWarpMode (oscillatorA);
+                monitor.amount = std::intrinsics::clamp (
+                    oscillatorWarpAmount (oscillatorA), 0.0f, 1.0f);
             }
 
             effectiveWarpStateOut <- monitor;
@@ -4478,14 +3738,14 @@ namespace wt
             {
                 monitor.voiceGeneration = findNewestVisibleGeneration();
                 monitor.hasActive = 0;
-                monitor.voices = unisonVoicesState;
-                monitor.detune = unisonDetuneState;
-                monitor.blend = unisonBlendState;
-                monitor.width = unisonWidthState;
-                monitor.detuneMode = unisonDetuneModeState;
-                monitor.stackMode = unisonStackModeState;
-                monitor.wavetablePositionSpread = unisonWavetablePositionSpreadState;
-                monitor.warpSpread = unisonWarpSpreadState;
+                monitor.voices = oscillatorUnisonVoices (oscillatorA);
+                monitor.detune = oscillatorUnisonDetune (oscillatorA);
+                monitor.blend = oscillatorUnisonBlend (oscillatorA);
+                monitor.width = oscillatorUnisonWidth (oscillatorA);
+                monitor.detuneMode = oscillatorUnisonDetuneMode (oscillatorA);
+                monitor.stackMode = oscillatorUnisonStackMode (oscillatorA);
+                monitor.wavetablePositionSpread = oscillatorPositionSpread (oscillatorA);
+                monitor.warpSpread = oscillatorWarpSpread (oscillatorA);
             }
 
             effectiveUnisonStateOut <- monitor;
@@ -4595,210 +3855,6 @@ namespace wt
             }
         }
 
-        void maybeTransitionServiceToPlayable()
-        {
-        }
-
-        float32 readVoiceSampleForMip (int32 playableMipIndex,
-                                       float32 effectivePosition,
-                                       float32 phase)
-        {
-            if (frameCount <= 1)
-                return readFixedFrameSampleForMip (playableMipIndex, 0, phase);
-
-            let frameIndex = effectivePosition * lastFrameIndexF;
-            let frameLo = int32 (std::intrinsics::floor (frameIndex));
-            let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
-            let frameT = frameIndex - float32 (frameLo);
-            return readFrameBlendSampleForMip (playableMipIndex, frameLo, frameHi, phase, frameT);
-        }
-
-        float32 readVoiceEndpointSampleForMip (int32 playableMipIndex,
-                                               float32 effectivePosition)
-        {
-            if (frameCount <= 1)
-                return readFixedFrameEndpointSampleForMip (playableMipIndex, 0);
-
-            let frameIndex = effectivePosition * lastFrameIndexF;
-            let frameLo = int32 (std::intrinsics::floor (frameIndex));
-            let frameHi = std::intrinsics::min (frameLo + 1, lastFrameIndex);
-            let frameT = frameIndex - float32 (frameLo);
-            return readFrameBlendEndpointSampleForMip (playableMipIndex, frameLo, frameHi, frameT);
-        }
-
-        void pushWarpHistorySample (int32 voiceIndex, int32 oscillatorIndex, float32 sample)
-        {
-            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-            let stateIndex = oscillatorVoiceIndex (resolvedVoice, resolvedOscillator);
-            let writeIndex = voiceWarpHistoryWriteIndex.at (stateIndex);
-            voiceWarpHistory.at (
-                warpHistoryIndex (resolvedVoice, resolvedOscillator, writeIndex)) = sample;
-            int32 nextWriteIndex = writeIndex + 1;
-
-            if (nextWriteIndex >= warpDecimatorTapCount)
-                nextWriteIndex = 0;
-
-            voiceWarpHistoryWriteIndex.at (stateIndex) = nextWriteIndex;
-        }
-
-        float32 readWarpDecimatorOutput (int32 voiceIndex, int32 oscillatorIndex)
-        {
-            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-            int32 historyIndex = voiceWarpHistoryWriteIndex.at (
-                oscillatorVoiceIndex (resolvedVoice, resolvedOscillator));
-            float32 sum = 0.0f;
-
-            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
-            {
-                historyIndex -= 1;
-
-                if (historyIndex < 0)
-                    historyIndex = warpDecimatorTapCount - 1;
-
-                sum += voiceWarpHistory.at (
-                           warpHistoryIndex (resolvedVoice, resolvedOscillator, historyIndex))
-                     * warpDecimatorTapsState.at (tapIndex);
-            }
-
-            return sum;
-        }
-
-        float32 renderWarpedVoiceSample (int32 voiceIndex,
-                                         int32 oscillatorIndex,
-                                         int32 playableMipIndex,
-                                         float32 effectivePosition,
-                                         float32 basePhase,
-                                         float32 currentPhaseIncrement,
-                                         int32 warpMode,
-                                         float32 effectiveWarpAmount)
-        {
-            let oversampledPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
-
-            for (int32 oversampleIndex = 0; oversampleIndex < warpOversampleFactor; ++oversampleIndex)
-            {
-                let oversampledPhase = std::intrinsics::wrap (
-                    basePhase + (float32 (oversampleIndex) * oversampledPhaseIncrement),
-                    1.0f
-                );
-                let warpedPhase = resolveWarpPhase (warpMode, effectiveWarpAmount, oversampledPhase);
-                float32 oversampledSample = 0.0f;
-
-                if (warpedPhase.shouldLookup)
-                    oversampledSample = readVoiceSampleForMip (playableMipIndex, effectivePosition, warpedPhase.phase);
-                else if (warpedPhase.holdCycleEndpoint)
-                    oversampledSample = readVoiceEndpointSampleForMip (playableMipIndex, effectivePosition);
-
-                pushWarpHistorySample (voiceIndex, oscillatorIndex, oversampledSample);
-            }
-
-            return readWarpDecimatorOutput (voiceIndex, oscillatorIndex);
-        }
-
-        void pushUnisonWarpHistorySample (int32 voiceIndex,
-                                          int32 oscillatorIndex,
-                                          int32 subVoiceIndex,
-                                          float32 sample)
-        {
-            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-            let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
-            let stateIndex = oscillatorLaneIndex (
-                resolvedVoice, resolvedOscillator, resolvedSubVoice);
-            let writeIndex = unisonWarpHistoryWriteIndex.at (stateIndex);
-            unisonWarpHistory.at (unisonWarpHistoryIndex (
-                resolvedVoice, resolvedOscillator, resolvedSubVoice, writeIndex)) = sample;
-            int32 nextWriteIndex = writeIndex + 1;
-
-            if (nextWriteIndex >= warpDecimatorTapCount)
-                nextWriteIndex = 0;
-
-            unisonWarpHistoryWriteIndex.at (stateIndex) = nextWriteIndex;
-        }
-
-        float32 readUnisonWarpDecimatorOutput (int32 voiceIndex,
-                                               int32 oscillatorIndex,
-                                               int32 subVoiceIndex)
-        {
-            let resolvedVoice = int32 (wrap<voiceCount> (voiceIndex));
-            let resolvedOscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-            let resolvedSubVoice = int32 (wrap<maxUnisonVoiceCount> (subVoiceIndex));
-            int32 historyIndex = unisonWarpHistoryWriteIndex.at (
-                oscillatorLaneIndex (resolvedVoice, resolvedOscillator, resolvedSubVoice));
-            float32 sum = 0.0f;
-
-            for (int32 tapIndex = 0; tapIndex < warpDecimatorTapCount; ++tapIndex)
-            {
-                historyIndex -= 1;
-
-                if (historyIndex < 0)
-                    historyIndex = warpDecimatorTapCount - 1;
-
-                sum += unisonWarpHistory.at (unisonWarpHistoryIndex (
-                           resolvedVoice, resolvedOscillator, resolvedSubVoice, historyIndex))
-                     * warpDecimatorTapsState.at (tapIndex);
-            }
-
-            return sum;
-        }
-
-        float32 renderWarpedUnisonSample (int32 voiceIndex,
-                                          int32 oscillatorIndex,
-                                          int32 subVoiceIndex,
-                                          int32 playableMipIndex,
-                                          float32 effectivePosition,
-                                          float32 basePhase,
-                                          float32 currentPhaseIncrement,
-                                          int32 warpMode,
-                                          float32 effectiveWarpAmount)
-        {
-            let oversampledPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
-
-            for (int32 oversampleIndex = 0; oversampleIndex < warpOversampleFactor; ++oversampleIndex)
-            {
-                let oversampledPhase = std::intrinsics::wrap (
-                    basePhase + (float32 (oversampleIndex) * oversampledPhaseIncrement),
-                    1.0f
-                );
-                let warpedPhase = resolveWarpPhase (warpMode, effectiveWarpAmount, oversampledPhase);
-                float32 oversampledSample = 0.0f;
-
-                if (warpedPhase.shouldLookup)
-                    oversampledSample = readVoiceSampleForMip (playableMipIndex, effectivePosition, warpedPhase.phase);
-                else if (warpedPhase.holdCycleEndpoint)
-                    oversampledSample = readVoiceEndpointSampleForMip (playableMipIndex, effectivePosition);
-
-                pushUnisonWarpHistorySample (
-                    voiceIndex, oscillatorIndex, subVoiceIndex, oversampledSample);
-            }
-
-            return readUnisonWarpDecimatorOutput (
-                voiceIndex, oscillatorIndex, subVoiceIndex);
-        }
-
-        void resetOscillatorUnisonPhases (int32 voiceIndex,
-                                          int32 oscillatorIndex,
-                                          int32 unisonVoiceCount,
-                                          float32 phase,
-                                          float32 randomAmount)
-        {
-            let voice = int32 (wrap<voiceCount> (voiceIndex));
-            let oscillator = int32 (wrap<oscillatorCount> (oscillatorIndex));
-            let generation = voiceGeneration.at (voice);
-
-            for (wrap<maxUnisonVoiceCount> subVoice)
-            {
-                let subIndex = int32 (subVoice);
-                let phaseForVoice = subIndex < unisonVoiceCount
-                    ? unisonSubVoicePhase (
-                        voice, oscillator, subIndex, generation, phase, randomAmount)
-                    : 0.0f;
-                unisonPhasors.at (
-                    oscillatorLaneIndex (voice, oscillator, subIndex)).phase = phaseForVoice;
-            }
-        }
-
         void emitOscillatorVoiceStart (int32 voiceIndex, int32 oscillatorIndex)
         {
             let voice = int32 (wrap<voiceCount> (voiceIndex));
@@ -4810,48 +3866,33 @@ namespace wt
                 oscillatorVoiceIndex (voice, oscillator));
             monitor.channel = voiceChannel.at (voice);
             monitor.pitch = voiceBasePitch.at (voice);
-            monitor.firstUnisonPhase = unisonPhasors.at (
-                oscillatorLaneIndex (voice, oscillator, 0)).phase;
-            monitor.lastUnisonPhase = unisonPhasors.at (
-                oscillatorLaneIndex (voice, oscillator, maxUnisonVoiceCount - 1)).phase;
+            monitor.firstUnisonPhase = rendererFloats.at (
+                rendererPhaseOffset + oscillatorLaneIndex (voice, oscillator, 0));
+            monitor.lastUnisonPhase = rendererFloats.at (
+                rendererPhaseOffset
+                    + oscillatorLaneIndex (voice, oscillator, maxUnisonVoiceCount - 1));
             oscillatorVoiceStartOut <- monitor;
         }
 
         void resetVoiceOscillatorLifecycle (int32 voiceIndex)
         {
             let voice = int32 (wrap<voiceCount> (voiceIndex));
-
-            if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
-                resetExternalRendererNoteHistory (voice);
+            resetExternalRendererNoteHistory (voice);
 
             for (wrap<oscillatorCount> oscillatorWrapped)
             {
                 let oscillator = int32 (oscillatorWrapped);
                 voiceOscillatorGeneration.at (oscillatorVoiceIndex (voice, oscillator))
                     = voiceGeneration.at (voice);
-                resetOscillatorWarpRenderState (voice, oscillator);
-                resetOscillatorUnisonWarpRenderState (voice, oscillator);
 
                 if (voiceOscillatorRetriggers (voice, oscillator))
-                    resetOscillatorUnisonPhases (
+                    resetExternalRendererOscillatorPhases (
                         voice,
                         oscillator,
                         voiceOscillatorUnisonVoices (voice, oscillator),
                         voiceOscillatorPhase (voice, oscillator),
                         voiceOscillatorPhaseRandom (voice, oscillator)
                     );
-
-                if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
-                {
-                    if (voiceOscillatorRetriggers (voice, oscillator))
-                        resetExternalRendererOscillatorPhases (
-                            voice,
-                            oscillator,
-                            voiceOscillatorUnisonVoices (voice, oscillator),
-                            voiceOscillatorPhase (voice, oscillator),
-                            voiceOscillatorPhaseRandom (voice, oscillator)
-                        );
-                }
 
                 emitOscillatorVoiceStart (voice, oscillator);
             }
@@ -5548,9 +4589,6 @@ namespace wt
 
             let previousStagingOscillator = tableStagingOscillatorIndex;
 
-            if (previousStagingOscillator == oscillatorA)
-                discardLegacyAStagingTable();
-
             oscillatorGenerationFrontier.at (oscillator) = std::intrinsics::max (
                 oscillatorGenerationFrontier.at (oscillator), requestedGeneration);
             tableStagingOscillatorIndex = oscillator;
@@ -5562,17 +4600,6 @@ namespace wt
             tableStagingLastFrameIndexF = float32 (tableStagingLastFrameIndex);
             clearPackedSlotState (nextStagingSlot);
             clearOscillatorMipRequestState (oscillator);
-
-            if (oscillator == oscillatorA)
-            {
-                generationFrontier = oscillatorGenerationFrontier.at (oscillatorA);
-                stagingGeneration = requestedGeneration;
-                stagingTableIndex = requestedTableIndex;
-                stagingFrameCount = resolvedFrameCount;
-                stagingLastFrameIndex = resolvedFrameCount - 1;
-                stagingLastFrameIndexF = float32 (stagingLastFrameIndex);
-                clearPendingTableState();
-            }
 
             if (previousStagingOscillator >= 0 && previousStagingOscillator != oscillator)
                 emitRuntimeServiceState (previousStagingOscillator);
@@ -5624,17 +4651,6 @@ namespace wt
             packedLoadedFrameCounts.at (packedSlotMipIndex (
                 tableStagingSlotIndex, resolvedMipIndex)) += 1;
 
-            if (oscillatorIndex == oscillatorA)
-            {
-                let legacyReadyIndex = bankedReadinessIndex (
-                    stagingBankIndex, resolvedMipIndex, uploadedFrameIndex);
-                writeMipFrame (
-                    stagingBankIndex, resolvedMipIndex, uploadedFrameIndex, samples);
-                readyFrameFlags.at (legacyReadyIndex) = 1;
-                loadedFrameCounts.at (bankedMipLevelIndex (
-                    stagingBankIndex, resolvedMipIndex)) += 1;
-            }
-
             emitUploadAck (
                 oscillatorIndex,
                 uploadedGeneration,
@@ -5644,13 +4660,7 @@ namespace wt
             );
 
             if (isPackedStagingComplete())
-            {
-                if (tableStagingOscillatorIndex == oscillatorA
-                    && ! isLegacyAStagingComplete())
-                    return;
-
                 commitPackedStagingTable();
-            }
         }
 
         void abortWavetableLoad (int32 dspSessionId,
@@ -5666,17 +4676,8 @@ namespace wt
 
             let abortedOscillator = tableStagingOscillatorIndex;
 
-            if (abortedOscillator == oscillatorA)
-                discardLegacyAStagingTable();
-
             clearTableStagingIdentity();
             emitRuntimeServiceState (abortedOscillator);
-        }
-
-        event wavetableLoadBeginIn (WavetableLoadBegin request)
-        {
-            beginWavetableLoad (request.dspSessionId, oscillatorA, request.generation,
-                                request.tableIndex, request.frameCount);
         }
 
         event oscillatorWavetableLoadBeginIn (OscillatorWavetableLoadBegin request)
@@ -5685,24 +4686,11 @@ namespace wt
                                 request.generation, request.tableIndex, request.frameCount);
         }
 
-        event wavetableMipFrameIn (WavetableMipFrame frame)
-        {
-            receiveWavetableMipFrame (frame.dspSessionId, oscillatorA, frame.generation,
-                                      frame.tableIndex, frame.mipIndex, frame.frameIndex,
-                                      frame.samples);
-        }
-
         event oscillatorWavetableMipFrameIn (OscillatorWavetableMipFrame frame)
         {
             receiveWavetableMipFrame (frame.dspSessionId, frame.oscillatorIndex,
                                       frame.generation, frame.tableIndex, frame.mipIndex,
                                       frame.frameIndex, frame.samples);
-        }
-
-        event serviceLoadAbortIn (ServiceLoadAbort abort)
-        {
-            abortWavetableLoad (abort.dspSessionId, oscillatorA,
-                                abort.generation, abort.tableIndex);
         }
 
         event oscillatorServiceLoadAbortIn (OscillatorServiceLoadAbort abort)
@@ -5715,11 +4703,10 @@ namespace wt
         {
             previewFrequencyHzState = previewFrequencyHzState < 0.0f ? 0.0f : previewFrequencyHzState;
             glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
-            updateUnisonInputState();
+            updateOscillatorInputState();
+
             for (wrap<oscillatorCount> oscillator)
                 clearOscillatorMipRequestState (int32 (oscillator));
-            initialiseWarpDecimatorTaps();
-            resetAllWarpRenderState();
 
             let requestedInterval = int32 (
                 std::intrinsics::floor ((processor.frequency / wt::effectiveWavetablePositionMonitorHz) + 0.5f)
@@ -5747,50 +4734,43 @@ namespace wt
             msegMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedMsegInterval);
             framesUntilNextMsegMonitorUpdate = 0;
             rackModGateReleaseStepState = rackModGateReleaseStep (float32 (processor.frequency));
-            rackModSmoothingCoefficientState = rackModOnePoleCoefficient (rackModSmoothingMs,
-                                                                          float32 (processor.frequency));
+            rackModSmoothingCoefficientState = rackModOnePoleCoefficient (
+                rackModSmoothingMs, float32 (processor.frequency));
             resetAllFilterState();
+
             for (wrap<voiceCount> voice)
                 clearVoiceArticulation (int32 (voice));
 
-            if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
-                initialiseExternalRendererState();
+            initialiseExternalRendererState();
 
             loop
             {
                 glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
-                updateUnisonInputState();
+                updateOscillatorInputState();
 
                 if (! hasEmittedInitialRuntimeState)
                 {
-                    emitRuntimeServiceState (oscillatorA);
+                    for (wrap<oscillatorCount> oscillator)
+                        emitRuntimeServiceState (int32 (oscillator));
+
                     hasEmittedInitialRuntimeState = true;
                 }
-
-                maybeTransitionServiceToPlayable();
 
                 float32 leftMix = 0.0f;
                 float32 rightMix = 0.0f;
                 float32 trackingPitchHz = 0.0f;
                 int32 trackingSerial = -1;
 
-                if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
-                {
-                    for (wrap<voiceCount> voice)
-                    {
-                        clearExternalRendererVoiceControls (int32 (voice));
-                        legacyALeftPrefilter.at (voice) = 0.0f;
-                        legacyARightPrefilter.at (voice) = 0.0f;
-                    }
+                for (wrap<voiceCount> voice)
+                    clearExternalRendererVoiceControls (int32 (voice));
 
-                    clearExternalRendererOutputs();
-                }
-
+                clearExternalRendererOutputs();
                 beginModulationFrame();
 
                 for (wrap<voiceCount> voice)
                 {
-                    advanceVoicePitchState (int32 (voice));
+                    let voiceIndex = int32 (voice);
+                    advanceVoicePitchState (voiceIndex);
                     mseg1[voice].advance();
                     mseg2[voice].advance();
                     mseg3[voice].advance();
@@ -5802,45 +4782,17 @@ namespace wt
                     voiceMsegProgress2[voice] = mseg2[voice].progressOut;
                     voiceMsegProgress3[voice] = mseg3[voice].progressOut;
 
-                    let processorFrequency = float32 (processor.frequency);
-                    let envelopeGain = envelopes[voice].gainOut;
-                    if (! voiceIsSoundingForRackModulation (int32 (voice)))
+                    if (! voiceIsSoundingForRackModulation (voiceIndex))
                         continue;
 
-                    accumulateVoiceModulationTargets (int32 (voice));
-                    accumulateVoiceRackSources (int32 (voice));
-                    let routePosition = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetWavetablePosition);
-                    let routeWarpAmount = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetWarpAmount);
-                    let routePitchSemitones = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetPitchSemitones);
-                    let routeAmpGainDb = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetAmpGainDb);
-                    let routePan = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetPan);
-                    let routeUnisonDetune = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetUnisonDetune);
-                    let routeUnisonBlend = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetUnisonBlend);
-                    let routeUnisonWidth = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetUnisonWidth);
-                    let routeUnisonWavetablePositionSpread = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetUnisonWavetablePositionSpread);
-                    let routeUnisonWarpSpread = voiceOscillatorModulationOffset (
-                        int32 (voice), oscillatorA, modulationTargetUnisonWarpSpread);
-                    let routeFilterCutoffOctaves = voiceTargetOffset (
-                        int32 (voice), modulationTargetFilterCutoffOctaves);
-                    let routeFilterQ = voiceTargetOffset (
-                        int32 (voice), modulationTargetFilterQ);
-                    let hasSoloedOscillator = voiceHasSoloedOscillator (int32 (voice));
+                    accumulateVoiceModulationTargets (voiceIndex);
+                    accumulateVoiceRackSources (voiceIndex);
 
-                    let baseFramePosition = voiceOscillatorFramePosition (
-                        int32 (voice), oscillatorA);
-                    let baseWarpMode = voiceOscillatorWarpMode (
-                        int32 (voice), oscillatorA);
-                    let baseWarpAmount = voiceOscillatorWarpAmount (
-                        int32 (voice), oscillatorA);
+                    let processorFrequency = float32 (processor.frequency);
+                    let routeFilterCutoffOctaves = voiceTargetOffset (
+                        voiceIndex, modulationTargetFilterCutoffOctaves);
+                    let routeFilterQ = voiceTargetOffset (
+                        voiceIndex, modulationTargetFilterQ);
                     let baseFilterMode = voiceUsesArticulation.at (voice)
                         ? voiceArticulationFilterMode.at (voice)
                         : resolveFilterMode (filterModeIn);
@@ -5850,438 +4802,177 @@ namespace wt
                     let baseFilterQ = voiceUsesArticulation.at (voice)
                         ? voiceArticulationFilterQ.at (voice)
                         : filterQIn;
-                    let basePan = voiceOscillatorPan (int32 (voice), oscillatorA);
-                    let baseUnisonVoices = voiceOscillatorUnisonVoices (
-                        int32 (voice), oscillatorA);
-                    let baseUnisonDetune = voiceOscillatorUnisonDetune (
-                        int32 (voice), oscillatorA);
-                    let baseUnisonBlend = voiceOscillatorUnisonBlend (
-                        int32 (voice), oscillatorA);
-                    let baseUnisonWidth = voiceOscillatorUnisonWidth (
-                        int32 (voice), oscillatorA);
-                    let baseUnisonDetuneMode = voiceOscillatorUnisonDetuneMode (
-                        int32 (voice), oscillatorA);
-                    let baseUnisonStackMode = voiceOscillatorUnisonStackMode (
-                        int32 (voice), oscillatorA);
-                    let baseUnisonWavetablePositionSpread = voiceOscillatorPositionSpread (
-                        int32 (voice), oscillatorA);
-                    let baseUnisonWarpSpread = voiceOscillatorWarpSpread (
-                        int32 (voice), oscillatorA);
-                    let effectivePosition = std::intrinsics::clamp (
-                        baseFramePosition + routePosition,
-                        0.0f,
-                        1.0f
-                    );
-                    let warpMode = baseWarpMode;
-                    let effectiveWarpAmount = std::intrinsics::clamp (
-                        baseWarpAmount + routeWarpAmount,
-                        0.0f,
-                        1.0f
-                    );
-                    let filterMode = baseFilterMode;
                     let effectiveFilterCutoffHz = clampFilterCutoffHz (
-                        baseFilterCutoffHz * std::intrinsics::pow (2.0f, routeFilterCutoffOctaves),
-                        processorFrequency
-                    );
+                        baseFilterCutoffHz
+                            * std::intrinsics::pow (2.0f, routeFilterCutoffOctaves),
+                        processorFrequency);
                     let effectiveFilterQ = clampFilterQ (baseFilterQ + routeFilterQ);
-                    let effectivePan = clampPan (basePan + routePan);
-                    let effectiveUnisonVoices = std::intrinsics::clamp (baseUnisonVoices, 1, maxUnisonVoiceCount);
-                    let effectiveUnisonDetune = clampUnison01 (baseUnisonDetune + routeUnisonDetune);
-                    let effectiveUnisonBlend = clampUnison01 (baseUnisonBlend + routeUnisonBlend);
-                    let effectiveUnisonWidth = clampUnison01 (baseUnisonWidth + routeUnisonWidth);
-                    let effectiveUnisonWavetablePositionSpread = clampUnison01 (
-                        baseUnisonWavetablePositionSpread + routeUnisonWavetablePositionSpread
-                    );
-                    let effectiveUnisonWarpSpread = clampUnison01 (
-                        baseUnisonWarpSpread + routeUnisonWarpSpread
-                    );
-                    float32 effectivePitchSemitones = voiceCurrentPitch.at (voice)
-                        + voiceBendSemitones.at (voice)
-                        + routePitchSemitones
-                        + voiceOscillatorTuningSemitones (int32 (voice), oscillatorA);
-                    let effectiveFrequencyHz = std::notes::noteToFrequency (effectivePitchSemitones);
-                    let voiceSerial = voiceTrackingSerial.at (voice);
+                    let hasSoloedOscillator = voiceHasSoloedOscillator (voiceIndex);
 
-                    if (voiceActive.at (voice) != 0 && voiceSerial > trackingSerial)
-                    {
-                        trackingSerial = voiceSerial;
-                        trackingPitchHz = effectiveFrequencyHz;
-                    }
-
-                    let shouldRenderWarpBackground = warpMode > warpModeOff;
-                    let shouldBypassWarpOutput = isIdentityWarp (warpMode, effectiveWarpAmount);
-                    voiceEffectivePosition.at (voice) = effectivePosition;
-                    voiceEffectiveWarpMode.at (voice) = warpMode;
-                    voiceEffectiveWarpAmount.at (voice) = effectiveWarpAmount;
-                    voiceEffectiveFilterMode.at (voice) = filterMode;
+                    voiceEffectiveFilterMode.at (voice) = baseFilterMode;
                     voiceEffectiveFilterCutoffHz.at (voice) = effectiveFilterCutoffHz;
                     voiceEffectiveFilterQ.at (voice) = effectiveFilterQ;
-                    voiceEffectivePan.at (voice) = effectivePan;
-                    voiceEffectiveUnisonVoices.at (voice) = effectiveUnisonVoices;
-                    voiceEffectiveUnisonDetune.at (voice) = effectiveUnisonDetune;
-                    voiceEffectiveUnisonBlend.at (voice) = effectiveUnisonBlend;
-                    voiceEffectiveUnisonWidth.at (voice) = effectiveUnisonWidth;
-                    voiceEffectiveUnisonDetuneMode.at (voice) = baseUnisonDetuneMode;
-                    voiceEffectiveUnisonStackMode.at (voice) = baseUnisonStackMode;
-                    voiceEffectiveUnisonWavetablePositionSpread.at (voice) = effectiveUnisonWavetablePositionSpread;
-                    voiceEffectiveUnisonWarpSpread.at (voice) = effectiveUnisonWarpSpread;
 
-                    if (envelopeGain <= 0.0f || effectiveFrequencyHz <= 0.0f)
-                        continue;
-
-                    if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
+                    for (wrap<oscillatorCount> oscillatorWrapped)
                     {
-                        // A is deliberately absent from this loop: its external gain
-                        // stays zero while the exact-float path remains authoritative.
-                        // The same 10-cell local target boundary is applied to B/C
-                        // without changing source resolution or active-prefix iteration.
-                        for (int32 oscillator = oscillatorB; oscillator <= oscillatorC; ++oscillator)
-                        {
-                            let effectiveOscillatorPosition = std::intrinsics::clamp (
-                                voiceOscillatorFramePosition (int32 (voice), oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        int32 (voice), oscillator, modulationTargetWavetablePosition),
-                                0.0f,
-                                1.0f
-                            );
-                            let effectiveOscillatorWarpAmount = std::intrinsics::clamp (
-                                voiceOscillatorWarpAmount (int32 (voice), oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        int32 (voice), oscillator, modulationTargetWarpAmount),
-                                0.0f,
-                                1.0f
-                            );
-                            let effectiveOscillatorPitchSemitones = voiceCurrentPitch.at (voice)
-                                + voiceBendSemitones.at (voice)
-                                + voiceOscillatorTuningSemitones (int32 (voice), oscillator)
+                        let oscillator = int32 (oscillatorWrapped);
+                        let effectivePosition = std::intrinsics::clamp (
+                            voiceOscillatorFramePosition (voiceIndex, oscillator)
                                 + voiceOscillatorModulationOffset (
-                                    int32 (voice), oscillator, modulationTargetPitchSemitones);
-                            let effectiveOscillatorGain = voiceOscillatorOutputGain (
-                                int32 (voice), oscillator, hasSoloedOscillator)
-                                * dbToGain (clampAmpGainDb (voiceOscillatorModulationOffset (
-                                    int32 (voice), oscillator, modulationTargetAmpGainDb)));
-                            let effectiveOscillatorPan = clampPan (
-                                voiceOscillatorPan (int32 (voice), oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        int32 (voice), oscillator, modulationTargetPan));
-                            let effectiveOscillatorUnisonDetune = clampUnison01 (
-                                voiceOscillatorUnisonDetune (int32 (voice), oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        int32 (voice), oscillator, modulationTargetUnisonDetune));
-                            let effectiveOscillatorUnisonBlend = clampUnison01 (
-                                voiceOscillatorUnisonBlend (int32 (voice), oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        int32 (voice), oscillator, modulationTargetUnisonBlend));
-                            let effectiveOscillatorUnisonWidth = clampUnison01 (
-                                voiceOscillatorUnisonWidth (int32 (voice), oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        int32 (voice), oscillator, modulationTargetUnisonWidth));
-                            let effectiveOscillatorPositionSpread = clampUnison01 (
-                                voiceOscillatorPositionSpread (int32 (voice), oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        int32 (voice), oscillator,
-                                        modulationTargetUnisonWavetablePositionSpread));
-                            let effectiveOscillatorWarpSpread = clampUnison01 (
-                                voiceOscillatorWarpSpread (int32 (voice), oscillator)
-                                    + voiceOscillatorModulationOffset (
-                                        int32 (voice), oscillator, modulationTargetUnisonWarpSpread));
-                            prepareExternalRendererOscillator (
-                                int32 (voice),
-                                oscillator,
-                                effectiveOscillatorPosition,
-                                voiceOscillatorWarpMode (int32 (voice), oscillator),
-                                effectiveOscillatorWarpAmount,
-                                effectiveOscillatorPitchSemitones,
-                                effectiveOscillatorPan,
-                                effectiveOscillatorGain,
-                                voiceOscillatorUnisonVoices (int32 (voice), oscillator),
-                                effectiveOscillatorUnisonDetune,
-                                effectiveOscillatorUnisonBlend,
-                                effectiveOscillatorUnisonWidth,
-                                voiceOscillatorUnisonDetuneMode (int32 (voice), oscillator),
-                                voiceOscillatorUnisonStackMode (int32 (voice), oscillator),
-                                effectiveOscillatorPositionSpread,
-                                effectiveOscillatorWarpSpread
-                            );
-                        }
-                    }
+                                    voiceIndex, oscillator, modulationTargetWavetablePosition),
+                            0.0f,
+                            1.0f);
+                        let effectiveWarpAmount = std::intrinsics::clamp (
+                            voiceOscillatorWarpAmount (voiceIndex, oscillator)
+                                + voiceOscillatorModulationOffset (
+                                    voiceIndex, oscillator, modulationTargetWarpAmount),
+                            0.0f,
+                            1.0f);
+                        let effectivePitchSemitones = voiceCurrentPitch.at (voice)
+                            + voiceBendSemitones.at (voice)
+                            + voiceOscillatorTuningSemitones (voiceIndex, oscillator)
+                            + voiceOscillatorModulationOffset (
+                                voiceIndex, oscillator, modulationTargetPitchSemitones);
+                        let effectiveGain = voiceOscillatorOutputGain (
+                            voiceIndex, oscillator, hasSoloedOscillator)
+                            * dbToGain (clampAmpGainDb (voiceOscillatorModulationOffset (
+                                voiceIndex, oscillator, modulationTargetAmpGainDb)));
+                        let effectivePan = clampPan (
+                            voiceOscillatorPan (voiceIndex, oscillator)
+                                + voiceOscillatorModulationOffset (
+                                    voiceIndex, oscillator, modulationTargetPan));
+                        let effectiveUnisonVoices = voiceOscillatorUnisonVoices (
+                            voiceIndex, oscillator);
+                        let effectiveUnisonDetune = clampUnison01 (
+                            voiceOscillatorUnisonDetune (voiceIndex, oscillator)
+                                + voiceOscillatorModulationOffset (
+                                    voiceIndex, oscillator, modulationTargetUnisonDetune));
+                        let effectiveUnisonBlend = clampUnison01 (
+                            voiceOscillatorUnisonBlend (voiceIndex, oscillator)
+                                + voiceOscillatorModulationOffset (
+                                    voiceIndex, oscillator, modulationTargetUnisonBlend));
+                        let effectiveUnisonWidth = clampUnison01 (
+                            voiceOscillatorUnisonWidth (voiceIndex, oscillator)
+                                + voiceOscillatorModulationOffset (
+                                    voiceIndex, oscillator, modulationTargetUnisonWidth));
+                        let effectivePositionSpread = clampUnison01 (
+                            voiceOscillatorPositionSpread (voiceIndex, oscillator)
+                                + voiceOscillatorModulationOffset (
+                                    voiceIndex, oscillator,
+                                    modulationTargetUnisonWavetablePositionSpread));
+                        let effectiveWarpSpread = clampUnison01 (
+                            voiceOscillatorWarpSpread (voiceIndex, oscillator)
+                                + voiceOscillatorModulationOffset (
+                                    voiceIndex, oscillator, modulationTargetUnisonWarpSpread));
 
-                    float32 oscillatorAGain = dbToGain (clampAmpGainDb (routeAmpGainDb));
-                    if (voiceUsesArticulation.at (voice))
-                        oscillatorAGain *= voiceOscillatorOutputGain (
-                            int32 (voice), oscillatorA, hasSoloedOscillator);
-                    else if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
-                        oscillatorAGain *= oscillatorOutputGain (
-                            oscillatorA, hasSoloedOscillator);
+                        prepareExternalRendererOscillator (
+                            voiceIndex,
+                            oscillator,
+                            effectivePosition,
+                            voiceOscillatorWarpMode (voiceIndex, oscillator),
+                            effectiveWarpAmount,
+                            effectivePitchSemitones,
+                            effectivePan,
+                            effectiveGain,
+                            effectiveUnisonVoices,
+                            effectiveUnisonDetune,
+                            effectiveUnisonBlend,
+                            effectiveUnisonWidth,
+                            voiceOscillatorUnisonDetuneMode (voiceIndex, oscillator),
+                            voiceOscillatorUnisonStackMode (voiceIndex, oscillator),
+                            effectivePositionSpread,
+                            effectiveWarpSpread
+                        );
 
-                    if (effectiveUnisonVoices <= 1)
-                    {
-                        let oscillatorStateIndex = oscillatorVoiceIndex (
-                            int32 (voice), oscillatorA);
-                        phasors.at (oscillatorStateIndex).setFrequency (
-                            processor.frequency, effectiveFrequencyHz);
-                        let currentPhaseIncrement = effectiveFrequencyHz / float32 (processor.frequency);
-                        let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
-                        let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
-                        int32 warpRequestedMipIndex = requestedMipIndex;
-                        int32 warpPlayableMipIndex = playableMipIndex;
-
-                        if (shouldRenderWarpBackground)
+                        if (oscillator == oscillatorA)
                         {
-                            let warpPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
-                            warpRequestedMipIndex = selectMipIndexFromPhaseIncrement (warpPhaseIncrement);
-                            warpPlayableMipIndex = findPlayableMipIndex (warpRequestedMipIndex);
-                        }
+                            voiceEffectivePosition.at (voice) = effectivePosition;
+                            voiceEffectiveWarpMode.at (voice)
+                                = voiceOscillatorWarpMode (voiceIndex, oscillator);
+                            voiceEffectiveWarpAmount.at (voice) = effectiveWarpAmount;
+                            voiceEffectivePan.at (voice) = effectivePan;
+                            voiceEffectiveUnisonVoices.at (voice) = effectiveUnisonVoices;
+                            voiceEffectiveUnisonDetune.at (voice) = effectiveUnisonDetune;
+                            voiceEffectiveUnisonBlend.at (voice) = effectiveUnisonBlend;
+                            voiceEffectiveUnisonWidth.at (voice) = effectiveUnisonWidth;
+                            voiceEffectiveUnisonDetuneMode.at (voice)
+                                = voiceOscillatorUnisonDetuneMode (voiceIndex, oscillator);
+                            voiceEffectiveUnisonStackMode.at (voice)
+                                = voiceOscillatorUnisonStackMode (voiceIndex, oscillator);
+                            voiceEffectiveUnisonWavetablePositionSpread.at (voice)
+                                = effectivePositionSpread;
+                            voiceEffectiveUnisonWarpSpread.at (voice) = effectiveWarpSpread;
 
-                        if (playableMipIndex < 0 && warpPlayableMipIndex < 0)
-                            continue;
-
-                        let phase = phasors.at (oscillatorStateIndex).next();
-                        float32 sample = 0.0f;
-
-                        if (playableMipIndex >= 0
-                            && (! shouldRenderWarpBackground
-                                || shouldBypassWarpOutput
-                                || warpPlayableMipIndex < 0))
-                            sample = readVoiceSampleForMip (playableMipIndex, effectivePosition, phase);
-
-                        if (shouldRenderWarpBackground && warpPlayableMipIndex >= 0)
-                        {
-                            let warpedSample = renderWarpedVoiceSample (
-                                int32 (voice),
-                                oscillatorA,
-                                warpPlayableMipIndex,
-                                effectivePosition,
-                                phase,
-                                currentPhaseIncrement,
-                                warpMode,
-                                effectiveWarpAmount
-                            );
-
-                            if (! shouldBypassWarpOutput)
-                                sample = warpedSample;
-                        }
-
-                        if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
-                        {
-                            let gainedSample = sample * oscillatorAGain;
-                            legacyALeftPrefilter.at (voice)
-                                = gainedSample * panLeftGain (effectivePan);
-                            legacyARightPrefilter.at (voice)
-                                = gainedSample * panRightGain (effectivePan);
-                        }
-                        else
-                        {
-                            if (filterMode > filterModeOff)
+                            let voiceSerial = voiceTrackingSerial.at (voice);
+                            if (voiceActive.at (voice) != 0 && voiceSerial > trackingSerial)
                             {
-                                filters.at (voice).setMode (resolveSimperFilterMode (filterMode));
-                                filters.at (voice).setFrequency (
-                                    processor.frequency,
-                                    effectiveFilterCutoffHz,
-                                    effectiveFilterQ,
-                                    0.0f
-                                );
-                                sample = filters.at (voice).process (sample);
+                                trackingSerial = voiceSerial;
+                                trackingPitchHz = std::notes::noteToFrequency (
+                                    effectivePitchSemitones);
                             }
-                            else
-                            {
-                                resetFilterState (int32 (voice));
-                            }
-
-                            let gainedSample = sample * envelopeGain * oscillatorAGain;
-                            leftMix += gainedSample * panLeftGain (effectivePan);
-                            rightMix += gainedSample * panRightGain (effectivePan);
-                        }
-                    }
-                    else
-                    {
-                        float32 unisonLeft = 0.0f;
-                        float32 unisonRight = 0.0f;
-                        float32 weightSum = 0.0f;
-                        let detuneCents = effectiveUnisonDetune * 50.0f;
-
-                        for (int32 subVoiceIndex = 0; subVoiceIndex < effectiveUnisonVoices; ++subVoiceIndex)
-                        {
-                            let spreadScalar = unisonSpreadScalar (subVoiceIndex, effectiveUnisonVoices, baseUnisonDetuneMode);
-                            let stackSemitones = unisonStackSemitones (subVoiceIndex, effectiveUnisonVoices, baseUnisonStackMode);
-                            let subPitchSemitones = effectivePitchSemitones + (spreadScalar * detuneCents * 0.01f) + stackSemitones;
-                            let subFrequencyHz = std::notes::noteToFrequency (subPitchSemitones);
-
-                            if (subFrequencyHz <= 0.0f)
-                                continue;
-
-                            let subPosition = std::intrinsics::clamp (
-                                effectivePosition + (spreadScalar * effectiveUnisonWavetablePositionSpread * 0.5f),
-                                0.0f,
-                                1.0f
-                            );
-                            let subWarpAmount = std::intrinsics::clamp (
-                                effectiveWarpAmount + (spreadScalar * effectiveUnisonWarpSpread * 0.5f),
-                                0.0f,
-                                1.0f
-                            );
-                            let shouldBypassSubWarpOutput = isIdentityWarp (warpMode, subWarpAmount);
-                            let subPan = clampPan (effectivePan + (spreadScalar * effectiveUnisonWidth));
-                            let subWeight = unisonSubVoiceWeight (subVoiceIndex, effectiveUnisonVoices, effectiveUnisonBlend);
-                            let currentPhaseIncrement = subFrequencyHz / float32 (processor.frequency);
-                            let requestedMipIndex = selectMipIndexFromPhaseIncrement (currentPhaseIncrement);
-                            let playableMipIndex = findPlayableMipIndex (requestedMipIndex);
-                            int32 warpRequestedMipIndex = requestedMipIndex;
-                            int32 warpPlayableMipIndex = playableMipIndex;
-
-                            if (shouldRenderWarpBackground)
-                            {
-                                let warpPhaseIncrement = currentPhaseIncrement / float32 (warpOversampleFactor);
-                                warpRequestedMipIndex = selectMipIndexFromPhaseIncrement (warpPhaseIncrement);
-                                warpPlayableMipIndex = findPlayableMipIndex (warpRequestedMipIndex);
-                            }
-
-                            if (playableMipIndex < 0 && warpPlayableMipIndex < 0)
-                                continue;
-
-                            let subStateIndex = oscillatorLaneIndex (
-                                int32 (voice), oscillatorA, subVoiceIndex);
-                            unisonPhasors.at (subStateIndex).setFrequency (processor.frequency, subFrequencyHz);
-                            let phase = unisonPhasors.at (subStateIndex).next();
-                            float32 sample = 0.0f;
-
-                            if (playableMipIndex >= 0
-                                && (! shouldRenderWarpBackground
-                                    || shouldBypassSubWarpOutput
-                                    || warpPlayableMipIndex < 0))
-                                sample = readVoiceSampleForMip (playableMipIndex, subPosition, phase);
-
-                            if (shouldRenderWarpBackground && warpPlayableMipIndex >= 0)
-                            {
-                                let warpedSample = renderWarpedUnisonSample (
-                                    int32 (voice),
-                                    oscillatorA,
-                                    subVoiceIndex,
-                                    warpPlayableMipIndex,
-                                    subPosition,
-                                    phase,
-                                    currentPhaseIncrement,
-                                    warpMode,
-                                    subWarpAmount
-                                );
-
-                                if (! shouldBypassSubWarpOutput)
-                                    sample = warpedSample;
-                            }
-
-                            unisonLeft += sample * subWeight * panLeftGain (subPan);
-                            unisonRight += sample * subWeight * panRightGain (subPan);
-                            weightSum += subWeight;
-                        }
-
-                        if (weightSum <= 0.0f)
-                            continue;
-
-                        unisonLeft /= weightSum;
-                        unisonRight /= weightSum;
-
-                        if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
-                        {
-                            legacyALeftPrefilter.at (voice) = unisonLeft * oscillatorAGain;
-                            legacyARightPrefilter.at (voice) = unisonRight * oscillatorAGain;
-                        }
-                        else
-                        {
-                            if (filterMode > filterModeOff)
-                            {
-                                unisonLeftFilters.at (voice).setMode (resolveSimperFilterMode (filterMode));
-                                unisonLeftFilters.at (voice).setFrequency (
-                                    processor.frequency,
-                                    effectiveFilterCutoffHz,
-                                    effectiveFilterQ,
-                                    0.0f
-                                );
-                                unisonRightFilters.at (voice).setMode (resolveSimperFilterMode (filterMode));
-                                unisonRightFilters.at (voice).setFrequency (
-                                    processor.frequency,
-                                    effectiveFilterCutoffHz,
-                                    effectiveFilterQ,
-                                    0.0f
-                                );
-                                unisonLeft = unisonLeftFilters.at (voice).process (unisonLeft);
-                                unisonRight = unisonRightFilters.at (voice).process (unisonRight);
-                            }
-                            else
-                            {
-                                resetFilterState (int32 (voice));
-                            }
-
-                            let gain = envelopeGain * oscillatorAGain;
-                            leftMix += unisonLeft * gain;
-                            rightMix += unisonRight * gain;
                         }
                     }
                 }
 
-                if const (enableExternalRenderer && wavetableFrameCapacity == maxFramesPerTable)
+                let rendererSucceeded = CosimoThreeOscillatorRenderer::renderAll (
+                    rendererFloats,
+                    rendererInts,
+                    packedSlot0Chunk0, packedSlot0Chunk1,
+                    packedSlot0Chunk2, packedSlot0Chunk3,
+                    packedSlot1Chunk0, packedSlot1Chunk1,
+                    packedSlot1Chunk2, packedSlot1Chunk3,
+                    packedSlot2Chunk0, packedSlot2Chunk1,
+                    packedSlot2Chunk2, packedSlot2Chunk3,
+                    packedSlot3Chunk0, packedSlot3Chunk1,
+                    packedSlot3Chunk2, packedSlot3Chunk3
+                );
+
+                for (wrap<voiceCount> voice)
                 {
-                    let rendererSucceeded = CosimoThreeOscillatorRenderer::renderAll (
-                        rendererFloats,
-                        rendererInts,
-                        packedSlot0Chunk0, packedSlot0Chunk1,
-                        packedSlot0Chunk2, packedSlot0Chunk3,
-                        packedSlot1Chunk0, packedSlot1Chunk1,
-                        packedSlot1Chunk2, packedSlot1Chunk3,
-                        packedSlot2Chunk0, packedSlot2Chunk1,
-                        packedSlot2Chunk2, packedSlot2Chunk3,
-                        packedSlot3Chunk0, packedSlot3Chunk1,
-                        packedSlot3Chunk2, packedSlot3Chunk3
-                    );
+                    if (! voiceIsSoundingForRackModulation (int32 (voice)))
+                        continue;
 
-                    for (wrap<voiceCount> voice)
+                    float32 noteLeft = 0.0f;
+                    float32 noteRight = 0.0f;
+
+                    if (rendererSucceeded != 0)
                     {
-                        if (! voiceIsSoundingForRackModulation (int32 (voice)))
-                            continue;
-
-                        float32 noteLeft = legacyALeftPrefilter.at (voice);
-                        float32 noteRight = legacyARightPrefilter.at (voice);
-                        if (rendererSucceeded != 0)
-                        {
-                            let outputIndex = rendererNoteOutputOffset + (int32 (voice) * 2);
-                            noteLeft += rendererFloats.at (outputIndex);
-                            noteRight += rendererFloats.at (outputIndex + 1);
-                        }
-
-                        let filterMode = voiceEffectiveFilterMode.at (voice);
-                        if (filterMode > filterModeOff)
-                        {
-                            unisonLeftFilters.at (voice).setMode (
-                                resolveSimperFilterMode (filterMode));
-                            unisonLeftFilters.at (voice).setFrequency (
-                                processor.frequency,
-                                voiceEffectiveFilterCutoffHz.at (voice),
-                                voiceEffectiveFilterQ.at (voice),
-                                0.0f
-                            );
-                            unisonRightFilters.at (voice).setMode (
-                                resolveSimperFilterMode (filterMode));
-                            unisonRightFilters.at (voice).setFrequency (
-                                processor.frequency,
-                                voiceEffectiveFilterCutoffHz.at (voice),
-                                voiceEffectiveFilterQ.at (voice),
-                                0.0f
-                            );
-                            noteLeft = unisonLeftFilters.at (voice).process (noteLeft);
-                            noteRight = unisonRightFilters.at (voice).process (noteRight);
-                        }
-                        else
-                        {
-                            unisonLeftFilters.at (voice).reset();
-                            unisonRightFilters.at (voice).reset();
-                        }
-
-                        // Level, pan, mute and solo all change the pre-filter input.
-                        // The common filter therefore rings out consistently for A,
-                        // B and C when any of those controls remove a source.
-                        let gain = envelopes[voice].gainOut;
-                        leftMix += noteLeft * gain;
-                        rightMix += noteRight * gain;
+                        let outputIndex = rendererNoteOutputOffset + (int32 (voice) * 2);
+                        noteLeft = rendererFloats.at (outputIndex);
+                        noteRight = rendererFloats.at (outputIndex + 1);
                     }
+
+                    let effectiveFilterMode = voiceEffectiveFilterMode.at (voice);
+                    if (effectiveFilterMode > filterModeOff)
+                    {
+                        unisonLeftFilters.at (voice).setMode (
+                            resolveSimperFilterMode (effectiveFilterMode));
+                        unisonLeftFilters.at (voice).setFrequency (
+                            processor.frequency,
+                            voiceEffectiveFilterCutoffHz.at (voice),
+                            voiceEffectiveFilterQ.at (voice),
+                            0.0f
+                        );
+                        unisonRightFilters.at (voice).setMode (
+                            resolveSimperFilterMode (effectiveFilterMode));
+                        unisonRightFilters.at (voice).setFrequency (
+                            processor.frequency,
+                            voiceEffectiveFilterCutoffHz.at (voice),
+                            voiceEffectiveFilterQ.at (voice),
+                            0.0f
+                        );
+                        noteLeft = unisonLeftFilters.at (voice).process (noteLeft);
+                        noteRight = unisonRightFilters.at (voice).process (noteRight);
+                    }
+                    else
+                    {
+                        unisonLeftFilters.at (voice).reset();
+                        unisonRightFilters.at (voice).reset();
+                    }
+
+                    let gain = envelopes[voice].gainOut;
+                    leftMix += noteLeft * gain;
+                    rightMix += noteRight * gain;
                 }
 
                 updateRackModulationOutputs();
@@ -6292,5 +4983,6 @@ namespace wt
                 advance();
             }
         }
+
     }
 }

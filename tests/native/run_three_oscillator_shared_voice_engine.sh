@@ -74,31 +74,24 @@ if (( NATIVE_FINGERPRINT != 424242 || WASM_FINGERPRINT != 424242 )); then
 fi
 
 for PRODUCT_NAME in WavetableSynth WavetableSynth.iOS; do
-    DEFAULT_CPP="$BUILD_DIR/$PRODUCT_NAME.default.cpp"
-    DEFAULT_JS="$BUILD_DIR/$PRODUCT_NAME.default.js"
-    cmaj generate --target=cpp "$REPO_DIR/$PRODUCT_NAME.cmajorpatch" --output="$DEFAULT_CPP"
-    if rg -q 'CosimoThreeOscillatorRenderer|rendererFloats|rendererInts|legacyALeftPrefilter|legacyARightPrefilter|externalLeftFilters|externalRightFilters' \
-        "$DEFAULT_CPP"; then
-        print -u2 "FAIL: $PRODUCT_NAME default-off product retains external renderer state or work"
+    PRODUCT_CPP="$BUILD_DIR/$PRODUCT_NAME.cpp"
+    PRODUCT_METADATA="$BUILD_DIR/$PRODUCT_NAME.endpoints.json"
+    "$REPO_DIR/scripts/generate_cmajor_cpp_with_externals.sh" \
+        "$REPO_DIR/$PRODUCT_NAME.cmajorpatch" \
+        "$PRODUCT_CPP" \
+        WavetableSynth \
+        "$PRODUCT_METADATA"
+
+    rg -Fq 'CosimoThreeOscillatorRenderer__renderAll' "$PRODUCT_CPP"
+    PRODUCT_OSCILLATOR_ENDPOINT_COUNT=$(rg -c '"endpointID": "osc[ABC]' "$PRODUCT_METADATA")
+    if (( PRODUCT_OSCILLATOR_ENDPOINT_COUNT != 66 )); then
+        print -u2 "FAIL: $PRODUCT_NAME exposes $PRODUCT_OSCILLATOR_ENDPOINT_COUNT A/B/C controls instead of 66"
         exit 1
     fi
-    cmaj generate --target=javascript --simd-only "$REPO_DIR/$PRODUCT_NAME.cmajorpatch" \
-        --output="$DEFAULT_JS"
-    # Exact generation fingerprint, not a synth/Effects performance budget:
-    # the clean RT-01 base generated two 1725-page memories. The intentional
-    # 12->32 target expansion and complete per-oscillator articulation arrays
-    # move both to 1728 (+3 pages each), without adding external-renderer state.
-    RT01_BASE_MEMORY_PAGES=1725
-    RT01_CANDIDATE_MEMORY_PAGES=1728
-    RT01_MEMORY_PAGE_DELTA=$(( RT01_CANDIDATE_MEMORY_PAGES - RT01_BASE_MEMORY_PAGES ))
-    read DEFAULT_MEMORY_COUNT DEFAULT_MEMORY_MISMATCH_COUNT <<< "$(
-        rg -o 'WebAssembly.Memory \(\{ initial: [0-9]+' "$DEFAULT_JS" \
-            | awk -v expected="$RT01_CANDIDATE_MEMORY_PAGES" \
-                '{ count += 1; if ($NF != expected) mismatch += 1 } END { print count + 0, mismatch + 0 }'
-    )"
-    if (( DEFAULT_MEMORY_COUNT != 2 || DEFAULT_MEMORY_MISMATCH_COUNT != 0
-          || RT01_MEMORY_PAGE_DELTA != 3 )); then
-        print -u2 "FAIL: $PRODUCT_NAME default-off Wasm linear-memory fingerprint is not 1725->1728 (+3) for both memories"
+
+    if rg -q '"endpointID": "(wavetablePosition|wavetableSelect|pan|warpMode|warpAmount|unisonVoices|unisonDetune|unisonBlend|unisonWidth|unisonPhase|unisonRandom|unisonPhaseMode|unisonDetuneMode|unisonStackMode|unisonWavetablePositionSpread|unisonWarpSpread)"' \
+        "$PRODUCT_METADATA"; then
+        print -u2 "FAIL: $PRODUCT_NAME still exposes scalar oscillator-A controls"
         exit 1
     fi
 done
@@ -110,4 +103,4 @@ if rg -qi 'selectedOscillator|oscillatorTab|activeOscillatorTab' \
 fi
 
 print "PASS SharedVoiceEngine semantic gates: native=$NATIVE_FINGERPRINT wasm=$WASM_FINGERPRINT"
-print 'PASS default-off product: no renderer state/work; Wasm linear-memory fingerprint 1725->1728 (+3) from v4 arrays (not a performance budget)'
+print 'PASS hard-cut products: one renderer call and exact 66-control A/B/C surface'

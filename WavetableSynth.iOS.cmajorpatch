@@ -3,7 +3,7 @@
   "ID": "dev.cosimo.wavetable-synth",
   "version": "0.1.1",
   "name": "Cosimo Synth",
-  "description": "Single-oscillator wavetable synth with MIDI input, automatable wavetable position, runtime table selection, and runtime-loaded Serum-style wavetable files.",
+  "description": "Three-oscillator wavetable synth with independent controls, modulation, articulation, and runtime-loaded tables.",
   "category": "generator",
   "manufacturer": "Cosimo",
   "plugin": {
@@ -20,6 +20,7 @@
     "cmajor/Phaser.cmajor",
     "cmajor/Delay.cmajor",
     "cmajor/Reverb.cmajor",
+    "cmajor/ThreeOscillatorRendererExternal.cmajor",
     "cmajor/FixedFrameOscillator.cmajor",
     "cmajor/VoiceReducer.cmajor",
     "cmajor/EffectsRack.cmajor",
