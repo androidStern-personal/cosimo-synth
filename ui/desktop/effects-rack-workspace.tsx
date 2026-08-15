@@ -50,12 +50,14 @@ import {
     type ModulationTargetKind,
     type RackModulationTargetKind,
 } from "../shared/modulation";
+import { parseModulationTargetKind } from "../shared/modulation-targets";
 import {
     RACK_MODULATION_SOURCE_PAGES,
     findRackModulationSource,
     type RackModulationSource,
 } from "../shared/rack-modulation-sources";
 import {
+    getModulationRouteCreation,
     projectRackRoutePresentation,
     type RackRouteCreation,
     type RackRouteSource,
@@ -135,9 +137,20 @@ function elementAtPointInRenderRoot(referenceElement: Element, clientX: number, 
     return null;
 }
 
-function rackModulationTargetAtPoint(referenceElement: Element, clientX: number, clientY: number) {
-    return elementAtPointInRenderRoot(referenceElement, clientX, clientY)
-        ?.closest<HTMLElement>("[data-rack-mod-target]") ?? null;
+type ModulationDropTarget = {
+    readonly element: HTMLElement;
+    readonly targetKind: ModulationTargetKind;
+};
+
+function modulationTargetAtPoint(
+    referenceElement: Element,
+    clientX: number,
+    clientY: number,
+): ModulationDropTarget | null {
+    const element = elementAtPointInRenderRoot(referenceElement, clientX, clientY)
+        ?.closest<HTMLElement>("[data-modulation-target-kind]") ?? null;
+    const targetKind = parseModulationTargetKind(element?.dataset.modulationTargetKind);
+    return element === null || targetKind === null ? null : { element, targetKind };
 }
 
 function readRackStateFromFullStoredState(fullState: Record<string, unknown>) {
@@ -569,6 +582,7 @@ function RackParameterControl({
         <div
             data-role={`rack-parameter-surface-${descriptor.endpointID}`}
             data-rack-mod-target={isTarget ? descriptor.endpointID : undefined}
+            data-modulation-target-kind={isTarget ? `rack.${descriptor.endpointID}` : undefined}
             data-creation-state={presentation.creation}
             data-effectiveness={presentation.effectiveness}
             className={`rack-editor-control${selected ? " is-selected-target" : ""}${hovered ? " is-mod-hover" : ""}${presentation.effectiveness === "active" ? "" : " is-suspended"}`}
@@ -1096,10 +1110,10 @@ function ModSourceArt({ source }: { source: RackModulationSource }) {
 }
 
 type ModSourceDragCallbacks = {
-    readonly onHoverTarget: (source: SelectedSource, endpointID: string | null) => void;
+    readonly onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
     readonly onDragSourceChange: (source: SelectedSource | null) => void;
     readonly onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
-    readonly onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
+    readonly onSourceDrop: (source: SelectedSource, targetKind: ModulationTargetKind) => void;
     readonly onTap: (source: SelectedSource, wasActiveSelection: boolean) => void;
 };
 
@@ -1119,7 +1133,25 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         startY: number;
         wasActiveSelection: boolean;
         captureElement: HTMLButtonElement;
+        hoveredTarget: HTMLElement | null;
     } | null>(null);
+
+    const updateHoveredTarget = useCallback((nextTarget: HTMLElement | null, source: SelectedSource) => {
+        const drag = dragRef.current;
+        if (!drag || drag.hoveredTarget === nextTarget) {
+            return;
+        }
+        drag.hoveredTarget?.classList.remove("is-mod-hover");
+        drag.hoveredTarget?.style.removeProperty("--drag-source-color");
+        drag.hoveredTarget = nextTarget;
+        if (nextTarget) {
+            nextTarget.style.setProperty(
+                "--drag-source-color",
+                findRackModulationSource(source.sourceKind, source.sourceSlot).accent,
+            );
+            nextTarget.classList.add("is-mod-hover");
+        }
+    }, []);
 
     const stopSourceAutoScroll = useCallback(() => {
         if (autoScrollRef.current.frame !== null) {
@@ -1179,10 +1211,10 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             return;
         }
 
-        const targetElement = cancelled
+        const target = cancelled
             ? null
-            : rackModulationTargetAtPoint(drag.captureElement, clientX, clientY);
-        const targetEndpointID = targetElement?.dataset.rackModTarget;
+            : modulationTargetAtPoint(drag.captureElement, clientX, clientY);
+        updateHoveredTarget(null, drag.source);
         dragRef.current = null;
         handlersRef.current.onHoverTarget(drag.source, null);
         handlersRef.current.onDragSourceChange(null);
@@ -1200,14 +1232,14 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         if (cancelled) {
             return;
         }
-        if (targetEndpointID) {
-            handlersRef.current.onSourceDrop(drag.source, targetEndpointID);
+        if (target) {
+            handlersRef.current.onSourceDrop(drag.source, target.targetKind);
             return;
         }
         if (!drag.moved) {
             handlersRef.current.onTap(drag.source, drag.wasActiveSelection);
         }
-    }, [stopSourceAutoScroll]);
+    }, [stopSourceAutoScroll, updateHoveredTarget]);
 
     useEffect(() => {
         const handlePointerUp = (event: PointerEvent) => {
@@ -1258,6 +1290,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 startY: event.clientY,
                 wasActiveSelection,
                 captureElement: event.currentTarget,
+                hoveredTarget: null,
             };
             try {
                 event.currentTarget.setPointerCapture(event.pointerId);
@@ -1285,8 +1318,9 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 });
                 updateSourceAutoScroll(event.currentTarget, event.clientY);
             }
-            const target = rackModulationTargetAtPoint(event.currentTarget, event.clientX, event.clientY);
-            handlersRef.current.onHoverTarget(drag.source, target?.dataset.rackModTarget ?? null);
+            const target = modulationTargetAtPoint(event.currentTarget, event.clientX, event.clientY);
+            updateHoveredTarget(target?.element ?? null, drag.source);
+            handlersRef.current.onHoverTarget(drag.source, target?.targetKind ?? null);
         },
         onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
             finishSourceGesture(event.pointerId, event.clientX, event.clientY, false);
@@ -1297,7 +1331,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         onLostPointerCapture: (event: ReactPointerEvent<HTMLButtonElement>) => {
             finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
         },
-    }), [finishSourceGesture, updateSourceAutoScroll]);
+    }), [finishSourceGesture, updateHoveredTarget, updateSourceAutoScroll]);
 }
 
 function ModSourceCarousel({
@@ -1320,9 +1354,9 @@ function ModSourceCarousel({
     onPageChange: (pageIndex: number) => void;
     onDragSourceChange: (source: SelectedSource | null) => void;
     onSourceSelect: (source: SelectedSource) => void;
-    onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
+    onSourceDrop: (source: SelectedSource, targetKind: ModulationTargetKind) => void;
     onOpenSelectedSource: (source: SelectedSource) => void;
-    onHoverTarget: (source: SelectedSource, endpointID: string | null) => void;
+    onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
     onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
 }) {
     const armedSourceLabel = sourceIsArmed
@@ -1755,8 +1789,8 @@ function MobileGlobalModRail({
     collapseSignal: number;
     onStateChange?: (state: GlobalModRailState) => void;
     onDragSourceChange: (source: SelectedSource | null) => void;
-    onSourceDrop: (source: SelectedSource, targetEndpointID: string) => void;
-    onHoverTarget: (source: SelectedSource, endpointID: string | null) => void;
+    onSourceDrop: (source: SelectedSource, targetKind: ModulationTargetKind) => void;
+    onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
     onSourceDragChange: (drag: SourceDragPresentation | null) => void;
     children: React.ReactNode;
 }) {
@@ -2964,29 +2998,23 @@ export function EffectsRackWorkspace({
 
     const getPairCreation = useCallback((
         source: SelectedSource,
-        targetEndpointID: string,
+        requestedTargetKind: string,
     ): RackRouteCreation => {
-        const target = getRackParameterDescriptor(targetEndpointID);
-        if (target === null || target.modulationTargetIndex === null) {
-            return "ineligible";
-        }
-        const targetKind = `rack.${targetEndpointID}` as RackModulationTargetKind;
-        return projectRackRoutePresentation({
+        const targetKind = parseModulationTargetKind(requestedTargetKind);
+        return getModulationRouteCreation({
             routes,
-            armedSource: source,
+            source,
             targetKind,
-            effectEnabled: true,
-            targetEffective: true,
-            pending: pendingRouteRef.current?.key === routePairKey(source, targetKind),
-        }).creation;
+            pending: targetKind !== null
+                && pendingRouteRef.current?.key === routePairKey(source, targetKind),
+        });
     }, [routes]);
 
     const createRoute = useCallback((
         source: SelectedSource,
-        targetEndpointID: string,
+        targetKind: ModulationTargetKind,
     ) => {
-        const targetKind = `rack.${targetEndpointID}` as RackModulationTargetKind;
-        const creation = getPairCreation(source, targetEndpointID);
+        const creation = getPairCreation(source, targetKind);
         if (creation === "existing") {
             setRouteStatus("");
             return true;
@@ -3043,9 +3071,10 @@ export function EffectsRackWorkspace({
         setRouteStatus("");
     }, []);
 
-    const dropSource = useCallback((source: SelectedSource, targetEndpointID: string) => {
-        const targetParameter = getRackParameterDescriptor(targetEndpointID);
-        const creation = getPairCreation(source, targetEndpointID);
+    const dropSource = useCallback((source: SelectedSource, targetKind: ModulationTargetKind) => {
+        const rackEndpointID = targetKind.startsWith("rack.") ? targetKind.slice("rack.".length) : null;
+        const targetParameter = rackEndpointID === null ? null : getRackParameterDescriptor(rackEndpointID);
+        const creation = getPairCreation(source, targetKind);
         if (creation !== "existing" && creation !== "creatable") {
             return;
         }
@@ -3053,12 +3082,12 @@ export function EffectsRackWorkspace({
         setSourcePageIndex(source.sourceSlot - 1);
         setSourceIsArmed(true);
         if (targetParameter && targetParameter.modulationTargetIndex !== null) {
-            setSelectedTargetEndpointID(targetEndpointID);
+            setSelectedTargetEndpointID(targetParameter.endpointID);
             setSelectedEffectId(targetParameter.effectId);
             onSelectedEffectChange?.(targetParameter.effectId);
         }
         if (creation === "creatable") {
-            createRoute(source, targetEndpointID);
+            createRoute(source, targetKind);
         }
     }, [createRoute, getPairCreation, onSelectedEffectChange]);
 
@@ -3130,12 +3159,13 @@ export function EffectsRackWorkspace({
         parameterOverlayRouteIndex,
     ]);
 
-    const hoverSourceTarget = useCallback((source: SelectedSource, endpointID: string | null) => {
-        if (endpointID === null) {
+    const hoverSourceTarget = useCallback((source: SelectedSource, targetKind: ModulationTargetKind | null) => {
+        if (targetKind === null || !targetKind.startsWith("rack.")) {
             setHoverTargetEndpointID(null);
             return;
         }
-        const creation = getPairCreation(source, endpointID);
+        const endpointID = targetKind.slice("rack.".length);
+        const creation = getPairCreation(source, targetKind);
         setHoverTargetEndpointID(
             creation === "existing" || creation === "creatable" ? endpointID : null,
         );
@@ -3175,7 +3205,10 @@ export function EffectsRackWorkspace({
                 <UnmappedModulationPair
                     source={activeSource}
                     target={selectedTarget}
-                    onCreate={() => createRoute(selectedSource, selectedTarget.endpointID)}
+                    onCreate={() => createRoute(
+                        selectedSource,
+                        `rack.${selectedTarget.endpointID}` as RackModulationTargetKind,
+                    )}
                 />
             ) : null}
             <output className="rack-route-status" aria-live="polite">

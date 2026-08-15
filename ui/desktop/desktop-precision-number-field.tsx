@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { PatchControlBinding } from "../shared/patch-controls";
+import type { ModulationTargetKind } from "../shared/modulation-targets";
 
 const DRAG_START_THRESHOLD_PX = 2;
 
@@ -25,6 +26,7 @@ export type PrecisionNumberFieldProps = {
     formatEditingValue?: (value: number) => string;
     parseText?: (rawText: string) => number | null;
     dataRole?: string;
+    modulationTargetKind?: ModulationTargetKind;
 };
 
 type ActiveDragState = {
@@ -77,6 +79,7 @@ export function PrecisionNumberField({
     formatEditingValue = defaultFormatEditingValue,
     parseText = defaultParseText,
     dataRole,
+    modulationTargetKind,
 }: PrecisionNumberFieldProps) {
     const inputRef = useRef<HTMLInputElement | null>(null);
     const fieldRef = useRef<HTMLLabelElement | null>(null);
@@ -323,6 +326,7 @@ export function PrecisionNumberField({
         <label
             ref={fieldRef}
             data-role={isInlineDark ? dataRole : undefined}
+            data-modulation-target-kind={modulationTargetKind}
             className={isInlineDark
                 ? "inline-flex h-6 min-w-0 items-center gap-1 rounded-[5px] border border-[rgb(var(--cosimo-edge-rgb)/0.34)] bg-[rgb(var(--cosimo-control-rgb)/0.58)] px-1 text-[var(--cosimo-text)] shadow-[var(--cosimo-contact-shadow)]"
                 : "grid gap-1"

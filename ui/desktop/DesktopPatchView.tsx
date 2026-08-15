@@ -19,6 +19,11 @@ import {
     usePatchParameterBinding,
     type PatchControlBinding,
 } from "../shared/patch-controls";
+import type {
+    OscillatorID,
+    OscillatorModulationParameterKind,
+    OscillatorModulationTargetKind,
+} from "../shared/modulation-targets";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import {
     type SynthFocusBindings,
@@ -252,6 +257,13 @@ function postNativeKeyboardProbeStatus(reason: string) {
 type HeaderProps = {
     statusText: string;
 };
+
+function oscillatorModulationTargetKind(
+    oscillatorID: OscillatorID,
+    parameterKind: OscillatorModulationParameterKind,
+): OscillatorModulationTargetKind {
+    return `osc${oscillatorID}.${parameterKind}`;
+}
 
 type VoiceGlideSectionProps = {
     playMode: PatchControlBinding<number>;
@@ -939,9 +951,11 @@ function MsegMorphRail({
 }
 
 function WarpControlCluster({
+    oscillatorID,
     warpMode,
     warpAmount,
 }: {
+    oscillatorID: OscillatorID;
     warpMode: PatchControlBinding<number>;
     warpAmount: PatchControlBinding<number>;
 }) {
@@ -978,6 +992,8 @@ function WarpControlCluster({
                 showLabel={false}
                 width={62}
                 height={20}
+                dataRole="warp-amount-field"
+                modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "warpAmount")}
             />
         </div>
     );
@@ -1183,6 +1199,7 @@ function UnisonField({
 }
 
 function UnisonControlSurface({
+    oscillatorID,
     unisonVoices,
     unisonDetune,
     unisonBlend,
@@ -1196,6 +1213,7 @@ function UnisonControlSurface({
     unisonWarpSpread,
     observedUnisonState,
 }: {
+    oscillatorID: OscillatorID;
     unisonVoices: PatchControlBinding<number>;
     unisonDetune: PatchControlBinding<number>;
     unisonBlend: PatchControlBinding<number>;
@@ -1301,6 +1319,7 @@ function UnisonControlSurface({
                                 formatEditingValue={(value) => String(Math.round(value * 50))}
                                 parseText={parseUnisonDetuneInput}
                                 dataRole="unison-detune-control"
+                                modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "unisonDetune")}
                             />
                         </UnisonField>
                         <UnisonField label="Blend">
@@ -1316,6 +1335,7 @@ function UnisonControlSurface({
                                 formatEditingValue={(value) => String(Math.round(value * 100))}
                                 parseText={parsePercentInput}
                                 dataRole="unison-blend-control"
+                                modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "unisonBlend")}
                             />
                         </UnisonField>
                         <UnisonField label="Width">
@@ -1331,6 +1351,7 @@ function UnisonControlSurface({
                                 formatEditingValue={(value) => String(Math.round(value * 100))}
                                 parseText={parsePercentInput}
                                 dataRole="unison-width-control"
+                                modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "unisonWidth")}
                             />
                         </UnisonField>
                     </div>
@@ -1378,6 +1399,10 @@ function UnisonControlSurface({
                                 formatEditingValue={(value) => String(Math.round(value * 100))}
                                 parseText={parsePercentInput}
                                 dataRole="unison-wt-spread-control"
+                                modulationTargetKind={oscillatorModulationTargetKind(
+                                    oscillatorID,
+                                    "unisonWavetablePositionSpread",
+                                )}
                             />
                         </UnisonField>
                     </div>
@@ -1395,6 +1420,7 @@ function UnisonControlSurface({
                                 formatEditingValue={(value) => String(Math.round(value * 100))}
                                 parseText={parsePercentInput}
                                 dataRole="unison-warp-spread-control"
+                                modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "unisonWarpSpread")}
                             />
                         </UnisonField>
                         <UnisonModeButton
@@ -1850,6 +1876,7 @@ function FilterSection({
                         valueFromNormalized={normalizedToFilterCutoffHz}
                         pixelsPerFullRange={220}
                         dataRole="filter-cutoff-field"
+                        modulationTargetKind="filterCutoffOctaves"
                         variant="compactOverlay"
                         width={72}
                         height={22}
@@ -1868,6 +1895,7 @@ function FilterSection({
                         valueFromNormalized={resonanceQFromSurface}
                         pixelsPerFullRange={180}
                         dataRole="filter-resonance-field"
+                        modulationTargetKind="filterQ"
                         variant="compactOverlay"
                         width={44}
                         height={22}
@@ -1896,6 +1924,7 @@ function FilterSection({
 }
 
 function OscillatorPerformanceControls({
+    oscillatorID,
     octave,
     semitone,
     fineCents,
@@ -1903,6 +1932,7 @@ function OscillatorPerformanceControls({
     mute,
     solo,
 }: {
+    oscillatorID: OscillatorID;
     octave: PatchControlBinding<number>;
     semitone: PatchControlBinding<number>;
     fineCents: PatchControlBinding<number>;
@@ -1911,10 +1941,10 @@ function OscillatorPerformanceControls({
     solo: PatchControlBinding<number>;
 }) {
     const fields = [
-        { label: "Oscillator octave", shortLabel: "OCT", role: "oscillator-octave", binding: octave, min: -4, max: 4, initial: 0, step: 1, detentStep: 1, suffix: "oct" },
-        { label: "Oscillator semitone", shortLabel: "SEMI", role: "oscillator-semitone", binding: semitone, min: -12, max: 12, initial: 0, step: 1, detentStep: 1, suffix: "st" },
-        { label: "Oscillator fine tune", shortLabel: "FINE", role: "oscillator-fine", binding: fineCents, min: -100, max: 100, initial: 0, step: 0.1, detentStep: null, suffix: "ct" },
-        { label: "Oscillator level", shortLabel: "LEVEL", role: "oscillator-level", binding: volumeDb, min: -48, max: 6, initial: -9.542425, step: 0.1, detentStep: null, suffix: "dB" },
+        { label: "Oscillator octave", shortLabel: "OCT", role: "oscillator-octave", binding: octave, min: -4, max: 4, initial: 0, step: 1, detentStep: 1, suffix: "oct", modulationParameterKind: "pitchSemitones" },
+        { label: "Oscillator semitone", shortLabel: "SEMI", role: "oscillator-semitone", binding: semitone, min: -12, max: 12, initial: 0, step: 1, detentStep: 1, suffix: "st", modulationParameterKind: "pitchSemitones" },
+        { label: "Oscillator fine tune", shortLabel: "FINE", role: "oscillator-fine", binding: fineCents, min: -100, max: 100, initial: 0, step: 0.1, detentStep: null, suffix: "ct", modulationParameterKind: "pitchSemitones" },
+        { label: "Oscillator level", shortLabel: "LEVEL", role: "oscillator-level", binding: volumeDb, min: -48, max: 6, initial: -9.542425, step: 0.1, detentStep: null, suffix: "dB", modulationParameterKind: "ampGainDb" },
     ] as const;
 
     return (
@@ -1940,6 +1970,10 @@ function OscillatorPerformanceControls({
                     trackDataRole={`${field.role}-track`}
                     handleDataRole={`${field.role}-handle`}
                     detentStep={field.detentStep}
+                    modulationTargetKind={oscillatorModulationTargetKind(
+                        oscillatorID,
+                        field.modulationParameterKind,
+                    )}
                     formatValue={(value) => `${value > 0 ? "+" : ""}${Number.isInteger(value) ? value : value.toFixed(1)} ${field.suffix}`}
                 />
             ))}
@@ -1976,6 +2010,7 @@ function OscillatorPerformanceControls({
 }
 
 function KeyboardToolbar({
+    oscillatorID,
     playMode,
     glideTime,
     unisonVoices,
@@ -1993,6 +2028,7 @@ function KeyboardToolbar({
     playModeFocusBindings,
     glideFocusTarget,
 }: VoiceGlideSectionProps & {
+    oscillatorID: OscillatorID;
     unisonVoices: PatchControlBinding<number>;
     unisonDetune: PatchControlBinding<number>;
     unisonBlend: PatchControlBinding<number>;
@@ -2033,6 +2069,7 @@ function KeyboardToolbar({
                 )}
             />
             <UnisonControlSurface
+                oscillatorID={oscillatorID}
                 unisonVoices={unisonVoices}
                 unisonDetune={unisonDetune}
                 unisonBlend={unisonBlend}
@@ -2051,6 +2088,7 @@ function KeyboardToolbar({
 }
 
 function KeyboardSection({
+    oscillatorID,
     playMode,
     glideTime,
     unisonVoices,
@@ -2074,6 +2112,7 @@ function KeyboardSection({
     keyboardRef,
     toolbarOverride,
 }: VoiceGlideSectionProps & {
+    oscillatorID: OscillatorID;
     unisonVoices: PatchControlBinding<number>;
     unisonDetune: PatchControlBinding<number>;
     unisonBlend: PatchControlBinding<number>;
@@ -2110,6 +2149,7 @@ function KeyboardSection({
             railClassName="px-2 py-3"
             toolbar={toolbarOverride ?? (
                 <KeyboardToolbar
+                    oscillatorID={oscillatorID}
                     playMode={playMode}
                     glideTime={glideTime}
                     unisonVoices={unisonVoices}
@@ -3494,10 +3534,11 @@ function DesktopPatchViewBody({
 
     const warpControlCluster = useMemo(() => (
         <WarpControlCluster
+            oscillatorID={oscillatorSelection.selectedOscillatorID}
             warpMode={synthView.warpMode}
             warpAmount={synthView.warpAmount}
         />
-    ), [synthView.warpAmount, synthView.warpMode]);
+    ), [oscillatorSelection.selectedOscillatorID, synthView.warpAmount, synthView.warpMode]);
 
     const panField = useMemo(() => (
         <PrecisionNumberField
@@ -3514,11 +3555,15 @@ function DesktopPatchViewBody({
             wheelStep={0.01}
             leadingLabel="Pan"
             dataRole="wavetable-pan-field"
+            modulationTargetKind={oscillatorModulationTargetKind(
+                oscillatorSelection.selectedOscillatorID,
+                "pan",
+            )}
             variant="inlineDark"
             width={44}
             height={20}
         />
-    ), [synthView.pan]);
+    ), [oscillatorSelection.selectedOscillatorID, synthView.pan]);
     const selectedOscillatorToolbar = useMemo(() => (
         <div data-role="keyboard-control-row" className="grid min-h-[158px] min-w-0 gap-2 overflow-hidden">
             <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5">
@@ -3549,6 +3594,7 @@ function DesktopPatchViewBody({
             </div>
 
             <OscillatorPerformanceControls
+                oscillatorID={oscillatorSelection.selectedOscillatorID}
                 octave={synthView.oscillatorOctave}
                 semitone={synthView.oscillatorSemitone}
                 fineCents={synthView.oscillatorFineCents}
@@ -3597,6 +3643,7 @@ function DesktopPatchViewBody({
                 />
             ) : (
                 <KeyboardToolbar
+                    oscillatorID={oscillatorSelection.selectedOscillatorID}
                     playMode={synthView.playMode}
                     glideTime={synthView.glideTime}
                     unisonVoices={synthView.unisonVoices}
@@ -3627,6 +3674,7 @@ function DesktopPatchViewBody({
         keySegments,
         keyboardControlMode,
         keyboardRootNote,
+        oscillatorSelection.selectedOscillatorID,
         selectedArticulationId,
         synthView,
         velocitySegments,
@@ -3682,6 +3730,10 @@ function DesktopPatchViewBody({
                         onPointerDown={synthView.stageBindings.handleStagePointerDown}
                         onPointerMove={synthView.stageBindings.handleStagePointerMove}
                         onPointerUp={synthView.stageBindings.handleStagePointerUp}
+                        modulationTargetKind={oscillatorModulationTargetKind(
+                            oscillatorSelection.selectedOscillatorID,
+                            "wavetablePosition",
+                        )}
                         bottomLeftAccessory={warpControlCluster}
                         bottomRightAccessory={panField}
                         className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
@@ -3863,6 +3915,7 @@ function DesktopPatchViewBody({
                 className="relative z-20 min-w-0 shrink-0 border-t border-white/[0.05] pt-3"
             >
                 <KeyboardSection
+                    oscillatorID={oscillatorSelection.selectedOscillatorID}
                     playMode={synthView.playMode}
                     glideTime={synthView.glideTime}
                     unisonVoices={synthView.unisonVoices}

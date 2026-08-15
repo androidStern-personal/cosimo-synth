@@ -1,6 +1,6 @@
 # ADR-019: Global mobile modulation rail
 
-Status: accepted — 2026-08-08; corrected 2026-08-08 (see "2026-08-08 correction: one vector silhouette")
+Status: accepted — 2026-08-08; corrected 2026-08-15 (see "2026-08-15 correction: shared Voice/FX targets")
 
 ## Context
 
@@ -23,6 +23,31 @@ The approved Mod Bar was embedded in the FX editor footer. That made modulation 
 - Position persistence survives materially different phone viewports instead of replaying a stale pixel offset.
 - The activity display stays honest but is intentionally incomplete for source families whose live value is not currently exposed by the engine.
 - ADR-018 remains authoritative for explicit mapping, source artwork, the no-LFO product model, and source/target semantics. ADR-020 owns scalable capacity and runtime execution.
+
+## 2026-08-15 correction: shared Voice/FX targets
+
+The source-drag gesture was still discovering targets through an FX-only DOM attribute
+and converting every drop into a `rack.*` address. That made the global rail visually
+available over Voice while leaving the existing oscillator and shared-filter runtime
+targets unreachable.
+
+- Every drop surface now publishes its exact canonical modulation target kind through
+  one workspace-independent attribute. The gesture validates that identity against the
+  existing 68-target catalog before creating a route; it does not infer an address from
+  the current tab or selected effect.
+- The selected oscillator exposes frame position, warp amount, aggregate tune, level,
+  pan, detune, blend, width, wavetable-position spread, and warp spread. Switching A/B/C
+  changes those identities rather than falling through to another oscillator. Shared
+  filter cutoff and resonance retain their global identities. FX parameters use the same
+  contract while preserving their effect-selection behavior.
+- All valid visible targets receive the same source-colored eligible and hover treatment
+  during a drag. The rail remains hit-transparent, so this also applies to controls below
+  its on-screen bounds.
+- This correction does not pretend that source editors are already modulation
+  destinations. MSEG shapes/playback and envelope ADSR values remain source
+  configuration, and the host-automatable MSEG morph parameters are not members of the
+  current 68-target routing domain. Making any of those routable requires an explicit
+  DSP/schema expansion rather than another UI-only marker.
 
 ## 2026-08-08 correction: true edge tab
 

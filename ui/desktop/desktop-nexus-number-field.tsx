@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import Nexus from "nexusui";
 
 import type { PatchControlBinding } from "../shared/patch-controls";
+import type { ModulationTargetKind } from "../shared/modulation-targets";
 
 export type NexusNumberFieldProps = {
     label: string;
@@ -20,6 +21,8 @@ export type NexusNumberFieldProps = {
     onActivate?: () => void;
     onBeginTextEntry?: () => void;
     onEndTextEntry?: () => void;
+    modulationTargetKind?: ModulationTargetKind;
+    dataRole?: string;
 };
 
 export type NexusNumberWidgetLike = {
@@ -114,6 +117,8 @@ export function NexusNumberField({
     onActivate,
     onBeginTextEntry,
     onEndTextEntry,
+    modulationTargetKind,
+    dataRole,
 }: NexusNumberFieldProps) {
     const hostRef = useRef<HTMLDivElement | null>(null);
     const widgetRef = useRef<NexusNumberWidgetLike | null>(null);
@@ -218,7 +223,11 @@ export function NexusNumberField({
     }, [binding.value, displayValueFromBinding, step]);
 
     return (
-        <label className="grid gap-2">
+        <label
+            className="grid gap-2"
+            data-role={dataRole}
+            data-modulation-target-kind={modulationTargetKind}
+        >
             {showLabel ? (
                 <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">{label}</span>
             ) : (

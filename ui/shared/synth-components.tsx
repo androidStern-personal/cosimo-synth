@@ -171,6 +171,7 @@ export type WavetableStageSectionProps = {
     bottomLeftAccessory?: ReactNode;
     bottomRightAccessory?: ReactNode;
     className?: string;
+    modulationTargetKind?: ModulationTargetKind;
 };
 
 export type MsegOverviewSectionProps = {
@@ -2008,6 +2009,7 @@ export function WavetableStageSection({
     bottomLeftAccessory,
     bottomRightAccessory,
     className,
+    modulationTargetKind,
 }: WavetableStageSectionProps) {
     const topControlsRef = useRef<HTMLDivElement | null>(null);
     const drawableTopInset = useElementBottomInset(stageRef, topControlsRef, WAVETABLE_DRAWABLE_CONTROL_GAP_PX);
@@ -2024,6 +2026,7 @@ export function WavetableStageSection({
             data-layout-card="desktop-grid-card"
             data-section-accent="cyan"
             data-liquid-detail="display-lip"
+            data-modulation-target-kind={modulationTargetKind}
             className={joinClasses(
                 "cosimo-stage border",
                 SYNTH_GRID_CARD_SHELL_CLASS,

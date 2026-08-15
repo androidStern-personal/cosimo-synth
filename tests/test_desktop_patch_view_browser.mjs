@@ -2096,17 +2096,18 @@ test("mobile oscillator performance knobs own touch and detent discrete values w
             '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
         );
 
-        const roles = [
-            "oscillator-octave",
-            "oscillator-semitone",
-            "oscillator-fine",
-            "oscillator-level",
-        ];
-        for (const role of roles) {
+        const targetsByRole = new Map([
+            ["oscillator-octave", "oscB.pitchSemitones"],
+            ["oscillator-semitone", "oscB.pitchSemitones"],
+            ["oscillator-fine", "oscB.pitchSemitones"],
+            ["oscillator-level", "oscB.ampGainDb"],
+        ]);
+        for (const [role, targetKind] of targetsByRole) {
             const knob = page.locator(`[data-role="${role}"]`);
             assert.equal(await knob.getAttribute("role"), "slider");
             assert.equal(await knob.locator(".rack-knob-art").count(), 1);
             assert.equal(await knob.evaluate((element) => getComputedStyle(element).touchAction), "none");
+            assert.equal(await knob.getAttribute("data-modulation-target-kind"), targetKind);
         }
 
         const voicePanel = page.locator('[data-role="mobile-workspace-panel-voice"]');
@@ -2222,6 +2223,106 @@ test("articulation capture and recall edit only the selected oscillator", async 
         ));
         assert.equal(oscillatorWrites.length > 0, true);
         assert.equal(oscillatorWrites.every(({ endpointID }) => endpointID.startsWith("oscB")), true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("global modulation-source drag maps the selected oscillator level control", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+        );
+        await expandGlobalModRail(page);
+
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const target = page.locator('[data-role="oscillator-level"]');
+        await target.scrollIntoViewIfNeeded();
+        const sourceBox = await source.boundingBox();
+        const targetBox = await target.boundingBox();
+        assert.ok(sourceBox && targetBox);
+
+        const start = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+        const end = {
+            x: targetBox.x + (targetBox.width / 2),
+            y: targetBox.y + (targetBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 8; step += 1) {
+            const progress = step / 8;
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: start.x + ((end.x - start.x) * progress),
+                    y: start.y + ((end.y - start.y) * progress),
+                    radiusX: 5,
+                    radiusY: 5,
+                    force: 1,
+                }],
+            });
+        }
+        assert.equal(await target.getAttribute("data-modulation-target-kind"), "oscB.ampGainDb");
+        assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), true);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "selected oscillator modulation route",
+            (candidate) => readStoredModulationState(candidate).routes.some((route) => (
+                route.sourceKind === "env"
+                && route.sourceSlot === 1
+                && route.targetKind === "oscB.ampGainDb"
+            )),
+        );
+        const routes = readStoredModulationState(snapshot).routes;
+        assert.equal(routes.some((route) => (
+            route.sourceKind === "env"
+            && route.sourceSlot === 1
+            && route.targetKind === "oscB.ampGainDb"
+        )), true);
+    } finally {
+        await page.close();
+    }
+});
+
+test("voice controls expose the selected oscillator and shared filter modulation targets", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const targetKindFor = (role) => page.locator(`[data-role="${role}"]`).evaluate((element) => (
+        element.closest("[data-modulation-target-kind]")?.getAttribute("data-modulation-target-kind") ?? null
+    ));
+
+    try {
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.locator('[data-role="keyboard-control-mode-voice"]').click();
+
+        assert.equal(await targetKindFor("wavetable-card"), "oscB.wavetablePosition");
+        assert.equal(await targetKindFor("warp-amount-field"), "oscB.warpAmount");
+        assert.equal(await targetKindFor("wavetable-pan-field"), "oscB.pan");
+        assert.equal(await targetKindFor("unison-detune-control"), "oscB.unisonDetune");
+        assert.equal(await targetKindFor("unison-blend-control"), "oscB.unisonBlend");
+        assert.equal(await targetKindFor("unison-width-control"), "oscB.unisonWidth");
+        assert.equal(await targetKindFor("unison-wt-spread-control"), "oscB.unisonWavetablePositionSpread");
+        assert.equal(await targetKindFor("unison-warp-spread-control"), "oscB.unisonWarpSpread");
+        assert.equal(await targetKindFor("filter-cutoff-field"), "filterCutoffOctaves");
+        assert.equal(await targetKindFor("filter-resonance-field"), "filterQ");
+
+        await page.getByRole("tab", { name: "Oscillator C" }).click();
+        assert.equal(await targetKindFor("oscillator-level"), "oscC.ampGainDb");
+        assert.equal(await targetKindFor("wavetable-card"), "oscC.wavetablePosition");
+        assert.equal(await targetKindFor("wavetable-pan-field"), "oscC.pan");
     } finally {
         await page.close();
     }

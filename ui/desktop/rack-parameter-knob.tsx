@@ -14,6 +14,7 @@ import {
     type ModulationRoute,
     type RackModulationTargetKind,
 } from "../shared/modulation";
+import type { ModulationTargetKind } from "../shared/modulation-targets";
 import type { PatchControlBinding } from "../shared/patch-controls";
 import {
     formatRackParameterValue,
@@ -49,6 +50,7 @@ export type BaseParameterKnobProps = {
     readonly handleDataRole: string;
     readonly detentStep: number | null;
     readonly formatValue: (value: number) => string;
+    readonly modulationTargetKind?: ModulationTargetKind;
 };
 
 export type RackParameterKnobProps = {
@@ -212,6 +214,7 @@ type ParameterKnobSurfaceProps = {
     readonly onHudChange: (hud: RackParameterHud | null) => void;
     readonly onModulationAmountChange: (amount: number) => void;
     readonly onRequestContextMenu: (clientX: number, clientY: number) => void;
+    readonly modulationTargetKind?: ModulationTargetKind;
 };
 
 function ParameterKnobSurface({
@@ -234,6 +237,7 @@ function ParameterKnobSurface({
     onHudChange,
     onModulationAmountChange,
     onRequestContextMenu,
+    modulationTargetKind,
 }: ParameterKnobSurfaceProps) {
     const artRef = useRef<SVGSVGElement | null>(null);
     const gestureRef = useRef<KnobGesture | null>(null);
@@ -531,6 +535,7 @@ function ParameterKnobSurface({
             data-detented={detentStep === null ? "false" : "true"}
             data-route-state={!sourceIsSelected ? "no-source" : route === null ? "unmapped" : route.enabled ? "mapped" : "bypassed"}
             data-route-effectiveness={effectiveness}
+            data-modulation-target-kind={modulationTargetKind}
             className={className}
             style={style}
             onPointerDown={handlePointerDown}

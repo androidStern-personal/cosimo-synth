@@ -320,7 +320,7 @@
         border-radius: 999px;
     }
 
-    .cosimo-surface.is-mod-source-mapping .rack-editor-controls > :not([data-rack-mod-target]) {
+    .cosimo-surface.is-mod-source-mapping .rack-editor-controls > :not([data-modulation-target-kind]) {
         opacity: 0.42;
     }
 }

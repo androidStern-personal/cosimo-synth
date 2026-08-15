@@ -68,6 +68,18 @@
     box-shadow: 0 26px 80px rgb(0 0 0 / 0.48);
 }
 
+.cosimo-surface.is-mod-source-mapping [data-modulation-target-kind] {
+    box-shadow:
+        inset 0 0 0 1px color-mix(in srgb, var(--active-source-color) 42%, transparent),
+        0 0 7px color-mix(in srgb, var(--active-source-color) 20%, transparent);
+}
+
+.cosimo-surface.is-mod-source-mapping [data-modulation-target-kind].is-mod-hover {
+    box-shadow:
+        inset 0 0 0 2px color-mix(in srgb, var(--drag-source-color) 74%, white),
+        0 0 12px color-mix(in srgb, var(--drag-source-color) 76%, transparent);
+}
+
 .cosimo-stage {
     background:
         linear-gradient(rgb(255 255 255 / 0.018) 1px, transparent 1px),
