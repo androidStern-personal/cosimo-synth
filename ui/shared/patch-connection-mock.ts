@@ -1,29 +1,33 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 import { createModulationArticulationWorkerService } from "../worker/modulation-articulation-worker-service";
 import { allTargetDescriptors } from "./target-descriptor";
+import {
+    OSCILLATOR_BINDING_CONTRACTS,
+    type OscillatorControlID,
+} from "./oscillator-binding";
 
 const midiInputEndpointID = "midiIn";
-const wavetablePositionEndpointID = "wavetablePosition";
-const wavetableSelectEndpointID = "wavetableSelect";
+const wavetablePositionEndpointID = "oscAWavetablePosition";
+const wavetableSelectEndpointID = "oscAWavetableSelect";
 const playModeEndpointID = "playMode";
 const glideTimeEndpointID = "glideTime";
-const panEndpointID = "pan";
-const warpModeEndpointID = "warpMode";
-const warpAmountEndpointID = "warpAmount";
+const panEndpointID = "oscAPan";
+const warpModeEndpointID = "oscAWarpMode";
+const warpAmountEndpointID = "oscAWarpAmount";
 const filterModeEndpointID = "filterMode";
 const filterCutoffEndpointID = "filterCutoff";
 const filterQEndpointID = "filterQ";
-const unisonVoicesEndpointID = "unisonVoices";
-const unisonDetuneEndpointID = "unisonDetune";
-const unisonBlendEndpointID = "unisonBlend";
-const unisonWidthEndpointID = "unisonWidth";
-const unisonPhaseEndpointID = "unisonPhase";
-const unisonRandomEndpointID = "unisonRandom";
-const unisonPhaseModeEndpointID = "unisonPhaseMode";
-const unisonDetuneModeEndpointID = "unisonDetuneMode";
-const unisonStackModeEndpointID = "unisonStackMode";
-const unisonWavetablePositionSpreadEndpointID = "unisonWavetablePositionSpread";
-const unisonWarpSpreadEndpointID = "unisonWarpSpread";
+const unisonVoicesEndpointID = "oscAUnisonVoices";
+const unisonDetuneEndpointID = "oscAUnisonDetune";
+const unisonBlendEndpointID = "oscAUnisonBlend";
+const unisonWidthEndpointID = "oscAUnisonWidth";
+const unisonPhaseEndpointID = "oscAPhase";
+const unisonRandomEndpointID = "oscAPhaseRandom";
+const unisonPhaseModeEndpointID = "oscARetrigger";
+const unisonDetuneModeEndpointID = "oscAUnisonDetuneMode";
+const unisonStackModeEndpointID = "oscAUnisonStackMode";
+const unisonWavetablePositionSpreadEndpointID = "oscAUnisonPositionSpread";
+const unisonWarpSpreadEndpointID = "oscAUnisonWarpSpread";
 const mseg1MorphEndpointID = "mseg1Morph";
 const mseg2MorphEndpointID = "mseg2Morph";
 const mseg3MorphEndpointID = "mseg3Morph";
@@ -58,6 +62,75 @@ const retryDesiredTableRequestEndpointID = "retryDesiredTableRequest";
 const wavetablePrewarmRequestEndpointID = "wavetablePrewarmRequest";
 const wavetablePrewarmNotificationEndpointID = "wavetablePrewarmNotification";
 const HARNESS_WAVETABLE_ACTIVATION_DELAY_MS = 700;
+
+type OscillatorParameterAnnotation = {
+    readonly name: string;
+    readonly min: number;
+    readonly max: number;
+    readonly init: number;
+    readonly discrete?: boolean;
+    readonly step?: number;
+    readonly unit?: string;
+};
+
+const oscillatorParameterAnnotations: Record<OscillatorControlID, OscillatorParameterAnnotation> = {
+    wavetableSelect: { name: "Wavetable Select", min: 0, max: 237, init: 0, discrete: true, step: 1 },
+    framePosition: { name: "Wavetable Position", min: 0, max: 1, init: 0 },
+    pan: { name: "Pan", min: -1, max: 1, init: 0 },
+    octave: { name: "Octave", min: -4, max: 4, init: 0, discrete: true, step: 1 },
+    semitone: { name: "Semitone", min: -12, max: 12, init: 0, discrete: true, step: 1 },
+    fineCents: { name: "Fine Cents", min: -100, max: 100, init: 0, unit: "cents" },
+    phase: { name: "Phase", min: 0, max: 1, init: 0 },
+    phaseRandom: { name: "Phase Random", min: 0, max: 1, init: 0 },
+    retrigger: { name: "Retrigger", min: 0, max: 1, init: 1, discrete: true, step: 1 },
+    volumeDb: { name: "Volume", min: -48, max: 6, init: -9.542425, unit: "dB" },
+    mute: { name: "Mute", min: 0, max: 1, init: 0, discrete: true, step: 1 },
+    solo: { name: "Solo", min: 0, max: 1, init: 0, discrete: true, step: 1 },
+    warpMode: { name: "Warp Mode", min: 0, max: 4, init: 0, discrete: true, step: 1 },
+    warpAmount: { name: "Warp Amount", min: 0, max: 1, init: 0 },
+    unisonVoices: { name: "Unison", min: 1, max: 8, init: 1, discrete: true, step: 1 },
+    unisonDetune: { name: "Unison Detune", min: 0, max: 1, init: 0.1 },
+    unisonBlend: { name: "Unison Blend", min: 0, max: 1, init: 0.75 },
+    unisonWidth: { name: "Unison Width", min: 0, max: 1, init: 1 },
+    unisonDetuneMode: { name: "Unison Detune Mode", min: 0, max: 4, init: 0, discrete: true, step: 1 },
+    unisonStackMode: { name: "Unison Stack", min: 0, max: 4, init: 0, discrete: true, step: 1 },
+    unisonWavetablePositionSpread: { name: "Unison WT Pos", min: 0, max: 1, init: 0 },
+    unisonWarpSpread: { name: "Unison Warp", min: 0, max: 1, init: 0 },
+};
+
+const manuallyDeclaredOscillatorEndpoints = new Set([
+    wavetablePositionEndpointID,
+    wavetableSelectEndpointID,
+    panEndpointID,
+    warpModeEndpointID,
+    warpAmountEndpointID,
+    unisonVoicesEndpointID,
+    unisonDetuneEndpointID,
+    unisonBlendEndpointID,
+    unisonWidthEndpointID,
+    unisonPhaseEndpointID,
+    unisonRandomEndpointID,
+    unisonPhaseModeEndpointID,
+    unisonDetuneModeEndpointID,
+    unisonStackModeEndpointID,
+    unisonWavetablePositionSpreadEndpointID,
+    unisonWarpSpreadEndpointID,
+]);
+
+function buildAdditionalOscillatorStatusInputs() {
+    return OSCILLATOR_BINDING_CONTRACTS.flatMap((contract) => contract.controls.flatMap((control) => {
+        if (manuallyDeclaredOscillatorEndpoints.has(control.endpointID)) return [];
+        const annotation = oscillatorParameterAnnotations[control.controlID];
+        return [{
+            endpointID: control.endpointID,
+            purpose: "parameter",
+            annotation: {
+                ...annotation,
+                name: `Oscillator ${contract.id} ${annotation.name}`,
+            },
+        }];
+    }));
+}
 
 type ParameterListener = (value: unknown) => void;
 type EndpointListener = (value: unknown) => void;
@@ -199,6 +272,7 @@ class MockPianoKeyboard extends HTMLElement {
 function createDefaultRuntimeState() {
     return {
         dspSessionId: 1,
+        oscillatorIndex: 0,
         desiredTableIndex: 0,
         desiredIntentSerial: 1,
         serviceState: 0,
@@ -269,6 +343,14 @@ function createInitialParameterValues(): Map<string, unknown> {
                 descriptor.binding.endpointId,
                 descriptor.binding.toEngine(descriptor.initialValue),
             );
+        }
+    }
+
+    for (const contract of OSCILLATOR_BINDING_CONTRACTS) {
+        for (const control of contract.controls) {
+            if (!values.has(control.endpointID)) {
+                values.set(control.endpointID, oscillatorParameterAnnotations[control.controlID].init);
+            }
         }
     }
     return values;
@@ -619,6 +701,7 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0.42,
                     },
                 },
+                ...buildAdditionalOscillatorStatusInputs(),
             ],
         },
     };

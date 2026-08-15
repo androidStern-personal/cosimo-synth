@@ -11,6 +11,8 @@ import {
     type OscillatorModulationTargetKind,
 } from "./modulation-targets";
 
+export type { OscillatorID } from "./modulation-targets";
+
 /** The three stable oscillator slots shared by DSP, state, and presentation. */
 export type OscillatorRuntimeIndex = 0 | 1 | 2;
 
@@ -45,7 +47,7 @@ type OscillatorControlEndpointSuffix =
 export type OscillatorControlEndpointID =
     `osc${OscillatorID}${OscillatorControlEndpointSuffix}`;
 
-/** The exact future host address for one oscillator control. */
+/** The exact live host address for one oscillator control. */
 export type OscillatorControlAddress = {
     readonly controlID: OscillatorControlID;
     readonly endpointID: OscillatorControlEndpointID;
@@ -79,9 +81,7 @@ export type OscillatorTableStatusAddress = {
 };
 
 /**
- * Shared domain contract for one oscillator. Endpoint IDs are reserved by the
- * accepted A/B/C graph, but this module does not claim that graph is connected
- * to today's legacy A-only patch root.
+ * Shared domain contract for one oscillator in the canonical A/B/C graph.
  */
 export type OscillatorBindingContract = {
     readonly id: OscillatorID;

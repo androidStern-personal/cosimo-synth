@@ -29,6 +29,60 @@ function run(command, args) {
     }
 }
 
+function runAndRead(command, args) {
+    const result = spawnSync(command, args, {
+        cwd: repoRoot,
+        env: process.env,
+        encoding: "utf8",
+    });
+
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+        throw new Error(`${command} ${args.join(" ")} exited with status ${result.status ?? "unknown"}.\n${result.stderr}`);
+    }
+    return result.stdout.trim();
+}
+
+async function buildRendererAwarePatchModule() {
+    const generatedClassPath = path.join(outputDirectory, "cmaj_WavetableSynth.class.js");
+    run("node", [
+        "scripts/generate_cmajor_javascript_with_renderer.mjs",
+        "WavetableSynth.cmajorpatch",
+        generatedClassPath,
+        "WavetableSynth",
+    ]);
+
+    const [generatedClass, manifestSource] = await Promise.all([
+        fs.readFile(generatedClassPath, "utf8"),
+        fs.readFile(path.join(repoRoot, "WavetableSynth.cmajorpatch"), "utf8"),
+    ]);
+    const manifest = JSON.parse(manifestSource);
+    const patchModule = `// Generated product WebAudio module with the canonical renderer.\n\n`
+        + `import * as helpers from "./cmaj_api/cmaj-audio-worklet-helper.js";\n\n`
+        + `export const manifest = ${JSON.stringify(manifest, null, 2)};\n\n`
+        + `export function getOutputEndpoints() { return WavetableSynth.prototype.getOutputEndpoints(); }\n`
+        + `export function getInputEndpoints() { return WavetableSynth.prototype.getInputEndpoints(); }\n\n`
+        + `export async function createAudioWorkletNodePatchConnection(audioContext, workletName) {\n`
+        + `  const connection = new helpers.AudioWorkletPatchConnection(manifest);\n`
+        + `  await connection.initialise({ CmajorClass: WavetableSynth, audioContext, workletName, hostDescription: "WebAudio" });\n`
+        + `  return connection;\n`
+        + `}\n\n`
+        + generatedClass;
+
+    await fs.writeFile(path.join(outputDirectory, "cmaj_Cosimo_Synth.js"), patchModule);
+    await fs.rm(generatedClassPath);
+}
+
+async function copyCmajorWebRuntime() {
+    const runtimeRoot = process.env.CMAJOR_SOURCE_PATH
+        || runAndRead("python3", ["scripts/ensure_cmajor_runtime.py", "--path"]);
+    await fs.cp(
+        path.join(runtimeRoot, "javascript", "cmaj_api"),
+        path.join(outputDirectory, "cmaj_api"),
+        { recursive: true },
+    );
+}
+
 async function instrumentAudioWorklet() {
     const helperPath = path.join(outputDirectory, "cmaj_api", "cmaj-audio-worklet-helper.js");
     const source = await fs.readFile(helperPath, "utf8");
@@ -44,11 +98,18 @@ async function buildWebProof() {
     run("npm", ["run", "ui:desktop:build"]);
     run("npm", ["run", "ui:worker:build"]);
     run("npm", ["run", "ui:worker:test:build"]);
-    run("cmaj", [
-        "generate",
-        "--target=webaudio-html",
-        `--output=${outputDirectory}`,
-        "WavetableSynth.cmajorpatch",
+    await fs.mkdir(path.join(outputDirectory, "patch_gui", "desktop"), { recursive: true });
+    await Promise.all([
+        fs.copyFile(
+            path.join(repoRoot, "patch_gui", "desktop", "app.js"),
+            path.join(outputDirectory, "patch_gui", "desktop", "app.js"),
+        ),
+        fs.copyFile(
+            path.join(repoRoot, "patch_gui", "wavetable-worker.js"),
+            path.join(outputDirectory, "patch_gui", "wavetable-worker.js"),
+        ),
+        copyCmajorWebRuntime(),
+        buildRendererAwarePatchModule(),
     ]);
 
     await instrumentAudioWorklet();

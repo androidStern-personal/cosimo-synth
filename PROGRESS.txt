@@ -327,3 +327,11 @@ Hard-cut modulation and runtime restore checkpoint — completed 2026-08-15
 - Desktop and iPhone presets now prove that MSEG morph is captured through the parameter snapshot and never duplicated into `modulation.v5`. Generated desktop, iPhone, and worker bundles are current and repeatable.
 - The native QuickJS production host now attaches the same renderer provider as the shipping native hosts. Its real production patch accepts modulation serial 14, installs and clears the rack route, remains non-silent, and shows the expected 11.10x audio delta. QuickJS scheduling uses the Promise-job fallback when `queueMicrotask` is unavailable.
 - Focused state/adapter/runtime gates pass 158/158; iPhone source UI passes 18/18; the built desktop bundle boots; TypeScript and generation checks pass. The full iPhone contract run reached 79 passes/3 unavailable-iPad skips; its two stale v4/legacy-A assertions were updated and their focused rerun passes 2/2.
+
+Hard-cut product UI/browser checkpoint — completed 2026-08-15
+- The abandoned `hard_cut_flow` carrier harness is no longer part of the implementation plan. Product work proceeds with small public-seam TDD checks and the existing native/Web/iPhone gates.
+- Desktop and iPhone now present one live A/B/C selector. Table, frame, pan, warp, phase, and unison edits use the selected oscillator's exact public endpoints; no B/C pending panel or scalar-A fallback remains.
+- Synth presets capture and restore the full visible product parameter contract, including distinct A/B/C table and pan values, plus strict `modulation.v5` and `articulations.v4` documents.
+- Browser durability hard-cuts to `cosimo.web.patch-state.v2`: `sound.parameters` owns endpoint-keyed values, `sound.storedState` owns MOD/ART/rack, and `auxiliary` keeps the preset library outside the sound. The flat v1 sound bag is not read.
+- The product Web build now invokes the renderer-aware generator and packages the same canonical renderer used by native hosts. A packaged AudioWorklet test restores oscillator B pan and rack order/enable state through reload; the canonical B-only renderer smoke is non-silent.
+- Seal gates: iPhone UI 19/19; desktop A/B/C presentation 2/2; focused desktop state/UI 6/6; Web bundle 13/13; renderer provider 3/3; real Chromium AudioWorklet renderer 1/1; TypeScript/syntax/diff clean.

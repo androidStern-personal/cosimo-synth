@@ -361,7 +361,10 @@ function getSnapshot() {
         modulationRejectedRouteCount: state.modulationRejectedRouteCount,
         parameterValues: { ...state.parameterValues },
         phase: state.phase,
-        persistedStateKeys: Object.keys(readBrowserPatchState()).sort(),
+        persistedStateKeys: [
+            ...Object.keys(readBrowserPatchState().sound.storedState),
+            ...Object.keys(readBrowserPatchState().auxiliary),
+        ].sort(),
         silentHeldNotePollCount: state.silentHeldNotePollCount,
         heldNoteCount: state.heldNotes.size,
         started: state.started,

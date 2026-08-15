@@ -834,8 +834,8 @@ async function openBuiltDesktopBundlePage() {
             failureReasonCode: 0,
         };
         const parameterValues = new Map([
-            ["wavetablePosition", 0.28],
-            ["wavetableSelect", 0],
+            ["oscAWavetablePosition", 0.28],
+            ["oscAWavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
         ]);
@@ -994,8 +994,8 @@ async function openDesktopEntryPageWithInjectedResourceClient() {
         }
 
         const parameterValues = new Map([
-            ["wavetablePosition", 0.28],
-            ["wavetableSelect", 0],
+            ["oscAWavetablePosition", 0.28],
+            ["oscAWavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
         ]);
@@ -1947,8 +1947,53 @@ test("wavetable picker prewarms the current and adjacent tables without selectin
                 { endpointID: "wavetablePrewarmNotification", value: 1 },
             ],
         );
-        assert.equal(Number(snapshot.parameterValues.wavetableSelect), 0);
-        assert.deepEqual(snapshot.gestureStarts.filter((value) => value === "wavetableSelect"), []);
+        assert.equal(Number(snapshot.parameterValues.oscAWavetableSelect), 0);
+        assert.deepEqual(snapshot.gestureStarts.filter((value) => value === "oscAWavetableSelect"), []);
+    } finally {
+        await page.close();
+    }
+});
+
+test("selected oscillator table and pan controls write only that oscillator", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+        );
+        await clearHarnessDebugLog(page);
+
+        await page.locator('select[aria-label="Select wavetable"]').selectOption("1");
+        const panInput = page.locator('input[aria-label="Pan"]');
+        await panInput.press("Enter");
+        await panInput.fill("25");
+        await panInput.press("Enter");
+
+        await page.waitForFunction(() => {
+            const messages = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().sentMessages;
+            return messages.some(({ endpointID, value }) => (
+                endpointID === "oscBWavetableSelect" && Number(value) === 1
+            )) && messages.some(({ endpointID, value }) => (
+                endpointID === "oscBPan" && Math.abs(Number(value) - 0.25) < 0.0001
+            ));
+        });
+
+        const selectedWrites = (await getHarnessSnapshot(page)).sentMessages.filter(({ endpointID }) => (
+            endpointID === "oscBWavetableSelect" || endpointID === "oscBPan"
+        ));
+        assert.deepEqual(selectedWrites, [
+            { endpointID: "oscBWavetableSelect", value: 1 },
+            { endpointID: "oscBPan", value: 0.25 },
+        ]);
+        assert.equal((await getHarnessSnapshot(page)).sentMessages.some(({ endpointID }) => (
+            endpointID === "wavetableSelect"
+            || endpointID === "pan"
+            || endpointID === "oscAWavetableSelect"
+            || endpointID === "oscAPan"
+            || endpointID === "oscCWavetableSelect"
+            || endpointID === "oscCPan"
+        )), false);
     } finally {
         await page.close();
     }
@@ -1969,15 +2014,15 @@ test("wavetable selection commits the desired table and retry uses the runtime r
         await clearHarnessDebugLog(page);
         await page.click('select[aria-label="Select wavetable"]');
         let snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), false);
-        assert.equal(snapshot.gestureEnds.includes("wavetablePosition"), false);
+        assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), false);
+        assert.equal(snapshot.gestureEnds.includes("oscAWavetablePosition"), false);
 
         await clearHarnessDebugLog(page);
         await page.selectOption('select[aria-label="Select wavetable"]', "1");
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.wavetableSelect) === 1 &&
+            return Number(snapshot.parameterValues.oscAWavetableSelect) === 1 &&
                 snapshot.runtimeState.desiredTableIndex === 1 &&
                 snapshot.runtimeState.activeTableIndex === 0 &&
                 snapshot.runtimeState.hasLoading === true &&
@@ -1986,16 +2031,16 @@ test("wavetable selection commits the desired table and retry uses the runtime r
         await page.waitForSelector(`text=Loading ${desiredTableName}…`);
 
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.gestureStarts.includes("wavetableSelect"), true);
-        assert.equal(snapshot.gestureEnds.includes("wavetableSelect"), true);
-        assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), false);
-        assert.equal(snapshot.gestureEnds.includes("wavetablePosition"), false);
+        assert.equal(snapshot.gestureStarts.includes("oscAWavetableSelect"), true);
+        assert.equal(snapshot.gestureEnds.includes("oscAWavetableSelect"), true);
+        assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), false);
+        assert.equal(snapshot.gestureEnds.includes("oscAWavetablePosition"), false);
         assert.equal(snapshot.runtimeState.activeTableIndex, 0);
         assert.equal(snapshot.runtimeState.desiredTableIndex, 1);
         assert.equal(snapshot.runtimeState.hasLoading, true);
         assert.equal(snapshot.runtimeState.loadingTableIndex, 1);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "wavetableSelect" && Number(value) === 1),
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscAWavetableSelect" && Number(value) === 1),
             true,
         );
         assert.equal((await getHarnessRenderedState(page)).stageLabel, audibleTableName);
@@ -2035,12 +2080,12 @@ test("wavetable selection commits the desired table and retry uses the runtime r
         snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
             snapshot.sentMessages.filter(({ endpointID }) => endpointID === "retryDesiredTableRequest"),
-            [{ endpointID: "retryDesiredTableRequest", value: 1 }],
+            [{ endpointID: "retryDesiredTableRequest", value: 0 }],
         );
         assert.equal(snapshot.runtimeState.hasLoading, true);
         assert.equal(snapshot.runtimeState.loadingTableIndex, 1);
         assert.equal(snapshot.runtimeState.hasFailure, false);
-        assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), false);
+        assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), false);
         assert.equal((await getHarnessRenderedState(page)).stageLabel, audibleTableName);
     } finally {
         await page.close();
@@ -2135,9 +2180,9 @@ test("stage drag preserves the gesture contract and ignores tiny drags", async (
         await page.mouse.up();
 
         let snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.gestureStarts.filter((value) => value === "wavetablePosition").length, 1);
-        assert.equal(snapshot.gestureEnds.filter((value) => value === "wavetablePosition").length, 1);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "wavetablePosition"), false);
+        assert.equal(snapshot.gestureStarts.filter((value) => value === "oscAWavetablePosition").length, 1);
+        assert.equal(snapshot.gestureEnds.filter((value) => value === "oscAWavetablePosition").length, 1);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "oscAWavetablePosition"), false);
 
         await clearHarnessDebugLog(page);
         await page.mouse.move(startX, startY);
@@ -2147,14 +2192,14 @@ test("stage drag preserves the gesture contract and ignores tiny drags", async (
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return snapshot.sentMessages.some(({ endpointID }) => endpointID === "wavetablePosition");
+            return snapshot.sentMessages.some(({ endpointID }) => endpointID === "oscAWavetablePosition");
         });
 
         snapshot = await getHarnessSnapshot(page);
-        const positionMessages = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "wavetablePosition");
+        const positionMessages = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "oscAWavetablePosition");
 
-        assert.equal(snapshot.gestureStarts.filter((value) => value === "wavetablePosition").length, 1);
-        assert.equal(snapshot.gestureEnds.filter((value) => value === "wavetablePosition").length, 1);
+        assert.equal(snapshot.gestureStarts.filter((value) => value === "oscAWavetablePosition").length, 1);
+        assert.equal(snapshot.gestureEnds.filter((value) => value === "oscAWavetablePosition").length, 1);
         assert.equal(positionMessages.length > 0, true);
 
         const lastPosition = Number(positionMessages.at(-1)?.value);
@@ -2180,14 +2225,14 @@ test("stage drag preserves the gesture contract and ignores tiny drags", async (
         await page.click('button:has-text("Retry Load")');
 
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), false);
+        assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), false);
 
         await clearHarnessDebugLog(page);
         await showVoiceControls(page);
         await page.click('[aria-label="Glide"]');
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), false);
-        assert.equal(snapshot.gestureEnds.includes("wavetablePosition"), false);
+        assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), false);
+        assert.equal(snapshot.gestureEnds.includes("oscAWavetablePosition"), false);
     } finally {
         await page.close();
     }
@@ -2212,13 +2257,13 @@ test("wavetable select claims left and right arrows on the real desktop page", a
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.wavetableSelect) === 1;
+            return Number(snapshot.parameterValues.oscAWavetableSelect) === 1;
         });
 
         let snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "wavetableSelect"),
-            [{ endpointID: "wavetableSelect", value: 1 }],
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "oscAWavetableSelect"),
+            [{ endpointID: "oscAWavetableSelect", value: 1 }],
         );
         assert.deepEqual(snapshot.midiInputEvents, []);
 
@@ -2227,13 +2272,13 @@ test("wavetable select claims left and right arrows on the real desktop page", a
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.wavetableSelect) === 0;
+            return Number(snapshot.parameterValues.oscAWavetableSelect) === 0;
         });
 
         snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "wavetableSelect"),
-            [{ endpointID: "wavetableSelect", value: 0 }],
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "oscAWavetableSelect"),
+            [{ endpointID: "oscAWavetableSelect", value: 0 }],
         );
         assert.deepEqual(snapshot.midiInputEvents, []);
     } finally {
@@ -2434,13 +2479,13 @@ test("unison controls commit parameters and redraw the voice distribution", asyn
         await page.locator('[data-role="unison-voices-up"]').click();
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.unisonVoices) === 2;
+            return Number(snapshot.parameterValues.oscAUnisonVoices) === 2;
         });
 
         let snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "unisonVoices"),
-            [{ endpointID: "unisonVoices", value: 2 }],
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "oscAUnisonVoices"),
+            [{ endpointID: "oscAUnisonVoices", value: 2 }],
         );
 
         await clearHarnessDebugLog(page);
@@ -2450,7 +2495,7 @@ test("unison controls commit parameters and redraw the voice distribution", asyn
         await detuneInput.press("Enter");
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Math.abs(Number(snapshot.parameterValues.unisonDetune) - 0.5) < 0.0001;
+            return Math.abs(Number(snapshot.parameterValues.oscAUnisonDetune) - 0.5) < 0.0001;
         });
 
         await page.locator('[data-role="unison-detune-mode-control"]').click();
@@ -2458,9 +2503,9 @@ test("unison controls commit parameters and redraw the voice distribution", asyn
         await page.locator('[data-role="unison-phase-mode-control"]').click();
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.unisonDetuneMode) === 1
-                && Number(snapshot.parameterValues.unisonStackMode) === 1
-                && Number(snapshot.parameterValues.unisonPhaseMode) === 1;
+            return Number(snapshot.parameterValues.oscAUnisonDetuneMode) === 1
+                && Number(snapshot.parameterValues.oscAUnisonStackMode) === 1
+                && Number(snapshot.parameterValues.oscARetrigger) === 1;
         });
 
         snapshot = await getHarnessSnapshot(page);
@@ -2469,10 +2514,10 @@ test("unison controls commit parameters and redraw the voice distribution", asyn
                 .filter(({ endpointID }) => endpointID.startsWith("unison"))
                 .map(({ endpointID, value }) => ({ endpointID, value })),
             [
-                { endpointID: "unisonDetune", value: 0.5 },
-                { endpointID: "unisonDetuneMode", value: 1 },
-                { endpointID: "unisonStackMode", value: 1 },
-                { endpointID: "unisonPhaseMode", value: 1 },
+                { endpointID: "oscAUnisonDetune", value: 0.5 },
+                { endpointID: "oscAUnisonDetuneMode", value: 1 },
+                { endpointID: "oscAUnisonStackMode", value: 1 },
+                { endpointID: "oscARetrigger", value: 1 },
             ],
         );
 
@@ -2517,7 +2562,7 @@ test("precision value entry commits the newest text when Enter follows in the sa
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Math.abs(Number(snapshot.parameterValues.unisonDetune) - 0.5) < 0.0001;
+            return Math.abs(Number(snapshot.parameterValues.oscAUnisonDetune) - 0.5) < 0.0001;
         });
     } finally {
         await page.close();
@@ -2533,7 +2578,7 @@ test("precision value entry keeps the focused draft when a host echo arrives", a
         await detuneInput.dblclick();
         await detuneInput.fill("25");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("unisonDetune", 0.8, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscAUnisonDetune", 0.8, true);
         });
         await page.waitForTimeout(50);
 
@@ -2542,7 +2587,7 @@ test("precision value entry keeps the focused draft when a host echo arrives", a
         await detuneInput.press("Enter");
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Math.abs(Number(snapshot.parameterValues.unisonDetune) - 0.5) < 0.0001;
+            return Math.abs(Number(snapshot.parameterValues.oscAUnisonDetune) - 0.5) < 0.0001;
         });
     } finally {
         await page.close();
@@ -2591,8 +2636,8 @@ test("precision fields end their host gesture when mouse movement reports no pre
         });
 
         const snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.gestureStarts, ["unisonDetune"]);
-        assert.deepEqual(snapshot.gestureEnds, ["unisonDetune"]);
+        assert.deepEqual(snapshot.gestureStarts, ["oscAUnisonDetune"]);
+        assert.deepEqual(snapshot.gestureEnds, ["oscAUnisonDetune"]);
     } finally {
         await page.close();
     }
@@ -2638,9 +2683,9 @@ test("precision fields keep tracking touch when pointer capture is unavailable",
         let snapshot = await waitForHarnessSnapshot(
             page,
             "capture-free precision touch move",
-            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "unisonDetune"),
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "oscAUnisonDetune"),
         );
-        assert.deepEqual(snapshot.gestureStarts, ["unisonDetune"]);
+        assert.deepEqual(snapshot.gestureStarts, ["oscAUnisonDetune"]);
         assert.deepEqual(snapshot.gestureEnds, []);
 
         await page.evaluate(({ pointerId, moved }) => {
@@ -2657,9 +2702,9 @@ test("precision fields keep tracking touch when pointer capture is unavailable",
         snapshot = await waitForHarnessSnapshot(
             page,
             "capture-free precision touch release",
-            (nextSnapshot) => nextSnapshot.gestureEnds.includes("unisonDetune"),
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("oscAUnisonDetune"),
         );
-        assert.deepEqual(snapshot.gestureEnds, ["unisonDetune"]);
+        assert.deepEqual(snapshot.gestureEnds, ["oscAUnisonDetune"]);
     } finally {
         await page.close();
     }
@@ -2675,14 +2720,14 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
 
         await clearHarnessDebugLog(page);
         const warpModeChip = page.locator('button[aria-label^="Cycle warp mode"]').first();
-        let currentMode = await page.evaluate(() => Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.warpMode));
+        let currentMode = await page.evaluate(() => Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.oscAWarpMode));
 
         for (let guard = 0; guard < 8 && currentMode !== 3; guard += 1) {
             await warpModeChip.click();
             currentMode = await waitForPageValue(
                 page,
                 "warp mode cycling to asym",
-                () => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.warpMode,
+                () => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.oscAWarpMode,
                 (value) => Number(value) !== Number(currentMode),
             );
         }
@@ -2691,7 +2736,7 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
 
         let snapshot = await getHarnessSnapshot(page);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "warpMode" && Number(value) === 3),
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscAWarpMode" && Number(value) === 3),
             true,
         );
 
@@ -2700,12 +2745,12 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.warpMode) === 4;
+            return Number(snapshot.parameterValues.oscAWarpMode) === 4;
         });
 
         snapshot = await getHarnessSnapshot(page);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "warpMode" && Number(value) === 4),
+            snapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscAWarpMode" && Number(value) === 4),
             true,
         );
 
@@ -2718,13 +2763,13 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
 
         await page.waitForFunction(() => {
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Math.abs(Number(snapshot.parameterValues.warpAmount) - 0.72) <= 1e-9;
+            return Math.abs(Number(snapshot.parameterValues.oscAWarpAmount) - 0.72) <= 1e-9;
         });
 
         snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "warpAmount"),
-            [{ endpointID: "warpAmount", value: 0.72 }],
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "oscAWarpAmount"),
+            [{ endpointID: "oscAWarpAmount", value: 0.72 }],
         );
 
         assert.equal(await page.locator('[aria-label="Route 1 slot"]').count(), 0);
@@ -2792,10 +2837,10 @@ test("articulation recall applies sparse v4 overrides without replacing routing"
 
         await page.evaluate(({ fallbackModulationState, nextRouteId }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setParameterValue("wavetablePosition", 0.12);
-            harness.setParameterValue("pan", 0.41);
-            harness.setParameterValue("warpMode", 4);
-            harness.setParameterValue("warpAmount", 0.08);
+            harness.setParameterValue("oscAWavetablePosition", 0.12);
+            harness.setParameterValue("oscAPan", 0.41);
+            harness.setParameterValue("oscAWarpMode", 4);
+            harness.setParameterValue("oscAWarpAmount", 0.08);
             harness.setParameterValue("filterCutoff", 8200);
 
             const rawModulationState = harness.getSnapshot().storedState["modulation.v5"];
@@ -2864,10 +2909,10 @@ test("articulation recall applies sparse v4 overrides without replacing routing"
                 const route = readStoredModulationState(nextSnapshot).routes[0];
                 const storedBank = readStoredArticulationEditorState(nextSnapshot);
                 return storedBank.selectedSlotId === "articulation-0"
-                    && Math.abs(Number(nextSnapshot.parameterValues.wavetablePosition) - 0.66) <= 1e-9
-                    && Math.abs(Number(nextSnapshot.parameterValues.pan) - -0.18) <= 1e-9
-                    && Number(nextSnapshot.parameterValues.warpMode) === 3
-                    && Math.abs(Number(nextSnapshot.parameterValues.warpAmount) - 0.61) <= 1e-9
+                    && Math.abs(Number(nextSnapshot.parameterValues.oscAWavetablePosition) - 0.66) <= 1e-9
+                    && Math.abs(Number(nextSnapshot.parameterValues.oscAPan) - -0.18) <= 1e-9
+                    && Number(nextSnapshot.parameterValues.oscAWarpMode) === 3
+                    && Math.abs(Number(nextSnapshot.parameterValues.oscAWarpAmount) - 0.61) <= 1e-9
                     && Math.abs(Number(nextSnapshot.parameterValues.filterCutoff) - 2475) <= 1e-9
                     && route?.id === routeId
                     && route?.sourceKind === "mseg"
@@ -2887,13 +2932,13 @@ test("articulation recall applies sparse v4 overrides without replacing routing"
         });
         assert.deepEqual(
             snapshot.sentMessages
-                .filter(({ endpointID }) => ["wavetablePosition", "pan", "warpMode", "warpAmount", "filterCutoff"].includes(endpointID))
+                .filter(({ endpointID }) => ["oscAWavetablePosition", "oscAPan", "oscAWarpMode", "oscAWarpAmount", "filterCutoff"].includes(endpointID))
                 .map(({ endpointID, value }) => ({ endpointID, value })),
             [
-                { endpointID: "wavetablePosition", value: 0.66 },
-                { endpointID: "pan", value: -0.18 },
-                { endpointID: "warpMode", value: 3 },
-                { endpointID: "warpAmount", value: 0.61 },
+                { endpointID: "oscAWavetablePosition", value: 0.66 },
+                { endpointID: "oscAPan", value: -0.18 },
+                { endpointID: "oscAWarpMode", value: 3 },
+                { endpointID: "oscAWarpAmount", value: 0.61 },
                 { endpointID: "filterCutoff", value: 2475 },
             ],
         );
@@ -3951,7 +3996,7 @@ test("contextual toolbar only exposes articulation draft actions", async () => {
         );
 
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("pan", 0.25);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscAPan", 0.25);
         });
 
         const toolbar = page.locator('[data-role="contextual-floating-toolbar"]');
@@ -4067,7 +4112,7 @@ test("synth preset bar saves current synth state through shared effect presets",
 
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setParameterValue("pan", 0.25);
+            harness.setParameterValue("oscAPan", 0.25);
             harness.setParameterValue("filterCutoff", 2475);
             harness.setParameterValue("mseg1Morph", 0.33);
         });
@@ -4162,7 +4207,12 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
 
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setParameterValue("pan", 0.12);
+            harness.setParameterValue("oscAPan", 0.12);
+            harness.setParameterValue("oscAWavetableSelect", 3);
+            harness.setParameterValue("oscBPan", -0.34);
+            harness.setParameterValue("oscBWavetableSelect", 7);
+            harness.setParameterValue("oscCPan", 0.56);
+            harness.setParameterValue("oscCWavetableSelect", 11);
             harness.setParameterValue("filterCutoff", 2475);
             harness.setParameterValue("mseg1Morph", 0.33);
         });
@@ -4173,7 +4223,12 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
 
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setParameterValue("pan", 0.77);
+            harness.setParameterValue("oscAPan", 0.77);
+            harness.setParameterValue("oscAWavetableSelect", 13);
+            harness.setParameterValue("oscBPan", 0.78);
+            harness.setParameterValue("oscBWavetableSelect", 17);
+            harness.setParameterValue("oscCPan", -0.79);
+            harness.setParameterValue("oscCWavetableSelect", 19);
             harness.setParameterValue("filterCutoff", 8200);
         });
 
@@ -4183,14 +4238,24 @@ test("synth preset bar marks edits dirty and reverts without synth-local baselin
         const snapshot = await waitForHarnessSnapshot(
             page,
             "shared synth preset reverted",
-            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.pan) - 0.12) <= 1e-9
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.oscAPan) - 0.12) <= 1e-9
+                && Number(nextSnapshot.parameterValues.oscAWavetableSelect) === 3
+                && Math.abs(Number(nextSnapshot.parameterValues.oscBPan) + 0.34) <= 1e-9
+                && Number(nextSnapshot.parameterValues.oscBWavetableSelect) === 7
+                && Math.abs(Number(nextSnapshot.parameterValues.oscCPan) - 0.56) <= 1e-9
+                && Number(nextSnapshot.parameterValues.oscCWavetableSelect) === 11
                 && Math.abs(Number(nextSnapshot.parameterValues.filterCutoff) - 2475) <= 1e-9
                 && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.33) <= 1e-9
                 && !containsRetiredSynthPresetBaselineKey(nextSnapshot)
                 && readEffectPresetState(nextSnapshot).activePresetByEffect[SYNTH_PRESET_EFFECT_ID]?.dirty === false,
         );
 
-        assert.equal(Number(snapshot.parameterValues.pan), 0.12);
+        assert.equal(Number(snapshot.parameterValues.oscAPan), 0.12);
+        assert.equal(Number(snapshot.parameterValues.oscAWavetableSelect), 3);
+        assert.equal(Number(snapshot.parameterValues.oscBPan), -0.34);
+        assert.equal(Number(snapshot.parameterValues.oscBWavetableSelect), 7);
+        assert.equal(Number(snapshot.parameterValues.oscCPan), 0.56);
+        assert.equal(Number(snapshot.parameterValues.oscCWavetableSelect), 11);
         assert.equal(Number(snapshot.parameterValues.filterCutoff), 2475);
         assert.equal(Number(snapshot.parameterValues.mseg1Morph), 0.33);
         assert.equal(containsRetiredSynthPresetBaselineKey(snapshot), false);
@@ -4616,12 +4681,12 @@ test("articulation card audition releases its note when the window blurs", async
 
 test("opening the synth GUI does not recall or overwrite a stored selected articulation", async () => {
     const parameterEndpoints = [
-        "wavetablePosition",
+        "oscAWavetablePosition",
         "playMode",
         "glideTime",
-        "pan",
-        "warpMode",
-        "warpAmount",
+        "oscAPan",
+        "oscAWarpMode",
+        "oscAWarpAmount",
         "filterMode",
         "filterCutoff",
         "filterQ",
@@ -5332,8 +5397,8 @@ test("desktop wavetable stage follows live effective warp state and falls back t
         });
 
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("warpMode", 1);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("warpAmount", 0.18);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscAWarpMode", 1);
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscAWarpAmount", 0.18);
         });
 
         await page.waitForFunction(() => {

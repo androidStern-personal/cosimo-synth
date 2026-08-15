@@ -153,9 +153,12 @@ import {
     DEFAULT_SELECTED_OSCILLATOR_ID,
     OSCILLATOR_BINDING_CONTRACTS,
     getOscillatorBindingContract,
+    getOscillatorControlAddress,
     projectSelectedOscillatorWrite,
     type OscillatorControlID,
     type OscillatorControlWrite,
+    type OscillatorID,
+    type OscillatorRuntimeIndex,
     type OscillatorSelectionViewModel,
 } from "./oscillator-binding";
 
@@ -166,27 +169,11 @@ export const EFFECTIVE_FILTER_STATE_ENDPOINT_ID = "effectiveFilterState";
 export const FILTER_SPECTRUM_ENDPOINT_ID = "filterSpectrum";
 export const DISPLAY_SWIPE_THRESHOLD_PX = 2;
 export const MSEG_DRAG_THRESHOLD_PX = 8;
-const WAVETABLE_POSITION_ENDPOINT_ID = "wavetablePosition";
-const WAVETABLE_SELECT_ENDPOINT_ID = "wavetableSelect";
 const PLAY_MODE_ENDPOINT_ID = "playMode";
 const GLIDE_TIME_ENDPOINT_ID = "glideTime";
-const PAN_ENDPOINT_ID = "pan";
-const WARP_MODE_ENDPOINT_ID = "warpMode";
-const WARP_AMOUNT_ENDPOINT_ID = "warpAmount";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
-const UNISON_VOICES_ENDPOINT_ID = "unisonVoices";
-const UNISON_DETUNE_ENDPOINT_ID = "unisonDetune";
-const UNISON_BLEND_ENDPOINT_ID = "unisonBlend";
-const UNISON_WIDTH_ENDPOINT_ID = "unisonWidth";
-const UNISON_PHASE_ENDPOINT_ID = "unisonPhase";
-const UNISON_RANDOM_ENDPOINT_ID = "unisonRandom";
-const UNISON_PHASE_MODE_ENDPOINT_ID = "unisonPhaseMode";
-const UNISON_DETUNE_MODE_ENDPOINT_ID = "unisonDetuneMode";
-const UNISON_STACK_MODE_ENDPOINT_ID = "unisonStackMode";
-const UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID = "unisonWavetablePositionSpread";
-const UNISON_WARP_SPREAD_ENDPOINT_ID = "unisonWarpSpread";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
 const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
 const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
@@ -277,9 +264,8 @@ export type ArticulationHeldInput = {
 
 /**
  * Owns the presentation-only oscillator tab state shared by desktop and iPhone.
- * It intentionally does not bind the reserved A/B/C endpoints: today's product
- * root remains on its working legacy A endpoints until the indexed host graph
- * is composed.
+ * Selection changes which canonical A/B/C endpoints the shared controls bind.
+ * It remains session-only presentation state and is never stored in the patch.
  */
 export function useOscillatorSelectionViewModel(): OscillatorSelectionViewModel {
     const [selectedOscillatorID, selectOscillator] = useState(DEFAULT_SELECTED_OSCILLATOR_ID);
@@ -298,6 +284,39 @@ export function useOscillatorSelectionViewModel(): OscillatorSelectionViewModel 
         selectOscillator,
         projectControlWrite,
     }), [projectControlWrite, selectedOscillator, selectedOscillatorID]);
+}
+
+function runtimeStateOscillatorIndex(message: unknown): OscillatorRuntimeIndex | null {
+    const payload = (message as { event?: unknown } | null | undefined)?.event ?? message;
+    if (!payload || typeof payload !== "object") return null;
+    const oscillatorIndex = Math.trunc(Number((payload as { oscillatorIndex?: unknown }).oscillatorIndex));
+    return oscillatorIndex === 0 || oscillatorIndex === 1 || oscillatorIndex === 2
+        ? oscillatorIndex
+        : null;
+}
+
+/** Retains the most recent table state for each oscillator on the shared event stream. */
+function useOscillatorRuntimeTableState(oscillatorIndex: OscillatorRuntimeIndex): unknown | null {
+    const patchConnection = usePatchConnection();
+    const [states, setStates] = useState<ReadonlyArray<unknown | null>>([null, null, null]);
+
+    useEffect(() => {
+        setStates([null, null, null]);
+        const listener = (message: unknown) => {
+            const messageOscillatorIndex = runtimeStateOscillatorIndex(message);
+            if (messageOscillatorIndex === null) return;
+            setStates((previousStates) => {
+                const nextStates = [...previousStates];
+                nextStates[messageOscillatorIndex] = message;
+                return nextStates;
+            });
+        };
+
+        patchConnection.addEndpointListener?.(RUNTIME_STATE_ENDPOINT_ID, listener);
+        return () => patchConnection.removeEndpointListener?.(RUNTIME_STATE_ENDPOINT_ID, listener);
+    }, [patchConnection]);
+
+    return states[oscillatorIndex] ?? null;
 }
 
 type HeldMidiNote = {
@@ -1397,34 +1416,78 @@ export function buildPresetArticulationBaseSnapshot(
     const parameters = defaults.parameters;
     return normalizeArticulationSnapshot({
         parameters: {
-            wavetablePosition: presetParameterNumber(context, WAVETABLE_POSITION_ENDPOINT_ID, parameters.wavetablePosition),
-            pan: presetParameterNumber(context, PAN_ENDPOINT_ID, parameters.pan),
-            warpMode: presetParameterNumber(context, WARP_MODE_ENDPOINT_ID, parameters.warpMode),
-            warpAmount: presetParameterNumber(context, WARP_AMOUNT_ENDPOINT_ID, parameters.warpAmount),
+            wavetablePosition: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "framePosition").endpointID,
+                parameters.wavetablePosition,
+            ),
+            pan: presetParameterNumber(context, getOscillatorControlAddress("A", "pan").endpointID, parameters.pan),
+            warpMode: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "warpMode").endpointID,
+                parameters.warpMode,
+            ),
+            warpAmount: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "warpAmount").endpointID,
+                parameters.warpAmount,
+            ),
             filterMode: presetParameterNumber(context, FILTER_MODE_ENDPOINT_ID, parameters.filterMode),
             filterCutoff: presetParameterNumber(context, FILTER_CUTOFF_ENDPOINT_ID, parameters.filterCutoff),
             filterQ: presetParameterNumber(context, FILTER_Q_ENDPOINT_ID, parameters.filterQ),
-            unisonVoices: presetParameterNumber(context, UNISON_VOICES_ENDPOINT_ID, parameters.unisonVoices),
-            unisonDetune: presetParameterNumber(context, UNISON_DETUNE_ENDPOINT_ID, parameters.unisonDetune),
-            unisonBlend: presetParameterNumber(context, UNISON_BLEND_ENDPOINT_ID, parameters.unisonBlend),
-            unisonWidth: presetParameterNumber(context, UNISON_WIDTH_ENDPOINT_ID, parameters.unisonWidth),
-            unisonPhase: presetParameterNumber(context, UNISON_PHASE_ENDPOINT_ID, parameters.unisonPhase),
-            unisonRandom: presetParameterNumber(context, UNISON_RANDOM_ENDPOINT_ID, parameters.unisonRandom),
-            unisonPhaseMode: presetParameterNumber(context, UNISON_PHASE_MODE_ENDPOINT_ID, parameters.unisonPhaseMode),
+            unisonVoices: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "unisonVoices").endpointID,
+                parameters.unisonVoices,
+            ),
+            unisonDetune: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "unisonDetune").endpointID,
+                parameters.unisonDetune,
+            ),
+            unisonBlend: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "unisonBlend").endpointID,
+                parameters.unisonBlend,
+            ),
+            unisonWidth: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "unisonWidth").endpointID,
+                parameters.unisonWidth,
+            ),
+            unisonPhase: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "phase").endpointID,
+                parameters.unisonPhase,
+            ),
+            unisonRandom: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "phaseRandom").endpointID,
+                parameters.unisonRandom,
+            ),
+            unisonPhaseMode: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "retrigger").endpointID,
+                parameters.unisonPhaseMode,
+            ),
             unisonDetuneMode: presetParameterNumber(
                 context,
-                UNISON_DETUNE_MODE_ENDPOINT_ID,
+                getOscillatorControlAddress("A", "unisonDetuneMode").endpointID,
                 parameters.unisonDetuneMode,
             ),
-            unisonStackMode: presetParameterNumber(context, UNISON_STACK_MODE_ENDPOINT_ID, parameters.unisonStackMode),
+            unisonStackMode: presetParameterNumber(
+                context,
+                getOscillatorControlAddress("A", "unisonStackMode").endpointID,
+                parameters.unisonStackMode,
+            ),
             unisonWavetablePositionSpread: presetParameterNumber(
                 context,
-                UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID,
+                getOscillatorControlAddress("A", "unisonWavetablePositionSpread").endpointID,
                 parameters.unisonWavetablePositionSpread,
             ),
             unisonWarpSpread: presetParameterNumber(
                 context,
-                UNISON_WARP_SPREAD_ENDPOINT_ID,
+                getOscillatorControlAddress("A", "unisonWarpSpread").endpointID,
                 parameters.unisonWarpSpread,
             ),
             msegMorphs: [
@@ -2289,6 +2352,7 @@ export function useSynthKeyboardRouting({
 }
 
 export function useSynthPatchViewModel({
+    oscillatorID = DEFAULT_SELECTED_OSCILLATOR_ID,
     stageRef,
     msegEditorSurfaceRef,
     keyboardRef,
@@ -2303,6 +2367,7 @@ export function useSynthPatchViewModel({
     observeDistortionVisuals = true,
     observeMsegPlayhead = true,
 }: {
+    oscillatorID?: OscillatorID;
     stageRef: RefObject<HTMLDivElement | null>;
     msegEditorSurfaceRef: RefObject<SVGSVGElement | null>;
     keyboardRef: RefObject<SynthKeyboardLike | null>;
@@ -2318,19 +2383,23 @@ export function useSynthPatchViewModel({
     observeMsegPlayhead?: boolean;
 }): SynthPatchViewModel {
     const patchConnection = usePatchConnection();
-    const runtimeStateMessage = usePatchEndpoint<unknown | null>(RUNTIME_STATE_ENDPOINT_ID, null);
+    const oscillator = getOscillatorBindingContract(oscillatorID);
+    const oscillatorEndpointID = useCallback((controlID: OscillatorControlID) => (
+        getOscillatorControlAddress(oscillatorID, controlID).endpointID
+    ), [oscillatorID]);
+    const runtimeStateMessage = useOscillatorRuntimeTableState(oscillator.oscillatorIndex);
     const normalizedRuntimeState = useMemo(
         () => normalizeRuntimeTableState(runtimeStateMessage),
         [runtimeStateMessage],
     );
     const { catalog, error: catalogError } = useFactoryBankCatalog();
     const wavetablePosition = usePatchParameterBinding<number>({
-        endpointID: WAVETABLE_POSITION_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("framePosition"),
         initialValue: 0,
         coerce: (value) => clampDisplayPosition(value),
     });
     const wavetableSelect = usePatchParameterBinding<number>({
-        endpointID: WAVETABLE_SELECT_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("wavetableSelect"),
         initialValue: DEFAULT_FACTORY_TABLE_INDEX,
         coerce: (value) => Math.max(0, Math.trunc(Number(value) || 0)),
     });
@@ -2345,17 +2414,17 @@ export function useSynthPatchViewModel({
         coerce: (value) => clamp(Number(value) || 0, GLIDE_TIME_MIN_SECONDS, GLIDE_TIME_MAX_SECONDS),
     });
     const pan = usePatchParameterBinding<number>({
-        endpointID: PAN_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("pan"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, -1, 1),
     });
     const warpMode = usePatchParameterBinding<number>({
-        endpointID: WARP_MODE_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("warpMode"),
         initialValue: 0,
         coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4),
     });
     const warpAmount = usePatchParameterBinding<number>({
-        endpointID: WARP_AMOUNT_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("warpAmount"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
@@ -2375,57 +2444,57 @@ export function useSynthPatchViewModel({
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
     const unisonVoices = usePatchParameterBinding<number>({
-        endpointID: UNISON_VOICES_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("unisonVoices"),
         initialValue: 1,
         coerce: (value) => clamp(Math.round(Number(value) || 1), 1, 8),
     });
     const unisonDetune = usePatchParameterBinding<number>({
-        endpointID: UNISON_DETUNE_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("unisonDetune"),
         initialValue: 0.1,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
     const unisonBlend = usePatchParameterBinding<number>({
-        endpointID: UNISON_BLEND_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("unisonBlend"),
         initialValue: 0.75,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
     const unisonWidth = usePatchParameterBinding<number>({
-        endpointID: UNISON_WIDTH_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("unisonWidth"),
         initialValue: 1,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
     const unisonPhase = usePatchParameterBinding<number>({
-        endpointID: UNISON_PHASE_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("phase"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
     const unisonRandom = usePatchParameterBinding<number>({
-        endpointID: UNISON_RANDOM_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("phaseRandom"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
     const unisonPhaseMode = usePatchParameterBinding<number>({
-        endpointID: UNISON_PHASE_MODE_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("retrigger"),
         initialValue: 0,
         coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
     });
     const unisonDetuneMode = usePatchParameterBinding<number>({
-        endpointID: UNISON_DETUNE_MODE_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("unisonDetuneMode"),
         initialValue: 0,
         coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4),
     });
     const unisonStackMode = usePatchParameterBinding<number>({
-        endpointID: UNISON_STACK_MODE_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("unisonStackMode"),
         initialValue: 0,
         coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4),
     });
     const unisonWavetablePositionSpread = usePatchParameterBinding<number>({
-        endpointID: UNISON_WAVETABLE_POSITION_SPREAD_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("unisonWavetablePositionSpread"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
     const unisonWarpSpread = usePatchParameterBinding<number>({
-        endpointID: UNISON_WARP_SPREAD_ENDPOINT_ID,
+        endpointID: oscillatorEndpointID("unisonWarpSpread"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
@@ -2517,8 +2586,8 @@ export function useSynthPatchViewModel({
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
     const prewarmWavetable = usePatchEventTrigger<number>(WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID);
-    const observedPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
-    const observedWarpState = useObservedWarpState({
+    const monitoredPosition = useObservedDisplayPosition(Number(wavetablePosition.value) || 0);
+    const monitoredWarpState = useObservedWarpState({
         warpMode: warpMode.value,
         warpAmount: warpAmount.value,
     });
@@ -2527,7 +2596,7 @@ export function useSynthPatchViewModel({
         filterCutoff: filterCutoff.value,
         filterQ: filterQ.value,
     });
-    const observedUnisonState = useObservedUnisonState({
+    const monitoredUnisonState = useObservedUnisonState({
         unisonVoices: unisonVoices.value,
         unisonDetune: unisonDetune.value,
         unisonBlend: unisonBlend.value,
@@ -2537,6 +2606,31 @@ export function useSynthPatchViewModel({
         unisonWavetablePositionSpread: unisonWavetablePositionSpread.value,
         unisonWarpSpread: unisonWarpSpread.value,
     });
+    const observedPosition = oscillatorID === "A"
+        ? monitoredPosition
+        : Number(wavetablePosition.value) || 0;
+    const observedWarpState = oscillatorID === "A"
+        ? monitoredWarpState
+        : {
+            voiceGeneration: -1,
+            hasActive: false,
+            mode: warpMode.value,
+            amount: warpAmount.value,
+        };
+    const observedUnisonState = oscillatorID === "A"
+        ? monitoredUnisonState
+        : {
+            voiceGeneration: -1,
+            hasActive: false,
+            voices: unisonVoices.value,
+            detune: unisonDetune.value,
+            blend: unisonBlend.value,
+            width: unisonWidth.value,
+            detuneMode: unisonDetuneMode.value,
+            stackMode: unisonStackMode.value,
+            wavetablePositionSpread: unisonWavetablePositionSpread.value,
+            warpSpread: unisonWarpSpread.value,
+        };
     const observedFilterSpectrum = useObservedFilterSpectrum(observeFilterSpectrum);
     const observedDistortionHistory = useObservedDistortionHistory(observeDistortionVisuals);
     const observedDistortionScope = useObservedDistortionScope(observeDistortionVisuals);
@@ -2682,8 +2776,8 @@ export function useSynthPatchViewModel({
     }, [desiredTableIndex, prewarmWavetableNeighborhood]);
 
     const handleRetryLoad = useCallback(() => {
-        retryDesiredTableLoad(1);
-    }, [retryDesiredTableLoad]);
+        retryDesiredTableLoad(oscillator.oscillatorIndex);
+    }, [oscillator.oscillatorIndex, retryDesiredTableLoad]);
 
     const handleSelectMsegSlot = useCallback((slotIndex: number) => {
         setSelectedMsegSlot(clamp(Math.round(slotIndex), 0, 2));

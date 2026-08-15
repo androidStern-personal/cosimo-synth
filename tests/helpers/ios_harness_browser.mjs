@@ -19,11 +19,11 @@ export function createIOSHarnessInitScript(baseUrl) {
         const endpointReplyTypes = new Map();
         const failingResources = new Map();
         const parameterValues = new Map([
-            ["wavetablePosition", 0.28],
-            ["wavetableSelect", 0],
+            ["oscAWavetablePosition", 0.28],
+            ["oscAWavetableSelect", 0],
             ["playMode", 0],
             ["glideTime", 0.15],
-            ["pan", 0],
+            ["oscAPan", 0],
             ["distortionDriveDb", 12],
             ["distortionKnee", 0.35],
             ["distortionWet", 0],
@@ -42,6 +42,7 @@ export function createIOSHarnessInitScript(baseUrl) {
         let bundledFallbackRequestCount = 0;
 
         let runtimeState = {
+            oscillatorIndex: 0,
             desiredTableIndex: 0,
             desiredIntentSerial: 1,
             serviceState: 2,
@@ -114,12 +115,12 @@ export function createIOSHarnessInitScript(baseUrl) {
                 inputs: [
                     { endpointID: "midiIn", purpose: "event" },
                     {
-                        endpointID: "wavetablePosition",
+                        endpointID: "oscAWavetablePosition",
                         purpose: "parameter",
                         annotation: { name: "Wavetable Position", min: 0, max: 1, init: 0 },
                     },
                     {
-                        endpointID: "wavetableSelect",
+                        endpointID: "oscAWavetableSelect",
                         purpose: "parameter",
                         annotation: { name: "Wavetable Select", min: 0, max: 255, init: 0 },
                     },
@@ -134,7 +135,7 @@ export function createIOSHarnessInitScript(baseUrl) {
                         annotation: { name: "Glide Time", min: 0, max: 2, init: 0 },
                     },
                     {
-                        endpointID: "pan",
+                        endpointID: "oscAPan",
                         purpose: "parameter",
                         annotation: { name: "Pan", min: -1, max: 1, init: 0 },
                     },
@@ -343,6 +344,9 @@ export function createIOSHarnessInitScript(baseUrl) {
             case "send_value": {
                 const endpointID = message.id;
                 const value = message.value;
+                const oscillatorPositionMatch = /^osc([ABC])WavetablePosition$/.exec(endpointID);
+                const oscillatorSelectMatch = /^osc([ABC])WavetableSelect$/.exec(endpointID);
+                const oscillatorPanMatch = /^osc([ABC])Pan$/.exec(endpointID);
                 sentMessages.push({ endpointID, value });
 
                 if (endpointID === "runtimeSyncRequest") {
@@ -369,8 +373,9 @@ export function createIOSHarnessInitScript(baseUrl) {
                 }
 
                 if (
-                    endpointID === "wavetablePosition"
-                    || endpointID === "wavetableSelect"
+                    oscillatorPositionMatch
+                    || oscillatorSelectMatch
+                    || oscillatorPanMatch
                     || endpointID === "playMode"
                     || endpointID === "glideTime"
                     || endpointID === "chorusMix"
@@ -386,7 +391,7 @@ export function createIOSHarnessInitScript(baseUrl) {
                     queueMicrotask(() => emitParameterValue(endpointID, value));
                 }
 
-                if (endpointID === "wavetablePosition") {
+                if (oscillatorPositionMatch) {
                     queueMicrotask(() => emitEndpoint("effectiveWavetablePosition", {
                         voiceGeneration: 1,
                         position: value,
@@ -394,7 +399,8 @@ export function createIOSHarnessInitScript(baseUrl) {
                     return;
                 }
 
-                if (endpointID === "wavetableSelect") {
+                if (oscillatorSelectMatch) {
+                    const oscillatorIndex = "ABC".indexOf(oscillatorSelectMatch[1]);
                     const tableIndex = Math.max(0, Math.trunc(Number(value) || 0));
                     const nextGeneration = Math.max(
                         runtimeState.activeGeneration,
@@ -404,6 +410,7 @@ export function createIOSHarnessInitScript(baseUrl) {
                     ) + 1;
                     runtimeState = {
                         ...runtimeState,
+                        oscillatorIndex,
                         desiredTableIndex: tableIndex,
                         desiredIntentSerial: runtimeState.desiredIntentSerial + 1,
                         hasLoading: true,

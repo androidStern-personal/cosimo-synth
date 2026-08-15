@@ -3220,7 +3220,9 @@ function DesktopPatchViewBody({
         return true;
     }, [keyboardRootNote]);
     const curveLab = useDesktopCurveLab();
+    const oscillatorSelection = useOscillatorSelectionViewModel();
     const synthView = useSynthPatchViewModel({
+        oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
         msegEditorSurfaceRef,
         keyboardRef: keyboardElementRef,
@@ -3237,7 +3239,6 @@ function DesktopPatchViewBody({
         onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
         onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false }),
     });
-    const oscillatorSelection = useOscillatorSelectionViewModel();
     useEffect(() => {
         postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
     }, [keyboardInputMode]);
@@ -3437,7 +3438,7 @@ function DesktopPatchViewBody({
             height={20}
         />
     ), [synthView.pan]);
-    const connectedOscillatorAToolbar = useMemo(() => (
+    const selectedOscillatorToolbar = useMemo(() => (
         <div data-role="keyboard-control-row" className="grid min-h-[158px] min-w-0 gap-2 overflow-hidden">
             <div className="flex min-w-0 items-center justify-between gap-2 overflow-hidden rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5">
                 <span className="min-w-0 truncate text-[10px] font-bold uppercase tracking-[0.18em] text-slate-300/45">
@@ -3542,9 +3543,7 @@ function DesktopPatchViewBody({
     ]);
     const keyboardToolbarOverride = (
         <DesktopOscillatorConnectionBoundary
-            connectedOscillatorAContent={connectedOscillatorAToolbar}
-            context="controls"
-            pendingClassName="min-h-[158px]"
+            content={selectedOscillatorToolbar}
             selectedOscillator={oscillatorSelection.selectedOscillator}
         />
     );
@@ -3573,8 +3572,7 @@ function DesktopPatchViewBody({
         >
             <DesktopOscillatorPresentation
                 selection={oscillatorSelection}
-                pendingStageClassName={`${SYNTH_GRID_CARD_SHELL_CLASS} border ${DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}`}
-                connectedOscillatorAStage={(
+                selectedOscillatorStage={(
                     <WavetableStageSection
                         stageRef={stageRef}
                         frames={synthView.frames}

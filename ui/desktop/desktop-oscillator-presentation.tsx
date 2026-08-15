@@ -6,18 +6,13 @@ import {
     type OscillatorSelectionViewModel,
 } from "../shared/oscillator-binding";
 
-type DesktopOscillatorConnectionContext = "stage" | "controls";
-
 type DesktopOscillatorConnectionBoundaryProps = {
-    readonly connectedOscillatorAContent: ReactNode;
-    readonly context: DesktopOscillatorConnectionContext;
-    readonly pendingClassName?: string;
+    readonly content: ReactNode;
     readonly selectedOscillator: OscillatorBindingContract;
 };
 
 type DesktopOscillatorPresentationProps = {
-    readonly connectedOscillatorAStage: ReactNode;
-    readonly pendingStageClassName?: string;
+    readonly selectedOscillatorStage: ReactNode;
     readonly selection: OscillatorSelectionViewModel;
 };
 
@@ -35,64 +30,12 @@ function projectedAddressMetadata(selectedOscillator: OscillatorBindingContract)
     };
 }
 
-function PendingOscillatorConnection({
-    context,
-    pendingClassName,
-    selectedOscillator,
-}: {
-    readonly context: DesktopOscillatorConnectionContext;
-    readonly pendingClassName?: string;
-    readonly selectedOscillator: OscillatorBindingContract;
-}) {
-    const oscillatorID = selectedOscillator.id;
-    const detail = context === "stage"
-        ? `Oscillator ${oscillatorID}'s independent table and sound controls are not connected to the synth engine yet.`
-        : `Oscillator ${oscillatorID}'s sound and articulation editing are not connected to the synth engine yet.`;
-
-    return (
-        <section
-            data-role="desktop-oscillator-connection-pending"
-            data-oscillator-id={oscillatorID}
-            data-connection-context={context}
-            data-section-accent="cyan"
-            className={pendingClassName ?? "min-h-[158px]"}
-            aria-label={`Oscillator ${oscillatorID} controls pending synth connection`}
-        >
-            <div className="grid h-full min-h-[inherit] place-content-center gap-3 rounded-[18px] border border-cyan-200/10 bg-cyan-300/[0.025] px-6 py-12 text-center">
-                <div className="text-[11px] font-bold uppercase tracking-[0.2em] text-cyan-100/85">
-                    Oscillator {oscillatorID}
-                </div>
-                <p className="mx-auto max-w-[480px] text-[11px] leading-relaxed text-slate-300/65" role="status">
-                    {detail}
-                </p>
-                <div className="flex flex-wrap justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-300/60">
-                    <span data-role="desktop-oscillator-table-identity" className="rounded-full border border-white/[0.07] bg-black/20 px-2 py-1">
-                        Table {oscillatorID}
-                    </span>
-                    <span data-role="desktop-oscillator-modulation-identity" className="rounded-full border border-white/[0.07] bg-black/20 px-2 py-1">
-                        Modulation {oscillatorID}
-                    </span>
-                    <span data-role="desktop-oscillator-articulation-identity" className="rounded-full border border-white/[0.07] bg-black/20 px-2 py-1">
-                        Articulation {oscillatorID}
-                    </span>
-                </div>
-            </div>
-        </section>
-    );
-}
-
-/**
- * Prevents the unconnected B/C tabs from falling through to today's legacy
- * oscillator-A controls while retaining their exact future product addresses.
- */
+/** Adds observable identity metadata around the selected live oscillator. */
 export function DesktopOscillatorConnectionBoundary({
-    connectedOscillatorAContent,
-    context,
-    pendingClassName,
+    content,
     selectedOscillator,
 }: DesktopOscillatorConnectionBoundaryProps) {
     const addressMetadata = projectedAddressMetadata(selectedOscillator);
-    const isLegacyOscillatorAConnected = selectedOscillator.id === "A";
 
     return (
         <div
@@ -105,16 +48,10 @@ export function DesktopOscillatorConnectionBoundary({
             data-projected-sound-endpoint-ids={addressMetadata.controlEndpointIDs}
             data-projected-modulation-target-ids={addressMetadata.modulationTargetIDs}
             data-projected-articulation-target-ids={addressMetadata.articulationTargetIDs}
-            data-product-wiring={isLegacyOscillatorAConnected ? "legacy-a-only" : "indexed-host-pending"}
+            data-product-wiring="abc-live"
             className="min-w-0"
         >
-            {isLegacyOscillatorAConnected ? connectedOscillatorAContent : (
-                <PendingOscillatorConnection
-                    context={context}
-                    pendingClassName={pendingClassName}
-                    selectedOscillator={selectedOscillator}
-                />
-            )}
+            {content}
         </div>
     );
 }
@@ -124,8 +61,7 @@ export function DesktopOscillatorConnectionBoundary({
  * by the shared binding view model and never enters patch or host state.
  */
 export function DesktopOscillatorPresentation({
-    connectedOscillatorAStage,
-    pendingStageClassName,
+    selectedOscillatorStage,
     selection,
 }: DesktopOscillatorPresentationProps) {
     const panelID = useId();
@@ -207,9 +143,7 @@ export function DesktopOscillatorPresentation({
                 className="min-w-0"
             >
                 <DesktopOscillatorConnectionBoundary
-                    connectedOscillatorAContent={connectedOscillatorAStage}
-                    context="stage"
-                    pendingClassName={pendingStageClassName}
+                    content={selectedOscillatorStage}
                     selectedOscillator={selection.selectedOscillator}
                 />
             </div>

@@ -250,6 +250,33 @@ select {
     padding: 0 16px;
 }
 
+.ios-oscillator-tabs {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem;
+    padding: 0.3rem;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.9rem;
+    background: rgba(5, 10, 18, 0.7);
+}
+
+.ios-oscillator-tab {
+    min-height: 44px;
+    border: 1px solid transparent;
+    border-radius: 0.7rem;
+    background: transparent;
+    color: rgba(220, 230, 241, 0.62);
+    font-size: 0.75rem;
+    font-weight: 750;
+    letter-spacing: 0.16em;
+}
+
+.ios-oscillator-tab[data-selected="true"] {
+    border-color: rgba(112, 224, 255, 0.28);
+    background: rgba(74, 199, 235, 0.15);
+    color: rgba(224, 249, 255, 0.96);
+}
+
 .wavetable-panel,
 .play-panel,
 .mseg-shell,

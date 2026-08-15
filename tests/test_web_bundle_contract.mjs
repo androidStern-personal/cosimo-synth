@@ -67,6 +67,13 @@ test("the generated modulation module ships its canonical identity dependency", 
     assert.match(generatedTargets, /^\/\/ Generated from ui\/shared\/modulation-targets\.ts /);
 });
 
+test("the product web build uses the renderer-aware generator", async () => {
+    const buildSource = await fs.readFile(path.join(repoRoot, "web", "build.mjs"), "utf8");
+
+    assert.match(buildSource, /generate_cmajor_javascript_with_renderer\.mjs/);
+    assert.doesNotMatch(buildSource, /"cmaj", \[\s*"generate"/);
+});
+
 test("browser stress artifact includes its exclusive runtime-lane worker", async () => {
     await fs.access(path.join(repoRoot, "build", "web", "patch_gui", "wavetable-test-worker.js"));
 });
@@ -252,7 +259,15 @@ test("browser patch persistence restores once and coalesces echoed storage write
     };
     const storage = {
         getItem() {
-            return JSON.stringify({ "rack.v1": "restored" });
+            return JSON.stringify({
+                format: "cosimo.browserPatchState",
+                version: 2,
+                sound: {
+                    parameters: {},
+                    storedState: { "rack.v1": "restored" },
+                },
+                auxiliary: {},
+            });
         },
         setItem(key, value) {
             storageWrites.push([key, value]);
@@ -271,8 +286,71 @@ test("browser patch persistence restores once and coalesces echoed storage write
     ]);
     assert.deepEqual(storageWrites, [[
         "test.patch-state",
-        JSON.stringify({ "rack.v1": "updated" }),
+        JSON.stringify({
+            format: "cosimo.browserPatchState",
+            version: 2,
+            sound: {
+                parameters: {},
+                storedState: { "rack.v1": "updated" },
+            },
+            auxiliary: {},
+        }),
     ]]);
+});
+
+test("browser patch persistence restores distinct A/B/C parameters before structured state", () => {
+    const runtimeWrites = [];
+    const storageWrites = [];
+    const connection = {
+        inputEndpoints: [
+            { endpointID: "oscAPan", purpose: "parameter" },
+            { endpointID: "oscBPan", purpose: "parameter" },
+            { endpointID: "oscCPan", purpose: "parameter" },
+            { endpointID: "runtimeState", purpose: "event" },
+        ],
+        sendEventOrValue(endpointID, value) {
+            runtimeWrites.push(["parameter", endpointID, value]);
+        },
+        sendStoredStateValue(key, value) {
+            runtimeWrites.push(["stored", key, value]);
+        },
+    };
+    const storage = {
+        getItem() {
+            return JSON.stringify({
+                format: "cosimo.browserPatchState",
+                version: 2,
+                sound: {
+                    parameters: { oscAPan: -0.25, oscBPan: 0.5, oscCPan: 0.75 },
+                    storedState: { "rack.v1": "restored-rack" },
+                },
+                auxiliary: {},
+            });
+        },
+        setItem(key, value) {
+            storageWrites.push([key, value]);
+        },
+    };
+
+    installBrowserPatchStatePersistence(connection, { storage, storageKey: "test.patch-state" });
+
+    assert.deepEqual(runtimeWrites, [
+        ["parameter", "oscAPan", -0.25],
+        ["parameter", "oscBPan", 0.5],
+        ["parameter", "oscCPan", 0.75],
+        ["stored", "rack.v1", "restored-rack"],
+    ]);
+
+    connection.sendEventOrValue("oscBPan", -0.6);
+    assert.deepEqual(JSON.parse(storageWrites.at(-1)[1]), {
+        format: "cosimo.browserPatchState",
+        version: 2,
+        sound: {
+            parameters: { oscAPan: -0.25, oscBPan: -0.6, oscCPan: 0.75 },
+            storedState: { "rack.v1": "restored-rack" },
+        },
+        auxiliary: {},
+    });
 });
 
 test("web host packaging includes every runtime-owned module", async (context) => {

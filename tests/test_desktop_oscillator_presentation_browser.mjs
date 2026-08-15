@@ -51,7 +51,7 @@ after(async () => {
     await server?.stop();
 });
 
-test("desktop A/B/C tabs expose exact addresses without sending unconnected siblings through A", async () => {
+test("desktop A/B/C tabs expose the same live surface with exact independent addresses", async () => {
     const page = await openHarness();
 
     try {
@@ -71,7 +71,7 @@ test("desktop A/B/C tabs expose exact addresses without sending unconnected sibl
             tableEndpointID: "oscAWavetableSelect",
             tableStatusEndpointID: "runtimeState",
             tableStatusIndex: 0,
-            wiring: "legacy-a-only",
+            wiring: "abc-live",
         });
         assert.equal(oscillatorAProjection.soundEndpointIDs.includes("oscAPan"), true);
         assert.equal(oscillatorAProjection.modulationTargetIDs.includes("oscA.framePosition"), true);
@@ -121,7 +121,7 @@ test("desktop A/B/C tabs expose exact addresses without sending unconnected sibl
                 tableEndpointID: `osc${oscillatorID}WavetableSelect`,
                 tableStatusEndpointID: "runtimeState",
                 tableStatusIndex: oscillatorIndex,
-                wiring: "indexed-host-pending",
+                wiring: "abc-live",
             });
             for (const endpointSuffix of ["Pan", "WarpAmount", "UnisonVoices", "VolumeDb"]) {
                 assert.equal(
@@ -152,21 +152,19 @@ test("desktop A/B/C tabs expose exact addresses without sending unconnected sibl
                 )),
                 false,
             );
-            assert.equal(await page.locator('[data-role="wavetable-card"]').count(), 0);
-            assert.equal(await page.locator('select[aria-label="Select wavetable"]').count(), 0);
-            assert.equal(await page.getByText(`Table ${oscillatorID}`, { exact: true }).count(), 1);
-            assert.equal(await page.getByText(`Modulation ${oscillatorID}`, { exact: true }).count(), 1);
-            assert.equal(await page.getByText(`Articulation ${oscillatorID}`, { exact: true }).count(), 1);
+            assert.equal(await page.locator('[data-role="wavetable-card"]').count(), 1);
+            assert.equal(await page.locator('select[aria-label="Select wavetable"]').count(), 1);
+            await page.locator('select[aria-label="Select wavetable"]').selectOption("1");
             assert.equal(await page.evaluate(() => (
                 window.__COSIMO_DESKTOP_OSCILLATOR_HARNESS__?.getConnectedActionCount()
-            )), 1);
+            )), oscillatorIndex + 1);
         }
 
         await page.getByRole("tab", { name: "Oscillator A" }).click();
         await page.locator('select[aria-label="Select wavetable"]').selectOption("1");
         assert.equal(await page.evaluate(() => (
             window.__COSIMO_DESKTOP_OSCILLATOR_HARNESS__?.getConnectedActionCount()
-        )), 2);
+        )), 4);
     } finally {
         await page.close();
     }

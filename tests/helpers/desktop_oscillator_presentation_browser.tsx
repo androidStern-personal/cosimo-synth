@@ -16,7 +16,7 @@ declare global {
     }
 }
 
-/** Mount the desktop oscillator selector around one observable legacy-A surface. */
+/** Mount the desktop oscillator selector around one observable live surface. */
 export function installDesktopOscillatorPresentationHarness(target: HTMLElement): void {
     let connectedActionCount = 0;
 
@@ -27,8 +27,7 @@ export function installDesktopOscillatorPresentationHarness(target: HTMLElement)
         return (
             <DesktopOscillatorPresentation
                 selection={selection}
-                pendingStageClassName="min-h-[220px]"
-                connectedOscillatorAStage={(
+                selectedOscillatorStage={(
                     <WavetableStageSection
                         stageRef={stageRef}
                         frames={null}

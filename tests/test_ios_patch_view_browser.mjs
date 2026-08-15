@@ -658,6 +658,43 @@ test("mounted iPhone host page boots through patch_gui/index.ios.html and loads 
     }
 });
 
+test("mounted iPhone oscillator tabs route table and pan edits only to the selected oscillator", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+        const oscillatorA = await getShadowLocator(page, 'button[aria-label="Oscillator A"]');
+        assert.equal(await oscillatorA.getAttribute("aria-selected"), "true");
+
+        await clearIOSHarnessDebugLog(page);
+        await (await getShadowLocator(page, 'button[aria-label="Oscillator B"]')).click();
+        await selectShadowOption(page, ".table-select-overlay", 1);
+        await dispatchShadowInputValueChange(page, '[data-role="oscillator-pan-slider"]', "0.25");
+
+        const snapshot = await waitForSnapshot(
+            page,
+            "oscillator B table and pan writes",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "oscBWavetableSelect" && Number(value) === 1
+            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "oscBPan" && Math.abs(Number(value) - 0.25) < 0.0001
+            )),
+        );
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => (
+            endpointID === "wavetableSelect"
+            || endpointID === "pan"
+            || endpointID === "oscAWavetableSelect"
+            || endpointID === "oscAPan"
+            || endpointID === "oscCWavetableSelect"
+            || endpointID === "oscCPan"
+        )), false);
+    } finally {
+        await closeIOSHarnessPage(page);
+    }
+});
+
 test("mounted iPhone host page loads BS2 - Acid through the URL path instead of the bridged audio path", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
@@ -688,7 +725,7 @@ test("mounted iPhone host page loads BS2 - Acid through the URL path instead of 
             (nextSnapshot) => (
                 nextSnapshot.fetchedUrls.some((url) => url.includes("BS2%20-%20Acid.wav"))
                 && nextSnapshot.sentMessages.some((message) => (
-                    message.endpointID === "wavetableSelect" && message.value === bs2Index
+                    message.endpointID === "oscAWavetableSelect" && message.value === bs2Index
                 ))
             ),
         );
@@ -831,7 +868,7 @@ test("mounted iPhone shell keeps the audible table visible while a new selection
             (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "retryDesiredTableRequest"),
         );
         assert.ok(snapshot.sentMessages.some((message) => (
-            message.endpointID === "retryDesiredTableRequest" && message.value === 1
+            message.endpointID === "retryDesiredTableRequest" && message.value === 0
         )));
         renderedState = await waitForRenderedState(
             page,
@@ -1543,7 +1580,7 @@ test("mounted iPhone stage gestures keep picker taps inert, swipe tables horizon
         await page.waitForTimeout(25);
         let snapshot = await getIOSHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some((message) => (
-            message.endpointID === "wavetablePosition" || message.endpointID === "wavetableSelect"
+            message.endpointID === "oscAWavetablePosition" || message.endpointID === "oscAWavetableSelect"
         )), false);
         assert.deepEqual(snapshot.gestureStarts, []);
         assert.deepEqual(snapshot.gestureEnds, []);
@@ -1553,13 +1590,13 @@ test("mounted iPhone stage gestures keep picker taps inert, swipe tables horizon
         snapshot = await waitForSnapshot(
             page,
             "mounted horizontal table swipe",
-            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "wavetableSelect"),
+            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "oscAWavetableSelect"),
         );
         assert.ok(snapshot.sentMessages.some((message) => (
-            message.endpointID === "wavetableSelect" && message.value === 1
+            message.endpointID === "oscAWavetableSelect" && message.value === 1
         )));
-        assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), false);
-        assert.equal(snapshot.gestureEnds.includes("wavetablePosition"), false);
+        assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), false);
+        assert.equal(snapshot.gestureEnds.includes("oscAWavetablePosition"), false);
 
         await clearIOSHarnessDebugLog(page);
         await startShadowMutationCounter(page, ".play-panel", "play-panel-stage-drag");
@@ -1567,12 +1604,12 @@ test("mounted iPhone stage gestures keep picker taps inert, swipe tables horizon
         snapshot = await waitForSnapshot(
             page,
             "mounted vertical stage drag",
-            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "wavetablePosition"),
+            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "oscAWavetablePosition"),
         );
         const playPanelMutationCount = await stopShadowMutationCounter(page, "play-panel-stage-drag");
-        const positionUpdate = snapshot.sentMessages.find((message) => message.endpointID === "wavetablePosition");
-        assert.equal(snapshot.gestureStarts.includes("wavetablePosition"), true);
-        assert.equal(snapshot.gestureEnds.includes("wavetablePosition"), true);
+        const positionUpdate = snapshot.sentMessages.find((message) => message.endpointID === "oscAWavetablePosition");
+        assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), true);
+        assert.equal(snapshot.gestureEnds.includes("oscAWavetablePosition"), true);
         assert.ok(Number(positionUpdate?.value) > 0.28);
         assert.ok(Number(positionUpdate?.value) <= 1);
         assert.equal(
@@ -1625,8 +1662,8 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
         let snapshot = await waitForSnapshot(
             page,
             "active iPhone scan gesture",
-            (nextSnapshot) => nextSnapshot.gestureStarts.includes("wavetablePosition")
-                && nextSnapshot.sentMessages.some((message) => message.endpointID === "wavetablePosition"),
+            (nextSnapshot) => nextSnapshot.gestureStarts.includes("oscAWavetablePosition")
+                && nextSnapshot.sentMessages.some((message) => message.endpointID === "oscAWavetablePosition"),
         );
         assert.deepEqual(snapshot.gestureEnds, []);
 
@@ -1634,9 +1671,9 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
         snapshot = await waitForSnapshot(
             page,
             "blurred iPhone scan gesture",
-            (nextSnapshot) => nextSnapshot.gestureEnds.includes("wavetablePosition"),
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("oscAWavetablePosition"),
         );
-        const valueAfterBlur = Number(snapshot.parameterValues.wavetablePosition);
+        const valueAfterBlur = Number(snapshot.parameterValues.oscAWavetablePosition);
 
         await stage.dispatchEvent("pointermove", {
             pointerId: 92,
@@ -1656,8 +1693,8 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
         });
         await page.waitForTimeout(60);
         snapshot = await getIOSHarnessSnapshot(page);
-        assert.equal(Number(snapshot.parameterValues.wavetablePosition), valueAfterBlur);
-        assert.deepEqual(snapshot.gestureEnds, ["wavetablePosition"]);
+        assert.equal(Number(snapshot.parameterValues.oscAWavetablePosition), valueAfterBlur);
+        assert.deepEqual(snapshot.gestureEnds, ["oscAWavetablePosition"]);
     } finally {
         await closeIOSHarnessPage(page);
     }
@@ -1711,8 +1748,8 @@ test("mounted iPhone stage keeps tracking touch when pointer capture is unavaila
         let snapshot = await waitForSnapshot(
             page,
             "capture-free iPhone scan gesture",
-            (nextSnapshot) => nextSnapshot.gestureStarts.includes("wavetablePosition")
-                && nextSnapshot.sentMessages.some((message) => message.endpointID === "wavetablePosition"),
+            (nextSnapshot) => nextSnapshot.gestureStarts.includes("oscAWavetablePosition")
+                && nextSnapshot.sentMessages.some((message) => message.endpointID === "oscAWavetablePosition"),
         );
         assert.deepEqual(snapshot.gestureEnds, []);
 
@@ -1730,9 +1767,9 @@ test("mounted iPhone stage keeps tracking touch when pointer capture is unavaila
         snapshot = await waitForSnapshot(
             page,
             "capture-free iPhone scan release",
-            (nextSnapshot) => nextSnapshot.gestureEnds.includes("wavetablePosition"),
+            (nextSnapshot) => nextSnapshot.gestureEnds.includes("oscAWavetablePosition"),
         );
-        assert.deepEqual(snapshot.gestureEnds, ["wavetablePosition"]);
+        assert.deepEqual(snapshot.gestureEnds, ["oscAWavetablePosition"]);
     } finally {
         await closeIOSHarnessPage(page);
     }

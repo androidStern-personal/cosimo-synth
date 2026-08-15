@@ -1113,7 +1113,7 @@ async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = fals
     });
 
     await page.addInitScript(({ shouldSimulateZeroTouchButtons }) => {
-        localStorage.removeItem("cosimo.web.patch-state.v1");
+        localStorage.removeItem("cosimo.web.patch-state.v2");
         if (!shouldSimulateZeroTouchButtons) {
             return;
         }
@@ -1444,8 +1444,11 @@ test("the production worker installs the unchanged v4 100-route rack profile end
     const profile = matrixBenchmarkProfiles.get("voice-rack-100");
     assert.ok(profile);
     await page.addInitScript(({ modulationState, modulationStateKey }) => {
-        localStorage.setItem("cosimo.web.patch-state.v1", JSON.stringify({
-            [modulationStateKey]: modulationState,
+        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
+            format: "cosimo.browserPatchState",
+            version: 2,
+            sound: { parameters: {}, storedState: { [modulationStateKey]: modulationState } },
+            auxiliary: {},
         }));
     }, { modulationState: profile.stateJSON, modulationStateKey: MODULATION_STATE_KEY });
 
@@ -1478,7 +1481,7 @@ test("the production worker installs the unchanged v4 100-route rack profile end
             ?? evidence.storedState?.values?.[MODULATION_STATE_KEY];
         assert.equal(deserializeModulationState(stored).routes.length, 100);
     } finally {
-        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v1")).catch(() => {});
+        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
         await page.close();
     }
 });
@@ -1492,8 +1495,11 @@ test("the real product UI sustains 60 Hz amount edits with 100 active among 884 
         : { viewport: { width: 1280, height: 820 } });
     const pageFailures = observePageFailures(page);
     await page.addInitScript(({ modulationState, modulationStateKey }) => {
-        localStorage.setItem("cosimo.web.patch-state.v1", JSON.stringify({
-            [modulationStateKey]: modulationState,
+        localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
+            format: "cosimo.browserPatchState",
+            version: 2,
+            sound: { parameters: {}, storedState: { [modulationStateKey]: modulationState } },
+            auxiliary: {},
         }));
     }, { modulationState: fullDomainHundredActiveStoredState, modulationStateKey: MODULATION_STATE_KEY });
 
@@ -1663,7 +1669,7 @@ test("the real product UI sustains 60 Hz amount edits with 100 active among 884 
     } finally {
         await page.evaluate(() => {
             for (let note = 48; note < 64; note += 1) globalThis.__COSIMO_WEB_POC__?.noteOff(note);
-            localStorage.removeItem("cosimo.web.patch-state.v1");
+            localStorage.removeItem("cosimo.web.patch-state.v2");
         }).catch(() => {});
         await page.close();
     }
@@ -2268,7 +2274,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
     const pageFailures = observePageFailures(page);
     await page.addInitScript(() => {
         if (sessionStorage.getItem("cosimo-rack-test-initialised") !== "1") {
-            localStorage.removeItem("cosimo.web.patch-state.v1");
+            localStorage.removeItem("cosimo.web.patch-state.v2");
             sessionStorage.setItem("cosimo-rack-test-initialised", "1");
         }
     });
@@ -2389,16 +2395,16 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
 
         pageFailures.assertClean();
     } finally {
-        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v1")).catch(() => {});
+        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
         await page.close();
     }
 });
 
-test("generated rack UI persists one grip reorder and enable change through reload", async (t) => {
+test("generated product UI restores oscillator parameters and rack state through reload", async (t) => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await page.addInitScript(() => {
         if (sessionStorage.getItem("cosimo-rack-state-test-initialised") !== "1") {
-            localStorage.removeItem("cosimo.web.patch-state.v1");
+            localStorage.removeItem("cosimo.web.patch-state.v2");
             sessionStorage.setItem("cosimo-rack-state-test-initialised", "1");
         }
     });
@@ -2410,6 +2416,15 @@ test("generated rack UI persists one grip reorder and enable change through relo
         });
         await page.locator("#cosimo-start-overlay").click();
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        const panInput = page.locator('input[aria-label="Pan"]');
+        await panInput.press("Enter");
+        await panInput.fill("25");
+        await panInput.press("Enter");
+        await page.waitForFunction(() => {
+            const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
+            return Math.abs(Number(saved?.sound?.parameters?.oscBPan) - 0.25) < 0.0001;
+        });
         await page.locator('[data-role="rack-enabled-chorus"]').click();
         const reorderHandle = page.locator('[data-role="rack-reorder-handle-reverb"]');
         const reorderTarget = page.locator('[data-role="rack-module-filter"]');
@@ -2429,8 +2444,10 @@ test("generated rack UI persists one grip reorder and enable change through relo
         });
         const beforeReload = await page.evaluate(async () => ({
             connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["rack.v1"] ?? null,
-            local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v1") ?? "{}")["rack.v1"] ?? null,
+            local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.storedState?.["rack.v1"] ?? null,
+            localOscBPan: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.parameters?.oscBPan ?? null,
         }));
+        assert.equal(beforeReload.localOscBPan, 0.25);
         t.diagnostic(`Before reload: ${JSON.stringify(beforeReload)}`);
 
         await page.reload({ waitUntil: "domcontentloaded" });
@@ -2442,7 +2459,8 @@ test("generated rack UI persists one grip reorder and enable change through relo
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             return {
                 connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["rack.v1"] ?? null,
-                local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v1") ?? "{}")["rack.v1"] ?? null,
+                local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.storedState?.["rack.v1"] ?? null,
+                localOscBPan: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.parameters?.oscBPan ?? null,
                 firstRole: root?.querySelector('[data-role="rack-module-list"]')?.firstElementChild?.getAttribute("data-role") ?? null,
                 chorusPressed: root?.querySelector('[data-role="rack-enabled-chorus"]')?.getAttribute("aria-pressed") ?? null,
             };
@@ -2450,6 +2468,10 @@ test("generated rack UI persists one grip reorder and enable change through relo
         t.diagnostic(`After reload: ${JSON.stringify(afterReload)}`);
         assert.equal(afterReload.firstRole, "rack-module-reverb");
         assert.equal(afterReload.chorusPressed, "true");
+        assert.equal(afterReload.localOscBPan, 0.25);
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.waitForTimeout(100);
+        assert.equal(await panInput.inputValue(), "+25%");
     } finally {
         await page.close();
     }

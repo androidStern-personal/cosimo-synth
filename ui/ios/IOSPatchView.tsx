@@ -50,6 +50,7 @@ import {
 } from "../shared/display-gesture";
 import {
     useSynthPatchViewModel,
+    useOscillatorSelectionViewModel,
 } from "../shared/synth-hooks";
 import {
     IOSKeyboardDock,
@@ -410,6 +411,8 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                         <span className="mseg-depth-label">Pan</span>
                         <input
                             className="mseg-depth-slider"
+                            data-role="oscillator-pan-slider"
+                            aria-label="Oscillator pan"
                             type="range"
                             min="-1"
                             max="1"
@@ -423,6 +426,40 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                     </div>
                 </div>
             </div>
+        </div>
+    );
+});
+
+const IOSOscillatorTabs = memo(function IOSOscillatorTabs({
+    selection,
+}: {
+    selection: ReturnType<typeof useOscillatorSelectionViewModel>;
+}) {
+    return (
+        <div
+            className="ios-oscillator-tabs"
+            data-role="ios-oscillator-tabs"
+            role="tablist"
+            aria-label="Oscillator"
+        >
+            {selection.options.map((oscillator) => {
+                const isSelected = oscillator.id === selection.selectedOscillatorID;
+                return (
+                    <button
+                        key={oscillator.id}
+                        type="button"
+                        role="tab"
+                        aria-label={`Oscillator ${oscillator.id}`}
+                        aria-selected={isSelected}
+                        data-oscillator-id={oscillator.id}
+                        className="ios-oscillator-tab"
+                        data-selected={isSelected ? "true" : "false"}
+                        onClick={() => selection.selectOscillator(oscillator.id)}
+                    >
+                        {oscillator.id}
+                    </button>
+                );
+            })}
         </div>
     );
 });
@@ -1347,7 +1384,9 @@ function IOSPatchViewBody() {
     const layout = useIOSViewportLayout();
     const msegPreviewOrientation: MsegSurfaceOrientation = "horizontal";
     const msegEditorOrientation: MsegSurfaceOrientation = layout.isPortrait ? "vertical" : "horizontal";
+    const oscillatorSelection = useOscillatorSelectionViewModel();
     const synthView = useSynthPatchViewModel({
+        oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
         msegEditorSurfaceRef,
         keyboardRef,
@@ -1463,6 +1502,7 @@ function IOSPatchViewBody() {
                 >
                     <div className="ios-scroll">
                         <div className="ios-content">
+                            <IOSOscillatorTabs selection={oscillatorSelection} />
                             <IOSWavetablePanel
                                 stageRef={stageRef}
                                 frames={synthView.frames}
