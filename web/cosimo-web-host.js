@@ -60,6 +60,7 @@ const state = {
     latestEffectiveWavetablePosition: null,
     latestRuntimeInstallAck: null,
     latestRuntimeState: null,
+    latestRuntimeStates: [null, null, null],
     modulationRejectedRouteCount: 0,
     parameterValues: {},
     midiEndpointID: null,
@@ -350,7 +351,7 @@ function getSnapshot() {
         audioWorkletRenderQuantumFrames: state.audioWorkletRenderQuantumFrames,
         audioWorkletSampleRateHz: state.audioWorkletSampleRateHz ?? state.audioContext?.sampleRate ?? null,
         error: state.error,
-        hasActiveTable: Boolean(state.latestRuntimeState?.hasActive),
+        hasActiveTable: state.latestRuntimeStates.every((runtimeState) => Boolean(runtimeState?.hasActive)),
         latestEffectiveFilterState: state.latestEffectiveFilterState,
         latestEffectiveRackState: state.latestEffectiveRackState,
         latestEffectiveWavetablePosition: state.latestEffectiveWavetablePosition,
@@ -358,6 +359,9 @@ function getSnapshot() {
             ? { ...state.latestRuntimeInstallAck }
             : null,
         latestRuntimeState: state.latestRuntimeState,
+        latestRuntimeStates: state.latestRuntimeStates.map((runtimeState) => (
+            runtimeState ? { ...runtimeState } : null
+        )),
         modulationRejectedRouteCount: state.modulationRejectedRouteCount,
         parameterValues: { ...state.parameterValues },
         phase: state.phase,
@@ -553,6 +557,12 @@ async function initialise() {
 
         connection.addEndpointListener("runtimeState", (message) => {
             state.latestRuntimeState = message;
+            const event = endpointEvent(message);
+            const runtimeState = event?.value ?? event;
+            const oscillatorIndex = Math.trunc(Number(runtimeState?.oscillatorIndex));
+            if (oscillatorIndex >= 0 && oscillatorIndex < state.latestRuntimeStates.length) {
+                state.latestRuntimeStates[oscillatorIndex] = runtimeState;
+            }
         });
         connection.addEndpointListener("runtimeInstallAck", (message) => {
             const event = endpointEvent(message);

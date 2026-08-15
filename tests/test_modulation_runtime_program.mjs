@@ -334,7 +334,7 @@ test("disabled voice mappings retain their finite base amount in the determinist
 test("the DSP hot path consumes published active prefixes instead of transport capacities", async () => {
     const source = await fs.readFile(path.join(repoRoot, "cmajor/FixedFrameOscillator.cmajor"), "utf8");
     const hotPathStart = source.indexOf("        void beginModulationFrame()");
-    const hotPathEnd = source.indexOf("        void initialiseWarpDecimatorTaps()", hotPathStart);
+    const hotPathEnd = source.indexOf("        void clearTableStagingIdentity()", hotPathStart);
     assert.ok(hotPathStart >= 0 && hotPathEnd > hotPathStart, "Expected the production modulation hot path.");
     const hotPath = source.slice(hotPathStart, hotPathEnd);
 
