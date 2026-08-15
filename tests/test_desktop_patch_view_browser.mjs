@@ -9574,6 +9574,9 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
             touchPoints: [{ x: gripStart.x, y: gripStart.y - 72, radiusX: 5, radiusY: 5, force: 1 }],
         });
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail"]')?.getAttribute("data-decelerating") === "false"
+        ));
         await page.waitForTimeout(220);
 
         const movedRailBox = await rail.boundingBox();
