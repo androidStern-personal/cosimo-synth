@@ -137,6 +137,15 @@ export class MappingAlreadyExists extends Error {
     }
 }
 
+/** The selected control has no destination in the engine modulation matrix. */
+export class TargetNotModulatable extends Error {
+    readonly _tag = "TargetNotModulatable" as const;
+
+    constructor(readonly targetId: TargetId) {
+        super(`Target ${targetId} cannot be modulated`);
+    }
+}
+
 /** Every slot for the requested source type is occupied. */
 export class SourceSlotsExhausted extends Error {
     readonly _tag = "SourceSlotsExhausted" as const;
@@ -193,7 +202,7 @@ export type CosimoCommands = {
         amount?: number;
         polarity?: MappingPolarity;
         reducer?: MappingReducer;
-    }): Result<MappingId, MappingAlreadyExists>;
+    }): Result<MappingId, MappingAlreadyExists | TargetNotModulatable>;
     removeMapping(mappingId: MappingId): void;
     setMappingAmount(mappingId: MappingId, amount: number, layer: EditLayer): void;
     setMappingEnabled(mappingId: MappingId, enabled: boolean): void;

@@ -2,6 +2,7 @@ import {
     ArticulationSlotsExhausted,
     MappingAlreadyExists,
     SourceSlotsExhausted,
+    TargetNotModulatable,
     type ArticulationLayerBackup,
     type ArticulationView,
     type AuditionState,
@@ -546,6 +547,9 @@ export function createMockCosimoAdapter({
 
         addMapping(input) {
             const targetId = requireTargetId(String(input.targetId));
+            if (getTargetDescriptor(targetId).modulationTargetKind === null) {
+                return err(new TargetNotModulatable(targetId));
+            }
             const source = requireSource(state, input.sourceId);
             const sourceId = sourceIdFromKnownIdentity(source.id);
             const mappingId = makeMappingId(targetId, sourceId);

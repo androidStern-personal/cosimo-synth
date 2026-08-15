@@ -162,6 +162,19 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(second.error._tag, "MappingAlreadyExists");
     });
 
+    t("controls without an engine modulation target cannot create mappings", (adapter) => {
+        const before = adapter.getSnapshot().patch.mappings;
+        const result = adapter.commands.addMapping({
+            targetId: "filter.globalFilterMode",
+            sourceId: "mseg-1",
+        });
+
+        assert.equal(result._tag, "err");
+        assert.equal(result.error._tag, "TargetNotModulatable");
+        assert.equal(result.error.targetId, "filter.globalFilterMode");
+        assert.deepEqual(adapter.getSnapshot().patch.mappings, before);
+    });
+
     t("more than 100 unique mappings are accepted", async (adapter) => {
         const { allTargetDescriptors } = await targetDescriptorPromise;
         const snapshot = adapter.getSnapshot();
@@ -772,28 +785,19 @@ test("mock DSP session changes reset both acknowledged install frontiers", async
     assert.equal(acknowledgement.syncSerial, 73);
 });
 
-test("bridge never persists an inaudible articulation amount for an engine-gapped UI mapping", async () => {
+test("bridge never persists a mapping for a control without an engine modulation target", async () => {
     const { createCosimoBridgeAdapter } = await bridgeFactoryPromise;
     const { MockPatchConnection } = await mockConnectionPromise;
     const connection = new MockPatchConnection({ name: "UI mapping articulation guard", version: 1 });
     const adapter = createCosimoBridgeAdapter({ connection });
     await waitForReady(adapter);
 
-    const articulationId = expectOkValue(adapter.commands.addArticulation(), "add articulation");
-    const mappingId = expectOkValue(adapter.commands.addMapping({
+    const result = adapter.commands.addMapping({
         targetId: "filter.globalFilterMode",
         sourceId: "mseg-1",
-    }), "add engine-gapped mapping");
-    adapter.commands.setMappingAmount(
-        mappingId,
-        100,
-        { _tag: "articulationOverride", articulationId },
-    );
+    });
 
-    assert.equal(
-        Object.hasOwn(adapter.getSnapshot().patch.articulationMappingAmounts[articulationId] ?? {}, mappingId),
-        false,
-    );
-    const stored = JSON.parse(connection.getDebugSnapshot().storedState["articulations.v4"]);
-    assert.equal(Object.hasOwn(stored.slots[0].routeAmounts, mappingId), false);
+    assert.equal(result._tag, "err");
+    assert.equal(result.error._tag, "TargetNotModulatable");
+    assert.equal(connection.getDebugSnapshot().storedState["uiMappings.v1"], undefined);
 });
