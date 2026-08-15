@@ -350,6 +350,11 @@ function formatSignedPercent(value: number) {
     return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
 }
 
+function parsePlainNumber(text: string) {
+    const value = Number(text.trim());
+    return Number.isFinite(value) ? value : null;
+}
+
 function formatDriveDb(value: number) {
     return `${value.toFixed(1)} dB`;
 }
@@ -1890,6 +1895,81 @@ function FilterSection({
                     </select>
                 </label>
             </div>
+        </section>
+    );
+}
+
+function OscillatorPerformanceControls({
+    octave,
+    semitone,
+    fineCents,
+    volumeDb,
+    mute,
+    solo,
+}: {
+    octave: PatchControlBinding<number>;
+    semitone: PatchControlBinding<number>;
+    fineCents: PatchControlBinding<number>;
+    volumeDb: PatchControlBinding<number>;
+    mute: PatchControlBinding<number>;
+    solo: PatchControlBinding<number>;
+}) {
+    const fields = [
+        { label: "Oscillator octave", role: "oscillator-octave", binding: octave, min: -4, max: 4, step: 1, suffix: "oct" },
+        { label: "Oscillator semitone", role: "oscillator-semitone", binding: semitone, min: -12, max: 12, step: 1, suffix: "st" },
+        { label: "Oscillator fine tune", role: "oscillator-fine", binding: fineCents, min: -100, max: 100, step: 0.1, suffix: "ct" },
+        { label: "Oscillator level", role: "oscillator-level", binding: volumeDb, min: -48, max: 6, step: 0.1, suffix: "dB" },
+    ] as const;
+
+    return (
+        <section
+            data-role="oscillator-performance-controls"
+            className="flex min-w-0 flex-wrap items-end gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5"
+        >
+            {fields.map((field) => (
+                <PrecisionNumberField
+                    key={field.role}
+                    ariaLabel={field.label}
+                    binding={field.binding}
+                    min={field.min}
+                    max={field.max}
+                    step={field.step}
+                    formatDisplay={(value) => `${value > 0 ? "+" : ""}${Number.isInteger(value) ? value : value.toFixed(1)} ${field.suffix}`}
+                    formatEditingValue={(value) => String(value)}
+                    parseText={parsePlainNumber}
+                    dataRole={field.role}
+                    width={68}
+                    height={28}
+                />
+            ))}
+            <button
+                type="button"
+                aria-label="Mute selected oscillator"
+                aria-pressed={mute.value >= 0.5}
+                data-role="oscillator-mute"
+                className={`h-7 rounded-[8px] border px-2 text-[10px] font-bold uppercase tracking-[0.12em] ${
+                    mute.value >= 0.5
+                        ? "border-amber-300/30 bg-amber-300/16 text-amber-100"
+                        : "border-white/[0.07] bg-black/25 text-slate-300/70"
+                }`}
+                onClick={() => mute.commitValue(mute.value >= 0.5 ? 0 : 1)}
+            >
+                Mute
+            </button>
+            <button
+                type="button"
+                aria-label="Solo selected oscillator"
+                aria-pressed={solo.value >= 0.5}
+                data-role="oscillator-solo"
+                className={`h-7 rounded-[8px] border px-2 text-[10px] font-bold uppercase tracking-[0.12em] ${
+                    solo.value >= 0.5
+                        ? "border-cyan-300/30 bg-cyan-300/16 text-cyan-100"
+                        : "border-white/[0.07] bg-black/25 text-slate-300/70"
+                }`}
+                onClick={() => solo.commitValue(solo.value >= 0.5 ? 0 : 1)}
+            >
+                Solo
+            </button>
         </section>
     );
 }
@@ -3466,6 +3546,15 @@ function DesktopPatchViewBody({
                     ))}
                 </div>
             </div>
+
+            <OscillatorPerformanceControls
+                octave={synthView.oscillatorOctave}
+                semitone={synthView.oscillatorSemitone}
+                fineCents={synthView.oscillatorFineCents}
+                volumeDb={synthView.oscillatorVolumeDb}
+                mute={synthView.oscillatorMute}
+                solo={synthView.oscillatorSolo}
+            />
 
             {keyboardControlMode === "articulation" ? (
                 <ArticulationControlSurface

@@ -277,6 +277,62 @@ select {
     color: rgba(224, 249, 255, 0.96);
 }
 
+.ios-oscillator-performance {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr)) repeat(2, minmax(52px, 0.7fr));
+    gap: 8px;
+    padding: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.9rem;
+    background: rgba(5, 10, 18, 0.7);
+}
+
+.ios-oscillator-number {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+    color: rgba(220, 230, 241, 0.56);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ios-oscillator-number input,
+.ios-oscillator-performance button {
+    box-sizing: border-box;
+    min-width: 0;
+    min-height: 44px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 0.65rem;
+    background: rgba(255, 255, 255, 0.04);
+    color: rgba(238, 247, 255, 0.92);
+    font: inherit;
+}
+
+.ios-oscillator-number input {
+    width: 100%;
+    padding: 0 8px;
+    font-size: 14px;
+    font-variant-numeric: tabular-nums;
+}
+
+.ios-oscillator-performance button {
+    align-self: end;
+    padding: 0 8px;
+    color: rgba(220, 230, 241, 0.62);
+    font-size: 11px;
+    font-weight: 750;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.ios-oscillator-performance button[data-active="true"] {
+    border-color: rgba(112, 224, 255, 0.28);
+    background: rgba(74, 199, 235, 0.15);
+    color: rgba(224, 249, 255, 0.96);
+}
+
 .wavetable-panel,
 .play-panel,
 .mseg-shell,

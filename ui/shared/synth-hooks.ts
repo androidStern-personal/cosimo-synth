@@ -63,6 +63,7 @@ import {
     type ArticulationSlotV4,
     type ArticulationsState,
     type ArticulationVoiceParameterId,
+    type OscillatorArticulationParameterId,
 } from "./articulation-image";
 import {
     ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
@@ -348,6 +349,12 @@ export type SynthPatchViewModel = {
     playMode: PatchControlBinding<number>;
     glideTime: PatchControlBinding<number>;
     pan: PatchControlBinding<number>;
+    oscillatorOctave: PatchControlBinding<number>;
+    oscillatorSemitone: PatchControlBinding<number>;
+    oscillatorFineCents: PatchControlBinding<number>;
+    oscillatorVolumeDb: PatchControlBinding<number>;
+    oscillatorMute: PatchControlBinding<number>;
+    oscillatorSolo: PatchControlBinding<number>;
     warpMode: PatchControlBinding<number>;
     warpAmount: PatchControlBinding<number>;
     filterMode: PatchControlBinding<number>;
@@ -992,11 +999,19 @@ function resolveEditorEnvelope(
     };
 }
 
-/** Resolve today's A/shared editor view over one stable patch base. */
+function selectedOscillatorArticulationID(
+    oscillatorID: OscillatorID,
+    parameterID: OscillatorArticulationParameterId,
+): ArticulationVoiceParameterId {
+    return `osc${oscillatorID}.${parameterID}`;
+}
+
+/** Resolve the selected oscillator and shared editor view over one stable patch base. */
 export function resolveVisibleArticulationSnapshotV4(
     slot: ArticulationSlotV4,
     baseSnapshot: ArticulationSnapshot,
     routes: ReadonlyArray<ModulationRoute>,
+    oscillatorID: OscillatorID,
 ): ArticulationSnapshot {
     const base = normalizeArticulationSnapshot(baseSnapshot);
     const parameters = base.parameters;
@@ -1016,28 +1031,34 @@ export function resolveVisibleArticulationSnapshotV4(
     return normalizeArticulationSnapshot({
         parameters: {
             ...parameters,
-            wavetablePosition: readArticulationOverride(slot, "oscA.framePosition", parameters.wavetablePosition),
-            pan: readArticulationOverride(slot, "oscA.pan", parameters.pan),
-            warpMode: readArticulationOverride(slot, "oscA.warpMode", parameters.warpMode),
-            warpAmount: readArticulationOverride(slot, "oscA.warpAmount", parameters.warpAmount),
+            wavetablePosition: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "framePosition"), parameters.wavetablePosition),
+            pan: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "pan"), parameters.pan),
+            octave: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "octave"), parameters.octave),
+            semitone: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "semitone"), parameters.semitone),
+            fineCents: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "fineCents"), parameters.fineCents),
+            volumeDb: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "volumeDb"), parameters.volumeDb),
+            mute: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "mute"), parameters.mute),
+            solo: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "solo"), parameters.solo),
+            warpMode: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "warpMode"), parameters.warpMode),
+            warpAmount: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "warpAmount"), parameters.warpAmount),
             filterMode: readArticulationOverride(slot, "filterMode", parameters.filterMode),
             filterCutoff: readArticulationOverride(slot, "filterCutoffHz", parameters.filterCutoff),
             filterQ: readArticulationOverride(slot, "filterQ", parameters.filterQ),
-            unisonVoices: readArticulationOverride(slot, "oscA.unisonVoices", parameters.unisonVoices),
-            unisonDetune: readArticulationOverride(slot, "oscA.unisonDetune", parameters.unisonDetune),
-            unisonBlend: readArticulationOverride(slot, "oscA.unisonBlend", parameters.unisonBlend),
-            unisonWidth: readArticulationOverride(slot, "oscA.unisonWidth", parameters.unisonWidth),
-            unisonPhase: readArticulationOverride(slot, "oscA.phase", parameters.unisonPhase),
-            unisonRandom: readArticulationOverride(slot, "oscA.phaseRandom", parameters.unisonRandom),
-            unisonPhaseMode: readArticulationOverride(slot, "oscA.retrigger", parameters.unisonPhaseMode),
-            unisonDetuneMode: readArticulationOverride(slot, "oscA.unisonDetuneMode", parameters.unisonDetuneMode),
-            unisonStackMode: readArticulationOverride(slot, "oscA.unisonStackMode", parameters.unisonStackMode),
+            unisonVoices: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonVoices"), parameters.unisonVoices),
+            unisonDetune: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonDetune"), parameters.unisonDetune),
+            unisonBlend: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonBlend"), parameters.unisonBlend),
+            unisonWidth: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonWidth"), parameters.unisonWidth),
+            unisonPhase: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "phase"), parameters.unisonPhase),
+            unisonRandom: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "phaseRandom"), parameters.unisonRandom),
+            unisonPhaseMode: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "retrigger"), parameters.unisonPhaseMode),
+            unisonDetuneMode: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonDetuneMode"), parameters.unisonDetuneMode),
+            unisonStackMode: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonStackMode"), parameters.unisonStackMode),
             unisonWavetablePositionSpread: readArticulationOverride(
                 slot,
-                "oscA.unisonWavetablePositionSpread",
+                selectedOscillatorArticulationID(oscillatorID, "unisonWavetablePositionSpread"),
                 parameters.unisonWavetablePositionSpread,
             ),
-            unisonWarpSpread: readArticulationOverride(slot, "oscA.unisonWarpSpread", parameters.unisonWarpSpread),
+            unisonWarpSpread: readArticulationOverride(slot, selectedOscillatorArticulationID(oscillatorID, "unisonWarpSpread"), parameters.unisonWarpSpread),
             msegMorphs: [
                 readArticulationOverride(slot, "msegMorph1", parameters.msegMorphs[0]),
                 readArticulationOverride(slot, "msegMorph2", parameters.msegMorphs[1]),
@@ -1057,6 +1078,7 @@ function projectCurrentArticulationsToEditorBank(
     state: ArticulationsState,
     baseSnapshot: ArticulationSnapshot,
     routes: ReadonlyArray<ModulationRoute>,
+    oscillatorID: OscillatorID,
 ): ArticulationEditorState {
     return normalizeArticulationEditorState({
         selectedSlotId: state.selectedSlotId,
@@ -1065,7 +1087,7 @@ function projectCurrentArticulationsToEditorBank(
             id: slot.id,
             runtimeSlot: slot.runtimeSlot,
             name: slot.name,
-            snapshot: resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes),
+            snapshot: resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID),
         })),
         keyAssignments: state.slots.map((slot) => ({ articulationId: slot.id, note: slot.key })),
         velocityAssignments: state.slots.map((slot) => ({
@@ -1081,22 +1103,7 @@ function projectCurrentArticulationsToEditorBank(
     });
 }
 
-const VISIBLE_ARTICULATION_PARAMETER_IDS: ReadonlySet<ArticulationVoiceParameterId> = new Set([
-    "oscA.framePosition",
-    "oscA.pan",
-    "oscA.phase",
-    "oscA.phaseRandom",
-    "oscA.retrigger",
-    "oscA.warpMode",
-    "oscA.warpAmount",
-    "oscA.unisonVoices",
-    "oscA.unisonDetune",
-    "oscA.unisonBlend",
-    "oscA.unisonWidth",
-    "oscA.unisonDetuneMode",
-    "oscA.unisonStackMode",
-    "oscA.unisonWavetablePositionSpread",
-    "oscA.unisonWarpSpread",
+const VISIBLE_SHARED_ARTICULATION_PARAMETER_IDS: ReadonlyArray<ArticulationVoiceParameterId> = [
     "filterMode",
     "filterCutoffHz",
     "filterQ",
@@ -1115,11 +1122,21 @@ const VISIBLE_ARTICULATION_PARAMETER_IDS: ReadonlySet<ArticulationVoiceParameter
     "env3.decaySeconds",
     "env3.sustain",
     "env3.releaseSeconds",
-]);
+];
 
-/** Project today's A/shared snapshot surface into the v4 keys it owns. */
+function visibleArticulationParameterIDs(
+    oscillatorID: OscillatorID,
+): ReadonlySet<ArticulationVoiceParameterId> {
+    return new Set([
+        ...getOscillatorBindingContract(oscillatorID).articulationParameterIDs,
+        ...VISIBLE_SHARED_ARTICULATION_PARAMETER_IDS,
+    ]);
+}
+
+/** Project the selected oscillator and shared snapshot surface into its v4 keys. */
 export function projectArticulationSnapshotToVisibleV4Layer(
     snapshotValue: ArticulationSnapshot,
+    oscillatorID: OscillatorID,
 ): CapturedArticulationLayer {
     const snapshot = normalizeArticulationSnapshot(snapshotValue);
     const parameters = snapshot.parameters;
@@ -1128,24 +1145,30 @@ export function projectArticulationSnapshotToVisibleV4Layer(
     const envelope3 = snapshot.envelopes[2] ?? createDefaultEnvelope(2);
     return {
         overrides: {
-            "oscA.framePosition": parameters.wavetablePosition,
-            "oscA.pan": parameters.pan,
-            "oscA.phase": parameters.unisonPhase,
-            "oscA.phaseRandom": parameters.unisonRandom,
-            "oscA.retrigger": parameters.unisonPhaseMode,
-            "oscA.warpMode": parameters.warpMode,
-            "oscA.warpAmount": parameters.warpAmount,
+            [selectedOscillatorArticulationID(oscillatorID, "framePosition")]: parameters.wavetablePosition,
+            [selectedOscillatorArticulationID(oscillatorID, "pan")]: parameters.pan,
+            [selectedOscillatorArticulationID(oscillatorID, "octave")]: parameters.octave,
+            [selectedOscillatorArticulationID(oscillatorID, "semitone")]: parameters.semitone,
+            [selectedOscillatorArticulationID(oscillatorID, "fineCents")]: parameters.fineCents,
+            [selectedOscillatorArticulationID(oscillatorID, "volumeDb")]: parameters.volumeDb,
+            [selectedOscillatorArticulationID(oscillatorID, "mute")]: parameters.mute,
+            [selectedOscillatorArticulationID(oscillatorID, "solo")]: parameters.solo,
+            [selectedOscillatorArticulationID(oscillatorID, "phase")]: parameters.unisonPhase,
+            [selectedOscillatorArticulationID(oscillatorID, "phaseRandom")]: parameters.unisonRandom,
+            [selectedOscillatorArticulationID(oscillatorID, "retrigger")]: parameters.unisonPhaseMode,
+            [selectedOscillatorArticulationID(oscillatorID, "warpMode")]: parameters.warpMode,
+            [selectedOscillatorArticulationID(oscillatorID, "warpAmount")]: parameters.warpAmount,
             filterMode: parameters.filterMode,
             filterCutoffHz: parameters.filterCutoff,
             filterQ: parameters.filterQ,
-            "oscA.unisonVoices": parameters.unisonVoices,
-            "oscA.unisonDetune": parameters.unisonDetune,
-            "oscA.unisonBlend": parameters.unisonBlend,
-            "oscA.unisonWidth": parameters.unisonWidth,
-            "oscA.unisonDetuneMode": parameters.unisonDetuneMode,
-            "oscA.unisonStackMode": parameters.unisonStackMode,
-            "oscA.unisonWavetablePositionSpread": parameters.unisonWavetablePositionSpread,
-            "oscA.unisonWarpSpread": parameters.unisonWarpSpread,
+            [selectedOscillatorArticulationID(oscillatorID, "unisonVoices")]: parameters.unisonVoices,
+            [selectedOscillatorArticulationID(oscillatorID, "unisonDetune")]: parameters.unisonDetune,
+            [selectedOscillatorArticulationID(oscillatorID, "unisonBlend")]: parameters.unisonBlend,
+            [selectedOscillatorArticulationID(oscillatorID, "unisonWidth")]: parameters.unisonWidth,
+            [selectedOscillatorArticulationID(oscillatorID, "unisonDetuneMode")]: parameters.unisonDetuneMode,
+            [selectedOscillatorArticulationID(oscillatorID, "unisonStackMode")]: parameters.unisonStackMode,
+            [selectedOscillatorArticulationID(oscillatorID, "unisonWavetablePositionSpread")]: parameters.unisonWavetablePositionSpread,
+            [selectedOscillatorArticulationID(oscillatorID, "unisonWarpSpread")]: parameters.unisonWarpSpread,
             msegMorph1: parameters.msegMorphs[0],
             msegMorph2: parameters.msegMorphs[1],
             msegMorph3: parameters.msegMorphs[2],
@@ -1169,7 +1192,7 @@ export function projectArticulationSnapshotToVisibleV4Layer(
 }
 
 /**
- * Capture the part of one slot owned by today's A/shared editor without
+ * Capture the part of one slot owned by the selected oscillator/shared editor without
  * materializing inherited values or replacing fields that editor cannot see.
  */
 export function replaceVisibleArticulationSnapshotV4(
@@ -1178,16 +1201,17 @@ export function replaceVisibleArticulationSnapshotV4(
     currentSnapshot: ArticulationSnapshot,
     baseSnapshot: ArticulationSnapshot,
     routes: ReadonlyArray<ModulationRoute>,
+    oscillatorID: OscillatorID,
 ): ArticulationsState {
     const layer = diffCapturedArticulationLayerV4(
-        projectArticulationSnapshotToVisibleV4Layer(currentSnapshot),
-        projectArticulationSnapshotToVisibleV4Layer(baseSnapshot),
+        projectArticulationSnapshotToVisibleV4Layer(currentSnapshot, oscillatorID),
+        projectArticulationSnapshotToVisibleV4Layer(baseSnapshot, oscillatorID),
     );
     return replaceVisibleArticulationLayerV4(
         state,
         slotId,
         layer,
-        VISIBLE_ARTICULATION_PARAMETER_IDS,
+        visibleArticulationParameterIDs(oscillatorID),
         currentArticulationRouteIds(routes),
     );
 }
@@ -1200,6 +1224,7 @@ function useStoredArticulationEditorState(
     modulationBridge: RefObject<ReturnType<typeof acquireModulationRuntimeBridge> | null>,
     modulationState: ModulationState | null,
     getBaseSnapshot: () => ArticulationSnapshot,
+    oscillatorID: OscillatorID,
 ) {
     const patchConnection = usePatchConnection();
     const emptyState = createEmptyArticulationsState();
@@ -1239,6 +1264,7 @@ function useStoredArticulationEditorState(
             nextState,
             getBaseSnapshotRef.current(),
             routes,
+            oscillatorID,
         );
         stateRef.current = nextState;
         bankRef.current = nextBank;
@@ -1247,7 +1273,7 @@ function useStoredArticulationEditorState(
             articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank
         ));
         sendNativeArticulationTriggerConfig(buildArticulationTriggerConfigV4(nextState), patchConnection);
-    }, [modulationBridge, patchConnection]);
+    }, [modulationBridge, oscillatorID, patchConnection]);
 
     const applyIncomingState = useCallback((
         rawValue: unknown,
@@ -1407,10 +1433,11 @@ function presetParameterNumber(
     return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
-/** Build the stable A/shared patch base from the preset transaction itself. */
+/** Build one oscillator's stable local/shared patch base from the preset transaction itself. */
 export function buildPresetArticulationBaseSnapshot(
     context: EffectStoredStateContext,
     modulationState: ModulationState,
+    oscillatorID: OscillatorID,
 ): ArticulationSnapshot {
     const defaults = createDefaultArticulationSnapshot();
     const parameters = defaults.parameters;
@@ -1418,18 +1445,24 @@ export function buildPresetArticulationBaseSnapshot(
         parameters: {
             wavetablePosition: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "framePosition").endpointID,
+                getOscillatorControlAddress(oscillatorID, "framePosition").endpointID,
                 parameters.wavetablePosition,
             ),
-            pan: presetParameterNumber(context, getOscillatorControlAddress("A", "pan").endpointID, parameters.pan),
+            pan: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "pan").endpointID, parameters.pan),
+            octave: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "octave").endpointID, parameters.octave),
+            semitone: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "semitone").endpointID, parameters.semitone),
+            fineCents: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "fineCents").endpointID, parameters.fineCents),
+            volumeDb: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "volumeDb").endpointID, parameters.volumeDb),
+            mute: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "mute").endpointID, parameters.mute),
+            solo: presetParameterNumber(context, getOscillatorControlAddress(oscillatorID, "solo").endpointID, parameters.solo),
             warpMode: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "warpMode").endpointID,
+                getOscillatorControlAddress(oscillatorID, "warpMode").endpointID,
                 parameters.warpMode,
             ),
             warpAmount: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "warpAmount").endpointID,
+                getOscillatorControlAddress(oscillatorID, "warpAmount").endpointID,
                 parameters.warpAmount,
             ),
             filterMode: presetParameterNumber(context, FILTER_MODE_ENDPOINT_ID, parameters.filterMode),
@@ -1437,57 +1470,57 @@ export function buildPresetArticulationBaseSnapshot(
             filterQ: presetParameterNumber(context, FILTER_Q_ENDPOINT_ID, parameters.filterQ),
             unisonVoices: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "unisonVoices").endpointID,
+                getOscillatorControlAddress(oscillatorID, "unisonVoices").endpointID,
                 parameters.unisonVoices,
             ),
             unisonDetune: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "unisonDetune").endpointID,
+                getOscillatorControlAddress(oscillatorID, "unisonDetune").endpointID,
                 parameters.unisonDetune,
             ),
             unisonBlend: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "unisonBlend").endpointID,
+                getOscillatorControlAddress(oscillatorID, "unisonBlend").endpointID,
                 parameters.unisonBlend,
             ),
             unisonWidth: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "unisonWidth").endpointID,
+                getOscillatorControlAddress(oscillatorID, "unisonWidth").endpointID,
                 parameters.unisonWidth,
             ),
             unisonPhase: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "phase").endpointID,
+                getOscillatorControlAddress(oscillatorID, "phase").endpointID,
                 parameters.unisonPhase,
             ),
             unisonRandom: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "phaseRandom").endpointID,
+                getOscillatorControlAddress(oscillatorID, "phaseRandom").endpointID,
                 parameters.unisonRandom,
             ),
             unisonPhaseMode: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "retrigger").endpointID,
+                getOscillatorControlAddress(oscillatorID, "retrigger").endpointID,
                 parameters.unisonPhaseMode,
             ),
             unisonDetuneMode: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "unisonDetuneMode").endpointID,
+                getOscillatorControlAddress(oscillatorID, "unisonDetuneMode").endpointID,
                 parameters.unisonDetuneMode,
             ),
             unisonStackMode: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "unisonStackMode").endpointID,
+                getOscillatorControlAddress(oscillatorID, "unisonStackMode").endpointID,
                 parameters.unisonStackMode,
             ),
             unisonWavetablePositionSpread: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "unisonWavetablePositionSpread").endpointID,
+                getOscillatorControlAddress(oscillatorID, "unisonWavetablePositionSpread").endpointID,
                 parameters.unisonWavetablePositionSpread,
             ),
             unisonWarpSpread: presetParameterNumber(
                 context,
-                getOscillatorControlAddress("A", "unisonWarpSpread").endpointID,
+                getOscillatorControlAddress(oscillatorID, "unisonWarpSpread").endpointID,
                 parameters.unisonWarpSpread,
             ),
             msegMorphs: [
@@ -1514,7 +1547,7 @@ function useSynthPresetStoredStateAdapters({
     articulationBankState: ReturnType<typeof useStoredArticulationEditorState>;
     modulationBridge: ReturnType<typeof useModulationState>["bridge"];
     modulationState: ModulationState | null;
-    setArticulationPatchBase: (snapshot: ArticulationSnapshot) => void;
+    setArticulationPatchBase: (oscillatorID: OscillatorID, snapshot: ArticulationSnapshot) => void;
 }) {
     const patchConnection = usePatchConnection();
     const { stateRef, setAndPersistState } = articulationBankState;
@@ -1613,7 +1646,12 @@ function useSynthPresetStoredStateAdapters({
                 if (!context) {
                     throw new Error("Synth preset context is required before articulation application.");
                 }
-                setArticulationPatchBase(buildPresetArticulationBaseSnapshot(context, nextModulationState));
+                for (const oscillator of OSCILLATOR_BINDING_CONTRACTS) {
+                    setArticulationPatchBase(
+                        oscillator.id,
+                        buildPresetArticulationBaseSnapshot(context, nextModulationState, oscillator.id),
+                    );
+                }
                 setAndPersistState(parseStrictArticulationPresetState(value, routeIds), routeIds, true);
             },
             subscribe(listener: () => void) {
@@ -2418,6 +2456,36 @@ export function useSynthPatchViewModel({
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, -1, 1),
     });
+    const oscillatorOctave = usePatchParameterBinding<number>({
+        endpointID: oscillatorEndpointID("octave"),
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), -4, 4),
+    });
+    const oscillatorSemitone = usePatchParameterBinding<number>({
+        endpointID: oscillatorEndpointID("semitone"),
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), -12, 12),
+    });
+    const oscillatorFineCents = usePatchParameterBinding<number>({
+        endpointID: oscillatorEndpointID("fineCents"),
+        initialValue: 0,
+        coerce: (value) => clamp(Number(value) || 0, -100, 100),
+    });
+    const oscillatorVolumeDb = usePatchParameterBinding<number>({
+        endpointID: oscillatorEndpointID("volumeDb"),
+        initialValue: -9.542425,
+        coerce: (value) => clamp(Number(value) || 0, -48, 6),
+    });
+    const oscillatorMute = usePatchParameterBinding<number>({
+        endpointID: oscillatorEndpointID("mute"),
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
+    });
+    const oscillatorSolo = usePatchParameterBinding<number>({
+        endpointID: oscillatorEndpointID("solo"),
+        initialValue: 0,
+        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
+    });
     const warpMode = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("warpMode"),
         initialValue: 0,
@@ -2643,17 +2711,25 @@ export function useSynthPatchViewModel({
     const captureCurrentArticulationSnapshotRef = useRef<() => ArticulationSnapshot>(
         createDefaultArticulationSnapshot,
     );
-    const articulationPatchBaseRef = useRef<ArticulationSnapshot | null>(null);
+    const articulationPatchBaseRef = useRef<Partial<Record<OscillatorID, ArticulationSnapshot>>>({});
     useEffect(() => {
-        articulationPatchBaseRef.current = null;
+        articulationPatchBaseRef.current = {};
     }, [patchConnection]);
-    const setArticulationPatchBase = useCallback((snapshot: ArticulationSnapshot) => {
-        articulationPatchBaseRef.current = snapshot;
+    const setArticulationPatchBase = useCallback((
+        targetOscillatorID: OscillatorID,
+        snapshot: ArticulationSnapshot,
+    ) => {
+        articulationPatchBaseRef.current[targetOscillatorID] = snapshot;
     }, []);
+    const currentArticulationPatchBase = useCallback(() => (
+        articulationPatchBaseRef.current[oscillatorID]
+        ?? captureCurrentArticulationSnapshotRef.current()
+    ), [oscillatorID]);
     const articulationBankState = useStoredArticulationEditorState(
         modulationBridge,
         modulationState,
-        () => articulationPatchBaseRef.current ?? captureCurrentArticulationSnapshotRef.current(),
+        currentArticulationPatchBase,
+        oscillatorID,
     );
     const runtimePresentation = useMemo(
         () => resolveRuntimeTablePresentation(runtimeStateMessage, Number(wavetableSelect.value) || 0),
@@ -2899,6 +2975,12 @@ export function useSynthPatchViewModel({
             parameters: {
                 wavetablePosition: wavetablePosition.value,
                 pan: pan.value,
+                octave: oscillatorOctave.value,
+                semitone: oscillatorSemitone.value,
+                fineCents: oscillatorFineCents.value,
+                volumeDb: oscillatorVolumeDb.value,
+                mute: oscillatorMute.value,
+                solo: oscillatorSolo.value,
                 warpMode: warpMode.value,
                 warpAmount: warpAmount.value,
                 filterMode: filterMode.value,
@@ -2933,6 +3015,12 @@ export function useSynthPatchViewModel({
         mseg1Morph.value,
         mseg2Morph.value,
         mseg3Morph.value,
+        oscillatorFineCents.value,
+        oscillatorMute.value,
+        oscillatorOctave.value,
+        oscillatorSemitone.value,
+        oscillatorSolo.value,
+        oscillatorVolumeDb.value,
         pan.value,
         unisonBlend.value,
         unisonDetune.value,
@@ -2953,14 +3041,14 @@ export function useSynthPatchViewModel({
     captureCurrentArticulationSnapshotRef.current = captureCurrentArticulationSnapshot;
 
     useEffect(() => {
-        if (articulationBankState.state.slots.length === 0) {
-            articulationPatchBaseRef.current = captureCurrentArticulationSnapshot();
+        if (articulationPatchBaseRef.current[oscillatorID] === undefined) {
+            articulationPatchBaseRef.current[oscillatorID] = captureCurrentArticulationSnapshot();
         }
-    }, [articulationBankState.state.slots.length, captureCurrentArticulationSnapshot]);
+    }, [captureCurrentArticulationSnapshot, oscillatorID]);
 
     const captureCurrentArticulationLayer = useCallback((): CapturedArticulationLayer => (
-        projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot())
-    ), [captureCurrentArticulationSnapshot]);
+        projectArticulationSnapshotToVisibleV4Layer(captureCurrentArticulationSnapshot(), oscillatorID)
+    ), [captureCurrentArticulationSnapshot, oscillatorID]);
 
     const applyArticulationSnapshot = useCallback((snapshotValue: unknown) => {
         const snapshot = normalizeArticulationSnapshot(snapshotValue);
@@ -2968,6 +3056,12 @@ export function useSynthPatchViewModel({
 
         wavetablePosition.setValue(parameters.wavetablePosition);
         pan.setValue(parameters.pan);
+        oscillatorOctave.setValue(parameters.octave);
+        oscillatorSemitone.setValue(parameters.semitone);
+        oscillatorFineCents.setValue(parameters.fineCents);
+        oscillatorVolumeDb.setValue(parameters.volumeDb);
+        oscillatorMute.setValue(parameters.mute);
+        oscillatorSolo.setValue(parameters.solo);
         warpMode.setValue(parameters.warpMode);
         warpAmount.setValue(parameters.warpAmount);
         filterMode.setValue(parameters.filterMode);
@@ -3029,6 +3123,12 @@ export function useSynthPatchViewModel({
         mseg1Morph,
         mseg2Morph,
         mseg3Morph,
+        oscillatorFineCents,
+        oscillatorMute,
+        oscillatorOctave,
+        oscillatorSemitone,
+        oscillatorSolo,
+        oscillatorVolumeDb,
         pan,
         unisonBlend,
         unisonDetune,
@@ -3048,11 +3148,11 @@ export function useSynthPatchViewModel({
 
     const handleCaptureArticulationSlot = useCallback((_options: { autoAssign?: boolean } = {}) => {
         const currentSnapshot = captureCurrentArticulationSnapshot();
-        const baseSnapshot = articulationPatchBaseRef.current ?? currentSnapshot;
-        articulationPatchBaseRef.current = baseSnapshot;
+        const baseSnapshot = currentArticulationPatchBase();
+        articulationPatchBaseRef.current[oscillatorID] = baseSnapshot;
         const layer = diffCapturedArticulationLayerV4(
             captureCurrentArticulationLayer(),
-            projectArticulationSnapshotToVisibleV4Layer(baseSnapshot),
+            projectArticulationSnapshotToVisibleV4Layer(baseSnapshot, oscillatorID),
         );
         articulationBankState.setAndPersistState((previousState) => (
             addCapturedArticulationV4(previousState, layer)
@@ -3063,6 +3163,8 @@ export function useSynthPatchViewModel({
         articulationBankState,
         captureCurrentArticulationLayer,
         captureCurrentArticulationSnapshot,
+        currentArticulationPatchBase,
+        oscillatorID,
     ]);
 
     const handleAddArticulationSlot = useCallback(() => {
@@ -3092,12 +3194,12 @@ export function useSynthPatchViewModel({
             });
         }
 
-        const baseSnapshot = articulationPatchBaseRef.current ?? captureCurrentArticulationSnapshot();
-        articulationPatchBaseRef.current = baseSnapshot;
+        const baseSnapshot = currentArticulationPatchBase();
+        articulationPatchBaseRef.current[oscillatorID] = baseSnapshot;
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
         isApplyingArticulationRef.current = true;
         setSelectedArticulationIsDirty(false);
-        applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes));
+        applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID));
         setTimeout(() => {
             isApplyingArticulationRef.current = false;
         }, 0);
@@ -3107,8 +3209,10 @@ export function useSynthPatchViewModel({
         applyArticulationSnapshot,
         articulationBankState,
         captureCurrentArticulationSnapshot,
+        currentArticulationPatchBase,
         modulationBridge,
         modulationState?.routes,
+        oscillatorID,
         selectedArticulationIsDirty,
     ]);
 
@@ -3125,7 +3229,7 @@ export function useSynthPatchViewModel({
         }
 
         const currentSnapshot = captureCurrentArticulationSnapshot();
-        const baseSnapshot = articulationPatchBaseRef.current ?? currentSnapshot;
+        const baseSnapshot = currentArticulationPatchBase();
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
         articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
             previousState,
@@ -3133,14 +3237,17 @@ export function useSynthPatchViewModel({
             currentSnapshot,
             baseSnapshot,
             routes,
+            oscillatorID,
         ));
         setSelectedArticulationIsDirty(false);
         setDiscardedArticulationEdit(null);
     }, [
         articulationBankState,
         captureCurrentArticulationSnapshot,
+        currentArticulationPatchBase,
         modulationBridge,
         modulationState?.routes,
+        oscillatorID,
     ]);
 
     const handleRevertSelectedArticulationSlot = useCallback(() => {
@@ -3161,9 +3268,9 @@ export function useSynthPatchViewModel({
 
         isApplyingArticulationRef.current = true;
         setSelectedArticulationIsDirty(false);
-        const baseSnapshot = articulationPatchBaseRef.current ?? captureCurrentArticulationSnapshot();
+        const baseSnapshot = currentArticulationPatchBase();
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
-        applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes));
+        applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID));
         setTimeout(() => {
             isApplyingArticulationRef.current = false;
         }, 0);
@@ -3171,8 +3278,10 @@ export function useSynthPatchViewModel({
         applyArticulationSnapshot,
         articulationBankState,
         captureCurrentArticulationSnapshot,
+        currentArticulationPatchBase,
         modulationBridge,
         modulationState?.routes,
+        oscillatorID,
         selectedArticulationIsDirty,
     ]);
 
@@ -3265,11 +3374,11 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(assignedState);
 
         if (nextSlot) {
-            const baseSnapshot = articulationPatchBaseRef.current ?? captureCurrentArticulationSnapshot();
+            const baseSnapshot = currentArticulationPatchBase();
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
-            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes));
+            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));
             setTimeout(() => {
                 isApplyingArticulationRef.current = false;
             }, 0);
@@ -3280,8 +3389,10 @@ export function useSynthPatchViewModel({
         applyArticulationSnapshot,
         articulationBankState,
         captureCurrentArticulationSnapshot,
+        currentArticulationPatchBase,
         modulationBridge,
         modulationState?.routes,
+        oscillatorID,
     ]);
 
     const handleMoveArticulationRangeAssignment = useCallback((
@@ -3334,7 +3445,7 @@ export function useSynthPatchViewModel({
 
     const handleReplaceArticulationSlotWithCurrent = useCallback((slotId: string) => {
         const currentSnapshot = captureCurrentArticulationSnapshot();
-        const baseSnapshot = articulationPatchBaseRef.current ?? currentSnapshot;
+        const baseSnapshot = currentArticulationPatchBase();
         const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
         articulationBankState.setAndPersistState((previousState) => replaceVisibleArticulationSnapshotV4(
             previousState,
@@ -3342,6 +3453,7 @@ export function useSynthPatchViewModel({
             currentSnapshot,
             baseSnapshot,
             routes,
+            oscillatorID,
         ));
 
         if (articulationBankState.bankRef.current.selectedSlotId === slotId) {
@@ -3350,8 +3462,10 @@ export function useSynthPatchViewModel({
     }, [
         articulationBankState,
         captureCurrentArticulationSnapshot,
+        currentArticulationPatchBase,
         modulationBridge,
         modulationState?.routes,
+        oscillatorID,
     ]);
 
     const handleDuplicateArticulationSlot = useCallback((slotId: string) => {
@@ -3361,11 +3475,11 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(nextState);
 
         if (nextSlot) {
-            const baseSnapshot = articulationPatchBaseRef.current ?? captureCurrentArticulationSnapshot();
+            const baseSnapshot = currentArticulationPatchBase();
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
-            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes));
+            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));
             setTimeout(() => {
                 isApplyingArticulationRef.current = false;
             }, 0);
@@ -3374,8 +3488,10 @@ export function useSynthPatchViewModel({
         applyArticulationSnapshot,
         articulationBankState,
         captureCurrentArticulationSnapshot,
+        currentArticulationPatchBase,
         modulationBridge,
         modulationState?.routes,
+        oscillatorID,
     ]);
 
     const handleDeleteArticulationSlot = useCallback((slotId: string) => {
@@ -3387,11 +3503,11 @@ export function useSynthPatchViewModel({
         articulationBankState.setAndPersistState(nextState);
 
         if (selectedChanged && nextSlot) {
-            const baseSnapshot = articulationPatchBaseRef.current ?? captureCurrentArticulationSnapshot();
+            const baseSnapshot = currentArticulationPatchBase();
             const routes = modulationBridge.current?.getState().routes ?? modulationState?.routes ?? [];
             isApplyingArticulationRef.current = true;
             setSelectedArticulationIsDirty(false);
-            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes));
+            applyArticulationSnapshot(resolveVisibleArticulationSnapshotV4(nextSlot, baseSnapshot, routes, oscillatorID));
             setTimeout(() => {
                 isApplyingArticulationRef.current = false;
             }, 0);
@@ -3400,8 +3516,10 @@ export function useSynthPatchViewModel({
         applyArticulationSnapshot,
         articulationBankState,
         captureCurrentArticulationSnapshot,
+        currentArticulationPatchBase,
         modulationBridge,
         modulationState?.routes,
+        oscillatorID,
     ]);
 
     const publishHeldMidiNote = useCallback((nextChainValue?: number | null) => {
@@ -3605,6 +3723,12 @@ export function useSynthPatchViewModel({
         playMode,
         glideTime,
         pan,
+        oscillatorOctave,
+        oscillatorSemitone,
+        oscillatorFineCents,
+        oscillatorVolumeDb,
+        oscillatorMute,
+        oscillatorSolo,
         warpMode,
         warpAmount,
         filterMode,

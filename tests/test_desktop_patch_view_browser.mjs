@@ -1999,6 +1999,129 @@ test("selected oscillator table and pan controls write only that oscillator", as
     }
 });
 
+test("selected oscillator tuning level mute and solo controls write only that oscillator", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+        );
+        await clearHarnessDebugLog(page);
+
+        for (const [label, value] of [
+            ["Oscillator octave", "1"],
+            ["Oscillator semitone", "-3"],
+            ["Oscillator fine tune", "12.5"],
+            ["Oscillator level", "-6"],
+        ]) {
+            const input = page.locator(`input[aria-label="${label}"]`);
+            await input.press("Enter");
+            await input.fill(value);
+            await input.press("Enter");
+        }
+        await page.getByRole("button", { name: "Mute selected oscillator" }).click();
+        await page.getByRole("button", { name: "Solo selected oscillator" }).click();
+
+        await page.waitForFunction(() => {
+            const values = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues;
+            return Number(values.oscBOctave) === 1
+                && Number(values.oscBSemitone) === -3
+                && Math.abs(Number(values.oscBFineCents) - 12.5) < 0.0001
+                && Number(values.oscBVolumeDb) === -6
+                && Number(values.oscBMute) === 1
+                && Number(values.oscBSolo) === 1;
+        });
+
+        const oscillatorWrites = (await getHarnessSnapshot(page)).sentMessages.filter(({ endpointID }) => (
+            /^osc[ABC](Octave|Semitone|FineCents|VolumeDb|Mute|Solo)$/.test(endpointID)
+        ));
+        assert.deepEqual(oscillatorWrites, [
+            { endpointID: "oscBOctave", value: 1 },
+            { endpointID: "oscBSemitone", value: -3 },
+            { endpointID: "oscBFineCents", value: 12.5 },
+            { endpointID: "oscBVolumeDb", value: -6 },
+            { endpointID: "oscBMute", value: 1 },
+            { endpointID: "oscBSolo", value: 1 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("articulation capture and recall edit only the selected oscillator", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+        );
+        await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
+        await waitForHarnessSnapshot(
+            page,
+            "baseline B articulation",
+            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
+        );
+
+        for (const [label, value] of [
+            ["Oscillator octave", "1"],
+            ["Oscillator semitone", "-3"],
+            ["Oscillator fine tune", "12.5"],
+            ["Oscillator level", "-6"],
+        ]) {
+            const input = page.locator(`input[aria-label="${label}"]`);
+            await input.press("Enter");
+            await input.fill(value);
+            await input.press("Enter");
+        }
+        await page.getByRole("button", { name: "Mute selected oscillator" }).click();
+        await page.getByRole("button", { name: "Solo selected oscillator" }).click();
+        await page.getByRole("button", { name: "Capture current parameters as a new articulation" }).click();
+
+        const captured = await waitForHarnessSnapshot(
+            page,
+            "B articulation overrides",
+            (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 2,
+        );
+        const storedBank = JSON.parse(String(captured.storedState[ARTICULATION_STATE_KEY]));
+        const overrides = storedBank.slots[1].overrides;
+        assert.deepEqual({
+            octave: overrides["oscB.octave"],
+            semitone: overrides["oscB.semitone"],
+            fineCents: overrides["oscB.fineCents"],
+            volumeDb: overrides["oscB.volumeDb"],
+            mute: overrides["oscB.mute"],
+            solo: overrides["oscB.solo"],
+        }, {
+            octave: 1,
+            semitone: -3,
+            fineCents: 12.5,
+            volumeDb: -6,
+            mute: 1,
+            solo: 1,
+        });
+        assert.equal(Object.keys(overrides).some((key) => key.startsWith("oscA.")), false);
+        assert.equal(Object.keys(overrides).some((key) => key.startsWith("oscC.")), false);
+
+        await clearHarnessDebugLog(page);
+        await page.locator('[data-role="articulation-card"]').first().click();
+        await page.locator('[data-role="articulation-card"]').nth(1).click();
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().sentMessages.some(({ endpointID, value }) => (
+                endpointID === "oscBVolumeDb" && Number(value) === -6
+            ))
+        ));
+        const oscillatorWrites = (await getHarnessSnapshot(page)).sentMessages.filter(({ endpointID }) => (
+            /^osc[ABC]/.test(endpointID)
+        ));
+        assert.equal(oscillatorWrites.length > 0, true);
+        assert.equal(oscillatorWrites.every(({ endpointID }) => endpointID.startsWith("oscB")), true);
+    } finally {
+        await page.close();
+    }
+});
+
 test("wavetable selection commits the desired table and retry uses the runtime retry event", async () => {
     const page = await openHarnessPage();
 
@@ -2509,9 +2632,15 @@ test("unison controls commit parameters and redraw the voice distribution", asyn
         });
 
         snapshot = await getHarnessSnapshot(page);
+        const unisonEndpointIDs = new Set([
+            "oscAUnisonDetune",
+            "oscAUnisonDetuneMode",
+            "oscAUnisonStackMode",
+            "oscARetrigger",
+        ]);
         assert.deepEqual(
             snapshot.sentMessages
-                .filter(({ endpointID }) => endpointID.startsWith("unison"))
+                .filter(({ endpointID }) => unisonEndpointIDs.has(endpointID))
                 .map(({ endpointID, value }) => ({ endpointID, value })),
             [
                 { endpointID: "oscAUnisonDetune", value: 0.5 },

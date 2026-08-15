@@ -41,6 +41,12 @@ export type ArticulationTriggerMode = "chain" | "key" | "vel";
 export type ArticulationParameterSnapshot = {
     wavetablePosition: number;
     pan: number;
+    octave: number;
+    semitone: number;
+    fineCents: number;
+    volumeDb: number;
+    mute: number;
+    solo: number;
     warpMode: number;
     warpAmount: number;
     filterMode: number;
@@ -253,6 +259,12 @@ export function createDefaultArticulationParameterSnapshot(): ArticulationParame
     return {
         wavetablePosition: 0,
         pan: 0,
+        octave: 0,
+        semitone: 0,
+        fineCents: 0,
+        volumeDb: -9.542425,
+        mute: 0,
+        solo: 0,
         warpMode: 0,
         warpAmount: 0,
         filterMode: 0,
@@ -283,6 +295,12 @@ export function normalizeArticulationParameterSnapshot(value: unknown): Articula
     return {
         wavetablePosition: normalizeNumber(nextValue.wavetablePosition, defaults.wavetablePosition, 0, 1),
         pan: normalizeNumber(nextValue.pan, defaults.pan, -1, 1),
+        octave: normalizeInteger(nextValue.octave, defaults.octave, -4, 4),
+        semitone: normalizeInteger(nextValue.semitone, defaults.semitone, -12, 12),
+        fineCents: normalizeNumber(nextValue.fineCents, defaults.fineCents, -100, 100),
+        volumeDb: normalizeNumber(nextValue.volumeDb, defaults.volumeDb, -48, 6),
+        mute: normalizeInteger(nextValue.mute, defaults.mute, 0, 1),
+        solo: normalizeInteger(nextValue.solo, defaults.solo, 0, 1),
         warpMode: normalizeInteger(nextValue.warpMode, defaults.warpMode, 0, 4),
         warpAmount: normalizeNumber(nextValue.warpAmount, defaults.warpAmount, 0, 1),
         filterMode: normalizeInteger(nextValue.filterMode, defaults.filterMode, 0, 5),

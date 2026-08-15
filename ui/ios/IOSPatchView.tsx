@@ -464,6 +464,68 @@ const IOSOscillatorTabs = memo(function IOSOscillatorTabs({
     );
 });
 
+const IOSOscillatorPerformanceControls = memo(function IOSOscillatorPerformanceControls({
+    octave,
+    semitone,
+    fineCents,
+    volumeDb,
+    mute,
+    solo,
+}: {
+    octave: ReturnType<typeof useSynthPatchViewModel>["oscillatorOctave"];
+    semitone: ReturnType<typeof useSynthPatchViewModel>["oscillatorSemitone"];
+    fineCents: ReturnType<typeof useSynthPatchViewModel>["oscillatorFineCents"];
+    volumeDb: ReturnType<typeof useSynthPatchViewModel>["oscillatorVolumeDb"];
+    mute: ReturnType<typeof useSynthPatchViewModel>["oscillatorMute"];
+    solo: ReturnType<typeof useSynthPatchViewModel>["oscillatorSolo"];
+}) {
+    const fields = [
+        { label: "Oct", role: "oscillator-octave-input", binding: octave, min: -4, max: 4, step: 1 },
+        { label: "Semi", role: "oscillator-semitone-input", binding: semitone, min: -12, max: 12, step: 1 },
+        { label: "Fine", role: "oscillator-fine-input", binding: fineCents, min: -100, max: 100, step: 0.1 },
+        { label: "Level", role: "oscillator-level-input", binding: volumeDb, min: -48, max: 6, step: 0.1 },
+    ] as const;
+
+    return (
+        <div className="ios-oscillator-performance" data-role="ios-oscillator-performance">
+            {fields.map((field) => (
+                <label key={field.role} className="ios-oscillator-number">
+                    <span>{field.label}</span>
+                    <input
+                        aria-label={`Oscillator ${field.label.toLowerCase()}`}
+                        data-role={field.role}
+                        type="number"
+                        inputMode="decimal"
+                        min={field.min}
+                        max={field.max}
+                        step={field.step}
+                        value={field.binding.value}
+                        onChange={(event) => field.binding.commitValue(Number(event.target.value))}
+                    />
+                </label>
+            ))}
+            <button
+                type="button"
+                aria-label="Mute selected oscillator"
+                aria-pressed={mute.value >= 0.5}
+                data-active={mute.value >= 0.5}
+                onClick={() => mute.commitValue(mute.value >= 0.5 ? 0 : 1)}
+            >
+                Mute
+            </button>
+            <button
+                type="button"
+                aria-label="Solo selected oscillator"
+                aria-pressed={solo.value >= 0.5}
+                data-active={solo.value >= 0.5}
+                onClick={() => solo.commitValue(solo.value >= 0.5 ? 0 : 1)}
+            >
+                Solo
+            </button>
+        </div>
+    );
+});
+
 const IOSKeyboardToolbar = memo(function IOSKeyboardToolbar({
     keyboardRootLabel,
     canOctaveDown,
@@ -1503,6 +1565,14 @@ function IOSPatchViewBody() {
                     <div className="ios-scroll">
                         <div className="ios-content">
                             <IOSOscillatorTabs selection={oscillatorSelection} />
+                            <IOSOscillatorPerformanceControls
+                                octave={synthView.oscillatorOctave}
+                                semitone={synthView.oscillatorSemitone}
+                                fineCents={synthView.oscillatorFineCents}
+                                volumeDb={synthView.oscillatorVolumeDb}
+                                mute={synthView.oscillatorMute}
+                                solo={synthView.oscillatorSolo}
+                            />
                             <IOSWavetablePanel
                                 stageRef={stageRef}
                                 frames={synthView.frames}

@@ -672,6 +672,12 @@ test("mounted iPhone oscillator tabs route table and pan edits only to the selec
         await (await getShadowLocator(page, 'button[aria-label="Oscillator B"]')).click();
         await selectShadowOption(page, ".table-select-overlay", 1);
         await dispatchShadowInputValueChange(page, '[data-role="oscillator-pan-slider"]', "0.25");
+        await dispatchShadowInputValueChange(page, '[data-role="oscillator-octave-input"]', "1");
+        await dispatchShadowInputValueChange(page, '[data-role="oscillator-semitone-input"]', "-3");
+        await dispatchShadowInputValueChange(page, '[data-role="oscillator-fine-input"]', "12.5");
+        await dispatchShadowInputValueChange(page, '[data-role="oscillator-level-input"]', "-6");
+        await (await getShadowLocator(page, 'button[aria-label="Mute selected oscillator"]')).click();
+        await (await getShadowLocator(page, 'button[aria-label="Solo selected oscillator"]')).click();
 
         const snapshot = await waitForSnapshot(
             page,
@@ -680,7 +686,12 @@ test("mounted iPhone oscillator tabs route table and pan edits only to the selec
                 endpointID === "oscBWavetableSelect" && Number(value) === 1
             )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "oscBPan" && Math.abs(Number(value) - 0.25) < 0.0001
-            )),
+            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBOctave" && Number(value) === 1)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBSemitone" && Number(value) === -3)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBFineCents" && Number(value) === 12.5)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBVolumeDb" && Number(value) === -6)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBMute" && Number(value) === 1)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBSolo" && Number(value) === 1),
         );
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => (
             endpointID === "wavetableSelect"

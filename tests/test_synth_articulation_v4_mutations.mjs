@@ -27,7 +27,7 @@ function makeSlot(overrides, routeAmounts) {
     };
 }
 
-test("production A/shared update stays sparse and preserves unrepresented v4 state", async () => {
+test("selected A/shared update stays sparse and preserves sibling oscillator state", async () => {
     const [image, editor, modulation, synthHooks] = await modulesPromise;
     const routeId = "oscA.pan::env-1";
     const retainedRouteId = "oscB.pan::env-1";
@@ -66,12 +66,13 @@ test("production A/shared update stays sparse and preserves unrepresented v4 sta
         current,
         base,
         [route],
+        "A",
     );
     const updated = next.slots[0];
 
     assert.equal(Object.hasOwn(updated.overrides, "oscA.pan"), false, "base-valued A scalar inherits");
     assert.equal(Object.hasOwn(updated.overrides, "filterQ"), false, "base-valued shared scalar inherits");
-    assert.equal(updated.overrides["oscA.octave"], 2, "newer unrepresented A state survives");
+    assert.equal(Object.hasOwn(updated.overrides, "oscA.octave"), false, "selected A values are replaced by the current editor layer");
     assert.equal(updated.overrides["oscB.pan"], -0.5, "B state survives");
     assert.equal(updated.overrides["oscC.fineCents"], 17, "C state survives");
     assert.equal(Object.hasOwn(updated.routeAmounts, routeId), true);
@@ -117,20 +118,34 @@ test("full-state hydration validates articulation routes against modulation from
     assert.equal(parsed.parsedState?.value.slots[0].routeAmounts[route.id], 0);
 });
 
-test("legacy A phase controls project to their canonical v4 oscillator keys", async () => {
+test("the selected oscillator projects every local articulation value to its own v4 keys", async () => {
     const [, , , synthHooks] = await modulesPromise;
     const layer = synthHooks.projectArticulationSnapshotToVisibleV4Layer({
         parameters: {
+            octave: 1,
+            semitone: -3,
+            fineCents: 12.5,
+            volumeDb: -6,
+            mute: 1,
+            solo: 1,
             unisonPhase: 0.25,
             unisonRandom: 0.75,
             unisonPhaseMode: 1,
         },
         modRouteAmounts: [{ routeId: "zero-route", amount: 0 }],
-    });
+    }, "B");
 
-    assert.equal(layer.overrides["oscA.phase"], 0.25);
-    assert.equal(layer.overrides["oscA.phaseRandom"], 0.75);
-    assert.equal(layer.overrides["oscA.retrigger"], 1);
+    assert.equal(layer.overrides["oscB.octave"], 1);
+    assert.equal(layer.overrides["oscB.semitone"], -3);
+    assert.equal(layer.overrides["oscB.fineCents"], 12.5);
+    assert.equal(layer.overrides["oscB.volumeDb"], -6);
+    assert.equal(layer.overrides["oscB.mute"], 1);
+    assert.equal(layer.overrides["oscB.solo"], 1);
+    assert.equal(layer.overrides["oscB.phase"], 0.25);
+    assert.equal(layer.overrides["oscB.phaseRandom"], 0.75);
+    assert.equal(layer.overrides["oscB.retrigger"], 1);
+    assert.equal(Object.keys(layer.overrides).some((key) => key.startsWith("oscA.")), false);
+    assert.equal(Object.keys(layer.overrides).some((key) => key.startsWith("oscC.")), false);
     assert.equal(Object.hasOwn(layer.routeAmounts, "zero-route"), true);
     assert.equal(layer.routeAmounts["zero-route"], 0);
 });
@@ -150,12 +165,12 @@ test("preset transaction rotates the sparse comparison base with parameters and 
     };
     const nextBase = synthHooks.buildPresetArticulationBaseSnapshot({
         parameters: {
-            pan: 0.75,
+            oscAPan: 0.75,
             filterQ: 2,
             mseg1Morph: 0.4,
         },
         storedState: {},
-    }, modulationState);
+    }, modulationState, "A");
     const slot = makeSlot({
         "oscA.pan": 0.5,
         "oscB.pan": -0.5,
@@ -179,6 +194,7 @@ test("preset transaction rotates the sparse comparison base with parameters and 
         nextBase,
         nextBase,
         [route],
+        "A",
     );
     assert.equal(Object.hasOwn(next.slots[0].overrides, "oscA.pan"), false);
     assert.equal(Object.hasOwn(next.slots[0].routeAmounts, route.id), false);
@@ -205,7 +221,7 @@ test("switching from an explicit-zero articulation restores an inherited route f
         name: "Layer 2",
     };
 
-    const explicitSnapshot = synthHooks.resolveVisibleArticulationSnapshotV4(explicit, base, [route]);
+    const explicitSnapshot = synthHooks.resolveVisibleArticulationSnapshotV4(explicit, base, [route], "A");
     assert.equal(explicitSnapshot.modRouteAmounts[0].amount, 0, "exact zero remains explicit");
 
     const liveRouteAfterExplicitRecall = { ...route, amount: explicitSnapshot.modRouteAmounts[0].amount };
@@ -213,6 +229,7 @@ test("switching from an explicit-zero articulation restores an inherited route f
         inherited,
         base,
         [liveRouteAfterExplicitRecall],
+        "A",
     );
     assert.equal(inheritedSnapshot.modRouteAmounts[0].amount, 0.25, "inheritance ignores the prior slot's live amount");
 
@@ -220,6 +237,7 @@ test("switching from an explicit-zero articulation restores an inherited route f
         inherited,
         {},
         [{ ...route, amount: 0.6 }],
+        "A",
     );
     assert.equal(missingBaseSnapshot.modRouteAmounts[0].amount, 0.6, "live fallback is reserved for a missing base route");
 });
@@ -233,7 +251,7 @@ test("production synth hook uses modulation.v5 with direct articulation-v4 trans
     assert.match(source, /setAndPersistState/);
     assert.match(source, /collapseArticulationSegmentV4\(previousState, mode, segment\)/);
     assert.match(source, /collapseAllArticulationSegmentsV4\(previousState, mode\)/);
-    assert.match(source, /setArticulationPatchBase\(buildPresetArticulationBaseSnapshot/);
+    assert.match(source, /setArticulationPatchBase\([\s\S]*?buildPresetArticulationBaseSnapshot/);
     assert.match(source, /setAndPersistState\(parseStrictArticulationPresetState\(value, routeIds\), routeIds, true\)/);
     assert.match(
         source,
