@@ -2009,16 +2009,16 @@ test("selected oscillator tuning level mute and solo controls write only that os
         );
         await clearHarnessDebugLog(page);
 
-        for (const [label, value] of [
-            ["Oscillator octave", "1"],
-            ["Oscillator semitone", "-3"],
-            ["Oscillator fine tune", "12.5"],
-            ["Oscillator level", "-6"],
+        for (const [label, keys] of [
+            ["Oscillator octave", ["ArrowUp"]],
+            ["Oscillator semitone", ["ArrowDown", "ArrowDown", "ArrowDown"]],
+            ["Oscillator fine tune", ["ArrowUp"]],
+            ["Oscillator level", ["End"]],
         ]) {
-            const input = page.locator(`input[aria-label="${label}"]`);
-            await input.press("Enter");
-            await input.fill(value);
-            await input.press("Enter");
+            const knob = page.getByRole("slider", { name: label });
+            for (const key of keys) {
+                await knob.press(key);
+            }
         }
         await page.getByRole("button", { name: "Mute selected oscillator" }).click();
         await page.getByRole("button", { name: "Solo selected oscillator" }).click();
@@ -2027,8 +2027,8 @@ test("selected oscillator tuning level mute and solo controls write only that os
             const values = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues;
             return Number(values.oscBOctave) === 1
                 && Number(values.oscBSemitone) === -3
-                && Math.abs(Number(values.oscBFineCents) - 12.5) < 0.0001
-                && Number(values.oscBVolumeDb) === -6
+                && Math.abs(Number(values.oscBFineCents) - 0.1) < 0.0001
+                && Number(values.oscBVolumeDb) === 6
                 && Number(values.oscBMute) === 1
                 && Number(values.oscBSolo) === 1;
         });
@@ -2038,13 +2038,118 @@ test("selected oscillator tuning level mute and solo controls write only that os
         ));
         assert.deepEqual(oscillatorWrites, [
             { endpointID: "oscBOctave", value: 1 },
+            { endpointID: "oscBSemitone", value: -1 },
+            { endpointID: "oscBSemitone", value: -2 },
             { endpointID: "oscBSemitone", value: -3 },
-            { endpointID: "oscBFineCents", value: 12.5 },
-            { endpointID: "oscBVolumeDb", value: -6 },
+            { endpointID: "oscBFineCents", value: 0.1 },
+            { endpointID: "oscBVolumeDb", value: 6 },
             { endpointID: "oscBMute", value: 1 },
             { endpointID: "oscBSolo", value: 1 },
         ]);
     } finally {
+        await page.close();
+    }
+});
+
+test("mobile oscillator performance knobs own touch and detent discrete values with haptics", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                window.__oscillatorHaptics = [];
+                window.cmaj_triggerHaptic = (style = "light") => window.__oscillatorHaptics.push(style);
+            });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    const dragByTouch = async (locator, deltaY) => {
+        const box = await locator.locator(".rack-knob-art").boundingBox();
+        assert.ok(box);
+        const start = {
+            x: box.x + (box.width / 2),
+            y: box.y + (box.height / 2),
+        };
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 4; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: start.x,
+                    y: start.y + ((deltaY * step) / 4),
+                    radiusX: 5,
+                    radiusY: 5,
+                    force: 1,
+                }],
+            });
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    };
+
+    try {
+        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.waitForSelector(
+            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+        );
+
+        const roles = [
+            "oscillator-octave",
+            "oscillator-semitone",
+            "oscillator-fine",
+            "oscillator-level",
+        ];
+        for (const role of roles) {
+            const knob = page.locator(`[data-role="${role}"]`);
+            assert.equal(await knob.getAttribute("role"), "slider");
+            assert.equal(await knob.locator(".rack-knob-art").count(), 1);
+            assert.equal(await knob.evaluate((element) => getComputedStyle(element).touchAction), "none");
+        }
+
+        const voicePanel = page.locator('[data-role="mobile-workspace-panel-voice"]');
+        const octaveKnob = page.locator('[data-role="oscillator-octave"]');
+        await octaveKnob.scrollIntoViewIfNeeded();
+        await clearHarnessDebugLog(page);
+        const scrollBefore = await voicePanel.evaluate((element) => element.scrollTop);
+        await dragByTouch(octaveKnob, -48);
+
+        const detentedSnapshot = await waitForHarnessSnapshot(
+            page,
+            "touch-detented oscillator octave",
+            (snapshot) => Number(snapshot.parameterValues.oscBOctave) >= 1,
+        );
+        const octaveValue = Number(detentedSnapshot.parameterValues.oscBOctave);
+        assert.equal(Number.isInteger(octaveValue), true);
+        assert.equal(octaveValue >= 1 && octaveValue <= 3, true);
+        assert.equal(await voicePanel.evaluate((element) => element.scrollTop), scrollBefore);
+        const detentHaptics = await page.evaluate(() => window.__oscillatorHaptics);
+        assert.equal(detentHaptics.length >= 1, true);
+        assert.equal(detentHaptics.every((style) => style === "light"), true);
+
+        const fineKnob = page.locator('[data-role="oscillator-fine"]');
+        const hapticCountBeforeContinuousDrag = detentHaptics.length;
+        await dragByTouch(fineKnob, -17);
+        const continuousSnapshot = await waitForHarnessSnapshot(
+            page,
+            "continuous oscillator fine tune",
+            (snapshot) => Number(snapshot.parameterValues.oscBFineCents) > 1,
+        );
+        assert.equal(Number.isInteger(Number(continuousSnapshot.parameterValues.oscBFineCents)), false);
+        assert.equal(
+            (await page.evaluate(() => window.__oscillatorHaptics)).length,
+            hapticCountBeforeContinuousDrag,
+        );
+        assert.equal(await voicePanel.evaluate((element) => element.scrollTop), scrollBefore);
+
+        const siblingWrites = continuousSnapshot.sentMessages.filter(({ endpointID }) => (
+            /^osc[AC](Octave|Semitone|FineCents|VolumeDb)$/.test(endpointID)
+        ));
+        assert.deepEqual(siblingWrites, []);
+    } finally {
+        await cdp.detach();
         await page.close();
     }
 });
@@ -2064,16 +2169,16 @@ test("articulation capture and recall edit only the selected oscillator", async 
             (snapshot) => JSON.parse(String(snapshot.storedState[ARTICULATION_STATE_KEY])).slots.length === 1,
         );
 
-        for (const [label, value] of [
-            ["Oscillator octave", "1"],
-            ["Oscillator semitone", "-3"],
-            ["Oscillator fine tune", "12.5"],
-            ["Oscillator level", "-6"],
+        for (const [label, keys] of [
+            ["Oscillator octave", ["ArrowUp"]],
+            ["Oscillator semitone", ["ArrowDown", "ArrowDown", "ArrowDown"]],
+            ["Oscillator fine tune", ["ArrowUp"]],
+            ["Oscillator level", ["End"]],
         ]) {
-            const input = page.locator(`input[aria-label="${label}"]`);
-            await input.press("Enter");
-            await input.fill(value);
-            await input.press("Enter");
+            const knob = page.getByRole("slider", { name: label });
+            for (const key of keys) {
+                await knob.press(key);
+            }
         }
         await page.getByRole("button", { name: "Mute selected oscillator" }).click();
         await page.getByRole("button", { name: "Solo selected oscillator" }).click();
@@ -2096,8 +2201,8 @@ test("articulation capture and recall edit only the selected oscillator", async 
         }, {
             octave: 1,
             semitone: -3,
-            fineCents: 12.5,
-            volumeDb: -6,
+            fineCents: 0.1,
+            volumeDb: 6,
             mute: 1,
             solo: 1,
         });
@@ -2109,7 +2214,7 @@ test("articulation capture and recall edit only the selected oscillator", async 
         await page.locator('[data-role="articulation-card"]').nth(1).click();
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().sentMessages.some(({ endpointID, value }) => (
-                endpointID === "oscBVolumeDb" && Number(value) === -6
+                endpointID === "oscBVolumeDb" && Number(value) === 6
             ))
         ));
         const oscillatorWrites = (await getHarnessSnapshot(page)).sentMessages.filter(({ endpointID }) => (

@@ -52,6 +52,7 @@ import {
 } from "./desktop-keyboard-adapter";
 import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
+import { BaseParameterKnob } from "./rack-parameter-knob";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import {
     DesktopOscillatorConnectionBoundary,
@@ -348,11 +349,6 @@ function formatPercent(value: number) {
 function formatSignedPercent(value: number) {
     const percentValue = Math.round(value * 100);
     return `${percentValue > 0 ? "+" : ""}${percentValue}%`;
-}
-
-function parsePlainNumber(text: string) {
-    const value = Number(text.trim());
-    return Number.isFinite(value) ? value : null;
 }
 
 function formatDriveDb(value: number) {
@@ -1915,10 +1911,10 @@ function OscillatorPerformanceControls({
     solo: PatchControlBinding<number>;
 }) {
     const fields = [
-        { label: "Oscillator octave", role: "oscillator-octave", binding: octave, min: -4, max: 4, step: 1, suffix: "oct" },
-        { label: "Oscillator semitone", role: "oscillator-semitone", binding: semitone, min: -12, max: 12, step: 1, suffix: "st" },
-        { label: "Oscillator fine tune", role: "oscillator-fine", binding: fineCents, min: -100, max: 100, step: 0.1, suffix: "ct" },
-        { label: "Oscillator level", role: "oscillator-level", binding: volumeDb, min: -48, max: 6, step: 0.1, suffix: "dB" },
+        { label: "Oscillator octave", shortLabel: "OCT", role: "oscillator-octave", binding: octave, min: -4, max: 4, initial: 0, step: 1, detentStep: 1, suffix: "oct" },
+        { label: "Oscillator semitone", shortLabel: "SEMI", role: "oscillator-semitone", binding: semitone, min: -12, max: 12, initial: 0, step: 1, detentStep: 1, suffix: "st" },
+        { label: "Oscillator fine tune", shortLabel: "FINE", role: "oscillator-fine", binding: fineCents, min: -100, max: 100, initial: 0, step: 0.1, detentStep: null, suffix: "ct" },
+        { label: "Oscillator level", shortLabel: "LEVEL", role: "oscillator-level", binding: volumeDb, min: -48, max: 6, initial: -9.542425, step: 0.1, detentStep: null, suffix: "dB" },
     ] as const;
 
     return (
@@ -1927,19 +1923,24 @@ function OscillatorPerformanceControls({
             className="flex min-w-0 flex-wrap items-end gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5"
         >
             {fields.map((field) => (
-                <PrecisionNumberField
+                <BaseParameterKnob
                     key={field.role}
-                    ariaLabel={field.label}
+                    descriptor={{
+                        endpointID: field.binding.endpointID,
+                        label: field.label,
+                        shortLabel: field.shortLabel,
+                        min: field.min,
+                        max: field.max,
+                        initial: field.initial,
+                        step: field.step,
+                        scale: "linear",
+                    }}
                     binding={field.binding}
-                    min={field.min}
-                    max={field.max}
-                    step={field.step}
-                    formatDisplay={(value) => `${value > 0 ? "+" : ""}${Number.isInteger(value) ? value : value.toFixed(1)} ${field.suffix}`}
-                    formatEditingValue={(value) => String(value)}
-                    parseText={parsePlainNumber}
                     dataRole={field.role}
-                    width={68}
-                    height={28}
+                    trackDataRole={`${field.role}-track`}
+                    handleDataRole={`${field.role}-handle`}
+                    detentStep={field.detentStep}
+                    formatValue={(value) => `${value > 0 ? "+" : ""}${Number.isInteger(value) ? value : value.toFixed(1)} ${field.suffix}`}
                 />
             ))}
             <button

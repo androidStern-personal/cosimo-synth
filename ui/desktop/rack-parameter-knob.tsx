@@ -36,6 +36,21 @@ type Point = {
     readonly y: number;
 };
 
+export type ParameterKnobDescriptor = Pick<
+    RackParameterDescriptor,
+    "endpointID" | "label" | "shortLabel" | "min" | "max" | "initial" | "step" | "scale"
+>;
+
+export type BaseParameterKnobProps = {
+    readonly descriptor: ParameterKnobDescriptor;
+    readonly binding: PatchControlBinding<number>;
+    readonly dataRole: string;
+    readonly trackDataRole: string;
+    readonly handleDataRole: string;
+    readonly detentStep: number | null;
+    readonly formatValue: (value: number) => string;
+};
+
 export type RackParameterKnobProps = {
     readonly descriptor: RackParameterDescriptor;
     readonly binding: PatchControlBinding<number>;
@@ -75,6 +90,7 @@ type KnobGesture = {
     readonly startClientY: number;
     readonly startBaseNormalized: number;
     readonly startModulationNormalized: number;
+    lastBaseValue: number;
     mode: "pending" | "base" | "modulation";
     moved: boolean;
     baseGestureStarted: boolean;
@@ -84,7 +100,7 @@ type KnobGesture = {
 const LONG_PRESS_DELAY_MS = 500;
 const GESTURE_MOVE_THRESHOLD_PX = 6;
 
-function triggerRackControlHaptic() {
+function triggerParameterControlHaptic() {
     const trigger = (globalThis as typeof globalThis & {
         cmaj_triggerHaptic?: (style?: string) => unknown;
     }).cmaj_triggerHaptic;
@@ -95,7 +111,7 @@ function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
 }
 
-function normalizedValue(descriptor: RackParameterDescriptor, value: number) {
+function normalizedValue(descriptor: ParameterKnobDescriptor, value: number) {
     const clamped = clamp(value, descriptor.min, descriptor.max);
     if (descriptor.scale === "log") {
         return Math.log(clamped / descriptor.min) / Math.log(descriptor.max / descriptor.min);
@@ -103,11 +119,29 @@ function normalizedValue(descriptor: RackParameterDescriptor, value: number) {
     return (clamped - descriptor.min) / (descriptor.max - descriptor.min);
 }
 
-function valueFromNormalized(descriptor: RackParameterDescriptor, normalized: number) {
+function valueFromNormalized(descriptor: ParameterKnobDescriptor, normalized: number) {
     const clamped = clamp(normalized, 0, 1);
     return descriptor.scale === "log"
         ? descriptor.min * ((descriptor.max / descriptor.min) ** clamped)
         : descriptor.min + (clamped * (descriptor.max - descriptor.min));
+}
+
+function snapParameterValue(
+    descriptor: ParameterKnobDescriptor,
+    value: number,
+    detentStep: number | null,
+) {
+    const clamped = clamp(value, descriptor.min, descriptor.max);
+    if (detentStep === null) {
+        return clamped;
+    }
+
+    const stepIndex = Math.round((clamped - descriptor.min) / detentStep);
+    return Number(clamp(
+        descriptor.min + (stepIndex * detentStep),
+        descriptor.min,
+        descriptor.max,
+    ).toFixed(10));
 }
 
 function pointOnCircle(degrees: number, radius: number): Point {
@@ -158,9 +192,31 @@ function annularSectorPath(
     return `M ${formatPoint(outerStart)} A ${outerRadius} ${outerRadius} 0 ${largeArc} 1 ${formatPoint(outerEnd)} L ${formatPoint(innerEnd)} A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${formatPoint(innerStart)} Z`;
 }
 
-/** Stippled dual-ring rack control: inner sector is the base value, outer sector is the selected modulation route. */
-export function RackParameterKnob({
+type ParameterKnobSurfaceProps = {
+    readonly descriptor: ParameterKnobDescriptor;
+    readonly rackDescriptor: RackParameterDescriptor | null;
+    readonly binding: PatchControlBinding<number>;
+    readonly route: ModulationRoute | null;
+    readonly sourceIsSelected: boolean;
+    readonly sourceAccent: string;
+    readonly effectiveness: RackRouteEffectiveness;
+    readonly dataRole: string;
+    readonly trackDataRole: string;
+    readonly handleDataRole: string;
+    readonly className: string;
+    readonly detentStep: number | null;
+    readonly formatValue: (value: number) => string;
+    readonly enableModulationGesture: boolean;
+    readonly enableContextMenu: boolean;
+    readonly onSelect: () => void;
+    readonly onHudChange: (hud: RackParameterHud | null) => void;
+    readonly onModulationAmountChange: (amount: number) => void;
+    readonly onRequestContextMenu: (clientX: number, clientY: number) => void;
+};
+
+function ParameterKnobSurface({
     descriptor,
+    rackDescriptor,
     binding,
     route,
     sourceIsSelected,
@@ -169,11 +225,16 @@ export function RackParameterKnob({
     dataRole,
     trackDataRole,
     handleDataRole,
+    className,
+    detentStep,
+    formatValue,
+    enableModulationGesture,
+    enableContextMenu,
     onSelect,
     onHudChange,
     onModulationAmountChange,
     onRequestContextMenu,
-}: RackParameterKnobProps) {
+}: ParameterKnobSurfaceProps) {
     const artRef = useRef<SVGSVGElement | null>(null);
     const gestureRef = useRef<KnobGesture | null>(null);
     const suppressClickRef = useRef(false);
@@ -183,30 +244,40 @@ export function RackParameterKnob({
     const routePolarityRef = useRef(route?.polarity);
     const routeRef = useRef(route);
     const sourceIsSelectedRef = useRef(sourceIsSelected);
+    const detentStepRef = useRef(detentStep);
+    const enableModulationGestureRef = useRef(enableModulationGesture);
+    const enableContextMenuRef = useRef(enableContextMenu);
     const onHudChangeRef = useRef(onHudChange);
     const onModulationAmountChangeRef = useRef(onModulationAmountChange);
     const onRequestContextMenuRef = useRef(onRequestContextMenu);
+    const formatValueRef = useRef(formatValue);
     bindingRef.current = binding;
     descriptorRef.current = descriptor;
     routePolarityRef.current = route?.polarity;
     routeRef.current = route;
     sourceIsSelectedRef.current = sourceIsSelected;
+    detentStepRef.current = detentStep;
+    enableModulationGestureRef.current = enableModulationGesture;
+    enableContextMenuRef.current = enableContextMenu;
     onHudChangeRef.current = onHudChange;
     onModulationAmountChangeRef.current = onModulationAmountChange;
     onRequestContextMenuRef.current = onRequestContextMenu;
+    formatValueRef.current = formatValue;
     const patternStem = useId().replaceAll(":", "");
     const baseTrackPatternID = `rack-knob-base-${patternStem}`;
     const modTrackPatternID = `rack-knob-mod-${patternStem}`;
     const baseNormalized = normalizedValue(descriptor, binding.value);
     const targetKind = `rack.${descriptor.endpointID}` as RackModulationTargetKind;
     const modulationAmount = route?.amount ?? 0;
-    const modulationNormalized = getModulationAmountSliderPosition(targetKind, modulationAmount);
+    const modulationNormalized = enableModulationGesture
+        ? getModulationAmountSliderPosition(targetKind, modulationAmount)
+        : 0;
     const baseOrigin = descriptor.min < 0 && descriptor.max > 0
         ? normalizedValue(descriptor, 0)
         : 0;
-    const routeTravel = route === null
+    const routeTravel = route === null || rackDescriptor === null
         ? null
-        : projectRackRouteTravel(descriptor, binding.value, route);
+        : projectRackRouteTravel(rackDescriptor, binding.value, route);
     const routePresencePoint = pointOnCircle(angleForNormalized(baseNormalized), (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2);
     const handlePoint = pointOnCircle(angleForNormalized(baseNormalized), BASE_RADIUS * 0.72);
     const defaultPoint = pointOnCircle(
@@ -267,7 +338,9 @@ export function RackParameterKnob({
         );
         if (!gesture.moved && distance >= GESTURE_MOVE_THRESHOLD_PX) {
             gesture.moved = true;
-            gesture.mode = Math.abs(deltaX) > Math.abs(deltaY) ? "modulation" : "base";
+            gesture.mode = enableModulationGestureRef.current && Math.abs(deltaX) > Math.abs(deltaY)
+                ? "modulation"
+                : "base";
             gesture.element.dataset.dragging = gesture.mode;
             if (holdTimerRef.current !== null) {
                 clearTimeout(holdTimerRef.current);
@@ -277,7 +350,7 @@ export function RackParameterKnob({
                 bindingRef.current.beginGesture();
                 gesture.baseGestureStarted = true;
             } else if (!sourceIsSelectedRef.current || routeRef.current === null) {
-                triggerRackControlHaptic();
+                triggerParameterControlHaptic();
             }
         }
         if (!gesture.moved || gesture.holdActivated) {
@@ -328,12 +401,23 @@ export function RackParameterKnob({
             return;
         }
 
-        const nextValue = valueFromNormalized(currentDescriptor, nextNormalized);
-        bindingRef.current.setValue(nextValue);
+        const nextValue = snapParameterValue(
+            currentDescriptor,
+            valueFromNormalized(currentDescriptor, nextNormalized),
+            detentStepRef.current,
+        );
+        const valueChanged = Math.abs(nextValue - gesture.lastBaseValue) > 1e-9;
+        if (detentStepRef.current !== null && valueChanged) {
+            triggerParameterControlHaptic();
+        }
+        if (detentStepRef.current === null || valueChanged) {
+            bindingRef.current.setValue(nextValue);
+            gesture.lastBaseValue = nextValue;
+        }
         onHudChangeRef.current({
             endpointID: currentDescriptor.endpointID,
             label: `BASE · ${currentDescriptor.label}`,
-            value: formatRackParameterValue(currentDescriptor, nextValue),
+            value: formatValueRef.current(nextValue),
             mode: "base",
             anchor: hudAnchor,
             pointer: hudPointer,
@@ -401,10 +485,14 @@ export function RackParameterKnob({
             startClientY: event.clientY,
             startBaseNormalized: baseNormalized,
             startModulationNormalized: modulationNormalized,
+            lastBaseValue: bindingRef.current.value,
             moved: false,
             baseGestureStarted: false,
             holdActivated: false,
         };
+        if (!enableContextMenuRef.current) {
+            return;
+        }
         holdTimerRef.current = setTimeout(() => {
             const gesture = gestureRef.current;
             if (!gesture || gesture.pointerId !== event.pointerId || gesture.moved) {
@@ -414,7 +502,7 @@ export function RackParameterKnob({
             gesture.holdActivated = true;
             suppressClickRef.current = true;
             onHudChangeRef.current(null);
-            triggerRackControlHaptic();
+            triggerParameterControlHaptic();
             onRequestContextMenuRef.current(event.clientX, event.clientY);
         }, LONG_PRESS_DELAY_MS);
     }, [
@@ -439,9 +527,11 @@ export function RackParameterKnob({
             aria-valuemin={descriptor.min}
             aria-valuemax={descriptor.max}
             aria-valuenow={binding.value}
+            aria-valuetext={formatValue(binding.value)}
+            data-detented={detentStep === null ? "false" : "true"}
             data-route-state={!sourceIsSelected ? "no-source" : route === null ? "unmapped" : route.enabled ? "mapped" : "bypassed"}
             data-route-effectiveness={effectiveness}
-            className="rack-parameter-knob"
+            className={className}
             style={style}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -449,6 +539,9 @@ export function RackParameterKnob({
             onPointerCancel={(event) => finishGesture(event.pointerId)}
             onLostPointerCapture={(event) => finishGesture(event.pointerId)}
             onContextMenu={(event) => {
+                if (!enableContextMenu) {
+                    return;
+                }
                 event.preventDefault();
                 event.stopPropagation();
                 onSelect();
@@ -470,6 +563,26 @@ export function RackParameterKnob({
                     return;
                 }
                 event.preventDefault();
+                if (!enableModulationGesture) {
+                    const direction = ["ArrowUp", "ArrowRight"].includes(event.key) ? 1 : -1;
+                    const keyboardStep = event.shiftKey && detentStep === null
+                        ? descriptor.step / 10
+                        : descriptor.step;
+                    const rawValue = event.key === "Home"
+                        ? descriptor.min
+                        : event.key === "End"
+                            ? descriptor.max
+                            : binding.value + (direction * keyboardStep);
+                    const nextValue = snapParameterValue(descriptor, rawValue, detentStep);
+                    if (Math.abs(nextValue - binding.value) > 1e-9) {
+                        binding.commitValue(nextValue);
+                        if (detentStep !== null) {
+                            triggerParameterControlHaptic();
+                        }
+                    }
+                    onSelect();
+                    return;
+                }
                 const step = event.shiftKey ? 0.01 : 0.04;
                 const current = normalizedValue(descriptor, binding.value);
                 const nextNormalized = event.key === "Home"
@@ -539,7 +652,48 @@ export function RackParameterKnob({
                     r="2.5"
                 />
             </svg>
-            <output className="rack-knob-readout">{formatRackParameterValue(descriptor, binding.value)}</output>
+            <output className="rack-knob-readout">{formatValue(binding.value)}</output>
         </button>
+    );
+}
+
+function ignoreSelection() {}
+function ignoreHudChange(_hud: RackParameterHud | null) {}
+function ignoreModulationAmountChange(_amount: number) {}
+function ignoreContextMenu(_clientX: number, _clientY: number) {}
+
+/** Stippled dual-ring rack control: inner sector is the base value, outer sector is the selected modulation route. */
+export function RackParameterKnob(props: RackParameterKnobProps) {
+    return (
+        <ParameterKnobSurface
+            {...props}
+            rackDescriptor={props.descriptor}
+            className="rack-parameter-knob"
+            detentStep={null}
+            formatValue={(value) => formatRackParameterValue(props.descriptor, value)}
+            enableModulationGesture
+            enableContextMenu
+        />
+    );
+}
+
+/** Base-value knob using the mobile FX visual and touch interaction without exposing a fake modulation route. */
+export function BaseParameterKnob(props: BaseParameterKnobProps) {
+    return (
+        <ParameterKnobSurface
+            {...props}
+            rackDescriptor={null}
+            route={null}
+            sourceIsSelected={false}
+            sourceAccent="transparent"
+            effectiveness="active"
+            className="rack-parameter-knob oscillator-parameter-knob"
+            enableModulationGesture={false}
+            enableContextMenu={false}
+            onSelect={ignoreSelection}
+            onHudChange={ignoreHudChange}
+            onModulationAmountChange={ignoreModulationAmountChange}
+            onRequestContextMenu={ignoreContextMenu}
+        />
     );
 }

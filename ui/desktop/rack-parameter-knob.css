@@ -18,6 +18,14 @@
     -webkit-user-select: none;
 }
 
+.oscillator-parameter-knob {
+    width: auto;
+    height: 86px;
+    min-width: 64px;
+    max-width: 78px;
+    flex: 1 1 64px;
+}
+
 .rack-knob-label,
 .rack-knob-readout {
     max-width: 100%;
