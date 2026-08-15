@@ -1986,8 +1986,6 @@ private:
             lastEditorHeight = 0;
         }
 
-        bool restoredArticulationTriggerConfig = false;
-
         if (auto storedState = newState.getChildWithName (ids.state); storedState.isValid())
         {
             for (const auto& valueTree : storedState)
@@ -2004,21 +2002,13 @@ private:
                             const auto keyString = key->toString().toStdString();
                             const auto convertedValue = convertVarToValue (*value);
                             patch->setStoredStateValue (keyString, convertedValue);
-
-                            if (keyString == cosimo::future_daw::articulationTriggerConfigStateKey)
-                            {
-                                restoredArticulationTriggerConfig = true;
-                                setPendingArticulationTriggerConfig (
-                                    cosimo::future_daw::createTriggerConfigFromStoredValue (convertedValue));
-                            }
                         }
                     }
                 }
             }
         }
 
-        if (! restoredArticulationTriggerConfig)
-            setPendingArticulationTriggerConfig ({});
+        setPendingArticulationTriggerConfig ({});
 
         if (getSampleRate() > 0.0)
             applyCurrentRateAndBlockSize();

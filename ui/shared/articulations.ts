@@ -8,7 +8,6 @@ import {
 import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program";
 import { OSCILLATOR_IDS } from "./modulation-targets";
 
-export const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 export const ARTICULATION_MAX_SLOTS = 128;
 /** Largest legal absolute route amount in Cosimo's target domain. */

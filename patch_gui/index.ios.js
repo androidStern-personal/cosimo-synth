@@ -18013,10 +18013,8 @@ function usePatchEventTrigger(endpointID) {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
 }
-const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 const ARTICULATION_MAX_SLOTS = 128;
 const ARTICULATION_ROUTE_AMOUNT_MAX_ABS = 48;
-const ARTICULATION_UNASSIGNED_RUNTIME_SLOT = -1;
 const ARTICULATION_DEFAULT_NAMES$1 = [
   "Bow Forte",
   "Bow Pianissimo",
@@ -18050,9 +18048,6 @@ function normalizeInteger(value, fallback, min, max) {
 }
 function normalizeTriggerMode(value) {
   return value === "key" || value === "vel" || value === "chain" ? value : "chain";
-}
-function createUnassignedRuntimeMap() {
-  return Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
 }
 function createDefaultArticulationName(runtimeSlot) {
   const safeRuntimeSlot = normalizeInteger(runtimeSlot, 0, 0, ARTICULATION_MAX_SLOTS - 1);
@@ -18300,63 +18295,6 @@ function articulationEditorStatesEqual(left, right) {
 }
 function articulationSnapshotsEqual(left, right) {
   return JSON.stringify(normalizeArticulationSnapshot(left)) === JSON.stringify(normalizeArticulationSnapshot(right));
-}
-function fillRangeTriggerMap(target, assignments, runtimeSlotByArticulationId) {
-  for (const assignment of assignments) {
-    const runtimeSlot = runtimeSlotByArticulationId.get(assignment.articulationId);
-    if (runtimeSlot === void 0) {
-      continue;
-    }
-    for (let value = assignment.min; value <= assignment.max; value += 1) {
-      if (target[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
-        target[value] = runtimeSlot;
-      }
-    }
-  }
-}
-function buildArticulationTriggerConfig(bankValue) {
-  const bank = normalizeArticulationEditorState(bankValue);
-  const runtimeSlotByArticulationId = new Map(bank.slots.map((slot) => [slot.id, slot.runtimeSlot]));
-  const chain = createUnassignedRuntimeMap();
-  const key = createUnassignedRuntimeMap();
-  const velocity = createUnassignedRuntimeMap();
-  fillRangeTriggerMap(chain, bank.chainAssignments, runtimeSlotByArticulationId);
-  fillRangeTriggerMap(velocity, bank.velocityAssignments, runtimeSlotByArticulationId);
-  for (const assignment of bank.keyAssignments) {
-    const runtimeSlot = runtimeSlotByArticulationId.get(assignment.articulationId);
-    if (runtimeSlot === void 0 || key[assignment.note] !== ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
-      continue;
-    }
-    key[assignment.note] = runtimeSlot;
-  }
-  velocity[0] = ARTICULATION_UNASSIGNED_RUNTIME_SLOT;
-  return {
-    format: "cosimo.articulation.triggerConfig",
-    version: 1,
-    activeMode: bank.activeTriggerMode,
-    chain,
-    key,
-    velocity
-  };
-}
-function serializeArticulationTriggerConfig(value) {
-  const config = value && typeof value === "object" && value.format === "cosimo.articulation.triggerConfig" ? value : buildArticulationTriggerConfig(value);
-  return JSON.stringify({
-    format: "cosimo.articulation.triggerConfig",
-    version: 1,
-    activeMode: normalizeTriggerMode(config.activeMode),
-    chain: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => normalizeInteger(config.chain?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1)),
-    key: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => normalizeInteger(config.key?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1)),
-    velocity: Array.from({ length: ARTICULATION_MAX_SLOTS }, (_, index) => index === 0 ? ARTICULATION_UNASSIGNED_RUNTIME_SLOT : normalizeInteger(config.velocity?.[index], ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_UNASSIGNED_RUNTIME_SLOT, ARTICULATION_MAX_SLOTS - 1))
-  });
-}
-function sendNativeArticulationTriggerConfig(configValue, patchConnection) {
-  const serializedConfig = serializeArticulationTriggerConfig(configValue);
-  patchConnection?.sendNativeArticulationTriggerConfig?.(serializedConfig);
-  const globalObject = globalThis;
-  if (typeof globalObject.cosimo_set_articulation_trigger_config === "function") {
-    globalObject.cosimo_set_articulation_trigger_config(serializedConfig);
-  }
 }
 const ARTICULATIONS_V4_STATE_KEY = "articulations.v4";
 const OSCILLATOR_ARTICULATION_PARAMETER_IDS = [
@@ -18699,35 +18637,6 @@ function createEmptyArticulationsState() {
     selectedSlotId: null,
     activeTriggerMode: "chain",
     slots: []
-  };
-}
-function buildArticulationTriggerConfigV4(state) {
-  const chain = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
-  const key = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
-  const velocity = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
-  for (const slot of state.slots) {
-    if (key[slot.key] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
-      key[slot.key] = slot.runtimeSlot;
-    }
-    for (let value = slot.chainRange.min; value <= slot.chainRange.max; value += 1) {
-      if (chain[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
-        chain[value] = slot.runtimeSlot;
-      }
-    }
-    for (let value = slot.velRange.min; value <= slot.velRange.max; value += 1) {
-      if (velocity[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
-        velocity[value] = slot.runtimeSlot;
-      }
-    }
-  }
-  velocity[0] = ARTICULATION_UNASSIGNED_RUNTIME_SLOT;
-  return {
-    format: "cosimo.articulation.triggerConfig",
-    version: 1,
-    activeMode: state.activeTriggerMode,
-    chain,
-    key,
-    velocity
   };
 }
 function lowestFreeRuntimeSlot(state) {
@@ -20435,7 +20344,6 @@ function useStoredArticulationEditorState(modulationBridge, modulationState, get
     bankRef.current = nextBank;
     setState((previousState) => articulationStatesEqual(previousState, nextState) ? previousState : nextState);
     setBank((previousBank) => articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank);
-    sendNativeArticulationTriggerConfig(buildArticulationTriggerConfigV4(nextState), patchConnection);
   }, [modulationBridge, oscillatorID, patchConnection]);
   const applyIncomingState = reactExports.useCallback((rawValue, isHydration, acceptedRouteIds = acceptedRouteIdsRef.current) => {
     if (rawValue === void 0) {
@@ -20516,10 +20424,6 @@ function useStoredArticulationEditorState(modulationBridge, modulationState, get
     if (typeof patchConnection.sendStoredStateValue === "function") {
       rememberPendingEcho(serializedState);
       patchConnection.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, serializedState);
-      patchConnection.sendStoredStateValue(
-        ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
-        serializeArticulationTriggerConfig(buildArticulationTriggerConfigV4(nextState))
-      );
     }
   }, [applyCurrentState, patchConnection, rememberPendingEcho]);
   return reactExports.useMemo(() => ({

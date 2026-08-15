@@ -61,6 +61,7 @@ class TestConnection {
         this.endpointListeners = new Map();
         this.sentEvents = [];
         this.storedWrites = [];
+        this.nativeTriggerConfigs = [];
         this.requestedKeys = [];
         this.dspSessionId = 0;
         this.acceptedModulationSerial = 0;
@@ -87,6 +88,10 @@ class TestConnection {
 
     sendStoredStateValue(key, value) {
         this.storedWrites.push({ key, value });
+    }
+
+    sendNativeArticulationTriggerConfig(serializedConfig) {
+        this.nativeTriggerConfigs.push(JSON.parse(serializedConfig));
     }
 
     addEndpointListener(endpointID, listener) {
@@ -240,10 +245,14 @@ test("articulation cannot publish while the matching modulation install is unacc
             "the held modulation upload",
         );
         assert.equal(connection.articulationUploads().length, 0);
+        assert.equal(connection.nativeTriggerConfigs.length, 0);
 
         connection.holdModulationAcknowledgements = false;
         connection.acceptPendingModulation();
         await waitFor(() => connection.articulationUploads().length === 1, "the dependent articulation upload");
+        await waitFor(() => connection.nativeTriggerConfigs.length === 1, "the accepted native trigger config");
+        assert.equal(connection.nativeTriggerConfigs[0].activeMode, "key");
+        assert.equal(connection.nativeTriggerConfigs[0].key[36], 5);
     } finally {
         service.stop();
     }

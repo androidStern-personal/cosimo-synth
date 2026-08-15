@@ -16,7 +16,6 @@ const [runtime, worker, modulation, program, installChannel] = await Promise.all
 const {
     ARTICULATION_MAX_SLOTS,
     ARTICULATION_SNAPSHOT_ENDPOINT_ID,
-    ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
     addCapturedArticulationToBank,
     assignArticulationToKey,
     assignArticulationToRangePosition,

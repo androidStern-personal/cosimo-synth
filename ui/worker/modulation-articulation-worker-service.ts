@@ -1,6 +1,7 @@
 import type { PatchConnectionLike } from "../shared/cmajor-react";
 import {
     ARTICULATIONS_V4_STATE_KEY,
+    buildArticulationTriggerConfigV4,
     compileArticulationOverrideImages,
     createEmptyArticulationsState,
     parseArticulationsV4,
@@ -10,6 +11,7 @@ import {
     ARTICULATION_MAX_SLOTS,
     ARTICULATION_SNAPSHOT_ENDPOINT_ID,
     createDisabledArticulationRuntimeUpload,
+    sendNativeArticulationTriggerConfig,
     type ArticulationSnapshotRuntimeUpload,
 } from "../shared/articulations";
 import {
@@ -354,6 +356,10 @@ export class ModulationArticulationWorkerService {
         if (this.acceptOutcome("articulation", articulationOutcome, nextTokens)) {
             this.lastAppliedArticulationGeneration = capturedGeneration;
             this.lastAppliedArticulationTokens = nextTokens;
+            sendNativeArticulationTriggerConfig(
+                buildArticulationTriggerConfigV4(capturedArticulations),
+                this.connection,
+            );
             this.clearRecoveryTimer();
             this.lastRejectedToken.clear();
         }

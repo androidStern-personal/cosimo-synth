@@ -2,7 +2,6 @@
 import { MODULATION_ENV_SLOT_COUNT, MODULATION_MSEG_SLOT_COUNT, createDefaultEnvelope, normalizeEnvelope, } from "./modulation.js";
 import { MODULATION_ARTICULATION_ROUTE_CELL_COUNT } from "./modulation-runtime-program.js";
 import { OSCILLATOR_IDS } from "./modulation-targets.js";
-export const ARTICULATION_TRIGGER_CONFIG_STATE_KEY = "articulationTriggerConfig.v1";
 export const ARTICULATION_SNAPSHOT_ENDPOINT_ID = "articulationSnapshot";
 export const ARTICULATION_MAX_SLOTS = 128;
 /** Largest legal absolute route amount in Cosimo's target domain. */

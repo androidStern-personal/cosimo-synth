@@ -8,8 +8,6 @@
 
 namespace cosimo::future_daw
 {
-constexpr auto articulationTriggerConfigStateKey = "articulationTriggerConfig.v1";
-
 inline ArticulationTriggerMode triggerModeFromString (std::string_view mode)
 {
     if (mode == "key")
@@ -66,14 +64,4 @@ inline ArticulationTriggerConfig createTriggerConfigFromJSONString (const std::s
     }
 }
 
-inline ArticulationTriggerConfig createTriggerConfigFromStoredValue (const choc::value::ValueView& value)
-{
-    if (value.isString())
-        return createTriggerConfigFromJSONString (value.toString());
-
-    if (value.isObject())
-        return createTriggerConfigFromJSON (value);
-
-    return {};
-}
 } // namespace cosimo::future_daw

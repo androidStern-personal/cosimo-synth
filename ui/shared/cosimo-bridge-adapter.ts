@@ -26,11 +26,7 @@ import {
 } from "./articulation-image";
 import {
     ARTICULATION_MAX_SLOTS,
-    ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
-    ARTICULATION_UNASSIGNED_RUNTIME_SLOT,
     createDefaultArticulationName,
-    serializeArticulationTriggerConfig,
-    type ArticulationTriggerConfig,
 } from "./articulations";
 import type { PatchConnectionLike } from "./cmajor-react";
 import {
@@ -576,7 +572,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     return;
                 }
                 this.articulations = parsed.value;
-                this.sendNativeTriggerConfig();
                 this.markSnapshotDirty();
             }
         });
@@ -843,7 +838,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             if (rawModulationState === undefined) {
                 this.modulationBridge.replaceRoutes([]);
             }
-            this.sendNativeTriggerConfig();
             commitRackState(this.connection, this.rackState);
             this.markSnapshotDirty();
         });
@@ -1564,7 +1558,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             selectedSlotId: slot.id,
             slots: [...this.articulations.slots, slot],
         };
-        this.persistArticulationsAndTriggerConfig();
+        this.persistArticulations();
         this.markSnapshotDirty();
         return ok(articulationIdFromSlot(slot));
     }
@@ -1595,7 +1589,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             selectedSlotId: slot.id,
             slots: [...this.articulations.slots, slot],
         };
-        this.persistArticulationsAndTriggerConfig();
+        this.persistArticulations();
         this.markSnapshotDirty();
         return ok(articulationIdFromSlot(slot));
     }
@@ -1610,7 +1604,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         if (this.audition.articulation === articulationId) {
             this.audition = { ...this.audition, articulation: "Default" };
         }
-        this.persistArticulationsAndTriggerConfig();
+        this.persistArticulations();
         this.markSnapshotDirty();
     }
 
@@ -1629,7 +1623,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         const neighbor = others.find((other) => Math.abs(other.key - key) === 1);
         this.replaceArticulationSlot({ ...current, key });
-        this.persistArticulationsAndTriggerConfig();
+        this.persistArticulations();
         this.markSnapshotDirty();
         return {
             key,
@@ -1672,7 +1666,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.replaceArticulationSlot(mode === "vel"
             ? { ...current, velRange: nextRange }
             : { ...current, chainRange: nextRange });
-        this.persistArticulationsAndTriggerConfig();
+        this.persistArticulations();
         this.markSnapshotDirty();
         return {
             value,
@@ -1683,7 +1677,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     private setArticulationTriggerMode(mode: ArticulationTriggerMode): void {
         this.articulations = { ...this.articulations, activeTriggerMode: mode };
-        this.persistArticulationsAndTriggerConfig();
+        this.persistArticulations();
         this.markSnapshotDirty();
     }
 
@@ -1943,7 +1937,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.persistUiMappings();
         this.persistRackState();
         commitRackState(this.connection, this.rackState);
-        this.persistArticulationsAndTriggerConfig();
+        this.persistArticulations();
         this.uploadAllBoundBaseValues();
         this.markSnapshotDirty();
     }
@@ -2045,53 +2039,11 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
     }
 
-    private buildTriggerConfig(): ArticulationTriggerConfig {
-        const chain = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
-        const key = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
-        const velocity = Array.from({ length: ARTICULATION_MAX_SLOTS }, () => ARTICULATION_UNASSIGNED_RUNTIME_SLOT);
-        for (const slot of this.articulations.slots) {
-            if (key[slot.key] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
-                key[slot.key] = slot.runtimeSlot;
-            }
-            for (let value = slot.chainRange.min; value <= slot.chainRange.max; value += 1) {
-                if (chain[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
-                    chain[value] = slot.runtimeSlot;
-                }
-            }
-            for (let value = slot.velRange.min; value <= slot.velRange.max; value += 1) {
-                if (velocity[value] === ARTICULATION_UNASSIGNED_RUNTIME_SLOT) {
-                    velocity[value] = slot.runtimeSlot;
-                }
-            }
-        }
-        velocity[0] = ARTICULATION_UNASSIGNED_RUNTIME_SLOT;
-        return {
-            format: "cosimo.articulation.triggerConfig",
-            version: 1,
-            activeMode: this.articulations.activeTriggerMode,
-            chain,
-            key,
-            velocity,
-        };
-    }
-
-    private sendNativeTriggerConfig(): void {
-        const serialized = serializeArticulationTriggerConfig(this.buildTriggerConfig());
-        this.connection.sendNativeArticulationTriggerConfig?.(serialized);
-    }
-
     private persistArticulations(): void {
         this.sendStoredStateValue(
             ARTICULATIONS_V4_STATE_KEY,
             JSON.stringify(serializeArticulationsV4(this.articulations)),
         );
-    }
-
-    private persistArticulationsAndTriggerConfig(): void {
-        this.persistArticulations();
-        const serialized = serializeArticulationTriggerConfig(this.buildTriggerConfig());
-        this.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serialized);
-        this.connection.sendNativeArticulationTriggerConfig?.(serialized);
     }
 
     private persistUiMappings(): void {

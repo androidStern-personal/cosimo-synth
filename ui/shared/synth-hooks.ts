@@ -56,7 +56,6 @@ import type {
 } from "./effects/effect-preset-v2";
 import {
     ARTICULATIONS_V4_STATE_KEY,
-    buildArticulationTriggerConfigV4,
     createEmptyArticulationsState,
     parseArticulationsV4,
     serializeArticulationsV4,
@@ -66,15 +65,12 @@ import {
     type OscillatorArticulationParameterId,
 } from "./articulation-image";
 import {
-    ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
     articulationEditorStatesEqual,
     articulationSnapshotsEqual,
     createDefaultArticulationEditorState,
     createDefaultArticulationSnapshot,
     normalizeArticulationEditorState,
     normalizeArticulationSnapshot,
-    sendNativeArticulationTriggerConfig,
-    serializeArticulationTriggerConfig,
     type ArticulationEditorState,
     type ArticulationInsertPreserveSide,
     type ArticulationRangeAssignment,
@@ -1272,7 +1268,6 @@ function useStoredArticulationEditorState(
         setBank((previousBank) => (
             articulationEditorStatesEqual(previousBank, nextBank) ? previousBank : nextBank
         ));
-        sendNativeArticulationTriggerConfig(buildArticulationTriggerConfigV4(nextState), patchConnection);
     }, [modulationBridge, oscillatorID, patchConnection]);
 
     const applyIncomingState = useCallback((
@@ -1372,10 +1367,6 @@ function useStoredArticulationEditorState(
         if (typeof patchConnection.sendStoredStateValue === "function") {
             rememberPendingEcho(serializedState);
             patchConnection.sendStoredStateValue(ARTICULATIONS_V4_STATE_KEY, serializedState);
-            patchConnection.sendStoredStateValue(
-                ARTICULATION_TRIGGER_CONFIG_STATE_KEY,
-                serializeArticulationTriggerConfig(buildArticulationTriggerConfigV4(nextState)),
-            );
         }
     }, [applyCurrentState, patchConnection, rememberPendingEcho]);
 
