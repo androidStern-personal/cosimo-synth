@@ -37,7 +37,7 @@ Each kind of schema has one owner:
 | Cmajor/TypeScript/native parameter contracts | Generated projections of that catalog | Cmajor input declarations, `OSCILLATOR_BINDING_CONTRACTS`, snapshot/validator metadata, and platform address tables; never separately authored |
 | Host automation slots | The compiled order generated from the catalog | Exact order-sensitive golden ledger, including the hidden slot-0 guard |
 | Factory wavetable slots | Ordered factory catalog `tableId` values | Immutable occupied 0–237 index-to-table-ID/content-digest ledger used by `wavetableSelect` |
-| Modulation document | The current modulation domain parser/catalog | MSEG shapes/playback, envelopes, routes, macro names, target identities, exact document shape |
+| Modulation document | The current modulation domain parser/catalog | MSEG shapes/discrete playback policy, envelope names, routes, macro names, target identities, exact document shape |
 | Articulation document | The `articulations.v4` domain parser/catalog plus referenced live parameter/MOD contracts | Slots, trigger ranges, sparse override identities/shape; scalar/envelope range and step from the referenced owner; route-amount bounds from the referenced MOD target |
 | Rack structure | The `rack.v1` domain parser | Order and enabled state |
 
@@ -157,7 +157,7 @@ automation cannot express it.
 | --- | --- | --- |
 | Ordinary synth/effect controls | Current Cmajor parameter values | Host/AUv3 parameter state; the same keyed parameter snapshot in browser and synth presets |
 | A/B/C wavetable choice | Indexed scheduler's last accepted value/ID; each `osc*WavetableSelect` parameter is its bounded request and durable projection | Numeric 0–237 parameter snapshot; immutable factory slots/content digests preserve its table-ID/sound meaning; table audio/cache contents are not saved |
-| Modulation structure | Last strictly accepted modulation document | Hard-cut `modulation.v5` |
+| Modulation structure | Last strictly accepted modulation document | Hard-cut `modulation.v6` |
 | Articulations | Last strictly accepted `articulations.v4` document | `articulations.v4` |
 | Rack structure | Last strictly accepted `rack.v1` document | `rack.v1` |
 | Active tables/program/images/voices | Cmajor and worker derived runtime state | Not independently saved |
@@ -237,7 +237,7 @@ independent desired state. MOD/ART compilers consume their owning structured doc
 and the live schema contract, not a duplicate parameter-value bag.
 
 For the shipping synth, the structured sound-key ledger after the cut is exact:
-`modulation.v5`, `articulations.v4`, and `rack.v1`. `effects.presets.v2` is the one
+`modulation.v6`, `articulations.v4`, and `rack.v1`. `effects.presets.v2` is the one
 separate auxiliary library key. Source and generated-output gates fail if another
 sound-affecting stored key appears. The retired synth keys `uiPatchValues.v2`,
 `uiMappings.v1`, `articulationTriggerConfig.v1`, `mseg1.shape`, `mseg1.playback`, and
@@ -248,20 +248,22 @@ plugin contracts. This synth hard cut neither imports those keys into the synth 
 nor deletes a separately shipping effect feature. The boundary is verified from actual
 product entry graphs rather than a repository-wide string ban.
 
-### The remaining MSEG overlap is removed too
+### Continuous MSEG and envelope values have one owner
 
-`modulation.v4` currently stores `msegSlots[].morph` while the product also exposes
-`mseg1Morph`, `mseg2Morph`, and `mseg3Morph` as host parameters. The document field and
-parameter can disagree after host restore or automation. The hard cut advances the
-document to `modulation.v5` and removes the three morph values from it.
+`modulation.v5` stored MSEG duration and envelope ADSR values inside its structured
+document. That prevented those controls from using the same host-automation and live
+modulation path as ordinary synth parameters without creating two competing copies.
+The hard cut advances the document to `modulation.v6` and removes those continuous
+values from it.
 
-- MSEG morph is an ordinary host-automatable parameter and is saved with parameters.
-- MSEG A/B shapes and playback configuration remain structured modulation state.
-- Envelopes, routes, and macro display names remain structured modulation state.
+- MSEG Morph and Time are ordinary host-automatable parameters and modulation destinations.
+- Envelope Attack, Decay, Sustain, and Release are ordinary host-automatable parameters and modulation destinations.
+- MSEG A/B shapes and discrete playback policy remain structured modulation state.
+- Envelope names, routes, and macro display names remain structured modulation state.
 - Macro values remain host parameters; macro names remain document fields.
-- The 13-source, 32-voice-target, 36-rack-target, 884-pair routing domain is unchanged.
+- The routing domain is 13 sources, 50 voice targets, 36 rack targets, and 1118 legal pairs.
 
-`modulation.v4` is rejected after the cut; no dual read or field reconciliation is
+`modulation.v5` is rejected after the cut; no dual read or field reconciliation is
 added. This closes the last known ordinary-parameter/document overlap rather than merely
 removing `uiPatchValues`.
 
@@ -271,8 +273,8 @@ The rest of the patch follows the same ownership rule:
 
 | Values | Durable owner |
 | --- | --- |
-| Voice/play mode, glide, macro values, MSEG morphs, shared filter controls, and every effect knob | Parameter snapshot |
-| MSEG A/B shapes and playback settings, envelopes, modulation routes, source settings, and macro display names | `modulation.v5` |
+| Voice/play mode, glide, macro values, MSEG Morph/Time, envelope ADSR, shared filter controls, and every effect knob | Parameter snapshot |
+| MSEG A/B shapes and discrete playback policy, envelope names, modulation routes, source settings, and macro display names | `modulation.v6` |
 | Sparse selector definitions, trigger ranges, parameter overrides, and route-amount overrides | `articulations.v4` |
 | Effect order and effect enabled state | `rack.v1` |
 | Active table data, compiled MOD program, compiled ART images, effective values, and sounding voices | Derived runtime only; never saved independently |
@@ -357,7 +359,7 @@ The implementation differs only where the platform supplies the outer carrier:
   suspended AudioContext starts. Browser preset application preflights the same contract.
   Each valid apply emits one synchronous JavaScript command burst:
   `ProductRestoreBegin`, the complete zero-ramp parameter map (including the three table
-  selectors), and exactly `modulation.v5`, `articulations.v4`, and `rack.v1`. There is no
+  selectors), and exactly `modulation.v6`, `articulations.v4`, and `rack.v1`. There is no
   second table-intent field or send. The generated delivery class routes ordinary values
   directly and each selector value to its scheduler; selector activation later commits
   its Cmajor/host/durability projection. MessagePort order prevents later UI work from
@@ -551,7 +553,7 @@ synchronous VST3/AUv3 state capture.
 
 Inputs:
 
-- strictly parsed `modulation.v5` (MSEG shapes/playback, envelopes, routes, macro names);
+- strictly parsed `modulation.v6` (MSEG shapes/discrete playback policy, envelope names, routes, macro names);
 - the current DSP session.
 
 State:
@@ -626,7 +628,7 @@ The audio callback parses no JSON, traverses no sparse object graph, allocates n
 and performs no persistence. A note start reads bounded preallocated data and latches its
 values; a sounding note is not mutated by later base or articulation edits. The bounded
 note-start work adds only fixed scalar presence choices alongside the existing fixed
-416-cell route latch. No dynamic collection or unbounded scan is introduced.
+650-cell route latch. No dynamic collection or unbounded scan is introduced.
 `ProductRestoreBegin` closes the internal note/output gate in event order. Only the
 terminal readiness request may clear all transient sound state and reopen it; ordinary
 parameter or preset code cannot bypass that lifecycle.

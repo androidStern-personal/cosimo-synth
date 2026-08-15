@@ -1,0 +1,302 @@
+// Real SharedVoiceEngine proof that a modulation route can target an MSEG
+// control. Shape A is silent, Shape B is full scale; Macro 1 drives Morph,
+// then MSEG 1 drives filter Q. The observed Q therefore proves the generator
+// target was consumed by DSP rather than merely accepted by the compiler.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "NoopThreeOscillatorRenderer.cmajor")
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph GeneratorTargetModulation [[ main ]]
+{
+    output event int32 out;
+
+    node source = GeneratorTargetSource;
+    node engine = wt::SharedVoiceEngine (1);
+    node witness = GeneratorTargetWitness;
+
+    connection
+    {
+        source.bufferOut -> engine.modulationMsegBufferIn;
+        source.programOut -> engine.modulationProgramIn;
+        source.voiceOut -> engine.voiceEventIn[0];
+        source.macro1Out -> engine.macro1In;
+        source.filterModeOut -> engine.filterModeIn;
+        source.filterQOut -> engine.filterQIn;
+        source.mseg1MorphOut -> engine.mseg1MorphIn;
+        engine.effectiveFilterStateOut -> witness.filterIn;
+        witness.out -> out;
+    }
+}
+
+processor GeneratorTargetSource
+{
+    output event wt::ModulationMsegBufferUpload bufferOut;
+    output event wt::ModulationProgramUpload programOut;
+    output event std::notes::NoteOn voiceOut;
+    output value float32 macro1Out;
+    output value float32 filterModeOut;
+    output value float32 filterQOut;
+    output value float32 mseg1MorphOut;
+
+    wt::ModulationMsegBufferUpload buffer (int32 shapeIndex, float32 value, int32 serial)
+    {
+        wt::ModulationMsegBufferUpload upload;
+        upload.slot = 1;
+        upload.shapeIndex = shapeIndex;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = serial;
+        for (int32 index = 0; index < wt::msegPaddedSamples; ++index)
+            upload.buffer.at (index) = value;
+        return upload;
+    }
+
+    wt::ModulationProgramUpload program()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 3;
+
+        upload.voiceRouteCount = 1;
+        upload.voiceRouteCells[0] = wt::modulationTargetFilterQ;
+        upload.voiceRouteSources[0] = 0;
+        upload.voiceRouteTargets[0] = wt::modulationTargetFilterQ;
+        upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[wt::modulationTargetFilterQ] = 1.0f;
+
+        upload.macroVoiceRouteCount = 1;
+        upload.macroVoiceRouteCells[0] = wt::modulationTargetMseg1Morph;
+        upload.macroVoiceRouteSources[0] = 0;
+        upload.macroVoiceRouteTargets[0] = wt::modulationTargetMseg1Morph;
+        upload.macroVoiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.macroVoiceRouteAmounts[wt::modulationTargetMseg1Morph] = 1.0f;
+        return upload;
+    }
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    void main()
+    {
+        macro1Out <- 1.0f;
+        filterModeOut <- 1.0f;
+        filterQOut <- 0.707107f;
+        mseg1MorphOut <- 0.0f;
+
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 1) bufferOut <- buffer (0, 0.0f, 1);
+            if (frame == 2) bufferOut <- buffer (1, 1.0f, 2);
+            if (frame == 3) programOut <- program();
+            if (frame == 4) voiceOut <- noteOn();
+            advance();
+        }
+    }
+}
+
+processor GeneratorTargetWitness
+{
+    input event wt::EffectiveFilterStateMonitor filterIn;
+    output event int32 out;
+    bool sawModulatedQ;
+
+    event filterIn (wt::EffectiveFilterStateMonitor state)
+    {
+        if (state.hasActive != 0 && state.q > 1.65f && state.q < 1.75f)
+            sawModulatedQ = true;
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 45) out <- sawModulatedQ ? 1 : 0;
+            if (frame == 46) out <- -1;
+            advance();
+        }
+    }
+}
+
+// The same real engine also proves the two newly parameter-owned timing
+// families. Macro 1 shortens MSEG 2 and ENV 1 from one second to one tenth of
+// a second; each source then drives filter Q. Without consuming the new rate
+// and attack targets, neither witness can cross the threshold in time.
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph GeneratorTimingTargetModulation [[ main ]]
+{
+    output event int32 out;
+
+    node source = GeneratorTimingTargetSource;
+    node rateEngine = wt::SharedVoiceEngine (1);
+    node attackEngine = wt::SharedVoiceEngine (1);
+    node witness = GeneratorTimingTargetWitness;
+
+    connection
+    {
+        source.bufferOut -> rateEngine.modulationMsegBufferIn,
+                            attackEngine.modulationMsegBufferIn;
+        source.rateProgramOut -> rateEngine.modulationProgramIn;
+        source.attackProgramOut -> attackEngine.modulationProgramIn;
+        source.voiceOut -> rateEngine.voiceEventIn[0],
+                           attackEngine.voiceEventIn[0];
+        source.macro1Out -> rateEngine.macro1In,
+                            attackEngine.macro1In;
+        source.filterModeOut -> rateEngine.filterModeIn,
+                                attackEngine.filterModeIn;
+        source.filterQOut -> rateEngine.filterQIn,
+                             attackEngine.filterQIn;
+        source.mseg2RateOut -> rateEngine.msegRateIn[1];
+        source.env1AttackOut -> attackEngine.envelopeAttackIn[0];
+        source.env1DecayOut -> attackEngine.envelopeDecayIn[0];
+        source.env1SustainOut -> attackEngine.envelopeSustainIn[0];
+        source.env1ReleaseOut -> attackEngine.envelopeReleaseIn[0];
+        rateEngine.effectiveFilterStateOut -> witness.rateFilterIn;
+        attackEngine.effectiveFilterStateOut -> witness.attackFilterIn;
+        witness.out -> out;
+    }
+}
+
+processor GeneratorTimingTargetSource
+{
+    output event wt::ModulationMsegBufferUpload bufferOut;
+    output event wt::ModulationProgramUpload rateProgramOut;
+    output event wt::ModulationProgramUpload attackProgramOut;
+    output event std::notes::NoteOn voiceOut;
+    output value float32 macro1Out;
+    output value float32 filterModeOut;
+    output value float32 filterQOut;
+    output value float32 mseg2RateOut;
+    output value float32 env1AttackOut;
+    output value float32 env1DecayOut;
+    output value float32 env1SustainOut;
+    output value float32 env1ReleaseOut;
+
+    wt::ModulationMsegBufferUpload buffer (int32 shapeIndex, int32 serial)
+    {
+        wt::ModulationMsegBufferUpload upload;
+        upload.slot = 2;
+        upload.shapeIndex = shapeIndex;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = serial;
+        for (int32 index = 0; index < wt::msegPaddedSamples; ++index)
+            upload.buffer.at (index) = float32 (index) / float32 (wt::msegPaddedSamples - 1);
+        return upload;
+    }
+
+    wt::ModulationProgramUpload rateProgram()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 3;
+        let sourceIndex = 1;
+        let routeCell = sourceIndex * wt::modulationVoiceTargetCount + wt::modulationTargetFilterQ;
+        upload.voiceRouteCount = 1;
+        upload.voiceRouteCells[0] = routeCell;
+        upload.voiceRouteSources[0] = sourceIndex;
+        upload.voiceRouteTargets[0] = wt::modulationTargetFilterQ;
+        upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[routeCell] = 1.0f;
+        upload.macroVoiceRouteCount = 1;
+        upload.macroVoiceRouteCells[0] = wt::modulationTargetMseg2Rate;
+        upload.macroVoiceRouteSources[0] = 0;
+        upload.macroVoiceRouteTargets[0] = wt::modulationTargetMseg2Rate;
+        upload.macroVoiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.macroVoiceRouteAmounts[wt::modulationTargetMseg2Rate] = -0.9f;
+        return upload;
+    }
+
+    wt::ModulationProgramUpload attackProgram()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 3;
+        let sourceIndex = 3;
+        let routeCell = sourceIndex * wt::modulationVoiceTargetCount + wt::modulationTargetFilterQ;
+        upload.voiceRouteCount = 1;
+        upload.voiceRouteCells[0] = routeCell;
+        upload.voiceRouteSources[0] = sourceIndex;
+        upload.voiceRouteTargets[0] = wt::modulationTargetFilterQ;
+        upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[routeCell] = 1.0f;
+        upload.macroVoiceRouteCount = 1;
+        upload.macroVoiceRouteCells[0] = wt::modulationTargetEnv1Attack;
+        upload.macroVoiceRouteSources[0] = 0;
+        upload.macroVoiceRouteTargets[0] = wt::modulationTargetEnv1Attack;
+        upload.macroVoiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.macroVoiceRouteAmounts[wt::modulationTargetEnv1Attack] = -0.9f;
+        return upload;
+    }
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    void main()
+    {
+        macro1Out <- 1.0f;
+        filterModeOut <- 1.0f;
+        filterQOut <- 0.707107f;
+        mseg2RateOut <- 1.0f;
+        env1AttackOut <- 1.0f;
+        env1DecayOut <- 1.0f;
+        env1SustainOut <- 1.0f;
+        env1ReleaseOut <- 1.0f;
+
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 1) bufferOut <- buffer (0, 1);
+            if (frame == 2) bufferOut <- buffer (1, 2);
+            if (frame == 3)
+            {
+                rateProgramOut <- rateProgram();
+                attackProgramOut <- attackProgram();
+            }
+            if (frame == 4) voiceOut <- noteOn();
+            advance();
+        }
+    }
+}
+
+processor GeneratorTimingTargetWitness
+{
+    input event wt::EffectiveFilterStateMonitor rateFilterIn;
+    input event wt::EffectiveFilterStateMonitor attackFilterIn;
+    output event int32 out;
+    bool sawRate;
+    bool sawAttack;
+
+    event rateFilterIn (wt::EffectiveFilterStateMonitor state)
+    {
+        if (state.hasActive != 0 && state.q > 1.25f)
+            sawRate = true;
+    }
+
+    event attackFilterIn (wt::EffectiveFilterStateMonitor state)
+    {
+        if (state.hasActive != 0 && state.q > 1.25f)
+            sawAttack = true;
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame == 75) out <- sawRate && sawAttack ? 1 : 0;
+            if (frame == 76) out <- -1;
+            advance();
+        }
+    }
+}

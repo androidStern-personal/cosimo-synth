@@ -50,6 +50,7 @@ import {
     createDefaultModulationState,
     getModulationAmountBounds,
     modulationRoutePairKey,
+    normalizeEnvelope,
     parseModulationState,
     releaseModulationRuntimeBridge,
     type ModulationEnvelope,
@@ -116,6 +117,7 @@ type ParseOutcome<T> =
 type DeletedSourceBackup = {
     readonly definition: SourceDefinition;
     readonly modulationState: ModulationState;
+    readonly envelopeValue: ModulationEnvelope | null;
     readonly macroValue: NormalizedValue | null;
     readonly msegMorphValue: NormalizedValue | null;
     readonly routes: ReadonlyArray<ModulationRoute>;
@@ -266,6 +268,28 @@ function createInitialParameterValues(): Record<string, NormalizedValue> {
     return Object.fromEntries(
         allTargetDescriptors().map((descriptor) => [descriptor.targetId, descriptor.initialValue]),
     );
+}
+
+function buildParameterOwnedEnvelope(
+    parameterValues: Readonly<Record<string, NormalizedValue>>,
+    envelopeName: string,
+    slotIndex: number,
+): ModulationEnvelope {
+    const fallback = createDefaultEnvelope(slotIndex);
+    const prefix = `env${slotIndex + 1}`;
+    const readEngineValue = (field: "attack" | "decay" | "sustain" | "release", fallbackValue: number) => {
+        const descriptor = allTargetDescriptors().find((candidate) => candidate.targetId === `${prefix}.${field}`);
+        if (descriptor?.binding._tag !== "endpoint") return fallbackValue;
+        const value = parameterValues[descriptor.targetId] ?? descriptor.initialValue;
+        return descriptor.binding.toEngine(value);
+    };
+    return {
+        name: envelopeName,
+        attackSeconds: readEngineValue("attack", fallback.attackSeconds),
+        decaySeconds: readEngineValue("decay", fallback.decaySeconds),
+        sustain: readEngineValue("sustain", fallback.sustain),
+        releaseSeconds: readEngineValue("release", fallback.releaseSeconds),
+    };
 }
 
 function createInitialRackState(): RackState {
@@ -874,6 +898,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 continue;
             }
             if (definition.type === "envelope") {
+                const envelopeSlot = state.envelopeSlots[slotIndex];
                 sources.push({
                     id: sourceId,
                     type: "envelope",
@@ -881,7 +906,11 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     label: definition.label,
                     state: {
                         _tag: "envelope",
-                        envelope: state.envelopeSlots[slotIndex] ?? createDefaultEnvelope(slotIndex),
+                        envelope: buildParameterOwnedEnvelope(
+                            this.parameterValues,
+                            envelopeSlot?.name ?? createDefaultEnvelope(slotIndex).name,
+                            slotIndex,
+                        ),
                     },
                 });
                 continue;
@@ -1166,6 +1195,13 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.deletedSourceBackup = {
             definition,
             modulationState: state,
+            envelopeValue: definition.type === "envelope"
+                ? buildParameterOwnedEnvelope(
+                    this.parameterValues,
+                    state.envelopeSlots[this.slotIndex(definition)]?.name ?? definition.label,
+                    this.slotIndex(definition),
+                )
+                : null,
             macroValue: definition.type === "macro"
                 ? this.macroValues[this.slotIndex(definition)] ?? clampNormalizedValue(0)
                 : null,
@@ -1177,7 +1213,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             articulationRouteAmounts,
         };
 
-        this.visibleSourceIds.delete(definition.idRaw);
         this.mappingCreationOrder = this.mappingCreationOrder
             .filter((mappingId) => !removedMappingIds.has(mappingId));
         this.modulationBridge.replaceRoutes(state.routes.filter((route) => !removedMappingIds.has(route.id)));
@@ -1191,6 +1226,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             })),
         };
         this.resetSourceSlot(definition);
+        this.visibleSourceIds.delete(definition.idRaw);
         this.persistArticulations();
         this.markSnapshotDirty();
     }
@@ -1217,9 +1253,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 macroNames: [...backup.modulationState.macroNames],
             });
         } else if (backup.definition.type === "envelope") {
-            this.modulationBridge.setEnvelope(
-                slotIndex,
-                backup.modulationState.envelopeSlots[slotIndex] ?? createDefaultEnvelope(slotIndex),
+            this.setEnvelope(
+                sourceIdFromDefinition(backup.definition),
+                backup.envelopeValue ?? createDefaultEnvelope(slotIndex),
             );
         } else {
             const slot = backup.modulationState.msegSlots[slotIndex];
@@ -1294,7 +1330,31 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
     private setEnvelope(sourceId: SourceId, envelope: ModulationEnvelope): void {
         const definition = this.requireSource(sourceId, "envelope");
-        this.modulationBridge.setEnvelope(this.slotIndex(definition), envelope);
+        const slotIndex = this.slotIndex(definition);
+        const normalizedEnvelope = normalizeEnvelope(envelope, slotIndex);
+        this.modulationBridge.setEnvelope(slotIndex, normalizedEnvelope);
+
+        const parameterValues = [
+            ["attack", normalizedEnvelope.attackSeconds],
+            ["decay", normalizedEnvelope.decaySeconds],
+            ["sustain", normalizedEnvelope.sustain],
+            ["release", normalizedEnvelope.releaseSeconds],
+        ] as const;
+        for (const [field, engineValue] of parameterValues) {
+            const parsedTarget = parseTargetId(`env${slotIndex + 1}.${field}`);
+            if (parsedTarget._tag === "err") {
+                throw parsedTarget.error;
+            }
+            const descriptor = getTargetDescriptor(parsedTarget.value);
+            if (descriptor.binding._tag !== "endpoint") {
+                throw new Error(`Envelope target ${descriptor.targetId} has no engine endpoint`);
+            }
+            this.setParameter({
+                targetId: parsedTarget.value,
+                value: descriptor.binding.fromEngine(engineValue),
+                layer: { _tag: "patchBase" },
+            });
+        }
     }
 
     private setMsegMorph(input: Parameters<CosimoCommands["setMsegMorph"]>[0]): void {
@@ -1766,7 +1826,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
         if (definition.type === "envelope") {
-            this.modulationBridge.setEnvelope(slotIndex, createDefaultEnvelope(slotIndex));
+            this.setEnvelope(sourceIdFromDefinition(definition), createDefaultEnvelope(slotIndex));
             return;
         }
         const label = `MSEG ${slotIndex + 1}`;

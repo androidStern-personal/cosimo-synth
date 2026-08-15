@@ -1,5 +1,9 @@
 # Cosimo Adapter Command Map
 
+> Historical Phase-1 audit. The hard-cut product no longer uses `uiPatchValues`,
+> selector-image re-resolution, or the pre-cut publication split documented below.
+> Current state ownership is defined by ADR-021 and the hard-cut roadmap.
+
 Phase-1 audit artifact (roadmap acceptance) and the build spec for the Phase-3
 `CosimoBridgeAdapter`. One row per port command (`ui/shared/cosimo-adapter-port.ts`):
 what the mock does, what the bridge must do, and where the engine still has a gap.
@@ -8,7 +12,7 @@ write via `sendStoredStateValue`; **RESOLVE** = recompile affected selector imag
 `resolveArticulationImages`/`affectedSelectors` (ADR-014); RT-01 connected the exact image shape to
 the Cmajor `articulationSnapshot` endpoint, while HOST-02 still owns production worker publication.
 **MODBRIDGE** = `ModulationRuntimeBridge`
-over `modulation.v4` (rebuild + runtime events).
+over `modulation.v6` (rebuild + runtime events).
 
 Persistence note: values for `unbacked` targets (rack params pending DSP, tune/level/attack/
 release pending endpoints) persist in **SS(uiPatchValues.v2)** — a UI-owned bag so patches
@@ -25,12 +29,12 @@ per-adapter divergence: both adapters model it, neither sounds it.
 | setMappingAmount (articulation layer) | reducer amount map | SS(articulations.v4) routeAmounts + RESOLVE after HOST-02 | production worker composition deferred to HOST-02 |
 | setMappingEnabled | reducer | MODBRIDGE route enabled | — |
 | setMappingPolarity | reducer | MODBRIDGE route polarity | — |
-| setMappingReducer | reducer | SS(modulation.v4) route metadata only | engine has no reducer stage (activates with rack DSP global targets, ledger §9) |
-| createSource (envelope/mseg) | policy + reducer | slot allocation over modulation.v4 fixed slots; MODBRIDGE | — |
+| setMappingReducer | reducer | SS(modulation.v6) route metadata only | engine has no reducer stage (activates with rack DSP global targets, ledger §9) |
+| createSource (envelope/mseg) | policy + reducer | slot allocation over modulation.v6 fixed slots; MODBRIDGE | — |
 | createSource (macro) | policy + reducer | macro slots are fixed engine parameters; "create" = reveal per ADR-010 progressive disclosure (SS-tracked visibility) | — |
 | deleteSource / undoDeleteSource | reducer + undo buffer | MODBRIDGE (clear slot + routes); undo is adapter-local buffer replay | — |
 | setMacroValue | reducer | EP macro1..macro4 | — |
-| renameMacro | reducer | SS(modulation.v4) macroNames | — |
+| renameMacro | reducer | SS(modulation.v6) macroNames | — |
 | setEnvelope | reducer sourceStates | MODBRIDGE envelope slot | — |
 | setMsegShape / setMsegPlayback | reducer sourceStates | MODBRIDGE mseg slot (2051-float buffer upload / playback upload) | — |
 | setMsegMorph (patchBase) | reducer sourceStates | EP mseg1..3Morph | — |
@@ -56,7 +60,7 @@ per-adapter divergence: both adapters model it, neither sounds it.
 2. **Route-amount unit conversion**: ModAmountSpec units (oct/st/dB/pan/%) vs
    `ROUTE_AMOUNT_LIMITS` route units per targetKind — one conversion table in the
    descriptor layer, property-tested for roundtrip, before the bridge sends amounts.
-3. **`skipMissingInputs` hydration**: bridge boot parses `modulation.v4`,
+3. **`skipMissingInputs` hydration**: bridge boot parses `modulation.v6`,
    `articulations.v4`, `articulationTriggerConfig.v1`, `rackState.v1`,
    `uiPatchValues.v2`; a malformed document is a typed parse error surfaced as
    `ConnectionState.detached` — never a silent default (fail fast).

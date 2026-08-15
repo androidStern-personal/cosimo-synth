@@ -835,9 +835,10 @@ before the React prototype can be connected to the real synth:
   snapshots, supports up to 128 dynamic articulation slots, and separates trigger
   modes (`chain`, `key`, `vel`). It also still snapshots Distortion and Chorus state,
   contradicting both sparse inheritance and patch-owned global rack state.
-- `ui/shared/modulation.ts` stores each MSEG as Shape A, Shape B, Morph, and Playback.
-  The prototype's simple shape plus Time/Scale/Curve is not a production-faithful
-  MSEG editor.
+- `ui/shared/modulation.ts` stores each MSEG's Shape A, Shape B, and discrete playback
+  policy. Morph and Time are host parameters and real modulation/drop targets; envelope
+  ADSR follows the same rule. The prototype's simple shape plus Time/Scale/Curve is not
+  a production-faithful MSEG editor.
 - The production modulation model already exposes Velocity, Pressure, and Slide,
   but has no active/visible-slot state for the progressive `1 + Add` source shelf.
 - Macros are accepted product scope but are not yet represented in the real

@@ -363,6 +363,7 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                             type="range"
                             aria-label="MSEG morph"
                             data-role="mseg-morph-slider"
+                            data-modulation-target-kind={`mseg${selectedMsegSlot + 1}Morph`}
                             min="0"
                             max="1"
                             step="0.001"
@@ -623,16 +624,17 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
 
             <div style={{ display: "grid", gap: "0.75rem" }}>
                 {[
-                    ["attackSeconds", "Attack", 0.001, 10, 0.001, Number(selectedEnvelope?.attackSeconds ?? 0.01)],
-                    ["decaySeconds", "Decay", 0.001, 10, 0.001, Number(selectedEnvelope?.decaySeconds ?? 0.25)],
-                    ["sustain", "Sustain", 0, 1, 0.001, Number(selectedEnvelope?.sustain ?? 0.5)],
-                    ["releaseSeconds", "Release", 0.001, 10, 0.001, Number(selectedEnvelope?.releaseSeconds ?? 0.2)],
-                ].map(([field, label, min, max, step, value]) => (
+                    ["attackSeconds", "Attack", "Attack", 0.001, 10, 0.001, Number(selectedEnvelope?.attackSeconds ?? 0.01)],
+                    ["decaySeconds", "Decay", "Decay", 0.001, 10, 0.001, Number(selectedEnvelope?.decaySeconds ?? 0.25)],
+                    ["sustain", "Sustain", "Sustain", 0, 1, 0.001, Number(selectedEnvelope?.sustain ?? 0.5)],
+                    ["releaseSeconds", "Release", "Release", 0.001, 10, 0.001, Number(selectedEnvelope?.releaseSeconds ?? 0.2)],
+                ].map(([field, label, target, min, max, step, value]) => (
                     <label key={String(field)} style={{ display: "grid", gap: "0.35rem" }}>
                         <span className="mseg-depth-label">{String(label)}</span>
                         <input
                             className="mseg-rate-slider"
                             type="range"
+                            data-modulation-target-kind={`env${selectedEnvelopeSlot + 1}${target}`}
                             min={String(min)}
                             max={String(max)}
                             step={String(step)}
@@ -993,6 +995,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
     isOpen,
     onClose,
     slotLabel,
+    slotIndex,
     msegState,
     selectedMsegMorph,
     surfaceRef,
@@ -1014,6 +1017,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
     isOpen: boolean;
     onClose: () => void;
     slotLabel: string;
+    slotIndex: number;
     msegState: ReturnType<typeof useSynthPatchViewModel>["msegState"];
     selectedMsegMorph: ReturnType<typeof useSynthPatchViewModel>["selectedMsegMorph"];
     surfaceRef: RefObject<SVGSVGElement | null>;
@@ -1086,6 +1090,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 type="range"
                                 aria-label="MSEG morph"
                                 data-role="mseg-morph-slider"
+                                data-modulation-target-kind={`mseg${slotIndex + 1}Morph`}
                                 min="0"
                                 max="1"
                                 step="0.001"
@@ -1099,6 +1104,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 className="mseg-rate-slider"
                                 type="range"
                                 aria-label="MSEG time in seconds"
+                                data-modulation-target-kind={`mseg${slotIndex + 1}Rate`}
                                 min={MSEG_RATE_MIN_SECONDS.toFixed(3)}
                                 max={MSEG_RATE_MAX_SECONDS.toFixed(3)}
                                 step="0.001"
@@ -1662,6 +1668,7 @@ function IOSPatchViewBody() {
                     isOpen={isMsegModalOpen}
                     onClose={closeMsegModal}
                     slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
+                    slotIndex={synthView.selectedMsegSlot}
                     msegState={synthView.msegState}
                     selectedMsegMorph={synthView.selectedMsegMorph}
                     surfaceRef={msegEditorSurfaceRef}

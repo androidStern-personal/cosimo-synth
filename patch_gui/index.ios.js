@@ -13464,9 +13464,6 @@ function normalizeMsegShape(shape = createDefaultMsegShape()) {
 function serializeMsegShape(shape) {
   return JSON.stringify(normalizeMsegShape(shape));
 }
-function serializeMsegPlayback(playback) {
-  return JSON.stringify(normalizeMsegPlayback(playback));
-}
 function powerScale(value, power) {
   if (Math.abs(power) < 0.01) {
     return value;
@@ -13742,9 +13739,6 @@ function deriveMsegSegmentCurvePower(shape, segmentIndex, x, y) {
 }
 function msegShapesEqual(left, right) {
   return serializeMsegShape(left) === serializeMsegShape(right);
-}
-function msegPlaybacksEqual(left, right) {
-  return serializeMsegPlayback(left) === serializeMsegPlayback(right);
 }
 function addMsegPoint(shape, x, y) {
   const normalizedShape = normalizeMsegShape(shape);
@@ -15103,7 +15097,25 @@ const OSCILLATOR_MODULATION_PARAMETER_KINDS = [
 ];
 const SHARED_VOICE_MODULATION_TARGET_KINDS = [
   "filterCutoffOctaves",
-  "filterQ"
+  "filterQ",
+  "mseg1Morph",
+  "mseg2Morph",
+  "mseg3Morph",
+  "mseg1Rate",
+  "mseg2Rate",
+  "mseg3Rate",
+  "env1Attack",
+  "env1Decay",
+  "env1Sustain",
+  "env1Release",
+  "env2Attack",
+  "env2Decay",
+  "env2Sustain",
+  "env2Release",
+  "env3Attack",
+  "env3Decay",
+  "env3Sustain",
+  "env3Release"
 ];
 const MODULATION_SOURCE_IDENTITIES = Object.freeze([
   { id: "mseg-1", sourceKind: "mseg", sourceSlot: 1, group: "voice", runtimeIndex: 0 },
@@ -15154,7 +15166,7 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 ]));
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 function assertCanonicalIdentities() {
-  if (MODULATION_SOURCE_COUNT !== 13 || MODULATION_VOICE_TARGET_COUNT$1 !== 32 || MODULATION_RACK_TARGET_COUNT$1 !== 36 || MODULATION_LEGAL_PAIR_COUNT !== 884) {
+  if (MODULATION_SOURCE_COUNT !== 13 || MODULATION_VOICE_TARGET_COUNT$1 !== 50 || MODULATION_RACK_TARGET_COUNT$1 !== 36 || MODULATION_LEGAL_PAIR_COUNT !== 1118) {
     throw new Error("Modulation identity catalog has an unexpected domain size");
   }
   for (const [group, expectedCount] of [["voice", 9], ["macro", 4]]) {
@@ -15164,7 +15176,7 @@ function assertCanonicalIdentities() {
       throw new Error(`Modulation ${group} source indexes must be unique and contiguous`);
     }
   }
-  for (const [group, expectedCount] of [["voice", 32], ["rack", 36]]) {
+  for (const [group, expectedCount] of [["voice", 50], ["rack", 36]]) {
     const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
     const indexes = identities.map((identity) => identity.runtimeIndex).sort((left, right) => left - right);
     if (identities.length !== expectedCount || indexes.some((index, position) => index !== position)) {
@@ -15463,6 +15475,53 @@ function createOscillatorModulationDescriptor(oscillatorID, definition) {
 const OSCILLATOR_MODULATION_DESCRIPTORS = Object.freeze(
   OSCILLATOR_IDS.flatMap((oscillatorID) => OSCILLATOR_MODULATION_DESCRIPTOR_DEFINITIONS.map((definition) => createOscillatorModulationDescriptor(oscillatorID, definition)))
 );
+const GENERATOR_TARGET_DEFINITIONS = Object.freeze([
+  { moduleId: "mseg1", targetIdSuffix: "morph", endpointID: "mseg1Morph", targetKind: "mseg1Morph", label: "MSEG 1 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph1" },
+  { moduleId: "mseg2", targetIdSuffix: "morph", endpointID: "mseg2Morph", targetKind: "mseg2Morph", label: "MSEG 2 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph2" },
+  { moduleId: "mseg3", targetIdSuffix: "morph", endpointID: "mseg3Morph", targetKind: "mseg3Morph", label: "MSEG 3 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph3" },
+  { moduleId: "mseg1", targetIdSuffix: "rate", endpointID: "mseg1Rate", targetKind: "mseg1Rate", label: "MSEG 1 Time", min: 0, max: 2, initial: 1, format: "time", articulationParameterId: null },
+  { moduleId: "mseg2", targetIdSuffix: "rate", endpointID: "mseg2Rate", targetKind: "mseg2Rate", label: "MSEG 2 Time", min: 0, max: 2, initial: 1, format: "time", articulationParameterId: null },
+  { moduleId: "mseg3", targetIdSuffix: "rate", endpointID: "mseg3Rate", targetKind: "mseg3Rate", label: "MSEG 3 Time", min: 0, max: 2, initial: 1, format: "time", articulationParameterId: null },
+  { moduleId: "env1", targetIdSuffix: "attack", endpointID: "env1Attack", targetKind: "env1Attack", label: "ENV 1 Attack", min: 1e-3, max: 10, initial: 0.01, format: "time", articulationParameterId: "env1.attackSeconds" },
+  { moduleId: "env1", targetIdSuffix: "decay", endpointID: "env1Decay", targetKind: "env1Decay", label: "ENV 1 Decay", min: 1e-3, max: 10, initial: 0.25, format: "time", articulationParameterId: "env1.decaySeconds" },
+  { moduleId: "env1", targetIdSuffix: "sustain", endpointID: "env1Sustain", targetKind: "env1Sustain", label: "ENV 1 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env1.sustain" },
+  { moduleId: "env1", targetIdSuffix: "release", endpointID: "env1Release", targetKind: "env1Release", label: "ENV 1 Release", min: 1e-3, max: 10, initial: 0.2, format: "time", articulationParameterId: "env1.releaseSeconds" },
+  { moduleId: "env2", targetIdSuffix: "attack", endpointID: "env2Attack", targetKind: "env2Attack", label: "ENV 2 Attack", min: 1e-3, max: 10, initial: 0.01, format: "time", articulationParameterId: "env2.attackSeconds" },
+  { moduleId: "env2", targetIdSuffix: "decay", endpointID: "env2Decay", targetKind: "env2Decay", label: "ENV 2 Decay", min: 1e-3, max: 10, initial: 0.25, format: "time", articulationParameterId: "env2.decaySeconds" },
+  { moduleId: "env2", targetIdSuffix: "sustain", endpointID: "env2Sustain", targetKind: "env2Sustain", label: "ENV 2 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env2.sustain" },
+  { moduleId: "env2", targetIdSuffix: "release", endpointID: "env2Release", targetKind: "env2Release", label: "ENV 2 Release", min: 1e-3, max: 10, initial: 0.2, format: "time", articulationParameterId: "env2.releaseSeconds" },
+  { moduleId: "env3", targetIdSuffix: "attack", endpointID: "env3Attack", targetKind: "env3Attack", label: "ENV 3 Attack", min: 1e-3, max: 10, initial: 0.01, format: "time", articulationParameterId: "env3.attackSeconds" },
+  { moduleId: "env3", targetIdSuffix: "decay", endpointID: "env3Decay", targetKind: "env3Decay", label: "ENV 3 Decay", min: 1e-3, max: 10, initial: 0.25, format: "time", articulationParameterId: "env3.decaySeconds" },
+  { moduleId: "env3", targetIdSuffix: "sustain", endpointID: "env3Sustain", targetKind: "env3Sustain", label: "ENV 3 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env3.sustain" },
+  { moduleId: "env3", targetIdSuffix: "release", endpointID: "env3Release", targetKind: "env3Release", label: "ENV 3 Release", min: 1e-3, max: 10, initial: 0.2, format: "time", articulationParameterId: "env3.releaseSeconds" }
+]);
+function createGeneratorTargetDescriptor(definition) {
+  const targetId = catalogTargetId(definition.moduleId, definition.targetIdSuffix);
+  const span = definition.max - definition.min;
+  const toEngine = (value) => definition.min + span * value;
+  const fromEngine = (value) => normalized(
+    (value - definition.min) / span,
+    `${definition.endpointID} endpoint conversion`
+  );
+  return Object.freeze({
+    targetId,
+    moduleId: definition.moduleId,
+    workspace: "voice",
+    label: definition.label,
+    defaultValue: fromEngine(definition.initial),
+    initialValue: fromEngine(definition.initial),
+    format: definition.format === "time" ? { kind: "time", minSeconds: definition.min, maxSeconds: definition.max } : { kind: "percent" },
+    modAmount: definition.format === "time" ? { min: -span, max: span, unit: "s", digits: 3 } : { min: -100, max: 100, unit: "%", digits: 0 },
+    binding: boundEndpoint(definition.endpointID, toEngine, fromEngine),
+    isQuick: false,
+    compound: null,
+    articulationParameterId: definition.articulationParameterId,
+    modulationTargetKind: definition.targetKind
+  });
+}
+const GENERATOR_TARGET_DESCRIPTORS = Object.freeze(
+  GENERATOR_TARGET_DEFINITIONS.map(createGeneratorTargetDescriptor)
+);
 function rackTargetId(parameter2) {
   return `${parameter2.effectId}.${parameter2.endpointID}`;
 }
@@ -15530,6 +15589,7 @@ const TARGET_DESCRIPTORS = Object.freeze(
   [
     ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
     ...OSCILLATOR_MODULATION_DESCRIPTORS,
+    ...GENERATOR_TARGET_DESCRIPTORS,
     ...MODULE_DEFINITIONS.flatMap(
       (moduleDefinition) => moduleDefinition.parameters.map(
         (parameterDefinition) => createDescriptor(moduleDefinition, parameterDefinition)
@@ -15567,8 +15627,8 @@ function getModulationTargetDisplayLabel(targetKind) {
   }
   return descriptor.workspace === "effects" ? `${descriptor.moduleId.toUpperCase()} ${descriptor.label.toUpperCase()}` : descriptor.label.toUpperCase();
 }
-const MODULATION_STATE_KEY = "modulation.v5";
-const MODULATION_STATE_VERSION = 5;
+const MODULATION_STATE_KEY = "modulation.v6";
+const MODULATION_STATE_VERSION = 6;
 const MODULATION_MSEG_SLOT_COUNT = 3;
 const MODULATION_ENV_SLOT_COUNT = 3;
 const MODULATION_MACRO_SLOT_COUNT = 4;
@@ -15591,7 +15651,25 @@ const ROUTE_AMOUNT_LIMITS = {
   unisonBlend: { min: -1, max: 1 },
   unisonWidth: { min: -1, max: 1 },
   unisonWavetablePositionSpread: { min: -1, max: 1 },
-  unisonWarpSpread: { min: -1, max: 1 }
+  unisonWarpSpread: { min: -1, max: 1 },
+  mseg1Morph: { min: -1, max: 1 },
+  mseg2Morph: { min: -1, max: 1 },
+  mseg3Morph: { min: -1, max: 1 },
+  mseg1Rate: { min: -MSEG_RATE_MAX_SECONDS, max: MSEG_RATE_MAX_SECONDS },
+  mseg2Rate: { min: -MSEG_RATE_MAX_SECONDS, max: MSEG_RATE_MAX_SECONDS },
+  mseg3Rate: { min: -MSEG_RATE_MAX_SECONDS, max: MSEG_RATE_MAX_SECONDS },
+  env1Attack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  env1Decay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  env1Sustain: { min: -1, max: 1 },
+  env1Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  env2Attack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  env2Decay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  env2Sustain: { min: -1, max: 1 },
+  env2Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  env3Attack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  env3Decay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+  env3Sustain: { min: -1, max: 1 },
+  env3Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS }
 };
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter2) => parameter2.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
@@ -15769,7 +15847,26 @@ function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar"
     case "unisonWidth":
     case "unisonWavetablePositionSpread":
     case "unisonWarpSpread":
+    case "mseg1Morph":
+    case "mseg2Morph":
+    case "mseg3Morph":
+    case "env1Sustain":
+    case "env2Sustain":
+    case "env3Sustain":
       return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+    case "mseg1Rate":
+    case "mseg2Rate":
+    case "mseg3Rate":
+    case "env1Attack":
+    case "env1Decay":
+    case "env1Release":
+    case "env2Attack":
+    case "env2Decay":
+    case "env2Release":
+    case "env3Attack":
+    case "env3Decay":
+    case "env3Release":
+      return `${prefix}${formatMagnitude(clampedAmount, 3)} s`;
     case "filterCutoffOctaves":
       return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
     case "filterQ":
@@ -15824,6 +15921,28 @@ function getModulationTargetClampHint(targetKind) {
       return "Unison wavetable spread still clamps to the table range.";
     case "unisonWarpSpread":
       return "Unison warp spread still clamps to the oscillator's warp range.";
+    case "mseg1Morph":
+    case "mseg2Morph":
+    case "mseg3Morph":
+      return "MSEG morph still clamps between Shape A and Shape B.";
+    case "mseg1Rate":
+    case "mseg2Rate":
+    case "mseg3Rate":
+      return "MSEG time still clamps to the source's authored duration range.";
+    case "env1Attack":
+    case "env1Decay":
+    case "env1Release":
+    case "env2Attack":
+    case "env2Decay":
+    case "env2Release":
+    case "env3Attack":
+    case "env3Decay":
+    case "env3Release":
+      return "Envelope time still clamps to the envelope stage range.";
+    case "env1Sustain":
+    case "env2Sustain":
+    case "env3Sustain":
+      return "Envelope sustain still clamps between silence and full level.";
     default:
       return "";
   }
@@ -15874,6 +15993,10 @@ function normalizeEnvelope(value, slotIndex = 0) {
     sustain: clamp01$1(nextValue.sustain ?? fallback.sustain),
     releaseSeconds: clampEnvSeconds(nextValue.releaseSeconds ?? fallback.releaseSeconds, fallback.releaseSeconds)
   };
+}
+function normalizeEnvelopeSlot(value, slotIndex = 0) {
+  const normalized2 = normalizeEnvelope(value, slotIndex);
+  return { name: normalized2.name };
 }
 function createDefaultRoute(overrides = {}) {
   return {
@@ -15966,10 +16089,16 @@ function normalizeMsegSlot(value, slotIndex) {
   const nextValue = value && typeof value === "object" ? value : {};
   const defaultShape = createDefaultMsegShape(MSEG_SLOT_NAMES[slotIndex] ?? `MSEG ${slotIndex + 1}`);
   const shapeA = normalizeMsegShape(nextValue.shapeA ?? defaultShape);
+  const normalizedPlayback = normalizeMsegPlayback({
+    ...createDefaultMsegPlayback(),
+    ...nextValue.playback ?? {},
+    rate: createDefaultMsegPlayback().rate
+  });
+  const { rate: _parameterOwnedRate, ...playback } = normalizedPlayback;
   return {
     shapeA,
     shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
-    playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback())
+    playback
   };
 }
 function createDefaultModulationState() {
@@ -15977,7 +16106,9 @@ function createDefaultModulationState() {
     format: "cosimo.modulation",
     version: MODULATION_STATE_VERSION,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
-    envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
+    envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => ({
+      name: createDefaultEnvelope(slotIndex).name
+    })),
     routes: [],
     macroNames: MACRO_SLOT_NAMES.slice()
   };
@@ -15991,7 +16122,7 @@ function normalizeModulationState(value = createDefaultModulationState()) {
     format: "cosimo.modulation",
     version: MODULATION_STATE_VERSION,
     msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
-    envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
+    envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelopeSlot(inputEnvelopeSlots[slotIndex], slotIndex)),
     routes: normalizeRoutes(nextValue.routes),
     macroNames: Array.from(
       { length: MODULATION_MACRO_SLOT_COUNT },
@@ -16037,6 +16168,9 @@ function toStoredStateEchoToken(value) {
     return `${typeof value}:${String(value)}`;
   }
 }
+function msegPlaybackPoliciesEqual(left, right) {
+  return left.holdFinalValue === right.holdFinalValue && left.noteOffPolicy === right.noteOffPolicy && left.legatoRestarts === right.legatoRestarts && JSON.stringify(left.loop) === JSON.stringify(right.loop);
+}
 function getModulationSourceOptionValue(route) {
   const match = MODULATION_SOURCE_OPTIONS.find((option) => option.sourceKind === route.sourceKind && option.sourceSlot === route.sourceSlot);
   return match?.value ?? MODULATION_SOURCE_OPTIONS[0].value;
@@ -16067,7 +16201,10 @@ class ModulationMsegSlotController {
       shapeB: slot.shapeB,
       referenceShape,
       editShapeIndex,
-      playback: slot.playback,
+      playback: {
+        ...slot.playback,
+        rate: createDefaultMsegPlayback().rate
+      },
       depth: MSEG_DEFAULT_DEPTH
     };
   }
@@ -16181,12 +16318,13 @@ class ModulationRuntimeBridge {
   }
   setMsegSlotPlayback(slotIndex, nextPlayback) {
     const normalizedPlayback = normalizeMsegPlayback(nextPlayback);
+    const { rate: _parameterOwnedRate, ...playback } = normalizedPlayback;
     const currentSlot = this.state.msegSlots[slotIndex];
-    if (msegPlaybacksEqual(currentSlot.playback, normalizedPlayback)) {
+    if (msegPlaybackPoliciesEqual(currentSlot.playback, playback)) {
       return;
     }
     this.updateState((previousState) => {
-      const nextMsegSlots = previousState.msegSlots.map((slot, index) => index === slotIndex ? { ...slot, playback: normalizedPlayback } : slot);
+      const nextMsegSlots = previousState.msegSlots.map((slot, index) => index === slotIndex ? { ...slot, playback } : slot);
       return {
         ...previousState,
         msegSlots: nextMsegSlots
@@ -16194,7 +16332,7 @@ class ModulationRuntimeBridge {
     });
   }
   setEnvelope(slotIndex, nextEnvelope) {
-    const normalizedEnvelope = normalizeEnvelope(nextEnvelope, slotIndex);
+    const normalizedEnvelope = normalizeEnvelopeSlot(nextEnvelope, slotIndex);
     const currentEnvelope = this.state.envelopeSlots[slotIndex];
     if (JSON.stringify(currentEnvelope) === JSON.stringify(normalizedEnvelope)) {
       return;
@@ -19660,6 +19798,21 @@ const FILTER_Q_ENDPOINT_ID = "filterQ";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
 const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
 const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
+const MSEG_1_RATE_ENDPOINT_ID = "mseg1Rate";
+const MSEG_2_RATE_ENDPOINT_ID = "mseg2Rate";
+const MSEG_3_RATE_ENDPOINT_ID = "mseg3Rate";
+const ENV_1_ATTACK_ENDPOINT_ID = "env1Attack";
+const ENV_1_DECAY_ENDPOINT_ID = "env1Decay";
+const ENV_1_SUSTAIN_ENDPOINT_ID = "env1Sustain";
+const ENV_1_RELEASE_ENDPOINT_ID = "env1Release";
+const ENV_2_ATTACK_ENDPOINT_ID = "env2Attack";
+const ENV_2_DECAY_ENDPOINT_ID = "env2Decay";
+const ENV_2_SUSTAIN_ENDPOINT_ID = "env2Sustain";
+const ENV_2_RELEASE_ENDPOINT_ID = "env2Release";
+const ENV_3_ATTACK_ENDPOINT_ID = "env3Attack";
+const ENV_3_DECAY_ENDPOINT_ID = "env3Decay";
+const ENV_3_SUSTAIN_ENDPOINT_ID = "env3Sustain";
+const ENV_3_RELEASE_ENDPOINT_ID = "env3Release";
 const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
 const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
 const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
@@ -20556,7 +20709,16 @@ function buildPresetArticulationBaseSnapshot(context, modulationState, oscillato
         presetParameterNumber(context, MSEG_3_MORPH_ENDPOINT_ID, parameters.msegMorphs[2])
       ]
     },
-    envelopes: modulationState.envelopeSlots,
+    envelopes: modulationState.envelopeSlots.map((envelope, slotIndex) => {
+      const endpointPrefix = `env${slotIndex + 1}`;
+      return {
+        name: envelope.name,
+        attackSeconds: presetParameterNumber(context, `${endpointPrefix}Attack`, 0.01),
+        decaySeconds: presetParameterNumber(context, `${endpointPrefix}Decay`, 0.25),
+        sustain: presetParameterNumber(context, `${endpointPrefix}Sustain`, 0.5),
+        releaseSeconds: presetParameterNumber(context, `${endpointPrefix}Release`, 0.2)
+      };
+    }),
     modRouteAmounts: modulationState.routes.flatMap((route) => getModulationArticulationCellIndex(route) === null ? [] : [{ routeId: route.id, amount: route.amount }])
   });
 }
@@ -21433,6 +21595,81 @@ function useSynthPatchViewModel({
     initialValue: 0,
     coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
   });
+  const mseg1Rate = usePatchParameterBinding({
+    endpointID: MSEG_1_RATE_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => clampMsegRateSeconds(Number(value))
+  });
+  const mseg2Rate = usePatchParameterBinding({
+    endpointID: MSEG_2_RATE_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => clampMsegRateSeconds(Number(value))
+  });
+  const mseg3Rate = usePatchParameterBinding({
+    endpointID: MSEG_3_RATE_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => clampMsegRateSeconds(Number(value))
+  });
+  const env1Attack = usePatchParameterBinding({
+    endpointID: ENV_1_ATTACK_ENDPOINT_ID,
+    initialValue: 0.01,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const env1Decay = usePatchParameterBinding({
+    endpointID: ENV_1_DECAY_ENDPOINT_ID,
+    initialValue: 0.25,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const env1Sustain = usePatchParameterBinding({
+    endpointID: ENV_1_SUSTAIN_ENDPOINT_ID,
+    initialValue: 0.5,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const env1Release = usePatchParameterBinding({
+    endpointID: ENV_1_RELEASE_ENDPOINT_ID,
+    initialValue: 0.2,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const env2Attack = usePatchParameterBinding({
+    endpointID: ENV_2_ATTACK_ENDPOINT_ID,
+    initialValue: 0.01,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const env2Decay = usePatchParameterBinding({
+    endpointID: ENV_2_DECAY_ENDPOINT_ID,
+    initialValue: 0.25,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const env2Sustain = usePatchParameterBinding({
+    endpointID: ENV_2_SUSTAIN_ENDPOINT_ID,
+    initialValue: 0.5,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const env2Release = usePatchParameterBinding({
+    endpointID: ENV_2_RELEASE_ENDPOINT_ID,
+    initialValue: 0.2,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const env3Attack = usePatchParameterBinding({
+    endpointID: ENV_3_ATTACK_ENDPOINT_ID,
+    initialValue: 0.01,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const env3Decay = usePatchParameterBinding({
+    endpointID: ENV_3_DECAY_ENDPOINT_ID,
+    initialValue: 0.25,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
+  const env3Sustain = usePatchParameterBinding({
+    endpointID: ENV_3_SUSTAIN_ENDPOINT_ID,
+    initialValue: 0.5,
+    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
+  });
+  const env3Release = usePatchParameterBinding({
+    endpointID: ENV_3_RELEASE_ENDPOINT_ID,
+    initialValue: 0.2,
+    coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
+  });
   const distortionMode = usePatchParameterBinding({
     endpointID: DISTORTION_MODE_ENDPOINT_ID,
     initialValue: 0,
@@ -21601,6 +21838,34 @@ function useSynthPatchViewModel({
   });
   const [selectedMsegSlot, setSelectedMsegSlot] = reactExports.useState(0);
   const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = reactExports.useState(0);
+  const msegMorphBindings = reactExports.useMemo(
+    () => [mseg1Morph, mseg2Morph, mseg3Morph],
+    [mseg1Morph, mseg2Morph, mseg3Morph]
+  );
+  const selectedMsegMorph = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
+  const msegRateBindings = reactExports.useMemo(
+    () => [mseg1Rate, mseg2Rate, mseg3Rate],
+    [mseg1Rate, mseg2Rate, mseg3Rate]
+  );
+  const selectedMsegRate = msegRateBindings[selectedMsegSlot] ?? mseg1Rate;
+  const envelopeBindings = reactExports.useMemo(() => [
+    { attackSeconds: env1Attack, decaySeconds: env1Decay, sustain: env1Sustain, releaseSeconds: env1Release },
+    { attackSeconds: env2Attack, decaySeconds: env2Decay, sustain: env2Sustain, releaseSeconds: env2Release },
+    { attackSeconds: env3Attack, decaySeconds: env3Decay, sustain: env3Sustain, releaseSeconds: env3Release }
+  ], [
+    env1Attack,
+    env1Decay,
+    env1Release,
+    env1Sustain,
+    env2Attack,
+    env2Decay,
+    env2Release,
+    env2Sustain,
+    env3Attack,
+    env3Decay,
+    env3Release,
+    env3Sustain
+  ]);
   const displayedMsegControllerRef = reactExports.useRef(null);
   displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
   const routes = reactExports.useMemo(() => modulationState?.routes ?? [], [modulationState?.routes]);
@@ -21608,8 +21873,15 @@ function useSynthPatchViewModel({
     if (!modulationState || !modulationBridge.current) {
       return null;
     }
-    return buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
-  }, [modulationBridge, modulationState, selectedMsegSlot]);
+    const state = buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
+    return {
+      ...state,
+      playback: {
+        ...state.playback,
+        rate: { kind: "seconds", seconds: selectedMsegRate.value }
+      }
+    };
+  }, [modulationBridge, modulationState, selectedMsegRate.value, selectedMsegSlot]);
   const observedMsegPlayhead = reactExports.useMemo(() => {
     return resolveMsegPreviewPlayheadState({
       observedState: observedMsegState,
@@ -21617,7 +21889,18 @@ function useSynthPatchViewModel({
       slotIndex: selectedMsegSlot
     });
   }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
-  const selectedEnvelope = modulationState?.envelopeSlots[selectedEnvelopeSlot] ?? null;
+  const selectedEnvelope = reactExports.useMemo(() => {
+    const name = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
+    const bindings = envelopeBindings[selectedEnvelopeSlot];
+    if (!modulationState || !bindings) return null;
+    return {
+      name: name ?? `Env ${selectedEnvelopeSlot + 1}`,
+      attackSeconds: bindings.attackSeconds.value,
+      decaySeconds: bindings.decaySeconds.value,
+      sustain: bindings.sustain.value,
+      releaseSeconds: bindings.releaseSeconds.value
+    };
+  }, [envelopeBindings, modulationState, selectedEnvelopeSlot]);
   const stageBindings = useStagePositionDrag({
     stageRef,
     observedPosition,
@@ -21677,11 +21960,6 @@ function useSynthPatchViewModel({
   const handleSelectMsegSlot = reactExports.useCallback((slotIndex) => {
     setSelectedMsegSlot(clamp$1(Math.round(slotIndex), 0, 2));
   }, []);
-  const msegMorphBindings = reactExports.useMemo(
-    () => [mseg1Morph, mseg2Morph, mseg3Morph],
-    [mseg1Morph, mseg2Morph, mseg3Morph]
-  );
-  const selectedMsegMorph = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
   const handleSelectMsegShape = reactExports.useCallback((shapeIndex) => {
     displayedMsegControllerRef.current?.setEditShapeIndex?.(shapeIndex);
   }, []);
@@ -21689,30 +21967,12 @@ function useSynthPatchViewModel({
     setSelectedEnvelopeSlot(clamp$1(Math.round(slotIndex), 0, 2));
   }, []);
   const handleMsegRateChange = reactExports.useCallback((nextValue) => {
-    if (!msegState) {
-      return;
-    }
-    displayedMsegControllerRef.current?.setPlayback({
-      ...msegState.playback,
-      rate: {
-        kind: "seconds",
-        seconds: nextValue
-      }
-    });
-  }, [msegState]);
+    selectedMsegRate.setValue(clampMsegRateSeconds(nextValue));
+  }, [selectedMsegRate]);
   const handleStepMsegRate = reactExports.useCallback((direction) => {
-    if (!msegState) {
-      return;
-    }
-    const nextRateSeconds = clampMsegRateSeconds(msegState.playback.rate.seconds + direction * 1e-3);
-    displayedMsegControllerRef.current?.setPlayback({
-      ...msegState.playback,
-      rate: {
-        kind: "seconds",
-        seconds: nextRateSeconds
-      }
-    });
-  }, [msegState]);
+    const nextRateSeconds = clampMsegRateSeconds(selectedMsegRate.value + direction * 1e-3);
+    selectedMsegRate.setValue(nextRateSeconds);
+  }, [selectedMsegRate]);
   const handleToggleMsegLoop = reactExports.useCallback(() => {
     if (!msegState) {
       return;
@@ -21729,15 +21989,12 @@ function useSynthPatchViewModel({
     targetBinding.setValue(nextMorph);
   }, [mseg1Morph, msegMorphBindings, selectedMsegSlot]);
   const handleEnvelopeChange = reactExports.useCallback((field, nextValue) => {
-    if (!selectedEnvelope) {
+    const selectedBindings = envelopeBindings[selectedEnvelopeSlot];
+    if (!selectedBindings) {
       return;
     }
-    const currentEnvelope = modulationBridge.current?.getState().envelopeSlots[selectedEnvelopeSlot] ?? selectedEnvelope;
-    modulationBridge.current?.setEnvelope(selectedEnvelopeSlot, {
-      ...currentEnvelope,
-      [field]: nextValue
-    });
-  }, [modulationBridge, selectedEnvelope, selectedEnvelopeSlot]);
+    selectedBindings[field].setValue(nextValue);
+  }, [envelopeBindings, selectedEnvelopeSlot]);
   const handleAddRoute = reactExports.useCallback(() => {
     const bridge = modulationBridge.current;
     if (!bridge) return;
@@ -21792,13 +22049,20 @@ function useSynthPatchViewModel({
         unisonWarpSpread: unisonWarpSpread.value,
         msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value]
       },
-      envelopes: currentModulationState?.envelopeSlots ?? [0, 1, 2].map((slotIndex) => createDefaultEnvelope(slotIndex)),
+      envelopes: envelopeBindings.map((bindings, slotIndex) => ({
+        name: currentModulationState?.envelopeSlots[slotIndex]?.name ?? createDefaultEnvelope(slotIndex).name,
+        attackSeconds: bindings.attackSeconds.value,
+        decaySeconds: bindings.decaySeconds.value,
+        sustain: bindings.sustain.value,
+        releaseSeconds: bindings.releaseSeconds.value
+      })),
       modRouteAmounts: (currentModulationState?.routes ?? []).flatMap((route) => getModulationArticulationCellIndex(route) === null ? [] : [{ routeId: route.id, amount: route.amount }])
     });
   }, [
     filterCutoff.value,
     filterMode.value,
     filterQ.value,
+    envelopeBindings,
     modulationBridge,
     modulationState,
     mseg1Morph.value,
@@ -21865,7 +22129,11 @@ function useSynthPatchViewModel({
     mseg3Morph.setValue(parameters.msegMorphs[2]);
     const bridge = modulationBridge.current;
     snapshot.envelopes.forEach((envelope, envelopeIndex) => {
-      bridge?.setEnvelope(envelopeIndex, envelope);
+      const bindings = envelopeBindings[envelopeIndex];
+      bindings?.attackSeconds.setValue(envelope.attackSeconds);
+      bindings?.decaySeconds.setValue(envelope.decaySeconds);
+      bindings?.sustain.setValue(envelope.sustain);
+      bindings?.releaseSeconds.setValue(envelope.releaseSeconds);
     });
     const currentRoutes = bridge?.getState().routes ?? modulationState?.routes ?? [];
     const routeAmountById = new Map(snapshot.modRouteAmounts.map((routeAmount) => [
@@ -21894,6 +22162,7 @@ function useSynthPatchViewModel({
     filterCutoff,
     filterMode,
     filterQ,
+    envelopeBindings,
     modulationBridge,
     modulationState?.routes,
     mseg1Morph,
@@ -22376,6 +22645,7 @@ function useSynthPatchViewModel({
     unisonWavetablePositionSpread,
     unisonWarpSpread,
     selectedMsegMorph,
+    selectedMsegRate,
     distortionMode,
     distortionDriveDb,
     distortionKnee,
@@ -22850,6 +23120,7 @@ const IOSMsegLauncher = reactExports.memo(function IOSMsegLauncher2({
             type: "range",
             "aria-label": "MSEG morph",
             "data-role": "mseg-morph-slider",
+            "data-modulation-target-kind": `mseg${selectedMsegSlot + 1}Morph`,
             min: "0",
             max: "1",
             step: "0.001",
@@ -23074,17 +23345,18 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
           `ios-env-slot-${slotIndex + 1}`
         )) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "grid", gap: "0.75rem" }, children: [
-          ["attackSeconds", "Attack", 1e-3, 10, 1e-3, Number(selectedEnvelope?.attackSeconds ?? 0.01)],
-          ["decaySeconds", "Decay", 1e-3, 10, 1e-3, Number(selectedEnvelope?.decaySeconds ?? 0.25)],
-          ["sustain", "Sustain", 0, 1, 1e-3, Number(selectedEnvelope?.sustain ?? 0.5)],
-          ["releaseSeconds", "Release", 1e-3, 10, 1e-3, Number(selectedEnvelope?.releaseSeconds ?? 0.2)]
-        ].map(([field, label, min, max, step, value]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "grid", gap: "0.35rem" }, children: [
+          ["attackSeconds", "Attack", "Attack", 1e-3, 10, 1e-3, Number(selectedEnvelope?.attackSeconds ?? 0.01)],
+          ["decaySeconds", "Decay", "Decay", 1e-3, 10, 1e-3, Number(selectedEnvelope?.decaySeconds ?? 0.25)],
+          ["sustain", "Sustain", "Sustain", 0, 1, 1e-3, Number(selectedEnvelope?.sustain ?? 0.5)],
+          ["releaseSeconds", "Release", "Release", 1e-3, 10, 1e-3, Number(selectedEnvelope?.releaseSeconds ?? 0.2)]
+        ].map(([field, label, target, min, max, step, value]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "grid", gap: "0.35rem" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "mseg-depth-label", children: String(label) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx(
             "input",
             {
               className: "mseg-rate-slider",
               type: "range",
+              "data-modulation-target-kind": `env${selectedEnvelopeSlot + 1}${target}`,
               min: String(min),
               max: String(max),
               step: String(step),
@@ -23459,6 +23731,7 @@ const IOSMsegModal = reactExports.memo(function IOSMsegModal2({
   isOpen,
   onClose,
   slotLabel,
+  slotIndex,
   msegState,
   selectedMsegMorph,
   surfaceRef,
@@ -23531,6 +23804,7 @@ const IOSMsegModal = reactExports.memo(function IOSMsegModal2({
                 type: "range",
                 "aria-label": "MSEG morph",
                 "data-role": "mseg-morph-slider",
+                "data-modulation-target-kind": `mseg${slotIndex + 1}Morph`,
                 min: "0",
                 max: "1",
                 step: "0.001",
@@ -23547,6 +23821,7 @@ const IOSMsegModal = reactExports.memo(function IOSMsegModal2({
                 className: "mseg-rate-slider",
                 type: "range",
                 "aria-label": "MSEG time in seconds",
+                "data-modulation-target-kind": `mseg${slotIndex + 1}Rate`,
                 min: MSEG_RATE_MIN_SECONDS.toFixed(3),
                 max: MSEG_RATE_MAX_SECONDS.toFixed(3),
                 step: "0.001",
@@ -24045,6 +24320,7 @@ function IOSPatchViewBody() {
           isOpen: isMsegModalOpen,
           onClose: closeMsegModal,
           slotLabel: `MSEG ${synthView.selectedMsegSlot + 1}`,
+          slotIndex: synthView.selectedMsegSlot,
           msegState: synthView.msegState,
           selectedMsegMorph: synthView.selectedMsegMorph,
           surfaceRef: msegEditorSurfaceRef,

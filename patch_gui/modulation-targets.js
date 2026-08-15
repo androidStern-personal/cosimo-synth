@@ -19,6 +19,24 @@ export const OSCILLATOR_MODULATION_PARAMETER_KINDS = [
 export const SHARED_VOICE_MODULATION_TARGET_KINDS = [
     "filterCutoffOctaves",
     "filterQ",
+    "mseg1Morph",
+    "mseg2Morph",
+    "mseg3Morph",
+    "mseg1Rate",
+    "mseg2Rate",
+    "mseg3Rate",
+    "env1Attack",
+    "env1Decay",
+    "env1Sustain",
+    "env1Release",
+    "env2Attack",
+    "env2Decay",
+    "env2Sustain",
+    "env2Release",
+    "env3Attack",
+    "env3Decay",
+    "env3Sustain",
+    "env3Release",
 ];
 /** The complete source domain; display names live with presentation metadata. */
 export const MODULATION_SOURCE_IDENTITIES = Object.freeze([
@@ -36,7 +54,10 @@ export const MODULATION_SOURCE_IDENTITIES = Object.freeze([
     { id: "pressure", sourceKind: "pressure", sourceSlot: null, group: "voice", runtimeIndex: 7 },
     { id: "slide", sourceKind: "slide", sourceSlot: null, group: "voice", runtimeIndex: 8 },
 ]);
-/** The complete 32-destination voice domain in stable runtime order. */
+/**
+ * The complete voice domain in stable runtime order. Existing oscillator and
+ * filter indexes are frozen; continuous MSEG/envelope controls are appended.
+ */
 export const VOICE_MODULATION_TARGET_KINDS = Object.freeze([
     ...OSCILLATOR_IDS.flatMap((oscillatorID) => (OSCILLATOR_MODULATION_PARAMETER_KINDS.map((parameterKind) => `osc${oscillatorID}.${parameterKind}`))),
     ...SHARED_VOICE_MODULATION_TARGET_KINDS,
@@ -74,9 +95,9 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 function assertCanonicalIdentities() {
     if (MODULATION_SOURCE_COUNT !== 13
-        || MODULATION_VOICE_TARGET_COUNT !== 32
+        || MODULATION_VOICE_TARGET_COUNT !== 50
         || MODULATION_RACK_TARGET_COUNT !== 36
-        || MODULATION_LEGAL_PAIR_COUNT !== 884) {
+        || MODULATION_LEGAL_PAIR_COUNT !== 1118) {
         throw new Error("Modulation identity catalog has an unexpected domain size");
     }
     for (const [group, expectedCount] of [["voice", 9], ["macro", 4]]) {
@@ -86,7 +107,7 @@ function assertCanonicalIdentities() {
             throw new Error(`Modulation ${group} source indexes must be unique and contiguous`);
         }
     }
-    for (const [group, expectedCount] of [["voice", 32], ["rack", 36]]) {
+    for (const [group, expectedCount] of [["voice", 50], ["rack", 36]]) {
         const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
         const indexes = identities.map((identity) => identity.runtimeIndex).sort((left, right) => left - right);
         if (identities.length !== expectedCount || indexes.some((index, position) => index !== position)) {

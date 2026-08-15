@@ -24,7 +24,7 @@ The accepted cut uses the product's public seams and existing test infrastructur
 
 - native and browser builds call the same renderer source and render A, B, and C;
 - browser reload and synth-preset tests save and restore distinct A/B/C parameters plus
-  `modulation.v5`, `articulations.v4`, and `rack.v1`;
+  `modulation.v6`, `articulations.v4`, and `rack.v1`;
 - the production worker proves ordered MOD then ART installation and replay on a new DSP
   session;
 - the indexed table worker proves independent A/B/C activation and failure identity;
@@ -70,9 +70,9 @@ There are four authorities, each with one job:
    22 controls for each oscillator, including each oscillator's wavetable selection.
    Plugin/AUv3 state already saves these parameters. Browser state must save the same
    parameter snapshot.
-2. **`modulation.v5`** owns MSEG shapes/playback, envelopes, mappings, and macro names.
-   MSEG morph and macro values are ordinary host parameters; v5 removes the duplicated
-   morph fields that exist in v4. The 884-pair routing domain is unchanged.
+2. **`modulation.v6`** owns MSEG shapes/discrete playback policy, envelope names,
+   mappings, and macro names. MSEG Morph/Time, envelope ADSR, and macro values are
+   ordinary host parameters. The routing domain is 13 sources × 86 destinations = 1118 pairs.
 3. **`articulations.v4`** owns sparse articulation slots and overrides.
 4. **`rack.v1`** owns rack order and enabled state.
 
@@ -132,10 +132,10 @@ allocates no memory, and uses only preallocated arrays and bounded loops. This r
 the full-image race in which a live parameter could change before the worker rebuilt and
 acknowledged inherited selector values.
 
-The schema audit also removes the remaining known parameter/document overlap:
-`mseg1Morph`/`2`/`3` stay host parameters, and `modulation.v5` no longer stores those
-values. Shapes, playback, envelopes, routes, and macro names remain in the modulation
-document. `modulation.v4` is rejected after the cut; there is no reconciliation rule.
+The schema audit also removes the remaining known parameter/document overlap.
+MSEG Morph/Time and envelope ADSR use host parameters only. `modulation.v6` stores
+MSEG shapes/discrete playback policy, envelope names, routes, and macro names.
+`modulation.v5` is rejected after the cut; there is no reconciliation rule.
 
 All other values are classified too: voice/play mode, glide, macros, MSEG morphs,
 shared filter values, and effect knobs are parameters; rack order/enables are `rack.v1`;
@@ -425,13 +425,14 @@ Acceptance:
   catch accidental 0..1 storage or double conversion;
 - all 22 A/B/C controls have one delivery classification: 21 ART-capable ordinary
   parameters plus one scheduler-only wavetable selection;
-- MOD membership remains the accepted ten targets per oscillator and is not inferred
-  from saved parameter inventory;
-- MSEG morph and macro values classify as parameters; MSEG shapes/playback, envelopes,
-  mappings, and macro names classify as `modulation.v5`; no field has two durable owners;
+- MOD membership remains the accepted ten targets per oscillator plus the 20 shared
+  voice targets and is not inferred from saved parameter inventory;
+- MSEG Morph/Time, envelope ADSR, and macro values classify as parameters; MSEG
+  shapes/discrete playback policy, envelope names, mappings, and macro names classify
+  as `modulation.v6`; no field has two durable owners;
 - `target-descriptor.ts` is no longer used to define a saved patch schema or independently
   author endpoint semantics;
-- the shipping synth's exact structured sound-key ledger is `modulation.v5`,
+- the shipping synth's exact structured sound-key ledger is `modulation.v6`,
   `articulations.v4`, and `rack.v1`, with only `effects.presets.v2` classified as
   auxiliary; actual product entry-graph tests reject any unclassified durable key;
 - retired synth-local `mseg1.shape`, `mseg1.playback`, and `mseg1.depth` controller paths
@@ -492,7 +493,7 @@ Acceptance:
 - MSEG shape/playback and amount-only MOD changes do zero ART work; route-layout or ART
   changes rebuild only affected fixed images;
 - note-start resolution remains preallocated, fixed-size, allocation-free, and within
-  the established callback deadline while preserving the existing 416-cell route latch;
+  the established callback deadline while preserving the existing 650-cell route latch;
 - native MIDI cannot pass until the trigger configuration and ART image share the same
   accepted epoch; whole-product restore additionally requires the terminal correlated
   `RestoreApplied`, while an ordinary live ART edit never invokes that destructive path;
@@ -805,7 +806,7 @@ Acceptance:
 - FLOW A/B/C pass on desktop, browser, and iPhone simulator;
 - grep/source guards prove every listed transitional symbol and artifact is gone;
 - the packed A/B/C table pool is the sole table representation;
-- `modulation.v5` is the only modulation document and retains the exact 884-pair domain;
+- `modulation.v6` is the only modulation document and retains the exact 1118-pair domain;
 - native MIDI/audio readiness stays closed until parameter, rack, MOD, ART, trigger, and
   all three stable table identities agree on one DSP session, the correlated full DSP
   transient reset completes, and matching `RestoreApplied` proves the terminal fence
@@ -821,7 +822,7 @@ Acceptance:
 
 Run the frozen oscillator-A differential across identity, warp, unison, retrigger,
 replacement, modulation, articulation, filter, and note lifecycle. Add isolated B and C
-and summed A/B/C causal checks. Retain the 884-route and populated-zero-count suites.
+and summed A/B/C causal checks. Retain the 1118-route and populated-zero-count suites.
 
 #### QA-STATE-02 — Cross-container state and drift qualification — 4 points
 
@@ -873,19 +874,20 @@ functional gate.
 
 Only after all functional QA passes, rerun the accepted modulation matrix and renderer
 load/deadline measurements on desktop native, Chromium, WebKit, and the physical iPhone.
-Use the complete A/B/C product, 884 stored-domain coverage, accepted 100-active profiles,
+Use the complete A/B/C product, 1118 stored-domain coverage, accepted 100-active profiles,
 and all effects enabled. Compare against explicit baselines; do not reuse default-off,
 A-only, atlas-diagnostic, or pre-cut rack-only evidence and do not infer an Effects Lane
 budget from this measurement.
 
-Implementation result: the complete native generated product and the packaged Chromium
-and WebKit products now execute the accepted 100/200/884-route profiles with 16 voices,
+Historical implementation result before the 18 generator destinations were added: the complete native generated product and the packaged Chromium
+and WebKit products executed the accepted 100/200/884-route profiles with 16 voices,
 all three oscillators, and all effects. Native qualifies as `product-shipping`; both
 browsers remain real-time with no frame discontinuities. The former synthetic 2x browser
 callback multiplier is not a shipping requirement. A bounded physical-iPhone benchmark
 attempt stopped in the isolated registration launcher before AU discovery, so no device
 performance number is claimed; the separately verified signed shipping app remains the
-physical functional gate.
+physical functional gate. The expanded 1118-pair domain requires fresh qualification;
+the historical 884-pair numbers are not reused as its result.
 
 ## Stale ticket disposition
 

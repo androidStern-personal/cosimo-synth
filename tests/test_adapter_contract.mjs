@@ -199,7 +199,7 @@ function contractSuite(adapterName, makeAdapter) {
         assert.equal(adapter.getSnapshot().patch.mappings.length, initialCount + 101);
     });
 
-    t("the complete 884-pair product domain is reachable", async (adapter) => {
+    t("the complete 1118-pair product domain is reachable", async (adapter) => {
         const { allTargetDescriptors } = await targetDescriptorPromise;
         for (const sourceType of ["mseg", "envelope", "macro"]) {
             while (adapter.commands.createSource(sourceType)._tag === "ok") {
@@ -212,7 +212,7 @@ function contractSuite(adapterName, makeAdapter) {
             .filter((descriptor) => descriptor.modulationTargetKind !== null)
             .map((descriptor) => descriptor.targetId);
         assert.equal(sources.length, 13);
-        assert.equal(targets.length, 68);
+        assert.equal(targets.length, 86);
 
         for (const targetId of targets) {
             for (const sourceId of sources) {
@@ -223,7 +223,7 @@ function contractSuite(adapterName, makeAdapter) {
             }
         }
 
-        assert.equal(adapter.getSnapshot().patch.mappings.length, 884);
+        assert.equal(adapter.getSnapshot().patch.mappings.length, 1118);
     });
 
     t("mapping setters are reflected verbatim", (adapter) => {
@@ -302,6 +302,9 @@ function contractSuite(adapterName, makeAdapter) {
 
     t("deleteSource removes its mappings; undoDeleteSource restores both", (adapter) => {
         const sourceId = "envelope-1";
+        adapter.commands.setEnvelope(sourceId, {
+            name: "Undo Env", attackSeconds: 0.47, decaySeconds: 0.36, sustain: 0.73, releaseSeconds: 1.2,
+        });
         const before = adapter.getSnapshot();
         const mappingsBefore = before.patch.mappings.filter((m) => m.sourceId === sourceId);
         assert.equal(mappingsBefore.length > 0, true, "fixture must map envelope-1 somewhere");
@@ -316,6 +319,16 @@ function contractSuite(adapterName, makeAdapter) {
             afterUndo.mappings.filter((m) => m.sourceId === sourceId).map((m) => m.id).sort(),
             mappingsBefore.map((m) => m.id).sort(),
         );
+        const restoredEnvelope = afterUndo.sources.find((source) => source.id === sourceId)?.state.envelope;
+        assert.equal(restoredEnvelope?.name, "Undo Env");
+        for (const [field, expected] of Object.entries({
+            attackSeconds: 0.47,
+            decaySeconds: 0.36,
+            sustain: 0.73,
+            releaseSeconds: 1.2,
+        })) {
+            assert.ok(Math.abs(restoredEnvelope[field] - expected) < 1e-12, `${field} restored`);
+        }
     });
 
     t("macro value and name commands are reflected in the source state", (adapter) => {

@@ -132,6 +132,29 @@ function buildAdditionalOscillatorStatusInputs() {
     }));
 }
 
+function buildModulationGeneratorStatusInputs() {
+    return allTargetDescriptors().flatMap((descriptor) => {
+        if (descriptor.binding._tag !== "endpoint"
+            || (!descriptor.moduleId.startsWith("mseg") && !descriptor.moduleId.startsWith("env"))
+            || [mseg1MorphEndpointID, mseg2MorphEndpointID, mseg3MorphEndpointID]
+                .includes(descriptor.binding.endpointId)) {
+            return [];
+        }
+        const range = descriptor.format.kind === "time"
+            ? { min: descriptor.format.minSeconds, max: descriptor.format.maxSeconds }
+            : { min: 0, max: 1 };
+        return [{
+            endpointID: descriptor.binding.endpointId,
+            purpose: "parameter",
+            annotation: {
+                name: descriptor.label,
+                ...range,
+                init: descriptor.binding.toEngine(descriptor.initialValue),
+            },
+        }];
+    });
+}
+
 type ParameterListener = (value: unknown) => void;
 type EndpointListener = (value: unknown) => void;
 type StatusListener = (status: unknown) => void;
@@ -701,6 +724,7 @@ function buildHarnessStatus(manifest: unknown) {
                         init: 0.42,
                     },
                 },
+                ...buildModulationGeneratorStatusInputs(),
                 ...buildAdditionalOscillatorStatusInputs(),
             ],
         },

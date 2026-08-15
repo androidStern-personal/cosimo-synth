@@ -7,6 +7,19 @@
 @import "./mobile-workspace.css";
 @import "./mobile-mod-matrix.css";
 
+/* The complete matrix is intentionally present for search and accessibility,
+   but off-screen rows must not consume the interactive frame budget. */
+.modulation-route-row {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 42px;
+}
+
+/* Menus intentionally escape their row; release paint containment while one
+   is open so its backdrop and options keep their normal stacking behavior. */
+.modulation-route-row:has([aria-expanded="true"]) {
+    content-visibility: visible;
+}
+
 @theme inline {
     --color-background: var(--cosimo-mod-background);
     --color-foreground: var(--cosimo-mod-foreground);

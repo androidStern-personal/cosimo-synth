@@ -44,13 +44,6 @@ function createNeutralState(routes) {
             shapeA: zeroMsegShape(slot.shapeA),
             shapeB: zeroMsegShape(slot.shapeB),
         })),
-        envelopeSlots: state.envelopeSlots.map((envelope) => ({
-            ...envelope,
-            attackSeconds: 0.001,
-            decaySeconds: 0.001,
-            sustain: 0,
-            releaseSeconds: 0.001,
-        })),
         routes,
     };
 }
@@ -142,8 +135,8 @@ function buildNeutralRouteGroups() {
         groupsByPath.set(name, targetGroups);
     }
 
-    if (allRoutes.length !== 884) {
-        throw new Error(`Expected the complete 884-cell domain, received ${allRoutes.length}`);
+    if (allRoutes.length !== 1118) {
+        throw new Error(`Expected the complete 1118-cell domain, received ${allRoutes.length}`);
     }
     return { allRoutes, groupsByPath };
 }
@@ -277,14 +270,14 @@ export function buildModulationBenchmarkProfiles() {
         createProfile("voice-rack-100", voiceRackHundred),
         createProfile("mixed-100", mixedHundred),
         createProfile("combined-200", [...voiceHundred, ...voiceRackHundred]),
-        createProfile("stored-884-active-100", allRoutes.map((route) => ({
+        createProfile("stored-1118-active-100", allRoutes.map((route) => ({
             ...route,
             enabled: mixedActiveIDs.has(route.id),
         }))),
-        createProfile("active-884", allRoutes),
+        createProfile("active-1118", allRoutes),
     ];
     const mixed = profiles.find((profile) => profile.name === "mixed-100");
-    const stored = profiles.find((profile) => profile.name === "stored-884-active-100");
+    const stored = profiles.find((profile) => profile.name === "stored-1118-active-100");
     if (mixed.executionFingerprint !== stored.executionFingerprint) {
         throw new Error("Disabled stored routes changed the compiled real-time execution program");
     }
@@ -294,7 +287,7 @@ export function buildModulationBenchmarkProfiles() {
 export function buildModulationBenchmarkDocument() {
     return {
         format: "cosimo.modulation-benchmark-profiles",
-        version: 2,
+        version: 3,
         generatedFrom: path.relative(repoRoot, scriptPath),
         sourceContract: {
             msegValue: 0,

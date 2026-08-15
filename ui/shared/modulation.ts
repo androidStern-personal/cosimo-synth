@@ -5,13 +5,13 @@ import {
 } from "./rack-parameter-descriptors";
 import {
     MSEG_DEFAULT_DEPTH,
+    MSEG_RATE_MAX_SECONDS,
     addMsegPoint,
     clamp01,
     clampMsegRateSeconds,
     createDefaultMsegPlayback,
     createDefaultMsegShape,
     deleteMsegPoint,
-    msegPlaybacksEqual,
     msegShapesEqual,
     moveMsegPoint,
     normalizeMsegPlayback,
@@ -38,14 +38,13 @@ import { err, ok, type Result } from "./result";
 import { getModulationTargetDisplayLabel } from "./target-descriptor";
 
 /** Persisted-state key for the hard-forked modulation contract. */
-export const MODULATION_STATE_KEY = "modulation.v5";
+export const MODULATION_STATE_KEY = "modulation.v6";
 /** Current strict persisted modulation envelope version. */
-export const MODULATION_STATE_VERSION = 5;
+export const MODULATION_STATE_VERSION = 6;
 export const MODULATION_MSEG_SLOT_COUNT = 3;
 export const MODULATION_ENV_SLOT_COUNT = 3;
 export const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
 export const MODULATION_MSEG_PLAYBACK_ENDPOINT_ID = "modulationMsegPlayback";
-export const MODULATION_ENV_ENDPOINT_ID = "modulationEnvelope";
 export const MODULATION_MACRO_SLOT_COUNT = 4;
 
 const MSEG_SLOT_NAMES = ["MSEG 1", "MSEG 2", "MSEG 3"] as const;
@@ -68,6 +67,24 @@ const ROUTE_AMOUNT_LIMITS = {
     unisonWidth: { min: -1.0, max: 1.0 },
     unisonWavetablePositionSpread: { min: -1.0, max: 1.0 },
     unisonWarpSpread: { min: -1.0, max: 1.0 },
+    mseg1Morph: { min: -1.0, max: 1.0 },
+    mseg2Morph: { min: -1.0, max: 1.0 },
+    mseg3Morph: { min: -1.0, max: 1.0 },
+    mseg1Rate: { min: -MSEG_RATE_MAX_SECONDS, max: MSEG_RATE_MAX_SECONDS },
+    mseg2Rate: { min: -MSEG_RATE_MAX_SECONDS, max: MSEG_RATE_MAX_SECONDS },
+    mseg3Rate: { min: -MSEG_RATE_MAX_SECONDS, max: MSEG_RATE_MAX_SECONDS },
+    env1Attack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    env1Decay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    env1Sustain: { min: -1.0, max: 1.0 },
+    env1Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    env2Attack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    env2Decay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    env2Sustain: { min: -1.0, max: 1.0 },
+    env2Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    env3Attack: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    env3Decay: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
+    env3Sustain: { min: -1.0, max: 1.0 },
+    env3Release: { min: -ENV_MAX_SECONDS, max: ENV_MAX_SECONDS },
 } as const;
 const ROUTE_AMOUNT_STEPS = {
     wavetablePosition: 0.001,
@@ -82,6 +99,24 @@ const ROUTE_AMOUNT_STEPS = {
     unisonWidth: 0.001,
     unisonWavetablePositionSpread: 0.001,
     unisonWarpSpread: 0.001,
+    mseg1Morph: 0.001,
+    mseg2Morph: 0.001,
+    mseg3Morph: 0.001,
+    mseg1Rate: 0.001,
+    mseg2Rate: 0.001,
+    mseg3Rate: 0.001,
+    env1Attack: 0.001,
+    env1Decay: 0.001,
+    env1Sustain: 0.001,
+    env1Release: 0.001,
+    env2Attack: 0.001,
+    env2Decay: 0.001,
+    env2Sustain: 0.001,
+    env2Release: 0.001,
+    env3Attack: 0.001,
+    env3Decay: 0.001,
+    env3Sustain: 0.001,
+    env3Release: 0.001,
 } as const;
 
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
@@ -114,9 +149,10 @@ export type ModulationTargetOption = {
 export type ModulationMsegSlot = {
     shapeA: MsegShape;
     shapeB: MsegShape;
-    playback: MsegPlayback;
+    playback: Omit<MsegPlayback, "rate">;
 };
 
+/** Display/runtime view assembled from the envelope name plus host parameters. */
 export type ModulationEnvelope = {
     name: string;
     attackSeconds: number;
@@ -124,6 +160,9 @@ export type ModulationEnvelope = {
     sustain: number;
     releaseSeconds: number;
 };
+
+/** The modulation document owns envelope identity only; ADSR values are host parameters. */
+export type ModulationEnvelopeSlot = Pick<ModulationEnvelope, "name">;
 
 export type ModulationRoute = {
     id: string;
@@ -140,9 +179,9 @@ export type ModulationRouteUpdate = Partial<Omit<ModulationRoute, "id">>;
 
 export type ModulationState = {
     format: "cosimo.modulation";
-    version: 5;
+    version: 6;
     msegSlots: ModulationMsegSlot[];
-    envelopeSlots: ModulationEnvelope[];
+    envelopeSlots: ModulationEnvelopeSlot[];
     routes: ModulationRoute[];
     /** Renameable macro display names (ADR-010); macro VALUES are host parameters. */
     macroNames: string[];
@@ -163,7 +202,6 @@ export type ModulationMsegBufferUpload = {
 
 export type ModulationMsegPlaybackUpload = {
     slot: number;
-    seconds: number;
     holdFinalValue: boolean;
     rateKind: number;
     loopEnabled: boolean;
@@ -171,14 +209,6 @@ export type ModulationMsegPlaybackUpload = {
     loopEnd: number;
     noteOffPolicy: number;
     legatoRestarts: boolean;
-};
-
-export type ModulationEnvelopeUpload = {
-    slot: number;
-    attackSeconds: number;
-    decaySeconds: number;
-    sustain: number;
-    releaseSeconds: number;
 };
 
 export type ModulationRuntimeEvent = {
@@ -453,7 +483,26 @@ export function formatModulationAmountReadout(
         case "unisonWidth":
         case "unisonWavetablePositionSpread":
         case "unisonWarpSpread":
+        case "mseg1Morph":
+        case "mseg2Morph":
+        case "mseg3Morph":
+        case "env1Sustain":
+        case "env2Sustain":
+        case "env3Sustain":
             return `${prefix}${formatMagnitude(clampedAmount * 100, 0)}%`;
+        case "mseg1Rate":
+        case "mseg2Rate":
+        case "mseg3Rate":
+        case "env1Attack":
+        case "env1Decay":
+        case "env1Release":
+        case "env2Attack":
+        case "env2Decay":
+        case "env2Release":
+        case "env3Attack":
+        case "env3Decay":
+        case "env3Release":
+            return `${prefix}${formatMagnitude(clampedAmount, 3)} s`;
         case "filterCutoffOctaves":
             return `${prefix}${formatMagnitude(clampedAmount, 2)} oct`;
         case "filterQ":
@@ -499,8 +548,27 @@ export function formatModulationAmountEditingValue(targetKind: ModulationTargetK
         case "unisonWidth":
         case "unisonWavetablePositionSpread":
         case "unisonWarpSpread":
+        case "mseg1Morph":
+        case "mseg2Morph":
+        case "mseg3Morph":
+        case "env1Sustain":
+        case "env2Sustain":
+        case "env3Sustain":
         case "pan":
             return formatSignedNumeric(clampedAmount * 100, 1);
+        case "mseg1Rate":
+        case "mseg2Rate":
+        case "mseg3Rate":
+        case "env1Attack":
+        case "env1Decay":
+        case "env1Release":
+        case "env2Attack":
+        case "env2Decay":
+        case "env2Release":
+        case "env3Attack":
+        case "env3Decay":
+        case "env3Release":
+            return formatSignedNumeric(clampedAmount, 3);
         case "filterCutoffOctaves":
             return formatSignedNumeric(clampedAmount, 2);
         case "filterQ":
@@ -542,7 +610,7 @@ export function parseModulationAmountEditingValue(targetKind: ModulationTargetKi
         }
     }
 
-    numericText = numericText.replace(/%|oct|st|db|q/g, "");
+    numericText = numericText.replace(/%|oct|st|db|q|s/g, "");
     const numericValue = Number.parseFloat(numericText);
 
     if (!Number.isFinite(numericValue)) {
@@ -567,6 +635,12 @@ export function parseModulationAmountEditingValue(targetKind: ModulationTargetKi
         || parameterKind === "unisonWidth"
         || parameterKind === "unisonWavetablePositionSpread"
         || parameterKind === "unisonWarpSpread"
+        || parameterKind === "mseg1Morph"
+        || parameterKind === "mseg2Morph"
+        || parameterKind === "mseg3Morph"
+        || parameterKind === "env1Sustain"
+        || parameterKind === "env2Sustain"
+        || parameterKind === "env3Sustain"
     ) {
         return clampModulationRouteAmount(targetKind, numericValue / 100);
     }
@@ -614,6 +688,28 @@ export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
             return "Unison wavetable spread still clamps to the table range.";
         case "unisonWarpSpread":
             return "Unison warp spread still clamps to the oscillator's warp range.";
+        case "mseg1Morph":
+        case "mseg2Morph":
+        case "mseg3Morph":
+            return "MSEG morph still clamps between Shape A and Shape B.";
+        case "mseg1Rate":
+        case "mseg2Rate":
+        case "mseg3Rate":
+            return "MSEG time still clamps to the source's authored duration range.";
+        case "env1Attack":
+        case "env1Decay":
+        case "env1Release":
+        case "env2Attack":
+        case "env2Decay":
+        case "env2Release":
+        case "env3Attack":
+        case "env3Decay":
+        case "env3Release":
+            return "Envelope time still clamps to the envelope stage range.";
+        case "env1Sustain":
+        case "env2Sustain":
+        case "env3Sustain":
+            return "Envelope sustain still clamps between silence and full level.";
         default:
             return "";
     }
@@ -683,6 +779,11 @@ export function normalizeEnvelope(value: unknown, slotIndex = 0): ModulationEnve
         sustain: clamp01(nextValue.sustain ?? fallback.sustain),
         releaseSeconds: clampEnvSeconds(nextValue.releaseSeconds ?? fallback.releaseSeconds, fallback.releaseSeconds),
     };
+}
+
+function normalizeEnvelopeSlot(value: unknown, slotIndex = 0): ModulationEnvelopeSlot {
+    const normalized = normalizeEnvelope(value, slotIndex);
+    return { name: normalized.name };
 }
 
 export function createDefaultRoute(overrides: Partial<ModulationRoute> = {}): ModulationRoute {
@@ -781,7 +882,7 @@ function canonicalJsonValuesEqual(left: unknown, right: unknown): boolean {
     ));
 }
 
-/** Pick the first unused cell in the closed 884-pair domain for generic Add. */
+/** Pick the first unused cell in the closed 1118-pair domain for generic Add. */
 export function createFirstAvailableModulationRoute(
     routes: ReadonlyArray<ModulationRoute>,
 ): ModulationRoute | null {
@@ -811,10 +912,17 @@ function normalizeMsegSlot(value: unknown, slotIndex: number): ModulationMsegSlo
     const defaultShape = createDefaultMsegShape(MSEG_SLOT_NAMES[slotIndex] ?? `MSEG ${slotIndex + 1}`);
     const shapeA = normalizeMsegShape(nextValue.shapeA ?? defaultShape);
 
+    const normalizedPlayback = normalizeMsegPlayback({
+        ...createDefaultMsegPlayback(),
+        ...(nextValue.playback ?? {}),
+        rate: createDefaultMsegPlayback().rate,
+    });
+    const { rate: _parameterOwnedRate, ...playback } = normalizedPlayback;
+
     return {
         shapeA,
         shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
-        playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback()),
+        playback,
     };
 }
 
@@ -823,7 +931,9 @@ export function createDefaultModulationState(): ModulationState {
         format: "cosimo.modulation",
         version: MODULATION_STATE_VERSION,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot({}, slotIndex)),
-        envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => createDefaultEnvelope(slotIndex)),
+        envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => ({
+            name: createDefaultEnvelope(slotIndex).name,
+        })),
         routes: [],
         macroNames: MACRO_SLOT_NAMES.slice(),
     };
@@ -839,7 +949,7 @@ export function normalizeModulationState(value: unknown = createDefaultModulatio
         format: "cosimo.modulation",
         version: MODULATION_STATE_VERSION,
         msegSlots: Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => normalizeMsegSlot(inputMsegSlots[slotIndex], slotIndex)),
-        envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelope(inputEnvelopeSlots[slotIndex], slotIndex)),
+        envelopeSlots: Array.from({ length: MODULATION_ENV_SLOT_COUNT }, (_, slotIndex) => normalizeEnvelopeSlot(inputEnvelopeSlots[slotIndex], slotIndex)),
         routes: normalizeRoutes(nextValue.routes),
         macroNames: Array.from(
             { length: MODULATION_MACRO_SLOT_COUNT },
@@ -904,10 +1014,9 @@ function toStoredStateEchoToken(value: unknown) {
     }
 }
 
-function toMsegPlaybackUpload(slotIndex: number, playback: MsegPlayback): ModulationMsegPlaybackUpload {
+function toMsegPlaybackUpload(slotIndex: number, playback: Omit<MsegPlayback, "rate">): ModulationMsegPlaybackUpload {
     return {
         slot: slotIndex + 1,
-        seconds: clampMsegRateSeconds(playback.rate.seconds),
         holdFinalValue: playback.holdFinalValue !== false,
         rateKind: 0,
         loopEnabled: Boolean(playback.loop),
@@ -931,14 +1040,11 @@ function toMsegBufferUpload(slotIndex: number, shapeIndex: number, shape: MsegSh
     };
 }
 
-function toEnvelopeUpload(slotIndex: number, envelope: ModulationEnvelope): ModulationEnvelopeUpload {
-    return {
-        slot: slotIndex + 1,
-        attackSeconds: envelope.attackSeconds,
-        decaySeconds: envelope.decaySeconds,
-        sustain: envelope.sustain,
-        releaseSeconds: envelope.releaseSeconds,
-    };
+function msegPlaybackPoliciesEqual(left: Omit<MsegPlayback, "rate">, right: Omit<MsegPlayback, "rate">) {
+    return left.holdFinalValue === right.holdFinalValue
+        && left.noteOffPolicy === right.noteOffPolicy
+        && left.legatoRestarts === right.legatoRestarts
+        && JSON.stringify(left.loop) === JSON.stringify(right.loop);
 }
 
 export function buildModulationRuntimeEvents(
@@ -962,21 +1068,10 @@ export function buildModulationRuntimeEvents(
                 value: toMsegBufferUpload(slotIndex, 1, slot.shapeB),
             });
         }
-        if (previousSlot === undefined || !msegPlaybacksEqual(previousSlot.playback, slot.playback)) {
+        if (previousSlot === undefined || !msegPlaybackPoliciesEqual(previousSlot.playback, slot.playback)) {
             events.push({
                 endpointID: MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
                 value: toMsegPlaybackUpload(slotIndex, slot.playback),
-            });
-        }
-    }
-
-    for (let slotIndex = 0; slotIndex < MODULATION_ENV_SLOT_COUNT; slotIndex += 1) {
-        const envelope = state.envelopeSlots[slotIndex];
-        const previousEnvelope = previousState?.envelopeSlots[slotIndex];
-        if (previousEnvelope === undefined || JSON.stringify(previousEnvelope) !== JSON.stringify(envelope)) {
-            events.push({
-                endpointID: MODULATION_ENV_ENDPOINT_ID,
-                value: toEnvelopeUpload(slotIndex, envelope),
             });
         }
     }
@@ -1029,7 +1124,10 @@ class ModulationMsegSlotController implements MsegEditorControllerLike {
             shapeB: slot.shapeB,
             referenceShape,
             editShapeIndex,
-            playback: slot.playback,
+            playback: {
+                ...slot.playback,
+                rate: createDefaultMsegPlayback().rate,
+            },
             depth: MSEG_DEFAULT_DEPTH,
         };
     }
@@ -1182,16 +1280,17 @@ export class ModulationRuntimeBridge {
 
     setMsegSlotPlayback(slotIndex: number, nextPlayback: unknown) {
         const normalizedPlayback = normalizeMsegPlayback(nextPlayback);
+        const { rate: _parameterOwnedRate, ...playback } = normalizedPlayback;
         const currentSlot = this.state.msegSlots[slotIndex];
 
-        if (msegPlaybacksEqual(currentSlot.playback, normalizedPlayback)) {
+        if (msegPlaybackPoliciesEqual(currentSlot.playback, playback)) {
             return;
         }
 
         this.updateState((previousState) => {
             const nextMsegSlots = previousState.msegSlots.map((slot, index) => (
                 index === slotIndex
-                    ? { ...slot, playback: normalizedPlayback }
+                    ? { ...slot, playback }
                     : slot
             ));
 
@@ -1203,7 +1302,7 @@ export class ModulationRuntimeBridge {
     }
 
     setEnvelope(slotIndex: number, nextEnvelope: unknown) {
-        const normalizedEnvelope = normalizeEnvelope(nextEnvelope, slotIndex);
+        const normalizedEnvelope = normalizeEnvelopeSlot(nextEnvelope, slotIndex);
         const currentEnvelope = this.state.envelopeSlots[slotIndex];
 
         if (JSON.stringify(currentEnvelope) === JSON.stringify(normalizedEnvelope)) {

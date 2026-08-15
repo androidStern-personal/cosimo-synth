@@ -1,6 +1,6 @@
 # ADR-020: Declarative mappings compile to a sparse real-time program
 
-Status: accepted — 2026-08-08; 884-cell RT-01 consumer amendment — 2026-08-14
+Status: accepted — 2026-08-08; 1118-cell generator-target amendment — 2026-08-15
 
 ## Context
 
@@ -22,18 +22,18 @@ performance property.
 
 ### One declarative model, one compiler seam
 
-`modulation.v4` is the canonical user and preset model. It stores mappings as relationships:
+`modulation.v6` is the canonical user and preset model. It stores mappings as relationships:
 source, target, amount, polarity, enabled state, and the applicable Max/Mean reducer. Mapping order
 has no sonic meaning. One source/target pair may exist at most once.
 
 `ui/shared/modulation-runtime-program.ts` is the only seam that translates those mappings into the
 engine representation. The public adapter and UI do not expose a route-table capacity.
 
-Cosimo's closed domain currently contains 13 sources and 68 destinations, so it has 884 legal
+Cosimo's closed domain currently contains 13 sources and 86 destinations, so it has 1118 legal
 source/target cells:
 
-- 288 voice-source → voice-destination cells
-- 128 Macro → voice-destination cells
+- 450 voice-source → voice-destination cells
+- 200 Macro → voice-destination cells
 - 324 voice-source → rack-destination cells
 - 144 Macro → rack-destination cells
 
@@ -42,7 +42,7 @@ allocated, recycled, or coupled to list order.
 
 ### Clean break at the stored-state boundary
 
-There is one exact current `modulation.v4` schema. Hydration, live writes, and presets all use the
+There is one exact current `modulation.v6` schema. Hydration, live writes, and presets all use the
 same parser. Unknown fields, unknown sources or destinations, duplicate ids, duplicate
 source/destination pairs, non-finite values, and incomplete documents reject the whole document.
 The parser never groups rows, repairs identities, clamps persisted values, or rewrites state.
@@ -129,7 +129,7 @@ reported without entering a retry loop.
 
 ### Articulations remain sparse in storage
 
-Articulation storage remains `mapping id → amount`. Source-contract images use 416 deterministic
+Articulation storage remains `mapping id → amount`. Source-contract images use 650 deterministic
 voice cells, independent of mapping list order: an explicit override is stored directly and an
 absent override uses a safe out-of-range inheritance sentinel. RT-01 connects the exact v4 shape to
 the Cmajor endpoint and resolves inherited cells from the current base program when the note
@@ -141,9 +141,9 @@ writes invoke the same strict parser; neither path drops, remaps, or repairs ent
 
 ## Performance contracts
 
-The measurements below predate the v4 target-domain expansion and were recorded against the
+The measurements below predate the current generator-target expansion and were recorded against the
 then-complete 624-cell domain. They remain evidence for active-prefix cost and the 100-active-route
-contract; every reference to 624 in this section is a historical result, not the current 884-cell
+contract; every reference to 624 in this section is a historical result, not the current 1118-cell
 capacity claim.
 
 The committed benchmark runs at an asserted 48 kHz / 128-frame render quantum. It confirms 16 unique
@@ -236,9 +236,10 @@ would only prove sequential restore and would add no overlapping-race coverage.
 The native QuickJS path has a separate production-patch proof rather than a mocked compiler or worker.
 It opens `WavetableSynth.cmajorpatch`, restores declarative stored state through the real worker,
 requires an accepted modulation serial and one installed macro-to-rack route, observes a strict
-`modulation.v4` Macro 1 to global-filter-cutoff route materially reduce real engine audio, then clears
+`modulation.v6` Macro 1 to global-filter-cutoff route materially reduce real engine audio, then clears
 the live state and requires the installed route count to return to zero and the audio level to recover.
-This is a rack-only pre-RT-01 execution proof, not qualification of the deferred 32-target voice image.
+This began as a rack-only pre-RT-01 proof; current voice-target behavior is covered by the generated
+SharedVoiceEngine and complete 50-target execution gates.
 Focused native regressions also exercise
 Promise jobs at every QuickJS execution boundary and stored-string change detection. The pinned runtime
 fixes are reproduced by `scripts/ensure_cmajor_runtime.py`; every source anchor must occur exactly once
@@ -286,7 +287,7 @@ pre/post runs. These are desktop results, not a substitute for the physical-iPho
 
 - Stored mappings and maximum execution cost are no longer the same number.
 - The UI can create more than 100 mappings and reports a plain mapping count. Only duplicate pairs
-  or exhaustion of the real 884-pair domain can prevent creation.
+  or exhaustion of the real 1118-pair domain can prevent creation.
 - Bypassed mappings cost no route instructions; deletion is no longer required to recover a slot.
 - The simplest measured transport won: one aggregate topology event plus one tiny amount event.
   A staged transaction protocol, slot allocator, generation checks, public rate-policy layer, and

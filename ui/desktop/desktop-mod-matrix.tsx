@@ -581,7 +581,7 @@ const RouteRow = memo(function RouteRow({
         <div
             ref={(element) => registerRow(routeIndex, element)}
             data-role={`route-row-${routeIndex + 1}`}
-            className={`synth-control-rail group flex items-center gap-2 rounded-lg px-3 py-2 transition-all hover:border-[rgb(var(--section-accent-rgb)/0.22)] hover:bg-[rgb(var(--section-accent-rgb)/0.045)] ${
+            className={`modulation-route-row synth-control-rail group flex items-center gap-2 rounded-lg px-3 py-2 transition-all hover:border-[rgb(var(--section-accent-rgb)/0.22)] hover:bg-[rgb(var(--section-accent-rgb)/0.045)] ${
                 route.enabled ? "" : "opacity-40"
             }`}
         >

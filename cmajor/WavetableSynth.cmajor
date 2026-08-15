@@ -1161,7 +1161,6 @@ graph WavetableSynth [[ main ]]
     input event int32 retryDesiredTableRequest;
     input event wt::ModulationMsegBufferUpload modulationMsegBuffer;
     input event wt::ModulationMsegPlaybackUpload modulationMsegPlayback;
-    input event wt::ModulationEnvelopeUpload modulationEnvelope;
     input event wt::ModulationProgramUpload modulationProgram;
     input event wt::ModulationAmountUpload modulationAmount;
     input event wt::ArticulationNoteMeta articulationNoteMeta;
@@ -1311,6 +1310,25 @@ graph WavetableSynth [[ main ]]
     input rack.reverbDecay;
     input rack.reverbDamping;
     input rack.reverbMix;
+    // Generator controls are appended so every existing host automation slot
+    // remains stable. These parameters are the single live/durable owner of the
+    // continuous MSEG and envelope values; structured modulation state owns
+    // only shapes and discrete playback policy.
+    input value float32 mseg1Rate [[ name: "MSEG 1 Time", min: 0.0f, max: 2.0f, init: 1.0f, unit: "s", rampFrames: 0 ]];
+    input value float32 mseg2Rate [[ name: "MSEG 2 Time", min: 0.0f, max: 2.0f, init: 1.0f, unit: "s", rampFrames: 0 ]];
+    input value float32 mseg3Rate [[ name: "MSEG 3 Time", min: 0.0f, max: 2.0f, init: 1.0f, unit: "s", rampFrames: 0 ]];
+    input value float32 env1Attack [[ name: "ENV 1 Attack", min: 0.001f, max: 10.0f, init: 0.01f, unit: "s", rampFrames: 0 ]];
+    input value float32 env1Decay [[ name: "ENV 1 Decay", min: 0.001f, max: 10.0f, init: 0.25f, unit: "s", rampFrames: 0 ]];
+    input value float32 env1Sustain [[ name: "ENV 1 Sustain", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 0 ]];
+    input value float32 env1Release [[ name: "ENV 1 Release", min: 0.001f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
+    input value float32 env2Attack [[ name: "ENV 2 Attack", min: 0.001f, max: 10.0f, init: 0.01f, unit: "s", rampFrames: 0 ]];
+    input value float32 env2Decay [[ name: "ENV 2 Decay", min: 0.001f, max: 10.0f, init: 0.25f, unit: "s", rampFrames: 0 ]];
+    input value float32 env2Sustain [[ name: "ENV 2 Sustain", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 0 ]];
+    input value float32 env2Release [[ name: "ENV 2 Release", min: 0.001f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
+    input value float32 env3Attack [[ name: "ENV 3 Attack", min: 0.001f, max: 10.0f, init: 0.01f, unit: "s", rampFrames: 0 ]];
+    input value float32 env3Decay [[ name: "ENV 3 Decay", min: 0.001f, max: 10.0f, init: 0.25f, unit: "s", rampFrames: 0 ]];
+    input value float32 env3Sustain [[ name: "ENV 3 Sustain", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 0 ]];
+    input value float32 env3Release [[ name: "ENV 3 Release", min: 0.001f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
     // Rack structure is patch state, not host automation (ADR-007). These are struct
     // events, which carry no parameter purpose, so they are structurally
     // non-automatable rather than non-automatable by convention.
@@ -1386,7 +1404,6 @@ graph WavetableSynth [[ main ]]
         articulationSnapshot -> sharedEngine.articulationSnapshotIn;
         modulationMsegBuffer -> sharedEngine.modulationMsegBufferIn;
         modulationMsegPlayback -> sharedEngine.modulationMsegPlaybackIn;
-        modulationEnvelope -> sharedEngine.modulationEnvelopeIn;
         modulationProgram -> sharedEngine.modulationProgramIn;
         modulationAmount -> sharedEngine.modulationAmountIn;
         glideTime -> sharedEngine.glideTimeIn;
@@ -1400,6 +1417,21 @@ graph WavetableSynth [[ main ]]
         mseg1Morph -> sharedEngine.mseg1MorphIn;
         mseg2Morph -> sharedEngine.mseg2MorphIn;
         mseg3Morph -> sharedEngine.mseg3MorphIn;
+        mseg1Rate -> sharedEngine.msegRateIn[0];
+        mseg2Rate -> sharedEngine.msegRateIn[1];
+        mseg3Rate -> sharedEngine.msegRateIn[2];
+        env1Attack -> sharedEngine.envelopeAttackIn[0];
+        env1Decay -> sharedEngine.envelopeDecayIn[0];
+        env1Sustain -> sharedEngine.envelopeSustainIn[0];
+        env1Release -> sharedEngine.envelopeReleaseIn[0];
+        env2Attack -> sharedEngine.envelopeAttackIn[1];
+        env2Decay -> sharedEngine.envelopeDecayIn[1];
+        env2Sustain -> sharedEngine.envelopeSustainIn[1];
+        env2Release -> sharedEngine.envelopeReleaseIn[1];
+        env3Attack -> sharedEngine.envelopeAttackIn[2];
+        env3Decay -> sharedEngine.envelopeDecayIn[2];
+        env3Sustain -> sharedEngine.envelopeSustainIn[2];
+        env3Release -> sharedEngine.envelopeReleaseIn[2];
         oscAWavetableSelect -> desiredTableMonitorA.tableSelectIn;
         oscBWavetableSelect -> desiredTableMonitorB.tableSelectIn;
         oscCWavetableSelect -> desiredTableMonitorC.tableSelectIn;

@@ -851,6 +851,8 @@ def test_ios_modulation_benchmark_installs_state_through_the_production_worker()
     assert "modulationProgram" not in host_harness
     assert 'isEqualToString:@"modulation-benchmark"' in host_controller
     assert "measureModulationPhaseNamed" in host_controller
+    assert '![profileDocument[@"version"] isEqual:@3]' in host_controller
+    assert 'setParameterWithIdentifier:@"env1Sustain"' in host_controller
     assert "waitForModulationRuntimeReadyUntil" in host_harness
     assert host_harness.index("waitForModulationRuntimeReadyUntil") < host_harness.index("install.value = 1.0f")
     assert "cosimoBenchmarkRuntimeReady" in host_harness
@@ -863,7 +865,7 @@ def test_ios_modulation_benchmark_installs_state_through_the_production_worker()
     assert "payload[@\"warmup\"]" in host_controller
 
     plugin_shell = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
-    assert 'static constexpr auto modulationStateKey = "modulation.v5";' in plugin_shell
+    assert 'static constexpr auto modulationStateKey = "modulation.v6";' in plugin_shell
     assert "patch->setStoredStateValue (modulationStateKey" in plugin_shell
     assert '"modulation.v2"' not in plugin_shell
     assert 'endpointID == "runtimeInstallAck"' in plugin_shell
@@ -943,7 +945,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
     payload = json.loads(output_path.read_text(encoding="utf-8"))
     profiles = {profile["name"]: profile for profile in payload["profiles"]}
 
-    assert payload["version"] == 2
+    assert payload["version"] == 3
     assert profiles["empty"]["execution"] == {"status": "available"}
     assert profiles["voice-rack-100"]["execution"] == {"status": "available"}
     assert all(profile["execution"] == {"status": "available"} for profile in profiles.values())
@@ -952,19 +954,19 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
     assert profiles["voice-100"]["activeRouteCount"] == 100
     assert profiles["voice-rack-100"]["activeRouteCount"] == 100
     assert profiles["mixed-100"]["activeRouteCount"] == 100
-    assert profiles["stored-884-active-100"]["storedRouteCount"] == 884
-    assert profiles["stored-884-active-100"]["activeRouteCount"] == 100
+    assert profiles["stored-1118-active-100"]["storedRouteCount"] == 1118
+    assert profiles["stored-1118-active-100"]["activeRouteCount"] == 100
     assert (
-        profiles["stored-884-active-100"]["executionFingerprint"]
+        profiles["stored-1118-active-100"]["executionFingerprint"]
         == profiles["mixed-100"]["executionFingerprint"]
     )
     assert profiles["combined-200"]["activeRouteCount"] == 200
     assert profiles["combined-200"]["compiledCounts"]["voice"] == 100
     assert profiles["combined-200"]["compiledCounts"]["voiceRack"] == 100
-    assert profiles["active-884"]["activeRouteCount"] == 884
-    assert profiles["active-884"]["compiledCounts"] == {
-        "voice": 288,
-        "macroVoice": 128,
+    assert profiles["active-1118"]["activeRouteCount"] == 1118
+    assert profiles["active-1118"]["compiledCounts"] == {
+        "voice": 450,
+        "macroVoice": 200,
         "voiceRack": 324,
         "macroRack": 144,
     }
@@ -984,7 +986,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
         assert profile["profileIndex"] == profile_index
         document = json.loads(profile["stateJSON"])
         assert document["format"] == "cosimo.modulation"
-        assert document["version"] == 5
+        assert document["version"] == 6
         assert len({route["id"] for route in document["routes"]}) == len(document["routes"])
         assert profile["compiledRouteCount"] == profile["activeRouteCount"]
         assert all(0.0 < abs(float(route["amount"])) <= 0.03125 for route in document["routes"])
@@ -994,12 +996,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
             for shape in (slot["shapeA"], slot["shapeB"])
             for point in shape["points"]
         )
-        assert all(envelope["sustain"] == 0.0 for envelope in document["envelopeSlots"])
-        assert all(
-            envelope[field] == 0.001
-            for envelope in document["envelopeSlots"]
-            for field in ("attackSeconds", "decaySeconds", "releaseSeconds")
-        )
+        assert all(set(envelope) == {"name"} for envelope in document["envelopeSlots"])
 
         route_groups: dict[tuple[object, ...], list[dict[str, object]]] = {}
         for route in document["routes"]:
@@ -1111,8 +1108,8 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "voice-rack-100": 45.0,
         "mixed-100": 45.0,
         "combined-200": 45.0,
-        "stored-884-active-100": 45.0,
-        "active-884": 20.0,
+        "stored-1118-active-100": 45.0,
+        "active-1118": 20.0,
     }
     compiled_counts = {
         "empty": {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
@@ -1120,8 +1117,8 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "voice-rack-100": {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
         "mixed-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
         "combined-200": {"voice": 100, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
-        "stored-884-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
-        "active-884": {"voice": 288, "macroVoice": 128, "voiceRack": 324, "macroRack": 144},
+        "stored-1118-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
+        "active-1118": {"voice": 450, "macroVoice": 200, "voiceRack": 324, "macroRack": 144},
     }
     phases = []
     for name in _load_ios_modulation_benchmark_module().PROFILE_NAMES:
@@ -1271,11 +1268,11 @@ def test_ios_modulation_benchmark_rejects_expensive_matrix_delta() -> None:
         module.assert_shipping_contract(payload)
 
 
-def test_ios_full_884_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
+def test_ios_full_1118_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
     module = _load_ios_modulation_benchmark_module()
 
-    assert "active-884" in module.PROFILE_NAMES
-    assert "active-884" not in module.MATRIX_LOAD_BUDGETS
+    assert "active-1118" in module.PROFILE_NAMES
+    assert "active-1118" not in module.MATRIX_LOAD_BUDGETS
 
 
 def test_ios_modulation_benchmark_requires_adjacent_empty_brackets() -> None:

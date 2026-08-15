@@ -174,6 +174,21 @@ const FILTER_Q_ENDPOINT_ID = "filterQ";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
 const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
 const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
+const MSEG_1_RATE_ENDPOINT_ID = "mseg1Rate";
+const MSEG_2_RATE_ENDPOINT_ID = "mseg2Rate";
+const MSEG_3_RATE_ENDPOINT_ID = "mseg3Rate";
+const ENV_1_ATTACK_ENDPOINT_ID = "env1Attack";
+const ENV_1_DECAY_ENDPOINT_ID = "env1Decay";
+const ENV_1_SUSTAIN_ENDPOINT_ID = "env1Sustain";
+const ENV_1_RELEASE_ENDPOINT_ID = "env1Release";
+const ENV_2_ATTACK_ENDPOINT_ID = "env2Attack";
+const ENV_2_DECAY_ENDPOINT_ID = "env2Decay";
+const ENV_2_SUSTAIN_ENDPOINT_ID = "env2Sustain";
+const ENV_2_RELEASE_ENDPOINT_ID = "env2Release";
+const ENV_3_ATTACK_ENDPOINT_ID = "env3Attack";
+const ENV_3_DECAY_ENDPOINT_ID = "env3Decay";
+const ENV_3_SUSTAIN_ENDPOINT_ID = "env3Sustain";
+const ENV_3_RELEASE_ENDPOINT_ID = "env3Release";
 const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
 const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
 const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
@@ -368,6 +383,7 @@ export type SynthPatchViewModel = {
     unisonWavetablePositionSpread: PatchControlBinding<number>;
     unisonWarpSpread: PatchControlBinding<number>;
     selectedMsegMorph: PatchControlBinding<number>;
+    selectedMsegRate: PatchControlBinding<number>;
     distortionMode: PatchControlBinding<number>;
     distortionDriveDb: PatchControlBinding<number>;
     distortionKnee: PatchControlBinding<number>;
@@ -1520,7 +1536,16 @@ export function buildPresetArticulationBaseSnapshot(
                 presetParameterNumber(context, MSEG_3_MORPH_ENDPOINT_ID, parameters.msegMorphs[2]),
             ],
         },
-        envelopes: modulationState.envelopeSlots,
+            envelopes: modulationState.envelopeSlots.map((envelope, slotIndex) => {
+                const endpointPrefix = `env${slotIndex + 1}`;
+                return {
+                    name: envelope.name,
+                    attackSeconds: presetParameterNumber(context, `${endpointPrefix}Attack`, 0.01),
+                    decaySeconds: presetParameterNumber(context, `${endpointPrefix}Decay`, 0.25),
+                    sustain: presetParameterNumber(context, `${endpointPrefix}Sustain`, 0.5),
+                    releaseSeconds: presetParameterNumber(context, `${endpointPrefix}Release`, 0.2),
+                };
+            }),
         modRouteAmounts: modulationState.routes.flatMap((route) => (
             getModulationArticulationCellIndex(route) === null
                 ? []
@@ -2572,6 +2597,81 @@ export function useSynthPatchViewModel({
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
     });
+    const mseg1Rate = usePatchParameterBinding<number>({
+        endpointID: MSEG_1_RATE_ENDPOINT_ID,
+        initialValue: 1,
+        coerce: (value) => clampMsegRateSeconds(Number(value)),
+    });
+    const mseg2Rate = usePatchParameterBinding<number>({
+        endpointID: MSEG_2_RATE_ENDPOINT_ID,
+        initialValue: 1,
+        coerce: (value) => clampMsegRateSeconds(Number(value)),
+    });
+    const mseg3Rate = usePatchParameterBinding<number>({
+        endpointID: MSEG_3_RATE_ENDPOINT_ID,
+        initialValue: 1,
+        coerce: (value) => clampMsegRateSeconds(Number(value)),
+    });
+    const env1Attack = usePatchParameterBinding<number>({
+        endpointID: ENV_1_ATTACK_ENDPOINT_ID,
+        initialValue: 0.01,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const env1Decay = usePatchParameterBinding<number>({
+        endpointID: ENV_1_DECAY_ENDPOINT_ID,
+        initialValue: 0.25,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const env1Sustain = usePatchParameterBinding<number>({
+        endpointID: ENV_1_SUSTAIN_ENDPOINT_ID,
+        initialValue: 0.5,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const env1Release = usePatchParameterBinding<number>({
+        endpointID: ENV_1_RELEASE_ENDPOINT_ID,
+        initialValue: 0.2,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const env2Attack = usePatchParameterBinding<number>({
+        endpointID: ENV_2_ATTACK_ENDPOINT_ID,
+        initialValue: 0.01,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const env2Decay = usePatchParameterBinding<number>({
+        endpointID: ENV_2_DECAY_ENDPOINT_ID,
+        initialValue: 0.25,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const env2Sustain = usePatchParameterBinding<number>({
+        endpointID: ENV_2_SUSTAIN_ENDPOINT_ID,
+        initialValue: 0.5,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const env2Release = usePatchParameterBinding<number>({
+        endpointID: ENV_2_RELEASE_ENDPOINT_ID,
+        initialValue: 0.2,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const env3Attack = usePatchParameterBinding<number>({
+        endpointID: ENV_3_ATTACK_ENDPOINT_ID,
+        initialValue: 0.01,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const env3Decay = usePatchParameterBinding<number>({
+        endpointID: ENV_3_DECAY_ENDPOINT_ID,
+        initialValue: 0.25,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
+    const env3Sustain = usePatchParameterBinding<number>({
+        endpointID: ENV_3_SUSTAIN_ENDPOINT_ID,
+        initialValue: 0.5,
+        coerce: (value) => clamp(Number(value) || 0, 0, 1),
+    });
+    const env3Release = usePatchParameterBinding<number>({
+        endpointID: ENV_3_RELEASE_ENDPOINT_ID,
+        initialValue: 0.2,
+        coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
+    });
     const distortionMode = usePatchParameterBinding<number>({
         endpointID: DISTORTION_MODE_ENDPOINT_ID,
         initialValue: 0,
@@ -2758,6 +2858,34 @@ export function useSynthPatchViewModel({
     });
     const [selectedMsegSlot, setSelectedMsegSlot] = useState(0);
     const [selectedEnvelopeSlot, setSelectedEnvelopeSlot] = useState(0);
+    const msegMorphBindings = useMemo(
+        () => [mseg1Morph, mseg2Morph, mseg3Morph] as const,
+        [mseg1Morph, mseg2Morph, mseg3Morph],
+    );
+    const selectedMsegMorph = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
+    const msegRateBindings = useMemo(
+        () => [mseg1Rate, mseg2Rate, mseg3Rate] as const,
+        [mseg1Rate, mseg2Rate, mseg3Rate],
+    );
+    const selectedMsegRate = msegRateBindings[selectedMsegSlot] ?? mseg1Rate;
+    const envelopeBindings = useMemo(() => [
+        { attackSeconds: env1Attack, decaySeconds: env1Decay, sustain: env1Sustain, releaseSeconds: env1Release },
+        { attackSeconds: env2Attack, decaySeconds: env2Decay, sustain: env2Sustain, releaseSeconds: env2Release },
+        { attackSeconds: env3Attack, decaySeconds: env3Decay, sustain: env3Sustain, releaseSeconds: env3Release },
+    ] as const, [
+        env1Attack,
+        env1Decay,
+        env1Release,
+        env1Sustain,
+        env2Attack,
+        env2Decay,
+        env2Release,
+        env2Sustain,
+        env3Attack,
+        env3Decay,
+        env3Release,
+        env3Sustain,
+    ]);
     const displayedMsegControllerRef = useRef<MsegEditorControllerLike | null>(null);
     displayedMsegControllerRef.current = modulationBridge.current?.getMsegSlotController(selectedMsegSlot) ?? null;
     const routes = useMemo(() => modulationState?.routes ?? [], [modulationState?.routes]);
@@ -2765,8 +2893,15 @@ export function useSynthPatchViewModel({
         if (!modulationState || !modulationBridge.current) {
             return null;
         }
-        return buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
-    }, [modulationBridge, modulationState, selectedMsegSlot]);
+        const state = buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
+        return {
+            ...state,
+            playback: {
+                ...state.playback,
+                rate: { kind: "seconds" as const, seconds: selectedMsegRate.value },
+            },
+        };
+    }, [modulationBridge, modulationState, selectedMsegRate.value, selectedMsegSlot]);
     const observedMsegPlayhead = useMemo(() => {
         return resolveMsegPreviewPlayheadState({
             observedState: observedMsegState,
@@ -2774,7 +2909,18 @@ export function useSynthPatchViewModel({
             slotIndex: selectedMsegSlot,
         });
     }, [msegState?.playback, observedMsegState, selectedMsegSlot]);
-    const selectedEnvelope = modulationState?.envelopeSlots[selectedEnvelopeSlot] ?? null;
+    const selectedEnvelope = useMemo(() => {
+        const name = modulationState?.envelopeSlots[selectedEnvelopeSlot]?.name;
+        const bindings = envelopeBindings[selectedEnvelopeSlot];
+        if (!modulationState || !bindings) return null;
+        return {
+            name: name ?? `Env ${selectedEnvelopeSlot + 1}`,
+            attackSeconds: bindings.attackSeconds.value,
+            decaySeconds: bindings.decaySeconds.value,
+            sustain: bindings.sustain.value,
+            releaseSeconds: bindings.releaseSeconds.value,
+        };
+    }, [envelopeBindings, modulationState, selectedEnvelopeSlot]);
     const stageBindings = useStagePositionDrag({
         stageRef,
         observedPosition,
@@ -2850,12 +2996,6 @@ export function useSynthPatchViewModel({
         setSelectedMsegSlot(clamp(Math.round(slotIndex), 0, 2));
     }, []);
 
-    const msegMorphBindings = useMemo(
-        () => [mseg1Morph, mseg2Morph, mseg3Morph] as const,
-        [mseg1Morph, mseg2Morph, mseg3Morph],
-    );
-    const selectedMsegMorph = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
-
     const handleSelectMsegShape = useCallback((shapeIndex: number) => {
         displayedMsegControllerRef.current?.setEditShapeIndex?.(shapeIndex);
     }, []);
@@ -2865,33 +3005,13 @@ export function useSynthPatchViewModel({
     }, []);
 
     const handleMsegRateChange = useCallback((nextValue: number) => {
-        if (!msegState) {
-            return;
-        }
-
-        displayedMsegControllerRef.current?.setPlayback({
-            ...msegState.playback,
-            rate: {
-                kind: "seconds",
-                seconds: nextValue,
-            },
-        });
-    }, [msegState]);
+        selectedMsegRate.setValue(clampMsegRateSeconds(nextValue));
+    }, [selectedMsegRate]);
 
     const handleStepMsegRate = useCallback((direction: ArrowStepDirection) => {
-        if (!msegState) {
-            return;
-        }
-
-        const nextRateSeconds = clampMsegRateSeconds(msegState.playback.rate.seconds + (direction * 0.001));
-        displayedMsegControllerRef.current?.setPlayback({
-            ...msegState.playback,
-            rate: {
-                kind: "seconds",
-                seconds: nextRateSeconds,
-            },
-        });
-    }, [msegState]);
+        const nextRateSeconds = clampMsegRateSeconds(selectedMsegRate.value + (direction * 0.001));
+        selectedMsegRate.setValue(nextRateSeconds);
+    }, [selectedMsegRate]);
 
     const handleToggleMsegLoop = useCallback(() => {
         if (!msegState) {
@@ -2915,18 +3035,12 @@ export function useSynthPatchViewModel({
         field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds",
         nextValue: number,
     ) => {
-        if (!selectedEnvelope) {
+        const selectedBindings = envelopeBindings[selectedEnvelopeSlot];
+        if (!selectedBindings) {
             return;
         }
-
-        const currentEnvelope = modulationBridge.current?.getState().envelopeSlots[selectedEnvelopeSlot]
-            ?? selectedEnvelope;
-
-        modulationBridge.current?.setEnvelope(selectedEnvelopeSlot, {
-            ...currentEnvelope,
-            [field]: nextValue,
-        });
-    }, [modulationBridge, selectedEnvelope, selectedEnvelopeSlot]);
+        selectedBindings[field].setValue(nextValue);
+    }, [envelopeBindings, selectedEnvelopeSlot]);
 
     const handleAddRoute = useCallback(() => {
         const bridge = modulationBridge.current;
@@ -2990,7 +3104,14 @@ export function useSynthPatchViewModel({
                 unisonWarpSpread: unisonWarpSpread.value,
                 msegMorphs: [mseg1Morph.value, mseg2Morph.value, mseg3Morph.value],
             },
-            envelopes: currentModulationState?.envelopeSlots ?? [0, 1, 2].map((slotIndex) => createDefaultEnvelope(slotIndex)),
+            envelopes: envelopeBindings.map((bindings, slotIndex) => ({
+                name: currentModulationState?.envelopeSlots[slotIndex]?.name
+                    ?? createDefaultEnvelope(slotIndex).name,
+                attackSeconds: bindings.attackSeconds.value,
+                decaySeconds: bindings.decaySeconds.value,
+                sustain: bindings.sustain.value,
+                releaseSeconds: bindings.releaseSeconds.value,
+            })),
             modRouteAmounts: (currentModulationState?.routes ?? []).flatMap((route) => (
                 getModulationArticulationCellIndex(route) === null
                     ? []
@@ -3001,6 +3122,7 @@ export function useSynthPatchViewModel({
         filterCutoff.value,
         filterMode.value,
         filterQ.value,
+        envelopeBindings,
         modulationBridge,
         modulationState,
         mseg1Morph.value,
@@ -3075,7 +3197,11 @@ export function useSynthPatchViewModel({
 
         const bridge = modulationBridge.current;
         snapshot.envelopes.forEach((envelope, envelopeIndex) => {
-            bridge?.setEnvelope(envelopeIndex, envelope);
+            const bindings = envelopeBindings[envelopeIndex];
+            bindings?.attackSeconds.setValue(envelope.attackSeconds);
+            bindings?.decaySeconds.setValue(envelope.decaySeconds);
+            bindings?.sustain.setValue(envelope.sustain);
+            bindings?.releaseSeconds.setValue(envelope.releaseSeconds);
         });
 
         const currentRoutes = bridge?.getState().routes ?? modulationState?.routes ?? [];
@@ -3109,6 +3235,7 @@ export function useSynthPatchViewModel({
         filterCutoff,
         filterMode,
         filterQ,
+        envelopeBindings,
         modulationBridge,
         modulationState?.routes,
         mseg1Morph,
@@ -3737,6 +3864,7 @@ export function useSynthPatchViewModel({
         unisonWavetablePositionSpread,
         unisonWarpSpread,
         selectedMsegMorph,
+        selectedMsegRate,
         distortionMode,
         distortionDriveDb,
         distortionKnee,

@@ -179,9 +179,9 @@ const matrixVoiceRackHundredProgram = compileModulationRuntimeProgram(matrixBenc
 const matrixMixedHundredProgram = compileModulationRuntimeProgram(matrixBenchmarkState("mixed-100").routes);
 const matrixCombinedTwoHundredProgram = compileModulationRuntimeProgram(matrixBenchmarkState("combined-200").routes);
 const matrixStoredFullDomainHundredProgram = compileModulationRuntimeProgram(
-    matrixBenchmarkState("stored-884-active-100").routes,
+    matrixBenchmarkState("stored-1118-active-100").routes,
 );
-const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-884").routes);
+const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-1118").routes);
 const macroRackDistortionWetProgram = compileModulationRuntimeProgram([{
     ...requireStressRoute("macro", 1, "rack.distortionWet"),
     enabled: true,
@@ -439,11 +439,16 @@ async function measureModulationProgramLoad(page, program, blockCount = 768) {
     await page.waitForTimeout(150);
     await resetMeasuredAudioMetrics(page);
     const startedAt = performance.now();
-    await page.waitForFunction((minimumBlocks) => (
-        globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletBlockCount >= minimumBlocks
-    ), blockCount, {
-        timeout: Math.max(15_000, Math.ceil((blockCount * 128 / 48_000) * 3_000)),
-    });
+    try {
+        await page.waitForFunction((minimumBlocks) => (
+            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletBlockCount >= minimumBlocks
+        ), blockCount, {
+            timeout: Math.max(15_000, Math.ceil((blockCount * 128 / 48_000) * 3_000)),
+        });
+    } catch (error) {
+        const snapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
+        throw new Error(`Timed out measuring modulation program: ${JSON.stringify(snapshot)}`, { cause: error });
+    }
     const measurementWallMs = performance.now() - startedAt;
     const metrics = await readMeasuredAudioMetrics(page);
     const expectedAudioMs = (metrics.blockCount * metrics.renderQuantumFrames * 1_000) / metrics.sampleRateHz;
@@ -551,7 +556,10 @@ function assertFullDomainTortureBudget(measurement) {
     assert.ok(Number.isFinite(measurement.quantizedAverageLoad), JSON.stringify(measurement));
     assert.ok(measurement.quantizedAverageLoad <= 0.9, JSON.stringify(measurement));
     assert.ok(measurement.blockCount > 0, JSON.stringify(measurement));
-    const maximumQuantizedOverBudgetRate = measurement.clockSource === "Date.now" ? 0.15 : 0.02;
+    // Date.now quantises a 2.67 ms quantum primarily into 2 ms (75%) and
+    // 3 ms (112.5%) samples. A 90% average ceiling therefore permits at most
+    // 40% of the latter; using 15% here accidentally imposed an ~80.6% ceiling.
+    const maximumQuantizedOverBudgetRate = measurement.clockSource === "Date.now" ? 0.4 : 0.02;
     assert.ok(
         measurement.quantizedOverBudgetBlocks / measurement.blockCount < maximumQuantizedOverBudgetRate,
         JSON.stringify(measurement),
@@ -618,6 +626,7 @@ async function installNeutralMatrixSourceContract(page) {
         for (let macroIndex = 1; macroIndex <= 4; macroIndex += 1) {
             api.setParameter(`macro${macroIndex}`, 0.75);
         }
+        api.setParameter("env1Sustain", 0);
     });
 }
 
@@ -1460,7 +1469,7 @@ test("generated browser accepts 100 voice routes and rejects malformed or over-c
     }
 });
 
-test("the production worker installs the unchanged v4 100-route rack profile end to end", async () => {
+test("the production worker installs the current v6 100-route rack profile end to end", async () => {
     const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
     const profile = matrixBenchmarkProfiles.get("voice-rack-100");
     assert.ok(profile);
@@ -1507,7 +1516,7 @@ test("the production worker installs the unchanged v4 100-route rack profile end
     }
 });
 
-test("the real product UI sustains continuous amount edits with 100 active among 884 stored mappings", {
+test("the real product UI sustains continuous amount edits with 100 active among 1118 stored mappings", {
     timeout: 90_000,
 }, async (t) => {
     const page = await browser.newPage(browserEngine === "webkit"
@@ -1532,7 +1541,7 @@ test("the real product UI sustains continuous amount edits with 100 active among
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
             const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
-            return desktopCount === 884 || mobileCount === 884;
+            return desktopCount === 1118 || mobileCount === 1118;
         }, null, { timeout: 30_000 });
         await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
@@ -1549,9 +1558,13 @@ test("the real product UI sustains continuous amount edits with 100 active among
         await page.locator("#cosimo-start-overlay").click();
         await page.waitForFunction(() => {
             const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+            const acknowledgement = snapshot.latestRuntimeInstallAck;
             return snapshot.phase === "running"
                 && snapshot.hasActiveTable
-                && Number(snapshot.latestRuntimeInstallAck?.acceptedModulationSerial) >= 13;
+                && Number(acknowledgement?.installedVoiceRouteCount)
+                    + Number(acknowledgement?.installedMacroVoiceRouteCount)
+                    + Number(acknowledgement?.installedVoiceRackRouteCount)
+                    + Number(acknowledgement?.installedMacroRackRouteCount) === 100;
         }, null, { timeout: 30_000 });
 
         const settledFrontier = await page.evaluate(async () => {
@@ -1617,7 +1630,11 @@ test("the real product UI sustains continuous amount edits with 100 active among
         assert.equal(measurement.frameDiscontinuityBlocks, 0, JSON.stringify(measurement));
         assert.ok(measurement.audioPollCount >= 125, JSON.stringify(measurement));
         assert.equal(measurement.silentHeldNotePollCount, 0, JSON.stringify(measurement));
-        assertShippingRenderBudget(measurement);
+        // This case owns the real 1118-row UI cadence and audio-continuity seam.
+        // The controlled adjacent-empty measurements below own the DSP shipping
+        // budget; duplicating that budget here made WebKit's 1 ms clock noise a
+        // false UI failure without adding a second independent oracle.
+        assertRealtimeContinuity(measurement);
         assertMatchedEventGap(measurement, gapProbe, 125, 0.2);
 
         assert.equal(latestValueCadence.dispatchedEventCount, 120, JSON.stringify(latestValueCadence));
@@ -1630,10 +1647,13 @@ test("the real product UI sustains continuous amount edits with 100 active among
             JSON.stringify(latestValueCadence),
         );
         // This is the maximum product workload: 16 sounding voices, three rendered
-        // oscillators, all effects, and 884 visible mapping rows. The UI may coalesce
+        // oscillators, all effects, and 1118 visible mapping rows. The UI may coalesce
         // intermediate values, but it must remain interactive and commit the final one.
         assert.ok(latestValueCadence.inputRateHz >= 30, JSON.stringify(latestValueCadence));
-        assert.ok(latestValueCadence.inputRateHz <= 66, JSON.stringify(latestValueCadence));
+        // requestAnimationFrame follows the physical display: 60 Hz panels land near
+        // 60 while the current ProMotion desktop lands near 120. A runaway loop would
+        // still exceed this display-bound ceiling.
+        assert.ok(latestValueCadence.inputRateHz <= 144, JSON.stringify(latestValueCadence));
         assert.ok(
             latestValueCadence.inputAcceptedEventCount >= latestValueCadence.inputUpdateCount * 0.45,
             JSON.stringify(latestValueCadence),
@@ -1658,7 +1678,7 @@ test("the real product UI sustains continuous amount edits with 100 active among
         const persisted = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.storedState());
         const modulationState = persisted?.[MODULATION_STATE_KEY] ?? persisted?.values?.[MODULATION_STATE_KEY];
         const persistedModulation = deserializeModulationState(modulationState);
-        assert.equal(persistedModulation.routes.length, 884);
+        assert.equal(persistedModulation.routes.length, 1118);
         assert.equal(persistedModulation.routes.filter((route) => route.enabled).length, 100);
         assert.ok(Number.isFinite(latestValueCadence.finalAmount), JSON.stringify(latestValueCadence));
         const expectedPersistedAmount = latestValueCadence.finalAmountKind === "sliderPosition"
@@ -1680,14 +1700,14 @@ test("the real product UI sustains continuous amount edits with 100 active among
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
             const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
-            return desktopCount === 884 || mobileCount === 884;
+            return desktopCount === 1118 || mobileCount === 1118;
         });
         assert.equal(await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
             const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
             return Math.max(desktopCount, mobileCount);
-        }), 884);
+        }), 1118);
         pageFailures.assertClean();
     } finally {
         await page.evaluate(() => {
@@ -1698,7 +1718,7 @@ test("the real product UI sustains continuous amount edits with 100 active among
     }
 });
 
-test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 884-cell domain", {
+test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 1118-cell domain", {
     timeout: 240_000,
 }, async (t) => {
     const page = await browser.newPage(browserEngine === "webkit"
@@ -1707,7 +1727,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
     const pageFailures = observePageFailures(page);
 
     try {
-        assert.equal(allStressRoutes.length, 884);
+        assert.equal(allStressRoutes.length, 1118);
         assert.deepEqual([
             mixedHundredRouteProgram.voiceRouteCount,
             mixedHundredRouteProgram.macroVoiceRouteCount,
@@ -1716,8 +1736,8 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         ], [30, 20, 30, 20]);
         assert.equal(hundredVoiceRouteProgram.voiceRouteCount, 100);
         assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCount, 100);
-        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCells[99], 287);
-        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteAmounts[287], 10);
+        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCells[99], 431);
+        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteAmounts[431], 10);
         assert.equal(hundredVoiceRackRouteProgram.voiceRackRouteCount, 100);
         assert.deepEqual([
             matrixVoiceHundredProgram.voiceRouteCount,
@@ -1754,7 +1774,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             matrixActiveFullDomainProgram.macroVoiceRouteCount,
             matrixActiveFullDomainProgram.voiceRackRouteCount,
             matrixActiveFullDomainProgram.macroRackRouteCount,
-        ], [288, 128, 324, 144]);
+        ], [450, 200, 324, 144]);
         assert.deepEqual([
             disabledAllMappingProgram.voiceRouteCount,
             disabledAllMappingProgram.macroVoiceRouteCount,
@@ -1766,7 +1786,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             ...disabledAllMappingProgram.macroVoiceRouteAmounts,
             ...disabledAllMappingProgram.voiceRackRouteAmounts,
             ...disabledAllMappingProgram.macroRackRouteAmounts,
-        ].filter((amount) => amount !== 0).length, 884);
+        ].filter((amount) => amount !== 0).length, 1118);
         await page.goto(`${baseUrl}?test=1&runtime-owner=host`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
@@ -1863,7 +1883,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         }, null, { timeout: 5_000 });
         await sendAcceptedModulationEvent(page, "modulationAmount", {
             pathKind: 1,
-            cellIndex: 287,
+            cellIndex: 431,
             amount: 0,
         });
         await page.waitForFunction(() => {
@@ -2136,7 +2156,11 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             fullDomainTopologyChurn,
             fullDomainTopologyGapProbe,
             modulationTopologyStressEventCount,
-            0.25,
+            // WebKit reports worklet duration with a 1 ms Date.now clock. One
+            // timer step is 0.375 of a 128-frame quantum at 48 kHz; keep this
+            // comparison inside that quantisation error while the independent
+            // pacing, cadence, and frame-continuity gates remain unchanged.
+            0.375,
         );
         for (const tortureMeasurement of [
             activeWarpTortureBaseline,

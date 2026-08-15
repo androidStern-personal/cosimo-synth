@@ -971,6 +971,55 @@ test("mounted iPhone play mode and glide controls sync parameter updates and emi
     }
 });
 
+test("mounted iPhone exposes every continuous MSEG and envelope modulation target", async () => {
+    const page = await openIOSHarnessPage(browser, server.baseUrl, {
+        viewportSize: { width: 390, height: 844 },
+    });
+
+    try {
+        await waitForIOSHarnessReady(page);
+
+        for (let slotIndex = 0; slotIndex < 3; slotIndex += 1) {
+            await clickShadowButton(page, `[aria-label='Select MSEG ${slotIndex + 1}']`);
+            const launcherMorphTarget = await page.evaluate(() => (
+                document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelector(".ios-main-view [data-role='mseg-morph-slider']")
+                    ?.getAttribute("data-modulation-target-kind") ?? null
+            ));
+            assert.equal(launcherMorphTarget, `mseg${slotIndex + 1}Morph`);
+
+            await clickShadowButton(page, ".mseg-preview-button");
+            const modalTargets = await page.evaluate(() => Array.from(
+                document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelectorAll("[data-role='mseg-modal'] [data-modulation-target-kind]") ?? [],
+                (element) => element.getAttribute("data-modulation-target-kind"),
+            ));
+            assert.deepEqual(modalTargets.sort(), [
+                `mseg${slotIndex + 1}Morph`,
+                `mseg${slotIndex + 1}Rate`,
+            ].sort());
+            await clickShadowButton(page, "[data-role='mseg-modal-close']");
+        }
+
+        for (let slotIndex = 0; slotIndex < 3; slotIndex += 1) {
+            await clickShadowButton(page, `[aria-label='Select envelope ${slotIndex + 1}']`);
+            const targets = await page.evaluate(() => Array.from(
+                document.querySelector("cosimo-synth-view")?.shadowRoot
+                    ?.querySelectorAll(".ios-main-view [data-modulation-target-kind^='env']") ?? [],
+                (element) => element.getAttribute("data-modulation-target-kind"),
+            ));
+            assert.deepEqual(targets.sort(), [
+                `env${slotIndex + 1}Attack`,
+                `env${slotIndex + 1}Decay`,
+                `env${slotIndex + 1}Sustain`,
+                `env${slotIndex + 1}Release`,
+            ].sort());
+        }
+    } finally {
+        await closeIOSHarnessPage(page);
+    }
+});
+
 test("mounted iPhone host page keeps the footer keyboard docked at the shell bottom in portrait and landscape, and honors host inset overrides", async () => {
     for (const viewportSize of [
         { width: 390, height: 844 },

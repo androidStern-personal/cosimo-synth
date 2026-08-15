@@ -199,12 +199,13 @@ function modulationMsegBufferEvent(slot, buffer) {
 }
 
 function modulationMsegPlaybackEvent(slot, playback) {
+    const { seconds: _hostParameterRate, ...discretePlayback } = playback[0].event;
     return [
         {
             frameOffset: 0,
             event: {
                 slot,
-                ...playback[0].event,
+                ...discretePlayback,
             },
         },
     ];
@@ -277,6 +278,7 @@ async function writeFixture(name, spec) {
 
     if (spec.mseg1Playback) {
         await writeJson(path.join(dir, "mseg1Playback.json"), spec.mseg1Playback);
+        await writeJson(path.join(dir, "mseg1Rate.json"), [valueEvent(0, spec.mseg1Playback[0].event.seconds)]);
     }
 
     const warpMsegDepth = spec.warpMsegDepth?.[0]?.value ?? 0;

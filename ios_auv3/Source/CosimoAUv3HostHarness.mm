@@ -70,7 +70,7 @@ static NSArray<NSString *> *CosimoBenchmarkResultFieldIdentifiers()
 
 static NSArray<NSNumber *> *CosimoBenchmarkResultFieldScales()
 {
-    return @[ @100000.0, @884.0, @884.0, @884.0, @884.0,
+    return @[ @100000.0, @450.0, @200.0, @324.0, @144.0,
               @100000.0, @100000.0, @192000.0, @10000000.0, @4096.0, @4096.0, @200.0,
               @200.0, @200.0, @1000.0, @10000.0, @65535.0, @255.0 ];
 }

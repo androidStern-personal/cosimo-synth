@@ -19,7 +19,7 @@ bool testCompleteMappingDomainHasEightHundredEightyFourCells()
             + wt::modulationMacroVoiceRouteCellCount
             + wt::modulationVoiceRackRouteCellCount
             + wt::modulationMacroRackRouteCellCount
-        == 884;
+        == 1118;
 }
 
 bool testRackDestinationVocabularyIsCompleteAndContiguous()

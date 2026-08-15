@@ -1,4 +1,4 @@
-// Bounded production-engine execution proof for the complete modulation.v5
+// Bounded production-engine execution proof for the complete modulation.v6
 // sparse program domain. This verifies installed prefix counts and live DSP
 // sentinels without turning the test into a performance budget.
 
@@ -6,13 +6,13 @@
 
 ## testProcessor (undefined, { frequency: 600 })
 
-graph ModulationV4ProgramExecution [[ main ]]
+graph ModulationV6ProgramExecution [[ main ]]
 {
     output event int32 out;
 
-    node source = ModulationV4ProgramSource;
+    node source = ModulationV6ProgramSource;
     node engine = wt::SharedVoiceEngine (1);
-    node witness = ModulationV4ProgramWitness;
+    node witness = ModulationV6ProgramWitness;
 
     connection
     {
@@ -29,7 +29,7 @@ graph ModulationV4ProgramExecution [[ main ]]
     }
 }
 
-processor ModulationV4ProgramSource
+processor ModulationV6ProgramSource
 {
     output event wt::ModulationProgramUpload programOut;
     output event (std::notes::NoteOn, std::notes::Slide) voiceOut;
@@ -145,7 +145,15 @@ processor ModulationV4ProgramSource
         }
 
         upload.voiceRouteAmounts[wt::modulationVoiceRouteCellCount - 1] = 1.0f;
+        upload.voiceRouteAmounts[
+            (wt::modulationVoiceSourceCount - 1) * wt::modulationVoiceTargetCount
+                + wt::modulationTargetFilterQ
+        ] = 1.0f;
         upload.macroVoiceRouteAmounts[wt::modulationMacroVoiceRouteCellCount - 1] = 2.0f;
+        upload.macroVoiceRouteAmounts[
+            (wt::modulationMacroSourceCount - 1) * wt::modulationVoiceTargetCount
+                + wt::modulationTargetFilterQ
+        ] = 2.0f;
         upload.voiceRackRouteAmounts[wt::modulationVoiceRackRouteCellCount - 1] = 1.0f;
         upload.macroRackRouteAmounts[wt::modulationMacroRackRouteCellCount - 1] = 2.0f;
         return upload;
@@ -208,7 +216,7 @@ processor ModulationV4ProgramSource
     }
 }
 
-processor ModulationV4ProgramWitness
+processor ModulationV6ProgramWitness
 {
     input event wt::RuntimeInstallAck ackIn;
     input event wt::EffectiveFilterStateMonitor filterIn;

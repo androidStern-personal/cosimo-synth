@@ -32,28 +32,28 @@ constexpr auto observationTimeout = std::chrono::seconds (8);
 
 constexpr auto storedStatePrefix = R"json({
   "format": "cosimo.modulation",
-  "version": 5,
+  "version": 6,
   "msegSlots": [
     {
       "shapeA": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 1", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
       "shapeB": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 1", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
-      "playback": { "format": "cosimo.mseg.playback", "version": 1, "rate": { "kind": "seconds", "seconds": 1 }, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
+      "playback": { "format": "cosimo.mseg.playback", "version": 1, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
     },
     {
       "shapeA": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 2", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
       "shapeB": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 2", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
-      "playback": { "format": "cosimo.mseg.playback", "version": 1, "rate": { "kind": "seconds", "seconds": 1 }, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
+      "playback": { "format": "cosimo.mseg.playback", "version": 1, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
     },
     {
       "shapeA": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 3", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
       "shapeB": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 3", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
-      "playback": { "format": "cosimo.mseg.playback", "version": 1, "rate": { "kind": "seconds", "seconds": 1 }, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
+      "playback": { "format": "cosimo.mseg.playback", "version": 1, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
     }
   ],
   "envelopeSlots": [
-    { "name": "Env 1", "attackSeconds": 0.01, "decaySeconds": 0.25, "sustain": 0.5, "releaseSeconds": 0.2 },
-    { "name": "Env 2", "attackSeconds": 0.01, "decaySeconds": 0.25, "sustain": 0.5, "releaseSeconds": 0.2 },
-    { "name": "Env 3", "attackSeconds": 0.01, "decaySeconds": 0.25, "sustain": 0.5, "releaseSeconds": 0.2 }
+    { "name": "Env 1" },
+    { "name": "Env 2" },
+    { "name": "Env 3" }
   ],
   "routes": )json";
 
@@ -311,7 +311,7 @@ int runProbe (const char* runtimePath, const char* patchPath)
         }
     };
 
-    patch.setStoredStateValue ("modulation.v5", choc::value::Value (routedStoredState));
+    patch.setStoredStateValue ("modulation.v6", choc::value::Value (routedStoredState));
     patch.setPlaybackParams ({ sampleRate, blockSize, 0, 2 });
 
     cmaj::Patch::LoadParams loadParams;
@@ -369,7 +369,7 @@ int runProbe (const char* runtimePath, const char* patchPath)
     const auto routedRms = measureAudioRms (patch, playback, 256);
     const auto routedSnapshot = takeSnapshot (observations);
 
-    patch.setStoredStateValue ("modulation.v5", choc::value::Value (emptyStoredState));
+    patch.setStoredStateValue ("modulation.v6", choc::value::Value (emptyStoredState));
 
     if (! waitForMessageLoopBarrier())
     {
@@ -405,7 +405,7 @@ int runProbe (const char* runtimePath, const char* patchPath)
         return 1;
     }
 
-    std::cout << "PASS: QuickJS restored modulation.v5 through the production worker and rack engine\n"
+    std::cout << "PASS: QuickJS restored modulation.v6 through the production worker and rack engine\n"
               << "  dspSessionID=" << emptySnapshot.dspSessionID << '\n'
               << "  acceptedModulationSerial=" << emptySnapshot.acceptedModulationSerial << '\n'
               << "  routedRms=" << routedRms << '\n'

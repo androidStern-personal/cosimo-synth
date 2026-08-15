@@ -23,8 +23,10 @@ const desktopBundleBudgetBytes = 3_200_000;
 // The worker owns stored-state parsing, sparse compilation, and acknowledged
 // delivery. Keep measured raw-parse and transfer ceilings on that complete
 // production unit instead of budgeting only the old 12-slot publisher.
-const wavetableWorkerBudgetBytes = 138_000;
-const wavetableWorkerGzipBudgetBytes = 34_000;
+// The 2026-08-15 generator-control cut adds 18 strict target identities and
+// their range validation to the worker's accepted modulation domain.
+const wavetableWorkerBudgetBytes = 143_000;
+const wavetableWorkerGzipBudgetBytes = 34_200;
 
 test("compiled desktop production entry stays within its browser parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");

@@ -199,7 +199,7 @@ test("valid restore acknowledges modulation before publishing dependent articula
     const connection = new TestConnection({
         values: {
             "articulations.v4": bank,
-            "modulation.v5": modulation.serializeModulationState(dependencies.modulationState),
+            "modulation.v6": modulation.serializeModulationState(dependencies.modulationState),
         },
     });
     const service = worker.createModulationArticulationWorkerService(connection);
@@ -273,14 +273,14 @@ test("separate-key restore waits for modulation and v4 articulation only", async
     assert.equal(connection.articulationUploads().length, 0);
 
     connection.emitStoredState(
-        "modulation.v5",
+        "modulation.v6",
         modulation.serializeModulationState(dependencies.modulationState),
     );
     await flushMicrotasks();
     assert.equal(connection.articulationUploads().length, 1);
     assert.deepEqual(connection.requestedKeys.sort(), [
         "articulations.v4",
-        "modulation.v5",
+        "modulation.v6",
     ]);
     service.stop();
 });
@@ -302,7 +302,7 @@ test("cold invalid v4 defaults without reading or rewriting a legacy bank", asyn
                 values: {
                     "articulations.v4": invalidCurrentValues[index],
                     "articulations.v3": { ...makeBank(), version: 3 },
-                    "modulation.v5": modulation.serializeModulationState(dependencies.modulationState),
+                    "modulation.v6": modulation.serializeModulationState(dependencies.modulationState),
                 },
             });
             const service = worker.createModulationArticulationWorkerService(connection);
@@ -329,7 +329,7 @@ test("live invalid v4 and legacy writes retain the last accepted bank atomically
     const connection = new TestConnection({
         values: {
             "articulations.v4": acceptedBank,
-            "modulation.v5": modulation.serializeModulationState(dependencies.modulationState),
+            "modulation.v6": modulation.serializeModulationState(dependencies.modulationState),
         },
     });
     const service = worker.createModulationArticulationWorkerService(connection);

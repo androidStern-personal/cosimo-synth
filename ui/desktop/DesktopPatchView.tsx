@@ -23,6 +23,7 @@ import type {
     OscillatorID,
     OscillatorModulationParameterKind,
     OscillatorModulationTargetKind,
+    ModulationTargetKind,
 } from "../shared/modulation-targets";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import {
@@ -295,6 +296,7 @@ type FilterSectionProps = {
 
 type MsegEditorModalProps = {
     isOpen: boolean;
+    slotIndex: number;
     slotLabel: string;
     msegState: MsegState | null;
     morphBinding: PatchControlBinding<number>;
@@ -787,11 +789,13 @@ function OverlayIconChip({
 
 function MsegMorphRail({
     binding,
+    modulationTargetKind,
     onChange,
     onAdjustingChange,
     className,
 }: {
     binding: PatchControlBinding<number>;
+    modulationTargetKind: ModulationTargetKind;
     onChange: (nextValue: number) => void;
     onAdjustingChange?: (isAdjusting: boolean) => void;
     className?: string;
@@ -893,6 +897,7 @@ function MsegMorphRail({
                 aria-valuenow={Number(value.toFixed(3))}
                 aria-valuetext={`${Math.round(value * 100)}%`}
                 data-role="mseg-morph-slider"
+                data-modulation-target-kind={modulationTargetKind}
                 className="relative h-5 min-w-[132px] flex-1 cursor-ew-resize touch-none rounded-full outline-none"
                 onPointerDown={(event) => {
                     if (event.button !== 0) {
@@ -2175,6 +2180,7 @@ function KeyboardSection({
 
 function MsegEditorModal({
     isOpen,
+    slotIndex,
     slotLabel,
     msegState,
     morphBinding,
@@ -2343,6 +2349,7 @@ function MsegEditorModal({
                             value={morphBinding.value.toFixed(3)}
                             aria-label="MSEG morph"
                             data-role="mseg-morph-slider"
+                            data-modulation-target-kind={`mseg${slotIndex + 1}Morph`}
                             onChange={(event) => onMorphChange(Number(event.currentTarget.value))}
                             onPointerDown={() => setIsMorphAdjusting(true)}
                             onPointerUp={() => setIsMorphAdjusting(false)}
@@ -2360,6 +2367,7 @@ function MsegEditorModal({
                             step={0.001}
                             value={clampMsegRateSeconds(msegState.playback.rate.seconds).toFixed(3)}
                             aria-label="MSEG rate"
+                            data-modulation-target-kind={`mseg${slotIndex + 1}Rate`}
                             onChange={(event) => onRateChange(Number(event.currentTarget.value))}
                             {...rateFocusBindings}
                         />
@@ -2923,6 +2931,7 @@ function ModulationMatrixSection({
                             spellCheck={false}
                             readOnly={!isEditingMsegRate}
                             aria-label="MSEG rate"
+                            data-modulation-target-kind={`mseg${selectedMsegSlot + 1}Rate`}
                             className={`synth-readout-text w-[56px] touch-none select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center text-[10px] leading-none outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
                                 isEditingMsegRate
                                     ? "cursor-text"
@@ -3002,10 +3011,10 @@ function ModulationMatrixSection({
                     {/* Envelope ADSR controls */}
                     <div className={`absolute inset-0 flex items-center justify-end gap-1.5 ${activeEditorTab.kind === "envelope" && selectedEnvelope ? "visible" : "invisible"}`}>
                         {selectedEnvelope ? ([
-                            { label: "A", compactLabel: "Attack", ariaLabel: "Envelope attack value", field: "attackSeconds" as const, draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds },
-                            { label: "D", compactLabel: "Decay", ariaLabel: "Envelope decay value", field: "decaySeconds" as const, draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds },
-                            { label: "S", compactLabel: "Sustain", ariaLabel: "Envelope sustain value", field: null, draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain },
-                            { label: "R", compactLabel: "Release", ariaLabel: "Envelope release value", field: "releaseSeconds" as const, draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds },
+                            { label: "A", compactLabel: "Attack", ariaLabel: "Envelope attack value", field: "attackSeconds" as const, target: "Attack", draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds },
+                            { label: "D", compactLabel: "Decay", ariaLabel: "Envelope decay value", field: "decaySeconds" as const, target: "Decay", draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds },
+                            { label: "S", compactLabel: "Sustain", ariaLabel: "Envelope sustain value", field: null, target: "Sustain", draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain },
+                            { label: "R", compactLabel: "Release", ariaLabel: "Envelope release value", field: "releaseSeconds" as const, target: "Release", draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds },
                         ] as const).map((param) => (
                             <label key={param.label} className="flex items-center gap-[3px]">
                                 <span className="text-[9px] font-semibold uppercase text-slate-400/60">
@@ -3013,6 +3022,7 @@ function ModulationMatrixSection({
                                 </span>
                                 <input
                                     aria-label={param.ariaLabel}
+                                    data-modulation-target-kind={`env${selectedEnvelopeSlot + 1}${param.target}`}
                                     type="text"
                                     inputMode="decimal"
                                     className="synth-readout-text w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-left text-[9px] leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[44px] max-[480px]:text-[10px]"
@@ -3113,6 +3123,7 @@ function ModulationMatrixSection({
                         <div className="absolute inset-x-3 bottom-2">
                             <MsegMorphRail
                                 binding={selectedMsegMorph}
+                                modulationTargetKind={`mseg${selectedMsegSlot + 1}Morph` as ModulationTargetKind}
                                 onChange={onMsegMorphChange}
                                 onAdjustingChange={setIsMsegMorphAdjusting}
                             />
@@ -3943,6 +3954,7 @@ function DesktopPatchViewBody({
 
             <MsegEditorModal
                 isOpen={synthView.msegEditor.isOpen}
+                slotIndex={synthView.selectedMsegSlot}
                 slotLabel={`MSEG ${synthView.selectedMsegSlot + 1}`}
                 msegState={synthView.msegState}
                 morphBinding={synthView.selectedMsegMorph}

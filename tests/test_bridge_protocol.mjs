@@ -129,7 +129,7 @@ function storedModulationState(harness) {
         : harness.modulation.deserializeModulationState(storedValue);
 }
 
-test("MSEG morph is a live parameter and is absent from modulation.v5", async () => {
+test("MSEG morph is a live parameter and is absent from modulation.v6", async () => {
     const harness = await createHarness();
 
     harness.adapter.commands.setMsegMorph({

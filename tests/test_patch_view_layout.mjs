@@ -227,6 +227,7 @@ test("iOS patch manifest keeps the synth graph but switches to the mobile editor
         "cmajor/Phaser.cmajor",
         "cmajor/Delay.cmajor",
         "cmajor/Reverb.cmajor",
+        "cmajor/ThreeOscillatorRendererExternal.cmajor",
         "cmajor/FixedFrameOscillator.cmajor",
         "cmajor/VoiceReducer.cmajor",
         "cmajor/EffectsRack.cmajor",
@@ -252,12 +253,36 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
     assert.match(graphInputValues[0]?.annotation ?? "", /hidden:\s*true/);
     assert.match(graphInputValues[0]?.annotation ?? "", /automatable:\s*false/);
     assert.match(graphInputValues[0]?.annotation ?? "", /rampFrames:\s*0/);
-    assert.equal(graphInputValues[1]?.identifier, "wavetablePosition");
+    assert.equal(graphInputValues[1]?.identifier, "oscAWavetableSelect");
     assert.doesNotMatch(
         synthSource,
         /hostSlot0Guard\s*->/,
         "The slot-0 guard must reserve the host parameter position without changing synth audio or UI state.",
     );
+});
+
+test("all continuous MSEG and envelope controls are public host parameters", async () => {
+    const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
+    const values = new Map(parseGraphInputValues(synthSource, "WavetableSynth").map((value) => [value.identifier, value]));
+    const expected = [
+        ["mseg1Morph", 0, 1, 0], ["mseg2Morph", 0, 1, 0], ["mseg3Morph", 0, 1, 0],
+        ["mseg1Rate", 0, 2, 1], ["mseg2Rate", 0, 2, 1], ["mseg3Rate", 0, 2, 1],
+        ["env1Attack", 0.001, 10, 0.01], ["env1Decay", 0.001, 10, 0.25],
+        ["env1Sustain", 0, 1, 0.5], ["env1Release", 0.001, 10, 0.2],
+        ["env2Attack", 0.001, 10, 0.01], ["env2Decay", 0.001, 10, 0.25],
+        ["env2Sustain", 0, 1, 0.5], ["env2Release", 0.001, 10, 0.2],
+        ["env3Attack", 0.001, 10, 0.01], ["env3Decay", 0.001, 10, 0.25],
+        ["env3Sustain", 0, 1, 0.5], ["env3Release", 0.001, 10, 0.2],
+    ];
+
+    for (const [identifier, minimum, maximum, initial] of expected) {
+        const value = values.get(identifier);
+        assert.notEqual(value, undefined, identifier);
+        assert.match(value.annotation, new RegExp(`min:\\s*${String(minimum).replace(".", "\\.")}f?`), identifier);
+        assert.match(value.annotation, new RegExp(`max:\\s*${String(maximum).replace(".", "\\.")}f?`), identifier);
+        assert.match(value.annotation, new RegExp(`init:\\s*${String(initial).replace(".", "\\.")}f?`), identifier);
+        assert.doesNotMatch(value.annotation, /automatable:\s*false/, identifier);
+    }
 });
 
 test("desktop and iPhone React UI tooling are wired for Vite dev and build loops", async () => {

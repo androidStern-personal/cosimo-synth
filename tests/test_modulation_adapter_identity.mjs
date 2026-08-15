@@ -139,7 +139,7 @@ test("bridge hydration preserves distinct canonical A/B/C cells from the same so
     adapter.dispose();
 });
 
-test("bridge hydration accepts all 884 canonical cells without identity collisions", async () => {
+test("bridge hydration accepts all 1118 canonical cells without identity collisions", async () => {
     const [adapterModule, modulation, targets, descriptors] = await Promise.all([
         adapterModulePromise,
         modulationModulePromise,
@@ -161,8 +161,8 @@ test("bridge hydration accepts all 884 canonical cells without identity collisio
             });
         })
     ));
-    assert.equal(routes.length, 884);
-    assert.equal(new Set(routes.map((route) => route.id)).size, 884);
+    assert.equal(routes.length, 1118);
+    assert.equal(new Set(routes.map((route) => route.id)).size, 1118);
     const current = { ...modulation.createDefaultModulationState(), routes };
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(current),
@@ -171,9 +171,9 @@ test("bridge hydration accepts all 884 canonical cells without identity collisio
     const mappings = mappingSummary(adapter.getSnapshot());
 
     assert.equal(adapter.getSnapshot().connection._tag, "ready");
-    assert.equal(mappings.length, 884);
-    assert.equal(new Set(mappings.map((mapping) => mapping.id)).size, 884);
-    assert.equal(new Set(mappings.map((mapping) => `${mapping.targetId}->${mapping.sourceId}`)).size, 884);
+    assert.equal(mappings.length, 1118);
+    assert.equal(new Set(mappings.map((mapping) => mapping.id)).size, 1118);
+    assert.equal(new Set(mappings.map((mapping) => `${mapping.targetId}->${mapping.sourceId}`)).size, 1118);
     assert.deepEqual(connection.storedWrites, []);
     adapter.dispose();
 });
@@ -189,7 +189,7 @@ test("bridge hydration rejects a route whose target kind conflicts with its disp
 
     assert.deepEqual(adapter.getSnapshot().connection, {
         _tag: "detached",
-        reason: "modulation.v5 contains a mapping without its canonical current identity",
+        reason: "modulation.v6 contains a mapping without its canonical current identity",
     });
     assert.deepEqual(mappingSummary(adapter.getSnapshot()), []);
     assert.deepEqual(connection.storedWrites, []);

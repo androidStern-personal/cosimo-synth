@@ -1,6 +1,6 @@
 # ADR-019: Global mobile modulation rail
 
-Status: accepted — 2026-08-08; corrected 2026-08-15 (see "2026-08-15 correction: shared Voice/FX targets")
+Status: accepted — 2026-08-08; corrected 2026-08-15 (see both 2026-08-15 target corrections)
 
 ## Context
 
@@ -33,7 +33,7 @@ targets unreachable.
 
 - Every drop surface now publishes its exact canonical modulation target kind through
   one workspace-independent attribute. The gesture validates that identity against the
-  existing 68-target catalog before creating a route; it does not infer an address from
+  current 86-target catalog before creating a route; it does not infer an address from
   the current tab or selected effect.
 - The selected oscillator exposes frame position, warp amount, aggregate tune, level,
   pan, detune, blend, width, wavetable-position spread, and warp spread. Switching A/B/C
@@ -43,11 +43,26 @@ targets unreachable.
 - All valid visible targets receive the same source-colored eligible and hover treatment
   during a drag. The rail remains hit-transparent, so this also applies to controls below
   its on-screen bounds.
-- This correction does not pretend that source editors are already modulation
-  destinations. MSEG shapes/playback and envelope ADSR values remain source
-  configuration, and the host-automatable MSEG morph parameters are not members of the
-  current 68-target routing domain. Making any of those routable requires an explicit
-  DSP/schema expansion rather than another UI-only marker.
+- Structural source settings remain configuration, not modulation destinations. MSEG
+  point geometry, loop window/mode, note-off policy, and other discrete switches do not
+  acquire a target merely because their editor is visible.
+
+## 2026-08-15 correction: continuous MSEG and envelope targets
+
+The explicit DSP/schema expansion is now accepted and implemented for the continuous
+controls beneath those source editors.
+
+- MSEG 1/2/3 Morph and Time, plus Envelope 1/2/3 Attack, Decay, Sustain, and Release,
+  are public host parameters and real modulation destinations.
+- Each visible desktop/mobile control publishes its exact target identity through the
+  same workspace-independent drop contract as oscillator, filter, and FX controls.
+- Touch-drop behavior is not a visual-only marker: route creation compiles into the
+  50-target voice program and changes the real generator behavior in Cmajor.
+- These values are saved once in the host parameter snapshot. `modulation.v6` keeps
+  MSEG shapes/discrete playback policy, envelope names, and routes; it does not keep a
+  second copy of Time or ADSR.
+- MSEG/envelope self- or cross-modulation consumes the prior audio frame's source value.
+  That one-frame delay avoids an algebraic cycle while remaining audio-rate.
 
 ## 2026-08-08 correction: true edge tab
 

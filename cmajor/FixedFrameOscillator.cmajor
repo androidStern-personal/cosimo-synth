@@ -45,9 +45,16 @@ namespace wt
     let modulationVoiceSourceCount = 9;
     let modulationMacroSourceCount = 4;
     // Runtime order matches ui/shared/modulation-targets.ts: ten local targets
-    // for each oscillator, followed by the two shared filter targets.
+    // for each oscillator, the two shared filter targets, then the appended
+    // continuous MSEG/envelope controls.
     let modulationOscillatorTargetCount = 10;
-    let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 2;
+    let modulationVoiceTargetCount = (oscillatorCount * modulationOscillatorTargetCount) + 20;
+    // Keep the established 32-wide SIMD block intact and place the appended
+    // generator destinations in a second padded SIMD block. A single 50-wide
+    // vector scalarises in the pinned browser backend and cannot meet the
+    // production AudioWorklet deadline.
+    let modulationVoiceCoreLaneCount = 32;
+    let modulationVoiceGeneratorLaneCount = 32;
     // Shared rack destination domain. Kept here because several isolated oscillator
     // tests compile this module without VoiceReducer.cmajor.
     let rackModTargetCount = 36;
@@ -58,7 +65,8 @@ namespace wt
 
     struct VoiceModulationTargets
     {
-        float32<modulationVoiceTargetCount> values;
+        float32<modulationVoiceCoreLaneCount> coreValues;
+        float32<modulationVoiceGeneratorLaneCount> generatorValues;
     }
     let modulationArticulationRouteCellCount = modulationVoiceRouteCellCount + modulationMacroVoiceRouteCellCount;
     let modulationArticulationInheritAmount = 1000000.0f;
@@ -125,6 +133,24 @@ namespace wt
     let modulationTargetUnisonWarpSpread = 9;
     let modulationTargetFilterCutoffOctaves = oscillatorCount * modulationOscillatorTargetCount;
     let modulationTargetFilterQ = modulationTargetFilterCutoffOctaves + 1;
+    let modulationTargetMseg1Morph = modulationTargetFilterQ + 1;
+    let modulationTargetMseg2Morph = modulationTargetMseg1Morph + 1;
+    let modulationTargetMseg3Morph = modulationTargetMseg2Morph + 1;
+    let modulationTargetMseg1Rate = modulationTargetMseg3Morph + 1;
+    let modulationTargetMseg2Rate = modulationTargetMseg1Rate + 1;
+    let modulationTargetMseg3Rate = modulationTargetMseg2Rate + 1;
+    let modulationTargetEnv1Attack = modulationTargetMseg3Rate + 1;
+    let modulationTargetEnv1Decay = modulationTargetEnv1Attack + 1;
+    let modulationTargetEnv1Sustain = modulationTargetEnv1Decay + 1;
+    let modulationTargetEnv1Release = modulationTargetEnv1Sustain + 1;
+    let modulationTargetEnv2Attack = modulationTargetEnv1Release + 1;
+    let modulationTargetEnv2Decay = modulationTargetEnv2Attack + 1;
+    let modulationTargetEnv2Sustain = modulationTargetEnv2Decay + 1;
+    let modulationTargetEnv2Release = modulationTargetEnv2Sustain + 1;
+    let modulationTargetEnv3Attack = modulationTargetEnv2Release + 1;
+    let modulationTargetEnv3Decay = modulationTargetEnv3Attack + 1;
+    let modulationTargetEnv3Sustain = modulationTargetEnv3Decay + 1;
+    let modulationTargetEnv3Release = modulationTargetEnv3Sustain + 1;
     let articulationSlotCount = 128;
     let articulationSelectorNone = -1;
     // Frozen Cmajor/native address book for the 16-note, three-oscillator
@@ -403,7 +429,6 @@ namespace wt
     struct ModulationMsegPlaybackUpload
     {
         int32 slot;
-        float32 seconds;
         bool holdFinalValue;
         int32 rateKind;
         bool loopEnabled;
@@ -411,17 +436,6 @@ namespace wt
         float32 loopEnd;
         int32 noteOffPolicy;
         bool legatoRestarts;
-        int32 dspSessionId;
-        int32 deliverySerial;
-    }
-
-    struct ModulationEnvelopeUpload
-    {
-        int32 slot;
-        float32 attackSeconds;
-        float32 decaySeconds;
-        float32 sustain;
-        float32 releaseSeconds;
         int32 dspSessionId;
         int32 deliverySerial;
     }
@@ -1058,49 +1072,41 @@ namespace wt
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff) eventIn;
-        input event ModulationEnvelopeUpload configUpload;
+        input value float32 attackSecondsIn;
+        input value float32 decaySecondsIn;
+        input value float32 sustainIn;
+        input value float32 releaseSecondsIn;
         output stream float32 gainOut;
 
-        float32 attackSeconds = 0.01f;
-        float32 decaySeconds = 0.25f;
-        float32 sustainLevel = 0.5f;
-        float32 releaseSeconds = 0.2f;
         float32 currentLevel = 0.0f;
         float32 attackStartLevel = 0.0f;
         float32 releaseStartLevel = 0.0f;
+        float32 stageProgress = 0.0f;
         int32 stage = 0;
-        int32 stageFrame = 0;
-        int32 stageLengthFrames = 0;
 
-        void startStage (int32 nextStage, float32 seconds)
+        void startStage (int32 nextStage)
         {
             stage = nextStage;
-            stageFrame = 0;
-            stageLengthFrames = std::intrinsics::max (
-                1,
-                int32 (std::intrinsics::floor ((std::intrinsics::max (seconds, 0.0f) * float32 (processor.frequency)) + 0.5f))
-            );
+            stageProgress = 0.0f;
         }
 
-        event configUpload (ModulationEnvelopeUpload config)
+        float32 stageIncrement (float32 seconds)
         {
-            attackSeconds = std::intrinsics::max (0.001f, config.attackSeconds);
-            decaySeconds = std::intrinsics::max (0.001f, config.decaySeconds);
-            sustainLevel = std::intrinsics::clamp (config.sustain, 0.0f, 1.0f);
-            releaseSeconds = std::intrinsics::max (0.001f, config.releaseSeconds);
+            let safeSeconds = std::intrinsics::max (0.001f, seconds);
+            return 1.0f / (safeSeconds * float32 (processor.frequency));
         }
 
         event eventIn (std::notes::NoteOn noteOn)
         {
             attackStartLevel = 0.0f;
             currentLevel = 0.0f;
-            startStage (1, attackSeconds);
+            startStage (1);
         }
 
         event eventIn (std::notes::NoteOff noteOff)
         {
             releaseStartLevel = currentLevel;
-            startStage (4, releaseSeconds);
+            startStage (4);
         }
 
         void main()
@@ -1109,46 +1115,45 @@ namespace wt
             {
                 if (stage == 1)
                 {
-                    let t = float32 (stageFrame) / float32 (stageLengthFrames);
+                    let t = std::intrinsics::clamp (stageProgress, 0.0f, 1.0f);
                     currentLevel = attackStartLevel + ((1.0f - attackStartLevel) * std::intrinsics::clamp (t, 0.0f, 1.0f));
-                    stageFrame += 1;
+                    stageProgress += stageIncrement (attackSecondsIn);
 
-                    if (stageFrame >= stageLengthFrames)
+                    if (stageProgress >= 1.0f)
                     {
                         currentLevel = 1.0f;
-                        startStage (2, decaySeconds);
+                        startStage (2);
                     }
                 }
                 else if (stage == 2)
                 {
-                    let t = float32 (stageFrame) / float32 (stageLengthFrames);
-                    currentLevel = 1.0f + ((sustainLevel - 1.0f) * std::intrinsics::clamp (t, 0.0f, 1.0f));
-                    stageFrame += 1;
+                    let sustainLevel = std::intrinsics::clamp (sustainIn, 0.0f, 1.0f);
+                    let t = std::intrinsics::clamp (stageProgress, 0.0f, 1.0f);
+                    currentLevel = 1.0f + ((sustainLevel - 1.0f) * t);
+                    stageProgress += stageIncrement (decaySecondsIn);
 
-                    if (stageFrame >= stageLengthFrames)
+                    if (stageProgress >= 1.0f)
                     {
                         currentLevel = sustainLevel;
                         stage = 3;
-                        stageFrame = 0;
-                        stageLengthFrames = 0;
+                        stageProgress = 0.0f;
                     }
                 }
                 else if (stage == 3)
                 {
-                    currentLevel = sustainLevel;
+                    currentLevel = std::intrinsics::clamp (sustainIn, 0.0f, 1.0f);
                 }
                 else if (stage == 4)
                 {
-                    let t = float32 (stageFrame) / float32 (stageLengthFrames);
-                    currentLevel = releaseStartLevel * (1.0f - std::intrinsics::clamp (t, 0.0f, 1.0f));
-                    stageFrame += 1;
+                    let t = std::intrinsics::clamp (stageProgress, 0.0f, 1.0f);
+                    currentLevel = releaseStartLevel * (1.0f - t);
+                    stageProgress += stageIncrement (releaseSecondsIn);
 
-                    if (stageFrame >= stageLengthFrames)
+                    if (stageProgress >= 1.0f)
                     {
                         currentLevel = 0.0f;
                         stage = 0;
-                        stageFrame = 0;
-                        stageLengthFrames = 0;
+                        stageProgress = 0.0f;
                     }
                 }
                 else
@@ -1180,7 +1185,6 @@ namespace wt
         input event ArticulationSnapshotUpload articulationSnapshotIn;
         input event ModulationMsegBufferUpload modulationMsegBufferIn;
         input event ModulationMsegPlaybackUpload modulationMsegPlaybackIn;
-        input event ModulationEnvelopeUpload modulationEnvelopeIn;
         input event ModulationProgramUpload modulationProgramIn;
         input event ModulationAmountUpload modulationAmountIn;
         input event int32 runtimeInstallSyncIn;
@@ -1216,6 +1220,11 @@ namespace wt
         input value float32 mseg1MorphIn [[ name: "MSEG 1 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         input value float32 mseg2MorphIn [[ name: "MSEG 2 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
         input value float32 mseg3MorphIn [[ name: "MSEG 3 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
+        input value float32 msegRateIn[modulationMsegSlotCount];
+        input value float32 envelopeAttackIn[modulationEnvSlotCount];
+        input value float32 envelopeDecayIn[modulationEnvSlotCount];
+        input value float32 envelopeSustainIn[modulationEnvSlotCount];
+        input value float32 envelopeReleaseIn[modulationEnvSlotCount];
         output event OscillatorWavetableUploadAck oscillatorWavetableUploadAckOut;
         output event OscillatorWavetableMipRequest oscillatorWavetableMipRequestOut;
         output event OscillatorRuntimeServiceState oscillatorRuntimeServiceStateOut;
@@ -1283,6 +1292,12 @@ namespace wt
         float32[voiceCount] voiceEffectiveUnisonWavetablePositionSpread;
         float32[voiceCount] voiceEffectiveUnisonWarpSpread;
         float32[voiceCount] voiceMsegProgress1;
+        float32[voiceCount * modulationMsegSlotCount] voiceEffectiveMsegMorphs;
+        float32[voiceCount * modulationMsegSlotCount] voiceEffectiveMsegRates;
+        float32[voiceCount * modulationEnvSlotCount] voiceEffectiveEnvelopeAttackSeconds;
+        float32[voiceCount * modulationEnvSlotCount] voiceEffectiveEnvelopeDecaySeconds;
+        float32[voiceCount * modulationEnvSlotCount] voiceEffectiveEnvelopeSustain;
+        float32[voiceCount * modulationEnvSlotCount] voiceEffectiveEnvelopeReleaseSeconds;
         float32[voiceCount] voiceMsegProgress2;
         float32[voiceCount] voiceMsegProgress3;
         bool[articulationSlotCount] articulationSlotDefined;
@@ -1366,8 +1381,10 @@ namespace wt
         float32[modulationVoiceRouteCellCount] voiceRouteScales;
         float32[modulationVoiceRouteCellCount] voiceRouteBiases;
         bool[modulationVoiceSourceCount] voiceRouteSourceUsed;
-        float32<modulationVoiceTargetCount>[modulationVoiceSourceCount] voiceRouteScaleVectors;
-        float32<modulationVoiceTargetCount>[modulationVoiceSourceCount] voiceRouteBiasVectors;
+        float32<modulationVoiceCoreLaneCount>[modulationVoiceSourceCount] voiceRouteCoreScaleVectors;
+        float32<modulationVoiceCoreLaneCount>[modulationVoiceSourceCount] voiceRouteCoreBiasVectors;
+        float32<modulationVoiceGeneratorLaneCount>[modulationVoiceSourceCount] voiceRouteGeneratorScaleVectors;
+        float32<modulationVoiceGeneratorLaneCount>[modulationVoiceSourceCount] voiceRouteGeneratorBiasVectors;
         int32 macroVoiceRouteCount;
         int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteCells;
         int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteSources;
@@ -1375,8 +1392,10 @@ namespace wt
         int32[modulationMacroVoiceRouteCellCount] macroVoiceRoutePolarities;
         float32[modulationMacroVoiceRouteCellCount] macroVoiceRouteAmounts;
         bool[modulationMacroSourceCount] macroVoiceRouteSourceUsed;
-        float32<modulationVoiceTargetCount>[modulationMacroSourceCount] macroVoiceRouteScaleVectors;
-        float32<modulationVoiceTargetCount>[modulationMacroSourceCount] macroVoiceRouteBiasVectors;
+        float32<modulationVoiceCoreLaneCount>[modulationMacroSourceCount] macroVoiceRouteCoreScaleVectors;
+        float32<modulationVoiceCoreLaneCount>[modulationMacroSourceCount] macroVoiceRouteCoreBiasVectors;
+        float32<modulationVoiceGeneratorLaneCount>[modulationMacroSourceCount] macroVoiceRouteGeneratorScaleVectors;
+        float32<modulationVoiceGeneratorLaneCount>[modulationMacroSourceCount] macroVoiceRouteGeneratorBiasVectors;
         int32 voiceRackRouteCount;
         int32[modulationVoiceRackRouteCellCount] voiceRackRouteCells;
         int32[modulationVoiceRackRouteCellCount] voiceRackRouteSources;
@@ -1396,7 +1415,8 @@ namespace wt
         bool[modulationVoiceSourceCount] voiceRackSourceUsed;
         VoiceModulationTargets[voiceCount] voiceTargetOffsets;
         float32[modulationMacroSourceCount] macroSourceValues;
-        float32<modulationVoiceTargetCount> macroVoiceBaseTargetOffsets;
+        float32<modulationVoiceCoreLaneCount> macroVoiceCoreBaseTargetOffsets;
+        float32<modulationVoiceGeneratorLaneCount> macroVoiceGeneratorBaseTargetOffsets;
         float32<rackModTargetCount> macroRackBaseTargetOffsets;
         float32[modulationVoiceSourceCount] voiceRackSourceSums;
         float32[modulationVoiceSourceCount] voiceRackSourceMaxima;
@@ -1506,6 +1526,7 @@ namespace wt
         float32 indexedFilterCutoffState;
         float32 indexedFilterQState;
         float32[modulationMsegSlotCount] indexedMsegMorphState;
+        float32[modulationMsegSlotCount] indexedMsegRateState;
 
         void updateOscillatorInputState()
         {
@@ -1557,6 +1578,15 @@ namespace wt
             indexedMsegMorphState[0] = std::intrinsics::clamp (mseg1MorphIn, 0.0f, 1.0f);
             indexedMsegMorphState[1] = std::intrinsics::clamp (mseg2MorphIn, 0.0f, 1.0f);
             indexedMsegMorphState[2] = std::intrinsics::clamp (mseg3MorphIn, 0.0f, 1.0f);
+            for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
+                indexedMsegRateState.at (slotIndex) = std::intrinsics::clamp (msegRateIn.at (slotIndex), 0.0f, 2.0f);
+            for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
+            {
+                currentEnvelopeAttackSeconds.at (slotIndex) = std::intrinsics::clamp (envelopeAttackIn.at (slotIndex), 0.001f, 10.0f);
+                currentEnvelopeDecaySeconds.at (slotIndex) = std::intrinsics::clamp (envelopeDecayIn.at (slotIndex), 0.001f, 10.0f);
+                currentEnvelopeSustain.at (slotIndex) = std::intrinsics::clamp (envelopeSustainIn.at (slotIndex), 0.0f, 1.0f);
+                currentEnvelopeReleaseSeconds.at (slotIndex) = std::intrinsics::clamp (envelopeReleaseIn.at (slotIndex), 0.001f, 10.0f);
+            }
         }
 
         int32 oscillatorMipIndex (int32 oscillatorIndex, int32 mipIndex)
@@ -2608,31 +2638,6 @@ namespace wt
             emitVoiceArticulationMonitor (voiceIndex);
         }
 
-        void uploadVoiceArticulationEnvelopeConfig (int32 voiceIndex)
-        {
-            let voice = wrap<voiceCount> (voiceIndex);
-
-            if (! voiceUsesArticulation.at (voice))
-                return;
-
-            for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
-            {
-                ModulationEnvelopeUpload config;
-                config.slot = slotIndex + 1;
-                config.attackSeconds = voiceArticulationEnvelopeAttackSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex));
-                config.decaySeconds = voiceArticulationEnvelopeDecaySeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex));
-                config.sustain = voiceArticulationEnvelopeSustain.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex));
-                config.releaseSeconds = voiceArticulationEnvelopeReleaseSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex));
-
-                if (slotIndex == 0)
-                    modEnv1[voice].configUpload <- config;
-                else if (slotIndex == 1)
-                    modEnv2[voice].configUpload <- config;
-                else
-                    modEnv3[voice].configUpload <- config;
-            }
-        }
-
         void uploadMsegBufferToSlot (int32 slot, int32 shapeIndex, const float32[msegPaddedSamples] buffer)
         {
             wt::MsegBufferUpload shapeUpload;
@@ -2685,42 +2690,12 @@ namespace wt
             }
         }
 
-        void uploadEnvelopeToSlot (int32 slot, ModulationEnvelopeUpload config)
-        {
-            let slotIndex = std::intrinsics::clamp (slot - 1, 0, modulationEnvSlotCount - 1);
-            currentEnvelopeAttackSeconds.at (slotIndex) = std::intrinsics::max (0.001f, config.attackSeconds);
-            currentEnvelopeDecaySeconds.at (slotIndex) = std::intrinsics::max (0.001f, config.decaySeconds);
-            currentEnvelopeSustain.at (slotIndex) = std::intrinsics::clamp (config.sustain, 0.0f, 1.0f);
-            currentEnvelopeReleaseSeconds.at (slotIndex) = std::intrinsics::max (0.001f, config.releaseSeconds);
-
-            if (slot == 1)
-            {
-                for (wrap<voiceCount> voice)
-                    modEnv1[voice].configUpload <- config;
-                return;
-            }
-
-            if (slot == 2)
-            {
-                for (wrap<voiceCount> voice)
-                    modEnv2[voice].configUpload <- config;
-                return;
-            }
-
-            if (slot == 3)
-            {
-                for (wrap<voiceCount> voice)
-                    modEnv3[voice].configUpload <- config;
-            }
-        }
-
         void triggerVoiceModulators (int32 voiceIndex)
         {
             let voice = wrap<voiceCount> (voiceIndex);
             mseg1[voice].triggerIn <- 1;
             mseg2[voice].triggerIn <- 1;
             mseg3[voice].triggerIn <- 1;
-            uploadVoiceArticulationEnvelopeConfig (voiceIndex);
 
             std::notes::NoteOn note;
             note.channel = voiceChannel.at (voice);
@@ -2742,7 +2717,7 @@ namespace wt
             modEnv3[voice].eventIn <- note;
         }
 
-        float32 resolveVoiceMsegMorph (int32 voiceIndex, int32 slot)
+        float32 resolveVoiceMsegMorphBase (int32 voiceIndex, int32 slot)
         {
             let voice = wrap<voiceCount> (voiceIndex);
 
@@ -2755,21 +2730,68 @@ namespace wt
             }
 
             if (slot == 1)
-                return std::intrinsics::clamp (mseg1MorphIn, 0.0f, 1.0f);
+                return indexedMsegMorphState.at (0);
 
             if (slot == 2)
-                return std::intrinsics::clamp (mseg2MorphIn, 0.0f, 1.0f);
+                return indexedMsegMorphState.at (1);
 
             if (slot == 3)
-                return std::intrinsics::clamp (mseg3MorphIn, 0.0f, 1.0f);
+                return indexedMsegMorphState.at (2);
 
             return 0.0f;
+        }
+
+        float32 resolveVoiceMsegRateBase (int32 slotIndex)
+        {
+            return std::intrinsics::clamp (
+                indexedMsegRateState.at (std::intrinsics::clamp (slotIndex, 0, modulationMsegSlotCount - 1)),
+                0.0f,
+                2.0f
+            );
+        }
+
+        float32 resolveVoiceEnvelopeAttackBase (int32 voiceIndex, int32 slotIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let index = voiceArticulationEnvelopeIndex (voiceIndex, slotIndex);
+            return voiceUsesArticulation.at (voice)
+                ? voiceArticulationEnvelopeAttackSeconds.at (index)
+                : currentEnvelopeAttackSeconds.at (slotIndex);
+        }
+
+        float32 resolveVoiceEnvelopeDecayBase (int32 voiceIndex, int32 slotIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let index = voiceArticulationEnvelopeIndex (voiceIndex, slotIndex);
+            return voiceUsesArticulation.at (voice)
+                ? voiceArticulationEnvelopeDecaySeconds.at (index)
+                : currentEnvelopeDecaySeconds.at (slotIndex);
+        }
+
+        float32 resolveVoiceEnvelopeSustainBase (int32 voiceIndex, int32 slotIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let index = voiceArticulationEnvelopeIndex (voiceIndex, slotIndex);
+            return voiceUsesArticulation.at (voice)
+                ? voiceArticulationEnvelopeSustain.at (index)
+                : currentEnvelopeSustain.at (slotIndex);
+        }
+
+        float32 resolveVoiceEnvelopeReleaseBase (int32 voiceIndex, int32 slotIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            let index = voiceArticulationEnvelopeIndex (voiceIndex, slotIndex);
+            return voiceUsesArticulation.at (voice)
+                ? voiceArticulationEnvelopeReleaseSeconds.at (index)
+                : currentEnvelopeReleaseSeconds.at (slotIndex);
         }
 
         float32 resolveMsegValue (int32 voiceIndex, int32 slot)
         {
             let voice = wrap<voiceCount> (voiceIndex);
-            let morph = resolveVoiceMsegMorph (voiceIndex, slot);
+            let morph = voiceEffectiveMsegMorphs.at (
+                voiceArticulationMsegIndex (voiceIndex, slot - 1)
+            );
 
             if (slot == 1)
             {
@@ -2837,14 +2859,20 @@ namespace wt
             for (wrap<modulationMacroSourceCount> macroIndex)
                 macroSourceValues[macroIndex] = resolveMacroValue (int32 (macroIndex) + 1);
 
-            macroVoiceBaseTargetOffsets = float32<modulationVoiceTargetCount> (0.0f);
+            macroVoiceCoreBaseTargetOffsets = float32<modulationVoiceCoreLaneCount> (0.0f);
+            macroVoiceGeneratorBaseTargetOffsets = float32<modulationVoiceGeneratorLaneCount> (0.0f);
 
             for (wrap<modulationMacroSourceCount> sourceIndex)
             {
                 if (macroVoiceRouteSourceUsed[sourceIndex])
-                    macroVoiceBaseTargetOffsets += (
-                        macroVoiceRouteScaleVectors[sourceIndex] * macroSourceValues[sourceIndex]
-                    ) + macroVoiceRouteBiasVectors[sourceIndex];
+                {
+                    macroVoiceCoreBaseTargetOffsets += (
+                        macroVoiceRouteCoreScaleVectors[sourceIndex] * macroSourceValues[sourceIndex]
+                    ) + macroVoiceRouteCoreBiasVectors[sourceIndex];
+                    macroVoiceGeneratorBaseTargetOffsets += (
+                        macroVoiceRouteGeneratorScaleVectors[sourceIndex] * macroSourceValues[sourceIndex]
+                    ) + macroVoiceRouteGeneratorBiasVectors[sourceIndex];
+                }
             }
 
             for (wrap<modulationVoiceSourceCount> sourceIndex)
@@ -2858,6 +2886,29 @@ namespace wt
             voiceRackParticipantCount = 0;
         }
 
+        void clearVoiceTargetOffsets (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            voiceTargetOffsets[voice].coreValues
+                = float32<modulationVoiceCoreLaneCount> (0.0f);
+            voiceTargetOffsets[voice].generatorValues
+                = float32<modulationVoiceGeneratorLaneCount> (0.0f);
+        }
+
+        void addVoiceTargetOffset (int32 voiceIndex, int32 targetIndex, float32 amount)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            if (targetIndex < modulationVoiceCoreLaneCount)
+            {
+                voiceTargetOffsets[voice].coreValues.at (targetIndex) += amount;
+                return;
+            }
+
+            voiceTargetOffsets[voice].generatorValues.at (
+                targetIndex - modulationVoiceCoreLaneCount
+            ) += amount;
+        }
+
         void accumulateVoiceModulationTargets (int32 voiceIndex)
         {
             let voice = wrap<voiceCount> (voiceIndex);
@@ -2865,8 +2916,7 @@ namespace wt
 
             if (usesArticulation)
             {
-                for (wrap<modulationVoiceTargetCount> targetIndex)
-                    voiceTargetOffsets[voice].values[targetIndex] = 0.0f;
+                clearVoiceTargetOffsets (voiceIndex);
 
                 int32 resolvedSourceIndex = -1;
                 float32 sourceValue = 0.0f;
@@ -2886,15 +2936,19 @@ namespace wt
                         );
                     }
 
-                    let targetIndex = wrap<modulationVoiceTargetCount> (voiceRouteTargets[routeIndex]);
+                    let targetIndex = voiceRouteTargets[routeIndex];
                     let cellIndex = voiceRouteCells[routeIndex];
                     let amount = voiceArticulationRouteAmounts.at (
                         voiceArticulationRouteIndex (voiceIndex, cellIndex)
                     );
-                    voiceTargetOffsets[voice].values[targetIndex] += applyModulationPolarity (
-                        sourceValue,
-                        voiceRoutePolarities[routeIndex]
-                    ) * amount;
+                    addVoiceTargetOffset (
+                        voiceIndex,
+                        targetIndex,
+                        applyModulationPolarity (
+                            sourceValue,
+                            voiceRoutePolarities[routeIndex]
+                        ) * amount
+                    );
                 }
 
                 for (wrap<modulationMacroVoiceRouteCellCount> routeIndex)
@@ -2903,22 +2957,27 @@ namespace wt
                         break;
 
                     let sourceIndex = macroVoiceRouteSources[routeIndex];
-                    let targetIndex = wrap<modulationVoiceTargetCount> (macroVoiceRouteTargets[routeIndex]);
+                    let targetIndex = macroVoiceRouteTargets[routeIndex];
                     let cellIndex = macroVoiceRouteCells[routeIndex];
                     let articulationCellIndex = modulationVoiceRouteCellCount + cellIndex;
                     let amount = voiceArticulationRouteAmounts.at (
                         voiceArticulationRouteIndex (voiceIndex, articulationCellIndex)
                     );
-                    voiceTargetOffsets[voice].values[targetIndex] += applyModulationPolarity (
-                        macroSourceValues.at (sourceIndex),
-                        macroVoiceRoutePolarities[routeIndex]
-                    ) * amount;
+                    addVoiceTargetOffset (
+                        voiceIndex,
+                        targetIndex,
+                        applyModulationPolarity (
+                            macroSourceValues.at (sourceIndex),
+                            macroVoiceRoutePolarities[routeIndex]
+                        ) * amount
+                    );
                 }
 
                 return;
             }
 
-            voiceTargetOffsets[voice].values = macroVoiceBaseTargetOffsets;
+            voiceTargetOffsets[voice].coreValues = macroVoiceCoreBaseTargetOffsets;
+            voiceTargetOffsets[voice].generatorValues = macroVoiceGeneratorBaseTargetOffsets;
             for (wrap<modulationVoiceSourceCount> sourceIndex)
             {
                 if (! voiceRouteSourceUsed[sourceIndex])
@@ -2929,15 +2988,118 @@ namespace wt
                     0.0f,
                     1.0f
                 );
-                voiceTargetOffsets[voice].values += (voiceRouteScaleVectors[sourceIndex] * sourceValue)
-                    + voiceRouteBiasVectors[sourceIndex];
+                voiceTargetOffsets[voice].coreValues += (
+                    voiceRouteCoreScaleVectors[sourceIndex] * sourceValue
+                ) + voiceRouteCoreBiasVectors[sourceIndex];
+                voiceTargetOffsets[voice].generatorValues += (
+                    voiceRouteGeneratorScaleVectors[sourceIndex] * sourceValue
+                ) + voiceRouteGeneratorBiasVectors[sourceIndex];
             }
         }
 
         float32 voiceTargetOffset (int32 voiceIndex, int32 targetIndex)
         {
-            return voiceTargetOffsets[wrap<voiceCount> (voiceIndex)]
-                .values[wrap<modulationVoiceTargetCount> (targetIndex)];
+            let voice = wrap<voiceCount> (voiceIndex);
+            if (targetIndex < modulationVoiceCoreLaneCount)
+                return voiceTargetOffsets[voice].coreValues.at (targetIndex);
+
+            return voiceTargetOffsets[voice].generatorValues.at (
+                targetIndex - modulationVoiceCoreLaneCount
+            );
+        }
+
+        void updateVoiceGeneratorModulationTargets (int32 voiceIndex)
+        {
+            voiceEffectiveMsegMorphs.at (voiceArticulationMsegIndex (voiceIndex, 0))
+                = std::intrinsics::clamp (
+                    resolveVoiceMsegMorphBase (voiceIndex, 1)
+                        + voiceTargetOffset (voiceIndex, modulationTargetMseg1Morph),
+                    0.0f,
+                    1.0f
+                );
+            voiceEffectiveMsegMorphs.at (voiceArticulationMsegIndex (voiceIndex, 1))
+                = std::intrinsics::clamp (
+                    resolveVoiceMsegMorphBase (voiceIndex, 2)
+                        + voiceTargetOffset (voiceIndex, modulationTargetMseg2Morph),
+                    0.0f,
+                    1.0f
+                );
+            voiceEffectiveMsegMorphs.at (voiceArticulationMsegIndex (voiceIndex, 2))
+                = std::intrinsics::clamp (
+                    resolveVoiceMsegMorphBase (voiceIndex, 3)
+                        + voiceTargetOffset (voiceIndex, modulationTargetMseg3Morph),
+                    0.0f,
+                    1.0f
+                );
+
+            for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
+            {
+                voiceEffectiveMsegRates.at (voiceArticulationMsegIndex (voiceIndex, slotIndex))
+                    = std::intrinsics::clamp (
+                        resolveVoiceMsegRateBase (slotIndex)
+                            + voiceTargetOffset (voiceIndex, modulationTargetMseg1Rate + slotIndex),
+                        0.0f,
+                        2.0f
+                    );
+            }
+
+            for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
+            {
+                let effectiveIndex = voiceArticulationEnvelopeIndex (voiceIndex, slotIndex);
+                let targetIndex = modulationTargetEnv1Attack + (slotIndex * 4);
+                voiceEffectiveEnvelopeAttackSeconds.at (effectiveIndex)
+                    = std::intrinsics::clamp (
+                        resolveVoiceEnvelopeAttackBase (voiceIndex, slotIndex)
+                            + voiceTargetOffset (voiceIndex, targetIndex),
+                        0.001f,
+                        10.0f
+                    );
+                voiceEffectiveEnvelopeDecaySeconds.at (effectiveIndex)
+                    = std::intrinsics::clamp (
+                        resolveVoiceEnvelopeDecayBase (voiceIndex, slotIndex)
+                            + voiceTargetOffset (voiceIndex, targetIndex + 1),
+                        0.001f,
+                        10.0f
+                    );
+                voiceEffectiveEnvelopeSustain.at (effectiveIndex)
+                    = std::intrinsics::clamp (
+                        resolveVoiceEnvelopeSustainBase (voiceIndex, slotIndex)
+                            + voiceTargetOffset (voiceIndex, targetIndex + 2),
+                        0.0f,
+                        1.0f
+                    );
+                voiceEffectiveEnvelopeReleaseSeconds.at (effectiveIndex)
+                    = std::intrinsics::clamp (
+                        resolveVoiceEnvelopeReleaseBase (voiceIndex, slotIndex)
+                            + voiceTargetOffset (voiceIndex, targetIndex + 3),
+                        0.001f,
+                        10.0f
+                    );
+            }
+        }
+
+        void resetVoiceGeneratorModulationTargets (int32 voiceIndex)
+        {
+            for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
+            {
+                voiceEffectiveMsegMorphs.at (voiceArticulationMsegIndex (voiceIndex, slotIndex))
+                    = resolveVoiceMsegMorphBase (voiceIndex, slotIndex + 1);
+                voiceEffectiveMsegRates.at (voiceArticulationMsegIndex (voiceIndex, slotIndex))
+                    = resolveVoiceMsegRateBase (slotIndex);
+            }
+
+            for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
+            {
+                let effectiveIndex = voiceArticulationEnvelopeIndex (voiceIndex, slotIndex);
+                voiceEffectiveEnvelopeAttackSeconds.at (effectiveIndex)
+                    = resolveVoiceEnvelopeAttackBase (voiceIndex, slotIndex);
+                voiceEffectiveEnvelopeDecaySeconds.at (effectiveIndex)
+                    = resolveVoiceEnvelopeDecayBase (voiceIndex, slotIndex);
+                voiceEffectiveEnvelopeSustain.at (effectiveIndex)
+                    = resolveVoiceEnvelopeSustainBase (voiceIndex, slotIndex);
+                voiceEffectiveEnvelopeReleaseSeconds.at (effectiveIndex)
+                    = resolveVoiceEnvelopeReleaseBase (voiceIndex, slotIndex);
+            }
         }
 
         int32 oscillatorModulationTargetIndex (int32 oscillatorIndex, int32 localTargetIndex)
@@ -3488,6 +3650,7 @@ namespace wt
             nextVoiceTrackingSerial += 1;
             resetVoiceOscillatorLifecycle (index);
             resetFilterState (index);
+            resetVoiceGeneratorModulationTargets (index);
 
             envelopes[voice].eventIn <- note;
             triggerVoiceModulators (index);
@@ -3698,19 +3861,27 @@ namespace wt
             {
                 voiceRackSourceUsed.at (sourceIndex) = false;
                 voiceRouteSourceUsed.at (sourceIndex) = false;
-                voiceRouteScaleVectors.at (sourceIndex)
-                    = float32<modulationVoiceTargetCount> (0.0f);
-                voiceRouteBiasVectors.at (sourceIndex)
-                    = float32<modulationVoiceTargetCount> (0.0f);
+                voiceRouteCoreScaleVectors.at (sourceIndex)
+                    = float32<modulationVoiceCoreLaneCount> (0.0f);
+                voiceRouteCoreBiasVectors.at (sourceIndex)
+                    = float32<modulationVoiceCoreLaneCount> (0.0f);
+                voiceRouteGeneratorScaleVectors.at (sourceIndex)
+                    = float32<modulationVoiceGeneratorLaneCount> (0.0f);
+                voiceRouteGeneratorBiasVectors.at (sourceIndex)
+                    = float32<modulationVoiceGeneratorLaneCount> (0.0f);
             }
 
             for (int32 sourceIndex = 0; sourceIndex < modulationMacroSourceCount; ++sourceIndex)
             {
                 macroVoiceRouteSourceUsed.at (sourceIndex) = false;
-                macroVoiceRouteScaleVectors.at (sourceIndex)
-                    = float32<modulationVoiceTargetCount> (0.0f);
-                macroVoiceRouteBiasVectors.at (sourceIndex)
-                    = float32<modulationVoiceTargetCount> (0.0f);
+                macroVoiceRouteCoreScaleVectors.at (sourceIndex)
+                    = float32<modulationVoiceCoreLaneCount> (0.0f);
+                macroVoiceRouteCoreBiasVectors.at (sourceIndex)
+                    = float32<modulationVoiceCoreLaneCount> (0.0f);
+                macroVoiceRouteGeneratorScaleVectors.at (sourceIndex)
+                    = float32<modulationVoiceGeneratorLaneCount> (0.0f);
+                macroVoiceRouteGeneratorBiasVectors.at (sourceIndex)
+                    = float32<modulationVoiceGeneratorLaneCount> (0.0f);
                 macroRackRouteSourceUsed.at (sourceIndex) = false;
                 macroRackRouteScaleVectors.at (sourceIndex)
                     = float32<rackModTargetCount> (0.0f);
@@ -3735,10 +3906,21 @@ namespace wt
                 voiceRouteScales.at (routeIndex) = modulationRouteScale (amount, polarityKind);
                 voiceRouteBiases.at (routeIndex) = modulationRouteBias (amount, polarityKind);
                 voiceRouteSourceUsed.at (sourceIndex) = true;
-                voiceRouteScaleVectors.at (sourceIndex).at (targetIndex)
-                    = modulationRouteScale (amount, polarityKind);
-                voiceRouteBiasVectors.at (sourceIndex).at (targetIndex)
-                    = modulationRouteBias (amount, polarityKind);
+                if (targetIndex < modulationVoiceCoreLaneCount)
+                {
+                    voiceRouteCoreScaleVectors.at (sourceIndex).at (targetIndex)
+                        = modulationRouteScale (amount, polarityKind);
+                    voiceRouteCoreBiasVectors.at (sourceIndex).at (targetIndex)
+                        = modulationRouteBias (amount, polarityKind);
+                }
+                else
+                {
+                    let generatorTargetIndex = targetIndex - modulationVoiceCoreLaneCount;
+                    voiceRouteGeneratorScaleVectors.at (sourceIndex).at (generatorTargetIndex)
+                        = modulationRouteScale (amount, polarityKind);
+                    voiceRouteGeneratorBiasVectors.at (sourceIndex).at (generatorTargetIndex)
+                        = modulationRouteBias (amount, polarityKind);
+                }
             }
 
             for (int32 cellIndex = 0; cellIndex < modulationMacroVoiceRouteCellCount; ++cellIndex)
@@ -3756,10 +3938,21 @@ namespace wt
                 macroVoiceRouteTargets.at (routeIndex) = targetIndex;
                 macroVoiceRoutePolarities.at (routeIndex) = polarityKind;
                 macroVoiceRouteSourceUsed.at (sourceIndex) = true;
-                macroVoiceRouteScaleVectors.at (sourceIndex).at (targetIndex)
-                    = modulationRouteScale (amount, polarityKind);
-                macroVoiceRouteBiasVectors.at (sourceIndex).at (targetIndex)
-                    = modulationRouteBias (amount, polarityKind);
+                if (targetIndex < modulationVoiceCoreLaneCount)
+                {
+                    macroVoiceRouteCoreScaleVectors.at (sourceIndex).at (targetIndex)
+                        = modulationRouteScale (amount, polarityKind);
+                    macroVoiceRouteCoreBiasVectors.at (sourceIndex).at (targetIndex)
+                        = modulationRouteBias (amount, polarityKind);
+                }
+                else
+                {
+                    let generatorTargetIndex = targetIndex - modulationVoiceCoreLaneCount;
+                    macroVoiceRouteGeneratorScaleVectors.at (sourceIndex).at (generatorTargetIndex)
+                        = modulationRouteScale (amount, polarityKind);
+                    macroVoiceRouteGeneratorBiasVectors.at (sourceIndex).at (generatorTargetIndex)
+                        = modulationRouteBias (amount, polarityKind);
+                }
             }
 
             // Reconcile only the old and new sparse prefixes. A topology edit must
@@ -3863,10 +4056,21 @@ namespace wt
                         );
                         let sourceIndex = voiceRouteSources.at (routeIndex);
                         let targetIndex = voiceRouteTargets.at (routeIndex);
-                        voiceRouteScaleVectors.at (sourceIndex).at (targetIndex)
-                            = voiceRouteScales.at (routeIndex);
-                        voiceRouteBiasVectors.at (sourceIndex).at (targetIndex)
-                            = voiceRouteBiases.at (routeIndex);
+                        if (targetIndex < modulationVoiceCoreLaneCount)
+                        {
+                            voiceRouteCoreScaleVectors.at (sourceIndex).at (targetIndex)
+                                = voiceRouteScales.at (routeIndex);
+                            voiceRouteCoreBiasVectors.at (sourceIndex).at (targetIndex)
+                                = voiceRouteBiases.at (routeIndex);
+                        }
+                        else
+                        {
+                            let generatorTargetIndex = targetIndex - modulationVoiceCoreLaneCount;
+                            voiceRouteGeneratorScaleVectors.at (sourceIndex).at (generatorTargetIndex)
+                                = voiceRouteScales.at (routeIndex);
+                            voiceRouteGeneratorBiasVectors.at (sourceIndex).at (generatorTargetIndex)
+                                = voiceRouteBiases.at (routeIndex);
+                        }
                         applied = true;
                         break;
                     }
@@ -3883,10 +4087,21 @@ namespace wt
                         let sourceIndex = macroVoiceRouteSources.at (routeIndex);
                         let targetIndex = macroVoiceRouteTargets.at (routeIndex);
                         let polarityKind = macroVoiceRoutePolarities.at (routeIndex);
-                        macroVoiceRouteScaleVectors.at (sourceIndex).at (targetIndex)
-                            = modulationRouteScale (upload.amount, polarityKind);
-                        macroVoiceRouteBiasVectors.at (sourceIndex).at (targetIndex)
-                            = modulationRouteBias (upload.amount, polarityKind);
+                        if (targetIndex < modulationVoiceCoreLaneCount)
+                        {
+                            macroVoiceRouteCoreScaleVectors.at (sourceIndex).at (targetIndex)
+                                = modulationRouteScale (upload.amount, polarityKind);
+                            macroVoiceRouteCoreBiasVectors.at (sourceIndex).at (targetIndex)
+                                = modulationRouteBias (upload.amount, polarityKind);
+                        }
+                        else
+                        {
+                            let generatorTargetIndex = targetIndex - modulationVoiceCoreLaneCount;
+                            macroVoiceRouteGeneratorScaleVectors.at (sourceIndex).at (generatorTargetIndex)
+                                = modulationRouteScale (upload.amount, polarityKind);
+                            macroVoiceRouteGeneratorBiasVectors.at (sourceIndex).at (generatorTargetIndex)
+                                = modulationRouteBias (upload.amount, polarityKind);
+                        }
                         applied = true;
                         break;
                     }
@@ -4054,7 +4269,6 @@ namespace wt
                 return;
             }
             wt::MsegPlaybackConfig config;
-            config.seconds = upload.seconds;
             config.holdFinalValue = upload.holdFinalValue;
             config.rateKind = upload.rateKind;
             config.loopEnabled = upload.loopEnabled;
@@ -4063,20 +4277,6 @@ namespace wt
             config.noteOffPolicy = upload.noteOffPolicy;
             config.legatoRestarts = upload.legatoRestarts;
             uploadMsegPlaybackToSlot (upload.slot, config);
-            completeModulationRuntimeInstall (upload.deliverySerial);
-        }
-
-        event modulationEnvelopeIn (ModulationEnvelopeUpload upload)
-        {
-            let installKind = beginModulationRuntimeInstall (upload.dspSessionId, upload.deliverySerial);
-            if (installKind == 0)
-                return;
-            if (upload.slot < 1 || upload.slot > modulationEnvSlotCount)
-            {
-                rejectRuntimeInstall (upload.deliverySerial);
-                return;
-            }
-            uploadEnvelopeToSlot (upload.slot, upload);
             completeModulationRuntimeInstall (upload.deliverySerial);
         }
 
@@ -4263,7 +4463,10 @@ namespace wt
             }
 
             for (wrap<voiceCount> voice)
+            {
                 clearVoiceArticulation (int32 (voice));
+                resetVoiceGeneratorModulationTargets (int32 (voice));
+            }
 
             initialiseExternalRendererState();
 
@@ -4295,6 +4498,28 @@ namespace wt
                 {
                     let voiceIndex = int32 (voice);
                     advanceVoicePitchState (voiceIndex);
+                    let msegIndex0 = voiceArticulationMsegIndex (voiceIndex, 0);
+                    let msegIndex1 = voiceArticulationMsegIndex (voiceIndex, 1);
+                    let msegIndex2 = voiceArticulationMsegIndex (voiceIndex, 2);
+                    mseg1[voice].durationSecondsIn <- voiceEffectiveMsegRates.at (msegIndex0);
+                    mseg2[voice].durationSecondsIn <- voiceEffectiveMsegRates.at (msegIndex1);
+                    mseg3[voice].durationSecondsIn <- voiceEffectiveMsegRates.at (msegIndex2);
+
+                    let envIndex0 = voiceArticulationEnvelopeIndex (voiceIndex, 0);
+                    let envIndex1 = voiceArticulationEnvelopeIndex (voiceIndex, 1);
+                    let envIndex2 = voiceArticulationEnvelopeIndex (voiceIndex, 2);
+                    modEnv1[voice].attackSecondsIn <- voiceEffectiveEnvelopeAttackSeconds.at (envIndex0);
+                    modEnv1[voice].decaySecondsIn <- voiceEffectiveEnvelopeDecaySeconds.at (envIndex0);
+                    modEnv1[voice].sustainIn <- voiceEffectiveEnvelopeSustain.at (envIndex0);
+                    modEnv1[voice].releaseSecondsIn <- voiceEffectiveEnvelopeReleaseSeconds.at (envIndex0);
+                    modEnv2[voice].attackSecondsIn <- voiceEffectiveEnvelopeAttackSeconds.at (envIndex1);
+                    modEnv2[voice].decaySecondsIn <- voiceEffectiveEnvelopeDecaySeconds.at (envIndex1);
+                    modEnv2[voice].sustainIn <- voiceEffectiveEnvelopeSustain.at (envIndex1);
+                    modEnv2[voice].releaseSecondsIn <- voiceEffectiveEnvelopeReleaseSeconds.at (envIndex1);
+                    modEnv3[voice].attackSecondsIn <- voiceEffectiveEnvelopeAttackSeconds.at (envIndex2);
+                    modEnv3[voice].decaySecondsIn <- voiceEffectiveEnvelopeDecaySeconds.at (envIndex2);
+                    modEnv3[voice].sustainIn <- voiceEffectiveEnvelopeSustain.at (envIndex2);
+                    modEnv3[voice].releaseSecondsIn <- voiceEffectiveEnvelopeReleaseSeconds.at (envIndex2);
                     mseg1[voice].advance();
                     mseg2[voice].advance();
                     mseg3[voice].advance();
@@ -4307,9 +4532,16 @@ namespace wt
                     voiceMsegProgress3[voice] = mseg3[voice].progressOut;
 
                     if (! voiceIsSoundingForRackModulation (voiceIndex))
+                    {
+                        resetVoiceGeneratorModulationTargets (voiceIndex);
                         continue;
+                    }
 
                     accumulateVoiceModulationTargets (voiceIndex);
+                    // Generator destinations consume the prior frame's source
+                    // values. This one-frame causal delay makes self/cross
+                    // modulation deterministic without an algebraic cycle.
+                    updateVoiceGeneratorModulationTargets (voiceIndex);
                     accumulateVoiceRackSources (voiceIndex);
 
                     let processorFrequency = float32 (processor.frequency);

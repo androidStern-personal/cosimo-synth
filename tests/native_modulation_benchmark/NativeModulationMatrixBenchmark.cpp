@@ -70,6 +70,7 @@ constexpr std::array effectSettings
     EffectSetting { "oscCWarpAmount", 0.0f },
     EffectSetting { "filterMode", 1.0f },
     EffectSetting { "filterCutoff", 1200.0f },
+    EffectSetting { "env1Sustain", 0.0f },
     EffectSetting { "globalFilterMode", 1.0f },
     EffectSetting { "globalFilterCutoff", 1200.0f },
     EffectSetting { "globalFilterResonance", 0.707107f },
@@ -251,7 +252,6 @@ std::int32_t installNeutralSourcesAndEmptyProgram (WavetableSynth& performer)
 
         WavetableSynth::wt_ModulationMsegPlaybackUpload upload;
         upload.slot = playback.slot;
-        upload.seconds = playback.seconds;
         upload.holdFinalValue = playback.holdFinalValue;
         upload.rateKind = playback.rateKind;
         upload.loopEnabled = playback.loopEnabled;
@@ -262,20 +262,6 @@ std::int32_t installNeutralSourcesAndEmptyProgram (WavetableSynth& performer)
         upload.dspSessionId = dspSessionID;
         upload.deliverySerial = ++deliverySerial;
         performer.addEvent_modulationMsegPlayback (upload);
-        requireAcceptedSerial (readLatestInstallAck (performer), deliverySerial);
-    }
-
-    for (const auto& envelope : benchmark_profiles::envelopes)
-    {
-        WavetableSynth::wt_ModulationEnvelopeUpload upload;
-        upload.slot = envelope.slot;
-        upload.attackSeconds = envelope.attackSeconds;
-        upload.decaySeconds = envelope.decaySeconds;
-        upload.sustain = envelope.sustain;
-        upload.releaseSeconds = envelope.releaseSeconds;
-        upload.dspSessionId = dspSessionID;
-        upload.deliverySerial = ++deliverySerial;
-        performer.addEvent_modulationEnvelope (upload);
         requireAcceptedSerial (readLatestInstallAck (performer), deliverySerial);
     }
 

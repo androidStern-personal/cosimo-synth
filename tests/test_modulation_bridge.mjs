@@ -6,7 +6,6 @@ import {
     renderMsegShape,
 } from "../patch_gui/mseg.js";
 import {
-    MODULATION_ENV_ENDPOINT_ID,
     MODULATION_MSEG_BUFFER_ENDPOINT_ID,
     MODULATION_MSEG_PLAYBACK_ENDPOINT_ID,
     MODULATION_STATE_KEY,
@@ -166,7 +165,6 @@ test("modulation runtime event builder converts defaults into a complete Cmajor 
 
     assert.equal(endpointEvents({ events }, MODULATION_MSEG_BUFFER_ENDPOINT_ID).length, 6);
     assert.equal(endpointEvents({ events }, MODULATION_MSEG_PLAYBACK_ENDPOINT_ID).length, 3);
-    assert.equal(endpointEvents({ events }, MODULATION_ENV_ENDPOINT_ID).length, 3);
     const program = endpointEvents({ events }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
     assert.equal(program.voiceRouteCount, 0);
     assert.equal(program.macroVoiceRouteCount, 0);
@@ -214,13 +212,7 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
             { x: 1.0, y: 0.2, curvePower: 0.0 },
         ],
     };
-    customState.envelopeSlots[2] = {
-        name: "Env 3",
-        attackSeconds: 0.25,
-        decaySeconds: 0.5,
-        sustain: 0.75,
-        releaseSeconds: 0.9,
-    };
+    customState.envelopeSlots[2] = { name: "Custom Env 3" };
     customState.routes = [{
         id: "boot-route-1",
         enabled: true,
@@ -244,7 +236,7 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
     assert.equal(state.msegSlots[1].shapeA.points.length, 3);
     assert.equal(state.msegSlots[1].shapeB.points.length, 2);
     assert.equal(Object.hasOwn(state.msegSlots[1], "morph"), false);
-    assert.equal(state.envelopeSlots[2].attackSeconds, 0.25);
+    assert.equal(state.envelopeSlots[2].name, "Custom Env 3");
     assert.deepEqual(state.routes, customState.routes);
     assert.deepEqual(patchConnection.events, []);
 });
@@ -329,7 +321,7 @@ test("direct live state replacement rejects malformed documents without wiping o
     assert.equal(patchConnection.storedWrites.length, writesBeforeRejection);
 });
 
-test("modulation runtime event builder converts saved state into slot_envelope_and_route_uploads", () => {
+test("modulation runtime event builder converts saved state into MSEG and route uploads", () => {
     const customState = createDefaultModulationState();
     customState.msegSlots[1].shapeA = {
         ...createDefaultMsegShape("MSEG 2"),
@@ -346,13 +338,7 @@ test("modulation runtime event builder converts saved state into slot_envelope_a
             { x: 1.0, y: 0.4, curvePower: 0.0 },
         ],
     };
-    customState.envelopeSlots[2] = {
-        name: "Env 3",
-        attackSeconds: 0.25,
-        decaySeconds: 0.5,
-        sustain: 0.75,
-        releaseSeconds: 0.9,
-    };
+    customState.envelopeSlots[2] = { name: "Env 3" };
     customState.routes = [{
         id: "boot-route-1",
         enabled: true,
@@ -374,13 +360,13 @@ test("modulation runtime event builder converts saved state into slot_envelope_a
 
     const program = endpointEvents({ events }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
     assert.equal(program.voiceRouteCount, 1);
-    assert.equal(program.voiceRouteCells[0], 190);
+    assert.equal(program.voiceRouteCells[0], 280);
     assert.equal(program.voiceRouteSources[0], 5);
     assert.equal(program.voiceRouteTargets[0], 30);
-    assert.equal(program.voiceRouteAmounts[190], 4);
+    assert.equal(program.voiceRouteAmounts[280], 4);
 });
 
-test("editing one MSEG slot persists modulation.v5 without runtime uploading", () => {
+test("editing one MSEG slot persists modulation.v6 without runtime uploading", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);
 
@@ -400,7 +386,7 @@ test("editing one MSEG slot persists modulation.v5 without runtime uploading", (
 
     assert.equal(patchConnection.storedWrites.some(({ key }) => key === MODULATION_STATE_KEY), true);
     const savedState = deserializeModulationState(patchConnection.storedWrites.at(-1).value);
-    assert.equal(savedState.version, 5);
+    assert.equal(savedState.version, 6);
     assert.equal(savedState.msegSlots[0].shapeA.points.length, 3);
     assert.equal(savedState.msegSlots[0].shapeB.points.length, 2);
     assert.deepEqual(patchConnection.events, []);
@@ -490,10 +476,10 @@ test("replacing routes preserves signed amounts and compiles only active mapping
 
     const program = endpointEvents({ events: buildModulationRuntimeEvents(savedState) }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
     assert.equal(program.voiceRouteCount, 2);
-    assert.deepEqual(program.voiceRouteCells.slice(0, 2), [158, 196]);
+    assert.deepEqual(program.voiceRouteCells.slice(0, 2), [230, 304]);
     assert.deepEqual(program.voiceRoutePolarities.slice(0, 2), [0, 1]);
-    assert.equal(program.voiceRouteAmounts[158], -2.5);
-    assert.equal(program.voiceRouteAmounts[196], 0.5);
+    assert.equal(program.voiceRouteAmounts[230], -2.5);
+    assert.equal(program.voiceRouteAmounts[304], 0.5);
 });
 
 test("async stored-state echoes do not retrigger modulation uploads", async () => {

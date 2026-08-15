@@ -195,6 +195,52 @@ function createOscillatorModulationDescriptor(oscillatorID, definition) {
     });
 }
 const OSCILLATOR_MODULATION_DESCRIPTORS = Object.freeze(OSCILLATOR_IDS.flatMap((oscillatorID) => (OSCILLATOR_MODULATION_DESCRIPTOR_DEFINITIONS.map((definition) => (createOscillatorModulationDescriptor(oscillatorID, definition))))));
+const GENERATOR_TARGET_DEFINITIONS = Object.freeze([
+    { moduleId: "mseg1", targetIdSuffix: "morph", endpointID: "mseg1Morph", targetKind: "mseg1Morph", label: "MSEG 1 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph1" },
+    { moduleId: "mseg2", targetIdSuffix: "morph", endpointID: "mseg2Morph", targetKind: "mseg2Morph", label: "MSEG 2 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph2" },
+    { moduleId: "mseg3", targetIdSuffix: "morph", endpointID: "mseg3Morph", targetKind: "mseg3Morph", label: "MSEG 3 Morph", min: 0, max: 1, initial: 0, format: "percent", articulationParameterId: "msegMorph3" },
+    { moduleId: "mseg1", targetIdSuffix: "rate", endpointID: "mseg1Rate", targetKind: "mseg1Rate", label: "MSEG 1 Time", min: 0, max: 2, initial: 1, format: "time", articulationParameterId: null },
+    { moduleId: "mseg2", targetIdSuffix: "rate", endpointID: "mseg2Rate", targetKind: "mseg2Rate", label: "MSEG 2 Time", min: 0, max: 2, initial: 1, format: "time", articulationParameterId: null },
+    { moduleId: "mseg3", targetIdSuffix: "rate", endpointID: "mseg3Rate", targetKind: "mseg3Rate", label: "MSEG 3 Time", min: 0, max: 2, initial: 1, format: "time", articulationParameterId: null },
+    { moduleId: "env1", targetIdSuffix: "attack", endpointID: "env1Attack", targetKind: "env1Attack", label: "ENV 1 Attack", min: 0.001, max: 10, initial: 0.01, format: "time", articulationParameterId: "env1.attackSeconds" },
+    { moduleId: "env1", targetIdSuffix: "decay", endpointID: "env1Decay", targetKind: "env1Decay", label: "ENV 1 Decay", min: 0.001, max: 10, initial: 0.25, format: "time", articulationParameterId: "env1.decaySeconds" },
+    { moduleId: "env1", targetIdSuffix: "sustain", endpointID: "env1Sustain", targetKind: "env1Sustain", label: "ENV 1 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env1.sustain" },
+    { moduleId: "env1", targetIdSuffix: "release", endpointID: "env1Release", targetKind: "env1Release", label: "ENV 1 Release", min: 0.001, max: 10, initial: 0.2, format: "time", articulationParameterId: "env1.releaseSeconds" },
+    { moduleId: "env2", targetIdSuffix: "attack", endpointID: "env2Attack", targetKind: "env2Attack", label: "ENV 2 Attack", min: 0.001, max: 10, initial: 0.01, format: "time", articulationParameterId: "env2.attackSeconds" },
+    { moduleId: "env2", targetIdSuffix: "decay", endpointID: "env2Decay", targetKind: "env2Decay", label: "ENV 2 Decay", min: 0.001, max: 10, initial: 0.25, format: "time", articulationParameterId: "env2.decaySeconds" },
+    { moduleId: "env2", targetIdSuffix: "sustain", endpointID: "env2Sustain", targetKind: "env2Sustain", label: "ENV 2 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env2.sustain" },
+    { moduleId: "env2", targetIdSuffix: "release", endpointID: "env2Release", targetKind: "env2Release", label: "ENV 2 Release", min: 0.001, max: 10, initial: 0.2, format: "time", articulationParameterId: "env2.releaseSeconds" },
+    { moduleId: "env3", targetIdSuffix: "attack", endpointID: "env3Attack", targetKind: "env3Attack", label: "ENV 3 Attack", min: 0.001, max: 10, initial: 0.01, format: "time", articulationParameterId: "env3.attackSeconds" },
+    { moduleId: "env3", targetIdSuffix: "decay", endpointID: "env3Decay", targetKind: "env3Decay", label: "ENV 3 Decay", min: 0.001, max: 10, initial: 0.25, format: "time", articulationParameterId: "env3.decaySeconds" },
+    { moduleId: "env3", targetIdSuffix: "sustain", endpointID: "env3Sustain", targetKind: "env3Sustain", label: "ENV 3 Sustain", min: 0, max: 1, initial: 0.5, format: "percent", articulationParameterId: "env3.sustain" },
+    { moduleId: "env3", targetIdSuffix: "release", endpointID: "env3Release", targetKind: "env3Release", label: "ENV 3 Release", min: 0.001, max: 10, initial: 0.2, format: "time", articulationParameterId: "env3.releaseSeconds" },
+]);
+function createGeneratorTargetDescriptor(definition) {
+    const targetId = catalogTargetId(definition.moduleId, definition.targetIdSuffix);
+    const span = definition.max - definition.min;
+    const toEngine = (value) => definition.min + (span * value);
+    const fromEngine = (value) => normalized((value - definition.min) / span, `${definition.endpointID} endpoint conversion`);
+    return Object.freeze({
+        targetId,
+        moduleId: definition.moduleId,
+        workspace: "voice",
+        label: definition.label,
+        defaultValue: fromEngine(definition.initial),
+        initialValue: fromEngine(definition.initial),
+        format: definition.format === "time"
+            ? { kind: "time", minSeconds: definition.min, maxSeconds: definition.max }
+            : { kind: "percent" },
+        modAmount: definition.format === "time"
+            ? { min: -span, max: span, unit: "s", digits: 3 }
+            : { min: -100, max: 100, unit: "%", digits: 0 },
+        binding: boundEndpoint(definition.endpointID, toEngine, fromEngine),
+        isQuick: false,
+        compound: null,
+        articulationParameterId: definition.articulationParameterId,
+        modulationTargetKind: definition.targetKind,
+    });
+}
+const GENERATOR_TARGET_DESCRIPTORS = Object.freeze(GENERATOR_TARGET_DEFINITIONS.map(createGeneratorTargetDescriptor));
 function rackTargetId(parameter) {
     // SAFETY: effect identity and endpoint id both come from the closed rack catalog.
     return `${parameter.effectId}.${parameter.endpointID}`;
@@ -270,6 +316,7 @@ function createRackTargetDescriptor(parameter) {
 const TARGET_DESCRIPTORS = Object.freeze([
     ...RACK_EFFECT_DESCRIPTORS.flatMap((effect) => effect.parameters.map(createRackTargetDescriptor)),
     ...OSCILLATOR_MODULATION_DESCRIPTORS,
+    ...GENERATOR_TARGET_DESCRIPTORS,
     ...MODULE_DEFINITIONS.flatMap((moduleDefinition) => moduleDefinition.parameters.map((parameterDefinition) => createDescriptor(moduleDefinition, parameterDefinition))),
 ]);
 const TARGET_DESCRIPTOR_BY_ID = new Map(TARGET_DESCRIPTORS.map((descriptor) => [descriptor.targetId, descriptor]));
@@ -366,6 +413,10 @@ export function formatTargetValue(descriptor, value) {
         case "rate": {
             const { minHz, maxHz } = descriptor.format;
             return `${(minHz + value * (maxHz - minHz)).toFixed(2)} Hz`;
+        }
+        case "time": {
+            const { minSeconds, maxSeconds } = descriptor.format;
+            return `${(minSeconds + value * (maxSeconds - minSeconds)).toFixed(3)} s`;
         }
         case "phase":
             return `${Math.round((prototypeValue / 100) * 360)}°`;

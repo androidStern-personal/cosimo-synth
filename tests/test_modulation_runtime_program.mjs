@@ -30,6 +30,24 @@ const voiceTargets = [
     )),
     "filterCutoffOctaves",
     "filterQ",
+    "mseg1Morph",
+    "mseg2Morph",
+    "mseg3Morph",
+    "mseg1Rate",
+    "mseg2Rate",
+    "mseg3Rate",
+    "env1Attack",
+    "env1Decay",
+    "env1Sustain",
+    "env1Release",
+    "env2Attack",
+    "env2Decay",
+    "env2Sustain",
+    "env2Release",
+    "env3Attack",
+    "env3Decay",
+    "env3Sustain",
+    "env3Release",
 ];
 
 const runtimeLaneSpecifications = [
@@ -247,18 +265,18 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
     });
 });
 
-test("all 884 legal mappings publish exact deterministic lane tails without truncation", async () => {
+test("all 1118 legal mappings publish exact deterministic lane tails without truncation", async () => {
     const runtime = await programModulePromise;
     const routes = await createAllLegalRoutes();
     const program = runtime.compileModulationRuntimeProgram(routes);
 
     assert.equal(routes.length, runtime.MODULATION_MAPPING_CELL_COUNT);
-    assert.deepEqual(runtimeLaneCounts(program), [288, 128, 324, 144]);
+    assert.deepEqual(runtimeLaneCounts(program), [450, 200, 324, 144]);
     assert.deepEqual(
         runtimeLaneSpecifications.map((specification) => runtimeLaneTail(program, specification)),
         [
-            { cellIndex: 287, sourceIndex: 8, targetIndex: 31, polarity: 1, amount: 0.25, reducer: null },
-            { cellIndex: 127, sourceIndex: 3, targetIndex: 31, polarity: 0, amount: 0.25, reducer: null },
+            { cellIndex: 449, sourceIndex: 8, targetIndex: 49, polarity: 1, amount: 0.25, reducer: null },
+            { cellIndex: 199, sourceIndex: 3, targetIndex: 49, polarity: 0, amount: 0.25, reducer: null },
             { cellIndex: 323, sourceIndex: 8, targetIndex: 35, polarity: 1, amount: 0.25, reducer: 2 },
             { cellIndex: 143, sourceIndex: 3, targetIndex: 35, polarity: 0, amount: 0.25, reducer: null },
         ],
@@ -270,7 +288,7 @@ test("all 884 legal mappings publish exact deterministic lane tails without trun
     );
 });
 
-test("884 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
+test("1118 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
     const runtime = await programModulePromise;
     const allRoutes = await createAllLegalRoutes();
     const activeRoutes = selectActiveRoutesByLane(
@@ -284,7 +302,7 @@ test("884 stored mappings with the same 100 active mappings publish identical ex
     ));
 
     assert.equal(activeRoutes.length, 100);
-    assert.equal(storedDomain.length, 884);
+    assert.equal(storedDomain.length, 1118);
     assert.deepEqual(
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(storedDomain)),
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(activeRoutes)),
@@ -339,9 +357,11 @@ test("the DSP hot path consumes published active prefixes instead of transport c
     const hotPath = source.slice(hotPathStart, hotPathEnd);
 
     assert.match(hotPath, /macroVoiceRouteSourceUsed\[sourceIndex\]/);
-    assert.match(hotPath, /macroVoiceRouteScaleVectors\[sourceIndex\] \* macroSourceValues\[sourceIndex\]/);
+    assert.match(hotPath, /macroVoiceRouteCoreScaleVectors\[sourceIndex\] \* macroSourceValues\[sourceIndex\]/);
+    assert.match(hotPath, /macroVoiceRouteGeneratorScaleVectors\[sourceIndex\] \* macroSourceValues\[sourceIndex\]/);
     assert.match(hotPath, /voiceRouteSourceUsed\[sourceIndex\]/);
-    assert.match(hotPath, /voiceRouteScaleVectors\[sourceIndex\] \* sourceValue/);
+    assert.match(hotPath, /voiceRouteCoreScaleVectors\[sourceIndex\] \* sourceValue/);
+    assert.match(hotPath, /voiceRouteGeneratorScaleVectors\[sourceIndex\] \* sourceValue/);
     assert.equal(
         hotPath.match(/int32 \(routeIndex\) >= voiceRouteCount/g)?.length,
         1,
@@ -680,9 +700,8 @@ test("initial modulation restore uploads sources once and installs one atomic ro
 
     assert.equal(endpointCount(modulation.MODULATION_MSEG_BUFFER_ENDPOINT_ID), 6);
     assert.equal(endpointCount(modulation.MODULATION_MSEG_PLAYBACK_ENDPOINT_ID), 3);
-    assert.equal(endpointCount(modulation.MODULATION_ENV_ENDPOINT_ID), 3);
     assert.equal(endpointCount(programModule.MODULATION_PROGRAM_ENDPOINT_ID), 1);
-    assert.equal(events.length, 13);
+    assert.equal(events.length, 10);
 });
 
 test("the runtime mirror gives a compiler the last successfully applied snapshot", async () => {

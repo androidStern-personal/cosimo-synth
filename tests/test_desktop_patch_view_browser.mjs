@@ -2296,6 +2296,164 @@ test("global modulation-source drag maps the selected oscillator level control",
     }
 });
 
+test("MSEG morph is a real modulation drop target", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await expandGlobalModRail(page);
+        await page.locator('[data-role="mobile-workspace-toggle-mod"]').click();
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const target = page.locator('[data-role="mseg-morph-slider"]').first();
+        await target.scrollIntoViewIfNeeded();
+        assert.equal(await target.getAttribute("data-modulation-target-kind"), "mseg1Morph");
+
+        const sourceBox = await source.boundingBox();
+        const targetBox = await target.boundingBox();
+        assert.ok(sourceBox && targetBox);
+        const start = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 };
+        const end = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 8; step += 1) {
+            const progress = step / 8;
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: start.x + ((end.x - start.x) * progress),
+                    y: start.y + ((end.y - start.y) * progress),
+                    radiusX: 5,
+                    radiusY: 5,
+                    force: 1,
+                }],
+            });
+        }
+        assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), true);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "MSEG morph modulation route",
+            (candidate) => readStoredModulationState(candidate).routes.some((route) => (
+                route.sourceKind === "env"
+                && route.sourceSlot === 1
+                && route.targetKind === "mseg1Morph"
+            )),
+        );
+        assert.equal(readStoredModulationState(snapshot).routes.some((route) => (
+            route.sourceKind === "env"
+            && route.sourceSlot === 1
+            && route.targetKind === "mseg1Morph"
+        )), true);
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+test("every continuous MSEG and envelope control exposes its exact modulation target", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        for (let slotIndex = 0; slotIndex < 3; slotIndex += 1) {
+            await page.getByRole("button", { name: `Select MSEG ${slotIndex + 1}` }).click();
+            assert.equal(
+                await page.locator('[role="slider"][aria-label="MSEG morph"]:visible').getAttribute("data-modulation-target-kind"),
+                `mseg${slotIndex + 1}Morph`,
+            );
+            assert.equal(
+                await page.locator('input[aria-label="MSEG rate"]:visible').getAttribute("data-modulation-target-kind"),
+                `mseg${slotIndex + 1}Rate`,
+            );
+        }
+
+        const envelopeFields = [
+            ["Envelope attack value", "Attack"],
+            ["Envelope decay value", "Decay"],
+            ["Envelope sustain value", "Sustain"],
+            ["Envelope release value", "Release"],
+        ];
+        for (let slotIndex = 0; slotIndex < 3; slotIndex += 1) {
+            await page.getByRole("button", { name: `Select envelope ${slotIndex + 1}` }).click();
+            for (const [ariaLabel, suffix] of envelopeFields) {
+                assert.equal(
+                    await page.locator(`input[aria-label="${ariaLabel}"]:visible`).getAttribute("data-modulation-target-kind"),
+                    `env${slotIndex + 1}${suffix}`,
+                );
+            }
+        }
+    } finally {
+        await page.close();
+    }
+});
+
+test("envelope decay accepts a real touch modulation drop", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await expandGlobalModRail(page);
+        await page.locator('[data-role="mobile-workspace-toggle-mod"]').click();
+        await page.locator('[data-role="mobile-mod-source-type"]').selectOption("envelope");
+        await page.locator('[data-role="mobile-mod-source-number"]').selectOption("2");
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const target = page.locator('input[aria-label="Envelope decay value"]:visible');
+        await target.scrollIntoViewIfNeeded();
+        assert.equal(await target.getAttribute("data-modulation-target-kind"), "env2Decay");
+
+        const sourceBox = await source.boundingBox();
+        const targetBox = await target.boundingBox();
+        assert.ok(sourceBox && targetBox);
+        const start = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 };
+        const end = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 8; step += 1) {
+            const progress = step / 8;
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: start.x + ((end.x - start.x) * progress),
+                    y: start.y + ((end.y - start.y) * progress),
+                    radiusX: 5,
+                    radiusY: 5,
+                    force: 1,
+                }],
+            });
+        }
+        assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), true);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "envelope decay modulation route",
+            (candidate) => readStoredModulationState(candidate).routes.some((route) => (
+                route.sourceKind === "env"
+                && route.sourceSlot === 1
+                && route.targetKind === "env2Decay"
+            )),
+        );
+        assert.equal(readStoredModulationState(snapshot).routes.some((route) => (
+            route.sourceKind === "env"
+            && route.sourceSlot === 1
+            && route.targetKind === "env2Decay"
+        )), true);
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
 test("voice controls expose the selected oscillator and shared filter modulation targets", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -3178,7 +3336,7 @@ test("articulation recall applies sparse v4 overrides without replacing routing"
             harness.setParameterValue("oscAWarpAmount", 0.08);
             harness.setParameterValue("filterCutoff", 8200);
 
-            const rawModulationState = harness.getSnapshot().storedState["modulation.v5"];
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v6"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
                 : fallbackModulationState;
@@ -3192,7 +3350,7 @@ test("articulation recall applies sparse v4 overrides without replacing routing"
                 amount: 0.03,
                 reducer: "max",
             }];
-            harness.setStoredStateValue("modulation.v5", JSON.stringify(modulationState));
+            harness.setStoredStateValue("modulation.v6", JSON.stringify(modulationState));
         }, {
             fallbackModulationState: createDefaultModulationState(),
             nextRouteId: routeId,
@@ -4398,7 +4556,7 @@ test("synth preset bar saves current synth state through shared effect presets",
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
 
-            const rawModulationState = harness.getSnapshot().storedState["modulation.v5"];
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v6"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
                 : defaultModulationState;
@@ -4414,10 +4572,7 @@ test("synth preset bar saves current synth state through shared effect presets",
             };
             modulationState.envelopeSlots[1] = {
                 ...(modulationState.envelopeSlots[1] ?? {}),
-                attackSeconds: 0.21,
-                decaySeconds: 0.32,
-                sustain: 0.43,
-                releaseSeconds: 0.54,
+                name: "Sweep Env",
             };
             modulationState.routes = [{
                 id: "preset-route-1",
@@ -4429,8 +4584,12 @@ test("synth preset bar saves current synth state through shared effect presets",
                 amount: 0.37,
                 reducer: "max",
             }];
-            harness.setStoredStateValue("modulation.v5", JSON.stringify(modulationState));
+            harness.setStoredStateValue("modulation.v6", JSON.stringify(modulationState));
             harness.setParameterValue("mseg1Morph", 0.71);
+            harness.setParameterValue("env2Attack", 0.21);
+            harness.setParameterValue("env2Decay", 0.32);
+            harness.setParameterValue("env2Sustain", 0.43);
+            harness.setParameterValue("env2Release", 0.54);
             return modulationState;
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
@@ -4442,7 +4601,9 @@ test("synth preset bar saves current synth state through shared effect presets",
             page,
             "seeded non-default stored state before synth preset save",
             (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).selectedSlotId === "bright-bow"
-                && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.71) <= 1e-9,
+                && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.71) <= 1e-9
+                && Math.abs(Number(nextSnapshot.parameterValues.env2Attack) - 0.21) <= 1e-9
+                && Math.abs(Number(nextSnapshot.parameterValues.env2Release) - 0.54) <= 1e-9,
         );
 
         await page.evaluate(() => {
@@ -4505,7 +4666,7 @@ test("synth preset bar saves current synth state through shared effect presets",
         );
         assert.deepEqual(
             Object.keys(savedPreset.storedState).sort((left, right) => left.localeCompare(right)),
-            [ARTICULATION_STATE_KEY, "modulation.v5"],
+            [ARTICULATION_STATE_KEY, "modulation.v6"],
             "saved synth presets must capture only the required stored-state adapters",
         );
         assert.deepEqual(
@@ -4513,11 +4674,15 @@ test("synth preset bar saves current synth state through shared effect presets",
             editorBankToStoredArticulations(seededBank),
             "saved synth presets must include the actual non-default articulation bank",
         );
-        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v5"]);
+        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v6"]);
         assert.equal(savedPreset.parameters.mseg1Morph, 0.33);
+        assert.equal(savedPreset.parameters.env2Attack, 0.21);
+        assert.equal(savedPreset.parameters.env2Decay, 0.32);
+        assert.equal(savedPreset.parameters.env2Sustain, 0.43);
+        assert.equal(savedPreset.parameters.env2Release, 0.54);
         assert.equal("morph" in savedModulationState.msegSlots[0], false);
-        assert.equal(savedModulationState.envelopeSlots[1].attackSeconds, seededModulationState.envelopeSlots[1].attackSeconds);
-        assert.equal(savedModulationState.envelopeSlots[1].releaseSeconds, seededModulationState.envelopeSlots[1].releaseSeconds);
+        assert.deepEqual(savedModulationState.envelopeSlots[1], { name: "Sweep Env" });
+        assert.equal("attackSeconds" in savedModulationState.envelopeSlots[1], false);
         assert.deepEqual(
             routeSummary(savedModulationState.routes[0]),
             routeSummary(seededModulationState.routes[0]),
@@ -4626,7 +4791,7 @@ test("synth presets restore mapping dependencies before strict articulation rout
 
         await page.evaluate(({ defaultModulationState, nextRouteId }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setStoredStateValue("modulation.v5", JSON.stringify({
+            harness.setStoredStateValue("modulation.v6", JSON.stringify({
                 ...defaultModulationState,
                 routes: [{
                     id: nextRouteId,
@@ -4671,8 +4836,8 @@ test("synth presets restore mapping dependencies before strict articulation rout
         await page.evaluate(({ articulationStateKey, emptyArticulations }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setStoredStateValue(articulationStateKey, JSON.stringify(emptyArticulations));
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v5"]));
-            harness.setStoredStateValue("modulation.v5", JSON.stringify({ ...modulationState, routes: [] }));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v6"]));
+            harness.setStoredStateValue("modulation.v6", JSON.stringify({ ...modulationState, routes: [] }));
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
             emptyArticulations: {
@@ -5419,13 +5584,13 @@ test("mod matrix amount entry preserves the focused draft across a host echo", a
         await amountInput.fill("12");
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v5"]));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v6"]));
             modulationState.routes[0].amount = 0.77;
-            harness.setStoredStateValue("modulation.v5", JSON.stringify(modulationState));
+            harness.setStoredStateValue("modulation.v6", JSON.stringify(modulationState));
         });
         await page.waitForFunction(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v5"]));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v6"]));
             return Math.abs(Number(modulationState.routes[0]?.amount) - 0.77) <= 1e-9;
         });
 
@@ -5577,7 +5742,7 @@ test("desktop envelope editor drags handles and commits compact rail values for 
             "left",
         );
 
-        const initialEnvelopeState = readStoredModulationState(await getHarnessSnapshot(page)).envelopeSlots[1];
+        const initialParameters = (await getHarnessSnapshot(page)).parameterValues;
 
         await dragEnvelopeHandleBy(page, "adsr-attack-handle-hit-target", 110, 0);
 
@@ -5585,21 +5750,19 @@ test("desktop envelope editor drags handles and commits compact rail values for 
             page,
             "envelope attack drag updates slot 2",
             (nextSnapshot) => {
-                const state = readStoredModulationState(nextSnapshot);
-                return Number(state.envelopeSlots[1]?.attackSeconds) > 0.08
-                    && Math.abs(Number(state.envelopeSlots[0]?.attackSeconds) - 0.01) <= 1e-9
+                return Number(nextSnapshot.parameterValues.env2Attack) > 0.08
+                    && Math.abs(Number(nextSnapshot.parameterValues.env1Attack) - 0.01) <= 1e-9
                     && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                        endpointID === "modulationEnvelope"
-                        && Number(value?.slot) === 2
-                        && Number(value?.attackSeconds) > 0.08
+                        endpointID === "env2Attack"
+                        && Number(value) > 0.08
                     ));
             },
         );
 
-        assert.equal(Number(readStoredModulationState(snapshot).envelopeSlots[1].attackSeconds) > 0.08, true);
-        assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].attackSeconds) - 0.01) <= 1e-9, true);
+        assert.equal(Number(snapshot.parameterValues.env2Attack) > 0.08, true);
+        assert.equal(Math.abs(Number(snapshot.parameterValues.env1Attack) - 0.01) <= 1e-9, true);
 
-        const envelopeAfterAttack = readStoredModulationState(snapshot).envelopeSlots[1];
+        const parametersAfterAttack = snapshot.parameterValues;
 
         await dragEnvelopeHandleBy(page, "adsr-decay-sustain-handle-hit-target", 160, 70);
 
@@ -5607,30 +5770,31 @@ test("desktop envelope editor drags handles and commits compact rail values for 
             page,
             "decay-sustain handle drag updates decay horizontally and sustain vertically for slot 2",
             (nextSnapshot) => {
-                const state = readStoredModulationState(nextSnapshot);
-                return Math.abs(Number(state.envelopeSlots[1]?.decaySeconds) - Number(envelopeAfterAttack?.decaySeconds ?? initialEnvelopeState?.decaySeconds ?? 0.25)) > 0.02
-                    && Math.abs(Number(state.envelopeSlots[1]?.sustain) - Number(envelopeAfterAttack?.sustain ?? initialEnvelopeState?.sustain ?? 0.5)) > 0.05
-                    && Math.abs(Number(state.envelopeSlots[0]?.decaySeconds) - 0.25) <= 1e-9
-                    && Math.abs(Number(state.envelopeSlots[0]?.sustain) - 0.5) <= 1e-9
+                return Math.abs(Number(nextSnapshot.parameterValues.env2Decay) - Number(parametersAfterAttack.env2Decay ?? initialParameters.env2Decay ?? 0.25)) > 0.02
+                    && Math.abs(Number(nextSnapshot.parameterValues.env2Sustain) - Number(parametersAfterAttack.env2Sustain ?? initialParameters.env2Sustain ?? 0.5)) > 0.05
+                    && Math.abs(Number(nextSnapshot.parameterValues.env1Decay) - 0.25) <= 1e-9
+                    && Math.abs(Number(nextSnapshot.parameterValues.env1Sustain) - 0.5) <= 1e-9
                     && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                        endpointID === "modulationEnvelope"
-                        && Number(value?.slot) === 2
-                        && Math.abs(Number(value?.decaySeconds) - Number(envelopeAfterAttack?.decaySeconds ?? initialEnvelopeState?.decaySeconds ?? 0.25)) > 0.02
-                        && Math.abs(Number(value?.sustain) - Number(envelopeAfterAttack?.sustain ?? initialEnvelopeState?.sustain ?? 0.5)) > 0.05
+                        endpointID === "env2Decay"
+                        && Math.abs(Number(value) - Number(parametersAfterAttack.env2Decay ?? initialParameters.env2Decay ?? 0.25)) > 0.02
+                    ))
+                    && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                        endpointID === "env2Sustain"
+                        && Math.abs(Number(value) - Number(parametersAfterAttack.env2Sustain ?? initialParameters.env2Sustain ?? 0.5)) > 0.05
                     ));
             },
         );
 
         assert.equal(
-            Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[1].decaySeconds) - Number(envelopeAfterAttack?.decaySeconds ?? initialEnvelopeState?.decaySeconds ?? 0.25)) > 0.02,
+            Math.abs(Number(snapshot.parameterValues.env2Decay) - Number(parametersAfterAttack.env2Decay ?? initialParameters.env2Decay ?? 0.25)) > 0.02,
             true,
         );
         assert.equal(
-            Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[1].sustain) - Number(envelopeAfterAttack?.sustain ?? initialEnvelopeState?.sustain ?? 0.5)) > 0.05,
+            Math.abs(Number(snapshot.parameterValues.env2Sustain) - Number(parametersAfterAttack.env2Sustain ?? initialParameters.env2Sustain ?? 0.5)) > 0.05,
             true,
         );
-        assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].decaySeconds) - 0.25) <= 1e-9, true);
-        assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[0].sustain) - 0.5) <= 1e-9, true);
+        assert.equal(Math.abs(Number(snapshot.parameterValues.env1Decay) - 0.25) <= 1e-9, true);
+        assert.equal(Math.abs(Number(snapshot.parameterValues.env1Sustain) - 0.5) <= 1e-9, true);
 
         const releaseInput = page.locator('input[aria-label="Envelope release value"]');
         await releaseInput.fill("800 ms");
@@ -5640,17 +5804,15 @@ test("desktop envelope editor drags handles and commits compact rail values for 
             page,
             "compact release field commits milliseconds for slot 2",
             (nextSnapshot) => {
-                const state = readStoredModulationState(nextSnapshot);
-                return Math.abs(Number(state.envelopeSlots[1]?.releaseSeconds) - 0.8) <= 1e-9
+                return Math.abs(Number(nextSnapshot.parameterValues.env2Release) - 0.8) <= 1e-9
                     && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                        endpointID === "modulationEnvelope"
-                        && Number(value?.slot) === 2
-                        && Math.abs(Number(value?.releaseSeconds) - 0.8) <= 1e-9
+                        endpointID === "env2Release"
+                        && Math.abs(Number(value) - 0.8) <= 1e-9
                     ));
             },
         );
 
-        assert.equal(Math.abs(Number(readStoredModulationState(snapshot).envelopeSlots[1].releaseSeconds) - 0.8) <= 1e-9, true);
+        assert.equal(Math.abs(Number(snapshot.parameterValues.env2Release) - 0.8) <= 1e-9, true);
     } finally {
         await page.close();
     }
@@ -5663,18 +5825,11 @@ test("desktop envelope exact entry preserves the focused draft across a host ech
         await page.getByRole("button", { name: "Select envelope 2" }).click();
         const attackInput = page.locator('input[aria-label="Envelope attack value"]');
         await attackInput.fill("250 ms");
-        const echoedModulationState = readStoredModulationState(await getHarnessSnapshot(page));
-        echoedModulationState.envelopeSlots[1].attackSeconds = 0.9;
-        await page.evaluate((nextModulationState) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(
-                "modulation.v5",
-                JSON.stringify(nextModulationState),
-            );
-        }, echoedModulationState);
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("env2Attack", 0.9);
+        });
         await page.waitForFunction(() => {
-            const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v5"]));
-            return Math.abs(Number(modulationState.envelopeSlots[1]?.attackSeconds) - 0.9) <= 1e-9;
+            return Math.abs(Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.env2Attack) - 0.9) <= 1e-9;
         });
 
         assert.equal(await attackInput.inputValue(), "250 ms");
@@ -5683,11 +5838,9 @@ test("desktop envelope exact entry preserves the focused draft across a host ech
         const snapshot = await waitForHarnessSnapshot(
             page,
             "focused envelope draft committed after host echo",
-            (nextSnapshot) => Math.abs(
-                Number(readStoredModulationState(nextSnapshot).envelopeSlots[1]?.attackSeconds) - 0.25,
-            ) <= 1e-9,
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.env2Attack) - 0.25) <= 1e-9,
         );
-        assert.equal(readStoredModulationState(snapshot).envelopeSlots[1].attackSeconds, 0.25);
+        assert.equal(snapshot.parameterValues.env2Attack, 0.25);
     } finally {
         await page.close();
     }
@@ -5713,7 +5866,7 @@ test("desktop envelope handle stops editing after the window blurs", async () =>
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationEnvelope"),
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "env2Attack"),
             false,
         );
     } finally {
@@ -6821,7 +6974,7 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
             page,
             "main MSEG morph changed",
             (nextSnapshot) => {
-                const rawState = nextSnapshot.storedState["modulation.v5"];
+                const rawState = nextSnapshot.storedState["modulation.v6"];
                 const modulationState = typeof rawState === "string" ? JSON.parse(rawState) : null;
                 return Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.72) <= 0.04
                     && (modulationState === null || !("morph" in (modulationState.msegSlots?.[0] ?? {})));
@@ -6836,7 +6989,7 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
             true,
             "the morph drag must reach the real parameter endpoint",
         );
-        const rawModulationState = snapshot.storedState["modulation.v5"];
+        const rawModulationState = snapshot.storedState["modulation.v6"];
         if (typeof rawModulationState === "string") {
             assert.equal("morph" in JSON.parse(rawModulationState).msegSlots[0], false);
         }
@@ -6961,7 +7114,7 @@ test("MSEG rate drag stops changing values after the window blurs", async () => 
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback"),
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Rate"),
             false,
         );
     } finally {
@@ -7024,18 +7177,17 @@ test("MSEG rate touch drag survives unavailable pointer capture", async () => {
             page,
             "touch-adjusted MSEG rate without pointer capture",
             (nextSnapshot) => {
-                const playback = readStoredMsegPlayback(nextSnapshot);
-                return Number(playback.rate?.seconds) > 1.2
-                    && nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegPlayback");
+                return Number(nextSnapshot.parameterValues.mseg1Rate) > 1.2
+                    && nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Rate");
             },
         );
-        assert.equal(readStoredMsegPlayback(snapshot).rate.seconds > 1.2, true);
+        assert.equal(Number(snapshot.parameterValues.mseg1Rate) > 1.2, true);
     } finally {
         await page.close();
     }
 });
 
-test("MSEG overview playback controls update the canonical modulation state on the real desktop page", { timeout: 60_000 }, async () => {
+test("MSEG overview rate updates its host parameter while loop policy updates modulation.v6", { timeout: 60_000 }, async () => {
     const isolatedServer = await startDesktopHarnessServer();
     const isolatedBrowser = await chromium.launch({ headless: true });
     const page = await isolatedBrowser.newPage();
@@ -7059,7 +7211,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
         assert.equal(depthInputCount, 0);
 
         await clearHarnessDebugLog(page);
-        const playbackAfterRateChange = await page.evaluate(async () => {
+        const rateAfterChange = await page.evaluate(async () => {
             const host = document.querySelector("cosimo-desktop-react-view");
             const viewRoot = host?.shadowRoot ?? host;
             const rateInput = viewRoot?.querySelector('input[aria-label="MSEG rate"]');
@@ -7074,27 +7226,20 @@ test("MSEG overview playback controls update the canonical modulation state on t
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
                 const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                const rawState = snapshot.storedState["modulation.v5"];
-                if (typeof rawState !== "string") {
-                    await new Promise((resolve) => setTimeout(resolve, 50));
-                    continue;
-                }
-
-                const modulationState = JSON.parse(rawState);
-                const playback = modulationState.msegSlots?.[0]?.playback;
-                if (Math.abs(Number(playback?.rate?.seconds) - 0.5) <= 1e-9) {
-                    return playback;
+                if (Math.abs(Number(snapshot.parameterValues.mseg1Rate) - 0.5) <= 1e-9) {
+                    return Number(snapshot.parameterValues.mseg1Rate);
                 }
 
                 await new Promise((resolve) => setTimeout(resolve, 50));
             }
 
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return JSON.parse(String(snapshot.storedState["modulation.v5"])).msegSlots?.[0]?.playback;
+            return Number(snapshot.parameterValues.mseg1Rate);
         });
-        assert.equal(playbackAfterRateChange.rate.seconds, 0.5);
+        assert.equal(rateAfterChange, 0.5);
         let snapshot = await getHarnessSnapshot(page);
-        assert.equal(readStoredMsegPlayback(snapshot).rate.seconds, 0.5);
+        assert.equal(Number(snapshot.parameterValues.mseg1Rate), 0.5);
+        assert.equal("rate" in readStoredMsegPlayback(snapshot), false);
 
         await clearHarnessDebugLog(page);
         const playbackAfterLoopToggle = await page.evaluate(async () => {
@@ -7112,7 +7257,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
                 const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                const rawState = snapshot.storedState["modulation.v5"];
+                const rawState = snapshot.storedState["modulation.v6"];
                 if (typeof rawState !== "string") {
                     await new Promise((resolve) => setTimeout(resolve, 50));
                     continue;
@@ -7128,7 +7273,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
             }
 
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return JSON.parse(String(snapshot.storedState["modulation.v5"])).msegSlots?.[0]?.playback;
+            return JSON.parse(String(snapshot.storedState["modulation.v6"])).msegSlots?.[0]?.playback;
         });
         assert.equal(playbackAfterLoopToggle.loop, null);
         snapshot = await getHarnessSnapshot(page);
@@ -7765,7 +7910,7 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await expandGlobalModRail(page);
@@ -7828,7 +7973,7 @@ test("switching armed sources swaps only selected-route outer geometry and prese
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWet", 0.6, true);
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
@@ -8345,7 +8490,7 @@ test("rack parameter menus never edit a hidden default-source route while no sou
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
@@ -8646,10 +8791,10 @@ test("mobile Mod uses a complete one-dimensional route list with detail, filters
         });
         await page.evaluate((state) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            harness.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.waitForFunction(() => {
-            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v5"]));
+            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"]));
             return state.routes?.length === 3;
         });
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
@@ -8766,7 +8911,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         }
         const seededState = normalizeModulationState({ routes: routes.slice(0, 101) });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
         const matrix = page.locator('[data-role="mobile-mod-matrix"]');
@@ -8793,7 +8938,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         assert.ok(createdRoute);
         await page.addInitScript((persistedState) => {
             window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
-                storedState: { "modulation.v5": JSON.stringify(persistedState) },
+                storedState: { "modulation.v6": JSON.stringify(persistedState) },
             };
         }, readStoredModulationState(snapshot));
         await page.reload({ waitUntil: "commit" });
@@ -8801,7 +8946,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
         await page.locator('[data-role="mobile-mod-matrix"]').waitFor();
         await page.waitForFunction((routeId) => {
-            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v5"];
+            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"];
             if (rawState === undefined) return false;
             const state = JSON.parse(String(rawState));
             return state.routes?.length === 102 && state.routes.some((route) => route.id === routeId);
@@ -10632,7 +10777,7 @@ test("source preview and valid hover stay transient while the armed ring and foc
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
@@ -10711,7 +10856,7 @@ test("a real source drop creates a mapping after 100 existing mappings", async (
             routes,
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await waitForHarnessSnapshot(
             page,
@@ -10765,7 +10910,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("globalFilterMode", 0, true);
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
@@ -10887,7 +11032,7 @@ test("a two-digit exact route badge stays contained at 320px without changing th
             })),
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         const surface = page.locator('[data-role="rack-parameter-surface-distortionWet"]');

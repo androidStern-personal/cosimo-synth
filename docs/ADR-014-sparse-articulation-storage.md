@@ -20,8 +20,8 @@ mapping amounts preserve sparse inheritance through the runtime upload.
   note start. RT-01 makes that Cmajor endpoint capable of the exact v4 image. Production worker
   composition remains deliberately deferred to HOST-02; RT-01 does not claim live product
   publication.
-  Scalar cells contain resolved A/B/C values. Each of the 416 deterministic voice-mapping cells
-  (13 sources × 32 voice targets) contains either an explicit override or the out-of-range
+  Scalar cells contain resolved A/B/C values. Each of the 650 deterministic voice-mapping cells
+  (13 sources × 50 voice targets) contains either an explicit override or the out-of-range
   `ARTICULATION_ROUTE_AMOUNT_INHERIT` sentinel.
   The engine resolves that sentinel from the current base mapping amount at note latch. ADR-020
   replaces the old list-position route array with these deterministic cells.

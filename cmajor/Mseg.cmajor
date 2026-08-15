@@ -13,7 +13,6 @@ namespace wt
 
     struct MsegPlaybackConfig
     {
-        float32 seconds;
         bool holdFinalValue;
         int32 rateKind;
         bool loopEnabled;
@@ -205,6 +204,7 @@ namespace wt
         input event MsegPlaybackConfig playbackUpload;
         input event int32 triggerIn;
         input event int32 noteOffIn;
+        input value float32 durationSecondsIn;
         output stream float32 outA;
         output stream float32 outB;
         output stream float32 progressOut;
@@ -214,7 +214,6 @@ namespace wt
         float32 currentValueA = 0.5f;
         float32 currentValueB = 0.5f;
         float32 progress = 1.0f;
-        float32 progressIncrement = 1.0f;
         bool active = false;
         bool holdFinalValue = true;
         bool hasUploadedBufferA = false;
@@ -238,11 +237,11 @@ namespace wt
                 bufferB.at (i) = 0.5f;
         }
 
-        void setDurationSeconds (float32 seconds)
+        float32 currentProgressIncrement()
         {
             let minDuration = 1.0f / float32 (processor.frequency);
-            let safeDuration = seconds < minDuration ? minDuration : seconds;
-            progressIncrement = 1.0f / (safeDuration * float32 (processor.frequency));
+            let safeDuration = durationSecondsIn < minDuration ? minDuration : durationSecondsIn;
+            return 1.0f / (safeDuration * float32 (processor.frequency));
         }
 
         void setLoopWindow (bool enabled, float32 start, float32 end)
@@ -317,7 +316,7 @@ namespace wt
 
         float32 advanceProgress()
         {
-            let rawNext = progress + progressIncrement;
+            let rawNext = progress + currentProgressIncrement();
 
             if (! wrapsAreActive())
                 return std::intrinsics::min (rawNext, 1.0f);
@@ -356,7 +355,6 @@ namespace wt
         event playbackUpload (MsegPlaybackConfig config)
         {
             holdFinalValue = config.holdFinalValue;
-            setDurationSeconds (config.seconds);
             setLoopWindow (config.loopEnabled, config.loopStart, config.loopEnd);
             noteOffPolicy = config.noteOffPolicy;
             hasUploadedPlayback = true;
@@ -389,9 +387,6 @@ namespace wt
 
             if (! hasUploadedBufferB)
                 initialiseBufferB();
-
-            if (! hasUploadedPlayback)
-                setDurationSeconds (1.0f);
 
             loop
             {
