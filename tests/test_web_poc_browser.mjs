@@ -1389,7 +1389,7 @@ test("generated production-mode browser keeps acceptance diagnostics off the aud
     }
 });
 
-test("generated browser rejects malformed and pre-RT-01 expanded voice programs", async () => {
+test("generated browser accepts 100 voice routes and rejects malformed or over-capacity programs", async () => {
     const page = await browser.newPage({ viewport: { width: 960, height: 640 } });
 
     try {
@@ -1427,12 +1427,28 @@ test("generated browser rejects malformed and pre-RT-01 expanded voice programs"
             "modulationProgram",
             matrixVoiceHundredProgram,
         );
-        assert.equal(expandedVoiceOutcome.accepted, false, JSON.stringify(expandedVoiceOutcome));
-        assert.equal(expandedVoiceOutcome.acknowledgement.rejectionReason, 3);
+        assert.equal(expandedVoiceOutcome.accepted, true, JSON.stringify(expandedVoiceOutcome));
         assert.equal(
-            expandedVoiceOutcome.acknowledgement.rejectedSerial,
-            expandedVoiceOutcome.deliverySerial,
+            expandedVoiceOutcome.acknowledgement.installedVoiceRouteCount,
+            100,
             JSON.stringify(expandedVoiceOutcome),
+        );
+
+        const overCapacityOutcome = await sendAcknowledgedRuntimeEvent(
+            page,
+            "modulation",
+            "modulationProgram",
+            {
+                ...emptyModulationProgram,
+                voiceRouteCount: emptyModulationProgram.voiceRouteCells.length + 1,
+            },
+        );
+        assert.equal(overCapacityOutcome.accepted, false, JSON.stringify(overCapacityOutcome));
+        assert.equal(overCapacityOutcome.acknowledgement.rejectionReason, 3);
+        assert.equal(
+            overCapacityOutcome.acknowledgement.rejectedSerial,
+            overCapacityOutcome.deliverySerial,
+            JSON.stringify(overCapacityOutcome),
         );
     } finally {
         await page.close();
