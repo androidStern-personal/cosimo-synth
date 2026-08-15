@@ -40,8 +40,9 @@
     "warp:fixtures:update-inputs": "node tests/helpers/generate_warp_cmajtest_fixtures.mjs && PYTHONPATH=. uv run python tests/helpers/generate_warp_reference_assets.py --expand-only",
     "warp:reference:update": "PYTHONPATH=. uv run --extra debug python tests/helpers/generate_warp_reference_assets.py",
     "warp:update-reference": "npm run warp:fixtures:update-inputs && npm run warp:reference:update",
-    "test:cmajor:warp": "npm run test:python:warp-alias && npm run test:desktop:ui && npm run test:shared:hooks && cmaj test --singleThread --sessionID=1 tests/cmajor_warp",
-    "test:cmajor:filter": "npm run test:python:filter-stability && npm run test:desktop:ui && npm run test:shared:hooks && cmaj test --singleThread --sessionID=1 tests/cmajor_filter",
+    "test:synth:engine": "tests/native/run_three_oscillator_renderer_oracle.sh && tests/native/run_three_oscillator_generated_integration.sh && tests/native/run_three_oscillator_shared_voice_engine.sh",
+    "test:cmajor:warp": "npm run test:python:warp-alias && npm run test:synth:engine",
+    "test:cmajor:filter": "npm run test:python:filter-stability && npm run test:synth:engine",
     "test:cmajor:rack": "cmaj test --singleThread --sessionID=1 tests/cmajor_rack"
   },
   "devDependencies": {

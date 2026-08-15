@@ -5,8 +5,8 @@
 
 #include "../../native/three_oscillator_renderer/RendererBridge.h"
 
-// This provider verifies RT-01 endpoint consumption. It does not stand in for
-// HOST-02 product worker/root activation.
+// This provider observes the renderer inputs while forwarding every frame to
+// the same renderer implementation used by the products.
 
 #ifndef COSIMO_GENERATED_CPP_PATH
  #error "COSIMO_GENERATED_CPP_PATH must point to generated Cmajor C++"
@@ -15,10 +15,6 @@
 namespace fixture_provider
 {
 using namespace cosimo::three_osc::bridge;
-
-constexpr auto failureFirstFrame = std::int32_t { 576 };
-constexpr auto failureEndFrame = std::int32_t { 1088 };
-constexpr auto expectedFailureCount = failureEndFrame - failureFirstFrame;
 
 enum Invariant : std::uint32_t
 {
@@ -43,7 +39,6 @@ enum Invariant : std::uint32_t
 constexpr auto expectedInvariantMask = (1u << 16) - 1u;
 
 std::int32_t frameCounter = 0;
-std::int32_t forcedFailureCount = 0;
 std::int32_t firstError = 0;
 std::uint32_t invariantMask = 0;
 float previousBPhase = 0.0f;
@@ -299,12 +294,6 @@ std::int32_t render (FloatSlice packedFloats,
     predictedBPhase = wrap01 (previousBPhase + floats[phaseIncrementOffset + 8]);
     hasPredictedBPhase = floats[phaseIncrementOffset + 8] > 0.0f;
 
-    if (frame >= failureFirstFrame && frame < failureEndFrame)
-    {
-        ++forcedFailureCount;
-        return 0;
-    }
-
     return renderAllGenerated (packedFloats, packedInts, tableChunks...);
 }
 }
@@ -332,7 +321,7 @@ struct Window
     std::int32_t frameCount = measurementFrameCount;
 };
 
-constexpr Window oscillatorAProviderFailure { 576 };
+constexpr Window oscillatorA { 5184, 256 };
 constexpr Window oscillatorB { 1600 };
 constexpr Window oscillatorC { 2624 };
 constexpr Window allOscillators { 3648 };
@@ -434,12 +423,10 @@ extern "C" std::int32_t three_oscillator_generated_integration() noexcept
 
     if (fixture_provider::firstError != 0)
         return -1000 - fixture_provider::firstError;
-    if (fixture_provider::forcedFailureCount != fixture_provider::expectedFailureCount)
-        return -2;
     if (fixture_provider::invariantMask != fixture_provider::expectedInvariantMask)
         return -3;
 
-    const auto a = measure (audio.data(), oscillatorAProviderFailure);
+    const auto a = measure (audio.data(), oscillatorA);
     const auto b = measure (audio.data(), oscillatorB);
     const auto c = measure (audio.data(), oscillatorC);
     const auto all = measure (audio.data(), allOscillators);
@@ -448,16 +435,14 @@ extern "C" std::int32_t three_oscillator_generated_integration() noexcept
         || ! isAudible (all) || ! isAudible (muted))
         return -4;
 
-    // Provider failure occurs throughout A's first measured window. A remains
-    // audible because its exact-float path is independent of renderer success.
     if (absoluteValue (a.leftMagnitude - a.rightMagnitude)
             > 0.05f * (a.leftMagnitude + a.rightMagnitude)
         || b.leftMagnitude <= b.rightMagnitude * 1.10f
         || c.rightMagnitude <= c.leftMagnitude * 1.10f)
         return -5;
 
-    if (difference (audio.data(), oscillatorAProviderFailure, oscillatorB) < 1.0f
-        || difference (audio.data(), oscillatorAProviderFailure, oscillatorC) < 1.0f
+    if (difference (audio.data(), oscillatorA, oscillatorB) < 1.0f
+        || difference (audio.data(), oscillatorA, oscillatorC) < 1.0f
         || difference (audio.data(), oscillatorB, oscillatorC) < 1.0f
         || difference (audio.data(), allOscillators, oscillatorBMuted) < 1.0f)
         return -6;

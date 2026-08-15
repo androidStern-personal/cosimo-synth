@@ -2400,6 +2400,77 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
     }
 });
 
+test("generated product renders oscillator A, B, and C independently", async (t) => {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
+    const pageFailures = observePageFailures(page);
+    await page.addInitScript(() => localStorage.removeItem("cosimo.web.patch-state.v2"));
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => {
+            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
+            return snapshot?.phase === "running" && snapshot.hasActiveTable;
+        }, null, { timeout: 30_000 });
+
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.sendEvent("rackEnable", { enabledFlags: [0, 0, 0, 0, 0, 0, 0, 0] });
+            api.setParameter("filterMode", 0);
+        });
+
+        const oscillatorRms = {};
+        for (const oscillator of ["A", "B", "C"]) {
+            await page.evaluate((activeOscillator) => {
+                const api = globalThis.__COSIMO_WEB_POC__;
+                for (const candidate of ["A", "B", "C"])
+                    api.setParameter(`osc${candidate}Mute`, candidate === activeOscillator ? 0 : 1);
+            }, oscillator);
+            await page.waitForTimeout(100);
+            oscillatorRms[oscillator] = await measureHeldNote(page);
+            assert.ok(
+                oscillatorRms[oscillator] > 1e-5,
+                `Oscillator ${oscillator} must be audible on its own; received RMS ${oscillatorRms[oscillator]}.`,
+            );
+        }
+
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            for (const oscillator of ["A", "B", "C"])
+                api.setParameter(`osc${oscillator}Mute`, 0);
+        });
+        const combinedRms = await measureHeldNote(page);
+        assert.ok(combinedRms > 1e-5, `The combined A/B/C sound must be audible; received RMS ${combinedRms}.`);
+
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.setParameter("filterCutoff", 40);
+            api.setParameter("filterQ", 0.707);
+            api.setParameter("filterMode", 1);
+        });
+        await page.waitForTimeout(100);
+        const lowpassRms = await measureHeldNote(page);
+        assert.ok(
+            lowpassRms < combinedRms * 0.6,
+            `The real low-pass filter must attenuate the A/B/C sound (off ${combinedRms}, on ${lowpassRms}).`,
+        );
+
+        const snapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
+        assert.deepEqual(
+            snapshot.latestRuntimeStates.map((runtimeState) => runtimeState?.oscillatorIndex),
+            [0, 1, 2],
+        );
+        pageFailures.assertClean();
+        t.diagnostic(JSON.stringify({ combinedRms, lowpassRms, oscillatorRms }));
+    } finally {
+        await page.evaluate(() => localStorage.removeItem("cosimo.web.patch-state.v2")).catch(() => {});
+        await page.close();
+    }
+});
+
 test("generated product UI restores oscillator parameters and rack state through reload", async (t) => {
     const page = await browser.newPage({ viewport: { width: 1280, height: 820 } });
     await page.addInitScript(() => {
