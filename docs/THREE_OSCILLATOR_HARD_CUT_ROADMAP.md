@@ -1,6 +1,6 @@
 # Three-Oscillator Hard-Cut Roadmap
 
-Status: roadmap revision complete; FLOW-01 active — 2026-08-14
+Status: product hard cut and functional platform QA complete; performance qualification and final delivery active — 2026-08-15
 
 Base: `4e7941208f66279159859ad52d257e877a970291`
 
@@ -13,6 +13,27 @@ Architecture records:
 
 The tickets below implement those records. A short ticket description must not be used
 to narrow or omit an ADR requirement.
+
+## Implementation override
+
+The proposed `FLOW-01` multi-carrier harness was abandoned before it became tracked
+product code. It grew into a second orchestration system instead of a small regression
+gate, and the user explicitly removed it from scope. It must not be revived.
+
+The accepted cut uses the product's public seams and existing test infrastructure:
+
+- native and browser builds call the same renderer source and render A, B, and C;
+- browser reload and synth-preset tests save and restore distinct A/B/C parameters plus
+  `modulation.v5`, `articulations.v4`, and `rack.v1`;
+- the production worker proves ordered MOD then ART installation and replay on a new DSP
+  session;
+- the indexed table worker proves independent A/B/C activation and failure identity;
+- existing desktop, browser, AUv3, plugin validation, and physical-device gates qualify
+  the actual products.
+
+No custom `ProductRestoreBegin`/`RestoreFence` protocol, native test command channel, or
+test-only application runtime was added. Detailed FLOW requirements below are retained
+only as design history; they are superseded by this implementation decision.
 
 ## Decision
 
@@ -159,17 +180,20 @@ have changed.
 
 The hard-cut implementation tickets share one cutover branch and form one merge unit.
 Intermediate commits may be temporarily incomplete, but none may be merged into the
-rolling product until `PRODUCT-HARD-CUT-01` deletes every superseded path and all outer
-flows pass. This deliberately prefers a temporarily broken construction branch over
-long-lived parallel product implementations.
+rolling product until `PRODUCT-HARD-CUT-01` deletes every superseded path and the public
+product gates pass. This deliberately prefers a temporarily broken construction branch
+over long-lived parallel product implementations.
 
-The portable renderer adapters and outer test harness may land earlier because they do
-not activate or duplicate a product render path.
+The portable renderer adapters may land earlier because they do not activate or
+duplicate a product render path.
 
-## The three outer product flows
+## Superseded FLOW-01 design history
 
-These are the non-negotiable regression surface. Their expected values are independent
-of the implementation being tested.
+This section is not an active ticket or completion gate. It records the behavior that
+motivated the cut, but the oversized carrier harness itself was rejected.
+
+These were the proposed regression scenarios. They are not executable acceptance work
+and do not override the implementation decision above.
 
 ### FLOW A — complete save and restore
 
@@ -286,7 +310,7 @@ independent expected delta.
 
 ### Tranche A — lock behavior and make the one renderer portable
 
-#### FLOW-01 — Outer-seam parity harness — 8 points
+#### FLOW-01 — Retired; never ship or resume this harness
 
 Create FLOW A/B/C as real product-facing tests. Freeze current oscillator-A state/audio
 evidence before changing the root. The new A/B/C assertions may begin red; do not weaken
@@ -875,6 +899,6 @@ budget from this measurement.
 ## Completion condition
 
 The roadmap is complete only when the accepted product has one renderer, one indexed
-table path, one parameter/state model, real A/B/C controls, and all three outer flows
-passing on desktop, Web, and iPhone. Passing isolated modules while any old product path
+table path, one parameter/state model, real A/B/C controls, and the public desktop, Web,
+and iPhone product gates pass. Passing isolated modules while any old product path
 remains is not completion.
