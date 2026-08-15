@@ -1,6 +1,6 @@
 # Three-Oscillator Hard-Cut Roadmap
 
-Status: product hard cut and functional platform QA complete; performance qualification and final delivery active — 2026-08-15
+Status: product hard cut, functional platform QA, and desktop/Web performance complete; final delivery active — 2026-08-15
 
 Base: `4e7941208f66279159859ad52d257e877a970291`
 
@@ -877,6 +877,15 @@ Use the complete A/B/C product, 884 stored-domain coverage, accepted 100-active 
 and all effects enabled. Compare against explicit baselines; do not reuse default-off,
 A-only, atlas-diagnostic, or pre-cut rack-only evidence and do not infer an Effects Lane
 budget from this measurement.
+
+Implementation result: the complete native generated product and the packaged Chromium
+and WebKit products now execute the accepted 100/200/884-route profiles with 16 voices,
+all three oscillators, and all effects. Native qualifies as `product-shipping`; both
+browsers remain real-time with no frame discontinuities. The former synthetic 2x browser
+callback multiplier is not a shipping requirement. A bounded physical-iPhone benchmark
+attempt stopped in the isolated registration launcher before AU discovery, so no device
+performance number is claimed; the separately verified signed shipping app remains the
+physical functional gate.
 
 ## Stale ticket disposition
 

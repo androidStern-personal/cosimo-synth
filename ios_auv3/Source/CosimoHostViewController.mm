@@ -578,33 +578,10 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
     };
     NSNumber *baseDuration = baseDurations[profileName];
     if (profileName.length == 0 || stateJSON.length == 0 || profileIndex == nil || baseDuration == nil
-        || !([executionStatus isEqual:@"available"] || [executionStatus isEqual:@"unavailable"]))
+        || ![executionStatus isEqual:@"available"])
     {
         [self completeAutomationWithPayload:@{ @"error": @"Benchmark profile is missing a supported name or strict state JSON." }
                                   outputName:outputName];
-        return;
-    }
-
-    if ([executionStatus isEqual:@"unavailable"])
-    {
-        NSString *blockedBy = [execution[@"blockedBy"] isKindOfClass:[NSString class]] ? execution[@"blockedBy"] : @"";
-        if (![blockedBy isEqual:@"RT-01"])
-        {
-            [self completeAutomationWithPayload:@{ @"error": @"Unavailable benchmark profile omitted its RT-01 dependency." }
-                                      outputName:outputName];
-            return;
-        }
-
-        NSMutableDictionary<NSString *, id> *phase = [profile mutableCopy];
-        [phase removeObjectForKey:@"stateJSON"];
-        phase[@"status"] = @"unavailable";
-        [(NSMutableArray<NSDictionary<NSString *, id> *> *) payload[@"phases"] addObject:phase];
-        [self completeAutomationWithPayload:payload outputName:outputName];
-        [self runModulationBenchmarkProfiles:profiles
-                                        index:index + 1
-                                durationScale:durationScale
-                                      payload:payload
-                                   outputName:outputName];
         return;
     }
 

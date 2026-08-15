@@ -50,8 +50,8 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
     }
     assert result["sampleRate"] == 48_000
     assert result["blockSize"] == 128
-    assert result["qualification"] == "rack-only-smoke"
-    assert result["blockedBy"] == "RT-01"
+    assert result["qualification"] == "product-smoke"
+    assert "blockedBy" not in result
     assert result["voiceIndexes"] == list(range(16))
     assert result["rackEnableMask"] == 255
     assert result["effectConfiguration"] == {
@@ -69,9 +69,15 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
         "ottMix": 35.0,
         "phaserMix": 0.25,
         "reverbMix": 0.3,
-        "unisonVoices": 1.0,
-        "warpAmount": 0.0,
-        "warpMode": 0.0,
+        "oscAUnisonVoices": 1.0,
+        "oscBUnisonVoices": 1.0,
+        "oscCUnisonVoices": 1.0,
+        "oscAWarpAmount": 0.0,
+        "oscBWarpAmount": 0.0,
+        "oscCWarpAmount": 0.0,
+        "oscAWarpMode": 0.0,
+        "oscBWarpMode": 0.0,
+        "oscCWarpMode": 0.0,
     }
 
     profiles = {profile["name"]: profile for profile in result["profiles"]}
@@ -80,33 +86,40 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
         "stored-884-active-100", "active-884",
     }
 
-    measured = profiles["voice-rack-100"]
-    assert measured["status"] == "measured"
-    assert measured["compiledCounts"] == {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0}
-    assert measured["installedCounts"] == measured["compiledCounts"]
-    assert measured["emptyInstalledCounts"] == {
+    for measured in profiles.values():
+        assert measured["status"] == "measured"
+        assert measured["installedCounts"] == measured["compiledCounts"]
+        assert measured["emptyInstalledCounts"] == {
+            "voice": 0,
+            "macroVoice": 0,
+            "voiceRack": 0,
+            "macroRack": 0,
+        }
+        assert len(measured["stateSha256"]) == 64
+        assert measured["audioEquivalent"] is True
+        assert measured["maximumAbsoluteSampleDelta"] <= 1.0e-7
+        assert measured["nonFiniteSampleCount"] == 0
+        assert measured["emptyRms"] > 1.0e-5
+        assert measured["loadedRms"] > 1.0e-5
+        assert measured["adjacentPairCount"] == 24
+        assert measured["emptyMeanNanoseconds"] > 0
+        assert measured["loadedMeanNanoseconds"] > 0
+        assert math.isfinite(measured["pairedMeanDeltaNanoseconds"])
+        assert math.isfinite(measured["addedRenderLoadPercentagePoints"])
+
+    assert profiles["voice-rack-100"]["compiledCounts"] == {
         "voice": 0,
         "macroVoice": 0,
-        "voiceRack": 0,
+        "voiceRack": 100,
         "macroRack": 0,
     }
-    assert len(measured["stateSha256"]) == 64
-    assert measured["audioEquivalent"] is True
-    assert measured["maximumAbsoluteSampleDelta"] <= 1.0e-7
-    assert measured["nonFiniteSampleCount"] == 0
-    assert measured["emptyRms"] > 1.0e-5
-    assert measured["loadedRms"] > 1.0e-5
-    assert measured["adjacentPairCount"] == 24
-    assert measured["emptyMeanNanoseconds"] > 0
-    assert measured["loadedMeanNanoseconds"] > 0
-    assert math.isfinite(measured["pairedMeanDeltaNanoseconds"])
-    assert math.isfinite(measured["addedRenderLoadPercentagePoints"])
-
-    unavailable = [profile for profile in profiles.values() if profile["status"] == "unavailable"]
-    assert len(unavailable) == 5
-    assert all(profile["blockedBy"] == "RT-01" for profile in unavailable)
-    assert all("addedRenderLoadPercentagePoints" not in profile for profile in unavailable)
     assert profiles["active-884"]["storedRouteCount"] == 884
+    assert profiles["active-884"]["compiledCounts"] == {
+        "voice": 288,
+        "macroVoice": 128,
+        "voiceRack": 324,
+        "macroRack": 144,
+    }
 
 
 def test_native_matrix_qualification_rejects_an_expensive_route_program() -> None:
@@ -130,7 +143,7 @@ def test_native_matrix_qualification_rejects_an_expensive_route_program() -> Non
         raise AssertionError("An over-budget native matrix program must fail qualification")
 
 
-def test_generated_native_loader_rejects_rt_01_blocked_profiles_without_emitting_expanded_writes(
+def test_generated_native_loader_emits_every_post_cut_profile(
     tmp_path: Path,
 ) -> None:
     header_path = tmp_path / "NativeModulationBenchmarkProfiles.h"
@@ -141,15 +154,15 @@ def test_generated_native_loader_rejects_rt_01_blocked_profiles_without_emitting
     )
     header = header_path.read_text(encoding="utf-8")
 
-    assert header.count("destination = {};") == 2
-    assert header.count("is unavailable until RT-01") == 5
-    assert "destination.voiceRouteAmounts[287]" not in header
-    assert "destination.macroVoiceRouteAmounts[127]" not in header
-    assert "destination.voiceRouteCells[287]" not in header
-    assert "destination.macroVoiceRouteCells[127]" not in header
+    assert header.count("destination = {};") == 7
+    assert "is unavailable until" not in header
+    assert "destination.voiceRouteAmounts[287]" in header
+    assert "destination.macroVoiceRouteAmounts[127]" in header
+    assert "destination.voiceRouteCells[287]" in header
+    assert "destination.macroVoiceRouteCells[127]" in header
 
 
-def test_native_main_enforces_the_rack_only_shipping_budget(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_native_main_enforces_the_product_shipping_budget(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     spec = importlib.util.spec_from_file_location("native_matrix_main_runner", RUNNER)
     assert spec is not None and spec.loader is not None
     runner = importlib.util.module_from_spec(spec)
@@ -172,7 +185,7 @@ def test_native_main_enforces_the_rack_only_shipping_budget(monkeypatch: pytest.
     monkeypatch.setattr(runner, "run", lambda _command: SimpleNamespace(stdout="fixture"))
     monkeypatch.setattr(runner, "parse_run", lambda _output: {})
     monkeypatch.setattr(runner, "build_result", lambda **_arguments: {
-        "qualification": "rack-only-shipping",
+        "qualification": "product-shipping",
         "profiles": [{
             "name": "voice-rack-100",
             "addedRenderLoadPercentagePoints": runner.MATRIX_LOAD_BUDGETS["voice-rack-100"] + 0.001,

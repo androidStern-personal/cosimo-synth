@@ -24,7 +24,12 @@
 #error "COSIMO_NATIVE_BENCHMARK_PROFILE_HEADER_PATH must name the generated shared-profile header"
 #endif
 
+#include "../../native/three_oscillator_renderer/RendererBridge.h"
+
+#define CosimoThreeOscillatorRenderer__renderAll(...) \
+    ::cosimo::three_osc::bridge::renderAllGenerated (__VA_ARGS__)
 #include COSIMO_GENERATED_CPP_PATH
+#undef CosimoThreeOscillatorRenderer__renderAll
 #include COSIMO_NATIVE_BENCHMARK_PROFILE_HEADER_PATH
 
 namespace
@@ -54,9 +59,15 @@ struct EffectSetting
 
 constexpr std::array effectSettings
 {
-    EffectSetting { "unisonVoices", 1.0f },
-    EffectSetting { "warpMode", 0.0f },
-    EffectSetting { "warpAmount", 0.0f },
+    EffectSetting { "oscAUnisonVoices", 1.0f },
+    EffectSetting { "oscBUnisonVoices", 1.0f },
+    EffectSetting { "oscCUnisonVoices", 1.0f },
+    EffectSetting { "oscAWarpMode", 0.0f },
+    EffectSetting { "oscBWarpMode", 0.0f },
+    EffectSetting { "oscCWarpMode", 0.0f },
+    EffectSetting { "oscAWarpAmount", 0.0f },
+    EffectSetting { "oscBWarpAmount", 0.0f },
+    EffectSetting { "oscCWarpAmount", 0.0f },
     EffectSetting { "filterMode", 1.0f },
     EffectSetting { "filterCutoff", 1200.0f },
     EffectSetting { "globalFilterMode", 1.0f },
@@ -298,25 +309,30 @@ WavetableSynth::wt_RuntimeInstallAck installProgram (WavetableSynth& performer,
 
 void loadSineWavetable (WavetableSynth& performer)
 {
-    WavetableSynth::wt_WavetableLoadBegin begin;
-    begin.dspSessionId = dspSessionID;
-    begin.generation = wavetableGeneration;
-    begin.tableIndex = wavetableTableIndex;
-    begin.frameCount = 1;
-    performer.addEvent_wavetableLoadBegin (begin);
-
     constexpr double twoPi = 6.283185307179586476925286766559;
-    for (std::int32_t mipIndex = 0; mipIndex < 11; ++mipIndex)
+    for (std::int32_t oscillatorIndex = 0; oscillatorIndex < 3; ++oscillatorIndex)
     {
-        WavetableSynth::wt_WavetableMipFrame frame;
-        frame.dspSessionId = dspSessionID;
-        frame.generation = wavetableGeneration;
-        frame.tableIndex = wavetableTableIndex;
-        frame.mipIndex = mipIndex;
-        frame.frameIndex = 0;
-        for (std::int32_t sampleIndex = 0; sampleIndex < 2048; ++sampleIndex)
-            frame.samples[sampleIndex] = static_cast<float> (std::sin (twoPi * sampleIndex / 2048.0));
-        performer.addEvent_wavetableMipFrame (frame);
+        WavetableSynth::wt_OscillatorWavetableLoadBegin begin;
+        begin.dspSessionId = dspSessionID;
+        begin.oscillatorIndex = oscillatorIndex;
+        begin.generation = wavetableGeneration;
+        begin.tableIndex = wavetableTableIndex;
+        begin.frameCount = 1;
+        performer.addEvent_wavetableLoadBegin (begin);
+
+        for (std::int32_t mipIndex = 0; mipIndex < 11; ++mipIndex)
+        {
+            WavetableSynth::wt_OscillatorWavetableMipFrame frame;
+            frame.dspSessionId = dspSessionID;
+            frame.oscillatorIndex = oscillatorIndex;
+            frame.generation = wavetableGeneration;
+            frame.tableIndex = wavetableTableIndex;
+            frame.mipIndex = mipIndex;
+            frame.frameIndex = 0;
+            for (std::int32_t sampleIndex = 0; sampleIndex < 2048; ++sampleIndex)
+                frame.samples[sampleIndex] = static_cast<float> (std::sin (twoPi * sampleIndex / 2048.0));
+            performer.addEvent_wavetableMipFrame (frame);
+        }
     }
     clearOutputEvents (performer);
 }
@@ -610,56 +626,13 @@ void writeResult (const ProfileResult& result)
               << '\n';
 }
 
-void writeUnavailableProfile (const benchmark_profiles::ProfileMetadata& profile)
-{
-    std::cout << "UNAVAILABLE\t" << profile.name
-              << '\t' << profile.stateSha256
-              << '\t' << profile.storedRouteCount
-              << '\t' << profile.activeRouteCount
-              << '\t' << profile.blockedBy
-              << '\n';
-}
-
-void requireUnavailableProgramsRejectWithoutMutation()
-{
-    for (std::size_t profileIndex = 0; profileIndex < benchmark_profiles::profiles.size(); ++profileIndex)
-    {
-        if (benchmark_profiles::profiles[profileIndex].blockedBy == nullptr)
-            continue;
-
-        WavetableSynth::wt_ModulationProgramUpload destination {};
-        destination.voiceRouteCount = 7;
-        destination.macroVoiceRouteCount = 8;
-        destination.voiceRouteCells[0] = 9;
-        destination.voiceRouteAmounts[0] = 0.25f;
-        bool rejected = false;
-
-        try
-        {
-            benchmark_profiles::loadProgram (profileIndex, destination);
-        }
-        catch (const std::logic_error& error)
-        {
-            rejected = std::string_view (error.what()).find ("RT-01") != std::string_view::npos;
-        }
-
-        if (! rejected
-            || destination.voiceRouteCount != 7
-            || destination.macroVoiceRouteCount != 8
-            || destination.voiceRouteCells[0] != 9
-            || destination.voiceRouteAmounts[0] != 0.25f)
-            throw std::runtime_error ("An unavailable modulation profile was executable or mutated its destination");
-    }
-}
-
 std::vector<std::size_t> profileOrder (std::size_t repeatIndex)
 {
     std::vector<std::size_t> result;
     for (std::size_t profileIndex = 1; profileIndex < benchmark_profiles::profiles.size(); ++profileIndex)
-        if (benchmark_profiles::profiles[profileIndex].blockedBy == nullptr)
-            result.push_back (profileIndex);
+        result.push_back (profileIndex);
     if (result.empty())
-        throw std::runtime_error ("No pre-RT-01 benchmark profile is executable");
+        throw std::runtime_error ("No post-cut benchmark profile is executable");
     std::rotate (result.begin(),
                  result.begin() + static_cast<std::ptrdiff_t> (repeatIndex % result.size()),
                  result.end());
@@ -673,7 +646,6 @@ int main (int argc, char** argv)
     try
     {
         const auto arguments = parseArguments (argc, argv);
-        requireUnavailableProgramsRejectWithoutMutation();
         std::cout << "META\t" << static_cast<std::int32_t> (sampleRate)
                   << '\t' << blockSize
                   << '\t' << benchmark_profiles::profileGenerator
@@ -682,9 +654,6 @@ int main (int argc, char** argv)
                   << '\n';
         for (const auto& setting : effectSettings)
             std::cout << "EFFECT\t" << setting.endpoint << '\t' << std::setprecision (9) << setting.value << '\n';
-        for (std::size_t profileIndex = 1; profileIndex < benchmark_profiles::profiles.size(); ++profileIndex)
-            if (benchmark_profiles::profiles[profileIndex].blockedBy != nullptr)
-                writeUnavailableProfile (benchmark_profiles::profiles[profileIndex]);
         for (const auto profileIndex : profileOrder (arguments.repeatIndex))
             writeResult (runProfile (profileIndex, arguments));
         return 0;

@@ -16,8 +16,10 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PATCH_MANIFEST = REPO_ROOT / "WavetableSynth.cmajorpatch"
+EXTERNAL_CODEGEN = REPO_ROOT / "scripts" / "generate_cmajor_cpp_with_externals.sh"
 PROFILE_HEADER_GENERATOR = REPO_ROOT / "scripts" / "generate_native_modulation_benchmark_header.mjs"
 HARNESS_SOURCE = REPO_ROOT / "tests" / "native_modulation_benchmark" / "NativeModulationMatrixBenchmark.cpp"
+RENDERER_DIR = REPO_ROOT / "native" / "three_oscillator_renderer"
 EXPECTED_PROFILE_NAMES = {
     "voice-100",
     "voice-rack-100",
@@ -26,11 +28,17 @@ EXPECTED_PROFILE_NAMES = {
     "stored-884-active-100",
     "active-884",
 }
-EXECUTABLE_PROFILE_NAMES = {"voice-rack-100"}
+EXECUTABLE_PROFILE_NAMES = set(EXPECTED_PROFILE_NAMES)
 EXPECTED_EFFECT_CONFIGURATION = {
-    "unisonVoices": 1.0,
-    "warpMode": 0.0,
-    "warpAmount": 0.0,
+    "oscAUnisonVoices": 1.0,
+    "oscBUnisonVoices": 1.0,
+    "oscCUnisonVoices": 1.0,
+    "oscAWarpMode": 0.0,
+    "oscBWarpMode": 0.0,
+    "oscCWarpMode": 0.0,
+    "oscAWarpAmount": 0.0,
+    "oscBWarpAmount": 0.0,
+    "oscCWarpAmount": 0.0,
     "filterMode": 1.0,
     "filterCutoff": 1200.0,
     "globalFilterMode": 1.0,
@@ -85,7 +93,6 @@ def quoted_include_definition(name: str, path: Path) -> str:
 
 
 def generate_and_compile(build_dir: Path) -> tuple[Path, Path, Path, list[str]]:
-    cmaj = require_tool("cmaj")
     compiler = require_tool("clang++")
     node = require_tool("node")
     build_dir.mkdir(parents=True, exist_ok=True)
@@ -94,23 +101,25 @@ def generate_and_compile(build_dir: Path) -> tuple[Path, Path, Path, list[str]]:
     executable = build_dir / "native-modulation-matrix-benchmark"
 
     run([node, str(PROFILE_HEADER_GENERATOR), "--output", str(profile_header)])
-    run(
-        [
-            cmaj,
-            "generate",
-            "-O3",
-            "--target=cpp",
-            "--maxFramesPerBlock=128",
-            str(PATCH_MANIFEST),
-            f"--output={generated_cpp}",
-        ]
-    )
+    run([
+        str(EXTERNAL_CODEGEN),
+        str(PATCH_MANIFEST),
+        str(generated_cpp),
+        "WavetableSynth",
+        "--max-frames-per-block",
+        "128",
+    ])
     compile_command = [
         compiler,
         "-std=c++20",
         "-O3",
         "-DNDEBUG",
+        "-ffast-math",
         str(HARNESS_SOURCE),
+        str(RENDERER_DIR / "WarpRenderer.cpp"),
+        str(RENDERER_DIR / "RendererBridge.cpp"),
+        f"-I{RENDERER_DIR}",
+        f"-I{RENDERER_DIR / 'third_party' / 'xsimd' / 'include'}",
         quoted_include_definition("COSIMO_GENERATED_CPP_PATH", generated_cpp),
         quoted_include_definition("COSIMO_NATIVE_BENCHMARK_PROFILE_HEADER_PATH", profile_header),
         "-o",
@@ -162,19 +171,6 @@ def parse_profile(fields: list[str]) -> dict[str, object]:
     }
 
 
-def parse_unavailable_profile(fields: list[str]) -> dict[str, object]:
-    if len(fields) != 6 or fields[5] != "RT-01":
-        raise RuntimeError("Native benchmark emitted a malformed unavailable-profile row")
-    return {
-        "name": fields[1],
-        "status": "unavailable",
-        "stateSha256": fields[2],
-        "storedRouteCount": int(fields[3]),
-        "activeRouteCount": int(fields[4]),
-        "blockedBy": fields[5],
-    }
-
-
 def parse_run(output: str) -> dict[str, object]:
     metadata: dict[str, object] | None = None
     effects: dict[str, float] = {}
@@ -197,8 +193,6 @@ def parse_run(output: str) -> dict[str, object]:
             effects[fields[1]] = float(fields[2])
         elif fields[0] == "PROFILE":
             profiles.append(parse_profile(fields))
-        elif fields[0] == "UNAVAILABLE":
-            profiles.append(parse_unavailable_profile(fields))
         elif line:
             raise RuntimeError(f"Native benchmark emitted an unknown record: {line}")
 
@@ -211,10 +205,8 @@ def parse_run(output: str) -> dict[str, object]:
             raise RuntimeError(f"Native benchmark effect setting {name} differs from the declared workload")
     measured_names = {str(profile["name"]) for profile in profiles if profile["status"] == "measured"}
     if measured_names != EXECUTABLE_PROFILE_NAMES:
-        raise RuntimeError("Native benchmark executed a profile outside the pre-RT-01 rack-only contract")
+        raise RuntimeError("Native benchmark did not execute the complete post-cut product profile set")
     for profile in profiles:
-        if profile["status"] == "unavailable":
-            continue
         if profile["emptyInstalledCounts"] != ZERO_COUNTS:
             raise RuntimeError(f"{profile['name']} did not use an empty adjacent baseline")
         if profile["emptyVoiceMask"] != 0xFFFF or profile["loadedVoiceMask"] != 0xFFFF:
@@ -241,16 +233,6 @@ def aggregate_profile(name: str, runs: list[dict[str, object]]) -> dict[str, obj
         for run in runs
     ]
     status = require_same([record["status"] for record in records], f"{name}.status")
-    if status == "unavailable":
-        return {
-            "name": name,
-            "status": "unavailable",
-            "blockedBy": require_same([record["blockedBy"] for record in records], f"{name}.blockedBy"),
-            "stateSha256": require_same([record["stateSha256"] for record in records], f"{name}.stateSha256"),
-            "storedRouteCount": require_same([record["storedRouteCount"] for record in records], f"{name}.storedRouteCount"),
-            "activeRouteCount": require_same([record["activeRouteCount"] for record in records], f"{name}.activeRouteCount"),
-        }
-
     stable_fields = (
         "stateSha256",
         "storedRouteCount",
@@ -342,8 +324,7 @@ def build_result(
         "sampleRate": sample_rate,
         "blockSize": block_size,
         "repeatCount": len(runs),
-        "qualification": "rack-only-shipping" if qualifying else "rack-only-smoke",
-        "blockedBy": "RT-01",
+        "qualification": "product-shipping" if qualifying else "product-smoke",
         "blocksPerRepeat": blocks,
         "warmupBlocksPerProfile": warmup_blocks,
         "settleBlocksPerProfile": settle_blocks,
@@ -368,7 +349,7 @@ def positive_int(value: str) -> int:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Measure adjacent paired modulation-matrix cost in the production generated C++ patch."
+        description="Measure the complete post-cut modulation matrix in the production generated C++ patch."
     )
     parser.add_argument("--build-dir", type=Path, default=REPO_ROOT / "build" / "native_modulation_benchmark")
     parser.add_argument("--output", type=Path)
@@ -412,7 +393,7 @@ def main() -> int:
         settle_blocks=args.settle_blocks,
         elapsed_seconds=time.monotonic() - started,
     )
-    if result["qualification"] == "rack-only-shipping":
+    if result["qualification"] == "product-shipping":
         assert_matrix_budgets(result["profiles"])
     encoded = json.dumps(result, indent=2) + "\n"
     if output_path is not None:

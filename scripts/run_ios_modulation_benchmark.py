@@ -38,8 +38,7 @@ PROFILE_BASE_DURATIONS_SECONDS = {
     "active-884": 20.0,
 }
 PROFILE_NAMES = tuple(PROFILE_BASE_DURATIONS_SECONDS)
-EXECUTABLE_PROFILE_NAMES = ("empty", "voice-rack-100")
-BLOCKED_PROFILE_NAMES = tuple(name for name in PROFILE_NAMES if name not in EXECUTABLE_PROFILE_NAMES)
+EXECUTABLE_PROFILE_NAMES = PROFILE_NAMES
 PAIRED_EMPTY_DURATION_SECONDS = 10.0
 WARMUP_DURATION_SECONDS = 2.0
 RESULT_COLLECTION_ALLOWANCE_SECONDS = 120.0
@@ -554,7 +553,7 @@ def _assert_measured_phase(name: str, phase: object, expected_duration: float) -
 
 def assert_shipping_contract(payload: dict[str, object], *, expected_duration_scale: float = 1.0) -> None:
     if payload.get("format") != "cosimo.ios-modulation-benchmark" or payload.get("version") != 2:
-        raise AssertionError("Benchmark result is not the current rack-only contract")
+        raise AssertionError("Benchmark result is not the current post-cut product contract")
     payload_duration_scale = float(payload.get("durationScale", math.nan))
     if (
         not math.isfinite(expected_duration_scale)
@@ -571,22 +570,9 @@ def assert_shipping_contract(payload: dict[str, object], *, expected_duration_sc
     if set(phase_records) != set(PROFILE_NAMES):
         raise AssertionError(f"Benchmark phases differ from required contract: {set(phase_records)}")
 
-    for name in BLOCKED_PROFILE_NAMES:
-        record = phase_records[name]
-        execution = record.get("execution")
-        if (
-            record.get("status") != "unavailable"
-            or not isinstance(execution, dict)
-            or execution.get("status") != "unavailable"
-            or execution.get("blockedBy") != "RT-01"
-            or "metrics" in record
-            or "installAck" in record
-        ):
-            raise AssertionError(f"{name} must remain explicitly unavailable until RT-01")
-
     metrics = phase_metrics(payload)
     if set(metrics) != set(EXECUTABLE_PROFILE_NAMES):
-        raise AssertionError(f"Benchmark executed outside its rack-only contract: {set(metrics)}")
+        raise AssertionError(f"Benchmark omitted post-cut product profiles: {set(metrics)}")
 
     zero_counts = {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0}
     paired_loads: dict[str, float] = {}
@@ -678,7 +664,7 @@ def read_device_provenance(device_id: str) -> dict[str, object]:
 def aggregate_runs(
     runs: list[dict[str, object]],
     *,
-    qualification: str = "rack-only-shipping",
+    qualification: str = "product-shipping",
     device: dict[str, object] | None = None,
 ) -> dict[str, object]:
     per_run_metrics = [phase_metrics(payload) for payload in runs]
@@ -699,8 +685,6 @@ def aggregate_runs(
         "version": 2,
         "runCount": len(runs),
         "qualification": qualification,
-        "blockedBy": "RT-01",
-        "unavailableProfiles": list(BLOCKED_PROFILE_NAMES),
         "device": device,
         "phases": {
             name: {
@@ -815,7 +799,7 @@ def main() -> int:
 
         aggregate = aggregate_runs(
             runs,
-            qualification="rack-only-shipping" if qualifying and not args.smoke_only else "rack-only-smoke",
+            qualification="product-shipping" if qualifying and not args.smoke_only else "product-smoke",
             device=device,
         )
         aggregate_path = args.output_dir / "aggregate.json"

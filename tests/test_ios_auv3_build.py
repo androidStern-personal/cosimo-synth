@@ -946,16 +946,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
     assert payload["version"] == 2
     assert profiles["empty"]["execution"] == {"status": "available"}
     assert profiles["voice-rack-100"]["execution"] == {"status": "available"}
-    assert {
-        name for name, profile in profiles.items()
-        if profile["execution"] == {"status": "unavailable", "blockedBy": "RT-01"}
-    } == {
-        "voice-100",
-        "mixed-100",
-        "combined-200",
-        "stored-884-active-100",
-        "active-884",
-    }
+    assert all(profile["execution"] == {"status": "available"} for profile in profiles.values())
 
     assert profiles["empty"]["storedRouteCount"] == 0
     assert profiles["voice-100"]["activeRouteCount"] == 100
@@ -1033,7 +1024,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
                 assert math.fsum(float(route["amount"]) for route in routes) == 0.0, key
 
 
-def test_ios_modulation_benchmark_skips_rt_01_blocked_profiles_before_install() -> None:
+def test_ios_modulation_benchmark_has_no_post_cut_unavailable_profile_path() -> None:
     host_controller = (REPO_ROOT / "ios_auv3" / "Source" / "CosimoHostViewController.mm").read_text(
         encoding="utf-8"
     )
@@ -1041,15 +1032,9 @@ def test_ios_modulation_benchmark_skips_rt_01_blocked_profiles_before_install() 
         host_controller.index("- (void)runModulationBenchmarkProfiles:"):
         host_controller.index("- (void)runSaveSmokeWithOutputName:")
     ]
-    unavailable_branch = profile_runner[
-        profile_runner.index('if ([executionStatus isEqual:@"unavailable"])'):
-        profile_runner.index("const NSTimeInterval durationSeconds")
-    ]
-
-    assert 'blockedBy isEqual:@"RT-01"' in unavailable_branch
-    assert 'phase[@"status"] = @"unavailable";' in unavailable_branch
-    assert "installAndMeasureModulationProfileAtIndex" not in unavailable_branch
-    assert "measureModulationPhaseNamed" not in unavailable_branch
+    assert 'executionStatus isEqual:@"available"' in profile_runner
+    assert 'executionStatus isEqual:@"unavailable"' not in profile_runner
+    assert 'blockedBy isEqual:@"RT-01"' not in profile_runner
 
 
 def test_ios_modulation_benchmark_runner_uses_unique_device_bundle_and_component_ids() -> None:
@@ -1133,7 +1118,7 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
         "empty": {"voice": 0, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
         "voice-100": {"voice": 100, "macroVoice": 0, "voiceRack": 0, "macroRack": 0},
         "voice-rack-100": {"voice": 0, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
-        "mixed-100": {"voice": 25, "macroVoice": 25, "voiceRack": 25, "macroRack": 25},
+        "mixed-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
         "combined-200": {"voice": 100, "macroVoice": 0, "voiceRack": 100, "macroRack": 0},
         "stored-884-active-100": {"voice": 30, "macroVoice": 20, "voiceRack": 30, "macroRack": 20},
         "active-884": {"voice": 288, "macroVoice": 128, "voiceRack": 324, "macroRack": 144},
@@ -1141,15 +1126,6 @@ def _valid_ios_modulation_benchmark_payload() -> dict[str, object]:
     phases = []
     for name in _load_ios_modulation_benchmark_module().PROFILE_NAMES:
         expected_counts = dict(compiled_counts[name])
-        if name not in _load_ios_modulation_benchmark_module().EXECUTABLE_PROFILE_NAMES:
-            phases.append({
-                "name": name,
-                "status": "unavailable",
-                "execution": {"status": "unavailable", "blockedBy": "RT-01"},
-                "compiledCounts": expected_counts,
-            })
-            continue
-
         installed_counts = dict(expected_counts)
         render_block_count = int(base_durations[name] * 48000 / 128)
         phase = {

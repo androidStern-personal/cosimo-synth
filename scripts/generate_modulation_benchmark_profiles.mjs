@@ -250,7 +250,6 @@ function createProfile(name, routes) {
         throw new Error(`Profile ${name} compiled ${compiledRouteCount} of ${activeRouteCount} active routes`);
     }
 
-    const requiresExpandedVoiceRuntime = program.voiceRouteCount > 0 || program.macroVoiceRouteCount > 0;
     return {
         name,
         storedRouteCount: parsed.value.routes.length,
@@ -263,9 +262,7 @@ function createProfile(name, routes) {
             macroRack: program.macroRackRouteCount,
         },
         executionFingerprint,
-        execution: requiresExpandedVoiceRuntime
-            ? { status: "unavailable", blockedBy: "RT-01" }
-            : { status: "available" },
+        execution: { status: "available" },
         stateJSON,
     };
 }
