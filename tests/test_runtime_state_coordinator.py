@@ -25,7 +25,7 @@ def _build_runtime_state_coordinator_probe_source() -> str:
     coordinator_body = wavetable_synth_source.split(
         "    processor RuntimeStateCoordinator",
         maxsplit=1,
-    )[1].split("    graph Voice", maxsplit=1)[0]
+    )[1].split("    processor StereoTrim", maxsplit=1)[0]
     coordinator_source = (
         runtime_state_types
         + "\nnamespace wt\n{\n    processor RuntimeStateCoordinator"
