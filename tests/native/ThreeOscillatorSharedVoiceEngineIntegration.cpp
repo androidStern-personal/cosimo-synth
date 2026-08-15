@@ -35,10 +35,12 @@ enum Invariant : std::uint32_t
     retriggerReset = 1u << 10,
     inactiveVoiceCleared = 1u << 11,
     independentModulation = 1u << 12,
-    perOscillatorArticulation = 1u << 13
+    perOscillatorArticulation = 1u << 13,
+    soundingNoteKeepsInheritedBase = 1u << 14,
+    futureNoteInheritsLiveBase = 1u << 15
 };
 
-constexpr auto expectedInvariantMask = (1u << 14) - 1u;
+constexpr auto expectedInvariantMask = (1u << 16) - 1u;
 
 std::int32_t frameCounter = 0;
 std::int32_t forcedFailureCount = 0;
@@ -261,6 +263,20 @@ std::int32_t render (FloatSlice packedFloats,
             invariantMask |= perOscillatorArticulation;
         else
             fail (116);
+    }
+    else if (frame == 9344)
+    {
+        if (near (floats[basePanOffset], 0.0f))
+            invariantMask |= soundingNoteKeepsInheritedBase;
+        else
+            fail (117);
+    }
+    else if (frame == 9728)
+    {
+        if (near (floats[basePanOffset], 0.70f))
+            invariantMask |= futureNoteInheritsLiveBase;
+        else
+            fail (118);
     }
 
     const auto bPhase = floats[phaseOffset + 8];

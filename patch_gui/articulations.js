@@ -843,6 +843,8 @@ export function createDisabledArticulationRuntimeUpload(selectorA) {
     return {
         selectorA,
         enabled: false,
+        oscillatorOverrideMasks: perOscillator(0),
+        sharedOverrideMask: 0,
         framePositions: perOscillator(0),
         pans: perOscillator(0),
         octaves: perOscillator(0),

@@ -1,12 +1,11 @@
 /**
- * Sparse three-oscillator articulation storage (`articulations.v4`) and its pure resolution to
- * the engine's complete per-selector snapshot images.
+ * Sparse three-oscillator articulation storage (`articulations.v4`) and its
+ * fixed-size runtime upload.
  *
  * Decision record: docs/ADR-014-sparse-articulation-storage.md. Storage is
- * sparse (absent keys inherit the patch base, ledger §11.1); the engine's
- * upload contract (`ArticulationSnapshotRuntimeUpload`) carries complete A/B/C
- * scalar arrays plus sparse route cells; this module compiles one into the
- * other. Values are engine units throughout; the
+ * sparse. The runtime upload preserves that sparsity with presence masks so
+ * absent values inherit live Cmajor state when a note starts. Values are
+ * engine units throughout; the
  * descriptor layer owns any normalized conversion. This module is a pure
  * Domain Module: no I/O, no engine access, no UI types.
  */
@@ -131,28 +130,6 @@ export type ArticulationsState = {
     readonly activeTriggerMode: ArticulationTriggerMode;
     readonly slots: ReadonlyArray<ArticulationSlotV4>;
 };
-
-/**
- * The patch-base voice values every un-overridden articulation key inherits.
- * `parameters` is COMPLETE (every id present — the type makes partial bases
- * unrepresentable). `routeCells` compiles stable mapping ids to deterministic
- * voice-destination cells; `routeAmounts` holds each mapping's base amount.
- */
-export type PatchVoiceBase = {
-    readonly parameters: Readonly<Record<ArticulationVoiceParameterId, number>>;
-    readonly routeAmounts: Readonly<Record<string, number>>;
-    readonly routeOrder: ReadonlyArray<string>;
-    readonly routeCells: Readonly<Record<string, number>>;
-};
-
-/**
- * A patch-base edit whose effect on resolved images must be computed.
- * `routeOrder` changes reposition every slot's route array, affecting all.
- */
-export type ArticulationBaseChange =
-    | { readonly kind: "voiceParameter"; readonly parameterId: ArticulationVoiceParameterId }
-    | { readonly kind: "routeAmount"; readonly routeId: string }
-    | { readonly kind: "routeOrder" };
 
 /** Why a stored payload failed to parse as articulations.v4. */
 export class ArticulationsParseError extends Error {
@@ -432,19 +409,127 @@ function copyRouteAmounts(source: Readonly<Record<string, number>>): Readonly<Re
     return copy;
 }
 
-function resolveVoiceParameter(
-    base: PatchVoiceBase,
+const OSCILLATOR_OVERRIDE_BITS = Object.fromEntries(
+    OSCILLATOR_ARTICULATION_PARAMETER_IDS.map((parameterID, index) => [parameterID, 2 ** index]),
+) as Readonly<Record<OscillatorArticulationParameterId, number>>;
+
+const SHARED_OVERRIDE_BITS = Object.fromEntries(
+    SHARED_ARTICULATION_VOICE_PARAMETER_IDS.map((parameterID, index) => [parameterID, 2 ** index]),
+) as Readonly<Record<SharedArticulationVoiceParameterId, number>>;
+
+function sparseOverrideValue(
     slot: ArticulationSlotV4,
-    parameterId: ArticulationVoiceParameterId,
+    parameterID: ArticulationVoiceParameterId,
 ): number {
-    if (Object.hasOwn(slot.overrides, parameterId)) {
-        const override = slot.overrides[parameterId];
-        if (override !== undefined) {
-            return override;
+    return Object.hasOwn(slot.overrides, parameterID)
+        ? slot.overrides[parameterID] ?? 0
+        : 0;
+}
+
+function oscillatorOverrideMask(slot: ArticulationSlotV4, oscillatorID: OscillatorID): number {
+    return OSCILLATOR_ARTICULATION_PARAMETER_IDS.reduce((mask, parameterID) => (
+        Object.hasOwn(slot.overrides, `osc${oscillatorID}.${parameterID}`)
+            ? mask | OSCILLATOR_OVERRIDE_BITS[parameterID]
+            : mask
+    ), 0);
+}
+
+function sharedOverrideMask(slot: ArticulationSlotV4): number {
+    return SHARED_ARTICULATION_VOICE_PARAMETER_IDS.reduce((mask, parameterID) => (
+        Object.hasOwn(slot.overrides, parameterID)
+            ? mask | SHARED_OVERRIDE_BITS[parameterID]
+            : mask
+    ), 0);
+}
+
+/** Compile sparse overrides; absent values are inherited inside Cmajor at note start. */
+export function compileArticulationOverrideImage(
+    slot: ArticulationSlotV4,
+    routeCells: Readonly<Record<string, number>>,
+): ArticulationSnapshotRuntimeUpload {
+    const oscillatorValue = (
+        oscillatorID: OscillatorID,
+        parameterID: OscillatorArticulationParameterId,
+    ) => sparseOverrideValue(slot, `osc${oscillatorID}.${parameterID}`);
+    const sharedValue = (parameterID: SharedArticulationVoiceParameterId) => (
+        sparseOverrideValue(slot, parameterID)
+    );
+    const routeAmounts = Array.from(
+        { length: MODULATION_ARTICULATION_ROUTE_CELL_COUNT },
+        () => ARTICULATION_ROUTE_AMOUNT_INHERIT,
+    );
+    for (const [routeID, amount] of Object.entries(slot.routeAmounts)) {
+        const cellIndex = routeCells[routeID];
+        if (cellIndex !== undefined) {
+            routeAmounts[cellIndex] = amount;
         }
     }
 
-    return base.parameters[parameterId];
+    return {
+        selectorA: slot.runtimeSlot,
+        enabled: true,
+        oscillatorOverrideMasks: OSCILLATOR_IDS.map((id) => oscillatorOverrideMask(slot, id)),
+        sharedOverrideMask: sharedOverrideMask(slot),
+        framePositions: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "framePosition")),
+        pans: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "pan")),
+        octaves: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "octave")),
+        semitones: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "semitone")),
+        fineCents: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "fineCents")),
+        phases: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "phase")),
+        phaseRandoms: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "phaseRandom")),
+        retriggers: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "retrigger")),
+        volumeDbs: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "volumeDb")),
+        mutes: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "mute")),
+        solos: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "solo")),
+        warpModes: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "warpMode")),
+        warpAmounts: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "warpAmount")),
+        filterMode: sharedValue("filterMode"),
+        filterCutoffHz: sharedValue("filterCutoffHz"),
+        filterQ: sharedValue("filterQ"),
+        unisonVoices: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonVoices")),
+        unisonDetunes: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonDetune")),
+        unisonBlends: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonBlend")),
+        unisonWidths: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonWidth")),
+        unisonDetuneModes: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonDetuneMode")),
+        unisonStackModes: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonStackMode")),
+        unisonWavetablePositionSpreads: OSCILLATOR_IDS.map((id) => (
+            oscillatorValue(id, "unisonWavetablePositionSpread")
+        )),
+        unisonWarpSpreads: OSCILLATOR_IDS.map((id) => oscillatorValue(id, "unisonWarpSpread")),
+        msegMorphs: [
+            sharedValue("msegMorph1"),
+            sharedValue("msegMorph2"),
+            sharedValue("msegMorph3"),
+        ],
+        routeAmounts,
+        envelopeAttackSeconds: [
+            sharedValue("env1.attackSeconds"),
+            sharedValue("env2.attackSeconds"),
+            sharedValue("env3.attackSeconds"),
+        ],
+        envelopeDecaySeconds: [
+            sharedValue("env1.decaySeconds"),
+            sharedValue("env2.decaySeconds"),
+            sharedValue("env3.decaySeconds"),
+        ],
+        envelopeSustain: [
+            sharedValue("env1.sustain"),
+            sharedValue("env2.sustain"),
+            sharedValue("env3.sustain"),
+        ],
+        envelopeReleaseSeconds: [
+            sharedValue("env1.releaseSeconds"),
+            sharedValue("env2.releaseSeconds"),
+            sharedValue("env3.releaseSeconds"),
+        ],
+    };
+}
+
+export function compileArticulationOverrideImages(
+    state: ArticulationsState,
+    routeCells: Readonly<Record<string, number>>,
+): ReadonlyArray<ArticulationSnapshotRuntimeUpload> {
+    return state.slots.map((slot) => compileArticulationOverrideImage(slot, routeCells));
 }
 
 /**
@@ -634,178 +719,7 @@ export function lowestFreeRuntimeSlot(state: ArticulationsState): number | null 
     return null;
 }
 
-/**
- * Compile ONE slot's sparse overrides over the patch base into the complete
- * engine image (ADR-014: storage sparse, runtime complete). Every scalar is
- * `override ?? base`; mapping amounts are placed at deterministic runtime cells,
- * independent of stored ordering. `selectorA` is the slot's `runtimeSlot` and
- * `enabled` is true.
- *
- * @param base - The complete patch-base voice values.
- * @param slot - The slot to resolve.
- * @returns The complete runtime upload image for this slot's selector.
- */
-export function resolveArticulationImage(
-    base: PatchVoiceBase,
-    slot: ArticulationSlotV4,
-): ArticulationSnapshotRuntimeUpload {
-    const routeAmounts = Array.from(
-        { length: MODULATION_ARTICULATION_ROUTE_CELL_COUNT },
-        () => ARTICULATION_ROUTE_AMOUNT_INHERIT,
-    );
-    for (const routeId of base.routeOrder) {
-        const cellIndex = base.routeCells[routeId];
-        if (cellIndex !== undefined && Object.hasOwn(slot.routeAmounts, routeId)) {
-            const override = slot.routeAmounts[routeId];
-            if (override !== undefined) {
-                routeAmounts[cellIndex] = override;
-            }
-        }
-    }
-
-    return {
-        selectorA: slot.runtimeSlot,
-        enabled: true,
-        framePositions: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.framePosition`,
-        )),
-        pans: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.pan`,
-        )),
-        octaves: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.octave`,
-        )),
-        semitones: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.semitone`,
-        )),
-        fineCents: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.fineCents`,
-        )),
-        phases: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.phase`,
-        )),
-        phaseRandoms: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.phaseRandom`,
-        )),
-        retriggers: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.retrigger`,
-        )),
-        volumeDbs: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.volumeDb`,
-        )),
-        mutes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.mute`,
-        )),
-        solos: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.solo`,
-        )),
-        warpModes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.warpMode`,
-        )),
-        warpAmounts: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.warpAmount`,
-        )),
-        filterMode: resolveVoiceParameter(base, slot, "filterMode"),
-        filterCutoffHz: resolveVoiceParameter(base, slot, "filterCutoffHz"),
-        filterQ: resolveVoiceParameter(base, slot, "filterQ"),
-        unisonVoices: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.unisonVoices`,
-        )),
-        unisonDetunes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.unisonDetune`,
-        )),
-        unisonBlends: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.unisonBlend`,
-        )),
-        unisonWidths: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.unisonWidth`,
-        )),
-        unisonDetuneModes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.unisonDetuneMode`,
-        )),
-        unisonStackModes: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.unisonStackMode`,
-        )),
-        unisonWavetablePositionSpreads: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.unisonWavetablePositionSpread`,
-        )),
-        unisonWarpSpreads: OSCILLATOR_IDS.map((oscillatorID) => resolveVoiceParameter(
-            base, slot, `osc${oscillatorID}.unisonWarpSpread`,
-        )),
-        msegMorphs: [
-            resolveVoiceParameter(base, slot, "msegMorph1"),
-            resolveVoiceParameter(base, slot, "msegMorph2"),
-            resolveVoiceParameter(base, slot, "msegMorph3"),
-        ],
-        routeAmounts,
-        envelopeAttackSeconds: [
-            resolveVoiceParameter(base, slot, "env1.attackSeconds"),
-            resolveVoiceParameter(base, slot, "env2.attackSeconds"),
-            resolveVoiceParameter(base, slot, "env3.attackSeconds"),
-        ],
-        envelopeDecaySeconds: [
-            resolveVoiceParameter(base, slot, "env1.decaySeconds"),
-            resolveVoiceParameter(base, slot, "env2.decaySeconds"),
-            resolveVoiceParameter(base, slot, "env3.decaySeconds"),
-        ],
-        envelopeSustain: [
-            resolveVoiceParameter(base, slot, "env1.sustain"),
-            resolveVoiceParameter(base, slot, "env2.sustain"),
-            resolveVoiceParameter(base, slot, "env3.sustain"),
-        ],
-        envelopeReleaseSeconds: [
-            resolveVoiceParameter(base, slot, "env1.releaseSeconds"),
-            resolveVoiceParameter(base, slot, "env2.releaseSeconds"),
-            resolveVoiceParameter(base, slot, "env3.releaseSeconds"),
-        ],
-    };
-}
-
-/**
- * Resolve every slot's image (see {@link resolveArticulationImage}).
- *
- * @param base - The complete patch-base voice values.
- * @param state - The bank to resolve.
- * @returns One image per slot, in slot order.
- */
-export function resolveArticulationImages(
-    base: PatchVoiceBase,
-    state: ArticulationsState,
-): ReadonlyArray<ArticulationSnapshotRuntimeUpload> {
-    return state.slots.map((slot) => resolveArticulationImage(base, slot));
-}
-
-/**
- * Which selectors a patch-base edit invalidates: slots that do NOT override
- * the changed key inherit it, so their images change; overriding slots are
- * untouched. A `routeOrder` change repositions every slot's route array and
- * affects all slots. Uploading only these selectors must be observably
- * equivalent to re-uploading everything (property-tested).
- *
- * @param change - The base edit.
- * @param state - The current bank.
- * @returns Affected selectors in slot order.
- */
-export function affectedSelectors(
-    change: ArticulationBaseChange,
-    state: ArticulationsState,
-): ReadonlyArray<number> {
-    switch (change.kind) {
-        case "voiceParameter":
-            return state.slots
-                .filter((slot) => !Object.hasOwn(slot.overrides, change.parameterId))
-                .map((slot) => slot.runtimeSlot);
-        case "routeAmount":
-            // Runtime images store sparse mapping overrides. Inherited base
-            // amounts are read when a note latches, so a base knob drag needs
-            // no articulation uploads.
-            return [];
-        case "routeOrder":
-            return state.slots.map((slot) => slot.runtimeSlot);
-    }
-}
-
-// Re-exported so resolver consumers size and interpret positional arrays without extra imports.
+// Re-exported so compiler consumers size and interpret positional arrays without extra imports.
 export {
     ARTICULATION_MAX_SLOTS,
     ARTICULATION_ROUTE_AMOUNT_INHERIT,

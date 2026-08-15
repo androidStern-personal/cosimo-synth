@@ -5,10 +5,9 @@ import path from "node:path";
 import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const [runtime, worker, runtimeBase, modulation, program, installChannel] = await Promise.all([
+const [runtime, worker, modulation, program, installChannel] = await Promise.all([
     loadUIModule(repoRoot, "ui/shared/articulations.ts"),
     loadUIModule(repoRoot, "ui/shared/articulation-worker-service.ts"),
-    loadUIModule(repoRoot, "ui/shared/articulation-runtime-base.ts"),
     loadUIModule(repoRoot, "ui/shared/modulation.ts"),
     loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts"),
     loadUIModule(repoRoot, "ui/shared/runtime-install-channel.ts"),
@@ -38,7 +37,6 @@ const {
     upsertSelectedArticulationSnapshot,
 } = runtime;
 const { createArticulationWorkerService } = worker;
-const { getArticulationModulationDependencyToken } = runtimeBase;
 const {
     createDefaultModulationState,
     deserializeModulationState,
@@ -1143,7 +1141,7 @@ test("malformed current articulation state is ignored without reading a v3 fallb
     }
 });
 
-test("cold malformed uiPatchValues.v2 defaults atomically before articulation restore", async () => {
+test("retired uiPatchValues documents are ignored during articulation restore", async () => {
     const connection = new ArticulationWorkerTestConnection({
         values: {
             "articulations.v4": JSON.stringify({
@@ -1182,6 +1180,7 @@ test("cold malformed uiPatchValues.v2 defaults atomically before articulation re
     assert.ok(upload);
     assert.equal(upload.value.selectorA, 10);
     assert.deepEqual(upload.value.framePositions, [0, 0, 0]);
+    assert.deepEqual(upload.value.oscillatorOverrideMasks, [0, 0, 0]);
 
     service.stop();
 });
@@ -1230,7 +1229,6 @@ test("separate stored-key boot requests only the current articulation schema", a
     assert.deepEqual(connection.requestedKeys.sort(), [
         "articulations.v4",
         "modulation.v4",
-        "uiPatchValues.v2",
     ]);
 
     service.stop();
@@ -1256,47 +1254,6 @@ test("live writes to the retired v3 key are ignored", async () => {
     ), false);
 
     service.stop();
-});
-
-test("articulation dependency projection ignores amount-only route edits", () => {
-    const base = createCurrentModulationState([{
-            id: WARP_ROUTE_ID,
-            enabled: true,
-            sourceKind: "mseg",
-            sourceSlot: 1,
-            polarity: "unipolar",
-            targetKind: "oscA.warpAmount",
-            amount: 0.1,
-            reducer: "max",
-    }]);
-    const normalized = deserializeModulationState(JSON.stringify(base));
-    const amountEdit = deserializeModulationState(JSON.stringify({
-        ...base,
-        routes: base.routes.map((route) => ({
-            ...route,
-            amount: 0.9,
-            polarity: "bipolar",
-            reducer: "mean",
-            enabled: false,
-        })),
-    }));
-    const topologyEdit = deserializeModulationState(JSON.stringify({
-        ...base,
-        routes: base.routes.map((route) => ({
-            ...route,
-            id: PAN_ROUTE_ID,
-            targetKind: "oscA.pan",
-        })),
-    }));
-
-    assert.equal(
-        getArticulationModulationDependencyToken(amountEdit),
-        getArticulationModulationDependencyToken(normalized),
-    );
-    assert.notEqual(
-        getArticulationModulationDependencyToken(topologyEdit),
-        getArticulationModulationDependencyToken(normalized),
-    );
 });
 
 test("same-DSP worker reattachment clears selectors the new worker cannot know", async () => {

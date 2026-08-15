@@ -93,12 +93,15 @@ async function flushMicrotasks(turns = 16) {
     }
 }
 
-async function createHarness({ storedState = {} } = {}) {
+async function createHarness({ storedState = {}, parameterValues = {} } = {}) {
     const loaded = await modules();
     const connection = new loaded.mock.MockPatchConnection({
         name: "Cosimo bridge protocol test",
         version: 1,
     });
+    for (const [endpointID, value] of Object.entries(parameterValues)) {
+        connection.setParameterValue(endpointID, value);
+    }
     for (const [key, value] of Object.entries(storedState)) {
         connection.setStoredStateValue(key, value);
     }
@@ -126,7 +129,7 @@ function storedModulationState(harness) {
         : harness.modulation.deserializeModulationState(storedValue);
 }
 
-test("boot hydrates ready and the acknowledged worker uploads every occupied selector", async (t) => {
+test("boot reads authoritative parameters and uploads every occupied articulation selector", async (t) => {
     const initialArticulations = articulationState([
         articulationSlot({
             id: "Pluck",
@@ -157,11 +160,13 @@ test("boot hydrates ready and the acknowledged worker uploads every occupied sel
         const upload = debug.sentMessages.find(
             (message) => message.endpointID === descriptor.binding.endpointId,
         );
-        assert.notEqual(upload, undefined, `${descriptor.binding.endpointId} was not uploaded`);
-        assert.equal(
-            upload.value,
-            descriptor.binding.toEngine(descriptor.initialValue),
-            `${descriptor.binding.endpointId} did not receive its initial engine value`,
+        assert.equal(upload, undefined, `${descriptor.binding.endpointId} must not be rewritten during boot`);
+        assert.ok(
+            Math.abs(
+                harness.adapter.getSnapshot().patch.parameterValues[descriptor.targetId]
+                - descriptor.initialValue
+            ) <= 1e-12,
+            `${descriptor.binding.endpointId} was not read from Cmajor parameter state`,
         );
     }
 
@@ -172,7 +177,7 @@ test("boot hydrates ready and the acknowledged worker uploads every occupied sel
     assert.deepEqual(occupiedSelectors, [7, 19]);
 });
 
-test("a bound shared-voice base edit persists immediately and the worker updates only inheriting selectors", async (t) => {
+test("a bound base edit reaches Cmajor without rebuilding articulation snapshots", async (t) => {
     const initialArticulations = articulationState([
         articulationSlot({ id: "Inherits Resonance", runtimeSlot: 4, key: 24 }),
         articulationSlot({
@@ -212,7 +217,12 @@ test("a bound shared-voice base edit persists immediately and the worker updates
         harness.connection.getDebugSnapshot().sentMessages
             .filter((message) => message.endpointID === "articulationSnapshot")
             .map((message) => message.value.selectorA),
-        [4],
+        [],
+        "future notes inherit the live Cmajor value without an articulation re-upload",
+    );
+    assert.equal(
+        Object.hasOwn(harness.connection.getDebugSnapshot().storedState, "uiPatchValues.v2"),
+        false,
     );
 });
 
@@ -440,7 +450,7 @@ test("a lower articulation envelope is rejected by the hard v4 boundary", async 
 test("full state roundtrip: a second bridge over the first one's stored state is snapshot-identical", async () => {
     const first = await createHarness();
     first.adapter.commands.setParameter({
-        targetId: "oscA.framePosition",
+        targetId: "voice-filter.cutoff",
         value: 0.77,
         layer: { _tag: "patchBase" },
     });
@@ -459,8 +469,10 @@ test("full state roundtrip: a second bridge over the first one's stored state is
     first.adapter.commands.setEffectEnabled("delay", false);
     first.adapter.commands.renameMacro("macro-1", "Shimmer");
 
-    const storedState = { ...first.connection.getDebugSnapshot().storedState };
-    const second = await createHarness({ storedState });
+    const firstDebug = first.connection.getDebugSnapshot();
+    const storedState = { ...firstDebug.storedState };
+    const parameterValues = { ...firstDebug.parameterValues };
+    const second = await createHarness({ storedState, parameterValues });
 
     const before = first.adapter.getSnapshot();
     const after = second.adapter.getSnapshot();

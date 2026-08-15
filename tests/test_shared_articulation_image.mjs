@@ -18,12 +18,6 @@ async function modules() {
     };
 }
 
-function deepFreeze(value) {
-    if (value === null || typeof value !== "object") return value;
-    for (const child of Object.values(value)) deepFreeze(child);
-    return Object.freeze(value);
-}
-
 function expectOk(result, label) {
     assert.equal(result._tag, "ok", `${label}: expected ok, got ${result._tag === "err" ? result.error.message : "?"}`);
     return result.value;
@@ -108,20 +102,6 @@ function makeMinimalSlot(index) {
 
 function storedRouteIds(state) {
     return new Set(state.slots.flatMap((slot) => Object.keys(slot.routeAmounts)));
-}
-
-function applyBaseChange(base, change, newValue) {
-    if (change.kind === "voiceParameter") {
-        return { ...base, parameters: { ...base.parameters, [change.parameterId]: newValue } };
-    }
-    if (change.kind === "routeAmount") {
-        return { ...base, routeAmounts: { ...base.routeAmounts, [change.routeId]: newValue } };
-    }
-    // routeOrder: rotate by one — a pure repositioning of the same routes.
-    const rotated = base.routeOrder.length > 1
-        ? [...base.routeOrder.slice(1), base.routeOrder[0]]
-        : [...base.routeOrder];
-    return { ...base, routeOrder: rotated };
 }
 
 test("accessor oracle covers every overridable parameter id exactly", async () => {
@@ -258,46 +238,65 @@ test("the empty bank is valid and roundtrips", async () => {
     assert.deepEqual(parsed, empty);
 });
 
-test("resolution: scalar fields are complete while route amounts stay sparse until note latch", async () => {
+test("the runtime compiler preserves sparse overrides with explicit presence masks", async () => {
     const { image, arb } = await modules();
     const table = imageAccessorTable();
     fc.assert(
         fc.property(
-            arb.patchVoiceBaseArbitrary(fc),
             arb.articulationsStateArbitrary(fc),
-            (base, state) => {
-                deepFreeze(base);
-                deepFreeze(state);
-                const images = image.resolveArticulationImages(base, state);
-                assert.equal(images.length, state.slots.length);
+            (state) => {
+                const routeIds = [...storedRouteIds(state)].sort();
+                const routeCells = Object.fromEntries(routeIds.map((routeId, index) => [routeId, index]));
+                const uploads = image.compileArticulationOverrideImages(state, routeCells);
+                assert.equal(uploads.length, state.slots.length);
                 state.slots.forEach((slot, slotIndex) => {
-                    const resolved = images[slotIndex];
-                    assert.equal(resolved.selectorA, slot.runtimeSlot);
-                    assert.equal(resolved.enabled, true);
+                    const upload = uploads[slotIndex];
+                    assert.equal(upload.selectorA, slot.runtimeSlot);
+                    assert.equal(upload.enabled, true);
                     for (const [parameterId, accessor] of Object.entries(table)) {
-                        const expected = Object.hasOwn(slot.overrides, parameterId)
-                            ? slot.overrides[parameterId]
-                            : base.parameters[parameterId];
+                        const explicit = Object.hasOwn(slot.overrides, parameterId);
+                        const expected = explicit ? slot.overrides[parameterId] : 0;
                         assert.equal(
-                            accessor(resolved),
+                            accessor(upload),
                             expected,
                             `${slot.id}: ${parameterId}`,
                         );
+
+                        if (parameterId.startsWith("osc")) {
+                            const oscillatorIndex = "ABC".indexOf(parameterId[3]);
+                            const localParameterId = parameterId.slice(5);
+                            const bitIndex = image.OSCILLATOR_ARTICULATION_PARAMETER_IDS.indexOf(localParameterId);
+                            assert.notEqual(oscillatorIndex, -1, `${parameterId}: known oscillator`);
+                            assert.notEqual(bitIndex, -1, `${parameterId}: known local parameter`);
+                            assert.equal(
+                                (upload.oscillatorOverrideMasks[oscillatorIndex] & (1 << bitIndex)) !== 0,
+                                explicit,
+                                `${slot.id}: ${parameterId} mask`,
+                            );
+                        } else {
+                            const bitIndex = image.SHARED_ARTICULATION_VOICE_PARAMETER_IDS.indexOf(parameterId);
+                            assert.notEqual(bitIndex, -1, `${parameterId}: known shared parameter`);
+                            assert.equal(
+                                (upload.sharedOverrideMask & (1 << bitIndex)) !== 0,
+                                explicit,
+                                `${slot.id}: ${parameterId} mask`,
+                            );
+                        }
                     }
-                    assert.equal(resolved.routeAmounts.length, image.MODULATION_ARTICULATION_ROUTE_CELL_COUNT);
+                    assert.equal(upload.routeAmounts.length, image.MODULATION_ARTICULATION_ROUTE_CELL_COUNT);
                     const assignedCells = new Set();
-                    base.routeOrder.forEach((routeId) => {
-                        const cellIndex = base.routeCells[routeId];
+                    routeIds.forEach((routeId) => {
+                        const cellIndex = routeCells[routeId];
                         assignedCells.add(cellIndex);
                         const expected = Object.hasOwn(slot.routeAmounts, routeId)
                             ? slot.routeAmounts[routeId]
                             : image.ARTICULATION_ROUTE_AMOUNT_INHERIT;
-                        assert.equal(resolved.routeAmounts[cellIndex], expected, `${slot.id}: route ${routeId}`);
+                        assert.equal(upload.routeAmounts[cellIndex], expected, `${slot.id}: route ${routeId}`);
                     });
                     for (let cellIndex = 0; cellIndex < image.MODULATION_ARTICULATION_ROUTE_CELL_COUNT; cellIndex += 1) {
                         if (!assignedCells.has(cellIndex)) {
                             assert.equal(
-                                resolved.routeAmounts[cellIndex],
+                                upload.routeAmounts[cellIndex],
                                 image.ARTICULATION_ROUTE_AMOUNT_INHERIT,
                                 `${slot.id}: empty cell ${cellIndex}`,
                             );
@@ -309,76 +308,17 @@ test("resolution: scalar fields are complete while route amounts stay sparse unt
     );
 });
 
-test("resolveArticulationImage agrees with the batch resolver", async () => {
+test("single-slot and bank articulation compilation agree", async () => {
     const { image, arb } = await modules();
     fc.assert(
         fc.property(
-            arb.patchVoiceBaseArbitrary(fc),
             arb.articulationsStateArbitrary(fc),
-            (base, state) => {
-                const batch = image.resolveArticulationImages(base, state);
+            (state) => {
+                const routeIds = [...storedRouteIds(state)].sort();
+                const routeCells = Object.fromEntries(routeIds.map((routeId, index) => [routeId, index]));
+                const batch = image.compileArticulationOverrideImages(state, routeCells);
                 state.slots.forEach((slot, index) => {
-                    assert.deepEqual(image.resolveArticulationImage(base, slot), batch[index]);
-                });
-            },
-        ),
-    );
-});
-
-test("affectedSelectors matches its specification exactly", async () => {
-    const { image, arb } = await modules();
-    fc.assert(
-        fc.property(
-            arb.patchVoiceBaseArbitrary(fc).chain((base) =>
-                fc.tuple(
-                    fc.constant(base),
-                    arb.articulationsStateArbitrary(fc),
-                    arb.baseChangeArbitrary(fc, base),
-                ),
-            ),
-            ([, state, change]) => {
-                const affected = image.affectedSelectors(change, state);
-                let expected;
-                if (change.kind === "voiceParameter") {
-                    expected = state.slots
-                        .filter((slot) => !Object.hasOwn(slot.overrides, change.parameterId))
-                        .map((slot) => slot.runtimeSlot);
-                } else if (change.kind === "routeAmount") {
-                    expected = [];
-                } else {
-                    expected = state.slots.map((slot) => slot.runtimeSlot);
-                }
-                assert.deepEqual([...affected], expected);
-            },
-        ),
-    );
-});
-
-test("re-uploading only affected selectors is equivalent to a full re-upload", async () => {
-    const { image, arb } = await modules();
-    fc.assert(
-        fc.property(
-            arb.patchVoiceBaseArbitrary(fc).chain((base) =>
-                fc.tuple(
-                    fc.constant(base),
-                    arb.articulationsStateArbitrary(fc),
-                    arb.baseChangeArbitrary(fc, base),
-                    arb.engineValueArbitrary(fc),
-                ),
-            ),
-            ([base, state, change, newValue]) => {
-                const changedBase = applyBaseChange(base, change, newValue);
-                const before = image.resolveArticulationImages(base, state);
-                const after = image.resolveArticulationImages(changedBase, state);
-                const affected = new Set(image.affectedSelectors(change, state));
-
-                state.slots.forEach((slot, index) => {
-                    if (affected.has(slot.runtimeSlot)) return;
-                    assert.deepEqual(
-                        after[index],
-                        before[index],
-                        `${slot.id}: unaffected selector's image must not change`,
-                    );
+                    assert.deepEqual(image.compileArticulationOverrideImage(slot, routeCells), batch[index]);
                 });
             },
         ),

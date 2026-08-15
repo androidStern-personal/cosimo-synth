@@ -10,12 +10,10 @@
 import {
     ARTICULATION_VOICE_PARAMETER_IDS,
     MODULATION_ARTICULATION_ROUTE_CELL_COUNT,
-    type ArticulationBaseChange,
     type ArticulationRange,
     type ArticulationSlotV4,
     type ArticulationsState,
     type ArticulationVoiceParameterId,
-    type PatchVoiceBase,
 } from "./articulation-image";
 
 type FastCheck = typeof import("fast-check");
@@ -139,52 +137,4 @@ export function articulationsStateArbitrary(fc: FastCheck): Arbitrary<Articulati
                         })),
                 ),
         );
-}
-
-/**
- * A complete patch base: EVERY voice parameter present, a route order of
- * unique ids, deterministic runtime cells, and base amounts for those routes.
- *
- * @param fc - The fast-check module.
- * @returns Arbitrary complete PatchVoiceBase values.
- */
-export function patchVoiceBaseArbitrary(fc: FastCheck): Arbitrary<PatchVoiceBase> {
-    return fc
-        .tuple(
-            fc.tuple(...ARTICULATION_VOICE_PARAMETER_IDS.map(() => engineValueArbitrary(fc))),
-            fc.uniqueArray(fc.constantFrom(...ROUTE_ID_POOL), { maxLength: ROUTE_ID_POOL.length }),
-        )
-        .chain(([values, routeOrder]) =>
-            fc.tuple(...routeOrder.map(() => engineValueArbitrary(fc))).map((amounts) => ({
-                parameters: Object.fromEntries(
-                    ARTICULATION_VOICE_PARAMETER_IDS.map((id, index) => [id, values[index]]),
-                ) as Record<ArticulationVoiceParameterId, number>,
-                routeAmounts: Object.fromEntries(routeOrder.map((routeId, index) => [routeId, amounts[index]])),
-                routeOrder,
-                routeCells: Object.fromEntries(routeOrder.map((routeId, index) => [routeId, index])),
-            })),
-        );
-}
-
-/**
- * A base change applicable to a given base (route changes pick real routes).
- *
- * @param fc - The fast-check module.
- * @param base - The base the change applies to.
- * @returns Arbitrary ArticulationBaseChange values valid for that base.
- */
-export function baseChangeArbitrary(fc: FastCheck, base: PatchVoiceBase): Arbitrary<ArticulationBaseChange> {
-    const voiceChange = fc
-        .constantFrom(...ARTICULATION_VOICE_PARAMETER_IDS)
-        .map((parameterId): ArticulationBaseChange => ({ kind: "voiceParameter", parameterId }));
-
-    if (base.routeOrder.length === 0) {
-        return voiceChange;
-    }
-
-    return fc.oneof(
-        voiceChange,
-        fc.constantFrom(...base.routeOrder).map((routeId): ArticulationBaseChange => ({ kind: "routeAmount", routeId })),
-        fc.constant({ kind: "routeOrder" } as const),
-    );
 }

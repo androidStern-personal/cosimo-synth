@@ -62,6 +62,36 @@ namespace wt
     }
     let modulationArticulationRouteCellCount = modulationVoiceRouteCellCount + modulationMacroVoiceRouteCellCount;
     let modulationArticulationInheritAmount = 1000000.0f;
+    let articulationOscillatorFramePositionBit = 1 << 0;
+    let articulationOscillatorPanBit = 1 << 1;
+    let articulationOscillatorOctaveBit = 1 << 2;
+    let articulationOscillatorSemitoneBit = 1 << 3;
+    let articulationOscillatorFineCentsBit = 1 << 4;
+    let articulationOscillatorPhaseBit = 1 << 5;
+    let articulationOscillatorPhaseRandomBit = 1 << 6;
+    let articulationOscillatorRetriggerBit = 1 << 7;
+    let articulationOscillatorVolumeDbBit = 1 << 8;
+    let articulationOscillatorMuteBit = 1 << 9;
+    let articulationOscillatorSoloBit = 1 << 10;
+    let articulationOscillatorWarpModeBit = 1 << 11;
+    let articulationOscillatorWarpAmountBit = 1 << 12;
+    let articulationOscillatorUnisonVoicesBit = 1 << 13;
+    let articulationOscillatorUnisonDetuneBit = 1 << 14;
+    let articulationOscillatorUnisonBlendBit = 1 << 15;
+    let articulationOscillatorUnisonWidthBit = 1 << 16;
+    let articulationOscillatorUnisonDetuneModeBit = 1 << 17;
+    let articulationOscillatorUnisonStackModeBit = 1 << 18;
+    let articulationOscillatorPositionSpreadBit = 1 << 19;
+    let articulationOscillatorWarpSpreadBit = 1 << 20;
+    let articulationOscillatorAllBits = (1 << 21) - 1;
+    let articulationSharedFilterModeBit = 1 << 0;
+    let articulationSharedFilterCutoffBit = 1 << 1;
+    let articulationSharedFilterQBit = 1 << 2;
+    let articulationSharedMseg1Bit = 1 << 3;
+    let articulationSharedMseg2Bit = 1 << 4;
+    let articulationSharedMseg3Bit = 1 << 5;
+    let articulationSharedEnvelopeBitOffset = 6;
+    let articulationSharedAllBits = (1 << 18) - 1;
     let modulationPathVoice = 1;
     let modulationPathMacroVoice = 2;
     let modulationPathVoiceRack = 3;
@@ -356,6 +386,8 @@ namespace wt
     {
         int32 selectorA;
         bool enabled;
+        int32[oscillatorCount] oscillatorOverrideMasks;
+        int32 sharedOverrideMask;
         float32[oscillatorCount] framePositions;
         float32[oscillatorCount] pans;
         float32[oscillatorCount] octaves;
@@ -608,13 +640,17 @@ namespace wt
         if (! upload.enabled)
             return true;
 
-        if (! isFiniteRuntimeValue (upload.filterCutoffHz)
+        if (upload.sharedOverrideMask < 0
+            || upload.sharedOverrideMask > articulationSharedAllBits
+            || ! isFiniteRuntimeValue (upload.filterCutoffHz)
             || ! isFiniteRuntimeValue (upload.filterQ))
             return false;
 
         for (wrap<oscillatorCount> oscillator)
         {
-            if (! isFiniteRuntimeValue (upload.framePositions.at (oscillator))
+            if (upload.oscillatorOverrideMasks.at (oscillator) < 0
+                || upload.oscillatorOverrideMasks.at (oscillator) > articulationOscillatorAllBits
+                || ! isFiniteRuntimeValue (upload.framePositions.at (oscillator))
                 || ! isFiniteRuntimeValue (upload.pans.at (oscillator))
                 || ! isFiniteRuntimeValue (upload.octaves.at (oscillator))
                 || ! isFiniteRuntimeValue (upload.semitones.at (oscillator))
@@ -1936,6 +1972,8 @@ namespace wt
         float32[voiceCount] voiceMsegProgress2;
         float32[voiceCount] voiceMsegProgress3;
         bool[articulationSlotCount] articulationSlotDefined;
+        int32[articulationSlotCount * oscillatorCount] articulationOscillatorOverrideMasks;
+        int32[articulationSlotCount] articulationSharedOverrideMasks;
         float32[articulationSlotCount * oscillatorCount] articulationFramePositions;
         float32[articulationSlotCount * oscillatorCount] articulationPans;
         float32[articulationSlotCount * oscillatorCount] articulationOctaves;
@@ -1966,6 +2004,10 @@ namespace wt
         float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeDecaySeconds;
         float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeSustain;
         float32[articulationSlotCount * modulationEnvSlotCount] articulationEnvelopeReleaseSeconds;
+        float32[modulationEnvSlotCount] currentEnvelopeAttackSeconds;
+        float32[modulationEnvSlotCount] currentEnvelopeDecaySeconds;
+        float32[modulationEnvSlotCount] currentEnvelopeSustain;
+        float32[modulationEnvSlotCount] currentEnvelopeReleaseSeconds;
         bool[voiceCount] voiceUsesArticulation;
         int32[voiceCount] voiceSelectorA;
         int32[voiceCount] voiceSelectorB;
@@ -2125,15 +2167,48 @@ namespace wt
         int32 framesUntilNextMsegMonitorUpdate = 0;
         float32 previewFrequencyHzState = previewFrequencyHz;
         float32 glideTimeSecondsState = 0.0f;
+        float32[oscillatorCount] indexedFramePositionState;
+        int32[oscillatorCount] indexedWarpModeState;
+        float32[oscillatorCount] indexedWarpAmountState;
+        float32[oscillatorCount] indexedOctaveState;
+        float32[oscillatorCount] indexedSemitoneState;
+        float32[oscillatorCount] indexedFineCentsState;
         int32[oscillatorCount] indexedUnisonVoicesState;
         float32[oscillatorCount] indexedPhaseState;
         float32[oscillatorCount] indexedPhaseRandomState;
         bool[oscillatorCount] indexedRetriggerState;
+        float32[oscillatorCount] indexedVolumeDbState;
+        bool[oscillatorCount] indexedMuteState;
+        bool[oscillatorCount] indexedSoloState;
+        float32[oscillatorCount] indexedPanState;
+        float32[oscillatorCount] indexedUnisonDetuneState;
+        float32[oscillatorCount] indexedUnisonBlendState;
+        float32[oscillatorCount] indexedUnisonWidthState;
+        int32[oscillatorCount] indexedUnisonDetuneModeState;
+        int32[oscillatorCount] indexedUnisonStackModeState;
+        float32[oscillatorCount] indexedPositionSpreadState;
+        float32[oscillatorCount] indexedWarpSpreadState;
+        int32 indexedFilterModeState;
+        float32 indexedFilterCutoffState;
+        float32 indexedFilterQState;
+        float32[modulationMsegSlotCount] indexedMsegMorphState;
 
         void updateOscillatorInputState()
         {
             for (wrap<oscillatorCount> oscillator)
             {
+                indexedFramePositionState.at (oscillator)
+                    = std::intrinsics::clamp (oscillatorFramePositionIn.at (oscillator), 0.0f, 1.0f);
+                indexedWarpModeState.at (oscillator)
+                    = resolveWarpMode (oscillatorWarpModeIn.at (oscillator));
+                indexedWarpAmountState.at (oscillator)
+                    = std::intrinsics::clamp (oscillatorWarpAmountIn.at (oscillator), 0.0f, 1.0f);
+                indexedOctaveState.at (oscillator)
+                    = std::intrinsics::clamp (oscillatorOctaveIn.at (oscillator), -4.0f, 4.0f);
+                indexedSemitoneState.at (oscillator)
+                    = std::intrinsics::clamp (oscillatorSemitoneIn.at (oscillator), -12.0f, 12.0f);
+                indexedFineCentsState.at (oscillator)
+                    = std::intrinsics::clamp (oscillatorFineCentsIn.at (oscillator), -100.0f, 100.0f);
                 indexedUnisonVoicesState.at (oscillator)
                     = resolveUnisonVoices (oscillatorUnisonVoicesIn.at (oscillator));
                 indexedPhaseState.at (oscillator)
@@ -2142,7 +2217,32 @@ namespace wt
                     = clampUnison01 (oscillatorPhaseRandomIn.at (oscillator));
                 indexedRetriggerState.at (oscillator)
                     = oscillatorRetriggerIn.at (oscillator) >= 0.5f;
+                indexedVolumeDbState.at (oscillator)
+                    = clampAmpGainDb (oscillatorVolumeDbIn.at (oscillator));
+                indexedMuteState.at (oscillator) = oscillatorMuteIn.at (oscillator) >= 0.5f;
+                indexedSoloState.at (oscillator) = oscillatorSoloIn.at (oscillator) >= 0.5f;
+                indexedPanState.at (oscillator) = clampPan (oscillatorPanIn.at (oscillator));
+                indexedUnisonDetuneState.at (oscillator)
+                    = clampUnison01 (oscillatorUnisonDetuneIn.at (oscillator));
+                indexedUnisonBlendState.at (oscillator)
+                    = clampUnison01 (oscillatorUnisonBlendIn.at (oscillator));
+                indexedUnisonWidthState.at (oscillator)
+                    = clampUnison01 (oscillatorUnisonWidthIn.at (oscillator));
+                indexedUnisonDetuneModeState.at (oscillator)
+                    = resolveUnisonDetuneMode (oscillatorUnisonDetuneModeIn.at (oscillator));
+                indexedUnisonStackModeState.at (oscillator)
+                    = resolveUnisonStackMode (oscillatorUnisonStackModeIn.at (oscillator));
+                indexedPositionSpreadState.at (oscillator)
+                    = clampUnison01 (oscillatorUnisonWavetablePositionSpreadIn.at (oscillator));
+                indexedWarpSpreadState.at (oscillator)
+                    = clampUnison01 (oscillatorUnisonWarpSpreadIn.at (oscillator));
             }
+            indexedFilterModeState = resolveFilterMode (filterModeIn);
+            indexedFilterCutoffState = clampFilterCutoffHz (filterCutoffIn, float32 (processor.frequency));
+            indexedFilterQState = clampFilterQ (filterQIn);
+            indexedMsegMorphState[0] = std::intrinsics::clamp (mseg1MorphIn, 0.0f, 1.0f);
+            indexedMsegMorphState[1] = std::intrinsics::clamp (mseg2MorphIn, 0.0f, 1.0f);
+            indexedMsegMorphState[2] = std::intrinsics::clamp (mseg3MorphIn, 0.0f, 1.0f);
         }
 
         int32 oscillatorMipIndex (int32 oscillatorIndex, int32 mipIndex)
@@ -2379,25 +2479,25 @@ namespace wt
         float32 oscillatorFramePosition (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorFramePositionIn.at (oscillator);
+            return indexedFramePositionState.at (oscillator);
         }
 
         int32 oscillatorWarpMode (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return resolveWarpMode (oscillatorWarpModeIn.at (oscillator));
+            return indexedWarpModeState.at (oscillator);
         }
 
         float32 oscillatorWarpAmount (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorWarpAmountIn.at (oscillator);
+            return indexedWarpAmountState.at (oscillator);
         }
 
         float32 oscillatorPan (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return oscillatorPanIn.at (oscillator);
+            return indexedPanState.at (oscillator);
         }
 
         int32 oscillatorUnisonVoices (int32 oscillatorIndex)
@@ -2409,54 +2509,51 @@ namespace wt
         float32 oscillatorUnisonDetune (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return clampUnison01 (oscillatorUnisonDetuneIn.at (oscillator));
+            return indexedUnisonDetuneState.at (oscillator);
         }
 
         float32 oscillatorUnisonBlend (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return clampUnison01 (oscillatorUnisonBlendIn.at (oscillator));
+            return indexedUnisonBlendState.at (oscillator);
         }
 
         float32 oscillatorUnisonWidth (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return clampUnison01 (oscillatorUnisonWidthIn.at (oscillator));
+            return indexedUnisonWidthState.at (oscillator);
         }
 
         int32 oscillatorUnisonDetuneMode (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return resolveUnisonDetuneMode (oscillatorUnisonDetuneModeIn.at (oscillator));
+            return indexedUnisonDetuneModeState.at (oscillator);
         }
 
         int32 oscillatorUnisonStackMode (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return resolveUnisonStackMode (oscillatorUnisonStackModeIn.at (oscillator));
+            return indexedUnisonStackModeState.at (oscillator);
         }
 
         float32 oscillatorPositionSpread (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return clampUnison01 (oscillatorUnisonWavetablePositionSpreadIn.at (oscillator));
+            return indexedPositionSpreadState.at (oscillator);
         }
 
         float32 oscillatorWarpSpread (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            return clampUnison01 (oscillatorUnisonWarpSpreadIn.at (oscillator));
+            return indexedWarpSpreadState.at (oscillator);
         }
 
         float32 oscillatorTuningSemitones (int32 oscillatorIndex)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            let octave = std::intrinsics::clamp (int32 (std::intrinsics::floor (
-                oscillatorOctaveIn.at (oscillator) + 0.5f)), -4, 4);
-            let semitone = std::intrinsics::clamp (int32 (std::intrinsics::floor (
-                oscillatorSemitoneIn.at (oscillator) + 0.5f)), -12, 12);
-            let fineCents = std::intrinsics::clamp (
-                oscillatorFineCentsIn.at (oscillator), -100.0f, 100.0f);
+            let octave = int32 (std::intrinsics::floor (indexedOctaveState.at (oscillator) + 0.5f));
+            let semitone = int32 (std::intrinsics::floor (indexedSemitoneState.at (oscillator) + 0.5f));
+            let fineCents = indexedFineCentsState.at (oscillator);
             return float32 ((octave * 12) + semitone) + fineCents * 0.01f;
         }
 
@@ -2964,6 +3061,22 @@ namespace wt
             return (selectorA * modulationEnvSlotCount) + slotIndex;
         }
 
+        bool articulationMaskContains (int32 mask, int32 bit)
+        {
+            return (mask & bit) != 0;
+        }
+
+        int32 articulationEnvelopeBit (int32 slotIndex, int32 fieldIndex)
+        {
+            return 1 << (articulationSharedEnvelopeBitOffset + (slotIndex * 4) + fieldIndex);
+        }
+
+        float32 baseMsegMorph (int32 slotIndex)
+        {
+            return indexedMsegMorphState.at (
+                wrap<modulationMsegSlotCount> (slotIndex));
+        }
+
         int32 voiceArticulationMsegIndex (int32 voiceIndex, int32 slotIndex)
         {
             return (voiceIndex * modulationMsegSlotCount) + slotIndex;
@@ -3039,39 +3152,113 @@ namespace wt
                 let storedIndex = articulationOscillatorIndex (selectorA, int32 (oscillator));
                 let latchedIndex = voiceArticulationOscillatorIndex (
                     int32 (voice), int32 (oscillator));
-                voiceArticulationFramePositions.at (latchedIndex) = articulationFramePositions.at (storedIndex);
-                voiceArticulationPans.at (latchedIndex) = articulationPans.at (storedIndex);
-                voiceArticulationOctaves.at (latchedIndex) = articulationOctaves.at (storedIndex);
-                voiceArticulationSemitones.at (latchedIndex) = articulationSemitones.at (storedIndex);
-                voiceArticulationFineCents.at (latchedIndex) = articulationFineCents.at (storedIndex);
-                voiceArticulationPhases.at (latchedIndex) = articulationPhases.at (storedIndex);
-                voiceArticulationPhaseRandoms.at (latchedIndex) = articulationPhaseRandoms.at (storedIndex);
-                voiceArticulationRetriggers.at (latchedIndex) = articulationRetriggers.at (storedIndex);
-                voiceArticulationVolumeDbs.at (latchedIndex) = articulationVolumeDbs.at (storedIndex);
-                voiceArticulationMutes.at (latchedIndex) = articulationMutes.at (storedIndex);
-                voiceArticulationSolos.at (latchedIndex) = articulationSolos.at (storedIndex);
-                voiceArticulationWarpModes.at (latchedIndex) = articulationWarpModes.at (storedIndex);
-                voiceArticulationWarpAmounts.at (latchedIndex) = articulationWarpAmounts.at (storedIndex);
-                voiceArticulationUnisonVoices.at (latchedIndex) = articulationUnisonVoices.at (storedIndex);
-                voiceArticulationUnisonDetunes.at (latchedIndex) = articulationUnisonDetunes.at (storedIndex);
-                voiceArticulationUnisonBlends.at (latchedIndex) = articulationUnisonBlends.at (storedIndex);
-                voiceArticulationUnisonWidths.at (latchedIndex) = articulationUnisonWidths.at (storedIndex);
-                voiceArticulationUnisonDetuneModes.at (latchedIndex) = articulationUnisonDetuneModes.at (storedIndex);
-                voiceArticulationUnisonStackModes.at (latchedIndex) = articulationUnisonStackModes.at (storedIndex);
+                let overrideMask = articulationOscillatorOverrideMasks.at (storedIndex);
+                voiceArticulationFramePositions.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorFramePositionBit)
+                        ? articulationFramePositions.at (storedIndex)
+                        : std::intrinsics::clamp (oscillatorFramePosition (int32 (oscillator)), 0.0f, 1.0f);
+                voiceArticulationPans.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorPanBit)
+                        ? articulationPans.at (storedIndex)
+                        : clampPan (oscillatorPan (int32 (oscillator)));
+                voiceArticulationOctaves.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorOctaveBit)
+                        ? articulationOctaves.at (storedIndex)
+                        : indexedOctaveState.at (oscillator);
+                voiceArticulationSemitones.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorSemitoneBit)
+                        ? articulationSemitones.at (storedIndex)
+                        : indexedSemitoneState.at (oscillator);
+                voiceArticulationFineCents.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorFineCentsBit)
+                        ? articulationFineCents.at (storedIndex)
+                        : indexedFineCentsState.at (oscillator);
+                voiceArticulationPhases.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorPhaseBit)
+                        ? articulationPhases.at (storedIndex)
+                        : indexedPhaseState.at (oscillator);
+                voiceArticulationPhaseRandoms.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorPhaseRandomBit)
+                        ? articulationPhaseRandoms.at (storedIndex)
+                        : indexedPhaseRandomState.at (oscillator);
+                voiceArticulationRetriggers.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorRetriggerBit)
+                        ? articulationRetriggers.at (storedIndex)
+                        : indexedRetriggerState.at (oscillator);
+                voiceArticulationVolumeDbs.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorVolumeDbBit)
+                        ? articulationVolumeDbs.at (storedIndex)
+                        : indexedVolumeDbState.at (oscillator);
+                voiceArticulationMutes.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorMuteBit)
+                        ? articulationMutes.at (storedIndex)
+                        : indexedMuteState.at (oscillator);
+                voiceArticulationSolos.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorSoloBit)
+                        ? articulationSolos.at (storedIndex)
+                        : indexedSoloState.at (oscillator);
+                voiceArticulationWarpModes.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorWarpModeBit)
+                        ? articulationWarpModes.at (storedIndex)
+                        : oscillatorWarpMode (int32 (oscillator));
+                voiceArticulationWarpAmounts.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorWarpAmountBit)
+                        ? articulationWarpAmounts.at (storedIndex)
+                        : std::intrinsics::clamp (oscillatorWarpAmount (int32 (oscillator)), 0.0f, 1.0f);
+                voiceArticulationUnisonVoices.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorUnisonVoicesBit)
+                        ? articulationUnisonVoices.at (storedIndex)
+                        : oscillatorUnisonVoices (int32 (oscillator));
+                voiceArticulationUnisonDetunes.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorUnisonDetuneBit)
+                        ? articulationUnisonDetunes.at (storedIndex)
+                        : oscillatorUnisonDetune (int32 (oscillator));
+                voiceArticulationUnisonBlends.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorUnisonBlendBit)
+                        ? articulationUnisonBlends.at (storedIndex)
+                        : oscillatorUnisonBlend (int32 (oscillator));
+                voiceArticulationUnisonWidths.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorUnisonWidthBit)
+                        ? articulationUnisonWidths.at (storedIndex)
+                        : oscillatorUnisonWidth (int32 (oscillator));
+                voiceArticulationUnisonDetuneModes.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorUnisonDetuneModeBit)
+                        ? articulationUnisonDetuneModes.at (storedIndex)
+                        : oscillatorUnisonDetuneMode (int32 (oscillator));
+                voiceArticulationUnisonStackModes.at (latchedIndex)
+                    = articulationMaskContains (overrideMask, articulationOscillatorUnisonStackModeBit)
+                        ? articulationUnisonStackModes.at (storedIndex)
+                        : oscillatorUnisonStackMode (int32 (oscillator));
                 voiceArticulationUnisonWavetablePositionSpreads.at (latchedIndex)
-                    = articulationUnisonWavetablePositionSpreads.at (storedIndex);
+                    = articulationMaskContains (overrideMask, articulationOscillatorPositionSpreadBit)
+                        ? articulationUnisonWavetablePositionSpreads.at (storedIndex)
+                        : oscillatorPositionSpread (int32 (oscillator));
                 voiceArticulationUnisonWarpSpreads.at (latchedIndex)
-                    = articulationUnisonWarpSpreads.at (storedIndex);
+                    = articulationMaskContains (overrideMask, articulationOscillatorWarpSpreadBit)
+                        ? articulationUnisonWarpSpreads.at (storedIndex)
+                        : oscillatorWarpSpread (int32 (oscillator));
             }
 
-            voiceArticulationFilterMode.at (voice) = articulationFilterMode.at (selectorA);
-            voiceArticulationFilterCutoffHz.at (voice) = articulationFilterCutoffHz.at (selectorA);
-            voiceArticulationFilterQ.at (voice) = articulationFilterQ.at (selectorA);
+            let sharedOverrideMask = articulationSharedOverrideMasks.at (selectorA);
+            voiceArticulationFilterMode.at (voice)
+                = articulationMaskContains (sharedOverrideMask, articulationSharedFilterModeBit)
+                    ? articulationFilterMode.at (selectorA)
+                    : indexedFilterModeState;
+            voiceArticulationFilterCutoffHz.at (voice)
+                = articulationMaskContains (sharedOverrideMask, articulationSharedFilterCutoffBit)
+                    ? articulationFilterCutoffHz.at (selectorA)
+                    : indexedFilterCutoffState;
+            voiceArticulationFilterQ.at (voice)
+                = articulationMaskContains (sharedOverrideMask, articulationSharedFilterQBit)
+                    ? articulationFilterQ.at (selectorA)
+                    : indexedFilterQState;
 
             for (int32 slotIndex = 0; slotIndex < modulationMsegSlotCount; ++slotIndex)
             {
                 voiceArticulationMsegMorphs.at (voiceArticulationMsegIndex (int32 (voice), slotIndex))
-                    = articulationMsegMorphs.at (articulationMsegIndex (selectorA, slotIndex));
+                    = articulationMaskContains (sharedOverrideMask, articulationSharedMseg1Bit << slotIndex)
+                        ? articulationMsegMorphs.at (articulationMsegIndex (selectorA, slotIndex))
+                        : baseMsegMorph (slotIndex);
             }
 
             for (int32 routeIndex = 0; routeIndex < modulationArticulationRouteCellCount; ++routeIndex)
@@ -3087,13 +3274,21 @@ namespace wt
             for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
             {
                 voiceArticulationEnvelopeAttackSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
-                    = articulationEnvelopeAttackSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex));
+                    = articulationMaskContains (sharedOverrideMask, articulationEnvelopeBit (slotIndex, 0))
+                        ? articulationEnvelopeAttackSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex))
+                        : currentEnvelopeAttackSeconds.at (slotIndex);
                 voiceArticulationEnvelopeDecaySeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
-                    = articulationEnvelopeDecaySeconds.at (articulationEnvelopeIndex (selectorA, slotIndex));
+                    = articulationMaskContains (sharedOverrideMask, articulationEnvelopeBit (slotIndex, 1))
+                        ? articulationEnvelopeDecaySeconds.at (articulationEnvelopeIndex (selectorA, slotIndex))
+                        : currentEnvelopeDecaySeconds.at (slotIndex);
                 voiceArticulationEnvelopeSustain.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
-                    = articulationEnvelopeSustain.at (articulationEnvelopeIndex (selectorA, slotIndex));
+                    = articulationMaskContains (sharedOverrideMask, articulationEnvelopeBit (slotIndex, 2))
+                        ? articulationEnvelopeSustain.at (articulationEnvelopeIndex (selectorA, slotIndex))
+                        : currentEnvelopeSustain.at (slotIndex);
                 voiceArticulationEnvelopeReleaseSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
-                    = articulationEnvelopeReleaseSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex));
+                    = articulationMaskContains (sharedOverrideMask, articulationEnvelopeBit (slotIndex, 3))
+                        ? articulationEnvelopeReleaseSeconds.at (articulationEnvelopeIndex (selectorA, slotIndex))
+                        : currentEnvelopeReleaseSeconds.at (slotIndex);
             }
 
             emitVoiceArticulationMonitor (voiceIndex);
@@ -3178,6 +3373,12 @@ namespace wt
 
         void uploadEnvelopeToSlot (int32 slot, ModulationEnvelopeUpload config)
         {
+            let slotIndex = std::intrinsics::clamp (slot - 1, 0, modulationEnvSlotCount - 1);
+            currentEnvelopeAttackSeconds.at (slotIndex) = std::intrinsics::max (0.001f, config.attackSeconds);
+            currentEnvelopeDecaySeconds.at (slotIndex) = std::intrinsics::max (0.001f, config.decaySeconds);
+            currentEnvelopeSustain.at (slotIndex) = std::intrinsics::clamp (config.sustain, 0.0f, 1.0f);
+            currentEnvelopeReleaseSeconds.at (slotIndex) = std::intrinsics::max (0.001f, config.releaseSeconds);
+
             if (slot == 1)
             {
                 for (wrap<voiceCount> voice)
@@ -4452,6 +4653,8 @@ namespace wt
             for (wrap<oscillatorCount> oscillator)
             {
                 let index = articulationOscillatorIndex (selectorA, int32 (oscillator));
+                articulationOscillatorOverrideMasks.at (index)
+                    = upload.oscillatorOverrideMasks.at (oscillator);
                 articulationFramePositions.at (index) = std::intrinsics::clamp (
                     upload.framePositions.at (oscillator), 0.0f, 1.0f);
                 articulationPans.at (index) = clampPan (upload.pans.at (oscillator));
@@ -4490,6 +4693,7 @@ namespace wt
                 articulationUnisonWarpSpreads.at (index) = clampUnison01 (
                     upload.unisonWarpSpreads.at (oscillator));
             }
+            articulationSharedOverrideMasks.at (selectorA) = upload.sharedOverrideMask;
             articulationFilterMode.at (selectorA) = resolveFilterMode (float32 (upload.filterMode));
             articulationFilterCutoffHz.at (selectorA) = clampFilterCutoffHz (upload.filterCutoffHz, float32 (processor.frequency));
             articulationFilterQ.at (selectorA) = clampFilterQ (upload.filterQ);
@@ -4735,6 +4939,14 @@ namespace wt
             rackModSmoothingCoefficientState = rackModOnePoleCoefficient (
                 rackModSmoothingMs, float32 (processor.frequency));
             resetAllFilterState();
+
+            for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
+            {
+                currentEnvelopeAttackSeconds.at (slotIndex) = 0.01f;
+                currentEnvelopeDecaySeconds.at (slotIndex) = 0.25f;
+                currentEnvelopeSustain.at (slotIndex) = 0.5f;
+                currentEnvelopeReleaseSeconds.at (slotIndex) = 0.2f;
+            }
 
             for (wrap<voiceCount> voice)
                 clearVoiceArticulation (int32 (voice));

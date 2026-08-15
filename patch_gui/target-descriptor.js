@@ -20,8 +20,12 @@ const MODULE_DEFINITIONS = [
         workspace: "voice",
         quickParameterId: "cutoff",
         parameters: [
-            parameter("cutoff", "Cutoff", 67, 70, "frequency"),
-            parameter("resonance", "Resonance", 25, 0),
+            // Initial values mirror the authoritative Cmajor parameter defaults:
+            // 1000 Hz and Q 0.707107. The retired UI patch-value bag used to
+            // overwrite these after boot, which made editor-open and headless
+            // instances start from different sounds.
+            parameter("cutoff", "Cutoff", 56.63233347786729, 70, "frequency"),
+            parameter("resonance", "Resonance", 36.91760377573153, 0),
             parameter("drive", "Drive", 15, 0),
         ],
     },

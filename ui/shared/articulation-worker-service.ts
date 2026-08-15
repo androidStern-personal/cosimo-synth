@@ -1,9 +1,9 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 import {
     ARTICULATIONS_V4_STATE_KEY,
+    compileArticulationOverrideImages,
     createEmptyArticulationsState,
     parseArticulationsV4,
-    resolveArticulationImages,
     type ArticulationsState,
 } from "./articulation-image";
 import {
@@ -12,14 +12,6 @@ import {
     createDisabledArticulationRuntimeUpload,
     type ArticulationSnapshotRuntimeUpload,
 } from "./articulations";
-import {
-    UI_PATCH_VALUES_STATE_KEY,
-    buildArticulationPatchVoiceBase,
-    createDefaultUiPatchValues,
-    deserializeUiPatchValues,
-    getArticulationModulationDependencyToken,
-    getArticulationPatchValuesDependencyToken,
-} from "./articulation-runtime-base";
 import {
     MODULATION_STATE_KEY,
     createDefaultModulationState,
@@ -37,7 +29,6 @@ const runtimeRecoveryDelayMilliseconds = 1_000;
 
 const bootStoredStateKeys = [
     ARTICULATIONS_V4_STATE_KEY,
-    UI_PATCH_VALUES_STATE_KEY,
     MODULATION_STATE_KEY,
 ] as const;
 
@@ -99,16 +90,22 @@ function toStableToken(value: unknown) {
     }
 }
 
+function getArticulationRouteLayoutToken(state: ModulationState): string {
+    return JSON.stringify(state.routes.flatMap((route) => {
+        const cellIndex = getModulationArticulationCellIndex(route);
+        return cellIndex === null ? [] : [[route.id, cellIndex] as const];
+    }).sort(([leftID, leftCell], [rightID, rightCell]) => (
+        leftID.localeCompare(rightID) || leftCell - rightCell
+    )));
+}
+
 export class ArticulationWorkerService {
     private articulationBank: ArticulationsState = createEmptyArticulationsState();
     private modulationState: ModulationState = createDefaultModulationState();
-    private uiPatchValues: Record<string, number> = createDefaultUiPatchValues();
     private hasArticulationState = false;
     private hasModulationState = false;
-    private hasPatchValues = false;
     private hasRuntimeState = false;
     private modulationDependencyToken: string | null = null;
-    private patchValuesDependencyToken: string | null = null;
     private pendingBootStoredValues: Map<string, unknown> | null = null;
     private runtimeDspSessionId = 0;
     private runtimeGeneration = 0;
@@ -160,7 +157,6 @@ export class ArticulationWorkerService {
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => {
                 this.applyModulationState(getFullStoredStateValue(storedState, MODULATION_STATE_KEY));
-                this.applyPatchValues(getFullStoredStateValue(storedState, UI_PATCH_VALUES_STATE_KEY));
                 this.applyArticulationState(getFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY));
             });
             return;
@@ -168,7 +164,6 @@ export class ArticulationWorkerService {
 
         if (typeof this.connection.requestStoredStateValue !== "function") {
             this.applyModulationState(undefined);
-            this.applyPatchValues(undefined);
             this.applyArticulationState(undefined);
             return;
         }
@@ -192,15 +187,12 @@ export class ArticulationWorkerService {
                 const bootValues = this.pendingBootStoredValues;
                 this.pendingBootStoredValues = null;
                 this.applyModulationState(bootValues.get(MODULATION_STATE_KEY));
-                this.applyPatchValues(bootValues.get(UI_PATCH_VALUES_STATE_KEY));
                 this.applyArticulationState(bootValues.get(ARTICULATIONS_V4_STATE_KEY));
             }
             return;
         }
         if (nextMessage.key === ARTICULATIONS_V4_STATE_KEY) {
             this.applyArticulationState(nextMessage.value);
-        } else if (nextMessage.key === UI_PATCH_VALUES_STATE_KEY) {
-            this.applyPatchValues(nextMessage.value);
         } else if (nextMessage.key === MODULATION_STATE_KEY) {
             this.applyModulationState(nextMessage.value);
         }
@@ -243,35 +235,6 @@ export class ArticulationWorkerService {
         return true;
     }
 
-    private applyPatchValues(value: unknown) {
-        let nextPatchValues: Record<string, number>;
-        if (value === undefined) {
-            if (this.hasPatchValues) {
-                return;
-            }
-            nextPatchValues = createDefaultUiPatchValues();
-        } else {
-            try {
-                nextPatchValues = deserializeUiPatchValues(value);
-            } catch (error) {
-                console.error("[articulation-worker] Stored patch-base state is invalid.", error);
-                if (this.hasPatchValues) {
-                    return;
-                }
-                nextPatchValues = createDefaultUiPatchValues();
-            }
-        }
-        const nextDependencyToken = getArticulationPatchValuesDependencyToken(nextPatchValues);
-        const dependencyChanged = nextDependencyToken !== this.patchValuesDependencyToken;
-        this.uiPatchValues = nextPatchValues;
-        this.patchValuesDependencyToken = nextDependencyToken;
-        const wasReady = this.hasPatchValues;
-        this.hasPatchValues = true;
-        if (!wasReady || dependencyChanged) {
-            this.applyRuntimeStateIfReady();
-        }
-    }
-
     private applyModulationState(value: unknown) {
         let nextModulationState = createDefaultModulationState();
         if (value === undefined) {
@@ -289,7 +252,7 @@ export class ArticulationWorkerService {
                 nextModulationState = parsedState.value;
             }
         }
-        const nextDependencyToken = getArticulationModulationDependencyToken(nextModulationState);
+        const nextDependencyToken = getArticulationRouteLayoutToken(nextModulationState);
         const dependencyChanged = nextDependencyToken !== this.modulationDependencyToken;
         this.modulationState = nextModulationState;
         this.modulationDependencyToken = nextDependencyToken;
@@ -301,10 +264,11 @@ export class ArticulationWorkerService {
     }
 
     private buildUploadsBySelector() {
-        const uploads = resolveArticulationImages(
-            buildArticulationPatchVoiceBase(this.modulationState, this.uiPatchValues),
-            this.articulationBank,
-        );
+        const routeCells = Object.fromEntries(this.modulationState.routes.flatMap((route) => {
+            const cellIndex = getModulationArticulationCellIndex(route);
+            return cellIndex === null ? [] : [[route.id, cellIndex] as const];
+        }));
+        const uploads = compileArticulationOverrideImages(this.articulationBank, routeCells);
         return new Map<number, ArticulationSnapshotRuntimeUpload>(
             uploads.map((upload) => [upload.selectorA, upload]),
         );
@@ -319,7 +283,6 @@ export class ArticulationWorkerService {
     private applyRuntimeStateIfReady() {
         if (!this.hasArticulationState
             || !this.hasModulationState
-            || !this.hasPatchValues
             || !this.hasRuntimeState) {
             return;
         }

@@ -1,5 +1,6 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 import { createArticulationWorkerService } from "./articulation-worker-service";
+import { allTargetDescriptors } from "./target-descriptor";
 import { createModulationWorkerService } from "../worker/modulation-worker-service";
 
 const midiInputEndpointID = "midiIn";
@@ -215,6 +216,63 @@ function createDefaultRuntimeState() {
         failurePhase: 0,
         failureReasonCode: 0,
     };
+}
+
+function createInitialParameterValues(): Map<string, unknown> {
+    const values = new Map<string, unknown>([
+        [wavetablePositionEndpointID, 0.28],
+        [wavetableSelectEndpointID, 0],
+        [playModeEndpointID, 0],
+        [glideTimeEndpointID, 0.15],
+        [panEndpointID, 0],
+        [warpModeEndpointID, 0],
+        [warpAmountEndpointID, 0],
+        [filterModeEndpointID, 0],
+        [filterCutoffEndpointID, 1000],
+        [filterQEndpointID, 0.707107],
+        [unisonVoicesEndpointID, 1],
+        [unisonDetuneEndpointID, 0.1],
+        [unisonBlendEndpointID, 0.75],
+        [unisonWidthEndpointID, 1],
+        [unisonPhaseEndpointID, 0],
+        [unisonRandomEndpointID, 0],
+        [unisonPhaseModeEndpointID, 0],
+        [unisonDetuneModeEndpointID, 0],
+        [unisonStackModeEndpointID, 0],
+        [unisonWavetablePositionSpreadEndpointID, 0],
+        [unisonWarpSpreadEndpointID, 0],
+        [mseg1MorphEndpointID, 0],
+        [mseg2MorphEndpointID, 0],
+        [mseg3MorphEndpointID, 0],
+        [distortionModeEndpointID, 0],
+        [distortionDriveDbEndpointID, 12],
+        [distortionKneeEndpointID, 0.35],
+        [distortionWetEndpointID, 0],
+        [distortionWetHPHzEndpointID, 40],
+        [distortionWetLPHzEndpointID, 18_000],
+        [chorusMixEndpointID, 0],
+        [chorusMotionModeEndpointID, 1],
+        [chorusBloomModeEndpointID, 0],
+        [chorusToneEndpointID, 0.5],
+        [chorusFeedbackEndpointID, 0.42],
+        [chorusRingAmountEndpointID, 0],
+        [chorusRingOffsetModeEndpointID, 0],
+        [chorusRingFineSemitonesEndpointID, 0],
+        [globalFilterModeEndpointID, 1],
+        [hiddenSynthPresetGuardEndpointID, 0.42],
+    ]);
+
+    // The mock models Cmajor's parameter state. Keep every product-bound
+    // endpoint at the same engine-unit initial value as the binding catalog.
+    for (const descriptor of allTargetDescriptors()) {
+        if (descriptor.binding._tag === "endpoint") {
+            values.set(
+                descriptor.binding.endpointId,
+                descriptor.binding.toEngine(descriptor.initialValue),
+            );
+        }
+    }
+    return values;
 }
 
 function buildHarnessStatus(manifest: unknown) {
@@ -581,48 +639,7 @@ export class MockPatchConnection implements PatchConnectionLike {
     keyboardAttachCalls: Array<{ endpointID: string }> = [];
     keyboardDetachCount = 0;
 
-    private parameterValues = new Map<string, unknown>([
-        [wavetablePositionEndpointID, 0.28],
-        [wavetableSelectEndpointID, 0],
-        [playModeEndpointID, 0],
-        [glideTimeEndpointID, 0.15],
-        [panEndpointID, 0],
-        [warpModeEndpointID, 0],
-        [warpAmountEndpointID, 0],
-        [filterModeEndpointID, 0],
-        [filterCutoffEndpointID, 1000],
-        [filterQEndpointID, 0.707107],
-        [unisonVoicesEndpointID, 1],
-        [unisonDetuneEndpointID, 0.1],
-        [unisonBlendEndpointID, 0.75],
-        [unisonWidthEndpointID, 1],
-        [unisonPhaseEndpointID, 0],
-        [unisonRandomEndpointID, 0],
-        [unisonPhaseModeEndpointID, 0],
-        [unisonDetuneModeEndpointID, 0],
-        [unisonStackModeEndpointID, 0],
-        [unisonWavetablePositionSpreadEndpointID, 0],
-        [unisonWarpSpreadEndpointID, 0],
-        [mseg1MorphEndpointID, 0],
-        [mseg2MorphEndpointID, 0],
-        [mseg3MorphEndpointID, 0],
-        [distortionModeEndpointID, 0],
-        [distortionDriveDbEndpointID, 12],
-        [distortionKneeEndpointID, 0.35],
-        [distortionWetEndpointID, 0],
-        [distortionWetHPHzEndpointID, 40],
-        [distortionWetLPHzEndpointID, 18_000],
-        [chorusMixEndpointID, 0],
-        [chorusMotionModeEndpointID, 1],
-        [chorusBloomModeEndpointID, 0],
-        [chorusToneEndpointID, 0.5],
-        [chorusFeedbackEndpointID, 0.42],
-        [chorusRingAmountEndpointID, 0],
-        [chorusRingOffsetModeEndpointID, 0],
-        [chorusRingFineSemitonesEndpointID, 0],
-        [globalFilterModeEndpointID, 1],
-        [hiddenSynthPresetGuardEndpointID, 0.42],
-    ]);
+    private parameterValues = createInitialParameterValues();
     private parameterListeners = new Map<string, Set<ParameterListener>>();
     private endpointListeners = new Map<string, Set<EndpointListener>>();
     private statusListeners = new Set<StatusListener>();

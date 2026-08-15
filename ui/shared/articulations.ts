@@ -117,6 +117,8 @@ export type ArticulationTriggerConfig = {
 export type ArticulationSnapshotRuntimeUpload = {
     selectorA: number;
     enabled: boolean;
+    oscillatorOverrideMasks: number[];
+    sharedOverrideMask: number;
     framePositions: number[];
     pans: number[];
     octaves: number[];
@@ -1302,6 +1304,8 @@ export function createDisabledArticulationRuntimeUpload(selectorA: number): Arti
     return {
         selectorA,
         enabled: false,
+        oscillatorOverrideMasks: perOscillator(0),
+        sharedOverrideMask: 0,
         framePositions: perOscillator(0),
         pans: perOscillator(0),
         octaves: perOscillator(0),

@@ -32,7 +32,6 @@ import {
     serializeArticulationTriggerConfig,
     type ArticulationTriggerConfig,
 } from "./articulations";
-import { UI_PATCH_VALUES_STATE_KEY } from "./articulation-runtime-base";
 import type { PatchConnectionLike } from "./cmajor-react";
 import {
     clampNormalizedValue,
@@ -297,45 +296,6 @@ function createInitialRackState(): RackState {
     return createDefaultRackState();
 }
 
-function parseUiPatchValues(input: unknown): ParseOutcome<Record<string, NormalizedValue>> {
-    const document = parseJsonDocument(input, UI_PATCH_VALUES_STATE_KEY);
-    if (document._tag === "err") {
-        return document;
-    }
-
-    if (!isRecord(document.value)) {
-        return parseError(`${UI_PATCH_VALUES_STATE_KEY} must be a flat object`);
-    }
-
-    const descriptors = allTargetDescriptors();
-    const descriptorIds = new Set(descriptors.map((descriptor) => String(descriptor.targetId)));
-    for (const key of Reflect.ownKeys(document.value)) {
-        if (typeof key !== "string" || !descriptorIds.has(key)) {
-            return parseError(`${UI_PATCH_VALUES_STATE_KEY} has unknown target "${String(key)}"`);
-        }
-    }
-
-    const values: Record<string, NormalizedValue> = {};
-    for (const descriptor of descriptors) {
-        if (!Object.hasOwn(document.value, descriptor.targetId)) {
-            return parseError(`${UI_PATCH_VALUES_STATE_KEY} is missing target "${descriptor.targetId}"`);
-        }
-
-        const rawValue = document.value[descriptor.targetId];
-        if (typeof rawValue !== "number") {
-            return parseError(`${UI_PATCH_VALUES_STATE_KEY}.${descriptor.targetId} must be a number`);
-        }
-
-        const parsedValue = parseNormalizedValue(rawValue);
-        if (parsedValue._tag === "err") {
-            return parseError(`${UI_PATCH_VALUES_STATE_KEY}.${descriptor.targetId}: ${parsedValue.error.message}`);
-        }
-        values[descriptor.targetId] = parsedValue.value;
-    }
-
-    return { _tag: "ok", value: values };
-}
-
 function requireEffectId(input: string): EffectModuleId {
     const effectId = RACK_EFFECT_ORDER.find((candidate) => candidate === input);
     if (effectId === undefined) {
@@ -526,6 +486,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private mappingCreationOrder: Array<string> = [];
     private readonly listeners = new Set<() => void>();
     private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
+    private readonly parameterListenerCleanups: Array<() => void> = [];
     private deletedSourceBackup: DeletedSourceBackup | null = null;
     private activeMidiNote: number | null = null;
     private acceptedModulationState = createDefaultModulationState();
@@ -575,17 +536,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
 
         this.runCommand(() => {
-            if (message.key === UI_PATCH_VALUES_STATE_KEY) {
-                const parsed = parseUiPatchValues(message.value);
-                if (parsed._tag === "err") {
-                    this.detach(parsed.message);
-                    return;
-                }
-                this.parameterValues = parsed.value;
-                this.uploadAllBoundBaseValues();
-                this.markSnapshotDirty();
-                return;
-            }
             if (message.key === RACK_STATE_KEY) {
                 const parsed = parseCanonicalRackState(message.value);
                 if (parsed._tag === "err") {
@@ -633,6 +583,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.modulationBridge.subscribe(this.handleModulationState);
         this.handleModulationState(this.modulationBridge.getState());
         this.connection.addStoredStateValueListener?.(this.handleStoredStateValue);
+        this.installParameterListeners();
 
         if (typeof this.connection.requestFullStoredState === "function") {
             this.connection.requestFullStoredState((storedState) => this.hydrate(storedState));
@@ -765,9 +716,44 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
         this.disposed = true;
         this.connection.removeStoredStateValueListener?.(this.handleStoredStateValue);
+        for (const cleanup of this.parameterListenerCleanups) {
+            cleanup();
+        }
+        this.parameterListenerCleanups.length = 0;
         this.modulationBridge.unsubscribe(this.handleModulationState);
         releaseModulationRuntimeBridge(this.connection);
         this.listeners.clear();
+    }
+
+    private installParameterListeners(): void {
+        for (const descriptor of allTargetDescriptors()) {
+            const binding = descriptor.binding;
+            if (binding._tag !== "endpoint") {
+                continue;
+            }
+            const endpointID = binding.endpointId;
+            const listener = (rawValue: unknown) => {
+                if (this.disposed || typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+                    return;
+                }
+                let normalizedValue: NormalizedValue;
+                try {
+                    normalizedValue = binding.fromEngine(rawValue);
+                } catch {
+                    return;
+                }
+                this.parameterValues = {
+                    ...this.parameterValues,
+                    [descriptor.targetId]: normalizedValue,
+                };
+                this.markSnapshotDirty();
+            };
+            this.connection.addParameterListener?.(endpointID, listener);
+            this.parameterListenerCleanups.push(() => {
+                this.connection.removeParameterListener?.(endpointID, listener);
+            });
+            this.connection.requestParameterValue?.(endpointID);
+        }
     }
 
     private hydrate(storedState: unknown): void {
@@ -776,7 +762,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         }
 
         const rawArticulations = readFullStoredStateValue(storedState, ARTICULATIONS_V4_STATE_KEY);
-        const rawParameterValues = readFullStoredStateValue(storedState, UI_PATCH_VALUES_STATE_KEY);
         const rawUiMappings = readFullStoredStateValue(storedState, UI_MAPPINGS_STATE_KEY);
         const rawRackState = readFullStoredStateValue(storedState, RACK_STATE_KEY);
         const rawModulationState = readFullStoredStateValue(storedState, MODULATION_STATE_KEY);
@@ -804,14 +789,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             return;
         }
 
-        const parsedParameterValues = rawParameterValues === undefined
-            ? { _tag: "ok", value: createInitialParameterValues() } as const
-            : parseUiPatchValues(rawParameterValues);
-        if (parsedParameterValues._tag === "err") {
-            this.detach(parsedParameterValues.message);
-            return;
-        }
-
         const parsedUiMappings: ParseOutcome<Map<MappingId, PendingUiMapping>> = rawUiMappings === undefined
             ? { _tag: "ok", value: new Map<MappingId, PendingUiMapping>() }
             : parseUiMappings(rawUiMappings);
@@ -831,7 +808,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.runCommand(() => {
             this.acceptedModulationState = restoredModulationState;
             this.articulations = parsedArticulations.value;
-            this.parameterValues = parsedParameterValues.value;
             this.uiMappings = parsedUiMappings.value;
             this.rackState = parsedRackState.value;
             this.connectionState = { _tag: "ready" };
@@ -845,7 +821,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             if (rawModulationState === undefined) {
                 this.modulationBridge.replaceRoutes([]);
             }
-            this.uploadAllBoundBaseValues();
             this.sendNativeTriggerConfig();
             commitRackState(this.connection, this.rackState);
             this.markSnapshotDirty();
@@ -1144,7 +1119,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     descriptor.binding.toEngine(input.value),
                 );
             }
-            this.persistParameterValues();
         } else {
             const slot = this.requireArticulation(input.layer.articulationId);
             const parameterId = descriptor.articulationParameterId;
@@ -1926,7 +1900,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.deletedSourceBackup = null;
         const modulationState = createDefaultModulationState();
         this.modulationBridge.setState({ ...modulationState, routes: [] });
-        this.persistParameterValues();
         this.persistUiMappings();
         this.persistRackState();
         commitRackState(this.connection, this.rackState);
@@ -2078,10 +2051,6 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const serialized = serializeArticulationTriggerConfig(this.buildTriggerConfig());
         this.sendStoredStateValue(ARTICULATION_TRIGGER_CONFIG_STATE_KEY, serialized);
         this.connection.sendNativeArticulationTriggerConfig?.(serialized);
-    }
-
-    private persistParameterValues(): void {
-        this.sendStoredStateValue(UI_PATCH_VALUES_STATE_KEY, JSON.stringify(this.parameterValues));
     }
 
     private persistUiMappings(): void {

@@ -8,7 +8,6 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const bindingModulePromise = loadUIModule(repoRoot, "ui/shared/oscillator-binding.ts");
 const articulationModulePromise = loadUIModule(repoRoot, "ui/shared/articulation-image.ts");
-const patchValuesModulePromise = loadUIModule(repoRoot, "ui/shared/articulation-runtime-base.ts");
 const targetDescriptorModulePromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
 
 const expectedEndpointSuffixes = new Map([
@@ -144,16 +143,7 @@ test("the source contract permits only numeric oscillator control writes", async
     assert.doesNotMatch(hookSource, /OscillatorControlWrite<|projectControlWrite = useCallback\(<TValue>/);
 });
 
-test("oscillator selection stays outside uiPatchValues.v2", async () => {
-    const [binding, patchValues] = await Promise.all([
-        bindingModulePromise,
-        patchValuesModulePromise,
-    ]);
-
+test("oscillator selection is session-local UI state", async () => {
+    const binding = await bindingModulePromise;
     assert.equal(binding.DEFAULT_SELECTED_OSCILLATOR_ID, "A");
-    assert.equal(Object.hasOwn(patchValues.createDefaultUiPatchValues(), "selectedOscillatorID"), false);
-    assert.throws(() => patchValues.deserializeUiPatchValues({
-        ...patchValues.createDefaultUiPatchValues(),
-        selectedOscillatorID: 1,
-    }));
 });

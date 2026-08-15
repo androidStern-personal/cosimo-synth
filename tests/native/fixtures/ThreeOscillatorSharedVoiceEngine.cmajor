@@ -255,6 +255,11 @@ processor Core03TableAndControlSchedule
         upload.deliverySerial = -1;
         upload.selectorA = 0;
         upload.enabled = true;
+        // A.pan is deliberately absent. The first note must latch the live
+        // value, keep it while sounding, and a later note must see a live edit
+        // without another articulation upload.
+        upload.oscillatorOverrideMasks = int32[3] (2097149, 2097151, 2097151);
+        upload.sharedOverrideMask = 262143;
         upload.framePositions = float32[3] (0.10f, 0.42f, 0.73f);
         upload.pans = float32[3] (0.0f, -0.25f, 0.40f);
         upload.octaves = float32[3] (0.0f, 1.0f, -1.0f);
@@ -411,7 +416,19 @@ processor Core03TableAndControlSchedule
             {
                 noteOut <- articulatedNote();
             }
+            else if (frameCounter == 9217)
+            {
+                aPanOut <- 0.70f;
+            }
             else if (frameCounter == 9472)
+            {
+                noteOut <- std::notes::NoteOff (1, 60.0f, 0.0f);
+            }
+            else if (frameCounter == 9473)
+            {
+                noteOut <- articulatedNote();
+            }
+            else if (frameCounter == 9984)
             {
                 noteOut <- std::notes::NoteOff (1, 60.0f, 0.0f);
             }

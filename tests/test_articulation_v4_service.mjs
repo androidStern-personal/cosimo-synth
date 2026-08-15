@@ -7,7 +7,6 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const modulesPromise = Promise.all([
     loadUIModule(repoRoot, "ui/shared/articulation-image.ts"),
-    loadUIModule(repoRoot, "ui/shared/articulation-runtime-base.ts"),
     loadUIModule(repoRoot, "ui/shared/articulation-worker-service.ts"),
     loadUIModule(repoRoot, "ui/shared/articulations.ts"),
     loadUIModule(repoRoot, "ui/shared/modulation.ts"),
@@ -15,8 +14,8 @@ const modulesPromise = Promise.all([
 ]);
 
 async function modules() {
-    const [image, base, worker, runtime, modulation, program] = await modulesPromise;
-    return { image, base, worker, runtime, modulation, program };
+    const [image, worker, runtime, modulation, program] = await modulesPromise;
+    return { image, worker, runtime, modulation, program };
 }
 
 async function flushMicrotasks(turns = 128) {
@@ -138,7 +137,7 @@ class TestConnection {
 }
 
 async function validDependencies() {
-    const { base, modulation } = await modules();
+    const { modulation } = await modules();
     const route = modulation.createDefaultRoute({
         id: "oscB.framePosition::mseg-1",
         sourceKind: "mseg",
@@ -152,15 +151,11 @@ async function validDependencies() {
             ...modulation.createDefaultModulationState(),
             routes: [route],
         },
-        patchValues: {
-            ...base.createDefaultUiPatchValues(),
-            "voice-filter.cutoff": 0.5,
-        },
     };
 }
 
-test("valid v4 restore publishes one independent A/B/C image after its dependencies", async () => {
-    const { base, worker, modulation, program } = await modules();
+test("valid v4 restore publishes only explicit A/B/C overrides without a patch-value bag", async () => {
+    const { worker, modulation, program } = await modules();
     const dependencies = await validDependencies();
     const bank = makeBank(makeSlot({
         "oscA.warpAmount": 0.2,
@@ -173,7 +168,6 @@ test("valid v4 restore publishes one independent A/B/C image after its dependenc
         values: {
             "articulations.v4": bank,
             "modulation.v4": modulation.serializeModulationState(dependencies.modulationState),
-            "uiPatchValues.v2": dependencies.patchValues,
         },
     });
     const service = worker.createArticulationWorkerService(connection);
@@ -185,15 +179,15 @@ test("valid v4 restore publishes one independent A/B/C image after its dependenc
     assert.equal(uploads.length, 1);
     const upload = uploads[0].value;
     assert.deepEqual(upload.warpAmounts, [0.2, 0.4, 0.6]);
-    assert.ok(Math.abs(upload.filterCutoffHz - 20 * 1000 ** 0.5) < 1e-9);
+    assert.deepEqual(upload.oscillatorOverrideMasks, [4096, 4096, 4096]);
+    assert.equal(upload.sharedOverrideMask, 0);
     const routeCell = program.getModulationRuntimeCell(dependencies.route).articulationCellIndex;
     assert.equal(upload.routeAmounts[routeCell], 0.66);
     assert.equal(connection.storedWrites.length, 0);
-    assert.equal(base.UI_PATCH_VALUES_STATE_KEY, "uiPatchValues.v2");
     service.stop();
 });
 
-test("separate-key restore waits, then accepts modulation and base before v4 articulation", async () => {
+test("separate-key restore waits for modulation and v4 articulation only", async () => {
     const { worker, modulation } = await modules();
     const dependencies = await validDependencies();
     const bank = makeBank(makeSlot({}, { [dependencies.route.id]: 0.75 }));
@@ -204,7 +198,6 @@ test("separate-key restore waits, then accepts modulation and base before v4 art
     connection.emitRuntimeSession(51);
 
     connection.emitStoredState("articulations.v4", bank);
-    connection.emitStoredState("uiPatchValues.v2", dependencies.patchValues);
     await flushMicrotasks();
     assert.equal(connection.articulationUploads().length, 0);
 
@@ -217,7 +210,6 @@ test("separate-key restore waits, then accepts modulation and base before v4 art
     assert.deepEqual(connection.requestedKeys.sort(), [
         "articulations.v4",
         "modulation.v4",
-        "uiPatchValues.v2",
     ]);
     service.stop();
 });
@@ -240,7 +232,6 @@ test("cold invalid v4 defaults without reading or rewriting a legacy bank", asyn
                     "articulations.v4": invalidCurrentValues[index],
                     "articulations.v3": { ...makeBank(), version: 3 },
                     "modulation.v4": modulation.serializeModulationState(dependencies.modulationState),
-                    "uiPatchValues.v2": dependencies.patchValues,
                 },
             });
             const service = worker.createArticulationWorkerService(connection);
@@ -268,7 +259,6 @@ test("live invalid v4 and legacy writes retain the last accepted bank atomically
         values: {
             "articulations.v4": acceptedBank,
             "modulation.v4": modulation.serializeModulationState(dependencies.modulationState),
-            "uiPatchValues.v2": dependencies.patchValues,
         },
     });
     const service = worker.createArticulationWorkerService(connection);
