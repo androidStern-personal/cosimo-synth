@@ -43,6 +43,7 @@ uv run --project "$repo_root" pytest -q "$repo_root/tests/test_ensure_cmajor_run
 compile_native_test() {
     local source_path="$1"
     local binary_path="$2"
+    shift 2
 
     clang++ \
         -std=c++17 \
@@ -51,6 +52,7 @@ compile_native_test() {
         -I "$cmajor_source_path/include" \
         -I "$cmajor_source_path/include/choc" \
         "$source_path" \
+        "$@" \
         -o "$binary_path" \
         -framework Accelerate \
         -framework CoreAudio \
@@ -65,7 +67,12 @@ compile_native_test() {
 compile_native_test "$stored_state_source" "$stored_state_binary"
 compile_native_test "$pending_jobs_source" "$pending_jobs_binary"
 compile_native_test "$worker_error_source" "$worker_error_binary"
-compile_native_test "$probe_source" "$probe_binary"
+compile_native_test \
+    "$probe_source" \
+    "$probe_binary" \
+    -I "$repo_root/native/three_oscillator_renderer/third_party/xsimd/include" \
+    "$repo_root/native/three_oscillator_renderer/RendererBridge.cpp" \
+    "$repo_root/native/three_oscillator_renderer/WarpRenderer.cpp"
 
 "$stored_state_binary"
 "$pending_jobs_binary"

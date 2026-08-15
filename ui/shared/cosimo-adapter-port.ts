@@ -67,7 +67,7 @@ export type ModulationMapping = {
 export type SourceState =
     | { readonly _tag: "macro"; readonly value: NormalizedValue; readonly name: string }
     | { readonly _tag: "envelope"; readonly envelope: ModulationEnvelope }
-    | { readonly _tag: "mseg"; readonly slot: ModulationMsegSlot }
+    | { readonly _tag: "mseg"; readonly slot: ModulationMsegSlot & { readonly morph: NormalizedValue } }
     | { readonly _tag: "fixed" };
 
 /** One rail source. Fixed sources have slot null and immutable identity. */

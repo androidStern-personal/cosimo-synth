@@ -22,8 +22,8 @@
 #endif
 
 static NSString * const CosimoHostHarnessErrorDomain = @"CosimoHostHarnessError";
-static NSString * const CosimoPrimaryParameterIdentifier = @"wavetablePosition";
-static NSString * const CosimoTableSelectParameterIdentifier = @"wavetableSelect";
+static NSString * const CosimoPrimaryParameterIdentifier = @"oscAWavetablePosition";
+static NSString * const CosimoTableSelectParameterIdentifier = @"oscAWavetableSelect";
 static const float CosimoStateVerificationTolerance = 0.001f;
 static const NSTimeInterval CosimoStateVerificationTimeoutSeconds = 5.0;
 static const NSTimeInterval CosimoFirstNoteOffSeconds = 1.2;

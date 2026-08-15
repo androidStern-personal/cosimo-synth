@@ -189,7 +189,7 @@ test("bridge hydration rejects a route whose target kind conflicts with its disp
 
     assert.deepEqual(adapter.getSnapshot().connection, {
         _tag: "detached",
-        reason: "modulation.v4 contains a mapping without its canonical current identity",
+        reason: "modulation.v5 contains a mapping without its canonical current identity",
     });
     assert.deepEqual(mappingSummary(adapter.getSnapshot()), []);
     assert.deepEqual(connection.storedWrites, []);

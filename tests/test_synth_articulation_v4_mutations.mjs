@@ -224,10 +224,10 @@ test("switching from an explicit-zero articulation restores an inherited route f
     assert.equal(missingBaseSnapshot.modRouteAmounts[0].amount, 0.6, "live fallback is reserved for a missing base route");
 });
 
-test("production synth hook imports direct v4 transitions and has no reverse compiler", async () => {
+test("production synth hook uses modulation.v5 with direct articulation-v4 transitions", async () => {
     const [, , modulation] = await modulesPromise;
     const source = await readFile(new URL("../ui/shared/synth-hooks.ts", import.meta.url), "utf8");
-    assert.equal(modulation.MODULATION_STATE_VERSION, 4);
+    assert.equal(modulation.MODULATION_STATE_VERSION, 5);
     assert.match(source, /from "\.\/articulation-v4-editor"/);
     assert.match(source, /replaceVisibleArticulationLayerV4/);
     assert.match(source, /setAndPersistState/);

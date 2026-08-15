@@ -7,11 +7,10 @@ const workerSource = await readFile(
     "utf8",
 );
 
-test("production worker defers v4 articulation images until RT-01 upgrades the DSP endpoint", () => {
-    assert.doesNotMatch(workerSource, /import\s+\{\s*createArticulationWorkerService\s*\}/);
+test("production worker has one owner for ordered modulation then articulation restore", () => {
+    assert.match(workerSource, /\bcreateModulationArticulationWorkerService\s*,/);
+    assert.doesNotMatch(workerSource, /\bcreateModulationWorkerService\s*,/);
     assert.doesNotMatch(workerSource, /\bcreateArticulationWorkerService\s*,/);
-    assert.match(workerSource, /RT-01 will compose the v4 articulation service/);
-    assert.match(workerSource, /\bcreateModulationWorkerService\s*,/);
     assert.match(workerSource, /\bcreateRackStateWorkerService\s*,/);
     assert.match(workerSource, /createWavetableWorkerController\(connection, options\)/);
 });

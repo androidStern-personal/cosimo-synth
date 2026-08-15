@@ -95,6 +95,7 @@ const ARTICULATION_COLORS = [
 ] as const;
 
 const INITIAL_VISIBLE_SOURCE_IDS = ["macro-1", "envelope-1", "mseg-1"] as const;
+const MSEG_MORPH_ENDPOINT_IDS = ["mseg1Morph", "mseg2Morph", "mseg3Morph"] as const;
 
 type SourceDefinition = {
     readonly idRaw: string;
@@ -141,6 +142,7 @@ type DeletedSourceBackup = {
     readonly definition: SourceDefinition;
     readonly modulationState: ModulationState;
     readonly macroValue: NormalizedValue | null;
+    readonly msegMorphValue: NormalizedValue | null;
     readonly routes: ReadonlyArray<ModulationRoute>;
     readonly uiMappings: ReadonlyArray<PendingUiMapping>;
     readonly mappingCreationOrder: ReadonlyArray<string>;
@@ -480,6 +482,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         { length: MODULATION_MACRO_SLOT_COUNT },
         () => clampNormalizedValue(0),
     );
+    private readonly msegMorphValues: Array<NormalizedValue> = Array.from(
+        { length: MSEG_MORPH_ENDPOINT_IDS.length },
+        () => clampNormalizedValue(0),
+    );
     private readonly visibleSourceIds = new Set<string>(INITIAL_VISIBLE_SOURCE_IDS);
     private readonly routeReducers = new Map<string, MappingReducer>();
     private uiMappings = new Map<MappingId, PendingUiMapping>();
@@ -754,6 +760,22 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             });
             this.connection.requestParameterValue?.(endpointID);
         }
+
+        for (let slotIndex = 0; slotIndex < MSEG_MORPH_ENDPOINT_IDS.length; slotIndex += 1) {
+            const endpointID = MSEG_MORPH_ENDPOINT_IDS[slotIndex];
+            const listener = (rawValue: unknown) => {
+                if (this.disposed || typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+                    return;
+                }
+                this.msegMorphValues[slotIndex] = clampNormalizedValue(rawValue);
+                this.markSnapshotDirty();
+            };
+            this.connection.addParameterListener?.(endpointID, listener);
+            this.parameterListenerCleanups.push(() => {
+                this.connection.removeParameterListener?.(endpointID, listener);
+            });
+            this.connection.requestParameterValue?.(endpointID);
+        }
     }
 
     private hydrate(storedState: unknown): void {
@@ -1016,7 +1038,13 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 type: "mseg",
                 slot: definition.slot,
                 label: definition.label,
-                state: { _tag: "mseg", slot: msegSlot },
+                state: {
+                    _tag: "mseg",
+                    slot: {
+                        ...msegSlot,
+                        morph: this.msegMorphValues[slotIndex] ?? clampNormalizedValue(0),
+                    },
+                },
             });
         }
         return sources;
@@ -1356,6 +1384,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             macroValue: definition.type === "macro"
                 ? this.macroValues[this.slotIndex(definition)] ?? clampNormalizedValue(0)
                 : null,
+            msegMorphValue: definition.type === "mseg"
+                ? this.msegMorphValues[this.slotIndex(definition)] ?? clampNormalizedValue(0)
+                : null,
             routes: removedRoutes,
             uiMappings: removedUiMappings,
             mappingCreationOrder: [...this.mappingCreationOrder],
@@ -1419,7 +1450,11 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             }
             this.modulationBridge.setMsegSlotShape(slotIndex, 0, slot.shapeA);
             this.modulationBridge.setMsegSlotShape(slotIndex, 1, slot.shapeB);
-            this.modulationBridge.setMsegSlotMorph(slotIndex, slot.morph);
+            this.setMsegMorph({
+                sourceId: sourceIdFromDefinition(backup.definition),
+                morph: backup.msegMorphValue ?? clampNormalizedValue(0),
+                layer: { _tag: "patchBase" },
+            });
             this.modulationBridge.setMsegSlotPlayback(slotIndex, slot.playback);
         }
 
@@ -1501,8 +1536,9 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             throw new Error("deferred: per-articulation MSEG morph overrides");
         }
         const slotIndex = this.slotIndex(definition);
-        this.modulationBridge.setMsegSlotMorph(slotIndex, input.morph);
+        this.msegMorphValues[slotIndex] = clampNormalizedValue(input.morph);
         this.connection.sendEventOrValue?.(`mseg${slotIndex + 1}Morph`, input.morph);
+        this.markSnapshotDirty();
     }
 
     private addArticulation(): ReturnType<CosimoCommands["addArticulation"]> {
@@ -1894,6 +1930,10 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             this.macroValues[index] = clampNormalizedValue(0);
             this.connection.sendEventOrValue?.(`macro${index + 1}`, 0);
         }
+        for (let index = 0; index < this.msegMorphValues.length; index += 1) {
+            this.msegMorphValues[index] = clampNormalizedValue(0);
+            this.connection.sendEventOrValue?.(MSEG_MORPH_ENDPOINT_IDS[index], 0);
+        }
         this.routeReducers.clear();
         this.uiMappings.clear();
         this.mappingCreationOrder = [];
@@ -1987,7 +2027,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const shape = createDefaultMsegShape(label);
         this.modulationBridge.setMsegSlotShape(slotIndex, 0, shape);
         this.modulationBridge.setMsegSlotShape(slotIndex, 1, shape);
-        this.modulationBridge.setMsegSlotMorph(slotIndex, 0);
+        this.msegMorphValues[slotIndex] = clampNormalizedValue(0);
+        this.connection.sendEventOrValue?.(MSEG_MORPH_ENDPOINT_IDS[slotIndex], 0);
         this.modulationBridge.setMsegSlotPlayback(slotIndex, createDefaultMsegPlayback());
     }
 

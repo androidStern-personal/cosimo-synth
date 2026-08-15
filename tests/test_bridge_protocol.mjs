@@ -129,6 +129,27 @@ function storedModulationState(harness) {
         : harness.modulation.deserializeModulationState(storedValue);
 }
 
+test("MSEG morph is a live parameter and is absent from modulation.v5", async () => {
+    const harness = await createHarness();
+
+    harness.adapter.commands.setMsegMorph({
+        sourceId: "mseg-1",
+        morph: 0.625,
+        layer: { _tag: "patchBase" },
+    });
+    await flushMicrotasks();
+
+    const debug = harness.connection.getDebugSnapshot();
+    assert.equal(debug.parameterValues.mseg1Morph, 0.625);
+    assert.equal(
+        harness.adapter.getSnapshot().patch.sources.find((source) => source.id === "mseg-1")
+            .state.slot.morph,
+        0.625,
+    );
+    assert.equal(Object.hasOwn(storedModulationState(harness).msegSlots[0], "morph"), false);
+    harness.adapter.dispose();
+});
+
 test("boot reads authoritative parameters and uploads every occupied articulation selector", async (t) => {
     const initialArticulations = articulationState([
         articulationSlot({

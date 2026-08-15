@@ -1193,7 +1193,7 @@ private:
     {
         try
         {
-            static constexpr auto modulationStateKey = "modulation.v4";
+            static constexpr auto modulationStateKey = "modulation.v5";
             const auto profileFile = detail::resolveBundleResourceFile ("benchmark/modulation-benchmark-profiles.json");
             if (! profileFile.existsAsFile())
                 throw std::runtime_error ("Benchmark profile bundle is missing");

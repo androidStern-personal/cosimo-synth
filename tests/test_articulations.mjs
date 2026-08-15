@@ -7,7 +7,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const [runtime, worker, modulation, program, installChannel] = await Promise.all([
     loadUIModule(repoRoot, "ui/shared/articulations.ts"),
-    loadUIModule(repoRoot, "ui/shared/articulation-worker-service.ts"),
+    loadUIModule(repoRoot, "ui/worker/modulation-articulation-worker-service.ts"),
     loadUIModule(repoRoot, "ui/shared/modulation.ts"),
     loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts"),
     loadUIModule(repoRoot, "ui/shared/runtime-install-channel.ts"),
@@ -36,7 +36,7 @@ const {
     setArticulationTriggerMode,
     upsertSelectedArticulationSnapshot,
 } = runtime;
-const { createArticulationWorkerService } = worker;
+const { createModulationArticulationWorkerService } = worker;
 const {
     createDefaultModulationState,
     deserializeModulationState,
@@ -673,10 +673,10 @@ test("articulation worker mirrors stored articulations to runtime without GUI ow
     const connection = new ArticulationWorkerTestConnection({
         values: {
             "articulations.v4": JSON.stringify(bank),
-            "modulation.v4": JSON.stringify(modulationState),
+            "modulation.v5": JSON.stringify(modulationState),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
 
     service.start();
     assert.equal(connection.sentEvents.filter(
@@ -726,7 +726,7 @@ test("articulation worker mirrors stored articulations to runtime without GUI ow
     assert.deepEqual(connection.sentEvents, []);
 
     for (let editIndex = 0; editIndex < 625; editIndex += 1) {
-        connection.emitStoredState("modulation.v4", JSON.stringify({
+        connection.emitStoredState("modulation.v5", JSON.stringify({
             ...modulationState,
             routes: modulationState.routes.map((route) => ({
                 ...route,
@@ -748,7 +748,7 @@ test("articulation worker mirrors stored articulations to runtime without GUI ow
             targetKind: "oscA.pan",
         })),
     };
-    connection.emitStoredState("modulation.v4", JSON.stringify(panModulationState));
+    connection.emitStoredState("modulation.v5", JSON.stringify(panModulationState));
     await flushMicrotasks();
     const topologyUploads = connection.sentEvents.filter(
         ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
@@ -799,10 +799,10 @@ test("a rejected articulation batch gets one full-state reconciliation", async (
     const connection = new ArticulationWorkerTestConnection({
         values: {
             "articulations.v4": JSON.stringify(bank),
-            "modulation.v4": JSON.stringify(createCurrentModulationState()),
+            "modulation.v5": JSON.stringify(createCurrentModulationState()),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
     const originalConsoleError = console.error;
     console.error = () => {};
 
@@ -860,10 +860,10 @@ test("repeated articulation rejection stops after one reconciliation attempt", a
     const connection = new ArticulationWorkerTestConnection({
         values: {
             "articulations.v4": JSON.stringify(bank),
-            "modulation.v4": JSON.stringify(createCurrentModulationState()),
+            "modulation.v5": JSON.stringify(createCurrentModulationState()),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
     const originalConsoleError = console.error;
     console.error = () => {};
 
@@ -946,7 +946,7 @@ test("headless articulation restore resolves the accepted sparse v4 model", asyn
     const connection = new ArticulationWorkerTestConnection({
         values: {
             "articulations.v4": JSON.stringify(articulationStateV4),
-            "modulation.v4": JSON.stringify(createCurrentModulationState([{
+            "modulation.v5": JSON.stringify(createCurrentModulationState([{
                     id: WARP_ROUTE_ID,
                     enabled: true,
                     sourceKind: "mseg",
@@ -957,7 +957,7 @@ test("headless articulation restore resolves the accepted sparse v4 model", asyn
             }])),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
 
     service.start();
     connection.emitEndpoint("runtimeState", { dspSessionId: 20 });
@@ -986,7 +986,7 @@ test("headless articulation restore resolves the accepted sparse v4 model", asyn
     service.stop();
 });
 
-test("cold rejected modulation uses the accepted default dependency before articulation resolution", async () => {
+test("cold invalid modulation publishes nothing until a valid modulation document arrives", async () => {
     const articulationState = createCurrentArticulationState([
         createCurrentArticulationSlot(4, {
             id: "strict-slot",
@@ -997,10 +997,10 @@ test("cold rejected modulation uses the accepted default dependency before artic
     const connection = new ArticulationWorkerTestConnection({
         values: {
             "articulations.v4": JSON.stringify(articulationState),
-            "modulation.v4": JSON.stringify({ format: "legacy", routes: [] }),
+            "modulation.v5": JSON.stringify({ format: "legacy", routes: [] }),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
     const originalConsoleError = console.error;
     console.error = () => {};
 
@@ -1008,20 +1008,24 @@ test("cold rejected modulation uses the accepted default dependency before artic
         service.start();
         connection.emitEndpoint("runtimeState", { dspSessionId: 43 });
         await flushMicrotasks(128);
-        const initialUpload = connection.sentEvents.find(
-            ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
-        );
-        assert.equal(initialUpload.value.selectorA, 4);
-        assert.equal(initialUpload.value.warpAmounts[0], 0.42);
+        assert.equal(connection.sentEvents.length, 0);
         connection.sentEvents = [];
 
         connection.emitStoredState(
-            "modulation.v4",
+            "modulation.v5",
             JSON.stringify(createCurrentModulationState([])),
         );
         await flushMicrotasks(128);
 
-        assert.equal(connection.sentEvents.length, 0, "the equivalent valid default does not republish");
+        const modulationUpload = connection.sentEvents.find(
+            ({ endpointID }) => endpointID === "modulationProgram",
+        );
+        const articulationUpload = connection.sentEvents.find(
+            ({ endpointID }) => endpointID === ARTICULATION_SNAPSHOT_ENDPOINT_ID,
+        );
+        assert.notEqual(modulationUpload, undefined);
+        assert.equal(articulationUpload.value.selectorA, 4);
+        assert.equal(articulationUpload.value.warpAmounts[0], 0.42);
     } finally {
         service.stop();
         console.error = originalConsoleError;
@@ -1062,11 +1066,11 @@ test("headless hydration and live writes both reject whole phantom-route documen
     }]);
     const connection = new ArticulationWorkerTestConnection({
         values: {
-            "modulation.v4": JSON.stringify(modulationState),
+            "modulation.v5": JSON.stringify(modulationState),
             "articulations.v4": JSON.stringify(invalidArticulationState),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
     const originalConsoleError = console.error;
     console.error = () => {};
 
@@ -1120,10 +1124,10 @@ test("malformed current articulation state is ignored without reading a v3 fallb
         values: {
             "articulations.v4": "{not-json",
             [RETIRED_ARTICULATION_STATE_KEY]: JSON.stringify(retiredBank),
-            "modulation.v4": JSON.stringify(createCurrentModulationState()),
+            "modulation.v5": JSON.stringify(createCurrentModulationState()),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
     const originalConsoleError = console.error;
     console.error = () => {};
 
@@ -1165,10 +1169,10 @@ test("retired uiPatchValues documents are ignored during articulation restore", 
                 "oscA.framePosition": 0.25,
                 "future-build.renamed-target": 0.75,
             }),
-            "modulation.v4": JSON.stringify(createCurrentModulationState()),
+            "modulation.v5": JSON.stringify(createCurrentModulationState()),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
 
     service.start();
     connection.emitEndpoint("runtimeState", { dspSessionId: 24 });
@@ -1208,11 +1212,11 @@ test("separate stored-key boot requests only the current articulation schema", a
             [RETIRED_ARTICULATION_STATE_KEY]: JSON.stringify(normalizeArticulationEditorState({
                 slots: [{ id: "legacy-slot", runtimeSlot: 3 }],
             })),
-            "modulation.v4": JSON.stringify(createCurrentModulationState()),
+            "modulation.v5": JSON.stringify(createCurrentModulationState()),
         },
     });
     connection.requestFullStoredState = undefined;
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
 
     service.start();
     connection.emitEndpoint("runtimeState", { dspSessionId: 21 });
@@ -1228,7 +1232,7 @@ test("separate stored-key boot requests only the current articulation schema", a
     assert.equal(snapshotEvents[0].value.warpAmounts[0], 0.37);
     assert.deepEqual(connection.requestedKeys.sort(), [
         "articulations.v4",
-        "modulation.v4",
+        "modulation.v5",
     ]);
 
     service.stop();
@@ -1239,10 +1243,10 @@ test("live writes to the retired v3 key are ignored", async () => {
         slots: [{ id: "legacy-slot", runtimeSlot: 3 }],
     });
     const connection = new ArticulationWorkerTestConnection({
-        "modulation.v4": JSON.stringify(createCurrentModulationState()),
+        "modulation.v5": JSON.stringify(createCurrentModulationState()),
     });
     connection.requestFullStoredState = undefined;
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
 
     service.start();
     connection.emitEndpoint("runtimeState", { dspSessionId: 22 });
@@ -1260,12 +1264,12 @@ test("same-DSP worker reattachment clears selectors the new worker cannot know",
     const connection = new ArticulationWorkerTestConnection({
         values: {
             "articulations.v4": JSON.stringify(createCurrentArticulationState()),
-            "modulation.v4": JSON.stringify(createCurrentModulationState()),
+            "modulation.v5": JSON.stringify(createCurrentModulationState()),
         },
     });
     connection.dspSessionId = 23;
     connection.acceptedArticulationSerial = -9;
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
 
     service.start();
     connection.emitEndpoint("runtimeState", { dspSessionId: 23 });
@@ -1292,10 +1296,10 @@ test("a full 128-slot articulation restore is acknowledged one image at a time",
     const connection = new ArticulationWorkerTestConnection({
         values: {
             "articulations.v4": JSON.stringify(bank),
-            "modulation.v4": JSON.stringify(createCurrentModulationState()),
+            "modulation.v5": JSON.stringify(createCurrentModulationState()),
         },
     });
-    const service = createArticulationWorkerService(connection);
+    const service = createModulationArticulationWorkerService(connection);
 
     service.start();
     connection.emitEndpoint("runtimeState", { dspSessionId: 19 });

@@ -863,7 +863,7 @@ def test_ios_modulation_benchmark_installs_state_through_the_production_worker()
     assert "payload[@\"warmup\"]" in host_controller
 
     plugin_shell = IOS_PLUGIN_SHELL.read_text(encoding="utf-8")
-    assert 'static constexpr auto modulationStateKey = "modulation.v4";' in plugin_shell
+    assert 'static constexpr auto modulationStateKey = "modulation.v5";' in plugin_shell
     assert "patch->setStoredStateValue (modulationStateKey" in plugin_shell
     assert '"modulation.v2"' not in plugin_shell
     assert 'endpointID == "runtimeInstallAck"' in plugin_shell
@@ -993,7 +993,7 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
         assert profile["profileIndex"] == profile_index
         document = json.loads(profile["stateJSON"])
         assert document["format"] == "cosimo.modulation"
-        assert document["version"] == 4
+        assert document["version"] == 5
         assert len({route["id"] for route in document["routes"]}) == len(document["routes"])
         assert profile["compiledRouteCount"] == profile["activeRouteCount"]
         assert all(0.0 < abs(float(route["amount"])) <= 0.03125 for route in document["routes"])
@@ -1862,8 +1862,11 @@ def test_ios_auv3_generator_writes_raw_performer_source(generated_ios_plugin_dir
 
     assert "struct WavetableSynth" in source_text
     assert "programDetailsJSON" in source_text
-    assert '"wavetablePosition"' in source_text
-    assert '"wavetableSelect"' in source_text
+    for oscillator in "ABC":
+        assert f'"osc{oscillator}WavetablePosition"' in source_text
+        assert f'"osc{oscillator}WavetableSelect"' in source_text
+    assert '"wavetablePosition"' not in source_text
+    assert '"wavetableSelect"' not in source_text
     assert '"wavetableLoadBegin"' in source_text
     assert '"wavetableMipFrame"' in source_text
     assert '"wavetableUploadAck"' in source_text
@@ -2590,10 +2593,10 @@ def test_ios_host_smoke_discovers_the_extension_and_restores_state_across_relaun
     assert phone["editor"]["screenMode"] == "patchView"
     assert host_page["bootSource"] == "bundle"
     assert host_page["currentURL"] == host_page["bundlePageURL"]
-    assert parameter_set["identifier"] == "wavetablePosition"
+    assert parameter_set["identifier"] == "oscAWavetablePosition"
     assert parameter_set["requestedValue"] == pytest.approx(0.625, abs=0.001)
     assert parameter_set["observedValue"] == pytest.approx(0.625, abs=0.001)
-    assert table_selection_set["identifier"] == "wavetableSelect"
+    assert table_selection_set["identifier"] == "oscAWavetableSelect"
     assert table_selection_set["requestedValue"] == pytest.approx(5.0, abs=0.001)
     assert table_selection_set["observedValue"] == pytest.approx(5.0, abs=0.001)
     assert state["savedStateSource"] in {"fullStateForDocument", "fullState"}

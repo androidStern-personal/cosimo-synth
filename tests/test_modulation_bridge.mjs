@@ -108,7 +108,7 @@ test("boot_without_saved_modulation_state_reads_defaults_without_runtime_uploadi
 
     const state = bridge.getState();
     assert.equal(state.msegSlots.length, 3);
-    assert.equal(state.msegSlots[0].morph, 0);
+    assert.equal(Object.hasOwn(state.msegSlots[0], "morph"), false);
     assert.deepEqual(state.msegSlots[0].shapeA, state.msegSlots[0].shapeB);
     assert.equal(state.envelopeSlots.length, 3);
     assert.deepEqual(state.routes, []);
@@ -214,7 +214,6 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
             { x: 1.0, y: 0.2, curvePower: 0.0 },
         ],
     };
-    customState.msegSlots[1].morph = 0.375;
     customState.envelopeSlots[2] = {
         name: "Env 3",
         attackSeconds: 0.25,
@@ -244,7 +243,7 @@ test("boot_with_saved_modulation_state_restores_ui_state_without_runtime_uploadi
     const state = bridge.getState();
     assert.equal(state.msegSlots[1].shapeA.points.length, 3);
     assert.equal(state.msegSlots[1].shapeB.points.length, 2);
-    assert.equal(state.msegSlots[1].morph, 0.375);
+    assert.equal(Object.hasOwn(state.msegSlots[1], "morph"), false);
     assert.equal(state.envelopeSlots[2].attackSeconds, 0.25);
     assert.deepEqual(state.routes, customState.routes);
     assert.deepEqual(patchConnection.events, []);
@@ -381,7 +380,7 @@ test("modulation runtime event builder converts saved state into slot_envelope_a
     assert.equal(program.voiceRouteAmounts[190], 4);
 });
 
-test("editing_one_mseg_slot_persists_modulation_v4_without_runtime_uploading", () => {
+test("editing one MSEG slot persists modulation.v5 without runtime uploading", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);
 
@@ -401,13 +400,13 @@ test("editing_one_mseg_slot_persists_modulation_v4_without_runtime_uploading", (
 
     assert.equal(patchConnection.storedWrites.some(({ key }) => key === MODULATION_STATE_KEY), true);
     const savedState = deserializeModulationState(patchConnection.storedWrites.at(-1).value);
-    assert.equal(savedState.version, 4);
+    assert.equal(savedState.version, 5);
     assert.equal(savedState.msegSlots[0].shapeA.points.length, 3);
     assert.equal(savedState.msegSlots[0].shapeB.points.length, 2);
     assert.deepEqual(patchConnection.events, []);
 });
 
-test("editing_shape_b_only_changes_shape_b_and_edit_focus_does_not_change_morph", () => {
+test("editing shape B only changes shape B and edit focus does not persist a morph", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);
 
@@ -419,7 +418,7 @@ test("editing_shape_b_only_changes_shape_b_and_edit_focus_does_not_change_morph"
     const controller = bridge.getMsegSlotController(0);
     controller.setEditShapeIndex(1);
     assert.equal(controller.getState().editShapeIndex, 1);
-    assert.equal(bridge.getState().msegSlots[0].morph, 0);
+    assert.equal(Object.hasOwn(bridge.getState().msegSlots[0], "morph"), false);
     assert.equal(patchConnection.storedWrites.length, 0);
 
     controller.setShape({
@@ -433,24 +432,7 @@ test("editing_shape_b_only_changes_shape_b_and_edit_focus_does_not_change_morph"
     const savedState = deserializeModulationState(patchConnection.storedWrites.at(-1).value);
     assert.equal(savedState.msegSlots[0].shapeA.points[0].y, 0);
     assert.equal(savedState.msegSlots[0].shapeB.points[0].y, 0.95);
-    assert.equal(savedState.msegSlots[0].morph, 0);
-    assert.deepEqual(patchConnection.events, []);
-});
-
-test("editing_morph_persists_without_uploading_mseg_buffers_or_retriggering", () => {
-    const patchConnection = new FakePatchConnection();
-    const bridge = new ModulationRuntimeBridge(patchConnection);
-
-    bridge.attach();
-    bridge.requestBootState();
-    patchConnection.events = [];
-    patchConnection.storedWrites = [];
-
-    bridge.setMsegSlotMorph(0, 0.625);
-
-    assert.equal(patchConnection.storedWrites.length, 1);
-    const savedState = deserializeModulationState(patchConnection.storedWrites[0].value);
-    assert.equal(savedState.msegSlots[0].morph, 0.625);
+    assert.equal(Object.hasOwn(savedState.msegSlots[0], "morph"), false);
     assert.deepEqual(patchConnection.events, []);
 });
 

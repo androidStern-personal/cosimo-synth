@@ -7,7 +7,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const modulesPromise = Promise.all([
     loadUIModule(repoRoot, "ui/shared/articulation-image.ts"),
-    loadUIModule(repoRoot, "ui/shared/articulation-worker-service.ts"),
+    loadUIModule(repoRoot, "ui/worker/modulation-articulation-worker-service.ts"),
     loadUIModule(repoRoot, "ui/shared/articulations.ts"),
     loadUIModule(repoRoot, "ui/shared/modulation.ts"),
     loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts"),
@@ -20,6 +20,14 @@ async function modules() {
 
 async function flushMicrotasks(turns = 128) {
     for (let index = 0; index < turns; index += 1) await Promise.resolve();
+}
+
+async function waitFor(predicate, description) {
+    for (let attempt = 0; attempt < 128; attempt += 1) {
+        if (predicate()) return;
+        await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.fail(`Timed out waiting for ${description}`);
 }
 
 function makeSlot(overrides = {}, routeAmounts = {}) {
@@ -57,6 +65,8 @@ class TestConnection {
         this.dspSessionId = 0;
         this.acceptedModulationSerial = 0;
         this.acceptedArticulationSerial = 0;
+        this.holdModulationAcknowledgements = false;
+        this.pendingModulationSerial = null;
     }
 
     addStoredStateValueListener(listener) {
@@ -96,6 +106,16 @@ class TestConnection {
             return;
         }
         const deliverySerial = Math.trunc(Number(value?.deliverySerial) || 0);
+        if (deliverySerial > 0) {
+            assert.equal(deliverySerial, this.acceptedModulationSerial + 1);
+            if (this.holdModulationAcknowledgements) {
+                this.pendingModulationSerial = deliverySerial;
+                return;
+            }
+            this.acceptedModulationSerial = deliverySerial;
+            queueMicrotask(() => this.emitAck(0));
+            return;
+        }
         if (deliverySerial < 0) {
             assert.equal(deliverySerial, this.acceptedArticulationSerial - 1);
             this.acceptedArticulationSerial = deliverySerial;
@@ -105,6 +125,13 @@ class TestConnection {
 
     emitStoredState(key, value) {
         this.storedStateListeners.forEach((listener) => listener({ key, value }));
+    }
+
+    acceptPendingModulation() {
+        assert.notEqual(this.pendingModulationSerial, null);
+        this.acceptedModulationSerial = this.pendingModulationSerial;
+        this.pendingModulationSerial = null;
+        this.emitAck(0);
     }
 
     emitRuntimeSession(dspSessionId) {
@@ -154,7 +181,7 @@ async function validDependencies() {
     };
 }
 
-test("valid v4 restore publishes only explicit A/B/C overrides without a patch-value bag", async () => {
+test("valid restore acknowledges modulation before publishing dependent articulation", async () => {
     const { worker, modulation, program } = await modules();
     const dependencies = await validDependencies();
     const bank = makeBank(makeSlot({
@@ -167,16 +194,20 @@ test("valid v4 restore publishes only explicit A/B/C overrides without a patch-v
     const connection = new TestConnection({
         values: {
             "articulations.v4": bank,
-            "modulation.v4": modulation.serializeModulationState(dependencies.modulationState),
+            "modulation.v5": modulation.serializeModulationState(dependencies.modulationState),
         },
     });
-    const service = worker.createArticulationWorkerService(connection);
+    const service = worker.createModulationArticulationWorkerService(connection);
     service.start();
     connection.emitRuntimeSession(41);
     await flushMicrotasks();
 
     const uploads = connection.articulationUploads();
     assert.equal(uploads.length, 1);
+    const modulationIndex = connection.sentEvents.findIndex(({ endpointID }) => endpointID === "modulationProgram");
+    const articulationIndex = connection.sentEvents.findIndex(({ endpointID }) => endpointID === "articulationSnapshot");
+    assert.equal(modulationIndex >= 0, true);
+    assert.equal(articulationIndex > modulationIndex, true);
     const upload = uploads[0].value;
     assert.deepEqual(upload.warpAmounts, [0.2, 0.4, 0.6]);
     assert.deepEqual(upload.oscillatorOverrideMasks, [4096, 4096, 4096]);
@@ -187,13 +218,44 @@ test("valid v4 restore publishes only explicit A/B/C overrides without a patch-v
     service.stop();
 });
 
+test("articulation cannot publish while the matching modulation install is unaccepted", async () => {
+    const { worker, modulation } = await modules();
+    const dependencies = await validDependencies();
+    const connection = new TestConnection({
+        values: {
+            "articulations.v4": makeBank(makeSlot({}, { [dependencies.route.id]: 0.4 })),
+            [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(
+                dependencies.modulationState,
+            ),
+        },
+    });
+    connection.holdModulationAcknowledgements = true;
+    const service = worker.createModulationArticulationWorkerService(connection);
+
+    try {
+        service.start();
+        connection.emitRuntimeSession(44);
+        await waitFor(
+            () => connection.sentEvents.some(({ value }) => Number(value?.deliverySerial) > 0),
+            "the held modulation upload",
+        );
+        assert.equal(connection.articulationUploads().length, 0);
+
+        connection.holdModulationAcknowledgements = false;
+        connection.acceptPendingModulation();
+        await waitFor(() => connection.articulationUploads().length === 1, "the dependent articulation upload");
+    } finally {
+        service.stop();
+    }
+});
+
 test("separate-key restore waits for modulation and v4 articulation only", async () => {
     const { worker, modulation } = await modules();
     const dependencies = await validDependencies();
     const bank = makeBank(makeSlot({}, { [dependencies.route.id]: 0.75 }));
     const connection = new TestConnection();
     connection.requestFullStoredState = undefined;
-    const service = worker.createArticulationWorkerService(connection);
+    const service = worker.createModulationArticulationWorkerService(connection);
     service.start();
     connection.emitRuntimeSession(51);
 
@@ -202,14 +264,14 @@ test("separate-key restore waits for modulation and v4 articulation only", async
     assert.equal(connection.articulationUploads().length, 0);
 
     connection.emitStoredState(
-        "modulation.v4",
+        "modulation.v5",
         modulation.serializeModulationState(dependencies.modulationState),
     );
     await flushMicrotasks();
     assert.equal(connection.articulationUploads().length, 1);
     assert.deepEqual(connection.requestedKeys.sort(), [
         "articulations.v4",
-        "modulation.v4",
+        "modulation.v5",
     ]);
     service.stop();
 });
@@ -231,10 +293,10 @@ test("cold invalid v4 defaults without reading or rewriting a legacy bank", asyn
                 values: {
                     "articulations.v4": invalidCurrentValues[index],
                     "articulations.v3": { ...makeBank(), version: 3 },
-                    "modulation.v4": modulation.serializeModulationState(dependencies.modulationState),
+                    "modulation.v5": modulation.serializeModulationState(dependencies.modulationState),
                 },
             });
-            const service = worker.createArticulationWorkerService(connection);
+            const service = worker.createModulationArticulationWorkerService(connection);
             service.start();
             connection.emitRuntimeSession(60 + index);
             await flushMicrotasks();
@@ -258,10 +320,10 @@ test("live invalid v4 and legacy writes retain the last accepted bank atomically
     const connection = new TestConnection({
         values: {
             "articulations.v4": acceptedBank,
-            "modulation.v4": modulation.serializeModulationState(dependencies.modulationState),
+            "modulation.v5": modulation.serializeModulationState(dependencies.modulationState),
         },
     });
-    const service = worker.createArticulationWorkerService(connection);
+    const service = worker.createModulationArticulationWorkerService(connection);
     const originalError = console.error;
     console.error = () => {};
     try {

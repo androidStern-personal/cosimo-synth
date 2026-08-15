@@ -1282,7 +1282,6 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
     bootModulationState.msegSlots[0] = {
         shapeA: createDefaultMsegShape("Test MSEG A"),
         shapeB: createDefaultMsegShape("Test MSEG B"),
-        morph: 0,
         playback: createDefaultMsegPlayback(),
     };
     bootModulationState.routes = [createDefaultRoute({

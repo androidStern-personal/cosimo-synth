@@ -6,9 +6,9 @@ import { buildModulationRuntimeProgramEvents } from "./modulation-runtime-progra
 import { err, ok } from "./result.js";
 import { getModulationTargetDisplayLabel } from "./target-descriptor.js";
 /** Persisted-state key for the hard-forked modulation contract. */
-export const MODULATION_STATE_KEY = "modulation.v4";
+export const MODULATION_STATE_KEY = "modulation.v5";
 /** Current strict persisted modulation envelope version. */
-export const MODULATION_STATE_VERSION = 4;
+export const MODULATION_STATE_VERSION = 5;
 export const MODULATION_MSEG_SLOT_COUNT = 3;
 export const MODULATION_ENV_SLOT_COUNT = 3;
 export const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
@@ -553,7 +553,6 @@ function normalizeMsegSlot(value, slotIndex) {
     return {
         shapeA,
         shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
-        morph: clamp01(nextValue.morph ?? 0),
         playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback()),
     };
 }
@@ -732,7 +731,6 @@ class ModulationMsegSlotController {
             shapeB: slot.shapeB,
             referenceShape,
             editShapeIndex,
-            morph: slot.morph,
             playback: slot.playback,
             depth: MSEG_DEFAULT_DEPTH,
         };
@@ -845,17 +843,6 @@ export class ModulationRuntimeBridge {
                 msegSlots: nextMsegSlots,
             };
         });
-    }
-    setMsegSlotMorph(slotIndex, nextMorph) {
-        const normalizedMorph = clamp01(nextMorph);
-        const currentSlot = this.state.msegSlots[slotIndex];
-        if (currentSlot.morph === normalizedMorph) {
-            return;
-        }
-        this.updateState((previousState) => ({
-            ...previousState,
-            msegSlots: previousState.msegSlots.map((slot, index) => (index === slotIndex ? { ...slot, morph: normalizedMorph } : slot)),
-        }));
     }
     setMsegSlotPlayback(slotIndex, nextPlayback) {
         const normalizedPlayback = normalizeMsegPlayback(nextPlayback);

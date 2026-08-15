@@ -17,7 +17,7 @@ import {
     type ResourceClientInput,
 } from "../shared/resource-client";
 import { startPatchWorkerServices } from "../shared/patch-worker-services";
-import { createModulationWorkerService } from "./modulation-worker-service";
+import { createModulationArticulationWorkerService } from "./modulation-articulation-worker-service";
 import { createRackStateWorkerService } from "./rack-state-worker-service";
 
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
@@ -376,6 +376,15 @@ function getNow() {
     return typeof globalThis.performance?.now === "function"
         ? globalThis.performance.now()
         : Date.now();
+}
+
+function scheduleMicrotask(callback: () => void) {
+    if (typeof globalThis.queueMicrotask === "function") {
+        globalThis.queueMicrotask(callback);
+        return;
+    }
+
+    void Promise.resolve().then(callback);
 }
 
 export class WavetableWorkerController {
@@ -1068,7 +1077,7 @@ export class WavetableWorkerController {
         }
 
         this.runtimeStateDrainScheduled = true;
-        queueMicrotask(() => {
+        scheduleMicrotask(() => {
             this.runtimeStateDrainScheduled = false;
             this.drainRuntimeStates().catch((error: unknown) => {
                 console.error(error);
@@ -1558,10 +1567,8 @@ export function createWavetableWorkerController(connection: PatchConnectionLike,
 
 export default async function runWavetableWorker(connection: PatchConnectionLike, options: WavetableWorkerOptions = {}) {
     return startPatchWorkerServices(connection, [
-        createModulationWorkerService,
+        createModulationArticulationWorkerService,
         createRackStateWorkerService,
-        // RT-01 will compose the v4 articulation service after the production
-        // Cmajor endpoint consumes A/B/C arrays and all 416 sparse route cells.
         () => createWavetableWorkerController(connection, options),
     ]);
 }

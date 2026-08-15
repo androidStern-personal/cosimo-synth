@@ -55,21 +55,27 @@ function withOneRoute(modulation) {
     };
 }
 
-test("modulation.v4 accepts only the exact current envelope", async () => {
+test("modulation.v5 accepts only the exact current envelope", async () => {
     const modulation = await modulationModulePromise;
     const current = withOneRoute(modulation);
-    assert.equal(modulation.MODULATION_STATE_KEY, "modulation.v4");
-    assert.equal(modulation.MODULATION_STATE_VERSION, 4);
+    assert.equal(modulation.MODULATION_STATE_KEY, "modulation.v5");
+    assert.equal(modulation.MODULATION_STATE_VERSION, 5);
+    assert.equal(Object.hasOwn(current.msegSlots[0], "morph"), false);
     assert.deepEqual(modulation.parseModulationState(current), { _tag: "ok", value: current });
 
     const withoutRoutes = { ...current };
     delete withoutRoutes.routes;
     const cases = [
-        { ...current, version: 3 },
-        { ...current, version: 5 },
+        { ...current, version: 4 },
+        { ...current, version: 6 },
         { ...current, format: "cosimo.modulation.future" },
         { ...current, unknown: true },
         withoutRoutes,
+        {
+            ...current,
+            version: 4,
+            msegSlots: current.msegSlots.map((slot) => ({ ...slot, morph: 0.5 })),
+        },
         { ...current, routes: [{ ...current.routes[0], targetKind: "pan" }] },
         { ...current, routes: [{ ...current.routes[0], targetKind: "futureTarget" }] },
         { ...current, routes: [{ ...current.routes[0], amount: Number.NaN }] },
@@ -96,10 +102,10 @@ test("legacy modulation state is ignored on cold boot and never rewritten", asyn
 
     assert.deepEqual(bridge.getState(), modulation.createDefaultModulationState());
     assert.deepEqual(connection.storedWrites, []);
-    assert.equal(Object.hasOwn(connection.storedState, "modulation.v4"), false);
+    assert.equal(Object.hasOwn(connection.storedState, "modulation.v5"), false);
 });
 
-test("cold invalid v4 uses defaults without installing replacement state", async () => {
+test("cold invalid v5 uses defaults without installing replacement state", async () => {
     const modulation = await modulationModulePromise;
     const connection = new FakePatchConnection({
         [modulation.MODULATION_STATE_KEY]: JSON.stringify({
@@ -116,7 +122,7 @@ test("cold invalid v4 uses defaults without installing replacement state", async
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("live invalid v4 retains the last valid state without a repair write", async () => {
+test("live invalid v5 retains the last valid state without a repair write", async () => {
     const modulation = await modulationModulePromise;
     const valid = withOneRoute(modulation);
     const connection = new FakePatchConnection({
@@ -145,6 +151,6 @@ test("fallback boot requests only the current key", async () => {
     bridge.attach();
     bridge.requestBootState();
 
-    assert.deepEqual(connection.requestedKeys, ["modulation.v4"]);
+    assert.deepEqual(connection.requestedKeys, ["modulation.v5"]);
     assert.deepEqual(connection.storedWrites, []);
 });

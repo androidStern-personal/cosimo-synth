@@ -330,7 +330,7 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
 {
     self.parameterValueLabel.text = [NSString stringWithFormat:@"%.3f", slider.value];
 
-    [self.harness setParameterWithIdentifier:@"wavetablePosition" value:slider.value completion:^(NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
+    [self.harness setParameterWithIdentifier:@"oscAWavetablePosition" value:slider.value completion:^(NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
     {
         [self handleStepNamed:@"set parameter" result:result error:error];
     }];
@@ -342,7 +342,7 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
     slider.value = quantizedValue;
     self.tableSelectValueLabel.text = [NSString stringWithFormat:@"%.0f", quantizedValue];
 
-    [self.harness setParameterWithIdentifier:@"wavetableSelect" value:quantizedValue completion:^(NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
+    [self.harness setParameterWithIdentifier:@"oscAWavetableSelect" value:quantizedValue completion:^(NSDictionary<NSString *,id> * _Nullable result, NSError * _Nullable error)
     {
         [self handleStepNamed:@"set table" result:result error:error];
     }];
@@ -706,14 +706,14 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
                 dispatch_after (dispatch_time (DISPATCH_TIME_NOW, (int64_t) (0.35 * NSEC_PER_SEC)),
                                 dispatch_get_main_queue(), ^
                 {
-                    [self.harness setParameterWithIdentifier:@"wavetablePosition" value:0.625f completion:^(NSDictionary<NSString *,id> * _Nullable parameterResult, NSError * _Nullable parameterError)
+                    [self.harness setParameterWithIdentifier:@"oscAWavetablePosition" value:0.625f completion:^(NSDictionary<NSString *,id> * _Nullable parameterResult, NSError * _Nullable parameterError)
                     {
                         if ([self handleAutomationError:parameterError outputName:outputName])
                             return;
 
                         payload[@"parameterSet"] = parameterResult;
 
-                        [self.harness setParameterWithIdentifier:@"wavetableSelect" value:CosimoSmokeTableSelectValue completion:^(NSDictionary<NSString *,id> * _Nullable tableResult, NSError * _Nullable tableError)
+                        [self.harness setParameterWithIdentifier:@"oscAWavetableSelect" value:CosimoSmokeTableSelectValue completion:^(NSDictionary<NSString *,id> * _Nullable tableResult, NSError * _Nullable tableError)
                         {
                             if ([self handleAutomationError:tableError outputName:outputName])
                                 return;

@@ -1,4 +1,4 @@
-// Bounded production-engine execution proof for the complete modulation.v4
+// Bounded production-engine execution proof for the complete modulation.v5
 // sparse program domain. This verifies installed prefix counts and live DSP
 // sentinels without turning the test into a performance budget.
 

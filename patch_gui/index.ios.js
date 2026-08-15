@@ -15301,8 +15301,12 @@ const MODULE_DEFINITIONS = [
     workspace: "voice",
     quickParameterId: "cutoff",
     parameters: [
-      parameter("cutoff", "Cutoff", 67, 70, "frequency"),
-      parameter("resonance", "Resonance", 25, 0),
+      // Initial values mirror the authoritative Cmajor parameter defaults:
+      // 1000 Hz and Q 0.707107. The retired UI patch-value bag used to
+      // overwrite these after boot, which made editor-open and headless
+      // instances start from different sounds.
+      parameter("cutoff", "Cutoff", 56.63233347786729, 70, "frequency"),
+      parameter("resonance", "Resonance", 36.91760377573153, 0),
       parameter("drive", "Drive", 15, 0)
     ]
   }
@@ -15563,8 +15567,8 @@ function getModulationTargetDisplayLabel(targetKind) {
   }
   return descriptor.workspace === "effects" ? `${descriptor.moduleId.toUpperCase()} ${descriptor.label.toUpperCase()}` : descriptor.label.toUpperCase();
 }
-const MODULATION_STATE_KEY = "modulation.v4";
-const MODULATION_STATE_VERSION = 4;
+const MODULATION_STATE_KEY = "modulation.v5";
+const MODULATION_STATE_VERSION = 5;
 const MODULATION_MSEG_SLOT_COUNT = 3;
 const MODULATION_ENV_SLOT_COUNT = 3;
 const MODULATION_MACRO_SLOT_COUNT = 4;
@@ -15965,7 +15969,6 @@ function normalizeMsegSlot(value, slotIndex) {
   return {
     shapeA,
     shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
-    morph: clamp01$1(nextValue.morph ?? 0),
     playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback())
   };
 }
@@ -16064,7 +16067,6 @@ class ModulationMsegSlotController {
       shapeB: slot.shapeB,
       referenceShape,
       editShapeIndex,
-      morph: slot.morph,
       playback: slot.playback,
       depth: MSEG_DEFAULT_DEPTH
     };
@@ -16176,17 +16178,6 @@ class ModulationRuntimeBridge {
         msegSlots: nextMsegSlots
       };
     });
-  }
-  setMsegSlotMorph(slotIndex, nextMorph) {
-    const normalizedMorph = clamp01$1(nextMorph);
-    const currentSlot = this.state.msegSlots[slotIndex];
-    if (currentSlot.morph === normalizedMorph) {
-      return;
-    }
-    this.updateState((previousState) => ({
-      ...previousState,
-      msegSlots: previousState.msegSlots.map((slot, index) => index === slotIndex ? { ...slot, morph: normalizedMorph } : slot)
-    }));
   }
   setMsegSlotPlayback(slotIndex, nextPlayback) {
     const normalizedPlayback = normalizeMsegPlayback(nextPlayback);
@@ -18601,6 +18592,12 @@ function copyRouteAmounts(source) {
   }
   return copy;
 }
+Object.fromEntries(
+  OSCILLATOR_ARTICULATION_PARAMETER_IDS.map((parameterID, index) => [parameterID, 2 ** index])
+);
+Object.fromEntries(
+  SHARED_ARTICULATION_VOICE_PARAMETER_IDS.map((parameterID, index) => [parameterID, 2 ** index])
+);
 function parseArticulationsV4(input, acceptedRouteIds) {
   if (!isObjectRecord(input)) {
     return malformed("payload must be an object");
@@ -21654,8 +21651,7 @@ function useSynthPatchViewModel({
     const nextMorph = clamp$1(Number(nextValue) || 0, 0, 1);
     const targetBinding = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
     targetBinding.setValue(nextMorph);
-    modulationBridge.current?.setMsegSlotMorph(selectedMsegSlot, nextMorph);
-  }, [modulationBridge, mseg1Morph, msegMorphBindings, selectedMsegSlot]);
+  }, [mseg1Morph, msegMorphBindings, selectedMsegSlot]);
   const handleEnvelopeChange = reactExports.useCallback((field, nextValue) => {
     if (!selectedEnvelope) {
       return;
@@ -21774,9 +21770,6 @@ function useSynthPatchViewModel({
     mseg2Morph.setValue(parameters.msegMorphs[1]);
     mseg3Morph.setValue(parameters.msegMorphs[2]);
     const bridge = modulationBridge.current;
-    bridge?.setMsegSlotMorph(0, parameters.msegMorphs[0]);
-    bridge?.setMsegSlotMorph(1, parameters.msegMorphs[1]);
-    bridge?.setMsegSlotMorph(2, parameters.msegMorphs[2]);
     snapshot.envelopes.forEach((envelope, envelopeIndex) => {
       bridge?.setEnvelope(envelopeIndex, envelope);
     });

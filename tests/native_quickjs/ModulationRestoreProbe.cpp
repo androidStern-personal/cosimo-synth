@@ -21,6 +21,7 @@
 #include "cmajor/helpers/cmaj_Patch.h"
 #include "cmajor/helpers/cmaj_PatchWorker_QuickJS.h"
 #include "choc/gui/choc_MessageLoop.h"
+#include "../../native/three_oscillator_renderer/RendererExternalFunctionProvider.h"
 
 namespace
 {
@@ -31,24 +32,21 @@ constexpr auto observationTimeout = std::chrono::seconds (8);
 
 constexpr auto storedStatePrefix = R"json({
   "format": "cosimo.modulation",
-  "version": 4,
+  "version": 5,
   "msegSlots": [
     {
       "shapeA": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 1", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
       "shapeB": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 1", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
-      "morph": 0,
       "playback": { "format": "cosimo.mseg.playback", "version": 1, "rate": { "kind": "seconds", "seconds": 1 }, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
     },
     {
       "shapeA": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 2", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
       "shapeB": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 2", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
-      "morph": 0,
       "playback": { "format": "cosimo.mseg.playback", "version": 1, "rate": { "kind": "seconds", "seconds": 1 }, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
     },
     {
       "shapeA": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 3", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
       "shapeB": { "format": "cosimo.mseg.shape", "version": 1, "name": "MSEG 3", "globalSmooth": false, "points": [{ "x": 0, "y": 0, "curvePower": 0 }, { "x": 1, "y": 1, "curvePower": 0 }] },
-      "morph": 0,
       "playback": { "format": "cosimo.mseg.playback", "version": 1, "rate": { "kind": "seconds", "seconds": 1 }, "loop": { "startX": 0, "endX": 1 }, "noteOffPolicy": "finish_loop", "legatoRestarts": false, "holdFinalValue": true }
     }
   ],
@@ -253,6 +251,8 @@ int runProbe (const char* runtimePath, const char* patchPath)
     PlaybackControl playback;
     cmaj::Patch patch;
     patch.createEngine = [] { return cmaj::Engine::create(); };
+    patch.externalFunctionProvider =
+        cosimo::three_osc::bridge::createExternalFunctionProvider();
     cmaj::enableQuickJSPatchWorker (patch);
 
     patch.stopPlayback = [&playback]
@@ -311,7 +311,7 @@ int runProbe (const char* runtimePath, const char* patchPath)
         }
     };
 
-    patch.setStoredStateValue ("modulation.v4", choc::value::Value (routedStoredState));
+    patch.setStoredStateValue ("modulation.v5", choc::value::Value (routedStoredState));
     patch.setPlaybackParams ({ sampleRate, blockSize, 0, 2 });
 
     cmaj::Patch::LoadParams loadParams;
@@ -369,7 +369,7 @@ int runProbe (const char* runtimePath, const char* patchPath)
     const auto routedRms = measureAudioRms (patch, playback, 256);
     const auto routedSnapshot = takeSnapshot (observations);
 
-    patch.setStoredStateValue ("modulation.v4", choc::value::Value (emptyStoredState));
+    patch.setStoredStateValue ("modulation.v5", choc::value::Value (emptyStoredState));
 
     if (! waitForMessageLoopBarrier())
     {
@@ -405,7 +405,7 @@ int runProbe (const char* runtimePath, const char* patchPath)
         return 1;
     }
 
-    std::cout << "PASS: QuickJS restored modulation.v4 through the production worker and rack engine\n"
+    std::cout << "PASS: QuickJS restored modulation.v5 through the production worker and rack engine\n"
               << "  dspSessionID=" << emptySnapshot.dspSessionID << '\n'
               << "  acceptedModulationSerial=" << emptySnapshot.acceptedModulationSerial << '\n'
               << "  routedRms=" << routedRms << '\n'

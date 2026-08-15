@@ -2798,7 +2798,7 @@ test("articulation recall applies sparse v4 overrides without replacing routing"
             harness.setParameterValue("warpAmount", 0.08);
             harness.setParameterValue("filterCutoff", 8200);
 
-            const rawModulationState = harness.getSnapshot().storedState["modulation.v4"];
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v5"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
                 : fallbackModulationState;
@@ -2812,7 +2812,7 @@ test("articulation recall applies sparse v4 overrides without replacing routing"
                 amount: 0.03,
                 reducer: "max",
             }];
-            harness.setStoredStateValue("modulation.v4", JSON.stringify(modulationState));
+            harness.setStoredStateValue("modulation.v5", JSON.stringify(modulationState));
         }, {
             fallbackModulationState: createDefaultModulationState(),
             nextRouteId: routeId,
@@ -4018,7 +4018,7 @@ test("synth preset bar saves current synth state through shared effect presets",
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setStoredStateValue(articulationStateKey, JSON.stringify(nextBank));
 
-            const rawModulationState = harness.getSnapshot().storedState["modulation.v4"];
+            const rawModulationState = harness.getSnapshot().storedState["modulation.v5"];
             const modulationState = rawModulationState
                 ? JSON.parse(String(rawModulationState))
                 : defaultModulationState;
@@ -4031,7 +4031,6 @@ test("synth preset bar saves current synth state through shared effect presets",
                 : [];
             modulationState.msegSlots[0] = {
                 ...(modulationState.msegSlots[0] ?? {}),
-                morph: 0.71,
             };
             modulationState.envelopeSlots[1] = {
                 ...(modulationState.envelopeSlots[1] ?? {}),
@@ -4050,7 +4049,8 @@ test("synth preset bar saves current synth state through shared effect presets",
                 amount: 0.37,
                 reducer: "max",
             }];
-            harness.setStoredStateValue("modulation.v4", JSON.stringify(modulationState));
+            harness.setStoredStateValue("modulation.v5", JSON.stringify(modulationState));
+            harness.setParameterValue("mseg1Morph", 0.71);
             return modulationState;
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
@@ -4062,7 +4062,7 @@ test("synth preset bar saves current synth state through shared effect presets",
             page,
             "seeded non-default stored state before synth preset save",
             (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).selectedSlotId === "bright-bow"
-                && Math.abs(Number(readStoredModulationState(nextSnapshot).msegSlots[0]?.morph) - 0.71) <= 1e-9,
+                && Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.71) <= 1e-9,
         );
 
         await page.evaluate(() => {
@@ -4125,7 +4125,7 @@ test("synth preset bar saves current synth state through shared effect presets",
         );
         assert.deepEqual(
             Object.keys(savedPreset.storedState).sort((left, right) => left.localeCompare(right)),
-            [ARTICULATION_STATE_KEY, "modulation.v4"],
+            [ARTICULATION_STATE_KEY, "modulation.v5"],
             "saved synth presets must capture only the required stored-state adapters",
         );
         assert.deepEqual(
@@ -4133,8 +4133,9 @@ test("synth preset bar saves current synth state through shared effect presets",
             editorBankToStoredArticulations(seededBank),
             "saved synth presets must include the actual non-default articulation bank",
         );
-        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v4"]);
-        assert.equal(savedModulationState.msegSlots[0].morph, seededModulationState.msegSlots[0].morph);
+        const savedModulationState = deserializeModulationState(savedPreset.storedState["modulation.v5"]);
+        assert.equal(savedPreset.parameters.mseg1Morph, 0.33);
+        assert.equal("morph" in savedModulationState.msegSlots[0], false);
         assert.equal(savedModulationState.envelopeSlots[1].attackSeconds, seededModulationState.envelopeSlots[1].attackSeconds);
         assert.equal(savedModulationState.envelopeSlots[1].releaseSeconds, seededModulationState.envelopeSlots[1].releaseSeconds);
         assert.deepEqual(
@@ -4225,7 +4226,7 @@ test("synth presets restore mapping dependencies before strict articulation rout
 
         await page.evaluate(({ defaultModulationState, nextRouteId }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setStoredStateValue("modulation.v4", JSON.stringify({
+            harness.setStoredStateValue("modulation.v5", JSON.stringify({
                 ...defaultModulationState,
                 routes: [{
                     id: nextRouteId,
@@ -4270,8 +4271,8 @@ test("synth presets restore mapping dependencies before strict articulation rout
         await page.evaluate(({ articulationStateKey, emptyArticulations }) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
             harness.setStoredStateValue(articulationStateKey, JSON.stringify(emptyArticulations));
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v4"]));
-            harness.setStoredStateValue("modulation.v4", JSON.stringify({ ...modulationState, routes: [] }));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v5"]));
+            harness.setStoredStateValue("modulation.v5", JSON.stringify({ ...modulationState, routes: [] }));
         }, {
             articulationStateKey: ARTICULATION_STATE_KEY,
             emptyArticulations: {
@@ -5018,13 +5019,13 @@ test("mod matrix amount entry preserves the focused draft across a host echo", a
         await amountInput.fill("12");
         await page.evaluate(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v4"]));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v5"]));
             modulationState.routes[0].amount = 0.77;
-            harness.setStoredStateValue("modulation.v4", JSON.stringify(modulationState));
+            harness.setStoredStateValue("modulation.v5", JSON.stringify(modulationState));
         });
         await page.waitForFunction(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v4"]));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v5"]));
             return Math.abs(Number(modulationState.routes[0]?.amount) - 0.77) <= 1e-9;
         });
 
@@ -5266,13 +5267,13 @@ test("desktop envelope exact entry preserves the focused draft across a host ech
         echoedModulationState.envelopeSlots[1].attackSeconds = 0.9;
         await page.evaluate((nextModulationState) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(
-                "modulation.v4",
+                "modulation.v5",
                 JSON.stringify(nextModulationState),
             );
         }, echoedModulationState);
         await page.waitForFunction(() => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v4"]));
+            const modulationState = JSON.parse(String(harness.getSnapshot().storedState["modulation.v5"]));
             return Math.abs(Number(modulationState.envelopeSlots[1]?.attackSeconds) - 0.9) <= 1e-9;
         });
 
@@ -6420,25 +6421,25 @@ test("main MSEG morph control updates morph without taking keyboard focus and pr
             page,
             "main MSEG morph changed",
             (nextSnapshot) => {
-                const rawState = nextSnapshot.storedState["modulation.v4"];
-                if (typeof rawState !== "string") {
-                    return false;
-                }
-
-                const modulationState = JSON.parse(rawState);
+                const rawState = nextSnapshot.storedState["modulation.v5"];
+                const modulationState = typeof rawState === "string" ? JSON.parse(rawState) : null;
                 return Math.abs(Number(nextSnapshot.parameterValues.mseg1Morph) - 0.72) <= 0.04
-                    && Math.abs(Number(modulationState.msegSlots?.[0]?.morph) - 0.72) <= 0.04;
+                    && (modulationState === null || !("morph" in (modulationState.msegSlots?.[0] ?? {})));
             },
         );
-        const modulationState = JSON.parse(String(snapshot.storedState["modulation.v4"]));
         assert.equal(
             snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationMsegBuffer"),
             false,
         );
         assert.equal(
-            Math.abs(Number(modulationState.msegSlots[0].morph) - Number(snapshot.parameterValues.mseg1Morph)) <= 1e-9,
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "mseg1Morph"),
             true,
+            "the morph drag must reach the real parameter endpoint",
         );
+        const rawModulationState = snapshot.storedState["modulation.v5"];
+        if (typeof rawModulationState === "string") {
+            assert.equal("morph" in JSON.parse(rawModulationState).msegSlots[0], false);
+        }
     } finally {
         await page.close();
     }
@@ -6673,7 +6674,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
                 const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                const rawState = snapshot.storedState["modulation.v4"];
+                const rawState = snapshot.storedState["modulation.v5"];
                 if (typeof rawState !== "string") {
                     await new Promise((resolve) => setTimeout(resolve, 50));
                     continue;
@@ -6689,7 +6690,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
             }
 
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return JSON.parse(String(snapshot.storedState["modulation.v4"])).msegSlots?.[0]?.playback;
+            return JSON.parse(String(snapshot.storedState["modulation.v5"])).msegSlots?.[0]?.playback;
         });
         assert.equal(playbackAfterRateChange.rate.seconds, 0.5);
         let snapshot = await getHarnessSnapshot(page);
@@ -6711,7 +6712,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
 
             for (let attempt = 0; attempt < 80; attempt += 1) {
                 const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                const rawState = snapshot.storedState["modulation.v4"];
+                const rawState = snapshot.storedState["modulation.v5"];
                 if (typeof rawState !== "string") {
                     await new Promise((resolve) => setTimeout(resolve, 50));
                     continue;
@@ -6727,7 +6728,7 @@ test("MSEG overview playback controls update the canonical modulation state on t
             }
 
             const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return JSON.parse(String(snapshot.storedState["modulation.v4"])).msegSlots?.[0]?.playback;
+            return JSON.parse(String(snapshot.storedState["modulation.v5"])).msegSlots?.[0]?.playback;
         });
         assert.equal(playbackAfterLoopToggle.loop, null);
         snapshot = await getHarnessSnapshot(page);
@@ -7361,7 +7362,7 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await expandGlobalModRail(page);
@@ -7424,7 +7425,7 @@ test("switching armed sources swaps only selected-route outer geometry and prese
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWet", 0.6, true);
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
@@ -7941,7 +7942,7 @@ test("rack parameter menus never edit a hidden default-source route while no sou
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
@@ -8242,10 +8243,10 @@ test("mobile Mod uses a complete one-dimensional route list with detail, filters
         });
         await page.evaluate((state) => {
             const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            harness.setStoredStateValue("modulation.v5", JSON.stringify(state));
         }, seededState);
         await page.waitForFunction(() => {
-            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v4"]));
+            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v5"]));
             return state.routes?.length === 3;
         });
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
@@ -8362,7 +8363,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         }
         const seededState = normalizeModulationState({ routes: routes.slice(0, 101) });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
         const matrix = page.locator('[data-role="mobile-mod-matrix"]');
@@ -8389,7 +8390,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         assert.ok(createdRoute);
         await page.addInitScript((persistedState) => {
             window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
-                storedState: { "modulation.v4": JSON.stringify(persistedState) },
+                storedState: { "modulation.v5": JSON.stringify(persistedState) },
             };
         }, readStoredModulationState(snapshot));
         await page.reload({ waitUntil: "commit" });
@@ -8397,7 +8398,7 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         await page.click('[data-role="mobile-workspace-toggle-mod"]');
         await page.locator('[data-role="mobile-mod-matrix"]').waitFor();
         await page.waitForFunction((routeId) => {
-            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v4"];
+            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v5"];
             if (rawState === undefined) return false;
             const state = JSON.parse(String(rawState));
             return state.routes?.length === 102 && state.routes.some((route) => route.id === routeId);
@@ -10103,7 +10104,7 @@ test("source preview and valid hover stay transient while the armed ring and foc
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         await selectRackEffect(page, "reverb");
@@ -10182,7 +10183,7 @@ test("a real source drop creates a mapping after 100 existing mappings", async (
             routes,
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
         }, seededState);
         await waitForHarnessSnapshot(
             page,
@@ -10236,7 +10237,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
             ],
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("globalFilterMode", 0, true);
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
@@ -10358,7 +10359,7 @@ test("a two-digit exact route badge stays contained at 320px without changing th
             })),
         });
         await page.evaluate((state) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v4", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v5", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-toggle-fx"]');
         const surface = page.locator('[data-role="rack-parameter-surface-distortionWet"]');

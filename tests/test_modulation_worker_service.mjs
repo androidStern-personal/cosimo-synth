@@ -8,7 +8,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const modulationModulePromise = loadUIModule(repoRoot, "ui/shared/modulation.ts");
 const targetsModulePromise = loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
-const serviceModulePromise = loadUIModule(repoRoot, "ui/worker/modulation-worker-service.ts");
+const serviceModulePromise = loadUIModule(repoRoot, "ui/worker/modulation-articulation-worker-service.ts");
 
 const laneTails = [
     {
@@ -177,7 +177,7 @@ test("the modulation service publishes serialized all-884 state through one corr
     ));
     const serializedState = modulation.serializeModulationState(state);
     const connection = new AcknowledgingModulationConnection(modulation.MODULATION_STATE_KEY, serializedState);
-    const service = serviceModule.createModulationWorkerService(connection);
+    const service = serviceModule.createModulationArticulationWorkerService(connection);
 
     service.start();
     connection.emitEndpoint("runtimeState", { dspSessionId: connection.dspSessionId });
@@ -214,11 +214,13 @@ test("the modulation service publishes serialized all-884 state through one corr
             })),
         );
 
-        const finalAcknowledgement = connection.acknowledgements.at(-1);
-        assert.equal(finalAcknowledgement.dspSessionId, programEvent.value.dspSessionId);
-        assert.equal(finalAcknowledgement.acceptedModulationSerial, programEvent.value.deliverySerial);
-        assert.equal(finalAcknowledgement.rejectedSerial, 0);
-        assert.equal(finalAcknowledgement.syncSerial, 0);
+        const modulationAcknowledgement = connection.acknowledgements.find((acknowledgement) => (
+            acknowledgement.acceptedModulationSerial === programEvent.value.deliverySerial
+            && acknowledgement.syncSerial === 0
+        ));
+        assert.notEqual(modulationAcknowledgement, undefined);
+        assert.equal(modulationAcknowledgement.dspSessionId, programEvent.value.dspSessionId);
+        assert.equal(modulationAcknowledgement.rejectedSerial, 0);
     } finally {
         service.stop();
     }

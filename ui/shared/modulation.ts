@@ -38,9 +38,9 @@ import { err, ok, type Result } from "./result";
 import { getModulationTargetDisplayLabel } from "./target-descriptor";
 
 /** Persisted-state key for the hard-forked modulation contract. */
-export const MODULATION_STATE_KEY = "modulation.v4";
+export const MODULATION_STATE_KEY = "modulation.v5";
 /** Current strict persisted modulation envelope version. */
-export const MODULATION_STATE_VERSION = 4;
+export const MODULATION_STATE_VERSION = 5;
 export const MODULATION_MSEG_SLOT_COUNT = 3;
 export const MODULATION_ENV_SLOT_COUNT = 3;
 export const MODULATION_MSEG_BUFFER_ENDPOINT_ID = "modulationMsegBuffer";
@@ -114,7 +114,6 @@ export type ModulationTargetOption = {
 export type ModulationMsegSlot = {
     shapeA: MsegShape;
     shapeB: MsegShape;
-    morph: number;
     playback: MsegPlayback;
 };
 
@@ -141,7 +140,7 @@ export type ModulationRouteUpdate = Partial<Omit<ModulationRoute, "id">>;
 
 export type ModulationState = {
     format: "cosimo.modulation";
-    version: 4;
+    version: 5;
     msegSlots: ModulationMsegSlot[];
     envelopeSlots: ModulationEnvelope[];
     routes: ModulationRoute[];
@@ -815,7 +814,6 @@ function normalizeMsegSlot(value: unknown, slotIndex: number): ModulationMsegSlo
     return {
         shapeA,
         shapeB: normalizeMsegShape(nextValue.shapeB ?? shapeA),
-        morph: clamp01(nextValue.morph ?? 0),
         playback: normalizeMsegPlayback(nextValue.playback ?? createDefaultMsegPlayback()),
     };
 }
@@ -1031,7 +1029,6 @@ class ModulationMsegSlotController implements MsegEditorControllerLike {
             shapeB: slot.shapeB,
             referenceShape,
             editShapeIndex,
-            morph: slot.morph,
             playback: slot.playback,
             depth: MSEG_DEFAULT_DEPTH,
         };
@@ -1181,22 +1178,6 @@ export class ModulationRuntimeBridge {
                 msegSlots: nextMsegSlots,
             };
         });
-    }
-
-    setMsegSlotMorph(slotIndex: number, nextMorph: number) {
-        const normalizedMorph = clamp01(nextMorph);
-        const currentSlot = this.state.msegSlots[slotIndex];
-
-        if (currentSlot.morph === normalizedMorph) {
-            return;
-        }
-
-        this.updateState((previousState) => ({
-            ...previousState,
-            msegSlots: previousState.msegSlots.map((slot, index) => (
-                index === slotIndex ? { ...slot, morph: normalizedMorph } : slot
-            )),
-        }));
     }
 
     setMsegSlotPlayback(slotIndex: number, nextPlayback: unknown) {

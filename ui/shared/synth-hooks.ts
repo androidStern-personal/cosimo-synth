@@ -2748,8 +2748,7 @@ export function useSynthPatchViewModel({
         const nextMorph = clamp(Number(nextValue) || 0, 0, 1);
         const targetBinding = msegMorphBindings[selectedMsegSlot] ?? mseg1Morph;
         targetBinding.setValue(nextMorph);
-        modulationBridge.current?.setMsegSlotMorph(selectedMsegSlot, nextMorph);
-    }, [modulationBridge, mseg1Morph, msegMorphBindings, selectedMsegSlot]);
+    }, [mseg1Morph, msegMorphBindings, selectedMsegSlot]);
 
     const handleEnvelopeChange = useCallback((
         field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds",
@@ -2896,9 +2895,6 @@ export function useSynthPatchViewModel({
         mseg3Morph.setValue(parameters.msegMorphs[2]);
 
         const bridge = modulationBridge.current;
-        bridge?.setMsegSlotMorph(0, parameters.msegMorphs[0]);
-        bridge?.setMsegSlotMorph(1, parameters.msegMorphs[1]);
-        bridge?.setMsegSlotMorph(2, parameters.msegMorphs[2]);
         snapshot.envelopes.forEach((envelope, envelopeIndex) => {
             bridge?.setEnvelope(envelopeIndex, envelope);
         });

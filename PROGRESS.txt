@@ -319,4 +319,11 @@ Hard-cut live parameter and articulation checkpoint — completed 2026-08-15
 - The old complete-image resolver and affected-selector re-upload path are deleted rather than retained in parallel. Cmajor remains fixed-size and allocation-free.
 - The mock engine now models the same parameter defaults as the Cmajor/binding contract. Editor-open and headless instances no longer depend on a post-boot UI overwrite for their initial filter sound.
 - Focused/adjacent UI, state, bridge, reset, and restore gates pass 128/128. The real generated SharedVoiceEngine agrees native/SIMD-Wasm at `424242` and retains the exact one-renderer/66-control product gate.
-- Next hard-cut work is the strict `modulation.v5` document and one production restore owner, followed by direct A/B/C UI bindings and final platform builds.
+- The next hard-cut work is direct A/B/C UI binding followed by final platform builds.
+
+Hard-cut modulation and runtime restore checkpoint — completed 2026-08-15
+- `modulation.v5` is now the only modulation document. MSEG morph is removed from that document and remains one ordinary host parameter per MSEG; shapes/playback, envelopes, routes, and macro names remain structured modulation state. There is no v4 read, alias, or repair path.
+- One production worker service owns the correlated MOD then ART restore order. It waits for both documents, publishes MOD first, withholds dependent ART until the matching MOD acknowledgement, skips stale captured ART when desired state changes, and replays both on a new DSP session. The separate modulation and articulation worker services are deleted.
+- Desktop and iPhone presets now prove that MSEG morph is captured through the parameter snapshot and never duplicated into `modulation.v5`. Generated desktop, iPhone, and worker bundles are current and repeatable.
+- The native QuickJS production host now attaches the same renderer provider as the shipping native hosts. Its real production patch accepts modulation serial 14, installs and clears the rack route, remains non-silent, and shows the expected 11.10x audio delta. QuickJS scheduling uses the Promise-job fallback when `queueMicrotask` is unavailable.
+- Focused state/adapter/runtime gates pass 158/158; iPhone source UI passes 18/18; the built desktop bundle boots; TypeScript and generation checks pass. The full iPhone contract run reached 79 passes/3 unavailable-iPad skips; its two stale v4/legacy-A assertions were updated and their focused rerun passes 2/2.

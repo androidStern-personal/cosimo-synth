@@ -1,7 +1,6 @@
 import type { PatchConnectionLike } from "./cmajor-react";
-import { createArticulationWorkerService } from "./articulation-worker-service";
+import { createModulationArticulationWorkerService } from "../worker/modulation-articulation-worker-service";
 import { allTargetDescriptors } from "./target-descriptor";
-import { createModulationWorkerService } from "../worker/modulation-worker-service";
 
 const midiInputEndpointID = "midiIn";
 const wavetablePositionEndpointID = "wavetablePosition";
@@ -650,16 +649,13 @@ export class MockPatchConnection implements PatchConnectionLike {
     private acceptedModulationSerial = 0;
     private acceptedArticulationSerial = 0;
     private status: unknown;
-    private readonly modulationWorkerService;
-    private readonly articulationWorkerService;
+    private readonly modulationArticulationWorkerService;
 
     constructor(manifest: unknown) {
         this.manifest = manifest;
         this.status = buildHarnessStatus(manifest);
-        this.modulationWorkerService = createModulationWorkerService(this);
-        this.modulationWorkerService.start();
-        this.articulationWorkerService = createArticulationWorkerService(this);
-        this.articulationWorkerService.start();
+        this.modulationArticulationWorkerService = createModulationArticulationWorkerService(this);
+        this.modulationArticulationWorkerService.start();
         queueMicrotask(() => this.emitEndpoint(runtimeStateEndpointID, this.runtimeState));
     }
 
