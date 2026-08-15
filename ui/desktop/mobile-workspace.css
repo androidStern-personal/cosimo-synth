@@ -444,11 +444,6 @@
         line-height: 1;
     }
 
-    .mobile-voice-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 4px;
-    }
-
     .mobile-workspace-section.is-fx .mobile-workspace-panel {
         padding: 0;
         overflow: hidden;

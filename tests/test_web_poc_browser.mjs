@@ -2854,7 +2854,7 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
     }
 });
 
-test("generated browser proof shows the wavetable and filter cards on mobile", {
+test("generated browser proof stacks full-width wavetable and filter rows on mobile", {
     skip: browserEngine !== "webkit",
 }, async () => {
     const page = await browser.newPage({
@@ -2880,7 +2880,13 @@ test("generated browser proof shows the wavetable and filter cards on mobile", {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const readBounds = (selector) => {
                 const bounds = root?.querySelector(selector)?.getBoundingClientRect();
-                return bounds ? { width: bounds.width, height: bounds.height } : null;
+                return bounds ? {
+                    x: bounds.x,
+                    y: bounds.y,
+                    bottom: bounds.bottom,
+                    width: bounds.width,
+                    height: bounds.height,
+                } : null;
             };
 
             return {
@@ -2891,6 +2897,15 @@ test("generated browser proof shows the wavetable and filter cards on mobile", {
 
         assert.ok(cards.wavetable?.width > 0 && cards.wavetable.height > 0, "Expected the mobile wavetable card to be visible.");
         assert.ok(cards.filter?.width > 0 && cards.filter.height > 0, "Expected the mobile filter card to be visible.");
+        assert.ok(
+            cards.filter.y >= cards.wavetable.bottom + 8,
+            `Expected the filter on its own row below the wavetable: ${JSON.stringify(cards)}`,
+        );
+        assert.ok(
+            Math.abs(cards.filter.x - cards.wavetable.x) <= 1
+                && Math.abs(cards.filter.width - cards.wavetable.width) <= 1,
+            `Expected equal full-width mobile cards: ${JSON.stringify(cards)}`,
+        );
     } finally {
         await page.close();
     }

@@ -7238,7 +7238,7 @@ test("mobile workspace keeps Voice FX and Mod visible while exactly one accordio
     }
 });
 
-test("mobile Voice uses a two-column instrument view and a short unlabeled one-and-a-half-octave keyboard", async () => {
+test("mobile Voice stacks full-width wavetable and filter rows above a short unlabeled one-and-a-half-octave keyboard", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -7266,7 +7266,8 @@ test("mobile Voice uses a two-column instrument view and a short unlabeled one-a
             const keyboardRect = keyboard.getBoundingClientRect();
 
             return {
-                sameRow: Math.abs(wavetableRect.top - filterRect.top) <= 1,
+                stackedRows: filterRect.top >= wavetableRect.bottom + 8,
+                alignedLeft: Math.abs(wavetableRect.left - filterRect.left) <= 1,
                 wavetableWidth: wavetableRect.width,
                 filterWidth: filterRect.width,
                 keyboardHeight: keyboardRect.height,
@@ -7277,8 +7278,10 @@ test("mobile Voice uses a two-column instrument view and a short unlabeled one-a
 
         assert.equal(renderedState.keyboardNoteCount, "18");
         assert.ok(layout);
-        assert.equal(layout.sameRow, true);
-        assert.equal(layout.wavetableWidth > 120 && layout.filterWidth > 120, true);
+        assert.equal(layout.stackedRows, true);
+        assert.equal(layout.alignedLeft, true);
+        assert.equal(Math.abs(layout.wavetableWidth - layout.filterWidth) <= 1, true);
+        assert.equal(layout.wavetableWidth > 280 && layout.filterWidth > 280, true);
         assert.equal(layout.keyboardHeight <= 84, true);
         assert.equal(layout.railLabelDisplay, "none");
         assert.equal(layout.railReadoutDisplay, "none");
