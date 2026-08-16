@@ -8,3 +8,23 @@ node_modules
 node_modules/
 /--output/
 .DS_Store
+
+# Local design-tool sessions and scratch projects
+/.impeccable-live*
+/dummy Project/
+
+# Generated visual captures and render iterations
+/animation_frames/
+/timelapse_frames/
+/anim_preview_frame_*.png
+/phase5_*.png
+/RENDER_high_quality*.png
+/cosimo_intro.mp4
+/promo/*/public/
+*.blend1
+
+# Generated packages
+/seqfx-stone-asset-pack*.zip
+
+# Local agent diagnostics
+/transient/claude-diagnostics/
