@@ -1,0 +1,22 @@
+/* Buildlapse global styles. Kept tiny — most styling lives in the components
+ * via inline style objects so transitions can read interpolated values. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #0d0a08;
+  color: rgba(225, 215, 195, 0.78);
+  font-family: "IBM Plex Mono", "JetBrains Mono", "Menlo", monospace;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: geometricPrecision;
+}
+
+img,
+video {
+  display: block;
+}
