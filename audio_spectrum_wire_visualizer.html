@@ -1,0 +1,1215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>3D Spectrum Wire Visualizer</title>
+  <style>
+    :root {
+      --bg: #03040a;
+      --panel: rgba(8, 12, 18, 0.78);
+      --panel-strong: rgba(8, 12, 18, 0.94);
+      --text: #e9f6ff;
+      --muted: #8aa0b8;
+      --line: rgba(255,255,255,0.12);
+      --accent: #d98b3a;
+      --accent-2: #50e6ff;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    #viewport {
+      position: fixed;
+      inset: 0;
+      background:
+        radial-gradient(circle at 50% 50%, rgba(217,139,58,0.08), transparent 34%),
+        radial-gradient(circle at 20% 20%, rgba(80,230,255,0.06), transparent 32%),
+        linear-gradient(135deg, #020208 0%, #080b12 55%, #020208 100%);
+    }
+
+    .topbar {
+      position: fixed;
+      left: 18px;
+      right: 18px;
+      top: 14px;
+      z-index: 10;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      pointer-events: none;
+    }
+
+    .title-card,
+    .meter-card {
+      pointer-events: auto;
+      border: 1px solid var(--line);
+      background: rgba(4, 7, 12, 0.62);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 16px 50px rgba(0,0,0,0.32);
+      border-radius: 18px;
+      padding: 12px 14px;
+    }
+
+    .title-card h1 {
+      margin: 0 0 4px 0;
+      font-size: 13px;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+
+    .title-card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .meter-card {
+      min-width: 210px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meter-card .row {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      font-size: 12px;
+      color: var(--muted);
+      margin: 3px 0;
+    }
+
+    .meter-card strong { color: var(--text); font-weight: 650; }
+
+    #panel {
+      position: fixed;
+      left: 18px;
+      bottom: 18px;
+      z-index: 20;
+      width: min(420px, calc(100vw - 36px));
+      max-height: min(76vh, 820px);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 22px;
+      background: var(--panel);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 24px 90px rgba(0,0,0,0.48);
+    }
+
+    #panel.collapsed .panel-body { display: none; }
+
+    .panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 13px 14px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.01));
+      border-bottom: 1px solid var(--line);
+    }
+
+    .panel-header .name {
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .panel-header .buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    button,
+    .file-label {
+      appearance: none;
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 999px;
+      background: rgba(255,255,255,0.07);
+      color: var(--text);
+      padding: 8px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: transform 120ms ease, background 120ms ease, border-color 120ms ease;
+    }
+
+    button:hover,
+    .file-label:hover {
+      transform: translateY(-1px);
+      background: rgba(255,255,255,0.11);
+      border-color: rgba(255,255,255,0.28);
+    }
+
+    button.primary,
+    .file-label.primary {
+      border-color: rgba(217,139,58,0.55);
+      background: rgba(217,139,58,0.17);
+      box-shadow: inset 0 0 24px rgba(217,139,58,0.08);
+    }
+
+    .panel-body {
+      max-height: calc(min(76vh, 820px) - 52px);
+      overflow-y: auto;
+      padding: 14px;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255,255,255,0.2) transparent;
+    }
+
+    .audio-box {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,0.11);
+      border-radius: 16px;
+      background: rgba(0,0,0,0.22);
+    }
+
+    .audio-actions {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    #fileInput { display: none; }
+
+    audio {
+      width: 100%;
+      height: 34px;
+      filter: invert(1) hue-rotate(180deg) saturate(0.8);
+      opacity: 0.82;
+    }
+
+    #status {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      word-break: break-word;
+    }
+
+    .group {
+      margin: 0 0 14px;
+      border: 1px solid rgba(255,255,255,0.10);
+      border-radius: 16px;
+      overflow: hidden;
+      background: rgba(0,0,0,0.18);
+    }
+
+    .group-title {
+      margin: 0;
+      padding: 10px 12px;
+      color: #b9cce3;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.13em;
+      text-transform: uppercase;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      background: rgba(255,255,255,0.035);
+    }
+
+    .control {
+      display: grid;
+      grid-template-columns: 116px 1fr 58px;
+      align-items: center;
+      gap: 9px;
+      padding: 9px 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+
+    .control:last-child { border-bottom: none; }
+
+    .control label {
+      color: #d9e7f5;
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .control output {
+      color: var(--muted);
+      font-size: 11px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    input[type="range"] { width: 100%; accent-color: var(--accent); }
+
+    input[type="number"],
+    select,
+    input[type="color"] {
+      width: 100%;
+      min-width: 0;
+      color: var(--text);
+      background: rgba(255,255,255,0.07);
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 10px;
+      padding: 7px 8px;
+      outline: none;
+    }
+
+    select option { background: #111722; }
+
+    input[type="checkbox"] {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    .hint {
+      margin: 10px 2px 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .legend {
+      position: fixed;
+      right: 18px;
+      bottom: 18px;
+      z-index: 10;
+      width: min(340px, calc(100vw - 36px));
+      padding: 13px 14px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(4, 7, 12, 0.58);
+      backdrop-filter: blur(14px);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      pointer-events: none;
+    }
+
+    .legend strong { color: var(--text); }
+
+    @media (max-width: 780px) {
+      .topbar { align-items: flex-start; }
+      .meter-card { display: none; }
+      .legend { display: none; }
+      #panel { max-height: 70vh; }
+      .control { grid-template-columns: 98px 1fr 48px; }
+    }
+  </style>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.174.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.174.0/examples/jsm/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <div id="viewport"></div>
+
+  <div class="topbar">
+    <div class="title-card">
+      <h1>3D Spectrum Wire</h1>
+      <p>Frequency is logarithmic on X, dB maps to Y, history recedes backward on Z.</p>
+    </div>
+    <div class="meter-card" aria-live="polite">
+      <div class="row"><span>Peak</span><strong id="peakReadout">— dB</strong></div>
+      <div class="row"><span>FFT</span><strong id="fftReadout">4096</strong></div>
+      <div class="row"><span>History</span><strong id="historyReadout">0</strong></div>
+    </div>
+  </div>
+
+  <aside id="panel">
+    <div class="panel-header">
+      <div class="name">Visualizer Controls</div>
+      <div class="buttons">
+        <button id="clearHistoryBtn" title="Remove old spectral trails">Clear Trails</button>
+        <button id="collapseBtn" title="Collapse panel">Hide</button>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="audio-box">
+        <div class="audio-actions">
+          <label class="file-label primary" for="fileInput">Choose Audio File</label>
+          <input id="fileInput" type="file" accept="audio/*" />
+          <button id="playPauseBtn" class="primary">Play / Pause</button>
+          <button id="resetCameraBtn">Reset View</button>
+        </div>
+        <audio id="audio" controls></audio>
+        <div id="status">Choose an audio file. Until then the line idles with a quiet synthetic ripple.</div>
+      </div>
+
+      <div id="controlsRoot"></div>
+
+      <p class="hint">
+        Tip: try <strong>Bézier contour</strong> for a smooth analog trace, then <strong>Blocky line fit</strong> and lower the line count for a geometric analyzer look.
+      </p>
+    </div>
+  </aside>
+
+  <div class="legend">
+    <strong>What you are seeing:</strong> the bright front copper tube is the live FFT contour. Each snapshot is copied into history, fades by decay rate, and is pulled backward along Z so time becomes depth.
+  </div>
+
+<script type="module">
+  import * as THREE from 'three';
+  import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+  import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+  import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+  import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+  import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const log10 = (v) => Math.log(v) / Math.LN10;
+
+  const params = {
+    curveMode: 'bezier',
+    samplePoints: 128,
+    blockSegments: 24,
+    fftSize: 4096,
+    analyserSmoothing: 0.82,
+    response: 0.34,
+    minFreq: 20,
+    maxFreq: 20000,
+    minDb: -95,
+    maxDb: -12,
+    dbBoost: 0,
+    xWidth: 92,
+    yHeight: 42,
+    tubeRadius: 0.23,
+    radialSegments: 8,
+    curveResolution: 3,
+    bezierTension: 0.92,
+    historyCount: 90,
+    spawnRate: 14,
+    pullSpeed: 20,
+    decayRate: 0.68,
+    depthFade: 0.004,
+    trailOpacity: 0.48,
+    wireColor: '#d98b3a',
+    liveEmissive: 0.72,
+    bloomStrength: 0.92,
+    bloomRadius: 0.42,
+    bloomThreshold: 0.08,
+    fogDensity: 0.006,
+    autoRotate: false,
+    showAxis: true
+  };
+
+  const controlGroups = [
+    {
+      title: 'Audio Analysis',
+      controls: [
+        { key: 'fftSize', label: 'FFT size', type: 'select', options: [512, 1024, 2048, 4096, 8192, 16384] },
+        { key: 'samplePoints', label: 'Bins drawn', type: 'range', min: 32, max: 256, step: 1 },
+        { key: 'analyserSmoothing', label: 'FFT smoothing', type: 'range', min: 0, max: 0.98, step: 0.01 },
+        { key: 'response', label: 'Visual response', type: 'range', min: 0.03, max: 1, step: 0.01 },
+        { key: 'dbBoost', label: 'dB boost', type: 'range', min: -24, max: 36, step: 1 }
+      ]
+    },
+    {
+      title: 'Axes and Scale',
+      controls: [
+        { key: 'minFreq', label: 'Min freq', type: 'number', min: 1, max: 2000, step: 1, suffix: 'Hz' },
+        { key: 'maxFreq', label: 'Max freq', type: 'number', min: 1000, max: 48000, step: 100, suffix: 'Hz' },
+        { key: 'minDb', label: 'Min dB', type: 'range', min: -120, max: -30, step: 1 },
+        { key: 'maxDb', label: 'Max dB', type: 'range', min: -40, max: 0, step: 1 },
+        { key: 'xWidth', label: 'X width', type: 'range', min: 40, max: 130, step: 1 },
+        { key: 'yHeight', label: 'Y height', type: 'range', min: 18, max: 70, step: 1 }
+      ]
+    },
+    {
+      title: 'Contour Drawing',
+      controls: [
+        { key: 'curveMode', label: 'Draw mode', type: 'select', options: [
+          { value: 'spline', label: 'Smooth spline tube' },
+          { value: 'bezier', label: 'Bézier contour' },
+          { value: 'blocky', label: 'Blocky line fit' }
+        ]},
+        { key: 'blockSegments', label: 'Blocky lines', type: 'range', min: 4, max: 96, step: 1 },
+        { key: 'bezierTension', label: 'Bézier pull', type: 'range', min: 0.1, max: 1.6, step: 0.01 },
+        { key: 'tubeRadius', label: 'Wire radius', type: 'range', min: 0.03, max: 1.2, step: 0.01 },
+        { key: 'radialSegments', label: 'Roundness', type: 'range', min: 3, max: 16, step: 1 },
+        { key: 'curveResolution', label: 'Curve detail', type: 'range', min: 1, max: 8, step: 1 }
+      ]
+    },
+    {
+      title: 'History Trail',
+      controls: [
+        { key: 'historyCount', label: 'Trail count', type: 'range', min: 0, max: 220, step: 1 },
+        { key: 'spawnRate', label: 'Snapshots/s', type: 'range', min: 1, max: 40, step: 1 },
+        { key: 'pullSpeed', label: 'Pull back', type: 'range', min: 0, max: 80, step: 1 },
+        { key: 'decayRate', label: 'Decay rate', type: 'range', min: 0.05, max: 3.5, step: 0.01 },
+        { key: 'depthFade', label: 'Depth fade', type: 'range', min: 0, max: 0.03, step: 0.001 },
+        { key: 'trailOpacity', label: 'Trail opacity', type: 'range', min: 0, max: 1, step: 0.01 }
+      ]
+    },
+    {
+      title: 'Look and Camera',
+      controls: [
+        { key: 'wireColor', label: 'Wire color', type: 'color' },
+        { key: 'liveEmissive', label: 'Live glow', type: 'range', min: 0, max: 2.5, step: 0.01 },
+        { key: 'bloomStrength', label: 'Bloom', type: 'range', min: 0, max: 3, step: 0.01 },
+        { key: 'bloomRadius', label: 'Bloom radius', type: 'range', min: 0, max: 1.4, step: 0.01 },
+        { key: 'bloomThreshold', label: 'Bloom floor', type: 'range', min: 0, max: 1, step: 0.01 },
+        { key: 'fogDensity', label: 'Fog depth', type: 'range', min: 0, max: 0.03, step: 0.001 },
+        { key: 'showAxis', label: 'Show axes', type: 'checkbox' },
+        { key: 'autoRotate', label: 'Auto rotate', type: 'checkbox' }
+      ]
+    }
+  ];
+
+  let scene, camera, renderer, controls, composer, bloomPass;
+  let liveMesh, liveMaterial, axisGroup, starField;
+  let lastRenderPoints = [];
+  let history = [];
+  let historyAccumulator = 0;
+  let rawLevels = new Float32Array(params.samplePoints).fill(0);
+  let lastPeakDb = Number.NEGATIVE_INFINITY;
+
+  let audioEl, fileInput, statusEl;
+  let audioContext = null;
+  let analyser = null;
+  let mediaSource = null;
+  let freqData = null;
+  let objectUrl = null;
+
+  class PolylineCurve3 extends THREE.Curve {
+    constructor(points) {
+      super();
+      this.points = points.map(p => p.clone());
+    }
+    getPoint(t, target = new THREE.Vector3()) {
+      const n = this.points.length;
+      if (n === 0) return target.set(0, 0, 0);
+      if (n === 1) return target.copy(this.points[0]);
+      const scaled = clamp(t, 0, 1) * (n - 1);
+      const index = Math.min(n - 2, Math.floor(scaled));
+      const localT = scaled - index;
+      return target.copy(this.points[index]).lerp(this.points[index + 1], localT);
+    }
+  }
+
+  initUi();
+  initThree();
+  animate();
+
+  function initThree() {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x03040a);
+    scene.fog = new THREE.FogExp2(0x03040a, params.fogDensity);
+
+    camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 900);
+    resetCamera();
+
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.1;
+    document.getElementById('viewport').appendChild(renderer.domElement);
+
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.rotateSpeed = 0.45;
+    controls.zoomSpeed = 0.75;
+    controls.minDistance = 35;
+    controls.maxDistance = 260;
+    controls.target.set(0, 0, -22);
+    controls.autoRotate = params.autoRotate;
+    controls.autoRotateSpeed = 0.25;
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.52));
+
+    const keyLight = new THREE.PointLight(0xffc58a, 90, 260, 1.8);
+    keyLight.position.set(22, 34, 64);
+    scene.add(keyLight);
+
+    const rimLight = new THREE.PointLight(0x50e6ff, 60, 260, 2.0);
+    rimLight.position.set(-48, -24, 20);
+    scene.add(rimLight);
+
+    liveMaterial = makeLiveMaterial();
+    const starterPoints = buildRenderPoints(performance.now() / 1000);
+    liveMesh = new THREE.Mesh(makeTubeGeometry(starterPoints), liveMaterial);
+    liveMesh.frustumCulled = false;
+    scene.add(liveMesh);
+
+    createStarField();
+    rebuildAxes();
+
+    composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
+    bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(window.innerWidth, window.innerHeight),
+      params.bloomStrength,
+      params.bloomRadius,
+      params.bloomThreshold
+    );
+    composer.addPass(bloomPass);
+    composer.addPass(new OutputPass());
+
+    window.addEventListener('resize', onResize);
+  }
+
+  function initUi() {
+    audioEl = document.getElementById('audio');
+    fileInput = document.getElementById('fileInput');
+    statusEl = document.getElementById('status');
+
+    buildControls();
+
+    fileInput.addEventListener('change', handleFileSelected);
+    document.getElementById('playPauseBtn').addEventListener('click', togglePlayback);
+    document.getElementById('clearHistoryBtn').addEventListener('click', clearHistory);
+    document.getElementById('resetCameraBtn').addEventListener('click', resetCamera);
+    document.getElementById('collapseBtn').addEventListener('click', () => {
+      const panel = document.getElementById('panel');
+      const btn = document.getElementById('collapseBtn');
+      panel.classList.toggle('collapsed');
+      btn.textContent = panel.classList.contains('collapsed') ? 'Show' : 'Hide';
+    });
+
+    audioEl.addEventListener('play', async () => {
+      await ensureAudioGraph();
+      if (audioContext) await audioContext.resume();
+    });
+
+    audioEl.addEventListener('pause', () => {
+      setStatus('Paused. Use the audio controls or Play / Pause to resume.');
+    });
+  }
+
+  function buildControls() {
+    const root = document.getElementById('controlsRoot');
+    root.innerHTML = '';
+
+    for (const group of controlGroups) {
+      const groupEl = document.createElement('section');
+      groupEl.className = 'group';
+      const title = document.createElement('h2');
+      title.className = 'group-title';
+      title.textContent = group.title;
+      groupEl.appendChild(title);
+
+      for (const spec of group.controls) {
+        const row = document.createElement('div');
+        row.className = 'control';
+
+        const label = document.createElement('label');
+        label.textContent = spec.label;
+        label.htmlFor = `control-${spec.key}`;
+        row.appendChild(label);
+
+        const input = createInput(spec);
+        input.id = `control-${spec.key}`;
+        input.dataset.key = spec.key;
+        input.dataset.type = spec.type;
+        row.appendChild(input);
+
+        const output = document.createElement('output');
+        output.id = `output-${spec.key}`;
+        output.textContent = formatParamValue(spec.key, spec);
+        row.appendChild(output);
+
+        input.addEventListener('input', () => {
+          applyInputValue(input, spec);
+          output.textContent = formatParamValue(spec.key, spec);
+          afterParamChange(spec.key);
+        });
+
+        groupEl.appendChild(row);
+      }
+      root.appendChild(groupEl);
+    }
+  }
+
+  function createInput(spec) {
+    let input;
+    if (spec.type === 'select') {
+      input = document.createElement('select');
+      const options = spec.options.map(opt => typeof opt === 'object' ? opt : { value: String(opt), label: String(opt) });
+      for (const option of options) {
+        const el = document.createElement('option');
+        el.value = String(option.value);
+        el.textContent = option.label;
+        input.appendChild(el);
+      }
+      input.value = String(params[spec.key]);
+    } else if (spec.type === 'checkbox') {
+      input = document.createElement('input');
+      input.type = 'checkbox';
+      input.checked = Boolean(params[spec.key]);
+    } else if (spec.type === 'color') {
+      input = document.createElement('input');
+      input.type = 'color';
+      input.value = params[spec.key];
+    } else if (spec.type === 'number') {
+      input = document.createElement('input');
+      input.type = 'number';
+      input.value = params[spec.key];
+      input.min = spec.min;
+      input.max = spec.max;
+      input.step = spec.step;
+    } else {
+      input = document.createElement('input');
+      input.type = 'range';
+      input.value = params[spec.key];
+      input.min = spec.min;
+      input.max = spec.max;
+      input.step = spec.step;
+    }
+    return input;
+  }
+
+  function applyInputValue(input, spec) {
+    if (spec.type === 'checkbox') {
+      params[spec.key] = input.checked;
+    } else if (spec.type === 'select') {
+      const numeric = Number(input.value);
+      params[spec.key] = Number.isFinite(numeric) && input.value.trim() !== '' ? numeric : input.value;
+    } else if (spec.type === 'color') {
+      params[spec.key] = input.value;
+    } else {
+      params[spec.key] = Number(input.value);
+    }
+  }
+
+  function formatParamValue(key, spec = {}) {
+    const value = params[key];
+    if (spec.type === 'checkbox') return value ? 'on' : 'off';
+    if (spec.type === 'color') return value;
+    if (key === 'minFreq' || key === 'maxFreq') return `${Math.round(value)} Hz`;
+    if (key === 'minDb' || key === 'maxDb' || key === 'dbBoost') return `${value} dB`;
+    if (typeof value === 'number') return Number.isInteger(value) ? String(value) : value.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
+    if (key === 'curveMode') {
+      return value === 'bezier' ? 'Bézier' : value === 'blocky' ? 'blocky' : 'spline';
+    }
+    return String(value);
+  }
+
+  function afterParamChange(key) {
+    params.minFreq = Math.max(1, params.minFreq);
+    params.maxFreq = Math.max(params.minFreq + 10, params.maxFreq);
+    params.minDb = Math.min(params.minDb, params.maxDb - 1);
+    params.maxDb = Math.max(params.maxDb, params.minDb + 1);
+    params.blockSegments = Math.min(params.blockSegments, Math.max(4, params.samplePoints - 1));
+
+    if (key === 'fftSize' || key === 'analyserSmoothing') updateAnalyserSettings();
+    if (key === 'samplePoints') resetRawLevels();
+    if (['minFreq', 'maxFreq', 'minDb', 'maxDb', 'xWidth', 'yHeight', 'showAxis'].includes(key)) rebuildAxes();
+    if (key === 'wireColor' || key === 'liveEmissive') updateMaterials();
+    if (key === 'autoRotate' && controls) controls.autoRotate = params.autoRotate;
+    if (key === 'fogDensity' && scene) scene.fog = new THREE.FogExp2(0x03040a, params.fogDensity);
+    if (['bloomStrength', 'bloomRadius', 'bloomThreshold'].includes(key) && bloomPass) {
+      bloomPass.strength = params.bloomStrength;
+      bloomPass.radius = params.bloomRadius;
+      bloomPass.threshold = params.bloomThreshold;
+    }
+    syncOutputs();
+  }
+
+  function syncOutputs() {
+    for (const group of controlGroups) {
+      for (const spec of group.controls) {
+        const output = document.getElementById(`output-${spec.key}`);
+        const input = document.getElementById(`control-${spec.key}`);
+        if (output) output.textContent = formatParamValue(spec.key, spec);
+        if (input) {
+          if (spec.type === 'checkbox') input.checked = Boolean(params[spec.key]);
+          else input.value = String(params[spec.key]);
+        }
+      }
+    }
+  }
+
+  async function handleFileSelected(event) {
+    const file = event.target.files && event.target.files[0];
+    if (!file) return;
+    await ensureAudioGraph();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+    objectUrl = URL.createObjectURL(file);
+    audioEl.src = objectUrl;
+    audioEl.load();
+    setStatus(`Loaded: ${file.name}`);
+    try {
+      await audioContext.resume();
+      await audioEl.play();
+      setStatus(`Playing: ${file.name}`);
+    } catch (error) {
+      setStatus(`Loaded: ${file.name}. Press Play / Pause to start audio.`);
+    }
+  }
+
+  async function togglePlayback() {
+    await ensureAudioGraph();
+    if (!audioEl.src) {
+      setStatus('Choose an audio file first.');
+      return;
+    }
+    if (audioContext) await audioContext.resume();
+    if (audioEl.paused) {
+      await audioEl.play();
+      setStatus('Playing.');
+    } else {
+      audioEl.pause();
+      setStatus('Paused.');
+    }
+  }
+
+  async function ensureAudioGraph() {
+    if (audioContext) return;
+    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    analyser = audioContext.createAnalyser();
+    mediaSource = audioContext.createMediaElementSource(audioEl);
+    mediaSource.connect(analyser);
+    analyser.connect(audioContext.destination);
+    updateAnalyserSettings();
+  }
+
+  function updateAnalyserSettings() {
+    if (!analyser) return;
+    analyser.fftSize = Number(params.fftSize);
+    analyser.smoothingTimeConstant = clamp(params.analyserSmoothing, 0, 0.99);
+    // These affect getByteFrequencyData; float values are still clamped manually below.
+    analyser.minDecibels = params.minDb;
+    analyser.maxDecibels = params.maxDb;
+    freqData = new Float32Array(analyser.frequencyBinCount);
+    resetRawLevels();
+  }
+
+  function setStatus(text) {
+    statusEl.textContent = text;
+  }
+
+  function makeLiveMaterial() {
+    const color = new THREE.Color(params.wireColor);
+    return new THREE.MeshStandardMaterial({
+      color,
+      emissive: color.clone(),
+      emissiveIntensity: params.liveEmissive,
+      metalness: 0.78,
+      roughness: 0.24,
+      transparent: false
+    });
+  }
+
+  function makeTrailMaterial() {
+    const color = new THREE.Color(params.wireColor);
+    return new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: params.trailOpacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+  }
+
+  function updateMaterials() {
+    const color = new THREE.Color(params.wireColor);
+    document.documentElement.style.setProperty('--accent', params.wireColor);
+    if (liveMaterial) {
+      liveMaterial.color.copy(color);
+      liveMaterial.emissive.copy(color);
+      liveMaterial.emissiveIntensity = params.liveEmissive;
+      liveMaterial.needsUpdate = true;
+    }
+    for (const item of history) {
+      item.mesh.material.color.copy(color);
+      item.mesh.material.needsUpdate = true;
+    }
+  }
+
+  function resetRawLevels() {
+    rawLevels = new Float32Array(params.samplePoints).fill(0);
+  }
+
+  function effectiveSampleRate() {
+    return audioContext ? audioContext.sampleRate : 44100;
+  }
+
+  function effectiveMaxFreq() {
+    return Math.min(params.maxFreq, effectiveSampleRate() * 0.5);
+  }
+
+  function mapFrequencyToX(freq) {
+    const minF = Math.max(1, params.minFreq);
+    const maxF = Math.max(minF + 1, effectiveMaxFreq());
+    const t = (log10(freq) - log10(minF)) / (log10(maxF) - log10(minF));
+    return (clamp(t, 0, 1) - 0.5) * params.xWidth;
+  }
+
+  function mapDbNormToY(norm) {
+    return (clamp(norm, 0, 1) - 0.5) * params.yHeight;
+  }
+
+  function mapDbToY(db) {
+    const norm = (db - params.minDb) / (params.maxDb - params.minDb);
+    return mapDbNormToY(norm);
+  }
+
+  function getBandDb(edge0, edge1) {
+    if (!analyser || !freqData) return params.minDb;
+    const sampleRate = effectiveSampleRate();
+    const binHz = sampleRate / analyser.fftSize;
+    const bin0 = clamp(Math.floor(edge0 / binHz), 0, freqData.length - 1);
+    const bin1 = clamp(Math.ceil(edge1 / binHz), 0, freqData.length - 1);
+    let peak = Number.NEGATIVE_INFINITY;
+    let sum = 0;
+    let count = 0;
+    for (let bin = bin0; bin <= bin1; bin++) {
+      const value = freqData[bin];
+      if (Number.isFinite(value)) {
+        peak = Math.max(peak, value);
+        sum += value;
+        count++;
+      }
+    }
+    if (!count) return params.minDb;
+    // 70% peak + 30% average gives peaks without becoming too spiky.
+    return peak * 0.7 + (sum / count) * 0.3;
+  }
+
+  function buildRawSpectrumPoints(nowSeconds) {
+    const count = params.samplePoints;
+    if (rawLevels.length !== count) resetRawLevels();
+
+    if (analyser && freqData) {
+      analyser.getFloatFrequencyData(freqData);
+    }
+
+    const minF = Math.max(1, params.minFreq);
+    const maxF = Math.max(minF + 1, effectiveMaxFreq());
+    const ratio = maxF / minF;
+    const points = [];
+    let peakDb = Number.NEGATIVE_INFINITY;
+
+    for (let i = 0; i < count; i++) {
+      const edge0 = minF * Math.pow(ratio, i / count);
+      const edge1 = minF * Math.pow(ratio, (i + 1) / count);
+      const center = Math.sqrt(edge0 * edge1);
+
+      let db;
+      if (analyser && freqData && audioEl.src) {
+        db = getBandDb(edge0, edge1);
+      } else {
+        // Quiet idle ripple so the shape is visible before an audio file is chosen.
+        const wave = Math.sin(nowSeconds * 1.7 + i * 0.22) * 0.5 + Math.sin(nowSeconds * 0.7 + i * 0.071) * 0.5;
+        db = params.minDb + 8 + wave * 3;
+      }
+
+      db = clamp(db + params.dbBoost, params.minDb, params.maxDb);
+      peakDb = Math.max(peakDb, db);
+      const targetNorm = clamp((db - params.minDb) / (params.maxDb - params.minDb), 0, 1);
+      rawLevels[i] = lerp(rawLevels[i], targetNorm, clamp(params.response, 0.01, 1));
+
+      points.push(new THREE.Vector3(
+        mapFrequencyToX(center),
+        mapDbNormToY(rawLevels[i]),
+        0
+      ));
+    }
+    lastPeakDb = peakDb;
+    return points;
+  }
+
+  function buildRenderPoints(nowSeconds) {
+    const raw = buildRawSpectrumPoints(nowSeconds);
+    if (params.curveMode !== 'blocky') return raw;
+
+    const maxSegments = Math.max(4, raw.length - 1);
+    const segments = clamp(Math.floor(params.blockSegments), 4, maxSegments);
+    const fitted = [];
+    const windowSize = Math.max(1, Math.floor(raw.length / segments));
+
+    for (let s = 0; s <= segments; s++) {
+      const ideal = s * (raw.length - 1) / segments;
+      const rounded = clamp(Math.round(ideal), 0, raw.length - 1);
+      const lo = clamp(Math.floor(ideal - windowSize * 0.5), 0, raw.length - 1);
+      const hi = clamp(Math.ceil(ideal + windowSize * 0.5), 0, raw.length - 1);
+      let y = 0;
+      let samples = 0;
+      for (let i = lo; i <= hi; i++) {
+        y += raw[i].y;
+        samples++;
+      }
+      fitted.push(new THREE.Vector3(raw[rounded].x, y / Math.max(1, samples), 0));
+    }
+    return fitted;
+  }
+
+  function makeCurve(points) {
+    const safe = points.length >= 2 ? points : [new THREE.Vector3(-1, 0, 0), new THREE.Vector3(1, 0, 0)];
+
+    if (params.curveMode === 'blocky') {
+      return new PolylineCurve3(safe);
+    }
+
+    if (params.curveMode === 'bezier') {
+      const path = new THREE.CurvePath();
+      for (let i = 0; i < safe.length - 1; i++) {
+        const p0 = safe[i - 1] || safe[i];
+        const p1 = safe[i];
+        const p2 = safe[i + 1];
+        const p3 = safe[i + 2] || p2;
+        const tension = params.bezierTension;
+        const c1 = p1.clone().add(p2.clone().sub(p0).multiplyScalar(tension / 6));
+        const c2 = p2.clone().sub(p3.clone().sub(p1).multiplyScalar(tension / 6));
+        path.add(new THREE.CubicBezierCurve3(p1, c1, c2, p2));
+      }
+      return path;
+    }
+
+    return new THREE.CatmullRomCurve3(safe, false, 'centripetal', 0.45);
+  }
+
+  function makeTubeGeometry(points) {
+    const curve = makeCurve(points);
+    const segmentsPerPoint = Math.max(1, Math.floor(params.curveResolution));
+    const tubularSegments = Math.max(8, Math.floor((points.length - 1) * segmentsPerPoint));
+    const radialSegments = Math.max(3, Math.floor(params.radialSegments));
+    return new THREE.TubeGeometry(curve, tubularSegments, params.tubeRadius, radialSegments, false);
+  }
+
+  function updateLiveMesh(points) {
+    const geometry = makeTubeGeometry(points);
+    liveMesh.geometry.dispose();
+    liveMesh.geometry = geometry;
+    liveMesh.material = liveMaterial;
+    liveMesh.frustumCulled = false;
+  }
+
+  function spawnTrail(points) {
+    if (params.historyCount <= 0 || !points || points.length < 2) return;
+    const snapshot = points.map(p => p.clone());
+    const mesh = new THREE.Mesh(makeTubeGeometry(snapshot), makeTrailMaterial());
+    mesh.frustumCulled = false;
+    mesh.position.z = 0;
+    scene.add(mesh);
+    history.push({ mesh, age: 0 });
+
+    while (history.length > params.historyCount) {
+      removeHistoryItem(history.shift());
+    }
+  }
+
+  function updateHistory(delta) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      const item = history[i];
+      item.age += delta;
+      item.mesh.position.z = -params.pullSpeed * item.age;
+
+      const opacity = params.trailOpacity
+        * Math.exp(-params.decayRate * item.age)
+        * Math.exp(-Math.abs(item.mesh.position.z) * params.depthFade);
+
+      item.mesh.material.opacity = opacity;
+      item.mesh.material.needsUpdate = true;
+
+      if (opacity < 0.006 || i >= params.historyCount) {
+        removeHistoryItem(item);
+        history.splice(i, 1);
+      }
+    }
+  }
+
+  function removeHistoryItem(item) {
+    if (!item || !item.mesh) return;
+    scene.remove(item.mesh);
+    item.mesh.geometry.dispose();
+    item.mesh.material.dispose();
+  }
+
+  function clearHistory() {
+    for (const item of history) removeHistoryItem(item);
+    history = [];
+  }
+
+  function rebuildAxes() {
+    if (!scene) return;
+    if (axisGroup) {
+      scene.remove(axisGroup);
+      axisGroup.traverse(obj => {
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (obj.material.map) obj.material.map.dispose();
+          obj.material.dispose();
+        }
+      });
+    }
+
+    axisGroup = new THREE.Group();
+    axisGroup.visible = params.showAxis;
+    const gridMat = new THREE.LineBasicMaterial({ color: 0x557087, transparent: true, opacity: 0.27 });
+    const axisMat = new THREE.LineBasicMaterial({ color: 0xe9f6ff, transparent: true, opacity: 0.52 });
+    const accentMat = new THREE.LineBasicMaterial({ color: 0xd98b3a, transparent: true, opacity: 0.55 });
+
+    const w = params.xWidth;
+    const h = params.yHeight;
+    const z = -0.18;
+
+    addLine(axisGroup, [new THREE.Vector3(-w/2, -h/2, z), new THREE.Vector3(w/2, -h/2, z)], axisMat);
+    addLine(axisGroup, [new THREE.Vector3(-w/2, -h/2, z), new THREE.Vector3(-w/2, h/2, z)], axisMat);
+    addLine(axisGroup, [new THREE.Vector3(-w/2, h/2, z), new THREE.Vector3(w/2, h/2, z)], gridMat);
+    addLine(axisGroup, [new THREE.Vector3(w/2, -h/2, z), new THREE.Vector3(w/2, h/2, z)], gridMat);
+
+    const freqTicks = [20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000];
+    for (const f of freqTicks) {
+      if (f < params.minFreq || f > effectiveMaxFreq()) continue;
+      const x = mapFrequencyToX(f);
+      addLine(axisGroup, [new THREE.Vector3(x, -h/2, z), new THREE.Vector3(x, h/2, z)], gridMat);
+      const text = f >= 1000 ? `${f/1000}k` : String(f);
+      const label = makeLabelSprite(text, '#9fb8cc', 0.95);
+      label.position.set(x, -h/2 - 2.3, 0.25);
+      axisGroup.add(label);
+    }
+
+    const dbStep = chooseDbStep(params.minDb, params.maxDb);
+    for (let db = Math.ceil(params.minDb / dbStep) * dbStep; db <= params.maxDb; db += dbStep) {
+      const y = mapDbToY(db);
+      addLine(axisGroup, [new THREE.Vector3(-w/2, y, z), new THREE.Vector3(w/2, y, z)], db === 0 ? accentMat : gridMat);
+      const label = makeLabelSprite(`${db}`, '#9fb8cc', 0.95);
+      label.position.set(-w/2 - 4.1, y, 0.25);
+      axisGroup.add(label);
+    }
+
+    const xLabel = makeLabelSprite('log frequency / Hz', '#e9f6ff', 1.05);
+    xLabel.position.set(0, -h/2 - 5.2, 0.25);
+    axisGroup.add(xLabel);
+
+    const yLabel = makeLabelSprite('dB', '#e9f6ff', 1.05);
+    yLabel.position.set(-w/2 - 6.8, h/2 + 0.6, 0.25);
+    axisGroup.add(yLabel);
+
+    scene.add(axisGroup);
+  }
+
+  function chooseDbStep(minDb, maxDb) {
+    const span = maxDb - minDb;
+    if (span <= 30) return 5;
+    if (span <= 70) return 10;
+    return 20;
+  }
+
+  function addLine(group, vertices, material) {
+    const geometry = new THREE.BufferGeometry().setFromPoints(vertices);
+    const line = new THREE.Line(geometry, material);
+    group.add(line);
+  }
+
+  function makeLabelSprite(text, color = '#ffffff', scale = 1) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.font = '700 42px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.shadowColor = 'rgba(80,230,255,0.35)';
+    ctx.shadowBlur = 16;
+    ctx.fillStyle = color;
+    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.needsUpdate = true;
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthWrite: false });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(7.2 * scale, 1.8 * scale, 1);
+    return sprite;
+  }
+
+  function createStarField() {
+    const count = 1800;
+    const positions = new Float32Array(count * 3);
+    const colors = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      positions[i*3] = (Math.random() - 0.5) * 220;
+      positions[i*3 + 1] = (Math.random() - 0.5) * 130;
+      positions[i*3 + 2] = -Math.random() * 240 - 10;
+      const tint = Math.random() * 0.4 + 0.25;
+      colors[i*3] = tint * 0.95;
+      colors[i*3 + 1] = tint * 0.78;
+      colors[i*3 + 2] = tint * 0.52;
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    const material = new THREE.PointsMaterial({
+      size: 0.8,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.32,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false
+    });
+    starField = new THREE.Points(geometry, material);
+    scene.add(starField);
+  }
+
+  function resetCamera() {
+    if (!camera) return;
+    camera.position.set(0, -1.5, 96);
+    camera.lookAt(0, 0, -22);
+    if (controls) {
+      controls.target.set(0, 0, -22);
+      controls.update();
+    }
+  }
+
+  let previousTime = performance.now();
+  let readoutTimer = 0;
+
+  function animate() {
+    requestAnimationFrame(animate);
+
+    const now = performance.now();
+    const delta = Math.min(0.05, (now - previousTime) / 1000);
+    previousTime = now;
+    const nowSeconds = now / 1000;
+
+    if (controls) controls.update();
+    if (starField) starField.rotation.z += delta * 0.006;
+
+    const points = buildRenderPoints(nowSeconds);
+    lastRenderPoints = points.map(p => p.clone());
+    updateLiveMesh(points);
+
+    historyAccumulator += delta;
+    const spawnInterval = params.spawnRate > 0 ? 1 / params.spawnRate : Infinity;
+    if (historyAccumulator >= spawnInterval) {
+      historyAccumulator = 0;
+      spawnTrail(lastRenderPoints);
+    }
+
+    updateHistory(delta);
+
+    readoutTimer += delta;
+    if (readoutTimer > 0.18) {
+      readoutTimer = 0;
+      document.getElementById('peakReadout').textContent = Number.isFinite(lastPeakDb) ? `${lastPeakDb.toFixed(1)} dB` : '— dB';
+      document.getElementById('fftReadout').textContent = String(params.fftSize);
+      document.getElementById('historyReadout').textContent = String(history.length);
+    }
+
+    if (composer) composer.render();
+  }
+
+  function onResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    composer.setSize(window.innerWidth, window.innerHeight);
+    if (bloomPass) bloomPass.setSize(window.innerWidth, window.innerHeight);
+  }
+</script>
+</body>
+</html>
