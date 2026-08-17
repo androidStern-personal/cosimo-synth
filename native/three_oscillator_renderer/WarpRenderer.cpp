@@ -1907,6 +1907,13 @@ void renderWarpedNotes (WarpRendererStateView state,
                maximumWarpOversampleFactor> mixed {};
     for (std::size_t note = 0; note < logicalNoteCount; ++note)
     {
+        const auto firstLane = note * lanesPerNote;
+        bool isActive = false;
+        for (std::size_t lane = 0; lane < lanesPerNote && ! isActive; ++lane)
+            isActive = controls.phaseIncrements[firstLane + lane] > 0.0f;
+        if (! isActive)
+            continue;
+
         StereoSample noteSamples[maximumWarpOversampleFactor] {};
         renderWarpedNoteInternal (state, controls, tables, atlas, atlasDc,
                                   atlasBasisWeights, note, noteSamples);

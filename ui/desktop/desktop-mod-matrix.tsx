@@ -28,6 +28,7 @@ import {
     type ModulationRouteUpdate,
     type ModulationTargetKind,
 } from "../shared/modulation";
+import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 
 const MINI_KNOB_VIEWBOX_SIZE = 32;
 const MINI_KNOB_CENTER = MINI_KNOB_VIEWBOX_SIZE / 2;
@@ -576,6 +577,7 @@ const RouteRow = memo(function RouteRow({
 }) {
     const sourceValue = getModulationSourceOptionValue(route);
     const targetBounds = getModulationAmountBounds(route.targetKind);
+    const amountBinding = useModulationRouteAmountBinding(route);
 
     return (
         <div
@@ -625,7 +627,6 @@ const RouteRow = memo(function RouteRow({
                     const targetKind = nextTargetKind as ModulationTargetKind;
                     onRouteChange(routeIndex, {
                         targetKind,
-                        amount: clampModulationRouteAmount(targetKind, route.amount),
                     });
                 }}
                 minWidthPx={132}
@@ -659,17 +660,15 @@ const RouteRow = memo(function RouteRow({
                 targetKind={route.targetKind}
                 polarity={route.polarity}
                 ariaLabel={`Route ${routeIndex + 1} amount`}
-                value={route.amount}
+                value={amountBinding.value}
                 min={targetBounds.min}
                 max={targetBounds.max}
                 step={targetBounds.step}
-                onChange={(nextAmount) => onRouteChange(routeIndex, {
-                    amount: clampModulationRouteAmount(route.targetKind, nextAmount),
-                })}
+                onChange={amountBinding.setValue}
             />
 
             <span className="synth-readout-text hidden w-16 shrink-0 text-right text-xs tabular-nums sm:block">
-                {formatModulationAmountReadout(route.targetKind, route.amount, route.polarity)}
+                {formatModulationAmountReadout(route.targetKind, amountBinding.value, route.polarity)}
             </span>
 
             <button

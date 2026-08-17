@@ -32,7 +32,6 @@ import {
 import {
     MODULATION_SOURCE_OPTIONS,
     MODULATION_TARGET_OPTIONS,
-    clampModulationRouteAmount,
     applyModulationSourceOption,
     MODULATION_ENV_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
@@ -40,6 +39,7 @@ import {
     type ModulationRoute,
     type ModulationRouteUpdate,
 } from "../shared/modulation";
+import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
     clampDisplayPosition,
 } from "../shared/runtime-table-state";
@@ -567,6 +567,32 @@ const IOSKeyboardToolbar = memo(function IOSKeyboardToolbar({
     );
 });
 
+const IOSModulationRouteAmountField = memo(function IOSModulationRouteAmountField({
+    route,
+    routeIndex,
+    onRouteChange,
+}: {
+    route: ModulationRoute;
+    routeIndex: number;
+    onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
+}) {
+    const amountBinding = useModulationRouteAmountBinding(route);
+
+    return (
+        <ModulationAmountField
+            targetKind={route.targetKind}
+            polarity={route.polarity}
+            amount={amountBinding.value}
+            onPolarityChange={(nextPolarity) => {
+                onRouteChange(routeIndex, { polarity: nextPolarity });
+            }}
+            knobAriaLabel={`Route ${routeIndex + 1} depth`}
+            polarityAriaLabel={`Route ${routeIndex + 1} polarity`}
+            onChange={amountBinding.setValue}
+        />
+    );
+});
+
 const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
     selectedEnvelopeSlot,
     selectedEnvelope,
@@ -687,7 +713,6 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                                     const nextTargetKind = event.target.value;
                                     onRouteChange(routeIndex, {
                                         targetKind: nextTargetKind as ModulationRoute["targetKind"],
-                                        amount: clampModulationRouteAmount(nextTargetKind as ModulationRoute["targetKind"], route.amount),
                                     });
                                 }}
                             >
@@ -695,22 +720,10 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                                     <option key={option.value} value={option.value}>{option.label}</option>
                                 ))}
                             </select>
-                            <ModulationAmountField
-                                targetKind={route.targetKind}
-                                polarity={route.polarity}
-                                amount={route.amount}
-                                onPolarityChange={(nextPolarity) => {
-                                    onRouteChange(routeIndex, {
-                                        polarity: nextPolarity,
-                                    });
-                                }}
-                                knobAriaLabel={`Route ${routeIndex + 1} depth`}
-                                polarityAriaLabel={`Route ${routeIndex + 1} polarity`}
-                                onChange={(nextAmount) => {
-                                    onRouteChange(routeIndex, {
-                                        amount: nextAmount,
-                                    });
-                                }}
+                            <IOSModulationRouteAmountField
+                                route={route}
+                                routeIndex={routeIndex}
+                                onRouteChange={onRouteChange}
                             />
                             <button
                                 className="mseg-loop-button"

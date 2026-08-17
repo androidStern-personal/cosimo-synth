@@ -133,7 +133,7 @@ void initialiseControls (WarpRendererControls& controls) noexcept
     };
     for (std::size_t oscillator = 0; oscillator < oscillatorCount; ++oscillator)
     {
-        const auto lane = oscillator * maximumUnisonCount;
+        const auto lane = oscillator * maximumUnisonCount + 1;
         controls.phaseIncrements[lane] = 0.0037f + 0.0011f * static_cast<float> (oscillator);
         controls.positions[lane] = 0.2f + 0.25f * static_cast<float> (oscillator);
         controls.warpAmounts[lane] = 0.2f + 0.3f * static_cast<float> (oscillator);
@@ -151,7 +151,7 @@ void updateControls (WarpRendererControls& controls, std::size_t sample) noexcep
     const auto sweep = static_cast<float> (sample % 97) / 96.0f;
     for (std::size_t oscillator = 0; oscillator < oscillatorCount; ++oscillator)
     {
-        const auto lane = oscillator * maximumUnisonCount;
+        const auto lane = oscillator * maximumUnisonCount + 1;
         auto position = sweep + 0.19f * static_cast<float> (oscillator);
         if (position > 1.0f)
             position -= 1.0f;

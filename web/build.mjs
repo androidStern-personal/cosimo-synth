@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 
 import {
     adaptCosimoAudioWorkletModuleLoading,
+    fixCosimoAudioWorkletListenerRemoval,
     instrumentCosimoAudioWorkletSource,
 } from "./audio-worklet-instrumentation.mjs";
 import { copyWebHostAssets } from "./web-host-assets.mjs";
@@ -88,7 +89,9 @@ async function instrumentAudioWorklet() {
     const source = await fs.readFile(helperPath, "utf8");
     await fs.writeFile(
         helperPath,
-        adaptCosimoAudioWorkletModuleLoading(instrumentCosimoAudioWorkletSource(source)),
+        fixCosimoAudioWorkletListenerRemoval(
+            adaptCosimoAudioWorkletModuleLoading(instrumentCosimoAudioWorkletSource(source)),
+        ),
     );
 }
 

@@ -46,6 +46,9 @@ constexpr std::uint32_t fullRackEnableMask = 0xff;
 constexpr double audioEquivalenceTolerance = 1.0e-7;
 constexpr double nonSilentRmsThreshold = 1.0e-5;
 constexpr std::size_t rackCommitBlocks = 8;
+constexpr std::size_t voiceFloorMeasuredBlocks = 512;
+constexpr std::size_t voiceFloorWarmupBlocks = 128;
+constexpr std::size_t voiceFloorSettleBlocks = 128;
 
 static_assert (WavetableSynth::maxFramesPerBlock == blockSize);
 static_assert (sizeof (WavetableSynth::wt_RuntimeInstallAck) == 44);
@@ -124,6 +127,20 @@ struct ProfileResult
     std::vector<double> emptyNanoseconds;
     std::vector<double> loadedNanoseconds;
     std::vector<double> pairedDeltaNanoseconds;
+};
+
+struct VoiceFloorResult
+{
+    std::uint32_t oneVoiceMask = 0;
+    std::uint32_t fullVoiceMask = 0;
+    std::int32_t oneRackMask = -1;
+    std::int32_t fullRackMask = -1;
+    long double oneSumSquares = 0.0;
+    long double fullSumSquares = 0.0;
+    std::uint64_t sampleCount = 0;
+    std::uint64_t nonFiniteSampleCount = 0;
+    std::vector<double> oneNanoseconds;
+    std::vector<double> fullNanoseconds;
 };
 
 std::size_t parsePositiveSize (const char* value, std::string_view argument)
@@ -342,18 +359,22 @@ std::int32_t initialisePerformer (WavetableSynth& performer)
     return serial;
 }
 
-std::uint32_t startSustainedVoices (WavetableSynth& performer)
+std::uint32_t startSustainedVoices (WavetableSynth& performer,
+                                    std::uint8_t voiceCountToStart = 16)
 {
+    if (voiceCountToStart == 0 || voiceCountToStart > 16)
+        throw std::invalid_argument ("Voice count must be between one and sixteen");
+
     const auto monitorHandle = endpoint ("voiceArticulationStart");
     performer.resetOutputEventCount (monitorHandle);
-    for (std::uint8_t voiceIndex = 0; voiceIndex < 16; ++voiceIndex)
+    for (std::uint8_t voiceIndex = 0; voiceIndex < voiceCountToStart; ++voiceIndex)
         performer.addEvent_midiIn (midiMessage (0x90,
                                                 static_cast<std::uint8_t> (48 + voiceIndex),
                                                 static_cast<std::uint8_t> (benchmark_profiles::expressionMidiValue)));
 
     const auto eventCount = performer.getNumOutputEvents (monitorHandle);
-    if (eventCount != 16)
-        throw std::runtime_error ("Production note dispatcher did not report 16 voice starts");
+    if (eventCount != voiceCountToStart)
+        throw std::runtime_error ("Production note dispatcher did not report every requested voice start");
     std::uint32_t voiceMask = 0;
     for (std::uint32_t eventIndex = 0; eventIndex < eventCount; ++eventIndex)
     {
@@ -374,6 +395,20 @@ std::uint32_t startSustainedVoices (WavetableSynth& performer)
                                             static_cast<std::uint8_t> (benchmark_profiles::expressionMidiValue)));
     clearOutputEvents (performer);
     return voiceMask;
+}
+
+void initialiseVoiceFloorPerformer (WavetableSynth& performer)
+{
+    performer.initialise (dspSessionID, sampleRate);
+    loadSineWavetable (performer);
+
+    WavetableSynth::wt_RackEnableUpload rackEnable;
+    for (std::int32_t moduleIndex = 0; moduleIndex < 8; ++moduleIndex)
+        rackEnable.enabledFlags[moduleIndex] = 0;
+    performer.addEvent_rackEnable (rackEnable);
+
+    installNeutralSourcesAndEmptyProgram (performer);
+    clearOutputEvents (performer);
 }
 
 void observeRackMask (WavetableSynth& performer, std::int32_t& latestMask)
@@ -486,6 +521,88 @@ void measurePairBlock (WavetableSynth& empty,
     result.emptyNanoseconds.push_back (emptyNanoseconds);
     result.loadedNanoseconds.push_back (loadedNanoseconds);
     result.pairedDeltaNanoseconds.push_back (loadedNanoseconds - emptyNanoseconds);
+}
+
+void advanceVoiceFloorPairUntimed (WavetableSynth& one,
+                                   WavetableSynth& full,
+                                   std::size_t blockIndex,
+                                   VoiceFloorResult& result)
+{
+    if ((blockIndex & 1u) == 0)
+    {
+        one.advance (blockSize);
+        full.advance (blockSize);
+    }
+    else
+    {
+        full.advance (blockSize);
+        one.advance (blockSize);
+    }
+    observeRackMask (one, result.oneRackMask);
+    observeRackMask (full, result.fullRackMask);
+    clearOutputEvents (one);
+    clearOutputEvents (full);
+}
+
+void accumulateVoiceFloorAudio (WavetableSynth& performer,
+                                long double& sumSquares,
+                                VoiceFloorResult& result)
+{
+    std::array<float, blockSize * 2> audio;
+    copyAudio (performer, audio);
+    for (const auto sample : audio)
+    {
+        if (! std::isfinite (sample))
+        {
+            ++result.nonFiniteSampleCount;
+            continue;
+        }
+        sumSquares += static_cast<long double> (sample) * sample;
+    }
+}
+
+VoiceFloorResult runVoiceFloor()
+{
+    auto one = std::make_unique<WavetableSynth>();
+    auto full = std::make_unique<WavetableSynth>();
+    initialiseVoiceFloorPerformer (*one);
+    initialiseVoiceFloorPerformer (*full);
+
+    VoiceFloorResult result;
+    result.oneVoiceMask = startSustainedVoices (*one, 1);
+    result.fullVoiceMask = startSustainedVoices (*full, 16);
+
+    for (std::size_t blockIndex = 0;
+         blockIndex < voiceFloorSettleBlocks + voiceFloorWarmupBlocks;
+         ++blockIndex)
+        advanceVoiceFloorPairUntimed (*one, *full, blockIndex, result);
+
+    result.oneNanoseconds.reserve (voiceFloorMeasuredBlocks);
+    result.fullNanoseconds.reserve (voiceFloorMeasuredBlocks);
+    for (std::size_t blockIndex = 0; blockIndex < voiceFloorMeasuredBlocks; ++blockIndex)
+    {
+        double oneNanoseconds = 0.0;
+        double fullNanoseconds = 0.0;
+        if ((blockIndex & 1u) == 0)
+        {
+            oneNanoseconds = timedAdvance (*one);
+            fullNanoseconds = timedAdvance (*full);
+        }
+        else
+        {
+            fullNanoseconds = timedAdvance (*full);
+            oneNanoseconds = timedAdvance (*one);
+        }
+
+        result.oneNanoseconds.push_back (oneNanoseconds);
+        result.fullNanoseconds.push_back (fullNanoseconds);
+        accumulateVoiceFloorAudio (*one, result.oneSumSquares, result);
+        accumulateVoiceFloorAudio (*full, result.fullSumSquares, result);
+        result.sampleCount += blockSize * 2;
+        clearOutputEvents (*one);
+        clearOutputEvents (*full);
+    }
+    return result;
 }
 
 ProfileResult runProfile (std::size_t profileIndex, const Arguments& arguments)
@@ -612,6 +729,38 @@ void writeResult (const ProfileResult& result)
               << '\n';
 }
 
+void writeVoiceFloorResult (const VoiceFloorResult& result)
+{
+    const auto oneRms = rms (result.oneSumSquares, result.sampleCount);
+    const auto fullRms = rms (result.fullSumSquares, result.sampleCount);
+    if (result.oneVoiceMask != 0x1 || result.fullVoiceMask != 0xffff
+        || result.oneRackMask != 0 || result.fullRackMask != 0
+        || result.nonFiniteSampleCount != 0
+        || oneRms <= nonSilentRmsThreshold || fullRms <= nonSilentRmsThreshold)
+        throw std::runtime_error ("Voice-floor workload did not exercise one and sixteen clean sounding voices");
+
+    const auto oneMean = mean (result.oneNanoseconds);
+    const auto fullMean = mean (result.fullNanoseconds);
+    const auto oneMedian = median (result.oneNanoseconds);
+    const auto fullMedian = median (result.fullNanoseconds);
+    std::cout << "VOICE_FLOOR"
+              << '\t' << result.oneNanoseconds.size()
+              << '\t' << result.oneVoiceMask
+              << '\t' << result.fullVoiceMask
+              << '\t' << result.oneRackMask
+              << '\t' << result.fullRackMask
+              << '\t' << result.sampleCount
+              << '\t' << result.nonFiniteSampleCount
+              << '\t' << std::setprecision (17) << oneRms
+              << '\t' << fullRms
+              << '\t' << oneMean
+              << '\t' << fullMean
+              << '\t' << oneMedian
+              << '\t' << fullMedian
+              << '\t' << (oneMedian / fullMedian)
+              << '\n';
+}
+
 std::vector<std::size_t> profileOrder (std::size_t repeatIndex)
 {
     std::vector<std::size_t> result;
@@ -640,6 +789,7 @@ int main (int argc, char** argv)
                   << '\n';
         for (const auto& setting : effectSettings)
             std::cout << "EFFECT\t" << setting.endpoint << '\t' << std::setprecision (9) << setting.value << '\n';
+        writeVoiceFloorResult (runVoiceFloor());
         for (const auto profileIndex : profileOrder (arguments.repeatIndex))
             writeResult (runProfile (profileIndex, arguments));
         return 0;

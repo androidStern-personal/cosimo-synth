@@ -498,6 +498,52 @@ test("async stored-state echoes do not retrigger modulation uploads", async () =
     assert.equal(patchConnection.events.length, uploadCountBeforeEchoes);
 });
 
+test("route amount subscriptions notify only the changed stable route identity", () => {
+    const patchConnection = new FakePatchConnection();
+    const bridge = new ModulationRuntimeBridge(patchConnection);
+    const routeA = {
+        id: "fine-grained-route-a",
+        enabled: true,
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        polarity: "unipolar",
+        targetKind: "rack.distortionDriveDb",
+        amount: 0,
+        reducer: "max",
+    };
+    const routeB = {
+        id: "fine-grained-route-b",
+        enabled: true,
+        sourceKind: "mseg",
+        sourceSlot: 2,
+        polarity: "unipolar",
+        targetKind: "rack.reverbMix",
+        amount: 0.2,
+        reducer: "max",
+    };
+    const notifications = { routeA: [], routeB: [] };
+
+    bridge.replaceRoutes([routeA, routeB]);
+    const unsubscribeRouteA = bridge.subscribeRouteAmount(routeA.id, (amount) => notifications.routeA.push(amount));
+    const unsubscribeRouteB = bridge.subscribeRouteAmount(routeB.id, (amount) => notifications.routeB.push(amount));
+
+    assert.equal(bridge.setRouteAmountById(routeA.id, 0.75), true);
+    assert.deepEqual(notifications, { routeA: [0.75], routeB: [] });
+    assert.equal(bridge.getRouteAmount(routeA.id), 0.75);
+    assert.equal(bridge.getRouteAmount(routeB.id), 0.2);
+    assert.equal(bridge.setRouteAmountById(routeA.id, 0.75), true);
+    assert.deepEqual(notifications, { routeA: [0.75], routeB: [] });
+
+    bridge.replaceRoutes([{ ...routeB, amount: 0.6 }]);
+    assert.deepEqual(notifications, { routeA: [0.75, null], routeB: [0.6] });
+    assert.equal(bridge.getRouteAmount(routeA.id), null);
+    assert.equal(bridge.getRouteAmount(routeB.id), 0.6);
+    assert.equal(bridge.setRouteAmountById(routeA.id, 0.1), false);
+
+    unsubscribeRouteA();
+    unsubscribeRouteB();
+});
+
 test("synchronous stored-state echoes consume their suppression tokens", () => {
     const patchConnection = new FakePatchConnection();
     const bridge = new ModulationRuntimeBridge(patchConnection);

@@ -9,11 +9,10 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 def _generate_wavetable_synth_cpp(output_path: Path) -> str:
     subprocess.run(
         [
-            "cmaj",
-            "generate",
-            "--target=cpp",
+            str(REPO_ROOT / "scripts/generate_cmajor_cpp_with_externals.sh"),
             str(REPO_ROOT / "WavetableSynth.cmajorpatch"),
-            f"--output={output_path}",
+            str(output_path),
+            "CosimoCodegenPerformance",
         ],
         cwd=REPO_ROOT,
         check=True,
@@ -63,8 +62,7 @@ def test_ordinary_voice_routes_execute_as_source_fanout_vectors(tmp_path: Path) 
     )
     assert function is not None
     body = function.group("body")
-    assert "voiceRouteScaleVectors" in body
-    assert "voiceRouteBiasVectors" in body
-    assert body.count("routeIndex >= _state.voiceRouteCount") == 1, (
-        "Only the articulation override may retain a scalar active-route loop"
-    )
+    assert "voiceRouteCoreScaleVectors" in body
+    assert "voiceRouteCoreBiasVectors" in body
+    assert "voiceArticulationRouteTransforms" in body
+    assert "routeIndex >= _state.voiceRouteCount" not in body

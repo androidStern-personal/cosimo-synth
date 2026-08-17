@@ -63,6 +63,7 @@ QUALIFYING_BLOCKS = 4096
 QUALIFYING_WARMUP_BLOCKS = 256
 QUALIFYING_SETTLE_BLOCKS = 128
 QUALIFYING_REPEATS = 3
+MAXIMUM_ONE_TO_SIXTEEN_VOICE_MEDIAN_RATIO = 0.40
 
 
 def run(command: list[str]) -> subprocess.CompletedProcess[str]:
@@ -172,10 +173,32 @@ def parse_profile(fields: list[str]) -> dict[str, object]:
     }
 
 
+def parse_voice_floor(fields: list[str]) -> dict[str, object]:
+    if len(fields) != 15:
+        raise RuntimeError(f"Native benchmark emitted a malformed voice-floor row ({len(fields)} fields)")
+    return {
+        "blockCount": int(fields[1]),
+        "oneVoiceMask": int(fields[2]),
+        "fullVoiceMask": int(fields[3]),
+        "oneRackEnableMask": int(fields[4]),
+        "fullRackEnableMask": int(fields[5]),
+        "sampleCount": int(fields[6]),
+        "nonFiniteSampleCount": int(fields[7]),
+        "oneVoiceRms": float(fields[8]),
+        "fullVoiceRms": float(fields[9]),
+        "oneVoiceMeanNanoseconds": float(fields[10]),
+        "fullVoiceMeanNanoseconds": float(fields[11]),
+        "oneVoiceMedianNanoseconds": float(fields[12]),
+        "fullVoiceMedianNanoseconds": float(fields[13]),
+        "oneToSixteenVoiceMedianRatio": float(fields[14]),
+    }
+
+
 def parse_run(output: str) -> dict[str, object]:
     metadata: dict[str, object] | None = None
     effects: dict[str, float] = {}
     profiles: list[dict[str, object]] = []
+    voice_floor: dict[str, object] | None = None
     for line in output.splitlines():
         fields = line.split("\t")
         if fields[0] == "META":
@@ -194,10 +217,14 @@ def parse_run(output: str) -> dict[str, object]:
             effects[fields[1]] = float(fields[2])
         elif fields[0] == "PROFILE":
             profiles.append(parse_profile(fields))
+        elif fields[0] == "VOICE_FLOOR":
+            if voice_floor is not None:
+                raise RuntimeError("Native benchmark emitted duplicate voice-floor evidence")
+            voice_floor = parse_voice_floor(fields)
         elif line:
             raise RuntimeError(f"Native benchmark emitted an unknown record: {line}")
 
-    if metadata is None or {str(profile["name"]) for profile in profiles} != EXPECTED_PROFILE_NAMES:
+    if metadata is None or voice_floor is None or {str(profile["name"]) for profile in profiles} != EXPECTED_PROFILE_NAMES:
         raise RuntimeError("Native benchmark omitted required metadata or shared profiles")
     if set(effects) != set(EXPECTED_EFFECT_CONFIGURATION):
         raise RuntimeError("Native benchmark did not configure the exact full synth/effect workload")
@@ -218,7 +245,17 @@ def parse_run(output: str) -> dict[str, object]:
             raise RuntimeError(f"{profile['name']} changed audio relative to its adjacent empty pair")
         if float(profile["emptyRms"]) <= 1.0e-5 or float(profile["loadedRms"]) <= 1.0e-5:
             raise RuntimeError(f"{profile['name']} did not produce non-silent production audio")
-    return {"metadata": metadata, "effects": effects, "profiles": profiles}
+    if (
+        voice_floor["oneVoiceMask"] != 0x1
+        or voice_floor["fullVoiceMask"] != 0xFFFF
+        or voice_floor["oneRackEnableMask"] != 0
+        or voice_floor["fullRackEnableMask"] != 0
+        or int(voice_floor["nonFiniteSampleCount"]) != 0
+        or float(voice_floor["oneVoiceRms"]) <= 1.0e-5
+        or float(voice_floor["fullVoiceRms"]) <= 1.0e-5
+    ):
+        raise RuntimeError("Native voice-floor benchmark did not exercise the required clean product workloads")
+    return {"metadata": metadata, "effects": effects, "profiles": profiles, "voiceFloor": voice_floor}
 
 
 def require_same(values: list[object], field: str) -> object:
@@ -265,6 +302,44 @@ def aggregate_profile(name: str, runs: list[dict[str, object]]) -> dict[str, obj
     return aggregate
 
 
+def aggregate_voice_floor(runs: list[dict[str, object]]) -> dict[str, object]:
+    records = [run["voiceFloor"] for run in runs]
+    stable_fields = (
+        "blockCount",
+        "oneVoiceMask",
+        "fullVoiceMask",
+        "oneRackEnableMask",
+        "fullRackEnableMask",
+    )
+    aggregate: dict[str, object] = {}
+    for field in stable_fields:
+        aggregate[field] = require_same([record[field] for record in records], f"voiceFloor.{field}")  # type: ignore[index]
+    for field in (
+        "oneVoiceRms",
+        "fullVoiceRms",
+        "oneVoiceMeanNanoseconds",
+        "fullVoiceMeanNanoseconds",
+        "oneVoiceMedianNanoseconds",
+        "fullVoiceMedianNanoseconds",
+        "oneToSixteenVoiceMedianRatio",
+    ):
+        aggregate[field] = statistics.median(float(record[field]) for record in records)  # type: ignore[index]
+    aggregate["sampleCount"] = sum(int(record["sampleCount"]) for record in records)  # type: ignore[index]
+    aggregate["nonFiniteSampleCount"] = sum(int(record["nonFiniteSampleCount"]) for record in records)  # type: ignore[index]
+    return aggregate
+
+
+def assert_voice_floor_budget(voice_floor: dict[str, object]) -> None:
+    ratio = float(voice_floor["oneToSixteenVoiceMedianRatio"])
+    if ratio > MAXIMUM_ONE_TO_SIXTEEN_VOICE_MEDIAN_RATIO:
+        one_ms = float(voice_floor["oneVoiceMedianNanoseconds"]) / 1.0e6
+        full_ms = float(voice_floor["fullVoiceMedianNanoseconds"]) / 1.0e6
+        raise RuntimeError(
+            f"one sounding voice used {one_ms:.3f} ms versus {full_ms:.3f} ms for sixteen "
+            f"({ratio:.3f} ratio); budget is {MAXIMUM_ONE_TO_SIXTEEN_VOICE_MEDIAN_RATIO:.3f}"
+        )
+
+
 def assert_matrix_budgets(profiles: list[dict[str, object]]) -> None:
     by_name = {str(profile["name"]): profile for profile in profiles}
     for name, maximum_added_load in MATRIX_LOAD_BUDGETS.items():
@@ -307,6 +382,8 @@ def build_result(
         raise RuntimeError("Native performer did not consume the shared benchmark profile authority")
 
     profiles = [aggregate_profile(name, runs) for name in sorted(EXPECTED_PROFILE_NAMES)]
+    voice_floor = aggregate_voice_floor(runs)
+    assert_voice_floor_budget(voice_floor)
     qualifying = is_qualifying_run(
         blocks=blocks,
         warmup_blocks=warmup_blocks,
@@ -332,6 +409,7 @@ def build_result(
         "voiceIndexes": list(range(16)),
         "rackEnableMask": 0xFF,
         "effectConfiguration": dict(sorted(EXPECTED_EFFECT_CONFIGURATION.items())),
+        "voiceFloor": voice_floor,
         "profileDocumentSha256": document_sha,
         "generatedPerformerSha256": sha256(generated_cpp),
         "generatedProfileHeaderSha256": sha256(profile_header),

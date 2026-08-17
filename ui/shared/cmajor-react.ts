@@ -1,6 +1,7 @@
 import {
     createElement,
     createContext,
+    startTransition,
     useCallback,
     useContext,
     useEffect,
@@ -57,6 +58,8 @@ type ParameterBinding = {
     endGesture: () => void;
 };
 
+export type PatchParameterPresentationPriority = "immediate" | "deferred-during-gesture";
+
 type PatchHostLike = {
     patchConnection: PatchConnectionLike;
     resourceClient: ResourceClient;
@@ -103,11 +106,21 @@ export function usePatchParameter(
     endpointID: string,
     initialValue: unknown = 0,
     active = true,
+    presentationPriority: PatchParameterPresentationPriority = "immediate",
 ): ParameterBinding {
     const patchConnection = usePatchConnection();
     const [value, setValue] = useState<unknown>(initialValue);
     const initialValueRef = useRef(initialValue);
+    const gestureActiveRef = useRef(false);
     initialValueRef.current = initialValue;
+    const presentValue = useCallback((nextValue: unknown) => {
+        if (presentationPriority === "deferred-during-gesture" && gestureActiveRef.current) {
+            startTransition(() => setValue(nextValue));
+            return;
+        }
+
+        setValue(nextValue);
+    }, [presentationPriority]);
 
     useEffect(() => {
         setValue(initialValueRef.current);
@@ -118,7 +131,7 @@ export function usePatchParameter(
         let listening = true;
         const listener = (nextValue: unknown) => {
             if (listening) {
-                setValue(nextValue);
+                presentValue(nextValue);
             }
         };
 
@@ -129,18 +142,20 @@ export function usePatchParameter(
             listening = false;
             patchConnection.removeParameterListener?.(endpointID, listener);
         };
-    }, [active, endpointID, patchConnection]);
+    }, [active, endpointID, patchConnection, presentValue]);
 
     const setParameterValue = useCallback((nextValue: unknown) => {
         patchConnection.sendEventOrValue?.(endpointID, nextValue);
-        setValue(nextValue);
-    }, [endpointID, patchConnection]);
+        presentValue(nextValue);
+    }, [endpointID, patchConnection, presentValue]);
 
     const beginGesture = useCallback(() => {
+        gestureActiveRef.current = true;
         patchConnection.sendParameterGestureStart?.(endpointID);
     }, [endpointID, patchConnection]);
 
     const endGesture = useCallback(() => {
+        gestureActiveRef.current = false;
         patchConnection.sendParameterGestureEnd?.(endpointID);
     }, [endpointID, patchConnection]);
 
@@ -179,6 +194,119 @@ export function usePatchEndpoint<TValue = unknown>(
 
         return () => {
             listening = false;
+            patchConnection.removeEndpointListener?.(endpointID, listener);
+        };
+    }, [active, endpointID, patchConnection]);
+
+    return value;
+}
+
+function visualEndpointValuesEqual(left: unknown, right: unknown): boolean {
+    if (Object.is(left, right)) {
+        return true;
+    }
+    if (left === null || right === null || typeof left !== "object" || typeof right !== "object") {
+        return false;
+    }
+    if (ArrayBuffer.isView(left) || ArrayBuffer.isView(right)) {
+        if (!ArrayBuffer.isView(left) || !ArrayBuffer.isView(right) || left.byteLength !== right.byteLength) {
+            return false;
+        }
+        const leftBytes = new Uint8Array(left.buffer, left.byteOffset, left.byteLength);
+        const rightBytes = new Uint8Array(right.buffer, right.byteOffset, right.byteLength);
+        return leftBytes.every((value, index) => value === rightBytes[index]);
+    }
+    if (Array.isArray(left) || Array.isArray(right)) {
+        return Array.isArray(left)
+            && Array.isArray(right)
+            && left.length === right.length
+            && left.every((value, index) => visualEndpointValuesEqual(value, right[index]));
+    }
+
+    const leftRecord = left as Record<string, unknown>;
+    const rightRecord = right as Record<string, unknown>;
+    const leftKeys = Object.keys(leftRecord);
+    const rightKeys = Object.keys(rightRecord);
+    return leftKeys.length === rightKeys.length
+        && leftKeys.every((key) => Object.prototype.hasOwnProperty.call(rightRecord, key)
+            && visualEndpointValuesEqual(leftRecord[key], rightRecord[key]));
+}
+
+/**
+ * Subscribes to latest-state visual telemetry. Bursts collapse to the newest
+ * animation-frame value, structurally repeated frames do not render, and the
+ * resulting React work is interruptible by user input.
+ */
+export function usePatchVisualEndpoint<TValue = unknown>(
+    endpointID: string,
+    initialValue: TValue,
+    active = true,
+) {
+    const patchConnection = usePatchConnection();
+    const [value, setValue] = useState<TValue>(initialValue);
+    const initialValueRef = useRef(initialValue);
+    const committedValueRef = useRef(initialValue);
+    const pendingValueRef = useRef<{ value: TValue } | null>(null);
+    const animationFrameRef = useRef<number | null>(null);
+    initialValueRef.current = initialValue;
+
+    useEffect(() => {
+        const resetValue = initialValueRef.current;
+        committedValueRef.current = resetValue;
+        pendingValueRef.current = null;
+        setValue(resetValue);
+        if (!active) {
+            return undefined;
+        }
+
+        let listening = true;
+        const presentPendingValue = () => {
+            animationFrameRef.current = null;
+            const pending = pendingValueRef.current;
+            pendingValueRef.current = null;
+            if (!listening || !pending || visualEndpointValuesEqual(committedValueRef.current, pending.value)) {
+                return;
+            }
+
+            committedValueRef.current = pending.value;
+            startTransition(() => {
+                setValue((previousValue) => (
+                    !listening || visualEndpointValuesEqual(previousValue, pending.value)
+                        ? previousValue
+                        : pending.value
+                ));
+            });
+        };
+        const listener = (nextValue: unknown) => {
+            if (!listening) {
+                return;
+            }
+            const typedValue = nextValue as TValue;
+            if (animationFrameRef.current !== null) {
+                pendingValueRef.current = { value: typedValue };
+                return;
+            }
+            if (visualEndpointValuesEqual(committedValueRef.current, typedValue)) {
+                return;
+            }
+
+            pendingValueRef.current = { value: typedValue };
+            if (typeof window.requestAnimationFrame === "function") {
+                animationFrameRef.current = window.requestAnimationFrame(presentPendingValue);
+            } else {
+                presentPendingValue();
+            }
+        };
+
+        patchConnection.addEndpointListener?.(endpointID, listener);
+
+        return () => {
+            listening = false;
+            pendingValueRef.current = null;
+            if (animationFrameRef.current !== null && typeof window.cancelAnimationFrame === "function") {
+                window.cancelAnimationFrame(animationFrameRef.current);
+            }
+            animationFrameRef.current = null;
             patchConnection.removeEndpointListener?.(endpointID, listener);
         };
     }, [active, endpointID, patchConnection]);

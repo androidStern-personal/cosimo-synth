@@ -68,6 +68,20 @@ namespace wt
         float32<modulationVoiceCoreLaneCount> coreValues;
         float32<modulationVoiceGeneratorLaneCount> generatorValues;
     }
+
+    struct VoiceModulationTransform
+    {
+        float32<modulationVoiceCoreLaneCount> coreScales;
+        float32<modulationVoiceCoreLaneCount> coreBiases;
+        float32<modulationVoiceGeneratorLaneCount> generatorScales;
+        float32<modulationVoiceGeneratorLaneCount> generatorBiases;
+    }
+
+    struct VoiceArticulationModulationTransforms
+    {
+        VoiceModulationTransform[modulationVoiceSourceCount] voiceSources;
+        VoiceModulationTransform[modulationMacroSourceCount] macroSources;
+    }
     let modulationArticulationRouteCellCount = modulationVoiceRouteCellCount + modulationMacroVoiceRouteCellCount;
     let modulationArticulationInheritAmount = 1000000.0f;
     let articulationOscillatorFramePositionBit = 1 << 0;
@@ -1368,6 +1382,7 @@ namespace wt
         float32[voiceCount] voiceArticulationFilterQ;
         float32[voiceCount * modulationMsegSlotCount] voiceArticulationMsegMorphs;
         float32[voiceCount * modulationArticulationRouteCellCount] voiceArticulationRouteAmounts;
+        VoiceArticulationModulationTransforms[voiceCount] voiceArticulationRouteTransforms;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeAttackSeconds;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeDecaySeconds;
         float32[voiceCount * modulationEnvSlotCount] voiceArticulationEnvelopeSustain;
@@ -1378,9 +1393,8 @@ namespace wt
         int32[modulationVoiceRouteCellCount] voiceRouteTargets;
         int32[modulationVoiceRouteCellCount] voiceRoutePolarities;
         float32[modulationVoiceRouteCellCount] voiceRouteAmounts;
-        float32[modulationVoiceRouteCellCount] voiceRouteScales;
-        float32[modulationVoiceRouteCellCount] voiceRouteBiases;
-        bool[modulationVoiceSourceCount] voiceRouteSourceUsed;
+        bool[modulationVoiceSourceCount] voiceRouteCoreSourceUsed;
+        bool[modulationVoiceSourceCount] voiceRouteGeneratorSourceUsed;
         float32<modulationVoiceCoreLaneCount>[modulationVoiceSourceCount] voiceRouteCoreScaleVectors;
         float32<modulationVoiceCoreLaneCount>[modulationVoiceSourceCount] voiceRouteCoreBiasVectors;
         float32<modulationVoiceGeneratorLaneCount>[modulationVoiceSourceCount] voiceRouteGeneratorScaleVectors;
@@ -1391,7 +1405,8 @@ namespace wt
         int32[modulationMacroVoiceRouteCellCount] macroVoiceRouteTargets;
         int32[modulationMacroVoiceRouteCellCount] macroVoiceRoutePolarities;
         float32[modulationMacroVoiceRouteCellCount] macroVoiceRouteAmounts;
-        bool[modulationMacroSourceCount] macroVoiceRouteSourceUsed;
+        bool[modulationMacroSourceCount] macroVoiceRouteCoreSourceUsed;
+        bool[modulationMacroSourceCount] macroVoiceRouteGeneratorSourceUsed;
         float32<modulationVoiceCoreLaneCount>[modulationMacroSourceCount] macroVoiceRouteCoreScaleVectors;
         float32<modulationVoiceCoreLaneCount>[modulationMacroSourceCount] macroVoiceRouteCoreBiasVectors;
         float32<modulationVoiceGeneratorLaneCount>[modulationMacroSourceCount] macroVoiceRouteGeneratorScaleVectors;
@@ -2615,6 +2630,8 @@ namespace wt
                     = storedAmount == modulationArticulationInheritAmount ? baseAmount : storedAmount;
             }
 
+            rebuildVoiceArticulationRouteTransforms (voiceIndex, voiceRouteCount, macroVoiceRouteCount);
+
             for (int32 slotIndex = 0; slotIndex < modulationEnvSlotCount; ++slotIndex)
             {
                 voiceArticulationEnvelopeAttackSeconds.at (voiceArticulationEnvelopeIndex (int32 (voice), slotIndex))
@@ -2864,15 +2881,15 @@ namespace wt
 
             for (wrap<modulationMacroSourceCount> sourceIndex)
             {
-                if (macroVoiceRouteSourceUsed[sourceIndex])
-                {
+                if (macroVoiceRouteCoreSourceUsed[sourceIndex])
                     macroVoiceCoreBaseTargetOffsets += (
                         macroVoiceRouteCoreScaleVectors[sourceIndex] * macroSourceValues[sourceIndex]
                     ) + macroVoiceRouteCoreBiasVectors[sourceIndex];
+
+                if (macroVoiceRouteGeneratorSourceUsed[sourceIndex])
                     macroVoiceGeneratorBaseTargetOffsets += (
                         macroVoiceRouteGeneratorScaleVectors[sourceIndex] * macroSourceValues[sourceIndex]
                     ) + macroVoiceRouteGeneratorBiasVectors[sourceIndex];
-                }
             }
 
             for (wrap<modulationVoiceSourceCount> sourceIndex)
@@ -2895,18 +2912,68 @@ namespace wt
                 = float32<modulationVoiceGeneratorLaneCount> (0.0f);
         }
 
-        void addVoiceTargetOffset (int32 voiceIndex, int32 targetIndex, float32 amount)
+        void setVoiceModulationTransformTarget (VoiceModulationTransform& transform, int32 targetIndex,
+                                                float32 amount, int32 polarityKind)
         {
-            let voice = wrap<voiceCount> (voiceIndex);
+            let scale = modulationRouteScale (amount, polarityKind);
+            let bias = modulationRouteBias (amount, polarityKind);
             if (targetIndex < modulationVoiceCoreLaneCount)
             {
-                voiceTargetOffsets[voice].coreValues.at (targetIndex) += amount;
+                transform.coreScales.at (targetIndex) = scale;
+                transform.coreBiases.at (targetIndex) = bias;
                 return;
             }
 
-            voiceTargetOffsets[voice].generatorValues.at (
-                targetIndex - modulationVoiceCoreLaneCount
-            ) += amount;
+            let generatorTargetIndex = targetIndex - modulationVoiceCoreLaneCount;
+            transform.generatorScales.at (generatorTargetIndex) = scale;
+            transform.generatorBiases.at (generatorTargetIndex) = bias;
+        }
+
+        void rebuildVoiceArticulationRouteTransforms (int32 voiceIndex,
+                                                       int32 nextVoiceRouteCount,
+                                                       int32 nextMacroVoiceRouteCount)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            VoiceModulationTransform emptyTransform;
+
+            for (wrap<modulationVoiceSourceCount> sourceIndex)
+                voiceArticulationRouteTransforms[voice].voiceSources[sourceIndex] = emptyTransform;
+
+            for (wrap<modulationMacroSourceCount> sourceIndex)
+                voiceArticulationRouteTransforms[voice].macroSources[sourceIndex] = emptyTransform;
+
+            for (wrap<modulationVoiceRouteCellCount> routeIndex)
+            {
+                if (int32 (routeIndex) >= nextVoiceRouteCount)
+                    break;
+
+                let sourceIndex = voiceRouteSources[routeIndex];
+                let targetIndex = voiceRouteTargets[routeIndex];
+                let cellIndex = voiceRouteCells[routeIndex];
+                let amount = voiceArticulationRouteAmounts.at (
+                    voiceArticulationRouteIndex (voiceIndex, cellIndex)
+                );
+                setVoiceModulationTransformTarget (voiceArticulationRouteTransforms[voice].voiceSources.at (sourceIndex),
+                                                    targetIndex, amount, voiceRoutePolarities[routeIndex]);
+            }
+
+            for (wrap<modulationMacroVoiceRouteCellCount> routeIndex)
+            {
+                if (int32 (routeIndex) >= nextMacroVoiceRouteCount)
+                    break;
+
+                let sourceIndex = macroVoiceRouteSources[routeIndex];
+                let targetIndex = macroVoiceRouteTargets[routeIndex];
+                let cellIndex = macroVoiceRouteCells[routeIndex];
+                let amount = voiceArticulationRouteAmounts.at (
+                    voiceArticulationRouteIndex (
+                        voiceIndex,
+                        modulationVoiceRouteCellCount + cellIndex
+                    )
+                );
+                setVoiceModulationTransformTarget (voiceArticulationRouteTransforms[voice].macroSources.at (sourceIndex),
+                                                    targetIndex, amount, macroVoiceRoutePolarities[routeIndex]);
+            }
         }
 
         void accumulateVoiceModulationTargets (int32 voiceIndex)
@@ -2918,59 +2985,46 @@ namespace wt
             {
                 clearVoiceTargetOffsets (voiceIndex);
 
-                int32 resolvedSourceIndex = -1;
-                float32 sourceValue = 0.0f;
-                for (wrap<modulationVoiceRouteCellCount> routeIndex)
+                if (voiceRouteCount == 0 && macroVoiceRouteCount == 0)
+                    return;
+
+                for (wrap<modulationVoiceSourceCount> sourceIndex)
                 {
-                    if (int32 (routeIndex) >= voiceRouteCount)
-                        break;
+                    if (! voiceRouteCoreSourceUsed[sourceIndex]
+                        && ! voiceRouteGeneratorSourceUsed[sourceIndex])
+                        continue;
 
-                    let sourceIndex = voiceRouteSources[routeIndex];
-                    if (sourceIndex != resolvedSourceIndex)
-                    {
-                        resolvedSourceIndex = sourceIndex;
-                        sourceValue = std::intrinsics::clamp (
-                            resolveVoiceSourceValue (voiceIndex, sourceIndex),
-                            0.0f,
-                            1.0f
-                        );
-                    }
+                    let sourceValue = std::intrinsics::clamp (
+                        resolveVoiceSourceValue (voiceIndex, int32 (sourceIndex)),
+                        0.0f,
+                        1.0f
+                    );
+                    if (voiceRouteCoreSourceUsed[sourceIndex])
+                        voiceTargetOffsets[voice].coreValues += (
+                            voiceArticulationRouteTransforms[voice].voiceSources[sourceIndex].coreScales * sourceValue
+                        ) + voiceArticulationRouteTransforms[voice].voiceSources[sourceIndex].coreBiases;
 
-                    let targetIndex = voiceRouteTargets[routeIndex];
-                    let cellIndex = voiceRouteCells[routeIndex];
-                    let amount = voiceArticulationRouteAmounts.at (
-                        voiceArticulationRouteIndex (voiceIndex, cellIndex)
-                    );
-                    addVoiceTargetOffset (
-                        voiceIndex,
-                        targetIndex,
-                        applyModulationPolarity (
-                            sourceValue,
-                            voiceRoutePolarities[routeIndex]
-                        ) * amount
-                    );
+                    if (voiceRouteGeneratorSourceUsed[sourceIndex])
+                        voiceTargetOffsets[voice].generatorValues += (
+                            voiceArticulationRouteTransforms[voice].voiceSources[sourceIndex].generatorScales * sourceValue
+                        ) + voiceArticulationRouteTransforms[voice].voiceSources[sourceIndex].generatorBiases;
                 }
 
-                for (wrap<modulationMacroVoiceRouteCellCount> routeIndex)
+                for (wrap<modulationMacroSourceCount> sourceIndex)
                 {
-                    if (int32 (routeIndex) >= macroVoiceRouteCount)
-                        break;
+                    if (! macroVoiceRouteCoreSourceUsed[sourceIndex]
+                        && ! macroVoiceRouteGeneratorSourceUsed[sourceIndex])
+                        continue;
 
-                    let sourceIndex = macroVoiceRouteSources[routeIndex];
-                    let targetIndex = macroVoiceRouteTargets[routeIndex];
-                    let cellIndex = macroVoiceRouteCells[routeIndex];
-                    let articulationCellIndex = modulationVoiceRouteCellCount + cellIndex;
-                    let amount = voiceArticulationRouteAmounts.at (
-                        voiceArticulationRouteIndex (voiceIndex, articulationCellIndex)
-                    );
-                    addVoiceTargetOffset (
-                        voiceIndex,
-                        targetIndex,
-                        applyModulationPolarity (
-                            macroSourceValues.at (sourceIndex),
-                            macroVoiceRoutePolarities[routeIndex]
-                        ) * amount
-                    );
+                    if (macroVoiceRouteCoreSourceUsed[sourceIndex])
+                        voiceTargetOffsets[voice].coreValues += (
+                            voiceArticulationRouteTransforms[voice].macroSources[sourceIndex].coreScales * macroSourceValues[sourceIndex]
+                        ) + voiceArticulationRouteTransforms[voice].macroSources[sourceIndex].coreBiases;
+
+                    if (macroVoiceRouteGeneratorSourceUsed[sourceIndex])
+                        voiceTargetOffsets[voice].generatorValues += (
+                            voiceArticulationRouteTransforms[voice].macroSources[sourceIndex].generatorScales * macroSourceValues[sourceIndex]
+                        ) + voiceArticulationRouteTransforms[voice].macroSources[sourceIndex].generatorBiases;
                 }
 
                 return;
@@ -2980,7 +3034,8 @@ namespace wt
             voiceTargetOffsets[voice].generatorValues = macroVoiceGeneratorBaseTargetOffsets;
             for (wrap<modulationVoiceSourceCount> sourceIndex)
             {
-                if (! voiceRouteSourceUsed[sourceIndex])
+                if (! voiceRouteCoreSourceUsed[sourceIndex]
+                    && ! voiceRouteGeneratorSourceUsed[sourceIndex])
                     continue;
 
                 let sourceValue = std::intrinsics::clamp (
@@ -2988,12 +3043,15 @@ namespace wt
                     0.0f,
                     1.0f
                 );
-                voiceTargetOffsets[voice].coreValues += (
-                    voiceRouteCoreScaleVectors[sourceIndex] * sourceValue
-                ) + voiceRouteCoreBiasVectors[sourceIndex];
-                voiceTargetOffsets[voice].generatorValues += (
-                    voiceRouteGeneratorScaleVectors[sourceIndex] * sourceValue
-                ) + voiceRouteGeneratorBiasVectors[sourceIndex];
+                if (voiceRouteCoreSourceUsed[sourceIndex])
+                    voiceTargetOffsets[voice].coreValues += (
+                        voiceRouteCoreScaleVectors[sourceIndex] * sourceValue
+                    ) + voiceRouteCoreBiasVectors[sourceIndex];
+
+                if (voiceRouteGeneratorSourceUsed[sourceIndex])
+                    voiceTargetOffsets[voice].generatorValues += (
+                        voiceRouteGeneratorScaleVectors[sourceIndex] * sourceValue
+                    ) + voiceRouteGeneratorBiasVectors[sourceIndex];
             }
         }
 
@@ -3860,7 +3918,8 @@ namespace wt
             for (int32 sourceIndex = 0; sourceIndex < modulationVoiceSourceCount; ++sourceIndex)
             {
                 voiceRackSourceUsed.at (sourceIndex) = false;
-                voiceRouteSourceUsed.at (sourceIndex) = false;
+                voiceRouteCoreSourceUsed.at (sourceIndex) = false;
+                voiceRouteGeneratorSourceUsed.at (sourceIndex) = false;
                 voiceRouteCoreScaleVectors.at (sourceIndex)
                     = float32<modulationVoiceCoreLaneCount> (0.0f);
                 voiceRouteCoreBiasVectors.at (sourceIndex)
@@ -3873,7 +3932,8 @@ namespace wt
 
             for (int32 sourceIndex = 0; sourceIndex < modulationMacroSourceCount; ++sourceIndex)
             {
-                macroVoiceRouteSourceUsed.at (sourceIndex) = false;
+                macroVoiceRouteCoreSourceUsed.at (sourceIndex) = false;
+                macroVoiceRouteGeneratorSourceUsed.at (sourceIndex) = false;
                 macroVoiceRouteCoreScaleVectors.at (sourceIndex)
                     = float32<modulationVoiceCoreLaneCount> (0.0f);
                 macroVoiceRouteCoreBiasVectors.at (sourceIndex)
@@ -3903,23 +3963,24 @@ namespace wt
                 voiceRouteSources.at (routeIndex) = sourceIndex;
                 voiceRouteTargets.at (routeIndex) = targetIndex;
                 voiceRoutePolarities.at (routeIndex) = polarityKind;
-                voiceRouteScales.at (routeIndex) = modulationRouteScale (amount, polarityKind);
-                voiceRouteBiases.at (routeIndex) = modulationRouteBias (amount, polarityKind);
-                voiceRouteSourceUsed.at (sourceIndex) = true;
+                let scale = modulationRouteScale (amount, polarityKind);
+                let bias = modulationRouteBias (amount, polarityKind);
                 if (targetIndex < modulationVoiceCoreLaneCount)
                 {
+                    voiceRouteCoreSourceUsed.at (sourceIndex) = true;
                     voiceRouteCoreScaleVectors.at (sourceIndex).at (targetIndex)
-                        = modulationRouteScale (amount, polarityKind);
+                        = scale;
                     voiceRouteCoreBiasVectors.at (sourceIndex).at (targetIndex)
-                        = modulationRouteBias (amount, polarityKind);
+                        = bias;
                 }
                 else
                 {
+                    voiceRouteGeneratorSourceUsed.at (sourceIndex) = true;
                     let generatorTargetIndex = targetIndex - modulationVoiceCoreLaneCount;
                     voiceRouteGeneratorScaleVectors.at (sourceIndex).at (generatorTargetIndex)
-                        = modulationRouteScale (amount, polarityKind);
+                        = scale;
                     voiceRouteGeneratorBiasVectors.at (sourceIndex).at (generatorTargetIndex)
-                        = modulationRouteBias (amount, polarityKind);
+                        = bias;
                 }
             }
 
@@ -3937,9 +3998,9 @@ namespace wt
                 macroVoiceRouteSources.at (routeIndex) = sourceIndex;
                 macroVoiceRouteTargets.at (routeIndex) = targetIndex;
                 macroVoiceRoutePolarities.at (routeIndex) = polarityKind;
-                macroVoiceRouteSourceUsed.at (sourceIndex) = true;
                 if (targetIndex < modulationVoiceCoreLaneCount)
                 {
+                    macroVoiceRouteCoreSourceUsed.at (sourceIndex) = true;
                     macroVoiceRouteCoreScaleVectors.at (sourceIndex).at (targetIndex)
                         = modulationRouteScale (amount, polarityKind);
                     macroVoiceRouteCoreBiasVectors.at (sourceIndex).at (targetIndex)
@@ -3947,11 +4008,21 @@ namespace wt
                 }
                 else
                 {
+                    macroVoiceRouteGeneratorSourceUsed.at (sourceIndex) = true;
                     let generatorTargetIndex = targetIndex - modulationVoiceCoreLaneCount;
                     macroVoiceRouteGeneratorScaleVectors.at (sourceIndex).at (generatorTargetIndex)
                         = modulationRouteScale (amount, polarityKind);
                     macroVoiceRouteGeneratorBiasVectors.at (sourceIndex).at (generatorTargetIndex)
                         = modulationRouteBias (amount, polarityKind);
+                }
+            }
+
+            for (wrap<voiceCount> voice)
+            {
+                if (voiceUsesArticulation[voice])
+                {
+                    rebuildVoiceArticulationRouteTransforms (int32 (voice), upload.voiceRouteCount,
+                                                              upload.macroVoiceRouteCount);
                 }
             }
 
@@ -4046,30 +4117,24 @@ namespace wt
                     if (voiceRouteCells.at (routeIndex) == upload.cellIndex)
                     {
                         voiceRouteAmounts.at (upload.cellIndex) = upload.amount;
-                        voiceRouteScales.at (routeIndex) = modulationRouteScale (
-                            upload.amount,
-                            voiceRoutePolarities.at (routeIndex)
-                        );
-                        voiceRouteBiases.at (routeIndex) = modulationRouteBias (
-                            upload.amount,
-                            voiceRoutePolarities.at (routeIndex)
-                        );
+                        let scale = modulationRouteScale (upload.amount, voiceRoutePolarities.at (routeIndex));
+                        let bias = modulationRouteBias (upload.amount, voiceRoutePolarities.at (routeIndex));
                         let sourceIndex = voiceRouteSources.at (routeIndex);
                         let targetIndex = voiceRouteTargets.at (routeIndex);
                         if (targetIndex < modulationVoiceCoreLaneCount)
                         {
                             voiceRouteCoreScaleVectors.at (sourceIndex).at (targetIndex)
-                                = voiceRouteScales.at (routeIndex);
+                                = scale;
                             voiceRouteCoreBiasVectors.at (sourceIndex).at (targetIndex)
-                                = voiceRouteBiases.at (routeIndex);
+                                = bias;
                         }
                         else
                         {
                             let generatorTargetIndex = targetIndex - modulationVoiceCoreLaneCount;
                             voiceRouteGeneratorScaleVectors.at (sourceIndex).at (generatorTargetIndex)
-                                = voiceRouteScales.at (routeIndex);
+                                = scale;
                             voiceRouteGeneratorBiasVectors.at (sourceIndex).at (generatorTargetIndex)
-                                = voiceRouteBiases.at (routeIndex);
+                                = bias;
                         }
                         applied = true;
                         break;

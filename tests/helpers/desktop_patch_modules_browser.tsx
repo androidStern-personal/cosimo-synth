@@ -5,9 +5,15 @@ import desktopCssText from "../../ui/desktop/styles.css?inline";
 import editorTokensCssText from "../../ui/shared/editor-tokens.css?inline";
 import editorCurveSurfaceCssText from "../../ui/shared/editor-curve-surface.css?inline";
 import filterRangeEditorCssText from "../../ui/shared/filter-range-editor.css?inline";
-import { PatchConnectionProvider, usePatchEndpoint, type PatchConnectionLike } from "../../ui/shared/cmajor-react";
+import {
+    PatchConnectionProvider,
+    usePatchEndpoint,
+    usePatchVisualEndpoint,
+    type PatchConnectionLike,
+} from "../../ui/shared/cmajor-react";
 import { usePatchParameterBinding } from "../../ui/shared/patch-controls";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
+import { PrecisionNumberField } from "../../ui/desktop/desktop-precision-number-field";
 import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
 import {
     EditableMsegSurface,
@@ -33,12 +39,14 @@ import {
 import {
     useFactoryBankCatalog,
     useFactoryTableFrames,
+    useModulationState,
     useMsegEditorInteractions,
     useMsegState,
     useObservedDisplayPosition,
     useStagePositionDrag,
     useSynthKeyboardRouting,
 } from "../../ui/shared/synth-hooks";
+import { useModulationRouteAmountBinding } from "../../ui/shared/modulation-route-amount";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
 import {
     addMsegPoint,
@@ -1193,6 +1201,195 @@ export async function installPatchEndpointActivityHarness(target: HTMLElement) {
     await waitForMicrotask();
 }
 
+export async function installPatchVisualEndpointHarness(target: HTMLElement) {
+    const endpointListeners = new Set<(value: unknown) => void>();
+    const renderLog: unknown[] = [];
+    let renderCount = 0;
+    let pendingBurstPayloadReadCount = 0;
+
+    const patchConnection: PatchConnectionLike = {
+        addEndpointListener(endpointID, listener) {
+            if (endpointID === "visualizerFrame") {
+                endpointListeners.add(listener);
+            }
+        },
+        removeEndpointListener(endpointID, listener) {
+            if (endpointID === "visualizerFrame") {
+                endpointListeners.delete(listener);
+            }
+        },
+    };
+    const mounted = mountHarness(target, (root) => {
+        function Reader() {
+            const frame = usePatchVisualEndpoint<unknown | null>("visualizerFrame", null);
+            renderCount += 1;
+
+            useEffect(() => {
+                renderLog.push(cloneValue(frame));
+            }, [frame]);
+
+            return null;
+        }
+
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Reader />
+            </PatchConnectionProvider>,
+        );
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async emitMeasuredPendingBurst(frameCount: number, valueCount: number) {
+            pendingBurstPayloadReadCount = 0;
+            for (let frameIndex = 0; frameIndex < frameCount; frameIndex += 1) {
+                const values = Array.from({ length: valueCount }, (_, valueIndex) => (
+                    valueIndex === valueCount - 1 ? frameIndex : valueIndex
+                ));
+                const frame = { sequence: 900 } as { sequence: number; values: number[] };
+                Object.defineProperty(frame, "values", {
+                    configurable: true,
+                    enumerable: true,
+                    get() {
+                        pendingBurstPayloadReadCount += 1;
+                        return values;
+                    },
+                });
+                endpointListeners.forEach((listener) => listener(frame));
+            }
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            return pendingBurstPayloadReadCount;
+        },
+        async emitFrames(values: unknown[], separateTasks = false) {
+            for (const value of values) {
+                endpointListeners.forEach((listener) => listener(value));
+                if (separateTasks) {
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                }
+            }
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        },
+        getSnapshot() {
+            return {
+                listenerCount: endpointListeners.size,
+                renderCount,
+                renderLog: cloneValue(renderLog),
+                lastRender: cloneValue(renderLog.at(-1) ?? null),
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
+export async function installModulationRouteAmountBindingHarness(target: HTMLElement) {
+    const routeId = "fine-grained-route-amount";
+    const initialRoute = createDefaultRoute({
+        id: routeId,
+        targetKind: "rack.distortionDriveDb",
+        amount: 0,
+    });
+    const initialState = {
+        ...createDefaultModulationState(),
+        routes: [initialRoute],
+    };
+    const storedStateListeners = new Set<(message: unknown) => void>();
+    const sentStoredStates: string[] = [];
+    const bindingRenderLog: number[] = [];
+    const parentRenderLog: Array<number | null> = [];
+    let setAmount: ((nextAmount: number) => boolean) | null = null;
+    let bindingValue = 0;
+    let parentAmount: number | null = null;
+
+    const patchConnection: PatchConnectionLike = {
+        addStoredStateValueListener(listener) {
+            storedStateListeners.add(listener);
+        },
+        removeStoredStateValueListener(listener) {
+            storedStateListeners.delete(listener);
+        },
+        requestFullStoredState(callback) {
+            callback({
+                values: {
+                    [MODULATION_STATE_KEY]: serializeModulationState(initialState),
+                },
+            });
+        },
+        sendStoredStateValue(key, value) {
+            if (key === MODULATION_STATE_KEY && typeof value === "string") {
+                sentStoredStates.push(value);
+            }
+        },
+    };
+    const mounted = mountHarness(target, (root) => {
+        function Reader() {
+            const { state } = useModulationState();
+            const route = state?.routes.find((candidate) => candidate.id === routeId)
+                ?? initialRoute;
+            const binding = useModulationRouteAmountBinding(route);
+            const nextParentAmount = state?.routes.find((candidate) => candidate.id === routeId)?.amount ?? null;
+            setAmount = binding.setValue;
+            bindingValue = binding.value;
+            parentAmount = nextParentAmount;
+
+            useEffect(() => {
+                bindingRenderLog.push(binding.value);
+            }, [binding.value]);
+            useEffect(() => {
+                parentRenderLog.push(nextParentAmount);
+            }, [nextParentAmount]);
+
+            return null;
+        }
+
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Reader />
+            </PatchConnectionProvider>,
+        );
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async setAmount(nextAmount: number) {
+            const accepted = setAmount?.(nextAmount) ?? false;
+            await waitForMicrotask();
+            return accepted;
+        },
+        async emitCanonicalAmount(nextAmount: number) {
+            const serializedState = serializeModulationState({
+                ...initialState,
+                routes: [{ ...initialRoute, amount: nextAmount }],
+            });
+            storedStateListeners.forEach((listener) => listener({
+                key: MODULATION_STATE_KEY,
+                value: serializedState,
+            }));
+            await waitForMicrotask();
+        },
+        getSnapshot() {
+            return {
+                bindingValue,
+                parentAmount,
+                bindingRenderLog: [...bindingRenderLog],
+                parentRenderLog: [...parentRenderLog],
+                sentStoredAmounts: sentStoredStates.map((serializedState) => (
+                    JSON.parse(serializedState).routes[0]?.amount ?? null
+                )),
+                storedStateListenerCount: storedStateListeners.size,
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
 export async function installPatchParameterRebindingHarness(target: HTMLElement) {
     const parameterListeners = new Map<string, Set<(value: unknown) => void>>();
     const requestedParameters: string[] = [];
@@ -1270,6 +1467,72 @@ export async function installPatchParameterRebindingHarness(target: HTMLElement)
     await waitForMicrotask();
 }
 
+export async function installPrecisionOptimisticEchoHarness(target: HTMLElement) {
+    const sentValues: number[] = [];
+    const gestures: string[] = [];
+    let updateHostModel: ((model: { endpointID: string; value: number }) => void) | null = null;
+
+    const mounted = mountHarness(target, (root) => {
+        function Harness() {
+            const [hostModel, setHostModel] = useState({ endpointID: "parameterA", value: 0.1 });
+            updateHostModel = setHostModel;
+            const binding = useMemo<PatchControlBinding<number>>(() => ({
+                endpointID: hostModel.endpointID,
+                value: hostModel.value,
+                setValue(nextValue) {
+                    sentValues.push(nextValue);
+                },
+                commitValue(nextValue) {
+                    sentValues.push(nextValue);
+                },
+                beginGesture() {
+                    gestures.push(`begin:${hostModel.endpointID}`);
+                },
+                endGesture() {
+                    gestures.push(`end:${hostModel.endpointID}`);
+                },
+            }), [hostModel.endpointID, hostModel.value]);
+
+            return (
+                <PrecisionNumberField
+                    ariaLabel="Optimistic precision value"
+                    binding={binding}
+                    min={0}
+                    max={1}
+                    step={0.001}
+                    width={120}
+                    height={32}
+                    formatDisplay={(value) => `${Math.round(value * 50)} ct`}
+                    dataRole="optimistic-precision-control"
+                />
+            );
+        }
+
+        root.render(<Harness />);
+    });
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async emitAuthoritativeValue(endpointID: string, value: number) {
+            updateHostModel?.({ endpointID, value });
+            await waitForMicrotask();
+        },
+        getSnapshot() {
+            const input = target.querySelector('[data-role="optimistic-precision-control"] input');
+            return {
+                displayedValue: input instanceof HTMLInputElement ? input.value : null,
+                gestures: [...gestures],
+                sentValues: [...sentValues],
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
 export async function installMsegStateHookHarness(target: HTMLElement) {
     const storedStateListeners = new Set<(message: unknown) => void>();
     const sentEvents: Array<{ endpointID: string; value: unknown }> = [];
@@ -1279,10 +1542,11 @@ export async function installMsegStateHookHarness(target: HTMLElement) {
     let removeStoredStateValueListenerCount = 0;
 
     const bootModulationState = createDefaultModulationState();
+    const { rate: _parameterOwnedRate, ...bootPlayback } = createDefaultMsegPlayback();
     bootModulationState.msegSlots[0] = {
         shapeA: createDefaultMsegShape("Test MSEG A"),
         shapeB: createDefaultMsegShape("Test MSEG B"),
-        playback: createDefaultMsegPlayback(),
+        playback: bootPlayback,
     };
     bootModulationState.routes = [createDefaultRoute({
         id: "oscA.framePosition::mseg-1",

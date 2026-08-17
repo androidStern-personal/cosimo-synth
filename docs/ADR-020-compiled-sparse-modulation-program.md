@@ -122,6 +122,11 @@ Continuation is fixed by the articulation lane's domain semantics rather than ex
 configuration switch. The lane's implementation-only state and helpers use JavaScript-private
 members, preserving readable source while allowing production minification to keep the complete
 worker below its unchanged startup/parse budget.
+
+ADR-023 owns the corresponding UI projection rule. A live amount control reads and writes the
+canonical bridge value by stable route ID; the broad `modulation.v6` React projection is allowed to
+trail pure amount edits and cannot be used as a live amount display.
+
 The worker retries one complete image only when the accepted frontier proves that replay is needed;
 if a later command is semantically rejected after earlier commands in its batch were accepted, the
 worker performs one guarded full replay to reconcile that accepted prefix. A repeated rejection is
@@ -188,12 +193,13 @@ The required 100-mapping sustained cases must produce non-silent audio, remain b
 measured render load, and complete no slower than 1.2× their audio duration in both desktop Chromium
 and desktop Playwright WebKit. Amount and 100-map topology edit epochs enforce the same render-load
 limit while cadence is measured separately. With a high-resolution worklet clock they permit zero
-over-budget calls. The tested generated worklets currently expose only integer-millisecond
-`Date.now()`, so a measured 3 ms call cannot distinguish a real 2.667 ms miss from clock quantization;
-that environment instead requires fewer than 0.2% flagged calls and no measured call of 4 ms or more.
-The historical 624-cell torture case is not a mobile real-time promise; sustained execution and
-then-complete-domain topology replacement must remain below 90% average with fewer than 2% over-budget
-render calls. Every epoch must also report zero rejected installs and zero silent held-note polls.
+over-budget calls. The tested generated WebKit worklet exposes only integer-millisecond `Date.now()`:
+a measured 3 ms call cannot distinguish a real 2.667 ms miss from clock quantization, while a measured
+4 ms call is unambiguously late. The permanent gate therefore reports 3 ms calls as ambiguous timing
+samples and requires zero definite deadline misses. The historical 624-cell torture case is not a
+mobile real-time promise; sustained execution and then-complete-domain topology replacement must
+remain below 90% average with fewer than 2% definite deadline misses. Every epoch must also report
+zero rejected installs and zero silent held-note polls.
 Browser `currentFrame` jumps are kept as a separate shared-machine scheduler diagnostic and must
 remain below 0.2% of measured blocks; they are not relabeled as DSP execution time.
 

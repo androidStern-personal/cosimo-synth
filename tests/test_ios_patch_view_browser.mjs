@@ -1537,7 +1537,7 @@ test("mounted iPhone no longer exposes the legacy MSEG depth control because rou
     }
 });
 
-test("mounted iPhone route rows use the compact depth control and preserve target-specific units", async () => {
+test("mounted iPhone route amounts present the canonical value before the full document projection", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
@@ -1570,7 +1570,27 @@ test("mounted iPhone route rows use the compact depth control and preserve targe
         )), true);
 
         await (await getShadowLocator(page, 'button[aria-label="Route 1 polarity bipolar"]')).click();
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-synth-view")
+                ?.shadowRoot
+                ?.querySelector(".cosimo-mod-amount-readout")
+                ?.textContent
+                ?.trim() === "±25%"
+        ));
+        await page.clock.install();
+        await page.clock.pauseAt(Date.now() + 1_000);
         await dispatchShadowInputValueChange(page, 'input[aria-label="Route 1 depth"]', 0.75);
+        await page.clock.runFor(20);
+
+        const beforeFullDocumentProjection = {
+            inputValue: await (await getShadowLocator(page, 'input[aria-label="Route 1 depth"]')).inputValue(),
+            readout: await (await getShadowLocator(page, ".cosimo-mod-amount-readout"))
+                .evaluate((element) => element.textContent?.trim() ?? null),
+        };
+        assert.deepEqual(beforeFullDocumentProjection, {
+            inputValue: "0.75",
+            readout: "±50%",
+        }, "The live amount control must not wait for the deferred modulation document.");
 
         const snapshot = await waitForSnapshot(
             page,
@@ -1606,13 +1626,6 @@ test("mounted iPhone route rows use the compact depth control and preserve targe
             targetKind: "oscA.pan",
             amount: 0.5,
         });
-        await page.waitForFunction(() => (
-            document.querySelector("cosimo-synth-view")
-                ?.shadowRoot
-                ?.querySelector(".cosimo-mod-amount-readout")
-                ?.textContent
-                ?.trim() === "±50%"
-        ));
         assert.equal(
             await (await getShadowLocator(page, ".cosimo-mod-amount-readout")).evaluate((element) => element.textContent?.trim() ?? null),
             "±50%",

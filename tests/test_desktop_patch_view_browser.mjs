@@ -2296,6 +2296,122 @@ test("global modulation-source drag maps the selected oscillator level control",
     }
 });
 
+test("first mobile Mod Bar drop appears in the matrix after restoring routes", async () => {
+    const restoredState = normalizeModulationState({
+        routes: [{
+            id: "mod-route-auto-1",
+            enabled: true,
+            sourceKind: "env",
+            sourceSlot: 3,
+            polarity: "unipolar",
+            targetKind: "filterQ",
+            amount: 0.25,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 695 });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: restoredState });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "restored modulation route before first drop",
+            (snapshot) => readStoredModulationState(snapshot).routes.length === 1,
+        );
+        await page.locator('[data-role="mobile-workspace-toggle-mod"]').click();
+        await page.waitForFunction(() => {
+            const matrix = document.querySelector('[data-role="mobile-mod-matrix"]');
+            const count = matrix?.querySelector('[data-role="mobile-mod-route-count"]')?.textContent?.trim();
+            const rows = Array.from(matrix?.querySelectorAll('[data-role="mobile-mod-route-row"]') ?? []);
+            return count === "1 mappings" && rows.some((row) => row.textContent?.includes("ENV 3"));
+        });
+        await page.locator('[data-role="mobile-workspace-toggle-voice"]').click();
+        const railGrip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
+        await railGrip.waitFor();
+        if (await railGrip.getAttribute("aria-expanded") !== "true") {
+            await railGrip.click({ position: { x: 28, y: 12 } });
+        }
+        await page.waitForFunction(() => {
+            const rail = document.querySelector('[data-role="mobile-global-mod-rail"]');
+            const drawer = rail?.querySelector('[data-role="mobile-global-mod-rail-drawer"]');
+            if (!(drawer instanceof HTMLElement) || rail?.getAttribute("data-expanded") !== "true") {
+                return false;
+            }
+            const style = getComputedStyle(drawer);
+            return drawer.getAttribute("aria-hidden") === "false"
+                && !drawer.inert
+                && style.opacity === "1"
+                && style.visibility === "visible"
+                && drawer.getAnimations().every((animation) => animation.playState === "finished");
+        });
+
+        const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        const target = page.locator('[data-role="oscillator-octave"]');
+        await target.scrollIntoViewIfNeeded();
+        const sourceBox = await source.boundingBox();
+        const targetBox = await target.boundingBox();
+        assert.ok(sourceBox && targetBox);
+        const start = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+        const end = {
+            x: targetBox.x + (targetBox.width / 2),
+            y: targetBox.y + (targetBox.height / 2),
+        };
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 8; step += 1) {
+            const progress = step / 8;
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: start.x + ((end.x - start.x) * progress),
+                    y: start.y + ((end.y - start.y) * progress),
+                    radiusX: 5,
+                    radiusY: 5,
+                    force: 1,
+                }],
+            });
+        }
+        assert.equal(await target.getAttribute("data-modulation-target-kind"), "oscA.pitchSemitones");
+        assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), true);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await waitForHarnessSnapshot(
+            page,
+            "first dropped oscillator modulation route",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "mseg"
+                && route.sourceSlot === 1
+                && route.targetKind === "oscA.pitchSemitones"
+            )),
+        );
+        await page.locator('[data-role="mobile-workspace-toggle-mod"]').click();
+        await page.waitForFunction(() => {
+            const matrix = document.querySelector('[data-role="mobile-mod-matrix"]');
+            const count = matrix?.querySelector('[data-role="mobile-mod-route-count"]')?.textContent?.trim();
+            const rows = Array.from(matrix?.querySelectorAll('[data-role="mobile-mod-route-row"]') ?? []);
+            return count === "2 mappings" && rows.some((row) => row.textContent?.includes("MSEG 1"));
+        });
+        assert.equal(readStoredModulationState(await getHarnessSnapshot(page)).routes.length, 2);
+    } finally {
+        await cdp.detach().catch(() => {});
+        await page.close();
+    }
+});
+
 test("MSEG morph is a real modulation drop target", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -3083,6 +3199,148 @@ test("precision value entry keeps the focused draft when a host echo arrives", a
             return Math.abs(Number(snapshot.parameterValues.oscAUnisonDetune) - 0.5) < 0.0001;
         });
     } finally {
+        await page.close();
+    }
+});
+
+test("mobile unison drag presents within 50 ms while committing the matching runtime value", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 390, height: 844 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await page.locator('[data-role="keyboard-control-mode-voice"]').click();
+        const detuneInput = page.locator('[data-role="unison-detune-control"] input');
+        await detuneInput.waitFor({ state: "visible" });
+        const bounds = await detuneInput.boundingBox();
+        assert.ok(bounds);
+        await page.evaluate(() => {
+            window.__COSIMO_UNISON_LATENCY__ = { armed: null, results: [] };
+            const patchConnection = window.__COSIMO_DESKTOP_HARNESS__.patchConnection;
+            const sendEventOrValue = patchConnection.sendEventOrValue.bind(patchConnection);
+            patchConnection.sendEventOrValue = (endpointID, value) => {
+                const state = window.__COSIMO_UNISON_LATENCY__;
+                if (endpointID === "oscAUnisonDetune" && state?.armed?.handlerStartedAt) {
+                    state.armed.runtimeSentAt ??= performance.now();
+                }
+                return sendEventOrValue(endpointID, value);
+            };
+            const targetInput = document.querySelector('[data-role="unison-detune-control"] input');
+            const nativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+            if (!(targetInput instanceof HTMLInputElement) || !nativeValue?.get || !nativeValue.set) {
+                throw new Error("Expected an instrumentable unison detune input.");
+            }
+            Object.defineProperty(targetInput, "value", {
+                configurable: true,
+                get() {
+                    return nativeValue.get.call(this);
+                },
+                set(nextValue) {
+                    nativeValue.set.call(this, nextValue);
+                    const state = window.__COSIMO_UNISON_LATENCY__;
+                    const armed = state?.armed;
+                    if (!armed?.handlerStartedAt || armed.presented || String(nextValue) === armed.initialValue) {
+                        return;
+                    }
+                    armed.presented = true;
+                    state.results.push({
+                        nativeQueueMs: armed.nativeQueueMs,
+                        handlerToCommitMs: performance.now() - armed.handlerStartedAt,
+                        handlerToRuntimeMs: armed.runtimeSentAt - armed.handlerStartedAt,
+                        totalMs: armed.nativeQueueMs + performance.now() - armed.handlerStartedAt,
+                        initialValue: armed.initialValue,
+                        presentedValue: String(nextValue),
+                    });
+                },
+            });
+            document.addEventListener("pointermove", (event) => {
+                const state = window.__COSIMO_UNISON_LATENCY__;
+                const input = event.composedPath().find((candidate) => (
+                    candidate instanceof HTMLInputElement
+                    && candidate.closest('[data-role="unison-detune-control"]')
+                ));
+                if (!state?.armed || state.armed.handled || !(input instanceof HTMLInputElement)) {
+                    return;
+                }
+
+                state.armed.handled = true;
+                const armed = state.armed;
+                const handlerStartedAt = performance.now();
+                armed.handlerStartedAt = handlerStartedAt;
+                armed.nativeQueueMs = handlerStartedAt - event.timeStamp;
+            }, { capture: true, passive: true });
+        });
+        await cdp.send("Emulation.setCPUThrottlingRate", { rate: 20 });
+        await detuneInput.evaluate((input) => {
+            window.__COSIMO_UNISON_LATENCY__.armed = {
+                initialValue: input.value,
+                handled: false,
+            };
+        });
+
+        const startX = bounds.x + (bounds.width / 2);
+        const endX = startX + Math.min(24, bounds.width * 0.25);
+        const y = bounds.y + (bounds.height / 2);
+        await detuneInput.dispatchEvent("pointerdown", {
+            pointerId: 71,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 1,
+            clientX: startX,
+            clientY: y,
+        });
+        await detuneInput.dispatchEvent("pointermove", {
+            pointerId: 71,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 1,
+            clientX: endX,
+            clientY: y,
+        });
+        await detuneInput.dispatchEvent("pointerup", {
+            pointerId: 71,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 0,
+            clientX: endX,
+            clientY: y,
+        });
+        await page.waitForFunction(() => window.__COSIMO_UNISON_LATENCY__?.results?.length === 1, null, { timeout: 10_000 });
+
+        const result = await page.evaluate(() => window.__COSIMO_UNISON_LATENCY__.results[0]);
+        const snapshot = await getHarnessSnapshot(page);
+        const sentUnisonMessages = snapshot.sentMessages.filter(
+            ({ endpointID }) => endpointID === "oscAUnisonDetune",
+        );
+        assert.notEqual(result.presentedValue, result.initialValue);
+        assert.ok(sentUnisonMessages.length > 0, "The presented drag must also reach the runtime boundary.");
+        assert.equal(
+            Number(snapshot.parameterValues.oscAUnisonDetune),
+            Number(sentUnisonMessages.at(-1).value),
+            "The runtime value must match the last value sent by the drag.",
+        );
+        assert.ok(
+            result.nativeQueueMs + result.handlerToRuntimeMs < 50,
+            `Expected unison runtime send <50ms, got ${JSON.stringify(result)}`,
+        );
+        assert.ok(result.totalMs < 50, `Expected unison value presentation <50ms, got ${JSON.stringify(result)}`);
+        await page.waitForTimeout(100);
+        assert.equal(
+            await detuneInput.inputValue(),
+            result.presentedValue,
+            "The optimistic value must not snap back while the deferred runtime echo settles.",
+        );
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("oscAUnisonDetune", 0.8, true);
+        });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="unison-detune-control"] input')?.value === "40 ct"
+        ));
+        assert.equal(await detuneInput.inputValue(), "40 ct", "An authoritative host echo must replace the drag value.");
+    } finally {
+        await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 }).catch(() => {});
+        await cdp.detach().catch(() => {});
         await page.close();
     }
 });
@@ -10729,6 +10987,85 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
         );
     } finally {
         await targetFirstPage.close();
+    }
+});
+
+test("mobile rack modulation amount presents the canonical bridge value while the full document is deferred", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+    const readAmountPresentation = async () => page.locator('[data-role="rack-modulation-amount"]').evaluate((slider) => {
+        const thumb = slider.querySelector(".rack-mod-amount-thumb");
+        const output = slider.closest(".rack-mod-amount")?.querySelector("output");
+        return {
+            ariaValueText: slider.getAttribute("aria-valuetext"),
+            output: output?.textContent ?? null,
+            thumbLeft: thumb instanceof HTMLElement ? thumb.style.left : null,
+        };
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [{
+                id: "mobile-rack-amount-route",
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "bipolar",
+                targetKind: "rack.distortionDriveDb",
+                amount: 0,
+                reducer: "max",
+            }],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await waitForHarnessSnapshot(
+            page,
+            "seeded mobile rack modulation amount route",
+            (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === "mobile-rack-amount-route",
+        );
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+
+        const amount = page.locator('[data-role="rack-modulation-amount"]');
+        await amount.waitFor();
+        const bounds = await amount.boundingBox();
+        assert.ok(bounds);
+        const initial = await readAmountPresentation();
+
+        await page.clock.install();
+        await page.clock.pauseAt(Date.now() + 1_000);
+        await clearHarnessDebugLog(page);
+        const y = bounds.y + (bounds.height / 2);
+        await page.mouse.move(bounds.x + (bounds.width * 0.5), y);
+        await page.mouse.down();
+        await page.mouse.move(bounds.x + (bounds.width * 0.8), y);
+        await page.clock.runFor(20);
+        const duringDrag = await readAmountPresentation();
+        await page.mouse.up();
+        await page.clock.runFor(20);
+        const beforeParentEcho = await readAmountPresentation();
+        await page.clock.runFor(30);
+        const afterParentEcho = await readAmountPresentation();
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID, value }) => (
+                (endpointID === "modulationAmount" && Number(value?.amount) > 0)
+                || (endpointID === "modulationProgram" && Number(value?.voiceRackRouteCount) > 0)
+            )),
+            true,
+            "The drag must reach the runtime boundary immediately.",
+        );
+        assert.notEqual(duringDrag.thumbLeft, initial.thumbLeft, "The amount thumb stayed at the stale parent value.");
+        assert.notEqual(duringDrag.output, initial.output, "The amount readout stayed at the stale parent value.");
+        assert.equal(duringDrag.output, duringDrag.ariaValueText);
+        assert.deepEqual(beforeParentEcho, duringDrag, "The amount presentation diverged from the canonical route value.");
+        assert.deepEqual(afterParentEcho, duringDrag, "The deferred full-document projection changed the route value.");
+    } finally {
+        await page.close();
     }
 });
 

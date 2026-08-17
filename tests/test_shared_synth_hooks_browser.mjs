@@ -166,6 +166,96 @@ test("usePatchEndpoint detaches high-rate streams while their visualizer is inac
     }
 });
 
+test("visual endpoint delivery presents the latest frame without rendering repeated state", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installPatchVisualEndpointHarness");
+        await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().listenerCount === 1);
+
+        const initial = await getHarnessSnapshot(page);
+        await invokeHarness(page, "emitFrames", [
+            { sequence: 1, values: [0.1, 0.2] },
+            { sequence: 2, values: [0.2, 0.3] },
+            { sequence: 3, values: [0.3, 0.4] },
+        ]);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.lastRender, { sequence: 3, values: [0.3, 0.4] });
+        assert.ok(
+            snapshot.renderLog.length - initial.renderLog.length <= 1,
+            `One visual burst must present at most one committed frame: ${JSON.stringify({ initial, snapshot })}`,
+        );
+
+        const repeatedFrame = { sequence: 3, values: [0.3, 0.4] };
+        const beforeRepeated = snapshot.renderCount;
+        await invokeHarness(page, "emitFrames", Array.from({ length: 24 }, () => repeatedFrame), true);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.renderCount, beforeRepeated);
+        assert.deepEqual(snapshot.lastRender, repeatedFrame);
+
+        const pendingBurstPayloadReads = await invokeHarness(page, "emitMeasuredPendingBurst", 64, 2_048);
+        assert.ok(
+            pendingBurstPayloadReads <= 2,
+            `A queued visual frame must replace pending payloads without rescanning them: ${pendingBurstPayloadReads}`,
+        );
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.lastRender.sequence, 900);
+        assert.equal(snapshot.lastRender.values.at(-1), 63);
+    } finally {
+        await page.close();
+    }
+});
+
+test("route amount binding presents the canonical bridge value before the full modulation document rerenders", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installModulationRouteAmountBindingHarness");
+        await page.waitForFunction(() => {
+            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return snapshot?.bindingValue === 0 && snapshot?.parentAmount === 0;
+        });
+        await page.clock.install();
+
+        const accepted = await invokeHarness(page, "setAmount", 0.75);
+        assert.equal(accepted, true);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().bindingValue === 0.75
+        ));
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.bindingValue, 0.75);
+        assert.equal(snapshot.parentAmount, 0, "The broad modulation document should remain deferred during amount edits.");
+        assert.deepEqual(snapshot.sentStoredAmounts, [0.75]);
+
+        await page.clock.runFor(49);
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.parentAmount, 0);
+
+        await page.clock.runFor(1);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().parentAmount === 0.75
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.bindingValue, 0.75);
+        assert.equal(snapshot.parentAmount, 0.75);
+        assert.deepEqual(snapshot.bindingRenderLog, [0, 0.75]);
+
+        await invokeHarness(page, "emitCanonicalAmount", -0.25);
+        await page.waitForFunction(() => {
+            const nextSnapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
+            return nextSnapshot?.bindingValue === -0.25 && nextSnapshot?.parentAmount === -0.25;
+        });
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.bindingValue, -0.25, "An authoritative replacement must supersede the edited amount.");
+        assert.equal(snapshot.parentAmount, -0.25);
+        assert.deepEqual(snapshot.sentStoredAmounts, [0.75], "An external replacement must not be persisted back as a new edit.");
+    } finally {
+        await page.close();
+    }
+});
+
 test("usePatchParameterBinding resets stale display state when the active endpoint changes", async () => {
     const page = await openModulePage();
 
@@ -182,6 +272,78 @@ test("usePatchParameterBinding resets stale display state when the active endpoi
         assert.deepEqual(snapshot.requestedParameters, ["parameterA", "parameterB"]);
         assert.deepEqual(snapshot.listenerCounts, { parameterA: 0, parameterB: 1 });
         assert.deepEqual(snapshot.lastRender, { endpointID: "parameterB", value: 0.25 });
+    } finally {
+        await page.close();
+    }
+});
+
+test("precision drag yields to clamped host echoes and endpoint changes without repeating unchanged values", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installHarness(page, "installPrecisionOptimisticEchoHarness");
+        const input = page.locator('[data-role="optimistic-precision-control"] input');
+        const bounds = await input.boundingBox();
+        assert.ok(bounds);
+        const pointer = {
+            pointerId: 91,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 1,
+            clientY: bounds.y + (bounds.height / 2),
+        };
+        await input.dispatchEvent("pointerdown", {
+            ...pointer,
+            clientX: bounds.x + (bounds.width / 2),
+        });
+        await input.dispatchEvent("pointermove", {
+            ...pointer,
+            clientX: bounds.x + (bounds.width * 0.75),
+        });
+        await input.dispatchEvent("pointermove", {
+            ...pointer,
+            clientX: bounds.x + (bounds.width * 0.75),
+        });
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.sentValues.length, 1, JSON.stringify(snapshot));
+        assert.notEqual(snapshot.displayedValue, "5 ct");
+        await input.dispatchEvent("pointerup", { ...pointer, buttons: 0 });
+
+        const secondPointer = { ...pointer, pointerId: 92 };
+        await input.dispatchEvent("pointerdown", {
+            ...secondPointer,
+            clientX: bounds.x + (bounds.width / 2),
+        });
+        await input.dispatchEvent("pointermove", {
+            ...secondPointer,
+            clientX: bounds.x + (bounds.width * 0.75),
+        });
+        await input.dispatchEvent("pointerup", { ...secondPointer, buttons: 0 });
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.sentValues.length, 2, JSON.stringify(snapshot));
+        assert.ok(snapshot.sentValues[1] > snapshot.sentValues[0], JSON.stringify(snapshot));
+
+        await invokeHarness(page, "emitAuthoritativeValue", "parameterA", 0.2);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().displayedValue === "10 ct"
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.displayedValue, "10 ct");
+
+        await invokeHarness(page, "emitAuthoritativeValue", "parameterB", 0.6);
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().displayedValue === "30 ct"
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(snapshot.displayedValue, "30 ct");
+
+        assert.deepEqual((await getHarnessSnapshot(page)).gestures, [
+            "begin:parameterA",
+            "end:parameterA",
+            "begin:parameterA",
+            "end:parameterA",
+        ]);
     } finally {
         await page.close();
     }

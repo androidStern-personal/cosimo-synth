@@ -1,4 +1,5 @@
 import {
+    useCallback,
     useEffect,
     useMemo,
     useState,
@@ -17,11 +18,13 @@ import {
     isRackModulationTarget,
     isVoiceModulationSource,
     parseModulationAmountEditingValue,
+    type GeneratedModulationRouteInput,
     type ModulationRoute,
     type ModulationRouteUpdate,
     type ModulationSourceKind,
     type ModulationTargetKind,
 } from "../shared/modulation";
+import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
     allRackParameterDescriptors,
     getRackEffectDescriptor,
@@ -39,7 +42,7 @@ type FocusedModulationSource = {
 type MobileModMatrixProps = {
     routes: ModulationRoute[];
     focusedSource?: FocusedModulationSource | null;
-    onCreateRoute: (route: Partial<ModulationRoute>) => void;
+    onCreateRoute: (route: GeneratedModulationRouteInput) => boolean;
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
 };
@@ -146,26 +149,29 @@ function ScreenHeader({
     );
 }
 
-function RouteAmountEditor({
-    route,
-    onChange,
-}: {
-    route: ModulationRoute;
-    onChange: (amount: number) => void;
-}) {
+function RouteAmountEditor({ route }: { route: ModulationRoute }) {
+    const amountBinding = useModulationRouteAmountBinding(route);
+    const presentedAmount = amountBinding.value;
     const [draft, setDraft] = useState(() => formatModulationAmountEditingValue(route.targetKind, route.amount));
 
+    const publishAmount = useCallback((nextAmount: number) => {
+        if (Math.abs(nextAmount - presentedAmount) <= 1e-9) {
+            return;
+        }
+        amountBinding.setValue(nextAmount);
+    }, [amountBinding, presentedAmount]);
+
     useEffect(() => {
-        setDraft(formatModulationAmountEditingValue(route.targetKind, route.amount));
-    }, [route.amount, route.targetKind]);
+        setDraft(formatModulationAmountEditingValue(route.targetKind, presentedAmount));
+    }, [presentedAmount, route.targetKind]);
 
     const commitDraft = () => {
         const parsed = parseModulationAmountEditingValue(route.targetKind, draft);
         if (parsed === null) {
-            setDraft(formatModulationAmountEditingValue(route.targetKind, route.amount));
+            setDraft(formatModulationAmountEditingValue(route.targetKind, presentedAmount));
             return;
         }
-        onChange(clampModulationRouteAmount(route.targetKind, parsed));
+        publishAmount(clampModulationRouteAmount(route.targetKind, parsed));
     };
     const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
         if (event.key === "Enter") {
@@ -173,7 +179,7 @@ function RouteAmountEditor({
             commitDraft();
             event.currentTarget.blur();
         } else if (event.key === "Escape") {
-            setDraft(formatModulationAmountEditingValue(route.targetKind, route.amount));
+            setDraft(formatModulationAmountEditingValue(route.targetKind, presentedAmount));
             event.currentTarget.blur();
         }
     };
@@ -182,7 +188,7 @@ function RouteAmountEditor({
         <section className="mobile-mod-amount-editor" aria-label="Route amount">
             <div className="mobile-mod-field-heading">
                 <span>Amount</span>
-                <strong>{formatModulationAmountReadout(route.targetKind, route.amount, route.polarity)}</strong>
+                <strong>{formatModulationAmountReadout(route.targetKind, presentedAmount, route.polarity)}</strong>
             </div>
             <input
                 type="range"
@@ -190,10 +196,10 @@ function RouteAmountEditor({
                 min={0}
                 max={1}
                 step={0.001}
-                value={getModulationAmountSliderPosition(route.targetKind, route.amount).toFixed(3)}
+                value={getModulationAmountSliderPosition(route.targetKind, presentedAmount).toFixed(3)}
                 data-role="mobile-mod-amount-slider"
                 aria-label="Route amount slider"
-                onChange={(event) => onChange(composeModulationAmount(route.targetKind, Number(event.currentTarget.value)))}
+                onChange={(event) => publishAmount(composeModulationAmount(route.targetKind, Number(event.currentTarget.value)))}
             />
             <label className="mobile-mod-exact-row">
                 <span>Exact</span>
@@ -207,7 +213,7 @@ function RouteAmountEditor({
                     onBlur={commitDraft}
                     onKeyDown={handleKeyDown}
                 />
-                <span>{formatModulationAmountReadout(route.targetKind, route.amount, route.polarity)}</span>
+                <span>{formatModulationAmountReadout(route.targetKind, presentedAmount, route.polarity)}</span>
             </label>
         </section>
     );
@@ -359,10 +365,7 @@ export function MobileModMatrix({
                             <strong>{targetPresentation(selectedRoute.targetKind).category} · {targetPresentation(selectedRoute.targetKind).parameter}</strong>
                         </div>
                     </div>
-                    <RouteAmountEditor
-                        route={selectedRoute}
-                        onChange={(amount) => onRouteChange(selectedRouteIndex, { amount })}
-                    />
+                    <RouteAmountEditor route={selectedRoute} />
                     <div className="mobile-mod-detail-actions">
                         <button
                             type="button"

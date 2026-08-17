@@ -13,6 +13,7 @@ import {
 } from "../web/public-asset-policy.mjs";
 import {
     adaptCosimoAudioWorkletModuleLoading,
+    fixCosimoAudioWorkletListenerRemoval,
     instrumentCosimoAudioWorkletSource,
 } from "../web/audio-worklet-instrumentation.mjs";
 import { installBrowserPatchStatePersistence } from "../web/browser-patch-state.mjs";
@@ -198,6 +199,14 @@ test("audio-worklet modules use a same-origin blob URL that WebKit accepts", () 
         () => adaptCosimoAudioWorkletModuleLoading("unrecognised helper"),
         /Could not adapt the generated Cmajor AudioWorklet module loader/,
     );
+});
+
+test("audio-worklet endpoint listener removal matches the stored listener object", () => {
+    const generated = "                                const index = listeners.indexOf (msg?.replyType);";
+    const fixed = fixCosimoAudioWorkletListenerRemoval(generated);
+
+    assert.match(fixed, /findIndex \(\(listener\) => listener\.replyType === msg\?\.replyType\)/);
+    assert.doesNotMatch(fixed, /listeners\.indexOf/);
 });
 
 test("browser patch persistence never blocks a runtime state write when storage fails", () => {

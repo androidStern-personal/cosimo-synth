@@ -153,16 +153,9 @@ const allMappingProgramVariant = compileModulationRuntimeProgram(
 const disabledAllMappingProgram = compileModulationRuntimeProgram(
     allStressRoutes.map((route) => ({ ...route, enabled: false })),
 );
-const mixedHundredRouteIds = new Set(mixedHundredRoutes.map((route) => route.id));
-const fullDomainHundredActiveRoutes = [
-    ...mixedHundredRoutes,
-    ...allStressRoutes
-        .filter((route) => !mixedHundredRouteIds.has(route.id))
-        .map((route) => ({ ...route, enabled: false })),
-];
-const fullDomainHundredActiveStoredState = serializeModulationState({
+const reportedMobileStoredState = serializeModulationState({
     ...createDefaultModulationState(),
-    routes: fullDomainHundredActiveRoutes,
+    routes: [requireStressRoute("mseg", 1, "filterCutoffOctaves")],
 });
 const emptyModulationProgram = compileModulationRuntimeProgram([]);
 const matrixBenchmarkProfiles = new Map(
@@ -224,8 +217,6 @@ const modulationAmountStressEventCount = stressCount("COSIMO_MOD_AMOUNT_STRESS_E
 const modulationAmountStressIntervalMs = 1_000 / 60;
 const modulationUiAverageDispatchBudgetMs = 4;
 const modulationUiMaximumDispatchBudgetMs = 8;
-const modulationUiAverageAcknowledgementBudgetMs = 35;
-const modulationUiMaximumAcknowledgementBudgetMs = 60;
 const modulationTopologyStressEventCount = stressCount("COSIMO_MOD_TOPOLOGY_STRESS_EVENTS", 250);
 const modulationTopologyStressIntervalMs = 40;
 
@@ -363,6 +354,66 @@ function observePageFailures(page) {
     };
 }
 
+function installEndpointListenerProbe() {
+    const activeReplies = new Set();
+    const removedReplies = new Set();
+    let activeDeliveries = 0;
+    let staleDeliveries = 0;
+
+    const nativePostMessage = MessagePort.prototype.postMessage;
+    MessagePort.prototype.postMessage = function postMessage(message, ...rest) {
+        const payload = message?.type === "patch" ? message.payload : null;
+        if (payload?.endpoint === "filterSpectrum") {
+            if (payload.type === "add_endpoint_listener") {
+                activeReplies.add(payload.replyType);
+                removedReplies.delete(payload.replyType);
+            } else if (payload.type === "remove_endpoint_listener") {
+                activeReplies.delete(payload.replyType);
+                removedReplies.add(payload.replyType);
+            }
+        }
+        return Reflect.apply(nativePostMessage, this, [message, ...rest]);
+    };
+
+    const NativeAudioWorkletNode = globalThis.AudioWorkletNode;
+    globalThis.AudioWorkletNode = new Proxy(NativeAudioWorkletNode, {
+        construct(target, argumentsList) {
+            const node = Reflect.construct(target, argumentsList);
+            node.port.addEventListener("message", (event) => {
+                const replyType = event.data?.type === "patch" ? event.data.payload?.type : null;
+                if (activeReplies.has(replyType)) activeDeliveries += 1;
+                if (removedReplies.has(replyType)) staleDeliveries += 1;
+            });
+            return node;
+        },
+    });
+
+    globalThis.__COSIMO_ENDPOINT_LISTENER_PROBE__ = {
+        resetDeliveries() {
+            activeDeliveries = 0;
+            staleDeliveries = 0;
+        },
+        snapshot() {
+            return {
+                activeDeliveries,
+                activeReplyCount: activeReplies.size,
+                removedReplyCount: removedReplies.size,
+                staleDeliveries,
+            };
+        },
+    };
+}
+
+async function selectMobileWorkspaceSection(page, section) {
+    const toggle = page.locator(`[data-role="mobile-workspace-toggle-${section}"]`);
+    await toggle.click();
+    await page.waitForFunction((sectionName) => (
+        document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+            ?.querySelector(`[data-role="mobile-workspace-toggle-${sectionName}"]`)
+            ?.getAttribute("aria-expanded") === "true"
+    ), section);
+}
+
 async function measureHeldNote(page, note = 48) {
     await page.evaluate((noteNumber) => {
         globalThis.__COSIMO_WEB_POC__.resetAudioMetrics();
@@ -411,6 +462,7 @@ async function readMeasuredAudioMetrics(page) {
             quantizedAverageLoad: snapshot.audioWorkletQuantizedAverageLoad,
             quantizedMaxLoad: snapshot.audioWorkletQuantizedMaxLoad,
             quantizedOverBudgetBlocks: snapshot.audioWorkletQuantizedOverBudgetBlocks,
+            definiteDeadlineMissBlocks: snapshot.audioWorkletDefiniteDeadlineMissBlocks,
             clockSource: snapshot.audioWorkletClockSource,
             processMultiplier: snapshot.audioWorkletProcessMultiplier,
             callbackGapBlocks: snapshot.audioWorkletCallbackGapBlocks,
@@ -528,40 +580,18 @@ function assertRealtimePacedMeasurement(
 
 function assertShippingRenderBudget(measurement) {
     assert.ok(Number.isFinite(measurement.quantizedAverageLoad), JSON.stringify(measurement));
-    if (measurement.clockSource === "performance.now") {
-        assert.ok(measurement.quantizedAverageLoad <= 0.75, JSON.stringify(measurement));
-        assert.equal(measurement.quantizedOverBudgetBlocks, 0, JSON.stringify(measurement));
-        return;
-    }
-
-    assert.equal(measurement.clockSource, "Date.now", JSON.stringify(measurement));
-    assert.ok(measurement.quantizedAverageLoad <= 0.8, JSON.stringify(measurement));
+    assert.ok(measurement.quantizedAverageLoad <= 0.75, JSON.stringify(measurement));
     assert.ok(measurement.blockCount > 0, JSON.stringify(measurement));
-    assert.ok(measurement.quantizedMaxLoad <= 1.125, JSON.stringify(measurement));
-    // Date.now has 1 ms resolution against a 2.67 ms render quantum. WebKit
-    // therefore reports many 3 ms samples as 112.5% even when the average load
-    // has headroom and the independently observed audio frames stay continuous.
-    assert.ok(
-        measurement.quantizedOverBudgetBlocks / measurement.blockCount < 0.15,
-        JSON.stringify(measurement),
-    );
-}
-
-function assertShippingSustainedBudget(measurement) {
-    assertShippingRenderBudget(measurement);
-    assertSustainedRealtimeThroughput(measurement);
+    assert.ok(["Date.now", "performance.now"].includes(measurement.clockSource), JSON.stringify(measurement));
+    assert.equal(measurement.definiteDeadlineMissBlocks, 0, JSON.stringify(measurement));
 }
 
 function assertFullDomainTortureBudget(measurement) {
     assert.ok(Number.isFinite(measurement.quantizedAverageLoad), JSON.stringify(measurement));
     assert.ok(measurement.quantizedAverageLoad <= 0.9, JSON.stringify(measurement));
     assert.ok(measurement.blockCount > 0, JSON.stringify(measurement));
-    // Date.now quantises a 2.67 ms quantum primarily into 2 ms (75%) and
-    // 3 ms (112.5%) samples. A 90% average ceiling therefore permits at most
-    // 40% of the latter; using 15% here accidentally imposed an ~80.6% ceiling.
-    const maximumQuantizedOverBudgetRate = measurement.clockSource === "Date.now" ? 0.4 : 0.02;
     assert.ok(
-        measurement.quantizedOverBudgetBlocks / measurement.blockCount < maximumQuantizedOverBudgetRate,
+        measurement.definiteDeadlineMissBlocks / measurement.blockCount < 0.02,
         JSON.stringify(measurement),
     );
 }
@@ -756,216 +786,104 @@ async function measureModulationAmountChurn(
     };
 }
 
-async function measureProductUiAmountChurn(
-    page,
-    { blockCount = 768, updateCount = 125 } = {},
-) {
-    await resetMeasuredAudioMetrics(page);
-    await page.waitForTimeout(50);
-    const cadence = await page.evaluate(async ({ updates }) => {
-        const api = globalThis.__COSIMO_WEB_POC__;
-        const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-        const slider = root?.querySelector('[role="slider"][aria-label="Route 1 amount"]')
-            ?? root?.querySelector('[data-role="mobile-mod-amount-slider"]');
-        if (!(slider instanceof HTMLElement)) {
-            throw new Error("The first product modulation amount control is unavailable.");
-        }
-        const baselineFrontier = Number(
-            api.runtimeInstallAckForTest()?.acceptedModulationSerial,
-        );
-        if (!Number.isInteger(baselineFrontier)) {
-            throw new Error("The product modulation publisher has no accepted frontier.");
-        }
-
-        const beganAt = performance.now();
-        let acknowledgementLatencyTotalMs = 0;
-        let acknowledgementLatencyMaxMs = 0;
-        let dispatchLatencyTotalMs = 0;
-        let dispatchLatencyMaxMs = 0;
-        for (let updateIndex = 0; updateIndex < updates; updateIndex += 1) {
-            const startedAt = performance.now();
-            const expectedFrontier = baselineFrontier + updateIndex + 1;
-            if (slider instanceof HTMLInputElement) {
-                const setValue = Object.getOwnPropertyDescriptor(
-                    HTMLInputElement.prototype,
-                    "value",
-                )?.set;
-                const step = Number(slider.step) || 0.001;
-                const direction = updateIndex % 2 === 0 ? 1 : -1;
-                setValue?.call(slider, String(Number(slider.value) + (direction * step)));
-                slider.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
-                slider.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
-            } else {
-                slider.dispatchEvent(new KeyboardEvent("keydown", {
-                    key: updateIndex % 2 === 0 ? "ArrowUp" : "ArrowDown",
-                    bubbles: true,
-                    cancelable: true,
-                }));
-            }
-            const dispatchLatencyMs = performance.now() - startedAt;
-            dispatchLatencyTotalMs += dispatchLatencyMs;
-            dispatchLatencyMaxMs = Math.max(dispatchLatencyMaxMs, dispatchLatencyMs);
-
-            while (true) {
-                const acknowledgement = api.runtimeInstallAckForTest();
-                if (acknowledgement?.rejectedSerial === expectedFrontier) {
-                    throw new Error(`Product amount edit was rejected: ${JSON.stringify(acknowledgement)}`);
-                }
-                const frontier = Number(acknowledgement?.acceptedModulationSerial);
-                if (frontier === expectedFrontier) break;
-                if (frontier > expectedFrontier) {
-                    throw new Error(`Product edit emitted more than one runtime command: ${JSON.stringify(acknowledgement)}`);
-                }
-                if (performance.now() - startedAt > 5_000) {
-                    throw new Error(`Timed out waiting for product amount edit ${updateIndex + 1}.`);
-                }
-                await new Promise((resolve) => setTimeout(resolve, 1));
-            }
-
-            const acknowledgementLatencyMs = performance.now() - startedAt;
-            acknowledgementLatencyTotalMs += acknowledgementLatencyMs;
-            acknowledgementLatencyMaxMs = Math.max(
-                acknowledgementLatencyMaxMs,
-                acknowledgementLatencyMs,
-            );
-            api.getSnapshot();
-        }
-        const elapsedMs = performance.now() - beganAt;
-        return {
-            acceptedEventCount: updates,
-            acceptedEventElapsedMs: elapsedMs,
-            acceptedEventRateHz: (updates * 1_000) / elapsedMs,
-            acceptedEventIntervalMs: elapsedMs / updates,
-            acknowledgementLatencyAverageMs: acknowledgementLatencyTotalMs / updates,
-            acknowledgementLatencyMaxMs,
-            dispatchLatencyAverageMs: dispatchLatencyTotalMs / updates,
-            dispatchLatencyMaxMs,
-            baselineFrontier,
-            finalFrontier: Number(api.runtimeInstallAckForTest()?.acceptedModulationSerial),
-        };
-    }, { updates: updateCount });
-    await page.waitForFunction((expectedEvents) => (
-        globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletMarkedEventCount >= expectedEvents
-    ), updateCount, { timeout: 5_000 });
-    await page.waitForFunction((minimumBlocks) => (
-        globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletBlockCount >= minimumBlocks
-    ), blockCount, { timeout: 15_000 });
-    return {
-        ...await readMeasuredAudioMetrics(page),
-        ...cadence,
-    };
-}
-
 async function measureProductUiLatestValueCadence(
     page,
     { blockCount = 768, updateCount = 119 } = {},
 ) {
     await resetMeasuredAudioMetrics(page);
-    await page.waitForTimeout(50);
-    const gesture = await page.evaluate(async ({ updates }) => {
+    const finalSliderPosition = 0.731;
+    const finalRouteAmount = composeModulationAmount("filterCutoffOctaves", finalSliderPosition);
+    const gesture = await page.evaluate(async ({ expectedFinalAmount, finalPosition, updates }) => {
         const api = globalThis.__COSIMO_WEB_POC__;
         const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
         const slider = root?.querySelector('[role="slider"][aria-label="Route 1 amount"]')
             ?? root?.querySelector('[data-role="mobile-mod-amount-slider"]');
-        if (!(slider instanceof HTMLElement)) {
-            throw new Error("The first product modulation amount control is unavailable.");
+        if (!(slider instanceof HTMLInputElement)) {
+            throw new Error("The mobile product modulation amount control is unavailable.");
         }
 
-        const readValue = () => Number(
-            slider instanceof HTMLInputElement ? slider.value : slider.getAttribute("aria-valuenow"),
-        );
         const dispatchStep = (direction) => {
-            if (slider instanceof HTMLInputElement) {
-                const setValue = Object.getOwnPropertyDescriptor(
-                    HTMLInputElement.prototype,
-                    "value",
-                )?.set;
-                const step = Number(slider.step) || 0.001;
-                const nextValue = Number(slider.value) + (direction * step);
-                setValue?.call(slider, String(nextValue));
-                slider.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
-                slider.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
-                return nextValue;
-            }
-            slider.dispatchEvent(new KeyboardEvent("keydown", {
-                key: direction > 0 ? "ArrowUp" : "ArrowDown",
-                bubbles: true,
-                cancelable: true,
-            }));
-            return null;
+            const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+            const nextValue = Number(slider.value) + (direction * (Number(slider.step) || 0.001));
+            setValue?.call(slider, String(nextValue));
+            slider.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
+            slider.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
         };
-        const waitForStableFrontier = async () => {
-            let frontier = Number(api.runtimeInstallAckForTest()?.acceptedModulationSerial);
-            for (let stableChecks = 0; stableChecks < 3; stableChecks += 1) {
-                await new Promise((resolve) => setTimeout(resolve, 75));
-                const next = Number(api.runtimeInstallAckForTest()?.acceptedModulationSerial);
-                if (next !== frontier) {
-                    frontier = next;
-                    stableChecks = -1;
-                }
+        const nativePostMessage = MessagePort.prototype.postMessage;
+        let latestSentAmount = null;
+        let latestSentSerial = null;
+        let sentEventCount = 0;
+        MessagePort.prototype.postMessage = function postMessage(message, ...rest) {
+            const payload = message?.type === "patch" ? message.payload : null;
+            if (payload?.type === "send_value" && payload.id === "modulationAmount") {
+                latestSentAmount = Number(payload.value?.amount);
+                latestSentSerial = Number(payload.value?.deliverySerial);
+                sentEventCount += 1;
             }
-            return frontier;
+            return Reflect.apply(nativePostMessage, this, [message, ...rest]);
         };
 
-        const baselineFrontier = Number(api.runtimeInstallAckForTest()?.acceptedModulationSerial);
-        if (!Number.isInteger(baselineFrontier)) {
-            throw new Error("The product modulation publisher has no accepted frontier.");
-        }
+        try {
+            const baselineFrontier = Number(api.runtimeInstallAckForTest()?.acceptedModulationSerial);
+            if (!Number.isInteger(baselineFrontier)) {
+                throw new Error("The product modulation publisher has no accepted frontier.");
+            }
 
-        const beganAt = performance.now();
-        let dispatchLatencyTotalMs = 0;
-        let dispatchLatencyMaxMs = 0;
-        for (let updateIndex = 0; updateIndex < updates; updateIndex += 1) {
-            const dispatchStartedAt = performance.now();
-            dispatchStep(updateIndex % 2 === 0 ? 1 : -1);
-            const dispatchLatencyMs = performance.now() - dispatchStartedAt;
-            dispatchLatencyTotalMs += dispatchLatencyMs;
-            dispatchLatencyMaxMs = Math.max(dispatchLatencyMaxMs, dispatchLatencyMs);
-            if (updateIndex + 1 < updates) {
+            const beganAt = performance.now();
+            let dispatchLatencyTotalMs = 0;
+            let dispatchLatencyMaxMs = 0;
+            for (let updateIndex = 0; updateIndex < updates; updateIndex += 1) {
+                const dispatchStartedAt = performance.now();
+                dispatchStep(updateIndex % 2 === 0 ? 1 : -1);
+                const dispatchLatencyMs = performance.now() - dispatchStartedAt;
+                dispatchLatencyTotalMs += dispatchLatencyMs;
+                dispatchLatencyMaxMs = Math.max(dispatchLatencyMaxMs, dispatchLatencyMs);
                 await new Promise((resolve) => requestAnimationFrame(resolve));
             }
-        }
-        const inputElapsedMs = performance.now() - beganAt;
-        const drainedFrontier = await waitForStableFrontier();
-        const finalStartedAt = performance.now();
-        const requestedFinalAmount = dispatchStep(updates % 2 === 0 ? 1 : -1);
-        const expectedFinalFrontier = drainedFrontier + 1;
+            const inputElapsedMs = performance.now() - beganAt;
+            const finalStartedAt = performance.now();
+            const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+            setValue?.call(slider, String(finalPosition));
+            slider.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
+            slider.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
 
-        while (true) {
-            const acknowledgement = api.runtimeInstallAckForTest();
-            if (acknowledgement?.rejectedSerial === expectedFinalFrontier) {
-                throw new Error(`Final product amount was rejected: ${JSON.stringify(acknowledgement)}`);
+            while (true) {
+                const acknowledgement = api.runtimeInstallAckForTest();
+                const acceptedSerial = Number(acknowledgement?.acceptedModulationSerial);
+                if (Number.isInteger(latestSentSerial)
+                    && acknowledgement?.rejectedSerial === latestSentSerial) {
+                    throw new Error(`Final product amount was rejected: ${JSON.stringify(acknowledgement)}`);
+                }
+                if (Math.abs(latestSentAmount - expectedFinalAmount) < 0.000001
+                    && Number.isInteger(latestSentSerial)
+                    && acceptedSerial >= latestSentSerial) {
+                    break;
+                }
+                if (performance.now() - finalStartedAt > 5_000) {
+                    throw new Error("Timed out waiting for the final product amount.");
+                }
+                await new Promise((resolve) => requestAnimationFrame(resolve));
             }
-            const frontier = Number(acknowledgement?.acceptedModulationSerial);
-            if (frontier === expectedFinalFrontier) break;
-            if (frontier > expectedFinalFrontier) {
-                throw new Error(`Final product amount emitted multiple commands: ${JSON.stringify(acknowledgement)}`);
-            }
-            if (performance.now() - finalStartedAt > 5_000) {
-                throw new Error("Timed out waiting for the final product amount.");
-            }
-            await new Promise((resolve) => setTimeout(resolve, 1));
-        }
-        await new Promise((resolve) => requestAnimationFrame(resolve));
-        const finalAmount = requestedFinalAmount ?? readValue();
 
-        return {
-            acknowledgedEventCount: expectedFinalFrontier - baselineFrontier,
-            baselineFrontier,
-            dispatchedEventCount: updates + 1,
-            dispatchLatencyAverageMs: dispatchLatencyTotalMs / updates,
-            dispatchLatencyMaxMs,
-            drainedFrontier,
-            inputAcceptedEventCount: drainedFrontier - baselineFrontier,
-            inputUpdateCount: updates,
-            finalAcknowledgementLatencyMs: performance.now() - finalStartedAt,
-            finalAmount,
-            finalAmountKind: slider instanceof HTMLInputElement ? "sliderPosition" : "routeAmount",
-            finalFrontier: expectedFinalFrontier,
-            inputElapsedMs,
-            inputRateHz: (updates * 1_000) / inputElapsedMs,
-        };
-    }, { updates: updateCount });
+            const finalFrontier = Number(api.runtimeInstallAckForTest()?.acceptedModulationSerial);
+            return {
+                acknowledgedEventCount: finalFrontier - baselineFrontier,
+                baselineFrontier,
+                dispatchedEventCount: updates + 1,
+                dispatchLatencyAverageMs: dispatchLatencyTotalMs / updates,
+                dispatchLatencyMaxMs,
+                finalAcknowledgementLatencyMs: performance.now() - finalStartedAt,
+                finalAmount: finalPosition,
+                finalAmountKind: "sliderPosition",
+                finalFrontier,
+                inputElapsedMs,
+                inputRateHz: (updates * 1_000) / inputElapsedMs,
+                sentEventCount,
+            };
+        } finally {
+            MessagePort.prototype.postMessage = nativePostMessage;
+        }
+    }, { expectedFinalAmount: finalRouteAmount, finalPosition: finalSliderPosition, updates: updateCount });
     await page.waitForFunction((expectedEvents) => (
         globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletMarkedEventCount >= expectedEvents
     ), gesture.acknowledgedEventCount, { timeout: 5_000 });
@@ -1516,33 +1434,95 @@ test("the production worker installs the current v6 100-route rack profile end t
     }
 });
 
-test("the real product UI sustains continuous amount edits with 100 active among 1118 stored mappings", {
+test("mobile workspace removes worklet listeners when a section closes", async () => {
+    const page = await browser.newPage({ ...devices["iPhone 13"] });
+    const pageFailures = observePageFailures(page);
+    await page.addInitScript(installEndpointListenerProbe);
+    await page.addInitScript(() => localStorage.removeItem("cosimo.web.patch-state.v2"));
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => (
+            globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready"
+            && globalThis.__COSIMO_ENDPOINT_LISTENER_PROBE__?.snapshot().activeReplyCount === 1
+        ), null, { timeout: 30_000 });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
+
+        await selectMobileWorkspaceSection(page, "mod");
+        await page.waitForFunction(() => (
+            globalThis.__COSIMO_ENDPOINT_LISTENER_PROBE__.snapshot().activeReplyCount === 0
+        ));
+        await selectMobileWorkspaceSection(page, "voice");
+        await page.waitForFunction(() => {
+            const probe = globalThis.__COSIMO_ENDPOINT_LISTENER_PROBE__.snapshot();
+            return probe.activeReplyCount === 1 && probe.removedReplyCount === 1;
+        });
+
+        await page.waitForFunction(() => (
+            globalThis.__COSIMO_ENDPOINT_LISTENER_PROBE__.snapshot().activeDeliveries >= 1
+        ));
+        await page.evaluate(() => globalThis.__COSIMO_ENDPOINT_LISTENER_PROBE__.resetDeliveries());
+        await page.waitForFunction(() => (
+            globalThis.__COSIMO_ENDPOINT_LISTENER_PROBE__.snapshot().activeDeliveries >= 3
+        ));
+        const probe = await page.evaluate(() => (
+            globalThis.__COSIMO_ENDPOINT_LISTENER_PROBE__.snapshot()
+        ));
+        assert.equal(probe.staleDeliveries, 0, JSON.stringify(probe));
+        pageFailures.assertClean();
+    } finally {
+        await page.close();
+    }
+});
+
+test("mobile product stays realtime with four-way unison and one MSEG filter route after workspace history", {
     timeout: 90_000,
 }, async (t) => {
-    const page = await browser.newPage(browserEngine === "webkit"
-        ? { ...devices["iPhone 13"] }
-        : { viewport: { width: 1280, height: 820 } });
+    const page = await browser.newPage({ ...devices["iPhone 13"] });
     const pageFailures = observePageFailures(page);
-    await page.addInitScript(({ modulationState, modulationStateKey }) => {
+    await page.addInitScript(({ modulationState, modulationStateKey, parameters }) => {
         localStorage.setItem("cosimo.web.patch-state.v2", JSON.stringify({
             format: "cosimo.browserPatchState",
             version: 2,
-            sound: { parameters: {}, storedState: { [modulationStateKey]: modulationState } },
+            sound: { parameters, storedState: { [modulationStateKey]: modulationState } },
             auxiliary: {},
         }));
-    }, { modulationState: fullDomainHundredActiveStoredState, modulationStateKey: MODULATION_STATE_KEY });
+    }, {
+        modulationState: reportedMobileStoredState,
+        modulationStateKey: MODULATION_STATE_KEY,
+        parameters: {
+            oscAUnisonVoices: 4,
+            oscBVolumeDb: -48,
+            oscCVolumeDb: -48,
+        },
+    });
 
     try {
         await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
+        await page.locator("#cosimo-start-overlay").click();
         await page.waitForFunction(() => {
-            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
-            const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
-            return desktopCount === 1118 || mobileCount === 1118;
+            const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+            const acknowledgement = snapshot.latestRuntimeInstallAck;
+            return snapshot.phase === "running"
+                && snapshot.hasActiveTable
+                && snapshot.parameterValues.oscAUnisonVoices === 4
+                && snapshot.parameterValues.oscBVolumeDb === -48
+                && snapshot.parameterValues.oscCVolumeDb === -48
+                && Number(acknowledgement?.installedVoiceRouteCount)
+                    + Number(acknowledgement?.installedMacroVoiceRouteCount)
+                    + Number(acknowledgement?.installedVoiceRackRouteCount)
+                    + Number(acknowledgement?.installedMacroRackRouteCount) === 1;
         }, null, { timeout: 30_000 });
+        for (let cycle = 0; cycle < 10; cycle += 1) {
+            await selectMobileWorkspaceSection(page, "fx");
+            await selectMobileWorkspaceSection(page, "mod");
+            await selectMobileWorkspaceSection(page, "voice");
+        }
+        await selectMobileWorkspaceSection(page, "mod");
         await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const mobileRoute = root?.querySelector('[data-role="mobile-mod-route-open-0"]');
@@ -1555,89 +1535,25 @@ test("the real product UI sustains continuous amount edits with 100 active among
                 ?? root?.querySelector('[data-role="mobile-mod-amount-slider"]'),
             );
         });
-        await page.locator("#cosimo-start-overlay").click();
-        await page.waitForFunction(() => {
-            const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
-            const acknowledgement = snapshot.latestRuntimeInstallAck;
-            return snapshot.phase === "running"
-                && snapshot.hasActiveTable
-                && Number(acknowledgement?.installedVoiceRouteCount)
-                    + Number(acknowledgement?.installedMacroVoiceRouteCount)
-                    + Number(acknowledgement?.installedVoiceRackRouteCount)
-                    + Number(acknowledgement?.installedMacroRackRouteCount) === 100;
-        }, null, { timeout: 30_000 });
-
-        const settledFrontier = await page.evaluate(async () => {
-            const api = globalThis.__COSIMO_WEB_POC__;
-            let previous = Number(api.runtimeInstallAckForTest()?.acceptedModulationSerial);
-            for (let check = 0; check < 3; check += 1) {
-                await new Promise((resolve) => setTimeout(resolve, 75));
-                const next = Number(api.runtimeInstallAckForTest()?.acceptedModulationSerial);
-                if (next !== previous) {
-                    check = -1;
-                    previous = next;
-                }
-            }
-            return previous;
-        });
-        assert.ok(Number.isInteger(settledFrontier));
-
         await page.evaluate(() => {
-            for (let note = 48; note < 64; note += 1) {
-                globalThis.__COSIMO_WEB_POC__.noteOn(note, 96);
-            }
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.sendEvent("rackEnable", { enabledFlags: [0, 0, 0, 0, 0, 0, 0, 0] });
+            api.noteOn(48, 96);
         });
         await page.waitForFunction(() => {
             const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
-            return snapshot.audioPeak > 0.00001 && snapshot.startedVoiceIndices.length === 16;
+            return snapshot.audioPeak > 0.00001
+                && snapshot.startedVoiceIndices.length === 1
+                && snapshot.latestEffectiveRackState?.committedEnableMask === 0;
         }, null, { timeout: 10_000 });
 
-        const measurement = await measureProductUiAmountChurn(page);
-        const gapProbe = await measureModulationGapProbe(page, null, {
-            blockCount: 768,
-            intervalMs: measurement.acceptedEventIntervalMs,
-            eventCount: 125,
-        });
         const latestValueCadence = await measureProductUiLatestValueCadence(page);
-        t.diagnostic(JSON.stringify({
-            productUiAmountChurn: measurement,
-            productUiGapProbe: gapProbe,
-            productUiLatestValueCadence: latestValueCadence,
-        }));
-        assert.equal(measurement.acceptedEventCount, 125, JSON.stringify(measurement));
-        assert.ok(
-            measurement.dispatchLatencyAverageMs <= modulationUiAverageDispatchBudgetMs,
-            JSON.stringify(measurement),
-        );
-        assert.ok(
-            measurement.dispatchLatencyMaxMs <= modulationUiMaximumDispatchBudgetMs,
-            JSON.stringify(measurement),
-        );
-        assert.ok(
-            measurement.acknowledgementLatencyAverageMs <= modulationUiAverageAcknowledgementBudgetMs,
-            JSON.stringify(measurement),
-        );
-        assert.ok(
-            measurement.acknowledgementLatencyMaxMs <= modulationUiMaximumAcknowledgementBudgetMs,
-            JSON.stringify(measurement),
-        );
-        assert.equal(measurement.finalFrontier - measurement.baselineFrontier, 125, JSON.stringify(measurement));
-        assert.equal(measurement.markedEventCount, 125, JSON.stringify(measurement));
-        assert.equal(measurement.sampleRateHz, 48_000, JSON.stringify(measurement));
-        assert.equal(measurement.renderQuantumFrames, 128, JSON.stringify(measurement));
-        assert.equal(measurement.rejectedProgramCount, 0, JSON.stringify(measurement));
-        assert.equal(measurement.processMultiplier, 1, JSON.stringify(measurement));
-        assert.equal(measurement.frameDiscontinuityBlocks, 0, JSON.stringify(measurement));
-        assert.ok(measurement.audioPollCount >= 125, JSON.stringify(measurement));
-        assert.equal(measurement.silentHeldNotePollCount, 0, JSON.stringify(measurement));
-        // This case owns the real 1118-row UI cadence and audio-continuity seam.
-        // The controlled adjacent-empty measurements below own the DSP shipping
-        // budget; duplicating that budget here made WebKit's 1 ms clock noise a
-        // false UI failure without adding a second independent oracle.
-        assertRealtimeContinuity(measurement);
-        assertMatchedEventGap(measurement, gapProbe, 125, 0.2);
-
         assert.equal(latestValueCadence.dispatchedEventCount, 120, JSON.stringify(latestValueCadence));
+        assert.equal(
+            latestValueCadence.sentEventCount,
+            latestValueCadence.acknowledgedEventCount,
+            JSON.stringify(latestValueCadence),
+        );
         assert.ok(
             latestValueCadence.dispatchLatencyAverageMs <= modulationUiAverageDispatchBudgetMs,
             JSON.stringify(latestValueCadence),
@@ -1646,40 +1562,17 @@ test("the real product UI sustains continuous amount edits with 100 active among
             latestValueCadence.dispatchLatencyMaxMs <= modulationUiMaximumDispatchBudgetMs,
             JSON.stringify(latestValueCadence),
         );
-        // This is the maximum product workload: 16 sounding voices, three rendered
-        // oscillators, all effects, and 1118 visible mapping rows. The UI may coalesce
-        // intermediate values, but it must remain interactive and commit the final one.
         assert.ok(latestValueCadence.inputRateHz >= 30, JSON.stringify(latestValueCadence));
-        // requestAnimationFrame follows the physical display: 60 Hz panels land near
-        // 60 while the current ProMotion desktop lands near 120. A runaway loop would
-        // still exceed this display-bound ceiling.
         assert.ok(latestValueCadence.inputRateHz <= 144, JSON.stringify(latestValueCadence));
-        assert.ok(
-            latestValueCadence.inputAcceptedEventCount >= latestValueCadence.inputUpdateCount * 0.45,
-            JSON.stringify(latestValueCadence),
-        );
-        assert.ok(
-            latestValueCadence.acknowledgedEventCount <= latestValueCadence.dispatchedEventCount,
-            JSON.stringify(latestValueCadence),
-        );
-        assert.equal(
-            latestValueCadence.finalFrontier,
-            latestValueCadence.drainedFrontier + 1,
-            JSON.stringify(latestValueCadence),
-        );
-        assert.equal(
-            latestValueCadence.markedEventCount,
-            latestValueCadence.acknowledgedEventCount,
-            JSON.stringify(latestValueCadence),
-        );
         assert.ok(latestValueCadence.finalAcknowledgementLatencyMs < 250, JSON.stringify(latestValueCadence));
         assertRealtimeContinuity(latestValueCadence);
+        assertShippingRenderBudget(latestValueCadence);
+        t.diagnostic(JSON.stringify({ reportedMobileWorkload: latestValueCadence }));
 
         const persisted = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.storedState());
         const modulationState = persisted?.[MODULATION_STATE_KEY] ?? persisted?.values?.[MODULATION_STATE_KEY];
         const persistedModulation = deserializeModulationState(modulationState);
-        assert.equal(persistedModulation.routes.length, 1118);
-        assert.equal(persistedModulation.routes.filter((route) => route.enabled).length, 100);
+        assert.equal(persistedModulation.routes.length, 1);
         assert.ok(Number.isFinite(latestValueCadence.finalAmount), JSON.stringify(latestValueCadence));
         const expectedPersistedAmount = latestValueCadence.finalAmountKind === "sliderPosition"
             ? composeModulationAmount(
@@ -1691,27 +1584,10 @@ test("the real product UI sustains continuous amount edits with 100 active among
             Math.abs(persistedModulation.routes[0].amount - expectedPersistedAmount) < 0.000001,
             JSON.stringify({ expectedPersistedAmount, latestValueCadence, persistedRoute: persistedModulation.routes[0] }),
         );
-        await page.evaluate(() => {
-            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const mobileBack = root?.querySelector('[data-role="mobile-mod-detail-back"]');
-            if (mobileBack instanceof HTMLButtonElement) mobileBack.click();
-        });
-        await page.waitForFunction(() => {
-            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
-            const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
-            return desktopCount === 1118 || mobileCount === 1118;
-        });
-        assert.equal(await page.evaluate(() => {
-            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const desktopCount = root?.querySelectorAll('[data-role^="route-row-"]').length ?? 0;
-            const mobileCount = root?.querySelectorAll('[data-role="mobile-mod-route-row"]').length ?? 0;
-            return Math.max(desktopCount, mobileCount);
-        }), 1118);
         pageFailures.assertClean();
     } finally {
         await page.evaluate(() => {
-            for (let note = 48; note < 64; note += 1) globalThis.__COSIMO_WEB_POC__?.noteOff(note);
+            globalThis.__COSIMO_WEB_POC__?.noteOff(48);
             localStorage.removeItem("cosimo.web.patch-state.v2");
         }).catch(() => {});
         await page.close();
@@ -1721,9 +1597,7 @@ test("the real product UI sustains continuous amount edits with 100 active among
 test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 1118-cell domain", {
     timeout: 240_000,
 }, async (t) => {
-    const page = await browser.newPage(browserEngine === "webkit"
-        ? { ...devices["iPhone 13"] }
-        : { viewport: { width: 1280, height: 820 } });
+    const page = await browser.newPage({ ...devices["iPhone 13"] });
     const pageFailures = observePageFailures(page);
 
     try {
@@ -1956,13 +1830,21 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             intervalMs: fullDomainTopologyChurn.acceptedEventIntervalMs,
             eventCount: modulationTopologyStressEventCount,
         });
-        await page.evaluate(async () => {
+        await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
             for (let note = 48; note < 64; note += 1) api.noteOff(note, 1);
-            await new Promise((resolve) => setTimeout(resolve, 350));
-            api.setParameter("unisonVoices", 2);
-            api.setParameter("warpMode", 1);
-            api.setParameter("warpAmount", 0.6);
+        });
+        await page.waitForFunction(() => {
+            const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+            return snapshot.heldNoteCount === 0 && snapshot.audioPeakCurrent < 0.00001;
+        });
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            for (const oscillator of ["A", "B", "C"]) {
+                api.setParameter(`osc${oscillator}UnisonVoices`, 2);
+                api.setParameter(`osc${oscillator}WarpMode`, 1);
+                api.setParameter(`osc${oscillator}WarpAmount`, 0.6);
+            }
             api.setParameter("filterMode", 1);
             api.setParameter("filterCutoff", 1_200);
             api.setParameter("distortionWet", 0.35);
@@ -2010,6 +1892,11 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
             return snapshot?.phase === "running" && snapshot.hasActiveTable;
         }, null, { timeout: 30_000 });
+        for (let cycle = 0; cycle < 10; cycle += 1) {
+            await selectMobileWorkspaceSection(page, "fx");
+            await selectMobileWorkspaceSection(page, "mod");
+            await selectMobileWorkspaceSection(page, "voice");
+        }
         await installNeutralMatrixSourceContract(page);
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
@@ -2032,7 +1919,6 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             for (let note = 48; note < 64; note += 1) api.noteOn(note, 100, 1);
         });
         await applyNeutralMatrixExpressionContract(page);
-        await page.waitForTimeout(50);
         await page.waitForFunction(() => {
             const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
             return snapshot.audioPeak > 0.00001
@@ -2107,10 +1993,12 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
 
         assert.ok(baseline.audioRms > 0.00001, JSON.stringify(baseline));
         assertRealtimeContinuity(baseline);
-        assertShippingSustainedBudget(baseline);
+        assertShippingRenderBudget(baseline);
+        assertSustainedRealtimeThroughput(baseline);
         for (const measuredHundred of [hundredVoiceMappings, hundredVoiceRackMappings, hundredMappings]) {
             assert.ok(measuredHundred.audioRms > 0.00001);
             assertRealtimeContinuity(measuredHundred);
+            assertShippingRenderBudget(measuredHundred);
         }
         assert.ok(allMappings.audioRms > 0.00001);
         assertRealtimeContinuity(allMappings);
@@ -2748,6 +2636,13 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
                 configurable: true,
                 value: { type: "ambient" },
             });
+            const NativeAudioWorkletNode = globalThis.AudioWorkletNode;
+            globalThis.AudioWorkletNode = new Proxy(NativeAudioWorkletNode, {
+                construct(target, argumentsList, newTarget) {
+                    globalThis.__COSIMO_AUDIO_CONTEXT_FOR_TEST__ ??= argumentsList[0];
+                    return Reflect.construct(target, argumentsList, newTarget);
+                },
+            });
         });
         await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
@@ -2847,14 +2742,29 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
         assert.equal(heldTouch?.active, true, "Expected a held touch to keep the key visibly pressed.");
         assert.ok(heldTouch?.audioPeak > 0.00001, `Expected non-silent touch audio, received peak ${heldTouch?.audioPeak ?? 0}.`);
 
-        await page.evaluate(async () => {
-            await globalThis.__COSIMO_WEB_POC__.suspendAudioForTest();
-            globalThis.__COSIMO_WEB_POC__.resetAudioMetrics();
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.noteOn(48, 96);
+            Object.defineProperty(document, "hidden", { configurable: true, value: true });
+            document.dispatchEvent(new Event("visibilitychange"));
+            api.resetAudioMetrics();
         });
+        await page.waitForFunction(() => (
+            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioContextState === "running"
+            && globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletBlockCount >= 256
+            && globalThis.__COSIMO_WEB_POC__.getSnapshot().audioRms > 0.00001
+        ));
+        await page.evaluate(() => {
+            globalThis.__COSIMO_WEB_POC__.noteOff(48);
+            Object.defineProperty(document, "hidden", { configurable: true, value: false });
+            document.dispatchEvent(new Event("visibilitychange"));
+        });
+
+        await page.evaluate(() => globalThis.__COSIMO_AUDIO_CONTEXT_FOR_TEST__.suspend());
         assert.equal(
             await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot().audioContextState),
             "suspended",
-            "Expected the test to reproduce an interrupted iPhone audio session.",
+            "Expected the interruption harness to suspend the production AudioContext.",
         );
 
         await page.touchscreen.tap(

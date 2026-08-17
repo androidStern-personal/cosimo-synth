@@ -11,6 +11,7 @@ import {
 import {
     usePatchConnection,
     usePatchEndpoint,
+    usePatchVisualEndpoint,
     useResourceClient,
 } from "./cmajor-react";
 import {
@@ -36,13 +37,13 @@ import {
     clampModulationRouteAmount,
     createDefaultModulationState,
     createDefaultEnvelope,
-    createDefaultRoute,
     createFirstAvailableModulationRoute,
     normalizeModulationState,
     parseModulationState,
     releaseModulationRuntimeBridge,
     serializeModulationState,
     type ModulationEnvelope,
+    type GeneratedModulationRouteInput,
     type ModulationRoute,
     type ModulationRouteUpdate,
     type ModulationState,
@@ -427,7 +428,7 @@ export type SynthPatchViewModel = {
     handleSelectEnvelopeSlot: (slotIndex: number) => void;
     handleEnvelopeChange: (field: "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds", nextValue: number) => void;
     handleAddRoute: () => void;
-    handleAddRouteWithOverrides: (overrides: Partial<ModulationRoute>) => void;
+    handleAddRouteWithOverrides: (overrides: GeneratedModulationRouteInput) => boolean;
     handleRemoveRoute: (routeIndex: number) => void;
     handleRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     handleAddArticulationSlot: () => void;
@@ -562,7 +563,7 @@ export function useFactoryTableFrames(tableIndex: number): FrameLoadState {
 }
 
 export function useObservedDisplayPosition(parameterPosition: number) {
-    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID, null);
+    const message = usePatchVisualEndpoint<unknown | null>(EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID, null);
     const [observedState, setObservedState] = useState(() => ({
         voiceGeneration: -1,
         position: parameterPosition,
@@ -584,7 +585,7 @@ export function useObservedFilterState({
     filterCutoff: number;
     filterQ: number;
 }) {
-    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_FILTER_STATE_ENDPOINT_ID, null);
+    const message = usePatchVisualEndpoint<unknown | null>(EFFECTIVE_FILTER_STATE_ENDPOINT_ID, null);
     const [observedState, setObservedState] = useState<EffectiveFilterState>(() => ({
         voiceGeneration: -1,
         hasActive: false,
@@ -631,7 +632,7 @@ export function useObservedFilterState({
 }
 
 export function useObservedFilterSpectrum(active = true) {
-    const message = usePatchEndpoint<unknown | null>(FILTER_SPECTRUM_ENDPOINT_ID, null, active);
+    const message = usePatchVisualEndpoint<unknown | null>(FILTER_SPECTRUM_ENDPOINT_ID, null, active);
     const [observedState, setObservedState] = useState<FilterSpectrumFrame | null>(null);
 
     useEffect(() => {
@@ -655,7 +656,7 @@ export function useObservedFilterSpectrum(active = true) {
 }
 
 export function useObservedDistortionScope(active = true) {
-    const message = usePatchEndpoint<unknown | null>(DISTORTION_SCOPE_ENDPOINT_ID, null, active);
+    const message = usePatchVisualEndpoint<unknown | null>(DISTORTION_SCOPE_ENDPOINT_ID, null, active);
     const [observedState, setObservedState] = useState<DistortionScopeFrame | null>(null);
 
     useEffect(() => {
@@ -679,7 +680,7 @@ export function useObservedDistortionScope(active = true) {
 }
 
 export function useObservedDistortionHistory(active = true) {
-    const message = usePatchEndpoint<unknown | null>(DISTORTION_HISTORY_ENDPOINT_ID, null, active);
+    const message = usePatchVisualEndpoint<unknown | null>(DISTORTION_HISTORY_ENDPOINT_ID, null, active);
     const [observedState, setObservedState] = useState<DistortionHistoryFrame | null>(null);
 
     useEffect(() => {
@@ -703,7 +704,7 @@ export function useObservedDistortionHistory(active = true) {
 }
 
 export function useObservedMsegState(active = true) {
-    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null, active);
+    const message = usePatchVisualEndpoint<unknown | null>(EFFECTIVE_MSEG_STATE_ENDPOINT_ID, null, active);
     const [observedState, setObservedState] = useState<EffectiveMsegState | null>(null);
 
     useEffect(() => {
@@ -732,7 +733,7 @@ export function useObservedWarpState({
     warpMode: number;
     warpAmount: number;
 }) {
-    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_WARP_STATE_ENDPOINT_ID, null);
+    const message = usePatchVisualEndpoint<unknown | null>(EFFECTIVE_WARP_STATE_ENDPOINT_ID, null);
     const [observedState, setObservedState] = useState<EffectiveWarpState>(() => ({
         voiceGeneration: -1,
         hasActive: false,
@@ -793,7 +794,7 @@ export function useObservedUnisonState({
     unisonWavetablePositionSpread: number;
     unisonWarpSpread: number;
 }) {
-    const message = usePatchEndpoint<unknown | null>(EFFECTIVE_UNISON_STATE_ENDPOINT_ID, null);
+    const message = usePatchVisualEndpoint<unknown | null>(EFFECTIVE_UNISON_STATE_ENDPOINT_ID, null);
     const fallbackState = useMemo<EffectiveUnisonState>(() => ({
         voiceGeneration: -1,
         hasActive: false,
@@ -2536,26 +2537,31 @@ export function useSynthPatchViewModel({
         endpointID: oscillatorEndpointID("unisonDetune"),
         initialValue: 0.1,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
+        presentationPriority: "deferred-during-gesture",
     });
     const unisonBlend = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("unisonBlend"),
         initialValue: 0.75,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
+        presentationPriority: "deferred-during-gesture",
     });
     const unisonWidth = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("unisonWidth"),
         initialValue: 1,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
+        presentationPriority: "deferred-during-gesture",
     });
     const unisonPhase = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("phase"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
+        presentationPriority: "deferred-during-gesture",
     });
     const unisonRandom = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("phaseRandom"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
+        presentationPriority: "deferred-during-gesture",
     });
     const unisonPhaseMode = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("retrigger"),
@@ -2576,11 +2582,13 @@ export function useSynthPatchViewModel({
         endpointID: oscillatorEndpointID("unisonWavetablePositionSpread"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
+        presentationPriority: "deferred-during-gesture",
     });
     const unisonWarpSpread = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("unisonWarpSpread"),
         initialValue: 0,
         coerce: (value) => clamp(Number(value) || 0, 0, 1),
+        presentationPriority: "deferred-during-gesture",
     });
     const mseg1Morph = usePatchParameterBinding<number>({
         endpointID: MSEG_1_MORPH_ENDPOINT_ID,
@@ -3049,8 +3057,9 @@ export function useSynthPatchViewModel({
         if (route) bridge.addRoute(route);
     }, [modulationBridge]);
 
-    const handleAddRouteWithOverrides = useCallback((overrides: Partial<ModulationRoute>) => {
-        modulationBridge.current?.addRoute(createDefaultRoute(overrides));
+    const handleAddRouteWithOverrides = useCallback((overrides: GeneratedModulationRouteInput) => {
+        const bridge = modulationBridge.current;
+        return bridge !== null && bridge.addGeneratedRoute(overrides) !== null;
     }, [modulationBridge]);
 
     const handleRemoveRoute = useCallback((routeIndex: number) => {
@@ -3062,11 +3071,6 @@ export function useSynthPatchViewModel({
         const currentRoute = bridge?.getState().routes[routeIndex];
 
         if (!bridge || !currentRoute) {
-            return;
-        }
-
-        if (Object.keys(update).length === 1 && typeof update.amount === "number") {
-            bridge.setRouteAmount(routeIndex, update.amount);
             return;
         }
 

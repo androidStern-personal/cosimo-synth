@@ -175,7 +175,14 @@ export type ModulationRoute = {
     reducer: ModulationReducer;
 };
 
-export type ModulationRouteUpdate = Partial<Omit<ModulationRoute, "id">>;
+/** User-selected mapping identity plus optional settings for a route ID assigned by the runtime bridge. */
+export type GeneratedModulationRouteInput = Pick<
+    ModulationRoute,
+    "sourceKind" | "sourceSlot" | "targetKind"
+> & Partial<Pick<ModulationRoute, "enabled" | "polarity" | "amount" | "reducer">>;
+
+/** Structural route edits only. Live amounts must use the route-specific canonical binding. */
+export type ModulationRouteUpdate = Partial<Omit<ModulationRoute, "id" | "amount">>;
 
 export type ModulationState = {
     format: "cosimo.modulation";
@@ -188,6 +195,8 @@ export type ModulationState = {
 };
 
 export type ModulationStateChangeKind = "general" | "routeAmount";
+
+type ModulationRouteAmountListener = (amount: number | null) => void;
 
 /** Expected boundary failure for a non-current modulation document. */
 export class ModulationStateParseError extends Error {
@@ -362,6 +371,17 @@ function getRouteAmountSideLimit(targetKind: ModulationTargetKind, amount: numbe
 function createGeneratedRouteId() {
     const routeId = `mod-route-auto-${generatedRouteIdCounter}`;
     generatedRouteIdCounter += 1;
+    return routeId;
+}
+
+function createAvailableGeneratedRouteId(routes: ReadonlyArray<Pick<ModulationRoute, "id">>) {
+    const usedRouteIds = new Set(routes.map((route) => route.id));
+    let routeId = createGeneratedRouteId();
+
+    while (usedRouteIds.has(routeId)) {
+        routeId = createGeneratedRouteId();
+    }
+
     return routeId;
 }
 
@@ -887,7 +907,6 @@ export function createFirstAvailableModulationRoute(
     routes: ReadonlyArray<ModulationRoute>,
 ): ModulationRoute | null {
     const usedPairs = new Set(routes.map(modulationRoutePairKey));
-    const usedIds = new Set(routes.map((route) => route.id));
 
     for (const source of MODULATION_SOURCE_OPTIONS) {
         for (const target of MODULATION_TARGET_OPTIONS) {
@@ -898,9 +917,10 @@ export function createFirstAvailableModulationRoute(
             };
             if (usedPairs.has(modulationRoutePairKey(candidateShape))) continue;
 
-            let route = createDefaultRoute(candidateShape);
-            while (usedIds.has(route.id)) route = createDefaultRoute(candidateShape);
-            return route;
+            return createDefaultRoute({
+                ...candidateShape,
+                id: createAvailableGeneratedRouteId(routes),
+            });
         }
     }
 
@@ -1164,11 +1184,14 @@ class ModulationMsegSlotController implements MsegEditorControllerLike {
 export class ModulationRuntimeBridge {
     private readonly patchConnection: PatchConnectionLike;
     private state = createDefaultModulationState();
+    private routeAmountsById = new Map(this.state.routes.map((route) => [route.id, route.amount]));
+    private routeIndexesById = new Map(this.state.routes.map((route, routeIndex) => [route.id, routeIndex]));
     private readonly pendingStoredStateEchoes = new Map<string, Map<string, number>>();
     private readonly stateListeners = new Set<(
         state: ModulationState,
         changeKind: ModulationStateChangeKind,
     ) => void>();
+    private readonly routeAmountListenersById = new Map<string, Set<ModulationRouteAmountListener>>();
     private readonly msegSlotEditShapeIndexes = Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0 as 0 | 1);
     private readonly slotControllers = Array.from(
         { length: MODULATION_MSEG_SLOT_COUNT },
@@ -1216,6 +1239,31 @@ export class ModulationRuntimeBridge {
         this.stateListeners.delete(listener);
     }
 
+    /** Read one route amount from the canonical bridge state by stable route identity. */
+    getRouteAmount(routeId: string): number | null {
+        return this.routeAmountsById.get(routeId) ?? null;
+    }
+
+    /** Subscribe to canonical amount changes for one route without observing the full modulation document. */
+    subscribeRouteAmount(routeId: string, listener: ModulationRouteAmountListener): () => void {
+        const listeners = this.routeAmountListenersById.get(routeId) ?? new Set<ModulationRouteAmountListener>();
+        listeners.add(listener);
+        this.routeAmountListenersById.set(routeId, listeners);
+
+        return () => {
+            listeners.delete(listener);
+            if (listeners.size === 0) {
+                this.routeAmountListenersById.delete(routeId);
+            }
+        };
+    }
+
+    /** Set one canonical route amount by stable identity while retaining the hot-path amount event. */
+    setRouteAmountById(routeId: string, nextAmount: number): boolean {
+        const routeIndex = this.routeIndexesById.get(routeId);
+        return routeIndex === undefined ? false : this.setRouteAmount(routeIndex, nextAmount);
+    }
+
     getMsegSlotController(slotIndex: number) {
         return this.slotControllers[clamp(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
     }
@@ -1247,9 +1295,7 @@ export class ModulationRuntimeBridge {
             return true;
         }
 
-        this.state = normalizedState;
-        this.persistState();
-        this.emitStateChange();
+        this.replaceCanonicalState(normalizedState, true);
         return true;
     }
 
@@ -1366,12 +1412,15 @@ export class ModulationRuntimeBridge {
         const routes = [...this.state.routes];
         routes[routeIndex] = { ...currentRoute, amount };
         this.state = { ...this.state, routes };
+        this.routeAmountsById.set(currentRoute.id, amount);
         this.persistState();
         this.emitStateChange("routeAmount");
+        this.emitRouteAmountChange(currentRoute.id);
         return true;
     }
 
-    addRoute(nextRoute: unknown = createDefaultRoute()): ModulationRoute | null {
+    /** Add a route with a caller-owned identity, rejecting duplicate identities or source-target pairs. */
+    addRoute(nextRoute: unknown): ModulationRoute | null {
         const normalizedRoute = normalizeRoute(nextRoute, this.state.routes.length);
         const pairKey = modulationRoutePairKey(normalizedRoute);
         if (this.state.routes.some((route) => (
@@ -1380,6 +1429,14 @@ export class ModulationRuntimeBridge {
 
         this.replaceRoutes([...this.state.routes, normalizedRoute]);
         return normalizedRoute;
+    }
+
+    /** Create and add a route whose generated identity is free in the canonical route set. */
+    addGeneratedRoute(overrides: GeneratedModulationRouteInput): ModulationRoute | null {
+        return this.addRoute(createDefaultRoute({
+            ...overrides,
+            id: createAvailableGeneratedRouteId(this.state.routes),
+        }));
     }
 
     removeRoute(routeIndex: number) {
@@ -1398,9 +1455,7 @@ export class ModulationRuntimeBridge {
             return;
         }
 
-        this.state = nextState;
-        this.persistState();
-        this.emitStateChange();
+        this.replaceCanonicalState(nextState, true);
     }
 
     private applyStoredState(rawValue: unknown) {
@@ -1414,9 +1469,7 @@ export class ModulationRuntimeBridge {
             return;
         }
 
-        this.state = parsedState.value;
-
-        this.emitStateChange();
+        this.replaceCanonicalState(parsedState.value, false);
     }
 
     private handleStoredStateValue(message: unknown) {
@@ -1460,6 +1513,29 @@ export class ModulationRuntimeBridge {
             routes: [...this.state.routes],
         };
         this.stateListeners.forEach((listener) => listener(stateSnapshot, changeKind));
+    }
+
+    private replaceCanonicalState(nextState: ModulationState, shouldPersist: boolean) {
+        const previousRouteAmountsById = this.routeAmountsById;
+        this.state = nextState;
+        this.routeAmountsById = new Map(nextState.routes.map((route) => [route.id, route.amount]));
+        this.routeIndexesById = new Map(nextState.routes.map((route, routeIndex) => [route.id, routeIndex]));
+        if (shouldPersist) {
+            this.persistState();
+        }
+        this.emitStateChange();
+        this.routeAmountListenersById.forEach((_listeners, routeId) => {
+            const previousAmount = previousRouteAmountsById.get(routeId) ?? null;
+            const nextAmount = this.routeAmountsById.get(routeId) ?? null;
+            if (!Object.is(previousAmount, nextAmount)) {
+                this.emitRouteAmountChange(routeId);
+            }
+        });
+    }
+
+    private emitRouteAmountChange(routeId: string) {
+        const amount = this.getRouteAmount(routeId);
+        this.routeAmountListenersById.get(routeId)?.forEach((listener) => listener(amount));
     }
 
     private rememberPendingStoredStateEcho(key: string, value: unknown) {

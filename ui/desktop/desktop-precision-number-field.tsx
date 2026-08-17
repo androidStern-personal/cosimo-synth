@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { PatchControlBinding } from "../shared/patch-controls";
 import type { ModulationTargetKind } from "../shared/modulation-targets";
@@ -30,10 +30,21 @@ export type PrecisionNumberFieldProps = {
 };
 
 type ActiveDragState = {
+    endGesture: () => void;
     pointerId: number;
     startClientX: number;
     startNormalizedValue: number;
     moved: boolean;
+};
+
+type OptimisticDragValue = {
+    endpointID: string;
+    value: number;
+};
+
+type OptimisticDragHistory = {
+    endpointID: string;
+    observedValueKeys: Set<number>;
 };
 
 function clampNumber(value: number, min: number, max: number) {
@@ -87,12 +98,16 @@ export function PrecisionNumberField({
     const draftValueRef = useRef("");
     const skipCommitOnBlurRef = useRef(false);
     const wheelCursorTimerRef = useRef<number>(0);
+    const optimisticValueTimerRef = useRef<number>(0);
     const isMountedRef = useRef(true);
     const bindingRef = useRef(binding);
     bindingRef.current = binding;
     const [isEditing, setIsEditing] = useState(false);
     const [draftValue, setDraftValue] = useState("");
     const [isWheelCursorHidden, setIsWheelCursorHidden] = useState(false);
+    const [optimisticDragValue, setOptimisticDragValue] = useState<OptimisticDragValue | null>(null);
+    const optimisticDragValueRef = useRef<OptimisticDragValue | null>(null);
+    const optimisticDragHistoryRef = useRef<OptimisticDragHistory | null>(null);
     const updateDragFromPointerRef = useRef<(event: Pick<
         PointerEvent,
         "pointerId" | "pointerType" | "buttons" | "clientX" | "shiftKey"
@@ -106,9 +121,12 @@ export function PrecisionNumberField({
         [max, min, normalizedFromValue],
     );
 
+    const presentedBindingValue = optimisticDragValue?.endpointID === binding.endpointID
+        ? optimisticDragValue.value
+        : binding.value;
     const displayValue = useMemo(() => (
-        isEditing ? draftValue : formatDisplay(binding.value)
-    ), [binding.value, draftValue, formatDisplay, isEditing]);
+        isEditing ? draftValue : formatDisplay(presentedBindingValue)
+    ), [draftValue, formatDisplay, isEditing, presentedBindingValue]);
     const isCompactOverlay = variant === "compactOverlay";
     const isInlineDark = variant === "inlineDark";
     const shouldShowLeadingLabel = isInlineDark && Boolean(leadingLabel);
@@ -118,10 +136,76 @@ export function PrecisionNumberField({
         setDraftValue(nextValue);
     }, []);
 
+    const clearOptimisticDragValue = useCallback(() => {
+        clearTimeout(optimisticValueTimerRef.current);
+        optimisticDragValueRef.current = null;
+        optimisticDragHistoryRef.current = null;
+        setOptimisticDragValue(null);
+    }, []);
+
+    const presentDragValue = useCallback((nextValue: number) => {
+        const previousPending = optimisticDragValueRef.current;
+        const currentValue = previousPending?.endpointID === bindingRef.current.endpointID
+            ? previousPending.value
+            : bindingRef.current.value;
+        const agreementTolerance = Math.max(step / 10, 1e-9);
+        if (Math.abs(nextValue - currentValue) <= agreementTolerance) {
+            return;
+        }
+
+        clearTimeout(optimisticValueTimerRef.current);
+        const valueKey = (value: number) => Math.round(value / agreementTolerance);
+        const previousHistory = optimisticDragHistoryRef.current;
+        const history = previousHistory?.endpointID === bindingRef.current.endpointID
+            ? previousHistory
+            : {
+                endpointID: bindingRef.current.endpointID,
+                observedValueKeys: new Set([valueKey(bindingRef.current.value)]),
+            };
+        history.observedValueKeys.add(valueKey(nextValue));
+        const pending: OptimisticDragValue = {
+            endpointID: bindingRef.current.endpointID,
+            value: nextValue,
+        };
+        optimisticDragHistoryRef.current = history;
+        optimisticDragValueRef.current = pending;
+        setOptimisticDragValue(pending);
+        startTransition(() => {
+            bindingRef.current.setValue(nextValue);
+        });
+        if (inputRef.current) {
+            inputRef.current.value = formatDisplay(nextValue);
+        }
+    }, [formatDisplay, step]);
+
+    useEffect(() => {
+        const pendingValue = optimisticDragValueRef.current;
+        if (!pendingValue) {
+            return;
+        }
+
+        const agreementTolerance = Math.max(step / 10, 1e-9);
+        const history = optimisticDragHistoryRef.current;
+        const endpointChanged = pendingValue.endpointID !== binding.endpointID;
+        const latestValueAccepted = Math.abs(binding.value - pendingValue.value) <= agreementTolerance;
+        const valueBelongsToThisGesture = history?.endpointID === binding.endpointID
+            && history.observedValueKeys.has(Math.round(binding.value / agreementTolerance));
+        if (endpointChanged || latestValueAccepted || !valueBelongsToThisGesture) {
+            clearOptimisticDragValue();
+        }
+    }, [binding.endpointID, binding.value, clearOptimisticDragValue, step]);
+
+    const readPresentedBindingValue = useCallback(() => {
+        const pending = optimisticDragValueRef.current;
+        return pending?.endpointID === bindingRef.current.endpointID
+            ? pending.value
+            : bindingRef.current.value;
+    }, []);
+
     const beginTextEntry = useCallback(() => {
-        updateDraftValue(formatEditingValue(bindingRef.current.value));
+        updateDraftValue(formatEditingValue(readPresentedBindingValue()));
         setIsEditing(true);
-    }, [formatEditingValue, updateDraftValue]);
+    }, [formatEditingValue, readPresentedBindingValue, updateDraftValue]);
 
     const finishDrag = useCallback((pointerId?: number) => {
         const activeDrag = activeDragRef.current;
@@ -138,9 +222,13 @@ export function PrecisionNumberField({
         } catch {
             // Capture may already be gone after cancellation or window deactivation.
         }
-        bindingRef.current.endGesture();
+        activeDrag.endGesture();
+        if (activeDrag.moved && optimisticDragValueRef.current) {
+            clearTimeout(optimisticValueTimerRef.current);
+            optimisticValueTimerRef.current = window.setTimeout(clearOptimisticDragValue, 1_000);
+        }
         return activeDrag;
-    }, []);
+    }, [clearOptimisticDragValue]);
 
     const updateDragFromPointer = (event: Pick<
         PointerEvent,
@@ -177,7 +265,7 @@ export function PrecisionNumberField({
             step,
         );
 
-        bindingRef.current.setValue(nextBindingValue);
+        presentDragValue(nextBindingValue);
     };
     updateDragFromPointerRef.current = updateDragFromPointer;
 
@@ -210,6 +298,7 @@ export function PrecisionNumberField({
         return () => {
             isMountedRef.current = false;
             clearTimeout(wheelCursorTimerRef.current);
+            clearTimeout(optimisticValueTimerRef.current);
             window.removeEventListener("pointermove", handleFallbackPointerMove, true);
             window.removeEventListener("pointerup", handlePointerEnd);
             window.removeEventListener("pointercancel", handlePointerEnd);
@@ -242,15 +331,16 @@ export function PrecisionNumberField({
 
     const commitTextEntry = (rawText: string) => {
         const parsedValue = parseText(rawText);
+        const currentValue = readPresentedBindingValue();
         const nextValue = quantizeToStep(
-            clampNumber(parsedValue ?? bindingRef.current.value, min, max),
+            clampNumber(parsedValue ?? currentValue, min, max),
             min,
             max,
             step,
         );
 
         updateDraftValue(formatEditingValue(nextValue));
-        if (Math.abs(nextValue - bindingRef.current.value) <= Math.max(step / 10, 1e-9)) {
+        if (Math.abs(nextValue - currentValue) <= Math.max(step / 10, 1e-9)) {
             return;
         }
 
@@ -260,18 +350,18 @@ export function PrecisionNumberField({
     const adjustByWheel = useCallback((deltaDirection: number) => {
         const displayStep = Math.abs(wheelStep ?? step) || Math.max(1e-9, (max - min) / 400);
         const nextValue = quantizeToStep(
-            clampNumber(binding.value + (deltaDirection * displayStep), min, max),
+            clampNumber(presentedBindingValue + (deltaDirection * displayStep), min, max),
             min,
             max,
             step,
         );
 
-        if (Math.abs(nextValue - binding.value) <= Math.max(step / 10, 1e-9)) {
+        if (Math.abs(nextValue - presentedBindingValue) <= Math.max(step / 10, 1e-9)) {
             return;
         }
 
         binding.commitValue(nextValue);
-    }, [binding, max, min, step, wheelStep]);
+    }, [binding, max, min, presentedBindingValue, step, wheelStep]);
 
     useEffect(() => {
         const field = fieldRef.current;
@@ -319,7 +409,7 @@ export function PrecisionNumberField({
             return;
         }
 
-        updateDraftValue(formatEditingValue(bindingRef.current.value));
+        updateDraftValue(formatEditingValue(readPresentedBindingValue()));
     };
 
     return (
@@ -377,9 +467,14 @@ export function PrecisionNumberField({
                         }
 
                         activeDragRef.current = {
+                            endGesture: binding.endGesture,
                             pointerId: event.pointerId,
                             startClientX: event.clientX,
-                            startNormalizedValue: clampNumber(normalizedFromValue(binding.value), normalizedMin, normalizedMax),
+                            startNormalizedValue: clampNumber(
+                                normalizedFromValue(readPresentedBindingValue()),
+                                normalizedMin,
+                                normalizedMax,
+                            ),
                             moved: false,
                         };
                         binding.beginGesture();

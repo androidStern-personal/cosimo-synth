@@ -200,6 +200,14 @@ function createGeneratedRouteId() {
     generatedRouteIdCounter += 1;
     return routeId;
 }
+function createAvailableGeneratedRouteId(routes) {
+    const usedRouteIds = new Set(routes.map((route) => route.id));
+    let routeId = createGeneratedRouteId();
+    while (usedRouteIds.has(routeId)) {
+        routeId = createGeneratedRouteId();
+    }
+    return routeId;
+}
 function normalizeRouteId(value, routeIndex) {
     if (typeof value === "string" && value.trim()) {
         return value;
@@ -633,7 +641,6 @@ function canonicalJsonValuesEqual(left, right) {
 /** Pick the first unused cell in the closed 1118-pair domain for generic Add. */
 export function createFirstAvailableModulationRoute(routes) {
     const usedPairs = new Set(routes.map(modulationRoutePairKey));
-    const usedIds = new Set(routes.map((route) => route.id));
     for (const source of MODULATION_SOURCE_OPTIONS) {
         for (const target of MODULATION_TARGET_OPTIONS) {
             const candidateShape = {
@@ -643,10 +650,10 @@ export function createFirstAvailableModulationRoute(routes) {
             };
             if (usedPairs.has(modulationRoutePairKey(candidateShape)))
                 continue;
-            let route = createDefaultRoute(candidateShape);
-            while (usedIds.has(route.id))
-                route = createDefaultRoute(candidateShape);
-            return route;
+            return createDefaultRoute({
+                ...candidateShape,
+                id: createAvailableGeneratedRouteId(routes),
+            });
         }
     }
     return null;
@@ -862,8 +869,11 @@ class ModulationMsegSlotController {
 export class ModulationRuntimeBridge {
     patchConnection;
     state = createDefaultModulationState();
+    routeAmountsById = new Map(this.state.routes.map((route) => [route.id, route.amount]));
+    routeIndexesById = new Map(this.state.routes.map((route, routeIndex) => [route.id, routeIndex]));
     pendingStoredStateEchoes = new Map();
     stateListeners = new Set();
+    routeAmountListenersById = new Map();
     msegSlotEditShapeIndexes = Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, () => 0);
     slotControllers = Array.from({ length: MODULATION_MSEG_SLOT_COUNT }, (_, slotIndex) => new ModulationMsegSlotController(this, slotIndex));
     constructor(patchConnection) {
@@ -898,6 +908,27 @@ export class ModulationRuntimeBridge {
     unsubscribe(listener) {
         this.stateListeners.delete(listener);
     }
+    /** Read one route amount from the canonical bridge state by stable route identity. */
+    getRouteAmount(routeId) {
+        return this.routeAmountsById.get(routeId) ?? null;
+    }
+    /** Subscribe to canonical amount changes for one route without observing the full modulation document. */
+    subscribeRouteAmount(routeId, listener) {
+        const listeners = this.routeAmountListenersById.get(routeId) ?? new Set();
+        listeners.add(listener);
+        this.routeAmountListenersById.set(routeId, listeners);
+        return () => {
+            listeners.delete(listener);
+            if (listeners.size === 0) {
+                this.routeAmountListenersById.delete(routeId);
+            }
+        };
+    }
+    /** Set one canonical route amount by stable identity while retaining the hot-path amount event. */
+    setRouteAmountById(routeId, nextAmount) {
+        const routeIndex = this.routeIndexesById.get(routeId);
+        return routeIndex === undefined ? false : this.setRouteAmount(routeIndex, nextAmount);
+    }
     getMsegSlotController(slotIndex) {
         return this.slotControllers[clamp(Math.round(slotIndex), 0, MODULATION_MSEG_SLOT_COUNT - 1)];
     }
@@ -922,9 +953,7 @@ export class ModulationRuntimeBridge {
         if (modulationStatesEqual(this.state, normalizedState)) {
             return true;
         }
-        this.state = normalizedState;
-        this.persistState();
-        this.emitStateChange();
+        this.replaceCanonicalState(normalizedState, true);
         return true;
     }
     setMsegSlotShape(slotIndex, shapeIndex, nextShape) {
@@ -1014,17 +1043,27 @@ export class ModulationRuntimeBridge {
         const routes = [...this.state.routes];
         routes[routeIndex] = { ...currentRoute, amount };
         this.state = { ...this.state, routes };
+        this.routeAmountsById.set(currentRoute.id, amount);
         this.persistState();
         this.emitStateChange("routeAmount");
+        this.emitRouteAmountChange(currentRoute.id);
         return true;
     }
-    addRoute(nextRoute = createDefaultRoute()) {
+    /** Add a route with a caller-owned identity, rejecting duplicate identities or source-target pairs. */
+    addRoute(nextRoute) {
         const normalizedRoute = normalizeRoute(nextRoute, this.state.routes.length);
         const pairKey = modulationRoutePairKey(normalizedRoute);
         if (this.state.routes.some((route) => (route.id === normalizedRoute.id || modulationRoutePairKey(route) === pairKey)))
             return null;
         this.replaceRoutes([...this.state.routes, normalizedRoute]);
         return normalizedRoute;
+    }
+    /** Create and add a route whose generated identity is free in the canonical route set. */
+    addGeneratedRoute(overrides) {
+        return this.addRoute(createDefaultRoute({
+            ...overrides,
+            id: createAvailableGeneratedRouteId(this.state.routes),
+        }));
     }
     removeRoute(routeIndex) {
         if (routeIndex < 0 || routeIndex >= this.state.routes.length) {
@@ -1038,9 +1077,7 @@ export class ModulationRuntimeBridge {
         if (modulationStatesEqual(this.state, nextState)) {
             return;
         }
-        this.state = nextState;
-        this.persistState();
-        this.emitStateChange();
+        this.replaceCanonicalState(nextState, true);
     }
     applyStoredState(rawValue) {
         if (rawValue === undefined) {
@@ -1051,8 +1088,7 @@ export class ModulationRuntimeBridge {
         if (parsedState._tag === "err") {
             return;
         }
-        this.state = parsedState.value;
-        this.emitStateChange();
+        this.replaceCanonicalState(parsedState.value, false);
     }
     handleStoredStateValue(message) {
         if (!message || typeof message !== "object") {
@@ -1091,6 +1127,27 @@ export class ModulationRuntimeBridge {
             routes: [...this.state.routes],
         };
         this.stateListeners.forEach((listener) => listener(stateSnapshot, changeKind));
+    }
+    replaceCanonicalState(nextState, shouldPersist) {
+        const previousRouteAmountsById = this.routeAmountsById;
+        this.state = nextState;
+        this.routeAmountsById = new Map(nextState.routes.map((route) => [route.id, route.amount]));
+        this.routeIndexesById = new Map(nextState.routes.map((route, routeIndex) => [route.id, routeIndex]));
+        if (shouldPersist) {
+            this.persistState();
+        }
+        this.emitStateChange();
+        this.routeAmountListenersById.forEach((_listeners, routeId) => {
+            const previousAmount = previousRouteAmountsById.get(routeId) ?? null;
+            const nextAmount = this.routeAmountsById.get(routeId) ?? null;
+            if (!Object.is(previousAmount, nextAmount)) {
+                this.emitRouteAmountChange(routeId);
+            }
+        });
+    }
+    emitRouteAmountChange(routeId) {
+        const amount = this.getRouteAmount(routeId);
+        this.routeAmountListenersById.get(routeId)?.forEach((listener) => listener(amount));
     }
     rememberPendingStoredStateEcho(key, value) {
         const token = toStoredStateEchoToken(value);

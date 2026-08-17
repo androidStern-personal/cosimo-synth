@@ -356,18 +356,16 @@ test("the DSP hot path consumes published active prefixes instead of transport c
     assert.ok(hotPathStart >= 0 && hotPathEnd > hotPathStart, "Expected the production modulation hot path.");
     const hotPath = source.slice(hotPathStart, hotPathEnd);
 
-    assert.match(hotPath, /macroVoiceRouteSourceUsed\[sourceIndex\]/);
+    assert.match(hotPath, /macroVoiceRouteCoreSourceUsed\[sourceIndex\]/);
+    assert.match(hotPath, /macroVoiceRouteGeneratorSourceUsed\[sourceIndex\]/);
     assert.match(hotPath, /macroVoiceRouteCoreScaleVectors\[sourceIndex\] \* macroSourceValues\[sourceIndex\]/);
     assert.match(hotPath, /macroVoiceRouteGeneratorScaleVectors\[sourceIndex\] \* macroSourceValues\[sourceIndex\]/);
-    assert.match(hotPath, /voiceRouteSourceUsed\[sourceIndex\]/);
+    assert.match(hotPath, /voiceRouteCoreSourceUsed\[sourceIndex\]/);
+    assert.match(hotPath, /voiceRouteGeneratorSourceUsed\[sourceIndex\]/);
     assert.match(hotPath, /voiceRouteCoreScaleVectors\[sourceIndex\] \* sourceValue/);
     assert.match(hotPath, /voiceRouteGeneratorScaleVectors\[sourceIndex\] \* sourceValue/);
-    assert.equal(
-        hotPath.match(/int32 \(routeIndex\) >= voiceRouteCount/g)?.length,
-        1,
-        "The articulated voice loop must stop at the active prefix.",
-    );
-    assert.match(hotPath, /int32 \(routeIndex\) >= macroVoiceRouteCount/);
+    assert.match(hotPath, /voiceArticulationRouteTransforms\[voice\]\.voiceSources\[sourceIndex\]/);
+    assert.doesNotMatch(hotPath, /int32 \(routeIndex\) >= (?:voiceRouteCount|macroVoiceRouteCount)/);
     assert.match(hotPath, /int32 \(routeIndex\) >= voiceRackRouteCount/);
     assert.match(hotPath, /macroRackRouteSourceUsed\[sourceIndex\]/);
     assert.match(hotPath, /macroRackRouteScaleVectors\[sourceIndex\] \* macroSourceValues\[sourceIndex\]/);
@@ -579,6 +577,86 @@ test("explicit Add rejects a route ID collision without changing state", async (
     const routes = bridge.getState().routes;
     assert.equal(added, null);
     assert.deepEqual(routes, [existingRoute]);
+    assert.equal(storedWrites.length, 0);
+});
+
+test("generated Add skips route IDs restored from storage", async () => {
+    const modulation = await modulationModulePromise;
+    const restoredState = modulation.normalizeModulationState({
+        routes: [modulation.createDefaultRoute({
+            id: "mod-route-auto-1",
+            sourceKind: "env",
+            sourceSlot: 3,
+            targetKind: "filterQ",
+        })],
+    });
+    const storedWrites = [];
+    const bridge = new modulation.ModulationRuntimeBridge({
+        requestFullStoredState(callback) {
+            callback({
+                [modulation.MODULATION_STATE_KEY]: modulation.serializeModulationState(restoredState),
+            });
+        },
+        sendStoredStateValue(key, value) {
+            storedWrites.push({ key, value });
+        },
+    });
+    bridge.requestBootState();
+
+    const added = bridge.addGeneratedRoute({
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        targetKind: "oscA.pitchSemitones",
+    });
+
+    assert.notEqual(added, null);
+    assert.notEqual(added.id, "mod-route-auto-1");
+    assert.deepEqual(
+        {
+            sourceKind: added.sourceKind,
+            sourceSlot: added.sourceSlot,
+            targetKind: added.targetKind,
+        },
+        {
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            targetKind: "oscA.pitchSemitones",
+        },
+    );
+    assert.equal(bridge.getState().routes.length, 2);
+    assert.equal(new Set(bridge.getState().routes.map((route) => route.id)).size, 2);
+    assert.equal(storedWrites.length, 1);
+    assert.deepEqual(
+        modulation.deserializeModulationState(storedWrites[0].value).routes,
+        bridge.getState().routes,
+    );
+});
+
+test("generated Add rejects an existing source-target pair without persisting", async () => {
+    const modulation = await modulationModulePromise;
+    const storedWrites = [];
+    const bridge = new modulation.ModulationRuntimeBridge({
+        sendStoredStateValue(key, value) {
+            storedWrites.push({ key, value });
+        },
+    });
+    const existingRoute = modulation.createDefaultRoute({
+        id: "existing-pair",
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        targetKind: "oscA.pitchSemitones",
+    });
+    assert.notEqual(bridge.addRoute(existingRoute), null);
+    storedWrites.length = 0;
+
+    const added = bridge.addGeneratedRoute({
+        sourceKind: "mseg",
+        sourceSlot: 1,
+        targetKind: "oscA.pitchSemitones",
+    });
+
+    assert.equal(added, null);
+    assert.deepEqual(bridge.getState().routes, [existingRoute]);
     assert.equal(storedWrites.length, 0);
 });
 

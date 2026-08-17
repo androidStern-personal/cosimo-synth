@@ -1,6 +1,10 @@
 import { useCallback, useMemo } from "react";
 
-import { usePatchConnection, usePatchParameter } from "./cmajor-react";
+import {
+    usePatchConnection,
+    usePatchParameter,
+    type PatchParameterPresentationPriority,
+} from "./cmajor-react";
 
 function serializeIdentity<TValue>(value: TValue) {
     return value;
@@ -21,6 +25,7 @@ type PatchParameterBindingOptions<TValue> = {
     coerce: (rawValue: unknown) => TValue;
     serialize?: (value: TValue) => unknown;
     active?: boolean;
+    presentationPriority?: PatchParameterPresentationPriority;
 };
 
 export function usePatchParameterBinding<TValue>({
@@ -29,8 +34,9 @@ export function usePatchParameterBinding<TValue>({
     coerce,
     serialize = serializeIdentity,
     active = true,
+    presentationPriority = "immediate",
 }: PatchParameterBindingOptions<TValue>): PatchControlBinding<TValue> {
-    const parameter = usePatchParameter(endpointID, serialize(initialValue), active);
+    const parameter = usePatchParameter(endpointID, serialize(initialValue), active, presentationPriority);
     const value = useMemo(() => coerce(parameter.value), [coerce, parameter.value]);
 
     const setValue = useCallback((nextValue: TValue) => {

@@ -36,6 +36,7 @@ const state = {
     audioWorkletQuantizedLoadSum: 0,
     audioWorkletQuantizedMaxLoad: 0,
     audioWorkletQuantizedOverBudgetBlocks: 0,
+    audioWorkletDefiniteDeadlineMissBlocks: 0,
     audioWorkletClockSource: null,
     audioWorkletProcessMultiplier: 1,
     audioWorkletCallbackGapBlocks: 0,
@@ -330,6 +331,7 @@ function getSnapshot() {
         audioWorkletBlockCount: state.audioWorkletBlockCount,
         audioWorkletQuantizedMaxLoad: state.audioWorkletQuantizedMaxLoad,
         audioWorkletQuantizedOverBudgetBlocks: state.audioWorkletQuantizedOverBudgetBlocks,
+        audioWorkletDefiniteDeadlineMissBlocks: state.audioWorkletDefiniteDeadlineMissBlocks,
         audioWorkletClockSource: state.audioWorkletClockSource,
         audioWorkletProcessMultiplier: state.audioWorkletProcessMultiplier,
         audioWorkletCallbackGapBlocks: state.audioWorkletCallbackGapBlocks,
@@ -422,6 +424,7 @@ globalThis.__COSIMO_WEB_POC__ = {
         state.audioWorkletQuantizedLoadSum = 0;
         state.audioWorkletQuantizedMaxLoad = 0;
         state.audioWorkletQuantizedOverBudgetBlocks = 0;
+        state.audioWorkletDefiniteDeadlineMissBlocks = 0;
         state.audioWorkletClockSource = null;
         state.audioWorkletCallbackGapBlocks = 0;
         state.audioWorkletMaxCallbackGapLoad = 0;
@@ -469,15 +472,6 @@ globalThis.__COSIMO_WEB_POC__ = {
         state.connection.sendEventOrValue(endpointID, value);
     },
     start: startAudio,
-    suspendAudioForTest() {
-        if (!isTestMode) {
-            return Promise.reject(new Error("Audio suspension is only available in test mode."));
-        }
-        if (!state.audioContext) {
-            return Promise.reject(new Error("Cosimo's audio engine is not ready."));
-        }
-        return state.audioContext.suspend();
-    },
     storedState() {
         if (!state.connection) return Promise.reject(new Error("Cosimo is not ready."));
         return new Promise((resolve) => state.connection.requestFullStoredState(resolve));
@@ -528,6 +522,7 @@ async function initialise() {
                 Number(event.data.quantizedMaxLoad) || 0,
             );
             state.audioWorkletQuantizedOverBudgetBlocks += Number(event.data.quantizedOverBudgetBlocks) || 0;
+            state.audioWorkletDefiniteDeadlineMissBlocks += Number(event.data.definiteDeadlineMissBlocks) || 0;
             state.audioWorkletClockSource = typeof event.data.clockSource === "string"
                 ? event.data.clockSource
                 : null;

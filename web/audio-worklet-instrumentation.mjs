@@ -38,6 +38,9 @@ const compatibleAddModule = `        const dataURI = await serialiseWorkletProce
             URL.revokeObjectURL (dataURI);
         }`;
 
+const generatedListenerRemoval = `                                const index = listeners.indexOf (msg?.replyType);`;
+const correctedListenerRemoval = `                                const index = listeners.findIndex ((listener) => listener.replyType === msg?.replyType);`;
+
 const generatedMessageSwitch = `                    switch (msg.type)
                     {
                         case "req_status":`;
@@ -81,6 +84,7 @@ const instrumentedMessageSwitch = `                    switch (msg.type)
                             this.cosimoPerfLoadSum = 0;
                             this.cosimoPerfMaxLoad = 0;
                             this.cosimoPerfOverBudgetBlocks = 0;
+                            this.cosimoPerfDefiniteDeadlineMissBlocks = 0;
                             this.cosimoPerfCallbackGapBlocks = 0;
                             this.cosimoPerfMaxCallbackGapLoad = 0;
                             this.cosimoPerfFrameDiscontinuityBlocks = 0;
@@ -132,6 +136,9 @@ const instrumentedProcessBlock = `        process (inputs, outputs)
             const elapsedMs = Math.max (0, finishedAt - startedAt);
             const blockFrames = output?.[0]?.length || 128;
             const budgetMs = (blockFrames / sampleRate) * 1000;
+            const definiteDeadlineMiss = globalThis.performance?.now
+                ? elapsedMs > budgetMs
+                : elapsedMs >= Math.ceil (budgetMs) + 1;
             const frameDiscontinuous = this.cosimoPerfLastCurrentFrame !== undefined
                 && currentFrame !== this.cosimoPerfLastCurrentFrame + blockFrames;
             this.cosimoPerfLastCurrentFrame = currentFrame;
@@ -155,6 +162,7 @@ const instrumentedProcessBlock = `        process (inputs, outputs)
             this.cosimoPerfLoadSum = (this.cosimoPerfLoadSum || 0) + load;
             this.cosimoPerfMaxLoad = Math.max (this.cosimoPerfMaxLoad || 0, load);
             this.cosimoPerfOverBudgetBlocks = (this.cosimoPerfOverBudgetBlocks || 0) + (elapsedMs > budgetMs ? 1 : 0);
+            this.cosimoPerfDefiniteDeadlineMissBlocks = (this.cosimoPerfDefiniteDeadlineMissBlocks || 0) + (definiteDeadlineMiss ? 1 : 0);
             this.cosimoPerfCallbackGapBlocks = (this.cosimoPerfCallbackGapBlocks || 0) + (callbackGapLoad > 1.5 ? 1 : 0);
             this.cosimoPerfMaxCallbackGapLoad = Math.max (this.cosimoPerfMaxCallbackGapLoad || 0, callbackGapLoad);
             this.cosimoPerfFrameDiscontinuityBlocks = (this.cosimoPerfFrameDiscontinuityBlocks || 0) + (frameDiscontinuous ? 1 : 0);
@@ -168,6 +176,7 @@ const instrumentedProcessBlock = `        process (inputs, outputs)
                     quantizedAverageLoad: this.cosimoPerfLoadSum / this.cosimoPerfBlockCount,
                     quantizedMaxLoad: this.cosimoPerfMaxLoad,
                     quantizedOverBudgetBlocks: this.cosimoPerfOverBudgetBlocks,
+                    definiteDeadlineMissBlocks: this.cosimoPerfDefiniteDeadlineMissBlocks,
                     clockSource: globalThis.performance?.now ? "performance.now" : "Date.now",
                     processMultiplier,
                     callbackGapBlocks: this.cosimoPerfCallbackGapBlocks,
@@ -185,6 +194,7 @@ const instrumentedProcessBlock = `        process (inputs, outputs)
                 this.cosimoPerfLoadSum = 0;
                 this.cosimoPerfMaxLoad = 0;
                 this.cosimoPerfOverBudgetBlocks = 0;
+                this.cosimoPerfDefiniteDeadlineMissBlocks = 0;
                 this.cosimoPerfCallbackGapBlocks = 0;
                 this.cosimoPerfMaxCallbackGapLoad = 0;
                 this.cosimoPerfFrameDiscontinuityBlocks = 0;
@@ -227,4 +237,13 @@ export function adaptCosimoAudioWorkletModuleLoading(source) {
     return source
         .replace(generatedDataUriFactory, compatibleModuleUrlFactory)
         .replace(generatedAddModule, compatibleAddModule);
+}
+
+/** Corrects Cmajor 1.0.3066's object-versus-string endpoint-listener lookup. */
+export function fixCosimoAudioWorkletListenerRemoval(source) {
+    if (!source.includes(generatedListenerRemoval)) {
+        throw new Error("Could not find the generated Cmajor endpoint-listener removal.");
+    }
+
+    return source.replace(generatedListenerRemoval, correctedListenerRemoval);
 }
