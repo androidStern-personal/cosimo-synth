@@ -29,12 +29,17 @@
         --rail-fill: rgb(13 20 23);
         --rail-stroke: color-mix(in srgb, var(--source-color) 34%, rgb(255 255 255 / 0.09));
         --rail-top-duration: 180ms;
+        --rail-dodge-distance: calc(var(--rail-tab-w) + 18px);
+        --rail-dodge-duration: 120ms;
         position: absolute;
         right: 0;
         width: var(--rail-tab-w);
         pointer-events: auto;
         filter: drop-shadow(-6px 8px 12px rgb(0 0 0 / 0.4));
-        transition: top var(--rail-top-duration) cubic-bezier(0.22, 0.72, 0.22, 1);
+        translate: 0 0;
+        transition:
+            top var(--rail-top-duration) cubic-bezier(0.22, 0.72, 0.22, 1),
+            translate var(--rail-dodge-duration) cubic-bezier(0.22, 0.72, 0.22, 1);
     }
 
     .mobile-global-mod-rail:has(.mobile-global-mod-rail-grip:active),
@@ -44,6 +49,7 @@
 
     .mobile-global-mod-rail[data-mapping-active="true"] {
         pointer-events: none;
+        translate: var(--rail-dodge-distance) 0;
     }
 
     .mobile-global-mod-rail-silhouette {

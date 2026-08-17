@@ -1,6 +1,6 @@
 # ADR-019: Global mobile modulation rail
 
-Status: accepted — 2026-08-08; corrected 2026-08-15 (see both 2026-08-15 target corrections)
+Status: accepted — 2026-08-08; corrected 2026-08-15 and 2026-08-17
 
 ## Context
 
@@ -23,6 +23,39 @@ The approved Mod Bar was embedded in the FX editor footer. That made modulation 
 - Position persistence survives materially different phone viewports instead of replaying a stale pixel offset.
 - The activity display stays honest but is intentionally incomplete for source families whose live value is not currently exposed by the engine.
 - ADR-018 remains authoritative for explicit mapping, source artwork, the no-LFO product model, and source/target semantics. ADR-020 owns scalable capacity and runtime execution.
+
+## 2026-08-17 correction: amplified finger-clearing touch drag
+
+Direct one-to-one touch tracking left the source ghost under the finger and hid the
+destination at the moment of placement. The first correction added a bounded 64-pixel
+lead, but physical-phone testing showed that it solved occlusion only: once established,
+the preview returned to one-to-one tracking and still required nearly full-screen thumb
+travel.
+
+- Touch source drags now use progressive control-display gain. After the existing
+  seven-pixel drag threshold, gain eases from 1x to a viewport-responsive 2.1–2.5x over
+  64 pixels of thumb travel; it is approximately 2.34x at a 393-pixel viewport and stays
+  amplified afterward. This preserves continuous pickup while allowing roughly 150
+  pixels of thumb travel to cross about 330 pixels of the surface.
+- The preview hotspot is the authoritative point for highlighting, target capture, edge
+  scrolling, and drop. Mouse and pen remain direct so their precise cursor contract does
+  not change.
+- The transfer function derives each step from consecutive absolute mapped positions, so
+  event frequency cannot change the result. Each step clamps to the preview-safe viewport
+  and discards overshoot; reversing the thumb therefore leaves an edge immediately rather
+  than paying back a hidden dead distance.
+- Targets have a minimum 44-pixel capture region, retain capture with 12 pixels of
+  hysteresis, and can be acquired when a fast movement segment crosses them. Capture is
+  communicated by the target's source-colored highlight and one light haptic bump. The
+  preview remains full-sized on its uninterrupted amplified trajectory; it never snaps
+  or resizes when a target claims the prospective drop. Releasing commits to the retained
+  target even when the preview has moved outside its exact bounds but remains within the
+  capture hysteresis region.
+- Once source mapping activates, the right-edge rail retreats fully beyond the viewport
+  in 120 milliseconds while the preview remains visible. It returns to the same persisted
+  vertical position after drop or cancellation. This uses a stable horizontal edge retreat
+  rather than vertical collision chasing, which could unpredictably cover a different
+  destination; reduced-motion makes the retreat and return effectively immediate.
 
 ## 2026-08-15 correction: shared Voice/FX targets
 

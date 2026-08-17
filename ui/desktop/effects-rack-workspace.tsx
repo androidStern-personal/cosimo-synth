@@ -51,6 +51,12 @@ import {
     type ModulationTargetKind,
     type RackModulationTargetKind,
 } from "../shared/modulation";
+import {
+    modSourceDragHasActivated,
+    resolveModSourceTouchPoint,
+    type ModSourceDragPoint as ClientPoint,
+    type ModSourceDragViewport as ClientViewport,
+} from "../shared/mod-source-touch-geometry";
 import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import { parseModulationTargetKind } from "../shared/modulation-targets";
 import {
@@ -103,6 +109,7 @@ type SourceDragPresentation = {
     readonly source: SelectedSource;
     readonly clientX: number;
     readonly clientY: number;
+    readonly targetCaptured: boolean;
 };
 
 type ReorderGesture = {
@@ -123,8 +130,45 @@ const EFFECT_ACCENTS: Readonly<Record<EffectModuleId, string>> = {
     reverb: "#e1b456",
 };
 
+const MOD_SOURCE_TOUCH_PREVIEW_RADIUS_PX = 23;
+
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
+}
+
+function readClientViewport(referenceElement: Element): ClientViewport {
+    const ownerWindow = referenceElement.ownerDocument.defaultView;
+    const visualViewport = ownerWindow?.visualViewport;
+    const left = visualViewport?.offsetLeft ?? 0;
+    const top = visualViewport?.offsetTop ?? 0;
+    const width = visualViewport?.width ?? ownerWindow?.innerWidth ?? referenceElement.ownerDocument.documentElement.clientWidth;
+    const height = visualViewport?.height ?? ownerWindow?.innerHeight ?? referenceElement.ownerDocument.documentElement.clientHeight;
+
+    return {
+        left: left + MOD_SOURCE_TOUCH_PREVIEW_RADIUS_PX,
+        right: left + width - MOD_SOURCE_TOUCH_PREVIEW_RADIUS_PX,
+        top: top + MOD_SOURCE_TOUCH_PREVIEW_RADIUS_PX,
+        bottom: top + height - MOD_SOURCE_TOUCH_PREVIEW_RADIUS_PX,
+        width,
+    };
+}
+
+function resolveModSourceDragPoint(
+    referenceElement: Element,
+    pointerType: string,
+    start: ClientPoint,
+    previousPointer: ClientPoint,
+    previousPreview: ClientPoint,
+    pointer: ClientPoint,
+): ClientPoint {
+    return resolveModSourceTouchPoint({
+        pointerType,
+        start,
+        previousPointer,
+        previousPreview,
+        pointer,
+        viewport: readClientViewport(referenceElement),
+    });
 }
 
 function hasReleasedMouseButton(event: ReactPointerEvent<HTMLElement>) {
@@ -144,6 +188,20 @@ type ModulationDropTarget = {
     readonly targetKind: ModulationTargetKind;
 };
 
+type ClientRect = {
+    readonly left: number;
+    readonly right: number;
+    readonly top: number;
+    readonly bottom: number;
+};
+
+type ModulationDropCandidate = ModulationDropTarget & {
+    readonly rect: ClientRect;
+};
+
+const MODULATION_TARGET_MIN_CAPTURE_PX = 44;
+const MODULATION_TARGET_CAPTURE_HYSTERESIS_PX = 12;
+
 function modulationTargetAtPoint(
     referenceElement: Element,
     clientX: number,
@@ -153,6 +211,132 @@ function modulationTargetAtPoint(
         ?.closest<HTMLElement>("[data-modulation-target-kind]") ?? null;
     const targetKind = parseModulationTargetKind(element?.dataset.modulationTargetKind);
     return element === null || targetKind === null ? null : { element, targetKind };
+}
+
+function modulationTargetFromElement(element: HTMLElement | null): ModulationDropTarget | null {
+    const targetKind = parseModulationTargetKind(element?.dataset.modulationTargetKind);
+    return element === null || targetKind === null ? null : { element, targetKind };
+}
+
+function modulationDropCandidateFromTarget(target: ModulationDropTarget): ModulationDropCandidate | null {
+    const bounds = target.element.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0 || target.element.getClientRects().length === 0) {
+        return null;
+    }
+
+    const horizontalInset = Math.max(0, (MODULATION_TARGET_MIN_CAPTURE_PX - bounds.width) / 2);
+    const verticalInset = Math.max(0, (MODULATION_TARGET_MIN_CAPTURE_PX - bounds.height) / 2);
+    return {
+        ...target,
+        rect: {
+            left: bounds.left - horizontalInset,
+            right: bounds.right + horizontalInset,
+            top: bounds.top - verticalInset,
+            bottom: bounds.bottom + verticalInset,
+        },
+    };
+}
+
+function modulationDropCandidates(referenceElement: Element): ModulationDropCandidate[] {
+    const renderRoot = referenceElement.getRootNode();
+    if (!(renderRoot instanceof Document || renderRoot instanceof ShadowRoot)) {
+        return [];
+    }
+
+    return Array.from(renderRoot.querySelectorAll<HTMLElement>("[data-modulation-target-kind]")).flatMap((element) => {
+        const target = modulationTargetFromElement(element);
+        const candidate = target ? modulationDropCandidateFromTarget(target) : null;
+        return candidate ? [candidate] : [];
+    });
+}
+
+function pointIsInsideClientRect(point: ClientPoint, rect: ClientRect, inset = 0) {
+    return point.x >= rect.left - inset
+        && point.x <= rect.right + inset
+        && point.y >= rect.top - inset
+        && point.y <= rect.bottom + inset;
+}
+
+function clientRectCenter(rect: ClientRect): ClientPoint {
+    return {
+        x: (rect.left + rect.right) / 2,
+        y: (rect.top + rect.bottom) / 2,
+    };
+}
+
+function segmentClientRectEntry(
+    start: ClientPoint,
+    end: ClientPoint,
+    rect: ClientRect,
+): number | null {
+    const delta = { x: end.x - start.x, y: end.y - start.y };
+    let entry = 0;
+    let exit = 1;
+
+    for (const [origin, movement, minimum, maximum] of [
+        [start.x, delta.x, rect.left, rect.right],
+        [start.y, delta.y, rect.top, rect.bottom],
+    ] as const) {
+        if (movement === 0) {
+            if (origin < minimum || origin > maximum) {
+                return null;
+            }
+            continue;
+        }
+
+        const first = (minimum - origin) / movement;
+        const second = (maximum - origin) / movement;
+        entry = Math.max(entry, Math.min(first, second));
+        exit = Math.min(exit, Math.max(first, second));
+        if (entry > exit) {
+            return null;
+        }
+    }
+
+    return entry >= 0 && entry <= 1 ? entry : null;
+}
+
+function resolveModulationTargetForDrag(
+    referenceElement: Element,
+    point: ClientPoint,
+    previousPoint: ClientPoint,
+    previousTarget: HTMLElement | null,
+): ModulationDropCandidate | null {
+    const exactTarget = modulationTargetAtPoint(referenceElement, point.x, point.y);
+    if (exactTarget) {
+        const candidate = modulationDropCandidateFromTarget(exactTarget);
+        if (candidate) {
+            return candidate;
+        }
+    }
+
+    if (previousTarget) {
+        const previous = modulationTargetFromElement(previousTarget);
+        const retained = previous ? modulationDropCandidateFromTarget(previous) : null;
+        if (retained && pointIsInsideClientRect(point, retained.rect, MODULATION_TARGET_CAPTURE_HYSTERESIS_PX)) {
+            return retained;
+        }
+    }
+
+    const candidates = modulationDropCandidates(referenceElement);
+    const nearPoint = candidates
+        .filter(({ rect }) => pointIsInsideClientRect(point, rect))
+        .sort((left, right) => {
+            const leftCenter = clientRectCenter(left.rect);
+            const rightCenter = clientRectCenter(right.rect);
+            return Math.hypot(point.x - leftCenter.x, point.y - leftCenter.y)
+                - Math.hypot(point.x - rightCenter.x, point.y - rightCenter.y);
+        })[0];
+    if (nearPoint) {
+        return nearPoint;
+    }
+
+    return candidates
+        .flatMap((candidate) => {
+            const entry = segmentClientRectEntry(previousPoint, point, candidate.rect);
+            return entry === null ? [] : [{ candidate, entry }];
+        })
+        .sort((left, right) => right.entry - left.entry)[0]?.candidate ?? null;
 }
 
 function readRackStateFromFullStoredState(fullState: Record<string, unknown>) {
@@ -1121,6 +1305,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
     }>({ clientY: 0, frame: null, referenceElement: null });
     const dragRef = useRef<{
         pointerId: number;
+        pointerType: string;
         source: SelectedSource;
         moved: boolean;
         startX: number;
@@ -1128,6 +1313,8 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         wasActiveSelection: boolean;
         captureElement: HTMLButtonElement;
         hoveredTarget: HTMLElement | null;
+        lastPointerPoint: ClientPoint;
+        lastDragPoint: ClientPoint;
     } | null>(null);
 
     const updateHoveredTarget = useCallback((nextTarget: HTMLElement | null, source: SelectedSource) => {
@@ -1144,6 +1331,9 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 findRackModulationSource(source.sourceKind, source.sourceSlot).accent,
             );
             nextTarget.classList.add("is-mod-hover");
+            if (drag.pointerType === "touch") {
+                triggerLightHaptic();
+            }
         }
     }, []);
 
@@ -1205,9 +1395,31 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             return;
         }
 
+        const pointerPoint = { x: clientX, y: clientY };
+        const pointerStayedAtLastPoint = Math.hypot(
+            pointerPoint.x - drag.lastPointerPoint.x,
+            pointerPoint.y - drag.lastPointerPoint.y,
+        ) <= 1;
+        const dragPoint = pointerStayedAtLastPoint
+            ? drag.lastDragPoint
+            : resolveModSourceDragPoint(
+                drag.captureElement,
+                drag.pointerType,
+                { x: drag.startX, y: drag.startY },
+                drag.lastPointerPoint,
+                drag.lastDragPoint,
+                pointerPoint,
+            );
         const target = cancelled
             ? null
-            : modulationTargetAtPoint(drag.captureElement, clientX, clientY);
+            : pointerStayedAtLastPoint
+                ? modulationTargetFromElement(drag.hoveredTarget)
+                : resolveModulationTargetForDrag(
+                    drag.captureElement,
+                    dragPoint,
+                    drag.lastDragPoint,
+                    drag.hoveredTarget,
+                );
         updateHoveredTarget(null, drag.source);
         dragRef.current = null;
         handlersRef.current.onHoverTarget(drag.source, null);
@@ -1278,6 +1490,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             handlersRef.current.onDragSourceChange(source);
             dragRef.current = {
                 pointerId: event.pointerId,
+                pointerType: event.pointerType,
                 source,
                 moved: false,
                 startX: event.clientX,
@@ -1285,6 +1498,8 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 wasActiveSelection,
                 captureElement: event.currentTarget,
                 hoveredTarget: null,
+                lastPointerPoint: { x: event.clientX, y: event.clientY },
+                lastDragPoint: { x: event.clientX, y: event.clientY },
             };
             try {
                 event.currentTarget.setPointerCapture(event.pointerId);
@@ -1303,14 +1518,37 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
                 return;
             }
-            drag.moved ||= Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) > 7;
+            drag.moved ||= modSourceDragHasActivated(
+                { x: drag.startX, y: drag.startY },
+                { x: event.clientX, y: event.clientY },
+            );
             if (drag.moved) {
+                const dragPoint = resolveModSourceDragPoint(
+                    event.currentTarget,
+                    drag.pointerType,
+                    { x: drag.startX, y: drag.startY },
+                    drag.lastPointerPoint,
+                    drag.lastDragPoint,
+                    { x: event.clientX, y: event.clientY },
+                );
+                const target = resolveModulationTargetForDrag(
+                    event.currentTarget,
+                    dragPoint,
+                    drag.lastDragPoint,
+                    drag.hoveredTarget,
+                );
+                drag.lastPointerPoint = { x: event.clientX, y: event.clientY };
+                drag.lastDragPoint = dragPoint;
                 handlersRef.current.onSourceDragChange?.({
                     source: drag.source,
-                    clientX: event.clientX,
-                    clientY: event.clientY,
+                    clientX: dragPoint.x,
+                    clientY: dragPoint.y,
+                    targetCaptured: target !== null,
                 });
-                updateSourceAutoScroll(event.currentTarget, event.clientY);
+                updateSourceAutoScroll(event.currentTarget, dragPoint.y);
+                updateHoveredTarget(target?.element ?? null, drag.source);
+                handlersRef.current.onHoverTarget(drag.source, target?.targetKind ?? null);
+                return;
             }
             const target = modulationTargetAtPoint(event.currentTarget, event.clientX, event.clientY);
             updateHoveredTarget(target?.element ?? null, drag.source);
@@ -2311,6 +2549,7 @@ function MobileGlobalModRail({
             {sourceDrag ? (
                 <div
                     data-role="mobile-global-mod-source-ghost"
+                    data-target-captured={sourceDrag.targetCaptured}
                     className="mobile-global-mod-source-ghost"
                     style={{
                         left: sourceDrag.clientX,

@@ -453,6 +453,42 @@ async function collapseGlobalModRail(page) {
     await page.waitForTimeout(240);
 }
 
+function touchPointForModSourcePreviewTarget(start, target, viewportWidth, viewportHeight = 852) {
+    const delta = { x: target.x - start.x, y: target.y - start.y };
+    const distance = Math.hypot(delta.x, delta.y);
+    assert.equal(distance > 7, true, "A preview-led test drag must cross the activation distance.");
+    const direction = { x: delta.x / distance, y: delta.y / distance };
+    const previewBounds = { left: 23, right: viewportWidth - 23, top: 23, bottom: viewportHeight - 23 };
+    const edgeDistances = [];
+    if (direction.x > 0) edgeDistances.push((previewBounds.right - start.x) / direction.x);
+    if (direction.x < 0) edgeDistances.push((previewBounds.left - start.x) / direction.x);
+    if (direction.y > 0) edgeDistances.push((previewBounds.bottom - start.y) / direction.y);
+    if (direction.y < 0) edgeDistances.push((previewBounds.top - start.y) / direction.y);
+    const viewportTravel = Math.min(...edgeDistances.filter((candidate) => candidate >= 0));
+    assert.equal(distance <= viewportTravel + 0.5, true, "The target center must be inside the preview-safe viewport.");
+    const maximumGain = Math.min(Math.max(viewportWidth / 168, 2.1), 2.5);
+    const previewTravelForFingerTravel = (fingerTravel) => {
+        const rampProgress = Math.min(Math.max((fingerTravel - 7) / 64, 0), 1);
+        const gainProgress = rampProgress * rampProgress * (3 - (2 * rampProgress));
+        return fingerTravel * (1 + ((maximumGain - 1) * gainProgress));
+    };
+    let lower = 0;
+    let upper = viewportTravel;
+    for (let iteration = 0; iteration < 32; iteration += 1) {
+        const middle = (lower + upper) / 2;
+        if (previewTravelForFingerTravel(middle) < distance) {
+            lower = middle;
+        } else {
+            upper = middle;
+        }
+    }
+    const fingerTravel = (lower + upper) / 2;
+    return {
+        x: start.x + (direction.x * fingerTravel),
+        y: start.y + (direction.y * fingerTravel),
+    };
+}
+
 async function editRackParameterValue(page, controlRole, editingValue) {
     await page.locator(`[data-role="${controlRole}"]`).click({ button: "right" });
     await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
@@ -2252,10 +2288,11 @@ test("global modulation-source drag maps the selected oscillator level control",
             x: sourceBox.x + (sourceBox.width / 2),
             y: sourceBox.y + (sourceBox.height / 2),
         };
-        const end = {
+        const targetCenter = {
             x: targetBox.x + (targetBox.width / 2),
             y: targetBox.y + (targetBox.height / 2),
         };
+        const end = touchPointForModSourcePreviewTarget(start, targetCenter, 393);
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
             touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
@@ -2273,8 +2310,39 @@ test("global modulation-source drag maps the selected oscillator level control",
                 }],
             });
         }
+        const settledTargetBox = await target.boundingBox();
+        assert.ok(settledTargetBox);
+        const settledEnd = touchPointForModSourcePreviewTarget(start, {
+            x: settledTargetBox.x + (settledTargetBox.width / 2),
+            y: settledTargetBox.y + (settledTargetBox.height / 2),
+        }, 393);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ ...settledEnd, radiusX: 5, radiusY: 5, force: 1 }],
+        });
         assert.equal(await target.getAttribute("data-modulation-target-kind"), "oscB.ampGainDb");
-        assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), true);
+        const dragDiagnostic = await page.evaluate(() => {
+            const targetElement = document.querySelector('[data-role="oscillator-level"]');
+            const ghost = document.querySelector('[data-role="mobile-global-mod-source-ghost"]');
+            const readRect = (element) => {
+                const bounds = element?.getBoundingClientRect();
+                return bounds ? { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height } : null;
+            };
+            return {
+                target: readRect(targetElement),
+                ghost: readRect(ghost),
+                hovered: Array.from(document.querySelectorAll(".is-mod-hover")).map((element) => ({
+                    role: element.getAttribute("data-role"),
+                    targetKind: element.getAttribute("data-modulation-target-kind"),
+                    rect: readRect(element),
+                })),
+            };
+        });
+        assert.equal(
+            (await target.getAttribute("class")).includes("is-mod-hover"),
+            true,
+            `Expected oscillator level hover. ${JSON.stringify(dragDiagnostic)}`,
+        );
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
         const snapshot = await waitForHarnessSnapshot(
             page,
@@ -2364,10 +2432,11 @@ test("first mobile Mod Bar drop appears in the matrix after restoring routes", a
             x: sourceBox.x + (sourceBox.width / 2),
             y: sourceBox.y + (sourceBox.height / 2),
         };
-        const end = {
+        const targetCenter = {
             x: targetBox.x + (targetBox.width / 2),
             y: targetBox.y + (targetBox.height / 2),
         };
+        const end = touchPointForModSourcePreviewTarget(start, targetCenter, 393);
 
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
@@ -2430,7 +2499,8 @@ test("MSEG morph is a real modulation drop target", async () => {
         const targetBox = await target.boundingBox();
         assert.ok(sourceBox && targetBox);
         const start = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 };
-        const end = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+        const targetCenter = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+        const end = touchPointForModSourcePreviewTarget(start, targetCenter, 393);
 
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
@@ -2528,7 +2598,8 @@ test("envelope decay accepts a real touch modulation drop", async () => {
         const targetBox = await target.boundingBox();
         assert.ok(sourceBox && targetBox);
         const start = { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 };
-        const end = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+        const targetCenter = { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 };
+        const end = touchPointForModSourcePreviewTarget(start, targetCenter, 393);
 
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
@@ -9291,7 +9362,12 @@ test("phone touch drags are captured by rack grips and modulation chips without 
         assert.ok(sourceBox && targetBox);
         await touchDrag(
             { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 },
-            { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 },
+            touchPointForModSourcePreviewTarget(
+                { x: sourceBox.x + sourceBox.width / 2, y: sourceBox.y + sourceBox.height / 2 },
+                { x: targetBox.x + targetBox.width / 2, y: targetBox.y + targetBox.height / 2 },
+                375,
+                667,
+            ),
         );
         snapshot = await waitForHarnessSnapshot(
             page,
@@ -9871,12 +9947,31 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         );
         assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 1);
         assert.equal(await page.locator('[data-role="mobile-global-mod-rail-drawer"]').getAttribute("aria-hidden"), "true");
+        await page.waitForTimeout(180);
+        const retreatedRailBox = await rail.boundingBox();
+        const activeGhostBox = await page.locator('[data-role="mobile-global-mod-source-ghost"]').boundingBox();
+        assert.ok(retreatedRailBox && activeGhostBox);
+        assert.equal(
+            retreatedRailBox.x >= 393,
+            true,
+            `The Mod Bar must retreat fully beyond the right edge during source mapping. ${JSON.stringify(retreatedRailBox)}`,
+        );
+        assert.equal(
+            activeGhostBox.x < 393 && activeGhostBox.x + activeGhostBox.width > 0,
+            true,
+            "The dragged source preview must remain visible while the Mod Bar retreats.",
+        );
 
+        const targetFinger = touchPointForModSourcePreviewTarget(
+            sourceStart,
+            { x: targetBox.x + (targetBox.width / 2), y: targetBox.y + (targetBox.height / 2) },
+            393,
+        );
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchMove",
             touchPoints: [{
-                x: targetBox.x + (targetBox.width / 2),
-                y: targetBox.y + (targetBox.height / 2),
+                x: targetFinger.x,
+                y: targetFinger.y,
                 radiusX: 5,
                 radiusY: 5,
                 force: 1,
@@ -9898,7 +9993,10 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 0);
         assert.equal(await page.locator('[data-role="mobile-global-mod-rail-drawer"]').getAttribute("aria-hidden"), "false");
         await page.waitForTimeout(320);
-        assert.equal(Math.abs(((await rail.boundingBox())?.y ?? 0) - railTopBeforeSourceDrag) <= 1, true, "Source drag moved the rail.");
+        const restoredRailBox = await rail.boundingBox();
+        assert.ok(restoredRailBox);
+        assert.equal(Math.abs(restoredRailBox.y - railTopBeforeSourceDrag) <= 1, true, "Source drag moved the rail.");
+        assert.equal(Math.abs(restoredRailBox.x + restoredRailBox.width - 393) <= 1, true, "The Mod Bar did not return to the right edge after the drop.");
         assert.equal(
             Number(await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText()),
             initialRouteCount + 1,
@@ -9926,11 +10024,22 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         assert.equal(await rail.getAttribute("data-expanded"), "false", "Dragging the collapsed armed source must not expand the drawer.");
         assert.equal(await rail.getAttribute("data-mapping-active"), "true", "The collapsed armed source must begin route mapping.");
         assert.equal(await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(), 1);
+        await page.waitForTimeout(180);
+        assert.equal(
+            ((await rail.boundingBox())?.x ?? 0) >= 393,
+            true,
+            "The collapsed Mod Bar must also retreat beyond the right edge during mapping.",
+        );
+        const secondTargetFinger = touchPointForModSourcePreviewTarget(
+            collapsedSourceStart,
+            { x: secondTargetBox.x + (secondTargetBox.width / 2), y: secondTargetBox.y + (secondTargetBox.height / 2) },
+            393,
+        );
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchMove",
             touchPoints: [{
-                x: secondTargetBox.x + (secondTargetBox.width / 2),
-                y: secondTargetBox.y + (secondTargetBox.height / 2),
+                x: secondTargetFinger.x,
+                y: secondTargetFinger.y,
                 radiusX: 5,
                 radiusY: 5,
                 force: 1,
@@ -9948,13 +10057,134 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
         );
         assert.equal(await rail.getAttribute("data-expanded"), "false");
         assert.equal(await rail.getAttribute("data-mapping-active"), "false");
-        assert.equal(Math.abs(((await rail.boundingBox())?.y ?? 0) - collapsedRailTop) <= 1, true, "Dragging the collapsed source moved the bar.");
+        await page.waitForTimeout(180);
+        const restoredCollapsedRailBox = await rail.boundingBox();
+        assert.ok(restoredCollapsedRailBox);
+        assert.equal(Math.abs(restoredCollapsedRailBox.y - collapsedRailTop) <= 1, true, "Dragging the collapsed source moved the bar.");
+        assert.equal(Math.abs(restoredCollapsedRailBox.x + restoredCollapsedRailBox.width - 393) <= 1, true, "The collapsed Mod Bar did not return after the drop.");
         assert.equal(
             Number(await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText()),
             initialRouteCount + 2,
         );
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true);
     } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+test("touch source mapping keeps its free preview while a sticky target claims the drop", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                window.__modSourceCaptureHaptics = [];
+                window.cmaj_triggerHaptic = (style = "light") => window.__modSourceCaptureHaptics.push(style);
+            });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await expandGlobalModRail(page);
+
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const target = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        const sourceBox = await source.boundingBox();
+        const targetBox = await target.boundingBox();
+        assert.ok(sourceBox && targetBox);
+
+        const sourceCenter = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+        const targetCenter = {
+            x: targetBox.x + (targetBox.width / 2),
+            y: targetBox.y + (targetBox.height / 2),
+        };
+        const sourceToTarget = {
+            x: targetCenter.x - sourceCenter.x,
+            y: targetCenter.y - sourceCenter.y,
+        };
+        const sourceToTargetDistance = Math.hypot(sourceToTarget.x, sourceToTarget.y);
+        assert.equal(sourceToTargetDistance > 128, true);
+        const finger = touchPointForModSourcePreviewTarget(sourceCenter, targetCenter, 393);
+        const thumbTravel = Math.hypot(finger.x - sourceCenter.x, finger.y - sourceCenter.y);
+        assert.equal(
+            thumbTravel <= sourceToTargetDistance * 0.55,
+            true,
+            `The preview should cross the surface with substantially less thumb travel. ${JSON.stringify({ thumbTravel, sourceToTargetDistance })}`,
+        );
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...sourceCenter, radiusX: 8, radiusY: 8, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ ...finger, radiusX: 8, radiusY: 8, force: 1 }],
+        });
+
+        const ghost = page.locator('[data-role="mobile-global-mod-source-ghost"]');
+        await ghost.waitFor({ state: "visible" });
+        assert.equal(
+            Math.hypot(finger.x - targetCenter.x, finger.y - targetCenter.y) >= 60,
+            true,
+        );
+        assert.equal((await target.getAttribute("class"))?.includes("is-mod-hover"), true);
+        assert.equal(await ghost.getAttribute("data-target-captured"), "true");
+        assert.deepEqual(await page.evaluate(() => window.__modSourceCaptureHaptics), ["light"]);
+
+        const retainedPreviewPoint = targetCenter.x <= 393 / 2
+            ? { x: targetBox.x + targetBox.width + 2, y: targetCenter.y }
+            : { x: targetBox.x - 2, y: targetCenter.y };
+        const retainedFinger = touchPointForModSourcePreviewTarget(sourceCenter, retainedPreviewPoint, 393);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ ...retainedFinger, radiusX: 8, radiusY: 8, force: 1 }],
+        });
+        await page.waitForFunction(({ x, y }) => {
+            const preview = document.querySelector('[data-role="mobile-global-mod-source-ghost"]');
+            if (!(preview instanceof HTMLElement)) {
+                return false;
+            }
+            return Math.hypot(Number.parseFloat(preview.style.left) - x, Number.parseFloat(preview.style.top) - y) <= 2;
+        }, retainedPreviewPoint);
+
+        const ghostBox = await ghost.boundingBox();
+        assert.ok(ghostBox);
+        const ghostCenter = {
+            x: ghostBox.x + (ghostBox.width / 2),
+            y: ghostBox.y + (ghostBox.height / 2),
+        };
+        assert.equal(
+            Math.hypot(ghostCenter.x - retainedPreviewPoint.x, ghostCenter.y - retainedPreviewPoint.y) <= 2,
+            true,
+            `Target capture must not magnetize the preview. ${JSON.stringify({ ghostCenter, retainedPreviewPoint, targetCenter })}`,
+        );
+        assert.equal((await target.getAttribute("class"))?.includes("is-mod-hover"), true);
+        assert.equal(await ghost.getAttribute("data-target-captured"), "true");
+        assert.deepEqual(await page.evaluate(() => window.__modSourceCaptureHaptics), ["light"]);
+        assert.equal(
+            ghostBox.width >= 40,
+            true,
+            `Target capture must not resize the preview, got ${ghostBox.width}px.`,
+        );
+
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await waitForHarnessSnapshot(
+            page,
+            "finger-clearing source drop",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "env"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.reverbSize"
+            )),
+        );
+    } finally {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] }).catch(() => undefined);
         await cdp.detach();
         await page.close();
     }
