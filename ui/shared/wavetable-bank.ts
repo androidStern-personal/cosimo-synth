@@ -3,6 +3,8 @@ import {
     type ResourceClientInput,
 } from "./resource-client";
 
+export { parseWaveFile } from "./resource-client";
+
 export const DEFAULT_SAMPLES_PER_FRAME = 2048;
 export const DEFAULT_FACTORY_BANK_CATALOG_PATH = "assets/factory-bank-catalog.json";
 
