@@ -106,7 +106,7 @@ test("deliberately narrower musical offset caps are pinned exactly", async () =>
     }
 });
 
-test("the hand-written patch_gui twin agrees with ui/shared on every voice amount range", async () => {
+test("the generated patch_gui twin stays in sync with ui/shared on every voice amount range", async () => {
     const shared = await modulationModulePromise;
     const twin = await import(path.join(repoRoot, "patch_gui", "modulation.js"));
     for (const targetKind of Object.values(VOICE_TARGET_KINDS_BY_PARAMETER)) {
