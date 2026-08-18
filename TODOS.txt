@@ -49,6 +49,7 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Browser acceptance: adapted the compact cases to the accepted surface (same behavioral assertions) and added tabs-mute/solo, graph one-axis-at-a-time with transient readout, vertical route-amount editing under the fixed HUD, and 320-430 no-overflow cases.
     Verification (2026-08-18, second pass): full desktop browser suite 160/160 (two touch-mechanics test fixes: harness readiness probe widened to the new graph, and the mod-source chip drop approaches closed-loop to defeat Chromium touch prediction); web bundle contract 14/14; production web build green and served for physical phone review at https://primary-mac.tail5ef964.ts.net/ (HTTPS via tailscale serve — AudioWorklet needs a secure context).
     Live-review feedback batch (2026-08-18, commit d3c23284): HUD fill/contrast/no-layout-shift/no-message-strings fixes, unmapped vertical stays on base HUD, chip route-presence dots, sticky semitone route detents, toolbar scroll ownership fix + permanent scroll regression case (suite now 161 cases). Details in PROGRESS.txt and the ADR-024 second amendment.
+    Mod-range repair batch (2026-08-18): amp route amounts became symmetric full-span ±54 dB offsets with engine-side base+offset domain clamping (upward Level modulation was frozen at base + 6 dB); pitch modulation presented by Semi alone on mobile AND the desktop deck (Oct/Fine base-only); HUD amounts in real units; new amount-limits contract suite + dB rail cases + two browser repros. Details in PROGRESS.txt and the ADR-024 third amendment.
     Remaining before done: real-WebKit/physical-device touch acceptance, phone-width visual captures, and the compiled desktop VST3 build/install pass.
     Build:
     - Rewrite the chosen hierarchy into the real mobile Voice surface; do not copy the throwaway prototype wholesale.
@@ -155,17 +156,27 @@ PHASE 2 — MAKE DRAGGING AND PARAMETER FEEDBACK COHERENT
     Closed 2026-08-18:
     - Approved the real-knob state board in `ui/desktop/parameter-color-prototype/`.
     - Active/default/selected controls keep their owning Voice, effect, or source-editor color; grey is reserved for inactive, bypassed, unavailable, or invalid states.
-    - A new mapping remains at exactly 0%: pending uses a source-colored pulse, confirmed success flashes and settles into a solid source-colored presence point, and duplicate/failure states remain distinct.
+    - A new mapping remains at exactly 0%: the modulation-amount arc's full travel is drawn as a source-colored dotted outline, none of the amount is drawn as a solid arc at 0%, and one solid source-colored point proves the mapping exists.
+    - Pending, confirmed success, duplicate hover, failure, live amount editing, bypass, and deletion now have explicit product behavior in ADR-025.
     - ADR-025 records the complete matrix, the successful-drop contract, and the current Voice/FX/Mod neutral-state audit that the implementation ticket inherits.
 
 [ ] T08 — Apply the approved parameter/mapping feedback across Voice, FX, and Mod
-    Depends on: T07
+    Depends on: T02, T07
     Build:
+    - Do not modify the ongoing Voice refactor. Begin only after T02 has landed, then use the shared parameter-knob abstraction that the finished Voice surface consumes.
     - Remove visual states that contradict the approved truth table.
-    - Make every successful route creation visibly register at the drop target, Mod rail, and matrix/list.
-    - Keep duplicate/rejected drops visibly distinct from success and never retain a phantom route or amount.
+    - Retain the stationary white reset-position marker. At mapped 0%, draw the modulation-amount arc's full travel as a source-colored dotted outline, draw none of the amount as a solid arc, and show one solid source-colored route-presence point.
+    - Treat an already-mapped source/target pair as unavailable: no eligibility or hover highlight and no accepted drop. After 500 ms of uninterrupted direct hover, emit one deliberately noticeable warning buzz and one top-screen `DUPLICATE` toast per target per drag; leaving sooner cancels both.
+    - After release on a valid target, pulse the source-colored outline and reject further drops while creation is unconfirmed. Do not show a route point, amount arc, count change, or matrix/list row yet.
+    - On authoritative confirmation only, create the route at exactly 0%, flash the target, emit a small source-colored checkmark that rises and fades, and give one light haptic tick. Briefly pulse the Mod rail count and new 0% matrix/list row in the same source color. Do not show a success toast.
+    - On rejection or timeout, show a top-screen Sonner-style `MAPPING NOT CREATED` toast and a warning buzz shorter than the duplicate buzz. Restore the prior target appearance and retain no route point, amount arc, count change, or matrix/list row.
+    - Keep existing routes truthful: live amount edits update the knob's solid outside arc and the matrix/list percentage together; bypass greys and dashes only the outside route ring, retains a grey `BYPASSED` matrix/list row, and leaves the Mod rail count unchanged; deletion removes the ring, row, and count contribution with a quick fade and no toast.
+    - When several mappings exist, show their total in the count badge. With no source selected, show no outside ring; with a source selected, show only that source's outside ring.
+    - Preserve speed-sensitive knob dragging only as a deferred experiment; do not implement it in this ticket.
     Done when:
-    - One cross-surface test follows a route from source drag through target feedback, live amount edit, bypass, and deletion.
+    - One cross-surface test follows a route from source drag through pending confirmation, target flash/checkmark, Mod rail count pulse, matrix/list row pulse, live amount edit, bypass, and deletion.
+    - Duplicate coverage proves the target never looks droppable, flyover shorter than 500 ms stays silent, deliberate hover reports once, and release creates nothing.
+    - Failure coverage proves the global toast and warning buzz occur without leaving a phantom ring, count, or matrix/list row.
     - Voice and FX controls describe equivalent modulation states with the same visual language.
 
 [ ] T09 — Finish the shared mobile parameter interaction language

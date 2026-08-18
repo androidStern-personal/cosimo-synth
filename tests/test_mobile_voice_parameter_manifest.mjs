@@ -80,15 +80,19 @@ test("intentional aliases and direct placements match the accepted layout", asyn
     assert.deepEqual([...getMobileVoiceControlSpec("warpMode").placements], ["graph-overlay-top-right"]);
 });
 
-test("MOD target references match the binding contract, with the aggregate Tune trio", async () => {
+test("each engine MOD destination is presented by exactly one cell", async () => {
     const { MOBILE_VOICE_PARAMETER_MANIFEST } = await manifestModulePromise;
     const { OSCILLATOR_BINDING_CONTRACTS } = await bindingModulePromise;
 
+    // The engine has ONE pitch modulation destination (semitones). Octave,
+    // Semitone, and Fine are three BASE parameters, but presenting the same
+    // route on all three cells reads as three independent mappings
+    // (live-review defect: mapping MSEG 1 -> semitones lit Oct, Semi, AND
+    // Fine on the Tune page). Semi alone owns the pitch destination.
     const contractKinds = new Set(
         OSCILLATOR_BINDING_CONTRACTS[0].modulationTargets.map((target) => target.parameterKind),
     );
-    const tuneControls = [];
-    const modulatable = [];
+    const cellsByKind = new Map();
     for (const spec of MOBILE_VOICE_PARAMETER_MANIFEST) {
         if (spec.modulationParameterKind === null) {
             continue;
@@ -97,21 +101,27 @@ test("MOD target references match the binding contract, with the aggregate Tune 
             contractKinds.has(spec.modulationParameterKind),
             `${spec.controlID} references a real MOD parameter kind`,
         );
-        modulatable.push(spec.controlID);
-        if (spec.modulationParameterKind === "pitchSemitones") {
-            tuneControls.push(spec.controlID);
-        }
+        const cells = cellsByKind.get(spec.modulationParameterKind) ?? [];
+        cells.push(spec.controlID);
+        cellsByKind.set(spec.modulationParameterKind, cells);
     }
 
-    assert.deepEqual(tuneControls.sort(), ["fineCents", "octave", "semitone"]);
+    for (const [parameterKind, cells] of cellsByKind) {
+        assert.equal(
+            cells.length,
+            1,
+            `${parameterKind} must have exactly one presenting cell, got: ${cells.join(", ")}`,
+        );
+    }
+    assert.deepEqual(cellsByKind.get("pitchSemitones"), ["semitone"]);
     assert.deepEqual(
-        modulatable.sort(),
+        [...cellsByKind.values()].flat().sort(),
         [
-            "fineCents", "framePosition", "octave", "pan", "semitone", "unisonBlend",
+            "framePosition", "pan", "semitone", "unisonBlend",
             "unisonDetune", "unisonWarpSpread", "unisonWavetablePositionSpread",
             "unisonWidth", "volumeDb", "warpAmount",
         ],
-        "exactly the ten MOD destinations, with Tune shared by three cells",
+        "exactly the ten MOD destinations, one cell each",
     );
 });
 

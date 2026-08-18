@@ -37,6 +37,8 @@ through bypass.
 - Neutral ink may still be used for typography, separators, the factory-default tick,
   and small contrast details. It must not carry the active/default/selected state of a
   control.
+- The small stationary white factory-default tick remains visible. It marks the value
+  that the parameter menu's Reset action will restore; it is not a default-state color.
 
 ### Approved state matrix
 
@@ -46,19 +48,19 @@ through bypass.
 | Selected parameter | The border brightens in the same owning color. |
 | Base value being changed | The inside value glows in the owning color. |
 | Source selected, pair not mapped | A dotted outside ring uses the selected source color. Dots, rather than a solid point or arc, explicitly mean “selected but not mapped.” |
-| Pair mapped at 0% | One solid source-colored point proves the mapping exists; there is no amount arc. |
-| Pair mapped above or below 0% | The source-colored outside arc shows the real route amount and direction. |
-| Other mappings exist on the parameter | A count badge reports the real total. The outside ring still describes only the selected source and must not borrow color from another mapping. |
-| Selected route bypassed | The inside stays in the owning color; only the outside mapping ring becomes grey, hollow, or dashed. |
+| Pair mapped at 0% | The modulation-amount arc's full travel is drawn as a source-colored dotted outline. At 0%, none of the amount is drawn as a solid arc. One solid source-colored point at the parameter's current base position proves that the mapping exists. |
+| Pair mapped above or below 0% | The same source-colored dotted outline remains behind the amount display. A solid source-colored arc covers the portion representing the real route amount and direction, and the solid route-presence point remains. |
+| Other mappings exist on the parameter | A count badge reports the real total. With no source selected, no outside ring is shown. Selecting a source shows only that source's outside ring; it never combines unrelated mappings or borrows another source's color. |
+| Selected route bypassed | The inside stays in the owning color. The outside ring for that mapping becomes grey and dashed. Its matrix/list row remains visible, shows a grey amount and a `BYPASSED` label, and still contributes to the Mod rail's mapping count. |
 | Owning effect or oscillator bypassed | The whole control becomes grey because the parameter cannot currently affect sound. |
 | Parameter unavailable in the current mode | The whole control becomes grey and carries the existing `MODE` explanation. |
 | Dragged source cannot map here | The target becomes grey for the duration of that drag and cannot show an eligible or success treatment. |
 | Dragged source can map here | A thin outline in the dragged source color marks eligibility. |
 | Drag is captured by this target | A stronger outline in the dragged source color identifies where release will land. |
-| Creation waiting for confirmation | The source-colored outline pulses. A mapped point or arc must not appear yet. |
-| New mapping confirmed | The target flashes in the source color, then settles into the mapped-at-0% solid point. |
-| Pair already mapped | An orange `ALREADY MAPPED` warning appears; the existing mapping remains visible and no success flash occurs. |
-| Creation rejected or times out | Failure is explicit, no route point or arc is retained, and the surface returns to its truthful prior state. |
+| Creation waiting for confirmation | The source-colored outline pulses, the target rejects additional drops, and no mapped point or solid amount arc appears yet. |
+| New mapping confirmed | The target flashes in the source color, emits a small source-colored checkmark that rises and fades, and gives one light haptic tick. It then settles into the mapped-at-0% presentation. The Mod rail count and new 0% matrix/list row briefly pulse in the same source color. No success toast appears. |
+| Pair already mapped | The target is not eligible: it receives no available-target or stronger hover highlight and cannot accept the drop. Holding the dragged source directly over it for 500 ms gives one deliberately noticeable warning buzz and one top-of-screen `DUPLICATE` toast. Leaving before 500 ms cancels both. Each duplicate target can report at most once per drag. Releasing there changes nothing. |
+| Creation rejected or times out | A top-of-screen `MAPPING NOT CREATED` toast and a warning buzz shorter than the duplicate buzz report the failure. No route point, amount arc, Mod rail count change, or matrix/list row is retained, and the target returns to its truthful prior state. |
 
 ### Successful-drop behavior
 
@@ -68,10 +70,24 @@ through bypass.
   the authoritative route state may trigger the success flash and mapped-at-0% point.
 - The Mod rail and matrix/list must update from that same confirmed route. They may not
   show success optimistically if no route exists.
-- A duplicate drop, invalid drop, and failed creation are visually distinct from a
-  successful new mapping.
+- Duplicate and failure messages use non-blocking, Sonner-style toasts at the top of
+  the screen. Success uses the local flash and floating checkmark instead of a toast.
+- A duplicate target remains visibly unavailable throughout the drag. Its delayed buzz
+  and toast explain the existing mapping without making the target look droppable.
 - Exact animation duration and easing remain implementation tuning. The confirmation
   must be unmistakable without outliving the transient action.
+
+### Existing-route behavior
+
+- Editing an existing mapping amount updates the solid outside arc and the percentage
+  in its matrix/list row from the same live value. It does not show a toast or
+  checkmark and does not change the Mod rail count.
+- Deleting a mapping removes its outside ring, matrix/list row, and contribution to the
+  Mod rail count with a quick fade and no toast.
+- Bypassing a mapping does not delete it. The knob's inside remains in its owning
+  color; only that mapping's outside ring becomes grey and dashed. The retained
+  matrix/list row shows a grey amount and `BYPASSED`, and the Mod rail count does not
+  change.
 
 ## Current production divergences for the implementation ticket
 
@@ -112,3 +128,12 @@ These are implementation inputs, not production changes made by this ADR.
   source would change the sound without an explicit amount edit.
 - Treating selected-but-unmapped and mapped-at-0% as the same ring was rejected because
   it would make color lie about whether a route exists.
+- Immediate duplicate warnings on incidental flyover were rejected because they would
+  spam the user while dragging toward another target. The 500 ms uninterrupted hover
+  distinguishes deliberate inspection from transit.
+
+## Deferred interaction experiment
+
+- Speed-sensitive knob dragging remains worth testing later: faster finger movement
+  would change the value by larger increments and slower movement by smaller
+  increments. It is not part of this implementation or its acceptance criteria.

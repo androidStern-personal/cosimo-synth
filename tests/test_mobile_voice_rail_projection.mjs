@@ -151,3 +151,46 @@ test("a zero-span rail domain is rejected as a programming error", async () => {
         { amount: 0, polarity: "unipolar" },
     ));
 });
+
+test("an amp route in dB units can lift any base to the +6 dB rail", async () => {
+    // Live repro (2026-08-18): with base Level at -20.1 dB the high limit
+    // froze at -14.1 dB because the OFFSET was capped at the parameter's own
+    // +6 maximum. Amounts are additive dB offsets over the full 54 dB span.
+    const { projectMobileVoiceRailBand } = await railModulePromise;
+    const domain = { min: -48, max: 6 };
+
+    const reachesTop = projectMobileVoiceRailBand(
+        domain,
+        -20.1,
+        { amount: 26.1, polarity: "unipolar" },
+    );
+    assert.ok(Math.abs(reachesTop.highNormalized - 1) < 1e-9, "base -20.1 + 26.1 dB reaches the +6 rail");
+    assert.equal(reachesTop.clippedHigh, false, "exact-rail travel is not clipped");
+    assert.ok(Math.abs(reachesTop.lowNormalized - reachesTop.baseNormalized) < 1e-9);
+
+    const saturates = projectMobileVoiceRailBand(
+        domain,
+        -20.1,
+        { amount: 54, polarity: "unipolar" },
+    );
+    assert.ok(Math.abs(saturates.highNormalized - 1) < 1e-9, "a full-span offset saturates at +6 dB");
+    assert.equal(saturates.clippedHigh, true, "overshoot past the rail reports the clipped edge");
+
+    const floors = projectMobileVoiceRailBand(
+        domain,
+        -20.1,
+        { amount: -54, polarity: "unipolar" },
+    );
+    assert.ok(Math.abs(floors.lowNormalized - 0) < 1e-9, "a full negative offset reaches the -48 dB rail");
+    assert.equal(floors.clippedLow, true);
+
+    const oldCap = projectMobileVoiceRailBand(
+        domain,
+        -20.1,
+        { amount: 6, polarity: "unipolar" },
+    );
+    assert.ok(
+        Math.abs(oldCap.highNormalized - ((-14.1 + 48) / 54)) < 1e-9,
+        "a +6 dB offset stops at -14.1 dB — the value the capped build could never exceed",
+    );
+});

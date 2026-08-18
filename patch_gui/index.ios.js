@@ -15752,7 +15752,8 @@ const ROUTE_AMOUNT_LIMITS = {
   filterCutoffOctaves: { min: -6, max: 6 },
   filterQ: { min: -19.9, max: FILTER_Q_MAX - FILTER_Q_MIN },
   pitchSemitones: { min: -48, max: 48 },
-  ampGainDb: { min: -48, max: 6 },
+  // Additive dB offset over the full parameter span; the engine clamps base + offset.
+  ampGainDb: { min: -54, max: 54 },
   pan: { min: -1, max: 1 },
   unisonDetune: { min: -1, max: 1 },
   unisonBlend: { min: -1, max: 1 },
@@ -18638,6 +18639,9 @@ const MOBILE_VOICE_PARAMETER_MANIFEST = Object.freeze([
     modulationParameterKind: "pan",
     placements: ["page"]
   }),
+  // Octave and Fine are BASE-only cells: the engine has one pitch MOD
+  // destination (semitones) and Semi alone presents it — mirroring the
+  // same route on all three Tune cells read as three separate mappings.
   SPEC({
     controlID: "octave",
     shortLabel: "Oct",
@@ -18645,7 +18649,7 @@ const MOBILE_VOICE_PARAMETER_MANIFEST = Object.freeze([
     format: "octave",
     interaction: "readout",
     detented: true,
-    modulationParameterKind: "pitchSemitones",
+    modulationParameterKind: null,
     placements: ["page"]
   }),
   SPEC({
@@ -18665,7 +18669,7 @@ const MOBILE_VOICE_PARAMETER_MANIFEST = Object.freeze([
     format: "cents",
     interaction: "readout",
     detented: false,
-    modulationParameterKind: "pitchSemitones",
+    modulationParameterKind: null,
     placements: ["page"]
   }),
   SPEC({
@@ -18851,9 +18855,24 @@ function assertManifestCoverage() {
       throw new Error(`Control ${spec.controlID} page placement must match page membership`);
     }
   }
-  const aggregateTuneIDs = MOBILE_VOICE_PARAMETER_MANIFEST.filter((spec) => spec.modulationParameterKind === "pitchSemitones").map((spec) => spec.controlID).sort();
-  if (aggregateTuneIDs.join(",") !== "fineCents,octave,semitone") {
-    throw new Error("Exactly Octave, Semitone, and Fine must share the aggregate Tune target");
+  const presentersByKind = /* @__PURE__ */ new Map();
+  for (const spec of MOBILE_VOICE_PARAMETER_MANIFEST) {
+    if (spec.modulationParameterKind === null) {
+      continue;
+    }
+    const presenters = presentersByKind.get(spec.modulationParameterKind) ?? [];
+    presenters.push(spec.controlID);
+    presentersByKind.set(spec.modulationParameterKind, presenters);
+  }
+  for (const [parameterKind, presenters] of presentersByKind) {
+    if (presenters.length !== 1) {
+      throw new Error(
+        `MOD destination ${parameterKind} must have exactly one presenting cell, got ${presenters.join(", ")}`
+      );
+    }
+  }
+  if (presentersByKind.get("pitchSemitones")?.[0] !== "semitone") {
+    throw new Error("Semitone alone presents the pitch MOD destination");
   }
   const contractTargetKinds = new Set(
     contract.modulationTargets.map((target) => target.parameterKind)
@@ -19857,10 +19876,14 @@ function MobileVoiceFocusedEditor({
     const symmetricBipolar = display.min < 0 && display.max > 0 && Math.abs(display.min) === display.max;
     const baseOrigin = symmetricBipolar ? (0 - display.min) / (display.max - display.min) : 0;
     let sourceLine = "";
-    if (presentation.route !== null && armedSource !== null) {
-      const amount = presentation.route.amount;
+    if (presentation.route !== null && armedSource !== null && spec.modulationParameterKind !== null) {
       const label = `${armedSourceIdentity?.shortLabel ?? ""} ${armedSource.sourceSlot}`.trim();
-      sourceLine = isTune ? `${label} · ${amount >= 0 ? "+" : ""}${amount.toFixed(1)} st` : `${label} · ${amount >= 0 ? "+" : ""}${Math.round(amount * 100)}%`;
+      const amountText = formatModulationAmountReadout(
+        targetKindFor(spec.modulationParameterKind),
+        presentation.route.amount,
+        presentation.route.polarity
+      );
+      sourceLine = `${label} · ${amountText}`;
     }
     let lowText;
     let highText;
@@ -19978,7 +20001,7 @@ function MobileVoiceFocusedEditor({
       ),
       hudContainer
     );
-  }, [armedSource, armedSourceIdentity, bindings, hudContainer, hudState, presentCell, sourceAccent]);
+  }, [armedSource, armedSourceIdentity, bindings, hudContainer, hudState, presentCell, sourceAccent, targetKindFor]);
   const isMuted = bindings.mute.value >= 0.5;
   const renderRail = (presentation) => {
     const { railState, band } = presentation;

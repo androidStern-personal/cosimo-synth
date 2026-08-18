@@ -1949,10 +1949,13 @@ function OscillatorPerformanceControls({
     mute: PatchControlBinding<number>;
     solo: PatchControlBinding<number>;
 }) {
+    // The engine has ONE pitch MOD destination (semitones); SEMI alone
+    // presents and receives it. OCT and FINE are base-only knobs — showing
+    // the same route on all three read as three independent mappings.
     const fields = [
-        { label: "Oscillator octave", shortLabel: "OCT", role: "oscillator-octave", binding: octave, min: -4, max: 4, initial: 0, step: 1, detentStep: 1, suffix: "oct", modulationParameterKind: "pitchSemitones" },
+        { label: "Oscillator octave", shortLabel: "OCT", role: "oscillator-octave", binding: octave, min: -4, max: 4, initial: 0, step: 1, detentStep: 1, suffix: "oct", modulationParameterKind: null },
         { label: "Oscillator semitone", shortLabel: "SEMI", role: "oscillator-semitone", binding: semitone, min: -12, max: 12, initial: 0, step: 1, detentStep: 1, suffix: "st", modulationParameterKind: "pitchSemitones" },
-        { label: "Oscillator fine tune", shortLabel: "FINE", role: "oscillator-fine", binding: fineCents, min: -100, max: 100, initial: 0, step: 0.1, detentStep: null, suffix: "ct", modulationParameterKind: "pitchSemitones" },
+        { label: "Oscillator fine tune", shortLabel: "FINE", role: "oscillator-fine", binding: fineCents, min: -100, max: 100, initial: 0, step: 0.1, detentStep: null, suffix: "ct", modulationParameterKind: null },
         { label: "Oscillator level", shortLabel: "LEVEL", role: "oscillator-level", binding: volumeDb, min: -48, max: 6, initial: -9.542425, step: 0.1, detentStep: null, suffix: "dB", modulationParameterKind: "ampGainDb" },
     ] as const;
 
@@ -1979,10 +1982,9 @@ function OscillatorPerformanceControls({
                     trackDataRole={`${field.role}-track`}
                     handleDataRole={`${field.role}-handle`}
                     detentStep={field.detentStep}
-                    modulationTargetKind={oscillatorModulationTargetKind(
-                        oscillatorID,
-                        field.modulationParameterKind,
-                    )}
+                    modulationTargetKind={field.modulationParameterKind === null
+                        ? undefined
+                        : oscillatorModulationTargetKind(oscillatorID, field.modulationParameterKind)}
                     formatValue={(value) => `${value > 0 ? "+" : ""}${Number.isInteger(value) ? value : value.toFixed(1)} ${field.suffix}`}
                 />
             ))}

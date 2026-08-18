@@ -269,3 +269,27 @@ included):
   Semitone-kind route amounts drag freely but capture to whole semitones
   within ±0.2 st, with one haptic pulse per newly captured integer. Base-axis
   detents are unchanged.
+
+## 2026-08-18 amendment: one MOD destination, one presenting cell
+
+Device review exposed that mapping a source to pitch lit Octave, Semitone,
+AND Fine on the Tune page. The engine has exactly one pitch modulation
+destination (semitones); presenting the same route on three cells read as
+three independent mappings. Superseding the aggregate-Tune trio text above:
+
+- **Every engine MOD destination is presented by exactly one cell.** The
+  manifest enforces this invariant at load. Semitone alone presents and
+  receives pitch modulation (toolbar cell and graph overlay chip are the same
+  control); Octave and Fine are base-only cells — no rail track, no route
+  band, no drop target, inert vertical axis.
+- The Semi cell's MOD HUD keeps the aggregate Tune presentation: base is
+  octave·12 + semitone + fine/100 and travel is expressed in semitones over
+  the ±61 st tune domain.
+- The desktop noncompact knob deck follows the same rule: SEMI alone carries
+  the pitch modulation ring and drop target; OCT and FINE are base knobs.
+
+The same review found the amp modulation range defect (upward travel frozen
+at base + 6 dB). That fix is engine-wide, not ADR-024-scoped: route amounts
+for `ampGainDb` are additive dB offsets spanning ±54 (the full −48..+6
+parameter span), and the engine clamps base + offset to the parameter domain
+at application, matching every sibling destination.

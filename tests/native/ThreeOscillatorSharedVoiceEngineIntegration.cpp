@@ -33,10 +33,11 @@ enum Invariant : std::uint32_t
     independentModulation = 1u << 12,
     perOscillatorArticulation = 1u << 13,
     soundingNoteKeepsInheritedBase = 1u << 14,
-    futureNoteInheritsLiveBase = 1u << 15
+    futureNoteInheritsLiveBase = 1u << 15,
+    ampModulationHeadroom = 1u << 16
 };
 
-constexpr auto expectedInvariantMask = (1u << 16) - 1u;
+constexpr auto expectedInvariantMask = (1u << 17) - 1u;
 
 std::int32_t frameCounter = 0;
 std::int32_t firstError = 0;
@@ -219,6 +220,18 @@ std::int32_t render (FloatSlice packedFloats,
             invariantMask |= independentModulation;
         else
             fail (115);
+
+        // B: -18 dB base + 18 dB route offset reaches unity, so the offset
+        // must not be clamped to the +6 dB parameter ceiling on its own.
+        // C: -9.54 dB base + 18 dB offset exceeds the ceiling, so the sum
+        // must clamp to +6 dB.
+        if (floats[oscillatorGainOffset + b] > 0.95f
+            && floats[oscillatorGainOffset + b] < 1.05f
+            && floats[oscillatorGainOffset + c] > 1.90f
+            && floats[oscillatorGainOffset + c] < 2.10f)
+            invariantMask |= ampModulationHeadroom;
+        else
+            fail (119);
     }
     else if (frame == 9216)
     {

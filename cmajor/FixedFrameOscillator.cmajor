@@ -1925,14 +1925,17 @@ namespace wt
             return false;
         }
 
-        float32 oscillatorOutputGain (int32 oscillatorIndex, bool hasSolo)
+        bool oscillatorIsAudible (int32 oscillatorIndex, bool hasSolo)
         {
             let oscillator = wrap<oscillatorCount> (oscillatorIndex);
-            if (oscillatorMuteIn.at (oscillator) >= 0.5f
-                || (hasSolo && oscillatorSoloIn.at (oscillator) < 0.5f))
-                return 0.0f;
+            return oscillatorMuteIn.at (oscillator) < 0.5f
+                && (! hasSolo || oscillatorSoloIn.at (oscillator) >= 0.5f);
+        }
 
-            return dbToGain (clampAmpGainDb (oscillatorVolumeDbIn.at (oscillator)));
+        float32 oscillatorVolumeDb (int32 oscillatorIndex)
+        {
+            let oscillator = wrap<oscillatorCount> (oscillatorIndex);
+            return oscillatorVolumeDbIn.at (oscillator);
         }
 
         int32 voiceArticulationOscillatorIndex (int32 voiceIndex, int32 oscillatorIndex)
@@ -2121,21 +2124,29 @@ namespace wt
             return false;
         }
 
-        float32 voiceOscillatorOutputGain (int32 voiceIndex,
-                                           int32 oscillatorIndex,
-                                           bool hasSolo)
+        bool voiceOscillatorIsAudible (int32 voiceIndex,
+                                       int32 oscillatorIndex,
+                                       bool hasSolo)
         {
             let voice = wrap<voiceCount> (voiceIndex);
             if (! voiceUsesArticulation.at (voice))
-                return oscillatorOutputGain (oscillatorIndex, hasSolo);
+                return oscillatorIsAudible (oscillatorIndex, hasSolo);
 
             let index = voiceArticulationOscillatorIndex (
                 int32 (voice), int32 (wrap<oscillatorCount> (oscillatorIndex)));
-            if (voiceArticulationMutes.at (index)
-                || (hasSolo && ! voiceArticulationSolos.at (index)))
-                return 0.0f;
+            return ! voiceArticulationMutes.at (index)
+                && (! hasSolo || voiceArticulationSolos.at (index));
+        }
 
-            return dbToGain (clampAmpGainDb (voiceArticulationVolumeDbs.at (index)));
+        float32 voiceOscillatorVolumeDb (int32 voiceIndex, int32 oscillatorIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            if (! voiceUsesArticulation.at (voice))
+                return oscillatorVolumeDb (oscillatorIndex);
+
+            let index = voiceArticulationOscillatorIndex (
+                int32 (voice), int32 (wrap<oscillatorCount> (oscillatorIndex)));
+            return voiceArticulationVolumeDbs.at (index);
         }
 
         void resetFilterState (int32 voiceIndex)
@@ -4654,10 +4665,13 @@ namespace wt
                             + voiceOscillatorTuningSemitones (voiceIndex, oscillator)
                             + voiceOscillatorModulationOffset (
                                 voiceIndex, oscillator, modulationTargetPitchSemitones);
-                        let effectiveGain = voiceOscillatorOutputGain (
+                        let effectiveGain = voiceOscillatorIsAudible (
                             voiceIndex, oscillator, hasSoloedOscillator)
-                            * dbToGain (clampAmpGainDb (voiceOscillatorModulationOffset (
-                                voiceIndex, oscillator, modulationTargetAmpGainDb)));
+                            ? dbToGain (clampAmpGainDb (
+                                voiceOscillatorVolumeDb (voiceIndex, oscillator)
+                                    + voiceOscillatorModulationOffset (
+                                        voiceIndex, oscillator, modulationTargetAmpGainDb)))
+                            : 0.0f;
                         let effectivePan = clampPan (
                             voiceOscillatorPan (voiceIndex, oscillator)
                                 + voiceOscillatorModulationOffset (

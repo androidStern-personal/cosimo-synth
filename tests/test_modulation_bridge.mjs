@@ -571,19 +571,23 @@ test("zero-centered route amount mapping keeps zero at the midpoint and uses sid
     assert.equal(composeModulationAmount("warpAmount", 0.5), 0);
     assert.equal(composeModulationAmount("warpAmount", 0), -1);
     assert.equal(composeModulationAmount("warpAmount", 1), 1);
+    // The amp amount is an additive dB offset over the full 54 dB parameter
+    // span in BOTH directions; the engine clamps base + offset to -48..+6.
+    // (An earlier revision of this test pinned the parameter range -48..+6
+    // as the OFFSET range, which froze upward modulation at base + 6 dB.)
     assert.equal(composeModulationAmount("ampGainDb", 0.5), 0);
-    assert.equal(composeModulationAmount("ampGainDb", 0), -48);
-    assert.equal(composeModulationAmount("ampGainDb", 1), 6);
+    assert.equal(composeModulationAmount("ampGainDb", 0), -54);
+    assert.equal(composeModulationAmount("ampGainDb", 1), 54);
 
     assert.equal(getModulationAmountSliderPosition("warpAmount", 0), 0.5);
     assert.equal(getModulationAmountSliderPosition("warpAmount", -1), 0);
     assert.equal(getModulationAmountSliderPosition("warpAmount", 1), 1);
-    assert.equal(getModulationAmountSliderPosition("ampGainDb", -48), 0);
+    assert.equal(getModulationAmountSliderPosition("ampGainDb", -54), 0);
     assert.equal(getModulationAmountSliderPosition("ampGainDb", 0), 0.5);
-    assert.equal(getModulationAmountSliderPosition("ampGainDb", 6), 1);
+    assert.equal(getModulationAmountSliderPosition("ampGainDb", 54), 1);
 
-    assert.equal(getModulationAmountDepth("ampGainDb", -24), 0.5);
-    assert.equal(getModulationAmountDepth("ampGainDb", 3), 0.5);
+    assert.equal(getModulationAmountDepth("ampGainDb", -27), 0.5);
+    assert.equal(getModulationAmountDepth("ampGainDb", 27), 0.5);
 });
 
 test("matrix amount text entry uses user-facing units instead of raw route amounts", () => {

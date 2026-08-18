@@ -2140,10 +2140,12 @@ test("mobile oscillator readout cells own touch and detent discrete values with 
         await page.locator('[data-role="mobile-voice-page-next"]').click();
         await page.waitForSelector('[data-role="mobile-voice-page"][data-page-name="Tune"]');
 
+        // One MOD destination, one presenting cell: Semi alone carries the
+        // pitch drop target; Oct and Fine are base-only readouts.
         const targetsByRole = new Map([
-            ["mobile-voice-cell-octave", "oscB.pitchSemitones"],
+            ["mobile-voice-cell-octave", null],
             ["mobile-voice-cell-semitone", "oscB.pitchSemitones"],
-            ["mobile-voice-cell-fineCents", "oscB.pitchSemitones"],
+            ["mobile-voice-cell-fineCents", null],
         ]);
         for (const [role, targetKind] of targetsByRole) {
             const cell = page.locator(`[data-role="${role}"]`);
@@ -12808,6 +12810,170 @@ test("mobile voice surface scrolls normally outside owned surfaces and never fro
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
         await page.waitForTimeout(650);
         assert.equal(await panelScrollTop(), 0, "No deferred scroll may follow an owned drag.");
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+test("mobile voice level modulation reaches the +6 dB rail from any base value", async () => {
+    // Live repro: with the amp amount range copied from the parameter range
+    // (-48..+6), an upward MOD drag could never lift the high limit past
+    // base + 6 dB. The amount is an additive dB offset spanning +/-54.
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "mod-route-amp-reach",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "oscA.ampGainDb",
+            amount: 0,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded amp route",
+            (candidate) => readStoredModulationState(candidate).routes.length === 1,
+        );
+        const cell = page.locator('[data-role="mobile-voice-cell-volumeDb"]');
+        await cell.waitFor({ state: "visible" });
+        const box = await cell.boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 5; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: start.x, y: start.y - (step * 30), radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-hud"]')?.getAttribute("data-hud-axis") === "modulation"
+        ));
+        const highText = await page.locator('[data-role="mobile-voice-hud-high"]').textContent();
+        assert.match(
+            (highText ?? "").trim(),
+            /^\+?6(\.0)?\s?dB$/,
+            `a large upward amount must pin the high limit to the +6 dB parameter rail, got "${highText}"`,
+        );
+        const sourceText = await page.locator(".mobile-voice-hud-source").textContent();
+        assert.ok(
+            (sourceText ?? "").includes("dB") && !(sourceText ?? "").includes("%"),
+            `amp amounts read in dB, never as a percentage, got "${sourceText}"`,
+        );
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "amp amount escaped the old +6 offset cap",
+            (candidate) => Number(readStoredModulationState(candidate).routes[0]?.amount ?? 0) > 6,
+        );
+        const amount = Number(readStoredModulationState(snapshot).routes[0].amount);
+        assert.ok(amount > 6 && amount <= 54, `stored offset must exceed +6 dB within +/-54, got ${amount}`);
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+test("mobile voice pitch modulation is presented by the Semi cell alone and Oct/Fine stay base-only", async () => {
+    // Live repro: mapping MSEG 1 -> semitones lit Oct, Semi, AND Fine on the
+    // Tune page. The engine has one pitch destination; Semi alone presents it.
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "mod-route-pitch-single",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "oscA.pitchSemitones",
+            amount: 3,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded pitch route",
+            (candidate) => readStoredModulationState(candidate).routes.length === 1,
+        );
+        await page.locator('[data-role="mobile-voice-page-next"]').click();
+        await page.waitForSelector('[data-role="mobile-voice-page"][data-page-name="Tune"]');
+
+        const railState = (controlID) => page
+            .locator(`[data-role="mobile-voice-cell-${controlID}"] .mobile-voice-rail`)
+            .getAttribute("data-rail-state");
+        assert.equal(await railState("semitone"), "mapped", "Semi presents the pitch route");
+        assert.equal(await railState("octave"), "not-modulatable", "Oct never presents pitch modulation");
+        assert.equal(await railState("fineCents"), "not-modulatable", "Fine never presents pitch modulation");
+
+        const targetKindOf = (controlID) => page
+            .locator(`[data-role="mobile-voice-cell-${controlID}"]`)
+            .getAttribute("data-modulation-target-kind");
+        assert.equal(await targetKindOf("semitone"), "oscA.pitchSemitones");
+        assert.equal(await targetKindOf("octave"), null, "Oct is not a pitch drop target");
+        assert.equal(await targetKindOf("fineCents"), null, "Fine is not a pitch drop target");
+
+        await page.locator('[data-role="mobile-voice-chip-route-dot-semitone"]').waitFor({ state: "visible" });
+
+        const octBox = await page.locator('[data-role="mobile-voice-cell-octave"]').boundingBox();
+        assert.ok(octBox);
+        const start = { x: octBox.x + (octBox.width / 2), y: octBox.y + (octBox.height / 2) };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 5; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: start.x, y: start.y - (step * 14), radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-hud"]')?.classList.contains("is-visible") === true
+        ));
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-hud"]').getAttribute("data-hud-axis"),
+            "base",
+            "a vertical drag on Oct stays in the base presentation",
+        );
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForTimeout(150);
+
+        const routes = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        assert.equal(routes.length, 1);
+        assert.equal(Number(routes[0].amount), 3, "an Oct drag never edits the pitch route amount");
     } finally {
         await cdp.detach();
         await page.close();

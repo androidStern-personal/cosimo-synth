@@ -37,6 +37,7 @@ import {
 } from "./oscillator-binding";
 import type { OscillatorModulationParameterKind } from "./modulation-targets";
 import {
+    formatModulationAmountReadout,
     getModulationAmountBounds,
     type ModulationRoute,
 } from "./modulation";
@@ -969,12 +970,16 @@ export function MobileVoiceFocusedEditor({
         // unarmed, and non-modulatable states show nothing here: their
         // vertical axis is inert and the HUD stays in base presentation.
         let sourceLine = "";
-        if (presentation.route !== null && armedSource !== null) {
-            const amount = presentation.route.amount;
+        if (presentation.route !== null && armedSource !== null && spec.modulationParameterKind !== null) {
             const label = `${armedSourceIdentity?.shortLabel ?? ""} ${armedSource.sourceSlot}`.trim();
-            sourceLine = isTune
-                ? `${label} · ${amount >= 0 ? "+" : ""}${amount.toFixed(1)} st`
-                : `${label} · ${amount >= 0 ? "+" : ""}${Math.round(amount * 100)}%`;
+            // The canonical per-kind readout carries the amount's real units
+            // (st, dB, %, s) — a flat percentage misreads dB offsets.
+            const amountText = formatModulationAmountReadout(
+                targetKindFor(spec.modulationParameterKind),
+                presentation.route.amount,
+                presentation.route.polarity,
+            );
+            sourceLine = `${label} · ${amountText}`;
         }
 
         let lowText: string;
@@ -1085,7 +1090,7 @@ export function MobileVoiceFocusedEditor({
             </div>,
             hudContainer,
         );
-    }, [armedSource, armedSourceIdentity, bindings, hudContainer, hudState, presentCell, sourceAccent]);
+    }, [armedSource, armedSourceIdentity, bindings, hudContainer, hudState, presentCell, sourceAccent, targetKindFor]);
 
     /* -------------------------------------------------------------- */
     /* Render                                                           */

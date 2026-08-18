@@ -127,6 +127,9 @@ export const MOBILE_VOICE_PARAMETER_MANIFEST: ReadonlyArray<MobileVoiceControlSp
         modulationParameterKind: "pan",
         placements: ["page"],
     }),
+    // Octave and Fine are BASE-only cells: the engine has one pitch MOD
+    // destination (semitones) and Semi alone presents it — mirroring the
+    // same route on all three Tune cells read as three separate mappings.
     SPEC({
         controlID: "octave",
         shortLabel: "Oct",
@@ -134,7 +137,7 @@ export const MOBILE_VOICE_PARAMETER_MANIFEST: ReadonlyArray<MobileVoiceControlSp
         format: "octave",
         interaction: "readout",
         detented: true,
-        modulationParameterKind: "pitchSemitones",
+        modulationParameterKind: null,
         placements: ["page"],
     }),
     SPEC({
@@ -154,7 +157,7 @@ export const MOBILE_VOICE_PARAMETER_MANIFEST: ReadonlyArray<MobileVoiceControlSp
         format: "cents",
         interaction: "readout",
         detented: false,
-        modulationParameterKind: "pitchSemitones",
+        modulationParameterKind: null,
         placements: ["page"],
     }),
     SPEC({
@@ -354,12 +357,24 @@ function assertManifestCoverage(): void {
         }
     }
 
-    const aggregateTuneIDs = MOBILE_VOICE_PARAMETER_MANIFEST
-        .filter((spec) => spec.modulationParameterKind === "pitchSemitones")
-        .map((spec) => spec.controlID)
-        .sort();
-    if (aggregateTuneIDs.join(",") !== "fineCents,octave,semitone") {
-        throw new Error("Exactly Octave, Semitone, and Fine must share the aggregate Tune target");
+    const presentersByKind = new Map<string, string[]>();
+    for (const spec of MOBILE_VOICE_PARAMETER_MANIFEST) {
+        if (spec.modulationParameterKind === null) {
+            continue;
+        }
+        const presenters = presentersByKind.get(spec.modulationParameterKind) ?? [];
+        presenters.push(spec.controlID);
+        presentersByKind.set(spec.modulationParameterKind, presenters);
+    }
+    for (const [parameterKind, presenters] of presentersByKind) {
+        if (presenters.length !== 1) {
+            throw new Error(
+                `MOD destination ${parameterKind} must have exactly one presenting cell, got ${presenters.join(", ")}`,
+            );
+        }
+    }
+    if (presentersByKind.get("pitchSemitones")?.[0] !== "semitone") {
+        throw new Error("Semitone alone presents the pitch MOD destination");
     }
 
     const contractTargetKinds = new Set(

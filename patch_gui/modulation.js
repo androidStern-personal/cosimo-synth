@@ -27,7 +27,8 @@ const ROUTE_AMOUNT_LIMITS = {
     filterCutoffOctaves: { min: -6.0, max: 6.0 },
     filterQ: { min: -(FILTER_Q_MAX - FILTER_Q_MIN), max: FILTER_Q_MAX - FILTER_Q_MIN },
     pitchSemitones: { min: -48.0, max: 48.0 },
-    ampGainDb: { min: -48.0, max: 6.0 },
+    // Additive dB offset over the full parameter span; the engine clamps base + offset.
+    ampGainDb: { min: -54.0, max: 54.0 },
     pan: { min: -1.0, max: 1.0 },
     unisonDetune: { min: -1.0, max: 1.0 },
     unisonBlend: { min: -1.0, max: 1.0 },

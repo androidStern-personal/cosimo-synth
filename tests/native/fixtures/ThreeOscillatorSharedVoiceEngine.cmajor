@@ -216,27 +216,49 @@ processor Core03TableAndControlSchedule
         wt::ModulationProgramUpload upload;
         upload.dspSessionId = int32 (processor.session);
         upload.deliverySerial = 1;
-        upload.voiceRouteCount = 2;
+        upload.voiceRouteCount = 4;
 
         let velocitySource = 6;
         let bPanTarget = (wt::oscillatorB * wt::modulationOscillatorTargetCount)
             + wt::modulationTargetPan;
         let cPitchTarget = (wt::oscillatorC * wt::modulationOscillatorTargetCount)
             + wt::modulationTargetPitchSemitones;
+        let bAmpTarget = (wt::oscillatorB * wt::modulationOscillatorTargetCount)
+            + wt::modulationTargetAmpGainDb;
+        let cAmpTarget = (wt::oscillatorC * wt::modulationOscillatorTargetCount)
+            + wt::modulationTargetAmpGainDb;
         let bPanCell = (velocitySource * wt::modulationVoiceTargetCount) + bPanTarget;
         let cPitchCell = (velocitySource * wt::modulationVoiceTargetCount) + cPitchTarget;
+        let bAmpCell = (velocitySource * wt::modulationVoiceTargetCount) + bAmpTarget;
+        let cAmpCell = (velocitySource * wt::modulationVoiceTargetCount) + cAmpTarget;
 
-        upload.voiceRouteCells[0] = bPanCell;
+        // Both amp routes carry a +18 dB offset at velocity 0.90. B rises from
+        // -18 dB to unity, proving the offset is not clamped to the +6 dB
+        // parameter ceiling on its own. C rises from -9.54 dB past the ceiling,
+        // proving the base + offset sum clamps to +6 dB.
+        upload.voiceRouteCells[0] = bAmpCell;
         upload.voiceRouteSources[0] = velocitySource;
-        upload.voiceRouteTargets[0] = bPanTarget;
+        upload.voiceRouteTargets[0] = bAmpTarget;
         upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[bAmpCell] = 20.0f;
+
+        upload.voiceRouteCells[1] = bPanCell;
+        upload.voiceRouteSources[1] = velocitySource;
+        upload.voiceRouteTargets[1] = bPanTarget;
+        upload.voiceRoutePolarities[1] = wt::modulationPolarityUnipolar;
         upload.voiceRouteAmounts[bPanCell] = 1.0f;
 
-        upload.voiceRouteCells[1] = cPitchCell;
-        upload.voiceRouteSources[1] = velocitySource;
-        upload.voiceRouteTargets[1] = cPitchTarget;
-        upload.voiceRoutePolarities[1] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteCells[2] = cPitchCell;
+        upload.voiceRouteSources[2] = velocitySource;
+        upload.voiceRouteTargets[2] = cPitchTarget;
+        upload.voiceRoutePolarities[2] = wt::modulationPolarityUnipolar;
         upload.voiceRouteAmounts[cPitchCell] = 12.0f;
+
+        upload.voiceRouteCells[3] = cAmpCell;
+        upload.voiceRouteSources[3] = velocitySource;
+        upload.voiceRouteTargets[3] = cAmpTarget;
+        upload.voiceRoutePolarities[3] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[cAmpCell] = 20.0f;
         return upload;
     }
 
@@ -402,10 +424,14 @@ processor Core03TableAndControlSchedule
             }
             else if (frameCounter == 8192)
             {
+                selectSolo (-1);
+                bVolumeDbOut <- -18.0f;
                 modulationProgramOut <- independentModulationProgram();
             }
             else if (frameCounter == 8960)
             {
+                selectSolo (wt::oscillatorB);
+                bVolumeDbOut <- -9.542425f;
                 modulationProgramOut <- emptyModulationProgram();
             }
             else if (frameCounter == 8961)
