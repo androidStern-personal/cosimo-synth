@@ -12,7 +12,7 @@ HOW WE WILL USE THIS FILE
 
 CURRENT FOCUS
 
-[>] T02 — Productionize the chosen Voice and wavetable layout (verification in flight).
+[ ] T02B — Single-source the hand-written patch_gui modules (next up per D05; not yet started; T02 closed except one parked cosmetic).
 
 PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
 
@@ -39,8 +39,9 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Handoff: docs/MOBILE_VOICE_FOCUSED_OSCILLATOR_SPEC.md
     - The accepted prototype remains throwaway and is not production-wired.
 
-[>] T02 — Productionize the chosen Voice and wavetable layout
+[x] T02 — Productionize the chosen Voice and wavetable layout
     Depends on: T01
+    Closed 2026-08-18: all Done-when gates executed (see Final gates below). One parked cosmetic follow-up remains: the 320px label/value gap defect recorded under PARKED below — it is deliberately NOT a blocker for this task.
     2026-08-18 implementation status:
     - Shared modules landed in ui/shared: mobile-voice-parameter-manifest (22-control coverage test), rolling-axis-classifier (accepted calibration, one-write-per-sample, in-gesture switching), mobile-voice-rail-projection (rail truth table + aggregate Tune adapter), wavetable-graph-axis-projection (provisional X=Warp behind the replaceable seam), parameter-knob-artwork (ADR-025 dual-ring), and MobileVoiceFocusedEditor + mobile-voice-editor.css.
     - Compact DesktopPatchView now renders the focused editor inside the existing DesktopOscillatorConnectionBoundary; noncompact desktop is untouched. The compact Controls card keeps Articulations plus Play/Glide and drops the superseded four-knob and unison decks.
@@ -50,7 +51,8 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     Verification (2026-08-18, second pass): full desktop browser suite 160/160 (two touch-mechanics test fixes: harness readiness probe widened to the new graph, and the mod-source chip drop approaches closed-loop to defeat Chromium touch prediction); web bundle contract 14/14; production web build green and served for physical phone review at https://primary-mac.tail5ef964.ts.net/ (HTTPS via tailscale serve — AudioWorklet needs a secure context).
     Live-review feedback batch (2026-08-18, commit d3c23284): HUD fill/contrast/no-layout-shift/no-message-strings fixes, unmapped vertical stays on base HUD, chip route-presence dots, sticky semitone route detents, toolbar scroll ownership fix + permanent scroll regression case (suite now 161 cases). Details in PROGRESS.txt and the ADR-024 second amendment.
     Mod-range repair batch (2026-08-18, commit a85512de, pushed to origin/master): amp route amounts became symmetric full-span ±54 dB offsets with engine-side base+offset domain clamping (upward Level modulation was frozen at base + 6 dB); pitch modulation presented by Semi alone on mobile AND the desktop deck (Oct/Fine base-only); HUD amounts in real units; new amount-limits contract suite + dB rail cases + two browser repros + a native-gate amp-headroom invariant. Full gates green: engine native+wasm, rack 61/61, desktop browser 163/163, iPhone 20/20, web bundle 14/14, tsc. Details in PROGRESS.txt and the ADR-024 third amendment. The tree is clean; T02B's clean-tree precondition is now satisfied once T02's remaining verification lands.
-    Remaining before done: real-WebKit/physical-device touch acceptance, phone-width visual captures, and the compiled desktop VST3 build/install pass.
+    Final gates (2026-08-18): physical-phone acceptance confirmed by the user on the tailnet build after the mod-range batch ("i already tested and it works on my phone"). Visual captures taken at 320x568, 393x852, and 430x932 (Shape + Tune pages, 2x, no horizontal overflow at any width). Compiled AU + VST3 rebuilt from this checkout with the engine amp-clamp fix and installed to ~/Library/Audio/Plug-Ins (strict codesign verify passes on both).
+    PARKED (cosmetic, own follow-up): at 320px width the toolbar cell label and value can render with no gap between them (Tune page shows "OCT0oct"/"SEMI0st"; Shape shows "LVL-9.5dB"). Grid tracks and the 4px column-gap resolve correctly in a layout probe, yet the label box overflows its track, so the first-guess CSS fix (shrinkable label track + ellipsis) provably changed nothing and was reverted. Diagnose for real before fixing.
     Build:
     - Rewrite the chosen hierarchy into the real mobile Voice surface; do not copy the throwaway prototype wholesale.
     - Reuse the real WavetableStageSection drawing/data path and preserve its artwork, table loading, and selected A/B/C oscillator bindings.
