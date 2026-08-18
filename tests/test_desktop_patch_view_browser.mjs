@@ -12739,3 +12739,77 @@ test("mobile voice editor stays edge-to-edge without horizontal overflow from 32
         await page.close();
     }
 });
+
+test("mobile voice surface scrolls normally outside owned surfaces and never from an owned drag", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    const swipeUp = async (x, y) => {
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ x, y, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 6; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x, y: y - (step * 20), radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    };
+    const panelScrollTop = () => page.evaluate(() => (
+        document.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop ?? -1
+    ));
+    const resetPanel = async () => {
+        await page.waitForTimeout(650);
+        await page.evaluate(() => {
+            const panel = document.querySelector('[data-role="mobile-workspace-panel-voice"]');
+            if (panel) panel.scrollTop = 0;
+        });
+    };
+
+    try {
+        await page.waitForSelector('[data-role="mobile-voice-editor"]');
+        const overflow = await page.evaluate(() => {
+            const panel = document.querySelector('[data-role="mobile-workspace-panel-voice"]');
+            return panel ? panel.scrollHeight - panel.clientHeight : 0;
+        });
+        assert.ok(overflow > 40, "The Voice panel must have scrollable content below the editor.");
+
+        const tabs = await page.locator('[data-role="mobile-voice-tabs"]').boundingBox();
+        assert.ok(tabs);
+        await swipeUp(tabs.x + (tabs.width * 0.5), tabs.y + (tabs.height * 0.5));
+        await page.waitForFunction(() => (
+            (document.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop ?? 0) > 20
+        ), null, { timeout: 3_000 });
+
+        await resetPanel();
+        const cell = await page.locator('[data-role="mobile-voice-cell-framePosition"]').boundingBox();
+        assert.ok(cell);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ x: cell.x + (cell.width / 2), y: cell.y + (cell.height / 2), radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 6; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: cell.x + (cell.width / 2),
+                    y: cell.y + (cell.height / 2) - (step * 20),
+                    radiusX: 5,
+                    radiusY: 5,
+                    force: 1,
+                }],
+            });
+            assert.equal(await panelScrollTop(), 0, "An owned readout drag must never become page scroll.");
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForTimeout(650);
+        assert.equal(await panelScrollTop(), 0, "No deferred scroll may follow an owned drag.");
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});

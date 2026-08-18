@@ -62,6 +62,32 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - The selected oscillator A/B/C remains the sole target of each edit.
     - Responsive tests and visual captures pass at 320, 393, and 430 px widths.
 
+[ ] T02B — Single-source the hand-written patch_gui modules and delete the wavetable type shims
+    Depends on: T02. Start only on a clean tree after T02's remaining verification lands — T02's in-flight work edits these exact files (patch_gui/wavetable-display.js, patch_gui/wavetable-display.d.ts, ui/shared/legacy-wavetable-display.d.ts).
+    Engineering-debt task, sequenced here so the D04 axis review and later renderer-adjacent work inherit typed source instead of extending the shims.
+    Context (verified 2026-08-18):
+    - patch_gui/ is a committed output directory: ui/build.mjs emitGeneratedPatchGuiModule() transpiles ~20 modules from ui/shared into it with "Generated from ... Do not edit" headers, and Vite emits desktop/app.js(.map), index.ios.js(.map), wavetable-worker.js, wavetable-test-worker.js there. But five modules inside it are still hand-written source: theme.js, wavetable-mip.mjs, wavetable-bank.js, responsive-layout.js (plus a diverged responsive-layout.mjs twin — same length, different contents), and wavetable-display.js (~1,256 lines; per the "Path B" note in ui/shared/wavetable-energy-field.ts it owns ALL wavetable projection/warp/scan math).
+    - The TS tree imports the renderer backwards: ui/shared/wavetable-display.ts is a one-line re-export of ../../patch_gui/wavetable-display.js, typed by the sibling patch_gui/wavetable-display.d.ts.
+    - Three hand-maintained declarations exist for CanvasWavetableDisplay. Two are provably inert — ui/legacy-patch-gui.d.ts and ui/shared/legacy-wavetable-display.d.ts use relative-path ambient `declare module`, which is invalid TypeScript (TS2436, masked by skipLibCheck: true); a probe import confirmed the compiler never reads them. The live sibling .d.ts is wrong: it declares setFrames(frames: Float32Array[] | null), but the implementation's assertFrames has thrown on null/empty since its first commit (27697090), and it omits real public methods (invalidateStaticScene, queueRender, getStaticScene, render).
+    Build (mechanical port; zero logic changes — the renderer's draw output must remain byte-identical):
+    - Port each hand-written module to ui/shared TypeScript under strict (no any, no casts), in dependency order: theme.js, then wavetable-mip.mjs, then wavetable-bank.js, then responsive-layout, then wavetable-display.js. For each: create ui/shared/<name>.ts, register it in the emit list in ui/build.mjs, run node ui/build.mjs, and commit the emitted patch_gui/<name>.js in place of the hand-written file.
+    - ui/shared/wavetable-display.ts stops being a re-export and becomes the real implementation; its existing importers (ui/shared/synth-components.tsx imports "./wavetable-display") must keep working unchanged.
+    - Type setFrames without null (the implementation throws), and replace the shim's `unknown` theme/options/static-scene surfaces with real types derived from the implementation.
+    - Before porting responsive-layout: diff responsive-layout.js against responsive-layout.mjs, enumerate every consumer of each (grep the repo excluding build/, node_modules/, .claude/worktrees/), unify on one canonical behavior in ui/shared/responsive-layout.ts, and record which side won and why in the commit message.
+    - Keep patch_gui committed and clone-loadable: WavetableSynth.cmajorpatch points directly at patch_gui/wavetable-worker.js and patch_gui/desktop/index.js. Do not gitignore anything in patch_gui.
+    - Keep the no-build file:// harnesses working: tools/patch_gui_harnesses/renderer-harness.mjs and mockup-massive-x-ios.html import patch_gui/wavetable-bank.mjs and patch_gui/wavetable-display.mjs (one-line export-* shims). Enumerate consumers of every patch_gui/*.mjs before deciding whether each stays a shim re-exporting the emitted .js or becomes an emitted file itself; no .mjs import path used by a harness may break.
+    - Delete ui/legacy-patch-gui.d.ts, ui/shared/legacy-wavetable-display.d.ts, and patch_gui/wavetable-display.d.ts. Then remove the "patch_gui/**/*.d.ts" entry from tsconfig.json include if nothing matches it anymore.
+    Done when:
+    - npx tsc --noEmit is clean with all three declaration files deleted and no `declare module "../../patch_gui/` remains anywhere in the repo.
+    - Every file under patch_gui/ either carries a "Generated from" header, is a Vite bundle output, or is a one-line .mjs re-export shim; no hand-written implementation remains in the directory.
+    - node --test tests/test_wavetable_display.mjs passes against the emitted renderer, including the byte-preserving default draw-stream assertion from T01.
+    - npm run test:desktop:ui and npm run test:shared:hooks pass; tools/patch_gui_harnesses/renderer-harness.mjs still renders over file://.
+    - Common definition of done applies (fresh HMR standalone launch; rebuilt/installed VST3 unless explicitly waived).
+    Do not:
+    - Refactor, simplify, or reformat renderer logic while porting; any draw-behavior change is out of scope and grounds for rejecting the port.
+    - Preserve the `| null` signature or widen any type to make the port compile faster.
+    - Start this task while T02's uncommitted changes to these files are still in the working tree.
+
 [?] T03A — Specify the persistent Voice/FX/Mod tab shell
     Depends on: T02
     Context:
@@ -278,3 +304,6 @@ Reason: the newest evidence has both an unexecuted physical campaign and a brows
 
 D04 — Wavetable graph X = Warp and Y = Index is provisional.
 Reason: rolling one-axis-at-a-time Warp/Index shaping is the current starting behavior, while physical use may show that horizontal table switching is more valuable. The current cutover keeps explicit table selection and isolates X behind one graph-axis seam so that later review does not disturb Y/Index, state ownership, or the retained renderer.
+
+D05 — The patch_gui single-sourcing port (T02B) runs immediately after T02, before the tab shell.
+Reason: T02's in-flight work edits the hand-written renderer and its declaration shims directly, and a 2026-08-18 audit proved two of the three CanvasWavetableDisplay declarations are dead (invalid relative ambient modules masked by skipLibCheck) while the live one advertises a setFrames(null) call the implementation has always thrown on. Every later renderer-adjacent task (D04 axis review, T04 filter graphics) would otherwise keep paying the hand-sync tax; porting on a clean tree right after T02 closes the gap at its cheapest point. The committed patch_gui directory and the Path B single-owner rule for render math are deliberate and stay; only the source of truth moves to typed ui/shared modules emitted by the existing pipeline.

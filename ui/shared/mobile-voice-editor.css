@@ -231,8 +231,6 @@
     flex: 0 0 40px;
     grid-template-columns: 38px minmax(0, 1fr) 30px;
     border-bottom: 1px solid rgb(255 255 255 / 0.055);
-    overscroll-behavior: none;
-    touch-action: none;
 }
 
 .mobile-voice-paddle {
@@ -466,9 +464,17 @@
 }
 
 .mobile-voice-hud-header {
-    justify-content: space-between;
+    display: grid;
+    grid-template-columns: 58px minmax(0, 1fr) 96px;
     gap: 7px;
     border-bottom: 1px solid rgb(255 255 255 / 0.06);
+}
+
+.mobile-voice-hud-source {
+    justify-self: end;
+    overflow: hidden;
+    max-width: 100%;
+    text-overflow: ellipsis;
 }
 
 .mobile-voice-hud-footer {
@@ -540,10 +546,11 @@
 }
 
 .mobile-voice-hud-center strong {
-    color: var(--mobile-voice-owner-accent);
+    color: #f4fbfc;
     font-family: var(--cosimo-font-readout, monospace);
     font-size: 16px;
     font-weight: 400;
+    text-shadow: 0 0 6px rgb(3 5 12 / 0.9), 0 0 2px rgb(3 5 12 / 0.9);
 }
 
 .mobile-voice-hud-limit {
@@ -569,4 +576,12 @@
     font-family: var(--cosimo-font-readout, monospace);
     font-size: 11px;
     font-weight: 400;
+}
+
+/* Mapping presence on a graph overlay chip, in the armed source color. */
+.mobile-voice-chip-dot {
+    width: 5px;
+    height: 5px;
+    flex: 0 0 auto;
+    border-radius: 999px;
 }

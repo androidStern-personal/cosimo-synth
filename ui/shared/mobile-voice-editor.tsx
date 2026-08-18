@@ -80,6 +80,8 @@ import { WavetableCanvas, type FactoryTableOption } from "./synth-components";
 const BASE_PIXELS_PER_FULL_RANGE = 220;
 const MODULATION_PIXELS_PER_FULL_SPAN = 360;
 const HUD_LINGER_MS = 420;
+/** Semitone capture window for sticky modulation detents on Tune. */
+const MOD_DETENT_CAPTURE_ST = 0.2;
 const LONG_PRESS_MS = 500;
 
 export const MOBILE_VOICE_OWNER_ACCENT = "#69d5c5";
@@ -258,6 +260,7 @@ type ActiveGesture = {
     amount: number;
     amountBounds: { readonly min: number; readonly max: number } | null;
     lastDetentValue: number | null;
+    lastModulationDetent: number | null;
     pendingCommit: boolean;
     rafHandle: number | null;
     longPressTimer: number | null;
@@ -455,7 +458,24 @@ export function MobileVoiceFocusedEditor({
 
         const amountBinding = activeAmountBindingRef.current;
         if (amountBinding.value !== null) {
-            amountBinding.setValue(gesture.amount);
+            let amountToWrite = gesture.amount;
+            const spec = getMobileVoiceControlSpec(controlID);
+            if (spec.modulationParameterKind === "pitchSemitones") {
+                // Sticky semitone detents: the amount moves freely, but locks
+                // to a whole semitone inside a small capture window with one
+                // haptic bump per newly locked integer.
+                const nearest = Math.round(gesture.amount);
+                if (Math.abs(gesture.amount - nearest) <= MOD_DETENT_CAPTURE_ST) {
+                    amountToWrite = nearest;
+                    if (gesture.lastModulationDetent !== nearest) {
+                        onRequestHaptic?.();
+                        gesture.lastModulationDetent = nearest;
+                    }
+                } else {
+                    gesture.lastModulationDetent = null;
+                }
+            }
+            amountBinding.setValue(amountToWrite);
         }
     }, [onRequestHaptic]);
 
@@ -623,9 +643,17 @@ export function MobileVoiceFocusedEditor({
                 } else {
                     gesture.owner = { kind: "cell-modulation", controlID };
                     endHostGesture(gesture);
-                    setDraggingCell({ controlID, mode: "modulation" });
+                    // Without an editable selected route the vertical axis is
+                    // inert, so the HUD keeps the base presentation instead
+                    // of advertising a modulation edit that cannot happen.
+                    const editable = gesture.amountBounds !== null;
+                    setDraggingCell({ controlID, mode: editable ? "modulation" : "base" });
                     clearHudLinger();
-                    setHudState({ phase: "active", axis: "modulation", controlID });
+                    setHudState({
+                        phase: "active",
+                        axis: editable ? "modulation" : "base",
+                        controlID,
+                    });
                 }
                 continue;
             }
@@ -819,6 +847,10 @@ export function MobileVoiceFocusedEditor({
             amount: route?.amount ?? 0,
             amountBounds,
             lastDetentValue: null,
+            lastModulationDetent: route !== null
+                && Math.abs(route.amount - Math.round(route.amount)) <= MOD_DETENT_CAPTURE_ST
+                ? Math.round(route.amount)
+                : null,
             pendingCommit: false,
             rafHandle: null,
             longPressTimer,
@@ -924,22 +956,20 @@ export function MobileVoiceFocusedEditor({
         const isModulation = hudState.axis === "modulation";
         const isTune = spec.modulationParameterKind === "pitchSemitones";
         const format = spec.format ?? "percent";
-        const baseOrigin = display.min < 0 && display.max > 0
+        // Zero-anchored fill reads correctly only when zero is the center of
+        // a symmetric range (Pan, Octave, Semitone, Fine). Asymmetric signed
+        // ranges like Level fill from their minimum like any amount control.
+        const symmetricBipolar = display.min < 0 && display.max > 0
+            && Math.abs(display.min) === display.max;
+        const baseOrigin = symmetricBipolar
             ? (0 - display.min) / (display.max - display.min)
             : 0;
 
-        let sourceLine: string;
-        let sourceIsMessage = false;
-        if (spec.modulationParameterKind === null) {
-            sourceLine = "NOT MODULATABLE";
-            sourceIsMessage = true;
-        } else if (armedSource === null) {
-            sourceLine = "SELECT MOD SOURCE";
-            sourceIsMessage = true;
-        } else if (presentation.route === null) {
-            sourceLine = "NOT MAPPED · CREATE MAPPING +";
-            sourceIsMessage = true;
-        } else {
+        // The source slot carries only a real source and amount. Unmapped,
+        // unarmed, and non-modulatable states show nothing here: their
+        // vertical axis is inert and the HUD stays in base presentation.
+        let sourceLine = "";
+        if (presentation.route !== null && armedSource !== null) {
             const amount = presentation.route.amount;
             const label = `${armedSourceIdentity?.shortLabel ?? ""} ${armedSource.sourceSlot}`.trim();
             sourceLine = isTune
@@ -970,6 +1000,8 @@ export function MobileVoiceFocusedEditor({
             highText = formatMobileVoiceValue(format, highValue);
         }
 
+        const limitsVisible = presentation.route !== null
+            && Math.abs(presentation.route.amount) > 1e-9;
         const modRing: ParameterKnobModRing = spec.modulationParameterKind === null || armedSource === null
             ? { kind: "hidden" }
             : presentation.route === null
@@ -1000,10 +1032,8 @@ export function MobileVoiceFocusedEditor({
                         {isModulation && isTune ? "Tune" : spec.fullLabel}
                     </strong>
                     <span
-                        className={`mobile-voice-hud-micro${sourceIsMessage ? " is-message" : ""}`}
-                        style={sourceIsMessage
-                            ? undefined
-                            : { color: isModulation ? sourceAccent : "rgba(232, 236, 239, 0.6)" }}
+                        className="mobile-voice-hud-micro mobile-voice-hud-source"
+                        style={{ color: isModulation ? sourceAccent : "rgba(232, 236, 239, 0.6)" }}
                     >
                         {sourceLine}
                     </span>
@@ -1023,11 +1053,17 @@ export function MobileVoiceFocusedEditor({
                             {formatMobileVoiceValue(format, clamp(bindings[controlID].value, display.min, display.max))}
                         </strong>
                     </div>
-                    <div className="mobile-voice-hud-limit is-low">
+                    <div
+                        className="mobile-voice-hud-limit is-low"
+                        style={{ visibility: limitsVisible ? "visible" : "hidden" }}
+                    >
                         <span>Low</span>
                         <strong data-role="mobile-voice-hud-low">{lowText}</strong>
                     </div>
-                    <div className="mobile-voice-hud-limit is-high">
+                    <div
+                        className="mobile-voice-hud-limit is-high"
+                        style={{ visibility: limitsVisible ? "visible" : "hidden" }}
+                    >
                         <span>High</span>
                         <strong data-role="mobile-voice-hud-high">{highText}</strong>
                     </div>
@@ -1132,6 +1168,18 @@ export function MobileVoiceFocusedEditor({
                     <strong className="mobile-voice-chip-value">
                         {formatMobileVoiceCellValue(format, value)}
                     </strong>
+                    {presentation.railState === "mapped"
+                        || presentation.railState === "mapped-zero"
+                        || presentation.railState === "bypassed" ? (
+                        <span
+                            data-role={`mobile-voice-chip-route-dot-${controlID}`}
+                            className="mobile-voice-chip-dot"
+                            style={presentation.railState === "bypassed"
+                                ? { border: `1px solid ${sourceAccent}`, background: "transparent", boxShadow: "none", opacity: 0.6 }
+                                : { background: sourceAccent, boxShadow: `0 0 4px ${sourceAccent}` }}
+                            aria-hidden="true"
+                        />
+                    ) : null}
                 </div>
             );
         }
