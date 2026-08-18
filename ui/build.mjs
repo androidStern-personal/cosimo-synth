@@ -113,6 +113,7 @@ if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild(
     await emitGeneratedPatchGuiModule("ui/shared/articulations.ts", "patch_gui/articulations.js");
     await emitGeneratedPatchGuiModule("ui/shared/articulation-image.ts", "patch_gui/articulation-image.js");
     await emitGeneratedPatchGuiModule("ui/shared/theme.ts", "patch_gui/theme.js");
+    await emitGeneratedPatchGuiModule("ui/shared/responsive-layout.ts", "patch_gui/responsive-layout.js");
     await emitGeneratedPatchGuiModule(
         "ui/worker/modulation-articulation-worker-service.ts",
         "patch_gui/modulation-articulation-worker-service.js",
