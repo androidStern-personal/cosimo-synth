@@ -12335,6 +12335,24 @@ function uk(e, n, r = Hy, o = {}) {
   e.save(), e.strokeStyle = cr(r.highlightColor, 0.98), e.lineWidth = n.currentSlice.lineWidth, e.shadowBlur = n.currentSlice.glowBlur + 4, e.shadowColor = cr(r.highlightColor, 0.52), Pp(e, n.currentSlice.segments), e.restore(), c && (e.save(), e.fillStyle = cr(r.backgroundRGB, 0.74), e.fillRect(n.currentSlice.label.x - 10, n.currentSlice.label.y - 14, 210, 24), e.fillStyle = r.textColor, e.font = "400 12px Departure Mono, IBM Plex Mono, monospace", e.textAlign = "left", e.fillText(n.currentSlice.label.text, n.currentSlice.label.x, n.currentSlice.label.y + 2), e.restore());
 }
 class dk {
+  canvas;
+  context;
+  theme;
+  paintBackground;
+  showSliceCaption;
+  requestAnimationFrame;
+  cancelAnimationFrame;
+  frames;
+  position;
+  warpMode;
+  warpAmount;
+  devicePixelRatio;
+  cssWidth;
+  cssHeight;
+  drawableInsets;
+  staticScene;
+  staticKey;
+  pendingRenderHandle;
   constructor(n, {
     theme: r = Hy,
     requestAnimationFrame: o = IS,

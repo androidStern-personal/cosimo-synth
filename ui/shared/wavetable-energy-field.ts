@@ -4,7 +4,7 @@
  *
  * This is "Path B" of the wavetable porting dossier: the pure builders
  * (buildWavetableStaticScene / buildWavetableRenderModel in
- * patch_gui/wavetable-display.js) own ALL projection, warp, and scan math;
+ * ui/shared/wavetable-display.ts) own ALL projection, warp, and scan math;
  * this module owns only pixels. White additive strokes/fills on black; the
  * model's own alpha/depth/glow weights become energy so the depth stack
  * fades naturally and the scan slice burns the reserved clean-paper channel

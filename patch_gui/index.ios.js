@@ -14828,6 +14828,24 @@ function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME, opt
   }
 }
 class CanvasWavetableDisplay {
+  canvas;
+  context;
+  theme;
+  paintBackground;
+  showSliceCaption;
+  requestAnimationFrame;
+  cancelAnimationFrame;
+  frames;
+  position;
+  warpMode;
+  warpAmount;
+  devicePixelRatio;
+  cssWidth;
+  cssHeight;
+  drawableInsets;
+  staticScene;
+  staticKey;
+  pendingRenderHandle;
   constructor(canvas, {
     theme = DEFAULT_WAVETABLE_THEME,
     requestAnimationFrame = requestNextAnimationFrame,
