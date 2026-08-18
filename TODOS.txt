@@ -12,7 +12,7 @@ HOW WE WILL USE THIS FILE
 
 CURRENT FOCUS
 
-[ ] T02B — Single-source the hand-written patch_gui modules (next up per D05; not yet started; T02 closed except one parked cosmetic).
+[?] T03A — Specify the persistent Voice/FX/Mod tab shell (next up per D01; T02 and T02B are closed, so the Voice cutover and the single-sourcing debt no longer block shell work).
 
 PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
 
@@ -66,7 +66,14 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - The selected oscillator A/B/C remains the sole target of each edit.
     - Responsive tests and visual captures pass at 320, 393, and 430 px widths.
 
-[ ] T02B — Single-source the hand-written patch_gui modules and delete the wavetable type shims
+[x] T02B — Single-source the hand-written patch_gui modules and delete the wavetable type shims
+    Closed 2026-08-18 (commits 53d147c1, 746efc48, ad6d6d22, 6dbab4ed):
+    - Ported in dependency order: ui/shared/theme.ts (new), ui/shared/responsive-layout.ts (new), ui/shared/wavetable-bank.ts (already the real TS twin; gained the parseWaveFile re-export the shim consumers use), ui/shared/wavetable-display.ts (full 1,256-line renderer under strict TS — no any/casts/non-null). All four are registered in ui/build.mjs and their patch_gui twins are now generated emits; theme/wavetable-bank/wavetable-display/responsive-layout .mjs files are one-line re-export shims, so every harness/test import path is unchanged.
+    - Mechanical-port proof: whitespace-stripped character diff of the emitted renderer vs the retired hand-written file shows exactly one insertion (the conventional bare class-field declarations); renderer suite 33/33 including the T01 byte-preserving draw-stream assertion; the file:// renderer-harness screenshot is byte-identical before/after.
+    - Corrections to this task's premises found during execution: the responsive-layout twins were byte-identical (the "diverged twin" note was stale — no behavior decision existed), and patch_gui/wavetable-mip.mjs had zero consumers anywhere (its math lives in ui/shared/wavetable-mip.ts, bundled into the workers), so it was deleted rather than re-emitted. wavetable-bank's resolvePatchResourceUrl and loadSourceWavetableFramesFromUrl also had zero consumers and died with the hand-written twin.
+    - Deletions landed: ui/legacy-patch-gui.d.ts, ui/shared/legacy-wavetable-display.d.ts, patch_gui/wavetable-display.d.ts, and tsconfig's now-empty patch_gui/**/*.d.ts include; no `declare module "../../patch_gui/` remains in the repo.
+    - Gates: tsc clean; layout 25/25 (the shared-renderer architecture test now asserts the generated-header direction); desktop browser 163/163; shared hooks 29/29; iPhone shell 20/20; web bundle 14/14; renderer-harness renders over file:// (see PROGRESS.txt for the browser-policy caveat and gate recipe).
+    - DoD: fresh HMR standalone relaunched from this repo at 127.0.0.1:5174; final compiled AU + VST3 installed and passing strict codesign verification.
     Depends on: T02. Start only on a clean tree after T02's remaining verification lands — T02's in-flight work edits these exact files (patch_gui/wavetable-display.js, patch_gui/wavetable-display.d.ts, ui/shared/legacy-wavetable-display.d.ts).
     Engineering-debt task, sequenced here so the D04 axis review and later renderer-adjacent work inherit typed source instead of extending the shims.
     Context (verified 2026-08-18):
