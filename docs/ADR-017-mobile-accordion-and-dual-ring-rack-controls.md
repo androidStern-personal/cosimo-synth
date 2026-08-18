@@ -1,6 +1,6 @@
 # ADR-017: Mobile accordion and dual-ring rack controls
 
-Status: accepted — 2026-08-06; mobile Voice layout and controls revised 2026-08-15
+Status: accepted — 2026-08-06; compact Voice oscillator composition superseded by ADR-024
 
 ## Context
 
@@ -30,3 +30,4 @@ A later compact layout compressed the wavetable and global filter into one row a
 - The full-width Voice stack uses more vertical space, but preserves readable wavetable and filter graphics and relies on the existing Voice-panel scrolling rather than shrinking both instruments.
 - The controls below the oscillator reuse one knob implementation instead of creating an oscillator-specific gesture system. Detents and haptics are configuration of that shared control, not a second widget.
 - Compact rows trade some faceplate height for keeping all eight effects, the selected editor, route controls, and playable keyboard in the phone flow without scrolling the rack column.
+- ADR-024 supersedes this ADR's compact Voice four-knob underlay and deferred wavetable-control placement. This ADR remains authoritative for the accordion, sticky keyboard, FX controls, parameter menu, and no-LFO model.

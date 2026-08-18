@@ -1,0 +1,270 @@
+COSIMO SYNTH — PRODUCT WORKSTREAM TODO
+Updated: 2026-08-18
+Source: 2026-08-18 spoken workstream inventory, accepted ADR-024/feature spec, and current repository evidence.
+
+HOW WE WILL USE THIS FILE
+
+- Work from top to bottom unless a dependency or new product decision changes the order.
+- Keep at most one task marked [>] IN PROGRESS.
+- At the end of each task, record the evidence beside it and promote the next unblocked task.
+- Put durable implementation gotchas in PROGRESS.txt; keep this file focused on what remains.
+- Status: [ ] queued, [>] in progress, [?] product decision/review, [x] implementation evidence exists, [-] parked.
+
+CURRENT FOCUS
+
+[>] T01 — Finish the accepted Variant-D wavetable preservation contract.
+
+PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
+
+[>] T01 — Finish the accepted Variant-D wavetable preservation contract
+    Settled while this tracker was being prepared:
+    - Variant D is the accepted production hierarchy.
+    - ADR-024 and docs/MOBILE_VOICE_FOCUSED_OSCILLATOR_SPEC.md are the implementation authority.
+    - Provisional graph axes are horizontal = Warp Amount and vertical = Index / Frame Position. The graph uses the numeric controls' rolling dominant-axis behavior: one value changes at a time, the active axis may switch before release, and ignored motion never becomes diagonal debt.
+    - A future physical-use review may replace graph X with discrete wavetable switching. The current cutover keeps the explicit picker and must isolate X behind one graph-axis projection seam rather than shipping both behaviors.
+    - At idle, Wavetable overlays the graph at top left and opens the picker; Warp Mode overlays at top right and cycles on tap. There is no permanent Frame/Index display.
+    - Once graph motion classifies, the top-left selector smoothly becomes the active Warp percentage or Index value, follows any in-gesture axis switch, and returns to Wavetable on finish.
+    - The real graphic fills the complete graph rectangle behind both overlays, with no reserved control inset, distortion, or dead space. The full Voice parameter strip remains below the graph as Variant D established.
+    Still open before production wiring:
+    - Capture the current production wavetable graphic and behavior as the do-not-regress reference.
+    Done when:
+    - The corner-overlay, transient-readout, rolling-axis, and frame-fill behavior are explicit.
+    - The ADR/spec continue to distinguish the chosen layout from the existing renderer/graphic that must be preserved.
+    - Before-state captures cover the real graphic at representative phone widths.
+    Evidence:
+    - Prototype: ui/desktop/voice-mobile-prototype/
+    - Decision: docs/ADR-024-mobile-voice-focused-oscillator-editor.md
+    - Handoff: docs/MOBILE_VOICE_FOCUSED_OSCILLATOR_SPEC.md
+    - The accepted prototype remains throwaway and is not production-wired.
+
+[ ] T02 — Productionize the chosen Voice and wavetable layout
+    Depends on: T01
+    Build:
+    - Rewrite the chosen hierarchy into the real mobile Voice surface; do not copy the throwaway prototype wholesale.
+    - Reuse the real WavetableStageSection drawing/data path and preserve its artwork, table loading, and selected A/B/C oscillator bindings.
+    - Keep the full Voice parameter strip below the graphic according to ADR-024 and its feature spec.
+    - Implement provisional graph horizontal = Warp / vertical = Index through the replaceable graph-axis seam resolved in T01, using the numeric controls' rolling one-axis-at-a-time classifier; do not switch wavetables by graph drag in this cutover.
+    - Replace the large Frame/Index overlay with top-left Wavetable, top-right Warp Mode, and the transient top-left active-value treatment resolved in T01.
+    - Resize and position the graphic so it fills its intended frame without distortion or dead space.
+    Done when:
+    - Before/after comparison proves the graphic itself was retained while its framing and controls changed.
+    - Real touch edits the correct X and Y destinations and cancellation cannot leave a gesture active.
+    - The selected oscillator A/B/C remains the sole target of each edit.
+    - Responsive tests and visual captures pass at 320, 393, and 430 px widths.
+
+[?] T03A — Specify the persistent Voice/FX/Mod tab shell
+    Depends on: T02
+    Context:
+    - ADR-024 intentionally leaves the existing accordion in place for its production cutover. This is a separate product change that will supersede the accordion portion of ADR-017.
+    Decide and record:
+    - Keep one compact Voice / FX / Mod tab row directly above the sticky keyboard.
+    - Let the active view use the full available content area instead of reserving accordion headers.
+    - Keep the keyboard and global Mod rail mounted while switching views.
+    - Preserve existing deep links and Back behavior into effects, routes, and modulation sources.
+    Done when:
+    - A new or amended ADR defines selection, second-tap behavior, deep links, active drags, accessibility, and retained per-view presentation state.
+    - The accepted Voice cutover remains independently deliverable before the shell change.
+
+[ ] T03B — Implement the persistent Voice/FX/Mod tab shell
+    Depends on: T03A
+    Done when:
+    - All three destinations are always discoverable without sacrificing a content-sized accordion header stack.
+    - Switching views does not interrupt held notes, active audio, selected oscillator/effect/source, or stored state.
+    - Short-phone layouts have one intentional content scroller and no nested accidental page scroll.
+
+[?] T04 — Decide the mobile Global Filter presentation
+    Depends on: T02, T03B
+    Compare:
+    - A full-time response graphic.
+    - A compact strip with Cutoff, Resonance, and Mix plus an expandable response graphic.
+    Decision rule:
+    - Use the smallest presentation that keeps the filter understandable, playable, and visually consistent after the real Voice and tab-shell geometry is known.
+    Done when:
+    - One behavior is selected in a visual prototype at short and tall phone heights.
+    - Collapsed controls, expansion behavior, and modulation feedback are explicit.
+
+[ ] T05 — Implement the selected Global Filter presentation
+    Depends on: T04
+    Done when:
+    - Filter editing remains live and audible in both compact and expanded states, if both exist.
+    - The graph never distorts to fit its container.
+    - No filter state or modulation target disappears during collapse/expansion.
+
+PHASE 2 — MAKE DRAGGING AND PARAMETER FEEDBACK COHERENT
+
+[ ] T06 — Add dwell-to-navigate during an active modulation-source drag
+    Depends on: T03B
+    Build:
+    - Hovering over Voice, FX, or Mod during a source drag switches to that view after a deliberate dwell.
+    - Hovering over an effect in the mobile rack selects that effect after a deliberate dwell.
+    - Keep the drag alive through navigation so the source can be dropped on the newly revealed target.
+    - Audit other navigation surfaces only after tabs and rack rows work; add only surfaces with a real drop destination behind them.
+    Done when:
+    - Transit across a tab/effect does not switch accidentally.
+    - Leaving before the dwell cancels the pending switch.
+    - The drag preview, edge autoscroll, target highlighting, cancellation, and final drop keep one owner throughout.
+
+[x] T07 — Lock the visual truth table for parameters and successful mapping
+    Review:
+    - Compare the current neutral base/selection treatment with the proposed effect-colored base treatment.
+    - Define every state once: idle, selected, unmapped source armed, mapped pair, bypassed route, invalid target, hovered target, and successful drop.
+    - Identify where unintended white is still appearing in the real Voice, FX, and Mod paths.
+    - Decide whether a successful new route starts with a small non-zero amount or keeps the existing explicit amount contract and uses unmistakable transient confirmation.
+    Starting recommendation to test:
+    - Keep base/selection neutral, reserve source color for real modulation relationships, and add explicit success feedback. A sound-changing default amount should be chosen only after an audition test proves it is preferable.
+    Done when:
+    - One state matrix and one successful-drop behavior are product-approved.
+    - Color never implies a mapping, effectiveness, or sound change that does not exist.
+    Closed 2026-08-18:
+    - Approved the real-knob state board in `ui/desktop/parameter-color-prototype/`.
+    - Active/default/selected controls keep their owning Voice, effect, or source-editor color; grey is reserved for inactive, bypassed, unavailable, or invalid states.
+    - A new mapping remains at exactly 0%: pending uses a source-colored pulse, confirmed success flashes and settles into a solid source-colored presence point, and duplicate/failure states remain distinct.
+    - ADR-025 records the complete matrix, the successful-drop contract, and the current Voice/FX/Mod neutral-state audit that the implementation ticket inherits.
+
+[ ] T08 — Apply the approved parameter/mapping feedback across Voice, FX, and Mod
+    Depends on: T07
+    Build:
+    - Remove visual states that contradict the approved truth table.
+    - Make every successful route creation visibly register at the drop target, Mod rail, and matrix/list.
+    - Keep duplicate/rejected drops visibly distinct from success and never retain a phantom route or amount.
+    Done when:
+    - One cross-surface test follows a route from source drag through target feedback, live amount edit, bypass, and deletion.
+    - Voice and FX controls describe equivalent modulation states with the same visual language.
+
+[ ] T09 — Finish the shared mobile parameter interaction language
+    Build from the existing baseline rather than replacing it:
+    - Use compact numeric readout strips/chips for dense values and knobs for controls that benefit from a larger gesture surface.
+    - Show a finger-clear HUD for every continuous touch edit that cannot display its live value unobstructed.
+    - Give knobs and numeric readouts a long-press menu with exact value entry and applicable reset/modulation actions.
+    - Give discrete parameters discrete snapping and best-effort haptic detents; keep continuous parameters smooth.
+    First step:
+    - Inventory production controls and list only the gaps. FX dual-ring knobs, oscillator Octave/Semitone detents, exact-value menus, and the collision-aware Mod HUD already have implementation evidence.
+    Done when:
+    - The inventory has no unexplained one-off gesture or value-display pattern.
+    - Pointer/touch cancellation, blur, visibility loss, and unmount end every gesture exactly once.
+
+PHASE 3 — KEEP THE SYNTH AUDITIONABLE EVERYWHERE
+
+[?] T10 — Choose the universal note-audition pattern
+    Product acceptance criterion:
+    - From every Voice, FX, Mod, route-detail, and expanded modulation editor state, the user can trigger a note while hearing a live parameter edit.
+    Prototype and compare:
+    - A persistent last-note trigger attached to the global Mod rail or another fixed edge control.
+    - A compact/contextual keyboard or left-thumb audition hotspot where the main keyboard is covered.
+    - Auto-preview as an optional assist, not the only way to audition.
+    Done when:
+    - One primary manual-audition behavior is selected and tested one-handed and two-handed.
+    - The behavior defines the note/pitch used before any note has been played and after notes change.
+
+[ ] T11 — Implement universal manual audition
+    Depends on: T10
+    Done when:
+    - A path test reaches every editor state and triggers audible output without closing the editor.
+    - Press/release, cancellation, app suspension, and re-entry cannot leave a stuck note.
+    - The control does not steal an active parameter or modulation drag.
+
+[?] T12 — Prototype and tune optional Auto-preview
+    Depends on: T10
+    Explore:
+    - A user setting, default off initially.
+    - Preview cadence, note choice, gate length, retrigger policy, and behavior while transport or a held note is already active.
+    - Which parameter classes should never auto-trigger.
+    Done when:
+    - Real phone trials establish that preview is useful rather than distracting.
+    - Disable/enable behavior is immediate, deterministic, and cannot create stuck notes.
+    - Ship, revise, or reject is recorded explicitly; experimentation alone is not completion.
+
+PHASE 4 — REDESIGN MODULATION AROUND QUICK EDITING
+
+[ ] T13 — Add a bottom quick-editor drawer for the selected modulation source
+    Depends on: T03B, T11
+    Build:
+    - Tapping a source in the global Mod rail opens an editable compact Envelope, MSEG, or Macro drawer instead of forcing full navigation.
+    - Provide a clear drag handle/dismiss gesture and a Go to full editor action.
+    - Preserve the existing source selection, route count, drag-from-source behavior, and second-tap/deep-link intent where they still apply.
+    Done when:
+    - The source can be edited and auditioned without leaving the current Voice/FX context.
+    - Drawer geometry never hides the only available audition control or active-value HUD.
+
+[?] T14 — Redesign the Mod overview without hidden functionality
+    Depends on: T03B, T11
+    Required behavior:
+    - The selected Envelope/MSEG/Macro preview and the route matrix/list are both discoverable on entry; the matrix cannot sit invisibly below a large graph.
+    - The compact MSEG preview preserves its coordinate system/aspect ratio and supports direct point editing.
+    - Expanded editing remains available for precision work.
+    Design question:
+    - Use tabs, summaries, or another explicit navigator to honor the no-hidden-functionality goal on short phones without cramming every editor onto one screen.
+    Done when:
+    - A first-time user can identify every major action from the initial Mod view without blind scrolling.
+    - Compact and expanded MSEG points render at the same normalized coordinates.
+
+[?] T15 — Revisit Mod Matrix row editing against the newer product direction
+    Depends on: T14
+    Current baseline:
+    - A mobile list/detail implementation already exists; rows show the relationship and amount, while detail owns exact editing, polarity, bypass, and delete.
+    Compare against the requested direction:
+    - Inline amount editing on the route row.
+    - Direct bypass and delete actions without mandatory expansion.
+    - A long-press context menu for exact value, polarity, bypass, and delete.
+    - An XY gesture that edits target base value on one axis and modulation amount on the other.
+    Decision rule:
+    - Keep the list scannable and vertically scrollable. Add direct manipulation only where touch ownership and accidental-delete risk remain clear.
+    Done when:
+    - The chosen row model is prototyped with multiple routes at 320 and 393 px.
+    - The decision explicitly says whether base value belongs in a route row or remains owned by the target control.
+
+PHASE 5 — PARKED UNTIL ITS QUALIFICATION CHANGES
+
+[-] T16 — Resume the nested Effects Lane
+    Desired product:
+    - Multiple effect instances nested inside utilities such as Parallel and Frequency Split, using an Ableton-like lane model.
+    Current blocker:
+    - Current-product requalification v2 is a browser no-go; Chromium C2 fails the frozen cross-platform gate and WebKit C2/H3 overload.
+    - The physical AUv3 campaign is also unexecuted, but phone access alone cannot clear the browser failure.
+    Resume only when:
+    - The baseline performance/capacity contract changes or the current product gains enough measured headroom to pass it.
+    - Then rerun browser qualification, complete the physical-phone campaign, review the existing Effects Lane branch, and make an explicit merge/rework/abandon decision.
+    Do not:
+    - Merge or begin production Effects Lane implementation merely because the phone becomes available.
+
+IMPLEMENTED BASELINES TO CONFIRM, NOT REBUILD BLINDLY
+
+[x] B01 — Finger-clear modulation dragging exists at commit 3b769b21
+    - Touch drag uses amplified preview movement, target capture/hysteresis, haptic acquisition, rail retreat, and preview-owned drop targeting.
+    - Product follow-up: physically confirm that it now feels right; reopen only a specific failed behavior.
+
+[x] B02 — Discrete oscillator controls have detents and best-effort haptics
+    - Octave and Semitone are discrete; Fine and Level remain continuous.
+
+[x] B03 — Mobile Mod Matrix list/detail and compact MSEG editor exist
+    - These are implementation baselines, not automatic approval of the newer inline-edit direction in T14/T15.
+
+[x] B04 — FX parameter-state truth correction and exact-value menus exist
+    - Current baseline uses neutral base framing and source color for the armed source/current-target relationship.
+    - T07 remains open because the spoken workstream questions that color contract and reports too much white.
+
+[x] B05 — Global Mod rail and collision-aware modulation HUD exist
+    - T09 should inventory missing controls and reuse this language rather than creating another HUD system.
+
+COMMON DEFINITION OF DONE FOR CODE TASKS
+
+- Reproduce or capture the current reachable product behavior before editing.
+- Preserve unrelated dirty work and record the exact source/commit used for validation.
+- Add the narrowest outer-seam regression that proves the user-visible behavior, not only component internals.
+- For mobile interaction work, verify representative short and tall phone layouts and use real touch where the result depends on feel.
+- For completed desktop React synth work, finish with a fresh HMR standalone launch from this repo and a rebuilt/installed Ableton VST3, unless explicitly waived.
+- Update this file with status and evidence; update PROGRESS.txt only with durable decisions, blockers, or hard-won setup knowledge.
+
+PLANNING DECISIONS RECORDED HERE
+
+D01 — Finish the accepted Voice handoff first, then replace the tab shell before Filter/Mod layout work.
+Reason: ADR-024 deliberately keeps the accordion so the focused Voice cutover can ship independently. The later tab shell determines the real vertical space and navigation model inherited by Filter and Mod; building those deeper editors before it would make their geometry provisional.
+
+D02 — Existing related implementations are baselines to audit, not proof that the spoken concerns are resolved.
+Reason: the repository shows completed work for haptics, matrix/detail, parameter states, HUD, and drag occlusion, while the spoken inventory still reports dissatisfaction or uncertainty. Product acceptance must resolve that mismatch.
+
+D03 — Effects Lane is parked behind cross-platform qualification, not merely phone availability.
+Reason: the newest evidence has both an unexecuted physical campaign and a browser no-go. A phone run cannot by itself authorize production integration.
+
+D04 — Wavetable graph X = Warp and Y = Index is provisional.
+Reason: rolling one-axis-at-a-time Warp/Index shaping is the current starting behavior, while physical use may show that horizontal table switching is more valuable. The current cutover keeps explicit table selection and isolates X behind one graph-axis seam so that later review does not disturb Y/Index, state ownership, or the retained renderer.
