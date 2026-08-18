@@ -6,6 +6,8 @@ declare module "../../patch_gui/wavetable-display.js" {
                 theme?: unknown;
                 requestAnimationFrame?: (callback: FrameRequestCallback) => number;
                 cancelAnimationFrame?: (handle: number) => void;
+                paintBackground?: boolean;
+                showSliceCaption?: boolean;
             },
         );
         invalidateStaticScene(): void;

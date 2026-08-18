@@ -20,7 +20,6 @@ import {
     ModulationAmountField,
     MsegPreview,
     VOICE_MODE_OPTIONS,
-    WavetableCanvas,
 } from "../shared/synth-components";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
 import {
@@ -41,13 +40,13 @@ import {
 } from "../shared/modulation";
 import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
+    MobileVoiceFocusedEditor,
+    type MobileVoiceArmedSource,
+    type MobileVoiceEditorBindings,
+} from "../shared/mobile-voice-editor";
+import {
     clampDisplayPosition,
 } from "../shared/runtime-table-state";
-import {
-    resolveDisplayGestureAxis,
-    resolveHorizontalSwipeTarget,
-    shouldCommitHorizontalSwipe,
-} from "../shared/display-gesture";
 import {
     useSynthPatchViewModel,
     useOscillatorSelectionViewModel,
@@ -86,17 +85,6 @@ type IOSResponsiveLayout = {
     keyboardAccidentalWidth: number;
 };
 
-type ActiveStageGesture = {
-    pointerId: number;
-    startClientX: number;
-    startClientY: number;
-    startTableIndex: number;
-    startPosition: number;
-    dragSpanX: number;
-    dragSpanY: number;
-    currentDeltaX: number;
-    mode: "pending" | "horizontal" | "vertical";
-};
 
 type IOSPlayPanelProps = {
     playModeValue: number;
@@ -427,102 +415,6 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
                     </div>
                 </div>
             </div>
-        </div>
-    );
-});
-
-const IOSOscillatorTabs = memo(function IOSOscillatorTabs({
-    selection,
-}: {
-    selection: ReturnType<typeof useOscillatorSelectionViewModel>;
-}) {
-    return (
-        <div
-            className="ios-oscillator-tabs"
-            data-role="ios-oscillator-tabs"
-            role="tablist"
-            aria-label="Oscillator"
-        >
-            {selection.options.map((oscillator) => {
-                const isSelected = oscillator.id === selection.selectedOscillatorID;
-                return (
-                    <button
-                        key={oscillator.id}
-                        type="button"
-                        role="tab"
-                        aria-label={`Oscillator ${oscillator.id}`}
-                        aria-selected={isSelected}
-                        data-oscillator-id={oscillator.id}
-                        className="ios-oscillator-tab"
-                        data-selected={isSelected ? "true" : "false"}
-                        onClick={() => selection.selectOscillator(oscillator.id)}
-                    >
-                        {oscillator.id}
-                    </button>
-                );
-            })}
-        </div>
-    );
-});
-
-const IOSOscillatorPerformanceControls = memo(function IOSOscillatorPerformanceControls({
-    octave,
-    semitone,
-    fineCents,
-    volumeDb,
-    mute,
-    solo,
-}: {
-    octave: ReturnType<typeof useSynthPatchViewModel>["oscillatorOctave"];
-    semitone: ReturnType<typeof useSynthPatchViewModel>["oscillatorSemitone"];
-    fineCents: ReturnType<typeof useSynthPatchViewModel>["oscillatorFineCents"];
-    volumeDb: ReturnType<typeof useSynthPatchViewModel>["oscillatorVolumeDb"];
-    mute: ReturnType<typeof useSynthPatchViewModel>["oscillatorMute"];
-    solo: ReturnType<typeof useSynthPatchViewModel>["oscillatorSolo"];
-}) {
-    const fields = [
-        { label: "Oct", role: "oscillator-octave-input", binding: octave, min: -4, max: 4, step: 1 },
-        { label: "Semi", role: "oscillator-semitone-input", binding: semitone, min: -12, max: 12, step: 1 },
-        { label: "Fine", role: "oscillator-fine-input", binding: fineCents, min: -100, max: 100, step: 0.1 },
-        { label: "Level", role: "oscillator-level-input", binding: volumeDb, min: -48, max: 6, step: 0.1 },
-    ] as const;
-
-    return (
-        <div className="ios-oscillator-performance" data-role="ios-oscillator-performance">
-            {fields.map((field) => (
-                <label key={field.role} className="ios-oscillator-number">
-                    <span>{field.label}</span>
-                    <input
-                        aria-label={`Oscillator ${field.label.toLowerCase()}`}
-                        data-role={field.role}
-                        type="number"
-                        inputMode="decimal"
-                        min={field.min}
-                        max={field.max}
-                        step={field.step}
-                        value={field.binding.value}
-                        onChange={(event) => field.binding.commitValue(Number(event.target.value))}
-                    />
-                </label>
-            ))}
-            <button
-                type="button"
-                aria-label="Mute selected oscillator"
-                aria-pressed={mute.value >= 0.5}
-                data-active={mute.value >= 0.5}
-                onClick={() => mute.commitValue(mute.value >= 0.5 ? 0 : 1)}
-            >
-                Mute
-            </button>
-            <button
-                type="button"
-                aria-label="Solo selected oscillator"
-                aria-pressed={solo.value >= 0.5}
-                data-active={solo.value >= 0.5}
-                onClick={() => solo.commitValue(solo.value >= 0.5 ? 0 : 1)}
-            >
-                Solo
-            </button>
         </div>
     );
 });
@@ -1164,298 +1056,6 @@ const IOSMsegModal = memo(function IOSMsegModal({
     );
 });
 
-const IOSWavetablePanel = memo(function IOSWavetablePanel({
-    stageRef,
-    frames,
-    observedPosition,
-    warpMode,
-    warpAmount,
-    displayedFrameCount,
-    displayedTableIndex,
-    desiredTableIndex,
-    tableOptions,
-    shouldShowOverlay,
-    displayStatus,
-    tableErrorText,
-    bankReadout,
-    canRetryDesiredTableLoad,
-    wavetableFocusBindings,
-    wavetablePosition,
-    onSelectWavetable,
-    onPrewarmWavetablePicker,
-    onRetryLoad,
-}: {
-    stageRef: RefObject<HTMLDivElement | null>;
-    frames: Float32Array[] | null;
-    observedPosition: number;
-    warpMode: number;
-    warpAmount: number;
-    displayedFrameCount: number;
-    displayedTableIndex: number;
-    desiredTableIndex: number;
-    tableOptions: ReturnType<typeof useSynthPatchViewModel>["tableOptions"];
-    shouldShowOverlay: boolean;
-    displayStatus: string;
-    tableErrorText: string | null;
-    bankReadout: string;
-    canRetryDesiredTableLoad: boolean;
-    wavetableFocusBindings: ReturnType<typeof useSynthPatchViewModel>["keyboardRouting"]["wavetableFocusBindings"];
-    wavetablePosition: ReturnType<typeof useSynthPatchViewModel>["wavetablePosition"];
-    onSelectWavetable: (nextValue: number) => void;
-    onPrewarmWavetablePicker: () => void;
-    onRetryLoad: () => void;
-}) {
-    const activeStageGestureRef = useRef<ActiveStageGesture | null>(null);
-    const wavetablePositionRef = useRef(wavetablePosition);
-    const onSelectWavetableRef = useRef(onSelectWavetable);
-    const tableOptionCountRef = useRef(tableOptions.length);
-    wavetablePositionRef.current = wavetablePosition;
-    onSelectWavetableRef.current = onSelectWavetable;
-    tableOptionCountRef.current = tableOptions.length;
-
-    const finishStageGesture = useCallback((pointerId?: number, cancelled = false) => {
-        const activeStageGesture = activeStageGestureRef.current;
-        if (!activeStageGesture || (pointerId !== undefined && activeStageGesture.pointerId !== pointerId)) {
-            return;
-        }
-
-        activeStageGestureRef.current = null;
-        try {
-            if (stageRef.current?.hasPointerCapture(activeStageGesture.pointerId)) {
-                stageRef.current.releasePointerCapture(activeStageGesture.pointerId);
-            }
-        } catch {
-            // Capture may already be gone after cancellation, blur, or a synthetic event.
-        }
-
-        if (activeStageGesture.mode === "vertical") {
-            wavetablePositionRef.current.endGesture();
-            return;
-        }
-
-        if (cancelled || activeStageGesture.mode !== "horizontal") {
-            return;
-        }
-
-        const swipeTarget = resolveHorizontalSwipeTarget(
-            activeStageGesture.startTableIndex,
-            activeStageGesture.currentDeltaX,
-            tableOptionCountRef.current,
-        );
-
-        if (
-            swipeTarget.hasTarget
-            && shouldCommitHorizontalSwipe(activeStageGesture.currentDeltaX, activeStageGesture.dragSpanX)
-        ) {
-            onSelectWavetableRef.current(swipeTarget.targetTableIndex);
-        }
-    }, [stageRef]);
-
-    const updateStageGestureFromPointer = useCallback((event: Pick<
-        PointerEvent,
-        "pointerId" | "pointerType" | "buttons" | "clientX" | "clientY" | "preventDefault"
-    >) => {
-        const activeStageGesture = activeStageGestureRef.current;
-        if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
-            return;
-        }
-
-        if (event.pointerType === "mouse" && event.buttons === 0) {
-            finishStageGesture(event.pointerId, true);
-            return;
-        }
-
-        const deltaX = event.clientX - activeStageGesture.startClientX;
-        const deltaY = event.clientY - activeStageGesture.startClientY;
-        const gestureAxis = resolveDisplayGestureAxis(deltaX, deltaY);
-
-        if (activeStageGesture.mode === "pending" && gestureAxis !== "pending") {
-            activeStageGesture.mode = gestureAxis;
-
-            if (gestureAxis === "vertical") {
-                wavetablePositionRef.current.beginGesture();
-            }
-        }
-
-        if (activeStageGesture.mode === "horizontal") {
-            activeStageGesture.currentDeltaX = deltaX;
-            event.preventDefault();
-            return;
-        }
-
-        if (activeStageGesture.mode !== "vertical") {
-            return;
-        }
-
-        const nextPosition = clampDisplayPosition(
-            activeStageGesture.startPosition
-                + ((activeStageGesture.startClientY - event.clientY) / Math.max(1, activeStageGesture.dragSpanY)),
-        );
-        wavetablePositionRef.current.setValue(nextPosition);
-        event.preventDefault();
-    }, [finishStageGesture]);
-
-    useEffect(() => {
-        const handleFallbackPointerMove = (event: PointerEvent) => {
-            const activeStageGesture = activeStageGestureRef.current;
-            if (!activeStageGesture || activeStageGesture.pointerId !== event.pointerId) {
-                return;
-            }
-            const stage = stageRef.current;
-            if (event.target instanceof Node && stage?.contains(event.target)) {
-                return;
-            }
-            updateStageGestureFromPointer(event);
-        };
-        const handlePointerUp = (event: PointerEvent) => finishStageGesture(event.pointerId);
-        const handlePointerCancel = (event: PointerEvent) => finishStageGesture(event.pointerId, true);
-        const handleBlur = () => finishStageGesture(undefined, true);
-        const handleVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                finishStageGesture(undefined, true);
-            }
-        };
-
-        window.addEventListener("pointermove", handleFallbackPointerMove, true);
-        window.addEventListener("pointerup", handlePointerUp, true);
-        window.addEventListener("pointercancel", handlePointerCancel, true);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-
-        return () => {
-            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
-            window.removeEventListener("pointerup", handlePointerUp, true);
-            window.removeEventListener("pointercancel", handlePointerCancel, true);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            finishStageGesture(undefined, true);
-        };
-    }, [finishStageGesture, stageRef, updateStageGestureFromPointer]);
-
-    const handleStagePointerDown = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        if (event.pointerType === "mouse" && event.button !== 0) {
-            return;
-        }
-
-        if ((event.target as HTMLElement | null)?.closest?.(".bank-picker-trigger, select, button, input")) {
-            return;
-        }
-
-        finishStageGesture(undefined, true);
-        const bounds = event.currentTarget.getBoundingClientRect();
-        activeStageGestureRef.current = {
-            pointerId: event.pointerId,
-            startClientX: event.clientX,
-            startClientY: event.clientY,
-            startTableIndex: displayedTableIndex,
-            startPosition: observedPosition,
-            dragSpanX: bounds.width,
-            dragSpanY: bounds.height,
-            currentDeltaX: 0,
-            mode: "pending",
-        };
-        try {
-            event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-            // Window-level termination still owns unsupported or synthetic pointers.
-        }
-        event.preventDefault();
-    }, [displayedTableIndex, finishStageGesture, observedPosition]);
-
-    const handleStagePointerMove = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        updateStageGestureFromPointer(event.nativeEvent);
-    }, [updateStageGestureFromPointer]);
-
-    const endStageGesture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        finishStageGesture(event.pointerId);
-        event.preventDefault();
-    }, [finishStageGesture]);
-
-    const cancelStageGesture = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
-        finishStageGesture(event.pointerId, true);
-        event.preventDefault();
-    }, [finishStageGesture]);
-
-    return (
-        <div className="wavetable-panel ios-section-panel" data-section-accent="cyan" data-liquid-detail="display-lip">
-            <div
-                ref={stageRef}
-                className="wavetable-stage"
-                data-state={shouldShowOverlay ? "loading" : "ready"}
-                onPointerDown={handleStagePointerDown}
-                onPointerMove={handleStagePointerMove}
-                onPointerUp={endStageGesture}
-                onPointerCancel={cancelStageGesture}
-                onLostPointerCapture={cancelStageGesture}
-            >
-                <div className="wavetable-display-stack">
-                    <div className="wavetable-layer">
-                        <WavetableCanvas
-                            frames={frames}
-                            position={observedPosition}
-                            warpMode={warpMode}
-                            warpAmount={warpAmount}
-                        />
-                    </div>
-                    <div className="wavetable-layer" aria-hidden="true" />
-                </div>
-                <div className="display-overlay" hidden={!shouldShowOverlay}>
-                    {displayStatus}
-                </div>
-                <div className="stage-copy">
-                    <div className="stage-copy-row">
-                        <div className="mini-label active">Wavescan</div>
-                        <div className="display-status" data-role="display-status">{displayStatus}</div>
-                        <div className="shape-readout" data-role="hero-frame-readout">
-                            {formatFrameReadout(observedPosition, displayedFrameCount)}
-                        </div>
-                    </div>
-                    <div
-                        className="table-error-banner"
-                        data-role="table-error-banner"
-                        hidden={!tableErrorText}
-                    >
-                        {tableErrorText ?? ""}
-                    </div>
-                    <div />
-                    <div className="stage-copy-row">
-                        <label
-                            className="bank-picker-trigger"
-                            onFocus={onPrewarmWavetablePicker}
-                            onPointerEnter={onPrewarmWavetablePicker}
-                        >
-                            <div className="bank-readout">{bankReadout}</div>
-                            <select
-                                className="table-select table-select-overlay"
-                                aria-label="Select wavetable"
-                                value={String(desiredTableIndex)}
-                                onChange={(event) => onSelectWavetable(Number(event.target.value))}
-                                {...wavetableFocusBindings}
-                            >
-                                {tableOptions.map((table, tableIndex) => (
-                                    <option key={`${table.tableId}-${tableIndex}`} value={tableIndex}>
-                                        {table.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </label>
-                        <button
-                            className="table-retry-button"
-                            type="button"
-                            hidden={!canRetryDesiredTableLoad}
-                            disabled={!canRetryDesiredTableLoad}
-                            onClick={onRetryLoad}
-                        >
-                            Retry
-                        </button>
-                        <div className="mini-label warm" data-role="stage-gesture-hint">Swipe + Drag</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    );
-});
-
 function IOSPatchViewBody() {
     const stageRef = useRef<HTMLDivElement | null>(null);
     const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
@@ -1466,6 +1066,8 @@ function IOSPatchViewBody() {
     const msegPreviewOrientation: MsegSurfaceOrientation = "horizontal";
     const msegEditorOrientation: MsegSurfaceOrientation = layout.isPortrait ? "vertical" : "horizontal";
     const oscillatorSelection = useOscillatorSelectionViewModel();
+    const [armedSource, setArmedSource] = useState<MobileVoiceArmedSource>({ sourceKind: "mseg", sourceSlot: 1 });
+    const [mobileVoiceHudLayer, setMobileVoiceHudLayer] = useState<HTMLDivElement | null>(null);
     const synthView = useSynthPatchViewModel({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
@@ -1485,73 +1087,6 @@ function IOSPatchViewBody() {
         ["--cosimo-control-height" as string]: `${layout.controlHeight}px`,
     }) satisfies CSSProperties, [layout.controlHeight, layout.keyboardHeight, layout.stageMinHeight]);
 
-    const displayStatus = useMemo(() => {
-        if (synthView.frameError) {
-            return formatIOSFactoryLibraryLoadMessage("Could not load wavetable bank", synthView.frameError);
-        }
-
-        if (synthView.catalogError) {
-            return formatIOSFactoryLibraryLoadMessage("Could not load wavetable catalog", synthView.catalogError);
-        }
-
-        if (synthView.runtimePresentation.failureMessage) {
-            return synthView.runtimePresentation.failureMessage;
-        }
-
-        if (
-            synthView.runtimePresentation.isPendingSelection &&
-            synthView.desiredTableName !== synthView.displayedTableName
-        ) {
-            return `Loading ${synthView.desiredTableName}…`;
-        }
-
-        if (!synthView.frames) {
-            return "Loading wavetable bank…";
-        }
-
-        return `${synthView.displayedFrameCount} shapes`;
-    }, [
-        synthView.catalogError,
-        synthView.desiredTableName,
-        synthView.displayedFrameCount,
-        synthView.displayedTableName,
-        synthView.frameError,
-        synthView.frames,
-        synthView.runtimePresentation.failureMessage,
-        synthView.runtimePresentation.isPendingSelection,
-    ]);
-
-    const bankReadout = useMemo(() => {
-        if (synthView.frameError) {
-            return "Display unavailable";
-        }
-
-        if (synthView.runtimePresentation.failureMessage) {
-            if (synthView.desiredTableName !== synthView.displayedTableName) {
-                return `${synthView.displayedTableName} -> ${synthView.desiredTableName} • ${synthView.runtimePresentation.failureMessage}`;
-            }
-
-            return `${synthView.displayedTableName} • ${synthView.runtimePresentation.failureMessage}`;
-        }
-
-        if (
-            synthView.runtimePresentation.isPendingSelection &&
-            synthView.desiredTableName !== synthView.displayedTableName
-        ) {
-            return `${synthView.displayedTableName} -> ${synthView.desiredTableName}`;
-        }
-
-        return synthView.displayedTableName;
-    }, [
-        synthView.desiredTableName,
-        synthView.displayedTableName,
-        synthView.frameError,
-        synthView.runtimePresentation.failureMessage,
-        synthView.runtimePresentation.isPendingSelection,
-    ]);
-
-    const tableErrorText = synthView.runtimePresentation.failureMessage ? synthView.failureDetail : null;
-    const shouldShowOverlay = !synthView.frames || Boolean(synthView.frameError || synthView.catalogError);
 
     const handleSelectWavetable = useCallback((nextValue: number) => {
         synthView.handleSelectWavetable(nextValue);
@@ -1573,8 +1108,83 @@ function IOSPatchViewBody() {
         setKeyboardRootNote((previousRootNote) => clamp(previousRootNote + 12, KEYBOARD_ROOT_NOTE_MIN, KEYBOARD_ROOT_NOTE_MAX));
     }, []);
 
+    const voiceStatusText = useMemo(() => {
+        if (synthView.frameError) {
+            return formatIOSFactoryLibraryLoadMessage("Could not load wavetable bank", synthView.frameError);
+        }
+        if (synthView.catalogError) {
+            return formatIOSFactoryLibraryLoadMessage("Could not load wavetable catalog", synthView.catalogError);
+        }
+        if (synthView.runtimePresentation.failureMessage) {
+            return synthView.runtimePresentation.failureMessage;
+        }
+        return null;
+    }, [
+        synthView.catalogError,
+        synthView.frameError,
+        synthView.runtimePresentation.failureMessage,
+    ]);
+
+    const resolveIOSVoiceScrollLocks = useCallback(() => (
+        Array.from(document.querySelectorAll<HTMLElement>(".ios-scroll"))
+    ), []);
+    const requestIOSVoiceHaptic = useCallback(() => {
+        triggerIOSHaptic("light");
+    }, []);
+    const mobileVoiceBindings = useMemo<MobileVoiceEditorBindings>(() => ({
+        framePosition: synthView.wavetablePosition,
+        warpAmount: synthView.warpAmount,
+        warpMode: synthView.warpMode,
+        pan: synthView.pan,
+        octave: synthView.oscillatorOctave,
+        semitone: synthView.oscillatorSemitone,
+        fineCents: synthView.oscillatorFineCents,
+        volumeDb: synthView.oscillatorVolumeDb,
+        mute: synthView.oscillatorMute,
+        solo: synthView.oscillatorSolo,
+        unisonVoices: synthView.unisonVoices,
+        unisonDetune: synthView.unisonDetune,
+        unisonBlend: synthView.unisonBlend,
+        unisonWidth: synthView.unisonWidth,
+        phase: synthView.unisonPhase,
+        phaseRandom: synthView.unisonRandom,
+        retrigger: synthView.unisonPhaseMode,
+        unisonDetuneMode: synthView.unisonDetuneMode,
+        unisonStackMode: synthView.unisonStackMode,
+        unisonWavetablePositionSpread: synthView.unisonWavetablePositionSpread,
+        unisonWarpSpread: synthView.unisonWarpSpread,
+    }), [
+        synthView.oscillatorFineCents,
+        synthView.oscillatorMute,
+        synthView.oscillatorOctave,
+        synthView.oscillatorSemitone,
+        synthView.oscillatorSolo,
+        synthView.oscillatorVolumeDb,
+        synthView.pan,
+        synthView.unisonBlend,
+        synthView.unisonDetune,
+        synthView.unisonDetuneMode,
+        synthView.unisonPhase,
+        synthView.unisonPhaseMode,
+        synthView.unisonRandom,
+        synthView.unisonStackMode,
+        synthView.unisonVoices,
+        synthView.unisonWarpSpread,
+        synthView.unisonWavetablePositionSpread,
+        synthView.unisonWidth,
+        synthView.warpAmount,
+        synthView.warpMode,
+        synthView.wavetablePosition,
+    ]);
+
     return (
         <div className="ios-shell" style={shellStyle}>
+            <div
+                ref={setMobileVoiceHudLayer}
+                data-role="ios-mobile-voice-hud-layer"
+                className="ios-mobile-voice-hud-layer"
+                aria-hidden={false}
+            />
             <div className="ios-top-row">
                 <div
                     className="ios-main-view"
@@ -1583,36 +1193,63 @@ function IOSPatchViewBody() {
                 >
                     <div className="ios-scroll">
                         <div className="ios-content">
-                            <IOSOscillatorTabs selection={oscillatorSelection} />
-                            <IOSOscillatorPerformanceControls
-                                octave={synthView.oscillatorOctave}
-                                semitone={synthView.oscillatorSemitone}
-                                fineCents={synthView.oscillatorFineCents}
-                                volumeDb={synthView.oscillatorVolumeDb}
-                                mute={synthView.oscillatorMute}
-                                solo={synthView.oscillatorSolo}
+                            <MobileVoiceFocusedEditor
+                                selection={oscillatorSelection}
+                                bindings={mobileVoiceBindings}
+                                stage={{
+                                    frames: synthView.frames,
+                                    position: synthView.observedPosition,
+                                    warpMode: synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value,
+                                    warpAmount: synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value,
+                                    tableName: synthView.displayedTableName,
+                                    pendingTableName: synthView.runtimePresentation.isPendingSelection ? synthView.desiredTableName : null,
+                                    desiredTableIndex: synthView.desiredTableIndex,
+                                    tableOptions: synthView.tableOptions,
+                                    onTableChange: handleSelectWavetable,
+                                    onTablePrewarm: synthView.handlePrewarmWavetablePicker,
+                                    canRetry: synthView.canRetryDesiredTableLoad,
+                                    onRetry: synthView.handleRetryLoad,
+                                }}
+                                routes={synthView.routes}
+                                armedSource={armedSource}
+                                hudContainer={mobileVoiceHudLayer}
+                                resolveScrollLockTargets={resolveIOSVoiceScrollLocks}
+                                onRequestHaptic={requestIOSVoiceHaptic}
                             />
-                            <IOSWavetablePanel
-                                stageRef={stageRef}
-                                frames={synthView.frames}
-                                observedPosition={synthView.observedPosition}
-                                warpMode={synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value}
-                                warpAmount={synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value}
-                                displayedFrameCount={synthView.displayedFrameCount}
-                                displayedTableIndex={synthView.displayedTableIndex}
-                                desiredTableIndex={synthView.desiredTableIndex}
-                                tableOptions={synthView.tableOptions}
-                                shouldShowOverlay={shouldShowOverlay}
-                                displayStatus={displayStatus}
-                                tableErrorText={tableErrorText}
-                                bankReadout={bankReadout}
-                                canRetryDesiredTableLoad={synthView.canRetryDesiredTableLoad}
-                                wavetableFocusBindings={synthView.keyboardRouting.wavetableFocusBindings}
-                                wavetablePosition={synthView.wavetablePosition}
-                                onSelectWavetable={handleSelectWavetable}
-                                onPrewarmWavetablePicker={synthView.handlePrewarmWavetablePicker}
-                                onRetryLoad={synthView.handleRetryLoad}
-                            />
+
+                            {voiceStatusText !== null ? (
+                                <div className="ios-voice-status" data-role="ios-voice-status" role="status">
+                                    {voiceStatusText}
+                                </div>
+                            ) : null}
+
+                            <div className="ios-armed-source-row" data-role="ios-armed-source">
+                                <span className="ios-armed-source-label">Mod Source</span>
+                                <select
+                                    aria-label="Modulation source type"
+                                    value={armedSource.sourceKind}
+                                    onChange={(event) => setArmedSource((current) => ({
+                                        ...current,
+                                        sourceKind: event.target.value === "env" ? "env" : event.target.value === "macro" ? "macro" : "mseg",
+                                    }))}
+                                >
+                                    <option value="mseg">MSEG</option>
+                                    <option value="env">Envelope</option>
+                                    <option value="macro">Macro</option>
+                                </select>
+                                <select
+                                    aria-label="Modulation source number"
+                                    value={String(armedSource.sourceSlot)}
+                                    onChange={(event) => setArmedSource((current) => ({
+                                        ...current,
+                                        sourceSlot: clamp(Math.round(Number(event.target.value) || 1), 1, 3),
+                                    }))}
+                                >
+                                    <option value="1">1</option>
+                                    <option value="2">2</option>
+                                    <option value="3">3</option>
+                                </select>
+                            </div>
 
                             <IOSPlayPanel
                                 playModeValue={synthView.playMode.value}

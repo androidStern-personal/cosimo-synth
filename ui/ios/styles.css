@@ -2,6 +2,7 @@
 @source ".";
 @source "../shared";
 @import "../shared/synth-style-guide.css";
+@import "../shared/mobile-voice-editor.css";
 
 :host {
     display: block;
@@ -984,4 +985,57 @@ select {
         height: 136px;
         min-height: 136px;
     }
+}
+
+/* ADR-024 focused Voice editor: shell-level HUD layer and armed source. */
+.ios-mobile-voice-hud-layer {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    pointer-events: none;
+}
+
+.ios-armed-source-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1px solid rgb(255 255 255 / 0.08);
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.02);
+}
+
+.ios-armed-source-row .ios-armed-source-label {
+    color: var(--cosimo-text-muted, #8e969b);
+    font-family: var(--cosimo-font-readout, monospace);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.ios-armed-source-row select {
+    min-height: 36px;
+    flex: 1 1 auto;
+    padding: 0 8px;
+    border: 1px solid rgb(var(--cosimo-edge-rgb, 77 77 77) / 0.34);
+    border-radius: 8px;
+    background: rgb(var(--cosimo-control-rgb, 55 55 55) / 0.58);
+    color: var(--cosimo-text, #e8ecef);
+    color-scheme: light;
+}
+
+.ios-armed-source-row select option {
+    background: Canvas;
+    color: CanvasText;
+}
+
+.ios-voice-status {
+    padding: 8px 10px;
+    border: 1px solid rgb(255 122 108 / 0.30);
+    border-radius: 10px;
+    background: rgb(255 122 108 / 0.06);
+    color: var(--cosimo-text, #e8ecef);
+    font-family: var(--cosimo-font-readout, monospace);
+    font-size: 10px;
+    line-height: 1.4;
 }

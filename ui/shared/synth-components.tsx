@@ -729,12 +729,17 @@ export function WavetableCanvas({
     warpMode,
     warpAmount,
     drawableTopInset = 0,
+    paintBackground = true,
+    showSliceCaption = true,
 }: {
     frames: Float32Array[] | null;
     position: number;
     warpMode: number;
     warpAmount: number;
     drawableTopInset?: number;
+    /** ADR-024 compact seams; defaults preserve the established drawing. */
+    paintBackground?: boolean;
+    showSliceCaption?: boolean;
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -746,10 +751,16 @@ export function WavetableCanvas({
             return;
         }
 
-        displayRef.current = new CanvasWavetableDisplay(canvasRef.current);
+        displayRef.current = new CanvasWavetableDisplay(canvasRef.current, {
+            paintBackground,
+            showSliceCaption,
+        });
         return () => {
             displayRef.current = null;
         };
+        // The render seams are a mount-time product decision per surface, not
+        // live state; remounting for a changed seam is deliberate.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     useEffect(() => {

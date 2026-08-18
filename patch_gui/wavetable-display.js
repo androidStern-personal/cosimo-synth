@@ -970,20 +970,31 @@ function strokePolylineSegments(context, segments) {
     }
 }
 
-export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME) {
+export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THEME, options = {}) {
+    // ADR-024 compact cutover seams. Defaults preserve the established
+    // desktop drawing exactly: an opaque painted background and the
+    // in-canvas frame/warp caption. The compact mobile Voice unit disables
+    // both so one page-owned gradient can run behind the graph AND its
+    // parameter strip, and because the cutover removes any permanent
+    // Frame/Index display. The retained artwork is identical either way.
+    const { paintBackground = true, showSliceCaption = true } = options;
     const meshColour = mixRGB(theme.meshColor, [214, 246, 255], 0.34);
-    const gradient = context.createLinearGradient?.(0, 0, 0, model.height);
-
-    if (gradient) {
-        gradient.addColorStop(0, "#4b164f");
-        gradient.addColorStop(1, "#1f4f5c");
-        context.fillStyle = gradient;
-    } else {
-        context.fillStyle = "#4b164f";
-    }
 
     context.clearRect(0, 0, model.width, model.height);
-    context.fillRect(0, 0, model.width, model.height);
+
+    if (paintBackground) {
+        const gradient = context.createLinearGradient?.(0, 0, 0, model.height);
+
+        if (gradient) {
+            gradient.addColorStop(0, "#4b164f");
+            gradient.addColorStop(1, "#1f4f5c");
+            context.fillStyle = gradient;
+        } else {
+            context.fillStyle = "#4b164f";
+        }
+
+        context.fillRect(0, 0, model.width, model.height);
+    }
 
     context.save();
     context.strokeStyle = theme.panelStroke;
@@ -1062,14 +1073,16 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
     strokePolylineSegments(context, model.currentSlice.segments);
     context.restore();
 
-    context.save();
-    context.fillStyle = toRGBA(theme.backgroundRGB, 0.74);
-    context.fillRect(model.currentSlice.label.x - 10, model.currentSlice.label.y - 14, 210, 24);
-    context.fillStyle = theme.textColor;
-    context.font = "400 12px Departure Mono, IBM Plex Mono, monospace";
-    context.textAlign = "left";
-    context.fillText(model.currentSlice.label.text, model.currentSlice.label.x, model.currentSlice.label.y + 2);
-    context.restore();
+    if (showSliceCaption) {
+        context.save();
+        context.fillStyle = toRGBA(theme.backgroundRGB, 0.74);
+        context.fillRect(model.currentSlice.label.x - 10, model.currentSlice.label.y - 14, 210, 24);
+        context.fillStyle = theme.textColor;
+        context.font = "400 12px Departure Mono, IBM Plex Mono, monospace";
+        context.textAlign = "left";
+        context.fillText(model.currentSlice.label.text, model.currentSlice.label.x, model.currentSlice.label.y + 2);
+        context.restore();
+    }
 }
 
 export class CanvasWavetableDisplay {
@@ -1079,11 +1092,15 @@ export class CanvasWavetableDisplay {
             theme = DEFAULT_WAVETABLE_THEME,
             requestAnimationFrame = requestNextAnimationFrame,
             cancelAnimationFrame = cancelNextAnimationFrame,
+            paintBackground = true,
+            showSliceCaption = true,
         } = {}
     ) {
         this.canvas = canvas;
         this.context = canvas.getContext("2d");
         this.theme = theme;
+        this.paintBackground = paintBackground;
+        this.showSliceCaption = showSliceCaption;
         this.requestAnimationFrame = requestAnimationFrame;
         this.cancelAnimationFrame = cancelAnimationFrame;
         this.frames = [];
@@ -1231,6 +1248,9 @@ export class CanvasWavetableDisplay {
             warpAmount: this.warpAmount,
         });
 
-        drawWavetableModel(this.context, model, this.theme);
+        drawWavetableModel(this.context, model, this.theme, {
+            paintBackground: this.paintBackground,
+            showSliceCaption: this.showSliceCaption,
+        });
     }
 }

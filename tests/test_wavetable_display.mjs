@@ -1119,3 +1119,38 @@ test("draw routine emits filled surface bands, contour strokes, and the in-canva
     assert.equal(textCommands.length, 1);
     assert.match(textCommands[0].text, /^Frame /);
 });
+
+test("compact-cutover options suppress the background fill and slice caption without touching the artwork", async () => {
+    const { frames } = await loadCurrentBank();
+    const model = buildWavetableRenderModel({
+        frames,
+        position: 0.25,
+        width: 640,
+        height: 320,
+    });
+
+    const defaults = new FakeContext();
+    drawWavetableModel(defaults, model);
+    const defaultFullRects = defaults.commands.filter((command) => (
+        command.type === "fillRect" && command.args[2] === model.width && command.args[3] === model.height
+    ));
+    assert.equal(defaultFullRects.length, 1, "defaults keep the painted background");
+
+    const context = new FakeContext();
+    drawWavetableModel(context, model, undefined, { paintBackground: false, showSliceCaption: false });
+
+    const clears = context.commands.filter((command) => command.type === "clearRect");
+    assert.equal(clears.length, 1, "the canvas still clears so transparent hosts cannot smear");
+
+    const fullRects = context.commands.filter((command) => (
+        command.type === "fillRect" && command.args[2] === model.width && command.args[3] === model.height
+    ));
+    assert.equal(fullRects.length, 0, "no full-canvas background fill");
+
+    const textCommands = context.commands.filter((command) => command.type === "fillText");
+    assert.equal(textCommands.length, 0, "no permanent Frame/Index caption");
+
+    const artStrokes = context.commands.filter((command) => command.type === "stroke");
+    const defaultStrokes = defaults.commands.filter((command) => command.type === "stroke");
+    assert.equal(artStrokes.length, defaultStrokes.length, "the retained artwork is untouched");
+});

@@ -237,7 +237,9 @@ try {
             const viewRoot = getDesktopViewRoot();
             return {
                 errorText: readHarnessFatalErrorText(),
-                hasCanvas: Boolean(viewRoot?.querySelector(".cosimo-stage canvas")),
+                hasCanvas: Boolean(viewRoot?.querySelector(
+                    ".cosimo-stage canvas, [data-role='mobile-voice-graph'] canvas",
+                )),
                 keyboardDebug: readKeyboardDebug(),
                 keyboardNoteCount: readKeyboardAttribute("note-count"),
                 keyboardRootNote: readKeyboardAttribute("root-note"),

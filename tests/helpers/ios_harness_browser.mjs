@@ -773,7 +773,7 @@ export function createIOSHarnessInitScript(baseUrl) {
                 const keyboardHost = shadowRoot?.querySelector(".keyboard-host");
                 const keyboard = shadowRoot?.querySelector(".keyboard");
                 const noteHolder = keyboard?.shadowRoot?.querySelector(".note-holder") ?? null;
-                const retryButton = shadowRoot?.querySelector(".table-retry-button");
+                const retryButton = shadowRoot?.querySelector('[data-role="mobile-voice-retry-load"]');
                 const modalLayer = shadowRoot?.querySelector("[data-role='mseg-modal-layer']");
                 const shellStyle = shell ? getComputedStyle(shell) : null;
                 const shellRect = rectToObject(shell);
@@ -808,10 +808,12 @@ export function createIOSHarnessInitScript(baseUrl) {
                     containerExists: Boolean(document.getElementById("cmaj-view-container")),
                     hostPageBootSource: hostPage?.bootSource ?? null,
                     hostPageViewActive: hostPage?.viewActive ?? null,
-                    hasStage: Boolean(shadowRoot?.querySelector(".wavetable-stage")),
+                    hasStage: Boolean(shadowRoot?.querySelector('[data-role="mobile-voice-graph"]')),
                     hasKeyboard: Boolean(keyboard),
                     hasMsegLauncher: Boolean(shadowRoot?.querySelector(".mseg-launcher")),
-                    displayStatus: shadowRoot?.querySelector("[data-role='display-status']")?.textContent?.trim() ?? null,
+                    displayStatus: shadowRoot?.querySelector("[data-role='ios-voice-status']")?.textContent?.trim()
+                        ?? shadowRoot?.querySelector("[data-role='mobile-voice-table-name']")?.textContent?.trim()
+                        ?? null,
                     bankReadout: shadowRoot?.querySelector(".bank-readout")?.textContent?.trim() ?? null,
                     octaveReadout: shadowRoot?.querySelector("[data-role='octave-readout']")?.textContent?.trim() ?? null,
                     playModeValue: shadowRoot?.querySelector(".play-mode-select")?.value ?? null,
@@ -820,8 +822,8 @@ export function createIOSHarnessInitScript(baseUrl) {
                     keyboardRootNote: keyboard?.getAttribute("root-note") ?? null,
                     keyboardNoteCount: keyboard?.getAttribute("note-count") ?? null,
                     keyboardAttachedEndpoint: keyboardCallback?.midiInputEndpointID ?? null,
-                    retryHidden: retryButton?.hidden ?? null,
-                    retryDisabled: retryButton instanceof HTMLButtonElement ? retryButton.disabled : null,
+                    retryHidden: retryButton === null || retryButton === undefined,
+                    retryDisabled: retryButton instanceof HTMLButtonElement ? retryButton.disabled : false,
                     modalOpen: modalLayer?.dataset.open ?? null,
                     mainViewDisplay: mainView ? getComputedStyle(mainView).display : null,
                     mainViewVisibility: mainView ? getComputedStyle(mainView).visibility : null,

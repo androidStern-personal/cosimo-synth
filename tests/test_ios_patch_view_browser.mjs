@@ -658,38 +658,43 @@ test("mounted iPhone host page boots through patch_gui/index.ios.html and loads 
     }
 });
 
-test("mounted iPhone oscillator tabs route table and pan edits only to the selected oscillator", async () => {
+test("mounted iPhone oscillator tabs route table and control edits only to the selected oscillator", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
 
     try {
         await waitForIOSHarnessReady(page);
-        const oscillatorA = await getShadowLocator(page, 'button[aria-label="Oscillator A"]');
+        const oscillatorA = await getShadowLocator(page, '[data-role="mobile-voice-tab-a"]');
         assert.equal(await oscillatorA.getAttribute("aria-selected"), "true");
 
         await clearIOSHarnessDebugLog(page);
-        await (await getShadowLocator(page, 'button[aria-label="Oscillator B"]')).click();
-        await selectShadowOption(page, ".table-select-overlay", 1);
+        await (await getShadowLocator(page, '[data-role="mobile-voice-tab-b"]')).click();
+        await selectShadowOption(page, 'select[aria-label="Select wavetable"]', 1);
         await dispatchShadowInputValueChange(page, '[data-role="oscillator-pan-slider"]', "0.25");
-        await dispatchShadowInputValueChange(page, '[data-role="oscillator-octave-input"]', "1");
-        await dispatchShadowInputValueChange(page, '[data-role="oscillator-semitone-input"]', "-3");
-        await dispatchShadowInputValueChange(page, '[data-role="oscillator-fine-input"]', "12.5");
-        await dispatchShadowInputValueChange(page, '[data-role="oscillator-level-input"]', "-6");
-        await (await getShadowLocator(page, 'button[aria-label="Mute selected oscillator"]')).click();
-        await (await getShadowLocator(page, 'button[aria-label="Solo selected oscillator"]')).click();
+
+        // Base edits go through the toolbar readout cells' keyboard contract.
+        await (await getShadowLocator(page, '[data-role="mobile-voice-page-next"]')).click();
+        const octaveCell = await getShadowLocator(page, '[data-role="mobile-voice-cell-octave"]');
+        await octaveCell.focus();
+        await page.keyboard.press("ArrowRight");
+        const semitoneCell = await getShadowLocator(page, '[data-role="mobile-voice-cell-semitone"]');
+        await semitoneCell.focus();
+        await page.keyboard.press("ArrowLeft");
+
+        // Mute is the second tap on the active tab; Solo is the tab badge.
+        await (await getShadowLocator(page, '[data-role="mobile-voice-tab-b"]')).click();
+        await (await getShadowLocator(page, '[data-role="mobile-voice-solo-b"]')).click();
 
         const snapshot = await waitForSnapshot(
             page,
-            "oscillator B table and pan writes",
+            "oscillator B routed writes",
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "oscBWavetableSelect" && Number(value) === 1
             )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
                 endpointID === "oscBPan" && Math.abs(Number(value) - 0.25) < 0.0001
             )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBOctave" && Number(value) === 1)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBSemitone" && Number(value) === -3)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBFineCents" && Number(value) === 12.5)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBVolumeDb" && Number(value) === -6)
+                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBSemitone" && Number(value) === -1)
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBMute" && Number(value) === 1)
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "oscBSolo" && Number(value) === 1),
         );
@@ -698,8 +703,10 @@ test("mounted iPhone oscillator tabs route table and pan edits only to the selec
             || endpointID === "pan"
             || endpointID === "oscAWavetableSelect"
             || endpointID === "oscAPan"
+            || endpointID === "oscAOctave"
             || endpointID === "oscCWavetableSelect"
             || endpointID === "oscCPan"
+            || endpointID === "oscCOctave"
         )), false);
     } finally {
         await closeIOSHarnessPage(page);
@@ -716,7 +723,7 @@ test("mounted iPhone host page loads BS2 - Acid through the URL path instead of 
     try {
         await waitForIOSHarnessReady(page);
         await clearIOSHarnessDebugLog(page);
-        await selectShadowOption(page, ".table-select-overlay", bs2Index);
+        await selectShadowOption(page, 'select[aria-label="Select wavetable"]', bs2Index);
         await setIOSHarnessRuntimeState(page, {
             desiredTableIndex: bs2Index,
             hasActive: false,
@@ -769,7 +776,7 @@ test("mounted iPhone shell shows the native library recovery message and Display
         await waitForIOSHarnessReady(page);
         await setIOSHarnessFailingResource(page, targetTable.sourceWav, 404);
         await clearIOSHarnessDebugLog(page);
-        await selectShadowOption(page, ".table-select-overlay", targetTableIndex);
+        await selectShadowOption(page, 'select[aria-label="Select wavetable"]', targetTableIndex);
         await setIOSHarnessRuntimeState(page, {
             desiredTableIndex: targetTableIndex,
             desiredIntentSerial: 8,
@@ -791,26 +798,21 @@ test("mounted iPhone shell shows the native library recovery message and Display
         const renderedState = await waitForRenderedState(
             page,
             "mounted source-wavetable failure UI",
-            (nextState) => (
-                nextState.bankReadout === "Display unavailable"
-                && /Could not load wavetable bank:/.test(nextState.displayStatus ?? "")
-            ),
+            (nextState) => /Could not load wavetable bank:/.test(nextState.displayStatus ?? ""),
         );
 
         assert.match(renderedState.displayStatus, /Failed to fetch resource|404/);
         assert.match(renderedState.displayStatus, /Import the factory wavetable zip from the native library bar, then reopen the patch\./);
-        assert.equal(renderedState.bankReadout, "Display unavailable");
     } finally {
         await clearIOSHarnessFailingResources(page);
         await closeIOSHarnessPage(page);
     }
 });
 
-test("mounted iPhone shell keeps the audible table visible while a new selection is pending, exposes retry on failure, and clears the failure when the requested table becomes active", async () => {
+test("mounted iPhone shell names the pending table, exposes retry on failure, and clears the failure when the requested table becomes active", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
-    const selectedTable = factoryCatalog.tables[0];
     const desiredTable = factoryCatalog.tables[1];
 
     try {
@@ -834,12 +836,8 @@ test("mounted iPhone shell keeps the audible table visible while a new selection
         let renderedState = await waitForRenderedState(
             page,
             "pending table presentation",
-            (nextState) => (
-                nextState.bankReadout?.includes(`${selectedTable.name} -> ${desiredTable.name}`)
-                && nextState.displayStatus === `Loading ${desiredTable.name}…`
-            ),
+            (nextState) => nextState.displayStatus === `Loading ${desiredTable.name}…`,
         );
-        assert.equal(renderedState.displayStatus, `Loading ${desiredTable.name}…`);
         assert.equal(renderedState.retryHidden, true);
 
         await setIOSHarnessRuntimeState(page, {
@@ -866,14 +864,13 @@ test("mounted iPhone shell keeps the audible table visible while a new selection
             (nextState) => (
                 nextState.retryHidden === false
                 && nextState.retryDisabled === false
-                && /Wavetable load timed out\./.test(nextState.bankReadout ?? "")
+                && /Wavetable load timed out\./.test(nextState.displayStatus ?? "")
             ),
         );
-        assert.match(renderedState.bankReadout, /Wavetable load timed out\./);
         assert.equal(renderedState.retryDisabled, false);
 
-        await clickShadowButton(page, ".table-retry-button");
-        let snapshot = await waitForSnapshot(
+        await clickShadowButton(page, '[data-role="mobile-voice-retry-load"]');
+        const snapshot = await waitForSnapshot(
             page,
             "retry request message",
             (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "retryDesiredTableRequest"),
@@ -887,10 +884,8 @@ test("mounted iPhone shell keeps the audible table visible while a new selection
             (nextState) => (
                 nextState.retryHidden === true
                 && nextState.displayStatus === `Loading ${desiredTable.name}…`
-                && nextState.bankReadout?.includes(`${selectedTable.name} -> ${desiredTable.name}`)
             ),
         );
-        assert.equal(renderedState.displayStatus, `Loading ${desiredTable.name}…`);
         assert.equal(renderedState.retryHidden, true);
 
         await setIOSHarnessRuntimeState(page, {
@@ -915,14 +910,12 @@ test("mounted iPhone shell keeps the audible table visible while a new selection
             page,
             "failure cleared after requested table becomes active",
             (nextState) => (
-                nextState.bankReadout === desiredTable.name
+                nextState.displayStatus === desiredTable.name
                 && nextState.retryHidden === true
-                && nextState.displayStatus === `${desiredTable.frameCount} shapes`
             ),
         );
-        assert.equal(renderedState.displayStatus, `${desiredTable.frameCount} shapes`);
-        snapshot = await getIOSHarnessSnapshot(page);
-        assert.equal(snapshot.runtimeState.activeTableIndex, 1);
+        const finalSnapshot = await getIOSHarnessSnapshot(page);
+        assert.equal(finalSnapshot.runtimeState.activeTableIndex, 1);
     } finally {
         await closeIOSHarnessPage(page);
     }
@@ -1635,7 +1628,7 @@ test("mounted iPhone route amounts present the canonical value before the full d
     }
 });
 
-test("mounted iPhone stage gestures keep picker taps inert, swipe tables horizontally, and drag scan position vertically", async () => {
+test("mounted iPhone graph keeps overlay taps inert, edits warp horizontally, and index vertically", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
@@ -1649,38 +1642,45 @@ test("mounted iPhone stage gestures keep picker taps inert, swipe tables horizon
         );
 
         await clearIOSHarnessDebugLog(page);
-        await tapShadowElementWithTouch(page, ".table-select-overlay", 16, 16);
+        await tapShadowElementWithTouch(page, ".mobile-voice-table-select", 16, 8);
         await page.waitForTimeout(25);
         let snapshot = await getIOSHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some((message) => (
-            message.endpointID === "oscAWavetablePosition" || message.endpointID === "oscAWavetableSelect"
+            message.endpointID === "oscAWavetablePosition"
+            || message.endpointID === "oscAWarpAmount"
+            || message.endpointID === "oscAWavetableSelect"
         )), false);
         assert.deepEqual(snapshot.gestureStarts, []);
         assert.deepEqual(snapshot.gestureEnds, []);
 
         await clearIOSHarnessDebugLog(page);
-        await dragAcrossShadowElement(page, ".wavetable-stage", { x: 280, y: 140 }, { x: 90, y: 148 });
+        await dragAcrossShadowElement(page, '[data-role="mobile-voice-graph"]', { x: 90, y: 148 }, { x: 280, y: 140 });
         snapshot = await waitForSnapshot(
             page,
-            "mounted horizontal table swipe",
-            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "oscAWavetableSelect"),
+            "mounted horizontal warp segment",
+            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => (
+                message.endpointID === "oscAWarpAmount" && Number(message.value) > 0.5
+            )),
         );
-        assert.ok(snapshot.sentMessages.some((message) => (
-            message.endpointID === "oscAWavetableSelect" && message.value === 1
-        )));
-        assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), false);
-        assert.equal(snapshot.gestureEnds.includes("oscAWavetablePosition"), false);
+        assert.equal(
+            snapshot.sentMessages.some((message) => message.endpointID === "oscAWavetableSelect"),
+            false,
+            "Graph X edits Warp Amount; it never switches tables in this cutover.",
+        );
+        assert.equal(snapshot.sentMessages.some((message) => message.endpointID === "oscAWavetablePosition"), false);
+        assert.equal(snapshot.gestureStarts.includes("oscAWarpAmount"), true);
+        assert.equal(snapshot.gestureEnds.includes("oscAWarpAmount"), true);
 
         await clearIOSHarnessDebugLog(page);
         await startShadowMutationCounter(page, ".play-panel", "play-panel-stage-drag");
-        await dragAcrossShadowElement(page, ".wavetable-stage", { x: 180, y: 170 }, { x: 182, y: 100 });
+        await dragAcrossShadowElement(page, '[data-role="mobile-voice-graph"]', { x: 180, y: 170 }, { x: 182, y: 100 });
         snapshot = await waitForSnapshot(
             page,
-            "mounted vertical stage drag",
+            "mounted vertical index segment",
             (nextSnapshot) => nextSnapshot.sentMessages.some((message) => message.endpointID === "oscAWavetablePosition"),
         );
         const playPanelMutationCount = await stopShadowMutationCounter(page, "play-panel-stage-drag");
-        const positionUpdate = snapshot.sentMessages.find((message) => message.endpointID === "oscAWavetablePosition");
+        const positionUpdate = snapshot.sentMessages.findLast((message) => message.endpointID === "oscAWavetablePosition");
         assert.equal(snapshot.gestureStarts.includes("oscAWavetablePosition"), true);
         assert.equal(snapshot.gestureEnds.includes("oscAWavetablePosition"), true);
         assert.ok(Number(positionUpdate?.value) > 0.28);
@@ -1688,14 +1688,14 @@ test("mounted iPhone stage gestures keep picker taps inert, swipe tables horizon
         assert.equal(
             playPanelMutationCount,
             0,
-            "Vertical wavetable scrubbing should not rewrite the play controls while scan position changes.",
+            "Vertical index scrubbing should not rewrite the play controls while the value changes.",
         );
     } finally {
         await closeIOSHarnessPage(page);
     }
 });
 
-test("mounted iPhone stage ends an active scan gesture on window blur", async () => {
+test("mounted iPhone graph ends an active index gesture on window blur", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
@@ -1703,16 +1703,12 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
     try {
         await waitForIOSHarnessReady(page);
         await clearIOSHarnessDebugLog(page);
-        const stage = await getShadowLocator(page, ".wavetable-stage");
+        const stage = await getShadowLocator(page, '[data-role="mobile-voice-graph"]');
         const bounds = await stage.boundingBox();
         assert.ok(bounds);
         const start = {
             x: bounds.x + (bounds.width * 0.5),
             y: bounds.y + (bounds.height * 0.72),
-        };
-        const moved = {
-            x: start.x + 2,
-            y: start.y - 54,
         };
 
         await stage.dispatchEvent("pointerdown", {
@@ -1723,18 +1719,27 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
             clientX: start.x,
             clientY: start.y,
         });
+        // The classifying sample is consumed; a second sample applies.
         await stage.dispatchEvent("pointermove", {
             pointerId: 92,
             pointerType: "touch",
             button: 0,
             buttons: 0,
-            clientX: moved.x,
-            clientY: moved.y,
+            clientX: start.x + 2,
+            clientY: start.y - 30,
+        });
+        await stage.dispatchEvent("pointermove", {
+            pointerId: 92,
+            pointerType: "touch",
+            button: 0,
+            buttons: 0,
+            clientX: start.x + 2,
+            clientY: start.y - 54,
         });
 
         let snapshot = await waitForSnapshot(
             page,
-            "active iPhone scan gesture",
+            "active iPhone index gesture",
             (nextSnapshot) => nextSnapshot.gestureStarts.includes("oscAWavetablePosition")
                 && nextSnapshot.sentMessages.some((message) => message.endpointID === "oscAWavetablePosition"),
         );
@@ -1743,7 +1748,7 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
         await page.evaluate(() => window.dispatchEvent(new Event("blur")));
         snapshot = await waitForSnapshot(
             page,
-            "blurred iPhone scan gesture",
+            "blurred iPhone index gesture",
             (nextSnapshot) => nextSnapshot.gestureEnds.includes("oscAWavetablePosition"),
         );
         const valueAfterBlur = Number(snapshot.parameterValues.oscAWavetablePosition);
@@ -1753,16 +1758,16 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
             pointerType: "touch",
             button: 0,
             buttons: 0,
-            clientX: moved.x,
-            clientY: moved.y - 40,
+            clientX: start.x + 2,
+            clientY: start.y - 94,
         });
         await stage.dispatchEvent("pointerup", {
             pointerId: 92,
             pointerType: "touch",
             button: 0,
             buttons: 0,
-            clientX: moved.x,
-            clientY: moved.y - 40,
+            clientX: start.x + 2,
+            clientY: start.y - 94,
         });
         await page.waitForTimeout(60);
         snapshot = await getIOSHarnessSnapshot(page);
@@ -1773,7 +1778,7 @@ test("mounted iPhone stage ends an active scan gesture on window blur", async ()
     }
 });
 
-test("mounted iPhone stage keeps tracking touch when pointer capture is unavailable", async () => {
+test("mounted iPhone graph keeps tracking touch when pointer capture is unavailable", async () => {
     const page = await openIOSHarnessPage(browser, server.baseUrl, {
         viewportSize: { width: 390, height: 844 },
     });
@@ -1781,7 +1786,7 @@ test("mounted iPhone stage keeps tracking touch when pointer capture is unavaila
     try {
         await waitForIOSHarnessReady(page);
         await clearIOSHarnessDebugLog(page);
-        const stage = await getShadowLocator(page, ".wavetable-stage");
+        const stage = await getShadowLocator(page, '[data-role="mobile-voice-graph"]');
         const bounds = await stage.boundingBox();
         assert.ok(bounds);
         await stage.evaluate((element) => {
@@ -1794,10 +1799,7 @@ test("mounted iPhone stage keeps tracking touch when pointer capture is unavaila
             x: bounds.x + (bounds.width * 0.5),
             y: bounds.y + (bounds.height * 0.72),
         };
-        const moved = {
-            x: start.x + 2,
-            y: start.y - 54,
-        };
+
         await stage.dispatchEvent("pointerdown", {
             pointerId,
             pointerType: "touch",
@@ -1806,40 +1808,42 @@ test("mounted iPhone stage keeps tracking touch when pointer capture is unavaila
             clientX: start.x,
             clientY: start.y,
         });
-        await page.evaluate(({ pointerId, moved }) => {
-            window.dispatchEvent(new PointerEvent("pointermove", {
-                pointerId,
-                pointerType: "touch",
-                button: 0,
-                buttons: 0,
-                clientX: moved.x,
-                clientY: moved.y,
-                bubbles: true,
-            }));
-        }, { pointerId, moved });
+        await page.evaluate(({ pointerId, start }) => {
+            for (const deltaY of [30, 54]) {
+                window.dispatchEvent(new PointerEvent("pointermove", {
+                    pointerId,
+                    pointerType: "touch",
+                    button: 0,
+                    buttons: 0,
+                    clientX: start.x + 2,
+                    clientY: start.y - deltaY,
+                    bubbles: true,
+                }));
+            }
+        }, { pointerId, start });
 
         let snapshot = await waitForSnapshot(
             page,
-            "capture-free iPhone scan gesture",
+            "capture-free iPhone index gesture",
             (nextSnapshot) => nextSnapshot.gestureStarts.includes("oscAWavetablePosition")
                 && nextSnapshot.sentMessages.some((message) => message.endpointID === "oscAWavetablePosition"),
         );
         assert.deepEqual(snapshot.gestureEnds, []);
 
-        await page.evaluate(({ pointerId, moved }) => {
+        await page.evaluate(({ pointerId, start }) => {
             window.dispatchEvent(new PointerEvent("pointerup", {
                 pointerId,
                 pointerType: "touch",
                 button: 0,
                 buttons: 0,
-                clientX: moved.x,
-                clientY: moved.y,
+                clientX: start.x + 2,
+                clientY: start.y - 54,
                 bubbles: true,
             }));
-        }, { pointerId, moved });
+        }, { pointerId, start });
         snapshot = await waitForSnapshot(
             page,
-            "capture-free iPhone scan release",
+            "capture-free iPhone index release",
             (nextSnapshot) => nextSnapshot.gestureEnds.includes("oscAWavetablePosition"),
         );
         assert.deepEqual(snapshot.gestureEnds, ["oscAWavetablePosition"]);

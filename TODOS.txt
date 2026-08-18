@@ -12,11 +12,11 @@ HOW WE WILL USE THIS FILE
 
 CURRENT FOCUS
 
-[>] T01 — Finish the accepted Variant-D wavetable preservation contract.
+[>] T02 — Productionize the chosen Voice and wavetable layout (verification in flight).
 
 PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
 
-[>] T01 — Finish the accepted Variant-D wavetable preservation contract
+[x] T01 — Finish the accepted Variant-D wavetable preservation contract
     Settled while this tracker was being prepared:
     - Variant D is the accepted production hierarchy.
     - ADR-024 and docs/MOBILE_VOICE_FOCUSED_OSCILLATOR_SPEC.md are the implementation authority.
@@ -25,8 +25,10 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - At idle, Wavetable overlays the graph at top left and opens the picker; Warp Mode overlays at top right and cycles on tap. There is no permanent Frame/Index display.
     - Once graph motion classifies, the top-left selector smoothly becomes the active Warp percentage or Index value, follows any in-gesture axis switch, and returns to Wavetable on finish.
     - The real graphic fills the complete graph rectangle behind both overlays, with no reserved control inset, distortion, or dead space. The full Voice parameter strip remains below the graph as Variant D established.
-    Still open before production wiring:
-    - Capture the current production wavetable graphic and behavior as the do-not-regress reference.
+    Preservation evidence (2026-08-18):
+    - Pre-cutover source checkpoint: commit 28fa20db (the complete prior compact Voice surface and renderer behavior are rebuildable from it).
+    - The retained renderer is provably unchanged by default: drawWavetableModel gained opt-in `paintBackground`/`showSliceCaption` seams, and tests/test_wavetable_display.mjs asserts the default draw stream (background fill, caption, artwork stroke counts) is identical with the options off leaving the artwork untouched.
+    - The final visual reference is the design canvas "Voice Wavetable Prototype" (real embedded renderer), user-approved for integration.
     Done when:
     - The corner-overlay, transient-readout, rolling-axis, and frame-fill behavior are explicit.
     - The ADR/spec continue to distinguish the chosen layout from the existing renderer/graphic that must be preserved.
@@ -37,8 +39,16 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Handoff: docs/MOBILE_VOICE_FOCUSED_OSCILLATOR_SPEC.md
     - The accepted prototype remains throwaway and is not production-wired.
 
-[ ] T02 — Productionize the chosen Voice and wavetable layout
+[>] T02 — Productionize the chosen Voice and wavetable layout
     Depends on: T01
+    2026-08-18 implementation status:
+    - Shared modules landed in ui/shared: mobile-voice-parameter-manifest (22-control coverage test), rolling-axis-classifier (accepted calibration, one-write-per-sample, in-gesture switching), mobile-voice-rail-projection (rail truth table + aggregate Tune adapter), wavetable-graph-axis-projection (provisional X=Warp behind the replaceable seam), parameter-knob-artwork (ADR-025 dual-ring), and MobileVoiceFocusedEditor + mobile-voice-editor.css.
+    - Compact DesktopPatchView now renders the focused editor inside the existing DesktopOscillatorConnectionBoundary; noncompact desktop is untouched. The compact Controls card keeps Articulations plus Play/Glide and drops the superseded four-knob and unison decks.
+    - IOSPatchView consumes the same editor with a real armed-source selector; its pre-rack tabs/performance-controls/wavetable panel (~390 lines) were deleted. iPhone shell suite: 20/20.
+    - Renderer seams (background fill / slice caption) default to the unchanged desktop drawing; 33/33 renderer cases including the byte-preserving default assertion.
+    - Browser acceptance: adapted the compact cases to the accepted surface (same behavioral assertions) and added tabs-mute/solo, graph one-axis-at-a-time with transient readout, vertical route-amount editing under the fixed HUD, and 320-430 no-overflow cases.
+    Verification (2026-08-18, second pass): full desktop browser suite 160/160 (two touch-mechanics test fixes: harness readiness probe widened to the new graph, and the mod-source chip drop approaches closed-loop to defeat Chromium touch prediction); web bundle contract 14/14; production web build green and served for physical phone review at http://primary-mac.tail5ef964.ts.net:8123/.
+    Remaining before done: real-WebKit/physical-device touch acceptance, phone-width visual captures, and the compiled desktop VST3 build/install pass.
     Build:
     - Rewrite the chosen hierarchy into the real mobile Voice surface; do not copy the throwaway prototype wholesale.
     - Reuse the real WavetableStageSection drawing/data path and preserve its artwork, table loading, and selected A/B/C oscillator bindings.

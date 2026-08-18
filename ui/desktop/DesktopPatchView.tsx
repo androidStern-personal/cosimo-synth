@@ -59,6 +59,10 @@ import {
 import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { BaseParameterKnob } from "./rack-parameter-knob";
+import {
+    MobileVoiceFocusedEditor,
+    type MobileVoiceEditorBindings,
+} from "../shared/mobile-voice-editor";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import {
     DesktopOscillatorConnectionBoundary,
@@ -3310,6 +3314,7 @@ function DesktopPatchViewBody({
     const [mobileModSource, setMobileModSource] = useState<MobileModSource | null>(null);
     const [mobileReturnSection, setMobileReturnSection] = useState<MobileWorkspaceSection | null>(null);
     const [mobileModRailPortalTarget, setMobileModRailPortalTarget] = useState<HTMLElement | null>(null);
+    const [mobileVoiceHudLayer, setMobileVoiceHudLayer] = useState<HTMLDivElement | null>(null);
     const [globalModRailState, setGlobalModRailState] = useState<GlobalModRailState>({
         expanded: false,
         selectedSource: { sourceKind: "mseg", sourceSlot: 1 },
@@ -3604,15 +3609,17 @@ function DesktopPatchViewBody({
                 </div>
             </div>
 
-            <OscillatorPerformanceControls
-                oscillatorID={oscillatorSelection.selectedOscillatorID}
-                octave={synthView.oscillatorOctave}
-                semitone={synthView.oscillatorSemitone}
-                fineCents={synthView.oscillatorFineCents}
-                volumeDb={synthView.oscillatorVolumeDb}
-                mute={synthView.oscillatorMute}
-                solo={synthView.oscillatorSolo}
-            />
+            {isCompactViewport ? null : (
+                <OscillatorPerformanceControls
+                    oscillatorID={oscillatorSelection.selectedOscillatorID}
+                    octave={synthView.oscillatorOctave}
+                    semitone={synthView.oscillatorSemitone}
+                    fineCents={synthView.oscillatorFineCents}
+                    volumeDb={synthView.oscillatorVolumeDb}
+                    mute={synthView.oscillatorMute}
+                    solo={synthView.oscillatorSolo}
+                />
+            )}
 
             {keyboardControlMode === "articulation" ? (
                 <ArticulationControlSurface
@@ -3652,6 +3659,25 @@ function DesktopPatchViewBody({
                     onRequestReplace={synthView.handleReplaceArticulationSlotWithCurrent}
                     onRequestDelete={synthView.handleDeleteArticulationSlot}
                 />
+            ) : isCompactViewport ? (
+                <VoiceGlideControlSurface
+                    playModeValue={synthView.playMode.value}
+                    onPlayModeChange={(nextValue) => synthView.playMode.commitValue(nextValue)}
+                    playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
+                    className="grid-cols-[minmax(0,1fr)_auto] items-end"
+                    glideControl={(
+                        <NexusNumberField
+                            label="Glide"
+                            binding={synthView.glideTime}
+                            min={GLIDE_TIME_MIN_SECONDS}
+                            max={GLIDE_TIME_MAX_SECONDS}
+                            step={GLIDE_TIME_STEP_SECONDS}
+                            onActivate={synthView.keyboardRouting.glideFocusTarget.onActivate}
+                            onBeginTextEntry={synthView.keyboardRouting.glideFocusTarget.onBeginTextEntry}
+                            onEndTextEntry={synthView.keyboardRouting.glideFocusTarget.onEndTextEntry}
+                        />
+                    )}
+                />
             ) : (
                 <KeyboardToolbar
                     oscillatorID={oscillatorSelection.selectedOscillatorID}
@@ -3682,6 +3708,7 @@ function DesktopPatchViewBody({
         handleRenameArticulation,
         handleSelectRangeSegment,
         isArticulationEditorExpanded,
+        isCompactViewport,
         keySegments,
         keyboardControlMode,
         keyboardRootNote,
@@ -3713,12 +3740,97 @@ function DesktopPatchViewBody({
         setMobileReturnSection(null);
     }, [mobileReturnSection]);
 
+    const resolveMobileVoiceScrollLocks = useCallback(() => (
+        Array.from(document.querySelectorAll<HTMLElement>(".mobile-workspace-panel"))
+    ), []);
+    const triggerMobileVoiceHaptic = useCallback(() => {
+        const trigger = (globalThis as typeof globalThis & {
+            cmaj_triggerHaptic?: (style?: string) => unknown;
+        }).cmaj_triggerHaptic;
+        trigger?.("light");
+    }, []);
+    const mobileVoiceBindings = useMemo<MobileVoiceEditorBindings>(() => ({
+        framePosition: synthView.wavetablePosition,
+        warpAmount: synthView.warpAmount,
+        warpMode: synthView.warpMode,
+        pan: synthView.pan,
+        octave: synthView.oscillatorOctave,
+        semitone: synthView.oscillatorSemitone,
+        fineCents: synthView.oscillatorFineCents,
+        volumeDb: synthView.oscillatorVolumeDb,
+        mute: synthView.oscillatorMute,
+        solo: synthView.oscillatorSolo,
+        unisonVoices: synthView.unisonVoices,
+        unisonDetune: synthView.unisonDetune,
+        unisonBlend: synthView.unisonBlend,
+        unisonWidth: synthView.unisonWidth,
+        phase: synthView.unisonPhase,
+        phaseRandom: synthView.unisonRandom,
+        retrigger: synthView.unisonPhaseMode,
+        unisonDetuneMode: synthView.unisonDetuneMode,
+        unisonStackMode: synthView.unisonStackMode,
+        unisonWavetablePositionSpread: synthView.unisonWavetablePositionSpread,
+        unisonWarpSpread: synthView.unisonWarpSpread,
+    }), [
+        synthView.oscillatorFineCents,
+        synthView.oscillatorMute,
+        synthView.oscillatorOctave,
+        synthView.oscillatorSemitone,
+        synthView.oscillatorSolo,
+        synthView.oscillatorVolumeDb,
+        synthView.pan,
+        synthView.unisonBlend,
+        synthView.unisonDetune,
+        synthView.unisonDetuneMode,
+        synthView.unisonPhase,
+        synthView.unisonPhaseMode,
+        synthView.unisonRandom,
+        synthView.unisonStackMode,
+        synthView.unisonVoices,
+        synthView.unisonWarpSpread,
+        synthView.unisonWavetablePositionSpread,
+        synthView.unisonWidth,
+        synthView.warpAmount,
+        synthView.warpMode,
+        synthView.wavetablePosition,
+    ]);
+
     const voiceWorkspace = (
         <>
         <section
             data-role="voice-visualization-stack"
             className="mobile-voice-grid grid min-h-0 grid-cols-1 items-stretch gap-4"
         >
+            {isCompactViewport ? (
+                <DesktopOscillatorConnectionBoundary
+                    selectedOscillator={oscillatorSelection.selectedOscillator}
+                    content={(
+                        <MobileVoiceFocusedEditor
+                            selection={oscillatorSelection}
+                            bindings={mobileVoiceBindings}
+                            stage={{
+                                frames: synthView.frames,
+                                position: synthView.observedPosition,
+                                warpMode: synthView.observedWarpState.hasActive ? synthView.observedWarpState.mode : synthView.warpMode.value,
+                                warpAmount: synthView.observedWarpState.hasActive ? synthView.observedWarpState.amount : synthView.warpAmount.value,
+                                tableName: synthView.displayedTableName,
+                                pendingTableName: synthView.runtimePresentation.isPendingSelection ? synthView.desiredTableName : null,
+                                desiredTableIndex: synthView.desiredTableIndex,
+                                tableOptions: synthView.tableOptions,
+                                onTableChange: synthView.handleSelectWavetable,
+                                onTablePrewarm: synthView.handlePrewarmWavetablePicker,
+                                canRetry: synthView.canRetryDesiredTableLoad,
+                                onRetry: synthView.handleRetryLoad,
+                            }}
+                            routes={synthView.routes}
+                            armedSource={globalModRailState.selectedSource}
+                            hudContainer={mobileVoiceHudLayer}
+                            resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
+                            onRequestHaptic={triggerMobileVoiceHaptic}
+                        />
+                    )}
+                />
+            ) : (
             <DesktopOscillatorPresentation
                 selection={oscillatorSelection}
                 selectedOscillatorStage={(
@@ -3751,6 +3863,7 @@ function DesktopPatchViewBody({
                     />
                 )}
             />
+            )}
 
             <FilterSection
                 filterMode={synthView.filterMode}
@@ -3917,6 +4030,15 @@ function DesktopPatchViewBody({
                     ref={setMobileModRailPortalTarget}
                     data-role="mobile-global-mod-rail-portal"
                     className="mobile-global-mod-rail-portal"
+                    aria-hidden={false}
+                />
+            ) : null}
+
+            {isCompactViewport ? (
+                <div
+                    ref={setMobileVoiceHudLayer}
+                    data-role="mobile-voice-hud-layer"
+                    className="pointer-events-none absolute inset-0 z-40"
                     aria-hidden={false}
                 />
             ) : null}

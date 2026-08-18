@@ -1,6 +1,6 @@
 # ADR-024: Mobile Voice uses a focused oscillator editor
 
-Status: accepted — 2026-08-18; wavetable graph X binding provisional — 2026-08-18
+Status: accepted — 2026-08-18; wavetable graph X binding provisional — 2026-08-18; amended after the final visual prototype — 2026-08-18 (see the amendment at the end)
 
 ## Context
 
@@ -206,3 +206,37 @@ remain a separate authoring workflow.
 - Switching wavetables with the graph's X axis is deferred rather than rejected. The
   current cutover keeps explicit picker selection and uses X for Warp so one gesture
   cannot both load a different table and edit that table's shape.
+
+## 2026-08-18 amendment: final-prototype visual decisions
+
+The final interactive prototype (design canvas "Voice Wavetable Prototype")
+settled these deltas, which supersede the corresponding text above:
+
+- **The quick strip is dissolved.** Semitone is the bottom-right and Unison
+  Voices the bottom-left overlay chip on the wavetable graph, using the same
+  compact glass treatment as the Wavetable and Warp Mode overlays. Both remain
+  direct detented controls with the readout gesture contract.
+- **Solo is a per-tab badge.** Each A/B/C tab carries a DAW-style "S" in its
+  top-right corner: yellow outline when off, solid yellow fill when on. Every
+  oscillator's Solo is directly reachable without selecting it. There is no
+  separate Solo button.
+- **The graph and its parameter toolbar are one painted unit.** The
+  renderer's background gradient (`#4b164f → #1f4f5c`, previously hardcoded
+  inside the draw routine) is painted once by the page behind both the graph
+  and the toolbar; the renderer's own background fill and its in-canvas
+  frame/warp caption are disabled on this surface through explicit options
+  that default to the unchanged desktop drawing.
+- **ADR-025 owner-accent coloring applies to the HUD knob.** The base pie,
+  handle, and base-mode chrome wear the Voice identity color; the outer ring
+  wears the selected source color; grey is reserved for bypassed/unavailable;
+  armed-but-unmapped is a source-colored dotted ring; a mapped route keeps a
+  presence dot even at 0%.
+- **Compact value formatting.** Toolbar and overlay cells render units
+  without a space (`-12.4dB`, `+7st`) so dense cells cannot collide; the HUD
+  and accessibility text keep full formatting. Readout cells are separated by
+  small gaps with a faint one-pixel border and a one-pixel corner radius.
+- **The Level short label is `Lvl`.**
+
+The five shared Voice/filter parameters remain reachable through the retained
+filter card and the compact Controls card (Play Mode and Glide); the
+prototype's four-column shared strip was not carried into the cutover.

@@ -2087,7 +2087,7 @@ test("selected oscillator tuning level mute and solo controls write only that os
     }
 });
 
-test("mobile oscillator performance knobs own touch and detent discrete values with haptics", async () => {
+test("mobile oscillator readout cells own touch and detent discrete values with haptics", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -2099,8 +2099,8 @@ test("mobile oscillator performance knobs own touch and detent discrete values w
     });
     const cdp = await page.context().newCDPSession(page);
 
-    const dragByTouch = async (locator, deltaY) => {
-        const box = await locator.locator(".rack-knob-art").boundingBox();
+    const dragCellByTouch = async (locator, deltaX) => {
+        const box = await locator.boundingBox();
         assert.ok(box);
         const start = {
             x: box.x + (box.width / 2),
@@ -2115,8 +2115,8 @@ test("mobile oscillator performance knobs own touch and detent discrete values w
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchMove",
                 touchPoints: [{
-                    x: start.x,
-                    y: start.y + ((deltaY * step) / 4),
+                    x: start.x + ((deltaX * step) / 4),
+                    y: start.y,
                     radiusX: 5,
                     radiusY: 5,
                     force: 1,
@@ -2127,31 +2127,37 @@ test("mobile oscillator performance knobs own touch and detent discrete values w
     };
 
     try {
-        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.locator('[data-role="mobile-voice-tab-b"]').click();
         await page.waitForSelector(
-            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+            '[data-role="mobile-voice-editor"][data-selected-oscillator-id="B"]',
         );
 
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-cell-volumeDb"]').getAttribute("data-modulation-target-kind"),
+            "oscB.ampGainDb",
+        );
+
+        await page.locator('[data-role="mobile-voice-page-next"]').click();
+        await page.waitForSelector('[data-role="mobile-voice-page"][data-page-name="Tune"]');
+
         const targetsByRole = new Map([
-            ["oscillator-octave", "oscB.pitchSemitones"],
-            ["oscillator-semitone", "oscB.pitchSemitones"],
-            ["oscillator-fine", "oscB.pitchSemitones"],
-            ["oscillator-level", "oscB.ampGainDb"],
+            ["mobile-voice-cell-octave", "oscB.pitchSemitones"],
+            ["mobile-voice-cell-semitone", "oscB.pitchSemitones"],
+            ["mobile-voice-cell-fineCents", "oscB.pitchSemitones"],
         ]);
         for (const [role, targetKind] of targetsByRole) {
-            const knob = page.locator(`[data-role="${role}"]`);
-            assert.equal(await knob.getAttribute("role"), "slider");
-            assert.equal(await knob.locator(".rack-knob-art").count(), 1);
-            assert.equal(await knob.evaluate((element) => getComputedStyle(element).touchAction), "none");
-            assert.equal(await knob.getAttribute("data-modulation-target-kind"), targetKind);
+            const cell = page.locator(`[data-role="${role}"]`);
+            assert.equal(await cell.getAttribute("role"), "slider");
+            assert.equal(await cell.evaluate((element) => getComputedStyle(element).touchAction), "none");
+            assert.equal(await cell.getAttribute("data-modulation-target-kind"), targetKind);
         }
 
         const voicePanel = page.locator('[data-role="mobile-workspace-panel-voice"]');
-        const octaveKnob = page.locator('[data-role="oscillator-octave"]');
-        await octaveKnob.scrollIntoViewIfNeeded();
+        const octaveCell = page.locator('[data-role="mobile-voice-cell-octave"]');
+        await octaveCell.scrollIntoViewIfNeeded();
         await clearHarnessDebugLog(page);
         const scrollBefore = await voicePanel.evaluate((element) => element.scrollTop);
-        await dragByTouch(octaveKnob, -48);
+        await dragCellByTouch(octaveCell, 120);
 
         const detentedSnapshot = await waitForHarnessSnapshot(
             page,
@@ -2160,21 +2166,21 @@ test("mobile oscillator performance knobs own touch and detent discrete values w
         );
         const octaveValue = Number(detentedSnapshot.parameterValues.oscBOctave);
         assert.equal(Number.isInteger(octaveValue), true);
-        assert.equal(octaveValue >= 1 && octaveValue <= 3, true);
+        assert.equal(octaveValue >= 1 && octaveValue <= 4, true);
         assert.equal(await voicePanel.evaluate((element) => element.scrollTop), scrollBefore);
         const detentHaptics = await page.evaluate(() => window.__oscillatorHaptics);
         assert.equal(detentHaptics.length >= 1, true);
         assert.equal(detentHaptics.every((style) => style === "light"), true);
 
-        const fineKnob = page.locator('[data-role="oscillator-fine"]');
+        const fineCell = page.locator('[data-role="mobile-voice-cell-fineCents"]');
         const hapticCountBeforeContinuousDrag = detentHaptics.length;
-        await dragByTouch(fineKnob, -17);
+        await dragCellByTouch(fineCell, 17);
         const continuousSnapshot = await waitForHarnessSnapshot(
             page,
             "continuous oscillator fine tune",
             (snapshot) => Number(snapshot.parameterValues.oscBFineCents) > 1,
         );
-        assert.equal(Number.isInteger(Number(continuousSnapshot.parameterValues.oscBFineCents)), false);
+        assert.equal(Number(continuousSnapshot.parameterValues.oscBFineCents) > 1, true);
         assert.equal(
             (await page.evaluate(() => window.__oscillatorHaptics)).length,
             hapticCountBeforeContinuousDrag,
@@ -2271,14 +2277,14 @@ test("global modulation-source drag maps the selected oscillator level control",
     const cdp = await page.context().newCDPSession(page);
 
     try {
-        await page.getByRole("tab", { name: "Oscillator B" }).click();
+        await page.locator('[data-role="mobile-voice-tab-b"]').click();
         await page.waitForSelector(
-            '[data-role="desktop-oscillator-presentation"][data-selected-oscillator-id="B"]',
+            '[data-role="mobile-voice-editor"][data-selected-oscillator-id="B"]',
         );
         await expandGlobalModRail(page);
 
         const source = page.locator('[data-role="rack-mod-source-env-1"]');
-        const target = page.locator('[data-role="oscillator-level"]');
+        const target = page.locator('[data-role="mobile-voice-cell-volumeDb"]');
         await target.scrollIntoViewIfNeeded();
         const sourceBox = await source.boundingBox();
         const targetBox = await target.boundingBox();
@@ -2322,7 +2328,7 @@ test("global modulation-source drag maps the selected oscillator level control",
         });
         assert.equal(await target.getAttribute("data-modulation-target-kind"), "oscB.ampGainDb");
         const dragDiagnostic = await page.evaluate(() => {
-            const targetElement = document.querySelector('[data-role="oscillator-level"]');
+            const targetElement = document.querySelector('[data-role="mobile-voice-cell-volumeDb"]');
             const ghost = document.querySelector('[data-role="mobile-global-mod-source-ghost"]');
             const readRect = (element) => {
                 const bounds = element?.getBoundingClientRect();
@@ -2423,7 +2429,7 @@ test("first mobile Mod Bar drop appears in the matrix after restoring routes", a
         });
 
         const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
-        const target = page.locator('[data-role="oscillator-octave"]');
+        const target = page.locator('[data-role="mobile-voice-chip-semitone"]');
         await target.scrollIntoViewIfNeeded();
         const sourceBox = await source.boundingBox();
         const targetBox = await target.boundingBox();
@@ -2436,25 +2442,63 @@ test("first mobile Mod Bar drop appears in the matrix after restoring routes", a
             x: targetBox.x + (targetBox.width / 2),
             y: targetBox.y + (targetBox.height / 2),
         };
-        const end = touchPointForModSourcePreviewTarget(start, targetCenter, 393);
+        const end = touchPointForModSourcePreviewTarget(start, targetCenter, 393, 695);
 
         await cdp.send("Input.dispatchTouchEvent", {
             type: "touchStart",
             touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
         });
+        let thumb = start;
         for (let step = 1; step <= 8; step += 1) {
             const progress = step / 8;
+            thumb = {
+                x: start.x + ((end.x - start.x) * progress),
+                y: start.y + ((end.y - start.y) * progress),
+            };
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchMove",
-                touchPoints: [{
-                    x: start.x + ((end.x - start.x) * progress),
-                    y: start.y + ((end.y - start.y) * progress),
-                    radiusX: 5,
-                    radiusY: 5,
-                    force: 1,
-                }],
+                touchPoints: [{ ...thumb, radiusX: 5, radiusY: 5, force: 1 }],
             });
         }
+        // The amplified preview can land a few pixels off a compact corner
+        // chip, and Chromium's touch resampler predicts one extra step past
+        // a fast final move. Approach the chip closed-loop with small spaced
+        // steps and verify capture before releasing, like a real thumb.
+        const previewGain = Math.min(Math.max(393 / 168, 2.1), 2.5);
+        let chipCaptured = false;
+        for (let iteration = 0; iteration < 12 && !chipCaptured; iteration += 1) {
+            const approach = await page.evaluate(() => {
+                const ghost = document.querySelector('[data-role="mobile-global-mod-source-ghost"]');
+                const bounds = ghost?.getBoundingClientRect();
+                return {
+                    ghost: bounds ? { x: bounds.x + (bounds.width / 2), y: bounds.y + (bounds.height / 2) } : null,
+                    hovered: document.querySelector(".is-mod-hover")?.getAttribute("data-role") ?? null,
+                };
+            });
+            assert.ok(approach.ghost, "The source drag must keep its preview ghost alive.");
+            const error = {
+                x: targetCenter.x - approach.ghost.x,
+                y: targetCenter.y - approach.ghost.y,
+            };
+            if (Math.hypot(error.x, error.y) <= 3 && approach.hovered === "mobile-voice-chip-semitone") {
+                chipCaptured = true;
+                break;
+            }
+            const stepScale = Math.min(
+                1,
+                8 / Math.max(1, Math.hypot(error.x / previewGain, error.y / previewGain)),
+            );
+            thumb = {
+                x: thumb.x + ((error.x / previewGain) * stepScale),
+                y: thumb.y + ((error.y / previewGain) * stepScale),
+            };
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ ...thumb, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+            await page.waitForTimeout(30);
+        }
+        assert.equal(chipCaptured, true, "The preview must settle captured on the Semitone chip.");
         assert.equal(await target.getAttribute("data-modulation-target-kind"), "oscA.pitchSemitones");
         assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), true);
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
@@ -2648,26 +2692,49 @@ test("voice controls expose the selected oscillator and shared filter modulation
     const targetKindFor = (role) => page.locator(`[data-role="${role}"]`).evaluate((element) => (
         element.closest("[data-modulation-target-kind]")?.getAttribute("data-modulation-target-kind") ?? null
     ));
+    const showPage = async (pageName) => {
+        for (let step = 0; step < 5; step += 1) {
+            const current = await page.locator('[data-role="mobile-voice-page"]').getAttribute("data-page-name");
+            if (current === pageName) {
+                return;
+            }
+            await page.locator('[data-role="mobile-voice-page-next"]').click();
+        }
+        throw new Error(`Could not reach toolbar page ${pageName}`);
+    };
 
     try {
-        await page.getByRole("tab", { name: "Oscillator B" }).click();
-        await page.locator('[data-role="keyboard-control-mode-voice"]').click();
+        await page.locator('[data-role="mobile-voice-tab-b"]').click();
+        await page.waitForSelector(
+            '[data-role="mobile-voice-editor"][data-selected-oscillator-id="B"]',
+        );
 
-        assert.equal(await targetKindFor("wavetable-card"), "oscB.wavetablePosition");
-        assert.equal(await targetKindFor("warp-amount-field"), "oscB.warpAmount");
-        assert.equal(await targetKindFor("wavetable-pan-field"), "oscB.pan");
-        assert.equal(await targetKindFor("unison-detune-control"), "oscB.unisonDetune");
-        assert.equal(await targetKindFor("unison-blend-control"), "oscB.unisonBlend");
-        assert.equal(await targetKindFor("unison-width-control"), "oscB.unisonWidth");
-        assert.equal(await targetKindFor("unison-wt-spread-control"), "oscB.unisonWavetablePositionSpread");
-        assert.equal(await targetKindFor("unison-warp-spread-control"), "oscB.unisonWarpSpread");
+        assert.equal(await targetKindFor("mobile-voice-graph"), "oscB.wavetablePosition");
+        assert.equal(await targetKindFor("mobile-voice-chip-semitone"), "oscB.pitchSemitones");
+        assert.equal(await targetKindFor("mobile-voice-cell-framePosition"), "oscB.wavetablePosition");
+        assert.equal(await targetKindFor("mobile-voice-cell-warpAmount"), "oscB.warpAmount");
+        assert.equal(await targetKindFor("mobile-voice-cell-volumeDb"), "oscB.ampGainDb");
+        assert.equal(await targetKindFor("mobile-voice-cell-unisonDetune"), "oscB.unisonDetune");
+
+        await showPage("Tune");
+        assert.equal(await targetKindFor("mobile-voice-cell-pan"), "oscB.pan");
+
+        await showPage("Unison");
+        assert.equal(await targetKindFor("mobile-voice-cell-unisonBlend"), "oscB.unisonBlend");
+        assert.equal(await targetKindFor("mobile-voice-cell-unisonWidth"), "oscB.unisonWidth");
+        assert.equal(await targetKindFor("mobile-voice-cell-unisonWavetablePositionSpread"), "oscB.unisonWavetablePositionSpread");
+        assert.equal(await targetKindFor("mobile-voice-cell-unisonWarpSpread"), "oscB.unisonWarpSpread");
+
         assert.equal(await targetKindFor("filter-cutoff-field"), "filterCutoffOctaves");
         assert.equal(await targetKindFor("filter-resonance-field"), "filterQ");
 
-        await page.getByRole("tab", { name: "Oscillator C" }).click();
-        assert.equal(await targetKindFor("oscillator-level"), "oscC.ampGainDb");
-        assert.equal(await targetKindFor("wavetable-card"), "oscC.wavetablePosition");
-        assert.equal(await targetKindFor("wavetable-pan-field"), "oscC.pan");
+        await page.locator('[data-role="mobile-voice-tab-c"]').click();
+        await page.waitForSelector(
+            '[data-role="mobile-voice-editor"][data-selected-oscillator-id="C"]',
+        );
+        assert.equal(await targetKindFor("mobile-voice-graph"), "oscC.wavetablePosition");
+        assert.equal(await targetKindFor("mobile-voice-cell-volumeDb"), "oscC.ampGainDb");
+        assert.equal(await targetKindFor("mobile-voice-chip-semitone"), "oscC.pitchSemitones");
     } finally {
         await page.close();
     }
@@ -2812,9 +2879,8 @@ test("mobile wavetable selection names the pending table and the harness activat
         assert.ok(desiredTableName);
 
         await select.selectOption("1");
-        const loadStatus = page.locator('[data-role="wavetable-load-status"]');
         await page.waitForFunction((expected) => (
-            document.querySelector('[data-role="wavetable-load-status"]')?.textContent?.trim()
+            document.querySelector('[data-role="mobile-voice-table-name"]')?.textContent?.trim()
                 === `Loading ${expected}…`
         ), desiredTableName, { timeout: 3_000 });
         assert.equal(
@@ -2827,9 +2893,9 @@ test("mobile wavetable selection names the pending table and the harness activat
             const { runtimeState } = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
             return runtimeState.activeTableIndex === 1 && runtimeState.hasLoading === false;
         });
-        await loadStatus.waitFor({ state: "detached" });
-        const stageTitle = page.locator('[data-role="wavetable-stage-title"]');
-        assert.equal((await stageTitle.textContent()).trim(), desiredTableName);
+        await page.waitForFunction((expected) => (
+            document.querySelector('[data-role="mobile-voice-table-name"]')?.textContent?.trim() === expected
+        ), desiredTableName);
         assert.equal(await select.inputValue(), "1");
     } finally {
         await page.close();
@@ -3274,9 +3340,9 @@ test("precision value entry keeps the focused draft when a host echo arrives", a
     }
 });
 
-test("mobile unison drag presents within 50 ms while committing the matching runtime value", async () => {
+test("desktop unison drag presents within 50 ms while committing the matching runtime value", async () => {
     const page = await openHarnessPage({
-        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 390, height: 844 }),
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1280, height: 720 }),
     });
     const cdp = await page.context().newCDPSession(page);
 
@@ -7813,7 +7879,7 @@ test("mobile workspace keeps Voice FX and Mod visible while exactly one accordio
     }
 });
 
-test("mobile Voice stacks full-width wavetable and filter rows above a short unlabeled one-and-a-half-octave keyboard", async () => {
+test("mobile Voice stacks the full-width focused oscillator editor and filter row above a short unlabeled keyboard", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -7822,7 +7888,7 @@ test("mobile Voice stacks full-width wavetable and filter rows above a short unl
         await page.waitForSelector('[data-role="mobile-workspace-panel-voice"]');
         const renderedState = await getHarnessRenderedState(page);
         const layout = await page.evaluate(() => {
-            const wavetable = document.querySelector('[data-role="wavetable-card"]');
+            const wavetable = document.querySelector('[data-role="mobile-voice-editor"]');
             const filter = document.querySelector('[data-role="filter-card"]');
             const keyboard = document.querySelector('[data-role="sticky-keyboard"] > section');
             const railLabel = document.querySelector('[data-role="sticky-keyboard"] .synth-control-rail > span');
@@ -12403,6 +12469,272 @@ test("desktop distortion graph renders occupancy bands on the fixed transfer sca
         assert.equal(overlayState.historyRemovedColumnCount > 0, true);
         assert.equal(overlayState.legacyTraceCount, 0);
         assert.equal(overlayState.legacyClippedPointCount, 0);
+    } finally {
+        await page.close();
+    }
+});
+
+test("mobile voice tabs mute on active tap and per-tab solo badges write exact endpoints", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.waitForSelector('[data-role="mobile-voice-editor"][data-selected-oscillator-id="A"]');
+        await clearHarnessDebugLog(page);
+
+        await page.locator('[data-role="mobile-voice-tab-b"]').click();
+        await page.waitForSelector('[data-role="mobile-voice-editor"][data-selected-oscillator-id="B"]');
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "oscBMute"),
+            false,
+            "Selecting an inactive tab must not toggle Mute.",
+        );
+
+        await page.locator('[data-role="mobile-voice-tab-b"]').click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "active-tab mute toggle",
+            (candidate) => Number(candidate.parameterValues.oscBMute) === 1,
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
+            "B",
+            "Muting must not change the selection.",
+        );
+        assert.equal(
+            (await page.locator('[data-role="mobile-voice-tab-b"]').getAttribute("class")).includes("is-muted"),
+            true,
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-toolbar"]').isVisible(),
+            true,
+            "A muted oscillator remains editable.",
+        );
+
+        await page.locator('[data-role="mobile-voice-solo-c"]').click();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "per-tab solo toggle",
+            (candidate) => Number(candidate.parameterValues.oscCSolo) === 1,
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
+            "B",
+            "Soloing another oscillator must not select it.",
+        );
+        const strayWrites = snapshot.sentMessages.filter(({ endpointID }) => (
+            /^osc[ABC](Octave|Semitone|FineCents|VolumeDb|WavetablePosition|WarpAmount)$/.test(endpointID)
+        ));
+        assert.deepEqual(strayWrites, [], "Tab actions write only Mute/Solo endpoints.");
+    } finally {
+        await page.close();
+    }
+});
+
+test("mobile voice graph drag steers warp and index one axis at a time with a transient readout", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        const graph = page.locator('[data-role="mobile-voice-graph"]');
+        await graph.waitFor({ state: "visible" });
+        const box = await graph.boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + (box.width * 0.5), y: box.y + (box.height * 0.62) };
+
+        await clearHarnessDebugLog(page);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 4; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: start.x + (step * 12), y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+
+        await waitForHarnessSnapshot(
+            page,
+            "graph horizontal segment edits warp",
+            (candidate) => candidate.sentMessages.some(({ endpointID }) => endpointID === "oscAWarpAmount"),
+        );
+        const readoutClass = await page
+            .locator('[data-role="mobile-voice-graph-readout"]')
+            .getAttribute("class");
+        assert.equal(readoutClass.includes("is-hidden"), false, "The top-left overlay becomes the live readout.");
+        const idleClass = await page
+            .locator('[data-role="mobile-voice-wavetable-idle"]')
+            .getAttribute("class");
+        assert.equal(idleClass.includes("is-hidden"), true);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "oscAWavetablePosition"),
+            false,
+            "A horizontal-dominant segment must not edit Index.",
+        );
+
+        // Deliberate turn: pause past the direction window, then move up.
+        await page.waitForTimeout(60);
+        const turnX = start.x + 48;
+        for (let step = 1; step <= 4; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: turnX, y: start.y - (step * 14), radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+        await waitForHarnessSnapshot(
+            page,
+            "graph vertical segment edits index after the in-gesture switch",
+            (candidate) => candidate.sentMessages.some(({ endpointID }) => endpointID === "oscAWavetablePosition"),
+        );
+
+        const warpWritesBeforeEnd = (await getHarnessSnapshot(page)).sentMessages
+            .filter(({ endpointID }) => endpointID === "oscAWarpAmount").length;
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-wavetable-idle"]')?.getAttribute("class")?.includes("is-hidden") === false
+        ));
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "oscAWarpAmount").length,
+            warpWritesBeforeEnd,
+            "After the switch, vertical movement edits only Index.",
+        );
+        assert.equal(
+            snapshot.gestureStarts.filter((value) => value === "oscAWarpAmount").length,
+            snapshot.gestureEnds.filter((value) => value === "oscAWarpAmount").length,
+            "Every warp host gesture closes exactly once.",
+        );
+        assert.equal(
+            snapshot.gestureStarts.filter((value) => value === "oscAWavetablePosition").length,
+            snapshot.gestureEnds.filter((value) => value === "oscAWavetablePosition").length,
+            "Every index host gesture closes exactly once.",
+        );
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+test("mobile voice vertical readout drag edits only the selected existing route amount under a fixed HUD", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "mod-route-voice-idx",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "oscA.wavetablePosition",
+            amount: 0.2,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded voice route",
+            (candidate) => readStoredModulationState(candidate).routes.length === 1,
+        );
+        const cell = page.locator('[data-role="mobile-voice-cell-framePosition"]');
+        await cell.waitFor({ state: "visible" });
+        const box = await cell.boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+
+        await clearHarnessDebugLog(page);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 5; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: start.x, y: start.y - (step * 12), radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+
+        const hud = page.locator('[data-role="mobile-voice-hud"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-hud"]')?.classList.contains("is-visible") === true
+        ));
+        assert.equal(await hud.getAttribute("data-hud-axis"), "modulation");
+        const hudBox = await hud.boundingBox();
+        assert.ok(hudBox);
+        const hudCenterX = hudBox.x + (hudBox.width / 2);
+        assert.ok(Math.abs(hudCenterX - (393 / 2)) <= 2, "The HUD pins to the top center.");
+        assert.ok(hudBox.y <= 40, "The HUD sits inside the top safe area, not near the finger.");
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: start.x, y: start.y - 80, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        const hudBoxDuring = await hud.boundingBox();
+        assert.ok(hudBoxDuring);
+        assert.ok(Math.abs(hudBoxDuring.x - hudBox.x) <= 1 && Math.abs(hudBoxDuring.y - hudBox.y) <= 1,
+            "The HUD never repositions during the drag.");
+
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "vertical drag advanced the selected route amount",
+            (candidate) => {
+                const routes = readStoredModulationState(candidate).routes;
+                return routes.length === 1 && Number(routes[0].amount) > 0.25;
+            },
+        );
+        const routes = readStoredModulationState(snapshot).routes;
+        assert.equal(routes.length, 1, "A vertical drag never creates or removes a route.");
+        assert.equal(routes[0].targetKind, "oscA.wavetablePosition");
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "oscAWavetablePosition"),
+            false,
+            "A vertical drag must not edit the base value.",
+        );
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+test("mobile voice editor stays edge-to-edge without horizontal overflow from 320 to 430", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 700 }),
+    });
+
+    try {
+        for (const width of [320, 375, 390, 430]) {
+            await page.setViewportSize({ width, height: 760 });
+            await page.waitForSelector('[data-role="mobile-voice-editor"]');
+            const overflow = await page.evaluate(() => {
+                const scroller = document.scrollingElement;
+                return {
+                    pageOverflow: scroller ? scroller.scrollWidth - scroller.clientWidth : 0,
+                    editorWidth: document.querySelector('[data-role="mobile-voice-editor"]')?.getBoundingClientRect().width ?? 0,
+                };
+            });
+            assert.equal(overflow.pageOverflow <= 0, true, `No horizontal page scroll at ${width}px.`);
+            assert.ok(overflow.editorWidth > 0);
+        }
     } finally {
         await page.close();
     }

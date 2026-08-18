@@ -6,6 +6,7 @@
 @import "./rack-parameter-knob.css";
 @import "./mobile-workspace.css";
 @import "./mobile-mod-matrix.css";
+@import "../shared/mobile-voice-editor.css";
 
 /* The complete matrix is intentionally present for search and accessibility,
    but off-screen rows must not consume the interactive frame budget. */

@@ -767,7 +767,7 @@ test("the iPhone patch view is emitted as a real React bundle instead of a wrapp
     assert.match(builtIOSPatchView, /class CosimoIOSReactViewElement extends HTMLElement/);
     assert.match(builtIOSPatchView, /function createIOSPatchView/);
     assert.match(builtIOSPatchView, /"cosimo-synth-view"/);
-    assert.match(builtIOSPatchView, /Swipe \+ Drag/);
+    assert.match(builtIOSPatchView, /mobile-voice-editor/);
     assert.doesNotMatch(builtIOSPatchView, /createPatchViewWithOptions/);
     assert.doesNotMatch(builtIOSPatchView, /import \{ createPatchViewWithOptions \} from "\.\/index\.js"/);
     await assert.rejects(
