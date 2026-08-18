@@ -240,3 +240,32 @@ settled these deltas, which supersede the corresponding text above:
 The five shared Voice/filter parameters remain reachable through the retained
 filter card and the compact Controls card (Play Mode and Glide); the
 prototype's four-column shared strip was not carried into the cutover.
+
+## 2026-08-18 amendment: live-review deltas
+
+Device review of the integrated build settled these behavior deltas, which
+supersede the corresponding HUD and rail text above (spec §10/§12 messages
+included):
+
+- **The HUD never renders message strings and never shifts layout.** The
+  "create a mapping" and "route bypassed" helper texts are dropped. The HUD
+  header is a fixed three-column grid (value left, name center, source right)
+  so no content change can move any element. The Low/High span labels render
+  only when the selected route has a non-zero amount — there is no modulation
+  range to depict otherwise.
+- **A vertical drag without an editable route stays in the base
+  presentation.** The HUD only flips to the modulation presentation when the
+  drag can actually write a route amount; otherwise the gesture presents (and
+  behaves) as an inert base-value inspection, not an empty MOD view.
+- **The base fill zero-anchors only for symmetric bipolar ranges.** Pan,
+  Octave, Semitone, and Fine fill outward from center; asymmetric signed
+  ranges such as Level (−60..+6 dB) fill from their minimum so the pie reads
+  as an amount.
+- **Mapped-route presence is visible on graph overlay chips.** A chip whose
+  parameter has a route for the armed source shows a small dot in the source
+  accent (outlined instead of filled when the route is bypassed), matching
+  the rail-band language of the toolbar cells.
+- **Modulation amounts on detented pitch parameters get sticky detents.**
+  Semitone-kind route amounts drag freely but capture to whole semitones
+  within ±0.2 st, with one haptic pulse per newly captured integer. Base-axis
+  detents are unchanged.
