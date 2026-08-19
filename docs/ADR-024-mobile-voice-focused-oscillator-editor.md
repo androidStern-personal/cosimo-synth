@@ -31,6 +31,12 @@ the deferred broad modulation document.
   toggles the oscillator's existing Mute parameter. A muted oscillator is visibly
   greyed but remains editable. There is no duplicate Mute button or second A/B/C power
   label. Solo remains a dedicated action at the upper right of the focused editor.
+- When selection moves between A, B, and C, the tab row remains fixed while the focused
+  oscillator editor beneath it slides horizontally in the matching direction: moving
+  toward a higher letter brings the new editor from the right, and moving toward a lower
+  letter brings it from the left. The three oscillator editors are visually similar, so
+  this motion is the deliberate cue that the editing context changed. It does not add a
+  swipe gesture, delay input, or animate the primary Voice/FX/Mod workspace shell.
 - Semitone and Unison Voices remain direct controls above the wavetable because they
   are high-frequency sound-design moves. The Semitone shortcut and the Tune-page
   Semitone readout are two views of one endpoint, never duplicated state.

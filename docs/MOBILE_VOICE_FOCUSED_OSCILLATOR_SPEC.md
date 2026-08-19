@@ -131,6 +131,16 @@ overflow or cause horizontal page scrolling.
   voice count, On/Off caption, or other secondary text appears in a tab.
 - An inactive tab tap changes only `selectedOscillatorID`.
 - A tap on the active tab toggles the focused oscillator's existing Mute endpoint.
+- The A/B/C tab row stays stationary while a selection change slides the focused editor
+  beneath it horizontally. Selecting a higher-letter oscillator moves the outgoing
+  editor left and brings the new editor in from the right; selecting a lower-letter
+  oscillator does the reverse. A direct A-to-C or C-to-A selection follows that same
+  letter order rather than inventing a wrap direction.
+- The slide is a short visual confirmation because adjacent oscillator editors otherwise
+  look nearly identical. It must not postpone binding the newly selected oscillator or
+  block immediate input. This is a tap/keyboard-triggered transition, not permission to
+  add horizontal swipe navigation. Reduced-motion removes the translation while keeping
+  the selected-tab state change unambiguous.
 - Active is indicated by the normal oscillator accent and a bottom edge marker. Muted
   is grey/desaturated. Active+muted remains visibly selected but grey.
 - Muting does not disable controls or discard page state. The editor remains usable so
@@ -638,71 +648,75 @@ Suggested module boundaries, names not binding:
    edge-to-edge with no horizontal overflow.
 2. A/B/C tabs contain only letters. Selecting B changes the focused bindings; tapping B
    again toggles only B Mute and greys B without disabling its editor.
-3. There is no dedicated Mute button or duplicate oscillator letter/power block. Solo
+3. Changing from A to B or B to C leaves the tab row fixed and slides the focused editor
+   left; changing in the opposite direction slides it right. The new oscillator accepts
+   input immediately, reduced-motion removes the translation, and no swipe recognizer is
+   created.
+4. There is no dedicated Mute button or duplicate oscillator letter/power block. Solo
    remains visible at the upper right.
-4. Semitone and Voices are available without changing toolbar pages.
-5. Over drawable graph space, a horizontal-dominant segment changes Warp Amount and not
+5. Semitone and Voices are available without changing toolbar pages.
+6. Over drawable graph space, a horizontal-dominant segment changes Warp Amount and not
    Index; a vertical-dominant segment changes Index and not Warp Amount. A continuous
    L-shaped drag can switch Warp → Index → Warp without release, but no sample changes
    both and ambiguous diagonal jitter changes neither. Neither axis changes the selected
    wavetable in this cutover. Wavetable and Warp Mode overlays operate without starting
    either graph axis.
-6. The real wavetable drawing fills the graph rectangle behind both corner controls,
+7. The real wavetable drawing fills the graph rectangle behind both corner controls,
    with no reserved control inset, dead band, stretch, or distortion. At idle, only
    Wavetable at top left and Warp Mode at top right persist. During graph editing, the
    top-left control smoothly becomes the current Warp percentage or Index value, tracks
    an axis switch, and returns to Wavetable on finish.
-7. Page paddles, page identity/count, and parameters occupy one row. Pages wrap and are
+8. Page paddles, page identity/count, and parameters occupy one row. Pages wrap and are
    independently remembered for A/B/C.
-8. The manifest-coverage test accounts for exactly the 22 controls in section 7 and all
+9. The manifest-coverage test accounts for exactly the 22 controls in section 7 and all
    five shared parameters remain reachable.
 
 ### Readouts and rails
 
-9. Every continuous toolbar cell keeps label and value on one line with no large empty
+10. Every continuous toolbar cell keeps label and value on one line with no large empty
    vertical padding.
-10. Every rail renders base as one neutral tick. No base-origin fill exists in DOM/CSS or
+11. Every rail renders base as one neutral tick. No base-origin fill exists in DOM/CSS or
    screenshot output.
-11. A mapped route renders only that selected route's source-colored projected band.
+12. A mapped route renders only that selected route's source-colored projected band.
     No-source, unmapped, zero, mapped, bypassed, clipped, and non-modulatable fixtures
     are distinguishable.
-12. Octave, Semitone, and Fine identify their Y-axis route as Tune and show semitone
+13. Octave, Semitone, and Fine identify their Y-axis route as Tune and show semitone
     amount/Low/High values derived from aggregate static tune.
 
 ### Readout gesture behavior
 
-13. A horizontal drag changes base and not route amount. A vertical drag changes the
+14. A horizontal drag changes base and not route amount. A vertical drag changes the
     existing route amount and not base.
-14. A single continuous L-shaped drag can change base, then route amount, then base
+15. A single continuous L-shaped drag can change base, then route amount, then base
     again without release; no sample changes both and no switch jumps.
-15. Ambiguous jitter inside activation/dominance changes neither value.
-16. On real iOS WebKit, the drag never becomes page scroll, never terminates merely on
+16. Ambiguous jitter inside activation/dominance changes neither value.
+17. On real iOS WebKit, the drag never becomes page scroll, never terminates merely on
     lost capture, and the HUD remains visible until a real finish condition.
-17. Releasing/cancelling outside the cell, blurring, hiding, rotating, and unmounting
+18. Releasing/cancelling outside the cell, blurring, hiding, rotating, and unmounting
     each end ownership exactly once with no stuck page lock.
-18. A vertical drag with no route does not create a route, persist a draft, or display a
+19. A vertical drag with no route does not create a route, persist a draft, or display a
     false zero mapping. A bypassed route remains bypassed after editing.
 
 ### HUD
 
-19. HUD appears only after axis classification and is fixed at top center for the whole
+20. HUD appears only after axis classification and is fixed at top center for the whole
     gesture. It never moves back above the readout or follows the pointer.
-20. HUD names the active axis, full parameter/target, actual armed source, signed route
+21. HUD names the active axis, full parameter/target, actual armed source, signed route
     amount, center base, and projected Low/High with correct units.
-21. Axis switches update content/art emphasis without moving the overlay.
-22. Normal release lingers briefly; cancel/context loss hides immediately; the overlay
+22. Axis switches update content/art emphasis without moving the overlay.
+23. Normal release lingers briefly; cancel/context loss hides immediately; the overlay
     never blocks pointer input.
 
 ### Data and performance
 
-23. Base writes reach only the focused oscillator endpoint and respect its real range,
+24. Base writes reach only the focused oscillator endpoint and respect its real range,
     step, begin/end gesture, and detents. Graph X writes only focused Warp Amount and
     graph Y writes only focused Index through their existing authoritative bindings.
-24. MOD writes reach only `useModulationRouteAmountBinding` for the selected real route.
+25. MOD writes reach only `useModulationRouteAmountBinding` for the selected real route.
     A test fails if a live readout amount is driven from broad `useModulationState`.
-25. A 10-second scrub at display rate produces no uncaught errors, stuck gestures,
+26. A 10-second scrub at display rate produces no uncaught errors, stuck gestures,
     document scroll, layout shift, or root Voice rerender per raw pointer event.
-26. Compact responsive and native iPhone shells pass the same pure manifest,
+27. Compact responsive and native iPhone shells pass the same pure manifest,
     classifier, projection, and lifecycle contract tests.
 
 ## 20. Verification matrix
@@ -710,8 +724,8 @@ Suggested module boundaries, names not binding:
 | Layer | Required proof |
 | --- | --- |
 | Pure unit | page manifest completeness; shared rolling-axis classifier; graph projection with replaceable horizontal and stable vertical/Index; one-write-per-sample; format/step; aggregate Tune; route range/polarity/clipping; rail states; mode-switch/no-debt; idempotent finish |
-| React/component | tab/Mute semantics; per-osc page memory; graph/Shape alias bindings; corner-overlay exclusion; top-left selector/readout transitions; HUD labels; route amount binding; no-route/bypassed states; reduced motion; accessibility roles |
-| Browser | 320/375/390/430 screenshots; full-frame graph behind corner controls; no overflow; label/value alignment; exact base-tick rail; graph value transition; top-center HUD; pointer leaving control; outside scroll remains normal |
+| React/component | tab/Mute semantics; directional A/B/C editor slide with fixed tabs and immediate bindings; per-osc page memory; graph/Shape alias bindings; corner-overlay exclusion; top-left selector/readout transitions; HUD labels; route amount binding; no-route/bypassed states; reduced motion; accessibility roles |
+| Browser | 320/375/390/430 screenshots; directional A/B/C transition and reduced-motion state; full-frame graph behind corner controls; no overflow; label/value alignment; exact base-tick rail; graph value transition; top-center HUD; pointer leaving control; outside scroll remains normal |
 | WebKit touch | non-passive ownership; `buttons=0`; rejected/lost capture; pointer/touch cancel; blur/visibility; no mid-drag page scroll |
 | Native iPhone | real safe area, orientation cancellation, haptics on Oct/Semi detents, global armed source integration, live audio response |
 | Regression | desktop noncompact Voice unchanged; FX knob axes unchanged; explicit route creation unchanged; presets/parameters/schema unchanged |
@@ -745,6 +759,9 @@ gesture contracts are the stability boundary; production composition follows the
 ### Settled product behavior
 
 - Variant D focused hierarchy; letter-only tabs; active-tab Mute; Solo only.
+- A/B/C tabs remain fixed while the focused editor slides left or right according to
+  letter order; selection binds immediately, no swipe navigation is added, and reduced
+  motion removes the translation.
 - Full-frame graph behind top-left Wavetable and top-right Warp Mode overlays; no
   permanent Frame/Index display. The top-left control becomes the current Warp or Index
   readout during graph editing and returns to Wavetable on finish.
