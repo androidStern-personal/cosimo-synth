@@ -2079,6 +2079,7 @@ function MobileGlobalModRail({
         layerWidthRef.current = layerBounds.width;
         const surface = layer.closest(".cosimo-surface");
         const keyboard = surface?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
+        const workspaceTabs = surface?.querySelector<HTMLElement>('[data-role="mobile-workspace-tabs"]');
         const presetBar = surface?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"]');
         const measuredKeyboardBounds = keyboard?.getBoundingClientRect();
         // A hidden keyboard (display: none) measures 0x0 at the origin and must
@@ -2086,14 +2087,25 @@ function MobileGlobalModRail({
         const keyboardBounds = measuredKeyboardBounds && measuredKeyboardBounds.height > 0
             ? measuredKeyboardBounds
             : undefined;
+        // The tab row's top edge is the rail's lowest usable boundary
+        // (ADR-026): with the keyboard hidden, the tabs dock at the bottom and
+        // become the binding constraint.
+        const measuredTabsBounds = workspaceTabs?.getBoundingClientRect();
+        const tabsBounds = measuredTabsBounds && measuredTabsBounds.height > 0
+            ? measuredTabsBounds
+            : undefined;
         const presetBarBounds = presetBar?.getBoundingClientRect();
         const safeTopInset = 8 + (Number.parseFloat(layerStyle.paddingTop) || 0);
         const safeTop = presetBarBounds
             ? Math.max(safeTopInset, presetBarBounds.bottom - layerBounds.top + 8)
             : safeTopInset;
         const safeBottom = 8 + (Number.parseFloat(layerStyle.paddingBottom) || 0);
-        const availableBottom = keyboardBounds
-            ? Math.min(layerBounds.height, keyboardBounds.top - layerBounds.top)
+        const chromeTop = Math.min(
+            keyboardBounds ? keyboardBounds.top : Number.POSITIVE_INFINITY,
+            tabsBounds ? tabsBounds.top : Number.POSITIVE_INFINITY,
+        );
+        const availableBottom = Number.isFinite(chromeTop)
+            ? Math.min(layerBounds.height, chromeTop - layerBounds.top)
             : layerBounds.height;
         const railStyle = getComputedStyle(rail);
         const shoulderHeight = Number.parseFloat(railStyle.getPropertyValue("--rail-shoulder"))
@@ -2139,6 +2151,7 @@ function MobileGlobalModRail({
         const layer = layerRef.current;
         const surface = layer?.closest(".cosimo-surface");
         const keyboard = surface?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
+        const workspaceTabs = surface?.querySelector<HTMLElement>('[data-role="mobile-workspace-tabs"]');
         const presetBar = surface?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"]');
         const observer = typeof ResizeObserver === "function"
             ? new ResizeObserver(measureAndClamp)
@@ -2154,6 +2167,9 @@ function MobileGlobalModRail({
         }
         if (keyboard) {
             observer?.observe(keyboard);
+        }
+        if (workspaceTabs) {
+            observer?.observe(workspaceTabs);
         }
         if (presetBar) {
             observer?.observe(presetBar);

@@ -7,6 +7,8 @@ import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
+const DESKTOP_HARNESS_READINESS_TIMEOUT_MS = 90_000;
+const SERVER_READINESS_POLL_INTERVAL_MS = 250;
 let cmajorApiRootPromise;
 
 export function desktopHarnessNpmCommand(platform = process.platform) {
@@ -136,7 +138,11 @@ async function waitForServer(baseUrl, child) {
         stdout += String(chunk);
     });
 
-    for (let attempt = 0; attempt < 120; attempt += 1) {
+    const maximumAttempts = Math.ceil(
+        DESKTOP_HARNESS_READINESS_TIMEOUT_MS / SERVER_READINESS_POLL_INTERVAL_MS,
+    );
+
+    for (let attempt = 0; attempt < maximumAttempts; attempt += 1) {
         if (child.exitCode !== null) {
             throw new Error(
                 `Desktop harness server exited early with code ${child.exitCode}.\n\nstdout:\n${stdout}\n\nstderr:\n${stderr}`,
@@ -153,7 +159,7 @@ async function waitForServer(baseUrl, child) {
             // Keep polling until the dev server is ready or exits.
         }
 
-        await delay(250);
+        await delay(SERVER_READINESS_POLL_INTERVAL_MS);
     }
 
     throw new Error(`Desktop harness server did not become ready at ${baseUrl}.\n\nstdout:\n${stdout}\n\nstderr:\n${stderr}`);
@@ -259,11 +265,10 @@ export async function startStaticRepoServer() {
 }
 
 export async function waitForHarnessReady(page) {
-    await page.waitForFunction(() => Boolean(window.__COSIMO_DESKTOP_HARNESS__));
     await page.waitForFunction(() => {
         const renderedState = window.__COSIMO_DESKTOP_HARNESS__?.getRenderedState?.();
         return Boolean(renderedState && (renderedState.hasCanvas || renderedState.errorText));
-    });
+    }, undefined, { timeout: DESKTOP_HARNESS_READINESS_TIMEOUT_MS });
 }
 
 export async function getHarnessSnapshot(page) {

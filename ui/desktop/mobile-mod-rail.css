@@ -6,10 +6,12 @@
    Note key carries the Auto-preview status dot. */
 
 @media (max-width: 639px) {
+    /* Above the full-screen editor backdrop (z-50): the rail is part of the
+       permanent global shell and stays usable over focused editors (ADR-026). */
     .mobile-global-mod-rail-portal {
         position: absolute;
         inset: 0;
-        z-index: 32;
+        z-index: 60;
         pointer-events: none;
     }
 

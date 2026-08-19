@@ -1,6 +1,7 @@
 import {
     useCallback,
     useEffect,
+    useLayoutEffect,
     useMemo,
     useRef,
     useState,
@@ -9,6 +10,20 @@ import {
     type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from "react";
+import {
+    WORKSPACE_SHELL_STORAGE_KEY,
+    activateTab,
+    createHomeShellState,
+    openDeepLink,
+    parseStoredShellState,
+    serializeShellState,
+    tapActiveTab,
+    universalBack,
+    universalBackTarget,
+    type WorkspaceShellState,
+    type WorkspaceTabId,
+} from "../shared/workspace-shell";
+import { MobileWorkspaceTabs } from "./mobile-workspace-tabs";
 import {
     PatchConnectionProvider,
     usePatchConnection,
@@ -1764,12 +1779,22 @@ function StatusHeader({ statusText }: HeaderProps) {
 function SynthPresetBarHost({
     isHidden,
     storedStateAdapters,
+    compactSynth = false,
+    backAvailable = false,
+    onShellBack,
 }: {
     isHidden: boolean;
     storedStateAdapters: EffectStoredStateAdapter[];
+    /** ADR-026 compact synth composition: Back slot, centered name, … popover. */
+    compactSynth?: boolean;
+    backAvailable?: boolean;
+    onShellBack?: () => void;
 }) {
     const patchConnection = usePatchConnection();
     const hostRef = useRef<HTMLDivElement | null>(null);
+    const presetBarRef = useRef<ReturnType<typeof createPresetBar> | null>(null);
+    const onShellBackRef = useRef(onShellBack);
+    onShellBackRef.current = onShellBack;
     const presetController = useMemo(() => createStandaloneEffectPresetController({
         effectID: SYNTH_PRESET_EFFECT_ID,
         patchConnection,
@@ -1785,22 +1810,40 @@ function SynthPresetBarHost({
 
         const presetBar = createPresetBar();
         presetBar.controller = presetController;
+        const handleShellBack = () => onShellBackRef.current?.();
+        presetBar.addEventListener("cosimo-shell-back", handleShellBack);
+        presetBarRef.current = presetBar;
         host.replaceChildren(presetBar);
         presetController.attach();
 
         return () => {
             presetController.detach();
+            presetBar.removeEventListener("cosimo-shell-back", handleShellBack);
             presetBar.controller = null;
+            presetBarRef.current = null;
             presetBar.remove();
         };
     }, [presetController]);
+
+    useEffect(() => {
+        const presetBar = presetBarRef.current;
+        if (!presetBar) {
+            return;
+        }
+        presetBar.toggleAttribute("compact-synth", compactSynth);
+        presetBar.shellBackAvailable = compactSynth && backAvailable;
+    }, [backAvailable, compactSynth, presetController]);
 
     return (
         <div
             ref={hostRef}
             data-role="synth-preset-bar-host"
             hidden={isHidden}
-            className="relative z-40 min-w-0 shrink-0 overflow-visible rounded-[12px] border border-white/[0.06] bg-black/20 [--knob-track-value-color:#87d7f5] [--preset-bar-border-radius:12px]"
+            className={`relative z-40 min-w-0 shrink-0 overflow-visible rounded-[12px] ${
+                // The compact shell row is exactly the 40px token: the bar's own
+                // chrome is the only border, so the host adds none (ADR-026).
+                compactSynth ? "" : "border border-white/[0.06] "
+            }bg-black/20 [--knob-track-value-color:#87d7f5] [--preset-bar-border-radius:12px]`}
         />
     );
 }
@@ -3249,70 +3292,23 @@ function ContextualArticulationToolbar({
     );
 }
 
-type MobileWorkspaceSection = "voice" | "fx" | "mod";
 type MobileModSource = Pick<RackModulationSource, "sourceKind" | "sourceSlot">;
 
-function MobileWorkspaceAccordion({
-    activeSection,
-    onSelectSection,
-    voice,
-    effects,
-    modulation,
-}: {
-    activeSection: MobileWorkspaceSection;
-    onSelectSection: (section: MobileWorkspaceSection) => void;
-    voice: ReactNode;
-    effects: ReactNode;
-    modulation: ReactNode;
-}) {
-    const sections: ReadonlyArray<{
-        id: MobileWorkspaceSection;
-        label: string;
-        content: ReactNode;
-    }> = [
-        { id: "voice", label: "Voice", content: voice },
-        { id: "fx", label: "FX", content: effects },
-        { id: "mod", label: "Mod", content: modulation },
-    ];
+type MobileWorkspaceSection = WorkspaceTabId;
 
-    return (
-        <main
-            data-role="mobile-workspace-accordion"
-            className="mobile-workspace-accordion min-h-0 flex-1"
-        >
-            {sections.map((section) => {
-                const isExpanded = section.id === activeSection;
-
-                return (
-                    <section
-                        key={section.id}
-                        className={`mobile-workspace-section is-${section.id}${isExpanded ? " is-expanded" : ""}`}
-                        data-mobile-workspace-section={section.id}
-                    >
-                        <button
-                            type="button"
-                            data-role={`mobile-workspace-toggle-${section.id}`}
-                            className="mobile-workspace-toggle"
-                            aria-expanded={isExpanded}
-                            aria-controls={`mobile-workspace-panel-${section.id}`}
-                            onClick={() => onSelectSection(section.id)}
-                        >
-                            {section.label}
-                        </button>
-                        <div
-                            id={`mobile-workspace-panel-${section.id}`}
-                            data-role={`mobile-workspace-panel-${section.id}`}
-                            className="mobile-workspace-panel"
-                            hidden={!isExpanded}
-                            aria-hidden={!isExpanded}
-                        >
-                            {section.content}
-                        </div>
-                    </section>
-                );
-            })}
-        </main>
-    );
+function parseMobileModSourceDetail(detail: string | null): MobileModSource | null {
+    if (detail === null) {
+        return null;
+    }
+    const [kind, slotText] = detail.split(":");
+    const slot = Number(slotText);
+    if (
+        (kind === "mseg" || kind === "env" || kind === "macro")
+        && (slot === 1 || slot === 2 || slot === 3)
+    ) {
+        return { sourceKind: kind, sourceSlot: slot };
+    }
+    return null;
 }
 
 function DesktopPatchViewBody({
@@ -3327,9 +3323,31 @@ function DesktopPatchViewBody({
     const [isCompactViewport, setIsCompactViewport] = useState(() => (
         typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches
     ));
-    const [mobileWorkspaceSection, setMobileWorkspaceSection] = useState<MobileWorkspaceSection>("voice");
-    const [mobileModSource, setMobileModSource] = useState<MobileModSource | null>(null);
-    const [mobileReturnSection, setMobileReturnSection] = useState<MobileWorkspaceSection | null>(null);
+    const [workspaceShell, setWorkspaceShell] = useState<WorkspaceShellState>(() => {
+        try {
+            return parseStoredShellState(sessionStorage.getItem(WORKSPACE_SHELL_STORAGE_KEY))
+                ?? createHomeShellState();
+        } catch {
+            return createHomeShellState();
+        }
+    });
+    useEffect(() => {
+        // Plugin-instance presentation state (ADR-026): never preset or DAW
+        // sound state. sessionStorage scopes it to the live app/editor session
+        // so a fresh process starts at Home.
+        try {
+            sessionStorage.setItem(WORKSPACE_SHELL_STORAGE_KEY, serializeShellState(workspaceShell));
+        } catch {
+            // Presentation persistence is best effort; navigation keeps working.
+        }
+    }, [workspaceShell]);
+    const mobileWorkspaceSection = workspaceShell.activeTab;
+    const mobileModSource = useMemo(
+        () => parseMobileModSourceDetail(workspaceShell.details.mod?.detail ?? null),
+        [workspaceShell.details.mod],
+    );
+    const mobileReturnTarget = universalBackTarget(workspaceShell);
+    const workspacePanelScrollsRef = useRef(new Map<WorkspaceTabId, number>());
     const [mobileModRailPortalTarget, setMobileModRailPortalTarget] = useState<HTMLElement | null>(null);
     const [mobileVoiceHudLayer, setMobileVoiceHudLayer] = useState<HTMLDivElement | null>(null);
     const [globalModRailState, setGlobalModRailState] = useState<GlobalModRailState>({
@@ -3349,9 +3367,7 @@ function DesktopPatchViewBody({
     }, []);
     useEffect(() => {
         if (!isCompactViewport) {
-            setMobileWorkspaceSection("voice");
-            setMobileModSource(null);
-            setMobileReturnSection(null);
+            setWorkspaceShell(createHomeShellState());
         }
     }, [isCompactViewport]);
     const [keyboardRootNote, setKeyboardRootNote] = useState(KEYBOARD_ROOT_NOTE_DEFAULT);
@@ -3785,21 +3801,56 @@ function DesktopPatchViewBody({
         />
     );
 
-    const selectMobileWorkspaceSection = useCallback((section: MobileWorkspaceSection) => {
-        setMobileWorkspaceSection(section);
-        setMobileReturnSection(null);
-    }, []);
+    const workspacePanelElement = useCallback((tab: WorkspaceTabId) => (
+        document.querySelector<HTMLElement>(`[data-role="mobile-workspace-panel-${tab}"]`)
+    ), []);
+
+    const activateWorkspaceTab = useCallback((tab: WorkspaceTabId) => {
+        setWorkspaceShell((current) => {
+            if (current.activeTab !== tab) {
+                const activePanel = workspacePanelElement(current.activeTab);
+                if (activePanel) {
+                    workspacePanelScrollsRef.current.set(current.activeTab, activePanel.scrollTop);
+                }
+            }
+            return activateTab(current, tab);
+        });
+    }, [workspacePanelElement]);
+
+    const tapActiveWorkspaceTab = useCallback(() => {
+        setWorkspaceShell((current) => {
+            const result = tapActiveTab(current);
+            if (result.effect === "scroll-to-top") {
+                workspacePanelElement(current.activeTab)?.scrollTo({ top: 0, behavior: "smooth" });
+            }
+            return result.state;
+        });
+    }, [workspacePanelElement]);
+
+    useLayoutEffect(() => {
+        if (!isCompactViewport) {
+            return;
+        }
+        // A panel hidden with display:none loses its DOM scroll position;
+        // the shell restores the workspace's own stored offset on activation.
+        const panel = workspacePanelElement(workspaceShell.activeTab);
+        const storedTop = workspacePanelScrollsRef.current.get(workspaceShell.activeTab);
+        if (panel && storedTop !== undefined) {
+            panel.scrollTop = storedTop;
+        }
+    }, [isCompactViewport, workspacePanelElement, workspaceShell.activeTab]);
 
     const openMobileModSource = useCallback((source: MobileModSource) => {
-        setMobileModSource(source);
-        setMobileReturnSection(mobileWorkspaceSection);
-        setMobileWorkspaceSection("mod");
-    }, [mobileWorkspaceSection]);
+        setWorkspaceShell((current) => openDeepLink(current, {
+            tab: "mod",
+            detail: `${source.sourceKind}:${source.sourceSlot}`,
+            from: current.activeTab,
+        }));
+    }, []);
 
-    const returnFromMobileModSource = useCallback(() => {
-        setMobileWorkspaceSection(mobileReturnSection ?? "fx");
-        setMobileReturnSection(null);
-    }, [mobileReturnSection]);
+    const handleUniversalBack = useCallback(() => {
+        setWorkspaceShell(universalBack);
+    }, []);
 
     const resolveMobileVoiceScrollLocks = useCallback(() => (
         Array.from(document.querySelectorAll<HTMLElement>(".mobile-workspace-panel"))
@@ -3951,19 +4002,6 @@ function DesktopPatchViewBody({
 
     const modulationWorkspace = (
         <>
-            {mobileReturnSection ? (
-                <nav className="mobile-mod-return-bar" aria-label="Modulation source navigation">
-                    <button
-                        type="button"
-                        data-role="mobile-workspace-back"
-                        onClick={returnFromMobileModSource}
-                    >
-                        <span aria-hidden="true">‹</span>
-                        Back to {mobileReturnSection === "fx" ? "FX" : mobileReturnSection === "voice" ? "Voice" : "Mod"}
-                    </button>
-                </nav>
-            ) : null}
-
             {synthView.failureDetail ? (
                 <div className="rounded-[22px] border border-fuchsia-300/15 bg-fuchsia-300/8 px-4 py-3 text-sm text-fuchsia-100/90">
                     {synthView.failureDetail}
@@ -4047,7 +4085,7 @@ function DesktopPatchViewBody({
             modRailAudition={modRailAudition}
             onBackToVoice={() => {
                 if (isCompactViewport) {
-                    setMobileWorkspaceSection("voice");
+                    activateWorkspaceTab("voice");
                     return;
                 }
                 scrollRegionRef.current?.scrollTo({ top: 0, behavior: "smooth" });
@@ -4056,25 +4094,51 @@ function DesktopPatchViewBody({
     );
 
     return (
-        <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-accordion" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
+        <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
             {!isCompactViewport ? <StatusHeader statusText={synthView.topStatus} /> : null}
             <SynthPresetBarHost
                 isHidden={synthView.msegEditor.isOpen}
                 storedStateAdapters={synthView.presetStoredStateAdapters}
+                compactSynth={isCompactViewport}
+                backAvailable={mobileReturnTarget !== null}
+                onShellBack={handleUniversalBack}
             />
 
             {isCompactViewport ? (
-                <MobileWorkspaceAccordion
-                    activeSection={mobileWorkspaceSection}
-                    onSelectSection={selectMobileWorkspaceSection}
-                    voice={voiceWorkspace}
-                    effects={(
-                        <div data-role="mobile-effects-region" className="min-h-0 h-full overflow-hidden">
-                            {effectsRackWorkspace}
-                        </div>
-                    )}
-                    modulation={modulationWorkspace}
-                />
+                <main
+                    data-role="mobile-workspace-panels"
+                    className="mobile-workspace-panels min-h-0 flex-1"
+                >
+                    {([
+                        { id: "voice" as const, content: voiceWorkspace },
+                        {
+                            id: "fx" as const,
+                            content: (
+                                <div data-role="mobile-effects-region" className="min-h-0 h-full overflow-hidden">
+                                    {effectsRackWorkspace}
+                                </div>
+                            ),
+                        },
+                        { id: "mod" as const, content: modulationWorkspace },
+                    ]).map(({ id, content }) => {
+                        const isActive = id === mobileWorkspaceSection;
+                        return (
+                            <div
+                                key={id}
+                                id={`mobile-workspace-panel-${id}`}
+                                data-role={`mobile-workspace-panel-${id}`}
+                                role="tabpanel"
+                                aria-labelledby={`mobile-workspace-tab-${id}`}
+                                className={`mobile-workspace-panel${id === "fx" ? " is-fx-panel" : ""}`}
+                                hidden={!isActive}
+                                aria-hidden={!isActive}
+                                inert={!isActive}
+                            >
+                                {content}
+                            </div>
+                        );
+                    })}
+                </main>
             ) : (
                 <main
                     ref={scrollRegionRef}
@@ -4105,10 +4169,20 @@ function DesktopPatchViewBody({
                 />
             ) : null}
 
+            {isCompactViewport && !synthView.msegEditor.isOpen ? (
+                <MobileWorkspaceTabs
+                    activeTab={mobileWorkspaceSection}
+                    onActivateTab={activateWorkspaceTab}
+                    onTapActiveTab={tapActiveWorkspaceTab}
+                />
+            ) : null}
+
             <div
                 data-role="sticky-keyboard"
                 className="relative z-20 min-w-0 shrink-0 border-t border-white/[0.05] pt-3"
-                style={keyboardVisible ? undefined : { display: "none" }}
+                style={keyboardVisible && !(isCompactViewport && synthView.msegEditor.isOpen)
+                    ? undefined
+                    : { display: "none" }}
             >
                 <KeyboardSection
                     oscillatorID={oscillatorSelection.selectedOscillatorID}

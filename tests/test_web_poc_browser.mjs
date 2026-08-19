@@ -405,12 +405,12 @@ function installEndpointListenerProbe() {
 }
 
 async function selectMobileWorkspaceSection(page, section) {
-    const toggle = page.locator(`[data-role="mobile-workspace-toggle-${section}"]`);
+    const toggle = page.locator(`[data-role="mobile-workspace-tab-${section}"]`);
     await toggle.click();
     await page.waitForFunction((sectionName) => (
         document.querySelector("cosimo-desktop-react-view")?.shadowRoot
-            ?.querySelector(`[data-role="mobile-workspace-toggle-${sectionName}"]`)
-            ?.getAttribute("aria-expanded") === "true"
+            ?.querySelector(`[data-role="mobile-workspace-tab-${sectionName}"]`)
+            ?.getAttribute("aria-selected") === "true"
     ), section);
 }
 
@@ -540,6 +540,23 @@ async function waitForRealtimeAudioPacing(
     }
 
     assert.fail(JSON.stringify({ maximumWindows, minimumWallRatio, maximumWallRatio, windows }));
+}
+
+async function waitForAsyncPageCondition(page, condition, argument = null, {
+    timeout = 30_000,
+    pollingInterval = 50,
+} = {}) {
+    const deadline = performance.now() + timeout;
+
+    while (performance.now() <= deadline) {
+        if (await page.evaluate(condition, argument)) {
+            return;
+        }
+
+        await page.waitForTimeout(pollingInterval);
+    }
+
+    throw new Error(`Timed out after ${timeout} ms waiting for an asynchronous page condition.`);
 }
 
 function assertRuntimeMeasurementIntegrity(measurement) {
@@ -987,6 +1004,47 @@ async function holdTouchKeyboardNote(page, {
     });
 }
 
+/**
+ * The touch drag preview leads the finger (finger-clear amplification), so a
+ * drop test must aim the FINGER at the point whose amplified preview lands on
+ * the target. Ported from the desktop suite; iPhone 13 viewport is 390x844.
+ */
+function touchPointForModSourcePreviewTarget(start, target, viewportWidth, viewportHeight) {
+    const delta = { x: target.x - start.x, y: target.y - start.y };
+    const distance = Math.hypot(delta.x, delta.y);
+    assert.ok(distance > 7, "A preview-led test drag must cross the activation distance.");
+    const direction = { x: delta.x / distance, y: delta.y / distance };
+    const previewBounds = { left: 23, right: viewportWidth - 23, top: 23, bottom: viewportHeight - 23 };
+    const edgeDistances = [];
+    if (direction.x > 0) edgeDistances.push((previewBounds.right - start.x) / direction.x);
+    if (direction.x < 0) edgeDistances.push((previewBounds.left - start.x) / direction.x);
+    if (direction.y > 0) edgeDistances.push((previewBounds.bottom - start.y) / direction.y);
+    if (direction.y < 0) edgeDistances.push((previewBounds.top - start.y) / direction.y);
+    const viewportTravel = Math.min(...edgeDistances.filter((candidate) => candidate >= 0));
+    assert.ok(distance <= viewportTravel + 0.5, "The target center must be inside the preview-safe viewport.");
+    const maximumGain = Math.min(Math.max(viewportWidth / 168, 2.1), 2.5);
+    const previewTravelForFingerTravel = (fingerTravel) => {
+        const rampProgress = Math.min(Math.max((fingerTravel - 7) / 64, 0), 1);
+        const gainProgress = rampProgress * rampProgress * (3 - (2 * rampProgress));
+        return fingerTravel * (1 + ((maximumGain - 1) * gainProgress));
+    };
+    let lower = 0;
+    let upper = viewportTravel;
+    for (let iteration = 0; iteration < 32; iteration += 1) {
+        const middle = (lower + upper) / 2;
+        if (previewTravelForFingerTravel(middle) < distance) {
+            lower = middle;
+        } else {
+            upper = middle;
+        }
+    }
+    const fingerTravel = (lower + upper) / 2;
+    return {
+        x: start.x + (direction.x * fingerTravel),
+        y: start.y + (direction.y * fingerTravel),
+    };
+}
+
 async function dispatchTouchDrag(page, start, end, { afterFirstMove, steps = 10 } = {}) {
     const client = await page.context().newCDPSession(page);
 
@@ -1074,7 +1132,7 @@ async function openStartedMobileRackPage({ simulateWebKitZeroTouchButtons = fals
         startBounds.y + (startBounds.height / 2),
     );
     await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "running");
-    await page.locator('[data-role="mobile-workspace-toggle-fx"]').click();
+    await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
     await page.locator('[data-role="rack-module-list"]').waitFor();
     return page;
 }
@@ -2421,7 +2479,7 @@ test("generated product UI restores oscillator parameters and rack state through
         await page.mouse.move(targetBox.x + targetBox.width / 2, targetBox.y + targetBox.height / 2, { steps: 12 });
         await page.mouse.up();
 
-        await page.waitForFunction(async () => {
+        await waitForAsyncPageCondition(page, async () => {
             const state = await globalThis.__COSIMO_WEB_POC__.storedState();
             const rack = JSON.parse(String(state.values?.["rack.v1"]));
             return rack.order[0] === "reverb" && rack.enabled.chorus === true;
@@ -2478,7 +2536,7 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
         const reorderStart = await centerOf(page.locator('[data-role="rack-reorder-handle-reverb"]'));
         const reorderEnd = await centerOf(page.locator('[data-role="rack-module-filter"]'));
         await dispatchTouchDrag(page, reorderStart, reorderEnd);
-        await page.waitForFunction(async () => {
+        await waitForAsyncPageCondition(page, async () => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const list = root?.querySelector('[data-role="rack-module-list"]');
             const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
@@ -2529,8 +2587,18 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
         await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="true"]').waitFor();
         await page.waitForTimeout(220);
         const sourceStart = await centerOf(page.locator('[data-role="rack-mod-source-mseg-1"]'));
-        const targetEnd = await centerOf(page.locator('[data-rack-mod-target="distortionKnee"]'));
+        const targetCenter = await centerOf(page.locator('[data-rack-mod-target="distortionKnee"]'));
+        const viewport = page.viewportSize();
+        const targetEnd = touchPointForModSourcePreviewTarget(
+            sourceStart,
+            targetCenter,
+            viewport.width,
+            viewport.height,
+        );
+        // Four steps keep the first move past the 7px drag-activation radius
+        // on the compensated (shorter) finger path.
         await dispatchTouchDrag(page, sourceStart, targetEnd, {
+            steps: 4,
             afterFirstMove: async () => {
                 await page
                     .locator('[data-role="mobile-global-mod-rail"][data-mapping-active="true"]')
@@ -2543,7 +2611,7 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
             },
         });
 
-        await page.waitForFunction(async (modulationStateKey) => {
+        await waitForAsyncPageCondition(page, async (modulationStateKey) => {
             const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
             const serialized = stored.values?.[modulationStateKey];
             if (typeof serialized !== "string") {
@@ -2665,7 +2733,7 @@ test("generated browser proof plays and visibly presses notes from a touchscreen
             "The explicitly started synth must use iOS's audible playback session, not the silent-switch ambient session.",
         );
 
-        await page.locator('[data-role="mobile-workspace-toggle-fx"]').click();
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             return root?.querySelectorAll('[data-role="rack-module-list"] > [data-rack-effect-id]').length === 8;

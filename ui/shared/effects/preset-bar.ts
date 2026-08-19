@@ -642,12 +642,107 @@ const PRESET_BAR_CSS = /* css */ `
     from { opacity: 0; transform: translateY(-6px); }
     to { opacity: 1; transform: translateY(0); }
   }
+
+  /* ── Compact synth-shell composition (ADR-026) ─────────
+     Additive mode: without the attribute, nothing below applies and the
+     standalone-effects presentation is untouched. */
+
+  .shell-back, .shell-more, .shell-menu { display: none; }
+
+  :host([compact-synth]) .preset-bar {
+    display: grid;
+    box-sizing: border-box;
+    grid-template-columns: 40px minmax(0, 1fr) 40px;
+    align-items: center;
+    height: var(--compact-shell-row, 40px);
+    padding: 0;
+  }
+
+  :host([compact-synth]) .nav-btn,
+  :host([compact-synth]) .action-group,
+  :host([compact-synth]) .source-tag,
+  :host([compact-synth]) .chevron { display: none; }
+
+  :host([compact-synth]) .shell-back {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: rgba(226, 232, 234, 0.78);
+    cursor: pointer;
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  /* The left slot stays reserved so the centered name never shifts. */
+  :host([compact-synth]) .shell-back[disabled] {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
+  :host([compact-synth]) .shell-more {
+    display: grid;
+    place-items: center;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: rgba(226, 232, 234, 0.78);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  :host([compact-synth]) .name-region {
+    justify-content: center;
+    min-width: 0;
+  }
+
+  :host([compact-synth]) .shell-menu.open {
+    display: flex;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 4px;
+    z-index: 40;
+    flex-direction: column;
+    min-width: 208px;
+    max-height: min(320px, 70vh);
+    overflow-y: auto;
+    padding: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: #14191c;
+    box-shadow: 0 14px 32px rgba(0, 0, 0, 0.55);
+  }
+
+  :host([compact-synth]) .shell-menu-row {
+    display: flex;
+    min-height: 44px;
+    align-items: center;
+    padding: 0 12px;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: rgba(233, 238, 240, 0.86);
+    cursor: pointer;
+    font: inherit;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  :host([compact-synth]) .shell-menu-row:hover { background: rgba(255, 255, 255, 0.06); }
+  :host([compact-synth]) .shell-menu-row[disabled] { color: rgba(233, 238, 240, 0.32); cursor: default; }
+  :host([compact-synth]) .shell-menu-row[disabled]:hover { background: transparent; }
 `;
 
 // ── HTML ─────────────────────────────────────────────────
 
 const PRESET_BAR_HTML = /* html */ `
   <div class="preset-bar">
+    <button class="shell-back" data-action="shell-back" data-el="shell-back" aria-label="Back" disabled>&#8249;</button>
+
     <button class="nav-btn" data-action="prev" title="Previous preset">&#8249;</button>
 
     <div class="name-region" data-action="toggle-flyout">
@@ -658,6 +753,8 @@ const PRESET_BAR_HTML = /* html */ `
     </div>
 
     <button class="nav-btn" data-action="next" title="Next preset">&#8250;</button>
+
+    <button class="shell-more" data-action="toggle-shell-menu" data-el="shell-more" aria-label="Preset actions" aria-haspopup="true" aria-expanded="false">&#8943;</button>
 
     <div class="action-group">
       <button class="action-btn highlight" data-action="save" data-el="btn-save" title="Save preset" aria-label="Save preset" disabled>${ICON_SAVE}</button>
@@ -670,6 +767,16 @@ const PRESET_BAR_HTML = /* html */ `
       <span class="action-sep"></span>
       <button class="action-btn" data-action="paste" title="Paste preset JSON" aria-label="Paste preset JSON">${ICON_PASTE}</button>
     </div>
+  </div>
+
+  <div class="shell-menu" data-el="shell-menu" role="menu" aria-label="Preset actions">
+    <button class="shell-menu-row" role="menuitem" data-action="prev">Previous preset</button>
+    <button class="shell-menu-row" role="menuitem" data-action="next">Next preset</button>
+    <button class="shell-menu-row" role="menuitem" data-action="save" data-el="menu-save" disabled>Save</button>
+    <button class="shell-menu-row" role="menuitem" data-action="save-as">Save as new preset</button>
+    <button class="shell-menu-row" role="menuitem" data-action="revert" data-el="menu-revert" disabled>Revert</button>
+    <button class="shell-menu-row" role="menuitem" data-action="copy">Copy preset JSON</button>
+    <button class="shell-menu-row" role="menuitem" data-action="paste">Paste preset JSON</button>
   </div>
 
   <div class="flyout" data-el="flyout">
@@ -732,7 +839,11 @@ class PresetBar extends HTMLElement {
     private _els!: Record<string, HTMLElement>;
 
     private readonly _handleDocumentPointerDown = (event: PointerEvent) => {
-        if (!this._flyoutOpen && !this._els["ctx-menu"].classList.contains("open")) {
+        if (
+            !this._flyoutOpen
+            && !this._shellMenuOpen
+            && !this._els["ctx-menu"].classList.contains("open")
+        ) {
             return;
         }
 
@@ -742,6 +853,7 @@ class PresetBar extends HTMLElement {
 
         this._closeFlyout();
         this._closeCtxMenu();
+        this._closeShellMenu();
     };
 
     private readonly _handleDocumentWheel = (event: WheelEvent) => {
@@ -822,6 +934,9 @@ class PresetBar extends HTMLElement {
             const actionEl = target.closest<HTMLElement>("[data-action]");
             if (actionEl) {
                 this._handleAction(actionEl.dataset.action!);
+                if (actionEl.closest(".shell-menu")) {
+                    this._closeShellMenu();
+                }
                 return;
             }
 
@@ -935,7 +1050,40 @@ class PresetBar extends HTMLElement {
                 break;
             case "dialog-cancel": this._closeDialog(); break;
             case "dialog-confirm": this._confirmDialog(); break;
+            case "shell-back":
+                this.dispatchEvent(new CustomEvent("cosimo-shell-back", { bubbles: true, composed: true }));
+                break;
+            case "toggle-shell-menu": this._toggleShellMenu(); break;
         }
+    }
+
+    // ── Compact synth-shell menu (ADR-026) ───────────────
+
+    private _shellMenuOpen = false;
+
+    private _toggleShellMenu() {
+        if (this._shellMenuOpen) {
+            this._closeShellMenu();
+            return;
+        }
+        this._shellMenuOpen = true;
+        this._els["shell-menu"].classList.add("open");
+        this._els["shell-more"].setAttribute("aria-expanded", "true");
+        this._addDocumentListeners();
+    }
+
+    private _closeShellMenu() {
+        if (!this._shellMenuOpen) {
+            return;
+        }
+        this._shellMenuOpen = false;
+        this._els["shell-menu"].classList.remove("open");
+        this._els["shell-more"].setAttribute("aria-expanded", "false");
+    }
+
+    /** Whether universal Back has somewhere to go (compact synth shell only). */
+    set shellBackAvailable(available: boolean) {
+        (this._els["shell-back"] as HTMLButtonElement).disabled = !available;
     }
 
     private _handleFilterPill(el: HTMLElement) {
@@ -1190,6 +1338,8 @@ class PresetBar extends HTMLElement {
         // Action buttons
         (this._els["btn-save"] as HTMLButtonElement).disabled = !state.dirty || !activeItem?.canOverwrite;
         (this._els["btn-revert"] as HTMLButtonElement).disabled = !state.dirty;
+        (this._els["menu-save"] as HTMLButtonElement).disabled = !state.dirty || !activeItem?.canOverwrite;
+        (this._els["menu-revert"] as HTMLButtonElement).disabled = !state.dirty;
 
         // Sync filter pill active state
         for (const pill of this.shadowRoot!.querySelectorAll<HTMLElement>(".filter-pill")) {

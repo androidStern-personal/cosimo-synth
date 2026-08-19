@@ -12,7 +12,7 @@ HOW WE WILL USE THIS FILE
 
 CURRENT FOCUS
 
-[?] T04 — Decide the mobile Global Filter presentation.
+[ ] T05 — Implement the decided Voice-page filter layout and Mix. T03B is closed, so the 50/50 split now divides the real shell height. T17 (suite wall-clock) is re-dispatched to codex in parallel.
 
 PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
 
@@ -162,10 +162,17 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Geometry audit resolved: newest production Voice tabs/toolbars, compact keyboard buttons, and the approved Mod-widget body converge on the selected 40 px shell tier; outgoing accordion/local-Back rows use 44 px; FX rack rows deliberately remain 48 px; the legacy preset bar is 38 px; and the throwaway screenshot row is 30 px.
     - Production audit resolved the remaining cutover seams: the current workspace callback erases return state on every switch; Voice scroll locking, FX drag geometry, compact styling, keyboard layout, browser tests, and Web POC helpers depend on accordion selectors; the shared preset component also serves standalone effects; and the current full-screen MSEG layer sits above the global Mod widget. ADR-026 now specifies how each dependency must change without altering unrelated behavior.
 
-[ ] T03B — Implement the persistent Voice/FX/Mod tab shell
+[x] T03B — Implement the persistent Voice/FX/Mod tab shell
     Depends on: T03A
-    Status:
-    - Implementation has not been authorized or started. ADR-026 is accepted; this remains a separate future implementation ticket.
+    Implementation evidence (2026-08-19; gates: desktop browser 169/169, iPhone 20/20, web bundle 14/14, shared hooks 29/29, web-poc chromium 15 pass/0 fail, effect presets 113/113, units 57/57, tsc clean; web build redeployed to the tailnet URL):
+    - Pure navigation model ui/shared/workspace-shell.ts (tests/test_workspace_shell.mjs, 9 cases): per-workspace detail + Back origin, active-tab-tap reset/scroll-top, deep links, universal Back, versioned session persistence starting at Home on anything unreadable. DesktopPatchView holds one WorkspaceShellState; the old mobileWorkspaceSection/mobileModSource/mobileReturnSection trio and its clear-return-on-every-switch defect are gone (the mod detail is a parsed shell detail string, so the active-tab-tap reset finally gives the deep-linked source editor a way back to the Mod overview).
+    - MobileWorkspaceTabs (ui/desktop/mobile-workspace-tabs.tsx): ADR-026 visual contract (one neutral 40px strip, three equal items, short neutral underline, no workspace colors) with the roving tab-list keyboard pattern. Panels stay mounted with hidden+inert; per-workspace scrollTop is stored on switch and restored on activation (display:none drops DOM scroll state). mobile-workspace.css rewritten as the shell stylesheet; the accordion styles and the is-mobile-accordion scope died (now is-mobile-shell), FX/keyboard geometry preserved.
+    - Compact preset bar: additive [compact-synth] mode on the shared cosimo-preset-bar element — reserved Back slot wired to universal Back via a composed shadow event, centered name + dirty dot, prev/next/save/save-as/revert/copy/paste behind a 44px-row "..." popover; source tag and chevron leave the compact row. The standalone-effects presentation is untouched (113/113). The 40px compact-shell-row token replaced the legacy 38px literal (host border dropped in compact so the row is exactly the token).
+    - Mod rail: the tab row joined its placement boundary (binding constraint when the keyboard hides) and the portal moved above the focused-editor layer (z-60 over the z-50 MSEG backdrop) per the permanent-global-shell rule; compact MSEG editing now hides tabs + keyboard.
+    - Tests: toggle selectors migrated to tabs across the desktop suite and the Web POC helper; the accordion structural test rewritten as tab-shell behavior (plus mounted-but-inert assertions); return-bar flows rewired to the shadow Back with settle waits; the old return-bar geometry and 38px assertions updated to the new contracts.
+    - Found and fixed during the cutover, unrelated to the shell: the web-poc touch-drop test aimed the finger at the raw target center with no preview-amplification compensation — it had been green by geometric luck and the B2 drawer geometry (T10B) broke it; the desktop suite's compensation helper is now ported there. Its stored-state waitForFunction pattern remains unsound (an async pagefunction that can mask a missing key) — tolerable now that the drop lands, noted for T17's sweep.
+    - Product observation for the physical pass: the rail's DEFAULT dock (right edge, 0.42) now overlaps the Voice toolbar's right paddle at 393x852 because the tab row shortened the travel band. Tests pre-dock the rail; on-device, decide whether the shipped default should sit lower.
+    - Deliberate scope notes: sessionStorage backs per-instance presentation state (a fresh process starts at Home per the ADR; host WebView-recreation persistence needs a native seam and is recorded as a follow-up, not silently faked). Full-screen editors: tabs/keyboard hide and the rail stays usable; the editor's own focus trap keeping the rail reachable to AT was not separately exercised — verify during the physical pass.
     Build:
     - Replace MobileWorkspaceAccordion with the ADR-026 tab list and one full-height active panel; keep all three workspace trees mounted but make hidden panels inert and unavailable to assistive technology.
     - Define one shared 40 px compact-shell-row token and use it for both the synth preset/Back row and primary tab row. Preserve the deliberately separate 48 px FX rows and existing 40 px keyboard controls.
@@ -190,8 +197,14 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Existing accordion assertions and Web POC helpers are migrated to tab semantics; no compatibility accordion headers, aria-expanded contract, or stale visible-panel lookup remains.
     - Native/plugin-instance coverage proves editor close/reopen restores place for the same instance while a new instance and standalone relaunch start at Home.
 
-[?] T04 — Decide the mobile Global Filter presentation
+[x] T04 — Decide the mobile Voice-page filter layout and Mix behavior
     Depends on: T02, T03A. The visual decision can proceed against the accepted tab-shell contract; implementation still follows T03B.
+    Status 2026-08-19:
+    - Behavioral review is complete, and the three remaining visual questions were decided directly (below) — no prototype. T05 implements this ticket's settled list plus these decisions.
+    Final decisions (user, 2026-08-19):
+    - Height split: 50/50 — the wavetable editor and the filter each get half of the Voice page's main content area (each with its own attached control row).
+    - The keyboard menu button is REJECTED — no room on the keyboard row. The Play Mode/Glide popover toggle goes in the expanded Mod bar drawer instead, PROVISIONALLY (the bar is already crowded; the user will revisit placement). Supersedes the "hidden with the keyboard" rationale — the bar is always reachable. Keep the toggle labeled with the active play mode if it fits the bar's module language; otherwise surface that conflict rather than shipping an unlabeled icon.
+    - Noncompact desktop Mix placement: OUT OF SCOPE for now — desktop has not been touched by this workstream and it is not a current question. The Mix parameter itself (appended endpoint, dry/wet behavior, modulation destination) remains in scope for the mobile row; only the desktop UI placement is deferred.
     Current production contract:
     - The Voice-page filter currently has only three sound controls: Mode (Off, Lowpass, Highpass, Bandpass, Notch, or Peak), Cutoff, and Resonance. The separate FX-rack module also called Global Filter is not the surface this ticket changes.
     - Mobile currently shows a large full-width graph below the focused oscillator. Dragging its handle left/right changes Cutoff and up/down changes Resonance; the top-left control cycles Mode, the top-right control cycles the analyzer drawing style, and small Cutoff/Resonance number controls sit at the bottom.
@@ -203,8 +216,11 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - When the keyboard is hidden, its Play Mode/Glide menu button is hidden with it. The user must restore the keyboard from the expanded Mod bar before changing those settings; do not duplicate the menu elsewhere.
     - Label the keyboard menu button with the active play mode (`POLY`, `MONO`, or `LEGATO`) rather than a generic settings icon, so the current mode remains visible without opening the menu. Glide remains inside the popout.
     - Glide affects only `MONO` and `LEGATO`. Keep it visible but disabled and grey while `POLY` is selected, using the same visual meaning for a genuinely inactive control.
+    - Preserve the current, simplest Play Mode change behavior: selecting a different mode stops all currently held notes, and the user must release and press them again. Do not expand this layout work into a note-dispatcher rewrite.
     - Add a real Mix parameter to the Voice-page filter. Its absence is a product flaw, not a reason to omit it from the mobile design. This requires a new synth endpoint and audio behavior, not merely another visual readout.
+    - Mix is product-wide, not mobile-only: make it visible and editable on the existing noncompact desktop Voice filter as well. Include that placement in the prototype without turning this into a desktop filter redesign.
     - Define Mix as 0% dry/unfiltered and 100% fully filtered. Existing presets and any saved state without a Mix value must resolve to 100%, because that exactly preserves how every currently active filter sounds.
+    - Use a linear dry/wet blend: 50% Mix means half dry plus half filtered, with no equal-power or other midpoint loudness compensation.
     - The synth's host-parameter order is append-only because DAW automation uses those positions. The future Mix endpoint must be appended without moving Mode, Cutoff, Resonance, or any later existing parameter, even though the UI presents all four together.
     - Mix is a full modulation destination: every existing modulation source can be mapped to it to move continuously between dry and filtered. Append its modulation identity after all existing Voice destinations so their stable names and target indexes remain unchanged; rebuild internal route-cell addresses from those names rather than persisting the derived addresses.
     - Keep the filter graph interactive. Dragging its handle edits Cutoff horizontally and Resonance vertically as one two-dimensional gesture; the attached control row provides precise, one-parameter-at-a-time editing of those same values.
@@ -218,39 +234,27 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - A visual prototype at short and tall phone heights settles the wavetable/filter height split, both attached control rows, and the keyboard-triggered Play Mode/Glide menu.
     - Mode, Cutoff, Resonance, Mix, graph gesture behavior, analyzer controls, and modulation feedback are explicit.
 
-[?] T04A — Adapt SeqFX's on-graph modulation range for the Voice filter
-    Depends on: T04 and the selected-source color/state contract settled in T07. This is a product/interaction review before implementation; do not copy the SeqFX editor wholesale.
-    Goal:
-    - Show the currently selected modulation source's possible filter movement directly on the mobile Voice filter graph, so the user can see the mapping amount in the same place they see and edit the filter.
-    Source behavior verified in SeqFX (2026-08-19):
-    - SeqFX's shared FilterRangeEditor draws the cutoff start and destination on the logarithmic frequency axis, joins them with a translucent range bar, adds dashed endpoint guides and compact frequency/span labels, and permits direct endpoint editing. Its existing helpers already model positive and negative octave amounts plus unipolar and bipolar cutoff travel.
-    - That surface represents one block-local Aux source and stores an explicit start/end cutoff pair. Its fixed cyan/coral/yellow range language and bipolar editing model are SeqFX-specific choices, not an automatic contract for the synth.
-    Translation constraints found in the synth:
-    - The Voice filter can have many modulation sources. Following the wavetable-range and parameter-rail contract, the graph must present only the source currently selected in the global Mod widget and only that source's routes to the Voice filter.
-    - Cutoff modulation is expressed in octaves on a logarithmic 20 Hz–20 kHz axis. Resonance is a separate additive `filterQ` route on the graph's tuned vertical response scale. SeqFX currently shows an inline Cutoff range but does not solve an inline Resonance range.
-    - The existing Voice graph already distinguishes the base response from the instantaneous effective response produced by all active modulation, and it can draw live spectrum data in three analyzer styles. A selected route's complete possible range is a third meaning and must remain visually distinguishable from both.
-    Review and settle:
-    - Adapt SeqFX's useful idea—range anchored to the filter graph—but use the selected source's color rather than SeqFX's fixed palette and derive every endpoint from the synth's canonical route amount, polarity, base value, and legal target clamp.
-    - Decide the exact Cutoff treatment: range band, endpoint/guide treatment, source-color intensity, and whether compact labels show destination frequency, signed octave amount, or both without obscuring the response or analyzer.
-    - Prototype how a selected Resonance mapping should appear. Decide whether V1 displays Cutoff only or also gives Resonance an equally clear on-graph range; do not imply support for Resonance by reusing Cutoff geometry incorrectly.
-    - Decide what happens when the selected source maps to both Cutoff and Resonance, when another source also maps either target, when a route is mapped at 0%, bypassed, clipped at a filter limit, or the filter Mode is Off.
-    - Decide whether the on-graph range is display-only or directly editable. SeqFX's endpoint handles cannot be inherited without resolving competition with the Voice graph's existing horizontal Cutoff / vertical Resonance base-value gesture and the shared modulation-amount gesture contract.
-    - Preserve the existing live effective-response curve and analyzer. Establish a restrained visual hierarchy that makes base setting, selected source's possible travel, and instantaneous total response readable as three different things.
-    - Audit whether FilterRangeEditor's tested range math and SVG primitives can be reused inside FilterResponseGraph without replacing the current graph, analyzer, response modes, overlay controls, or future Mix control.
+[x] T04A — Lock the Voice-filter Cutoff modulation-range overlay
+    Depends on: T04 and the selected-source color/state contract settled in T07.
+    Closed 2026-08-19:
+    - This ticket changes only the Cutoff modulation-range overlay. It does not redesign or alter any other part of the already-specified Voice filter.
+    Locked overlay:
+    - Use the SeqFX modulation-range treatment: two Cutoff endpoints, the connected colored span, and the same draggable handle interaction for changing those endpoints.
+    - Color that overlay with the modulation source currently selected in the global Mod widget.
+    - Do not change the filter response, analyzer, base Cutoff/Resonance gesture, Mode overlay, Cutoff/Resonance/Mix control row, filter sound, or Voice-page layout as part of this work.
     Done when:
-    - Phone-width prototypes show no route, mapped-zero, bypassed, positive/negative unipolar Cutoff, bipolar Cutoff, clipped Cutoff, live modulation movement, and source switching over representative analyzer modes.
-    - The review explicitly resolves Resonance, simultaneous Cutoff+Resonance mapping, direct-edit versus display-only behavior, labels, colors, Mode Off, and gesture ownership.
-    - A cold implementation handoff can state which SeqFX pieces are reused, which are adapted, and which are rejected, with observable acceptance cases for the chosen treatment.
+    - The Voice filter has the SeqFX two-endpoint Cutoff modulation overlay in the selected source's color, and every other accepted filter decision remains unchanged.
 
-[ ] T05 — Implement the selected Global Filter presentation
+[ ] T05 — Implement the mobile Voice-page filter and keyboard voice menu
     Depends on: T03B, T04, T04A
     Done when:
     - The full filter graph remains visible and live on mobile with Mode, Cutoff, Resonance, and Mix all reachable.
     - The graph never distorts to fit its container.
     - The compact articulation/controls pane is absent without deleting or corrupting articulation behavior or stored data; noncompact desktop Articulations remain unchanged.
     - Play Mode and Glide remain reachable through the accepted keyboard-associated menu.
+    - Changing Play Mode retains the existing held-note release behavior; this ticket does not rewrite note dispatch.
     - The new Mix endpoint preserves all existing host parameter positions and follows the accepted default/migration behavior established during this review.
-    - The accepted selected-source modulation-range treatment from T04A appears directly on the filter graph without confusing the base response, instantaneous effective response, or live analyzer and without creating competing graph gestures.
+    - Add only the exact Cutoff modulation-range overlay locked in T04A without changing any other accepted filter behavior or presentation.
 
 [-] T05A — Find a future mobile home for Articulations
     Parked 2026-08-19:
@@ -473,11 +477,19 @@ PHASE 4 — REDESIGN MODULATION AROUND QUICK EDITING
     - The selected Envelope/MSEG/Macro preview and the route matrix/list are both discoverable on entry; the matrix cannot sit invisibly below a large graph.
     - The compact MSEG preview preserves its coordinate system/aspect ratio and supports direct point editing.
     - Expanded editing remains available for precision work.
-    Design question:
-    - Use tabs, summaries, or another explicit navigator to honor the no-hidden-functionality goal on short phones without cramming every editor onto one screen.
+    Settled so far:
+    - Replace the vertical source-editor/mapping-list stack with two top-level panels: `SOURCE` and `MAPPINGS`. Each selected panel receives the available Mod-workspace height instead of pushing the other below the phone viewport.
+    - Reuse the Voice page's A/B/C selector exactly as the visual and behavioral authority: the same tab-bar component, dimensions, typography, active treatment, focus/accessibility behavior, and fixed-bar/directional-panel transition. Only the two labels and panel contents differ.
+    - Order the panels `SOURCE`, then `MAPPINGS`. Activating a tab slides the content beneath left or right according to that order while the tab bar itself remains stationary; do not invent a separate Mod-specific tab design or transition.
+    - On the first Mod visit in a plugin instance, select `SOURCE`. Later visits restore that instance's last selected `SOURCE`/`MAPPINGS` tab under the persistent workspace-state contract already settled for the primary shell.
+    - In the `SOURCE` panel, make the compact MSEG graph directly editable instead of treating the entire graph as the full-editor button. Dragging its points edits the shape; a separate explicit Expand control opens the full-screen MSEG editor.
+    - Defer compact structural gestures until the real layout can be judged: adding points, deleting points, and curve shaping may remain expanded-editor-only if the compact graph feels cramped. The prototype/review must compare them rather than letting implementation choose silently.
+    - Keep the `SOURCE` panel's own source-family and source-number selectors. Synchronize them bidirectionally with the source selected in the floating Mod bar so either surface can change the same selection without requiring the bar to be expanded or repositioned.
+    - Open `MAPPINGS` with all routes visible. Changing the selected source in either selector must not silently filter the list; apply a source filter only through the mappings panel's explicit Filter control.
     Done when:
     - A first-time user can identify every major action from the initial Mod view without blind scrolling.
     - Compact and expanded MSEG points render at the same normalized coordinates.
+    - Browser coverage proves the Mod tabs match the Voice A/B/C selector and its directional content transition rather than merely approximating its appearance.
 
 [?] T15 — Revisit Mod Matrix row editing against the newer product direction
     Depends on: T14
@@ -510,7 +522,12 @@ PHASE 5 — PARKED UNTIL ITS QUALIFICATION CHANGES
 
 INFRASTRUCTURE AND TOOLING
 
-[ ] T17 — Cut the desktop browser suite's wall clock without losing coverage or stringency
+[x] T17 — Cut the desktop browser suite's wall clock without losing coverage or stringency
+    Implementation evidence (2026-08-19, codex-implemented, independently verified):
+    - Four balanced shard files (main 51 / articulation+mseg 39 / fx+modulation 40 / rail 39) sharing tests/helpers/desktop_patch_view_browser_suite.mjs, node --test concurrency 4, wired as the single test:desktop:ui command (TAP mirrored to build/t17-latest-sharded-suite.log).
+    - Independently verified: fresh run 169/169 in 7m29s; the ok-name diff against the pre-shard baseline is EMPTY (169 = 169); assertion count 1258 -> 1259 (the +1 is one strengthened load-race wait); tsc clean. Honest speed claim: the true solo baseline was ~13.5 min, so the real win is ~1.8x (codex's reported 3.82x measured its baseline under its own concurrent load — corrected here). Codex's three consecutive sharded runs were green with zero boot flakes.
+    - The unsound async waitForFunction patterns in tests/test_web_poc_browser.mjs were converted to sound polling with unchanged conditions.
+    - Leftover for the user: codex left git stash@{0} ("pre-codex-master-merge-local-tracked-edits") holding OLD uncommitted transient/hardware-lit-moodboard edits it set aside; deliberately not dropped or popped — decide its fate when convenient.
     Delegation:
     - Implementation may be handed to codex at max reasoning effort. Fable writes the shard plan review and verifies the gates; codex must not modify what any test ASSERTS — only structure, waits, and orchestration.
     Measured baseline (2026-08-19, from a full 163-case run log):
