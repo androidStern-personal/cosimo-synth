@@ -3124,15 +3124,15 @@ function requireReactDomClient_production() {
     return value;
   }
   var AbortControllerLocal = "undefined" !== typeof AbortController ? AbortController : function() {
-    var listeners = [], signal = this.signal = {
+    var listeners2 = [], signal = this.signal = {
       aborted: false,
       addEventListener: function(type, listener) {
-        listeners.push(listener);
+        listeners2.push(listener);
       }
     };
     this.abort = function() {
       signal.aborted = true;
-      listeners.forEach(function(listener) {
+      listeners2.forEach(function(listener) {
         return listener();
       });
     };
@@ -3178,33 +3178,33 @@ function requireReactDomClient_production() {
   function pingEngtangledActionScope() {
     if (0 === --currentEntangledPendingCount && null !== currentEntangledListeners) {
       null !== currentEntangledActionThenable && (currentEntangledActionThenable.status = "fulfilled");
-      var listeners = currentEntangledListeners;
+      var listeners2 = currentEntangledListeners;
       currentEntangledListeners = null;
       currentEntangledLane = 0;
       currentEntangledActionThenable = null;
-      for (var i = 0; i < listeners.length; i++) (0, listeners[i])();
+      for (var i = 0; i < listeners2.length; i++) (0, listeners2[i])();
     }
   }
   function chainThenableValue(thenable, result) {
-    var listeners = [], thenableWithOverride = {
+    var listeners2 = [], thenableWithOverride = {
       status: "pending",
       value: null,
       reason: null,
       then: function(resolve) {
-        listeners.push(resolve);
+        listeners2.push(resolve);
       }
     };
     thenable.then(
       function() {
         thenableWithOverride.status = "fulfilled";
         thenableWithOverride.value = result;
-        for (var i = 0; i < listeners.length; i++) (0, listeners[i])(result);
+        for (var i = 0; i < listeners2.length; i++) (0, listeners2[i])(result);
       },
       function(error) {
         thenableWithOverride.status = "rejected";
         thenableWithOverride.reason = error;
-        for (error = 0; error < listeners.length; error++)
-          (0, listeners[error])(void 0);
+        for (error = 0; error < listeners2.length; error++)
+          (0, listeners2[error])(void 0);
       }
     );
     return thenableWithOverride;
@@ -10145,15 +10145,15 @@ function requireReactDomClient_production() {
     };
   }
   function accumulateTwoPhaseListeners(targetFiber, reactName) {
-    for (var captureName = reactName + "Capture", listeners = []; null !== targetFiber; ) {
+    for (var captureName = reactName + "Capture", listeners2 = []; null !== targetFiber; ) {
       var _instance2 = targetFiber, stateNode = _instance2.stateNode;
       _instance2 = _instance2.tag;
-      5 !== _instance2 && 26 !== _instance2 && 27 !== _instance2 || null === stateNode || (_instance2 = getListener(targetFiber, captureName), null != _instance2 && listeners.unshift(
+      5 !== _instance2 && 26 !== _instance2 && 27 !== _instance2 || null === stateNode || (_instance2 = getListener(targetFiber, captureName), null != _instance2 && listeners2.unshift(
         createDispatchListener(targetFiber, _instance2, stateNode)
-      ), _instance2 = getListener(targetFiber, reactName), null != _instance2 && listeners.push(
+      ), _instance2 = getListener(targetFiber, reactName), null != _instance2 && listeners2.push(
         createDispatchListener(targetFiber, _instance2, stateNode)
       ));
-      if (3 === targetFiber.tag) return listeners;
+      if (3 === targetFiber.tag) return listeners2;
       targetFiber = targetFiber.return;
     }
     return [];
@@ -10166,18 +10166,18 @@ function requireReactDomClient_production() {
     return inst ? inst : null;
   }
   function accumulateEnterLeaveListenersForEvent(dispatchQueue, event, target, common, inCapturePhase) {
-    for (var registrationName = event._reactName, listeners = []; null !== target && target !== common; ) {
+    for (var registrationName = event._reactName, listeners2 = []; null !== target && target !== common; ) {
       var _instance3 = target, alternate = _instance3.alternate, stateNode = _instance3.stateNode;
       _instance3 = _instance3.tag;
       if (null !== alternate && alternate === common) break;
-      5 !== _instance3 && 26 !== _instance3 && 27 !== _instance3 || null === stateNode || (alternate = stateNode, inCapturePhase ? (stateNode = getListener(target, registrationName), null != stateNode && listeners.unshift(
+      5 !== _instance3 && 26 !== _instance3 && 27 !== _instance3 || null === stateNode || (alternate = stateNode, inCapturePhase ? (stateNode = getListener(target, registrationName), null != stateNode && listeners2.unshift(
         createDispatchListener(target, stateNode, alternate)
-      )) : inCapturePhase || (stateNode = getListener(target, registrationName), null != stateNode && listeners.push(
+      )) : inCapturePhase || (stateNode = getListener(target, registrationName), null != stateNode && listeners2.push(
         createDispatchListener(target, stateNode, alternate)
       )));
       target = target.return;
     }
-    0 !== listeners.length && dispatchQueue.push({ event, listeners });
+    0 !== listeners2.length && dispatchQueue.push({ event, listeners: listeners2 });
   }
   var NORMALIZE_NEWLINES_REGEX = /\r\n?/g, NORMALIZE_NULL_AND_REPLACEMENT_REGEX = /\u0000|\uFFFD/g;
   function normalizeMarkupForTextOrAttribute(markup) {
@@ -12856,6 +12856,46 @@ function asResourceClient(value) {
   }
   return createPatchConnectionResourceClient(value);
 }
+const listeners = /* @__PURE__ */ new Set();
+let programmaticWriteDepth = 0;
+function subscribeToUserEdits(listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+function reportUserParameterEdit(edit) {
+  if (programmaticWriteDepth > 0) {
+    return;
+  }
+  for (const listener of listeners) {
+    listener.onParameterEdit?.(edit);
+  }
+}
+function reportUserGestureStart() {
+  if (programmaticWriteDepth > 0) {
+    return;
+  }
+  for (const listener of listeners) {
+    listener.onGestureStart?.();
+  }
+}
+function reportUserGestureEnd() {
+  if (programmaticWriteDepth > 0) {
+    return;
+  }
+  for (const listener of listeners) {
+    listener.onGestureEnd?.();
+  }
+}
+function runProgrammaticWrites(write) {
+  programmaticWriteDepth += 1;
+  try {
+    return write();
+  } finally {
+    programmaticWriteDepth -= 1;
+  }
+}
 const PatchHostContext = reactExports.createContext(null);
 function PatchConnectionProvider({
   patchConnection,
@@ -12885,9 +12925,11 @@ function usePatchParameter(endpointID, initialValue = 0, active = true, presenta
   const patchConnection = usePatchConnection();
   const [value, setValue] = reactExports.useState(initialValue);
   const initialValueRef = reactExports.useRef(initialValue);
+  const valueRef = reactExports.useRef(initialValue);
   const gestureActiveRef = reactExports.useRef(false);
   initialValueRef.current = initialValue;
   const presentValue = reactExports.useCallback((nextValue) => {
+    valueRef.current = nextValue;
     if (presentationPriority === "deferred-during-gesture" && gestureActiveRef.current) {
       reactExports.startTransition(() => setValue(nextValue));
       return;
@@ -12895,6 +12937,7 @@ function usePatchParameter(endpointID, initialValue = 0, active = true, presenta
     setValue(nextValue);
   }, [presentationPriority]);
   reactExports.useEffect(() => {
+    valueRef.current = initialValueRef.current;
     setValue(initialValueRef.current);
     if (!active) {
       return void 0;
@@ -12913,16 +12956,20 @@ function usePatchParameter(endpointID, initialValue = 0, active = true, presenta
     };
   }, [active, endpointID, patchConnection, presentValue]);
   const setParameterValue = reactExports.useCallback((nextValue) => {
+    const changed = !Object.is(nextValue, valueRef.current);
     patchConnection.sendEventOrValue?.(endpointID, nextValue);
     presentValue(nextValue);
+    reportUserParameterEdit({ endpointID, changed });
   }, [endpointID, patchConnection, presentValue]);
   const beginGesture = reactExports.useCallback(() => {
     gestureActiveRef.current = true;
     patchConnection.sendParameterGestureStart?.(endpointID);
+    reportUserGestureStart();
   }, [endpointID, patchConnection]);
   const endGesture = reactExports.useCallback(() => {
     gestureActiveRef.current = false;
     patchConnection.sendParameterGestureEnd?.(endpointID);
+    reportUserGestureEnd();
   }, [endpointID, patchConnection]);
   return reactExports.useMemo(() => ({
     value,
@@ -16462,12 +16509,12 @@ class ModulationRuntimeBridge {
   }
   /** Subscribe to canonical amount changes for one route without observing the full modulation document. */
   subscribeRouteAmount(routeId, listener) {
-    const listeners = this.routeAmountListenersById.get(routeId) ?? /* @__PURE__ */ new Set();
-    listeners.add(listener);
-    this.routeAmountListenersById.set(routeId, listeners);
+    const listeners2 = this.routeAmountListenersById.get(routeId) ?? /* @__PURE__ */ new Set();
+    listeners2.add(listener);
+    this.routeAmountListenersById.set(routeId, listeners2);
     return () => {
-      listeners.delete(listener);
-      if (listeners.size === 0) {
+      listeners2.delete(listener);
+      if (listeners2.size === 0) {
         this.routeAmountListenersById.delete(routeId);
       }
     };
@@ -16518,6 +16565,7 @@ class ModulationRuntimeBridge {
         msegSlots: nextMsegSlots
       };
     });
+    reportUserParameterEdit({ endpointID: `msegShape.${slotIndex}.${shapeIndex}`, changed: true });
   }
   setMsegSlotPlayback(slotIndex, nextPlayback) {
     const normalizedPlayback = normalizeMsegPlayback(nextPlayback);
@@ -16587,6 +16635,7 @@ class ModulationRuntimeBridge {
     this.persistState();
     this.emitStateChange("routeAmount");
     this.emitRouteAmountChange(currentRoute.id);
+    reportUserParameterEdit({ endpointID: `modAmount.${currentRoute.id}`, changed: true });
     return true;
   }
   /** Add a route with a caller-owned identity, rejecting duplicate identities or source-target pairs. */
@@ -20406,6 +20455,240 @@ function MobileVoiceFocusedEditor({
     }
   );
 }
+function createAutoPreviewEngine(deps) {
+  let isEnabled = false;
+  let isDisposed = false;
+  let gestureDepth = 0;
+  let stillnessDeadline = null;
+  let armedTimer = null;
+  const dispatch = (commands) => {
+    for (const command of commands) {
+      switch (command.kind) {
+        case "retrigger":
+          deps.playPreview(command.capMs);
+          break;
+        case "endPreview":
+          deps.endPreview();
+          break;
+      }
+    }
+  };
+  const cancelTimer = () => {
+    const timer = armedTimer;
+    if (timer === null) {
+      return;
+    }
+    armedTimer = null;
+    timer.cancel();
+  };
+  const nextTimerDeadline = () => {
+    const schedulerDeadline = deps.scheduler.nextDeadline();
+    if (stillnessDeadline === null) {
+      return schedulerDeadline;
+    }
+    if (schedulerDeadline === null) {
+      return stillnessDeadline;
+    }
+    return Math.min(stillnessDeadline, schedulerDeadline);
+  };
+  const timerFired = () => {
+    if (!isEnabled || isDisposed) {
+      return;
+    }
+    const now = deps.now();
+    if (stillnessDeadline !== null && stillnessDeadline <= now) {
+      stillnessDeadline = null;
+      dispatch(deps.scheduler.gestureEnded(now));
+    }
+    const schedulerDeadline = deps.scheduler.nextDeadline();
+    if (schedulerDeadline !== null && schedulerDeadline <= now) {
+      dispatch(deps.scheduler.tick(now));
+    }
+    armTimer();
+  };
+  const armTimer = () => {
+    cancelTimer();
+    if (!isEnabled || isDisposed) {
+      return;
+    }
+    const deadline = nextTimerDeadline();
+    if (deadline === null) {
+      return;
+    }
+    const token = {};
+    const cancel = deps.scheduleAt(deadline, () => {
+      if (armedTimer?.token !== token) {
+        return;
+      }
+      armedTimer = null;
+      timerFired();
+    });
+    armedTimer = { token, cancel };
+  };
+  const deactivate = () => {
+    cancelTimer();
+    stillnessDeadline = null;
+    gestureDepth = 0;
+    dispatch(deps.scheduler.cancelled(deps.now()));
+  };
+  return {
+    setEnabled(enabled) {
+      if (isDisposed || enabled === isEnabled) {
+        return;
+      }
+      isEnabled = enabled;
+      if (!enabled) {
+        deactivate();
+      }
+    },
+    parameterEdited(changed) {
+      if (isDisposed || !isEnabled || !changed) {
+        return;
+      }
+      const now = deps.now();
+      stillnessDeadline = gestureDepth === 0 ? now + deps.movementStoppedMs : null;
+      dispatch(deps.scheduler.parameterChanged(now));
+      armTimer();
+    },
+    gestureStarted() {
+      if (isDisposed || !isEnabled) {
+        return;
+      }
+      gestureDepth += 1;
+      stillnessDeadline = null;
+      armTimer();
+    },
+    gestureEnded() {
+      if (isDisposed || !isEnabled) {
+        return;
+      }
+      if (gestureDepth === 0) {
+        armTimer();
+        return;
+      }
+      gestureDepth -= 1;
+      if (gestureDepth === 0) {
+        stillnessDeadline = null;
+        dispatch(deps.scheduler.gestureEnded(deps.now()));
+      }
+      armTimer();
+    },
+    dispose() {
+      if (isDisposed) {
+        return;
+      }
+      isDisposed = true;
+      if (isEnabled) {
+        isEnabled = false;
+        deactivate();
+        return;
+      }
+      cancelTimer();
+      stillnessDeadline = null;
+      gestureDepth = 0;
+    }
+  };
+}
+function createAutoPreviewScheduler(config) {
+  const noCommands = [];
+  let phase = "idle";
+  let lastRetriggerAt = null;
+  let pendingDeadline = null;
+  let previewSounding = false;
+  const windowClosed = (now) => lastRetriggerAt !== null && now < lastRetriggerAt + config.minRetriggerIntervalMs;
+  const retrigger = (at, capMs) => ({
+    kind: "retrigger",
+    at,
+    capMs
+  });
+  return {
+    parameterChanged(now) {
+      phase = "gesture";
+      if (pendingDeadline !== null) {
+        return noCommands;
+      }
+      if (windowClosed(now) && lastRetriggerAt !== null) {
+        pendingDeadline = lastRetriggerAt + config.minRetriggerIntervalMs;
+        return noCommands;
+      }
+      lastRetriggerAt = now;
+      previewSounding = true;
+      return [retrigger(now, null)];
+    },
+    gestureEnded(now) {
+      if (pendingDeadline !== null) {
+        phase = "trailing";
+        return noCommands;
+      }
+      phase = "idle";
+      if (!previewSounding) {
+        return noCommands;
+      }
+      previewSounding = false;
+      return [{ kind: "endPreview", at: now }];
+    },
+    cancelled(now) {
+      phase = "idle";
+      pendingDeadline = null;
+      if (!previewSounding) {
+        return noCommands;
+      }
+      previewSounding = false;
+      return [{ kind: "endPreview", at: now }];
+    },
+    tick(now) {
+      if (pendingDeadline === null || now < pendingDeadline) {
+        return noCommands;
+      }
+      const retriggerAt = pendingDeadline;
+      pendingDeadline = null;
+      lastRetriggerAt = retriggerAt;
+      if (phase === "trailing") {
+        phase = "idle";
+        previewSounding = false;
+        return [retrigger(retriggerAt, config.releaseNoteCapMs)];
+      }
+      previewSounding = true;
+      return [retrigger(retriggerAt, null)];
+    },
+    nextDeadline() {
+      return pendingDeadline;
+    }
+  };
+}
+const AUTO_PREVIEW_SYNC_CONFIG = {
+  minSyncPeriodMs: 120,
+  waitBudgetLeadingMs: 150,
+  waitBudgetOtherMs: 300,
+  minSubdivisionMs: 120,
+  slowLoopPolicy: "subdivision"
+};
+function nextGridBoundary(now, anchor, intervalMs) {
+  return anchor + Math.ceil((now - anchor) / intervalMs) * intervalMs;
+}
+function quantizeStrikeTime(input) {
+  const { now, kind, source, config } = input;
+  if (source === null || !Number.isFinite(source.periodMs) || !Number.isFinite(source.anchorMs) || source.periodMs < config.minSyncPeriodMs || source.anchorMs > now) {
+    return now;
+  }
+  const budget = kind === "leading" ? config.waitBudgetLeadingMs : config.waitBudgetOtherMs;
+  if (source.periodMs <= budget) {
+    return nextGridBoundary(now, source.anchorMs, source.periodMs);
+  }
+  if (config.slowLoopPolicy === "opportunistic") {
+    const boundary2 = nextGridBoundary(now, source.anchorMs, source.periodMs);
+    return boundary2 - now <= budget ? boundary2 : now;
+  }
+  let interval = source.periodMs;
+  while (interval / 2 >= config.minSubdivisionMs) {
+    interval /= 2;
+  }
+  if (interval <= budget) {
+    return nextGridBoundary(now, source.anchorMs, interval);
+  }
+  const boundary = nextGridBoundary(now, source.anchorMs, interval);
+  return boundary - now <= budget ? boundary : now;
+}
 const ARTICULATION_MAX_SLOTS = 128;
 const ARTICULATION_ROUTE_AMOUNT_MAX_ABS = 48;
 const ARTICULATION_DEFAULT_NAMES$1 = [
@@ -21917,6 +22200,12 @@ const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID$1 = "midiIn";
+const AUTO_PREVIEW_SCHEDULER_CONFIG = {
+  minRetriggerIntervalMs: 250,
+  movementStoppedMs: 150,
+  releaseNoteCapMs: 600
+};
+const AUTO_PREVIEW_MIN_NOTE_MS = 250;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 const GLIDE_TIME_MIN_SECONDS = 0;
@@ -23519,7 +23808,8 @@ function useSynthPatchViewModel({
   keyboardInputMode = "hosted",
   observeFilterSpectrum = true,
   observeDistortionVisuals = true,
-  observeMsegPlayhead = true
+  observeMsegPlayhead = true,
+  autoPreviewEnabled = false
 }) {
   const patchConnection = usePatchConnection();
   const oscillator = getOscillatorBindingContract(oscillatorID);
@@ -23923,6 +24213,7 @@ function useSynthPatchViewModel({
   const lastPlayedNoteRef = reactExports.useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
   const heldMidiNotesRef = reactExports.useRef(/* @__PURE__ */ new Map());
   const heldMidiOrderRef = reactExports.useRef(0);
+  const lastNoteOnAtRef = reactExports.useRef(null);
   const [articulationHeldInput, setArticulationHeldInput] = reactExports.useState({
     note: null,
     velocity: null,
@@ -24189,40 +24480,44 @@ function useSynthPatchViewModel({
   const applyArticulationSnapshot = reactExports.useCallback((snapshotValue) => {
     const snapshot = normalizeArticulationSnapshot(snapshotValue);
     const parameters = snapshot.parameters;
-    wavetablePosition.setValue(parameters.wavetablePosition);
-    pan.setValue(parameters.pan);
-    oscillatorOctave.setValue(parameters.octave);
-    oscillatorSemitone.setValue(parameters.semitone);
-    oscillatorFineCents.setValue(parameters.fineCents);
-    oscillatorVolumeDb.setValue(parameters.volumeDb);
-    oscillatorMute.setValue(parameters.mute);
-    oscillatorSolo.setValue(parameters.solo);
-    warpMode.setValue(parameters.warpMode);
-    warpAmount.setValue(parameters.warpAmount);
-    filterMode.setValue(parameters.filterMode);
-    filterCutoff.setValue(parameters.filterCutoff);
-    filterQ.setValue(parameters.filterQ);
-    unisonVoices.setValue(parameters.unisonVoices);
-    unisonDetune.setValue(parameters.unisonDetune);
-    unisonBlend.setValue(parameters.unisonBlend);
-    unisonWidth.setValue(parameters.unisonWidth);
-    unisonPhase.setValue(parameters.unisonPhase);
-    unisonRandom.setValue(parameters.unisonRandom);
-    unisonPhaseMode.setValue(parameters.unisonPhaseMode);
-    unisonDetuneMode.setValue(parameters.unisonDetuneMode);
-    unisonStackMode.setValue(parameters.unisonStackMode);
-    unisonWavetablePositionSpread.setValue(parameters.unisonWavetablePositionSpread);
-    unisonWarpSpread.setValue(parameters.unisonWarpSpread);
-    mseg1Morph.setValue(parameters.msegMorphs[0]);
-    mseg2Morph.setValue(parameters.msegMorphs[1]);
-    mseg3Morph.setValue(parameters.msegMorphs[2]);
+    runProgrammaticWrites(() => {
+      wavetablePosition.setValue(parameters.wavetablePosition);
+      pan.setValue(parameters.pan);
+      oscillatorOctave.setValue(parameters.octave);
+      oscillatorSemitone.setValue(parameters.semitone);
+      oscillatorFineCents.setValue(parameters.fineCents);
+      oscillatorVolumeDb.setValue(parameters.volumeDb);
+      oscillatorMute.setValue(parameters.mute);
+      oscillatorSolo.setValue(parameters.solo);
+      warpMode.setValue(parameters.warpMode);
+      warpAmount.setValue(parameters.warpAmount);
+      filterMode.setValue(parameters.filterMode);
+      filterCutoff.setValue(parameters.filterCutoff);
+      filterQ.setValue(parameters.filterQ);
+      unisonVoices.setValue(parameters.unisonVoices);
+      unisonDetune.setValue(parameters.unisonDetune);
+      unisonBlend.setValue(parameters.unisonBlend);
+      unisonWidth.setValue(parameters.unisonWidth);
+      unisonPhase.setValue(parameters.unisonPhase);
+      unisonRandom.setValue(parameters.unisonRandom);
+      unisonPhaseMode.setValue(parameters.unisonPhaseMode);
+      unisonDetuneMode.setValue(parameters.unisonDetuneMode);
+      unisonStackMode.setValue(parameters.unisonStackMode);
+      unisonWavetablePositionSpread.setValue(parameters.unisonWavetablePositionSpread);
+      unisonWarpSpread.setValue(parameters.unisonWarpSpread);
+      mseg1Morph.setValue(parameters.msegMorphs[0]);
+      mseg2Morph.setValue(parameters.msegMorphs[1]);
+      mseg3Morph.setValue(parameters.msegMorphs[2]);
+    });
     const bridge = modulationBridge.current;
-    snapshot.envelopes.forEach((envelope, envelopeIndex) => {
-      const bindings = envelopeBindings[envelopeIndex];
-      bindings?.attackSeconds.setValue(envelope.attackSeconds);
-      bindings?.decaySeconds.setValue(envelope.decaySeconds);
-      bindings?.sustain.setValue(envelope.sustain);
-      bindings?.releaseSeconds.setValue(envelope.releaseSeconds);
+    runProgrammaticWrites(() => {
+      snapshot.envelopes.forEach((envelope, envelopeIndex) => {
+        const bindings = envelopeBindings[envelopeIndex];
+        bindings?.attackSeconds.setValue(envelope.attackSeconds);
+        bindings?.decaySeconds.setValue(envelope.decaySeconds);
+        bindings?.sustain.setValue(envelope.sustain);
+        bindings?.releaseSeconds.setValue(envelope.releaseSeconds);
+      });
     });
     const currentRoutes = bridge?.getState().routes ?? modulationState?.routes ?? [];
     const routeAmountById = new Map(snapshot.modRouteAmounts.map((routeAmount) => [
@@ -24583,6 +24878,7 @@ function useSynthPatchViewModel({
     const isNoteOn = messageKind === 144 && safeVelocity > 0;
     const isNoteOff = messageKind === 128 || messageKind === 144 && safeVelocity === 0;
     if (isNoteOn) {
+      lastNoteOnAtRef.current = performance.now();
       lastPlayedNoteRef.current = safeNote;
       heldMidiNotesRef.current.set(safeNote, {
         velocity: safeVelocity,
@@ -24615,6 +24911,206 @@ function useSynthPatchViewModel({
     activeAuditionRef.current = { slotId, note };
     sendMidiInputEvent(144, note, 100);
   }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
+  const noteKeyAuditionRef = reactExports.useRef(null);
+  const handleStopNoteKeyAudition = reactExports.useCallback(() => {
+    const activeNoteKey = noteKeyAuditionRef.current;
+    if (!activeNoteKey) {
+      return;
+    }
+    noteKeyAuditionRef.current = null;
+    sendMidiInputEvent(128, activeNoteKey.note, 0);
+  }, [sendMidiInputEvent]);
+  const handleStartNoteKeyAudition = reactExports.useCallback(() => {
+    handleStopNoteKeyAudition();
+    const note = clamp$1(Math.round(lastPlayedNoteRef.current), 0, 127);
+    noteKeyAuditionRef.current = { note };
+    sendMidiInputEvent(144, note, 100);
+  }, [handleStopNoteKeyAudition, sendMidiInputEvent]);
+  const autoPreviewEnabledRef = reactExports.useRef(autoPreviewEnabled);
+  autoPreviewEnabledRef.current = autoPreviewEnabled;
+  const autoPreviewEngineRef = reactExports.useRef(null);
+  const autoPreviewOwnedNoteRef = reactExports.useRef(null);
+  const autoPreviewOffTimerRef = reactExports.useRef(null);
+  const autoPreviewPendingStrikeRef = reactExports.useRef(null);
+  const autoPreviewClearPendingRef = reactExports.useRef(null);
+  const msegRatesRef = reactExports.useRef([1, 1, 1]);
+  msegRatesRef.current = [mseg1Rate.value, mseg2Rate.value, mseg3Rate.value];
+  reactExports.useEffect(() => {
+    const sendRawMidi = (status, note, velocity) => {
+      patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID$1, buildShortMidi(status, note, velocity));
+    };
+    const clearOwnedOffTimer = () => {
+      if (autoPreviewOffTimerRef.current !== null) {
+        window.clearTimeout(autoPreviewOffTimerRef.current);
+        autoPreviewOffTimerRef.current = null;
+      }
+    };
+    const releaseOwnedNote = () => {
+      clearOwnedOffTimer();
+      const owned = autoPreviewOwnedNoteRef.current;
+      if (owned) {
+        autoPreviewOwnedNoteRef.current = null;
+        sendRawMidi(128, owned.note, 0);
+      }
+    };
+    const scheduleOwnedRelease = (delayMs) => {
+      clearOwnedOffTimer();
+      autoPreviewOffTimerRef.current = window.setTimeout(() => {
+        autoPreviewOffTimerRef.current = null;
+        releaseOwnedNote();
+      }, Math.max(0, delayMs));
+    };
+    const clearPendingStrike = () => {
+      const pending = autoPreviewPendingStrikeRef.current;
+      if (pending) {
+        autoPreviewPendingStrikeRef.current = null;
+        window.clearTimeout(pending.timer);
+      }
+    };
+    autoPreviewClearPendingRef.current = clearPendingStrike;
+    const resolveLoopSyncSource = () => {
+      const anchorMs = lastNoteOnAtRef.current;
+      const sounding = autoPreviewOwnedNoteRef.current !== null || heldMidiNotesRef.current.size > 0;
+      if (anchorMs === null || !sounding) {
+        return null;
+      }
+      const bridgeState = modulationBridge.current?.getState();
+      if (!bridgeState) {
+        return null;
+      }
+      let slowestPeriodMs = 0;
+      for (const slotIndex of [0, 1, 2]) {
+        const loop = bridgeState.msegSlots[slotIndex]?.playback.loop ?? null;
+        const rateSeconds = msegRatesRef.current[slotIndex];
+        if (!loop || !(rateSeconds > 0)) {
+          continue;
+        }
+        const periodMs = (loop.endX - loop.startX) * rateSeconds * 1e3;
+        if (!(periodMs > 0)) {
+          continue;
+        }
+        const isRouted = bridgeState.routes.some((route) => route.enabled && route.sourceKind === "mseg" && route.sourceSlot === slotIndex + 1);
+        if (!isRouted) {
+          continue;
+        }
+        slowestPeriodMs = Math.max(slowestPeriodMs, periodMs);
+      }
+      return slowestPeriodMs > 0 ? { periodMs: slowestPeriodMs, anchorMs } : null;
+    };
+    const engine = createAutoPreviewEngine({
+      scheduler: createAutoPreviewScheduler(AUTO_PREVIEW_SCHEDULER_CONFIG),
+      movementStoppedMs: AUTO_PREVIEW_SCHEDULER_CONFIG.movementStoppedMs,
+      now: () => performance.now(),
+      scheduleAt: (atMs, callback) => {
+        const handle = window.setTimeout(callback, Math.max(0, atMs - performance.now()));
+        return () => window.clearTimeout(handle);
+      },
+      playPreview: (capMs) => {
+        const strikePreview = (strikeCapMs) => {
+          const strikeAtMs = performance.now();
+          const heldNotes = [...heldMidiNotesRef.current.entries()];
+          if (heldNotes.length > 0) {
+            releaseOwnedNote();
+            for (const [note2, held] of heldNotes) {
+              sendRawMidi(128, note2, 0);
+              sendRawMidi(144, note2, held.velocity);
+            }
+            lastNoteOnAtRef.current = strikeAtMs;
+            return;
+          }
+          const note = clamp$1(Math.round(lastPlayedNoteRef.current), 0, 127);
+          releaseOwnedNote();
+          autoPreviewOwnedNoteRef.current = { note, startedAt: strikeAtMs };
+          sendRawMidi(144, note, 100);
+          lastNoteOnAtRef.current = strikeAtMs;
+          if (strikeCapMs !== null) {
+            scheduleOwnedRelease(strikeCapMs);
+          }
+        };
+        clearPendingStrike();
+        const now = performance.now();
+        const sounding = autoPreviewOwnedNoteRef.current !== null || heldMidiNotesRef.current.size > 0;
+        const kind = capMs !== null ? "trailing" : sounding ? "inMotion" : "leading";
+        const strikeAt = quantizeStrikeTime({
+          now,
+          kind,
+          source: resolveLoopSyncSource(),
+          config: AUTO_PREVIEW_SYNC_CONFIG
+        });
+        if (strikeAt <= now) {
+          strikePreview(capMs);
+          return;
+        }
+        const pending = { timer: 0, capMs };
+        pending.timer = window.setTimeout(() => {
+          if (autoPreviewPendingStrikeRef.current !== pending) {
+            return;
+          }
+          autoPreviewPendingStrikeRef.current = null;
+          strikePreview(pending.capMs);
+        }, Math.max(0, strikeAt - now));
+        autoPreviewPendingStrikeRef.current = pending;
+      },
+      endPreview: () => {
+        const pending = autoPreviewPendingStrikeRef.current;
+        if (pending && pending.capMs === null) {
+          pending.capMs = AUTO_PREVIEW_SCHEDULER_CONFIG.releaseNoteCapMs;
+        }
+        const owned = autoPreviewOwnedNoteRef.current;
+        if (!owned) {
+          return;
+        }
+        const age = performance.now() - owned.startedAt;
+        if (age < AUTO_PREVIEW_MIN_NOTE_MS) {
+          scheduleOwnedRelease(AUTO_PREVIEW_MIN_NOTE_MS - age);
+          return;
+        }
+        releaseOwnedNote();
+      }
+    });
+    autoPreviewEngineRef.current = engine;
+    engine.setEnabled(autoPreviewEnabledRef.current && document.visibilityState === "visible");
+    const unsubscribe = subscribeToUserEdits({
+      onParameterEdit: (edit) => engine.parameterEdited(edit.changed),
+      onGestureStart: () => engine.gestureStarted(),
+      onGestureEnd: () => engine.gestureEnded()
+    });
+    const handleSuspend = () => {
+      clearPendingStrike();
+      engine.setEnabled(false);
+      releaseOwnedNote();
+    };
+    const handleResume = () => engine.setEnabled(autoPreviewEnabledRef.current);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        handleResume();
+      } else {
+        handleSuspend();
+      }
+    };
+    window.addEventListener("blur", handleSuspend);
+    window.addEventListener("focus", handleResume);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener("blur", handleSuspend);
+      window.removeEventListener("focus", handleResume);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      unsubscribe();
+      engine.dispose();
+      clearPendingStrike();
+      releaseOwnedNote();
+      autoPreviewClearPendingRef.current = null;
+      autoPreviewEngineRef.current = null;
+    };
+  }, [patchConnection]);
+  reactExports.useEffect(() => {
+    if (!autoPreviewEnabled) {
+      autoPreviewClearPendingRef.current?.();
+    }
+    autoPreviewEngineRef.current?.setEnabled(
+      autoPreviewEnabled && document.visibilityState === "visible"
+    );
+  }, [autoPreviewEnabled]);
   reactExports.useEffect(() => {
     if (!voiceArticulationStartMessage) {
       return;
@@ -24626,19 +25122,30 @@ function useSynthPatchViewModel({
     );
   }, [publishHeldMidiNote, voiceArticulationStartMessage]);
   reactExports.useEffect(() => {
-    const handleWindowBlur = () => handleStopArticulationAudition();
+    const handleWindowBlur = () => {
+      handleStopArticulationAudition();
+      handleStopNoteKeyAudition();
+    };
     const handleKeyDown = (event) => {
       if (event.key === "Escape") {
         handleStopArticulationAudition();
+        handleStopNoteKeyAudition();
+      }
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") {
+        handleStopNoteKeyAudition();
       }
     };
     window.addEventListener("blur", handleWindowBlur);
     window.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       window.removeEventListener("blur", handleWindowBlur);
       window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [handleStopArticulationAudition]);
+  }, [handleStopArticulationAudition, handleStopNoteKeyAudition]);
   reactExports.useEffect(() => () => {
     const activeAudition = activeAuditionRef.current;
     if (activeAudition) {
@@ -24647,6 +25154,14 @@ function useSynthPatchViewModel({
         buildShortMidi(128, activeAudition.note, 0)
       );
       activeAuditionRef.current = null;
+    }
+    const activeNoteKey = noteKeyAuditionRef.current;
+    if (activeNoteKey) {
+      patchConnection.sendMIDIInputEvent?.(
+        MIDI_INPUT_ENDPOINT_ID$1,
+        buildShortMidi(128, activeNoteKey.note, 0)
+      );
+      noteKeyAuditionRef.current = null;
     }
   }, [patchConnection]);
   reactExports.useEffect(() => {
@@ -24802,6 +25317,10 @@ function useSynthPatchViewModel({
     handleReplaceArticulationSlotWithCurrent,
     handleStartArticulationAudition,
     handleStopArticulationAudition,
+    handleStartNoteKeyAudition,
+    handleStopNoteKeyAudition,
+    /** Feed one user-intentional MIDI note into last-played/held bookkeeping. */
+    trackIntentionalNoteInput: trackMidiInputForArticulationLane,
     handleSelectWavetable,
     handlePrewarmWavetablePicker,
     handleRetryLoad,

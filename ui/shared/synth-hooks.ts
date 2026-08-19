@@ -19,6 +19,15 @@ import {
     usePatchParameterBinding,
     type PatchControlBinding,
 } from "./patch-controls";
+import { runProgrammaticWrites, subscribeToUserEdits } from "./user-edit-bus";
+import { createAutoPreviewEngine, type AutoPreviewEngine } from "./auto-preview-engine";
+import { createAutoPreviewScheduler } from "./auto-preview-scheduler";
+import {
+    AUTO_PREVIEW_SYNC_CONFIG,
+    quantizeStrikeTime,
+    type AutoPreviewStrikeKind,
+    type LoopSyncSource,
+} from "./auto-preview-sync";
 import {
     deriveMsegSegmentCurvePower,
     clampMsegRateSeconds,
@@ -209,6 +218,14 @@ const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
 const WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID = "wavetablePrewarmRequest";
 const MIDI_INPUT_ENDPOINT_ID = "midiIn";
+/** T12 locked starting cadence; tune on a real phone before shipping. */
+const AUTO_PREVIEW_SCHEDULER_CONFIG = {
+    minRetriggerIntervalMs: 250,
+    movementStoppedMs: 150,
+    releaseNoteCapMs: 600,
+} as const;
+/** A preview released in the instant it started still gets a brief audible life. */
+const AUTO_PREVIEW_MIN_NOTE_MS = 250;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 export const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
@@ -462,6 +479,10 @@ export type SynthPatchViewModel = {
     handleReplaceArticulationSlotWithCurrent: (slotId: string) => void;
     handleStartArticulationAudition: (slotId: string) => void;
     handleStopArticulationAudition: (slotId?: string) => void;
+    handleStartNoteKeyAudition: () => void;
+    handleStopNoteKeyAudition: () => void;
+    /** Feed one user-intentional MIDI note into last-played/held bookkeeping. */
+    trackIntentionalNoteInput: (status: number, noteNumber: number, velocity?: number) => void;
     handleSelectWavetable: (nextValue: number) => void;
     handlePrewarmWavetablePicker: () => void;
     handleRetryLoad: () => void;
@@ -2421,6 +2442,7 @@ export function useSynthPatchViewModel({
     observeFilterSpectrum = true,
     observeDistortionVisuals = true,
     observeMsegPlayhead = true,
+    autoPreviewEnabled = false,
 }: {
     oscillatorID?: OscillatorID;
     stageRef: RefObject<HTMLDivElement | null>;
@@ -2436,6 +2458,7 @@ export function useSynthPatchViewModel({
     observeFilterSpectrum?: boolean;
     observeDistortionVisuals?: boolean;
     observeMsegPlayhead?: boolean;
+    autoPreviewEnabled?: boolean;
 }): SynthPatchViewModel {
     const patchConnection = usePatchConnection();
     const oscillator = getOscillatorBindingContract(oscillatorID);
@@ -2859,6 +2882,8 @@ export function useSynthPatchViewModel({
     const lastPlayedNoteRef = useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
     const heldMidiNotesRef = useRef(new Map<number, HeldMidiNote>());
     const heldMidiOrderRef = useRef(0);
+    /** When the newest voice started (any note-on we emitted or tracked) — the T12B loop-phase anchor. */
+    const lastNoteOnAtRef = useRef<number | null>(null);
     const [articulationHeldInput, setArticulationHeldInput] = useState<ArticulationHeldInput>({
         note: null,
         velocity: null,
@@ -3171,41 +3196,47 @@ export function useSynthPatchViewModel({
         const snapshot = normalizeArticulationSnapshot(snapshotValue);
         const parameters = snapshot.parameters;
 
-        wavetablePosition.setValue(parameters.wavetablePosition);
-        pan.setValue(parameters.pan);
-        oscillatorOctave.setValue(parameters.octave);
-        oscillatorSemitone.setValue(parameters.semitone);
-        oscillatorFineCents.setValue(parameters.fineCents);
-        oscillatorVolumeDb.setValue(parameters.volumeDb);
-        oscillatorMute.setValue(parameters.mute);
-        oscillatorSolo.setValue(parameters.solo);
-        warpMode.setValue(parameters.warpMode);
-        warpAmount.setValue(parameters.warpAmount);
-        filterMode.setValue(parameters.filterMode);
-        filterCutoff.setValue(parameters.filterCutoff);
-        filterQ.setValue(parameters.filterQ);
-        unisonVoices.setValue(parameters.unisonVoices);
-        unisonDetune.setValue(parameters.unisonDetune);
-        unisonBlend.setValue(parameters.unisonBlend);
-        unisonWidth.setValue(parameters.unisonWidth);
-        unisonPhase.setValue(parameters.unisonPhase);
-        unisonRandom.setValue(parameters.unisonRandom);
-        unisonPhaseMode.setValue(parameters.unisonPhaseMode);
-        unisonDetuneMode.setValue(parameters.unisonDetuneMode);
-        unisonStackMode.setValue(parameters.unisonStackMode);
-        unisonWavetablePositionSpread.setValue(parameters.unisonWavetablePositionSpread);
-        unisonWarpSpread.setValue(parameters.unisonWarpSpread);
-        mseg1Morph.setValue(parameters.msegMorphs[0]);
-        mseg2Morph.setValue(parameters.msegMorphs[1]);
-        mseg3Morph.setValue(parameters.msegMorphs[2]);
+        // Applying a snapshot writes through the scalar bindings but is not a
+        // direct user edit: suppress the T12 user-edit seam for the batch.
+        runProgrammaticWrites(() => {
+            wavetablePosition.setValue(parameters.wavetablePosition);
+            pan.setValue(parameters.pan);
+            oscillatorOctave.setValue(parameters.octave);
+            oscillatorSemitone.setValue(parameters.semitone);
+            oscillatorFineCents.setValue(parameters.fineCents);
+            oscillatorVolumeDb.setValue(parameters.volumeDb);
+            oscillatorMute.setValue(parameters.mute);
+            oscillatorSolo.setValue(parameters.solo);
+            warpMode.setValue(parameters.warpMode);
+            warpAmount.setValue(parameters.warpAmount);
+            filterMode.setValue(parameters.filterMode);
+            filterCutoff.setValue(parameters.filterCutoff);
+            filterQ.setValue(parameters.filterQ);
+            unisonVoices.setValue(parameters.unisonVoices);
+            unisonDetune.setValue(parameters.unisonDetune);
+            unisonBlend.setValue(parameters.unisonBlend);
+            unisonWidth.setValue(parameters.unisonWidth);
+            unisonPhase.setValue(parameters.unisonPhase);
+            unisonRandom.setValue(parameters.unisonRandom);
+            unisonPhaseMode.setValue(parameters.unisonPhaseMode);
+            unisonDetuneMode.setValue(parameters.unisonDetuneMode);
+            unisonStackMode.setValue(parameters.unisonStackMode);
+            unisonWavetablePositionSpread.setValue(parameters.unisonWavetablePositionSpread);
+            unisonWarpSpread.setValue(parameters.unisonWarpSpread);
+            mseg1Morph.setValue(parameters.msegMorphs[0]);
+            mseg2Morph.setValue(parameters.msegMorphs[1]);
+            mseg3Morph.setValue(parameters.msegMorphs[2]);
+        });
 
         const bridge = modulationBridge.current;
-        snapshot.envelopes.forEach((envelope, envelopeIndex) => {
-            const bindings = envelopeBindings[envelopeIndex];
-            bindings?.attackSeconds.setValue(envelope.attackSeconds);
-            bindings?.decaySeconds.setValue(envelope.decaySeconds);
-            bindings?.sustain.setValue(envelope.sustain);
-            bindings?.releaseSeconds.setValue(envelope.releaseSeconds);
+        runProgrammaticWrites(() => {
+            snapshot.envelopes.forEach((envelope, envelopeIndex) => {
+                const bindings = envelopeBindings[envelopeIndex];
+                bindings?.attackSeconds.setValue(envelope.attackSeconds);
+                bindings?.decaySeconds.setValue(envelope.decaySeconds);
+                bindings?.sustain.setValue(envelope.sustain);
+                bindings?.releaseSeconds.setValue(envelope.releaseSeconds);
+            });
         });
 
         const currentRoutes = bridge?.getState().routes ?? modulationState?.routes ?? [];
@@ -3689,6 +3720,9 @@ export function useSynthPatchViewModel({
         const isNoteOff = messageKind === 0x80 || (messageKind === 0x90 && safeVelocity === 0);
 
         if (isNoteOn) {
+            // The newest note-on anchors every per-voice MSEG loop's phase
+            // (T12B): loop-sync boundaries are computed from this moment.
+            lastNoteOnAtRef.current = performance.now();
             lastPlayedNoteRef.current = safeNote;
             heldMidiNotesRef.current.set(safeNote, {
                 velocity: safeVelocity,
@@ -3729,6 +3763,255 @@ export function useSynthPatchViewModel({
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
 
+    // The Mod rail's Note key (T10B): one piano key fixed to the most recently
+    // played intentional pitch. It goes through sendMidiInputEvent so the held
+    // set and last-played bookkeeping stay correct, and it remembers its own
+    // started pitch so a keyboard note played mid-press cannot orphan the
+    // eventual note-off.
+    const noteKeyAuditionRef = useRef<{ note: number } | null>(null);
+
+    const handleStopNoteKeyAudition = useCallback(() => {
+        const activeNoteKey = noteKeyAuditionRef.current;
+
+        if (!activeNoteKey) {
+            return;
+        }
+
+        noteKeyAuditionRef.current = null;
+        sendMidiInputEvent(0x80, activeNoteKey.note, 0);
+    }, [sendMidiInputEvent]);
+
+    const handleStartNoteKeyAudition = useCallback(() => {
+        handleStopNoteKeyAudition();
+
+        const note = clamp(Math.round(lastPlayedNoteRef.current), 0, 127);
+        noteKeyAuditionRef.current = { note };
+        sendMidiInputEvent(0x90, note, 100);
+    }, [handleStopNoteKeyAudition, sendMidiInputEvent]);
+
+    // ── Auto-preview (T12): retrigger the held chord (or the remembered
+    // intentional pitch) when a direct user edit actually changes a value.
+    // Engine-owned strikes take the raw connection so they never disturb the
+    // held-note/last-played bookkeeping; user-held notes are re-struck but
+    // their release always stays user-owned.
+    const autoPreviewEnabledRef = useRef(autoPreviewEnabled);
+    autoPreviewEnabledRef.current = autoPreviewEnabled;
+    const autoPreviewEngineRef = useRef<AutoPreviewEngine | null>(null);
+    const autoPreviewOwnedNoteRef = useRef<{ note: number; startedAt: number } | null>(null);
+    const autoPreviewOffTimerRef = useRef<number | null>(null);
+    // T12B loop-sync state: the strike currently deferred to a loop boundary,
+    // a reach-in to clear it from outside the mount closure, and live MSEG
+    // rates mirrored for the resolver.
+    const autoPreviewPendingStrikeRef = useRef<{ timer: number; capMs: number | null } | null>(null);
+    const autoPreviewClearPendingRef = useRef<(() => void) | null>(null);
+    const msegRatesRef = useRef<[number, number, number]>([1, 1, 1]);
+    msegRatesRef.current = [mseg1Rate.value, mseg2Rate.value, mseg3Rate.value];
+
+    useEffect(() => {
+        const sendRawMidi = (status: number, note: number, velocity: number) => {
+            patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID, buildShortMidi(status, note, velocity));
+        };
+        const clearOwnedOffTimer = () => {
+            if (autoPreviewOffTimerRef.current !== null) {
+                window.clearTimeout(autoPreviewOffTimerRef.current);
+                autoPreviewOffTimerRef.current = null;
+            }
+        };
+        const releaseOwnedNote = () => {
+            clearOwnedOffTimer();
+            const owned = autoPreviewOwnedNoteRef.current;
+            if (owned) {
+                autoPreviewOwnedNoteRef.current = null;
+                sendRawMidi(0x80, owned.note, 0);
+            }
+        };
+        const scheduleOwnedRelease = (delayMs: number) => {
+            clearOwnedOffTimer();
+            autoPreviewOffTimerRef.current = window.setTimeout(() => {
+                autoPreviewOffTimerRef.current = null;
+                releaseOwnedNote();
+            }, Math.max(0, delayMs));
+        };
+        const clearPendingStrike = () => {
+            const pending = autoPreviewPendingStrikeRef.current;
+            if (pending) {
+                autoPreviewPendingStrikeRef.current = null;
+                window.clearTimeout(pending.timer);
+            }
+        };
+        autoPreviewClearPendingRef.current = clearPendingStrike;
+        // T12B: the slowest looping MSEG that modulates anything is the
+        // audible rhythm; its cycle grid (anchored at the newest note-on,
+        // which restarts every per-voice MSEG) is what strikes align to.
+        // Unmapped MSEGs are ignored entirely.
+        const resolveLoopSyncSource = (): LoopSyncSource | null => {
+            const anchorMs = lastNoteOnAtRef.current;
+            const sounding = autoPreviewOwnedNoteRef.current !== null || heldMidiNotesRef.current.size > 0;
+            if (anchorMs === null || !sounding) {
+                return null;
+            }
+            const bridgeState = modulationBridge.current?.getState();
+            if (!bridgeState) {
+                return null;
+            }
+            let slowestPeriodMs = 0;
+            for (const slotIndex of [0, 1, 2] as const) {
+                const loop = bridgeState.msegSlots[slotIndex]?.playback.loop ?? null;
+                const rateSeconds = msegRatesRef.current[slotIndex];
+                if (!loop || !(rateSeconds > 0)) {
+                    continue;
+                }
+                const periodMs = (loop.endX - loop.startX) * rateSeconds * 1000;
+                if (!(periodMs > 0)) {
+                    continue;
+                }
+                const isRouted = bridgeState.routes.some((route) => (
+                    route.enabled && route.sourceKind === "mseg" && route.sourceSlot === slotIndex + 1
+                ));
+                if (!isRouted) {
+                    continue;
+                }
+                slowestPeriodMs = Math.max(slowestPeriodMs, periodMs);
+            }
+            return slowestPeriodMs > 0 ? { periodMs: slowestPeriodMs, anchorMs } : null;
+        };
+        const engine = createAutoPreviewEngine({
+            scheduler: createAutoPreviewScheduler(AUTO_PREVIEW_SCHEDULER_CONFIG),
+            movementStoppedMs: AUTO_PREVIEW_SCHEDULER_CONFIG.movementStoppedMs,
+            now: () => performance.now(),
+            scheduleAt: (atMs, callback) => {
+                const handle = window.setTimeout(callback, Math.max(0, atMs - performance.now()));
+                return () => window.clearTimeout(handle);
+            },
+            playPreview: (capMs) => {
+                const strikePreview = (strikeCapMs: number | null) => {
+                    const strikeAtMs = performance.now();
+                    const heldNotes = [...heldMidiNotesRef.current.entries()];
+                    if (heldNotes.length > 0) {
+                        // Re-strike the user's chord. Its gates stay
+                        // user-owned: neither the cap nor endPreview may
+                        // note-off held keys.
+                        releaseOwnedNote();
+                        for (const [note, held] of heldNotes) {
+                            sendRawMidi(0x80, note, 0);
+                            sendRawMidi(0x90, note, held.velocity);
+                        }
+                        // Raw strikes bypass tracking but still restart every
+                        // per-voice MSEG: they are the new loop anchor.
+                        lastNoteOnAtRef.current = strikeAtMs;
+                        return;
+                    }
+                    const note = clamp(Math.round(lastPlayedNoteRef.current), 0, 127);
+                    releaseOwnedNote();
+                    autoPreviewOwnedNoteRef.current = { note, startedAt: strikeAtMs };
+                    sendRawMidi(0x90, note, 100);
+                    lastNoteOnAtRef.current = strikeAtMs;
+                    if (strikeCapMs !== null) {
+                        scheduleOwnedRelease(strikeCapMs);
+                    }
+                };
+
+                clearPendingStrike();
+                const now = performance.now();
+                const sounding = autoPreviewOwnedNoteRef.current !== null
+                    || heldMidiNotesRef.current.size > 0;
+                const kind: AutoPreviewStrikeKind = capMs !== null
+                    ? "trailing"
+                    : sounding ? "inMotion" : "leading";
+                const strikeAt = quantizeStrikeTime({
+                    now,
+                    kind,
+                    source: resolveLoopSyncSource(),
+                    config: AUTO_PREVIEW_SYNC_CONFIG,
+                });
+                if (strikeAt <= now) {
+                    strikePreview(capMs);
+                    return;
+                }
+                const pending: { timer: number; capMs: number | null } = { timer: 0, capMs };
+                pending.timer = window.setTimeout(() => {
+                    if (autoPreviewPendingStrikeRef.current !== pending) {
+                        return;
+                    }
+                    autoPreviewPendingStrikeRef.current = null;
+                    strikePreview(pending.capMs);
+                }, Math.max(0, strikeAt - now));
+                autoPreviewPendingStrikeRef.current = pending;
+            },
+            endPreview: () => {
+                // Every cancel path clears the pending strike explicitly
+                // before reaching the engine, so an endPreview arriving with
+                // one still pending is a RELEASE: convert the deferred hold
+                // strike into the self-releasing capped final note so the
+                // last value is still heard, on the beat.
+                const pending = autoPreviewPendingStrikeRef.current;
+                if (pending && pending.capMs === null) {
+                    pending.capMs = AUTO_PREVIEW_SCHEDULER_CONFIG.releaseNoteCapMs;
+                }
+                const owned = autoPreviewOwnedNoteRef.current;
+                if (!owned) {
+                    return;
+                }
+                // A preview released in the instant it started (a discrete
+                // commit is begin+set+end in one breath) still gets a brief
+                // audible life.
+                const age = performance.now() - owned.startedAt;
+                if (age < AUTO_PREVIEW_MIN_NOTE_MS) {
+                    scheduleOwnedRelease(AUTO_PREVIEW_MIN_NOTE_MS - age);
+                    return;
+                }
+                releaseOwnedNote();
+            },
+        });
+        autoPreviewEngineRef.current = engine;
+        engine.setEnabled(autoPreviewEnabledRef.current && document.visibilityState === "visible");
+        const unsubscribe = subscribeToUserEdits({
+            onParameterEdit: (edit) => engine.parameterEdited(edit.changed),
+            onGestureStart: () => engine.gestureStarted(),
+            onGestureEnd: () => engine.gestureEnded(),
+        });
+        // Suspension stops preview notes immediately and schedules no trailing
+        // note; returning restores the user's preference.
+        const handleSuspend = () => {
+            clearPendingStrike();
+            engine.setEnabled(false);
+            releaseOwnedNote();
+        };
+        const handleResume = () => engine.setEnabled(autoPreviewEnabledRef.current);
+        const handleVisibility = () => {
+            if (document.visibilityState === "visible") {
+                handleResume();
+            } else {
+                handleSuspend();
+            }
+        };
+        window.addEventListener("blur", handleSuspend);
+        window.addEventListener("focus", handleResume);
+        document.addEventListener("visibilitychange", handleVisibility);
+        return () => {
+            window.removeEventListener("blur", handleSuspend);
+            window.removeEventListener("focus", handleResume);
+            document.removeEventListener("visibilitychange", handleVisibility);
+            unsubscribe();
+            engine.dispose();
+            clearPendingStrike();
+            releaseOwnedNote();
+            autoPreviewClearPendingRef.current = null;
+            autoPreviewEngineRef.current = null;
+        };
+    }, [patchConnection]);
+
+    useEffect(() => {
+        if (!autoPreviewEnabled) {
+            // Disabling must also drop a strike still waiting on a loop
+            // boundary — the engine cannot see it.
+            autoPreviewClearPendingRef.current?.();
+        }
+        autoPreviewEngineRef.current?.setEnabled(
+            autoPreviewEnabled && document.visibilityState === "visible",
+        );
+    }, [autoPreviewEnabled]);
+
     useEffect(() => {
         if (!voiceArticulationStartMessage) {
             return;
@@ -3745,20 +4028,33 @@ export function useSynthPatchViewModel({
     }, [publishHeldMidiNote, voiceArticulationStartMessage]);
 
     useEffect(() => {
-        const handleWindowBlur = () => handleStopArticulationAudition();
+        const handleWindowBlur = () => {
+            handleStopArticulationAudition();
+            handleStopNoteKeyAudition();
+        };
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 handleStopArticulationAudition();
+                handleStopNoteKeyAudition();
+            }
+        };
+        const handleVisibilityChange = () => {
+            // Mobile backgrounding fires visibilitychange without a reliable
+            // blur; suspension must never leave the Note key's note held.
+            if (document.visibilityState !== "visible") {
+                handleStopNoteKeyAudition();
             }
         };
 
         window.addEventListener("blur", handleWindowBlur);
         window.addEventListener("keydown", handleKeyDown);
+        document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
             window.removeEventListener("blur", handleWindowBlur);
             window.removeEventListener("keydown", handleKeyDown);
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
         };
-    }, [handleStopArticulationAudition]);
+    }, [handleStopArticulationAudition, handleStopNoteKeyAudition]);
 
     useEffect(() => () => {
         const activeAudition = activeAuditionRef.current;
@@ -3769,6 +4065,16 @@ export function useSynthPatchViewModel({
                 buildShortMidi(0x80, activeAudition.note, 0),
             );
             activeAuditionRef.current = null;
+        }
+
+        const activeNoteKey = noteKeyAuditionRef.current;
+
+        if (activeNoteKey) {
+            patchConnection.sendMIDIInputEvent?.(
+                MIDI_INPUT_ENDPOINT_ID,
+                buildShortMidi(0x80, activeNoteKey.note, 0),
+            );
+            noteKeyAuditionRef.current = null;
         }
     }, [patchConnection]);
 
@@ -3938,6 +4244,10 @@ export function useSynthPatchViewModel({
         handleReplaceArticulationSlotWithCurrent,
         handleStartArticulationAudition,
         handleStopArticulationAudition,
+        handleStartNoteKeyAudition,
+        handleStopNoteKeyAudition,
+        /** Feed one user-intentional MIDI note into last-played/held bookkeeping. */
+        trackIntentionalNoteInput: trackMidiInputForArticulationLane,
         handleSelectWavetable,
         handlePrewarmWavetablePicker,
         handleRetryLoad,

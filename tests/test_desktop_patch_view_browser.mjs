@@ -10141,6 +10141,546 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
     }
 });
 
+test("the Mod rail docks to either screen edge and remembers its dock across launches", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await page.waitForTimeout(240);
+        assert.equal(await rail.getAttribute("data-edge"), "right");
+
+        const handle = rail.locator(".mobile-global-mod-rail-handle");
+        const handleBox = await handle.boundingBox();
+        assert.ok(handleBox);
+        const start = {
+            x: handleBox.x + (handleBox.width / 2),
+            y: handleBox.y + (handleBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        // Two intermediate points keep the drag classified before crossing the
+        // midline, then release deep inside the left half.
+        for (const x of [start.x - 80, start.x - 200, 60]) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x, y: start.y + 12, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForFunction(() => {
+            const element = document.querySelector('[data-role="mobile-global-mod-rail"]');
+            return element?.getAttribute("data-settling-x") === "false"
+                && element.getAttribute("data-decelerating") === "false";
+        });
+        await page.waitForTimeout(300);
+
+        assert.equal(await rail.getAttribute("data-edge"), "left");
+        const dockedBox = await rail.boundingBox();
+        assert.ok(dockedBox);
+        assert.equal(Math.abs(dockedBox.x) <= 1, true, "The rail must settle flush against the left screen edge.");
+        assert.equal(
+            (await rail.locator('[data-role="mobile-global-mod-rail-silhouette"] path').getAttribute("d"))?.startsWith("M 0 0"),
+            true,
+            "The silhouette's shoulders must attach to the left screen edge after a left dock.",
+        );
+
+        const storedDock = await page.evaluate(() => (
+            JSON.parse(localStorage.getItem("cosimo.mobile-global-mod-rail.position.v1") ?? "null")
+        ));
+        assert.equal(storedDock?.version, 2);
+        assert.equal(storedDock?.edge, "left");
+        assert.equal(storedDock.normalizedY >= 0 && storedDock.normalizedY <= 1, true);
+
+        // The drawer still opens toward the screen from the left dock.
+        await expandGlobalModRail(page);
+        const drawerBox = await page.locator('[data-role="mobile-global-mod-rail-drawer"]').boundingBox();
+        assert.ok(drawerBox);
+        assert.equal(drawerBox.x >= -1 && drawerBox.x + drawerBox.width <= 200, true);
+    } finally {
+        await page.close();
+    }
+
+    const restoredPage = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript((value) => {
+                localStorage.setItem("cosimo.mobile-global-mod-rail.position.v1", value);
+            }, JSON.stringify({ version: 2, edge: "left", normalizedY: 0.8 }));
+        },
+    });
+    try {
+        const rail = restoredPage.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await restoredPage.waitForTimeout(240);
+        assert.equal(await rail.getAttribute("data-edge"), "left");
+        const box = await rail.boundingBox();
+        assert.ok(box);
+        assert.equal(Math.abs(box.x) <= 1, true, "A stored left dock must restore flush left.");
+        assert.equal(box.y > 426, true, "A stored normalizedY of 0.8 must restore in the lower travel band.");
+    } finally {
+        await restoredPage.close();
+    }
+
+    const legacyPage = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem("cosimo.mobile-global-mod-rail.position.v1", "0.42");
+            });
+        },
+    });
+    try {
+        const rail = legacyPage.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await legacyPage.waitForTimeout(240);
+        assert.equal(
+            await rail.getAttribute("data-edge"),
+            "right",
+            "A legacy stored position predates edge docking and must restore on the right edge.",
+        );
+    } finally {
+        await legacyPage.close();
+    }
+});
+
+test("the Note key plays the remembered pitch, follows intentional notes, and never sticks", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        const noteKey = rail.locator('[data-role="mobile-global-mod-rail-note"]');
+        await noteKey.waitFor();
+        await page.waitForTimeout(240);
+        await clearHarnessDebugLog(page);
+
+        // Before any intentional note the Note key plays middle C.
+        const noteBox = await noteKey.boundingBox();
+        assert.ok(noteBox);
+        const noteCenter = { x: noteBox.x + (noteBox.width / 2), y: noteBox.y + (noteBox.height / 2) };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...noteCenter, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1
+        ));
+        assert.equal(await noteKey.getAttribute("data-note-held"), "true");
+
+        // A vertical move while holding the key must neither move the rail nor
+        // release the note: the key owns its pointer.
+        const railTopWhileHeld = (await rail.boundingBox())?.y;
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: noteCenter.x, y: noteCenter.y + 48, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await page.waitForTimeout(120);
+        assert.equal((await rail.boundingBox())?.y, railTopWhileHeld, "Holding the Note key must not drag the rail.");
+        assert.equal(await noteKey.getAttribute("data-note-held"), "true");
+
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2
+        ));
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 60, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 60, 0) },
+        ]);
+        assert.equal(await noteKey.getAttribute("data-note-held"), "false");
+
+        // An intentional note played on the on-screen keyboard becomes the
+        // Note key's pitch (the element reports its own presses as
+        // note-down/note-up, which host playback never dispatches).
+        await page.evaluate(() => {
+            const keyboard = document.querySelector('[data-role="sticky-keyboard"] .keyboard');
+            keyboard.dispatchEvent(new CustomEvent("note-down", { detail: { note: 52 } }));
+            keyboard.dispatchEvent(new CustomEvent("note-up", { detail: { note: 52 } }));
+        });
+        await clearHarnessDebugLog(page);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...noteCenter, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1
+        ));
+
+        // Suspension while held must end the note exactly once.
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length >= 2
+        ));
+        await page.waitForTimeout(160);
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 52, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 52, 0) },
+        ]);
+        assert.equal(await noteKey.getAttribute("data-note-held"), "false");
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } finally {
+        await page.close();
+    }
+});
+
+test("the expanded drawer's Keyboard and Auto-preview toggles govern the keyboard and the Note-key dot", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await page.waitForTimeout(240);
+        await expandGlobalModRail(page);
+
+        const autoToggle = rail.locator('[data-role="mobile-global-mod-rail-auto-toggle"]');
+        const keyboardToggle = rail.locator('[data-role="mobile-global-mod-rail-keyboard-toggle"]');
+        const noteDot = rail.locator('[data-role="mobile-global-mod-rail-note-dot"]');
+
+        assert.equal(await autoToggle.getAttribute("aria-pressed"), "false");
+        assert.equal(await noteDot.count(), 0);
+        await autoToggle.click();
+        assert.equal(await autoToggle.getAttribute("aria-pressed"), "true");
+        assert.equal(await noteDot.count(), 1, "Active Auto-preview must light the Note key's status dot.");
+        assert.deepEqual(
+            await page.evaluate(() => JSON.parse(localStorage.getItem("cosimo.auto-preview.enabled.v1") ?? "null")),
+            { version: 1, enabled: true },
+        );
+
+        const keyboard = page.locator('[data-role="sticky-keyboard"]');
+        assert.equal(await keyboard.isVisible(), true);
+        const beforeDebug = await getKeyboardDebug(page);
+        await keyboardToggle.click();
+        assert.equal(await keyboardToggle.getAttribute("aria-pressed"), "false");
+        assert.equal(await keyboard.isVisible(), false, "The Keyboard toggle must hide the bottom keyboard.");
+        const afterDebug = await getKeyboardDebug(page);
+        assert.equal(
+            Number(afterDebug?.allNotesOffCount ?? 0) >= Number(beforeDebug?.allNotesOffCount ?? 0) + 1,
+            true,
+            "Hiding the keyboard must release its held notes.",
+        );
+        await page.waitForTimeout(260);
+        const railBoxWithoutKeyboard = await rail.boundingBox();
+        assert.ok(railBoxWithoutKeyboard);
+        assert.equal(
+            railBoxWithoutKeyboard.y + railBoxWithoutKeyboard.height <= 852,
+            true,
+            "The rail must stay inside the viewport when the keyboard is hidden.",
+        );
+
+        await keyboardToggle.click();
+        assert.equal(await keyboard.isVisible(), true);
+        assert.equal(await keyboardToggle.getAttribute("aria-pressed"), "true");
+    } finally {
+        await page.close();
+    }
+});
+
+test("the Note key triggers audible output from every mobile editor state", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    const pressNoteKey = async (stateLabel) => {
+        await clearHarnessDebugLog(page);
+        const noteKey = page.locator('[data-role="mobile-global-mod-rail-note"]');
+        const noteBox = await noteKey.boundingBox();
+        assert.ok(noteBox, `${stateLabel}: the Note key must be present.`);
+        const center = { x: noteBox.x + (noteBox.width / 2), y: noteBox.y + (noteBox.height / 2) };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...center, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1
+        ), undefined, { timeout: 4000 }).catch(() => {
+            throw new Error(`${stateLabel}: pressing the Note key produced no note-on.`);
+        });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2
+        ));
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 60, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 60, 0) },
+        ], `${stateLabel}: the Note key must play and release exactly the remembered pitch.`);
+    };
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+
+        await pressNoteKey("Voice accordion");
+
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+        await pressNoteKey("FX effect editor");
+
+        // Create one route so the Mod views have a route to detail.
+        await expandGlobalModRail(page);
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const target = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        const sourceBox = await source.boundingBox();
+        const targetBox = await target.boundingBox();
+        assert.ok(sourceBox && targetBox);
+        const sourceStart = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...sourceStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: sourceStart.x - 18, y: sourceStart.y, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        const routeFinger = touchPointForModSourcePreviewTarget(
+            sourceStart,
+            { x: targetBox.x + (targetBox.width / 2), y: targetBox.y + (targetBox.height / 2) },
+            393,
+        );
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: routeFinger.x, y: routeFinger.y, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await waitForHarnessSnapshot(
+            page,
+            "note key path route creation",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
+                route.sourceKind === "env" && route.targetKind === "rack.reverbSize"
+            )),
+        );
+        await collapseGlobalModRail(page);
+
+        await page.click('[data-role="mobile-workspace-toggle-mod"]');
+        await pressNoteKey("Mod overview");
+
+        const routeRow = page.locator('[data-role="mobile-mod-route-row"]').first();
+        await routeRow.waitFor();
+        await routeRow.click();
+        await pressNoteKey("Route detail");
+
+        // Deep-link into the selected source's full editor from the drawer: the
+        // first tap arms the source if it is not armed; the tap on an armed
+        // source opens its editor.
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        if (!(await page.locator(".mobile-mod-return-bar").isVisible())) {
+            await page.click('[data-role="rack-mod-source-mseg-1"]');
+        }
+        await page.locator(".mobile-mod-return-bar").waitFor();
+        await pressNoteKey("Source editor");
+    } finally {
+        await page.close();
+    }
+});
+
+test("Auto-preview retriggers on real parameter drags, stays silent when off, and cannot stick", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    const dragKnobVertically = async () => {
+        const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        const surfaceBox = await surface.boundingBox();
+        assert.ok(surfaceBox);
+        const start = {
+            x: surfaceBox.x + (surfaceBox.width / 2),
+            y: surfaceBox.y + (surfaceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (const step of [12, 26, 40]) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: start.x, y: start.y - step, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+            await page.waitForTimeout(40);
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    };
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+
+        // Off by default: a real value drag produces no audition notes.
+        await clearHarnessDebugLog(page);
+        await dragKnobVertically();
+        await page.waitForTimeout(700);
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [], "Auto-preview off must stay silent for value edits.");
+        assert.notEqual(
+            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "reverbSize").length,
+            0,
+            "The drag itself must have edited the parameter.",
+        );
+
+        await expandGlobalModRail(page);
+        await page.locator('[data-role="mobile-global-mod-rail-auto-toggle"]').click();
+        await collapseGlobalModRail(page);
+
+        // On: the same drag strikes the remembered pitch and settles with no
+        // note left hanging.
+        await clearHarnessDebugLog(page);
+        await dragKnobVertically();
+        await page.waitForFunction(() => {
+            const events = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents;
+            const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
+            const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
+            return noteOns >= 1 && noteOns === noteOffs;
+        }, undefined, { timeout: 4000 });
+        snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.midiInputEvents.every(({ value }) => ((value >>> 8) & 0x7f) === 60),
+            true,
+            "With nothing held, Auto-preview must strike the remembered pitch (middle C).",
+        );
+
+        // Toggling off mid-hold can never leave a note sounding.
+        await clearHarnessDebugLog(page);
+        const surfaceBox = await page.locator('[data-role="rack-parameter-surface-reverbSize"]').boundingBox();
+        assert.ok(surfaceBox);
+        const holdStart = {
+            x: surfaceBox.x + (surfaceBox.width / 2),
+            y: surfaceBox.y + (surfaceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...holdStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: holdStart.x, y: holdStart.y - 30, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.some(({ value }) => (value >>> 16) === 0x90)
+        ));
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.waitForFunction(() => {
+            const events = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents;
+            const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
+            const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
+            return noteOns === noteOffs;
+        }, undefined, { timeout: 2000 });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } finally {
+        await page.close();
+    }
+});
+
+test("Auto-preview with a routed looping MSEG still strikes, settles balanced, and never sticks", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await page.click('[data-role="mobile-workspace-toggle-fx"]');
+        await selectRackEffect(page, "reverb");
+
+        // Route the default-armed MSEG 1 (rate 1s, full-shape loop) onto a
+        // rack parameter so the loop-sync path becomes eligible.
+        await expandGlobalModRail(page);
+        const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        const target = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        const sourceBox = await source.boundingBox();
+        const targetBox = await target.boundingBox();
+        assert.ok(sourceBox && targetBox);
+        const sourceStart = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...sourceStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: sourceStart.x - 18, y: sourceStart.y, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        const routeFinger = touchPointForModSourcePreviewTarget(
+            sourceStart,
+            { x: targetBox.x + (targetBox.width / 2), y: targetBox.y + (targetBox.height / 2) },
+            393,
+        );
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: routeFinger.x, y: routeFinger.y, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await waitForHarnessSnapshot(
+            page,
+            "mseg loop-sync route creation",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
+                route.sourceKind === "mseg" && route.targetKind === "rack.reverbSize"
+            )),
+        );
+
+        await page.locator('[data-role="mobile-global-mod-rail-auto-toggle"]').click();
+        await collapseGlobalModRail(page);
+
+        // Drag the knob: strikes may defer to the loop grid (unit-pinned math)
+        // but must still arrive, stay on the remembered pitch, and settle with
+        // every note-on matched by a note-off.
+        await clearHarnessDebugLog(page);
+        const surfaceBox = await page.locator('[data-role="rack-parameter-surface-reverbSize"]').boundingBox();
+        assert.ok(surfaceBox);
+        const dragStart = {
+            x: surfaceBox.x + (surfaceBox.width / 2),
+            y: surfaceBox.y + (surfaceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...dragStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (const step of [14, 30, 46]) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: dragStart.x, y: dragStart.y - step, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+            await page.waitForTimeout(50);
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        await page.waitForFunction(() => {
+            const events = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents;
+            const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
+            const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
+            return noteOns >= 1 && noteOns === noteOffs;
+        }, undefined, { timeout: 5000 });
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            snapshot.midiInputEvents.every(({ value }) => ((value >>> 8) & 0x7f) === 60),
+            true,
+            "Loop-synced strikes must stay on the remembered pitch.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("touch source mapping keeps its free preview while a sticky target claims the drop", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
@@ -10981,8 +11521,10 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         assert.equal(visualContract.sources.every(Boolean), true);
         assert.deepEqual(visualContract.sources.map((source) => source.number), ["1", "1", "1"]);
         assert.deepEqual(visualContract.sources.map((source) => source.accent), ["#cc59d2", "#b8e236", "#ff6428"]);
-        assert.equal(visualContract.sources.every((source) => source.buttonWidth === 44 && source.buttonHeight === 44), true);
-        assert.equal(visualContract.sources.every((source) => source.artWidth === 36 && source.artHeight === 36), true);
+        // The B2 module skeleton (T10B): a full-width 40px hit area around a
+        // 28px source module, on the rail's 10px rhythm.
+        assert.equal(visualContract.sources.every((source) => source.buttonWidth === 40 && source.buttonHeight === 28), true);
+        assert.equal(visualContract.sources.every((source) => source.artWidth === 28 && source.artHeight === 28), true);
         assert.equal(visualContract.sources.every((source) => source.background === "rgba(0, 0, 0, 0)"), true);
         assert.equal(visualContract.sources.every((source) => source.boxShadow === "none"), true);
         assert.equal(visualContract.sources.every((source) => source.overflow === "visible"), true);
@@ -11010,13 +11552,13 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         );
         assert.equal(
             visualContract.sources.slice(1).every((source, index) => (
-                Math.abs(source.top - visualContract.sources[index].bottom - 4) <= 0.5
+                Math.abs(source.top - visualContract.sources[index].bottom - 10) <= 0.5
             )),
             true,
-            "Source rows must use one consistent 4px gap.",
+            "Source rows must sit on the rail's single 10px rhythm.",
         );
-        assert.deepEqual(visualContract.previous, { width: 28, height: 28 });
-        assert.deepEqual(visualContract.next, { width: 28, height: 28 });
+        assert.deepEqual(visualContract.previous, { width: 40, height: 20 });
+        assert.deepEqual(visualContract.next, { width: 40, height: 20 });
 
         await page.click('[data-role="rack-mod-source-mseg-1"]');
         const selectedVisual = await page.locator('[data-role="rack-mod-source-mseg-1"]').evaluate((button) => {
@@ -11029,20 +11571,24 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
                 buttonShadow: getComputedStyle(button).boxShadow,
                 artFilter: art instanceof HTMLElement ? getComputedStyle(art).filter : "",
                 artTransform: art instanceof HTMLElement ? getComputedStyle(art).transform : "",
-                underlineHeight: underline.height,
-                underlineShadow: underline.boxShadow,
+                artBackground: art instanceof HTMLElement ? getComputedStyle(art).backgroundColor : "",
+                underlineDisplay: underline.display,
                 viewportOverflow: viewportStyle?.overflow ?? "",
                 viewportClipMargin: viewportStyle?.overflowClipMargin ?? "",
             };
         });
+        // B2 selection: the module itself tints — no glow, no scale, no
+        // underline. The tinted container is the entire selected treatment.
         assert.equal(selectedVisual.buttonFilter, "none");
         assert.equal(selectedVisual.buttonShadow, "none");
-        assert.match(selectedVisual.artFilter, /drop-shadow/);
-        assert.notEqual(selectedVisual.artTransform, "none");
-        assert.equal(selectedVisual.underlineHeight, "2px");
-        assert.notEqual(selectedVisual.underlineShadow, "none");
+        assert.equal(selectedVisual.artFilter, "none");
+        assert.equal(selectedVisual.artTransform, "none");
+        assert.notEqual(selectedVisual.artBackground, "rgba(0, 0, 0, 0)");
+        assert.equal(selectedVisual.underlineDisplay, "none");
         assert.equal(selectedVisual.viewportOverflow, "clip");
-        assert.equal(Number.parseFloat(selectedVisual.viewportClipMargin) >= 9, true);
+        // B2 modules carry no glow: the viewport clips hard so the next page
+        // cannot peek through the 10px rhythm gap.
+        assert.equal(Number.parseFloat(selectedVisual.viewportClipMargin), 0);
 
         const animation = await page.evaluate(async () => {
             const track = document.querySelector('[data-role="rack-mod-source-track"]');

@@ -14,6 +14,11 @@ import {
     createPatchConnectionResourceClient,
     type ResourceClient,
 } from "./resource-client";
+import {
+    reportUserGestureEnd,
+    reportUserGestureStart,
+    reportUserParameterEdit,
+} from "./user-edit-bus";
 
 export type PatchConnectionLike = {
     manifest?: unknown;
@@ -111,9 +116,11 @@ export function usePatchParameter(
     const patchConnection = usePatchConnection();
     const [value, setValue] = useState<unknown>(initialValue);
     const initialValueRef = useRef(initialValue);
+    const valueRef = useRef<unknown>(initialValue);
     const gestureActiveRef = useRef(false);
     initialValueRef.current = initialValue;
     const presentValue = useCallback((nextValue: unknown) => {
+        valueRef.current = nextValue;
         if (presentationPriority === "deferred-during-gesture" && gestureActiveRef.current) {
             startTransition(() => setValue(nextValue));
             return;
@@ -123,6 +130,7 @@ export function usePatchParameter(
     }, [presentationPriority]);
 
     useEffect(() => {
+        valueRef.current = initialValueRef.current;
         setValue(initialValueRef.current);
         if (!active) {
             return undefined;
@@ -145,18 +153,25 @@ export function usePatchParameter(
     }, [active, endpointID, patchConnection, presentValue]);
 
     const setParameterValue = useCallback((nextValue: unknown) => {
+        // Every write through this hook is a direct user edit — programmatic
+        // bulk writes (preset load, host restore) take the connection directly
+        // and never construct bindings (T12 seam A).
+        const changed = !Object.is(nextValue, valueRef.current);
         patchConnection.sendEventOrValue?.(endpointID, nextValue);
         presentValue(nextValue);
+        reportUserParameterEdit({ endpointID, changed });
     }, [endpointID, patchConnection, presentValue]);
 
     const beginGesture = useCallback(() => {
         gestureActiveRef.current = true;
         patchConnection.sendParameterGestureStart?.(endpointID);
+        reportUserGestureStart();
     }, [endpointID, patchConnection]);
 
     const endGesture = useCallback(() => {
         gestureActiveRef.current = false;
         patchConnection.sendParameterGestureEnd?.(endpointID);
+        reportUserGestureEnd();
     }, [endpointID, patchConnection]);
 
     return useMemo(() => ({

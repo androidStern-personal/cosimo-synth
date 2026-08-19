@@ -73,7 +73,13 @@ import { MobileModMatrix } from "./mobile-mod-matrix";
 import {
     EffectsRackWorkspace,
     type GlobalModRailState,
+    type ModRailAuditionBindings,
 } from "./effects-rack-workspace";
+import {
+    AUTO_PREVIEW_ENABLED_STORAGE_KEY,
+    parseStoredAutoPreviewEnabled,
+    serializeAutoPreviewEnabled,
+} from "../shared/audition-preferences";
 import {
     SYNTH_PRESET_EFFECT_ID,
     useOscillatorSelectionViewModel,
@@ -2121,6 +2127,7 @@ function KeyboardSection({
     playModeFocusBindings,
     glideFocusTarget,
     keyboardRef,
+    onIntentionalNote,
     toolbarOverride,
 }: VoiceGlideSectionProps & {
     oscillatorID: OscillatorID;
@@ -2147,6 +2154,7 @@ function KeyboardSection({
         onEndTextEntry: () => void;
     };
     keyboardRef: RefObject<PianoKeyboardElement | null>;
+    onIntentionalNote?: (status: number, noteNumber: number, velocity: number) => void;
     toolbarOverride?: ReactNode;
 }) {
     return (
@@ -2179,7 +2187,14 @@ function KeyboardSection({
                     glideFocusTarget={glideFocusTarget}
                 />
             )}
-            keyboard={<KeyboardDock rootNote={keyboardRootNote} noteCount={noteCount} keyboardRef={keyboardRef} />}
+            keyboard={(
+                <KeyboardDock
+                    rootNote={keyboardRootNote}
+                    noteCount={noteCount}
+                    keyboardRef={keyboardRef}
+                    onIntentionalNote={onIntentionalNote}
+                />
+            )}
         />
     );
 }
@@ -3358,6 +3373,34 @@ function DesktopPatchViewBody({
         ));
         return true;
     }, [keyboardRootNote]);
+    const [keyboardVisible, setKeyboardVisible] = useState(true);
+    const handleToggleKeyboard = useCallback(() => {
+        // Hiding the keyboard must never strand its held notes.
+        keyboardElementRef.current?.allNotesOff?.();
+        setKeyboardVisible((visible) => !visible);
+    }, []);
+    const [autoPreviewEnabled, setAutoPreviewEnabled] = useState(() => {
+        try {
+            return parseStoredAutoPreviewEnabled(
+                localStorage.getItem(AUTO_PREVIEW_ENABLED_STORAGE_KEY),
+            ) ?? false;
+        } catch {
+            return false;
+        }
+    });
+    const handleToggleAutoPreview = useCallback(() => {
+        setAutoPreviewEnabled((enabled) => !enabled);
+    }, []);
+    useEffect(() => {
+        try {
+            localStorage.setItem(
+                AUTO_PREVIEW_ENABLED_STORAGE_KEY,
+                serializeAutoPreviewEnabled(autoPreviewEnabled),
+            );
+        } catch {
+            // A private-browsing storage failure must not break the toggle.
+        }
+    }, [autoPreviewEnabled]);
     const curveLab = useDesktopCurveLab();
     const oscillatorSelection = useOscillatorSelectionViewModel();
     const synthView = useSynthPatchViewModel({
@@ -3377,7 +3420,23 @@ function DesktopPatchViewBody({
             || globalModRailState.selectedSource.sourceKind === "mseg",
         onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
         onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false }),
+        autoPreviewEnabled,
     });
+    const modRailAudition = useMemo<ModRailAuditionBindings>(() => ({
+        onNoteKeyDown: synthView.handleStartNoteKeyAudition,
+        onNoteKeyUp: synthView.handleStopNoteKeyAudition,
+        autoPreviewEnabled,
+        onToggleAutoPreview: handleToggleAutoPreview,
+        keyboardVisible,
+        onToggleKeyboard: handleToggleKeyboard,
+    }), [
+        autoPreviewEnabled,
+        handleToggleAutoPreview,
+        handleToggleKeyboard,
+        keyboardVisible,
+        synthView.handleStartNoteKeyAudition,
+        synthView.handleStopNoteKeyAudition,
+    ]);
     useEffect(() => {
         postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
     }, [keyboardInputMode]);
@@ -3985,6 +4044,7 @@ function DesktopPatchViewBody({
             mobileGlobalModRail={isCompactViewport}
             mobileModRailPortalTarget={mobileModRailPortalTarget}
             globalModSourceActivity={globalModSourceActivity}
+            modRailAudition={modRailAudition}
             onBackToVoice={() => {
                 if (isCompactViewport) {
                     setMobileWorkspaceSection("voice");
@@ -4048,6 +4108,7 @@ function DesktopPatchViewBody({
             <div
                 data-role="sticky-keyboard"
                 className="relative z-20 min-w-0 shrink-0 border-t border-white/[0.05] pt-3"
+                style={keyboardVisible ? undefined : { display: "none" }}
             >
                 <KeyboardSection
                     oscillatorID={oscillatorSelection.selectedOscillatorID}
@@ -4072,6 +4133,7 @@ function DesktopPatchViewBody({
                     playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
                     glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
                     keyboardRef={keyboardElementRef}
+                    onIntentionalNote={synthView.trackIntentionalNoteInput}
                     toolbarOverride={false}
                 />
             </div>

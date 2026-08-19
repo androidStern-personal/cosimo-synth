@@ -199,14 +199,23 @@ export function KeyboardDock({
     rootNote,
     noteCount = DEFAULT_KEYBOARD_NOTE_COUNT,
     keyboardRef,
+    onIntentionalNote,
 }: {
     rootNote: number;
     noteCount?: number;
     keyboardRef: RefObject<PianoKeyboardElement | null>;
+    /**
+     * Observes the user's own key presses (the element's note-down/note-up
+     * events), which host/DAW playback never dispatches — the intentional-note
+     * feed for last-played-pitch bookkeeping (T10B).
+     */
+    onIntentionalNote?: (status: number, noteNumber: number, velocity: number) => void;
 }) {
     const patchConnection = usePatchConnection();
     const hostRef = useRef<HTMLDivElement | null>(null);
     const hostSize = useResizeObserver(hostRef);
+    const onIntentionalNoteRef = useRef(onIntentionalNote);
+    onIntentionalNoteRef.current = onIntentionalNote;
 
     useEffect(() => {
         const tagName = ensureKeyboardElement(patchConnection);
@@ -232,10 +241,30 @@ export function KeyboardDock({
         keyboard.setAttribute("note-count", String(noteCount));
         refreshKeyboardLayout(keyboard);
         keyboard.attachToPatchConnection?.(patchConnection, midiInputEndpointID);
+        const readNoteNumber = (event: Event) => {
+            const note = Number((event as CustomEvent<{ note?: unknown }>).detail?.note);
+            return Number.isFinite(note) ? note : null;
+        };
+        const handleNoteDown = (event: Event) => {
+            const note = readNoteNumber(event);
+            if (note !== null) {
+                onIntentionalNoteRef.current?.(0x90, note, 100);
+            }
+        };
+        const handleNoteUp = (event: Event) => {
+            const note = readNoteNumber(event);
+            if (note !== null) {
+                onIntentionalNoteRef.current?.(0x80, note, 0);
+            }
+        };
+        keyboard.addEventListener("note-down", handleNoteDown);
+        keyboard.addEventListener("note-up", handleNoteUp);
         keyboardRef.current = keyboard;
         host.replaceChildren(keyboard);
 
         return () => {
+            keyboard.removeEventListener("note-down", handleNoteDown);
+            keyboard.removeEventListener("note-up", handleNoteUp);
             keyboard.detachPatchConnection?.(patchConnection);
             keyboardRef.current = null;
             host.replaceChildren();

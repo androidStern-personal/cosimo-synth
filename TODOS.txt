@@ -1,5 +1,5 @@
 COSIMO SYNTH — PRODUCT WORKSTREAM TODO
-Updated: 2026-08-18
+Updated: 2026-08-19
 Source: 2026-08-18 spoken workstream inventory, accepted ADR-024/feature spec, and current repository evidence.
 
 HOW WE WILL USE THIS FILE
@@ -12,7 +12,7 @@ HOW WE WILL USE THIS FILE
 
 CURRENT FOCUS
 
-[?] T03A — Specify the persistent Voice/FX/Mod tab shell (next up per D01; T02 and T02B are closed, so the Voice cutover and the single-sourcing debt no longer block shell work).
+[?] T04 — Decide the mobile Global Filter presentation.
 
 PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
 
@@ -99,8 +99,30 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Preserve the `| null` signature or widen any type to make the port compile faster.
     - Start this task while T02's uncommitted changes to these files are still in the working tree.
 
-[?] T03A — Specify the persistent Voice/FX/Mod tab shell
+[ ] T02C — Shade the selected Index modulation range on the wavetable graphic
+    Depends on: T02, T02B, and the selected-source color/state contract settled in T07. This renderer-specific enhancement is independently schedulable and does not block the tab-shell or Global Filter discussions.
+    Product behavior:
+    - Apply this to the focused mobile Voice oscillator's wavetable graphic. Look only at the modulation source currently selected in the global Mod widget and only at that exact source's route to the focused oscillator's Index / wavetable-position target.
+    - When that route exists and is enabled, show its complete possible Index travel—not its instantaneous modulation value. Positive unipolar amounts span from the base Index forward, negative amounts span backward, and bipolar amounts span on both sides of the base.
+    - Use the same canonical route amount, polarity, target-domain projection, and 0–100% edge clamping already used by the selected Index parameter rail. The graphic must update live while the route amount, base Index, selected source, or focused A/B/C oscillator changes.
+    - If the selected source has no Index route, its route is bypassed, or its amount is 0%, draw no positive-width modulation range. Routes belonging to every other source remain absent from this graphic.
+    Visual treatment:
+    - Tint the visible waveform slice lines throughout the projected range with the selected modulation source's color while keeping the current-Index slice visually distinct as the current-position indicator.
+    - Tint the semi-transparent surface skin connecting those slices with the same source color. Mix the color gently into the existing translucent surface faces; preserve their depth fade, slope lighting, ridge shading, and transparency rather than painting a flat or opaque overlay.
+    - Leave all slices and surface faces outside the projected range unchanged, so the result reads as one softly source-colored section of the existing 3D wavetable.
+    Implementation constraints:
+    - Make the modulation overlay an opt-in renderer input. Preserve the renderer's established default draw stream and every non-mobile or otherwise unconnected caller unless a later product decision explicitly expands the treatment.
+    - Reuse the renderer's existing slice frame indices and surface-band frame bounds; do not build a second wavetable projection or approximate route travel separately from the canonical Index range calculation.
+    Done when:
+    - Renderer and Voice coverage prove no-route, mapped-zero, bypassed, positive, negative, bipolar, low-edge-clipped, and high-edge-clipped behavior.
+    - Switching the selected source or focused oscillator immediately moves, recolors, or removes the range without exposing another source's mapping.
+    - Visual evidence confirms that both the slice lines and the translucent skin receive a restrained source-color tint while the current slice, 3D lighting, and untouched parts of the wavetable remain legible.
+    - Existing default-renderer preservation tests continue to pass unchanged.
+
+[x] T03A — Specify the persistent Voice/FX/Mod tab shell
     Depends on: T02
+    Closed 2026-08-19:
+    - ADR-026 accepted after product review and a production-coupling audit. It now covers visual design, shared 40 px shell geometry, immediate workspace switching, keyboard-visible/hidden placement, universal Back and compact preset actions, exact per-workspace restoration, full-screen behavior, permanent Mod-widget visibility, accessibility, implementation seams, and test obligations.
     Context:
     - ADR-024 intentionally leaves the existing accordion in place for its production cutover. This is a separate product change that will supersede the accordion portion of ADR-017.
     Decide and record:
@@ -111,31 +133,130 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     Done when:
     - A new or amended ADR defines selection, second-tap behavior, deep links, active drags, accessibility, and retained per-view presentation state.
     - The accepted Voice cutover remains independently deliverable before the shell change.
+    Settled so far:
+    - ADR-026 replaces only ADR-017's accordion decision with a persistent Voice / FX / Mod tab row above the sticky keyboard.
+    - When the keyboard is hidden, that same tab row becomes the bottom dock and respects the device safe area; hiding the keyboard gives the released height to the active workspace.
+    - Remove the current accordion's redundant top-level Voice / FX / Mod heading bars. The selected tab identifies the active primary workspace; contextual titles and Back controls inside detail pages remain a separate requirement.
+    - Visual authority is the user-supplied two-item FX/MOD screenshot adapted to three equal items: one dark, restrained strip; centered uppercase VOICE / FX / MOD labels; subtle outline and dividers; and one short underline for the active item. Do not color-code the three tabs, add icons, use large active fills/glows, or introduce a floating-pill treatment.
+    - Use one shared 40 px compact-shell-row token for both the simplified preset/Back bar and primary tab row. This reuses the accepted production Voice tab/toolbar and compact-control tier; do not retain the legacy preset bar's 38 px literal, copy the throwaway screenshot's 30 px row, or inherit the outgoing accordion's 44 px literal. Each tab fills the row and uses the same neutral active-underline color.
+    - Workspace changes occur only by activating Voice, FX, or Mod in the tab row. Do not add horizontal page-swipe navigation or any other workspace-switching gesture.
+    - Voice / FX / Mod content switches immediately with no slide or fade because those workspaces are already visually distinct. This deliberately differs from the visually similar A/B/C oscillator editors: their fixed tab row stays put while the focused editor beneath slides left or right according to letter order, as now recorded in ADR-024 and its implementation spec.
+    - Use one tab-row component in both keyboard states. It stays attached to the keyboard as the keyboard shows/hides, then rests at the bottom safe area when the keyboard is gone; do not swap or cross-fade between duplicate bars.
+    - Treat the tab row's top edge as the movable Mod bar's lowest usable boundary. A bottom-positioned bar sits immediately above the tabs and expands upward; a side-positioned bar cannot extend below that boundary. Neither the compact bar nor expanded drawer may cover the tabs, keyboard, or bottom safe area.
+    - If the keyboard appears under a low side-positioned Mod bar, temporarily slide the bar upward only far enough to clear the raised tab boundary. Remember its user-chosen position separately and restore it when the keyboard hides; the temporary dodge must not overwrite persistence.
+    - Simplify the compact synth preset bar to three visible regions matching the supplied reference: a left universal Back slot, the current preset centered, and `…` on the right. The Back control replaces workspace-local return bars such as `Back to FX`, follows the active workspace's exact return path, and disappears when that workspace has no return path while its empty slot remains reserved to keep the preset centered.
+    - Use a compact back glyph in the first cut. Dynamic destination text such as `Back (FX)` or `Back (Mod – MSEG 1)` is explicitly deferred as an enhancement.
+    - Move the current previous/next, Save, Save As, Revert, Copy JSON, and Paste JSON controls behind `…`; keep the centered preset name as the direct entry to the searchable preset browser, and preserve every existing operation and enabled/dirty state. Scope the composition to the compact synth shell because the preset-bar component is shared with standalone effects.
+    - Keep the existing yellow unsaved-change dot beside the centered preset name. Remove the factory/user source tag and dropdown chevron from the compact row; that information remains available inside the preset browser and action popover.
+    - `…` opens a compact popover anchored beneath the preset bar's right side. Use touch-sized action rows and allow the popover to scroll on unusually short screens; do not turn it into a full-screen sheet or merge it with the preset browser.
+    - Remove workspace-local return bars after universal Back exists. Ordinary detail screens retain only the specific editor name needed to identify their content (for example DELAY, MSEG 1, or ENVELOPE 2); do not add a second Back control or generic FX/MOD heading.
+    - In a true full-screen editor, hide the preset/Back bar, primary tabs, piano keyboard, and normal workspace content; the editor supplies its own specific title and Done/Back action. The global Mod widget is the permanent exception: it stays visible, movable, and usable above every full-screen editor so Note audition and its global controls remain available. Exiting restores the exact previous shell state.
+    - Never automatically move, collapse, expand, or restore the Mod widget merely because a full-screen editor opens or closes. Keep its exact user-chosen position and expansion state; the user can move, collapse, or expand it manually over the editor as usual.
+    - Switching tabs restores each workspace exactly; tapping the active tab returns a detail to its main screen, then scrolls the main screen to the top on the next tap.
+    - Deep-link return paths survive temporary tab switches and end only through Back or an active-tab reset.
+    - The same plugin instance retains navigation across editor close/reopen; a new plugin instance or fully relaunched standalone app starts at Home (Voice main screen, top). Background/foreground keeps the live app's place.
+    - Full-screen focused editors temporarily replace the tabs; ordinary detail pages retain them. Standard tab-list accessibility and existing gesture ownership are inherited requirements rather than additional product questions.
+    Closure audit 2026-08-19:
+    - The first review did not specify the tab row's visual design or audit its practical integration with keyboard visibility, safe areas, detail-page navigation, the perimeter-docked Mod bar, transitions, and focused-editor geometry.
+    - Those decisions were completed one at a time before ADR-026 was accepted; implementation remains separate and unauthorized.
+    - Geometry audit resolved: newest production Voice tabs/toolbars, compact keyboard buttons, and the approved Mod-widget body converge on the selected 40 px shell tier; outgoing accordion/local-Back rows use 44 px; FX rack rows deliberately remain 48 px; the legacy preset bar is 38 px; and the throwaway screenshot row is 30 px.
+    - Production audit resolved the remaining cutover seams: the current workspace callback erases return state on every switch; Voice scroll locking, FX drag geometry, compact styling, keyboard layout, browser tests, and Web POC helpers depend on accordion selectors; the shared preset component also serves standalone effects; and the current full-screen MSEG layer sits above the global Mod widget. ADR-026 now specifies how each dependency must change without altering unrelated behavior.
 
 [ ] T03B — Implement the persistent Voice/FX/Mod tab shell
     Depends on: T03A
+    Status:
+    - Implementation has not been authorized or started. ADR-026 is accepted; this remains a separate future implementation ticket.
+    Build:
+    - Replace MobileWorkspaceAccordion with the ADR-026 tab list and one full-height active panel; keep all three workspace trees mounted but make hidden panels inert and unavailable to assistive technology.
+    - Define one shared 40 px compact-shell-row token and use it for both the synth preset/Back row and primary tab row. Preserve the deliberately separate 48 px FX rows and existing 40 px keyboard controls.
+    - Consume the keyboard show/hide state supplied by the in-flight keyboard work. Do not duplicate its ownership, persistence, or transition state in the tab shell.
+    - Keep the keyboard and global Mod bar mounted across switches. Do not interrupt held notes, audio, active parameter gestures, selected oscillator/effect/source, or stored musical state.
+    - Preserve each workspace's exact main/detail location, Back origin, selection, and scroll position. Replace the current tab-switch path that clears mobileReturnSection; only universal Back or that workspace's active-tab reset may clear its return path. Implement standard keyboard tab-list behavior exactly as ADR-026 defines.
+    - Give each tab panel one stable semantic role and one explicit content scroller. Migrate Voice gesture scroll locks, FX drag/drop visible-panel lookup, Mod-widget geometry, browser helpers, and Web POC helpers from accordion selectors to that contract.
+    - Move compact FX-rack and sticky-keyboard styling off is-mobile-accordion without changing their established geometry or introducing nested short-phone scrolling.
+    - Add an explicit compact-synth composition seam to the shared preset bar: universal Back at left, centered preset name/dirty dot, and the action popover at right. Keep the shared standalone-effect presentation unchanged, then remove the local Back-to-FX/Mod bar.
+    - Add the tab row to the Mod widget's placement boundaries. Put the Mod widget above full-screen editors and include it in their pointer, focus, and accessibility surface without changing the user's saved position or expansion state.
+    - Store navigation as plugin-instance presentation state so closing/reopening the same plugin editor restores it without putting it in presets, DAW sound state, or global preferences. Standalone relaunch and new plugin instances start at Home.
+    - Keep true full-screen editors outside the persistent tab shell until Done/Back. Leave modulation-source dwell navigation for T06, but provide the tab-shell seam it needs without breaking drag ownership.
     Done when:
     - All three destinations are always discoverable without sacrificing a content-sized accordion header stack.
     - Switching views does not interrupt held notes, active audio, selected oscillator/effect/source, or stored state.
     - Short-phone layouts have one intentional content scroller and no nested accidental page scroll.
+    - Browser coverage proves the 40 px rows and screenshot-directed neutral tab treatment; removal of redundant workspace titles and local Back bars; different-tab scroll/detail restore; active-tab reset; deep-link Back retention across a temporary tab visit; hidden-panel inertness; roving keyboard focus; and uninterrupted held-note/gesture ownership.
+    - Workspace-switch coverage proves Voice / FX / Mod content changes immediately without a slide or fade; the separate A/B/C directional slide remains owned and tested by the Voice editor contract.
+    - Layout coverage proves the same tab component attaches above the visible keyboard and docks above the safe area when hidden, with no blank strip or content overlap; a low Mod widget dodges the keyboard temporarily and restores its saved location afterward.
+    - Full-screen coverage proves preset bar, tabs, keyboard, and normal content disappear while the Mod widget stays visible and usable above the editor without being moved, collapsed, expanded, or excluded from focus.
+    - Preset coverage proves every displaced action remains available, the dirty dot remains visible, preset-name search still opens, and the standalone-effects preset bar is unchanged.
+    - Existing accordion assertions and Web POC helpers are migrated to tab semantics; no compatibility accordion headers, aria-expanded contract, or stale visible-panel lookup remains.
+    - Native/plugin-instance coverage proves editor close/reopen restores place for the same instance while a new instance and standalone relaunch start at Home.
 
 [?] T04 — Decide the mobile Global Filter presentation
-    Depends on: T02, T03B
-    Compare:
-    - A full-time response graphic.
-    - A compact strip with Cutoff, Resonance, and Mix plus an expandable response graphic.
-    Decision rule:
-    - Use the smallest presentation that keeps the filter understandable, playable, and visually consistent after the real Voice and tab-shell geometry is known.
+    Depends on: T02, T03A. The visual decision can proceed against the accepted tab-shell contract; implementation still follows T03B.
+    Current production contract:
+    - The Voice-page filter currently has only three sound controls: Mode (Off, Lowpass, Highpass, Bandpass, Notch, or Peak), Cutoff, and Resonance. The separate FX-rack module also called Global Filter is not the surface this ticket changes.
+    - Mobile currently shows a large full-width graph below the focused oscillator. Dragging its handle left/right changes Cutoff and up/down changes Resonance; the top-left control cycles Mode, the top-right control cycles the analyzer drawing style, and small Cutoff/Resonance number controls sit at the bottom.
+    Settled so far:
+    - Keep the complete filter graph permanently visible on mobile; do not add collapsed and expanded filter states. Removing the existing mobile articulation/controls pane gives the Voice page enough space for the graph.
+    - Divide the Voice page's main content between the focused wavetable editor and the filter, with each visual surface retaining its own attached control row. Determine the exact height split in the visual prototype rather than inventing it in the ticket.
+    - Remove the current articulation pane and its Articulations/Voice mode switch from compact mobile layouts for this cut. Do not remove articulation state, playback behavior, preset/project data, or the noncompact desktop authoring UI.
+    - Move Poly / Mono / Legato and Glide out of the removed mobile pane. A dedicated control associated with the piano keyboard opens a small menu containing those controls; settle its exact keyboard placement in the visual prototype.
+    - When the keyboard is hidden, its Play Mode/Glide menu button is hidden with it. The user must restore the keyboard from the expanded Mod bar before changing those settings; do not duplicate the menu elsewhere.
+    - Label the keyboard menu button with the active play mode (`POLY`, `MONO`, or `LEGATO`) rather than a generic settings icon, so the current mode remains visible without opening the menu. Glide remains inside the popout.
+    - Glide affects only `MONO` and `LEGATO`. Keep it visible but disabled and grey while `POLY` is selected, using the same visual meaning for a genuinely inactive control.
+    - Add a real Mix parameter to the Voice-page filter. Its absence is a product flaw, not a reason to omit it from the mobile design. This requires a new synth endpoint and audio behavior, not merely another visual readout.
+    - Define Mix as 0% dry/unfiltered and 100% fully filtered. Existing presets and any saved state without a Mix value must resolve to 100%, because that exactly preserves how every currently active filter sounds.
+    - The synth's host-parameter order is append-only because DAW automation uses those positions. The future Mix endpoint must be appended without moving Mode, Cutoff, Resonance, or any later existing parameter, even though the UI presents all four together.
+    - Mix is a full modulation destination: every existing modulation source can be mapped to it to move continuously between dry and filtered. Append its modulation identity after all existing Voice destinations so their stable names and target indexes remain unchanged; rebuild internal route-cell addresses from those names rather than persisting the derived addresses.
+    - Keep the filter graph interactive. Dragging its handle edits Cutoff horizontally and Resonance vertically as one two-dimensional gesture; the attached control row provides precise, one-parameter-at-a-time editing of those same values.
+    - The graph always shows the filter's wet response shape at full visual strength. Mix never fades, flattens, or otherwise changes that curve; the Mix knob alone communicates how much filtered signal reaches the output.
+    - Remove the analyzer-style button from compact mobile and always render the live spectrum as rounded bars there. Keep the existing Graph/Bars/Round Bars choice unchanged on noncompact desktop surfaces.
+    - Keep Filter Mode as the top-left overlay on the mobile graph. Do not move it into the attached control row; that row contains Cutoff, Resonance, and Mix.
+    - Tapping the Mode overlay cycles through Off, Lowpass, Highpass, Bandpass, Notch, Peak, then back to Off, matching the accepted tap-to-cycle Warp Mode interaction.
+    - When Mode is Off, disable and grey the graph plus Cutoff, Resonance, and Mix because none can affect the sound. Keep the Mode overlay active so the user can turn the filter back on. This uses the already-approved grey treatment only for genuinely inactive controls.
+    - Render Cutoff, Resonance, and Mix with the same shared production knob component and interaction/state contract as the other parameter rows, including value editing and modulation feedback. Do not retain the current filter-specific miniature number fields.
     Done when:
-    - One behavior is selected in a visual prototype at short and tall phone heights.
-    - Collapsed controls, expansion behavior, and modulation feedback are explicit.
+    - A visual prototype at short and tall phone heights settles the wavetable/filter height split, both attached control rows, and the keyboard-triggered Play Mode/Glide menu.
+    - Mode, Cutoff, Resonance, Mix, graph gesture behavior, analyzer controls, and modulation feedback are explicit.
+
+[?] T04A — Adapt SeqFX's on-graph modulation range for the Voice filter
+    Depends on: T04 and the selected-source color/state contract settled in T07. This is a product/interaction review before implementation; do not copy the SeqFX editor wholesale.
+    Goal:
+    - Show the currently selected modulation source's possible filter movement directly on the mobile Voice filter graph, so the user can see the mapping amount in the same place they see and edit the filter.
+    Source behavior verified in SeqFX (2026-08-19):
+    - SeqFX's shared FilterRangeEditor draws the cutoff start and destination on the logarithmic frequency axis, joins them with a translucent range bar, adds dashed endpoint guides and compact frequency/span labels, and permits direct endpoint editing. Its existing helpers already model positive and negative octave amounts plus unipolar and bipolar cutoff travel.
+    - That surface represents one block-local Aux source and stores an explicit start/end cutoff pair. Its fixed cyan/coral/yellow range language and bipolar editing model are SeqFX-specific choices, not an automatic contract for the synth.
+    Translation constraints found in the synth:
+    - The Voice filter can have many modulation sources. Following the wavetable-range and parameter-rail contract, the graph must present only the source currently selected in the global Mod widget and only that source's routes to the Voice filter.
+    - Cutoff modulation is expressed in octaves on a logarithmic 20 Hz–20 kHz axis. Resonance is a separate additive `filterQ` route on the graph's tuned vertical response scale. SeqFX currently shows an inline Cutoff range but does not solve an inline Resonance range.
+    - The existing Voice graph already distinguishes the base response from the instantaneous effective response produced by all active modulation, and it can draw live spectrum data in three analyzer styles. A selected route's complete possible range is a third meaning and must remain visually distinguishable from both.
+    Review and settle:
+    - Adapt SeqFX's useful idea—range anchored to the filter graph—but use the selected source's color rather than SeqFX's fixed palette and derive every endpoint from the synth's canonical route amount, polarity, base value, and legal target clamp.
+    - Decide the exact Cutoff treatment: range band, endpoint/guide treatment, source-color intensity, and whether compact labels show destination frequency, signed octave amount, or both without obscuring the response or analyzer.
+    - Prototype how a selected Resonance mapping should appear. Decide whether V1 displays Cutoff only or also gives Resonance an equally clear on-graph range; do not imply support for Resonance by reusing Cutoff geometry incorrectly.
+    - Decide what happens when the selected source maps to both Cutoff and Resonance, when another source also maps either target, when a route is mapped at 0%, bypassed, clipped at a filter limit, or the filter Mode is Off.
+    - Decide whether the on-graph range is display-only or directly editable. SeqFX's endpoint handles cannot be inherited without resolving competition with the Voice graph's existing horizontal Cutoff / vertical Resonance base-value gesture and the shared modulation-amount gesture contract.
+    - Preserve the existing live effective-response curve and analyzer. Establish a restrained visual hierarchy that makes base setting, selected source's possible travel, and instantaneous total response readable as three different things.
+    - Audit whether FilterRangeEditor's tested range math and SVG primitives can be reused inside FilterResponseGraph without replacing the current graph, analyzer, response modes, overlay controls, or future Mix control.
+    Done when:
+    - Phone-width prototypes show no route, mapped-zero, bypassed, positive/negative unipolar Cutoff, bipolar Cutoff, clipped Cutoff, live modulation movement, and source switching over representative analyzer modes.
+    - The review explicitly resolves Resonance, simultaneous Cutoff+Resonance mapping, direct-edit versus display-only behavior, labels, colors, Mode Off, and gesture ownership.
+    - A cold implementation handoff can state which SeqFX pieces are reused, which are adapted, and which are rejected, with observable acceptance cases for the chosen treatment.
 
 [ ] T05 — Implement the selected Global Filter presentation
-    Depends on: T04
+    Depends on: T03B, T04, T04A
     Done when:
-    - Filter editing remains live and audible in both compact and expanded states, if both exist.
+    - The full filter graph remains visible and live on mobile with Mode, Cutoff, Resonance, and Mix all reachable.
     - The graph never distorts to fit its container.
-    - No filter state or modulation target disappears during collapse/expansion.
+    - The compact articulation/controls pane is absent without deleting or corrupting articulation behavior or stored data; noncompact desktop Articulations remain unchanged.
+    - Play Mode and Glide remain reachable through the accepted keyboard-associated menu.
+    - The new Mix endpoint preserves all existing host parameter positions and follows the accepted default/migration behavior established during this review.
+    - The accepted selected-source modulation-range treatment from T04A appears directly on the filter graph without confusing the base response, instantaneous effective response, or live analyzer and without creating competing graph gestures.
+
+[-] T05A — Find a future mobile home for Articulations
+    Parked 2026-08-19:
+    - The current mobile articulation pane is deliberately removed to make Voice an instrument surface divided between the wavetable and filter.
+    - This task will later redesign mobile articulation authoring and access. It must reuse the existing articulation model and stored data rather than treating removal of the pane as removal of the feature.
+    - Decide in that future articulation review whether Filter Mix joins the existing per-articulation Mode, Cutoff, and Resonance overrides; do not expand the articulation schema as an incidental part of the mobile filter layout change.
 
 PHASE 2 — MAKE DRAGGING AND PARAMETER FEEDBACK COHERENT
 
@@ -202,34 +323,137 @@ PHASE 2 — MAKE DRAGGING AND PARAMETER FEEDBACK COHERENT
 
 PHASE 3 — KEEP THE SYNTH AUDITIONABLE EVERYWHERE
 
-[?] T10 — Choose the universal note-audition pattern
-    Product acceptance criterion:
-    - From every Voice, FX, Mod, route-detail, and expanded modulation editor state, the user can trigger a note while hearing a live parameter edit.
-    Prototype and compare:
-    - A persistent last-note trigger attached to the global Mod rail or another fixed edge control.
-    - A compact/contextual keyboard or left-thumb audition hotspot where the main keyboard is covered.
-    - Auto-preview as an optional assist, not the only way to audition.
+[x] T10 — Prototype the perimeter-docked Mod bar and universal audition controls
+    Closed 2026-08-19:
+    - Design approved: "B2 · Linear Glass · Shouldered" on the "Mod Bar Directions" design canvas (https://claude.ai/code/artifact/0f7bc737-a855-446a-b33b-62b9261979cf). 40 px bar, 28 px modules on a 10 px rhythm; route count is a corner badge on the selected-source module, live activity is the thin bar inside it, the Note key carries the Auto-preview dot; the expanded drawer adds ENV/MAC, page dots, and the Keyboard + Auto-preview modules; tab-with-shoulders silhouette in the Linear Glass material with 12 px of clear space inside the body beyond each shoulder.
+    - Product decision (2026-08-19): no behavioral prototype. Edge movement, gesture ownership, and expansion behavior are implementation requirements and moved to T10B; the width sweep and the one-/two-handed edge review are dropped as separate work items.
+    - The default-pitch decision is recorded below (middle C / MIDI 60).
+    Purpose:
+    - Redesign the existing mobile Mod bar as a slimmer, cleaner edge widget before adding audition controls to production.
+    - Use React Grab's small movable edge widget as the interaction and finish reference, without copying its branding or exact artwork.
+    - Keep manual audition reachable from every Voice, FX, Mod, route-detail, and expanded modulation-editor state.
+    Current problems the prototype must solve:
+    - The compact production bar is 56 px wide and 168 px tall, with a 44 px selected-source control; it feels bulky beside the newer mobile surface.
+    - Source icons and their surrounding spacing are oversized.
+    - The selected source's glow is clipped by a parent with hidden overflow.
+    - The current composition lacks the visual hierarchy and spacing expected of a polished permanent edge control.
+    Prototype requirements:
+    - Let the complete Mod bar move around the screen perimeter like the React Grab widget, settle cleanly against an edge, respect safe areas, and expand inward from its current edge. Preserve its chosen perimeter position between uses.
+    - Make the compact bar meaningfully slimmer than the current 56 px treatment. Shrink the source icons, establish deliberate spacing, and render the active-source glow without clipping.
+    - Preserve the compact bar's existing selected-source identity, route count, activity, disclosure, source-drag behavior, and vertical repositioning responsibilities while finding a cleaner composition.
+    - Add exactly one new compact control: a Note button. Do not put Keyboard or Auto-preview controls in the compact bar.
+    - The compact Note button behaves like one piano key fixed to the most recently played pitch: touch/pointer down starts the note; release, cancellation, suspension, or loss of ownership stops it; touching again retriggers it.
+    - Update the remembered pitch from intentional notes played on the on-screen keyboard or a connected MIDI keyboard, not DAW/transport playback. Before any intentional note has been played, use middle C (MIDI note 60).
+    - Put the Keyboard visibility control and the Auto-preview toggle in the expanded Mod bar alongside the modulation sources. Keyboard toggles the bottom keyboard; Auto-preview is an explicit visible mode, not a hidden gesture.
+    - When Auto-preview is active and the bar is compact, show a small lit status dot on the Note button without adding another compact control.
+    - Show compact and expanded treatments at representative 320–430 px phone widths and at enough perimeter positions to resolve side, corner, orientation, and inward-expansion behavior visually.
+    - Keep this prototype throwaway. Do not wire it into the production Mod bar or disturb the ongoing Voice implementation.
     Done when:
-    - One primary manual-audition behavior is selected and tested one-handed and two-handed.
-    - The behavior defines the note/pitch used before any note has been played and after notes change.
+    - One compact and expanded design is product-approved as clean, well-spaced, meaningfully slimmer, and visually consistent with the current mobile synth.
+    - Edge movement, snapping/settling, safe-area behavior, inward expansion, persistence, and interaction ownership are explicit.
+    - The approved design proves that source dragging, bar movement, disclosure, Note-button playing, Keyboard visibility, and Auto-preview access do not compete for the same touch target.
+    - One-handed and two-handed use are reviewed with the bar on more than one screen edge.
 
-[ ] T11 — Implement universal manual audition
+[x] T10B — Replace the production Mod bar with the approved B2 design
     Depends on: T10
+    Implementation evidence (2026-08-19):
+    - Production MobileGlobalModRail rewritten to B2 in ui/desktop/effects-rack-workspace.tsx with new ui/desktop/mobile-mod-rail.css (rail styles split out of mobile-workspace.css); the old 56 px treatment is gone. Pure geometry (bounds, projection, edge settling, three-anchor snapping, drawer placement, dock persistence codec, both-edge silhouette paths) lives in ui/shared/mod-rail-perimeter.ts under tests/test_mod_rail_perimeter.mjs (property-based, 9 cases).
+    - Left/right edge docking with FLIP settle animation; dock persisted as v2 {edge, normalizedY} under the existing storage key with v1 migration to the right edge (browser-proven, including restore-across-launch and legacy migration).
+    - Note key wired through synth-hooks handleStart/StopNoteKeyAudition (same sendMidiInputEvent idiom as articulation audition, so held-set/last-played bookkeeping stays correct); remembers its own started pitch; release, cancel, blur, Escape, visibilitychange, and unmount all end it exactly once. The on-screen keyboard now feeds lastPlayedNoteRef via the element's note-down/note-up events (it previously never did — the Note key would have been stuck at middle C on mobile); DAW playback cannot dispatch those DOM events, so transport never pollutes the memory. Hardware-MIDI pitch capture remains impossible from JS today (no Web MIDI; host delivers natively without provenance) — record as a native-bridge follow-up if wanted.
+    - Keyboard toggle added (no visibility state existed): keeps the keyboard mounted, hides via display none, fires allNotesOff on hide; the rail's travel band ignores a zero-height keyboard.
+    - Glass verified by 2x screenshot review, which caught four real rendering defects the DOM assertions could not see (all fixed): Tailwind preflight's all-sides border-style made chevron border-width shorthand paint diamonds; the rail-level drop-shadow filter made the rail a backdrop root so the blur sampled an empty backdrop (shadow moved onto the silhouette svg); slot numbers floated detached (-8px overhang); the drawer's inherited overflow-clip-margin let the next carousel page peek through the 10 px gap.
+    - Gates: full desktop browser suite 168/168 (five new cases: edge docking/persistence/migration, Note key pitch-memory/ownership/suspension, drawer toggles, the T11 path test, auto-preview end-to-end; two legacy cases updated to the B2 visual contract — one had also pinned a real body-corner clipping bug, fixed), iPhone shell 20/20, web bundle 14/14, shared hooks 29/29, tsc clean.
+    - Remaining human gate: physical phone review of movement/feel on the tailnet build.
+    Design authority:
+    - The approved B2 artboard on the "Mod Bar Directions" canvas is the visual contract: 28 px modules on a 10 px rhythm in a 40 px bar, corner-badge route count, in-module activity bar, Note key with Auto-preview dot, Keyboard + Auto-preview modules only in the expanded drawer, shouldered silhouette with 12 px clear space inside the body beyond each shoulder, Linear Glass material (gradient fill, hairline border tracing the whole silhouette, tinted selected module).
+    - Make the bar slightly translucent with a backdrop blur (2026-08-19 direction); keep the effect cheap on low-end phones and degrade to the opaque gradient where blur is unavailable.
+    Implementation requirements (carried from T10 — honor during implementation, no separate prototype):
+    - The complete bar moves around the screen perimeter, settles cleanly against an edge, respects safe areas, expands inward from its current edge, and preserves its perimeter position between uses.
+    - Source dragging, bar movement, disclosure, and Note-key playing never compete for the same touch target; extend the existing separate-pointer-ownership pattern in MobileGlobalModRail.
+    - The Note key behaves like one piano key fixed to the most recently played intentional pitch (initial fallback middle C / MIDI 60): down starts the note; release, cancellation, suspension, or loss of ownership stops it; touching again retriggers. Intentional pitch updates only from the on-screen or MIDI keyboard, never DAW/transport playback.
+    - The bar stays mounted across Voice/FX/Mod view switches (T03A); sequence the landing against T03B so the shell surface is not churned twice.
+    Done when:
+    - Production MobileGlobalModRail renders the B2 design and the old 56 px treatment is gone.
+    - Perimeter movement, snapping, safe areas, inward expansion, and persistence work on-device.
+    - Gesture-ownership and stuck-note cases are covered in the existing browser acceptance suites.
+
+[x] T11 — Implement universal manual audition
+    Depends on: T10B
+    Implementation evidence (2026-08-19):
+    - Path test "the Note key triggers audible output from every mobile editor state" (tests/test_desktop_patch_view_browser.mjs) presses the rail's Note key in the Voice accordion, the FX effect editor, the Mod overview, a route-detail row, and the deep-linked source editor, asserting the exact note-on/note-off pair each time without leaving the state.
+    - Stuck-note proofs: pointer cancel, capture loss, window blur, Escape, visibilitychange (mobile backgrounding fires no reliable blur), and unmount each end the note exactly once, guarded in both the rail component and synth-hooks.
+    - Ownership: holding the Note key and moving does not drag the rail; the existing disjoint-ownership case plus the new Note-key case cover grip vs source-drag vs disclosure vs Note press.
     Done when:
     - A path test reaches every editor state and triggers audible output without closing the editor.
     - Press/release, cancellation, app suspension, and re-entry cannot leave a stuck note.
     - The control does not steal an active parameter or modulation drag.
 
 [?] T12 — Prototype and tune optional Auto-preview
-    Depends on: T10
-    Explore:
-    - A user setting, default off initially.
-    - Preview cadence, note choice, gate length, retrigger policy, and behavior while transport or a held note is already active.
-    - Which parameter classes should never auto-trigger.
+    Depends on: T10B
+    Implementation evidence (2026-08-19) — built in production, not a prototype; what remains is the on-phone tuning and the explicit ship/revise/reject call:
+    - Seam architecture (from a full write-path audit): exactly TWO instrumented seams, no per-control wiring. Seam A: usePatchParameter's setParameterValue (ui/shared/cmajor-react.ts) covers all 139 scalar engine parameters across all 63 binding sites on both platforms, with an actual-change comparison against the canonical value; preset load, host restore, engine echo, and undo bypass the hook by construction. Seam B: the modulation bridge's setRouteAmount and setMsegSlotShape (ui/shared/modulation.ts), both behind existing equality guards; incoming documents enter via applyStoredState, not these methods. One suppression: applyArticulationSnapshot writes scalar bindings inside runProgrammaticWrites. The stream is ui/shared/user-edit-bus.ts.
+    - Pure scheduler (ui/shared/auto-preview-scheduler.ts, 16 cases) implements the locked cadence, including the cross-gesture rate window ("triggers immediately unless a prior preview is still inside the rate-limit window" — a first implementation violated it and the tests now pin it) and the trailing capped note arming the window like any retrigger.
+    - Engine (ui/shared/auto-preview-engine.ts, 12 cases): gesture depth for bracketed drags, stillness synthesis (movementStoppedMs) for unbracketed controls, one armed timer at min(stillness, scheduler deadline) with stillness resolving first at a shared instant, deterministic caller-driven time.
+    - Note layer (synth-hooks): retriggers the complete held set via heldMidiNotesRef or the remembered intentional pitch; engine-owned strikes use the raw connection so bookkeeping is untouched; user-held gates are never note-offed by cap or endPreview; a preview released in the instant it started keeps a 250 ms minimum audible life; blur/visibilitychange stop preview notes immediately with no trailing note. Toggle wired to the durable localStorage preference (cosimo.auto-preview.enabled.v1) and the rail's status dot.
+    - End-to-end browser proof: with the toggle off, a real knob drag edits the parameter with zero audition notes; with it on, the drag strikes the remembered pitch and every note-on is matched by a note-off; toggling suspension mid-hold releases immediately. All under the 168/168 suite.
+    - Deferred to tuning: whether rack enable/reorder and articulation range edits should trigger (currently they do not; both are one-line bus additions), and the 250/150/600 ms + minimum-note numbers on a real phone.
+    Locked starting behavior:
+    - A durable global preference shared across synth sessions and unaffected by presets, projects, or an individual session's lifetime. After first use, reopening the synth restores the previous Auto-preview state.
+    - Only direct user parameter edits participate. Preset loading, DAW automation, modulation movement, undo/restore, and incoming state changes never generate audition notes.
+    - Retrigger the complete set of notes currently held by the user; if nothing is held, use the remembered intentional pitch from T10, whose initial fallback is middle C (MIDI note 60).
+    - Any actual parameter-value change counts. Do not use a change-magnitude threshold. Pointer motion that leaves the canonical value unchanged does not count.
+    - The first actual change triggers immediately unless a prior preview is still inside the rate-limit window. Later changes overwrite one pending preview with the newest value; the latest changed value can never be stranded indefinitely.
+    - Start physical tuning with a 250 ms minimum interval between in-motion retriggers. At each available interval, retrigger only when a newer value is pending, which caps continuous movement at four retriggers per second.
+    - Every actual change resets a starting 150 ms movement-stopped timer. When that timer expires, guarantee one trailing retrigger of the latest value; if the rate-limit window is still closed, fire exactly when it opens. The final changed value must be heard no later than 250 ms after its change.
+    - After the trailing retrigger, keep the note or chord held while the finger remains down and the parameter remains still. Do not retrigger again until movement resumes, allowing a looping MSEG to continue for as long as the user deliberately holds still.
+    - If the gesture ends before the trailing retrigger, preserve that final retrigger and start physical tuning with a capped 600 ms note. If the trailing retrigger has already occurred, release ends the preview. Cancellation, suspension, visibility loss, or lost gesture ownership stops preview notes immediately and schedules no trailing note.
+    - A direct discrete sound-changing parameter change provisionally triggers once; confirm the exact included/excluded parameter classes during physical testing.
+    Tune rather than assume:
+    - Audition the 250 ms rate limit, 150 ms stopped timer, and 600 ms capped final note on a real phone with short envelopes, long attacks, one-shot MSEGs, and short/long looping MSEGs.
+    - Define interaction with intentional notes arriving during an active preview and verify that retriggering a held chord cannot lose, duplicate, or stick a user-owned note.
     Done when:
     - Real phone trials establish that preview is useful rather than distracting.
+    - A tiny final change always produces a bounded trailing preview; continuous movement cannot exceed the configured rate cap.
+    - Holding still allows a looping MSEG to continue without further retriggers, and resuming movement restarts the same bounded scheduler.
     - Disable/enable behavior is immediate, deterministic, and cannot create stuck notes.
     - Ship, revise, or reject is recorded explicitly; experimentation alone is not completion.
+    Sequencing note (2026-08-19): the physical tuning pass waits for T12B — retrigger/loop interference was the first physical finding, so the feel cannot be judged until cycle-synced retriggers exist.
+
+[x] T12B — Sync Auto-preview retriggers to the looping MSEG's cycle
+    Depends on: T12 implementation evidence (in place); blocks T12's physical tuning.
+    Implementation evidence (2026-08-19; final gates: desktop browser 169/169, iPhone 20/20, web bundle 14/14, shared hooks 29/29, modulation runtime 32/32, units 48/48, tsc clean; web build redeployed to the tailnet URL):
+    - Pure quantizer ui/shared/auto-preview-sync.ts (quantizeStrikeTime + AUTO_PREVIEW_SYNC_CONFIG) under tests/test_auto_preview_sync.mjs (8 cases): eligibility/invalid-source immediates, the 120 ms sync floor, sweet-band boundary math, per-kind budgets (leading 150 / others 300), both slow-loop policies, the subdivision floor fallback, and far-past anchors. Two contract corrections happened DURING test review: the sweet-band case originally used a leading strike whose waits exceeded the leading budget (test was self-contradictory), and the subdivision loop must halve to the finest grid at or above the floor, not stop at the first grid under budget.
+    - Note-layer integration in synth-hooks: lastNoteOnAtRef anchors the loop grid (updated by tracked note-ons AND engine-owned raw strikes, which also restart per-voice MSEGs); resolver picks the slowest looping MSEG with >= 1 enabled route (user decision; unmapped MSEGs ignored); strikes defer via one cancellable timer; a deferred hold strike converts to the capped final note when the gesture releases first (invariant: every cancel path clears the pending strike explicitly BEFORE the engine dispatch, so endPreview-with-pending always means release); suspend/disable/unmount all drop the pending strike.
+    - patch_gui emit registered: ui/shared/user-edit-bus.ts -> patch_gui/user-edit-bus.js in ui/build.mjs (the seam import had broken the generated modulation.js emit chain — caught by the suite import failing, fixed in the pipeline, never by hand-editing patch_gui).
+    - Browser: "Auto-preview with a routed looping MSEG still strikes, settles balanced, and never sticks" (route MSEG 1 -> reverbSize, auto on, drag) plus the pre-existing no-loop case. DEVIATIONS from the original plan, deliberate: the browser case asserts invariants (strikes arrive, stay on pitch, balance) rather than millisecond grid spacing — grid math is unit-pinned and CI timing assertions would flake; the telemetry cross-check kill-switch is deferred to the tuning pass (the arithmetic model needs no telemetry, so the kill-switch has nothing to compare until the tuning pass measures telemetry accuracy); "note-on timestamps in held bookkeeping" reduced to the single lastNoteOnAtRef since the newest note-on is the only anchor the per-voice model needs.
+    Remaining: the tuning pass judges the feel (slowLoopPolicy ships as "subdivision"; "opportunistic" is one config field away), tunes minSubdivisionMs (raise it to coarsen the grid if eighths feel too loose), and folds into T12's ship/revise/reject.
+    Origin (2026-08-19 physical finding): with a fastish looping MSEG and Auto-preview on, mid-cycle retriggers chop the loop's rhythm and feel jarring. Fix: when a retrigger becomes due, land it on the loop's grid instead of firing immediately, within a bounded wait.
+    Delegation:
+    - Implementation may go to codex (max effort) against pre-written contracts and failing tests; the quantizer's tests and the T12 latency-guarantee amendment are architecture work and stay with Fable. Codex must not modify tests.
+    Architecture (decided):
+    - The scheduler (ui/shared/auto-preview-scheduler.ts) stays untouched: it still decides WHEN a strike is due. Add a pure strike-time quantizer between the scheduler's retrigger command and the note layer's strike: (loop phase, cycle period T, strike kind, now, wait budget) → strike time. The engine/note layer defers the strike with one cancellable timer; cancellation/suspension rules unchanged.
+    - Phase sources, in preference order: (a) if the MSEG is note-retriggered, no telemetry is needed — phase is time since OUR last strike modulo T, so sync is pure arithmetic keeping strikes an integer number of cycles apart; (b) free-running loops use the existing per-slot playhead telemetry (observeMsegPlayhead / the harness's emitEffectiveMsegState shape) to anchor phase, predicting the next boundary as now + (1 - position) * T rather than waiting to observe the wrap. MEASURE the telemetry anchor's accuracy/latency before trusting it and record the number.
+    Audit findings (2026-08-19, engine + type contracts — these reshape the above):
+    - MSEG rate has exactly one kind today: seconds (ui/shared/mseg.ts MsegPlayback.rate). No tempo-synced rate exists, so the BPM-visibility gate is moot until the reserved rateKind gains a sync value; drop it from v1.
+    - The loop is a SUB-REGION {startX, endX} of the shape: the cycle period is T = (endX - startX) * rate.seconds, and the boundary to sync to is the region wrap (endX back to startX), NOT playhead 1 -> 0. Default playback loops the full shape with noteOffPolicy "finish_loop" and holdFinalValue true.
+    - MSEGs run PER VOICE, and effectiveMsegState reports the newest audible voice (FixedFrameOscillator findNewestMonitoredVoiceIndex). Every preview strike spawns a new voice whose MSEG phase restarts at the note-on (legatoRestarts semantics to be confirmed engine-side during implementation). Consequence: the loop rhythm the user hears is anchored at a note-on JS itself observed, so the PRIMARY algorithm is note-on-anchored arithmetic for every case — engine-owned strikes AND held-chord re-strikes (a re-strike is note-off+note-on, which re-anchors). Telemetry drops to a cross-check/kill-switch input, not a phase source. Held-note bookkeeping must gain note-on timestamps to serve as anchors.
+    - noteOffPolicy "finish_loop" keeps a released voice looping; its anchor remains its own observed note-on, so the arithmetic model still holds.
+    Eligibility gates (attempt sync only when ALL hold):
+    - The slot is in loop playback (one-shots never sync).
+    - The slot has at least one enabled route (unmapped MSEGs are ignored entirely). Slot selection when several loop (user decision 2026-08-19): ALWAYS the slowest eligible loop — it is the audible rhythm, and since all per-voice MSEGs share the same note-on anchor, harmonically related faster loops land on its grid for free. The earlier edited-parameter/armed-source preferences are dropped.
+    - T is confidently known and stable: skip sync while the MSEG rate itself is being edited, and skip tempo-synced rates unless host BPM is visible from JS (audit first; assumed not).
+    - Telemetry anchor fresh within ~100 ms (free-running case only).
+    Regime bounds (starting numbers — tune on the phone with everything else):
+    - T < ~120 ms (faster than ~8 Hz): never sync. The loop reads as texture, not rhythm, and timer/telemetry jitter (±10-30 ms) is too large a fraction of T for "synced" to be true.
+    - Sweet band, T between ~120 ms and the wait budget W: every due strike defers to the next cycle boundary. W by strike kind: leading strike ~150 ms (responsiveness dominates), in-motion and trailing strikes ~300 ms (rhythm dominates; the ear forgives late more than off-beat).
+    - Slow loops, T > W (the musically common 0.5-3 Hz range, where the jarring is worst): implement BOTH candidate policies behind one switch so the tuning pass can compare — (a) opportunistic: sync only when the next boundary is ≤ W away, else fire immediately; (b) subdivision grid: quantize to the loop's internal binary grid T/2^k, choosing the finest interval within [~120 ms, W] (a 2 s loop gets a 250 ms grid). (b) assumes rhythmic MSEGs are drawn on binary-ish grids — verify against real patches during tuning and pick one policy explicitly.
+    - Kill-switch: if two consecutive synced strikes measurably land > ~25 ms off the boundary, fall back to immediate strikes for the rest of the gesture.
+    Contract amendment:
+    - T12's "the final changed value must be heard no later than 250 ms after its change" becomes "≤ 250 ms + the active sync wait (≤ W)" while sync is engaged. Record the amendment beside T12's locked behavior when this lands.
+    Done when:
+    - The quantizer is pure with deterministic tests covering every regime, gate, and the kill-switch; a browser case drives fake playhead telemetry and proves a due strike defers to the boundary (and that ineligible cases fire immediately).
+    - The telemetry anchor accuracy measurement is recorded, and tempo-sync/BPM visibility is audited and recorded.
+    - Both slow-loop policies are selectable for the tuning pass; the tuning pass then picks one, tunes the bounds, and folds the ship/revise/reject into T12's closure.
 
 PHASE 4 — REDESIGN MODULATION AROUND QUICK EDITING
 
@@ -283,6 +507,29 @@ PHASE 5 — PARKED UNTIL ITS QUALIFICATION CHANGES
     - Then rerun browser qualification, complete the physical-phone campaign, review the existing Effects Lane branch, and make an explicit merge/rework/abandon decision.
     Do not:
     - Merge or begin production Effects Lane implementation merely because the phone becomes available.
+
+INFRASTRUCTURE AND TOOLING
+
+[ ] T17 — Cut the desktop browser suite's wall clock without losing coverage or stringency
+    Delegation:
+    - Implementation may be handed to codex at max reasoning effort. Fable writes the shard plan review and verifies the gates; codex must not modify what any test ASSERTS — only structure, waits, and orchestration.
+    Measured baseline (2026-08-19, from a full 163-case run log):
+    - ~13.3 minutes total. Per-test cost is dominated by app boot: every test calls openHarnessPage() (fresh isolated context, full bundle eval, waitForHarnessReady, first render) at ~3.5-4.5 s; median test 4.8 s, p90 5.6 s, assertions nearly free.
+    - The whole suite lives in one file (tests/test_desktop_patch_view_browser.mjs), and node --test parallelizes across FILES, so 168 Chromium boots run strictly serially on a 16-core machine.
+    - 66 static waitForTimeout sleeps total only ~13 s nominal — real but minor.
+    - A legitimate ~2-minute tail (~15 tests, 6-18.5 s) exercises deceleration physics, momentum decay, animation midpoints, and nothing-happens-for-N-ms negative windows, where elapsed time IS the assertion.
+    Build, in order of leverage:
+    - Shard the one file into 4-6 domain files (rail/audition, articulations, MSEG, voice editor, FX rack, misc) that import the shared helpers from a new tests/helpers module instead of duplicating them. Every shard keeps its own before/after starting its own ephemeral-port servers (startStaticRepoServer/startDesktopHarnessServer already support this). Expected ~3-5x.
+    - Cap file concurrency at ~4 (--test-concurrency) and raise the harness readiness timeout under concurrency: the observed "Desktop harness did not render. State: null" flake is a boot starved by concurrent machine load, and 16-wide concurrency would trade minutes for flakes.
+    - Profile waitForHarnessReady (tests/helpers/desktop_harness_browser.mjs) and shrink the boot floor itself — what part is bundle eval vs catalog/audio-mock init vs first render; trim await chains. Even 4.5 s → 2 s saves ~7 minutes before sharding.
+    - Replace fixed sleeps with condition waits that are strictly STRONGER than the sleep they replace (data-decelerating="false", data-settling-x="false", scrollTop stable across frames, midiInputEvents settled). Fold the ubiquitous post-boot 240 ms settle into the readiness condition itself.
+    - Boot amortization (several sequential read-only cases sharing one page) is allowed only for cases that provably do not mutate stored state, localStorage, or runtime state consumed by a later case; never merge mutating cases.
+    Do not:
+    - Delete, skip, or weaken any test or assertion; do not shorten the time-semantics tail (deceleration/momentum/negative-window tests keep their real clocks); do not raise concurrency past the flake-free point just for speed.
+    Done when:
+    - Before/after runs on the same machine record the wall-clock win, and the after-run passes with EXACTLY the same set of test names as the before-run (diff the ok lines; count may only grow).
+    - Ten consecutive full runs (or three on a loaded machine) show zero harness-boot flakes at the chosen concurrency.
+    - tsc and the untouched suites (iPhone shell, web bundle, shared hooks) stay green; package.json test:desktop:ui runs the sharded set as one command.
 
 IMPLEMENTED BASELINES TO CONFIRM, NOT REBUILD BLINDLY
 

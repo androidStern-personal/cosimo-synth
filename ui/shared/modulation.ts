@@ -1,4 +1,5 @@
 import type { PatchConnectionLike } from "./cmajor-react";
+import { reportUserParameterEdit } from "./user-edit-bus";
 import {
     allRackParameterDescriptors,
     type RackParameterDescriptor,
@@ -1323,6 +1324,9 @@ export class ModulationRuntimeBridge {
                 msegSlots: nextMsegSlots,
             };
         });
+        // MSEG node edits are direct user edits (T12 seam B); the equality
+        // guard above already dropped no-op writes.
+        reportUserParameterEdit({ endpointID: `msegShape.${slotIndex}.${shapeIndex}`, changed: true });
     }
 
     setMsegSlotPlayback(slotIndex: number, nextPlayback: unknown) {
@@ -1417,6 +1421,9 @@ export class ModulationRuntimeBridge {
         this.persistState();
         this.emitStateChange("routeAmount");
         this.emitRouteAmountChange(currentRoute.id);
+        // Locally-originated amount edits are direct user edits (T12 seam B);
+        // incoming documents arrive through applyStoredState, not here.
+        reportUserParameterEdit({ endpointID: `modAmount.${currentRoute.id}`, changed: true });
         return true;
     }
 

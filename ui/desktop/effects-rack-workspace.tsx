@@ -57,6 +57,22 @@ import {
     type ModSourceDragPoint as ClientPoint,
     type ModSourceDragViewport as ClientViewport,
 } from "../shared/mod-source-touch-geometry";
+import {
+    buildRailSilhouettePath,
+    normalizeRailTop,
+    parseStoredRailDock,
+    projectRailDrawerPlacement,
+    projectRailTop,
+    railVerticalBounds,
+    serializeRailDock,
+    settleRailEdge,
+    snapRailTop,
+    type RailDock,
+    type RailDrawerMetrics,
+    type RailDrawerPlacement,
+    type RailEdge,
+    type RailVerticalBounds,
+} from "../shared/mod-rail-perimeter";
 import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import { parseModulationTargetKind } from "../shared/modulation-targets";
 import {
@@ -95,7 +111,22 @@ type EffectsRackWorkspaceProps = {
     mobileGlobalModRail?: boolean;
     mobileModRailPortalTarget?: HTMLElement | null;
     globalModSourceActivity?: number | null;
+    modRailAudition?: ModRailAuditionBindings;
     className?: string;
+};
+
+/**
+ * The rail's audition wiring (T10B): the Note key's press lifecycle, the
+ * Auto-preview mode, and the on-screen keyboard toggle. Required whenever the
+ * mobile rail renders — a compact surface without them is a wiring defect.
+ */
+export type ModRailAuditionBindings = {
+    readonly onNoteKeyDown: () => void;
+    readonly onNoteKeyUp: () => void;
+    readonly autoPreviewEnabled: boolean;
+    readonly onToggleAutoPreview: () => void;
+    readonly keyboardVisible: boolean;
+    readonly onToggleKeyboard: () => void;
 };
 
 type SelectedSource = Pick<RackModulationSource, "sourceKind" | "sourceSlot">;
@@ -1864,48 +1895,12 @@ const MOBILE_MOD_RAIL_STOP_VELOCITY_PX_PER_MS = 0.02;
 // millisecond decay gives this short rail speed-sensitive travel without the
 // long coast that feels right for a full scroll view.
 const MOBILE_MOD_RAIL_DECELERATION_RATE_PER_MS = 0.99;
-const MOBILE_MOD_RAIL_WIDTH_PX = 56;
-const MOBILE_MOD_RAIL_SHOULDER_PX = 14;
-const MOBILE_MOD_RAIL_CORNER_PX = 15;
-const MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX = 140;
-
-function buildMobileModRailSilhouettePath(height: number) {
-    const width = MOBILE_MOD_RAIL_WIDTH_PX;
-    const shoulder = MOBILE_MOD_RAIL_SHOULDER_PX;
-    const bodyTop = shoulder;
-    const bodyBottom = height - shoulder;
-    const corner = Math.min(MOBILE_MOD_RAIL_CORNER_PX, (bodyBottom - bodyTop) / 2);
-    return [
-        `M ${width} 0`,
-        `A ${shoulder} ${shoulder} 0 0 1 ${width - shoulder} ${bodyTop}`,
-        `H ${corner}`,
-        `A ${corner} ${corner} 0 0 0 0 ${bodyTop + corner}`,
-        `V ${bodyBottom - corner}`,
-        `A ${corner} ${corner} 0 0 0 ${corner} ${bodyBottom}`,
-        `H ${width - shoulder}`,
-        `A ${shoulder} ${shoulder} 0 0 1 ${width} ${height}`,
-        "Z",
-    ].join(" ");
-}
-
-type RailVerticalBounds = {
-    readonly min: number;
-    readonly max: number;
-};
-
-type RailDrawerDirection = "down" | "up";
-
-type RailDrawerMetrics = {
-    readonly safeTop: number;
-    readonly safeBottom: number;
-    readonly collapsedHeight: number;
-    readonly desiredHeight: number;
-};
-
-type RailDrawerPlacement = {
-    readonly direction: RailDrawerDirection;
-    readonly extent: number;
-};
+const MOBILE_MOD_RAIL_WIDTH_PX = 40;
+const MOBILE_MOD_RAIL_SHOULDER_PX = 12;
+const MOBILE_MOD_RAIL_CORNER_PX = 12;
+const MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX = 128;
+const MOBILE_MOD_RAIL_SETTLE_X_MS = 220;
+const MOBILE_MOD_RAIL_DEFAULT_DOCK: RailDock = { edge: "right", normalizedY: 0.42 };
 
 type RailMotionSample = {
     readonly clientY: number;
@@ -1961,35 +1956,6 @@ function prefersReducedRailMotion() {
         && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 }
 
-function projectRailDrawerPlacement(tabTop: number, metrics: RailDrawerMetrics): RailDrawerPlacement {
-    const spaceAbove = Math.max(0, tabTop - metrics.safeTop);
-    const spaceBelow = Math.max(0, metrics.safeBottom - tabTop - metrics.collapsedHeight);
-    let direction: RailDrawerDirection = "down";
-    if (spaceBelow < metrics.desiredHeight && (spaceAbove >= metrics.desiredHeight || spaceAbove > spaceBelow)) {
-        direction = "up";
-    }
-    return {
-        direction,
-        extent: Math.min(metrics.desiredHeight, direction === "up" ? spaceAbove : spaceBelow),
-    };
-}
-
-function readStoredRailPosition() {
-    try {
-        const stored = localStorage.getItem(MOBILE_MOD_RAIL_POSITION_KEY);
-        if (stored === null) {
-            return 0.42;
-        }
-        const parsed = JSON.parse(stored) as unknown;
-        const candidate = typeof parsed === "number"
-            ? parsed
-            : Number((parsed as { normalizedY?: unknown } | null)?.normalizedY);
-        return Number.isFinite(candidate) ? clamp(candidate, 0, 1) : 0.42;
-    } catch {
-        return 0.42;
-    }
-}
-
 function triggerLightHaptic() {
     try {
         (globalThis as { cmaj_triggerHaptic?: (style?: string) => unknown })
@@ -2006,11 +1972,17 @@ function MobileGlobalModRail({
     sourceDrag,
     accent,
     collapseSignal,
+    autoPreviewEnabled,
+    keyboardVisible,
     onStateChange,
     onDragSourceChange,
     onSourceDrop,
     onHoverTarget,
     onSourceDragChange,
+    onNoteKeyDown,
+    onNoteKeyUp,
+    onToggleAutoPreview,
+    onToggleKeyboard,
     children,
 }: {
     selectedSource: RackModulationSource;
@@ -2019,11 +1991,17 @@ function MobileGlobalModRail({
     sourceDrag: SourceDragPresentation | null;
     accent: string;
     collapseSignal: number;
+    autoPreviewEnabled: boolean;
+    keyboardVisible: boolean;
     onStateChange?: (state: GlobalModRailState) => void;
     onDragSourceChange: (source: SelectedSource | null) => void;
     onSourceDrop: (source: SelectedSource, targetKind: ModulationTargetKind) => void;
     onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
     onSourceDragChange: (drag: SourceDragPresentation | null) => void;
+    onNoteKeyDown: () => void;
+    onNoteKeyUp: () => void;
+    onToggleAutoPreview: () => void;
+    onToggleKeyboard: () => void;
     children: React.ReactNode;
 }) {
     const layerRef = useRef<HTMLDivElement | null>(null);
@@ -2033,18 +2011,27 @@ function MobileGlobalModRail({
     const positionRef = useRef(0);
     const normalizedPositionRef = useRef<number | null>(null);
     const boundsRef = useRef<RailVerticalBounds>({ min: 12, max: 12 });
+    const layerWidthRef = useRef(0);
+    const edgeRef = useRef<RailEdge>(MOBILE_MOD_RAIL_DEFAULT_DOCK.edge);
+    const dockInitializedRef = useRef(false);
+    const dragXRef = useRef(0);
+    const settleXTimeoutRef = useRef<number | null>(null);
+    const noteKeyPointerRef = useRef<number | null>(null);
     const drawerMetricsRef = useRef<RailDrawerMetrics>({
         safeTop: 12,
         safeBottom: 12,
-        collapsedHeight: 168,
+        collapsedHeight: MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX + (2 * MOBILE_MOD_RAIL_SHOULDER_PX),
         desiredHeight: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
     });
     const decelerationFrameRef = useRef<number | null>(null);
     const gestureRef = useRef<{
         pointerId: number;
+        startClientX: number;
         startClientY: number;
+        lastClientX: number;
         startNormalizedY: number;
         startTop: number;
+        startEdge: RailEdge;
         moved: boolean;
         interruptedDeceleration: boolean;
         motionSamples: RailMotionSample[];
@@ -2052,7 +2039,11 @@ function MobileGlobalModRail({
     } | null>(null);
     const [expanded, setExpanded] = useState(false);
     const [top, setTop] = useState(12);
+    const [edge, setEdge] = useState<RailEdge>(MOBILE_MOD_RAIL_DEFAULT_DOCK.edge);
+    const [dragX, setDragX] = useState(0);
+    const [settlingX, setSettlingX] = useState(false);
     const [decelerating, setDecelerating] = useState(false);
+    const [noteHeld, setNoteHeld] = useState(false);
     const [drawerPlacement, setDrawerPlacement] = useState<RailDrawerPlacement>({
         direction: "down",
         extent: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
@@ -2067,6 +2058,11 @@ function MobileGlobalModRail({
         onTap: () => setExpanded((current) => !current),
     });
 
+    const applyDragX = useCallback((nextDragX: number) => {
+        dragXRef.current = nextDragX;
+        setDragX(nextDragX);
+    }, []);
+
     const updateDrawerPlacement = useCallback((nextTop: number) => {
         setDrawerPlacement(projectRailDrawerPlacement(nextTop, drawerMetricsRef.current));
     }, []);
@@ -2080,10 +2076,16 @@ function MobileGlobalModRail({
 
         const layerBounds = layer.getBoundingClientRect();
         const layerStyle = getComputedStyle(layer);
+        layerWidthRef.current = layerBounds.width;
         const surface = layer.closest(".cosimo-surface");
         const keyboard = surface?.querySelector<HTMLElement>('[data-role="sticky-keyboard"]');
         const presetBar = surface?.querySelector<HTMLElement>('[data-role="synth-preset-bar-host"]');
-        const keyboardBounds = keyboard?.getBoundingClientRect();
+        const measuredKeyboardBounds = keyboard?.getBoundingClientRect();
+        // A hidden keyboard (display: none) measures 0x0 at the origin and must
+        // not collapse the rail's travel band.
+        const keyboardBounds = measuredKeyboardBounds && measuredKeyboardBounds.height > 0
+            ? measuredKeyboardBounds
+            : undefined;
         const presetBarBounds = presetBar?.getBoundingClientRect();
         const safeTopInset = 8 + (Number.parseFloat(layerStyle.paddingTop) || 0);
         const safeTop = presetBarBounds
@@ -2094,19 +2096,15 @@ function MobileGlobalModRail({
             ? Math.min(layerBounds.height, keyboardBounds.top - layerBounds.top)
             : layerBounds.height;
         const railStyle = getComputedStyle(rail);
-        const shoulderHeight = Number.parseFloat(railStyle.getPropertyValue("--rail-shoulder")) || 14;
-        const tabHeight = tabRef.current?.getBoundingClientRect().height || 140;
-        const body = rail.querySelector<HTMLElement>('[data-role="mobile-global-mod-rail-body"]');
-        const bodyStyle = body ? getComputedStyle(body) : null;
-        const bodyBorderHeight = bodyStyle
-            ? (Number.parseFloat(bodyStyle.borderTopWidth) || 0)
-                + (Number.parseFloat(bodyStyle.borderBottomWidth) || 0)
-            : 2;
-        const railHeight = tabHeight + (2 * shoulderHeight) + bodyBorderHeight;
-        const nextBounds = {
-            min: safeTop,
-            max: Math.max(safeTop, availableBottom - railHeight - safeBottom),
-        };
+        const shoulderHeight = Number.parseFloat(railStyle.getPropertyValue("--rail-shoulder"))
+            || MOBILE_MOD_RAIL_SHOULDER_PX;
+        const tabHeight = tabRef.current?.getBoundingClientRect().height
+            || MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX;
+        const railHeight = tabHeight + (2 * shoulderHeight);
+        const nextBounds = railVerticalBounds(
+            { height: availableBottom, insetTop: safeTop, insetBottom: safeBottom },
+            railHeight,
+        );
         boundsRef.current = nextBounds;
         const drawerHeight = drawerRef.current?.scrollHeight || MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX;
         drawerMetricsRef.current = {
@@ -2116,9 +2114,21 @@ function MobileGlobalModRail({
             desiredHeight: drawerHeight,
         };
 
-        normalizedPositionRef.current ??= readStoredRailPosition();
-        const nextTop = nextBounds.min
-            + ((nextBounds.max - nextBounds.min) * normalizedPositionRef.current);
+        if (!dockInitializedRef.current) {
+            dockInitializedRef.current = true;
+            let storedDock: RailDock | null = null;
+            try {
+                storedDock = parseStoredRailDock(localStorage.getItem(MOBILE_MOD_RAIL_POSITION_KEY));
+            } catch {
+                storedDock = null;
+            }
+            const dock = storedDock ?? MOBILE_MOD_RAIL_DEFAULT_DOCK;
+            edgeRef.current = dock.edge;
+            setEdge(dock.edge);
+            normalizedPositionRef.current = dock.normalizedY;
+        }
+        normalizedPositionRef.current ??= MOBILE_MOD_RAIL_DEFAULT_DOCK.normalizedY;
+        const nextTop = projectRailTop(normalizedPositionRef.current, nextBounds);
         positionRef.current = nextTop;
         setTop(nextTop);
         updateDrawerPlacement(nextTop);
@@ -2198,15 +2208,14 @@ function MobileGlobalModRail({
         };
     }, [mappingActive, selectedSource.accent]);
 
-    const persistRailPosition = useCallback((nextTop: number) => {
-        const bounds = boundsRef.current;
-        const span = bounds.max - bounds.min;
-        const normalizedY = span > 0 ? (nextTop - bounds.min) / span : 0;
-        normalizedPositionRef.current = clamp(normalizedY, 0, 1);
+    const persistRailDock = useCallback((nextTop: number) => {
+        const normalizedY = normalizeRailTop(nextTop, boundsRef.current);
+        normalizedPositionRef.current = normalizedY;
         try {
-            localStorage.setItem(MOBILE_MOD_RAIL_POSITION_KEY, JSON.stringify({
-                normalizedY: normalizedPositionRef.current,
-            }));
+            localStorage.setItem(
+                MOBILE_MOD_RAIL_POSITION_KEY,
+                serializeRailDock({ edge: edgeRef.current, normalizedY }),
+            );
         } catch {
             // A private browsing storage failure must not break rail movement.
         }
@@ -2214,25 +2223,16 @@ function MobileGlobalModRail({
 
     const settleRailPosition = useCallback((unsettledTop: number) => {
         const bounds = boundsRef.current;
-        const middle = bounds.min + ((bounds.max - bounds.min) / 2);
-        const anchors = [bounds.min, middle, bounds.max];
         const clampedTop = clamp(unsettledTop, bounds.min, bounds.max);
-        const nearest = anchors.reduce((candidate, anchor) => (
-            Math.abs(anchor - clampedTop) < Math.abs(candidate - clampedTop)
-                ? anchor
-                : candidate
-        ), anchors[0] ?? bounds.min);
-        const settledTop = Math.abs(nearest - clampedTop) <= MOBILE_MOD_RAIL_SNAP_DISTANCE_PX
-            ? nearest
-            : clampedTop;
+        const { top: settledTop } = snapRailTop(clampedTop, bounds, MOBILE_MOD_RAIL_SNAP_DISTANCE_PX);
         if (settledTop !== clampedTop) {
             triggerLightHaptic();
         }
         positionRef.current = settledTop;
         setTop(settledTop);
         updateDrawerPlacement(settledTop);
-        persistRailPosition(settledTop);
-    }, [persistRailPosition, updateDrawerPlacement]);
+        persistRailDock(settledTop);
+    }, [persistRailDock, updateDrawerPlacement]);
 
     const stopRailDeceleration = useCallback(() => {
         const frameID = decelerationFrameRef.current;
@@ -2276,10 +2276,7 @@ function MobileGlobalModRail({
             const reachedBound = nextTop !== projectedTop;
 
             positionRef.current = nextTop;
-            const span = bounds.max - bounds.min;
-            normalizedPositionRef.current = span > 0
-                ? (nextTop - bounds.min) / span
-                : 0;
+            normalizedPositionRef.current = normalizeRailTop(nextTop, bounds);
             setTop(nextTop);
             updateDrawerPlacement(nextTop);
 
@@ -2296,6 +2293,25 @@ function MobileGlobalModRail({
         decelerationFrameRef.current = requestAnimationFrame(step);
         return true;
     }, [settleRailPosition, updateDrawerPlacement]);
+
+    const settleDragXHome = useCallback(() => {
+        // Paint the compensated offset first, then glide the bar flush against
+        // its edge (FLIP): the double frame guarantees the pre-transition
+        // position reaches the compositor before the transition arms.
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                setSettlingX(true);
+                applyDragX(0);
+                if (settleXTimeoutRef.current !== null) {
+                    window.clearTimeout(settleXTimeoutRef.current);
+                }
+                settleXTimeoutRef.current = window.setTimeout(() => {
+                    settleXTimeoutRef.current = null;
+                    setSettlingX(false);
+                }, MOBILE_MOD_RAIL_SETTLE_X_MS);
+            });
+        });
+    }, [applyDragX]);
 
     const finishRailGesture = useCallback((
         pointerId: number,
@@ -2321,6 +2337,10 @@ function MobileGlobalModRail({
             positionRef.current = gesture.startTop;
             setTop(gesture.startTop);
             updateDrawerPlacement(gesture.startTop);
+            edgeRef.current = gesture.startEdge;
+            setEdge(gesture.startEdge);
+            setSettlingX(false);
+            applyDragX(0);
             return;
         }
         if (!gesture.moved) {
@@ -2330,6 +2350,21 @@ function MobileGlobalModRail({
             return;
         }
 
+        // Horizontal settle: the nearest screen edge wins and the bar glides
+        // flush against it from wherever the finger left it.
+        const layerWidth = layerWidthRef.current;
+        const currentEdge = edgeRef.current;
+        const nextEdge = settleRailEdge(gesture.lastClientX, layerWidth, currentEdge);
+        if (nextEdge !== currentEdge) {
+            const edgeSpan = Math.max(0, layerWidth - MOBILE_MOD_RAIL_WIDTH_PX);
+            edgeRef.current = nextEdge;
+            setEdge(nextEdge);
+            applyDragX(nextEdge === "left"
+                ? dragXRef.current + edgeSpan
+                : dragXRef.current - edgeSpan);
+        }
+        settleDragXHome();
+
         const releaseVelocity = railReleaseVelocity(gesture.motionSamples, releaseTimeStamp);
         if (
             prefersReducedRailMotion()
@@ -2337,15 +2372,35 @@ function MobileGlobalModRail({
         ) {
             settleRailPosition(positionRef.current);
         }
-    }, [settleRailPosition, startRailDeceleration, stopRailDeceleration, updateDrawerPlacement]);
+    }, [applyDragX, settleDragXHome, settleRailPosition, startRailDeceleration, stopRailDeceleration, updateDrawerPlacement]);
+
+    const releaseNoteKey = useCallback((pointerId: number) => {
+        if (noteKeyPointerRef.current !== pointerId) {
+            return;
+        }
+        noteKeyPointerRef.current = null;
+        setNoteHeld(false);
+        onNoteKeyUp();
+    }, [onNoteKeyUp]);
+
+    const abortNoteKey = useCallback(() => {
+        if (noteKeyPointerRef.current === null) {
+            return;
+        }
+        noteKeyPointerRef.current = null;
+        setNoteHeld(false);
+        onNoteKeyUp();
+    }, [onNoteKeyUp]);
 
     useEffect(() => {
-        const handlePointerUp = (event: PointerEvent) => (
-            finishRailGesture(event.pointerId, false, event.timeStamp)
-        );
-        const handlePointerCancel = (event: PointerEvent) => (
-            finishRailGesture(event.pointerId, true, event.timeStamp)
-        );
+        const handlePointerUp = (event: PointerEvent) => {
+            finishRailGesture(event.pointerId, false, event.timeStamp);
+            releaseNoteKey(event.pointerId);
+        };
+        const handlePointerCancel = (event: PointerEvent) => {
+            finishRailGesture(event.pointerId, true, event.timeStamp);
+            releaseNoteKey(event.pointerId);
+        };
         const cancelActiveInteraction = () => {
             const gesture = gestureRef.current;
             if (gesture) {
@@ -2354,6 +2409,7 @@ function MobileGlobalModRail({
             if (stopRailDeceleration()) {
                 settleRailPosition(positionRef.current);
             }
+            abortNoteKey();
         };
         const handleVisibilityChange = () => {
             if (document.visibilityState !== "visible") {
@@ -2370,15 +2426,24 @@ function MobileGlobalModRail({
             window.removeEventListener("blur", cancelActiveInteraction);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             cancelActiveInteraction();
+            if (settleXTimeoutRef.current !== null) {
+                window.clearTimeout(settleXTimeoutRef.current);
+                settleXTimeoutRef.current = null;
+            }
         };
-    }, [finishRailGesture, settleRailPosition, stopRailDeceleration]);
+    }, [abortNoteKey, finishRailGesture, releaseNoteKey, settleRailPosition, stopRailDeceleration]);
 
     const clampedActivity = sourceActivity === null ? null : clamp(sourceActivity, 0, 1);
     const drawerOpen = expanded && !mappingActive;
     const silhouetteHeight = MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX
         + (2 * MOBILE_MOD_RAIL_SHOULDER_PX)
         + (drawerOpen ? drawerPlacement.extent : 0);
-    const silhouettePath = buildMobileModRailSilhouettePath(silhouetteHeight);
+    const silhouettePath = buildRailSilhouettePath({
+        width: MOBILE_MOD_RAIL_WIDTH_PX,
+        shoulder: MOBILE_MOD_RAIL_SHOULDER_PX,
+        corner: MOBILE_MOD_RAIL_CORNER_PX,
+        height: silhouetteHeight,
+    }, edge);
     const upwardDrawerOffset = drawerOpen && drawerPlacement.direction === "up" ? -drawerPlacement.extent : 0;
     let disclosureDirection = drawerPlacement.direction;
     if (expanded) {
@@ -2391,19 +2456,27 @@ function MobileGlobalModRail({
                 ref={railRef}
                 data-role="mobile-global-mod-rail"
                 data-expanded={expanded}
+                data-edge={edge}
                 data-drawer-direction={drawerPlacement.direction}
                 data-mapping-active={mappingActive}
                 data-decelerating={decelerating}
+                data-settling-x={settlingX}
                 className="mobile-global-mod-rail"
                 style={{
                     top,
-                    transform: `translateY(${upwardDrawerOffset}px)`,
+                    transform: `translate(${dragX}px, ${upwardDrawerOffset}px)`,
                     "--source-color": selectedSource.accent,
                     "--editor-accent": accent,
                     "--rail-drawer-size": `${drawerPlacement.extent}px`,
                 } as CSSProperties}
                 aria-label="Global modulation bar"
             >
+                <div
+                    data-role="mobile-global-mod-rail-glass"
+                    className="mobile-global-mod-rail-glass"
+                    style={{ clipPath: `path("${silhouettePath}")` }}
+                    aria-hidden="true"
+                />
                 <svg
                     data-role="mobile-global-mod-rail-silhouette"
                     className="mobile-global-mod-rail-silhouette"
@@ -2413,10 +2486,10 @@ function MobileGlobalModRail({
                     aria-hidden="true"
                 >
                     <defs>
-                        <linearGradient id={silhouetteGradientId} x1="0" y1="0" x2="1" y2="1">
-                            <stop className="mobile-global-mod-rail-silhouette-accent" offset="0" />
-                            <stop className="mobile-global-mod-rail-silhouette-fill" offset="46%" />
-                            <stop className="mobile-global-mod-rail-silhouette-fill" offset="100%" />
+                        <linearGradient id={silhouetteGradientId} x1="0" y1="0" x2="0" y2="1">
+                            <stop className="mobile-global-mod-rail-silhouette-top" offset="0" />
+                            <stop className="mobile-global-mod-rail-silhouette-mid" offset="0.12" />
+                            <stop className="mobile-global-mod-rail-silhouette-bottom" offset="1" />
                         </linearGradient>
                     </defs>
                     <path
@@ -2454,20 +2527,29 @@ function MobileGlobalModRail({
                                 if (interruptedDeceleration) {
                                     // Like touching a coasting scroll view, a new touch stops
                                     // it exactly where it is before beginning the next gesture.
-                                    persistRailPosition(positionRef.current);
+                                    persistRailDock(positionRef.current);
                                 }
                                 const motionSamples: RailMotionSample[] = [];
                                 appendRailMotionSample(motionSamples, event.clientY, event.timeStamp);
                                 gestureRef.current = {
                                     pointerId: event.pointerId,
+                                    startClientX: event.clientX,
                                     startClientY: event.clientY,
-                                    startNormalizedY: normalizedPositionRef.current ?? readStoredRailPosition(),
+                                    lastClientX: event.clientX,
+                                    startNormalizedY: normalizedPositionRef.current
+                                        ?? MOBILE_MOD_RAIL_DEFAULT_DOCK.normalizedY,
                                     startTop: positionRef.current,
+                                    startEdge: edgeRef.current,
                                     moved: false,
                                     interruptedDeceleration,
                                     motionSamples,
                                     captureElement: event.currentTarget,
                                 };
+                                setSettlingX(false);
+                                if (settleXTimeoutRef.current !== null) {
+                                    window.clearTimeout(settleXTimeoutRef.current);
+                                    settleXTimeoutRef.current = null;
+                                }
                                 try {
                                     event.currentTarget.setPointerCapture(event.pointerId);
                                 } catch {
@@ -2486,34 +2568,35 @@ function MobileGlobalModRail({
                                     event.clientY,
                                     event.timeStamp,
                                 );
+                                gesture.lastClientX = event.clientX;
                                 const deltaY = event.clientY - gesture.startClientY;
-                                gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
+                                const deltaX = event.clientX - gesture.startClientX;
+                                gesture.moved ||= Math.abs(deltaY) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX
+                                    || Math.abs(deltaX) > MOBILE_MOD_RAIL_DRAG_THRESHOLD_PX;
                                 if (!gesture.moved) {
                                     return;
                                 }
                                 const bounds = boundsRef.current;
                                 const nextTop = clamp(gesture.startTop + deltaY, bounds.min, bounds.max);
                                 positionRef.current = nextTop;
-                                const span = bounds.max - bounds.min;
-                                normalizedPositionRef.current = span > 0
-                                    ? (nextTop - bounds.min) / span
-                                    : 0;
+                                normalizedPositionRef.current = normalizeRailTop(nextTop, bounds);
                                 setTop(nextTop);
                                 updateDrawerPlacement(nextTop);
+                                // The bar follows the finger horizontally inside the layer;
+                                // release settles it against the nearest edge.
+                                const edgeSpan = Math.max(0, layerWidthRef.current - MOBILE_MOD_RAIL_WIDTH_PX);
+                                const dragRange: readonly [number, number] = gesture.startEdge === "right"
+                                    ? [-edgeSpan, 0]
+                                    : [0, edgeSpan];
+                                applyDragX(clamp(deltaX, dragRange[0], dragRange[1]));
                             }}
                             onPointerUp={(event) => finishRailGesture(event.pointerId, false, event.timeStamp)}
                             onPointerCancel={(event) => finishRailGesture(event.pointerId, true, event.timeStamp)}
                             onLostPointerCapture={(event) => finishRailGesture(event.pointerId, true, event.timeStamp)}
                         >
-                            <span className="mobile-global-mod-rail-handle" aria-hidden="true" />
-                            <span className="mobile-global-mod-rail-chip-slot" aria-hidden="true" />
-                            {clampedActivity !== null ? (
-                                <span
-                                    className="mobile-global-mod-rail-activity"
-                                    aria-label={`${selectedSource.label} activity`}
-                                    style={{ "--source-activity": clampedActivity } as CSSProperties}
-                                ><span /></span>
-                            ) : null}
+                            <span className="mobile-global-mod-rail-handle" aria-hidden="true">
+                                <span /><span /><span /><span /><span /><span />
+                            </span>
                             <span
                                 className="rack-mod-chevron mobile-global-mod-rail-chevron"
                                 data-direction={disclosureDirection}
@@ -2523,17 +2606,78 @@ function MobileGlobalModRail({
                         <button
                             type="button"
                             data-role="mobile-global-mod-rail-selected"
-                            className="mobile-global-mod-rail-selected"
+                            className="mobile-global-mod-rail-module mobile-global-mod-rail-selected"
                             aria-label={`${selectedSource.label} selected`}
                             {...selectedSourceHandlers(selectedSource, false)}
                         >
                             <ModSourceArt source={selectedSource} />
+                            {clampedActivity !== null ? (
+                                <span
+                                    className="mobile-global-mod-rail-activity"
+                                    aria-label={`${selectedSource.label} activity`}
+                                    style={{ "--source-activity": clampedActivity } as CSSProperties}
+                                ><span /></span>
+                            ) : null}
                         </button>
                         <span
                             data-role="mobile-global-mod-rail-route-count"
                             className="mobile-global-mod-rail-route-count"
                             aria-label={`${routeCount} modulation routes`}
                         >{routeCount}</span>
+                        <button
+                            type="button"
+                            data-role="mobile-global-mod-rail-note"
+                            className="mobile-global-mod-rail-module mobile-global-mod-rail-note"
+                            data-note-held={noteHeld}
+                            aria-label="Play note"
+                            onPointerDown={(event) => {
+                                if (event.pointerType === "mouse" && event.button !== 0) {
+                                    return;
+                                }
+                                event.preventDefault();
+                                event.stopPropagation();
+                                try {
+                                    event.currentTarget.setPointerCapture(event.pointerId);
+                                } catch {
+                                    // Window-level termination still owns unsupported pointers.
+                                }
+                                noteKeyPointerRef.current = event.pointerId;
+                                setNoteHeld(true);
+                                onNoteKeyDown();
+                            }}
+                            onPointerUp={(event) => releaseNoteKey(event.pointerId)}
+                            onPointerCancel={(event) => releaseNoteKey(event.pointerId)}
+                            onLostPointerCapture={(event) => releaseNoteKey(event.pointerId)}
+                            onKeyDown={(event) => {
+                                if ((event.key !== "Enter" && event.key !== " ") || event.repeat) {
+                                    return;
+                                }
+                                event.preventDefault();
+                                noteKeyPointerRef.current = -1;
+                                setNoteHeld(true);
+                                onNoteKeyDown();
+                            }}
+                            onKeyUp={(event) => {
+                                if (event.key !== "Enter" && event.key !== " ") {
+                                    return;
+                                }
+                                event.preventDefault();
+                                releaseNoteKey(-1);
+                            }}
+                        >
+                            <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                                <circle cx="9" cy="17" r="2.8" fill="currentColor" />
+                                <path d="M11.8 17V5.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                                <path d="M11.8 5.5c3 1 4.6 2.6 4.9 5.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                            </svg>
+                            {autoPreviewEnabled ? (
+                                <span
+                                    data-role="mobile-global-mod-rail-note-dot"
+                                    className="mobile-global-mod-rail-note-dot"
+                                    aria-hidden="true"
+                                />
+                            ) : null}
+                        </button>
                     </div>
                     <div
                         ref={drawerRef}
@@ -2543,6 +2687,34 @@ function MobileGlobalModRail({
                         inert={!expanded || mappingActive}
                     >
                         {children}
+                        <div className="mobile-global-mod-rail-toggles" role="group" aria-label="Audition controls">
+                            <button
+                                type="button"
+                                data-role="mobile-global-mod-rail-keyboard-toggle"
+                                className="mobile-global-mod-rail-toggle"
+                                aria-pressed={keyboardVisible}
+                                aria-label="Toggle on-screen keyboard"
+                                onClick={onToggleKeyboard}
+                            >
+                                <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+                                    <rect x="3" y="8" width="18" height="9.5" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.7" />
+                                    <path d="M9 8v6M15 8v6" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                                </svg>
+                            </button>
+                            <button
+                                type="button"
+                                data-role="mobile-global-mod-rail-auto-toggle"
+                                className="mobile-global-mod-rail-toggle is-auto"
+                                aria-pressed={autoPreviewEnabled}
+                                aria-label="Toggle auto-preview"
+                                onClick={onToggleAutoPreview}
+                            >
+                                <svg width="15" height="15" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M19.5 12a7.5 7.5 0 1 1-2.2-5.3" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+                                    <path d="M19.5 3.5v3.4h-3.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </aside>
@@ -2998,8 +3170,12 @@ export function EffectsRackWorkspace({
     mobileGlobalModRail = false,
     mobileModRailPortalTarget = null,
     globalModSourceActivity = null,
+    modRailAudition,
     className,
 }: EffectsRackWorkspaceProps) {
+    if (mobileGlobalModRail && !modRailAudition) {
+        throw new Error("The mobile Mod rail requires modRailAudition bindings.");
+    }
     const { rackState, rackStateRef, commit } = useRackState();
     const [selectedEffectId, setSelectedEffectId] = useState<EffectModuleId>("drive");
     const [quickEndpointByEffect, setQuickEndpointByEffect] = useState<Readonly<Record<EffectModuleId, string>>>(() => (
@@ -3623,7 +3799,7 @@ export function EffectsRackWorkspace({
                     </div>
                 </section>
             </div>
-            {mobileGlobalModRail && mobileModRailPortalTarget ? createPortal(
+            {mobileGlobalModRail && mobileModRailPortalTarget && modRailAudition ? createPortal(
                 <MobileGlobalModRail
                     selectedSource={activeSource}
                     routeCount={routes.length}
@@ -3631,11 +3807,17 @@ export function EffectsRackWorkspace({
                     sourceDrag={sourceDrag}
                     accent={EFFECT_ACCENTS[selectedEffectId]}
                     collapseSignal={railCollapseSignal}
+                    autoPreviewEnabled={modRailAudition.autoPreviewEnabled}
+                    keyboardVisible={modRailAudition.keyboardVisible}
                     onStateChange={onGlobalModRailStateChange}
                     onDragSourceChange={setDragSource}
                     onSourceDrop={dropSource}
                     onHoverTarget={hoverSourceTarget}
                     onSourceDragChange={setSourceDrag}
+                    onNoteKeyDown={modRailAudition.onNoteKeyDown}
+                    onNoteKeyUp={modRailAudition.onNoteKeyUp}
+                    onToggleAutoPreview={modRailAudition.onToggleAutoPreview}
+                    onToggleKeyboard={modRailAudition.onToggleKeyboard}
                 >
                     {modulationSourceControls}
                 </MobileGlobalModRail>,
