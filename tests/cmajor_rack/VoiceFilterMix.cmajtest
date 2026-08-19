@@ -1,0 +1,158 @@
+// Voice-filter Mix contracts use the production math helpers directly. The
+// fully-wet rail is deliberately exact: no interpolation expression may replace
+// the current filtered sample when Mix is 1.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "ConstantThreeOscillatorRenderer.cmajor")
+
+## testFunction()
+
+bool testFullyWetReturnsTheFilteredSampleExactly()
+{
+    let filtered = -0.318271f;
+    return wt::mixVoiceFilterSample (0.927315f, filtered, 1.0f) == filtered;
+}
+
+bool testFullyDryReturnsTheUnfilteredSampleExactly()
+{
+    let dry = 0.731925f;
+    return wt::mixVoiceFilterSample (dry, -0.442871f, 0.0f) == dry;
+}
+
+bool testIntermediateMixIsLinear()
+{
+    let dry = -0.75f;
+    let filtered = 0.25f;
+    return wt::mixVoiceFilterSample (dry, filtered, 0.25f)
+        == dry * 0.75f + filtered * 0.25f;
+}
+
+bool testModulationClampsBasePlusOffsetAtApplication()
+{
+    return wt::resolveVoiceFilterMix (0.8f, 1.0f) == 1.0f
+        && wt::resolveVoiceFilterMix (0.2f, -1.0f) == 0.0f
+        && wt::resolveVoiceFilterMix (0.8f, -0.3f) == 0.5f;
+}
+
+// The production engine consumes the appended route cell. With velocity at
+// one, a +1 Filter Mix route from a dry base must be sample-identical to a
+// directly fully-wet engine while remaining observably different from dry.
+
+## testProcessor (undefined, { frequency: 600 })
+
+graph VoiceFilterMixRouteExecution [[ main ]]
+{
+    output event int32 out;
+
+    node source = VoiceFilterMixRouteSource;
+    node dryEngine = wt::SharedVoiceEngine (1);
+    node wetEngine = wt::SharedVoiceEngine (1);
+    node routedEngine = wt::SharedVoiceEngine (1);
+    node witness = VoiceFilterMixRouteWitness;
+
+    connection
+    {
+        source.noteOut -> dryEngine.voiceEventIn[0],
+                          wetEngine.voiceEventIn[0],
+                          routedEngine.voiceEventIn[0];
+        source.programOut -> routedEngine.modulationProgramIn;
+        source.filterModeOut -> dryEngine.filterModeIn,
+                                wetEngine.filterModeIn,
+                                routedEngine.filterModeIn;
+        source.filterCutoffOut -> dryEngine.filterCutoffIn,
+                                  wetEngine.filterCutoffIn,
+                                  routedEngine.filterCutoffIn;
+        source.filterQOut -> dryEngine.filterQIn,
+                             wetEngine.filterQIn,
+                             routedEngine.filterQIn;
+        source.dryMixOut -> dryEngine.filterMixIn,
+                            routedEngine.filterMixIn;
+        source.wetMixOut -> wetEngine.filterMixIn;
+        dryEngine.out -> witness.dryIn;
+        wetEngine.out -> witness.wetIn;
+        routedEngine.out -> witness.routedIn;
+        witness.out -> out;
+    }
+}
+
+processor VoiceFilterMixRouteSource
+{
+    output event std::notes::NoteOn noteOut;
+    output event wt::ModulationProgramUpload programOut;
+    output value float32 filterModeOut;
+    output value float32 filterCutoffOut;
+    output value float32 filterQOut;
+    output value float32 dryMixOut;
+    output value float32 wetMixOut;
+
+    wt::ModulationProgramUpload program()
+    {
+        wt::ModulationProgramUpload upload;
+        upload.dspSessionId = int32 (processor.session);
+        upload.deliverySerial = 1;
+        let velocitySource = 6;
+        let routeCell = velocitySource * wt::modulationVoiceTargetCount
+            + wt::modulationTargetFilterMix;
+        upload.voiceRouteCount = 1;
+        upload.voiceRouteCells[0] = routeCell;
+        upload.voiceRouteSources[0] = velocitySource;
+        upload.voiceRouteTargets[0] = wt::modulationTargetFilterMix;
+        upload.voiceRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        upload.voiceRouteAmounts[routeCell] = 1.0f;
+        return upload;
+    }
+
+    std::notes::NoteOn noteOn()
+    {
+        std::notes::NoteOn note;
+        note.channel = 0;
+        note.pitch = 60.0f;
+        note.velocity = 1.0f;
+        return note;
+    }
+
+    void main()
+    {
+        filterModeOut <- 1.0f;
+        filterCutoffOut <- 20.0f;
+        filterQOut <- 0.707107f;
+        dryMixOut <- 0.0f;
+        wetMixOut <- 1.0f;
+        programOut <- program();
+        advance();
+        noteOut <- noteOn();
+        loop advance();
+    }
+}
+
+processor VoiceFilterMixRouteWitness
+{
+    input stream float32<2> dryIn;
+    input stream float32<2> wetIn;
+    input stream float32<2> routedIn;
+    output event int32 out;
+
+    bool routedStayedExactlyWet = true;
+    bool sawDryWetDifference;
+
+    void main()
+    {
+        for (int32 frame = 0; ; ++frame)
+        {
+            if (frame >= 8 && frame < 70)
+            {
+                if (routedIn.at (0) != wetIn.at (0)
+                    || routedIn.at (1) != wetIn.at (1))
+                    routedStayedExactlyWet = false;
+
+                if (std::intrinsics::abs (dryIn.at (0) - wetIn.at (0)) > 0.0001f
+                    || std::intrinsics::abs (dryIn.at (1) - wetIn.at (1)) > 0.0001f)
+                    sawDryWetDifference = true;
+            }
+
+            if (frame == 70) out <- routedStayedExactlyWet ? 1 : 0;
+            if (frame == 71) out <- sawDryWetDifference ? 1 : 0;
+            if (frame == 72) out <- -1;
+            advance();
+        }
+    }
+}

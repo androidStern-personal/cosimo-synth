@@ -17,6 +17,7 @@ const warpAmountEndpointID = "oscAWarpAmount";
 const filterModeEndpointID = "filterMode";
 const filterCutoffEndpointID = "filterCutoff";
 const filterQEndpointID = "filterQ";
+const filterMixEndpointID = "filterMix";
 const unisonVoicesEndpointID = "oscAUnisonVoices";
 const unisonDetuneEndpointID = "oscAUnisonDetune";
 const unisonBlendEndpointID = "oscAUnisonBlend";
@@ -326,6 +327,7 @@ function createInitialParameterValues(): Map<string, unknown> {
         [filterModeEndpointID, 0],
         [filterCutoffEndpointID, 1000],
         [filterQEndpointID, 0.707107],
+        [filterMixEndpointID, 1],
         [unisonVoicesEndpointID, 1],
         [unisonDetuneEndpointID, 0.1],
         [unisonBlendEndpointID, 0.75],
@@ -486,6 +488,16 @@ function buildHarnessStatus(manifest: unknown) {
                         min: 0.1,
                         max: 20,
                         init: 0.707107,
+                    },
+                },
+                {
+                    endpointID: filterMixEndpointID,
+                    purpose: "parameter",
+                    annotation: {
+                        name: "Filter Mix",
+                        min: 0,
+                        max: 1,
+                        init: 1,
                     },
                 },
                 {

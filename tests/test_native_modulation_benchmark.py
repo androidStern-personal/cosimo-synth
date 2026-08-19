@@ -84,7 +84,7 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
     profiles = {profile["name"]: profile for profile in result["profiles"]}
     assert set(profiles) == {
         "voice-100", "voice-rack-100", "mixed-100", "combined-200",
-        "stored-1118-active-100", "active-1118",
+        "stored-1131-active-100", "active-1131",
     }
 
     for measured in profiles.values():
@@ -114,10 +114,10 @@ def test_generated_native_patch_isolates_incremental_modulation_matrix_cost(tmp_
         "voiceRack": 100,
         "macroRack": 0,
     }
-    assert profiles["active-1118"]["storedRouteCount"] == 1118
-    assert profiles["active-1118"]["compiledCounts"] == {
-        "voice": 450,
-        "macroVoice": 200,
+    assert profiles["active-1131"]["storedRouteCount"] == 1131
+    assert profiles["active-1131"]["compiledCounts"] == {
+        "voice": 459,
+        "macroVoice": 204,
         "voiceRack": 324,
         "macroRack": 144,
     }
@@ -215,11 +215,11 @@ def test_native_shipping_qualification_requires_full_warmup_and_settle() -> None
         assert runner.is_qualifying_run(**below_contract) is False, field
 
 
-def test_full_1118_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
+def test_full_1131_route_profile_is_diagnostic_until_the_merged_product_budget_is_set() -> None:
     spec = importlib.util.spec_from_file_location("native_matrix_runner", RUNNER)
     assert spec is not None and spec.loader is not None
     runner = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(runner)
 
-    assert "active-1118" in runner.EXPECTED_PROFILE_NAMES
-    assert "active-1118" not in runner.MATRIX_LOAD_BUDGETS
+    assert "active-1131" in runner.EXPECTED_PROFILE_NAMES
+    assert "active-1131" not in runner.MATRIX_LOAD_BUDGETS

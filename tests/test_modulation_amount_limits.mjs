@@ -9,7 +9,7 @@
 //
 // 1. Offset limits must be SYMMETRIC. An asymmetric amount range silently
 //    caps one drag direction at an arbitrary distance from base.
-// 2. For full-span destinations (wavetable position, warp, filter Q, amp),
+// 2. For full-span destinations (wavetable position, warp, filter Q/Mix, amp),
 //    the limit must cover the whole parameter span so any base value can be
 //    modulated to either rail. Deliberately narrower musical caps (pitch at
 //    +/-48 st, cutoff at +/-6 oct, pan at +/-1) are pinned exactly.
@@ -33,6 +33,7 @@ const VOICE_TARGET_KINDS_BY_PARAMETER = {
     warpAmount: "oscA.warpAmount",
     filterCutoffOctaves: "filterCutoffOctaves",
     filterQ: "filterQ",
+    filterMix: "filterMix",
     pitchSemitones: "oscA.pitchSemitones",
     ampGainDb: "oscA.ampGainDb",
     pan: "oscA.pan",
@@ -76,6 +77,7 @@ test("full-span offset destinations reach both rails from any base value", async
         { parameterKind: "wavetablePosition", span: 1 },
         { parameterKind: "warpAmount", span: 1 },
         { parameterKind: "filterQ", span: 19.9 },
+        { parameterKind: "filterMix", span: 1 },
         { parameterKind: "ampGainDb", span: AMP_GAIN_DB_SPAN },
         { parameterKind: "unisonDetune", span: 1 },
         { parameterKind: "unisonBlend", span: 1 },

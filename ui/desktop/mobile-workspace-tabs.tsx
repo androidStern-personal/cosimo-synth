@@ -85,6 +85,7 @@ export function MobileWorkspaceTabs({
                         role="tab"
                         id={`mobile-workspace-tab-${tab}`}
                         data-role={`mobile-workspace-tab-${tab}`}
+                        data-drag-dwell={`workspace-tab:${tab}`}
                         className={`mobile-workspace-tab${isSelected ? " is-active" : ""}`}
                         aria-selected={isSelected}
                         aria-controls={`mobile-workspace-panel-${tab}`}

@@ -14,6 +14,7 @@ import {
     pathStaysWithinRepoRoot,
     startStaticRepoServer,
 } from "./helpers/desktop_harness_browser.mjs";
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 
@@ -58,6 +59,126 @@ function parseGraphInputValues(sourceText, graphName) {
         annotation,
     }));
 }
+
+function parseGraphHostParameterIdentifiers(sourceText, graphName) {
+    const graphStart = sourceText.indexOf(`graph ${graphName}`);
+
+    if (graphStart < 0) {
+        throw new Error(`Graph not found: ${graphName}`);
+    }
+
+    const rackStructureStart = sourceText.indexOf("    input rack.rackOrder;", graphStart);
+    if (rackStructureStart < 0) {
+        throw new Error(`Rack structure boundary not found in graph: ${graphName}`);
+    }
+
+    const parameterText = sourceText.slice(graphStart, rackStructureStart);
+    const parameterPattern = /^\s*input (?:(?:value\s+[^\s]+\s+([A-Za-z_][A-Za-z0-9_]*)\s+\[\[[^\]]*\]\])|(?:rack\.([A-Za-z_][A-Za-z0-9_]*)))\s*;/gm;
+
+    return Array.from(parameterText.matchAll(parameterPattern), ([, directIdentifier, rackIdentifier]) => (
+        directIdentifier ?? rackIdentifier
+    ));
+}
+
+const EXISTING_SYNTH_HOST_PARAMETER_ORDER = [
+    "hostSlot0Guard",
+    ...["A", "B", "C"].flatMap((oscillatorID) => [
+        "WavetableSelect",
+        "WavetablePosition",
+        "Pan",
+        "Octave",
+        "Semitone",
+        "FineCents",
+        "Phase",
+        "PhaseRandom",
+        "Retrigger",
+        "VolumeDb",
+        "Mute",
+        "Solo",
+        "WarpMode",
+        "WarpAmount",
+        "UnisonVoices",
+        "UnisonDetune",
+        "UnisonBlend",
+        "UnisonWidth",
+        "UnisonDetuneMode",
+        "UnisonStackMode",
+        "UnisonPositionSpread",
+        "UnisonWarpSpread",
+    ].map((suffix) => `osc${oscillatorID}${suffix}`)),
+    "playMode",
+    "glideTime",
+    "macro1",
+    "macro2",
+    "macro3",
+    "macro4",
+    "filterMode",
+    "filterCutoff",
+    "filterQ",
+    "mseg1Morph",
+    "mseg2Morph",
+    "mseg3Morph",
+    "distortionMode",
+    "distortionDriveDb",
+    "distortionKnee",
+    "distortionWet",
+    "distortionWetHPHz",
+    "distortionWetLPHz",
+    "chorusMix",
+    "chorusMotionMode",
+    "chorusBloomMode",
+    "chorusTone",
+    "chorusFeedback",
+    "chorusRingAmount",
+    "chorusRingOffsetMode",
+    "chorusRingFineSemitones",
+    "ottMix",
+    "ottAmount",
+    "ottTimePercent",
+    "ottBandDrive",
+    "ottEnvelopeMatch",
+    "globalFilterMode",
+    "globalFilterCutoff",
+    "globalFilterResonance",
+    "globalFilterDrive",
+    "flangerRate",
+    "flangerDepth",
+    "flangerFeedback",
+    "flangerMix",
+    "phaserRate",
+    "phaserRateMode",
+    "phaserRateDivision",
+    "phaserDepth",
+    "phaserFrequency",
+    "phaserFeedback",
+    "phaserPhase",
+    "phaserMix",
+    "delayTime",
+    "delayTimeMode",
+    "delayDivision",
+    "delayFeedback",
+    "delayFilter",
+    "delayMix",
+    "reverbSize",
+    "reverbDecay",
+    "reverbDamping",
+    "reverbMix",
+    "mseg1Rate",
+    "mseg2Rate",
+    "mseg3Rate",
+    "env1Attack",
+    "env1Decay",
+    "env1Sustain",
+    "env1Release",
+    "env2Attack",
+    "env2Decay",
+    "env2Sustain",
+    "env2Release",
+    "env3Attack",
+    "env3Decay",
+    "env3Sustain",
+    "env3Release",
+];
 
 async function runUiBuild(extraEnv = {}) {
     await new Promise((resolve, reject) => {
@@ -258,6 +379,102 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
         synthSource,
         /hostSlot0Guard\s*->/,
         "The slot-0 guard must reserve the host parameter position without changing synth audio or UI state.",
+    );
+});
+
+test("Voice filter Mix is the sole append to the frozen synth host-parameter order", async () => {
+    const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
+    const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
+    const filterMix = parseGraphInputValues(synthSource, "WavetableSynth")
+        .find(({ identifier }) => identifier === "filterMix");
+
+    assert.deepEqual(
+        parameterOrder.slice(0, -1),
+        EXISTING_SYNTH_HOST_PARAMETER_ORDER,
+        "adding filterMix must not move any existing DAW automation slot",
+    );
+    assert.equal(parameterOrder.at(-1), "filterMix");
+    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 1);
+    assert.notEqual(filterMix, undefined);
+    assert.equal(filterMix.type, "float32");
+    assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
+    assert.match(filterMix.annotation, /min:\s*0(?:\.0)?f?/);
+    assert.match(filterMix.annotation, /max:\s*1(?:\.0)?f?/);
+    assert.match(filterMix.annotation, /init:\s*1(?:\.0)?f?/);
+    assert.match(filterMix.annotation, /rampFrames:\s*64/);
+});
+
+test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {
+    const [{ buildCanonicalPluginStateContract }, { applyEffectPresetV2 }] = await Promise.all([
+        loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
+        loadUIModule(repoRoot, "ui/shared/effects/effect-preset-v2.ts"),
+    ]);
+    const legacyParameters = [
+        { endpointID: "filterMode", type: "number", min: 0, max: 5, defaultValue: 0 },
+        { endpointID: "filterCutoff", type: "number", min: 20, max: 20_000, defaultValue: 1_000 },
+        { endpointID: "filterQ", type: "number", min: 0.1, max: 20, defaultValue: 0.707107 },
+    ];
+    const legacyContract = buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters: legacyParameters,
+    });
+    const currentContract = buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters: [
+            ...legacyParameters,
+            { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+        ],
+    });
+    const legacyPreset = {
+        kind: "cosimo.effectPreset",
+        version: 2,
+        effectID: "wavetable-synth",
+        presetID: "user.legacy-filter",
+        label: "Legacy Filter",
+        contract: legacyContract,
+        parameters: {
+            filterMode: 1,
+            filterCutoff: 2_400,
+            filterQ: 4,
+        },
+        storedState: {},
+    };
+    const writes = [];
+    const patchConnection = {
+        sendEventOrValue(endpointID, value) {
+            writes.push({ endpointID, value });
+        },
+    };
+
+    assert.throws(() => applyEffectPresetV2({
+        preset: legacyPreset,
+        currentContract,
+        patchConnection,
+    }), /no migration/i, "effect-preset v2 must not silently accept a missing current parameter");
+    assert.deepEqual(writes, []);
+
+    const normalized = applyEffectPresetV2({
+        preset: legacyPreset,
+        currentContract,
+        patchConnection,
+        migrations: [{
+            effectID: "wavetable-synth",
+            fromHash: legacyContract.hash,
+            toHash: currentContract.hash,
+            migrate(preset) {
+                return {
+                    ...preset,
+                    contract: currentContract,
+                    parameters: { ...preset.parameters, filterMix: 1 },
+                };
+            },
+        }],
+    });
+
+    assert.equal(normalized.parameters.filterMix, 1);
+    assert.deepEqual(
+        writes.filter(({ endpointID }) => endpointID === "filterMix"),
+        [{ endpointID: "filterMix", value: 1 }],
     );
 });
 

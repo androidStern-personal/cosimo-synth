@@ -583,8 +583,8 @@ static const NSTimeInterval CosimoPairedEmptyDurationSeconds = 10.0;
         @"voice-rack-100": @45.0,
         @"mixed-100": @45.0,
         @"combined-200": @45.0,
-        @"stored-1118-active-100": @45.0,
-        @"active-1118": @20.0,
+        @"stored-1131-active-100": @45.0,
+        @"active-1131": @20.0,
     };
     NSNumber *baseDuration = baseDurations[profileName];
     if (profileName.length == 0 || stateJSON.length == 0 || profileIndex == nil || baseDuration == nil

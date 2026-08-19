@@ -1578,76 +1578,12 @@ test("collapsed articulation cards scroll without clipping the voice tab or row 
     }
 });
 
-test("compact desktop articulation row click replaces an occupied v4 range", async () => {
-    const page = await openHarnessPage({
-        beforeGoto: async (nextPage) => {
-            await nextPage.setViewportSize({ width: 390, height: 760 });
-        },
-    });
-
-    try {
-        await page.waitForFunction(() => {
-            const addButton = document.querySelector('button[aria-label="Capture current parameters as a new articulation"]');
-            return addButton instanceof HTMLButtonElement && !addButton.disabled;
-        });
-
-        const bank = {
-            format: "cosimo.articulations",
-            version: 4,
-            selectedSlotId: "bow",
-            activeTriggerMode: "chain",
-            slots: [
-                {
-                    id: "bow", runtimeSlot: 0, name: "Bow", color: "test-bow", key: 0,
-                    velRange: { min: 1, max: 1 }, chainRange: { min: 0, max: 126 },
-                    overrides: {}, routeAmounts: {},
-                },
-                {
-                    id: "pluck", runtimeSlot: 1, name: "Pluck", color: "test-pluck", key: 1,
-                    velRange: { min: 2, max: 2 }, chainRange: { min: 127, max: 127 },
-                    overrides: {}, routeAmounts: {},
-                },
-            ],
-        };
-
-        await page.evaluate(({ stateKey, nextBank }) => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue(stateKey, JSON.stringify(nextBank));
-        }, {
-            stateKey: ARTICULATION_STATE_KEY,
-            nextBank: bank,
-        });
-        await waitForHarnessSnapshot(
-            page,
-            "seeded articulation bank for compact row replacement",
-            (nextSnapshot) => readStoredArticulationEditorState(nextSnapshot).chainAssignments.length === 2,
-        );
-
-        await page.getByRole("button", { name: "Expand articulation editor" }).click();
-        await page.locator('[data-role="articulation-card"][data-articulation-id="pluck"]').click();
-        await page.locator('[data-role="articulation-range-segment-row"]').first().click();
-
-        const snapshot = await waitForHarnessSnapshot(
-            page,
-            "compact occupied row click replaces the whole range",
-            (nextSnapshot) => {
-                const assignments = readStoredArticulationEditorState(nextSnapshot).chainAssignments;
-                return assignments.length === 2
-                    && assignments[0].articulationId === "bow"
-                    && assignments[0].min === 127
-                    && assignments[0].max === 127
-                    && assignments[1].articulationId === "pluck"
-                    && assignments[1].min === 0
-                    && assignments[1].max === 126;
-            },
-        );
-        assert.deepEqual(readStoredArticulationEditorState(snapshot).chainAssignments, [
-            { id: "chain-bow", articulationId: "bow", min: 127, max: 127 },
-            { id: "chain-pluck", articulationId: "pluck", min: 0, max: 126 },
-        ]);
-    } finally {
-        await page.close();
-    }
-});
+// Retired 2026-08-19 with T05: the narrow (`sm:hidden`) articulation range-row
+// list was the compact presentation of the expanded editor, and the compact
+// articulation pane left mobile entirely — no shipping viewport reaches those
+// rows any more. The row-click replace contract returns with the T05A mobile
+// articulation redesign; desktop lane behavior stays covered by the range
+// click/drag/resize tests above.
 
 test("articulation card audition is press-hold and follows the most recently played note", async () => {
     const page = await openHarnessPage();

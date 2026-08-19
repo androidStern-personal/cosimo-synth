@@ -47,6 +47,7 @@ export const SHARED_VOICE_MODULATION_TARGET_KINDS = [
     "env3Decay",
     "env3Sustain",
     "env3Release",
+    "filterMix",
 ] as const;
 
 /** One voice-global modulation destination. */
@@ -108,7 +109,7 @@ export const MODULATION_SOURCE_IDENTITIES: ReadonlyArray<ModulationSourceIdentit
 
 /**
  * The complete voice domain in stable runtime order. Existing oscillator and
- * filter indexes are frozen; continuous MSEG/envelope controls are appended.
+ * filter indexes are frozen; new destinations are append-only.
  */
 export const VOICE_MODULATION_TARGET_KINDS: ReadonlyArray<VoiceModulationTargetKind> = Object.freeze([
     ...OSCILLATOR_IDS.flatMap((oscillatorID) => (
@@ -162,25 +163,25 @@ const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity)
 
 function assertCanonicalIdentities(): void {
     if (MODULATION_SOURCE_COUNT !== 13
-        || MODULATION_VOICE_TARGET_COUNT !== 50
+        || MODULATION_VOICE_TARGET_COUNT !== 51
         || MODULATION_RACK_TARGET_COUNT !== 36
-        || MODULATION_LEGAL_PAIR_COUNT !== 1118) {
-        throw new Error("Modulation identity catalog has an unexpected domain size");
+        || MODULATION_LEGAL_PAIR_COUNT !== 1131) {
+        throw new Error("Unexpected modulation domain size");
     }
 
     for (const [group, expectedCount] of [["voice", 9], ["macro", 4]] as const) {
         const identities = MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === group);
-        const indexes = identities.map((identity) => identity.runtimeIndex).sort((left, right) => left - right);
-        if (identities.length !== expectedCount || indexes.some((index, position) => index !== position)) {
-            throw new Error(`Modulation ${group} source indexes must be unique and contiguous`);
+        if (identities.length !== expectedCount
+            || identities.some((identity, position) => identity.runtimeIndex !== position)) {
+            throw new Error(`Bad modulation ${group} source indexes`);
         }
     }
 
-    for (const [group, expectedCount] of [["voice", 50], ["rack", 36]] as const) {
+    for (const [group, expectedCount] of [["voice", 51], ["rack", 36]] as const) {
         const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
-        const indexes = identities.map((identity) => identity.runtimeIndex).sort((left, right) => left - right);
-        if (identities.length !== expectedCount || indexes.some((index, position) => index !== position)) {
-            throw new Error(`Modulation ${group} target indexes must be unique and contiguous`);
+        if (identities.length !== expectedCount
+            || identities.some((identity, position) => identity.runtimeIndex !== position)) {
+            throw new Error(`Bad modulation ${group} target indexes`);
         }
     }
 

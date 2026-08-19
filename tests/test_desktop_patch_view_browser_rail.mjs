@@ -686,6 +686,71 @@ test("the expanded drawer's Keyboard and Auto-preview toggles govern the keyboar
     }
 });
 
+test("the drawer's voice-settings popover owns Play Mode and greys Glide while Poly is active", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await page.waitForTimeout(240);
+        await expandGlobalModRail(page);
+
+        // T04 decision: the voice-settings toggle lives in the drawer and is
+        // labeled with the active play mode.
+        const voiceToggle = rail.locator('[data-role="mobile-global-mod-rail-voice-toggle"]');
+        assert.equal((await voiceToggle.textContent())?.trim(), "Poly");
+
+        const popover = page.locator('[data-role="mobile-global-mod-rail-voice-popover"]');
+        assert.equal(await popover.count(), 0);
+        await voiceToggle.click();
+        await popover.waitFor();
+
+        const polyOption = popover.locator(".mobile-global-mod-rail-voice-mode", { hasText: "Poly" });
+        const monoOption = popover.locator(".mobile-global-mod-rail-voice-mode", { hasText: "Mono" });
+        assert.equal(await polyOption.getAttribute("aria-checked"), "true");
+
+        const glide = popover.locator(".mobile-global-mod-rail-voice-glide");
+        assert.equal(await glide.getAttribute("data-disabled"), "true");
+        assert.equal(await glide.evaluate((element) => element.inert), true);
+        assert.equal(await glide.evaluate((element) => getComputedStyle(element).opacity), "0.38");
+
+        // Choosing Mono writes the playMode host parameter and un-greys Glide.
+        await monoOption.click();
+        await waitForHarnessSnapshot(
+            page,
+            "play mode commit",
+            (candidate) => Number(candidate.parameterValues.playMode) === 1,
+        );
+        assert.equal(await monoOption.getAttribute("aria-checked"), "true");
+        assert.equal((await voiceToggle.textContent())?.trim(), "Mono");
+        assert.equal(await glide.getAttribute("data-disabled"), "false");
+        assert.equal(await glide.evaluate((element) => element.inert), false);
+
+        // A tap outside the popover dismisses it without changing the mode.
+        await page.locator('[data-role="mobile-workspace-tab-voice"]').click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail-voice-popover"]') === null
+        ));
+        assert.equal(
+            Number((await getHarnessSnapshot(page)).parameterValues.playMode),
+            1,
+            "Dismissing the popover must not change the play mode.",
+        );
+
+        // Collapsing the drawer takes the reopened popover with it.
+        await voiceToggle.click();
+        await popover.waitFor();
+        await collapseGlobalModRail(page);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail-voice-popover"]') === null
+        ));
+    } finally {
+        await page.close();
+    }
+});
+
 test("the Note key triggers audible output from every mobile editor state", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -796,7 +861,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
     });
     const cdp = await page.context().newCDPSession(page);
 
-    const dragKnobVertically = async () => {
+    const dragKnobBase = async () => {
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
         const surfaceBox = await surface.boundingBox();
         assert.ok(surfaceBox);
@@ -811,7 +876,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         for (const step of [12, 26, 40]) {
             await cdp.send("Input.dispatchTouchEvent", {
                 type: "touchMove",
-                touchPoints: [{ x: start.x, y: start.y - step, radiusX: 5, radiusY: 5, force: 1 }],
+                touchPoints: [{ x: start.x + step, y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
             });
             await page.waitForTimeout(40);
         }
@@ -826,7 +891,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
 
         // Off by default: a real value drag produces no audition notes.
         await clearHarnessDebugLog(page);
-        await dragKnobVertically();
+        await dragKnobBase();
         await page.waitForTimeout(700);
         let snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.midiInputEvents, [], "Auto-preview off must stay silent for value edits.");
@@ -843,7 +908,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         // On: the same drag strikes the remembered pitch and settles with no
         // note left hanging.
         await clearHarnessDebugLog(page);
-        await dragKnobVertically();
+        await dragKnobBase();
         await page.waitForFunction(() => {
             const events = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents;
             const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
@@ -869,10 +934,12 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
             type: "touchStart",
             touchPoints: [{ ...holdStart, radiusX: 5, radiusY: 5, force: 1 }],
         });
-        await cdp.send("Input.dispatchTouchEvent", {
-            type: "touchMove",
-            touchPoints: [{ x: holdStart.x, y: holdStart.y - 30, radiusX: 5, radiusY: 5, force: 1 }],
-        });
+        for (const step of [15, 30]) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: holdStart.x + step, y: holdStart.y, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.some(({ value }) => (value >>> 16) === 0x90)
         ));
@@ -1387,7 +1454,7 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
                     const bounds = element.getBoundingClientRect();
                     return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom };
                 };
-                const hud = document.querySelector('[data-role="rack-parameter-hud"]');
+                const hud = document.querySelector('[data-role="mobile-voice-hud"]');
                 return {
                     hud: rectOf(hud),
                     hudPosition: hud ? getComputedStyle(hud).position : null,
@@ -1432,7 +1499,7 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
         await page.mouse.move(start.x, start.y);
         await page.mouse.down();
         await page.mouse.move(start.x + 42, start.y, { steps: 8 });
-        await page.locator('[data-role="rack-parameter-hud"]').waitFor();
+        await page.locator('[data-role="mobile-voice-hud"]').waitFor();
         const firstPlacement = await readHudCollisions("rack-parameter-reverbSize", { x: start.x + 42, y: start.y });
         await page.mouse.move(start.x + 58, start.y, { steps: 4 });
         const secondPlacement = await readHudCollisions("rack-parameter-reverbSize", { x: start.x + 58, y: start.y });
@@ -1442,7 +1509,7 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
             "The HUD must keep one stable placement during an uninterrupted gesture.",
         );
         await page.mouse.up();
-        await page.waitForFunction(() => document.querySelector('[data-role="rack-parameter-hud"]') === null);
+        await page.waitForFunction(() => document.querySelector('[data-role="mobile-voice-hud"]') === null);
 
         const lastKnob = page.locator(".rack-editor-controls .rack-parameter-knob").last();
         await lastKnob.scrollIntoViewIfNeeded();
@@ -1453,10 +1520,10 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
         await page.mouse.move(lastStart.x, lastStart.y);
         await page.mouse.down();
         await page.mouse.move(lastStart.x, lastStart.y - 24, { steps: 6 });
-        await page.locator('[data-role="rack-parameter-hud"]').waitFor();
+        await page.locator('[data-role="mobile-voice-hud"]').waitFor();
         await readHudCollisions(lastKnobRole, { x: lastStart.x, y: lastStart.y - 24 });
         await page.mouse.up();
-        await page.waitForFunction(() => document.querySelector('[data-role="rack-parameter-hud"]') === null);
+        await page.waitForFunction(() => document.querySelector('[data-role="mobile-voice-hud"]') === null);
     } finally {
         await page.close();
     }
@@ -2272,6 +2339,95 @@ test("source preview and valid hover stay transient while the armed ring and foc
     }
 });
 
+test("a source drag dwell-navigates tabs and rack effects while the gesture survives to the drop", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const voiceTab = page.locator('[data-role="mobile-workspace-tab-voice"]');
+        const fxTab = page.locator('[data-role="mobile-workspace-tab-fx"]');
+        assert.equal(await voiceTab.getAttribute("aria-selected"), "true");
+
+        await expandGlobalModRail(page);
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const sourceBox = await source.boundingBox();
+        assert.ok(sourceBox);
+        await page.mouse.move(sourceBox.x + (sourceBox.width / 2), sourceBox.y + (sourceBox.height / 2));
+        await page.mouse.down();
+        // Activate the drag away from any dwell surface.
+        await page.mouse.move(196, 300, { steps: 4 });
+
+        // A dwell on an oscillator tab reveals that oscillator's targets.
+        const oscillatorTabB = page.locator('[data-role="mobile-voice-tab-b"]');
+        const oscillatorTabBox = await oscillatorTabB.boundingBox();
+        assert.ok(oscillatorTabBox);
+        await page.mouse.move(
+            oscillatorTabBox.x + (oscillatorTabBox.width / 2),
+            oscillatorTabBox.y + (oscillatorTabBox.height / 2),
+            { steps: 3 },
+        );
+        await page.waitForFunction(() => (
+            document
+                .querySelector('[data-role="mobile-voice-editor"]')
+                ?.getAttribute("data-selected-oscillator-id") === "B"
+        ));
+        await page.mouse.move(196, 300, { steps: 3 });
+
+        // Transit: crossing the FX tab without stopping must not switch, and
+        // leaving before the dwell cancels the pending navigation.
+        const fxBox = await fxTab.boundingBox();
+        assert.ok(fxBox);
+        const fxCenter = { x: fxBox.x + (fxBox.width / 2), y: fxBox.y + (fxBox.height / 2) };
+        await page.mouse.move(fxCenter.x, fxCenter.y, { steps: 3 });
+        await page.mouse.move(196, 300, { steps: 3 });
+        await page.waitForTimeout(750);
+        assert.equal(await voiceTab.getAttribute("aria-selected"), "true", "transit must not switch tabs");
+
+        // A deliberate dwell on the FX tab switches while the drag stays alive.
+        await page.mouse.move(fxCenter.x, fxCenter.y, { steps: 3 });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-workspace-tab-fx"]')?.getAttribute("aria-selected") === "true"
+        ));
+        assert.equal(
+            await page.locator('[data-role="mobile-global-mod-source-ghost"]').count(),
+            1,
+            "the drag must survive the tab switch",
+        );
+
+        // A deliberate dwell on a rack effect row selects that effect.
+        assert.equal(
+            await page.locator("[data-selected-effect]").getAttribute("data-selected-effect"),
+            "drive",
+        );
+        const reverbRow = page.locator('[data-role="rack-module-reverb"]');
+        const reverbBox = await reverbRow.boundingBox();
+        assert.ok(reverbBox);
+        await page.mouse.move(reverbBox.x + 12, reverbBox.y + (reverbBox.height / 2), { steps: 3 });
+        await page.waitForFunction(() => (
+            document.querySelector("[data-selected-effect]")?.getAttribute("data-selected-effect") === "reverb"
+        ));
+
+        // The same gesture finishes with a real drop on the revealed target.
+        const target = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        const targetBox = await target.boundingBox();
+        assert.ok(targetBox);
+        await page.mouse.move(targetBox.x + (targetBox.width / 2), targetBox.y + (targetBox.height / 2), { steps: 6 });
+        await page.mouse.up();
+        await waitForHarnessSnapshot(
+            page,
+            "dwell-navigated drop creates the mapping",
+            (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
+                route.sourceKind === "env"
+                && route.sourceSlot === 1
+                && route.targetKind === "rack.reverbSize"
+            )),
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("a real source drop creates a mapping after 100 existing mappings", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -2388,7 +2544,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         assert.ok(reverbArtBox);
         await page.mouse.move(reverbArtBox.x + reverbArtBox.width / 2, reverbArtBox.y + reverbArtBox.height / 2);
         await page.mouse.down();
-        await page.mouse.move(reverbArtBox.x + reverbArtBox.width / 2 + 30, reverbArtBox.y + reverbArtBox.height / 2, { steps: 6 });
+        await page.mouse.move(reverbArtBox.x + reverbArtBox.width / 2, reverbArtBox.y + reverbArtBox.height / 2 - 30, { steps: 6 });
         assert.equal(await reverbKnob.getAttribute("data-route-effectiveness"), "effect-bypassed");
         await page.mouse.up();
         const afterBypassedEdit = await waitForHarnessSnapshot(
@@ -2989,9 +3145,9 @@ test("desktop chorus knob closes host gesture on pointer cancellation", async ()
         await clearHarnessDebugLog(page);
 
         await dispatchRackKnobPointerEvents(page.locator('[data-role="chorus-mix-control"]'), [
-            { type: "pointerdown", pointerId: 7, buttons: 1, deltaY: 0 },
-            { type: "pointermove", pointerId: 7, buttons: 1, deltaY: -12 },
-            { type: "pointercancel", pointerId: 7, buttons: 0, deltaY: -12 },
+            { type: "pointerdown", pointerId: 7, buttons: 1, deltaX: 0 },
+            { type: "pointermove", pointerId: 7, buttons: 1, deltaX: 12 },
+            { type: "pointercancel", pointerId: 7, buttons: 0, deltaX: 12 },
         ]);
 
         const snapshot = await waitForHarnessSnapshot(
@@ -3010,7 +3166,7 @@ test("desktop chorus knob closes host gesture on pointer cancellation", async ()
     }
 });
 
-test("desktop chorus knob closes host gesture when pointer capture is lost", async () => {
+test("desktop chorus knob survives pointer-capture loss and closes its host gesture on release", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -3019,23 +3175,33 @@ test("desktop chorus knob closes host gesture when pointer capture is lost", asy
         await page.waitForSelector('[data-role="chorus-mix-track"]');
         await clearHarnessDebugLog(page);
 
+        // The shared contract continues through capture loss on its window
+        // listeners; release still closes the host gesture exactly once.
         await dispatchRackKnobPointerEvents(page.locator('[data-role="chorus-mix-control"]'), [
-            { type: "pointerdown", pointerId: 8, buttons: 1, deltaY: 0 },
-            { type: "pointermove", pointerId: 8, buttons: 1, deltaY: -12 },
-            { type: "lostpointercapture", pointerId: 8, buttons: 0, deltaY: -12 },
+            { type: "pointerdown", pointerId: 8, buttons: 1, deltaX: 0 },
+            { type: "pointermove", pointerId: 8, buttons: 1, deltaX: 12 },
+            { type: "lostpointercapture", pointerId: 8, buttons: 1, deltaX: 12 },
+            { type: "pointermove", pointerId: 8, buttons: 1, deltaX: 30 },
+            { type: "pointerup", pointerId: 8, buttons: 0, deltaX: 30 },
         ]);
 
         const snapshot = await waitForHarnessSnapshot(
             page,
-            "chorus lost pointer capture cleanup",
+            "chorus capture-loss survival",
             (nextSnapshot) => (
                 nextSnapshot.gestureStarts.includes("chorusMix")
                 && nextSnapshot.gestureEnds.includes("chorusMix")
+                && nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "chorusMix")
             ),
         );
 
         assert.deepEqual(snapshot.gestureStarts, ["chorusMix"]);
         assert.deepEqual(snapshot.gestureEnds, ["chorusMix"]);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "chorusMix"),
+            true,
+            "The move after capture loss must still edit the base value.",
+        );
     } finally {
         await page.close();
     }
@@ -3051,9 +3217,9 @@ test("desktop chorus knob closes host gesture when pointer movement reports no p
         await clearHarnessDebugLog(page);
 
         await dispatchRackKnobPointerEvents(page.locator('[data-role="chorus-mix-control"]'), [
-            { type: "pointerdown", pointerId: 9, buttons: 1, deltaY: 0 },
-            { type: "pointermove", pointerId: 9, buttons: 1, deltaY: -12 },
-            { type: "pointermove", pointerId: 9, buttons: 0, deltaY: -12 },
+            { type: "pointerdown", pointerId: 9, buttons: 1, deltaX: 0 },
+            { type: "pointermove", pointerId: 9, buttons: 1, deltaX: 12 },
+            { type: "pointermove", pointerId: 9, buttons: 0, deltaX: 12 },
         ]);
 
         const snapshot = await waitForHarnessSnapshot(
@@ -3096,7 +3262,7 @@ test("desktop chorus knob ignores mouse movement after a completed drag release"
         const centerY = box.y + (box.height * 0.5);
         await page.mouse.move(centerX, centerY);
         await page.mouse.down();
-        await page.mouse.move(centerX, centerY - 26, { steps: 8 });
+        await page.mouse.move(centerX + 26, centerY, { steps: 8 });
         await page.mouse.up();
 
         const valueAfterRelease = await knob.getAttribute("value");

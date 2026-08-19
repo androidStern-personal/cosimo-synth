@@ -181,6 +181,7 @@ const GLIDE_TIME_ENDPOINT_ID = "glideTime";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
+const FILTER_MIX_ENDPOINT_ID = "filterMix";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
 const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
 const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
@@ -229,9 +230,9 @@ const AUTO_PREVIEW_MIN_NOTE_MS = 250;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
 export const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
-const GLIDE_TIME_MIN_SECONDS = 0;
-const GLIDE_TIME_MAX_SECONDS = 2;
-const GLIDE_TIME_STEP_SECONDS = 0.001;
+export const GLIDE_TIME_MIN_SECONDS = 0;
+export const GLIDE_TIME_MAX_SECONDS = 2;
+export const GLIDE_TIME_STEP_SECONDS = 0.001;
 
 type ActiveMsegPointPointerState = {
     kind: "point-drag";
@@ -389,6 +390,7 @@ export type SynthPatchViewModel = {
     filterMode: PatchControlBinding<number>;
     filterCutoff: PatchControlBinding<number>;
     filterQ: PatchControlBinding<number>;
+    filterMix: PatchControlBinding<number>;
     unisonVoices: PatchControlBinding<number>;
     unisonDetune: PatchControlBinding<number>;
     unisonBlend: PatchControlBinding<number>;
@@ -2551,6 +2553,16 @@ export function useSynthPatchViewModel({
         initialValue: 0.707107,
         coerce: (value) => clamp(Number(value) || 0, 0.1, 20),
     });
+    // T05: linear dry/wet blend, 1.0 = fully filtered (preserves every
+    // existing patch; the appended engine endpoint defaults to 1).
+    const filterMix = usePatchParameterBinding<number>({
+        endpointID: FILTER_MIX_ENDPOINT_ID,
+        initialValue: 1,
+        coerce: (value) => {
+            const numeric = Number(value);
+            return clamp(Number.isFinite(numeric) ? numeric : 1, 0, 1);
+        },
+    });
     const unisonVoices = usePatchParameterBinding<number>({
         endpointID: oscillatorEndpointID("unisonVoices"),
         initialValue: 1,
@@ -4162,6 +4174,7 @@ export function useSynthPatchViewModel({
         filterMode,
         filterCutoff,
         filterQ,
+        filterMix,
         unisonVoices,
         unisonDetune,
         unisonBlend,

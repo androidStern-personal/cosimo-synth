@@ -12,7 +12,7 @@ HOW WE WILL USE THIS FILE
 
 CURRENT FOCUS
 
-[ ] T05 — Implement the decided Voice-page filter layout and Mix. T03B is closed, so the 50/50 split now divides the real shell height. T17 (suite wall-clock) is re-dispatched to codex in parallel.
+[ ] Phone pass on the shipped mobile surface: shell feel, rail default dock position over the Voice paddle, T12 auto-preview cadence/sync tuning, and the new T05 filter card + T06 dwell feel. T05 and T06 are implementation-complete with gate evidence below.
 
 PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
 
@@ -197,6 +197,45 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Existing accordion assertions and Web POC helpers are migrated to tab semantics; no compatibility accordion headers, aria-expanded contract, or stale visible-panel lookup remains.
     - Native/plugin-instance coverage proves editor close/reopen restores place for the same instance while a new instance and standalone relaunch start at Home.
 
+[ ] T03C — Fix re-tapping the active Voice/FX/Mod tab so it actually scrolls to the top
+    Depends on: T03B
+    Origin (2026-08-19 bug found after T03B was marked complete): ADR-026 and T03B both require an active-tab tap on a workspace's main screen to scroll that workspace to the top. The handler exists, but it finds panels with document.querySelector while compiled builds mount the UI inside a shadow root, so the lookup can return nothing and the scroll never occurs. The existing unit test proves only that the navigation model requests "scroll-to-top"; no browser test proves that the real panel moves.
+    Fix:
+    - On the Voice, FX, or Mod main screen, tapping that already-selected bottom tab smoothly scrolls that workspace's actual content panel to the top. If it is already at the top, nothing changes.
+    - Preserve the separate detail-page rule: tapping the selected tab from a detail page returns to that workspace's main screen; only a subsequent tap on the selected tab scrolls the main screen to the top.
+    - Resolve the three content panels through component-owned refs or another root-scoped mechanism that works identically in the development light DOM and the compiled shadow DOM. Do not depend on document.querySelector crossing a shadow boundary.
+    - Preserve different-tab scroll restoration: leaving a workspace remembers its exact position, returning restores it, and re-tapping its selected tab is the explicit action that resets it to the top.
+    - Do not change tab appearance, height, placement, transitions, keyboard behavior, Back behavior, workspace persistence, or any workspace content.
+    Done when:
+    - A real browser interaction test scrolls each of Voice, FX, and Mod below the top, taps that workspace's selected tab, and waits for its actual panel scrollTop to reach zero.
+    - Coverage proves the two-step detail behavior and proves that switching away and back still restores the previous nonzero scroll position until the user explicitly re-taps the active tab.
+    - At least one production-equivalent shadow-root test exercises the same path; a development-only light-DOM test is not sufficient evidence.
+    - The compiled mobile app or plugin is smoke-tested to confirm the behavior outside the development harness.
+
+[ ] T03D — Add a safe Init command to the synth preset menu
+    Depends on: T03B and the canonical whole-synth state/default contract in ADR-021.
+    Origin (2026-08-19 product requirement): the compact synth preset bar's `…` menu needs an Init action that creates a clean default sound without leaving the previously selected preset active or falsely dirty. Preset application has previously appeared dirty without a user edit, so correct clean-baseline ownership is part of this ticket, not a later polish item.
+    Product behavior:
+    - Add one `Init` row to the compact synth preset `…` menu. Init is a command, not a factory preset: it does not appear in the searchable preset list or participate in Previous/Next ordering. Do not add it to standalone-effect preset bars as part of this ticket.
+    - If the current working sound has no unsaved changes, Init proceeds immediately. If it has unsaved changes, present exactly three paths: `Save and Init`, `Discard and Init`, and `Cancel`.
+    - `Save and Init` overwrites the active user preset when that preset is writable. For a factory preset or an unnamed/Init sound, it opens the existing Save As flow. Continue to Init only after a successful save; cancelling or failing the save leaves the sound, active preset, and dirty state untouched.
+    - Use the same unsaved-work guard before every command that replaces the current sound: Init, Previous, Next, choosing a preset from the browser, and pasting/importing a preset. Revert remains an explicit request to discard changes and restore the current baseline.
+    - Init applies the current-version canonical new-patch sound as one complete operation, not a series of UI-control resets and not a hidden saved preset. Reset every preset-owned sound domain: the complete public parameter map (including all three wavetable selectors and all FX parameters), default modulation sources with no routes, default/empty articulations, and default rack order plus enabled/bypassed state. Audit the canonical state contract at implementation time so any additional sound-owned domain is included rather than silently retained.
+    - Init must not erase or reset the user preset library, factory preset catalog, imported wavetable/assets library, Voice/FX/Mod navigation and scroll state, keyboard visibility, global Mod-widget position or expansion, Auto-preview preference, or remembered audition notes. Those are library or presentation/preferences state, not the initialized sound.
+    - After Init succeeds, clear the previous active-preset identity and display `INIT` in the preset bar with no dirty indicator. The previous preset remains saved and unchanged.
+    - A real user edit after Init marks the unnamed INIT working sound dirty and shows the dirty indicator beside `INIT`; it never marks the previous preset dirty. Saving an INIT sound creates a new user preset through Save As. Revert from a dirty INIT sound returns to the canonical Init defaults.
+    - Keep the current established note/voice behavior used by ordinary preset changes; do not invent a separate Init-only held-note policy. If Init removes the route or articulation named by the current detail page, return to that workspace's main screen instead of leaving a dead editor open.
+    Clean-load and failure contract:
+    - Treat Init and ordinary preset selection as complete load transactions. Preflight the entire target before mutation; on any validation, write, or apply failure, retain the prior sound, preset identity, and dirty state rather than exposing a partial reset.
+    - Parameter callbacks, structured-state notifications, asynchronous wavetable activation, rack installation, and other echoes caused by the load itself must never mark the loaded preset or INIT dirty. Establish the clean baseline only after the canonical target has settled successfully; a subsequent genuine user edit must still mark it dirty immediately.
+    - User input that arrives while a load is settling must not be silently lost or mistaken for a load echo: either temporarily block that edit or apply it after completion and mark the resulting sound dirty.
+    Done when:
+    - Interaction tests cover clean Init and every Save and Init / Discard and Init / Cancel path, including writable user presets, factory presets, unnamed INIT state, save cancellation, and save failure.
+    - A full-state assertion proves Init equals the canonical current defaults across parameters, table selection, modulation, articulations, and rack state while leaving libraries and presentation/preferences unchanged.
+    - After Init, the prior preset remains byte-for-byte unchanged, active preset identity is null, the bar reads `INIT`, and the first actual edit dirties only the INIT working sound.
+    - Applying Init and multiple ordinary presets remains clean after delayed and out-of-order parameter/stored-state/runtime echoes; a paired control test proves the next user edit becomes dirty. Merely loading or switching presets can never create the dirty indicator.
+    - Failure injection proves there is no half-initialized sound and no mismatched sound/preset label. Compiled mobile verification confirms the compact menu, confirmation flow, and final INIT state.
+
 [x] T04 — Decide the mobile Voice-page filter layout and Mix behavior
     Depends on: T02, T03A. The visual decision can proceed against the accepted tab-shell contract; implementation still follows T03B.
     Status 2026-08-19:
@@ -245,7 +284,7 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     Done when:
     - The Voice filter has the SeqFX two-endpoint Cutoff modulation overlay in the selected source's color, and every other accepted filter decision remains unchanged.
 
-[ ] T05 — Implement the mobile Voice-page filter and keyboard voice menu
+[x] T05 — Implement the mobile Voice-page filter and keyboard voice menu
     Depends on: T03B, T04, T04A
     Done when:
     - The full filter graph remains visible and live on mobile with Mode, Cutoff, Resonance, and Mix all reachable.
@@ -255,6 +294,33 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Changing Play Mode retains the existing held-note release behavior; this ticket does not rewrite note dispatch.
     - The new Mix endpoint preserves all existing host parameter positions and follows the accepted default/migration behavior established during this review.
     - Add only the exact Cutoff modulation-range overlay locked in T04A without changing any other accepted filter behavior or presentation.
+    Closed 2026-08-19:
+    - Engine (codex on max, reviewed): `filterMix` host parameter appended last (init 1.0, rampFrames 64), per-voice linear dry/wet after the voice filter with dry captured pre-filter, and the `filterMix` modulation destination appended at voice runtime index 50 with base+offset engine clamp. Gates it ran: test:synth:engine 3/3, cmajor rack 63/63 (incl. new VoiceFilterMix.cmajtest), append-only order pinned in tests/test_patch_view_layout.mjs.
+    - Voice page splits 50/50 between the wavetable editor and the filter card at every compact height (mobile-workspace.css; browser test at 852 and 700).
+    - The filter card keeps the live graph + Mode chip and gains the attached Cut/Res/Mix knob row (shared ADR-025 RackParameterKnob via a new voice `modulationTargetKind` override on the knob; per-knob desktop display formatters). Off greys the graph and knobs while the Mode chip stays live.
+    - The T04A Cutoff range overlay ships on the compact graph: two source-colored endpoints + band + guides (`filter-cutoff-range-*` roles), rendered only while the armed source has a Cutoff mapping; handle drags write the route amount through the canonical amount binding (browser test).
+    - Play Mode/Glide live in the Mod rail drawer's voice-settings popover (T04 decision, provisional placement): mode-labeled toggle module, POLY/MONO/LEGATO radio, Glide field greyed+inert on Poly, outside-tap and drawer-collapse dismissal (browser test).
+    - Legacy presets without filterMix migrate to fully wet through a contract-derived migration (ui/shared/effects/synth-preset-migrations.ts, controller `presetMigrations` function form; tests/test_synth_preset_migrations.mjs + codex's exact-contract test).
+    - `filterMix` joined the canonical target catalog end to end (modulation-targets, modulation limits/steps/readout, target-descriptor voice-filter.mix descriptor; articulations deliberately do not own Mix — see T05A).
+    - Worker parse budgets re-measured for the appended destination (tests/test_web_bundle_contract.mjs 2026-08-19 note).
+    - Deliberate deviation: the compact knob row offers no rack context menu (value edits on the knob, modulation on its ring).
+    - Resonance feel decision: the graph handle keeps the curve-lab sigmoid; the Res knob stays an ordinary log-scale knob (equal travel = equal dial fraction). A transfer-unified knob was tried on-device and rejected as lurchy — do not re-unify.
+    - Domain-growth ripple (1118 -> 1131 legal pairs): benchmark profiles renamed stored-1131-active-100/active-1131 across the generator, both python runners, the iOS host budget table, and every domain-pinning test; the appended lane tails (459/204) are pinned in the worker-service and web-poc suites.
+    - Gates: desktop sharded suite 173/173 (three new T05 cases + the rail popover case), iPhone shell 20/20, web bundle 14/14, web-poc chromium 15/15 AND webkit 15/15 (the webkit layout proof was stale since ADR-024 and now pins the 50/50 split), shared hooks 29/29, effect presets 113/113, node units green (identity/limits/runtime/layout 70, worker-service+adapter+install 94, preset migrations 2, shared logic 36), python benchmark tests 6+49, tsc clean.
+    - Known pre-existing failure, NOT from this batch (verified against a HEAD worktree): test_shared_synth_components_browser "shared wavetable stage mounts with plain props and reports select and retry actions" times out clicking Retry Load.
+
+[x] T05B — Filter travel overlay v2 and the one parameter-control contract
+    Product decisions (2026-08-19 review of the first T04A cut):
+    - The overlay adopts the full SeqFX treatment: the response curves at BOTH travel extremes (source = 0 and source = full), the swept region shaded in the source color, and 2D endpoint handles whose Y edits resonance through the same curve-lab transfer as the base handle.
+    - Both filter axes ride ONE source: dropping a source on the filter graph creates the Cutoff + Resonance pair at 0% in that single explicit gesture (knob drops keep mapping only their own destination); each travel axis is live only through its own route, and an axis without one stays pinned at base.
+    - Handles (revised in the same review): NO connector arrow — hollow start vs filled end is the only direction cue. Endpoints drag fully independently: the other endpoint stays planted on screen, so endpoint drags co-rewrite base and amount (geometric midpoint for octave cutoff amounts, arithmetic for linear Q offsets); host cutoff/Q gestures bracket these drags. A diamond center grip translates the whole travel rigidly in SCREEN space (both endpoints ride one pixel delta, base + amounts re-derived; parameter-space translate felt broken on the nonlinear Q display) whenever a routed axis is unipolar; with bipolar-only travel the base handle IS the center and keeps plain translate. In unipolar the base handle IS the start (its drags pin the end and compensate the amount). 0% endpoints park as dotted tabs beside base (ADR-025 zero language).
+    - EVERY knob joins the voice readout cells' drag contract: horizontal = base, vertical = modulation amount, rolling dominant-axis switching, inert-vertical-when-unmapped (the "CREATE MAPPING +" drag hint is retired), long-press = menu, and the fixed top-center ADR-025 precision HUD instead of the pointer-chasing popover. The popover HUD remains only for the rack's modulation amount slider (not a knob; future convergence candidate).
+    Closed 2026-08-19:
+    - One shared gesture controller (ui/shared/parameter-gesture.ts) now owns classification, rAF-batched writes, scroll locks, long-press, and every cancellation channel; the voice editor, wavetable graph, and ParameterKnobSurface (all Rack + Base knobs, FX rack included) consume it, so control families can no longer drift.
+    - One shared HUD (ui/shared/parameter-hud.tsx): the ParameterPrecisionHud component plus a page-level HUD layer context provided by both patch views (desktop viewports included); knobs pass their owner accent (effect accents on the rack, violet on the voice filter).
+    - Travel overlay v2 in FilterResponseGraph (filter-travel-* roles) with the compact FilterSection mapping endpoint drags onto both route amounts; graph pair-drop via a companion-destination attribute on the drop surface flowing through one widened onSourceDrop seam.
+    - Behavioral tests: five travel cases (two-axis end-handle edit, inert-axis honesty, independent bipolar endpoints with base following the midpoint, unipolar center-grip translate vs base-pins-end, pair-drop at 0% with parked tab), knob-contract migrations across the rail/fx shards (axis flips, shared-HUD roles, capture-loss survival, inert unmapped vertical), and the HUD-collision case now runs against the fixed HUD.
+    - Gates: desktop sharded suite 180/180, iPhone shell 20/20, web bundle 14/14, web-poc routing 34/34 + chromium 15/15 + webkit 15/15, shared hooks 29/29, shared logic 36/36, tsc clean. The shared-components "wavetable stage Retry Load" failure remains pre-existing (verified at HEAD earlier today).
 
 [-] T05A — Find a future mobile home for Articulations
     Parked 2026-08-19:
@@ -264,7 +330,7 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
 
 PHASE 2 — MAKE DRAGGING AND PARAMETER FEEDBACK COHERENT
 
-[ ] T06 — Add dwell-to-navigate during an active modulation-source drag
+[x] T06 — Add dwell-to-navigate during an active modulation-source drag
     Depends on: T03B
     Build:
     - Hovering over Voice, FX, or Mod during a source drag switches to that view after a deliberate dwell.
@@ -275,6 +341,11 @@ PHASE 2 — MAKE DRAGGING AND PARAMETER FEEDBACK COHERENT
     - Transit across a tab/effect does not switch accidentally.
     - Leaving before the dwell cancels the pending switch.
     - The drag preview, edge autoscroll, target highlighting, cancellation, and final drop keep one owner throughout.
+    Closed 2026-08-19:
+    - The dwell tracker lives inside useModSourceDrag (the one gesture owner): navigation surfaces declare `data-drag-dwell` keys, the tracker re-arms a 550ms timer per surface using the same drag point as drop targeting, and gesture end/cancel clears it.
+    - Surfaces shipped after the audit, each with real drop destinations behind it: the Voice/FX/Mod workspace tabs (activateWorkspaceTab), mobile rack effect rows (selectEffect), and the oscillator A/B/C tabs (selectOscillator).
+    - Rack keys resolve inside the rack workspace; everything else delegates upward through one `onDragDwellNavigate` seam handled in DesktopPatchView.
+    - Browser test drives one mouse gesture through oscillator-tab dwell, tab transit without switching, cancelled dwell, FX-tab dwell, rack-row dwell to Reverb, and a final drop that creates the env-1 -> rack.reverbSize mapping.
 
 [x] T07 — Lock the visual truth table for parameters and successful mapping
     Review:
@@ -321,6 +392,13 @@ PHASE 2 — MAKE DRAGGING AND PARAMETER FEEDBACK COHERENT
     - Give discrete parameters discrete snapping and best-effort haptic detents; keep continuous parameters smooth.
     First step:
     - Inventory production controls and list only the gaps. FX dual-ring knobs, oscillator Octave/Semitone detents, exact-value menus, and the collision-aware Mod HUD already have implementation evidence.
+    Current production inventory (2026-08-19, read-only audit):
+    - The shared `useParameterGesture` path currently has two production control-family consumers: `MobileVoiceEditor` (its numeric readouts and wavetable graph) and `ParameterKnobSurface` through `RackParameterKnob` (FX knobs plus the mobile Voice-filter knobs). Those surfaces already share rolling axis selection, horizontal Base / vertical Mod, the fixed precision HUD, long press, gesture batching, and terminal cancellation.
+    - Several older direct parameter controls still bypass that path: the compact Mod source editor's custom MSEG Rate field and Morph rail, its Envelope text fields, its Macro range control, the full MSEG editor's Morph/Time ranges, the mobile Mod Matrix amount range, the FX workspace's selected-route amount slider, and multiple native-iOS range controls for Glide, MSEG, Envelope, route, and effect parameters.
+    - T13/T14 supersede the compact Mod-source controls and T15 supersedes the current mobile Mod Matrix detail editor. Do not separately polish obsolete versions immediately before those replacements; verify the replacement controls against this shared contract instead.
+    - Direct manipulation of geometry is not a parameter-control inconsistency: MSEG points, Envelope curve handles, the Filter graph's two-dimensional handles, and articulation boundaries retain the interaction dictated by their graphics. They still need clean transaction/cancellation ownership, but must not be forced into horizontal-Base / vertical-Mod steering.
+    Settled cleanup:
+    - Remove the FX workspace's separate selected-route `AMOUNT` slider. It is redundant now that the target knob itself edits its normal value with horizontal movement and the selected source's influence with vertical movement. Do not replace the slider with another route-amount control in FX; the knob, its modulation ring, and the shared drag HUD own that job.
     Done when:
     - The inventory has no unexplained one-off gesture or value-display pattern.
     - Pointer/touch cancellation, blur, visibility loss, and unmount end every gesture exactly once.
@@ -404,7 +482,7 @@ PHASE 3 — KEEP THE SYNTH AUDITIONABLE EVERYWHERE
     Locked starting behavior:
     - A durable global preference shared across synth sessions and unaffected by presets, projects, or an individual session's lifetime. After first use, reopening the synth restores the previous Auto-preview state.
     - Only direct user parameter edits participate. Preset loading, DAW automation, modulation movement, undo/restore, and incoming state changes never generate audition notes.
-    - Retrigger the complete set of notes currently held by the user; if nothing is held, use the remembered intentional pitch from T10, whose initial fallback is middle C (MIDI note 60).
+    - Corrected requirement (T12C, superseding the current note-layer behavior): while any intentional keyboard note is held, Auto-preview emits no preview strikes; when nothing is held, it repeats the most recently completed note group, falling back to middle C (MIDI note 60) before any group has been completed.
     - Any actual parameter-value change counts. Do not use a change-magnitude threshold. Pointer motion that leaves the canonical value unchanged does not count.
     - The first actual change triggers immediately unless a prior preview is still inside the rate-limit window. Later changes overwrite one pending preview with the newest value; the latest changed value can never be stranded indefinitely.
     - Start physical tuning with a 250 ms minimum interval between in-motion retriggers. At each available interval, retrigger only when a newer value is pending, which caps continuous movement at four retriggers per second.
@@ -414,14 +492,14 @@ PHASE 3 — KEEP THE SYNTH AUDITIONABLE EVERYWHERE
     - A direct discrete sound-changing parameter change provisionally triggers once; confirm the exact included/excluded parameter classes during physical testing.
     Tune rather than assume:
     - Audition the 250 ms rate limit, 150 ms stopped timer, and 600 ms capped final note on a real phone with short envelopes, long attacks, one-shot MSEGs, and short/long looping MSEGs.
-    - Define interaction with intentional notes arriving during an active preview and verify that retriggering a held chord cannot lose, duplicate, or stick a user-owned note.
+    - After T12C, verify that intentional notes arriving during an active preview cancel only preview-owned work and cannot lose, duplicate, or stick a user-owned note.
     Done when:
     - Real phone trials establish that preview is useful rather than distracting.
     - A tiny final change always produces a bounded trailing preview; continuous movement cannot exceed the configured rate cap.
     - Holding still allows a looping MSEG to continue without further retriggers, and resuming movement restarts the same bounded scheduler.
     - Disable/enable behavior is immediate, deterministic, and cannot create stuck notes.
     - Ship, revise, or reject is recorded explicitly; experimentation alone is not completion.
-    Sequencing note (2026-08-19): the physical tuning pass waits for T12B — retrigger/loop interference was the first physical finding, so the feel cannot be judged until cycle-synced retriggers exist.
+    Sequencing note (2026-08-19): the physical tuning pass waits for T12B and T12C — cycle sync must be present, and manual keyboard playing must no longer be interrupted by Auto-preview, before the feel can be judged.
 
 [x] T12B — Sync Auto-preview retriggers to the looping MSEG's cycle
     Depends on: T12 implementation evidence (in place); blocks T12's physical tuning.
@@ -459,17 +537,45 @@ PHASE 3 — KEEP THE SYNTH AUDITIONABLE EVERYWHERE
     - The telemetry anchor accuracy measurement is recorded, and tempo-sync/BPM visibility is audited and recorded.
     - Both slow-loop policies are selectable for the tuning pass; the tuning pass then picks one, tunes the bounds, and folds the ship/revise/reject into T12's closure.
 
+[ ] T12C — Make manual keyboard playing override Auto-preview and remember the last played chord
+    Depends on: the existing T12/T12B Auto-preview implementation; blocks T12's physical tuning pass.
+    Origin (2026-08-19 corrected product decision): the current note layer re-strikes the notes a user is physically holding and remembers only one released pitch. Manual playing should instead remain uninterrupted, while a released chord should remain available for later Auto-preview.
+    Build:
+    - Manual playing wins. While at least one intentional keyboard note is physically held, parameter edits never produce an Auto-preview note-on, note-off, deferred strike, or trailing strike. The user hears the sustained note or chord respond directly to the parameter change.
+    - When manual playing begins, cancel any pending Auto-preview strike and release only notes owned by Auto-preview. Never release or re-strike user-owned notes. Parameter changes made while a manual note is held count as already heard and must not queue a preview for after release; if the same parameter gesture continues after release, only later changes may trigger Auto-preview.
+    - Remember the most recently completed keyboard group. A group begins when the held-note count changes from zero to one, collects every distinct pitch pressed before the held-note count returns to zero, and commits when the last note is released. The next group after an all-notes-up gap replaces it.
+    - Any temporal overlap keeps notes in the same group. This deliberately treats rolled notes, uneven releases, and chained overlaps as one chord: if A overlaps B and B overlaps C, the remembered group is A+B+C even if A and C never overlap directly.
+    - When no manual notes are held, each due Auto-preview strike plays every pitch in the remembered group together. A one-pitch group repeats one note; a multi-pitch group repeats a chord. Do not replay the original staggered note timing. Before the first completed group, retain the middle-C fallback.
+    - Only genuine user keyboard input already visible to the UI may form the remembered group. DAW/transport playback and Auto-preview's own strikes never update it. Preserve the existing Auto-preview cadence, loop synchronization, durable toggle, triggering parameter set, and preview-note velocity/lifetime policies.
+    Done when:
+    - Holding one note or a chord while changing a parameter produces no extra MIDI strikes and no retriggered envelope or MSEG; releasing the manual notes remains entirely user-owned.
+    - Deterministic tests cover one-note groups, simultaneous and rolled chords, chained overlaps, the all-notes-up boundary, and replacement by the newest completed group.
+    - Starting manual playing during either a sounding or deferred Auto-preview cancels only the preview-owned work and cannot lose, duplicate, or stick a manual note.
+    - Changes made during the manual hold cannot leak into a trailing preview after release, while a new change made afterward can preview the remembered group normally.
+    - A real-phone check confirms that a sustained note or chord remains continuous while a parameter is adjusted and that the released group is subsequently repeated correctly.
+
 PHASE 4 — REDESIGN MODULATION AROUND QUICK EDITING
 
-[ ] T13 — Add a bottom quick-editor drawer for the selected modulation source
+[ ] T13 — Add an iOS-style quick-editor drawer for the selected modulation source
     Depends on: T03B, T11
-    Build:
-    - Tapping a source in the global Mod rail opens an editable compact Envelope, MSEG, or Macro drawer instead of forcing full navigation.
-    - Provide a clear drag handle/dismiss gesture and a Go to full editor action.
-    - Preserve the existing source selection, route count, drag-from-source behavior, and second-tap/deep-link intent where they still apply.
+    Current correction:
+    - The collapsed Mod widget currently treats a tap on its active-source icon as a request to expand the widget. That is wrong. The widget's own grip remains responsible for expanding/collapsing it; tapping the active-source icon opens that source's quick editor in the sheet.
+    - In the expanded widget, tapping a different source selects it; tapping the already-selected source opens that source in the same quick-editor sheet. Full-editor navigation is then available from the sheet instead of being the selected source's immediate tap action.
+    Required behavior:
+    - Use a conventional iOS-style bottom sheet over the current Voice or FX workspace instead of forcing navigation to Mod.
+    - Open at a compact detent around one quarter of the usable screen height. The exact safe-area-aware height may be tuned, but it must read as the small default state rather than an arbitrary fixed pixel panel.
+    - Dragging the sheet's top grab rail upward can snap it to a larger state around half of the usable screen height. The same editor remains available at both detents; resizing does not reveal a different feature set.
+    - Put a parameter-control strip immediately below the sheet's top lip. Reuse the exact numeric-readout bar component and interaction language shown below the mobile Voice oscillator graphic; do not invent drawer-specific knobs or controls. This strip stays fixed at the top of the sheet at every detent.
+    - Only the modulation graphic changes orientation with the sheet's usable graphic aspect ratio: render it horizontally while its available area is wider than tall, and vertically once that area becomes taller than wide. Do not rotate or rearrange the fixed control strip with it.
+    - Dragging all the way upward transitions into the existing full-screen editor layout for that exact source. Do not leave the user in a nearly-full sheet that duplicates the full editor.
+    - Dragging the grab rail downward past the dismissal threshold closes the sheet and reveals the unchanged Voice/FX context beneath it.
+    - Keep the conventional direct path to the full editor available from the sheet as well; dragging to full screen is an additional physical shortcut, not the only discoverable route.
+    - Preserve source selection, route count, drag-from-source mapping, the movable Mod widget, and its universal Note control. Opening or resizing the sheet must not reinterpret a source drag as a tap.
     Done when:
     - The source can be edited and auditioned without leaving the current Voice/FX context.
-    - Drawer geometry never hides the only available audition control or active-value HUD.
+    - The compact, half-height, full-screen, and downward-dismiss transitions feel continuous and land on their intended states without accidental source selection or route creation.
+    - Sheet geometry never hides the Mod widget's audition control or the active-value HUD.
+    Product-discussion status (2026-08-19): locked for later implementation. No prototype or implementation was started or authorized during this clarification pass.
 
 [?] T14 — Redesign the Mod overview without hidden functionality
     Depends on: T03B, T11
@@ -486,20 +592,53 @@ PHASE 4 — REDESIGN MODULATION AROUND QUICK EDITING
     - Defer compact structural gestures until the real layout can be judged: adding points, deleting points, and curve shaping may remain expanded-editor-only if the compact graph feels cramped. The prototype/review must compare them rather than letting implementation choose silently.
     - Keep the `SOURCE` panel's own source-family and source-number selectors. Synchronize them bidirectionally with the source selected in the floating Mod bar so either surface can change the same selection without requiring the bar to be expanded or repositioned.
     - Open `MAPPINGS` with all routes visible. Changing the selected source in either selector must not silently filter the list; apply a source filter only through the mappings panel's explicit Filter control.
+    - When already inside the Mod workspace, choosing a source from the floating Mod bar selects that source and switches to `SOURCE`; do not open the quick-editor drawer over the full Source panel. The quick drawer remains the way to edit a source while staying in Voice or FX.
+    Mappings table and toolbar:
+    - Treat `MAPPINGS` as a polished responsive data table, not a loose stack of cards. Its logical data columns are Source, Target, Base, Mod Amount, Direction (`+ / ±`), State (active/bypassed), and row Actions. Wide layouts may show ordinary headers and columns; compact phone rows may reflow them, but must retain the same data model and the inline editing controls locked in T15.
+    - Start a new plugin instance with every mapping visible, no search or filters, and a stable Source-then-Target ascending order.
+    - Keep a compact, visually disciplined toolbar visible at the top of the scrolling table. It provides result count, find-in-table search, Filter, Sort, display choices where useful, and Add Mapping. Do not let controls wrap into an accidental pile or hide the table at 320 px; settle the responsive composition in the required prototype rather than inventing another arbitrary toolbar height.
+    - `Add Mapping` inserts an inline draft row instead of navigating through separate full-screen source/category/effect/target pages. The draft provides searchable Source and Target pickers plus explicit Create and Cancel actions.
+    - Disable source/target pairs that already have a mapping so the draft cannot submit a duplicate. A confirmed mapping starts at exactly 0% and becomes a normal editable row; a rejected creation leaves no row or route state and uses the mapping-failure feedback already locked in ADR-025.
+    - Search matches the visible source, destination surface/effect, and parameter names and filters results as the user types. It has an obvious clear action.
+    - Make every meaningful data column sortable and filterable with controls appropriate to its data: multi-select for Source and Target, choices for Direction and State, and unit-safe ranges for Base and Mod Amount. Actions are not data and do not sort or filter.
+    - For numeric Base/Mod filtering across unlike parameter units, present normalized percentage of each parameter's legal span. When the table is narrowed to one compatible target/unit, the filter may additionally accept that unit's exact values under T19. Never compare raw Hz, dB, seconds, and other unrelated units as though they were one numeric scale.
+    - Combine selections within one column as OR and filters across different columns as AND. Do not add a nested query builder, AI filter, board mode, shared saved views, or other project-management cargo cult to this synth table.
+    - Bulk selection and bulk actions are out of scope. Do not add a checkbox column or a multi-select mode; enable, bypass, and delete remain per-row actions.
+    - Show active search/filter/sort state plainly through selected toolbar controls, compact removable criteria, an `n of total` result count, and one Clear All action. A zero-result view explains that no mappings match and offers Clear All; it must not look like the synth has no mappings.
+    - Preserve explicit search, filter, sort, and display choices while the same plugin instance remains alive, including visits to `SOURCE` and back. A new plugin instance resets to the all-mappings default. These are UI-view preferences, never preset sound state, and selecting a modulation source never rewrites them.
+    - If sorting or filtering depends on Base or Mod Amount, a row being edited must not move or disappear under the user's finger. Freeze its membership and position for the active gesture, then apply the current sort/filter once that gesture ends.
+    - Use Linear's current list/view discipline as the quality benchmark: obvious controls, immediate results, persistent user choices, sortable columns, and legible active criteria. Copy the interaction quality, not Linear's branding or project-management feature set.
     Done when:
     - A first-time user can identify every major action from the initial Mod view without blind scrolling.
     - Compact and expanded MSEG points render at the same normalized coordinates.
     - Browser coverage proves the Mod tabs match the Voice A/B/C selector and its directional content transition rather than merely approximating its appearance.
+    - A real multi-route table prototype at 320 and 393 px proves the toolbar remains composed, every logical column can be sorted and filtered, active criteria and result count remain understandable, and inline row editing never causes the active row to jump or disappear.
+    Planning note (2026-08-19): the product behavior above is locked enough to move on. The user explicitly deferred the real-device-width prototype; do not start that prototype now, and do not treat its deferral as implementation approval.
 
 [?] T15 — Revisit Mod Matrix row editing against the newer product direction
-    Depends on: T14
+    Depends on: T14; the immediate-delete behavior also depends on T18's synth-wide Undo recovery
     Current baseline:
     - A mobile list/detail implementation already exists; rows show the relationship and amount, while detail owns exact editing, polarity, bypass, and delete.
-    Compare against the requested direction:
-    - Inline amount editing on the route row.
-    - Direct bypass and delete actions without mandatory expansion.
-    - A long-press context menu for exact value, polarity, bypass, and delete.
-    - An XY gesture that edits target base value on one axis and modulation amount on the other.
+    Settled direction:
+    - Make each mapping row the editing surface instead of requiring a tap into a separate route-detail page. Tapping the row must not navigate away; put the commonly used route controls directly on the row.
+    - Put any less-common route controls that genuinely do not fit on the row in a context menu opened by long-pressing that row.
+    - Keep Delete directly on every row as a trash-can button immediately beside the power button that switches that mapping between active and bypassed; Delete is not hidden in the long-press menu.
+    - Tapping the trash can deletes the mapping immediately. Do not show a confirmation dialog, toast, or other intermediate feedback; recovery belongs to the planned synth-wide Undo history, which must be specified separately before this destructive row behavior ships.
+    - Put a full parameter slider/rail on each mapping row. It shows the target's normal/base position together with that row's selected mapping range using the same visual language as the app's other parameter controls.
+    - Reuse the app-wide parameter gesture unchanged: horizontal movement edits the target's base value, vertical movement edits that row's modulation amount, the rolling dominant axis may change during one drag, and one movement sample changes only one value.
+    - Reuse the same finger-clear parameter HUD, including its live Base/Mod mode and values. Do not create a Mod-Matrix-specific drag controller or HUD.
+    - When several mapping rows share a target, a base-value edit from any one row updates the shared base display on every other row for that target; each row continues to show and edit only its own mapping range.
+    - Keep the mapping-direction control visible on every row as a compact `+ / ±` toggle: `+` is one-way modulation and `±` is centered modulation around the base. The slider/rail updates immediately to show that choice.
+    - Put exact-value editing and the uncommon Max/Mean voice-combining option in the row's long-press context menu.
+    - The context menu provides separate, clearly labeled Base and Mod Amount number fields. Both use the unit-aware entry contract from T19, and each has decrement and increment paddles that use that parameter's existing step/detent rather than a new Mod-row-specific increment.
+    - When a mapping is bypassed, keep its range grey/dashed and remove its effect from the sound, but leave both Base and Mod Amount editable. Bypass disables the mapping's audible effect, not its editing controls.
+    - Only the slider/rail area owns the horizontal-Base/vertical-Mod parameter gesture. Dragging the source identity, target identity, or unused row space scrolls the mappings list normally.
+    - A stationary long press anywhere on the row opens its context menu; once movement has committed to list scrolling or parameter editing, it must not open the menu.
+    - Include `Reset Base` and `Reset Mod Amount to 0` in the long-press menu. Each reset is one synth-wide Undo action.
+    - Inherit the shared parameter control's keyboard, focus, cancellation, and exact-entry behavior; do not create a less accessible Mod-row variant.
+    Product-discussion status:
+    - The interaction and control split are locked. The remaining design gate is a real multi-row prototype at 320 and 393 px that proves the identity, rail, direction, power, and trash controls remain readable and the list remains comfortably scrollable. Do not resolve density by silently removing controls during implementation.
+    - The user explicitly deferred that prototype on 2026-08-19. Do not start it now, and do not treat the settled product discussion as implementation approval.
     Decision rule:
     - Keep the list scannable and vertically scrollable. Add direct manipulation only where touch ownership and accidental-delete risk remain clear.
     Done when:
@@ -547,6 +686,64 @@ INFRASTRUCTURE AND TOOLING
     - Before/after runs on the same machine record the wall-clock win, and the after-run passes with EXACTLY the same set of test names as the before-run (diff the ok lines; count may only grow).
     - Ten consecutive full runs (or three on a loaded machine) show zero harness-boot flakes at the chosen concurrency.
     - tsc and the untouched suites (iPhone shell, web bundle, shared hooks) stay green; package.json test:desktop:ui runs the sharded set as one command.
+
+CROSS-CUTTING EDITING FEATURES — REQUIRE PRODUCT AND ARCHITECTURE REVIEW
+
+[-] T18 — Add synth-wide Undo history
+    Desired behavior:
+    - Put Undo in the top-right Settings menu opened by the preset bar's three-dot button. Name the available action specifically, such as `Undo Delete Mapping`, rather than showing an unexplained generic command; show it disabled when no action is available.
+    - Ideally, put Redo beside Undo in the same Settings menu. Redo may be deferred if the architecture investigation finds that it adds meaningful complexity beyond Undo.
+    - Undo must recover destructive edits such as immediate mapping deletion; do not add confirmation dialogs or deletion toasts as substitutes.
+    - Ideally, loading a preset is one undoable action that restores the entire sound that existed immediately before the load.
+    - Cover every direct user action that changes the sound, including parameter adjustments, sound-changing switches, mapping edits, modulation-shape edits, source deletion, rack changes, and articulation edits.
+    - Do not put played notes, page/tab navigation, manual auditioning, Auto-preview activity, DAW automation, or other incoming host changes into the synth's Undo history.
+    - Keep Undo history for the lifetime of the running synth/plugin instance, including when its editor window is closed and reopened. Clear it when that instance is destroyed or the standalone app relaunches; never save Undo history inside a preset or project.
+    - Treat one complete user action as one Undo step: an entire continuous gesture from touch-down to release, one committed exact-value entry, one button action, or one compound command such as deleting a source together with its mappings.
+    - Keep the existing MSEG-editor Undo button and the temporary Articulation recovery button as contextual shortcuts to this same global history. They may appear or enable only when the newest reversible action is the relevant MSEG/Articulation action. They must never retain, expose, or apply a separate local history.
+    - On desktop, while Cosimo's UI has keyboard focus, Command-Z belongs to Cosimo's synth-wide Undo even when Cosimo is running inside a DAW; it must not undo a host action. If Redo ships, give it the standard Shift-Command-Z shortcut under the same focus rule. Record the Windows/Linux equivalents during implementation rather than making the macOS wording the whole cross-platform contract.
+    - While the user is actively typing in a number, name, or other text field, Command-Z first uses that field's normal text-editing Undo. Everywhere else in the focused Cosimo UI, Command-Z invokes synth-wide Undo. Neither case may leak the shortcut to the DAW.
+    - Undo restores the affected sound state and visible controls without changing the user's current page, tab, open editor, or scroll position. For example, undoing a deleted mapping while viewing Voice restores that mapping in the background; it does not navigate to Mappings merely to show the restored row.
+    - After a successful Undo or Redo, show one brief top-of-screen toast naming the completed action, such as `Undid Delete Mapping`. Repeated shortcuts replace the current Undo/Redo toast instead of stacking a queue. This confirms recovery only; the original immediate Delete still has no confirmation or deletion toast.
+    - Use conventional Undo/Redo behavior for routine edge cases without returning them for product review: a new sound edit after Undo clears the Redo branch; cancelled, failed, and no-op edits add no history entry; Undo/Redo never records itself; unavailable commands are disabled; and shortcut key repeat may walk backward or forward through successive complete actions.
+    - Applying an Undo or Redo action is atomic. If the complete prior/next state cannot be restored, apply none of it, leave the history position unchanged so the command can be retried, and replace the current status toast with a concise failure such as `Couldn't undo Delete Mapping`. Never expose a half-restored sound or controls.
+    - Do not invent a fixed history length in the product ticket. Choose a safe capacity during the architecture investigation using measured worst-case memory cost; normal editing must not exhaust the available Undo history noticeably.
+    Product-discussion status (2026-08-19): the user-visible Undo behavior is locked. The user explicitly tabled the remaining architecture investigation for later; no implementation is authorized. Do not continue grilling the user about conventional Undo mechanics; use normal platform behavior when this resumes.
+    Architecture gate:
+    - Do not prescribe the storage model or implementation in this product ticket. Before implementation, investigate the synth's existing state owners and one-off recovery mechanisms, discuss viable architectures, and record the chosen design separately.
+    - Preset-load Undo and the remaining scope decisions are provisional on that investigation. Report their actual complexity and engine/state implications for a product decision rather than silently including or dropping them.
+    Current architecture findings (2026-08-19, read-only audit):
+    - Ordinary knobs/readouts write scalar engine parameters through `usePatchParameter`. The existing user-edit stream reports which parameter changed and whether it changed, plus broad gesture start/end signals, but it does not retain the previous value, the final value, or a dependable identity for grouping every multi-control gesture into one reversible action.
+    - The rest of the sound is split across independently persisted documents: `modulation.v6` owns routes and MSEG/source structure, `articulations.v4` owns the articulation bank, and `rack.v1` owns effect order and enabled state. Their mutation entry points are not currently one shared command path.
+    - The preset system already observes the complete scalar parameter contract and can capture/apply modulation and articulation documents. That is useful prior art, not a ready Undo engine: rack state is not in the synth preset adapter list, preset application is a full load rather than an edit transaction, and complete rollback across a failed multi-domain apply is not currently guaranteed.
+    - Two isolated recovery mechanisms exist and must not become competing histories: the MSEG editor holds one previous shape, while Articulations temporarily remembers one discarded edit. No global stack, Redo stack, or cross-domain compound action exists.
+    - Desktop host-keyboard routing already provides the required ownership seam: the native CHOC layer temporarily retains the original key event, ordinary UI code handles a normal browser event, and `preventDefault()` tells the bridge that Cosimo claimed it; unclaimed musical-typing/transport keys can still be returned to the host. Implement Undo through that one existing route. Do not add a second native interception path, call host-forwarding APIs from product components, use `[NSApp currentEvent]`, or resign the WebView as first responder.
+    - The architecture review must compare at least per-action before/after records, complete sound snapshots, and a hybrid of scalar edits plus structured-document snapshots. Measure memory, apply cost, failure rollback, Redo cost, preset-load cost, and how Undo avoids recording its own writes before selecting one. Do not choose from ideology or prescribe Immer in advance.
+    Done when:
+    - The user-visible scope, grouping, and lifetime rules are explicit.
+    - Undo restores both the sound and every affected visible control to the prior user-visible state.
+    - Desktop integration tests prove that focused Cosimo handles its Undo shortcut exactly once and does not leak it to the DAW, text fields retain normal typing Undo, and unclaimed musical-typing and transport keys still reach the host with matching key-down/key-up behavior.
+
+[ ] T19 — Make exact-value entry understand parameter units consistently
+    Product direction already stated:
+    - Infer the expected unit when a parameter has one obvious meaning, while accepting an explicitly typed compatible unit where useful.
+    - Define intentional behavior for ambiguous modulation amounts instead of treating every number as an unexplained raw scalar.
+    - Every exact-value field visibly states its default unit. A bare number uses that displayed default; a compatible unit typed with the number may override it. For example, a Cutoff field whose default is Hz treats `2000` and `2 kHz` as the same value.
+    - For the base filter Cutoff, accept Hz, kHz, and percentage. Percentage means the position through the existing logarithmic 20 Hz–20 kHz Cutoff range: 0% = 20 Hz, 50% is approximately 632 Hz, and 100% = 20 kHz; it does not mean a linear percentage of 20 kHz.
+    - For filter Cutoff modulation amount, accept a signed Hz/kHz movement relative to the current base Cutoff. Convert the resulting full-modulation endpoint to the equivalent octave interval; if the base Cutoff later changes, preserve that interval rather than preserving the originally typed fixed-Hz difference.
+    - For filter Cutoff modulation amount, use octaves as the displayed default unit. A typed percentage means percentage of the allowed signed modulation depth: +100% = +6 octaves and -50% = -3 octaves; it is not a percentage of the current Hz value.
+    - For a parameter that has explicit Free and tempo-synced modes, exact entry may select the mode as part of the same commit. Typing an ordinary time/rate value such as `250 ms` for Delay or `2 Hz` for Phaser selects Free; typing a supported musical division such as `1/8`, `1/4T`, or a dotted value selects Sync and applies that division. The field must show the resulting mode and canonical value immediately.
+    - Invalid text or an incompatible unit must not change the parameter. Keep the editor available and show a short explanation beside that field rather than a global toast.
+    - A valid value outside the parameter's legal range clamps to the nearest legal value, and the field immediately shows the value that was actually applied.
+    Current technical reality:
+    - Unit-aware parsing already exists in separate places: Cutoff accepts Hz/kHz, envelope time accepts milliseconds/seconds, and rack controls accept their displayed units. The rules are duplicated and incomplete.
+    - A route does not store one universal percentage. Its numeric `amount` is interpreted by its target: normalized targets use a -1..+1 offset displayed as percentage, pitch uses semitones, level uses dB, envelope/MSEG timing uses seconds, and logarithmic targets such as Cutoff, Delay Time, and Phaser Rate use octaves. A UI percentage such as "50% depth" is derived from that target's allowed amount; it is not the persisted route value.
+    - Exact entry must translate compatible typed units into that existing target-owned amount. It must not replace the canonical route amount with a second percentage representation. For example, entering a Delay endpoint change from 250 ms to 500 ms resolves to the existing +1-octave amount and therefore remains a 2x interval if the base time later changes.
+    Architecture gate:
+    - This ticket specifies input behavior, not the parser/storage design. Before implementation, inventory the existing per-surface rules, discuss the appropriate shared architecture, and record that design separately.
+    - As part of that inventory, assign each parameter family its obvious displayed default and common compatible typed units. Use ordinary domain meaning without requiring product review for every conversion; return only genuinely ambiguous cases for a product decision.
+    Product-discussion status (2026-08-19): locked and queued. Do not reopen the existing target-specific route-amount contract or ask the user to adjudicate routine compatible-unit conversions. Begin with the architecture inventory above; return only if the repository exposes a genuinely ambiguous musical meaning that cannot be resolved by the displayed unit and existing target contract. No implementation was authorized during this clarification pass.
+    Done when:
+    - The same text means the same value everywhere that parameter can be edited, explicit units round-trip correctly, and no exact-value field silently guesses between genuinely different meanings.
 
 IMPLEMENTED BASELINES TO CONFIRM, NOT REBUILD BLINDLY
 

@@ -13,6 +13,7 @@ processor Core03TableAndControlSchedule
     output value float32 filterModeOut;
     output value float32 filterCutoffOut;
     output value float32 filterQOut;
+    output value float32 filterMixOut;
 
     output value float32 aFramePositionOut;
     output value float32 aWarpModeOut;
@@ -137,6 +138,7 @@ processor Core03TableAndControlSchedule
         filterModeOut <- 1.0f;
         filterCutoffOut <- 1800.0f;
         filterQOut <- 6.0f;
+        filterMixOut <- 1.0f;
         aFramePositionOut <- 0.20f;
         aWarpModeOut <- 0.0f;
         aWarpAmountOut <- 0.0f;
@@ -482,6 +484,7 @@ graph ThreeOscillatorSharedVoiceEngine [[ main ]]
         schedule.filterModeOut -> engine.filterModeIn;
         schedule.filterCutoffOut -> engine.filterCutoffIn;
         schedule.filterQOut -> engine.filterQIn;
+        schedule.filterMixOut -> engine.filterMixIn;
 
         schedule.aFramePositionOut -> engine.oscillatorFramePositionIn[wt::oscillatorA];
         schedule.aWarpModeOut -> engine.oscillatorWarpModeIn[wt::oscillatorA];

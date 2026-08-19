@@ -26,8 +26,11 @@ const desktopBundleBudgetBytes = 3_200_000;
 // production unit instead of budgeting only the old 12-slot publisher.
 // The 2026-08-15 generator-control cut adds 18 strict target identities and
 // their range validation to the worker's accepted modulation domain.
-const wavetableWorkerBudgetBytes = 143_000;
-const wavetableWorkerGzipBudgetBytes = 34_200;
+// The 2026-08-19 Voice filter Mix append (T05) adds one shared voice target
+// plus its catalog descriptor and amount policy; re-measured at 142,969 raw
+// and 34,341 gzipped.
+const wavetableWorkerBudgetBytes = 143_100;
+const wavetableWorkerGzipBudgetBytes = 34_400;
 
 test("compiled desktop production entry stays within its browser parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");

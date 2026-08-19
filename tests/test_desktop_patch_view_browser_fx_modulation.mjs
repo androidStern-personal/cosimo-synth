@@ -776,22 +776,20 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
 
         await page.mouse.move(centerX, centerY);
         await page.mouse.down();
-        assert.equal(await page.locator('[data-role="rack-parameter-hud"]').count(), 0);
-        await page.mouse.move(centerX, centerY - 10, { steps: 3 });
-        await page.waitForSelector('[data-role="rack-parameter-hud"]');
-        assert.match(await page.locator('[data-role="rack-parameter-hud"]').innerText(), /BASE.*Size/i);
-        assert.match(
-            await page.locator('[data-role="rack-parameter-hud"]').evaluate((element) => getComputedStyle(element).fontFamily),
-            /system-ui/,
-        );
-        const hudLayout = await page.locator('[data-role="rack-parameter-hud"]').evaluate((element) => {
-            const hud = element.getBoundingClientRect();
+        assert.equal(await page.locator('[data-role="mobile-voice-hud"]').count(), 0);
+        await page.mouse.move(centerX + 10, centerY, { steps: 3 });
+        await page.waitForSelector('[data-role="mobile-voice-hud"].is-visible');
+        const hud = page.locator('[data-role="mobile-voice-hud"]');
+        assert.equal(await hud.getAttribute("data-hud-axis"), "base");
+        assert.match(await hud.innerText(), /BASE[\s\S]*Size/i);
+        const hudLayout = await hud.evaluate((element) => {
+            const hudBounds = element.getBoundingClientRect();
             const knob = document.querySelector('[data-role="rack-parameter-reverbSize"]')?.getBoundingClientRect();
             const style = getComputedStyle(element);
             return knob ? {
                 pointerEvents: style.pointerEvents,
-                intersectsKnob: !(hud.right <= knob.left || hud.left >= knob.right || hud.bottom <= knob.top || hud.top >= knob.bottom),
-                onScreen: hud.left >= 0 && hud.top >= 0 && hud.right <= window.innerWidth && hud.bottom <= window.innerHeight,
+                intersectsKnob: !(hudBounds.right <= knob.left || hudBounds.left >= knob.right || hudBounds.bottom <= knob.top || hudBounds.top >= knob.bottom),
+                onScreen: hudBounds.left >= 0 && hudBounds.top >= 0 && hudBounds.right <= window.innerWidth && hudBounds.bottom <= window.innerHeight,
             } : null;
         });
         assert.ok(hudLayout);
@@ -799,9 +797,9 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
         assert.equal(hudLayout.intersectsKnob, false, "The gesture HUD must not cover the active knob.");
         assert.equal(hudLayout.onScreen, true, "The gesture HUD must remain fully on screen.");
 
-        await page.mouse.move(centerX, centerY - 34, { steps: 8 });
+        await page.mouse.move(centerX + 34, centerY, { steps: 8 });
         await page.mouse.up();
-        await page.waitForFunction(() => document.querySelector('[data-role="rack-parameter-hud"]') === null);
+        await page.waitForFunction(() => document.querySelector('[data-role="mobile-voice-hud"]') === null);
 
         snapshot = await waitForHarnessSnapshot(
             page,
@@ -852,7 +850,7 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
             x: artBox.x + (artBox.width / 2),
             y: artBox.y + (artBox.height / 2),
         };
-        const moved = { x: start.x, y: start.y - 40 };
+        const moved = { x: start.x + 40, y: start.y };
         await knob.dispatchEvent("pointerdown", {
             pointerId,
             pointerType: "touch",
@@ -861,17 +859,21 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
             clientX: start.x,
             clientY: start.y,
         });
-        await page.evaluate(({ pointerId, moved }) => {
-            window.dispatchEvent(new PointerEvent("pointermove", {
-                pointerId,
-                pointerType: "touch",
-                button: 0,
-                buttons: 0,
-                clientX: moved.x,
-                clientY: moved.y,
-                bubbles: true,
-            }));
-        }, { pointerId, moved });
+        // Two samples: the first classifies the axis (and is consumed by the
+        // rolling contract), the second applies the delta.
+        await page.evaluate(({ pointerId, start, moved }) => {
+            for (const point of [{ x: start.x + 20, y: start.y }, moved]) {
+                window.dispatchEvent(new PointerEvent("pointermove", {
+                    pointerId,
+                    pointerType: "touch",
+                    button: 0,
+                    buttons: 0,
+                    clientX: point.x,
+                    clientY: point.y,
+                    bubbles: true,
+                }));
+            }
+        }, { pointerId, start, moved });
 
         let snapshot = await waitForHarnessSnapshot(
             page,
@@ -898,7 +900,7 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
             (nextSnapshot) => nextSnapshot.gestureEnds.includes("reverbSize"),
         );
         assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
-        assert.equal(await page.locator('[data-role="rack-parameter-hud"]').count(), 0);
+        await page.waitForFunction(() => document.querySelector('[data-role="mobile-voice-hud"]') === null);
     } finally {
         await page.close();
     }
@@ -936,15 +938,15 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
         const art = knob.locator(".rack-knob-art");
         const box = await art.boundingBox();
         assert.ok(box);
-        const outerX = box.x + (box.width * 0.75);
+        const centerX = box.x + (box.width * 0.5);
         const centerY = box.y + (box.height * 0.5);
-        await page.mouse.move(outerX, centerY);
+        await page.mouse.move(centerX, centerY);
         await page.mouse.down();
-        await page.mouse.move(outerX + 38, centerY, { steps: 8 });
+        await page.mouse.move(centerX, centerY - 38, { steps: 8 });
         assert.equal(await knob.getAttribute("data-dragging"), "modulation");
-        const hud = page.locator('[data-role="rack-parameter-hud"]');
-        assert.equal(await hud.getAttribute("data-mode"), "modulation");
-        assert.match(await hud.innerText(), /MOD.*Size/i);
+        const hud = page.locator('[data-role="mobile-voice-hud"]');
+        assert.equal(await hud.getAttribute("data-hud-axis"), "modulation");
+        assert.match(await hud.innerText(), /MOD[\s\S]*Size/i);
         await page.mouse.up();
 
         const snapshot = await waitForHarnessSnapshot(
@@ -1080,7 +1082,7 @@ test("switching armed sources swaps only selected-route outer geometry and prese
     }
 });
 
-test("an unmapped rack knob shows a neutral outer track and horizontal drag cannot create a route", async () => {
+test("an unmapped rack knob shows a neutral outer track and its modulation axis stays inert", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -1102,10 +1104,15 @@ test("an unmapped rack knob shows a neutral outer track and horizontal drag cann
         assert.ok(box);
         const start = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
         await clearHarnessDebugLog(page);
+        // The shared contract: the vertical (modulation) axis of an unmapped
+        // knob is inert — no route creation, no writes, and the HUD stays in
+        // base presentation instead of advertising an impossible edit.
         await page.mouse.move(start.x, start.y);
         await page.mouse.down();
-        await page.mouse.move(start.x + 42, start.y, { steps: 8 });
-        assert.match(await page.locator('[data-role="rack-parameter-hud"]').innerText(), /NOT MAPPED.*CREATE MAPPING/i);
+        await page.mouse.move(start.x, start.y - 42, { steps: 8 });
+        const hud = page.locator('[data-role="mobile-voice-hud"]');
+        await hud.waitFor();
+        assert.equal(await hud.getAttribute("data-hud-axis"), "base");
         await page.mouse.up();
 
         const snapshot = await getHarnessSnapshot(page);
@@ -1118,6 +1125,11 @@ test("an unmapped rack knob shows a neutral outer track and horizontal drag cann
             false,
         );
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"), false);
+        assert.equal(
+            snapshot.sentMessages.some(({ endpointID }) => endpointID === "reverbSize"),
+            false,
+            "An inert modulation drag must not write the base parameter either.",
+        );
     } finally {
         await page.close();
     }
@@ -1151,7 +1163,7 @@ test("editing a bypassed rack route preserves bypass and renders the outer ring 
         assert.ok(box);
         await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
         await page.mouse.down();
-        await page.mouse.move(box.x + box.width / 2 + 36, box.y + box.height / 2, { steps: 8 });
+        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2 - 36, { steps: 8 });
         assert.equal(await knob.getAttribute("data-dragging"), "modulation");
         assert.equal(await knob.getAttribute("data-route-state"), "bypassed");
         const liveBypassedStyle = await knob.locator('.rack-knob-mod-fill').evaluate((element) => {
@@ -1286,14 +1298,18 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
             clientX: start.x,
             clientY: start.y,
         });
-        await knob.dispatchEvent("pointermove", {
-            pointerId: 42,
-            pointerType: "touch",
-            button: 0,
-            buttons: 1,
-            clientX: start.x,
-            clientY: start.y - 28,
-        });
+        // Two samples: the first classifies the base axis (consumed), the
+        // second applies the delta; the movement also cancels the hold menu.
+        for (const deltaX of [14, 28]) {
+            await knob.dispatchEvent("pointermove", {
+                pointerId: 42,
+                pointerType: "touch",
+                button: 0,
+                buttons: 1,
+                clientX: start.x + deltaX,
+                clientY: start.y,
+            });
+        }
         await page.waitForTimeout(560);
         assert.equal(await page.locator('[data-role="rack-parameter-menu"]').count(), 0);
         assert.deepEqual(await page.evaluate(() => window.__rackHaptics), []);
@@ -1302,8 +1318,8 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
             pointerType: "touch",
             button: 0,
             buttons: 0,
-            clientX: start.x,
-            clientY: start.y - 28,
+            clientX: start.x + 28,
+            clientY: start.y,
         });
 
         const snapshot = await waitForHarnessSnapshot(

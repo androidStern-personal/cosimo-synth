@@ -15287,7 +15287,8 @@ const SHARED_VOICE_MODULATION_TARGET_KINDS = [
   "env3Attack",
   "env3Decay",
   "env3Sustain",
-  "env3Release"
+  "env3Release",
+  "filterMix"
 ];
 const MODULATION_SOURCE_IDENTITIES = Object.freeze([
   { id: "mseg-1", sourceKind: "mseg", sourceSlot: 1, group: "voice", runtimeIndex: 0 },
@@ -15338,21 +15339,19 @@ const sourceIdentityByAddress = new Map(MODULATION_SOURCE_IDENTITIES.map((identi
 ]));
 const targetIdentityByKind = new Map(MODULATION_TARGET_IDENTITIES.map((identity) => [identity.kind, identity]));
 function assertCanonicalIdentities() {
-  if (MODULATION_SOURCE_COUNT !== 13 || MODULATION_VOICE_TARGET_COUNT$1 !== 50 || MODULATION_RACK_TARGET_COUNT$1 !== 36 || MODULATION_LEGAL_PAIR_COUNT !== 1118) {
-    throw new Error("Modulation identity catalog has an unexpected domain size");
+  if (MODULATION_SOURCE_COUNT !== 13 || MODULATION_VOICE_TARGET_COUNT$1 !== 51 || MODULATION_RACK_TARGET_COUNT$1 !== 36 || MODULATION_LEGAL_PAIR_COUNT !== 1131) {
+    throw new Error("Unexpected modulation domain size");
   }
   for (const [group, expectedCount] of [["voice", 9], ["macro", 4]]) {
     const identities = MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === group);
-    const indexes = identities.map((identity) => identity.runtimeIndex).sort((left, right) => left - right);
-    if (identities.length !== expectedCount || indexes.some((index, position) => index !== position)) {
-      throw new Error(`Modulation ${group} source indexes must be unique and contiguous`);
+    if (identities.length !== expectedCount || identities.some((identity, position) => identity.runtimeIndex !== position)) {
+      throw new Error(`Bad modulation ${group} source indexes`);
     }
   }
-  for (const [group, expectedCount] of [["voice", 50], ["rack", 36]]) {
+  for (const [group, expectedCount] of [["voice", 51], ["rack", 36]]) {
     const identities = MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
-    const indexes = identities.map((identity) => identity.runtimeIndex).sort((left, right) => left - right);
-    if (identities.length !== expectedCount || indexes.some((index, position) => index !== position)) {
-      throw new Error(`Modulation ${group} target indexes must be unique and contiguous`);
+    if (identities.length !== expectedCount || identities.some((identity, position) => identity.runtimeIndex !== position)) {
+      throw new Error(`Bad modulation ${group} target indexes`);
     }
   }
   if (sourceIdentityById.size !== MODULATION_SOURCE_COUNT || sourceIdentityByAddress.size !== MODULATION_SOURCE_COUNT || targetIdentityByKind.size !== MODULATION_TARGET_IDENTITIES.length) {
@@ -15491,6 +15490,8 @@ const MODULE_DEFINITIONS = [
       // instances start from different sounds.
       parameter("cutoff", "Cutoff", 56.63233347786729, 70, "frequency"),
       parameter("resonance", "Resonance", 36.91760377573153, 0),
+      // Initial 100% mirrors the engine's back-compat filterMix default 1.0.
+      parameter("mix", "Mix", 100, 100),
       parameter("drive", "Drive", 15, 0)
     ]
   }
@@ -15526,6 +15527,12 @@ function resonanceToEngine(value) {
 function resonanceFromEngine(value) {
   return normalized(Math.log(value / 0.1) / Math.log(200), "filterQ endpoint conversion");
 }
+function mixToEngine(value) {
+  return value;
+}
+function mixFromEngine(value) {
+  return normalized(value, "filterMix endpoint conversion");
+}
 function boundEndpoint(id, toEngine, fromEngine) {
   return { _tag: "endpoint", endpointId: endpointId(id), toEngine, fromEngine };
 }
@@ -15542,6 +15549,14 @@ function connectivityFor(targetId, workspace) {
         binding: boundEndpoint("filterQ", resonanceToEngine, resonanceFromEngine),
         articulationParameterId: "filterQ",
         modulationTargetKind: "filterQ"
+      };
+    case "voice-filter.mix":
+      return {
+        binding: boundEndpoint("filterMix", mixToEngine, mixFromEngine),
+        // T05 scope: articulations do not own Mix yet — capturing it
+        // would extend the persisted articulation schema.
+        articulationParameterId: null,
+        modulationTargetKind: "filterMix"
       };
     default:
       return {
@@ -15816,6 +15831,7 @@ const ROUTE_AMOUNT_LIMITS = {
   warpAmount: { min: -1, max: 1 },
   filterCutoffOctaves: { min: -6, max: 6 },
   filterQ: { min: -19.9, max: FILTER_Q_MAX - FILTER_Q_MIN },
+  filterMix: { min: -1, max: 1 },
   pitchSemitones: { min: -48, max: 48 },
   // Additive dB offset over the full parameter span; the engine clamps base + offset.
   ampGainDb: { min: -54, max: 54 },
@@ -15849,6 +15865,7 @@ const ROUTE_AMOUNT_STEPS = {
   warpAmount: 1e-3,
   filterCutoffOctaves: 1e-3,
   filterQ: 1e-3,
+  filterMix: 1e-3,
   pitchSemitones: 0.01,
   ampGainDb: 0.1,
   pan: 1e-3,
@@ -16078,6 +16095,7 @@ function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar"
     case "mseg1Morph":
     case "mseg2Morph":
     case "mseg3Morph":
+    case "filterMix":
     case "env1Sustain":
     case "env2Sustain":
     case "env3Sustain":
@@ -16133,6 +16151,8 @@ function getModulationTargetClampHint(targetKind) {
       return "Requested cutoff movement is converted to Hz and still clamps to the filter range.";
     case "filterQ":
       return "Resonance still clamps to the synth's Q range.";
+    case "filterMix":
+      return "Mix clamps to 0-100%.";
     case "pitchSemitones":
       return "Pitch depth adds on top of note, glide, and bend.";
     case "ampGainDb":
@@ -19046,118 +19066,267 @@ function applyRollingAxisSample(state, sample, config = DEFAULT_ROLLING_AXIS_CON
   const application = state.mode === "horizontal" ? Object.freeze({ axis: "horizontal", dx, dy: 0 }) : Object.freeze({ axis: "vertical", dx: 0, dy: dyUp });
   return { state: moved, transition: "none", application };
 }
-const PROVISIONAL_WAVETABLE_GRAPH_AXES = Object.freeze({
-  horizontal: Object.freeze({
-    controlID: "warpAmount",
-    direction: 1,
-    pixelsPerFullRange: 220
-  }),
-  vertical: Object.freeze({
-    controlID: "framePosition",
-    direction: 1,
-    pixelsPerFullRange: 220
-  })
-});
+const PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE = 220;
+const PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN = 360;
+const PARAMETER_GESTURE_LONG_PRESS_MS = 500;
+function pointerTypeOfEvent(event) {
+  return event.pointerType === "touch" ? "touch" : event.pointerType === "pen" ? "pen" : "mouse";
+}
 function clamp01$4(value) {
-  return Math.min(Math.max(value, 0), 1);
+  return Math.min(1, Math.max(0, value));
 }
-function projectGraphAxisWrite(descriptor, axis, currentNormalized, dx, dy) {
-  const binding = axis === "horizontal" ? descriptor.horizontal : descriptor.vertical;
-  const delta = axis === "horizontal" ? dx : dy;
-  const nextNormalized = clamp01$4(
-    currentNormalized + delta * binding.direction / binding.pixelsPerFullRange
+function useParameterGesture() {
+  const gestureRef = reactExports.useRef(null);
+  const commitGestureFrame = reactExports.useCallback(() => {
+    const gesture = gestureRef.current;
+    if (gesture === null || !gesture.pendingCommit) {
+      return;
+    }
+    gesture.pendingCommit = false;
+    const axis = gesture.ownedAxis;
+    if (axis === null) {
+      return;
+    }
+    const channel = axis === "horizontal" ? gesture.plan.horizontal : gesture.plan.vertical;
+    const normalized2 = axis === "horizontal" ? gesture.horizontalNormalized : gesture.verticalNormalized;
+    channel?.write?.(normalized2);
+  }, []);
+  const scheduleGestureCommit = reactExports.useCallback(() => {
+    const gesture = gestureRef.current;
+    if (gesture === null) {
+      return;
+    }
+    gesture.pendingCommit = true;
+    if (gesture.rafHandle !== null) {
+      return;
+    }
+    gesture.rafHandle = window.requestAnimationFrame(() => {
+      const current = gestureRef.current;
+      if (current !== null) {
+        current.rafHandle = null;
+      }
+      commitGestureFrame();
+    });
+  }, [commitGestureFrame]);
+  const restoreScrollLocks = reactExports.useCallback((gesture) => {
+    for (const lock of gesture.scrollLocks) {
+      if (lock.element.scrollTop !== lock.top) {
+        lock.element.scrollTop = lock.top;
+      }
+      if (lock.element.scrollLeft !== lock.left) {
+        lock.element.scrollLeft = lock.left;
+      }
+    }
+    if (window.scrollX !== gesture.windowScroll.x || window.scrollY !== gesture.windowScroll.y) {
+      window.scrollTo(gesture.windowScroll.x, gesture.windowScroll.y);
+    }
+  }, []);
+  const finishGesture = reactExports.useCallback((reason) => {
+    const gesture = gestureRef.current;
+    if (gesture === null) {
+      return;
+    }
+    gestureRef.current = null;
+    if (gesture.longPressTimer !== null) {
+      window.clearTimeout(gesture.longPressTimer);
+    }
+    if (gesture.rafHandle !== null) {
+      window.cancelAnimationFrame(gesture.rafHandle);
+      gesture.rafHandle = null;
+    }
+    if (reason === "release" && gesture.pendingCommit) {
+      gestureRef.current = gesture;
+      commitGestureFrame();
+      gestureRef.current = null;
+    }
+    gesture.removeListeners();
+    try {
+      if (gesture.plan.element.hasPointerCapture(gesture.plan.pointerId)) {
+        gesture.plan.element.releasePointerCapture(gesture.plan.pointerId);
+      }
+    } catch {
+    }
+    restoreScrollLocks(gesture);
+    gesture.plan.onFinish?.(reason, gesture.ownedAxis);
+  }, [commitGestureFrame, restoreScrollLocks]);
+  const finishGestureRef = reactExports.useRef(finishGesture);
+  finishGestureRef.current = finishGesture;
+  reactExports.useEffect(() => () => {
+    finishGestureRef.current("cancel");
+  }, []);
+  const applyGestureSample = reactExports.useCallback((event) => {
+    const gesture = gestureRef.current;
+    if (gesture === null || event.pointerId !== gesture.plan.pointerId) {
+      return;
+    }
+    if (event.pointerType === "mouse" && event.buttons === 0) {
+      finishGestureRef.current("release");
+      return;
+    }
+    event.preventDefault();
+    const coalesced = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [];
+    const samples = coalesced.length > 0 ? coalesced : [event];
+    for (const sample of samples) {
+      const result = applyRollingAxisSample(gesture.classifier, {
+        x: sample.clientX,
+        y: sample.clientY,
+        time: Number(sample.timeStamp) || performance.now(),
+        pointerType: gesture.plan.pointerType
+      });
+      gesture.classifier = result.state;
+      if (result.transition === "activate" || result.transition === "switch") {
+        if (gesture.longPressTimer !== null) {
+          window.clearTimeout(gesture.longPressTimer);
+          gesture.longPressTimer = null;
+        }
+        const nextAxis = result.state.mode;
+        const previousAxis = gesture.ownedAxis;
+        if (previousAxis !== null && previousAxis !== nextAxis) {
+          const previousChannel = previousAxis === "horizontal" ? gesture.plan.horizontal : gesture.plan.vertical;
+          previousChannel?.onDeactivate?.();
+        }
+        gesture.ownedAxis = nextAxis;
+        const channel2 = nextAxis === "horizontal" ? gesture.plan.horizontal : gesture.plan.vertical;
+        channel2?.onActivate?.();
+        continue;
+      }
+      const application = result.application;
+      if (application === null || gesture.ownedAxis === null) {
+        continue;
+      }
+      const channel = gesture.ownedAxis === "horizontal" ? gesture.plan.horizontal : gesture.plan.vertical;
+      if (channel === null || channel.write === null) {
+        continue;
+      }
+      const delta = gesture.ownedAxis === "horizontal" ? application.dx : application.dy;
+      const step = delta * (channel.direction ?? 1) / channel.pixelsPerFullSpan;
+      if (gesture.ownedAxis === "horizontal") {
+        gesture.horizontalNormalized = clamp01$4(gesture.horizontalNormalized + step);
+      } else {
+        gesture.verticalNormalized = clamp01$4(gesture.verticalNormalized + step);
+      }
+      gesture.pendingCommit = true;
+    }
+    if (gesture.pendingCommit) {
+      scheduleGestureCommit();
+    }
+  }, [scheduleGestureCommit]);
+  const startGesture = reactExports.useCallback((event, planInput) => {
+    if (gestureRef.current !== null) {
+      return;
+    }
+    if (event.pointerType === "mouse" && event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const element = event.currentTarget;
+    try {
+      element.setPointerCapture(event.pointerId);
+    } catch {
+    }
+    const plan = {
+      ...planInput,
+      pointerId: event.pointerId,
+      pointerType: pointerTypeOfEvent(event),
+      element,
+      startClientX: event.clientX,
+      startClientY: event.clientY
+    };
+    const scrollLocks = (plan.resolveScrollLockTargets?.() ?? []).map((lockElement) => ({
+      element: lockElement,
+      top: lockElement.scrollTop,
+      left: lockElement.scrollLeft
+    }));
+    const handleMove = (moveEvent) => applyGestureSample(moveEvent);
+    const handleUp = (upEvent) => {
+      if (gestureRef.current !== null && upEvent.pointerId === plan.pointerId) {
+        finishGestureRef.current("release");
+      }
+    };
+    const handleCancel = (cancelEvent) => {
+      if (gestureRef.current !== null && cancelEvent.pointerId === plan.pointerId) {
+        finishGestureRef.current("cancel");
+      }
+    };
+    const handleBlur = () => finishGestureRef.current("cancel");
+    const handleVisibility = () => {
+      if (document.visibilityState !== "visible") {
+        finishGestureRef.current("cancel");
+      }
+    };
+    const handleViewportInvalidation = () => finishGestureRef.current("cancel");
+    const handleNativeTouchMove = (touchEvent) => {
+      if (gestureRef.current === null) {
+        return;
+      }
+      if (touchEvent.cancelable) {
+        touchEvent.preventDefault();
+      }
+      restoreScrollLocks(gestureRef.current);
+    };
+    const handleNativeTouchEnd = (touchEvent) => {
+      if (gestureRef.current !== null && touchEvent.touches.length === 0) {
+        finishGestureRef.current("release");
+      }
+    };
+    const handleNativeTouchCancel = (touchEvent) => {
+      if (gestureRef.current !== null && touchEvent.touches.length === 0) {
+        finishGestureRef.current("cancel");
+      }
+    };
+    window.addEventListener("pointermove", handleMove, { passive: false });
+    window.addEventListener("pointerup", handleUp, true);
+    window.addEventListener("pointercancel", handleCancel, true);
+    window.addEventListener("blur", handleBlur);
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("orientationchange", handleViewportInvalidation);
+    window.addEventListener("resize", handleViewportInvalidation);
+    document.addEventListener("touchmove", handleNativeTouchMove, { capture: true, passive: false });
+    document.addEventListener("touchend", handleNativeTouchEnd, true);
+    document.addEventListener("touchcancel", handleNativeTouchCancel, true);
+    const removeListeners = () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp, true);
+      window.removeEventListener("pointercancel", handleCancel, true);
+      window.removeEventListener("blur", handleBlur);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("orientationchange", handleViewportInvalidation);
+      window.removeEventListener("resize", handleViewportInvalidation);
+      document.removeEventListener("touchmove", handleNativeTouchMove, true);
+      document.removeEventListener("touchend", handleNativeTouchEnd, true);
+      document.removeEventListener("touchcancel", handleNativeTouchCancel, true);
+    };
+    const longPressTimer = plan.onLongPress ? window.setTimeout(() => {
+      const gesture = gestureRef.current;
+      if (gesture === null || gesture.ownedAxis !== null) {
+        return;
+      }
+      finishGestureRef.current("cancel");
+      plan.onLongPress?.(plan.startClientX, plan.startClientY);
+    }, PARAMETER_GESTURE_LONG_PRESS_MS) : null;
+    gestureRef.current = {
+      plan,
+      classifier: createRollingAxisState(event.clientX, event.clientY),
+      ownedAxis: null,
+      horizontalNormalized: plan.horizontal?.startNormalized ?? 0,
+      verticalNormalized: plan.vertical?.startNormalized ?? 0,
+      pendingCommit: false,
+      rafHandle: null,
+      longPressTimer,
+      scrollLocks,
+      windowScroll: { x: window.scrollX, y: window.scrollY },
+      removeListeners
+    };
+  }, [applyGestureSample, restoreScrollLocks]);
+  const cancelGesture = reactExports.useCallback(() => {
+    finishGestureRef.current("cancel");
+  }, []);
+  const isGestureActive = reactExports.useCallback(() => gestureRef.current !== null, []);
+  return reactExports.useMemo(
+    () => ({ startGesture, cancelGesture, isGestureActive }),
+    [cancelGesture, isGestureActive, startGesture]
   );
-  return Object.freeze({ controlID: binding.controlID, nextNormalized });
-}
-const AMOUNT_EPSILON = 1e-9;
-function clamp$4(value, min, max) {
-  return Math.min(Math.max(value, min), max);
-}
-function clamp01$3(value) {
-  return clamp$4(value, 0, 1);
-}
-function resolveMobileVoiceRailState(input) {
-  if (!input.modulatable) {
-    return "not-modulatable";
-  }
-  if (!input.armed) {
-    return "no-source";
-  }
-  if (input.route === null) {
-    return "unmapped";
-  }
-  if (!input.route.enabled) {
-    return "bypassed";
-  }
-  return Math.abs(input.route.amount) <= AMOUNT_EPSILON ? "mapped-zero" : "mapped";
-}
-function routeAmountOffsets(route) {
-  if (route.polarity === "bipolar") {
-    const magnitude = Math.abs(route.amount);
-    return [-magnitude, magnitude];
-  }
-  return route.amount < 0 ? [route.amount, 0] : [0, route.amount];
-}
-function projectMobileVoiceRailBand(domain, baseValue, route) {
-  const range = domain.max - domain.min;
-  if (!(range > 0)) {
-    throw new Error("A rail domain must span a positive range");
-  }
-  const clampedBase = clamp$4(baseValue, domain.min, domain.max);
-  const offsets = routeAmountOffsets(route);
-  const rawLow = clampedBase + offsets[0];
-  const rawHigh = clampedBase + offsets[1];
-  const lowValue = clamp$4(rawLow, domain.min, domain.max);
-  const highValue = clamp$4(rawHigh, domain.min, domain.max);
-  const lowNormalized = (lowValue - domain.min) / range;
-  const highNormalized = (highValue - domain.min) / range;
-  const magnitude = Math.abs(route.amount);
-  return Object.freeze({
-    baseNormalized: (clampedBase - domain.min) / range,
-    lowNormalized,
-    highNormalized,
-    clippedLow: rawLow < domain.min - AMOUNT_EPSILON,
-    clippedHigh: rawHigh > domain.max + AMOUNT_EPSILON,
-    fullyClipped: magnitude > AMOUNT_EPSILON && Math.abs(highNormalized - lowNormalized) <= AMOUNT_EPSILON
-  });
-}
-const AGGREGATE_TUNE_DOMAIN = Object.freeze({
-  min: -61,
-  max: 61
-});
-const TUNE_COMPONENT_SEMITONE_SPANS = Object.freeze({
-  octave: 96,
-  semitone: 24,
-  fineCents: 2
-});
-function aggregateTuneBaseSemitones(octave, semitone, fineCents) {
-  return octave * 12 + semitone + fineCents / 100;
-}
-function projectAggregateTuneTravel(baseSemitones, route) {
-  const clampedBase = clamp$4(baseSemitones, AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max);
-  const offsets = routeAmountOffsets(route);
-  return Object.freeze({
-    lowSemitones: clamp$4(clampedBase + offsets[0], AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max),
-    highSemitones: clamp$4(clampedBase + offsets[1], AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max)
-  });
-}
-function projectTuneComponentBand(component, componentBaseNormalized, route) {
-  const span = TUNE_COMPONENT_SEMITONE_SPANS[component];
-  const base = clamp01$3(componentBaseNormalized);
-  const offsets = routeAmountOffsets(route);
-  const rawLow = base + offsets[0] / span;
-  const rawHigh = base + offsets[1] / span;
-  const lowNormalized = clamp01$3(rawLow);
-  const highNormalized = clamp01$3(rawHigh);
-  const magnitude = Math.abs(route.amount);
-  return Object.freeze({
-    baseNormalized: base,
-    lowNormalized,
-    highNormalized,
-    clippedLow: rawLow < -AMOUNT_EPSILON,
-    clippedHigh: rawHigh > 1 + AMOUNT_EPSILON,
-    fullyClipped: magnitude > AMOUNT_EPSILON && Math.abs(highNormalized - lowNormalized) <= AMOUNT_EPSILON
-  });
 }
 const KNOB_CENTER = 50;
 const KNOB_SWEEP_START_DEGREES = 225;
@@ -19168,11 +19337,11 @@ const MOD_OUTER_RADIUS = 48;
 const HANDLE_RADIUS = BASE_RADIUS * 0.72;
 const PRESENCE_RADIUS = (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2;
 const BYPASSED_GREY = "#758084";
-function clamp01$2(value) {
+function clamp01$3(value) {
   return Math.min(Math.max(value, 0), 1);
 }
 function polarPoint(normalized2, radius) {
-  const degrees = KNOB_SWEEP_START_DEGREES - clamp01$2(normalized2) * KNOB_SWEEP_DEGREES;
+  const degrees = KNOB_SWEEP_START_DEGREES - clamp01$3(normalized2) * KNOB_SWEEP_DEGREES;
   const radians = degrees * Math.PI / 180;
   return {
     x: KNOB_CENTER + radius * Math.cos(radians),
@@ -19220,8 +19389,8 @@ function ParameterKnobArtwork({
   const patternIDBase = reactExports.useId();
   const basePatternID = `${patternIDBase}-base`;
   const modPatternID = `${patternIDBase}-mod`;
-  const handle = polarPoint(clamp01$2(baseNormalized), HANDLE_RADIUS);
-  const presence = polarPoint(clamp01$2(baseNormalized), PRESENCE_RADIUS);
+  const handle = polarPoint(clamp01$3(baseNormalized), HANDLE_RADIUS);
+  const presence = polarPoint(clamp01$3(baseNormalized), PRESENCE_RADIUS);
   const baseTrackOpacity = 0.34;
   const baseFillStyle = emphasis === "base" ? { opacity: 1, filter: `drop-shadow(0 0 5px ${ownerAccent})` } : { opacity: emphasis === "modulation" ? 0.46 : 1 };
   const baseTrackStyle = emphasis === "base" ? { opacity: 1, filter: `drop-shadow(0 0 5px ${ownerAccent})` } : { opacity: baseTrackOpacity };
@@ -19327,12 +19496,208 @@ function ParameterKnobArtwork({
     }
   );
 }
-const BASE_PIXELS_PER_FULL_RANGE = 220;
-const MODULATION_PIXELS_PER_FULL_SPAN = 360;
+const ParameterHudLayerContext = reactExports.createContext(null);
+function ParameterPrecisionHud({ model }) {
+  const isModulation = model.axis === "modulation";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      "data-role": "mobile-voice-hud",
+      "data-hud-axis": model.axis,
+      className: `mobile-voice-hud${model.visible ? " is-visible" : ""}${isModulation ? " is-modulation" : ""}`,
+      style: {
+        "--mobile-voice-source-accent": model.sourceAccent,
+        "--mobile-voice-owner-accent": model.ownerAccent,
+        "--mobile-voice-owner-accent-rgb": model.ownerAccentRgb
+      },
+      "aria-hidden": "true",
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "mobile-voice-hud-header", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "mobile-voice-hud-micro",
+              style: { color: isModulation ? model.sourceAccent : model.ownerAccent },
+              children: isModulation ? "MOD ↕" : "BASE ↔"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "mobile-voice-hud-label", children: model.label }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "mobile-voice-hud-micro mobile-voice-hud-source",
+              style: { color: isModulation ? model.sourceAccent : "rgba(232, 236, 239, 0.6)" },
+              children: model.sourceLine
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mobile-voice-hud-knob", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            ParameterKnobArtwork,
+            {
+              baseNormalized: model.baseNormalized,
+              baseOriginNormalized: model.baseOriginNormalized,
+              ownerAccent: model.ownerAccent,
+              sourceAccent: model.sourceAccent,
+              modRing: model.modRing,
+              emphasis: model.axis === "base" ? "base" : "modulation"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mobile-voice-hud-center", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Base" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { "data-role": "mobile-voice-hud-base", children: model.baseText })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "mobile-voice-hud-limit is-low",
+              style: { visibility: model.limitsVisible ? "visible" : "hidden" },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Low" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { "data-role": "mobile-voice-hud-low", children: model.lowText })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: "mobile-voice-hud-limit is-high",
+              style: { visibility: model.limitsVisible ? "visible" : "hidden" },
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "High" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { "data-role": "mobile-voice-hud-high", children: model.highText })
+              ]
+            }
+          )
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "mobile-voice-hud-footer", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "mobile-voice-hud-micro",
+              style: { color: !isModulation ? model.ownerAccent : "rgba(232, 236, 239, 0.35)" },
+              children: "↔ Base"
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: "mobile-voice-hud-micro",
+              style: { color: isModulation ? model.sourceAccent : "rgba(232, 236, 239, 0.35)" },
+              children: "↕ Mod amount"
+            }
+          )
+        ] })
+      ]
+    }
+  );
+}
+const PROVISIONAL_WAVETABLE_GRAPH_AXES = Object.freeze({
+  horizontal: Object.freeze({
+    controlID: "warpAmount",
+    direction: 1,
+    pixelsPerFullRange: 220
+  }),
+  vertical: Object.freeze({
+    controlID: "framePosition",
+    direction: 1,
+    pixelsPerFullRange: 220
+  })
+});
+const AMOUNT_EPSILON = 1e-9;
+function clamp$4(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+function clamp01$2(value) {
+  return clamp$4(value, 0, 1);
+}
+function resolveMobileVoiceRailState(input) {
+  if (!input.modulatable) {
+    return "not-modulatable";
+  }
+  if (!input.armed) {
+    return "no-source";
+  }
+  if (input.route === null) {
+    return "unmapped";
+  }
+  if (!input.route.enabled) {
+    return "bypassed";
+  }
+  return Math.abs(input.route.amount) <= AMOUNT_EPSILON ? "mapped-zero" : "mapped";
+}
+function routeAmountOffsets(route) {
+  if (route.polarity === "bipolar") {
+    const magnitude = Math.abs(route.amount);
+    return [-magnitude, magnitude];
+  }
+  return route.amount < 0 ? [route.amount, 0] : [0, route.amount];
+}
+function projectMobileVoiceRailBand(domain, baseValue, route) {
+  const range = domain.max - domain.min;
+  if (!(range > 0)) {
+    throw new Error("A rail domain must span a positive range");
+  }
+  const clampedBase = clamp$4(baseValue, domain.min, domain.max);
+  const offsets = routeAmountOffsets(route);
+  const rawLow = clampedBase + offsets[0];
+  const rawHigh = clampedBase + offsets[1];
+  const lowValue = clamp$4(rawLow, domain.min, domain.max);
+  const highValue = clamp$4(rawHigh, domain.min, domain.max);
+  const lowNormalized = (lowValue - domain.min) / range;
+  const highNormalized = (highValue - domain.min) / range;
+  const magnitude = Math.abs(route.amount);
+  return Object.freeze({
+    baseNormalized: (clampedBase - domain.min) / range,
+    lowNormalized,
+    highNormalized,
+    clippedLow: rawLow < domain.min - AMOUNT_EPSILON,
+    clippedHigh: rawHigh > domain.max + AMOUNT_EPSILON,
+    fullyClipped: magnitude > AMOUNT_EPSILON && Math.abs(highNormalized - lowNormalized) <= AMOUNT_EPSILON
+  });
+}
+const AGGREGATE_TUNE_DOMAIN = Object.freeze({
+  min: -61,
+  max: 61
+});
+const TUNE_COMPONENT_SEMITONE_SPANS = Object.freeze({
+  octave: 96,
+  semitone: 24,
+  fineCents: 2
+});
+function aggregateTuneBaseSemitones(octave, semitone, fineCents) {
+  return octave * 12 + semitone + fineCents / 100;
+}
+function projectAggregateTuneTravel(baseSemitones, route) {
+  const clampedBase = clamp$4(baseSemitones, AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max);
+  const offsets = routeAmountOffsets(route);
+  return Object.freeze({
+    lowSemitones: clamp$4(clampedBase + offsets[0], AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max),
+    highSemitones: clamp$4(clampedBase + offsets[1], AGGREGATE_TUNE_DOMAIN.min, AGGREGATE_TUNE_DOMAIN.max)
+  });
+}
+function projectTuneComponentBand(component, componentBaseNormalized, route) {
+  const span = TUNE_COMPONENT_SEMITONE_SPANS[component];
+  const base = clamp01$2(componentBaseNormalized);
+  const offsets = routeAmountOffsets(route);
+  const rawLow = base + offsets[0] / span;
+  const rawHigh = base + offsets[1] / span;
+  const lowNormalized = clamp01$2(rawLow);
+  const highNormalized = clamp01$2(rawHigh);
+  const magnitude = Math.abs(route.amount);
+  return Object.freeze({
+    baseNormalized: base,
+    lowNormalized,
+    highNormalized,
+    clippedLow: rawLow < -AMOUNT_EPSILON,
+    clippedHigh: rawHigh > 1 + AMOUNT_EPSILON,
+    fullyClipped: magnitude > AMOUNT_EPSILON && Math.abs(highNormalized - lowNormalized) <= AMOUNT_EPSILON
+  });
+}
 const HUD_LINGER_MS = 420;
 const MOD_DETENT_CAPTURE_ST = 0.2;
-const LONG_PRESS_MS = 500;
 const MOBILE_VOICE_OWNER_ACCENT = "#69d5c5";
+const MOBILE_VOICE_OWNER_ACCENT_RGB = "105 213 197";
 const WARP_MODE_LABELS = ["Off", "Bend +/-", "PWM", "Asym +/-", "Mirror"];
 const PHASE_MODE_LABELS = ["Free", "Reset"];
 const DETUNE_MODE_LABELS = ["Linear", "Super", "Exp", "Inv", "Random"];
@@ -19416,9 +19781,6 @@ function isTuneComponent(controlID) {
   return TUNE_COMPONENTS.includes(controlID);
 }
 const HIDDEN_HUD = { phase: "hidden", axis: "base", controlID: null };
-function pointerTypeOf(event) {
-  return event.pointerType === "touch" ? "touch" : event.pointerType === "pen" ? "pen" : "mouse";
-}
 function useOscillatorToggleBinding(oscillatorID, controlID) {
   return usePatchParameterBinding({
     endpointID: getOscillatorControlAddress(oscillatorID, controlID).endpointID,
@@ -19485,7 +19847,12 @@ function MobileVoiceFocusedEditor({
   activeAmountBindingRef.current = activeAmountBinding;
   const bindingsRef = reactExports.useRef(bindings);
   bindingsRef.current = bindings;
-  const gestureRef = reactExports.useRef(null);
+  const gestureController = useParameterGesture();
+  const hostGestureControlIDRef = reactExports.useRef(null);
+  const gestureScratchRef = reactExports.useRef({
+    lastDetentValue: null,
+    lastModulationDetent: null
+  });
   const hudLingerTimerRef = reactExports.useRef(null);
   const clearHudLinger = reactExports.useCallback(() => {
     if (hudLingerTimerRef.current !== null) {
@@ -19505,382 +19872,167 @@ function MobileVoiceFocusedEditor({
       setHudState(HIDDEN_HUD);
     }, HUD_LINGER_MS);
   }, [clearHudLinger]);
-  const commitGestureFrame = reactExports.useCallback(() => {
-    const gesture = gestureRef.current;
-    if (gesture === null || !gesture.pendingCommit) {
-      return;
-    }
-    gesture.pendingCommit = false;
-    const owner = gesture.owner;
-    if (owner === null) {
-      return;
-    }
-    if (owner.kind === "graph") {
-      const descriptor = PROVISIONAL_WAVETABLE_GRAPH_AXES;
-      const binding = owner.axis === "horizontal" ? descriptor.horizontal : descriptor.vertical;
-      const controlID2 = binding.controlID;
-      const display2 = DISPLAY_DESCRIPTORS[controlID2];
-      const normalized2 = owner.axis === "horizontal" ? gesture.graphHorizontalNormalized : gesture.graphVerticalNormalized;
-      const value = display2.min + normalized2 * (display2.max - display2.min);
-      bindingsRef.current[controlID2].setValue(value);
-      return;
-    }
-    const controlID = owner.controlID;
-    const display = DISPLAY_DESCRIPTORS[controlID];
-    if (owner.kind === "cell-base") {
-      const raw = display.min + gesture.baseNormalized * (display.max - display.min);
-      const snapped = display.min + Math.round((raw - display.min) / display.step) * display.step;
-      const value = clamp$3(snapped, display.min, display.max);
-      const spec = getMobileVoiceControlSpec(controlID);
-      if (spec.detented) {
-        if (gesture.lastDetentValue !== value) {
-          if (gesture.lastDetentValue !== null) {
-            onRequestHaptic?.();
-          }
-          gesture.lastDetentValue = value;
-        }
-      }
-      bindingsRef.current[controlID].setValue(value);
-      return;
-    }
-    const amountBinding = activeAmountBindingRef.current;
-    if (amountBinding.value !== null) {
-      let amountToWrite = gesture.amount;
-      const spec = getMobileVoiceControlSpec(controlID);
-      if (spec.modulationParameterKind === "pitchSemitones") {
-        const nearest = Math.round(gesture.amount);
-        if (Math.abs(gesture.amount - nearest) <= MOD_DETENT_CAPTURE_ST) {
-          amountToWrite = nearest;
-          if (gesture.lastModulationDetent !== nearest) {
-            onRequestHaptic?.();
-            gesture.lastModulationDetent = nearest;
-          }
-        } else {
-          gesture.lastModulationDetent = null;
-        }
-      }
-      amountBinding.setValue(amountToWrite);
-    }
-  }, [onRequestHaptic]);
-  const scheduleGestureCommit = reactExports.useCallback(() => {
-    const gesture = gestureRef.current;
-    if (gesture === null) {
-      return;
-    }
-    gesture.pendingCommit = true;
-    if (gesture.rafHandle !== null) {
-      return;
-    }
-    gesture.rafHandle = window.requestAnimationFrame(() => {
-      const current = gestureRef.current;
-      if (current !== null) {
-        current.rafHandle = null;
-      }
-      commitGestureFrame();
-    });
-  }, [commitGestureFrame]);
-  const endHostGesture = reactExports.useCallback((gesture) => {
-    if (gesture.hostGestureControlID !== null) {
-      bindingsRef.current[gesture.hostGestureControlID].endGesture();
-      gesture.hostGestureControlID = null;
+  const endHostGesture = reactExports.useCallback(() => {
+    const controlID = hostGestureControlIDRef.current;
+    if (controlID !== null) {
+      bindingsRef.current[controlID].endGesture();
+      hostGestureControlIDRef.current = null;
     }
   }, []);
-  const beginHostGesture = reactExports.useCallback((gesture, controlID) => {
-    endHostGesture(gesture);
+  const beginHostGesture = reactExports.useCallback((controlID) => {
+    endHostGesture();
     bindingsRef.current[controlID].beginGesture();
-    gesture.hostGestureControlID = controlID;
+    hostGestureControlIDRef.current = controlID;
   }, [endHostGesture]);
-  const restoreScrollLocks = reactExports.useCallback((gesture) => {
-    for (const lock of gesture.scrollLocks) {
-      if (lock.element.scrollTop !== lock.top) {
-        lock.element.scrollTop = lock.top;
-      }
-      if (lock.element.scrollLeft !== lock.left) {
-        lock.element.scrollLeft = lock.left;
-      }
-    }
-    if (window.scrollX !== gesture.windowScroll.x || window.scrollY !== gesture.windowScroll.y) {
-      window.scrollTo(gesture.windowScroll.x, gesture.windowScroll.y);
-    }
-  }, []);
-  const finishGesture = reactExports.useCallback((reason) => {
-    const gesture = gestureRef.current;
-    if (gesture === null) {
-      return;
-    }
-    gestureRef.current = null;
-    if (gesture.longPressTimer !== null) {
-      window.clearTimeout(gesture.longPressTimer);
-    }
-    if (gesture.rafHandle !== null) {
-      window.cancelAnimationFrame(gesture.rafHandle);
-      gesture.rafHandle = null;
-    }
-    if (reason === "release" && gesture.pendingCommit) {
-      gestureRef.current = gesture;
-      commitGestureFrame();
-      gestureRef.current = null;
-    }
-    endHostGesture(gesture);
-    gesture.removeListeners();
-    try {
-      if (gesture.element.hasPointerCapture(gesture.pointerId)) {
-        gesture.element.releasePointerCapture(gesture.pointerId);
-      }
-    } catch {
-    }
-    restoreScrollLocks(gesture);
-    setDraggingCell(null);
-    setGraphAxis(null);
-    setActiveRoute(null);
-    if (gesture.surface === "cell" && gesture.owner !== null) {
-      hideHud(reason === "cancel");
-    } else {
-      hideHud(true);
-    }
-  }, [commitGestureFrame, endHostGesture, hideHud, restoreScrollLocks]);
-  const finishGestureRef = reactExports.useRef(finishGesture);
-  finishGestureRef.current = finishGesture;
   reactExports.useEffect(() => () => {
-    finishGestureRef.current("cancel");
-  }, []);
+    gestureController.cancelGesture();
+  }, [gestureController]);
   reactExports.useEffect(() => {
-    finishGestureRef.current("cancel");
-  }, [oscillatorID]);
+    gestureController.cancelGesture();
+  }, [gestureController, oscillatorID]);
   reactExports.useEffect(() => {
-    finishGestureRef.current("cancel");
-  }, [pageIndex]);
+    gestureController.cancelGesture();
+  }, [gestureController, pageIndex]);
   reactExports.useEffect(() => {
     if (armedSource !== null) {
       return;
     }
-    finishGestureRef.current("cancel");
-  }, [armedSource]);
-  const applyGestureSample = reactExports.useCallback((event) => {
-    const gesture = gestureRef.current;
-    if (gesture === null || event.pointerId !== gesture.pointerId) {
-      return;
-    }
-    if (event.pointerType === "mouse" && event.buttons === 0) {
-      finishGestureRef.current("release");
-      return;
-    }
-    event.preventDefault();
-    const coalesced = typeof event.getCoalescedEvents === "function" ? event.getCoalescedEvents() : [];
-    const samples = coalesced.length > 0 ? coalesced : [event];
-    for (const sample of samples) {
-      const result = applyRollingAxisSample(gesture.classifier, {
-        x: sample.clientX,
-        y: sample.clientY,
-        time: Number(sample.timeStamp) || performance.now(),
-        pointerType: gesture.pointerType
-      });
-      gesture.classifier = result.state;
-      if (result.transition === "activate" || result.transition === "switch") {
-        if (gesture.longPressTimer !== null) {
-          window.clearTimeout(gesture.longPressTimer);
-          gesture.longPressTimer = null;
-        }
-        const axis = result.state.mode;
-        if (gesture.surface === "graph") {
-          const binding = axis === "horizontal" ? PROVISIONAL_WAVETABLE_GRAPH_AXES.horizontal : PROVISIONAL_WAVETABLE_GRAPH_AXES.vertical;
-          const controlID2 = binding.controlID;
-          gesture.owner = { kind: "graph", axis };
-          beginHostGesture(gesture, controlID2);
-          setGraphAxis(axis);
-          continue;
-        }
-        const controlID = gesture.controlID;
-        if (controlID === null) {
-          continue;
-        }
-        if (axis === "horizontal") {
-          gesture.owner = { kind: "cell-base", controlID };
-          beginHostGesture(gesture, controlID);
-          setDraggingCell({ controlID, mode: "base" });
-          clearHudLinger();
-          setHudState({ phase: "active", axis: "base", controlID });
-        } else {
-          gesture.owner = { kind: "cell-modulation", controlID };
-          endHostGesture(gesture);
-          const editable = gesture.amountBounds !== null;
-          setDraggingCell({ controlID, mode: editable ? "modulation" : "base" });
-          clearHudLinger();
-          setHudState({
-            phase: "active",
-            axis: editable ? "modulation" : "base",
-            controlID
-          });
-        }
-        continue;
-      }
-      const application = result.application;
-      if (application === null || gesture.owner === null) {
-        continue;
-      }
-      if (gesture.owner.kind === "graph") {
-        const write = projectGraphAxisWrite(
-          PROVISIONAL_WAVETABLE_GRAPH_AXES,
-          application.axis,
-          application.axis === "horizontal" ? gesture.graphHorizontalNormalized : gesture.graphVerticalNormalized,
-          application.dx,
-          application.dy
-        );
-        if (application.axis === "horizontal") {
-          gesture.graphHorizontalNormalized = write.nextNormalized;
-        } else {
-          gesture.graphVerticalNormalized = write.nextNormalized;
-        }
-        gesture.pendingCommit = true;
-        continue;
-      }
-      if (gesture.owner.kind === "cell-base") {
-        gesture.baseNormalized = clamp01$1(
-          gesture.baseNormalized + application.dx / BASE_PIXELS_PER_FULL_RANGE
-        );
-        gesture.pendingCommit = true;
-        continue;
-      }
-      const bounds = gesture.amountBounds;
-      if (bounds === null) {
-        continue;
-      }
-      const span = bounds.max - bounds.min;
-      gesture.amount = clamp$3(
-        gesture.amount + application.dy / MODULATION_PIXELS_PER_FULL_SPAN * span,
-        bounds.min,
-        bounds.max
-      );
-      gesture.pendingCommit = true;
-    }
-    if (gesture.pendingCommit) {
-      scheduleGestureCommit();
-    }
-  }, [beginHostGesture, clearHudLinger, endHostGesture, scheduleGestureCommit]);
+    gestureController.cancelGesture();
+  }, [armedSource, gestureController]);
   const startGesture = reactExports.useCallback((event, surface, controlID) => {
-    if (gestureRef.current !== null) {
+    if (gestureController.isGestureActive()) {
       return;
     }
     if (event.pointerType === "mouse" && event.button !== 0) {
       return;
     }
-    event.preventDefault();
-    event.stopPropagation();
-    const element = event.currentTarget;
-    try {
-      element.setPointerCapture(event.pointerId);
-    } catch {
-    }
-    const pointerType = pointerTypeOf(event);
     const display = controlID !== null ? DISPLAY_DESCRIPTORS[controlID] : null;
     const spec = controlID !== null ? getMobileVoiceControlSpec(controlID) : null;
     const route = spec !== null ? routeFor(spec.modulationParameterKind) : null;
     const modulationTargetKind = spec?.modulationParameterKind ?? null;
     const amountBounds = route !== null && modulationTargetKind !== null ? getModulationAmountBounds(targetKindFor(modulationTargetKind)) : null;
     setActiveRoute(route);
-    const baseValue = controlID !== null && display !== null ? clamp$3(bindingsRef.current[controlID].value, display.min, display.max) : 0;
-    const graphHorizontal = clamp01$1(bindingsRef.current.warpAmount.value);
-    const graphVertical = clamp01$1(bindingsRef.current.framePosition.value);
-    const scrollLocks = (resolveScrollLockTargets?.() ?? []).map((lockElement) => ({
-      element: lockElement,
-      top: lockElement.scrollTop,
-      left: lockElement.scrollLeft
-    }));
-    const handleMove = (moveEvent) => applyGestureSample(moveEvent);
-    const handleUp = (upEvent) => {
-      if (gestureRef.current !== null && upEvent.pointerId === gestureRef.current.pointerId) {
-        finishGestureRef.current("release");
-      }
-    };
-    const handleCancel = (cancelEvent) => {
-      if (gestureRef.current !== null && cancelEvent.pointerId === gestureRef.current.pointerId) {
-        finishGestureRef.current("cancel");
-      }
-    };
-    const handleBlur = () => finishGestureRef.current("cancel");
-    const handleVisibility = () => {
-      if (document.visibilityState !== "visible") {
-        finishGestureRef.current("cancel");
-      }
-    };
-    const handleViewportInvalidation = () => finishGestureRef.current("cancel");
-    const handleNativeTouchMove = (touchEvent) => {
-      if (gestureRef.current === null) {
-        return;
-      }
-      if (touchEvent.cancelable) {
-        touchEvent.preventDefault();
-      }
-      restoreScrollLocks(gestureRef.current);
-    };
-    const handleNativeTouchEnd = (touchEvent) => {
-      if (gestureRef.current !== null && touchEvent.touches.length === 0) {
-        finishGestureRef.current("release");
-      }
-    };
-    const handleNativeTouchCancel = (touchEvent) => {
-      if (gestureRef.current !== null && touchEvent.touches.length === 0) {
-        finishGestureRef.current("cancel");
-      }
-    };
-    window.addEventListener("pointermove", handleMove, { passive: false });
-    window.addEventListener("pointerup", handleUp, true);
-    window.addEventListener("pointercancel", handleCancel, true);
-    window.addEventListener("blur", handleBlur);
-    document.addEventListener("visibilitychange", handleVisibility);
-    window.addEventListener("orientationchange", handleViewportInvalidation);
-    window.addEventListener("resize", handleViewportInvalidation);
-    document.addEventListener("touchmove", handleNativeTouchMove, { capture: true, passive: false });
-    document.addEventListener("touchend", handleNativeTouchEnd, true);
-    document.addEventListener("touchcancel", handleNativeTouchCancel, true);
-    const removeListeners = () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp, true);
-      window.removeEventListener("pointercancel", handleCancel, true);
-      window.removeEventListener("blur", handleBlur);
-      document.removeEventListener("visibilitychange", handleVisibility);
-      window.removeEventListener("orientationchange", handleViewportInvalidation);
-      window.removeEventListener("resize", handleViewportInvalidation);
-      document.removeEventListener("touchmove", handleNativeTouchMove, true);
-      document.removeEventListener("touchend", handleNativeTouchEnd, true);
-      document.removeEventListener("touchcancel", handleNativeTouchCancel, true);
-    };
-    const longPressTimer = surface === "cell" && controlID !== null && onRequestParameterMenu ? window.setTimeout(() => {
-      const gesture = gestureRef.current;
-      if (gesture === null || gesture.owner !== null) {
-        return;
-      }
-      const { clientX, clientY } = event;
-      finishGestureRef.current("cancel");
-      onRequestParameterMenu(controlID, clientX, clientY);
-    }, LONG_PRESS_MS) : null;
-    gestureRef.current = {
-      surface,
-      controlID,
-      pointerId: event.pointerId,
-      pointerType,
-      element,
-      classifier: createRollingAxisState(event.clientX, event.clientY),
-      owner: null,
-      hostGestureControlID: null,
-      baseNormalized: display !== null ? clamp01$1((baseValue - display.min) / (display.max - display.min)) : 0,
-      graphHorizontalNormalized: graphHorizontal,
-      graphVerticalNormalized: graphVertical,
-      amount: route?.amount ?? 0,
-      amountBounds,
+    gestureScratchRef.current = {
       lastDetentValue: null,
-      lastModulationDetent: route !== null && Math.abs(route.amount - Math.round(route.amount)) <= MOD_DETENT_CAPTURE_ST ? Math.round(route.amount) : null,
-      pendingCommit: false,
-      rafHandle: null,
-      longPressTimer,
-      scrollLocks,
-      windowScroll: { x: window.scrollX, y: window.scrollY },
-      removeListeners
+      lastModulationDetent: route !== null && Math.abs(route.amount - Math.round(route.amount)) <= MOD_DETENT_CAPTURE_ST ? Math.round(route.amount) : null
     };
+    const graphChannelFor = (axis) => {
+      const axisBinding = axis === "horizontal" ? PROVISIONAL_WAVETABLE_GRAPH_AXES.horizontal : PROVISIONAL_WAVETABLE_GRAPH_AXES.vertical;
+      const axisControlID = axisBinding.controlID;
+      const axisDisplay = DISPLAY_DESCRIPTORS[axisControlID];
+      return {
+        // Graph axes integrate from the BASE bindings, never the
+        // observed (modulation-inclusive) drawing values.
+        startNormalized: axis === "horizontal" ? clamp01$1(bindingsRef.current.warpAmount.value) : clamp01$1(bindingsRef.current.framePosition.value),
+        pixelsPerFullSpan: axisBinding.pixelsPerFullRange,
+        direction: axisBinding.direction,
+        write: (normalized2) => {
+          bindingsRef.current[axisControlID].setValue(
+            axisDisplay.min + normalized2 * (axisDisplay.max - axisDisplay.min)
+          );
+        },
+        onActivate: () => {
+          beginHostGesture(axisControlID);
+          setGraphAxis(axis);
+        }
+      };
+    };
+    const baseChannel = controlID === null || display === null || spec === null ? null : {
+      startNormalized: clamp01$1(
+        (clamp$3(bindingsRef.current[controlID].value, display.min, display.max) - display.min) / (display.max - display.min)
+      ),
+      pixelsPerFullSpan: PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+      write: (normalized2) => {
+        const raw = display.min + normalized2 * (display.max - display.min);
+        const snapped = display.min + Math.round((raw - display.min) / display.step) * display.step;
+        const value = clamp$3(snapped, display.min, display.max);
+        if (spec.detented) {
+          if (gestureScratchRef.current.lastDetentValue !== value) {
+            if (gestureScratchRef.current.lastDetentValue !== null) {
+              onRequestHaptic?.();
+            }
+            gestureScratchRef.current.lastDetentValue = value;
+          }
+        }
+        bindingsRef.current[controlID].setValue(value);
+      },
+      onActivate: () => {
+        beginHostGesture(controlID);
+        setDraggingCell({ controlID, mode: "base" });
+        clearHudLinger();
+        setHudState({ phase: "active", axis: "base", controlID });
+      }
+    };
+    const modulationChannel = controlID === null || spec === null ? null : {
+      startNormalized: amountBounds === null ? 0 : clamp01$1(((route?.amount ?? 0) - amountBounds.min) / (amountBounds.max - amountBounds.min)),
+      pixelsPerFullSpan: PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+      // No armed source, unmapped pair, or non-modulatable target:
+      // vertical motion is inert (the HUD explains why).
+      write: amountBounds === null ? null : (normalized2) => {
+        const span = amountBounds.max - amountBounds.min;
+        const freeAmount = amountBounds.min + normalized2 * span;
+        let amountToWrite = freeAmount;
+        if (spec.modulationParameterKind === "pitchSemitones") {
+          const nearest = Math.round(freeAmount);
+          if (Math.abs(freeAmount - nearest) <= MOD_DETENT_CAPTURE_ST) {
+            amountToWrite = nearest;
+            if (gestureScratchRef.current.lastModulationDetent !== nearest) {
+              onRequestHaptic?.();
+              gestureScratchRef.current.lastModulationDetent = nearest;
+            }
+          } else {
+            gestureScratchRef.current.lastModulationDetent = null;
+          }
+        }
+        const amountBinding = activeAmountBindingRef.current;
+        if (amountBinding.value !== null) {
+          amountBinding.setValue(amountToWrite);
+        }
+      },
+      onActivate: () => {
+        endHostGesture();
+        const editable = amountBounds !== null;
+        setDraggingCell({ controlID, mode: editable ? "modulation" : "base" });
+        clearHudLinger();
+        setHudState({
+          phase: "active",
+          axis: editable ? "modulation" : "base",
+          controlID
+        });
+      }
+    };
+    gestureController.startGesture(event, {
+      horizontal: surface === "graph" ? graphChannelFor("horizontal") : baseChannel,
+      vertical: surface === "graph" ? graphChannelFor("vertical") : modulationChannel,
+      onFinish: (reason, ownedAxis) => {
+        endHostGesture();
+        setDraggingCell(null);
+        setGraphAxis(null);
+        setActiveRoute(null);
+        if (surface === "cell" && ownedAxis !== null) {
+          hideHud(reason === "cancel");
+        } else {
+          hideHud(true);
+        }
+      },
+      onLongPress: surface === "cell" && controlID !== null && onRequestParameterMenu ? (clientX, clientY) => onRequestParameterMenu(controlID, clientX, clientY) : void 0,
+      resolveScrollLockTargets
+    });
     if (surface === "cell" && controlID !== null) {
       setDraggingCell({ controlID, mode: "pending" });
     }
-  }, [applyGestureSample, onRequestParameterMenu, resolveScrollLockTargets, restoreScrollLocks, routeFor, targetKindFor]);
+  }, [
+    beginHostGesture,
+    clearHudLinger,
+    endHostGesture,
+    gestureController,
+    hideHud,
+    onRequestHaptic,
+    onRequestParameterMenu,
+    resolveScrollLockTargets,
+    routeFor,
+    targetKindFor
+  ]);
   const cellPointerDown = reactExports.useCallback((event, controlID) => {
     startGesture(event, "cell", controlID);
   }, [startGesture]);
@@ -19977,97 +20129,23 @@ function MobileVoiceFocusedEditor({
       highNormalized: presentation.band?.highNormalized ?? presentation.baseNormalized,
       bypassed: presentation.railState === "bypassed"
     };
-    return reactDomExports.createPortal(
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "div",
-        {
-          "data-role": "mobile-voice-hud",
-          "data-hud-axis": hudState.axis,
-          className: `mobile-voice-hud${hudState.phase !== "hidden" ? " is-visible" : ""}${isModulation ? " is-modulation" : ""}`,
-          style: { "--mobile-voice-source-accent": sourceAccent },
-          "aria-hidden": "true",
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "mobile-voice-hud-header", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  className: "mobile-voice-hud-micro",
-                  style: { color: isModulation ? sourceAccent : MOBILE_VOICE_OWNER_ACCENT },
-                  children: isModulation ? "MOD ↕" : "BASE ↔"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { className: "mobile-voice-hud-label", children: isModulation && isTune ? "Tune" : spec.fullLabel }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  className: "mobile-voice-hud-micro mobile-voice-hud-source",
-                  style: { color: isModulation ? sourceAccent : "rgba(232, 236, 239, 0.6)" },
-                  children: sourceLine
-                }
-              )
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mobile-voice-hud-knob", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                ParameterKnobArtwork,
-                {
-                  baseNormalized: presentation.baseNormalized,
-                  baseOriginNormalized: baseOrigin,
-                  ownerAccent: MOBILE_VOICE_OWNER_ACCENT,
-                  sourceAccent,
-                  modRing,
-                  emphasis: hudState.axis === "base" ? "base" : "modulation"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mobile-voice-hud-center", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Base" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { "data-role": "mobile-voice-hud-base", children: formatMobileVoiceValue(format, clamp$3(bindings[controlID].value, display.min, display.max)) })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  className: "mobile-voice-hud-limit is-low",
-                  style: { visibility: limitsVisible ? "visible" : "hidden" },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Low" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { "data-role": "mobile-voice-hud-low", children: lowText })
-                  ]
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                "div",
-                {
-                  className: "mobile-voice-hud-limit is-high",
-                  style: { visibility: limitsVisible ? "visible" : "hidden" },
-                  children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "High" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { "data-role": "mobile-voice-hud-high", children: highText })
-                  ]
-                }
-              )
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "mobile-voice-hud-footer", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  className: "mobile-voice-hud-micro",
-                  style: { color: !isModulation ? MOBILE_VOICE_OWNER_ACCENT : "rgba(232, 236, 239, 0.35)" },
-                  children: "↔ Base"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "span",
-                {
-                  className: "mobile-voice-hud-micro",
-                  style: { color: isModulation ? sourceAccent : "rgba(232, 236, 239, 0.35)" },
-                  children: "↕ Mod amount"
-                }
-              )
-            ] })
-          ]
-        }
-      ),
-      hudContainer
-    );
+    const model = {
+      visible: hudState.phase !== "hidden",
+      axis: hudState.axis,
+      label: isModulation && isTune ? "Tune" : spec.fullLabel,
+      sourceLine,
+      ownerAccent: MOBILE_VOICE_OWNER_ACCENT,
+      ownerAccentRgb: MOBILE_VOICE_OWNER_ACCENT_RGB,
+      sourceAccent,
+      baseNormalized: presentation.baseNormalized,
+      baseOriginNormalized: baseOrigin,
+      baseText: formatMobileVoiceValue(format, clamp$3(bindings[controlID].value, display.min, display.max)),
+      lowText,
+      highText,
+      limitsVisible,
+      modRing
+    };
+    return reactDomExports.createPortal(/* @__PURE__ */ jsxRuntimeExports.jsx(ParameterPrecisionHud, { model }), hudContainer);
   }, [armedSource, armedSourceIdentity, bindings, hudContainer, hudState, presentCell, sourceAccent, targetKindFor]);
   const isMuted = bindings.mute.value >= 0.5;
   const renderRail = (presentation) => {
@@ -20234,6 +20312,7 @@ function MobileVoiceFocusedEditor({
                   "aria-label": isActive ? `Turn oscillator ${oscillator.id} ${oscillatorMuted ? "on" : "off"}` : `Select oscillator ${oscillator.id}`,
                   "data-role": `mobile-voice-tab-${oscillator.id.toLowerCase()}`,
                   "data-oscillator-id": oscillator.id,
+                  "data-drag-dwell": `oscillator-tab:${oscillator.id}`,
                   className: `mobile-voice-tab${isActive ? " is-active" : ""}${oscillatorMuted ? " is-muted" : ""}`,
                   onClick: () => {
                     if (isActive) {
@@ -22163,6 +22242,7 @@ const GLIDE_TIME_ENDPOINT_ID = "glideTime";
 const FILTER_MODE_ENDPOINT_ID = "filterMode";
 const FILTER_CUTOFF_ENDPOINT_ID = "filterCutoff";
 const FILTER_Q_ENDPOINT_ID = "filterQ";
+const FILTER_MIX_ENDPOINT_ID = "filterMix";
 const MSEG_1_MORPH_ENDPOINT_ID = "mseg1Morph";
 const MSEG_2_MORPH_ENDPOINT_ID = "mseg2Morph";
 const MSEG_3_MORPH_ENDPOINT_ID = "mseg3Morph";
@@ -23900,6 +23980,14 @@ function useSynthPatchViewModel({
     initialValue: 0.707107,
     coerce: (value) => clamp$1(Number(value) || 0, 0.1, 20)
   });
+  const filterMix = usePatchParameterBinding({
+    endpointID: FILTER_MIX_ENDPOINT_ID,
+    initialValue: 1,
+    coerce: (value) => {
+      const numeric = Number(value);
+      return clamp$1(Number.isFinite(numeric) ? numeric : 1, 0, 1);
+    }
+  });
   const unisonVoices = usePatchParameterBinding({
     endpointID: oscillatorEndpointID("unisonVoices"),
     initialValue: 1,
@@ -25237,6 +25325,7 @@ function useSynthPatchViewModel({
     filterMode,
     filterCutoff,
     filterQ,
+    filterMix,
     unisonVoices,
     unisonDetune,
     unisonBlend,
@@ -26496,7 +26585,7 @@ function IOSPatchViewBody() {
     synthView.warpMode,
     synthView.wavetablePosition
   ]);
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "ios-shell", style: shellStyle, children: [
+  return /* @__PURE__ */ jsxRuntimeExports.jsx(ParameterHudLayerContext.Provider, { value: mobileVoiceHudLayer, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "ios-shell", style: shellStyle, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
@@ -26686,7 +26775,7 @@ function IOSPatchViewBody() {
         keyboardRef
       }
     ) })
-  ] });
+  ] }) });
 }
 function IOSPatchView({
   patchConnection,

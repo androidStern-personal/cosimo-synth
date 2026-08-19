@@ -193,6 +193,42 @@ export type VoiceGlideControlSurfaceProps = {
     className?: string;
 };
 
+export type FilterTravelEndpointSide = "start" | "end" | "base";
+
+/** Every travel grip, for drag lifecycle purposes. */
+export type FilterTravelGestureSide = FilterTravelEndpointSide | "center";
+
+export type FilterEndpointState = {
+    readonly cutoffHz: number;
+    readonly q: number;
+};
+
+/**
+ * T04A: the armed source's modulation travel — the filter at source = 0
+ * (start) and at full deflection (end) — drawn as the two response curves
+ * with the swept region shaded in the source color. Renders only while the
+ * armed source has at least one filter mapping (T07: color never implies a
+ * mapping that does not exist). The start of a fully unipolar travel is the
+ * base handle itself; only bipolar travel gets its own start handle.
+ */
+export type FilterModulationTravel = {
+    readonly start: FilterEndpointState;
+    readonly end: FilterEndpointState;
+    readonly accent: string;
+    readonly cutoffEditable: boolean;
+    readonly qEditable: boolean;
+    readonly showStartHandle: boolean;
+    /**
+     * "start": the base handle IS the travel start (a unipolar axis is
+     * routed), so its drags pin the end and the dedicated center grip owns
+     * translation. "translate": base is the travel center (bipolar-only
+     * travel) and keeps its plain translate behavior.
+     */
+    readonly baseHandleMode: "translate" | "start";
+    /** Render the dedicated center translate grip at the travel midpoint. */
+    readonly centerHandle: boolean;
+};
+
 export type FilterResponseGraphProps = {
     baseMode: number;
     baseCutoffHz: number;
@@ -213,6 +249,17 @@ export type FilterResponseGraphProps = {
     onGestureEnd?: () => void;
     onCutoffSet: (nextValue: number) => void;
     onQSet: (nextValue: number) => void;
+    modulationTravel?: FilterModulationTravel | null;
+    onTravelEndpointSet?: (side: FilterTravelEndpointSide, state: FilterEndpointState) => void;
+    /**
+     * Rigid screen-space translation from the center grip: both endpoints
+     * moved by one pixel delta and re-read through the axis transfers. The
+     * consumer re-derives base + amounts from the pair.
+     */
+    onTravelTranslate?: (start: FilterEndpointState, end: FilterEndpointState) => void;
+    /** Bracket a travel drag: snapshot the fixed endpoint, open host gestures. */
+    onTravelGestureStart?: (side: FilterTravelGestureSide) => void;
+    onTravelGestureEnd?: () => void;
     className?: string;
 };
 
@@ -1370,6 +1417,11 @@ export function FilterResponseGraph({
     onGestureEnd,
     onCutoffSet,
     onQSet,
+    modulationTravel = null,
+    onTravelEndpointSet,
+    onTravelTranslate,
+    onTravelGestureStart,
+    onTravelGestureEnd,
     className,
 }: FilterResponseGraphProps) {
     const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -1379,17 +1431,31 @@ export function FilterResponseGraph({
     const [activePointerId, setActivePointerId] = useState<number | null>(null);
     const dragStateRef = useRef<{
         pointerId: number;
+        target: "value" | FilterTravelGestureSide;
         startClientX: number;
         startClientY: number;
         pointerOffsetX: number;
         pointerOffsetY: number;
         hasMoved: boolean;
+        /** Grab-time endpoint screen points for rigid center translation. */
+        travelAnchor?: {
+            readonly startPoint: { readonly x: number; readonly y: number };
+            readonly endPoint: { readonly x: number; readonly y: number };
+        };
     } | null>(null);
     const applyHandlePointerPositionRef = useRef<(clientX: number, clientY: number) => void>(() => undefined);
     const onGestureStartRef = useRef(onGestureStart);
     const onGestureEndRef = useRef(onGestureEnd);
+    const onTravelEndpointSetRef = useRef(onTravelEndpointSet);
+    const onTravelTranslateRef = useRef(onTravelTranslate);
+    const onTravelGestureStartRef = useRef(onTravelGestureStart);
+    const onTravelGestureEndRef = useRef(onTravelGestureEnd);
     onGestureStartRef.current = onGestureStart;
     onGestureEndRef.current = onGestureEnd;
+    onTravelEndpointSetRef.current = onTravelEndpointSet;
+    onTravelTranslateRef.current = onTravelTranslate;
+    onTravelGestureStartRef.current = onTravelGestureStart;
+    onTravelGestureEndRef.current = onTravelGestureEnd;
     const baseModel = useMemo(() => createFilterResponseModel({
         mode: baseMode,
         cutoffHz: baseCutoffHz,
@@ -1484,6 +1550,102 @@ export function FilterResponseGraph({
         };
     }, [baseModel, basePath, resonanceNormalizedFromQ]);
 
+    const travelGeometry = useMemo(() => {
+        if (!modulationTravel) {
+            return null;
+        }
+
+        const pointFor = (state: FilterEndpointState) => ({
+            x: basePath.plotLeft + (basePath.plotWidth * clamp(
+                filterCutoffHzToNormalized(clamp(state.cutoffHz, FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ)),
+                0,
+                1,
+            )),
+            y: basePath.plotBottom - (basePath.plotHeight * clamp(resonanceNormalizedFromQ(state.q), 0, 1)),
+        });
+        const toPolyline = (points: ReadonlyArray<{ x: number; y: number }>) => (
+            points.map((point) => `${point.x.toFixed(2)} ${point.y.toFixed(2)}`).join(" L ")
+        );
+
+        const startResponse = buildFilterResponsePath(
+            createFilterResponseModel({
+                mode: baseMode,
+                cutoffHz: modulationTravel.start.cutoffHz,
+                q: modulationTravel.start.q,
+            }).magnitudesDb,
+            size.width,
+            size.height,
+        );
+        const endResponse = buildFilterResponsePath(
+            createFilterResponseModel({
+                mode: baseMode,
+                cutoffHz: modulationTravel.end.cutoffHz,
+                q: modulationTravel.end.q,
+            }).magnitudesDb,
+            size.width,
+            size.height,
+        );
+        const shadePath = startResponse.points.length > 0 && endResponse.points.length > 0
+            ? `M ${toPolyline(startResponse.points)} L ${toPolyline([...endResponse.points].reverse())} Z`
+            : "";
+
+        const startPoint = pointFor(modulationTravel.start);
+        const endPoint = pointFor(modulationTravel.end);
+        const basePoint = { x: baseHandle.x, y: baseHandle.y };
+        // ADR-025 zero language: a 0% endpoint parks as a dotted tab beside
+        // base instead of stacking a dead handle on the base grab area.
+        const endParked = Math.hypot(endPoint.x - basePoint.x, endPoint.y - basePoint.y) < 3;
+        const startParked = modulationTravel.showStartHandle
+            && Math.hypot(startPoint.x - basePoint.x, startPoint.y - basePoint.y) < 3;
+        const presentedEnd = endParked ? { x: basePoint.x + 18, y: basePoint.y } : endPoint;
+        const presentedStart = startParked ? { x: basePoint.x - 18, y: basePoint.y } : startPoint;
+        const travelStart = modulationTravel.showStartHandle ? presentedStart : basePoint;
+        const centerPoint = {
+            x: (travelStart.x + presentedEnd.x) / 2,
+            y: (travelStart.y + presentedEnd.y) / 2,
+        };
+
+        return {
+            startCurvePath: startResponse.path,
+            endCurvePath: endResponse.path,
+            shadePath,
+            startPoint: presentedStart,
+            endPoint: presentedEnd,
+            /** Unparked endpoint points: the rigid-translate anchor. */
+            trueStartPoint: modulationTravel.showStartHandle ? startPoint : basePoint,
+            trueEndPoint: endPoint,
+            centerPoint,
+            startParked,
+            endParked,
+        };
+    }, [baseHandle, baseMode, basePath, modulationTravel, resonanceNormalizedFromQ, size.height, size.width]);
+
+    const beginTravelEndpointDrag = (side: FilterTravelEndpointSide, handleX: number, handleY: number) => (
+        (event: ReactPointerEvent<SVGCircleElement>) => {
+            event.preventDefault();
+            endDrag();
+            try {
+                surfaceRef.current?.setPointerCapture(event.pointerId);
+            } catch {
+                // Window-level termination still owns unsupported or synthetic pointers.
+            }
+            const bounds = surfaceRef.current?.getBoundingClientRect();
+            dragStateRef.current = {
+                pointerId: event.pointerId,
+                target: side,
+                startClientX: event.clientX,
+                startClientY: event.clientY,
+                pointerOffsetX: bounds ? event.clientX - (bounds.left + handleX) : 0,
+                pointerOffsetY: bounds ? event.clientY - (bounds.top + handleY) : 0,
+                hasMoved: false,
+            };
+            // Snapshot the fixed endpoint before the first write: endpoint
+            // math must anchor on where the OTHER endpoint was at grab time.
+            onTravelGestureStartRef.current?.(side);
+            setActivePointerId(event.pointerId);
+        }
+    );
+
     const applyHandlePointerPosition = (clientX: number, clientY: number) => {
         const surface = surfaceRef.current;
         const dragState = dragStateRef.current;
@@ -1493,23 +1655,63 @@ export function FilterResponseGraph({
         }
 
         const bounds = surface.getBoundingClientRect();
-        const handleClientX = clientX - dragState.pointerOffsetX;
-        const handleClientY = clientY - dragState.pointerOffsetY;
-        const plotX = clamp(handleClientX - bounds.left, basePath.plotLeft, basePath.plotRight);
-        const plotY = clamp(handleClientY - bounds.top, basePath.plotTop, basePath.plotBottom);
-        const nextCutoffNormalized = clamp(
-            (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
-            0,
-            1,
-        );
-        const nextQNormalized = clamp(
-            1 - ((plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight)),
-            0,
-            1,
+        const stateAtPlotPoint = (rawPlotX: number, rawPlotY: number): FilterEndpointState => {
+            const plotX = clamp(rawPlotX, basePath.plotLeft, basePath.plotRight);
+            const plotY = clamp(rawPlotY, basePath.plotTop, basePath.plotBottom);
+            const cutoffNormalized = clamp(
+                (plotX - basePath.plotLeft) / Math.max(1, basePath.plotWidth),
+                0,
+                1,
+            );
+            const qNormalized = clamp(
+                1 - ((plotY - basePath.plotTop) / Math.max(1, basePath.plotHeight)),
+                0,
+                1,
+            );
+            return {
+                cutoffHz: clamp(normalizedToFilterCutoffHz(cutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ),
+                q: clamp(resonanceQFromSurface(qNormalized), FILTER_Q_MIN, FILTER_Q_MAX),
+            };
+        };
+
+        if (dragState.target === "center") {
+            const anchor = dragState.travelAnchor;
+            if (!anchor) {
+                return;
+            }
+            // Rigid screen-space translation: the interval your eye tracks is
+            // a screen object, so both endpoints move by ONE pixel delta,
+            // clamped so neither leaves the plot (rigid means rigid: it stops
+            // at the rails instead of squashing one side).
+            const rawDeltaX = clientX - dragState.startClientX;
+            const rawDeltaY = clientY - dragState.startClientY;
+            const minX = Math.min(anchor.startPoint.x, anchor.endPoint.x);
+            const maxX = Math.max(anchor.startPoint.x, anchor.endPoint.x);
+            const minY = Math.min(anchor.startPoint.y, anchor.endPoint.y);
+            const maxY = Math.max(anchor.startPoint.y, anchor.endPoint.y);
+            const deltaX = clamp(rawDeltaX, basePath.plotLeft - minX, basePath.plotRight - maxX);
+            const deltaY = clamp(rawDeltaY, basePath.plotTop - minY, basePath.plotBottom - maxY);
+            onTravelTranslateRef.current?.(
+                stateAtPlotPoint(anchor.startPoint.x + deltaX, anchor.startPoint.y + deltaY),
+                stateAtPlotPoint(anchor.endPoint.x + deltaX, anchor.endPoint.y + deltaY),
+            );
+            return;
+        }
+
+        const next = stateAtPlotPoint(
+            (clientX - dragState.pointerOffsetX) - bounds.left,
+            (clientY - dragState.pointerOffsetY) - bounds.top,
         );
 
-        onCutoffSet(clamp(normalizedToFilterCutoffHz(nextCutoffNormalized), FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MAX_HZ));
-        onQSet(clamp(resonanceQFromSurface(nextQNormalized), FILTER_Q_MIN, FILTER_Q_MAX));
+        if (dragState.target !== "value") {
+            // Travel endpoints move in both axes with the same transfers as
+            // the base handle; the consumer maps them onto route amounts.
+            onTravelEndpointSetRef.current?.(dragState.target, next);
+            return;
+        }
+
+        onCutoffSet(next.cutoffHz);
+        onQSet(next.q);
     };
     applyHandlePointerPositionRef.current = applyHandlePointerPosition;
 
@@ -1532,8 +1734,12 @@ export function FilterResponseGraph({
             // Capture may already be gone after cancellation, blur, or unmount.
         }
 
-        if (dragState.hasMoved) {
-            onGestureEndRef.current?.();
+        if (dragState.target === "value") {
+            if (dragState.hasMoved) {
+                onGestureEndRef.current?.();
+            }
+        } else {
+            onTravelGestureEndRef.current?.();
         }
     }, []);
 
@@ -1561,7 +1767,9 @@ export function FilterResponseGraph({
 
         if (!dragState.hasMoved) {
             dragState.hasMoved = true;
-            onGestureStartRef.current?.();
+            if (dragState.target === "value") {
+                onGestureStartRef.current?.();
+            }
         }
         applyHandlePointerPositionRef.current(event.clientX, event.clientY);
     }, [endDrag]);
@@ -1821,14 +2029,25 @@ export function FilterResponseGraph({
                                 // Window-level termination still owns unsupported or synthetic pointers.
                             }
                             const bounds = surfaceRef.current?.getBoundingClientRect();
+                            // With a unipolar travel routed, base IS the travel
+                            // start: its drags pin the end (the center grip
+                            // owns translation). Bipolar travel keeps the
+                            // plain translate: base is already the center.
+                            const target = modulationTravel && modulationTravel.baseHandleMode === "start"
+                                ? "base" as const
+                                : "value" as const;
                             dragStateRef.current = {
                                 pointerId: event.pointerId,
+                                target,
                                 startClientX: event.clientX,
                                 startClientY: event.clientY,
                                 pointerOffsetX: bounds ? event.clientX - (bounds.left + baseHandle.x) : 0,
                                 pointerOffsetY: bounds ? event.clientY - (bounds.top + baseHandle.y) : 0,
                                 hasMoved: false,
                             };
+                            if (target === "base") {
+                                onTravelGestureStartRef.current?.("base");
+                            }
                             setActivePointerId(event.pointerId);
                         }}
                     />
@@ -1858,6 +2077,191 @@ export function FilterResponseGraph({
                         strokeLinecap="round"
                         pointerEvents="none"
                     />
+                    {modulationTravel && travelGeometry ? (
+                        <g data-role="filter-travel-overlay">
+                            {travelGeometry.shadePath ? (
+                                <path
+                                    data-role="filter-travel-shade"
+                                    d={travelGeometry.shadePath}
+                                    fill={modulationTravel.accent}
+                                    fillOpacity="0.14"
+                                    stroke="none"
+                                    pointerEvents="none"
+                                />
+                            ) : null}
+                            <path
+                                data-role="filter-travel-start-curve"
+                                d={travelGeometry.startCurvePath}
+                                fill="none"
+                                stroke={modulationTravel.accent}
+                                strokeOpacity="0.5"
+                                strokeWidth="1.6"
+                                pointerEvents="none"
+                            />
+                            <path
+                                data-role="filter-travel-end-curve"
+                                d={travelGeometry.endCurvePath}
+                                fill="none"
+                                stroke={modulationTravel.accent}
+                                strokeOpacity="0.9"
+                                strokeWidth="2"
+                                pointerEvents="none"
+                            />
+                            {modulationTravel.centerHandle && !travelGeometry.endParked ? (
+                                <g data-role="filter-travel-center">
+                                    <rect
+                                        data-role="filter-travel-handle-center"
+                                        x={travelGeometry.centerPoint.x - 5}
+                                        y={travelGeometry.centerPoint.y - 5}
+                                        width="10"
+                                        height="10"
+                                        rx="2"
+                                        transform={`rotate(45 ${travelGeometry.centerPoint.x} ${travelGeometry.centerPoint.y})`}
+                                        fill="rgb(9 13 15 / 0.9)"
+                                        stroke={modulationTravel.accent}
+                                        strokeWidth="1.6"
+                                        pointerEvents="none"
+                                    />
+                                    <circle
+                                        data-role="filter-travel-hit-target-center"
+                                        role="slider"
+                                        aria-label="Translate filter modulation travel"
+                                        aria-valuemin={FILTER_CUTOFF_MIN_HZ}
+                                        aria-valuemax={FILTER_CUTOFF_MAX_HZ}
+                                        aria-valuenow={Math.round(baseCutoffHz)}
+                                        tabIndex={0}
+                                        cx={travelGeometry.centerPoint.x}
+                                        cy={travelGeometry.centerPoint.y}
+                                        r="14"
+                                        fill="transparent"
+                                        className="cursor-grab active:cursor-grabbing"
+                                        onPointerDown={(event) => {
+                                            event.preventDefault();
+                                            endDrag();
+                                            try {
+                                                surfaceRef.current?.setPointerCapture(event.pointerId);
+                                            } catch {
+                                                // Window-level termination still owns unsupported or synthetic pointers.
+                                            }
+                                            // Rigid screen-space translation: both endpoints
+                                            // ride one pixel delta from their grab-time spots.
+                                            dragStateRef.current = {
+                                                pointerId: event.pointerId,
+                                                target: "center",
+                                                startClientX: event.clientX,
+                                                startClientY: event.clientY,
+                                                pointerOffsetX: 0,
+                                                pointerOffsetY: 0,
+                                                hasMoved: false,
+                                                travelAnchor: {
+                                                    startPoint: travelGeometry.trueStartPoint,
+                                                    endPoint: travelGeometry.trueEndPoint,
+                                                },
+                                            };
+                                            onTravelGestureStartRef.current?.("center");
+                                            setActivePointerId(event.pointerId);
+                                        }}
+                                    />
+                                </g>
+                            ) : null}
+                            {(travelGeometry.endParked || travelGeometry.startParked) ? (
+                                <g data-role="filter-travel-parked-leaders" pointerEvents="none">
+                                    {travelGeometry.endParked ? (
+                                        <line
+                                            x1={baseHandle.x}
+                                            y1={baseHandle.y}
+                                            x2={travelGeometry.endPoint.x}
+                                            y2={travelGeometry.endPoint.y}
+                                            stroke={modulationTravel.accent}
+                                            strokeOpacity="0.5"
+                                            strokeWidth="1.2"
+                                            strokeDasharray="2 3"
+                                        />
+                                    ) : null}
+                                    {travelGeometry.startParked ? (
+                                        <line
+                                            x1={baseHandle.x}
+                                            y1={baseHandle.y}
+                                            x2={travelGeometry.startPoint.x}
+                                            y2={travelGeometry.startPoint.y}
+                                            stroke={modulationTravel.accent}
+                                            strokeOpacity="0.5"
+                                            strokeWidth="1.2"
+                                            strokeDasharray="2 3"
+                                        />
+                                    ) : null}
+                                </g>
+                            ) : null}
+                            {([
+                                ...(modulationTravel.showStartHandle
+                                    ? [["start", travelGeometry.startPoint, modulationTravel.start, travelGeometry.startParked] as const]
+                                    : []),
+                                ["end", travelGeometry.endPoint, modulationTravel.end, travelGeometry.endParked] as const,
+                            ]).map(([side, point, state, parked]) => (
+                                <g key={`filter-travel-${side}`} data-parked={parked}>
+                                    <circle
+                                        data-role={`filter-travel-handle-${side}`}
+                                        data-parked={parked}
+                                        cx={point.x}
+                                        cy={point.y}
+                                        r="6.5"
+                                        fill={side === "end" ? modulationTravel.accent : "rgb(9 13 15 / 0.9)"}
+                                        fillOpacity={parked ? 0.35 : side === "end" ? 1 : 0.9}
+                                        stroke={side === "end" ? "rgb(255 255 255 / 0.5)" : modulationTravel.accent}
+                                        strokeWidth={side === "end" ? 1.4 : 2}
+                                        strokeDasharray={parked ? "2 3" : undefined}
+                                        pointerEvents="none"
+                                    />
+                                    <circle
+                                        data-role={`filter-travel-hit-target-${side}`}
+                                        role="slider"
+                                        aria-label={`Filter modulation travel ${side}`}
+                                        aria-valuemin={FILTER_CUTOFF_MIN_HZ}
+                                        aria-valuemax={FILTER_CUTOFF_MAX_HZ}
+                                        aria-valuenow={Math.round(state.cutoffHz)}
+                                        tabIndex={0}
+                                        cx={point.x}
+                                        cy={point.y}
+                                        r={parked ? 12 : 16}
+                                        fill="transparent"
+                                        className="cursor-grab active:cursor-grabbing"
+                                        onPointerDown={beginTravelEndpointDrag(side, point.x, point.y)}
+                                        onKeyDown={(event) => {
+                                            const stepOctaves = event.key === "ArrowRight"
+                                                ? 0.1
+                                                : event.key === "ArrowLeft" ? -0.1 : 0;
+                                            const stepSurface = event.key === "ArrowUp"
+                                                ? 0.03
+                                                : event.key === "ArrowDown" ? -0.03 : 0;
+                                            if (stepOctaves === 0 && stepSurface === 0) {
+                                                return;
+                                            }
+                                            event.preventDefault();
+                                            // Keyboard steps are one-shot travel gestures.
+                                            onTravelGestureStartRef.current?.(side);
+                                            onTravelEndpointSetRef.current?.(side, {
+                                                cutoffHz: clamp(
+                                                    state.cutoffHz * (2 ** stepOctaves),
+                                                    FILTER_CUTOFF_MIN_HZ,
+                                                    FILTER_CUTOFF_MAX_HZ,
+                                                ),
+                                                q: clamp(
+                                                    resonanceQFromSurface(clamp(
+                                                        resonanceNormalizedFromQ(state.q) + stepSurface,
+                                                        0,
+                                                        1,
+                                                    )),
+                                                    FILTER_Q_MIN,
+                                                    FILTER_Q_MAX,
+                                                ),
+                                            });
+                                            onTravelGestureEndRef.current?.();
+                                        }}
+                                    />
+                                </g>
+                            ))}
+                        </g>
+                    ) : null}
                 </svg>
             </div>
             <pre data-role="filter-graph-debug" className="hidden">

@@ -1062,6 +1062,826 @@ test("mobile oscillator readout cells own touch and detent discrete values with 
     }
 });
 
+test("compact Voice splits its height 50/50 between the wavetable editor and the filter card", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+        },
+    });
+
+    try {
+        // T04 decision: the articulation/controls pane leaves compact mobile
+        // entirely; the freed height goes to the two remaining cards.
+        assert.equal(await page.locator('[data-role="keyboard-controls"]').count(), 0);
+
+        const measureRows = async () => {
+            const editor = await page
+                .locator('[data-role="mobile-workspace-panel-voice"] [data-role="desktop-oscillator-connection-boundary"]')
+                .boundingBox();
+            const filter = await page.locator('[data-role="filter-card"]').boundingBox();
+            assert.ok(editor, "the wavetable editor row must render");
+            assert.ok(filter, "the filter card must render");
+            return { editor, filter };
+        };
+
+        const tall = await measureRows();
+        assert.ok(tall.editor.height > 200, `wavetable row too short at 852: ${tall.editor.height}`);
+        assert.ok(
+            Math.abs(tall.editor.height - tall.filter.height) <= 2,
+            `not an even split at 852: editor ${tall.editor.height}, filter ${tall.filter.height}`,
+        );
+        // The editor fills its row: the filter card starts one grid gap below.
+        const tallGap = tall.filter.y - (tall.editor.y + tall.editor.height);
+        assert.ok(tallGap >= 0 && tallGap <= 12, `dead space between the rows at 852: ${tallGap}`);
+
+        await page.setViewportSize({ width: 393, height: 700 });
+        await waitForReactFrames(page, 3);
+        const short = await measureRows();
+        assert.ok(
+            short.editor.height < tall.editor.height,
+            `the split must track the viewport: ${short.editor.height} vs ${tall.editor.height}`,
+        );
+        assert.ok(
+            Math.abs(short.editor.height - short.filter.height) <= 2,
+            `not an even split at 700: editor ${short.editor.height}, filter ${short.filter.height}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("the compact filter knob row exposes Cut/Res/Mix as modulation destinations and Off greys everything but the mode chip", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+
+    try {
+        // The synth boots with the filter Off, so the greyed state is the
+        // boot state: destinations advertised, interaction blocked.
+        const card = page.locator('[data-role="filter-card"]');
+        assert.equal(await card.getAttribute("data-filter-off"), "true");
+
+        const kinds = await page
+            .locator('[data-role="voice-filter-knob-row"] .mobile-filter-knob-cell')
+            .evaluateAll((cells) => cells.map((cell) => cell.getAttribute("data-modulation-target-kind")));
+        assert.deepEqual(kinds, ["filterCutoffOctaves", "filterQ", "filterMix"]);
+
+        const mixCell = page.locator('.mobile-filter-knob-cell[data-modulation-target-kind="filterMix"]');
+        assert.equal(await mixCell.evaluate((element) => getComputedStyle(element).pointerEvents), "none");
+
+        // The mode chip stays live while Off greys the rest of the card.
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="filter-card"]')?.getAttribute("data-filter-off") === "false"
+        ));
+        assert.equal(await mixCell.evaluate((element) => getComputedStyle(element).pointerEvents), "auto");
+
+        // The shared control contract: a horizontal drag on the Mix knob
+        // edits its base value (leftward lowers it).
+        await clearHarnessDebugLog(page);
+        const knob = page.locator('[data-role="voice-filter-knob-filterMix"]');
+        const box = await knob.boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (let step = 1; step <= 4; step += 1) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{
+                    x: start.x - ((60 * step) / 4),
+                    y: start.y,
+                    radiusX: 5,
+                    radiusY: 5,
+                    force: 1,
+                }],
+            });
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "filter mix knob drag",
+            (candidate) => Number(candidate.parameterValues.filterMix) < 0.95,
+        );
+        const mixValue = Number(snapshot.parameterValues.filterMix);
+        assert.ok(mixValue >= 0 && mixValue < 0.95, `dragging left must lower Mix: ${mixValue}`);
+    } finally {
+        await cdp.detach();
+        await page.close();
+    }
+});
+
+test("the Res knob sweeps uniformly: equal drag travel covers equal fractions of its range", async () => {
+    // Product decision (2026-08-19): the GRAPH handle keeps the curve-lab
+    // sigmoid, but the knob is an ordinary knob — equal finger travel moves
+    // the dial by equal fractions of its full range. For the log-scaled Q
+    // dial that means equal travel produces equal Q RATIOS.
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+        },
+    });
+
+    try {
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        const knob = page.locator('[data-role="voice-filter-knob-filterQ"]');
+        await knob.waitFor();
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("filterQ", 0.2, true);
+        });
+        await page.waitForFunction(() => (
+            Math.abs(Number(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterValues.filterQ) - 0.2) <= 0.001
+        ));
+
+        const dragRight = async (pixels) => {
+            const box = await knob.boundingBox();
+            assert.ok(box);
+            const from = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+            await page.mouse.move(from.x, from.y);
+            await page.mouse.down();
+            // The 5px throwaway move eats the classifier's consumed
+            // activation sample so the measured travel is exact.
+            await page.mouse.move(from.x + 5, from.y);
+            await page.mouse.move(from.x + 5 + pixels, from.y, { steps: 6 });
+            await page.mouse.up();
+            await page.waitForTimeout(120);
+            return Number((await getHarnessSnapshot(page)).parameterValues.filterQ);
+        };
+
+        const first = await dragRight(44);
+        const second = await dragRight(44);
+        const third = await dragRight(44);
+
+        // Three identical 20%-of-range drags: successive Q ratios must match.
+        const ratioA = first / 0.2;
+        const ratioB = second / first;
+        const ratioC = third / second;
+        assert.ok(ratioA > 1.5, `each step must audibly move the dial: ${ratioA}`);
+        assert.ok(
+            Math.abs(ratioB - ratioA) / ratioA <= 0.08 && Math.abs(ratioC - ratioB) / ratioB <= 0.08,
+            `equal travel must sweep equal fractions of the dial: ${ratioA}, ${ratioB}, ${ratioC}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("Res knob modulation drags walk the dial with no downward cliff and no dead over-travel", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "res-walk",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "filterQ",
+            amount: 0,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+
+    const dragVertically = async (pixels) => {
+        const knob = page.locator('[data-role="voice-filter-knob-filterQ"]');
+        const box = await knob.boundingBox();
+        assert.ok(box);
+        const from = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        await page.mouse.move(from.x, from.y - Math.sign(pixels) * 5);
+        await page.mouse.move(from.x, from.y - pixels, { steps: 8 });
+        await page.mouse.up();
+        await page.waitForTimeout(150);
+        return readStoredRouteAmount(await getHarnessSnapshot(page), 1, "filterQ");
+    };
+    const resetAmount = async () => {
+        await page.evaluate(() => {
+            const raw = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"];
+            const parsed = JSON.parse(raw);
+            parsed.routes[0].amount = 0;
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(parsed));
+        });
+        await page.waitForFunction(() => {
+            const raw = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"];
+            return JSON.parse(raw).routes[0].amount === 0;
+        });
+    };
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded resonance route",
+            (candidate) => readStoredModulationState(candidate).routes.length === 1,
+        );
+        await page.locator('[data-role="filter-mode-chip"]').click();
+
+        // Base Q 0.707 sits 3% above the floor. Under the old linear-amount
+        // mapping, 40px down banked -4.4 of amount: the floor in 5px, dead
+        // travel after. Walking the dial, 40px covers 40/220 of the knob's
+        // range and the modulated value stays well above the floor.
+        const shortDown = await dragVertically(-40);
+        assert.ok(shortDown < -0.05, `downward travel must modulate: ${shortDown}`);
+        assert.ok(shortDown > -0.55, `40px must NOT reach the floor: ${shortDown}`);
+
+        // Full downward travel stops at the audible floor: no dead amount
+        // banked beyond it, so the next upward pixel responds immediately.
+        await resetAmount();
+        const longDown = await dragVertically(-200);
+        assert.ok(longDown <= -0.55 && longDown >= -0.65, `full travel pins at the floor, not past it: ${longDown}`);
+
+        // Upward stays alive over the same dial fractions.
+        await resetAmount();
+        const shortUp = await dragVertically(40);
+        assert.ok(shortUp > 0.1, `upward travel must modulate: ${shortUp}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("a knob modulation drag presents its canonical amount live, not at release", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "live-cutoff",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "filterCutoffOctaves",
+            amount: 0,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+            await nextPage.addInitScript(() => {
+                // Frame sampler: the deferred route document only flushes
+                // after a 50ms write-idle, so any live readout observed WHILE
+                // the pointer is still moving must come from the canonical
+                // amount path, never the document.
+                window.__hudSamples = [];
+                window.__lastMoveAt = 0;
+                window.addEventListener("pointermove", () => {
+                    window.__lastMoveAt = performance.now();
+                }, true);
+                const sample = () => {
+                    const sourceLine = document.querySelector('[data-role="mobile-voice-hud"] .mobile-voice-hud-source');
+                    const modFill = document.querySelector('[data-role="voice-filter-knob-filterCutoff"] .rack-knob-mod-fill');
+                    window.__hudSamples.push({
+                        text: sourceLine?.textContent ?? "",
+                        fillVisible: (modFill?.getAttribute("d") ?? "") !== "",
+                        whileMoving: performance.now() - window.__lastMoveAt < 40,
+                    });
+                    window.requestAnimationFrame(sample);
+                };
+                window.requestAnimationFrame(sample);
+            });
+        },
+    });
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded zero-amount cutoff route",
+            (candidate) => readStoredModulationState(candidate).routes.length === 1,
+        );
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        const knob = page.locator('[data-role="voice-filter-knob-filterCutoff"]');
+        await knob.waitFor();
+        const box = await knob.boundingBox();
+        assert.ok(box);
+        const from = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        await page.mouse.move(from.x, from.y - 110, { steps: 30 });
+        await page.mouse.up();
+
+        const liveSamples = await page.evaluate(() => window.__hudSamples.filter((candidate) => (
+            candidate.whileMoving
+            && candidate.fillVisible
+            && /MSEG 1/.test(candidate.text)
+            && /oct/i.test(candidate.text)
+            && !/\+0\.0/.test(candidate.text)
+        )).length);
+        assert.ok(
+            liveSamples >= 1,
+            "The HUD and mod ring must present the canonical amount during movement, not after the drag settles.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("the armed source's filter mappings draw the travel overlay and its end handle edits both amounts", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "travel-cutoff",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "filterCutoffOctaves",
+            amount: 2,
+            reducer: "max",
+        }, {
+            id: "travel-q",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "filterQ",
+            amount: 5,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded filter travel routes",
+            (candidate) => readStoredModulationState(candidate).routes.length === 2,
+        );
+
+        // The filter boots Off, which hides the overlay with the rest of the card.
+        const overlay = page.locator('[data-role="filter-travel-overlay"]');
+        assert.equal(await overlay.count(), 0);
+
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        await overlay.waitFor();
+
+        // SeqFX treatment: both extreme response curves, the shaded swept
+        // region, and the travel arrow. Unipolar travel starts at the base
+        // handle, so no separate start handle renders.
+        assert.equal(await page.locator('[data-role="filter-travel-start-curve"]').count(), 1);
+        assert.equal(await page.locator('[data-role="filter-travel-end-curve"]').count(), 1);
+        assert.notEqual(await page.locator('[data-role="filter-travel-shade"]').getAttribute("d"), "");
+        assert.equal(await page.locator('[data-role="filter-travel-hit-target-start"]').count(), 0);
+        // A routed unipolar axis puts translation on the center grip.
+        assert.equal(await page.locator('[data-role="filter-travel-hit-target-center"]').count(), 1);
+
+        // Unipolar +2 octaves from the 1 kHz base: the end sits at 4 kHz.
+        const endHandle = page.locator('[data-role="filter-travel-hit-target-end"]');
+        assert.equal(Number(await endHandle.getAttribute("aria-valuenow")), 4000);
+
+        // One diagonal end-handle drag edits BOTH route amounts through the
+        // same transfers the base handle uses.
+        const box = await endHandle.boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x - 60, start.y + 40, { steps: 8 });
+        await page.mouse.up();
+
+        const dragged = await waitForHarnessSnapshot(
+            page,
+            "travel end-handle diagonal drag",
+            (candidate) => {
+                const cutoffAmount = readStoredRouteAmount(candidate, 1, "filterCutoffOctaves");
+                const qAmount = readStoredRouteAmount(candidate, 1, "filterQ");
+                // Seeds were +2 oct / +5 Q: any drop below proves the write.
+                return cutoffAmount > -6 && cutoffAmount < 1.9
+                    && qAmount > -19 && qAmount < 4.5;
+            },
+        );
+        const draggedCutoff = readStoredRouteAmount(dragged, 1, "filterCutoffOctaves");
+        const draggedQ = readStoredRouteAmount(dragged, 1, "filterQ");
+        assert.ok(draggedCutoff > -6 && draggedCutoff < 1.9, `cutoff amount follows: ${draggedCutoff}`);
+        assert.ok(draggedQ > -19 && draggedQ < 4.5, `q amount follows: ${draggedQ}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("a travel axis without its own mapping stays pinned at base and never fabricates a route", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "travel-cutoff-only",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "filterCutoffOctaves",
+            amount: 2,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded cutoff-only travel route",
+            (candidate) => readStoredModulationState(candidate).routes.length === 1,
+        );
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        const endHandle = page.locator('[data-role="filter-travel-hit-target-end"]');
+        await endHandle.waitFor();
+
+        // The end handle sits at base resonance: the Q axis has no mapping.
+        const handleY = await page.locator('[data-role="filter-travel-handle-end"]').evaluate((element) => (
+            Number(element.getAttribute("cy"))
+        ));
+        const baseY = await page.locator('[data-role="filter-response-handle"]').evaluate((element) => (
+            Number(element.getAttribute("cy"))
+        ));
+        assert.ok(Math.abs(handleY - baseY) <= 1, `end handle must sit at base Q: ${handleY} vs ${baseY}`);
+
+        // A straight vertical drag writes nothing: the Q axis is inert and
+        // must not fabricate a filterQ mapping.
+        const box = await endHandle.boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x, start.y - 50, { steps: 6 });
+        await page.mouse.up();
+        await page.waitForTimeout(250);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.equal(
+            readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "filterQ"),
+            false,
+            "An inert travel axis must never fabricate a mapping.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("bipolar filter travel drags endpoints independently and base follows the midpoint", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "travel-bipolar-cutoff",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "bipolar",
+            targetKind: "filterCutoffOctaves",
+            amount: 1.5,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded bipolar travel route",
+            (candidate) => readStoredModulationState(candidate).routes.length === 1,
+        );
+        await page.locator('[data-role="filter-mode-chip"]').click();
+
+        // Bipolar travel renders its own start handle mirrored below base.
+        const startHandle = page.locator('[data-role="filter-travel-hit-target-start"]');
+        await startHandle.waitFor();
+        const startHz = Number(await startHandle.getAttribute("aria-valuenow"));
+        const endHz = Number(await page.locator('[data-role="filter-travel-hit-target-end"]').getAttribute("aria-valuenow"));
+        assert.ok(Math.abs(startHz - (1000 / (2 ** 1.5))) <= 3, `start mirrors base: ${startHz}`);
+        assert.ok(Math.abs(endHz - (1000 * (2 ** 1.5))) <= 6, `end mirrors base: ${endHz}`);
+
+        // Independent endpoints: dragging the START leftward leaves the END
+        // planted, so base moves to the new (geometric) midpoint and the
+        // amount widens to the new half-span.
+        const box = await startHandle.boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x - 40, start.y, { steps: 6 });
+        await page.mouse.up();
+
+        const dragged = await waitForHarnessSnapshot(
+            page,
+            "independent start-handle drag",
+            (candidate) => (
+                readStoredRouteAmount(candidate, 1, "filterCutoffOctaves") > 1.55
+                && Number(candidate.parameterValues.filterCutoff) < 995
+            ),
+        );
+        assert.ok(readStoredRouteAmount(dragged, 1, "filterCutoffOctaves") > 1.55, "the half-span widens");
+        assert.ok(Number(dragged.parameterValues.filterCutoff) < 995, "base follows the new midpoint");
+        const endHzAfter = Number(await page.locator('[data-role="filter-travel-hit-target-end"]').getAttribute("aria-valuenow"));
+        assert.ok(Math.abs(endHzAfter - endHz) <= endHz * 0.03, `the end endpoint stays planted: ${endHzAfter} vs ${endHz}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("unipolar travel: the center grip translates while the base handle pins the end", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "travel-grips",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "filterCutoffOctaves",
+            amount: 2,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+
+    const dragBy = async (locator, deltaX) => {
+        const box = await locator.boundingBox();
+        assert.ok(box);
+        const from = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        await page.mouse.move(from.x + deltaX, from.y, { steps: 6 });
+        await page.mouse.up();
+    };
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded unipolar travel route",
+            (candidate) => readStoredModulationState(candidate).routes.length === 1,
+        );
+        await page.locator('[data-role="filter-mode-chip"]').click();
+
+        // Translation lives on the center grip: base moves, the amount stays.
+        const centerGrip = page.locator('[data-role="filter-travel-hit-target-center"]');
+        await centerGrip.waitFor();
+        await dragBy(centerGrip, 40);
+        const translated = await waitForHarnessSnapshot(
+            page,
+            "center-grip translation",
+            (candidate) => Number(candidate.parameterValues.filterCutoff) > 1050,
+        );
+        const translatedAmount = readStoredRouteAmount(translated, 1, "filterCutoffOctaves");
+        assert.ok(Math.abs(translatedAmount - 2) <= 0.02, `translation keeps the amount: ${translatedAmount}`);
+
+        // The base handle IS the unipolar start: dragging it pins the end,
+        // so base moves and the amount compensates.
+        const endHzBefore = Number(await page.locator('[data-role="filter-travel-hit-target-end"]').getAttribute("aria-valuenow"));
+        const baseBefore = Number(translated.parameterValues.filterCutoff);
+        await dragBy(page.locator('[data-role="filter-response-handle-hit-target"]'), 30);
+        const pinned = await waitForHarnessSnapshot(
+            page,
+            "base-as-start drag",
+            (candidate) => (
+                Number(candidate.parameterValues.filterCutoff) > baseBefore * 1.05
+                && readStoredRouteAmount(candidate, 1, "filterCutoffOctaves") < 1.95
+            ),
+        );
+        const endHzAfter = Number(await page.locator('[data-role="filter-travel-hit-target-end"]').getAttribute("aria-valuenow"));
+        assert.ok(
+            Math.abs(endHzAfter - endHzBefore) <= endHzBefore * 0.03,
+            `the end must stay planted while base moves: ${endHzAfter} vs ${endHzBefore}`,
+        );
+        assert.ok(readStoredRouteAmount(pinned, 1, "filterCutoffOctaves") < 1.95, "the amount compensates");
+    } finally {
+        await page.close();
+    }
+});
+
+test("center-grip translation moves both endpoints by the same pixels on the nonlinear Q surface", async () => {
+    const seededState = normalizeModulationState({
+        routes: [{
+            id: "rigid-cutoff",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "filterCutoffOctaves",
+            amount: 1.5,
+            reducer: "max",
+        }, {
+            id: "rigid-q",
+            enabled: true,
+            sourceKind: "mseg",
+            sourceSlot: 1,
+            polarity: "unipolar",
+            targetKind: "filterQ",
+            amount: 12,
+            reducer: "max",
+        }],
+    });
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+            await nextPage.addInitScript(({ stateKey, state }) => {
+                window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                    storedState: { [stateKey]: JSON.stringify(state) },
+                };
+            }, { stateKey: MODULATION_STATE_KEY, state: seededState });
+        },
+    });
+
+    try {
+        await waitForHarnessSnapshot(
+            page,
+            "seeded two-axis travel",
+            (candidate) => readStoredModulationState(candidate).routes.length === 2,
+        );
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        const centerGrip = page.locator('[data-role="filter-travel-hit-target-center"]');
+        await centerGrip.waitFor();
+
+        // The end sits deep in the compressed high-Q display region while
+        // base sits mid-range: the exact configuration that used to make a
+        // parameter-space translation move one handle far more than the other.
+        const readHandleYs = () => page.evaluate(() => ({
+            base: Number(document.querySelector('[data-role="filter-response-handle"]')?.getAttribute("cy")),
+            end: Number(document.querySelector('[data-role="filter-travel-handle-end"]')?.getAttribute("cy")),
+        }));
+        const before = await readHandleYs();
+
+        const box = await centerGrip.boundingBox();
+        assert.ok(box);
+        const from = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        await page.mouse.move(from.x, from.y);
+        await page.mouse.down();
+        await page.mouse.move(from.x, from.y + 30, { steps: 6 });
+        await page.mouse.up();
+
+        await page.waitForFunction((baseYBefore) => {
+            const baseY = Number(document.querySelector('[data-role="filter-response-handle"]')?.getAttribute("cy"));
+            return Math.abs(baseY - baseYBefore) > 20;
+        }, before.base);
+        const after = await readHandleYs();
+        const baseDelta = after.base - before.base;
+        const endDelta = after.end - before.end;
+        assert.ok(Math.abs(baseDelta - 30) <= 4, `base rides the finger: ${baseDelta}`);
+        assert.ok(Math.abs(endDelta - 30) <= 4, `the far endpoint rides the SAME pixels: ${endDelta}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("one drop on the filter graph maps the source to both filter destinations at zero", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.setItem(
+                    "cosimo.mobile-global-mod-rail.position.v1",
+                    JSON.stringify({ version: 2, edge: "right", normalizedY: 0 }),
+                );
+            });
+        },
+    });
+
+    try {
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        await expandGlobalModRail(page);
+        const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        const stage = page.locator('[data-role="filter-graph-drop-surface"]');
+        const sourceBox = await source.boundingBox();
+        const stageBox = await stage.boundingBox();
+        assert.ok(sourceBox && stageBox);
+
+        await page.mouse.move(sourceBox.x + (sourceBox.width / 2), sourceBox.y + (sourceBox.height / 2));
+        await page.mouse.down();
+        await page.mouse.move(stageBox.x + (stageBox.width * 0.35), stageBox.y + (stageBox.height * 0.6), { steps: 8 });
+        assert.equal((await stage.getAttribute("class")).includes("is-mod-hover"), true);
+        await page.mouse.up();
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "graph drop creates the filter pair",
+            (candidate) => {
+                const routes = readStoredModulationState(candidate).routes;
+                return routes.some((route) => (
+                    route.sourceKind === "mseg" && route.sourceSlot === 1 && route.targetKind === "filterCutoffOctaves"
+                )) && routes.some((route) => (
+                    route.sourceKind === "mseg" && route.sourceSlot === 1 && route.targetKind === "filterQ"
+                ));
+            },
+        );
+        const routes = readStoredModulationState(snapshot).routes;
+        assert.equal(routes.length, 2, "one drop creates exactly the pair");
+        assert.equal(routes.every((route) => route.amount === 0), true, "new mappings start at exactly 0%");
+
+        // Zero travel presents as the dotted parked tab, not a stacked handle.
+        const endHandle = page.locator('[data-role="filter-travel-handle-end"]');
+        await endHandle.waitFor();
+        assert.equal(await endHandle.getAttribute("data-parked"), "true");
+    } finally {
+        await page.close();
+    }
+});
+
 test("articulation capture and recall edit only the selected oscillator", async () => {
     const page = await openHarnessPage();
 
@@ -1605,8 +2425,11 @@ test("voice controls expose the selected oscillator and shared filter modulation
         assert.equal(await targetKindFor("mobile-voice-cell-unisonWavetablePositionSpread"), "oscB.unisonWavetablePositionSpread");
         assert.equal(await targetKindFor("mobile-voice-cell-unisonWarpSpread"), "oscB.unisonWarpSpread");
 
-        assert.equal(await targetKindFor("filter-cutoff-field"), "filterCutoffOctaves");
-        assert.equal(await targetKindFor("filter-resonance-field"), "filterQ");
+        // T05: the compact filter card presents its destinations on the
+        // attached Cut/Res/Mix knob row instead of the desktop fields.
+        assert.equal(await targetKindFor("voice-filter-knob-filterCutoff"), "filterCutoffOctaves");
+        assert.equal(await targetKindFor("voice-filter-knob-filterQ"), "filterQ");
+        assert.equal(await targetKindFor("voice-filter-knob-filterMix"), "filterMix");
 
         await page.locator('[data-role="mobile-voice-tab-c"]').click();
         await page.waitForSelector(
@@ -3191,10 +4014,8 @@ test("mobile voice editor stays edge-to-edge without horizontal overflow from 32
     }
 });
 
-test("mobile voice surface scrolls normally outside owned surfaces and never from an owned drag", async () => {
+test("the Voice page fits without scrolling, owned drags stay scroll-free, and neutral swipes scroll an overflowing panel", async () => {
     const page = await openHarnessPage({
-        // The tab shell freed the accordion headers' height; a shorter phone
-        // keeps the Voice panel genuinely scrollable, which this test needs.
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 700 });
             await nextPage.addInitScript(() => {
@@ -3225,30 +4046,39 @@ test("mobile voice surface scrolls normally outside owned surfaces and never fro
     const panelScrollTop = () => page.evaluate(() => (
         document.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop ?? -1
     ));
-    const resetPanel = async () => {
-        await page.waitForTimeout(650);
-        await page.evaluate(() => {
-            const panel = document.querySelector('[data-role="mobile-workspace-panel-voice"]');
-            if (panel) panel.scrollTop = 0;
-        });
-    };
 
     try {
         await page.waitForSelector('[data-role="mobile-voice-editor"]');
-        const overflow = await page.evaluate(() => {
+        // T05: the Voice page is an instrument surface that splits its real
+        // height 50/50 — it must fit its panel with nothing left to scroll.
+        const voiceOverflow = await page.evaluate(() => {
             const panel = document.querySelector('[data-role="mobile-workspace-panel-voice"]');
+            return panel ? panel.scrollHeight - panel.clientHeight : -1;
+        });
+        assert.ok(voiceOverflow >= 0 && voiceOverflow <= 1, `The Voice page must fit its panel: overflow ${voiceOverflow}`);
+
+        // Neutral swipes still scroll a panel that genuinely overflows: the
+        // Mod workspace at a short phone height.
+        await page.setViewportSize({ width: 393, height: 600 });
+        await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
+        await page.waitForSelector('[data-role="mobile-mod-source-selector"]');
+        const modOverflow = await page.evaluate(() => {
+            const panel = document.querySelector('[data-role="mobile-workspace-panel-mod"]');
             return panel ? panel.scrollHeight - panel.clientHeight : 0;
         });
-        assert.ok(overflow > 40, "The Voice panel must have scrollable content below the editor.");
-
-        const tabs = await page.locator('[data-role="mobile-voice-tabs"]').boundingBox();
-        assert.ok(tabs);
-        await swipeUp(tabs.x + (tabs.width * 0.5), tabs.y + (tabs.height * 0.5));
+        assert.ok(modOverflow > 40, `The Mod panel must overflow at 600: ${modOverflow}`);
+        const modSelector = await page.locator('[data-role="mobile-mod-source-selector"]').boundingBox();
+        assert.ok(modSelector);
+        await swipeUp(modSelector.x + (modSelector.width * 0.5), modSelector.y + (modSelector.height * 0.5));
         await page.waitForFunction(() => (
-            (document.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop ?? 0) > 20
+            (document.querySelector('[data-role="mobile-workspace-panel-mod"]')?.scrollTop ?? 0) > 20
         ), null, { timeout: 3_000 });
 
-        await resetPanel();
+        // Back on Voice: an owned readout drag edits its parameter and never
+        // becomes panel scroll.
+        await page.setViewportSize({ width: 393, height: 700 });
+        await page.locator('[data-role="mobile-workspace-tab-voice"]').click();
+        await page.waitForSelector('[data-role="mobile-voice-cell-framePosition"]');
         const cell = await page.locator('[data-role="mobile-voice-cell-framePosition"]').boundingBox();
         assert.ok(cell);
         await cdp.send("Input.dispatchTouchEvent", {

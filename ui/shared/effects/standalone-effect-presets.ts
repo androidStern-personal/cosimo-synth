@@ -92,7 +92,15 @@ export type StandaloneEffectPresetControllerOptions = {
     patchConnection: PatchConnectionLike;
     factoryPresets?: Record<string, StandaloneEffectFactoryPreset[]>;
     storedStateAdapters?: EffectStoredStateAdapter[];
-    presetMigrations?: EffectPresetMigration[];
+    /**
+     * Contract migrations for stored presets. The function form derives them
+     * from the live contract, for migrations whose source hash is only
+     * computable once the current parameter manifest is known (e.g. an
+     * appended parameter whose legacy contract is the current one minus it).
+     */
+    presetMigrations?:
+        | EffectPresetMigration[]
+        | ((currentContract: EffectPluginStateContract) => EffectPresetMigration[]);
     createPresetID?: (context: {
         effectID: string;
         label: string;
@@ -265,7 +273,8 @@ export class StandaloneEffectPresetController {
     private readonly bridge: EffectPresetRuntimeBridgeV2;
     private readonly factoryPresetRegistry: Record<string, StandaloneEffectFactoryPreset[]>;
     private readonly storedStateAdapters: EffectStoredStateAdapter[];
-    private readonly presetMigrations: EffectPresetMigration[];
+    private readonly presetMigrationsOption: NonNullable<StandaloneEffectPresetControllerOptions["presetMigrations"]>;
+    private resolvedPresetMigrations: { contractHash: string; migrations: EffectPresetMigration[] } | null = null;
     private readonly createPresetID: NonNullable<StandaloneEffectPresetControllerOptions["createPresetID"]>;
     private readonly readClipboardText?: StandaloneEffectPresetControllerOptions["readClipboardText"];
     private readonly writeClipboardText?: StandaloneEffectPresetControllerOptions["writeClipboardText"];
@@ -294,7 +303,7 @@ export class StandaloneEffectPresetController {
 
         this.factoryPresetRegistry = options.factoryPresets ?? EFFECT_FACTORY_PRESETS;
         this.storedStateAdapters = options.storedStateAdapters ?? [];
-        this.presetMigrations = options.presetMigrations ?? [];
+        this.presetMigrationsOption = options.presetMigrations ?? [];
         this.createPresetID = options.createPresetID ?? defaultCreatePresetID;
         this.readClipboardText = options.readClipboardText;
         this.writeClipboardText = options.writeClipboardText;
@@ -834,7 +843,7 @@ export class StandaloneEffectPresetController {
                 preset,
                 this.currentContract as EffectPluginStateContract,
                 this.storedStateAdapters,
-                this.presetMigrations,
+                this.resolvePresetMigrations(this.currentContract as EffectPluginStateContract),
             )
         ));
     }
@@ -1037,11 +1046,27 @@ export class StandaloneEffectPresetController {
     }
 
     private normalizePresetForCurrentContract(preset: unknown) {
+        const currentContract = this.requireCurrentContract();
         return normalizeEffectPresetV2(preset, {
-            currentContract: this.requireCurrentContract(),
+            currentContract,
             storedStateAdapters: this.storedStateAdapters,
-            migrations: this.presetMigrations,
+            migrations: this.resolvePresetMigrations(currentContract),
         });
+    }
+
+    private resolvePresetMigrations(currentContract: EffectPluginStateContract): EffectPresetMigration[] {
+        if (typeof this.presetMigrationsOption !== "function") {
+            return this.presetMigrationsOption;
+        }
+
+        if (this.resolvedPresetMigrations?.contractHash !== currentContract.hash) {
+            this.resolvedPresetMigrations = {
+                contractHash: currentContract.hash,
+                migrations: this.presetMigrationsOption(currentContract),
+            };
+        }
+
+        return this.resolvedPresetMigrations.migrations;
     }
 
     private commitActivePresetAndApply(preset: EffectPresetV2) {
@@ -1082,6 +1107,7 @@ export class StandaloneEffectPresetController {
 
     private applyPresetValuesToPatch(preset: EffectPresetV2) {
         const sendEventOrValue = this.options.patchConnection.sendEventOrValue;
+        const currentContract = this.requireCurrentContract();
 
         if (typeof sendEventOrValue !== "function") {
             throw new Error("Cannot apply effect presets because the patch connection cannot write parameter values.");
@@ -1100,9 +1126,9 @@ export class StandaloneEffectPresetController {
                     sendStoredStateValue: this.options.patchConnection.sendStoredStateValue?.bind(this.options.patchConnection),
                 },
                 preset,
-                currentContract: this.requireCurrentContract(),
+                currentContract,
                 storedStateAdapters: this.storedStateAdapters,
-                migrations: this.presetMigrations,
+                migrations: this.resolvePresetMigrations(currentContract),
             });
         } catch (error) {
             this.suppressedParameterValues.clear();

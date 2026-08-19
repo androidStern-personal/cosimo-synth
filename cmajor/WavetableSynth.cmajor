@@ -1329,6 +1329,7 @@ graph WavetableSynth [[ main ]]
     input value float32 env3Decay [[ name: "ENV 3 Decay", min: 0.001f, max: 10.0f, init: 0.25f, unit: "s", rampFrames: 0 ]];
     input value float32 env3Sustain [[ name: "ENV 3 Sustain", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 0 ]];
     input value float32 env3Release [[ name: "ENV 3 Release", min: 0.001f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
+    input value float32 filterMix [[ name: "Filter Mix", min: 0.0f, max: 1.0f, init: 1.0f, rampFrames: 64 ]];
     // Rack structure is patch state, not host automation (ADR-007). These are struct
     // events, which carry no parameter purpose, so they are structurally
     // non-automatable rather than non-automatable by convention.
@@ -1414,6 +1415,7 @@ graph WavetableSynth [[ main ]]
         filterMode -> sharedEngine.filterModeIn;
         filterCutoff -> sharedEngine.filterCutoffIn;
         filterQ -> sharedEngine.filterQIn;
+        filterMix -> sharedEngine.filterMixIn;
         mseg1Morph -> sharedEngine.mseg1MorphIn;
         mseg2Morph -> sharedEngine.mseg2MorphIn;
         mseg3Morph -> sharedEngine.mseg3MorphIn;

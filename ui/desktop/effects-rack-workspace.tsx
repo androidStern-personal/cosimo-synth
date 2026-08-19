@@ -73,7 +73,7 @@ import {
     type RailEdge,
     type RailVerticalBounds,
 } from "../shared/mod-rail-perimeter";
-import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
+import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import { parseModulationTargetKind } from "../shared/modulation-targets";
 import {
     RACK_MODULATION_SOURCE_PAGES,
@@ -87,9 +87,15 @@ import {
     type RackRouteSource,
 } from "../shared/rack-route-presentation";
 import type { EffectModuleId } from "../shared/target-descriptor";
-import { FilterResponseGraph } from "../shared/synth-components";
+import { FilterResponseGraph, VOICE_MODE_OPTIONS } from "../shared/synth-components";
+import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
-import type { SynthPatchViewModel } from "../shared/synth-hooks";
+import {
+    GLIDE_TIME_MAX_SECONDS,
+    GLIDE_TIME_MIN_SECONDS,
+    GLIDE_TIME_STEP_SECONDS,
+    type SynthPatchViewModel,
+} from "../shared/synth-hooks";
 import { useSliderDrag, type SliderDragPointer } from "../shared/use-slider-drag";
 import {
     RackParameterKnob,
@@ -112,6 +118,12 @@ type EffectsRackWorkspaceProps = {
     mobileModRailPortalTarget?: HTMLElement | null;
     globalModSourceActivity?: number | null;
     modRailAudition?: ModRailAuditionBindings;
+    modRailVoiceSettings?: ModRailVoiceSettings;
+    /**
+     * T06: dwell navigation during a source drag for surfaces the rack does
+     * not own (workspace tabs, oscillator tabs). Rack rows resolve locally.
+     */
+    onDragDwellNavigate?: (dwellKey: string) => void;
     className?: string;
 };
 
@@ -127,6 +139,15 @@ export type ModRailAuditionBindings = {
     readonly onToggleAutoPreview: () => void;
     readonly keyboardVisible: boolean;
     readonly onToggleKeyboard: () => void;
+};
+
+/**
+ * T05: Play Mode/Glide live in the rail drawer's voice-settings popover (the
+ * keyboard menu button was rejected; this placement is provisional).
+ */
+export type ModRailVoiceSettings = {
+    readonly playMode: PatchControlBinding<number>;
+    readonly glideTime: PatchControlBinding<number>;
 };
 
 type SelectedSource = Pick<RackModulationSource, "sourceKind" | "sourceSlot">;
@@ -217,6 +238,8 @@ function elementAtPointInRenderRoot(referenceElement: Element, clientX: number, 
 type ModulationDropTarget = {
     readonly element: HTMLElement;
     readonly targetKind: ModulationTargetKind;
+    /** Extra destinations a compound drop surface pairs with one drop. */
+    readonly companionKinds: ReadonlyArray<ModulationTargetKind>;
 };
 
 type ClientRect = {
@@ -233,6 +256,20 @@ type ModulationDropCandidate = ModulationDropTarget & {
 const MODULATION_TARGET_MIN_CAPTURE_PX = 44;
 const MODULATION_TARGET_CAPTURE_HYSTERESIS_PX = 12;
 
+function parseCompanionKinds(element: HTMLElement): ReadonlyArray<ModulationTargetKind> {
+    const raw = element.dataset.modulationTargetCompanions;
+    if (!raw) {
+        return [];
+    }
+    return raw.split(/\s+/).filter(Boolean).map((candidate) => {
+        const kind = parseModulationTargetKind(candidate);
+        if (kind === null) {
+            throw new Error(`Unknown companion modulation target "${candidate}"`);
+        }
+        return kind;
+    });
+}
+
 function modulationTargetAtPoint(
     referenceElement: Element,
     clientX: number,
@@ -241,12 +278,16 @@ function modulationTargetAtPoint(
     const element = elementAtPointInRenderRoot(referenceElement, clientX, clientY)
         ?.closest<HTMLElement>("[data-modulation-target-kind]") ?? null;
     const targetKind = parseModulationTargetKind(element?.dataset.modulationTargetKind);
-    return element === null || targetKind === null ? null : { element, targetKind };
+    return element === null || targetKind === null
+        ? null
+        : { element, targetKind, companionKinds: parseCompanionKinds(element) };
 }
 
 function modulationTargetFromElement(element: HTMLElement | null): ModulationDropTarget | null {
     const targetKind = parseModulationTargetKind(element?.dataset.modulationTargetKind);
-    return element === null || targetKind === null ? null : { element, targetKind };
+    return element === null || targetKind === null
+        ? null
+        : { element, targetKind, companionKinds: parseCompanionKinds(element) };
 }
 
 function modulationDropCandidateFromTarget(target: ModulationDropTarget): ModulationDropCandidate | null {
@@ -636,6 +677,7 @@ function RackUnit({
             data-rack-position={position}
             data-effect-id={effectId}
             data-enabled={enabled ? "true" : "false"}
+            data-drag-dwell={`rack-effect:${effectId}`}
             className={`rack-unit${selected ? " is-selected" : ""}${enabled ? "" : " is-disabled"}${reordering ? " is-reordering" : ""}`}
         >
             <button
@@ -755,9 +797,7 @@ function RackParameterControl({
         pending,
     });
     const amountBinding = useModulationRouteAmountBinding(presentation.currentRoute);
-    const presentedRoute = presentation.currentRoute === null || amountBinding.value === null
-        ? presentation.currentRoute
-        : { ...presentation.currentRoute, amount: amountBinding.value };
+    const presentedRoute = presentRouteWithCanonicalAmount(presentation.currentRoute, amountBinding);
     const rootStyle = {
         "--drag-source-color": dragSourceAccent ?? "transparent",
     } as CSSProperties;
@@ -830,7 +870,7 @@ function RackParameterControl({
                 trackDataRole={RACK_TRACK_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-track-${descriptor.endpointID}`}
                 handleDataRole={RACK_HANDLE_ROLE_ALIASES[descriptor.endpointID] ?? `rack-parameter-handle-${descriptor.endpointID}`}
                 onSelect={selectParameter}
-                onHudChange={onHudChange}
+                ownerAccent={EFFECT_ACCENTS[descriptor.effectId]}
                 onModulationAmountChange={amountBinding.setValue}
                 onRequestContextMenu={(clientX, clientY) => onRequestContextMenu(
                     descriptor.endpointID,
@@ -1322,9 +1362,21 @@ type ModSourceDragCallbacks = {
     readonly onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
     readonly onDragSourceChange: (source: SelectedSource | null) => void;
     readonly onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
-    readonly onSourceDrop: (source: SelectedSource, targetKind: ModulationTargetKind) => void;
+    readonly onSourceDrop: (
+        source: SelectedSource,
+        targetKind: ModulationTargetKind,
+        companionKinds?: ReadonlyArray<ModulationTargetKind>,
+    ) => void;
     readonly onTap: (source: SelectedSource, wasActiveSelection: boolean) => void;
+    /**
+     * T06: fired when the drag preview dwells on a `[data-drag-dwell]`
+     * navigation surface. The drag stays alive; the consumer navigates.
+     */
+    readonly onDwellNavigate?: (dwellKey: string) => void;
 };
+
+/** Deliberate hover before a dwell navigation fires; transit stays inert. */
+const MOD_SOURCE_DWELL_NAVIGATE_MS = 550;
 
 function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
     const handlersRef = useRef(callbacks);
@@ -1346,7 +1398,41 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         hoveredTarget: HTMLElement | null;
         lastPointerPoint: ClientPoint;
         lastDragPoint: ClientPoint;
+        dwell: { key: string; timer: number } | null;
     } | null>(null);
+
+    const clearDwellTracker = useCallback(() => {
+        const drag = dragRef.current;
+        if (drag?.dwell) {
+            window.clearTimeout(drag.dwell.timer);
+            drag.dwell = null;
+        }
+    }, []);
+
+    const updateDwellTracker = useCallback((referenceElement: Element, dragPoint: ClientPoint) => {
+        const drag = dragRef.current;
+        if (!drag) {
+            return;
+        }
+        const dwellKey = elementAtPointInRenderRoot(referenceElement, dragPoint.x, dragPoint.y)
+            ?.closest<HTMLElement>("[data-drag-dwell]")
+            ?.dataset.dragDwell ?? null;
+        if ((drag.dwell?.key ?? null) === dwellKey) {
+            return;
+        }
+        clearDwellTracker();
+        if (dwellKey === null) {
+            return;
+        }
+        const timer = window.setTimeout(() => {
+            const activeDrag = dragRef.current;
+            if (activeDrag?.dwell?.key !== dwellKey) {
+                return;
+            }
+            handlersRef.current.onDwellNavigate?.(dwellKey);
+        }, MOD_SOURCE_DWELL_NAVIGATE_MS);
+        drag.dwell = { key: dwellKey, timer };
+    }, [clearDwellTracker]);
 
     const updateHoveredTarget = useCallback((nextTarget: HTMLElement | null, source: SelectedSource) => {
         const drag = dragRef.current;
@@ -1452,6 +1538,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                     drag.hoveredTarget,
                 );
         updateHoveredTarget(null, drag.source);
+        clearDwellTracker();
         dragRef.current = null;
         handlersRef.current.onHoverTarget(drag.source, null);
         handlersRef.current.onDragSourceChange(null);
@@ -1470,13 +1557,13 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             return;
         }
         if (target) {
-            handlersRef.current.onSourceDrop(drag.source, target.targetKind);
+            handlersRef.current.onSourceDrop(drag.source, target.targetKind, target.companionKinds);
             return;
         }
         if (!drag.moved) {
             handlersRef.current.onTap(drag.source, drag.wasActiveSelection);
         }
-    }, [stopSourceAutoScroll, updateHoveredTarget]);
+    }, [clearDwellTracker, stopSourceAutoScroll, updateHoveredTarget]);
 
     useEffect(() => {
         const handlePointerUp = (event: PointerEvent) => {
@@ -1531,6 +1618,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 hoveredTarget: null,
                 lastPointerPoint: { x: event.clientX, y: event.clientY },
                 lastDragPoint: { x: event.clientX, y: event.clientY },
+                dwell: null,
             };
             try {
                 event.currentTarget.setPointerCapture(event.pointerId);
@@ -1578,6 +1666,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
                 });
                 updateSourceAutoScroll(event.currentTarget, dragPoint.y);
                 updateHoveredTarget(target?.element ?? null, drag.source);
+                updateDwellTracker(event.currentTarget, dragPoint);
                 handlersRef.current.onHoverTarget(drag.source, target?.targetKind ?? null);
                 return;
             }
@@ -1594,7 +1683,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         onLostPointerCapture: (event: ReactPointerEvent<HTMLButtonElement>) => {
             finishSourceGesture(event.pointerId, event.clientX, event.clientY, true);
         },
-    }), [finishSourceGesture, updateHoveredTarget, updateSourceAutoScroll]);
+    }), [finishSourceGesture, updateDwellTracker, updateHoveredTarget, updateSourceAutoScroll]);
 }
 
 function ModSourceCarousel({
@@ -1609,6 +1698,7 @@ function ModSourceCarousel({
     onOpenSelectedSource,
     onHoverTarget,
     onSourceDragChange,
+    onDwellNavigate,
 }: {
     pageIndex: number;
     selectedSource: SelectedSource;
@@ -1617,10 +1707,15 @@ function ModSourceCarousel({
     onPageChange: (pageIndex: number) => void;
     onDragSourceChange: (source: SelectedSource | null) => void;
     onSourceSelect: (source: SelectedSource) => void;
-    onSourceDrop: (source: SelectedSource, targetKind: ModulationTargetKind) => void;
+    onSourceDrop: (
+        source: SelectedSource,
+        targetKind: ModulationTargetKind,
+        companionKinds?: ReadonlyArray<ModulationTargetKind>,
+    ) => void;
     onOpenSelectedSource: (source: SelectedSource) => void;
     onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
     onSourceDragChange?: (drag: SourceDragPresentation | null) => void;
+    onDwellNavigate?: (dwellKey: string) => void;
 }) {
     const armedSourceLabel = sourceIsArmed
         ? findRackModulationSource(selectedSource.sourceKind, selectedSource.sourceSlot).label
@@ -1630,6 +1725,7 @@ function ModSourceCarousel({
         onDragSourceChange,
         onSourceDrop,
         onSourceDragChange,
+        onDwellNavigate,
         onTap: (source, wasActiveSelection) => {
             if (wasActiveSelection) {
                 onOpenSelectedSource(source);
@@ -1750,7 +1846,7 @@ function boundingHudRect(element: Element | null): HudRect | null {
     return { left: bounds.left, top: bounds.top, right: bounds.right, bottom: bounds.bottom };
 }
 
-function RackParameterHudOverlay({ hud }: { hud: RackParameterHud }) {
+export function RackParameterHudOverlay({ hud }: { hud: RackParameterHud }) {
     const elementRef = useRef<HTMLDivElement | null>(null);
     const stickyRef = useRef<{ gestureKey: string; side: HudPlacementSide | "dock" } | null>(null);
     const [offset, setOffset] = useState<{ left: number; top: number } | null>(null);
@@ -1983,6 +2079,8 @@ function MobileGlobalModRail({
     onNoteKeyUp,
     onToggleAutoPreview,
     onToggleKeyboard,
+    voiceSettings,
+    onDwellNavigate,
     children,
 }: {
     selectedSource: RackModulationSource;
@@ -1995,13 +2093,19 @@ function MobileGlobalModRail({
     keyboardVisible: boolean;
     onStateChange?: (state: GlobalModRailState) => void;
     onDragSourceChange: (source: SelectedSource | null) => void;
-    onSourceDrop: (source: SelectedSource, targetKind: ModulationTargetKind) => void;
+    onSourceDrop: (
+        source: SelectedSource,
+        targetKind: ModulationTargetKind,
+        companionKinds?: ReadonlyArray<ModulationTargetKind>,
+    ) => void;
     onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
     onSourceDragChange: (drag: SourceDragPresentation | null) => void;
     onNoteKeyDown: () => void;
     onNoteKeyUp: () => void;
     onToggleAutoPreview: () => void;
     onToggleKeyboard: () => void;
+    voiceSettings: ModRailVoiceSettings;
+    onDwellNavigate: (dwellKey: string) => void;
     children: React.ReactNode;
 }) {
     const layerRef = useRef<HTMLDivElement | null>(null);
@@ -2048,6 +2152,9 @@ function MobileGlobalModRail({
         direction: "down",
         extent: MOBILE_MOD_RAIL_DRAWER_FALLBACK_HEIGHT_PX,
     });
+    const [voiceSettingsOpen, setVoiceSettingsOpen] = useState(false);
+    const voicePopoverRef = useRef<HTMLDivElement | null>(null);
+    const voiceToggleRef = useRef<HTMLButtonElement | null>(null);
     const silhouetteGradientId = `mobile-mod-rail-fill-${useId().replaceAll(":", "")}`;
     const mappingActive = sourceDrag !== null;
     const selectedSourceHandlers = useModSourceDrag({
@@ -2055,6 +2162,7 @@ function MobileGlobalModRail({
         onDragSourceChange,
         onSourceDrop,
         onSourceDragChange,
+        onDwellNavigate,
         onTap: () => setExpanded((current) => !current),
     });
 
@@ -2066,6 +2174,32 @@ function MobileGlobalModRail({
     const updateDrawerPlacement = useCallback((nextTop: number) => {
         setDrawerPlacement(projectRailDrawerPlacement(nextTop, drawerMetricsRef.current));
     }, []);
+
+    // The voice-settings popover belongs to the open drawer; whatever hides
+    // the drawer (collapse, mapping drag) takes the popover with it.
+    useEffect(() => {
+        if (!expanded || mappingActive) {
+            setVoiceSettingsOpen(false);
+        }
+    }, [expanded, mappingActive]);
+
+    useEffect(() => {
+        if (!voiceSettingsOpen) {
+            return;
+        }
+        const handlePointerDown = (event: PointerEvent) => {
+            const target = event.target;
+            if (!(target instanceof Node)) {
+                return;
+            }
+            if (voicePopoverRef.current?.contains(target) || voiceToggleRef.current?.contains(target)) {
+                return;
+            }
+            setVoiceSettingsOpen(false);
+        };
+        window.addEventListener("pointerdown", handlePointerDown, true);
+        return () => window.removeEventListener("pointerdown", handlePointerDown, true);
+    }, [voiceSettingsOpen]);
 
     const measureAndClamp = useCallback(() => {
         const layer = layerRef.current;
@@ -2451,6 +2585,14 @@ function MobileGlobalModRail({
 
     const clampedActivity = sourceActivity === null ? null : clamp(sourceActivity, 0, 1);
     const drawerOpen = expanded && !mappingActive;
+    const activePlayMode = VOICE_MODE_OPTIONS.find(
+        (option) => option.value === voiceSettings.playMode.value,
+    );
+    if (!activePlayMode) {
+        throw new Error(`Unknown play mode value: ${voiceSettings.playMode.value}`);
+    }
+    // Glide only applies while notes steal a voice (Mono/Legato); Poly greys it.
+    const glideDisabled = voiceSettings.playMode.value === VOICE_MODE_OPTIONS[0].value;
     const silhouetteHeight = MOBILE_MOD_RAIL_TAB_CONTENT_HEIGHT_PX
         + (2 * MOBILE_MOD_RAIL_SHOULDER_PX)
         + (drawerOpen ? drawerPlacement.extent : 0);
@@ -2730,9 +2872,64 @@ function MobileGlobalModRail({
                                     <path d="M19.5 3.5v3.4h-3.4" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                                 </svg>
                             </button>
+                            <button
+                                ref={voiceToggleRef}
+                                type="button"
+                                data-role="mobile-global-mod-rail-voice-toggle"
+                                className="mobile-global-mod-rail-toggle is-voice"
+                                aria-pressed={voiceSettingsOpen}
+                                aria-haspopup="dialog"
+                                aria-label={`Voice settings (${activePlayMode.label})`}
+                                onClick={() => setVoiceSettingsOpen((current) => !current)}
+                            >
+                                {activePlayMode.label}
+                            </button>
                         </div>
                     </div>
                 </div>
+                {voiceSettingsOpen ? (
+                    <div
+                        ref={voicePopoverRef}
+                        data-role="mobile-global-mod-rail-voice-popover"
+                        className="mobile-global-mod-rail-voice-popover"
+                        role="dialog"
+                        aria-label="Voice settings"
+                    >
+                        <div className="mobile-global-mod-rail-voice-modes" role="radiogroup" aria-label="Play mode">
+                            {VOICE_MODE_OPTIONS.map((option) => (
+                                <button
+                                    key={option.value}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={option.value === voiceSettings.playMode.value}
+                                    className="mobile-global-mod-rail-voice-mode"
+                                    onClick={() => voiceSettings.playMode.commitValue(option.value)}
+                                >
+                                    {option.label}
+                                </button>
+                            ))}
+                        </div>
+                        <div
+                            className="mobile-global-mod-rail-voice-glide"
+                            data-disabled={glideDisabled}
+                            inert={glideDisabled}
+                        >
+                            <PrecisionNumberField
+                                ariaLabel="Glide time"
+                                binding={voiceSettings.glideTime}
+                                min={GLIDE_TIME_MIN_SECONDS}
+                                max={GLIDE_TIME_MAX_SECONDS}
+                                step={GLIDE_TIME_STEP_SECONDS}
+                                formatDisplay={(value) => `${value.toFixed(3)} s`}
+                                leadingLabel="Glide"
+                                variant="inlineDark"
+                                dataRole="mobile-global-mod-rail-glide-field"
+                                width={64}
+                                height={22}
+                            />
+                        </div>
+                    </div>
+                ) : null}
             </aside>
             {sourceDrag ? (
                 <div
@@ -3187,10 +3384,15 @@ export function EffectsRackWorkspace({
     mobileModRailPortalTarget = null,
     globalModSourceActivity = null,
     modRailAudition,
+    modRailVoiceSettings,
+    onDragDwellNavigate,
     className,
 }: EffectsRackWorkspaceProps) {
     if (mobileGlobalModRail && !modRailAudition) {
         throw new Error("The mobile Mod rail requires modRailAudition bindings.");
+    }
+    if (mobileGlobalModRail && !modRailVoiceSettings) {
+        throw new Error("The mobile Mod rail requires modRailVoiceSettings bindings.");
     }
     const { rackState, rackStateRef, commit } = useRackState();
     const [selectedEffectId, setSelectedEffectId] = useState<EffectModuleId>("drive");
@@ -3501,6 +3703,19 @@ export function EffectsRackWorkspace({
         setRouteStatus("");
     }, [onSelectedEffectChange]);
 
+    // T06: a source drag dwelling on a navigation surface switches views
+    // while the drag stays alive under its original owner.
+    const handleDwellNavigate = useCallback((dwellKey: string) => {
+        if (dwellKey.startsWith("rack-effect:")) {
+            const effectId = dwellKey.slice("rack-effect:".length) as EffectModuleId;
+            // Unknown ids are authoring bugs; the descriptor lookup throws.
+            getRackEffectDescriptor(effectId);
+            selectEffect(effectId);
+            return;
+        }
+        onDragDwellNavigate?.(dwellKey);
+    }, [onDragDwellNavigate, selectEffect]);
+
     const selectSource = useCallback((source: SelectedSource) => {
         setSelectedSource(source);
         setSourcePageIndex(source.sourceSlot - 1);
@@ -3508,7 +3723,11 @@ export function EffectsRackWorkspace({
         setRouteStatus("");
     }, []);
 
-    const dropSource = useCallback((source: SelectedSource, targetKind: ModulationTargetKind) => {
+    const dropSource = useCallback((
+        source: SelectedSource,
+        targetKind: ModulationTargetKind,
+        companionKinds: ReadonlyArray<ModulationTargetKind> = [],
+    ) => {
         const rackEndpointID = targetKind.startsWith("rack.") ? targetKind.slice("rack.".length) : null;
         const targetParameter = rackEndpointID === null ? null : getRackParameterDescriptor(rackEndpointID);
         const creation = getPairCreation(source, targetKind);
@@ -3526,7 +3745,18 @@ export function EffectsRackWorkspace({
         if (creation === "creatable") {
             createRoute(source, targetKind);
         }
-    }, [createRoute, getPairCreation, onSelectedEffectChange]);
+        // A compound drop surface (the filter graph) declares companion
+        // destinations; one explicit drop creates every missing pairing.
+        for (const companionKind of companionKinds) {
+            if (getPairCreation(source, companionKind) === "creatable") {
+                onAddRouteWithOverrides({
+                    sourceKind: source.sourceKind,
+                    sourceSlot: source.sourceSlot,
+                    targetKind: companionKind,
+                });
+            }
+        }
+    }, [createRoute, getPairCreation, onAddRouteWithOverrides, onSelectedEffectChange]);
 
     const changeSourcePage = useCallback((nextPageIndex: number) => {
         const normalizedPageIndex = ((nextPageIndex % RACK_MODULATION_SOURCE_PAGES.length)
@@ -3600,6 +3830,7 @@ export function EffectsRackWorkspace({
             }}
             onHoverTarget={hoverSourceTarget}
             onSourceDragChange={setSourceDrag}
+            onDwellNavigate={handleDwellNavigate}
         />
     );
 
@@ -3815,7 +4046,7 @@ export function EffectsRackWorkspace({
                     </div>
                 </section>
             </div>
-            {mobileGlobalModRail && mobileModRailPortalTarget && modRailAudition ? createPortal(
+            {mobileGlobalModRail && mobileModRailPortalTarget && modRailAudition && modRailVoiceSettings ? createPortal(
                 <MobileGlobalModRail
                     selectedSource={activeSource}
                     routeCount={routes.length}
@@ -3834,6 +4065,8 @@ export function EffectsRackWorkspace({
                     onNoteKeyUp={modRailAudition.onNoteKeyUp}
                     onToggleAutoPreview={modRailAudition.onToggleAutoPreview}
                     onToggleKeyboard={modRailAudition.onToggleKeyboard}
+                    voiceSettings={modRailVoiceSettings}
+                    onDwellNavigate={handleDwellNavigate}
                 >
                     {modulationSourceControls}
                 </MobileGlobalModRail>,

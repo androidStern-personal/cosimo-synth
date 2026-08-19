@@ -511,17 +511,19 @@ export async function dispatchRackKnobPointerEvents(locator, events) {
             throw new Error("Expected a rack knob button and its SVG art.");
         }
         const bounds = art.getBoundingClientRect();
-        const clientX = bounds.left + bounds.width / 2;
+        const centerX = bounds.left + bounds.width / 2;
         const centerY = bounds.top + bounds.height / 2;
         for (const pointerEvent of pointerEvents) {
+            // The shared parameter-gesture contract listens on window; the
+            // bubbling element dispatch reaches it.
             element.dispatchEvent(new PointerEvent(pointerEvent.type, {
                 bubbles: true,
                 pointerId: pointerEvent.pointerId,
                 pointerType: "mouse",
                 button: 0,
                 buttons: pointerEvent.buttons,
-                clientX,
-                clientY: centerY + pointerEvent.deltaY,
+                clientX: centerX + (pointerEvent.deltaX ?? 0),
+                clientY: centerY + (pointerEvent.deltaY ?? 0),
             }));
         }
     }, events);

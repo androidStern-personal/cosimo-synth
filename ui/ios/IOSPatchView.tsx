@@ -44,6 +44,7 @@ import {
     type MobileVoiceArmedSource,
     type MobileVoiceEditorBindings,
 } from "../shared/mobile-voice-editor";
+import { ParameterHudLayerContext } from "../shared/parameter-hud";
 import {
     clampDisplayPosition,
 } from "../shared/runtime-table-state";
@@ -1178,6 +1179,7 @@ function IOSPatchViewBody() {
     ]);
 
     return (
+        <ParameterHudLayerContext.Provider value={mobileVoiceHudLayer}>
         <div className="ios-shell" style={shellStyle}>
             <div
                 ref={setMobileVoiceHudLayer}
@@ -1349,6 +1351,7 @@ function IOSPatchViewBody() {
                 />
             </div>
         </div>
+        </ParameterHudLayerContext.Provider>
     );
 }
 

@@ -1,21 +1,38 @@
 import {
     useCallback,
-    useEffect,
+    useContext,
     useId,
     useRef,
+    useState,
     type CSSProperties,
     type PointerEvent as ReactPointerEvent,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
-    composeModulationAmount,
     formatModulationAmountReadout,
+    getModulationAmountBounds,
     getModulationAmountSliderPosition,
     type ModulationRoute,
     type RackModulationTargetKind,
 } from "../shared/modulation";
 import type { ModulationTargetKind } from "../shared/modulation-targets";
+import {
+    PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+    PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+    useParameterGesture,
+    type ParameterGestureChannel,
+} from "../shared/parameter-gesture";
+import {
+    ParameterHudLayerContext,
+    ParameterPrecisionHud,
+    PARAMETER_HUD_LINGER_MS,
+    hexToRgbTriplet,
+    type ParameterHudModel,
+} from "../shared/parameter-hud";
+import type { ParameterKnobModRing } from "../shared/parameter-knob-artwork";
 import type { PatchControlBinding } from "../shared/patch-controls";
+import { findRackModulationSource } from "../shared/rack-modulation-sources";
 import {
     formatRackParameterValue,
     type RackParameterDescriptor,
@@ -51,6 +68,8 @@ export type BaseParameterKnobProps = {
     readonly detentStep: number | null;
     readonly formatValue: (value: number) => string;
     readonly modulationTargetKind?: ModulationTargetKind;
+    /** Accent the precision HUD frames this control's owner with. */
+    readonly ownerAccent?: string;
 };
 
 export type RackParameterKnobProps = {
@@ -64,9 +83,23 @@ export type RackParameterKnobProps = {
     readonly trackDataRole: string;
     readonly handleDataRole: string;
     readonly onSelect: () => void;
-    readonly onHudChange: (hud: RackParameterHud | null) => void;
     readonly onModulationAmountChange: (amount: number) => void;
     readonly onRequestContextMenu: (clientX: number, clientY: number) => void;
+    /** Overrides the `rack.<endpoint>` default for voice-endpoint callers. */
+    readonly modulationTargetKind?: ModulationTargetKind;
+    /** Overrides the rack readout so voice endpoints keep their surface's display language. */
+    readonly formatValue?: (value: number) => string;
+    /** Accent the precision HUD frames this control's owner with. */
+    readonly ownerAccent?: string;
+    /**
+     * How vertical travel maps onto the modulation amount.
+     * "amount-span" (default): travel is linear across the amount domain.
+     * "effective-value": travel walks the MODULATED value (base + amount)
+     * along the knob's own dial scale — for a parameter whose base rests
+     * next to a domain edge (resonance), the default crams all of one
+     * direction's effect into a few pixels and leaves the rest dead.
+     */
+    readonly modulationDragStyle?: "amount-span" | "effective-value";
 };
 
 export type RackParameterHudAnchor = {
@@ -85,22 +118,8 @@ export type RackParameterHud = {
     readonly pointer: { readonly x: number; readonly y: number };
 };
 
-type KnobGesture = {
-    readonly pointerId: number;
-    readonly element: HTMLButtonElement;
-    readonly startClientX: number;
-    readonly startClientY: number;
-    readonly startBaseNormalized: number;
-    readonly startModulationNormalized: number;
-    lastBaseValue: number;
-    mode: "pending" | "base" | "modulation";
-    moved: boolean;
-    baseGestureStarted: boolean;
-    holdActivated: boolean;
-};
-
-const LONG_PRESS_DELAY_MS = 500;
-const GESTURE_MOVE_THRESHOLD_PX = 6;
+/** Neutral owner frame for knobs whose host declares no accent. */
+const DEFAULT_KNOB_OWNER_ACCENT = "#d5dcde";
 
 function triggerParameterControlHaptic() {
     const trigger = (globalThis as typeof globalThis & {
@@ -211,10 +230,11 @@ type ParameterKnobSurfaceProps = {
     readonly enableModulationGesture: boolean;
     readonly enableContextMenu: boolean;
     readonly onSelect: () => void;
-    readonly onHudChange: (hud: RackParameterHud | null) => void;
     readonly onModulationAmountChange: (amount: number) => void;
     readonly onRequestContextMenu: (clientX: number, clientY: number) => void;
     readonly modulationTargetKind?: ModulationTargetKind;
+    readonly ownerAccent?: string;
+    readonly modulationDragStyle?: "amount-span" | "effective-value";
 };
 
 function ParameterKnobSurface({
@@ -234,48 +254,30 @@ function ParameterKnobSurface({
     enableModulationGesture,
     enableContextMenu,
     onSelect,
-    onHudChange,
     onModulationAmountChange,
     onRequestContextMenu,
     modulationTargetKind,
+    ownerAccent,
+    modulationDragStyle = "amount-span",
 }: ParameterKnobSurfaceProps) {
     const artRef = useRef<SVGSVGElement | null>(null);
-    const gestureRef = useRef<KnobGesture | null>(null);
-    const suppressClickRef = useRef(false);
-    const holdTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const bindingRef = useRef(binding);
-    const descriptorRef = useRef(descriptor);
-    const routePolarityRef = useRef(route?.polarity);
-    const routeRef = useRef(route);
-    const sourceIsSelectedRef = useRef(sourceIsSelected);
     const detentStepRef = useRef(detentStep);
-    const enableModulationGestureRef = useRef(enableModulationGesture);
-    const enableContextMenuRef = useRef(enableContextMenu);
-    const onHudChangeRef = useRef(onHudChange);
     const onModulationAmountChangeRef = useRef(onModulationAmountChange);
     const onRequestContextMenuRef = useRef(onRequestContextMenu);
-    const formatValueRef = useRef(formatValue);
     bindingRef.current = binding;
-    descriptorRef.current = descriptor;
-    routePolarityRef.current = route?.polarity;
-    routeRef.current = route;
-    sourceIsSelectedRef.current = sourceIsSelected;
     detentStepRef.current = detentStep;
-    enableModulationGestureRef.current = enableModulationGesture;
-    enableContextMenuRef.current = enableContextMenu;
-    onHudChangeRef.current = onHudChange;
     onModulationAmountChangeRef.current = onModulationAmountChange;
     onRequestContextMenuRef.current = onRequestContextMenu;
-    formatValueRef.current = formatValue;
     const patternStem = useId().replaceAll(":", "");
     const baseTrackPatternID = `rack-knob-base-${patternStem}`;
     const modTrackPatternID = `rack-knob-mod-${patternStem}`;
     const baseNormalized = normalizedValue(descriptor, binding.value);
-    const targetKind = `rack.${descriptor.endpointID}` as RackModulationTargetKind;
+    // Rack knobs address their own rack destination; voice-endpoint callers
+    // (the compact filter row) pass the canonical voice kind instead.
+    const targetKind = modulationTargetKind
+        ?? (`rack.${descriptor.endpointID}` as RackModulationTargetKind);
     const modulationAmount = route?.amount ?? 0;
-    const modulationNormalized = enableModulationGesture
-        ? getModulationAmountSliderPosition(targetKind, modulationAmount)
-        : 0;
     const baseOrigin = descriptor.min < 0 && descriptor.max > 0
         ? normalizedValue(descriptor, 0)
         : 0;
@@ -293,235 +295,208 @@ function ParameterKnobSurface({
         "--rack-knob-mod-accent": sourceAccent,
     } as CSSProperties;
 
-    const finishGesture = useCallback((pointerId?: number) => {
-        const gesture = gestureRef.current;
-        if (!gesture || (pointerId !== undefined && gesture.pointerId !== pointerId)) {
-            return;
-        }
+    const gestureController = useParameterGesture();
+    const hudLayer = useContext(ParameterHudLayerContext);
+    const [draggingMode, setDraggingMode] = useState<"pending" | "base" | "modulation" | null>(null);
+    const [hudPresentation, setHudPresentation] = useState<{
+        readonly phase: "active" | "lingering";
+        readonly axis: "base" | "modulation";
+    } | null>(null);
+    const hudLingerTimerRef = useRef<number | null>(null);
+    const hostGestureActiveRef = useRef(false);
+    const lastBaseValueRef = useRef(binding.value);
 
-        gestureRef.current = null;
-        if (holdTimerRef.current !== null) {
-            clearTimeout(holdTimerRef.current);
-            holdTimerRef.current = null;
+    const clearHudLinger = useCallback(() => {
+        if (hudLingerTimerRef.current !== null) {
+            window.clearTimeout(hudLingerTimerRef.current);
+            hudLingerTimerRef.current = null;
         }
-        suppressClickRef.current = gesture.moved || gesture.holdActivated;
-        delete gesture.element.dataset.dragging;
-        try {
-            if (gesture.element.hasPointerCapture(gesture.pointerId)) {
-                gesture.element.releasePointerCapture(gesture.pointerId);
-            }
-        } catch {
-            // Capture may already be gone after cancellation or window deactivation.
-        }
-        if (gesture.baseGestureStarted) {
-            bindingRef.current.endGesture();
-        }
-        onHudChangeRef.current(null);
     }, []);
 
-    const updateGestureFromPointer = useCallback((event: Pick<
-        PointerEvent,
-        "pointerId" | "pointerType" | "buttons" | "clientX" | "clientY" | "shiftKey" | "preventDefault" | "stopPropagation"
-    >) => {
-        const gesture = gestureRef.current;
-        if (!gesture || gesture.pointerId !== event.pointerId) {
+    const hideHud = useCallback((immediate: boolean) => {
+        clearHudLinger();
+        if (immediate) {
+            setHudPresentation(null);
             return;
         }
-        if (event.pointerType === "mouse" && event.buttons === 0) {
-            finishGesture(event.pointerId);
-            return;
-        }
+        setHudPresentation((current) => (
+            current === null ? current : { ...current, phase: "lingering" }
+        ));
+        hudLingerTimerRef.current = window.setTimeout(() => {
+            hudLingerTimerRef.current = null;
+            setHudPresentation(null);
+        }, PARAMETER_HUD_LINGER_MS);
+    }, [clearHudLinger]);
 
-        event.preventDefault();
-        event.stopPropagation();
-        const deltaX = event.clientX - gesture.startClientX;
-        const deltaY = gesture.startClientY - event.clientY;
-        const distance = Math.hypot(
-            event.clientX - gesture.startClientX,
-            event.clientY - gesture.startClientY,
-        );
-        if (!gesture.moved && distance >= GESTURE_MOVE_THRESHOLD_PX) {
-            gesture.moved = true;
-            gesture.mode = enableModulationGestureRef.current && Math.abs(deltaX) > Math.abs(deltaY)
-                ? "modulation"
-                : "base";
-            gesture.element.dataset.dragging = gesture.mode;
-            if (holdTimerRef.current !== null) {
-                clearTimeout(holdTimerRef.current);
-                holdTimerRef.current = null;
-            }
-            if (gesture.mode === "base") {
-                bindingRef.current.beginGesture();
-                gesture.baseGestureStarted = true;
-            } else if (!sourceIsSelectedRef.current || routeRef.current === null) {
-                triggerParameterControlHaptic();
-            }
+    const endHostGesture = useCallback(() => {
+        if (hostGestureActiveRef.current) {
+            bindingRef.current.endGesture();
+            hostGestureActiveRef.current = false;
         }
-        if (!gesture.moved || gesture.holdActivated) {
-            return;
-        }
-        const currentDescriptor = descriptorRef.current;
-        const currentTargetKind = `rack.${currentDescriptor.endpointID}` as RackModulationTargetKind;
-        const anchorBounds = gesture.element.getBoundingClientRect();
-        const hudAnchor = {
-            left: anchorBounds.left,
-            top: anchorBounds.top,
-            right: anchorBounds.right,
-            bottom: anchorBounds.bottom,
-        };
-        const hudPointer = { x: event.clientX, y: event.clientY };
-        const sensitivity = event.shiftKey ? 720 : 180;
-        const nextNormalized = clamp(
-            gesture.mode === "base"
-                ? gesture.startBaseNormalized + (deltaY / sensitivity)
-                : gesture.startModulationNormalized + (deltaX / sensitivity),
-            0,
-            1,
-        );
-        if (gesture.mode === "modulation") {
-            if (!sourceIsSelectedRef.current || routeRef.current === null) {
-                onHudChangeRef.current({
-                    endpointID: currentDescriptor.endpointID,
-                    label: "MOD",
-                    value: sourceIsSelectedRef.current
-                        ? "NOT MAPPED · CREATE MAPPING +"
-                        : "SELECT A SOURCE",
-                    mode: "modulation",
-                    anchor: hudAnchor,
-                    pointer: hudPointer,
-                });
-                return;
-            }
-            const nextAmount = composeModulationAmount(currentTargetKind, nextNormalized);
-            onModulationAmountChangeRef.current(nextAmount);
-            onHudChangeRef.current({
-                endpointID: currentDescriptor.endpointID,
-                label: `MOD · ${currentDescriptor.label}`,
-                value: formatModulationAmountReadout(currentTargetKind, nextAmount, routePolarityRef.current),
-                mode: "modulation",
-                anchor: hudAnchor,
-                pointer: hudPointer,
-            });
-            return;
-        }
-
-        const nextValue = snapParameterValue(
-            currentDescriptor,
-            valueFromNormalized(currentDescriptor, nextNormalized),
-            detentStepRef.current,
-        );
-        const valueChanged = Math.abs(nextValue - gesture.lastBaseValue) > 1e-9;
-        if (detentStepRef.current !== null && valueChanged) {
-            triggerParameterControlHaptic();
-        }
-        if (detentStepRef.current === null || valueChanged) {
-            bindingRef.current.setValue(nextValue);
-            gesture.lastBaseValue = nextValue;
-        }
-        onHudChangeRef.current({
-            endpointID: currentDescriptor.endpointID,
-            label: `BASE · ${currentDescriptor.label}`,
-            value: formatValueRef.current(nextValue),
-            mode: "base",
-            anchor: hudAnchor,
-            pointer: hudPointer,
-        });
-    }, [finishGesture]);
-
-    useEffect(() => {
-        const handleFallbackPointerMove = (event: PointerEvent) => {
-            const gesture = gestureRef.current;
-            if (!gesture || gesture.pointerId !== event.pointerId) {
-                return;
-            }
-            if (event.target instanceof Node && gesture.element.contains(event.target)) {
-                return;
-            }
-            updateGestureFromPointer(event);
-        };
-        const handlePointerEnd = (event: PointerEvent) => finishGesture(event.pointerId);
-        const handleBlur = () => finishGesture();
-        const handleVisibilityChange = () => {
-            if (document.visibilityState !== "visible") {
-                finishGesture();
-            }
-        };
-
-        window.addEventListener("pointermove", handleFallbackPointerMove, true);
-        window.addEventListener("pointerup", handlePointerEnd, true);
-        window.addEventListener("pointercancel", handlePointerEnd, true);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibilityChange);
-        return () => {
-            window.removeEventListener("pointermove", handleFallbackPointerMove, true);
-            window.removeEventListener("pointerup", handlePointerEnd, true);
-            window.removeEventListener("pointercancel", handlePointerEnd, true);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibilityChange);
-            finishGesture();
-        };
-    }, [finishGesture, updateGestureFromPointer]);
+    }, []);
 
     const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
         if (event.pointerType === "mouse" && event.button !== 0) {
             return;
         }
-        const art = artRef.current;
-        if (!art) {
+        if (gestureController.isGestureActive()) {
             return;
         }
-
-        event.preventDefault();
-        event.stopPropagation();
-        finishGesture();
         onSelect();
-        try {
-            event.currentTarget.setPointerCapture(event.pointerId);
-        } catch {
-            // Synthetic pointer events may not own a platform pointer.
-        }
-        event.currentTarget.dataset.dragging = "pending";
-        gestureRef.current = {
-            pointerId: event.pointerId,
-            element: event.currentTarget,
-            mode: "pending",
-            startClientX: event.clientX,
-            startClientY: event.clientY,
-            startBaseNormalized: baseNormalized,
-            startModulationNormalized: modulationNormalized,
-            lastBaseValue: bindingRef.current.value,
-            moved: false,
-            baseGestureStarted: false,
-            holdActivated: false,
+
+        const gestureDescriptor = descriptor;
+        const gestureTargetKind = modulationTargetKind
+            ?? (`rack.${gestureDescriptor.endpointID}` as RackModulationTargetKind);
+        const amountBounds = enableModulationGesture && route !== null
+            ? getModulationAmountBounds(gestureTargetKind)
+            : null;
+        lastBaseValueRef.current = bindingRef.current.value;
+
+        const baseChannel: ParameterGestureChannel = {
+            startNormalized: normalizedValue(gestureDescriptor, bindingRef.current.value),
+            pixelsPerFullSpan: PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+            write: (normalized) => {
+                const nextValue = snapParameterValue(
+                    gestureDescriptor,
+                    valueFromNormalized(gestureDescriptor, normalized),
+                    detentStepRef.current,
+                );
+                const valueChanged = Math.abs(nextValue - lastBaseValueRef.current) > 1e-9;
+                if (detentStepRef.current !== null && valueChanged) {
+                    triggerParameterControlHaptic();
+                }
+                if (detentStepRef.current === null || valueChanged) {
+                    bindingRef.current.setValue(nextValue);
+                    lastBaseValueRef.current = nextValue;
+                }
+            },
+            onActivate: () => {
+                if (!hostGestureActiveRef.current) {
+                    bindingRef.current.beginGesture();
+                    hostGestureActiveRef.current = true;
+                }
+                setDraggingMode("base");
+                clearHudLinger();
+                setHudPresentation({ phase: "active", axis: "base" });
+            },
         };
-        if (!enableContextMenuRef.current) {
-            return;
-        }
-        holdTimerRef.current = setTimeout(() => {
-            const gesture = gestureRef.current;
-            if (!gesture || gesture.pointerId !== event.pointerId || gesture.moved) {
-                return;
-            }
-            holdTimerRef.current = null;
-            gesture.holdActivated = true;
-            suppressClickRef.current = true;
-            onHudChangeRef.current(null);
-            triggerParameterControlHaptic();
-            onRequestContextMenuRef.current(event.clientX, event.clientY);
-        }, LONG_PRESS_DELAY_MS);
+
+        // The vertical axis always classifies; without an editable mapping it
+        // stays inert and the HUD keeps the base presentation (ADR-024).
+        const modulationEditable = amountBounds !== null;
+        const baseValueAtStart = bindingRef.current.value;
+        const dialWalk = modulationDragStyle === "effective-value";
+        const modulationChannel: ParameterGestureChannel = {
+            startNormalized: amountBounds === null
+                ? 0
+                : dialWalk
+                    ? normalizedValue(gestureDescriptor, baseValueAtStart + (route?.amount ?? 0))
+                    : clamp(
+                        ((route?.amount ?? 0) - amountBounds.min) / (amountBounds.max - amountBounds.min),
+                        0,
+                        1,
+                    ),
+            pixelsPerFullSpan: dialWalk
+                ? PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE
+                : PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+            write: amountBounds === null ? null : (normalized) => {
+                if (dialWalk) {
+                    // Walk the modulated value along the dial: every pixel of
+                    // travel covers the same fraction of the knob's range in
+                    // both directions, and the amount is derived storage.
+                    onModulationAmountChangeRef.current(
+                        valueFromNormalized(gestureDescriptor, normalized) - baseValueAtStart,
+                    );
+                    return;
+                }
+                onModulationAmountChangeRef.current(
+                    amountBounds.min + (normalized * (amountBounds.max - amountBounds.min)),
+                );
+            },
+            onActivate: () => {
+                endHostGesture();
+                setDraggingMode(modulationEditable ? "modulation" : "base");
+                clearHudLinger();
+                setHudPresentation({ phase: "active", axis: modulationEditable ? "modulation" : "base" });
+            },
+        };
+
+        gestureController.startGesture(event, {
+            horizontal: baseChannel,
+            vertical: modulationChannel,
+            onFinish: (reason, ownedAxis) => {
+                endHostGesture();
+                setDraggingMode(null);
+                if (ownedAxis !== null) {
+                    hideHud(reason === "cancel");
+                } else {
+                    hideHud(true);
+                }
+            },
+            onLongPress: enableContextMenu
+                ? (clientX, clientY) => {
+                    triggerParameterControlHaptic();
+                    onRequestContextMenuRef.current(clientX, clientY);
+                }
+                : undefined,
+        });
+        setDraggingMode("pending");
     }, [
-        baseNormalized,
+        clearHudLinger,
         descriptor,
-        finishGesture,
-        modulationNormalized,
+        enableContextMenu,
+        enableModulationGesture,
+        endHostGesture,
+        gestureController,
+        hideHud,
+        modulationTargetKind,
         onSelect,
+        route,
     ]);
 
-    const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
-        updateGestureFromPointer(event.nativeEvent);
-    }, [updateGestureFromPointer]);
+    const hudModel: ParameterHudModel | null = hudPresentation === null ? null : (() => {
+        const resolvedOwnerAccent = ownerAccent ?? DEFAULT_KNOB_OWNER_ACCENT;
+        // Routes shown here always come from the armed rail source, whose
+        // kinds are the rack set; performance-source routes never present.
+        const sourceIdentity = route !== null
+            && route.sourceSlot !== null
+            && (route.sourceKind === "mseg" || route.sourceKind === "env" || route.sourceKind === "macro")
+            ? findRackModulationSource(route.sourceKind, route.sourceSlot)
+            : null;
+        const sourceLine = route !== null && sourceIdentity !== null
+            ? `${sourceIdentity.shortLabel} ${route.sourceSlot ?? ""}`.trim()
+                + ` · ${formatModulationAmountReadout(targetKind, modulationAmount, route.polarity)}`
+            : "";
+        const modRing: ParameterKnobModRing = !enableModulationGesture || !sourceIsSelected
+            ? { kind: "hidden" }
+            : route === null
+                ? { kind: "unmapped" }
+                : {
+                    kind: "mapped",
+                    lowNormalized: routeTravel?.normalized[0] ?? baseNormalized,
+                    highNormalized: routeTravel?.normalized[1] ?? baseNormalized,
+                    bypassed: !route.enabled,
+                };
+        return {
+            visible: true,
+            axis: hudPresentation.axis,
+            label: descriptor.label,
+            sourceLine,
+            ownerAccent: resolvedOwnerAccent,
+            ownerAccentRgb: hexToRgbTriplet(resolvedOwnerAccent),
+            sourceAccent,
+            baseNormalized,
+            baseOriginNormalized: baseOrigin,
+            baseText: formatValue(binding.value),
+            lowText: formatValue(routeTravel?.values[0] ?? binding.value),
+            highText: formatValue(routeTravel?.values[1] ?? binding.value),
+            limitsVisible: route !== null && Math.abs(modulationAmount) > 1e-9,
+            modRing,
+        };
+    })();
 
     return (
+        <>
         <button
             type="button"
             role="slider"
@@ -536,13 +511,10 @@ function ParameterKnobSurface({
             data-route-state={!sourceIsSelected ? "no-source" : route === null ? "unmapped" : route.enabled ? "mapped" : "bypassed"}
             data-route-effectiveness={effectiveness}
             data-modulation-target-kind={modulationTargetKind}
+            data-dragging={draggingMode ?? undefined}
             className={className}
             style={style}
             onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={(event) => finishGesture(event.pointerId)}
-            onPointerCancel={(event) => finishGesture(event.pointerId)}
-            onLostPointerCapture={(event) => finishGesture(event.pointerId)}
             onContextMenu={(event) => {
                 if (!enableContextMenu) {
                     return;
@@ -553,12 +525,6 @@ function ParameterKnobSurface({
                 onRequestContextMenu(event.clientX, event.clientY);
             }}
             onClick={(event) => {
-                if (suppressClickRef.current) {
-                    suppressClickRef.current = false;
-                    event.preventDefault();
-                    event.stopPropagation();
-                    return;
-                }
                 if (event.detail === 0) {
                     onSelect();
                 }
@@ -659,11 +625,14 @@ function ParameterKnobSurface({
             </svg>
             <output className="rack-knob-readout">{formatValue(binding.value)}</output>
         </button>
+        {hudModel !== null && hudLayer !== null
+            ? createPortal(<ParameterPrecisionHud model={hudModel} />, hudLayer)
+            : null}
+        </>
     );
 }
 
 function ignoreSelection() {}
-function ignoreHudChange(_hud: RackParameterHud | null) {}
 function ignoreModulationAmountChange(_amount: number) {}
 function ignoreContextMenu(_clientX: number, _clientY: number) {}
 
@@ -675,7 +644,7 @@ export function RackParameterKnob(props: RackParameterKnobProps) {
             rackDescriptor={props.descriptor}
             className="rack-parameter-knob"
             detentStep={null}
-            formatValue={(value) => formatRackParameterValue(props.descriptor, value)}
+            formatValue={props.formatValue ?? ((value) => formatRackParameterValue(props.descriptor, value))}
             enableModulationGesture
             enableContextMenu
         />
@@ -696,7 +665,6 @@ export function BaseParameterKnob(props: BaseParameterKnobProps) {
             enableModulationGesture={false}
             enableContextMenu={false}
             onSelect={ignoreSelection}
-            onHudChange={ignoreHudChange}
             onModulationAmountChange={ignoreModulationAmountChange}
             onRequestContextMenu={ignoreContextMenu}
         />

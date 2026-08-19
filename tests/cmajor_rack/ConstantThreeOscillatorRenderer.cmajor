@@ -1,0 +1,32 @@
+// Deterministic renderer seam for SharedVoiceEngine filter-path tests.
+namespace CosimoThreeOscillatorRenderer
+{
+    int32 renderAll (float32[] packedFloats,
+                     int32[] packedInts,
+                     int32[] slot0Chunk0,
+                     int32[] slot0Chunk1,
+                     int32[] slot0Chunk2,
+                     int32[] slot0Chunk3,
+                     int32[] slot1Chunk0,
+                     int32[] slot1Chunk1,
+                     int32[] slot1Chunk2,
+                     int32[] slot1Chunk3,
+                     int32[] slot2Chunk0,
+                     int32[] slot2Chunk1,
+                     int32[] slot2Chunk2,
+                     int32[] slot2Chunk3,
+                     int32[] slot3Chunk0,
+                     int32[] slot3Chunk1,
+                     int32[] slot3Chunk2,
+                     int32[] slot3Chunk3)
+    {
+        for (int32 voiceIndex = 0; voiceIndex < 16; ++voiceIndex)
+        {
+            let outputIndex = wt::rendererNoteOutputOffset + voiceIndex * 2;
+            packedFloats.at (outputIndex) = 0.75f;
+            packedFloats.at (outputIndex + 1) = -0.5f;
+        }
+
+        return 1;
+    }
+}

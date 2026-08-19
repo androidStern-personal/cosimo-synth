@@ -139,6 +139,7 @@ type ModuleDefinition = {
 type BoundEndpointId =
     | "filterCutoff"
     | "filterQ"
+    | "filterMix"
     | `mseg${1 | 2 | 3}${"Morph" | "Rate"}`
     | `env${1 | 2 | 3}${"Attack" | "Decay" | "Sustain" | "Release"}`;
 
@@ -170,6 +171,8 @@ const MODULE_DEFINITIONS: ReadonlyArray<ModuleDefinition> = [
             // instances start from different sounds.
             parameter("cutoff", "Cutoff", 56.63233347786729, 70, "frequency"),
             parameter("resonance", "Resonance", 36.91760377573153, 0),
+            // Initial 100% mirrors the engine's back-compat filterMix default 1.0.
+            parameter("mix", "Mix", 100, 100),
             parameter("drive", "Drive", 15, 0),
         ],
     },
@@ -230,6 +233,14 @@ function resonanceFromEngine(value: number): NormalizedValue {
     return normalized(Math.log(value / 0.1) / Math.log(200), "filterQ endpoint conversion");
 }
 
+function mixToEngine(value: NormalizedValue): number {
+    return value;
+}
+
+function mixFromEngine(value: number): NormalizedValue {
+    return normalized(value, "filterMix endpoint conversion");
+}
+
 function boundEndpoint(
     id: BoundEndpointId,
     toEngine: (value: NormalizedValue) => number,
@@ -251,6 +262,14 @@ function connectivityFor(targetId: TargetId, workspace: "voice" | "effects"): Ta
                 binding: boundEndpoint("filterQ", resonanceToEngine, resonanceFromEngine),
                 articulationParameterId: "filterQ",
                 modulationTargetKind: "filterQ",
+            };
+        case "voice-filter.mix":
+            return {
+                binding: boundEndpoint("filterMix", mixToEngine, mixFromEngine),
+                // T05 scope: articulations do not own Mix yet — capturing it
+                // would extend the persisted articulation schema.
+                articulationParameterId: null,
+                modulationTargetKind: "filterMix",
             };
         default:
             return {

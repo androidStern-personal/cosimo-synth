@@ -50,17 +50,15 @@ import {
     type MobileVoiceFormatKind,
     type MobileVoicePageName,
 } from "./mobile-voice-parameter-manifest";
+import type { RollingAxis } from "./rolling-axis-classifier";
 import {
-    applyRollingAxisSample,
-    createRollingAxisState,
-    type RollingAxis,
-    type RollingAxisPointerType,
-    type RollingAxisState,
-} from "./rolling-axis-classifier";
-import {
-    PROVISIONAL_WAVETABLE_GRAPH_AXES,
-    projectGraphAxisWrite,
-} from "./wavetable-graph-axis-projection";
+    PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+    PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+    useParameterGesture,
+    type ParameterGestureChannel,
+} from "./parameter-gesture";
+import { ParameterPrecisionHud, type ParameterHudModel } from "./parameter-hud";
+import { PROVISIONAL_WAVETABLE_GRAPH_AXES } from "./wavetable-graph-axis-projection";
 import {
     aggregateTuneBaseSemitones,
     projectAggregateTuneTravel,
@@ -71,21 +69,19 @@ import {
     type MobileVoiceRailBand,
     type MobileVoiceRailState,
 } from "./mobile-voice-rail-projection";
-import { ParameterKnobArtwork, type ParameterKnobModRing } from "./parameter-knob-artwork";
+import type { ParameterKnobModRing } from "./parameter-knob-artwork";
 import { WavetableCanvas, type FactoryTableOption } from "./synth-components";
 
 /* ------------------------------------------------------------------ */
 /* Calibration (ADR-024: tunable with device evidence only)            */
 /* ------------------------------------------------------------------ */
 
-const BASE_PIXELS_PER_FULL_RANGE = 220;
-const MODULATION_PIXELS_PER_FULL_SPAN = 360;
 const HUD_LINGER_MS = 420;
 /** Semitone capture window for sticky modulation detents on Tune. */
 const MOD_DETENT_CAPTURE_ST = 0.2;
-const LONG_PRESS_MS = 500;
 
 export const MOBILE_VOICE_OWNER_ACCENT = "#69d5c5";
+export const MOBILE_VOICE_OWNER_ACCENT_RGB = "105 213 197";
 
 /* ------------------------------------------------------------------ */
 /* Display descriptors                                                  */
@@ -238,37 +234,8 @@ export type MobileVoiceFocusedEditorProps = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Gesture controller                                                   */
+/* Gesture controller (shared: ui/shared/parameter-gesture.ts)          */
 /* ------------------------------------------------------------------ */
-
-type GestureAxisOwner =
-    | { readonly kind: "cell-base"; readonly controlID: MobileVoiceBindableControlID }
-    | { readonly kind: "cell-modulation"; readonly controlID: MobileVoiceBindableControlID }
-    | { readonly kind: "graph"; readonly axis: RollingAxis };
-
-type ActiveGesture = {
-    readonly surface: "cell" | "graph";
-    readonly controlID: MobileVoiceBindableControlID | null;
-    readonly pointerId: number;
-    readonly pointerType: RollingAxisPointerType;
-    readonly element: HTMLElement;
-    classifier: RollingAxisState;
-    owner: GestureAxisOwner | null;
-    hostGestureControlID: MobileVoiceBindableControlID | null;
-    baseNormalized: number;
-    graphHorizontalNormalized: number;
-    graphVerticalNormalized: number;
-    amount: number;
-    amountBounds: { readonly min: number; readonly max: number } | null;
-    lastDetentValue: number | null;
-    lastModulationDetent: number | null;
-    pendingCommit: boolean;
-    rafHandle: number | null;
-    longPressTimer: number | null;
-    scrollLocks: ReadonlyArray<{ readonly element: HTMLElement; readonly top: number; readonly left: number }>;
-    windowScroll: { readonly x: number; readonly y: number };
-    removeListeners: () => void;
-};
 
 type HudPhase = "hidden" | "active" | "lingering";
 
@@ -279,10 +246,6 @@ type HudState = {
 };
 
 const HIDDEN_HUD: HudState = { phase: "hidden", axis: "base", controlID: null };
-
-function pointerTypeOf(event: PointerEvent | ReactPointerEvent<HTMLElement>): RollingAxisPointerType {
-    return event.pointerType === "touch" ? "touch" : event.pointerType === "pen" ? "pen" : "mouse";
-}
 
 /* ------------------------------------------------------------------ */
 /* Per-oscillator toggle bindings (tabs need all three at once)         */
@@ -388,7 +351,13 @@ export function MobileVoiceFocusedEditor({
     const bindingsRef = useRef(bindings);
     bindingsRef.current = bindings;
 
-    const gestureRef = useRef<ActiveGesture | null>(null);
+    const gestureController = useParameterGesture();
+    const hostGestureControlIDRef = useRef<MobileVoiceBindableControlID | null>(null);
+    /** Per-gesture detent memories (reset when a new gesture starts). */
+    const gestureScratchRef = useRef<{ lastDetentValue: number | null; lastModulationDetent: number | null }>({
+        lastDetentValue: null,
+        lastModulationDetent: null,
+    });
     const hudLingerTimerRef = useRef<number | null>(null);
 
     const clearHudLinger = useCallback(() => {
@@ -413,325 +382,51 @@ export function MobileVoiceFocusedEditor({
         }, HUD_LINGER_MS);
     }, [clearHudLinger]);
 
-    const commitGestureFrame = useCallback(() => {
-        const gesture = gestureRef.current;
-        if (gesture === null || !gesture.pendingCommit) {
-            return;
-        }
-        gesture.pendingCommit = false;
-        const owner = gesture.owner;
-        if (owner === null) {
-            return;
-        }
-
-        if (owner.kind === "graph") {
-            const descriptor = PROVISIONAL_WAVETABLE_GRAPH_AXES;
-            const binding = owner.axis === "horizontal" ? descriptor.horizontal : descriptor.vertical;
-            const controlID = binding.controlID as MobileVoiceBindableControlID;
-            const display = DISPLAY_DESCRIPTORS[controlID];
-            const normalized = owner.axis === "horizontal"
-                ? gesture.graphHorizontalNormalized
-                : gesture.graphVerticalNormalized;
-            const value = display.min + (normalized * (display.max - display.min));
-            bindingsRef.current[controlID].setValue(value);
-            return;
-        }
-
-        const controlID = owner.controlID;
-        const display = DISPLAY_DESCRIPTORS[controlID];
-        if (owner.kind === "cell-base") {
-            const raw = display.min + (gesture.baseNormalized * (display.max - display.min));
-            const snapped = display.min
-                + (Math.round((raw - display.min) / display.step) * display.step);
-            const value = clamp(snapped, display.min, display.max);
-            const spec = getMobileVoiceControlSpec(controlID);
-            if (spec.detented) {
-                if (gesture.lastDetentValue !== value) {
-                    if (gesture.lastDetentValue !== null) {
-                        onRequestHaptic?.();
-                    }
-                    gesture.lastDetentValue = value;
-                }
-            }
-            bindingsRef.current[controlID].setValue(value);
-            return;
-        }
-
-        const amountBinding = activeAmountBindingRef.current;
-        if (amountBinding.value !== null) {
-            let amountToWrite = gesture.amount;
-            const spec = getMobileVoiceControlSpec(controlID);
-            if (spec.modulationParameterKind === "pitchSemitones") {
-                // Sticky semitone detents: the amount moves freely, but locks
-                // to a whole semitone inside a small capture window with one
-                // haptic bump per newly locked integer.
-                const nearest = Math.round(gesture.amount);
-                if (Math.abs(gesture.amount - nearest) <= MOD_DETENT_CAPTURE_ST) {
-                    amountToWrite = nearest;
-                    if (gesture.lastModulationDetent !== nearest) {
-                        onRequestHaptic?.();
-                        gesture.lastModulationDetent = nearest;
-                    }
-                } else {
-                    gesture.lastModulationDetent = null;
-                }
-            }
-            amountBinding.setValue(amountToWrite);
-        }
-    }, [onRequestHaptic]);
-
-    const scheduleGestureCommit = useCallback(() => {
-        const gesture = gestureRef.current;
-        if (gesture === null) {
-            return;
-        }
-        gesture.pendingCommit = true;
-        if (gesture.rafHandle !== null) {
-            return;
-        }
-        gesture.rafHandle = window.requestAnimationFrame(() => {
-            const current = gestureRef.current;
-            if (current !== null) {
-                current.rafHandle = null;
-            }
-            commitGestureFrame();
-        });
-    }, [commitGestureFrame]);
-
-    const endHostGesture = useCallback((gesture: ActiveGesture) => {
-        if (gesture.hostGestureControlID !== null) {
-            bindingsRef.current[gesture.hostGestureControlID].endGesture();
-            gesture.hostGestureControlID = null;
+    const endHostGesture = useCallback(() => {
+        const controlID = hostGestureControlIDRef.current;
+        if (controlID !== null) {
+            bindingsRef.current[controlID].endGesture();
+            hostGestureControlIDRef.current = null;
         }
     }, []);
 
-    const beginHostGesture = useCallback((gesture: ActiveGesture, controlID: MobileVoiceBindableControlID) => {
-        endHostGesture(gesture);
+    const beginHostGesture = useCallback((controlID: MobileVoiceBindableControlID) => {
+        endHostGesture();
         bindingsRef.current[controlID].beginGesture();
-        gesture.hostGestureControlID = controlID;
+        hostGestureControlIDRef.current = controlID;
     }, [endHostGesture]);
-
-    const restoreScrollLocks = useCallback((gesture: ActiveGesture) => {
-        for (const lock of gesture.scrollLocks) {
-            if (lock.element.scrollTop !== lock.top) {
-                lock.element.scrollTop = lock.top;
-            }
-            if (lock.element.scrollLeft !== lock.left) {
-                lock.element.scrollLeft = lock.left;
-            }
-        }
-        if (window.scrollX !== gesture.windowScroll.x || window.scrollY !== gesture.windowScroll.y) {
-            window.scrollTo(gesture.windowScroll.x, gesture.windowScroll.y);
-        }
-    }, []);
-
-    /** Idempotent single finish path for release AND every cancellation. */
-    const finishGesture = useCallback((reason: "release" | "cancel") => {
-        const gesture = gestureRef.current;
-        if (gesture === null) {
-            return;
-        }
-        gestureRef.current = null;
-
-        if (gesture.longPressTimer !== null) {
-            window.clearTimeout(gesture.longPressTimer);
-        }
-        if (gesture.rafHandle !== null) {
-            window.cancelAnimationFrame(gesture.rafHandle);
-            gesture.rafHandle = null;
-        }
-        // Flush the final integrated delta before the host gesture closes.
-        if (reason === "release" && gesture.pendingCommit) {
-            gestureRef.current = gesture;
-            commitGestureFrame();
-            gestureRef.current = null;
-        }
-        endHostGesture(gesture);
-        gesture.removeListeners();
-        try {
-            if (gesture.element.hasPointerCapture(gesture.pointerId)) {
-                gesture.element.releasePointerCapture(gesture.pointerId);
-            }
-        } catch {
-            // Capture may already be gone after cancellation; not terminal.
-        }
-        restoreScrollLocks(gesture);
-        setDraggingCell(null);
-        setGraphAxis(null);
-        setActiveRoute(null);
-        if (gesture.surface === "cell" && gesture.owner !== null) {
-            hideHud(reason === "cancel");
-        } else {
-            hideHud(true);
-        }
-    }, [commitGestureFrame, endHostGesture, hideHud, restoreScrollLocks]);
-
-    const finishGestureRef = useRef(finishGesture);
-    finishGestureRef.current = finishGesture;
 
     /** Cancel on oscillator/page rebinds, unmount, and session teardown. */
     useEffect(() => () => {
-        finishGestureRef.current("cancel");
-    }, []);
+        gestureController.cancelGesture();
+    }, [gestureController]);
     useEffect(() => {
-        finishGestureRef.current("cancel");
-    }, [oscillatorID]);
+        gestureController.cancelGesture();
+    }, [gestureController, oscillatorID]);
     useEffect(() => {
         // A page change mid-drag (e.g. a second finger on a paddle) cancels
         // exactly once before the presentation rebinds (ADR-024 §17).
-        finishGestureRef.current("cancel");
-    }, [pageIndex]);
+        gestureController.cancelGesture();
+    }, [gestureController, pageIndex]);
     useEffect(() => {
         if (armedSource !== null) {
             return;
         }
-        finishGestureRef.current("cancel");
-    }, [armedSource]);
-
-    const applyGestureSample = useCallback((event: PointerEvent) => {
-        const gesture = gestureRef.current;
-        if (gesture === null || event.pointerId !== gesture.pointerId) {
-            return;
-        }
-        if (event.pointerType === "mouse" && event.buttons === 0) {
-            // Only mouse treats zero buttons as an implicit release; Safari
-            // touch moves legitimately report buttons === 0.
-            finishGestureRef.current("release");
-            return;
-        }
-        event.preventDefault();
-
-        const coalesced = typeof event.getCoalescedEvents === "function"
-            ? event.getCoalescedEvents()
-            : [];
-        const samples = coalesced.length > 0 ? coalesced : [event];
-
-        for (const sample of samples) {
-            const result = applyRollingAxisSample(gesture.classifier, {
-                x: sample.clientX,
-                y: sample.clientY,
-                time: Number(sample.timeStamp) || performance.now(),
-                pointerType: gesture.pointerType,
-            });
-            gesture.classifier = result.state;
-
-            if (result.transition === "activate" || result.transition === "switch") {
-                if (gesture.longPressTimer !== null) {
-                    window.clearTimeout(gesture.longPressTimer);
-                    gesture.longPressTimer = null;
-                }
-                const axis = result.state.mode as RollingAxis;
-                if (gesture.surface === "graph") {
-                    const binding = axis === "horizontal"
-                        ? PROVISIONAL_WAVETABLE_GRAPH_AXES.horizontal
-                        : PROVISIONAL_WAVETABLE_GRAPH_AXES.vertical;
-                    const controlID = binding.controlID as MobileVoiceBindableControlID;
-                    gesture.owner = { kind: "graph", axis };
-                    beginHostGesture(gesture, controlID);
-                    setGraphAxis(axis);
-                    continue;
-                }
-                const controlID = gesture.controlID;
-                if (controlID === null) {
-                    continue;
-                }
-                if (axis === "horizontal") {
-                    gesture.owner = { kind: "cell-base", controlID };
-                    beginHostGesture(gesture, controlID);
-                    setDraggingCell({ controlID, mode: "base" });
-                    clearHudLinger();
-                    setHudState({ phase: "active", axis: "base", controlID });
-                } else {
-                    gesture.owner = { kind: "cell-modulation", controlID };
-                    endHostGesture(gesture);
-                    // Without an editable selected route the vertical axis is
-                    // inert, so the HUD keeps the base presentation instead
-                    // of advertising a modulation edit that cannot happen.
-                    const editable = gesture.amountBounds !== null;
-                    setDraggingCell({ controlID, mode: editable ? "modulation" : "base" });
-                    clearHudLinger();
-                    setHudState({
-                        phase: "active",
-                        axis: editable ? "modulation" : "base",
-                        controlID,
-                    });
-                }
-                continue;
-            }
-
-            const application = result.application;
-            if (application === null || gesture.owner === null) {
-                continue;
-            }
-
-            if (gesture.owner.kind === "graph") {
-                const write = projectGraphAxisWrite(
-                    PROVISIONAL_WAVETABLE_GRAPH_AXES,
-                    application.axis,
-                    application.axis === "horizontal"
-                        ? gesture.graphHorizontalNormalized
-                        : gesture.graphVerticalNormalized,
-                    application.dx,
-                    application.dy,
-                );
-                if (application.axis === "horizontal") {
-                    gesture.graphHorizontalNormalized = write.nextNormalized;
-                } else {
-                    gesture.graphVerticalNormalized = write.nextNormalized;
-                }
-                gesture.pendingCommit = true;
-                continue;
-            }
-
-            if (gesture.owner.kind === "cell-base") {
-                gesture.baseNormalized = clamp01(
-                    gesture.baseNormalized + (application.dx / BASE_PIXELS_PER_FULL_RANGE),
-                );
-                gesture.pendingCommit = true;
-                continue;
-            }
-
-            const bounds = gesture.amountBounds;
-            if (bounds === null) {
-                // No armed source, unmapped pair, or non-modulatable target:
-                // vertical motion is inert (the HUD explains why).
-                continue;
-            }
-            const span = bounds.max - bounds.min;
-            gesture.amount = clamp(
-                gesture.amount + ((application.dy / MODULATION_PIXELS_PER_FULL_SPAN) * span),
-                bounds.min,
-                bounds.max,
-            );
-            gesture.pendingCommit = true;
-        }
-
-        if (gesture.pendingCommit) {
-            scheduleGestureCommit();
-        }
-    }, [beginHostGesture, clearHudLinger, endHostGesture, scheduleGestureCommit]);
+        gestureController.cancelGesture();
+    }, [armedSource, gestureController]);
 
     const startGesture = useCallback((
         event: ReactPointerEvent<HTMLElement>,
         surface: "cell" | "graph",
         controlID: MobileVoiceBindableControlID | null,
     ) => {
-        if (gestureRef.current !== null) {
+        if (gestureController.isGestureActive()) {
             return;
         }
         if (event.pointerType === "mouse" && event.button !== 0) {
             return;
         }
-        event.preventDefault();
-        event.stopPropagation();
-        const element = event.currentTarget;
-        try {
-            element.setPointerCapture(event.pointerId);
-        } catch {
-            // Window fallbacks continue the gesture when capture is rejected.
-        }
 
-        const pointerType = pointerTypeOf(event);
         const display = controlID !== null ? DISPLAY_DESCRIPTORS[controlID] : null;
         const spec = controlID !== null ? getMobileVoiceControlSpec(controlID) : null;
         const route = spec !== null ? routeFor(spec.modulationParameterKind) : null;
@@ -740,130 +435,155 @@ export function MobileVoiceFocusedEditor({
             ? getModulationAmountBounds(targetKindFor(modulationTargetKind))
             : null;
         setActiveRoute(route);
-
-        const baseValue = controlID !== null && display !== null
-            ? clamp(bindingsRef.current[controlID].value, display.min, display.max)
-            : 0;
-        // Graph axes integrate from the BASE bindings, never the observed
-        // (modulation-inclusive) drawing values: the gesture edits base.
-        const graphHorizontal = clamp01(bindingsRef.current.warpAmount.value);
-        const graphVertical = clamp01(bindingsRef.current.framePosition.value);
-
-        const scrollLocks = (resolveScrollLockTargets?.() ?? []).map((lockElement) => ({
-            element: lockElement,
-            top: lockElement.scrollTop,
-            left: lockElement.scrollLeft,
-        }));
-
-        const handleMove = (moveEvent: PointerEvent) => applyGestureSample(moveEvent);
-        const handleUp = (upEvent: PointerEvent) => {
-            if (gestureRef.current !== null && upEvent.pointerId === gestureRef.current.pointerId) {
-                finishGestureRef.current("release");
-            }
-        };
-        const handleCancel = (cancelEvent: PointerEvent) => {
-            if (gestureRef.current !== null && cancelEvent.pointerId === gestureRef.current.pointerId) {
-                finishGestureRef.current("cancel");
-            }
-        };
-        const handleBlur = () => finishGestureRef.current("cancel");
-        const handleVisibility = () => {
-            if (document.visibilityState !== "visible") {
-                finishGestureRef.current("cancel");
-            }
-        };
-        const handleViewportInvalidation = () => finishGestureRef.current("cancel");
-        const handleNativeTouchMove = (touchEvent: TouchEvent) => {
-            // Non-passive Safari fallback: an owned readout gesture must
-            // never be promoted into page scroll midway through the drag.
-            if (gestureRef.current === null) {
-                return;
-            }
-            if (touchEvent.cancelable) {
-                touchEvent.preventDefault();
-            }
-            restoreScrollLocks(gestureRef.current);
-        };
-        const handleNativeTouchEnd = (touchEvent: TouchEvent) => {
-            if (gestureRef.current !== null && touchEvent.touches.length === 0) {
-                finishGestureRef.current("release");
-            }
-        };
-        const handleNativeTouchCancel = (touchEvent: TouchEvent) => {
-            if (gestureRef.current !== null && touchEvent.touches.length === 0) {
-                finishGestureRef.current("cancel");
-            }
-        };
-
-        window.addEventListener("pointermove", handleMove, { passive: false });
-        window.addEventListener("pointerup", handleUp, true);
-        window.addEventListener("pointercancel", handleCancel, true);
-        window.addEventListener("blur", handleBlur);
-        document.addEventListener("visibilitychange", handleVisibility);
-        window.addEventListener("orientationchange", handleViewportInvalidation);
-        window.addEventListener("resize", handleViewportInvalidation);
-        document.addEventListener("touchmove", handleNativeTouchMove, { capture: true, passive: false });
-        document.addEventListener("touchend", handleNativeTouchEnd, true);
-        document.addEventListener("touchcancel", handleNativeTouchCancel, true);
-
-        const removeListeners = () => {
-            window.removeEventListener("pointermove", handleMove);
-            window.removeEventListener("pointerup", handleUp, true);
-            window.removeEventListener("pointercancel", handleCancel, true);
-            window.removeEventListener("blur", handleBlur);
-            document.removeEventListener("visibilitychange", handleVisibility);
-            window.removeEventListener("orientationchange", handleViewportInvalidation);
-            window.removeEventListener("resize", handleViewportInvalidation);
-            document.removeEventListener("touchmove", handleNativeTouchMove, true);
-            document.removeEventListener("touchend", handleNativeTouchEnd, true);
-            document.removeEventListener("touchcancel", handleNativeTouchCancel, true);
-        };
-
-        const longPressTimer = surface === "cell" && controlID !== null && onRequestParameterMenu
-            ? window.setTimeout(() => {
-                const gesture = gestureRef.current;
-                if (gesture === null || gesture.owner !== null) {
-                    return;
-                }
-                const { clientX, clientY } = event;
-                finishGestureRef.current("cancel");
-                onRequestParameterMenu(controlID, clientX, clientY);
-            }, LONG_PRESS_MS)
-            : null;
-
-        gestureRef.current = {
-            surface,
-            controlID,
-            pointerId: event.pointerId,
-            pointerType,
-            element,
-            classifier: createRollingAxisState(event.clientX, event.clientY),
-            owner: null,
-            hostGestureControlID: null,
-            baseNormalized: display !== null
-                ? clamp01((baseValue - display.min) / (display.max - display.min))
-                : 0,
-            graphHorizontalNormalized: graphHorizontal,
-            graphVerticalNormalized: graphVertical,
-            amount: route?.amount ?? 0,
-            amountBounds,
+        gestureScratchRef.current = {
             lastDetentValue: null,
             lastModulationDetent: route !== null
                 && Math.abs(route.amount - Math.round(route.amount)) <= MOD_DETENT_CAPTURE_ST
                 ? Math.round(route.amount)
                 : null,
-            pendingCommit: false,
-            rafHandle: null,
-            longPressTimer,
-            scrollLocks,
-            windowScroll: { x: window.scrollX, y: window.scrollY },
-            removeListeners,
         };
+
+        const graphChannelFor = (axis: RollingAxis): ParameterGestureChannel => {
+            const axisBinding = axis === "horizontal"
+                ? PROVISIONAL_WAVETABLE_GRAPH_AXES.horizontal
+                : PROVISIONAL_WAVETABLE_GRAPH_AXES.vertical;
+            const axisControlID = axisBinding.controlID as MobileVoiceBindableControlID;
+            const axisDisplay = DISPLAY_DESCRIPTORS[axisControlID];
+            return {
+                // Graph axes integrate from the BASE bindings, never the
+                // observed (modulation-inclusive) drawing values.
+                startNormalized: axis === "horizontal"
+                    ? clamp01(bindingsRef.current.warpAmount.value)
+                    : clamp01(bindingsRef.current.framePosition.value),
+                pixelsPerFullSpan: axisBinding.pixelsPerFullRange,
+                direction: axisBinding.direction,
+                write: (normalized) => {
+                    bindingsRef.current[axisControlID].setValue(
+                        axisDisplay.min + (normalized * (axisDisplay.max - axisDisplay.min)),
+                    );
+                },
+                onActivate: () => {
+                    beginHostGesture(axisControlID);
+                    setGraphAxis(axis);
+                },
+            };
+        };
+
+        const baseChannel: ParameterGestureChannel | null = controlID === null || display === null || spec === null
+            ? null
+            : {
+                startNormalized: clamp01(
+                    (clamp(bindingsRef.current[controlID].value, display.min, display.max) - display.min)
+                        / (display.max - display.min),
+                ),
+                pixelsPerFullSpan: PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+                write: (normalized) => {
+                    const raw = display.min + (normalized * (display.max - display.min));
+                    const snapped = display.min
+                        + (Math.round((raw - display.min) / display.step) * display.step);
+                    const value = clamp(snapped, display.min, display.max);
+                    if (spec.detented) {
+                        if (gestureScratchRef.current.lastDetentValue !== value) {
+                            if (gestureScratchRef.current.lastDetentValue !== null) {
+                                onRequestHaptic?.();
+                            }
+                            gestureScratchRef.current.lastDetentValue = value;
+                        }
+                    }
+                    bindingsRef.current[controlID].setValue(value);
+                },
+                onActivate: () => {
+                    beginHostGesture(controlID);
+                    setDraggingCell({ controlID, mode: "base" });
+                    clearHudLinger();
+                    setHudState({ phase: "active", axis: "base", controlID });
+                },
+            };
+
+        const modulationChannel: ParameterGestureChannel | null = controlID === null || spec === null
+            ? null
+            : {
+                startNormalized: amountBounds === null
+                    ? 0
+                    : clamp01(((route?.amount ?? 0) - amountBounds.min) / (amountBounds.max - amountBounds.min)),
+                pixelsPerFullSpan: PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+                // No armed source, unmapped pair, or non-modulatable target:
+                // vertical motion is inert (the HUD explains why).
+                write: amountBounds === null ? null : (normalized) => {
+                    const span = amountBounds.max - amountBounds.min;
+                    const freeAmount = amountBounds.min + (normalized * span);
+                    let amountToWrite = freeAmount;
+                    if (spec.modulationParameterKind === "pitchSemitones") {
+                        // Sticky semitone detents: the amount moves freely,
+                        // but locks to a whole semitone inside a small capture
+                        // window with one haptic bump per newly locked integer.
+                        const nearest = Math.round(freeAmount);
+                        if (Math.abs(freeAmount - nearest) <= MOD_DETENT_CAPTURE_ST) {
+                            amountToWrite = nearest;
+                            if (gestureScratchRef.current.lastModulationDetent !== nearest) {
+                                onRequestHaptic?.();
+                                gestureScratchRef.current.lastModulationDetent = nearest;
+                            }
+                        } else {
+                            gestureScratchRef.current.lastModulationDetent = null;
+                        }
+                    }
+                    const amountBinding = activeAmountBindingRef.current;
+                    if (amountBinding.value !== null) {
+                        amountBinding.setValue(amountToWrite);
+                    }
+                },
+                onActivate: () => {
+                    endHostGesture();
+                    // Without an editable selected route the vertical axis is
+                    // inert, so the HUD keeps the base presentation instead
+                    // of advertising a modulation edit that cannot happen.
+                    const editable = amountBounds !== null;
+                    setDraggingCell({ controlID, mode: editable ? "modulation" : "base" });
+                    clearHudLinger();
+                    setHudState({
+                        phase: "active",
+                        axis: editable ? "modulation" : "base",
+                        controlID,
+                    });
+                },
+            };
+
+        gestureController.startGesture(event, {
+            horizontal: surface === "graph" ? graphChannelFor("horizontal") : baseChannel,
+            vertical: surface === "graph" ? graphChannelFor("vertical") : modulationChannel,
+            onFinish: (reason, ownedAxis) => {
+                endHostGesture();
+                setDraggingCell(null);
+                setGraphAxis(null);
+                setActiveRoute(null);
+                if (surface === "cell" && ownedAxis !== null) {
+                    hideHud(reason === "cancel");
+                } else {
+                    hideHud(true);
+                }
+            },
+            onLongPress: surface === "cell" && controlID !== null && onRequestParameterMenu
+                ? (clientX, clientY) => onRequestParameterMenu(controlID, clientX, clientY)
+                : undefined,
+            resolveScrollLockTargets,
+        });
 
         if (surface === "cell" && controlID !== null) {
             setDraggingCell({ controlID, mode: "pending" });
         }
-    }, [applyGestureSample, onRequestParameterMenu, resolveScrollLockTargets, restoreScrollLocks, routeFor, targetKindFor]);
+    }, [
+        beginHostGesture,
+        clearHudLinger,
+        endHostGesture,
+        gestureController,
+        hideHud,
+        onRequestHaptic,
+        onRequestParameterMenu,
+        resolveScrollLockTargets,
+        routeFor,
+        targetKindFor,
+    ]);
 
     /* -------------------------------------------------------------- */
     /* Cell + page models                                               */
@@ -1018,78 +738,24 @@ export function MobileVoiceFocusedEditor({
                     bypassed: presentation.railState === "bypassed",
                 };
 
-        return createPortal(
-            <div
-                data-role="mobile-voice-hud"
-                data-hud-axis={hudState.axis}
-                className={`mobile-voice-hud${hudState.phase !== "hidden" ? " is-visible" : ""}${isModulation ? " is-modulation" : ""}`}
-                style={{ "--mobile-voice-source-accent": sourceAccent } as React.CSSProperties}
-                aria-hidden="true"
-            >
-                <header className="mobile-voice-hud-header">
-                    <span
-                        className="mobile-voice-hud-micro"
-                        style={{ color: isModulation ? sourceAccent : MOBILE_VOICE_OWNER_ACCENT }}
-                    >
-                        {isModulation ? "MOD ↕" : "BASE ↔"}
-                    </span>
-                    <strong className="mobile-voice-hud-label">
-                        {isModulation && isTune ? "Tune" : spec.fullLabel}
-                    </strong>
-                    <span
-                        className="mobile-voice-hud-micro mobile-voice-hud-source"
-                        style={{ color: isModulation ? sourceAccent : "rgba(232, 236, 239, 0.6)" }}
-                    >
-                        {sourceLine}
-                    </span>
-                </header>
-                <div className="mobile-voice-hud-knob">
-                    <ParameterKnobArtwork
-                        baseNormalized={presentation.baseNormalized}
-                        baseOriginNormalized={baseOrigin}
-                        ownerAccent={MOBILE_VOICE_OWNER_ACCENT}
-                        sourceAccent={sourceAccent}
-                        modRing={modRing}
-                        emphasis={hudState.axis === "base" ? "base" : "modulation"}
-                    />
-                    <div className="mobile-voice-hud-center">
-                        <span>Base</span>
-                        <strong data-role="mobile-voice-hud-base">
-                            {formatMobileVoiceValue(format, clamp(bindings[controlID].value, display.min, display.max))}
-                        </strong>
-                    </div>
-                    <div
-                        className="mobile-voice-hud-limit is-low"
-                        style={{ visibility: limitsVisible ? "visible" : "hidden" }}
-                    >
-                        <span>Low</span>
-                        <strong data-role="mobile-voice-hud-low">{lowText}</strong>
-                    </div>
-                    <div
-                        className="mobile-voice-hud-limit is-high"
-                        style={{ visibility: limitsVisible ? "visible" : "hidden" }}
-                    >
-                        <span>High</span>
-                        <strong data-role="mobile-voice-hud-high">{highText}</strong>
-                    </div>
-                </div>
-                <footer className="mobile-voice-hud-footer">
-                    <span
-                        className="mobile-voice-hud-micro"
-                        style={{ color: !isModulation ? MOBILE_VOICE_OWNER_ACCENT : "rgba(232, 236, 239, 0.35)" }}
-                    >
-                        ↔ Base
-                    </span>
-                    <span
-                        className="mobile-voice-hud-micro"
-                        style={{ color: isModulation ? sourceAccent : "rgba(232, 236, 239, 0.35)" }}
-                    >
-                        ↕ Mod amount
-                    </span>
-                </footer>
-            </div>,
-            hudContainer,
-        );
+        const model: ParameterHudModel = {
+            visible: hudState.phase !== "hidden",
+            axis: hudState.axis,
+            label: isModulation && isTune ? "Tune" : spec.fullLabel,
+            sourceLine,
+            ownerAccent: MOBILE_VOICE_OWNER_ACCENT,
+            ownerAccentRgb: MOBILE_VOICE_OWNER_ACCENT_RGB,
+            sourceAccent,
+            baseNormalized: presentation.baseNormalized,
+            baseOriginNormalized: baseOrigin,
+            baseText: formatMobileVoiceValue(format, clamp(bindings[controlID].value, display.min, display.max)),
+            lowText,
+            highText,
+            limitsVisible,
+            modRing,
+        };
+
+        return createPortal(<ParameterPrecisionHud model={model} />, hudContainer);
     }, [armedSource, armedSourceIdentity, bindings, hudContainer, hudState, presentCell, sourceAccent, targetKindFor]);
 
     /* -------------------------------------------------------------- */
@@ -1284,6 +950,7 @@ export function MobileVoiceFocusedEditor({
                                 : `Select oscillator ${oscillator.id}`}
                             data-role={`mobile-voice-tab-${oscillator.id.toLowerCase()}`}
                             data-oscillator-id={oscillator.id}
+                            data-drag-dwell={`oscillator-tab:${oscillator.id}`}
                             className={`mobile-voice-tab${isActive ? " is-active" : ""}${oscillatorMuted ? " is-muted" : ""}`}
                             onClick={() => {
                                 if (isActive) {

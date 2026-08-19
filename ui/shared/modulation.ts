@@ -60,6 +60,7 @@ const ROUTE_AMOUNT_LIMITS = {
     warpAmount: { min: -1.0, max: 1.0 },
     filterCutoffOctaves: { min: -6.0, max: 6.0 },
     filterQ: { min: -(FILTER_Q_MAX - FILTER_Q_MIN), max: FILTER_Q_MAX - FILTER_Q_MIN },
+    filterMix: { min: -1.0, max: 1.0 },
     pitchSemitones: { min: -48.0, max: 48.0 },
     // Additive dB offset over the full parameter span; the engine clamps base + offset.
     ampGainDb: { min: -54.0, max: 54.0 },
@@ -93,6 +94,7 @@ const ROUTE_AMOUNT_STEPS = {
     warpAmount: 0.001,
     filterCutoffOctaves: 0.001,
     filterQ: 0.001,
+    filterMix: 0.001,
     pitchSemitones: 0.01,
     ampGainDb: 0.1,
     pan: 0.001,
@@ -508,6 +510,7 @@ export function formatModulationAmountReadout(
         case "mseg1Morph":
         case "mseg2Morph":
         case "mseg3Morph":
+        case "filterMix":
         case "env1Sustain":
         case "env2Sustain":
         case "env3Sustain":
@@ -573,6 +576,7 @@ export function formatModulationAmountEditingValue(targetKind: ModulationTargetK
         case "mseg1Morph":
         case "mseg2Morph":
         case "mseg3Morph":
+        case "filterMix":
         case "env1Sustain":
         case "env2Sustain":
         case "env3Sustain":
@@ -660,6 +664,7 @@ export function parseModulationAmountEditingValue(targetKind: ModulationTargetKi
         || parameterKind === "mseg1Morph"
         || parameterKind === "mseg2Morph"
         || parameterKind === "mseg3Morph"
+        || parameterKind === "filterMix"
         || parameterKind === "env1Sustain"
         || parameterKind === "env2Sustain"
         || parameterKind === "env3Sustain"
@@ -694,6 +699,8 @@ export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
             return "Requested cutoff movement is converted to Hz and still clamps to the filter range.";
         case "filterQ":
             return "Resonance still clamps to the synth's Q range.";
+        case "filterMix":
+            return "Mix clamps to 0-100%.";
         case "pitchSemitones":
             return "Pitch depth adds on top of note, glide, and bend.";
         case "ampGainDb":
@@ -904,7 +911,7 @@ function canonicalJsonValuesEqual(left: unknown, right: unknown): boolean {
     ));
 }
 
-/** Pick the first unused cell in the closed 1118-pair domain for generic Add. */
+/** Pick the first unused cell in the closed 1131-pair domain for generic Add. */
 export function createFirstAvailableModulationRoute(
     routes: ReadonlyArray<ModulationRoute>,
 ): ModulationRoute | null {

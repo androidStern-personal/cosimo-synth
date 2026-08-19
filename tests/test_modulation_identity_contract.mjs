@@ -14,9 +14,9 @@ test("the canonical modulation domain has stable collision-free source and targe
     const targets = await targetsModulePromise;
 
     assert.equal(targets.MODULATION_SOURCE_COUNT, 13);
-    assert.equal(targets.MODULATION_VOICE_TARGET_COUNT, 50);
+    assert.equal(targets.MODULATION_VOICE_TARGET_COUNT, 51);
     assert.equal(targets.MODULATION_RACK_TARGET_COUNT, 36);
-    assert.equal(targets.MODULATION_LEGAL_PAIR_COUNT, 1118);
+    assert.equal(targets.MODULATION_LEGAL_PAIR_COUNT, 1131);
 
     for (const [group, count] of [["voice", 9], ["macro", 4]]) {
         const identities = targets.MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === group);
@@ -25,7 +25,7 @@ test("the canonical modulation domain has stable collision-free source and targe
             Array.from({ length: count }, (_, index) => index));
     }
 
-    for (const [group, count] of [["voice", 50], ["rack", 36]]) {
+    for (const [group, count] of [["voice", 51], ["rack", 36]]) {
         const identities = targets.MODULATION_TARGET_IDENTITIES.filter((identity) => identity.group === group);
         assert.equal(identities.length, count);
         assert.deepEqual(identities.map((identity) => identity.runtimeIndex).sort((a, b) => a - b),
@@ -33,14 +33,14 @@ test("the canonical modulation domain has stable collision-free source and targe
     }
 
     assert.equal(new Set(targets.MODULATION_SOURCE_IDENTITIES.map((identity) => identity.id)).size, 13);
-    assert.equal(new Set(targets.MODULATION_TARGET_IDENTITIES.map((identity) => identity.kind)).size, 86);
+    assert.equal(new Set(targets.MODULATION_TARGET_IDENTITIES.map((identity) => identity.kind)).size, 87);
     assert.equal(targets.getVoiceModulationTargetIndex("oscA.wavetablePosition"), 0);
     assert.equal(targets.getVoiceModulationTargetIndex("oscB.wavetablePosition"), 10);
     assert.equal(targets.getVoiceModulationTargetIndex("oscC.wavetablePosition"), 20);
     assert.equal(targets.getVoiceModulationTargetIndex("filterCutoffOctaves"), 30);
     assert.equal(targets.getVoiceModulationTargetIndex("filterQ"), 31);
     assert.deepEqual(
-        targets.VOICE_MODULATION_TARGET_KINDS.slice(32),
+        targets.VOICE_MODULATION_TARGET_KINDS.slice(32, 50),
         [
             "mseg1Morph", "mseg2Morph", "mseg3Morph",
             "mseg1Rate", "mseg2Rate", "mseg3Rate",
@@ -52,9 +52,10 @@ test("the canonical modulation domain has stable collision-free source and targe
     assert.equal(targets.getVoiceModulationTargetIndex("mseg1Morph"), 32);
     assert.equal(targets.getVoiceModulationTargetIndex("mseg3Rate"), 37);
     assert.equal(targets.getVoiceModulationTargetIndex("env3Release"), 49);
+    assert.equal(targets.getVoiceModulationTargetIndex("filterMix"), 50);
 });
 
-test("legacy target aliases are absent and all 1118 canonical pairs are legal", async () => {
+test("legacy target aliases are absent and all 1131 canonical pairs are legal", async () => {
     const targets = await targetsModulePromise;
     const legacyAliases = [
         "wavetablePosition",
@@ -76,7 +77,7 @@ test("legacy target aliases are absent and all 1118 canonical pairs are legal", 
     const pairs = targets.MODULATION_SOURCE_IDENTITIES.flatMap((source) => (
         targets.MODULATION_TARGET_IDENTITIES.map((target) => [source.id, target.kind])
     ));
-    assert.equal(pairs.length, 1118);
+    assert.equal(pairs.length, 1131);
     assert.equal(pairs.every(([sourceId, targetKind]) => targets.isLegalModulationPair(sourceId, targetKind)), true);
 });
 
@@ -96,7 +97,7 @@ test("identity records carry indexes while target descriptors retain presentatio
     for (const identity of targets.MODULATION_TARGET_IDENTITIES) {
         assert.deepEqual(Object.keys(identity).sort(), ["group", "kind", "runtimeIndex"]);
     }
-    assert.equal(modulation.MODULATION_TARGET_OPTIONS.length, 86);
+    assert.equal(modulation.MODULATION_TARGET_OPTIONS.length, 87);
     assert.equal(modulation.MODULATION_TARGET_OPTIONS.every((option) => option.label.length > 0), true);
 
     const wavetableDescriptor = descriptors.allTargetDescriptors()
@@ -113,15 +114,15 @@ test("identity records carry indexes while target descriptors retain presentatio
     const descriptorByKind = new Map(modulationDescriptors.map((descriptor) => (
         [descriptor.modulationTargetKind, descriptor]
     )));
-    assert.equal(modulationDescriptors.length, 86);
-    assert.equal(descriptorByKind.size, 86);
+    assert.equal(modulationDescriptors.length, 87);
+    assert.equal(descriptorByKind.size, 87);
     for (const identity of targets.MODULATION_TARGET_IDENTITIES) {
         const descriptor = descriptorByKind.get(identity.kind);
         assert.notEqual(descriptor, undefined, identity.kind);
         assert.equal(descriptor.modulationTargetKind, identity.kind);
     }
 
-    const generatorKinds = targets.VOICE_MODULATION_TARGET_KINDS.slice(32);
+    const generatorKinds = targets.VOICE_MODULATION_TARGET_KINDS.slice(32, 50);
     assert.equal(generatorKinds.length, 18);
     for (const targetKind of generatorKinds) {
         const descriptor = descriptorByKind.get(targetKind);
@@ -148,7 +149,7 @@ test("the sparse runtime consumes the same canonical voice indexes", async () =>
     const [modulation, runtime] = await Promise.all([modulationModulePromise, runtimeModulePromise]);
     const route = (targetKind) => modulation.createDefaultRoute({ id: targetKind, targetKind });
 
-    assert.equal(runtime.MODULATION_VOICE_TARGET_COUNT, 50);
+    assert.equal(runtime.MODULATION_VOICE_TARGET_COUNT, 51);
     assert.equal(runtime.MODULATION_RACK_TARGET_COUNT, 36);
     assert.deepEqual(runtime.getModulationRuntimeCell(route("oscA.wavetablePosition")), {
         path: "voice", cellIndex: 0, sourceIndex: 0, targetIndex: 0, articulationCellIndex: 0,
@@ -158,4 +159,5 @@ test("the sparse runtime consumes the same canonical voice indexes", async () =>
     assert.equal(runtime.getModulationRuntimeCell(route("filterQ")).targetIndex, 31);
     assert.equal(runtime.getModulationRuntimeCell(route("mseg1Morph")).targetIndex, 32);
     assert.equal(runtime.getModulationRuntimeCell(route("env3Release")).targetIndex, 49);
+    assert.equal(runtime.getModulationRuntimeCell(route("filterMix")).targetIndex, 50);
 });

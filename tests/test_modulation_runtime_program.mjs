@@ -48,6 +48,7 @@ const voiceTargets = [
     "env3Decay",
     "env3Sustain",
     "env3Release",
+    "filterMix",
 ];
 
 const runtimeLaneSpecifications = [
@@ -265,18 +266,18 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
     });
 });
 
-test("all 1118 legal mappings publish exact deterministic lane tails without truncation", async () => {
+test("all 1131 legal mappings publish exact deterministic lane tails without truncation", async () => {
     const runtime = await programModulePromise;
     const routes = await createAllLegalRoutes();
     const program = runtime.compileModulationRuntimeProgram(routes);
 
     assert.equal(routes.length, runtime.MODULATION_MAPPING_CELL_COUNT);
-    assert.deepEqual(runtimeLaneCounts(program), [450, 200, 324, 144]);
+    assert.deepEqual(runtimeLaneCounts(program), [459, 204, 324, 144]);
     assert.deepEqual(
         runtimeLaneSpecifications.map((specification) => runtimeLaneTail(program, specification)),
         [
-            { cellIndex: 449, sourceIndex: 8, targetIndex: 49, polarity: 1, amount: 0.25, reducer: null },
-            { cellIndex: 199, sourceIndex: 3, targetIndex: 49, polarity: 0, amount: 0.25, reducer: null },
+            { cellIndex: 458, sourceIndex: 8, targetIndex: 50, polarity: 0, amount: 0.25, reducer: null },
+            { cellIndex: 203, sourceIndex: 3, targetIndex: 50, polarity: 1, amount: 0.25, reducer: null },
             { cellIndex: 323, sourceIndex: 8, targetIndex: 35, polarity: 1, amount: 0.25, reducer: 2 },
             { cellIndex: 143, sourceIndex: 3, targetIndex: 35, polarity: 0, amount: 0.25, reducer: null },
         ],
@@ -288,7 +289,7 @@ test("all 1118 legal mappings publish exact deterministic lane tails without tru
     );
 });
 
-test("1118 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
+test("1131 stored mappings with the same 100 active mappings publish identical execution lanes", async () => {
     const runtime = await programModulePromise;
     const allRoutes = await createAllLegalRoutes();
     const activeRoutes = selectActiveRoutesByLane(
@@ -302,7 +303,7 @@ test("1118 stored mappings with the same 100 active mappings publish identical e
     ));
 
     assert.equal(activeRoutes.length, 100);
-    assert.equal(storedDomain.length, 1118);
+    assert.equal(storedDomain.length, 1131);
     assert.deepEqual(
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(storedDomain)),
         projectActiveRuntimeLanes(runtime.compileModulationRuntimeProgram(activeRoutes)),
@@ -347,6 +348,68 @@ test("disabled voice mappings retain their finite base amount in the determinist
     assert.equal(program.voiceRouteCount, 0, "disabled mappings must emit no active instruction");
     assert.equal(program.voiceRouteAmounts[cellIndex], 0.625);
     assert.equal(Number.isFinite(program.voiceRouteAmounts[cellIndex]), true);
+});
+
+test("filter Mix routes compile from their stable name at the appended Voice target index", async () => {
+    const [modulation, runtime, targets] = await Promise.all([
+        modulationModulePromise,
+        programModulePromise,
+        targetsModulePromise,
+    ]);
+    const mixRoute = modulation.createDefaultRoute({
+        id: "velocity-filter-mix",
+        sourceKind: "velocity",
+        sourceSlot: null,
+        targetKind: "filterMix",
+        amount: 1,
+    });
+    const existingRoute = modulation.createDefaultRoute({
+        id: "velocity-filter-q",
+        sourceKind: "velocity",
+        sourceSlot: null,
+        targetKind: "filterQ",
+        amount: 0.5,
+    });
+    const mixCell = runtime.getModulationRuntimeCell(mixRoute);
+    const existingCell = runtime.getModulationRuntimeCell(existingRoute);
+    const program = runtime.compileModulationRuntimeProgram([mixRoute, existingRoute]);
+
+    assert.equal(targets.getVoiceModulationTargetIndex("filterQ"), 31, "existing target index moved");
+    assert.equal(targets.getVoiceModulationTargetIndex("filterMix"), 50);
+    assert.deepEqual(mixCell, {
+        path: "voice",
+        cellIndex: (6 * 51) + 50,
+        sourceIndex: 6,
+        targetIndex: 50,
+        articulationCellIndex: (6 * 51) + 50,
+    });
+    assert.equal(
+        existingCell.cellIndex,
+        (6 * 51) + 31,
+        "derived route-cell addresses must be rebuilt from the stable filterQ name using the current target stride",
+    );
+    assert.equal(program.voiceRouteCount, 2);
+    assert.equal(program.voiceRouteAmounts[mixCell.cellIndex], 1);
+});
+
+test("the Cmajor consumer resolves Filter Mix from its appended route target and clamps base plus offset", async () => {
+    const source = await fs.readFile(path.join(repoRoot, "cmajor/FixedFrameOscillator.cmajor"), "utf8");
+
+    assert.match(
+        source,
+        /modulationTargetFilterMix\s*=\s*modulationTargetEnv3Release\s*\+\s*1/,
+        "the Cmajor address book must append Filter Mix after every existing Voice target",
+    );
+    assert.match(
+        source,
+        /routeFilterMix\s*=\s*voiceTargetOffset\s*\(\s*voiceIndex,\s*modulationTargetFilterMix\s*\)/,
+        "the Cmajor hot path must consume the Filter Mix route cell",
+    );
+    assert.match(
+        source,
+        /effectiveFilterMix\s*=\s*resolveVoiceFilterMix\s*\(\s*filterMixIn,\s*routeFilterMix\s*\)/,
+        "the engine must clamp base Mix plus the modulation offset at application",
+    );
 });
 
 test("the DSP hot path consumes published active prefixes instead of transport capacities", async () => {

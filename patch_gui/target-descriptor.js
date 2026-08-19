@@ -26,6 +26,8 @@ const MODULE_DEFINITIONS = [
             // instances start from different sounds.
             parameter("cutoff", "Cutoff", 56.63233347786729, 70, "frequency"),
             parameter("resonance", "Resonance", 36.91760377573153, 0),
+            // Initial 100% mirrors the engine's back-compat filterMix default 1.0.
+            parameter("mix", "Mix", 100, 100),
             parameter("drive", "Drive", 15, 0),
         ],
     },
@@ -72,6 +74,12 @@ function resonanceToEngine(value) {
 function resonanceFromEngine(value) {
     return normalized(Math.log(value / 0.1) / Math.log(200), "filterQ endpoint conversion");
 }
+function mixToEngine(value) {
+    return value;
+}
+function mixFromEngine(value) {
+    return normalized(value, "filterMix endpoint conversion");
+}
 function boundEndpoint(id, toEngine, fromEngine) {
     return { _tag: "endpoint", endpointId: endpointId(id), toEngine, fromEngine };
 }
@@ -88,6 +96,14 @@ function connectivityFor(targetId, workspace) {
                 binding: boundEndpoint("filterQ", resonanceToEngine, resonanceFromEngine),
                 articulationParameterId: "filterQ",
                 modulationTargetKind: "filterQ",
+            };
+        case "voice-filter.mix":
+            return {
+                binding: boundEndpoint("filterMix", mixToEngine, mixFromEngine),
+                // T05 scope: articulations do not own Mix yet — capturing it
+                // would extend the persisted articulation schema.
+                articulationParameterId: null,
+                modulationTargetKind: "filterMix",
             };
         default:
             return {

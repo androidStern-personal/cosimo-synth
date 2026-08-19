@@ -20,6 +20,7 @@ import {
     tapActiveTab,
     universalBack,
     universalBackTarget,
+    WORKSPACE_TAB_IDS,
     type WorkspaceShellState,
     type WorkspaceTabId,
 } from "../shared/workspace-shell";
@@ -34,11 +35,12 @@ import {
     usePatchParameterBinding,
     type PatchControlBinding,
 } from "../shared/patch-controls";
-import type {
-    OscillatorID,
-    OscillatorModulationParameterKind,
-    OscillatorModulationTargetKind,
-    ModulationTargetKind,
+import {
+    OSCILLATOR_IDS,
+    type OscillatorID,
+    type OscillatorModulationParameterKind,
+    type OscillatorModulationTargetKind,
+    type ModulationTargetKind,
 } from "../shared/modulation-targets";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import {
@@ -54,6 +56,10 @@ import {
 import {
     EditableMsegSurface,
     FilterResponseGraph,
+    type FilterEndpointState,
+    type FilterModulationTravel,
+    type FilterTravelEndpointSide,
+    type FilterTravelGestureSide,
     KeyboardSectionShell,
     MsegPreview,
     RangeField,
@@ -73,7 +79,11 @@ import {
 } from "./desktop-keyboard-adapter";
 import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
-import { BaseParameterKnob } from "./rack-parameter-knob";
+import { BaseParameterKnob, RackParameterKnob } from "./rack-parameter-knob";
+import { ParameterHudLayerContext } from "../shared/parameter-hud";
+import type { RackParameterDescriptor } from "../shared/rack-parameter-descriptors";
+import { findRackModulationSource } from "../shared/rack-modulation-sources";
+import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
     MobileVoiceFocusedEditor,
     type MobileVoiceEditorBindings,
@@ -89,6 +99,7 @@ import {
     EffectsRackWorkspace,
     type GlobalModRailState,
     type ModRailAuditionBindings,
+    type ModRailVoiceSettings,
 } from "./effects-rack-workspace";
 import {
     AUTO_PREVIEW_ENABLED_STORAGE_KEY,
@@ -96,6 +107,9 @@ import {
     serializeAutoPreviewEnabled,
 } from "../shared/audition-preferences";
 import {
+    GLIDE_TIME_MAX_SECONDS,
+    GLIDE_TIME_MIN_SECONDS,
+    GLIDE_TIME_STEP_SECONDS,
     SYNTH_PRESET_EFFECT_ID,
     useOscillatorSelectionViewModel,
     useSynthPatchViewModel,
@@ -103,6 +117,7 @@ import {
 } from "../shared/synth-hooks";
 import { createPresetBar } from "../shared/effects/preset-bar";
 import { createStandaloneEffectPresetController } from "../shared/effects/standalone-effect-presets";
+import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migrations";
 import type { EffectStoredStateAdapter } from "../shared/effects/effect-preset-v2";
 import {
     ArticulationControlSurface,
@@ -131,6 +146,7 @@ import {
     MODULATION_ENV_SLOT_COUNT,
     MODULATION_MACRO_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
+    clampModulationRouteAmount,
     type ModulationRoute,
     type ModulationRouteUpdate,
 } from "../shared/modulation";
@@ -139,9 +155,6 @@ import type { RackModulationSource } from "../shared/rack-modulation-sources";
 const KEYBOARD_ROOT_NOTE_DEFAULT = 36;
 const KEYBOARD_ROOT_NOTE_MIN = 12;
 const KEYBOARD_ROOT_NOTE_MAX = 72;
-const GLIDE_TIME_MIN_SECONDS = 0;
-const GLIDE_TIME_MAX_SECONDS = 2;
-const GLIDE_TIME_STEP_SECONDS = 0.001;
 const ENVELOPE_TIME_MIN_SECONDS = 0.001;
 const ENVELOPE_TIME_MAX_SECONDS = 10;
 const ENVELOPE_TIME_RESPONSE = 1.4;
@@ -317,6 +330,11 @@ type FilterSectionProps = {
         coefficients: Record<string, number>;
     };
     className?: string;
+    /** T05 compact mode: attached knob row, forced round-bars, Off greys all. */
+    compact?: boolean;
+    filterMix?: PatchControlBinding<number>;
+    routes?: ModulationRoute[];
+    armedSource?: MobileModSource;
 };
 
 type MsegEditorModalProps = {
@@ -615,6 +633,58 @@ function parseCutoffInput(text: string) {
 function formatResonanceDisplay(value: number) {
     const safeValue = Math.min(Math.max(Number(value) || FILTER_Q_MIN, FILTER_Q_MIN), FILTER_Q_MAX);
     return safeValue.toFixed(safeValue >= 10 ? 1 : 2);
+}
+
+function formatMixDisplay(value: number) {
+    return `${Math.round(Math.min(Math.max(Number(value) || 0, 0), 1) * 100)}%`;
+}
+
+/** The Voice filter card's violet section accent (synth-style-guide). */
+const VOICE_FILTER_OWNER_ACCENT = "#a98cff";
+
+/**
+ * T04A: the armed source's filter travel, per axis. The travel start is the
+ * filter at source = 0 (base for a unipolar axis, the mirrored offset for a
+ * bipolar one); the end is the filter at full deflection. Endpoints clamp
+ * to the audible parameter ranges.
+ */
+function buildFilterModulationTravel(args: {
+    baseCutoffHz: number;
+    baseQ: number;
+    cutoffAmountOctaves: number;
+    qAmountOffset: number;
+    cutoffBipolar: boolean;
+    qBipolar: boolean;
+    cutoffEditable: boolean;
+    qEditable: boolean;
+    accent: string;
+}): FilterModulationTravel {
+    const clampHz = (hz: number) => Math.min(FILTER_CUTOFF_MAX_HZ, Math.max(FILTER_CUTOFF_MIN_HZ, hz));
+    const clampQ = (q: number) => Math.min(FILTER_Q_MAX, Math.max(FILTER_Q_MIN, q));
+    // A routed unipolar axis makes base the travel START, not its center:
+    // the base handle adopts start semantics and the dedicated center grip
+    // takes over translation.
+    const anyRoutedUnipolar = (args.cutoffEditable && !args.cutoffBipolar)
+        || (args.qEditable && !args.qBipolar);
+
+    return {
+        start: {
+            cutoffHz: clampHz(args.cutoffBipolar
+                ? args.baseCutoffHz * (2 ** -args.cutoffAmountOctaves)
+                : args.baseCutoffHz),
+            q: clampQ(args.qBipolar ? args.baseQ - args.qAmountOffset : args.baseQ),
+        },
+        end: {
+            cutoffHz: clampHz(args.baseCutoffHz * (2 ** args.cutoffAmountOctaves)),
+            q: clampQ(args.baseQ + args.qAmountOffset),
+        },
+        accent: args.accent,
+        cutoffEditable: args.cutoffEditable,
+        qEditable: args.qEditable,
+        showStartHandle: args.cutoffBipolar || args.qBipolar,
+        baseHandleMode: anyRoutedUnipolar ? "start" : "translate",
+        centerHandle: anyRoutedUnipolar,
+    };
 }
 
 function parseResonanceInput(text: string) {
@@ -1799,6 +1869,7 @@ function SynthPresetBarHost({
         effectID: SYNTH_PRESET_EFFECT_ID,
         patchConnection,
         storedStateAdapters,
+        presetMigrations: buildSynthPresetMigrations,
     }), [patchConnection, storedStateAdapters]);
 
     useEffect(() => {
@@ -1848,6 +1919,118 @@ function SynthPresetBarHost({
     );
 }
 
+/**
+ * T05: the Voice filter's compact knob row uses the shared production knob
+ * (ADR-025 dual-ring) bound to the voice filter endpoints. The rack context
+ * menu is deliberately not offered here — value editing happens on the knob
+ * and modulation feedback on its ring, per the T04 settled list.
+ */
+const VOICE_FILTER_KNOB_DESCRIPTORS: Readonly<Record<"cutoff" | "resonance" | "mix", RackParameterDescriptor>> = {
+    cutoff: {
+        id: "voiceFilterCutoff",
+        effectId: "filter",
+        endpointID: "filterCutoff",
+        label: "Cutoff",
+        shortLabel: "Cut",
+        min: 20,
+        max: 20000,
+        initial: 1000,
+        step: 1,
+        scale: "log",
+        unit: "Hz",
+        quick: false,
+        modulationTargetIndex: null,
+        modulationApplication: "octaves",
+    },
+    resonance: {
+        id: "voiceFilterResonance",
+        effectId: "filter",
+        endpointID: "filterQ",
+        label: "Resonance",
+        shortLabel: "Res",
+        min: 0.1,
+        max: 20,
+        initial: 0.707107,
+        step: 0.01,
+        scale: "log",
+        unit: "",
+        quick: false,
+        modulationTargetIndex: null,
+        modulationApplication: "linear",
+    },
+    mix: {
+        id: "voiceFilterMix",
+        effectId: "filter",
+        endpointID: "filterMix",
+        label: "Mix",
+        shortLabel: "Mix",
+        min: 0,
+        max: 1,
+        initial: 1,
+        step: 0.01,
+        scale: "linear",
+        unit: "%",
+        quick: false,
+        modulationTargetIndex: null,
+        modulationApplication: "linear",
+    },
+};
+
+function VoiceFilterKnob({
+    descriptor,
+    binding,
+    targetKind,
+    routes,
+    armedSource,
+    disabled,
+    formatValue,
+    modulationDragStyle,
+}: {
+    descriptor: RackParameterDescriptor;
+    binding: PatchControlBinding<number>;
+    targetKind: ModulationTargetKind;
+    routes: ModulationRoute[];
+    armedSource: MobileModSource;
+    disabled: boolean;
+    formatValue: (value: number) => string;
+    modulationDragStyle?: "amount-span" | "effective-value";
+}) {
+    const armedRoute = routes.find((route) => (
+        route.targetKind === targetKind
+        && route.sourceKind === armedSource.sourceKind
+        && route.sourceSlot === armedSource.sourceSlot
+    )) ?? null;
+    const amountBinding = useModulationRouteAmountBinding(armedRoute);
+    const presentedRoute = presentRouteWithCanonicalAmount(armedRoute, amountBinding);
+    const sourceDescriptor = findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot);
+
+    return (
+        <div
+            className={`mobile-filter-knob-cell${disabled ? " is-disabled" : ""}`}
+            data-modulation-target-kind={targetKind}
+        >
+            <RackParameterKnob
+                descriptor={descriptor}
+                binding={binding}
+                modulationTargetKind={targetKind}
+                formatValue={formatValue}
+                ownerAccent={VOICE_FILTER_OWNER_ACCENT}
+                modulationDragStyle={modulationDragStyle}
+                route={presentedRoute}
+                sourceIsSelected
+                sourceAccent={sourceDescriptor.accent}
+                effectiveness={disabled ? "effect-bypassed" : "active"}
+                dataRole={`voice-filter-knob-${descriptor.endpointID}`}
+                trackDataRole={`voice-filter-knob-track-${descriptor.endpointID}`}
+                handleDataRole={`voice-filter-knob-handle-${descriptor.endpointID}`}
+                onSelect={() => {}}
+                onModulationAmountChange={(amount) => amountBinding.setValue(amount)}
+                onRequestContextMenu={() => {}}
+            />
+        </div>
+    );
+}
+
 function FilterSection({
     filterMode,
     filterCutoff,
@@ -1858,8 +2041,291 @@ function FilterSection({
     resonanceQFromSurface,
     resonanceCurveDebugState,
     className,
+    compact = false,
+    filterMix,
+    routes,
+    armedSource,
 }: FilterSectionProps) {
     const [spectrumRenderMode, setSpectrumRenderMode] = useState<FilterSpectrumRenderMode>("graph");
+    const findArmedRoute = (targetKind: "filterCutoffOctaves" | "filterQ") => (routes && armedSource
+        ? routes.find((route) => (
+            route.targetKind === targetKind
+            && route.sourceKind === armedSource.sourceKind
+            && route.sourceSlot === armedSource.sourceSlot
+        )) ?? null
+        : null);
+    const armedCutoffRoute = findArmedRoute("filterCutoffOctaves");
+    const armedQRoute = findArmedRoute("filterQ");
+    const armedCutoffAmount = useModulationRouteAmountBinding(armedCutoffRoute);
+    const armedQAmount = useModulationRouteAmountBinding(armedQRoute);
+    /** Anchor for one travel drag: the endpoints as they stood at grab time. */
+    const travelDragRef = useRef<{
+        side: FilterTravelGestureSide;
+        baseCutoffHz: number;
+        baseQ: number;
+        startCutoffHz: number;
+        startQ: number;
+        endCutoffHz: number;
+        endQ: number;
+    } | null>(null);
+
+    if (compact) {
+        if (!filterMix || !routes || !armedSource) {
+            throw new Error("Compact FilterSection requires filterMix, routes, and armedSource.");
+        }
+        const filterOff = filterMode.value === 0;
+        // T04A: the travel overlay renders only while the armed source has a
+        // filter mapping — color must never claim a mapping that does not
+        // exist. Each axis is live only through its own route.
+        const modulationTravel = armedCutoffRoute === null && armedQRoute === null
+            ? null
+            : buildFilterModulationTravel({
+                baseCutoffHz: filterCutoff.value,
+                baseQ: filterQ.value,
+                cutoffAmountOctaves: armedCutoffRoute === null
+                    ? 0
+                    : armedCutoffAmount.value ?? armedCutoffRoute.amount,
+                qAmountOffset: armedQRoute === null
+                    ? 0
+                    : armedQAmount.value ?? armedQRoute.amount,
+                cutoffBipolar: armedCutoffRoute?.polarity === "bipolar",
+                qBipolar: armedQRoute?.polarity === "bipolar",
+                cutoffEditable: armedCutoffRoute !== null,
+                qEditable: armedQRoute !== null,
+                accent: findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot).accent,
+            });
+        const handleTravelGestureStart = (side: FilterTravelGestureSide) => {
+            if (modulationTravel === null) {
+                throw new Error("Travel gestures require an armed filter mapping.");
+            }
+            travelDragRef.current = {
+                side,
+                baseCutoffHz: filterCutoff.value,
+                baseQ: filterQ.value,
+                startCutoffHz: modulationTravel.start.cutoffHz,
+                startQ: modulationTravel.start.q,
+                endCutoffHz: modulationTravel.end.cutoffHz,
+                endQ: modulationTravel.end.q,
+            };
+            // Endpoint drags can rewrite base cutoff/Q, so they bracket host
+            // gestures exactly like the base handle does.
+            filterCutoff.beginGesture();
+            filterQ.beginGesture();
+        };
+        const handleTravelGestureEnd = () => {
+            if (travelDragRef.current === null) {
+                return;
+            }
+            travelDragRef.current = null;
+            filterCutoff.endGesture();
+            filterQ.endGesture();
+        };
+        const handleTravelEndpointSet = (side: FilterTravelEndpointSide, state: FilterEndpointState) => {
+            const anchor = travelDragRef.current;
+            if (anchor === null) {
+                throw new Error("Travel endpoint edits require an open travel gesture.");
+            }
+
+            // Every handle moves independently: the dragged grip follows the
+            // pointer and every other grip stays planted, so base and amount
+            // co-rewrite per axis. Octave amounts anchor base on the
+            // geometric midpoint; linear Q offsets on the arithmetic one.
+            const applyCutoff = () => {
+                if (armedCutoffRoute === null) {
+                    if (side === "base") {
+                        filterCutoff.setValue(state.cutoffHz);
+                    }
+                    return;
+                }
+                if (armedCutoffRoute.polarity === "bipolar") {
+                    if (side === "base") {
+                        // Base is the travel center: translation, amount kept.
+                        filterCutoff.setValue(state.cutoffHz);
+                        return;
+                    }
+                    const fixedHz = side === "end" ? anchor.startCutoffHz : anchor.endCutoffHz;
+                    const nextBaseHz = Math.sqrt(fixedHz * state.cutoffHz);
+                    const nextAmount = Math.log2(state.cutoffHz / nextBaseHz) * (side === "end" ? 1 : -1);
+                    filterCutoff.setValue(nextBaseHz);
+                    armedCutoffAmount.setValue(clampModulationRouteAmount("filterCutoffOctaves", nextAmount));
+                    return;
+                }
+                if (side === "end") {
+                    armedCutoffAmount.setValue(clampModulationRouteAmount(
+                        "filterCutoffOctaves",
+                        Math.log2(state.cutoffHz / anchor.baseCutoffHz),
+                    ));
+                    return;
+                }
+                // Unipolar start (the base handle or the mixed-polarity start
+                // grip): base follows the pointer and the end stays planted.
+                filterCutoff.setValue(state.cutoffHz);
+                armedCutoffAmount.setValue(clampModulationRouteAmount(
+                    "filterCutoffOctaves",
+                    Math.log2(anchor.endCutoffHz / state.cutoffHz),
+                ));
+            };
+            const applyQ = () => {
+                if (armedQRoute === null) {
+                    if (side === "base") {
+                        filterQ.setValue(state.q);
+                    }
+                    return;
+                }
+                if (armedQRoute.polarity === "bipolar") {
+                    if (side === "base") {
+                        filterQ.setValue(state.q);
+                        return;
+                    }
+                    const fixedQ = side === "end" ? anchor.startQ : anchor.endQ;
+                    const nextBaseQ = (fixedQ + state.q) / 2;
+                    const nextAmount = (state.q - nextBaseQ) * (side === "end" ? 1 : -1);
+                    filterQ.setValue(nextBaseQ);
+                    armedQAmount.setValue(clampModulationRouteAmount("filterQ", nextAmount));
+                    return;
+                }
+                if (side === "end") {
+                    armedQAmount.setValue(clampModulationRouteAmount("filterQ", state.q - anchor.baseQ));
+                    return;
+                }
+                filterQ.setValue(state.q);
+                armedQAmount.setValue(clampModulationRouteAmount("filterQ", anchor.endQ - state.q));
+            };
+
+            applyCutoff();
+            applyQ();
+        };
+        const handleTravelTranslate = (start: FilterEndpointState, end: FilterEndpointState) => {
+            if (travelDragRef.current === null) {
+                throw new Error("Travel translation requires an open travel gesture.");
+            }
+            // Rigid screen-space translation: re-derive base + amounts from
+            // the translated endpoint pair per each axis's polarity. Amounts
+            // may breathe slightly on the nonlinear Q surface — the shape the
+            // user is holding is the honest contract.
+            if (armedCutoffRoute !== null) {
+                if (armedCutoffRoute.polarity === "bipolar") {
+                    const nextBaseHz = Math.sqrt(start.cutoffHz * end.cutoffHz);
+                    filterCutoff.setValue(nextBaseHz);
+                    armedCutoffAmount.setValue(clampModulationRouteAmount(
+                        "filterCutoffOctaves",
+                        Math.log2(end.cutoffHz / nextBaseHz),
+                    ));
+                } else {
+                    filterCutoff.setValue(start.cutoffHz);
+                    armedCutoffAmount.setValue(clampModulationRouteAmount(
+                        "filterCutoffOctaves",
+                        Math.log2(end.cutoffHz / start.cutoffHz),
+                    ));
+                }
+            } else {
+                filterCutoff.setValue(start.cutoffHz);
+            }
+            if (armedQRoute !== null) {
+                if (armedQRoute.polarity === "bipolar") {
+                    const nextBaseQ = (start.q + end.q) / 2;
+                    filterQ.setValue(nextBaseQ);
+                    armedQAmount.setValue(clampModulationRouteAmount("filterQ", end.q - nextBaseQ));
+                } else {
+                    filterQ.setValue(start.q);
+                    armedQAmount.setValue(clampModulationRouteAmount("filterQ", end.q - start.q));
+                }
+            } else {
+                filterQ.setValue(start.q);
+            }
+        };
+        return (
+            <section
+                data-role="filter-card"
+                data-section-accent="violet"
+                data-filter-off={filterOff}
+                className={`mobile-filter-card ${className ?? ""}`}
+            >
+                {/* One drop on the graph maps the source to the whole filter:
+                    the primary Cutoff destination plus its Q companion. */}
+                <div
+                    className="mobile-filter-stage"
+                    data-role="filter-graph-drop-surface"
+                    data-modulation-target-kind="filterCutoffOctaves"
+                    data-modulation-target-companions="filterQ"
+                >
+                <div className="mobile-filter-graph" data-disabled={filterOff}>
+                    <FilterResponseGraph
+                        baseMode={filterMode.value}
+                        baseCutoffHz={filterCutoff.value}
+                        baseQ={filterQ.value}
+                        liveMode={observedFilterState.mode}
+                        liveCutoffHz={observedFilterState.cutoffHz}
+                        liveQ={observedFilterState.q}
+                        liveHasActive={observedFilterState.hasActive}
+                        spectrumFrame={observedFilterSpectrum}
+                        spectrumRenderMode="round-bars"
+                        resonanceNormalizedFromQ={resonanceNormalizedFromQ}
+                        resonanceQFromSurface={resonanceQFromSurface}
+                        resonanceCurveDebugState={resonanceCurveDebugState}
+                        onGestureStart={() => {
+                            filterCutoff.beginGesture();
+                            filterQ.beginGesture();
+                        }}
+                        onGestureEnd={() => {
+                            filterCutoff.endGesture();
+                            filterQ.endGesture();
+                        }}
+                        onCutoffSet={(nextValue) => filterCutoff.setValue(nextValue)}
+                        onQSet={(nextValue) => filterQ.setValue(nextValue)}
+                        modulationTravel={filterOff ? null : modulationTravel}
+                        onTravelEndpointSet={handleTravelEndpointSet}
+                        onTravelTranslate={handleTravelTranslate}
+                        onTravelGestureStart={handleTravelGestureStart}
+                        onTravelGestureEnd={handleTravelGestureEnd}
+                        className="h-full w-full"
+                    />
+                </div>
+                {/* The Mode chip stays live while Off greys everything else. */}
+                <div className="absolute left-1.5 top-1.5 z-10">
+                    <OverlayIconChip
+                        dataRole="filter-mode-chip"
+                        ariaLabel={`Cycle filter mode (currently ${getFilterModeLabel(filterMode.value)})`}
+                        title={`Filter mode: ${getFilterModeLabel(filterMode.value)}`}
+                        onClick={() => filterMode.commitValue(cycleFilterMode(filterMode.value))}
+                    >
+                        <FilterModeGlyph mode={filterMode.value} />
+                    </OverlayIconChip>
+                </div>
+                </div>
+                <div data-role="voice-filter-knob-row" className="mobile-filter-knob-row">
+                    <VoiceFilterKnob
+                        descriptor={VOICE_FILTER_KNOB_DESCRIPTORS.cutoff}
+                        binding={filterCutoff}
+                        targetKind="filterCutoffOctaves"
+                        routes={routes}
+                        armedSource={armedSource}
+                        disabled={filterOff}
+                        formatValue={formatCutoffDisplay}
+                    />
+                    <VoiceFilterKnob
+                        descriptor={VOICE_FILTER_KNOB_DESCRIPTORS.resonance}
+                        binding={filterQ}
+                        targetKind="filterQ"
+                        routes={routes}
+                        armedSource={armedSource}
+                        disabled={filterOff}
+                        formatValue={formatResonanceDisplay}
+                        modulationDragStyle="effective-value"
+                    />
+                    <VoiceFilterKnob
+                        descriptor={VOICE_FILTER_KNOB_DESCRIPTORS.mix}
+                        binding={filterMix}
+                        targetKind="filterMix"
+                        routes={routes}
+                        armedSource={armedSource}
+                        disabled={filterOff}
+                        formatValue={formatMixDisplay}
+                    />
+                </div>
+            </section>
+        );
+    }
 
     return (
         <section
@@ -3453,6 +3919,10 @@ function DesktopPatchViewBody({
         synthView.handleStartNoteKeyAudition,
         synthView.handleStopNoteKeyAudition,
     ]);
+    const modRailVoiceSettings = useMemo<ModRailVoiceSettings>(() => ({
+        playMode: synthView.playMode,
+        glideTime: synthView.glideTime,
+    }), [synthView.glideTime, synthView.playMode]);
     useEffect(() => {
         postNativeKeyboardProbeStatus(`cosimo-keyboard-router-ready:${keyboardInputMode}`);
     }, [keyboardInputMode]);
@@ -3736,25 +4206,6 @@ function DesktopPatchViewBody({
                     onRequestReplace={synthView.handleReplaceArticulationSlotWithCurrent}
                     onRequestDelete={synthView.handleDeleteArticulationSlot}
                 />
-            ) : isCompactViewport ? (
-                <VoiceGlideControlSurface
-                    playModeValue={synthView.playMode.value}
-                    onPlayModeChange={(nextValue) => synthView.playMode.commitValue(nextValue)}
-                    playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
-                    className="grid-cols-[minmax(0,1fr)_auto] items-end"
-                    glideControl={(
-                        <NexusNumberField
-                            label="Glide"
-                            binding={synthView.glideTime}
-                            min={GLIDE_TIME_MIN_SECONDS}
-                            max={GLIDE_TIME_MAX_SECONDS}
-                            step={GLIDE_TIME_STEP_SECONDS}
-                            onActivate={synthView.keyboardRouting.glideFocusTarget.onActivate}
-                            onBeginTextEntry={synthView.keyboardRouting.glideFocusTarget.onBeginTextEntry}
-                            onEndTextEntry={synthView.keyboardRouting.glideFocusTarget.onEndTextEntry}
-                        />
-                    )}
-                />
             ) : (
                 <KeyboardToolbar
                     oscillatorID={oscillatorSelection.selectedOscillatorID}
@@ -3816,6 +4267,28 @@ function DesktopPatchViewBody({
             return activateTab(current, tab);
         });
     }, [workspacePanelElement]);
+
+    // T06: dwell navigation during a source drag. The drag gesture keeps its
+    // owner; these only change what is presented under the held source.
+    const handleDragDwellNavigate = useCallback((dwellKey: string) => {
+        if (dwellKey.startsWith("workspace-tab:")) {
+            const tab = dwellKey.slice("workspace-tab:".length);
+            if (!(WORKSPACE_TAB_IDS as ReadonlyArray<string>).includes(tab)) {
+                throw new Error(`Unknown dwell tab: ${dwellKey}`);
+            }
+            activateWorkspaceTab(tab as WorkspaceTabId);
+            return;
+        }
+        if (dwellKey.startsWith("oscillator-tab:")) {
+            const oscillatorID = dwellKey.slice("oscillator-tab:".length);
+            if (!(OSCILLATOR_IDS as ReadonlyArray<string>).includes(oscillatorID)) {
+                throw new Error(`Unknown dwell oscillator: ${dwellKey}`);
+            }
+            oscillatorSelection.selectOscillator(oscillatorID as OscillatorID);
+            return;
+        }
+        throw new Error(`Unknown dwell action: ${dwellKey}`);
+    }, [activateWorkspaceTab, oscillatorSelection]);
 
     const tapActiveWorkspaceTab = useCallback(() => {
         setWorkspaceShell((current) => {
@@ -3986,17 +4459,25 @@ function DesktopPatchViewBody({
                 resonanceNormalizedFromQ={resonanceNormalizedFromQ}
                 resonanceQFromSurface={resonanceQFromSurface}
                 resonanceCurveDebugState={filterResonanceCurveProfile}
-                className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
+                className={isCompactViewport ? "" : DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
+                compact={isCompactViewport}
+                filterMix={synthView.filterMix}
+                routes={synthView.routes}
+                armedSource={globalModRailState.selectedSource}
             />
         </section>
-        <section
-            data-role="keyboard-controls"
-            data-section-accent="lime"
-            data-liquid-detail="edge-rail"
-            className={`${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`}
-        >
-            {keyboardToolbarOverride}
-        </section>
+        {/* T05: the articulation/controls pane leaves compact mobile; the
+            wavetable editor and filter split the freed height 50/50. */}
+        {isCompactViewport ? null : (
+            <section
+                data-role="keyboard-controls"
+                data-section-accent="lime"
+                data-liquid-detail="edge-rail"
+                className={`${SYNTH_GRID_CARD_SHELL_CLASS} min-w-0 border p-3`}
+            >
+                {keyboardToolbarOverride}
+            </section>
+        )}
         </>
     );
 
@@ -4083,6 +4564,8 @@ function DesktopPatchViewBody({
             mobileModRailPortalTarget={mobileModRailPortalTarget}
             globalModSourceActivity={globalModSourceActivity}
             modRailAudition={modRailAudition}
+            modRailVoiceSettings={modRailVoiceSettings}
+            onDragDwellNavigate={handleDragDwellNavigate}
             onBackToVoice={() => {
                 if (isCompactViewport) {
                     activateWorkspaceTab("voice");
@@ -4094,6 +4577,7 @@ function DesktopPatchViewBody({
     );
 
     return (
+        <ParameterHudLayerContext.Provider value={mobileVoiceHudLayer}>
         <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
             {!isCompactViewport ? <StatusHeader statusText={synthView.topStatus} /> : null}
             <SynthPresetBarHost
@@ -4160,14 +4644,14 @@ function DesktopPatchViewBody({
                 />
             ) : null}
 
-            {isCompactViewport ? (
-                <div
-                    ref={setMobileVoiceHudLayer}
-                    data-role="mobile-voice-hud-layer"
-                    className="pointer-events-none absolute inset-0 z-40"
-                    aria-hidden={false}
-                />
-            ) : null}
+            {/* The one precision-HUD layer: every parameter control (cells
+                and knobs, compact AND desktop) portals its HUD here. */}
+            <div
+                ref={setMobileVoiceHudLayer}
+                data-role="mobile-voice-hud-layer"
+                className="pointer-events-none absolute inset-0 z-40"
+                aria-hidden={false}
+            />
 
             {isCompactViewport && !synthView.msegEditor.isOpen ? (
                 <MobileWorkspaceTabs
@@ -4253,6 +4737,7 @@ function DesktopPatchViewBody({
 
             {curveLab.panel}
         </div>
+        </ParameterHudLayerContext.Provider>
     );
 }
 

@@ -172,9 +172,9 @@ const matrixVoiceRackHundredProgram = compileModulationRuntimeProgram(matrixBenc
 const matrixMixedHundredProgram = compileModulationRuntimeProgram(matrixBenchmarkState("mixed-100").routes);
 const matrixCombinedTwoHundredProgram = compileModulationRuntimeProgram(matrixBenchmarkState("combined-200").routes);
 const matrixStoredFullDomainHundredProgram = compileModulationRuntimeProgram(
-    matrixBenchmarkState("stored-1118-active-100").routes,
+    matrixBenchmarkState("stored-1131-active-100").routes,
 );
-const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-1118").routes);
+const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-1131").routes);
 const macroRackDistortionWetProgram = compileModulationRuntimeProgram([{
     ...requireStressRoute("macro", 1, "rack.distortionWet"),
     enabled: true,
@@ -1652,14 +1652,14 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
     }
 });
 
-test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 1118-cell domain", {
+test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 1131-cell domain", {
     timeout: 240_000,
 }, async (t) => {
     const page = await browser.newPage({ ...devices["iPhone 13"] });
     const pageFailures = observePageFailures(page);
 
     try {
-        assert.equal(allStressRoutes.length, 1118);
+        assert.equal(allStressRoutes.length, 1131);
         assert.deepEqual([
             mixedHundredRouteProgram.voiceRouteCount,
             mixedHundredRouteProgram.macroVoiceRouteCount,
@@ -1668,8 +1668,8 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         ], [30, 20, 30, 20]);
         assert.equal(hundredVoiceRouteProgram.voiceRouteCount, 100);
         assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCount, 100);
-        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCells[99], 431);
-        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteAmounts[431], 10);
+        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteCells[99], 439);
+        assert.equal(hundredVoiceTailSentinelProgram.voiceRouteAmounts[439], 10);
         assert.equal(hundredVoiceRackRouteProgram.voiceRackRouteCount, 100);
         assert.deepEqual([
             matrixVoiceHundredProgram.voiceRouteCount,
@@ -1706,7 +1706,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             matrixActiveFullDomainProgram.macroVoiceRouteCount,
             matrixActiveFullDomainProgram.voiceRackRouteCount,
             matrixActiveFullDomainProgram.macroRackRouteCount,
-        ], [450, 200, 324, 144]);
+        ], [459, 204, 324, 144]);
         assert.deepEqual([
             disabledAllMappingProgram.voiceRouteCount,
             disabledAllMappingProgram.macroVoiceRouteCount,
@@ -1718,7 +1718,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             ...disabledAllMappingProgram.macroVoiceRouteAmounts,
             ...disabledAllMappingProgram.voiceRackRouteAmounts,
             ...disabledAllMappingProgram.macroRackRouteAmounts,
-        ].filter((amount) => amount !== 0).length, 1118);
+        ].filter((amount) => amount !== 0).length, 1131);
         await page.goto(`${baseUrl}?test=1&runtime-owner=host`, { waitUntil: "domcontentloaded" });
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
@@ -1815,7 +1815,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
         }, null, { timeout: 5_000 });
         await sendAcceptedModulationEvent(page, "modulationAmount", {
             pathKind: 1,
-            cellIndex: 431,
+            cellIndex: 439,
             amount: 0,
         });
         await page.waitForFunction(() => {
@@ -2868,12 +2868,14 @@ test("generated browser proof stacks full-width wavetable and filter rows on mob
         await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
             timeout: 30_000,
         });
+        // T05: compact mobile renders the ADR-024 focused wavetable editor
+        // above the filter card, splitting the Voice page's height 50/50.
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const wavetable = root?.querySelector('[data-role="wavetable-card"]')?.getBoundingClientRect();
+            const editor = root?.querySelector('[data-role="desktop-oscillator-connection-boundary"]')?.getBoundingClientRect();
             const filter = root?.querySelector('[data-role="filter-card"]')?.getBoundingClientRect();
             return Boolean(
-                wavetable && wavetable.width > 0 && wavetable.height > 0
+                editor && editor.width > 0 && editor.height > 0
                 && filter && filter.width > 0 && filter.height > 0,
             );
         }, null, { timeout: 30_000 });
@@ -2893,20 +2895,24 @@ test("generated browser proof stacks full-width wavetable and filter rows on mob
 
             return {
                 filter: readBounds('[data-role="filter-card"]'),
-                wavetable: readBounds('[data-role="wavetable-card"]'),
+                wavetable: readBounds('[data-role="desktop-oscillator-connection-boundary"]'),
             };
         });
 
-        assert.ok(cards.wavetable?.width > 0 && cards.wavetable.height > 0, "Expected the mobile wavetable card to be visible.");
+        assert.ok(cards.wavetable?.width > 0 && cards.wavetable.height > 0, "Expected the mobile wavetable editor to be visible.");
         assert.ok(cards.filter?.width > 0 && cards.filter.height > 0, "Expected the mobile filter card to be visible.");
         assert.ok(
-            cards.filter.y >= cards.wavetable.bottom + 8,
+            cards.filter.y >= cards.wavetable.bottom + 6,
             `Expected the filter on its own row below the wavetable: ${JSON.stringify(cards)}`,
         );
         assert.ok(
             Math.abs(cards.filter.x - cards.wavetable.x) <= 1
                 && Math.abs(cards.filter.width - cards.wavetable.width) <= 1,
             `Expected equal full-width mobile cards: ${JSON.stringify(cards)}`,
+        );
+        assert.ok(
+            Math.abs(cards.filter.height - cards.wavetable.height) <= 2,
+            `Expected the 50/50 height split: ${JSON.stringify(cards)}`,
         );
     } finally {
         await page.close();

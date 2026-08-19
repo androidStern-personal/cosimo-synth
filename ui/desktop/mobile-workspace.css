@@ -37,56 +37,47 @@
         display: none;
     }
 
-    /* ADR-026 tab row: one restrained neutral strip, three equal items,
-       centered uppercase labels, subtle rules/separators, one short active
-       underline. No per-workspace color, fills, glows, or icons. */
+    /* ADR-026 tab row in the SAME visual language as the oscillator A/B/C
+       tabs (mobile-voice-editor.css): one flat 40px strip, hairline rules,
+       full-width inset underline on the active item. No radius, no gradient,
+       no per-workspace color. */
     .mobile-workspace-tabs {
+        position: relative;
         display: grid;
         height: var(--compact-shell-row);
         flex: 0 0 var(--compact-shell-row);
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        overflow: hidden;
-        border: 1px solid rgb(255 255 255 / 0.08);
-        border-radius: 12px;
-        background: linear-gradient(180deg, rgb(21 27 30 / 0.98), rgb(12 16 18 / 0.98));
+        border-top: 1px solid rgb(255 255 255 / 0.055);
+        background: rgb(255 255 255 / 0.008);
     }
 
     .mobile-workspace-tab {
         position: relative;
         display: grid;
         min-width: 0;
-        place-items: center;
+        align-items: center;
+        justify-items: center;
         padding: 0;
         border: 0;
         background: transparent;
         box-shadow: none;
-        color: rgb(226 232 234 / 0.56);
+        color: rgb(232 236 239 / 0.42);
         cursor: pointer;
-        font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.15em;
+        font-family: var(--cosimo-font-label, sans-serif);
+        font-size: 13px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
         text-transform: uppercase;
     }
 
-    .mobile-workspace-tab + .mobile-workspace-tab {
-        border-left: 1px solid rgb(255 255 255 / 0.08);
+    .mobile-workspace-tab:not(:last-of-type) {
+        border-right: 1px solid rgb(255 255 255 / 0.045);
     }
 
     .mobile-workspace-tab.is-active {
+        background: rgb(255 255 255 / 0.03);
+        box-shadow: inset 0 -2px rgb(232 237 238 / 0.85);
         color: #f3f6f7;
-    }
-
-    .mobile-workspace-tab.is-active::after {
-        position: absolute;
-        bottom: 5px;
-        left: 50%;
-        width: 22px;
-        height: 2px;
-        border-radius: 1px;
-        background: rgb(232 237 238 / 0.85);
-        content: "";
-        transform: translateX(-50%);
     }
 
     .mobile-workspace-tab:focus-visible {
@@ -127,6 +118,86 @@
 
     .mobile-workspace-panel.is-fx-panel .rack-quick-surface {
         min-height: 48px;
+    }
+
+    /* T05: the Voice page's main content splits 50/50 between the wavetable
+       editor and the filter, each keeping its attached control row. */
+    .mobile-workspace-panel .mobile-voice-grid {
+        height: 100%;
+        grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 8px;
+    }
+
+    /* The connection boundary is the grid item; the editor inside it must
+       inherit the stretched row height instead of its intrinsic height. */
+    .mobile-workspace-panel .mobile-voice-grid > [data-role="desktop-oscillator-connection-boundary"] {
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+    }
+
+    .mobile-workspace-panel .mobile-voice-grid .mobile-voice-editor {
+        min-height: 0;
+        flex: 1 1 auto;
+    }
+
+    .mobile-filter-card {
+        position: relative;
+        display: flex;
+        min-height: 0;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid rgb(255 255 255 / 0.09);
+        border-radius: 12px;
+        background: #0b1012;
+    }
+
+    .mobile-filter-stage {
+        position: relative;
+        min-height: 0;
+        flex: 1 1 auto;
+    }
+
+    .mobile-filter-graph {
+        position: absolute;
+        inset: 0;
+        padding: 6px;
+    }
+
+    .mobile-filter-graph[data-disabled="true"] {
+        opacity: 0.38;
+        pointer-events: none;
+    }
+
+    /* Drop-hover ring while a modulation source drags over the graph. */
+    .mobile-filter-stage.is-mod-hover::after {
+        position: absolute;
+        z-index: 5;
+        border: 2px solid var(--drag-source-color, #cc59d2);
+        border-radius: 10px;
+        content: "";
+        inset: 2px;
+        pointer-events: none;
+    }
+
+    .mobile-filter-knob-row {
+        display: grid;
+        flex: none;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 6px;
+        padding: 6px;
+        border-top: 1px solid rgb(255 255 255 / 0.055);
+    }
+
+    .mobile-filter-knob-cell {
+        display: grid;
+        min-width: 0;
+        justify-items: center;
+    }
+
+    .mobile-filter-knob-cell.is-disabled {
+        opacity: 0.38;
+        pointer-events: none;
     }
 
     .is-mobile-shell [data-role="sticky-keyboard"] {

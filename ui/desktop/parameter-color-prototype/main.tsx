@@ -134,7 +134,6 @@ function RealKnobPreview({ state, compact = false }: { readonly state: BoardStat
                 trackDataRole={`prototype-track-${state.id}`}
                 handleDataRole={`prototype-handle-${state.id}`}
                 onSelect={noOp}
-                onHudChange={noHud}
                 onModulationAmountChange={noOp}
                 onRequestContextMenu={noContextMenu}
             />

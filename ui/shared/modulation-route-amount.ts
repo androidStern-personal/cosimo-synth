@@ -25,6 +25,22 @@ export type OptionalModulationRouteAmountBinding = {
 };
 
 /**
+ * ADR-023: a route presented on a live control must carry its CANONICAL
+ * amount, not the deferred document's copy — during a drag the document lags
+ * until the gesture settles, freezing every derived visual (rings, HUD
+ * limits, readouts). Compose the bridge value in before handing the route to
+ * a control.
+ */
+export function presentRouteWithCanonicalAmount<TRoute extends Pick<ModulationRoute, "amount">>(
+    route: TRoute | null,
+    binding: OptionalModulationRouteAmountBinding,
+): TRoute | null {
+    return route === null || binding.value === null
+        ? route
+        : { ...route, amount: binding.value };
+}
+
+/**
  * Subscribe one amount control directly to its canonical bridge value.
  * Unrelated modulation changes and the deferred full-document React projection
  * cannot rerender the caller through this interface.

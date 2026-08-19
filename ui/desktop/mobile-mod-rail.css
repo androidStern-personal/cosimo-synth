@@ -524,6 +524,80 @@
         color: #9aa2fb;
     }
 
+    /* T05: the voice-settings toggle is a text module labeled with the active
+       play mode (T04: the keyboard menu button was rejected; this placement
+       is provisional). */
+    .mobile-global-mod-rail-toggle.is-voice {
+        width: 34px;
+        font-family: var(--cosimo-font-label, sans-serif);
+        font-size: 7px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    /* The popover opens inward from the docked edge, anchored to the
+       drawer's toggle strip at the rail's bottom end. */
+    .mobile-global-mod-rail-voice-popover {
+        position: absolute;
+        bottom: var(--rail-shoulder);
+        z-index: 1;
+        display: grid;
+        width: 176px;
+        gap: 8px;
+        box-sizing: border-box;
+        padding: 10px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        border-radius: 12px;
+        background: rgb(13 17 20 / 0.97);
+        box-shadow: 0 12px 28px rgb(0 0 0 / 0.5);
+    }
+
+    .mobile-global-mod-rail[data-edge="right"] .mobile-global-mod-rail-voice-popover {
+        right: calc(100% + 10px);
+    }
+
+    .mobile-global-mod-rail[data-edge="left"] .mobile-global-mod-rail-voice-popover {
+        left: calc(100% + 10px);
+    }
+
+    .mobile-global-mod-rail-voice-modes {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 4px;
+    }
+
+    .mobile-global-mod-rail-voice-mode {
+        height: 26px;
+        padding: 0;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        background: rgb(255 255 255 / 0.04);
+        box-shadow: none;
+        color: rgb(230 232 234 / 0.55);
+        cursor: pointer;
+        font-family: var(--cosimo-font-label, sans-serif);
+        font-size: 9px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .mobile-global-mod-rail-voice-mode[aria-checked="true"] {
+        border-color: rgb(255 255 255 / 0.2);
+        background: rgb(255 255 255 / 0.14);
+        color: #fff;
+    }
+
+    .mobile-global-mod-rail-voice-glide {
+        display: grid;
+        justify-items: start;
+    }
+
+    .mobile-global-mod-rail-voice-glide[data-disabled="true"] {
+        opacity: 0.38;
+    }
+
     .mobile-global-mod-source-ghost {
         position: fixed;
         z-index: 100;
