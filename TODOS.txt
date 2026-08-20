@@ -400,6 +400,21 @@ PHASE 2 — MAKE DRAGGING AND PARAMETER FEEDBACK COHERENT
     - Failure coverage proves the global toast and warning buzz occur without leaving a phantom ring, count, or matrix/list row.
     - Voice and FX controls describe equivalent modulation states with the same visual language.
 
+[ ] T08A — Restore the active drop-target highlight during modulation-source drags
+    Origin (2026-08-20 physical-use report):
+    - After T08, dragging a modulation source still marks valid controls as available, but moving over one valid control produces no visible change. The user therefore cannot tell which target will receive the mapping on release.
+    Confirmed diagnosis:
+    - The drag controller still identifies the correct target, adds `is-mod-hover`, and supplies the dragged source color.
+    - T08 added duplicate/ineligible exclusions to the always-on eligibility selector. Those exclusions made that selector more specific than the hover selector, so its thin available-target outline continues to win after the target is hovered. A phone-width browser repro confirms that the computed box-shadow is identical before and during hover; a page-only selector-specificity correction restores the stronger outline. T09 is not involved.
+    Scope:
+    - Restore ADR-025's existing distinction: every valid target gets a thin source-colored eligibility outline, while the one target that would receive the drop gets an unmistakably stronger source-colored outline/glow.
+    - Leaving that target returns it to the thin eligibility outline. Duplicate and ineligible targets remain unavailable and never acquire the stronger highlight.
+    - Apply the correction consistently to the existing Voice and FX drop targets without changing hit geometry, drag ownership, route creation, haptics, duplicate dwell/toast behavior, pending confirmation, or successful-drop feedback.
+    Done when:
+    - A production-equivalent phone-width source-drag test compares the eligible and hovered target's rendered/computed visual treatments and proves they differ; checking only for `is-mod-hover` or a non-empty shadow is insufficient.
+    - The same test proves leaving restores the thin outline and a duplicate/ineligible target never gains the stronger treatment.
+    - Physical-phone review confirms the intended landing target is immediately obvious while dragging.
+
 [ ] T09 — Finish the shared mobile parameter interaction language
     Build from the existing baseline rather than replacing it:
     - Use compact numeric readout strips/chips for dense values and knobs for controls that benefit from a larger gesture surface.
