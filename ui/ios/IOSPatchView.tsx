@@ -40,11 +40,19 @@ import {
 } from "../shared/modulation";
 import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
+    formatParameterEntry,
+    parameterEntrySpecForFrequency,
+    parameterEntrySpecForScalar,
+    parameterEntrySpecForSeconds,
+} from "../shared/parameter-value-entry";
+import {
     MobileVoiceFocusedEditor,
     type MobileVoiceArmedSource,
     type MobileVoiceEditorBindings,
 } from "../shared/mobile-voice-editor";
 import { ParameterHudLayerContext } from "../shared/parameter-hud";
+import { ParameterMenuContext } from "../shared/parameter-context-menu";
+import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import {
     clampDisplayPosition,
 } from "../shared/runtime-table-state";
@@ -65,6 +73,20 @@ const DISTORTION_WET_HP_MIN_HZ = 20;
 const DISTORTION_WET_HP_MAX_HZ = 4_000;
 const DISTORTION_WET_LP_MIN_HZ = 20;
 const DISTORTION_WET_LP_MAX_HZ = 20_000;
+const IOS_PERCENT_ENTRY_SPEC = parameterEntrySpecForScalar({
+    min: 0,
+    max: 1,
+    step: 0,
+    unit: "%",
+    canonicalPerDisplayedUnit: 0.01,
+    digits: 0,
+});
+const IOS_FREQUENCY_ENTRY_SPEC = parameterEntrySpecForFrequency({
+    minHz: DISTORTION_WET_HP_MIN_HZ,
+    maxHz: DISTORTION_WET_LP_MAX_HZ,
+    stepHz: 0,
+    allowLogPercent: false,
+});
 const DISTORTION_MODE_OPTIONS = [
     { value: 0, label: "Classic", summary: "Dry/wet crossfade" },
     { value: 1, label: "Harmonics", summary: "Dry plus residue" },
@@ -104,30 +126,17 @@ function formatGlideTime(seconds: number) {
     return `${Number(seconds).toFixed(3)} s`;
 }
 
-function formatSeconds(seconds: number) {
-    return `${clampMsegRateSeconds(seconds).toFixed(3)} s`;
-}
-
 function formatDriveDb(value: number) {
     return `${Number(value).toFixed(1)} dB`;
 }
 
-function formatPercent(value: number) {
-    return `${Math.round(clamp(Number(value) || 0, 0, 1) * 100)}%`;
-}
-
-function formatFrequencyHz(value: number) {
-    const safeValue = Math.max(20, Number(value) || 0);
-
-    if (safeValue >= 10_000) {
-        return `${(safeValue / 1000).toFixed(1)} kHz`;
-    }
-
-    if (safeValue >= 1000) {
-        return `${(safeValue / 1000).toFixed(2)} kHz`;
-    }
-
-    return `${Math.round(safeValue)} Hz`;
+function msegRateEntrySpec(seconds: number) {
+    return parameterEntrySpecForSeconds({
+        minSeconds: MSEG_RATE_MIN_SECONDS,
+        maxSeconds: MSEG_RATE_MAX_SECONDS,
+        stepSeconds: 0.001,
+        currentSeconds: clampMsegRateSeconds(seconds),
+    });
 }
 
 function frequencyHzToLogNormalized(value: number, minHz: number, maxHz: number) {
@@ -382,7 +391,12 @@ const IOSMsegLauncher = memo(function IOSMsegLauncher({
 
                 <div className="mseg-preview-footer">
                     <div className="mseg-launcher-rate-readout" data-role="mseg-launcher-rate-readout">
-                        {msegState ? formatSeconds(msegState.playback.rate.seconds) : "1.000 s"}
+                        {msegState
+                            ? formatParameterEntry(
+                                msegRateEntrySpec(msegState.playback.rate.seconds),
+                                msegState.playback.rate.seconds,
+                            ).display
+                            : formatParameterEntry(msegRateEntrySpec(1), 1).display}
                     </div>
                     <button
                         className="mseg-loop-button mseg-launcher-loop-button"
@@ -765,7 +779,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
                         min: 0,
                         max: 1,
                         step: 0.001,
-                        readout: formatPercent(kneeValue),
+                        readout: formatParameterEntry(IOS_PERCENT_ENTRY_SPEC, kneeValue).display,
                         onChange: onKneeChange,
                         dataRole: "distortion-knee-slider",
                         readoutRole: null,
@@ -776,7 +790,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
                         min: 0,
                         max: 1,
                         step: 0.001,
-                        readout: formatPercent(wetValue),
+                        readout: formatParameterEntry(IOS_PERCENT_ENTRY_SPEC, wetValue).display,
                         onChange: onWetChange,
                         dataRole: "distortion-mix-slider",
                         readoutRole: "distortion-mix-readout",
@@ -820,7 +834,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
                             color: "rgba(226,232,240,0.92)",
                         }}
                         >
-                            {formatFrequencyHz(wetHPHzValue)}
+                            {formatParameterEntry(IOS_FREQUENCY_ENTRY_SPEC, wetHPHzValue).display}
                         </span>
                     </div>
                     <input
@@ -852,7 +866,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
                             color: "rgba(226,232,240,0.92)",
                         }}
                         >
-                            {formatFrequencyHz(wetLPHzValue)}
+                            {formatParameterEntry(IOS_FREQUENCY_ENTRY_SPEC, wetLPHzValue).display}
                         </span>
                     </div>
                     <input
@@ -1037,7 +1051,7 @@ const IOSMsegModal = memo(function IOSMsegModal({
                                 </div>
                             ) : null}
                             <div className="mseg-rate-readout" data-role="mseg-rate-readout">
-                                {formatSeconds(rateSeconds)}
+                                {formatParameterEntry(msegRateEntrySpec(rateSeconds), rateSeconds).display}
                             </div>
                             <button
                                 className="mseg-loop-button"
@@ -1082,6 +1096,14 @@ function IOSPatchViewBody() {
         },
     });
 
+    /* T20 — the ADR-017 long-press parameter menu (shared shell machine). */
+    const { openParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
+        routes: synthView.routes,
+        armedSourceKind: armedSource.sourceKind,
+        armedSourceSlot: armedSource.sourceSlot,
+        onRouteChange: synthView.handleRouteChange,
+        onRemoveRoute: synthView.handleRemoveRoute,
+    });
     const shellStyle = useMemo(() => ({
         ["--cosimo-stage-min-height" as string]: `${layout.stageMinHeight}px`,
         ["--cosimo-keyboard-height" as string]: `${layout.keyboardHeight}px`,
@@ -1180,6 +1202,7 @@ function IOSPatchViewBody() {
 
     return (
         <ParameterHudLayerContext.Provider value={mobileVoiceHudLayer}>
+        <ParameterMenuContext.Provider value={openParameterMenu}>
         <div className="ios-shell" style={shellStyle}>
             <div
                 ref={setMobileVoiceHudLayer}
@@ -1217,6 +1240,7 @@ function IOSPatchViewBody() {
                                 hudContainer={mobileVoiceHudLayer}
                                 resolveScrollLockTargets={resolveIOSVoiceScrollLocks}
                                 onRequestHaptic={requestIOSVoiceHaptic}
+                                onRequestParameterMenu={openParameterMenu}
                             />
 
                             {voiceStatusText !== null ? (
@@ -1350,7 +1374,9 @@ function IOSPatchViewBody() {
                     keyboardRef={keyboardRef}
                 />
             </div>
+            {parameterMenuOverlays}
         </div>
+        </ParameterMenuContext.Provider>
         </ParameterHudLayerContext.Provider>
     );
 }

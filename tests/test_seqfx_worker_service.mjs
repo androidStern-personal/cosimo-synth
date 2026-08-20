@@ -14,6 +14,7 @@ const {
     SEQFX_LANES,
     SEQFX_STATE_KEY,
     applySeqFxBlockCreate,
+    buildSeqPatternUpload,
     createDefaultSeqFxState,
     serializeSeqFxState,
 } = stateModule;
@@ -101,13 +102,6 @@ class FakePatchConnection {
     }
 }
 
-class CmajorMissingStoredValuePatchConnection extends FakePatchConnection {
-    requestStoredStateValue(key) {
-        this.requestedStoredKeys.push(key);
-        this.emitStoredState(key, null);
-    }
-}
-
 function patternUploads(connection) {
     return connection.events.filter((event) => event.endpointID === "patternUpload");
 }
@@ -185,15 +179,18 @@ test("seqfx worker ignores old state keys and applies a default empty pattern wh
     service.start();
 
     const upload = patternUploads(connection).at(-1).value;
-    assert.equal(upload.patternIndex, 0);
-    assert.equal(upload.authoritative, false);
-    assert.equal(upload.activeSteps.flat().some(Boolean), false);
-    assert.deepEqual(connection.requestedStoredKeys, [SEQFX_STATE_KEY]);
+    assert.deepEqual(upload, buildSeqPatternUpload(createDefaultSeqFxState(), {
+        patternIndex: 0,
+        authoritative: false,
+    }));
     assert.deepEqual(connection.storedWrites, []);
 });
 
-test("seqfx worker treats Cmajor null stored-state response as missing seqfx.v6", () => {
-    const connection = new CmajorMissingStoredValuePatchConnection({
+test("seqfx worker treats Cmajor null in full stored state as missing seqfx.v6", () => {
+    const connection = new FakePatchConnection({
+        values: {
+            [SEQFX_STATE_KEY]: null,
+        },
         parameters: {
             patternSelect: 0,
         },
@@ -203,12 +200,12 @@ test("seqfx worker treats Cmajor null stored-state response as missing seqfx.v6"
     service.start();
 
     const uploads = patternUploads(connection);
-    assert.deepEqual(connection.requestedStoredKeys, [SEQFX_STATE_KEY]);
     assert.equal(connection.storedWrites.length, 0);
     assert.equal(uploads.length, 1);
-    assert.equal(uploads[0].value.patternIndex, 0);
-    assert.equal(uploads[0].value.authoritative, false);
-    assert.equal(uploads[0].value.activeSteps.flat().some(Boolean), false);
+    assert.deepEqual(uploads[0].value, buildSeqPatternUpload(createDefaultSeqFxState(), {
+        patternIndex: 0,
+        authoritative: false,
+    }));
 });
 
 test("seqfx worker rejects old-shaped current seqfx state instead of normalizing missing aux", () => {

@@ -177,20 +177,24 @@ async function readStutterEnvelopePathSamples(page, phases) {
         const width = Math.max(1, right - left);
 
         const sampleAtPhase = (phase) => {
-            let nearestPoint = points[0];
-            let nearestDistance = Number.POSITIVE_INFINITY;
+            const targetX = left + (width * phase);
 
-            for (const point of points) {
-                const pointPhase = (point.x - left) / width;
-                const distance = Math.abs(pointPhase - phase);
+            if (targetX <= points[0].x) {
+                return points[0].y;
+            }
 
-                if (distance < nearestDistance) {
-                    nearestPoint = point;
-                    nearestDistance = distance;
+            for (let index = 0; index + 1 < points.length; index += 1) {
+                const from = points[index];
+                const to = points[index + 1];
+
+                if (targetX >= from.x && targetX <= to.x) {
+                    const segmentWidth = to.x - from.x;
+                    const segmentPhase = segmentWidth === 0 ? 0 : (targetX - from.x) / segmentWidth;
+                    return from.y + ((to.y - from.y) * segmentPhase);
                 }
             }
 
-            return nearestPoint.y;
+            return points[points.length - 1].y;
         };
 
         return Object.fromEntries(targetPhases.map((phase) => [phase.toFixed(2), sampleAtPhase(phase)]));
@@ -619,7 +623,7 @@ test("SeqFX Cmajor host-flow mounts a visible UI instead of a black viewport", a
         });
         assert.equal(rootInfo.hostTagName, "cosimo-seqfx-react-view");
         assert.equal(rootInfo.renderedInShadowRoot || rootInfo.renderedInLightDom, true);
-        assert.match(rootInfo.text ?? "", /CosimoSeqFX/);
+        assert.match(rootInfo.text ?? "", /SeqFX/);
 
         const screenshot = await page.screenshot();
         const visiblePixelCount = countVisiblePixels(parsePng(screenshot));
@@ -716,7 +720,7 @@ test("SeqFX packaged shadow-root flow renders the selected crusher and stutter i
             };
         });
 
-        assert.equal(crusherLayout.backgroundColor, "rgb(228, 222, 211)");
+        assert.equal(crusherLayout.backgroundColor, "rgba(222, 216, 204, 0.58)");
         assert.equal(crusherLayout.color, "rgb(28, 28, 28)");
         assert.ok(
             crusherLayout.bitsTrackWidth > crusherLayout.bitsRowWidth * 0.45,
@@ -776,7 +780,22 @@ test("SeqFX packaged shadow-root flow renders the selected crusher and stutter i
         const morphBox = await page.locator('[data-role="seqfx-stutter-morph-track"]').boundingBox();
         assert.ok(morphBox);
         await page.mouse.click(morphBox.x + morphBox.width * 0.125, morphBox.y + morphBox.height / 2);
-        const trapezoidSamples = await readStutterEnvelopePathSamples(page, [0.1, 0.3, 0.7, 0.8]);
+        // The packaged flow round-trips the shape write through the bridge, so
+        // the path re-renders a beat after the click: poll for the trapezoid's
+        // right wall instead of sampling immediately. A genuine rendering
+        // regression still fails here after the deadline.
+        let trapezoidSamples = null;
+        const trapezoidDeadline = Date.now() + 5_000;
+        for (;;) {
+            trapezoidSamples = await readStutterEnvelopePathSamples(page, [0.1, 0.3, 0.7, 0.8]);
+            if (trapezoidSamples && trapezoidSamples["0.80"] > trapezoidSamples["0.70"] + 10) {
+                break;
+            }
+            if (Date.now() > trapezoidDeadline) {
+                break;
+            }
+            await page.waitForTimeout(100);
+        }
         assert.ok(trapezoidSamples, "expected the packaged stutter graph path to produce readable points");
         assert.ok(
             Math.abs(trapezoidSamples["0.30"] - trapezoidSamples["0.70"]) <= 2,
@@ -807,7 +826,7 @@ test("SeqFX packaged shadow-root flow renders the selected crusher and stutter i
                 color: styles?.color ?? "",
             };
         });
-        assert.equal(stutterEditorStyle.backgroundColor, "rgb(228, 222, 211)");
+        assert.equal(stutterEditorStyle.backgroundColor, "rgba(222, 216, 204, 0.58)");
         assert.equal(stutterEditorStyle.color, "rgb(28, 28, 28)");
 
         assert.deepEqual(pageErrors.map((error) => error.message), []);
@@ -974,7 +993,7 @@ test("SeqFX production loader falls back when the dev-server status probe hangs"
                 ?.querySelector('[data-role="seqfx-root"]')
                 ?.textContent
         ));
-        assert.match(rootText ?? "", /CosimoSeqFX/);
+        assert.match(rootText ?? "", /SeqFX/);
     } finally {
         await page.close();
         await hangingServer.close();

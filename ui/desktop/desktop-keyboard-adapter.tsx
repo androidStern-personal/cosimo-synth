@@ -240,7 +240,6 @@ export function KeyboardDock({
         keyboard.setAttribute("root-note", String(rootNote));
         keyboard.setAttribute("note-count", String(noteCount));
         refreshKeyboardLayout(keyboard);
-        keyboard.attachToPatchConnection?.(patchConnection, midiInputEndpointID);
         const readNoteNumber = (event: Event) => {
             const note = Number((event as CustomEvent<{ note?: unknown }>).detail?.note);
             return Number.isFinite(note) ? note : null;
@@ -257,8 +256,11 @@ export function KeyboardDock({
                 onIntentionalNoteRef.current?.(0x80, note, 0);
             }
         };
+        // Preview ownership must clear before the keyboard sends a same-pitch
+        // user note-on through its later-registered connection listener.
         keyboard.addEventListener("note-down", handleNoteDown);
         keyboard.addEventListener("note-up", handleNoteUp);
+        keyboard.attachToPatchConnection?.(patchConnection, midiInputEndpointID);
         keyboardRef.current = keyboard;
         host.replaceChildren(keyboard);
 

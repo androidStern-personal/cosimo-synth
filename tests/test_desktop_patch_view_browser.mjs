@@ -188,6 +188,64 @@ test("built desktop bundle renders the stage without duplicating worker-owned ru
     }
 });
 
+test("built desktop bundle active Voice tab re-tap scrolls its shadow-root panel to the top", async () => {
+    const page = await openBuiltDesktopBundlePage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.waitForFunction(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            return root?.querySelector('[data-role="mobile-workspace-panel-voice"]') instanceof HTMLElement
+                && root.querySelector('[data-role="mobile-workspace-tab-voice"]') instanceof HTMLButtonElement;
+        });
+
+        const initialScrollTop = await page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const panel = root?.querySelector('[data-role="mobile-workspace-panel-voice"]');
+
+            if (!(panel instanceof HTMLElement)) {
+                throw new Error("Expected the built Voice workspace panel inside the shadow root.");
+            }
+
+            const spacer = document.createElement("div");
+            spacer.style.height = `${panel.clientHeight + 320}px`;
+            panel.append(spacer);
+            panel.scrollTop = panel.scrollHeight;
+            return panel.scrollTop;
+        });
+        assert.ok(initialScrollTop > 0, "The built Voice panel must accept a nonzero pre-tap scroll position.");
+
+        await page.evaluate(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const tab = root?.querySelector('[data-role="mobile-workspace-tab-voice"]');
+
+            if (!(tab instanceof HTMLButtonElement)) {
+                throw new Error("Expected the built active Voice workspace tab inside the shadow root.");
+            }
+
+            tab.click();
+        });
+
+        const reachedTop = await page.waitForFunction(() => {
+            const panel = document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="mobile-workspace-panel-voice"]');
+            return panel instanceof HTMLElement && panel.scrollTop === 0;
+        }, null, { timeout: 3_000 }).then(() => true, () => false);
+        const finalScrollTop = await page.evaluate(() => (
+            document.querySelector("cosimo-desktop-react-view")?.shadowRoot
+                ?.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop ?? -1
+        ));
+        assert.equal(
+            reachedTop,
+            true,
+            `The built active Voice tab must scroll its shadow-root panel to the top; scrollTop stayed at ${finalScrollTop}.`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
 test("built desktop bundle renders visible distortion dual-ring knobs inside the shadow DOM", async () => {
     const page = await openBuiltDesktopBundlePage();
 
@@ -2831,6 +2889,10 @@ test("glide widget commits direct edits and blocks note routing while text entry
 
         await clearHarnessDebugLog(page);
         await glideInput.focus();
+        assert.equal(
+            (await glideInput.locator("xpath=ancestor::label[1]//*[@data-role='parameter-entry-unit']").textContent()).trim(),
+            "ms",
+        );
         await page.waitForFunction(() => {
             const keyboardDebug = window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().keyboardDebug;
             return Number(keyboardDebug?.allNotesOffCount ?? 0) === 1;
@@ -2839,7 +2901,7 @@ test("glide widget commits direct edits and blocks note routing while text entry
         await clearHarnessDebugLog(page);
         await page.keyboard.down("a");
         await page.keyboard.up("a");
-        await dispatchInputValueChange(glideInput, 0.5);
+        await dispatchInputValueChange(glideInput, 500);
         await glideInput.blur();
 
         await page.waitForFunction(() => {
@@ -2983,6 +3045,45 @@ test("unison controls commit parameters and redraw the voice distribution", asyn
             });
         });
         await page.waitForFunction(() => document.querySelectorAll('[data-role="unison-visualization"] circle').length === 5);
+    } finally {
+        await page.close();
+    }
+});
+
+test("voice exact entry shows units, accepts logarithmic Cutoff percent, and rejects garbage voices", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const cutoffInput = page.locator('[data-role="filter-cutoff-field"] input');
+        await cutoffInput.dblclick();
+        assert.equal(
+            (await page.locator('[data-role="filter-cutoff-field"] [data-role="parameter-entry-unit"]').textContent()).trim(),
+            "Hz",
+        );
+        await cutoffInput.fill("50%");
+        await cutoffInput.press("Enter");
+        await waitForHarnessSnapshot(
+            page,
+            "logarithmic Cutoff percent exact entry",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.filterCutoff) - 632.4555) < 0.02,
+        );
+
+        await showVoiceControls(page);
+        const voicesInput = page.locator('[data-role="unison-voices-control"] input');
+        const initialVoices = Number((await getHarnessSnapshot(page)).parameterValues.oscAUnisonVoices);
+        await voicesInput.dblclick();
+        assert.equal(
+            (await page.locator('[data-role="unison-voices-control"] [data-role="parameter-entry-unit"]').textContent()).trim(),
+            "x",
+        );
+        await voicesInput.fill("many");
+        await voicesInput.press("Enter");
+        assert.equal(await voicesInput.isEditable(), true, "a rejected exact value keeps the field editable");
+        assert.match(
+            await page.locator('[data-role="unison-voices-control"] [data-role="parameter-entry-error"]').textContent(),
+            /number.*voices/i,
+        );
+        assert.equal(Number((await getHarnessSnapshot(page)).parameterValues.oscAUnisonVoices), initialVoices);
     } finally {
         await page.close();
     }
@@ -3348,8 +3449,12 @@ test("warp controls commit mode and amount, and the matrix can route MSEG 1 into
         await clearHarnessDebugLog(page);
         const warpAmountInput = page.locator('input[aria-label="Warp amount"]');
         await warpAmountInput.dblclick();
+        assert.equal(
+            (await page.locator('[data-role="warp-amount-field"] [data-role="parameter-entry-unit"]').textContent()).trim(),
+            "%",
+        );
         await warpAmountInput.press(`${process.platform === "darwin" ? "Meta" : "Control"}+A`);
-        await warpAmountInput.type("0.720");
+        await warpAmountInput.type("72");
         await warpAmountInput.blur();
 
         await page.waitForFunction(() => {
@@ -3659,6 +3764,139 @@ test("mobile workspace shows one tab-selected panel while all three stay mounted
     }
 });
 
+test("re-tapping each active mobile workspace tab scrolls its real panel to the top", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        for (const tab of ["voice", "fx", "mod"]) {
+            const tabButton = page.locator(`[data-role="mobile-workspace-tab-${tab}"]`);
+            if (await tabButton.getAttribute("aria-selected") !== "true") {
+                await tabButton.click();
+            }
+            await page.waitForFunction((tabId) => (
+                document.querySelector(`[data-role="mobile-workspace-tab-${tabId}"]`)
+                    ?.getAttribute("aria-selected") === "true"
+            ), tab);
+
+            const panel = page.locator(`[data-role="mobile-workspace-panel-${tab}"]`);
+            const initialScrollTop = await panel.evaluate((element) => {
+                const spacer = document.createElement("div");
+                spacer.style.height = `${element.clientHeight + 320}px`;
+                element.append(spacer);
+                element.scrollTop = element.scrollHeight;
+                return element.scrollTop;
+            });
+            assert.ok(initialScrollTop > 0, `The ${tab} panel must accept a nonzero pre-tap scroll position.`);
+
+            await tabButton.click();
+            await page.waitForFunction((tabId) => (
+                document.querySelector(`[data-role="mobile-workspace-panel-${tabId}"]`)?.scrollTop === 0
+            ), tab);
+        }
+    } finally {
+        await page.close();
+    }
+});
+
+test("an active mobile workspace tab returns from detail before a second tap scrolls to the top", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const modTab = page.locator('[data-role="mobile-workspace-tab-mod"]');
+        await modTab.click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-workspace-tab-mod"]')?.getAttribute("aria-selected") === "true"
+        ));
+
+        const modPanel = page.locator('[data-role="mobile-workspace-panel-mod"]');
+        const mainScrollTop = await modPanel.evaluate((element) => {
+            const spacer = document.createElement("div");
+            spacer.style.height = `${element.clientHeight + 320}px`;
+            element.append(spacer);
+            element.scrollTop = element.scrollHeight;
+            return element.scrollTop;
+        });
+        assert.ok(mainScrollTop > 0, "The Mod main panel must accept a nonzero pre-detail scroll position.");
+
+        const railGrip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
+        if (await railGrip.getAttribute("aria-expanded") !== "true") {
+            await railGrip.click({ position: { x: 28, y: 12 } });
+        }
+        await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="true"]').waitFor();
+        const selectedSource = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        await selectedSource.click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-mod-source-mseg-1"]')?.getAttribute("aria-pressed") === "true"
+        ));
+        await selectedSource.click();
+        await page.waitForFunction(() => {
+            const presetBar = document.querySelector("cosimo-preset-bar");
+            const backButton = presetBar?.shadowRoot?.querySelector('[data-el="shell-back"]');
+            return backButton instanceof HTMLButtonElement && !backButton.disabled;
+        });
+        const detailScrollTop = await modPanel.evaluate((element) => element.scrollTop);
+        assert.ok(detailScrollTop > 0, "Opening the Mod detail must preserve a nonzero panel position.");
+
+        await modTab.click();
+        await page.waitForFunction(() => {
+            const presetBar = document.querySelector("cosimo-preset-bar");
+            const backButton = presetBar?.shadowRoot?.querySelector('[data-el="shell-back"]');
+            return backButton instanceof HTMLButtonElement && backButton.disabled;
+        });
+        assert.equal(
+            await modPanel.evaluate((element) => element.scrollTop),
+            detailScrollTop,
+            "The first active-tab tap must return to the main screen without resetting its scroll position.",
+        );
+
+        await modTab.click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-workspace-panel-mod"]')?.scrollTop === 0
+        ));
+    } finally {
+        await page.close();
+    }
+});
+
+test("mobile workspace switching restores Voice scroll until an active-tab re-tap resets it", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const voicePanel = page.locator('[data-role="mobile-workspace-panel-voice"]');
+        const voiceScrollTop = await voicePanel.evaluate((element) => {
+            const spacer = document.createElement("div");
+            spacer.style.height = `${element.clientHeight + 320}px`;
+            element.append(spacer);
+            element.scrollTop = element.scrollHeight;
+            return element.scrollTop;
+        });
+        assert.ok(voiceScrollTop > 0, "The Voice panel must accept a nonzero position before switching tabs.");
+
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-workspace-tab-fx"]')?.getAttribute("aria-selected") === "true"
+        ));
+        await page.locator('[data-role="mobile-workspace-tab-voice"]').click();
+        await page.waitForFunction((storedTop) => (
+            document.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop === storedTop
+        ), voiceScrollTop);
+        assert.equal(await voicePanel.evaluate((element) => element.scrollTop), voiceScrollTop);
+
+        await page.locator('[data-role="mobile-workspace-tab-voice"]').click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-workspace-panel-voice"]')?.scrollTop === 0
+        ));
+    } finally {
+        await page.close();
+    }
+});
+
 test("mobile Voice stacks the full-width focused oscillator editor and filter row above a short unlabeled keyboard", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -3742,7 +3980,8 @@ test("mobile workspace keeps the synth preset bar visible and contained at 320px
         // retiring the legacy 38px preset-bar literal (ADR-026).
         assert.equal(layout.presetBarHeight, 40);
         assert.equal(layout.panelsTop >= layout.height, true);
-        assert.equal(layout.presetName, "No Preset");
+        // T03D: the unnamed working sound is the INIT identity.
+        assert.equal(layout.presetName, "INIT");
     } finally {
         await page.close();
     }
@@ -4275,6 +4514,56 @@ test("mobile voice pitch modulation is presented by the Semi cell alone and Oct/
         assert.equal(Number(routes[0].amount), 3, "an Oct drag never edits the pitch route amount");
     } finally {
         await cdp.detach();
+        await page.close();
+    }
+});
+
+test("short compact Voice never clips the readout strip: the graph yields, the rail stays visible", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    try {
+        const editor = page.locator('[data-role="mobile-voice-editor"]');
+        await editor.waitFor();
+        const clipping = await editor.evaluate((element) => {
+            const editorRect = element.getBoundingClientRect();
+            const toolbar = element.querySelector(".mobile-voice-toolbar");
+            const rail = element.querySelector(".mobile-voice-rail");
+            if (!(toolbar instanceof HTMLElement) || !(rail instanceof HTMLElement)) {
+                throw new Error("The readout strip and its rail must render.");
+            }
+            return {
+                overflow: element.scrollHeight - element.clientHeight,
+                toolbarClipped: toolbar.getBoundingClientRect().bottom - editorRect.bottom,
+                railClipped: rail.getBoundingClientRect().bottom - editorRect.bottom,
+            };
+        });
+        assert.ok(
+            clipping.overflow <= 0,
+            `The editor's content must fit its half row; it overflows by ${clipping.overflow}px.`,
+        );
+        assert.ok(
+            clipping.toolbarClipped <= 0.5,
+            `The readout strip must sit fully inside the editor; its bottom hangs ${clipping.toolbarClipped}px past the clip edge.`,
+        );
+        assert.ok(
+            clipping.railClipped <= 0.5,
+            `The base tick / mod-range rail must stay visible; it hangs ${clipping.railClipped}px past the clip edge.`,
+        );
+
+        // The strip itself keeps its full height — the GRAPH is what gave.
+        const strip = await editor.evaluate((element) => {
+            const toolbar = element.querySelector(".mobile-voice-toolbar");
+            const graph = element.querySelector('[data-role="mobile-voice-graph"]');
+            return {
+                toolbarHeight: toolbar.getBoundingClientRect().height,
+                graphHeight: graph.getBoundingClientRect().height,
+            };
+        });
+        assert.ok(Math.abs(strip.toolbarHeight - 40) <= 0.5, `the strip keeps its 40px: ${strip.toolbarHeight}`);
+        assert.ok(strip.graphHeight < 180, `the graph must shrink below its old floor here: ${strip.graphHeight}`);
+    } finally {
         await page.close();
     }
 });

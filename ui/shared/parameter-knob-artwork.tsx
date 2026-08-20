@@ -23,7 +23,7 @@ const MOD_INNER_RADIUS = 36;
 const MOD_OUTER_RADIUS = 48;
 const HANDLE_RADIUS = BASE_RADIUS * 0.72;
 const PRESENCE_RADIUS = (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2;
-const BYPASSED_GREY = "#758084";
+export const BYPASSED_GREY = "#758084";
 
 function clamp01(value: number): number {
     return Math.min(Math.max(value, 0), 1);

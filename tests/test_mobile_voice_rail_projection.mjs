@@ -194,3 +194,46 @@ test("an amp route in dB units can lift any base to the +6 dB rail", async () =>
         "a +6 dB offset stops at -14.1 dB — the value the capped build could never exceed",
     );
 });
+
+test("T02C: only a live mapped route shades the wavetable graphic, using the rail band's clamped travel", async () => {
+    const { projectMobileVoiceRailBand, wavetableModulationShadingRange } = await railModulePromise;
+    const domain = { min: 0, max: 1 };
+
+    const positive = projectMobileVoiceRailBand(domain, 0.3, { amount: 0.4, polarity: "unipolar" });
+    assert.deepEqual(
+        wavetableModulationShadingRange("mapped", positive),
+        { lowPosition: 0.3, highPosition: 0.7 },
+        "positive unipolar travel spans forward from the base Index",
+    );
+
+    const negative = projectMobileVoiceRailBand(domain, 0.3, { amount: -0.4, polarity: "unipolar" });
+    assert.deepEqual(
+        wavetableModulationShadingRange("mapped", negative),
+        { lowPosition: 0, highPosition: 0.3 },
+        "negative unipolar travel spans backward and clamps at the low edge",
+    );
+
+    const bipolar = projectMobileVoiceRailBand(domain, 0.9, { amount: 0.3, polarity: "bipolar" });
+    assert.deepEqual(
+        wavetableModulationShadingRange("mapped", bipolar),
+        { lowPosition: 0.6000000000000001, highPosition: 1 },
+        "bipolar travel spans both sides and clamps at the high edge",
+    );
+
+    for (const railState of ["no-source", "not-modulatable", "unmapped"]) {
+        assert.equal(
+            wavetableModulationShadingRange(railState, null),
+            null,
+            `${railState} draws no range`,
+        );
+    }
+    const zero = projectMobileVoiceRailBand(domain, 0.3, { amount: 0, polarity: "unipolar" });
+    assert.equal(wavetableModulationShadingRange("mapped-zero", zero), null, "a 0% route draws no range");
+    const bypassed = projectMobileVoiceRailBand(domain, 0.3, { amount: 0.4, polarity: "unipolar" });
+    assert.equal(wavetableModulationShadingRange("bypassed", bypassed), null, "a bypassed route draws no range");
+
+    assert.throws(
+        () => wavetableModulationShadingRange("mapped", null),
+        "a mapped cell without its band is a caller bug, never a silent no-shade",
+    );
+});

@@ -12,6 +12,10 @@ import {
     type PatchConnectionLike,
 } from "../../ui/shared/cmajor-react";
 import { usePatchParameterBinding } from "../../ui/shared/patch-controls";
+import {
+    parameterEntrySpecForMobileVoiceControl,
+    parameterEntrySpecForSeconds,
+} from "../../ui/shared/parameter-value-entry";
 import { KeyboardDock, ensureKeyboardElement, type PianoKeyboardElement } from "../../ui/desktop/desktop-keyboard-adapter";
 import { PrecisionNumberField } from "../../ui/desktop/desktop-precision-number-field";
 import { NexusNumberField, setNexusNumberConstructorForTests, type NexusNumberWidgetLike } from "../../ui/desktop/desktop-nexus-number-field";
@@ -45,7 +49,9 @@ import {
     useObservedDisplayPosition,
     useStagePositionDrag,
     useSynthKeyboardRouting,
+    useSynthPatchViewModel,
 } from "../../ui/shared/synth-hooks";
+import { MockPatchConnection } from "../../ui/shared/patch-connection-mock";
 import { useModulationRouteAmountBinding } from "../../ui/shared/modulation-route-amount";
 import type { SynthKeyboardInputMode } from "../../ui/shared/synth-input-router";
 import {
@@ -707,6 +713,8 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
             this.options = options;
             this.element = document.createElement("input");
             this.element.type = "text";
+            // The real Nexus widget renders its numeric value into the input.
+            this.element.value = String(options.value);
             host.replaceChildren(this.element);
             createdWidgets.push(this);
         }
@@ -725,6 +733,7 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
 
         passiveUpdate(value: number) {
             this.value = value;
+            this.element.value = String(value);
             this.passiveUpdates.push(value);
         }
 
@@ -769,10 +778,12 @@ export async function installNexusNumberFieldHarness(target: HTMLElement) {
                 <NexusNumberField
                     label="Glide Time"
                     binding={binding}
-                    min={0}
-                    max={2}
-                    step={0.001}
-                    decimalPlaces={3}
+                    entrySpec={parameterEntrySpecForSeconds({
+                        minSeconds: 0,
+                        maxSeconds: 2,
+                        stepSeconds: 0.001,
+                        currentSeconds: bindingValue,
+                    })}
                     onActivate={() => activationLog.push("activate")}
                     onBeginTextEntry={() => activationLog.push("begin")}
                     onEndTextEntry={() => activationLog.push("end")}
@@ -1497,12 +1508,10 @@ export async function installPrecisionOptimisticEchoHarness(target: HTMLElement)
                 <PrecisionNumberField
                     ariaLabel="Optimistic precision value"
                     binding={binding}
-                    min={0}
-                    max={1}
-                    step={0.001}
+                    entrySpec={parameterEntrySpecForMobileVoiceControl("unisonDetune")}
+                    suffix={parameterEntrySpecForMobileVoiceControl("unisonDetune").defaultUnit}
                     width={120}
                     height={32}
-                    formatDisplay={(value) => `${Math.round(value * 50)} ct`}
                     dataRole="optimistic-precision-control"
                 />
             );
@@ -2128,6 +2137,118 @@ export async function installSynthKeyboardRoutingHookHarness(
     await waitForMicrotask();
 }
 
+export async function installAutoPreviewSynthHookHarness(target: HTMLElement) {
+    const patchConnection = new MockPatchConnection({ name: "Auto-preview hook harness" });
+    let synthView: ReturnType<typeof useSynthPatchViewModel> | null = null;
+    let ready = false;
+
+    const requireSynthView = () => {
+        if (synthView === null) {
+            throw new Error("Auto-preview synth hook harness is not ready.");
+        }
+
+        return synthView;
+    };
+
+    const mounted = mountHarness(target, (root) => {
+        function Harness() {
+            const stageRef = useRef<HTMLDivElement | null>(null);
+            const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
+            const keyboardRef = useRef(null);
+            synthView = useSynthPatchViewModel({
+                stageRef,
+                msegEditorSurfaceRef,
+                keyboardRef,
+                voiceModeCount: 3,
+                observeFilterSpectrum: false,
+                observeDistortionVisuals: false,
+                observeMsegPlayhead: false,
+                autoPreviewEnabled: true,
+            });
+
+            useEffect(() => {
+                ready = true;
+                return () => {
+                    ready = false;
+                    synthView = null;
+                };
+            }, []);
+
+            return (
+                <div>
+                    <div ref={stageRef} />
+                    <svg ref={msegEditorSurfaceRef} />
+                </div>
+            );
+        }
+
+        root.render(
+            <PatchConnectionProvider patchConnection={patchConnection}>
+                <Harness />
+            </PatchConnectionProvider>,
+        );
+    });
+
+    const buildShortMidi = (status: number, noteNumber: number, velocity = 0) => (
+        ((status & 0xff) << 16) | ((noteNumber & 0x7f) << 8) | (velocity & 0x7f)
+    );
+
+    window.__COSIMO_DESKTOP_MODULE_HARNESS__ = {
+        async sendIntentionalNote(status: number, noteNumber: number, velocity = 0) {
+            requireSynthView().trackIntentionalNoteInput(status, noteNumber, velocity);
+            patchConnection.sendMIDIInputEvent("midiIn", buildShortMidi(status, noteNumber, velocity));
+            await waitForMicrotask();
+        },
+        async beginParameterGesture() {
+            requireSynthView().filterCutoff.beginGesture();
+            await waitForMicrotask();
+        },
+        async setParameterValue(nextValue: number) {
+            requireSynthView().filterCutoff.setValue(nextValue);
+            await waitForMicrotask();
+        },
+        async endParameterGesture() {
+            requireSynthView().filterCutoff.endGesture();
+            await waitForMicrotask();
+        },
+        async configureLoopSync() {
+            patchConnection.setParameterValue("mseg1Rate", 0.9);
+            const added = requireSynthView().handleAddRouteWithOverrides({
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                targetKind: "filterCutoffOctaves",
+            });
+            if (!added) {
+                throw new Error("Auto-preview synth hook harness could not add its loop-sync route.");
+            }
+            await waitForMicrotask();
+        },
+        async startNoteKeyAudition() {
+            requireSynthView().handleStartNoteKeyAudition();
+            await waitForMicrotask();
+        },
+        async stopNoteKeyAudition() {
+            requireSynthView().handleStopNoteKeyAudition();
+            await waitForMicrotask();
+        },
+        clearDebugLog() {
+            patchConnection.clearDebugLog();
+        },
+        getSnapshot() {
+            return {
+                ready,
+                ...patchConnection.getDebugSnapshot(),
+            };
+        },
+        async unmount() {
+            mounted.unmount();
+            await waitForMicrotask();
+        },
+    };
+
+    await waitForMicrotask();
+}
+
 export async function installSharedWavetableStageHarness(target: HTMLElement) {
     const changeLog: number[] = [];
     let retryCount = 0;
@@ -2140,6 +2261,12 @@ export async function installSharedWavetableStageHarness(target: HTMLElement) {
             const stageRef = useRef<HTMLDivElement | null>(null);
 
             return (
+                // The product sizes the stage externally (the desktop grid's
+                // rows). The Tailwind build does not scan tests/helpers, so
+                // the min-h utility below threads to the DOM but compiles to
+                // no CSS; this sized grid wrapper is the harness stand-in for
+                // the product's external sizing.
+                <div style={{ height: 220, display: "grid" }}>
                 <WavetableStageSection
                     stageRef={stageRef}
                     frames={[Float32Array.from([0, 0.5, -0.5, 0])]}
@@ -2177,6 +2304,7 @@ export async function installSharedWavetableStageHarness(target: HTMLElement) {
                     onPointerUp={() => {}}
                     className="min-h-[220px]"
                 />
+                </div>
             );
         }
 

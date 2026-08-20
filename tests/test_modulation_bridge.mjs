@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
+
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 import {
     createDefaultMsegShape,
@@ -14,15 +17,16 @@ import {
     composeModulationAmount,
     createDefaultModulationState,
     deserializeModulationState,
-    formatModulationAmountEditingValue,
     getModulationAmountDepth,
     getModulationAmountSliderPosition,
     normalizeModulationState,
     parseModulationState,
-    parseModulationAmountEditingValue,
     serializeModulationState,
 } from "../patch_gui/modulation.js";
-import { MODULATION_PROGRAM_ENDPOINT_ID } from "../patch_gui/modulation-runtime-program.js";
+import { MODULATION_PROGRAM_ENDPOINT_ID, getModulationRuntimeCell } from "../patch_gui/modulation-runtime-program.js";
+
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const parameterEntriesPromise = loadUIModule(repoRoot, "ui/shared/parameter-value-entry.ts");
 
 class FakePatchConnection {
     constructor(storedState = {}) {
@@ -359,11 +363,15 @@ test("modulation runtime event builder converts saved state into MSEG and route 
     assert.deepEqual(secondSlotShapeBUpload.value.buffer, Array.from(renderMsegShape(customState.msegSlots[1].shapeB)));
 
     const program = endpointEvents({ events }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
+    // The expectations come from the canonical cell mapper so a future
+    // destination append can never silently strand this file again.
+    const bootCell = getModulationRuntimeCell(customState.routes[0]);
+    assert.equal(bootCell.path, "voice");
     assert.equal(program.voiceRouteCount, 1);
-    assert.equal(program.voiceRouteCells[0], 280);
-    assert.equal(program.voiceRouteSources[0], 5);
-    assert.equal(program.voiceRouteTargets[0], 30);
-    assert.equal(program.voiceRouteAmounts[280], 4);
+    assert.equal(program.voiceRouteCells[0], bootCell.cellIndex);
+    assert.equal(program.voiceRouteSources[0], bootCell.sourceIndex);
+    assert.equal(program.voiceRouteTargets[0], bootCell.targetIndex);
+    assert.equal(program.voiceRouteAmounts[bootCell.cellIndex], 4);
 });
 
 test("editing one MSEG slot persists modulation.v6 without runtime uploading", () => {
@@ -475,11 +483,16 @@ test("replacing routes preserves signed amounts and compiles only active mapping
     ]);
 
     const program = endpointEvents({ events: buildModulationRuntimeEvents(savedState) }, MODULATION_PROGRAM_ENDPOINT_ID)[0].value;
+    const replacedCells = savedState.routes.map((route) => getModulationRuntimeCell(route));
+    assert.deepEqual(replacedCells.map((cell) => cell.path), ["voice", "voice"]);
     assert.equal(program.voiceRouteCount, 2);
-    assert.deepEqual(program.voiceRouteCells.slice(0, 2), [230, 304]);
+    assert.deepEqual(
+        program.voiceRouteCells.slice(0, 2),
+        replacedCells.map((cell) => cell.cellIndex),
+    );
     assert.deepEqual(program.voiceRoutePolarities.slice(0, 2), [0, 1]);
-    assert.equal(program.voiceRouteAmounts[230], -2.5);
-    assert.equal(program.voiceRouteAmounts[304], 0.5);
+    assert.equal(program.voiceRouteAmounts[replacedCells[0].cellIndex], -2.5);
+    assert.equal(program.voiceRouteAmounts[replacedCells[1].cellIndex], 0.5);
 });
 
 test("async stored-state echoes do not retrigger modulation uploads", async () => {
@@ -590,10 +603,15 @@ test("zero-centered route amount mapping keeps zero at the midpoint and uses sid
     assert.equal(getModulationAmountDepth("ampGainDb", 27), 0.5);
 });
 
-test("matrix amount text entry uses user-facing units instead of raw route amounts", () => {
-    assert.equal(formatModulationAmountEditingValue("warpAmount", 0.12), "12");
-    assert.equal(parseModulationAmountEditingValue("warpAmount", "12"), 0.12);
-    assert.equal(parseModulationAmountEditingValue("pan", "-40"), -0.4);
-    assert.equal(parseModulationAmountEditingValue("pan", "40L"), -0.4);
-    assert.equal(parseModulationAmountEditingValue("pitchSemitones", "12"), 12);
+test("matrix amount text entry uses the shared target-owned unit contract", async () => {
+    const entries = await parameterEntriesPromise;
+    const warpSpec = entries.parameterEntrySpecForModulationAmount("oscA.warpAmount", 0);
+    const panSpec = entries.parameterEntrySpecForModulationAmount("oscA.pan", 0);
+    const pitchSpec = entries.parameterEntrySpecForModulationAmount("oscA.pitchSemitones", 0);
+
+    assert.equal(entries.formatParameterEntry(warpSpec, 0.12).draft, "12");
+    assert.equal(entries.parseParameterEntry(warpSpec, "12").commit.value, 0.12);
+    assert.equal(entries.parseParameterEntry(panSpec, "-40").commit.value, -0.4);
+    assert.equal(entries.parseParameterEntry(panSpec, "40L").commit.value, -0.4);
+    assert.equal(entries.parseParameterEntry(pitchSpec, "12").commit.value, 12);
 });

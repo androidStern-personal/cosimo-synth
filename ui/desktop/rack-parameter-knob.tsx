@@ -30,8 +30,10 @@ import {
     hexToRgbTriplet,
     type ParameterHudModel,
 } from "../shared/parameter-hud";
-import type { ParameterKnobModRing } from "../shared/parameter-knob-artwork";
+import { BYPASSED_GREY as KNOB_BYPASSED_GREY, type ParameterKnobModRing } from "../shared/parameter-knob-artwork";
 import type { PatchControlBinding } from "../shared/patch-controls";
+import { useParameterMenu } from "../shared/parameter-context-menu";
+import type { ParameterEntrySpec } from "../shared/parameter-value-entry";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
 import {
     formatRackParameterValue,
@@ -70,6 +72,9 @@ export type BaseParameterKnobProps = {
     readonly modulationTargetKind?: ModulationTargetKind;
     /** Accent the precision HUD frames this control's owner with. */
     readonly ownerAccent?: string;
+    /** Exact-entry spec: with a shell menu present, long-press opens the
+        ADR-017 parameter menu built from this spec (T20: every control). */
+    readonly entrySpec?: ParameterEntrySpec;
 };
 
 export type RackParameterKnobProps = {
@@ -290,9 +295,15 @@ function ParameterKnobSurface({
         angleForNormalized(normalizedValue(descriptor, descriptor.initial)),
         BASE_RADIUS * 0.94,
     );
+    // ADR-025: the inside describes the parameter's OWNER (Voice/effect
+    // identity color); grey may appear only when the control genuinely cannot
+    // affect sound. The outside ring's color belongs to the selected source.
+    const resolvedOwnerAccent = ownerAccent ?? DEFAULT_KNOB_OWNER_ACCENT;
+    const controlIsGrey = effectiveness !== "active";
     const style = {
-        "--rack-knob-accent": "#d5dcde",
-        "--rack-knob-mod-accent": sourceAccent,
+        "--rack-knob-accent": controlIsGrey ? KNOB_BYPASSED_GREY : resolvedOwnerAccent,
+        "--rack-knob-mod-accent": controlIsGrey ? KNOB_BYPASSED_GREY : sourceAccent,
+        "--rack-knob-bypassed-ink": KNOB_BYPASSED_GREY,
     } as CSSProperties;
 
     const gestureController = useParameterGesture();
@@ -455,7 +466,6 @@ function ParameterKnobSurface({
     ]);
 
     const hudModel: ParameterHudModel | null = hudPresentation === null ? null : (() => {
-        const resolvedOwnerAccent = ownerAccent ?? DEFAULT_KNOB_OWNER_ACCENT;
         // Routes shown here always come from the armed rail source, whose
         // kinds are the rack set; performance-source routes never present.
         const sourceIdentity = route !== null
@@ -653,9 +663,12 @@ export function RackParameterKnob(props: RackParameterKnobProps) {
 
 /** Base-value knob using the mobile FX visual and touch interaction without exposing a fake modulation route. */
 export function BaseParameterKnob(props: BaseParameterKnobProps) {
+    const openParameterMenu = useParameterMenu();
+    const { entrySpec, ...surfaceProps } = props;
+    const menuAvailable = openParameterMenu !== null && entrySpec !== undefined;
     return (
         <ParameterKnobSurface
-            {...props}
+            {...surfaceProps}
             rackDescriptor={null}
             route={null}
             sourceIsSelected={false}
@@ -663,10 +676,24 @@ export function BaseParameterKnob(props: BaseParameterKnobProps) {
             effectiveness="active"
             className="rack-parameter-knob oscillator-parameter-knob"
             enableModulationGesture={false}
-            enableContextMenu={false}
+            enableContextMenu={menuAvailable}
             onSelect={ignoreSelection}
             onModulationAmountChange={ignoreModulationAmountChange}
-            onRequestContextMenu={ignoreContextMenu}
+            onRequestContextMenu={menuAvailable
+                ? (clientX: number, clientY: number) => {
+                    openParameterMenu({
+                        controlKey: props.descriptor.endpointID,
+                        label: props.descriptor.label,
+                        targetKind: props.modulationTargetKind ?? null,
+                        baseSpec: entrySpec,
+                        baseValue: props.binding.value,
+                        defaultValue: props.descriptor.initial,
+                        commitBase: props.binding.commitValue,
+                        clientX,
+                        clientY,
+                    });
+                }
+                : ignoreContextMenu}
         />
     );
 }

@@ -24,6 +24,14 @@ export type RackParameterDescriptor = {
     readonly modulationTargetIndex: number | null;
     /** DSP application for one route offset; independent of the control's display scale. */
     readonly modulationApplication: "linear" | "octaves" | null;
+    /**
+     * Vertical modulation drags walk the MODULATED value along the knob's own
+     * dial instead of sweeping the linear amount span. Opt-in for parameters
+     * whose base rests near one end of a wide amount domain (resonance), where
+     * the linear sweep slams the audible floor in a few pixels and banks dead
+     * clamped amount for the rest of the travel.
+     */
+    readonly modulationDragStyle?: "effective-value";
 };
 
 /** Stable identity information for a rack module. Icons are vendored fontaudio SVGs. */
@@ -111,6 +119,7 @@ const p = (
     modulationTargetIndex: options.modulationTargetIndex ?? null,
     modulationApplication: options.modulationApplication
         ?? (options.modulationTargetIndex === undefined || options.modulationTargetIndex === null ? null : "linear"),
+    modulationDragStyle: options.modulationDragStyle,
 });
 
 const PHASER_DIVISIONS = ["4/1", "2/1", "1/1", "1/2.", "1/2", "1/4.", "1/2T", "1/4", "1/4T", "1/8.", "1/8", "1/8T", "1/16"];
@@ -128,7 +137,7 @@ const definitions: ReadonlyArray<Omit<RackEffectDescriptor, "parameters"> & { re
         parameters: [
             p("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 1, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(choice), quick: true }),
             p("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 20_000, 20_000, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 0, modulationApplication: "octaves" }),
-            p("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1 }),
+            p("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1, modulationDragStyle: "effective-value" }),
             p("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 }),
         ],
     },
@@ -294,43 +303,4 @@ export function formatRackParameterValue(descriptor: RackParameterDescriptor, va
     if (descriptor.unit === "deg") return `${Math.round(value)}°`;
     if (descriptor.unit === "st") return `${value >= 0 ? "+" : ""}${value.toFixed(1)}st`;
     return `${Math.round(value * 100)}%`;
-}
-
-/** Plain real-unit text for the rack's exact-value editor. Unitless normalized controls edit as percent. */
-export function formatRackParameterEditingValue(descriptor: RackParameterDescriptor, value: number): string {
-    const clamped = Math.min(Math.max(Number(value), descriptor.min), descriptor.max);
-    const editingValue = descriptor.unit === "" && descriptor.max - descriptor.min <= 2
-        ? clamped * 100
-        : clamped;
-    return String(Number(editingValue.toFixed(4)));
-}
-
-/** Parse exact rack input at the descriptor boundary; accepts visible units and `k` frequency shorthand. */
-export function parseRackParameterEditingValue(
-    descriptor: RackParameterDescriptor,
-    rawText: string,
-): number | null {
-    let normalized = String(rawText ?? "")
-        .trim()
-        .toLowerCase()
-        .replace(/,/g, "")
-        .replace(/\s+/g, "")
-        .replace(/khz|hz|ms|db|deg|°|st|%/g, "");
-    if (!normalized) {
-        return null;
-    }
-
-    let multiplier = 1;
-    if (normalized.endsWith("k")) {
-        multiplier = 1_000;
-        normalized = normalized.slice(0, -1);
-    }
-    const parsed = Number.parseFloat(normalized);
-    if (!Number.isFinite(parsed)) {
-        return null;
-    }
-    const realUnitValue = descriptor.unit === "" && descriptor.max - descriptor.min <= 2
-        ? parsed / 100
-        : parsed * multiplier;
-    return Math.min(Math.max(realUnitValue, descriptor.min), descriptor.max);
 }

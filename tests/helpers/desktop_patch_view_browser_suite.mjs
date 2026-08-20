@@ -822,8 +822,14 @@ export async function showVoiceControls(page) {
     await page.locator('[aria-label="Glide"]').waitFor({ state: "visible" });
 }
 
-export async function openBuiltDesktopBundlePage() {
+export async function openBuiltDesktopBundlePage({
+    beforeGoto = null,
+} = {}) {
     const page = await browser.newPage();
+
+    if (typeof beforeGoto === "function") {
+        await beforeGoto(page);
+    }
 
     await page.goto(builtBundleServer.baseUrl, { waitUntil: "domcontentloaded" });
     await page.setContent(`

@@ -1,5 +1,18 @@
 export type RGBColor = [number, number, number];
 
+/** "#rrggbb" (or "#rgb") to the canvas/theme RGB triple. */
+export function hexToRGBColor(hex: string): RGBColor {
+    const normalized = hex.trim().replace(/^#/, "");
+    const expanded = normalized.length === 3
+        ? normalized.split("").map((digit) => digit + digit).join("")
+        : normalized;
+    if (!/^[0-9a-fA-F]{6}$/.test(expanded)) {
+        throw new Error(`Expected a hex color, received "${hex}"`);
+    }
+    const value = Number.parseInt(expanded, 16);
+    return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
+}
+
 export type PatchTheme = {
     backgroundTop: string;
     backgroundBottom: string;

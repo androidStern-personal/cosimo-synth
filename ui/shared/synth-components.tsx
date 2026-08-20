@@ -31,7 +31,7 @@ import {
     type MsegSurfaceOrientation,
     type MsegState,
 } from "./mseg";
-import { CanvasWavetableDisplay } from "./wavetable-display";
+import { CanvasWavetableDisplay, type WavetableModulationRangeOverlay } from "./wavetable-display";
 import type { SynthFocusBindings } from "./synth-input-router";
 import {
     createFilterResponseModel,
@@ -778,6 +778,7 @@ export function WavetableCanvas({
     drawableTopInset = 0,
     paintBackground = true,
     showSliceCaption = true,
+    modulationRange = null,
 }: {
     frames: Float32Array[] | null;
     position: number;
@@ -787,6 +788,8 @@ export function WavetableCanvas({
     /** ADR-024 compact seams; defaults preserve the established drawing. */
     paintBackground?: boolean;
     showSliceCaption?: boolean;
+    /** T02C: the selected source's Index travel, shaded onto the graphic. */
+    modulationRange?: WavetableModulationRangeOverlay | null;
 }) {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const viewportRef = useRef<HTMLDivElement | null>(null);
@@ -825,6 +828,10 @@ export function WavetableCanvas({
     useEffect(() => {
         displayRef.current?.setWarp(warpMode, warpAmount);
     }, [warpAmount, warpMode]);
+
+    useEffect(() => {
+        displayRef.current?.setModulationRange(modulationRange);
+    }, [modulationRange]);
 
     useEffect(() => {
         displayRef.current?.setDrawableInsets({ top: drawableTopInset });

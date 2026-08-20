@@ -2513,7 +2513,9 @@ test("generated product UI restores oscillator parameters and rack state through
         assert.equal(afterReload.localOscBPan, 0.25);
         await page.getByRole("tab", { name: "Oscillator B" }).click();
         await page.waitForTimeout(100);
-        assert.equal(await panInput.inputValue(), "+25%");
+        // ADR-028: Pan displays in L/C/R language via the one shared
+        // formatter; the stored value (0.25, asserted above) is unchanged.
+        assert.equal(await panInput.inputValue(), "25 R");
     } finally {
         await page.close();
     }

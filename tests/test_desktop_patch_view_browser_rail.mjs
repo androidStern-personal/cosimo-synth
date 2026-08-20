@@ -1443,7 +1443,6 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
         if (await createMapping.count() > 0) {
             await createMapping.click();
         }
-        await page.locator('[data-role="rack-modulation-amount"]').waitFor();
 
         const readHudCollisions = async (knobRole, finger) => {
             const layout = await page.evaluate(({ role }) => {
@@ -1462,7 +1461,6 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
                     knob: rectOf(document.querySelector(`[data-role="${role}"]`)),
                     rail: rectOf(document.querySelector('[data-role="mobile-global-mod-rail"]')),
                     drawer: rectOf(document.querySelector('[data-role="mobile-global-mod-rail-drawer"]')),
-                    amount: rectOf(document.querySelector('[data-role="rack-modulation-amount"]')),
                     keyboard: rectOf(document.querySelector('[data-role="sticky-keyboard"]')),
                     viewport: { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight },
                 };
@@ -1473,9 +1471,6 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
             assert.equal(rectsIntersect(layout.hud, layout.rail), false, "HUD covers the global modulation rail.");
             if (layout.drawer) {
                 assert.equal(rectsIntersect(layout.hud, layout.drawer), false, "HUD covers the rail drawer.");
-            }
-            if (layout.amount) {
-                assert.equal(rectsIntersect(layout.hud, layout.amount), false, "HUD covers the modulation amount slider.");
             }
             assert.equal(rectsIntersect(layout.hud, layout.keyboard), false, "HUD covers the sticky keyboard.");
             assert.equal(
@@ -2010,29 +2005,30 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
         ));
         assert.ok(sourceFirstRoute);
 
-        const amount = sourceFirstPage.locator('[data-role="rack-modulation-amount"]');
-        const amountBox = await amount.boundingBox();
-        assert.ok(amountBox, "Expected the rack amount control.");
-        await sourceFirstPage.mouse.move(amountBox.x + (amountBox.width * 0.5), amountBox.y + (amountBox.height * 0.5));
-        await sourceFirstPage.mouse.down();
-        await sourceFirstPage.mouse.move(amountBox.x + (amountBox.width * 0.82), amountBox.y + (amountBox.height * 0.5), { steps: 8 });
-        const amountHud = sourceFirstPage.locator('[data-role="rack-parameter-hud"]');
-        await amountHud.waitFor();
-        assert.equal(await amountHud.getAttribute("data-mode"), "modulation");
-        assert.match(await amountHud.innerText(), /MOD.*Drive.*dB/is);
-        const liveAmountHudLayout = await sourceFirstPage.evaluate(() => {
-            const rectOf = (element) => {
-                const bounds = element.getBoundingClientRect();
-                return { left: bounds.left, right: bounds.right, top: bounds.top, bottom: bounds.bottom };
-            };
-            return {
-                hud: rectOf(document.querySelector('[data-role="rack-parameter-hud"]')),
-                amount: rectOf(document.querySelector('[data-role="rack-modulation-amount"]')),
-            };
-        });
-        assert.equal(rectsIntersect(liveAmountHudLayout.hud, liveAmountHudLayout.amount), false);
-        await sourceFirstPage.mouse.up();
-        await amountHud.waitFor({ state: "detached" });
+        // T09: no separate AMOUNT control — the drive knob's vertical axis
+        // edits the new route's amount with the shared HUD.
+        assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 0);
+        await collapseGlobalModRail(sourceFirstPage);
+        const driveKnob = sourceFirstPage.locator('[data-role="distortion-drive-field"]');
+        await driveKnob.waitFor();
+        await dispatchRackKnobPointerEvents(driveKnob, [
+            { type: "pointerdown", pointerId: 61, buttons: 1 },
+            { type: "pointermove", pointerId: 61, buttons: 1, deltaY: -8 },
+            { type: "pointermove", pointerId: 61, buttons: 1, deltaY: -120 },
+        ]);
+        await sourceFirstPage.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-hud"]')?.getAttribute("data-hud-axis") === "modulation"
+        ));
+        assert.match(
+            await sourceFirstPage.locator('[data-role="mobile-voice-hud"]').innerText(),
+            /Drive/i,
+        );
+        // The first write compiles the zero-depth route into the program; the
+        // second must ride the small amount-update path.
+        await dispatchRackKnobPointerEvents(driveKnob, [
+            { type: "pointermove", pointerId: 61, buttons: 1, deltaY: -150 },
+            { type: "pointerup", pointerId: 61, buttons: 0, deltaY: -150 },
+        ]);
 
         snapshot = await waitForHarnessSnapshot(
             sourceFirstPage,
@@ -2059,9 +2055,6 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             && Number(value?.cellIndex) === 3
             && Number(value?.amount) > 1
         )), true, `Voice-source rack amount edit did not use the small update path: ${JSON.stringify(modulationMessages)}`);
-        assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').getAttribute("aria-valuemin"), "-100");
-        assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').getAttribute("aria-valuemax"), "100");
-        assert.equal(await sourceFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 1);
     } finally {
         await sourceFirstPage.close();
     }
@@ -2111,20 +2104,18 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             "A zero-depth rack mapping must remain outside the active runtime prefix.",
         );
 
-        const targetAmount = targetFirstPage.locator('[data-role="rack-modulation-amount"]');
-        const targetAmountBox = await targetAmount.boundingBox();
-        assert.ok(targetAmountBox, "Expected the target-first rack amount control.");
-        await targetFirstPage.mouse.move(
-            targetAmountBox.x + (targetAmountBox.width * 0.5),
-            targetAmountBox.y + (targetAmountBox.height * 0.5),
-        );
-        await targetFirstPage.mouse.down();
-        await targetFirstPage.mouse.move(
-            targetAmountBox.x + (targetAmountBox.width * 0.82),
-            targetAmountBox.y + (targetAmountBox.height * 0.5),
-            { steps: 8 },
-        );
-        await targetFirstPage.mouse.up();
+        assert.equal(await targetFirstPage.locator('[data-role="rack-modulation-amount"]').count(), 0);
+        await collapseGlobalModRail(targetFirstPage);
+        const sizeKnob = targetFirstPage.locator('[data-role="rack-parameter-reverbSize"]');
+        await sizeKnob.waitFor();
+        await dispatchRackKnobPointerEvents(sizeKnob, [
+            { type: "pointerdown", pointerId: 62, buttons: 1 },
+            { type: "pointermove", pointerId: 62, buttons: 1, deltaY: -8 },
+            { type: "pointermove", pointerId: 62, buttons: 1, deltaY: -110 },
+        ]);
+        await dispatchRackKnobPointerEvents(sizeKnob, [
+            { type: "pointerup", pointerId: 62, buttons: 0, deltaY: -110 },
+        ]);
 
         snapshot = await waitForHarnessSnapshot(
             targetFirstPage,
@@ -2159,18 +2150,9 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
     }
 });
 
-test("mobile rack modulation amount presents the canonical bridge value while the full document is deferred", async () => {
+test("the FX workspace has no separate route AMOUNT control: the target knob edits the amount live", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
-    });
-    const readAmountPresentation = async () => page.locator('[data-role="rack-modulation-amount"]').evaluate((slider) => {
-        const thumb = slider.querySelector(".rack-mod-amount-thumb");
-        const output = slider.closest(".rack-mod-amount")?.querySelector("output");
-        return {
-            ariaValueText: slider.getAttribute("aria-valuetext"),
-            output: output?.textContent ?? null,
-            thumbLeft: thumb instanceof HTMLElement ? thumb.style.left : null,
-        };
     });
 
     try {
@@ -2181,7 +2163,7 @@ test("mobile rack modulation amount presents the canonical bridge value while th
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "bipolar",
-                targetKind: "rack.distortionDriveDb",
+                targetKind: "rack.reverbSize",
                 amount: 0,
                 reducer: "max",
             }],
@@ -2195,44 +2177,52 @@ test("mobile rack modulation amount presents the canonical bridge value while th
             (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === "mobile-rack-amount-route",
         );
         await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await collapseGlobalModRail(page);
 
-        const amount = page.locator('[data-role="rack-modulation-amount"]');
-        await amount.waitFor();
-        const bounds = await amount.boundingBox();
-        assert.ok(bounds);
-        const initial = await readAmountPresentation();
-
-        await page.clock.install();
-        await page.clock.pauseAt(Date.now() + 1_000);
-        await clearHarnessDebugLog(page);
-        const y = bounds.y + (bounds.height / 2);
-        await page.mouse.move(bounds.x + (bounds.width * 0.5), y);
-        await page.mouse.down();
-        await page.mouse.move(bounds.x + (bounds.width * 0.8), y);
-        await page.clock.runFor(20);
-        const duringDrag = await readAmountPresentation();
-        await page.mouse.up();
-        await page.clock.runFor(20);
-        const beforeParentEcho = await readAmountPresentation();
-        await page.clock.runFor(30);
-        const afterParentEcho = await readAmountPresentation();
-
-        const snapshot = await getHarnessSnapshot(page);
+        // T09 settled cleanup: the separate AMOUNT slider is gone everywhere;
+        // the target knob, its ring, and the shared HUD own the job.
+        const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        await knob.waitFor();
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID, value }) => (
-                (endpointID === "modulationAmount" && Number(value?.amount) > 0)
-                || (endpointID === "modulationProgram" && Number(value?.voiceRackRouteCount) > 0)
-            )),
-            true,
-            "The drag must reach the runtime boundary immediately.",
+            await page.locator('[data-role="rack-modulation-amount"]').count(),
+            0,
+            "The selected-route AMOUNT slider must not exist.",
         );
-        assert.notEqual(duringDrag.thumbLeft, initial.thumbLeft, "The amount thumb stayed at the stale parent value.");
-        assert.notEqual(duringDrag.output, initial.output, "The amount readout stayed at the stale parent value.");
-        assert.equal(duringDrag.output, duringDrag.ariaValueText);
-        assert.deepEqual(beforeParentEcho, duringDrag, "The amount presentation diverged from the canonical route value.");
-        assert.deepEqual(afterParentEcho, duringDrag, "The deferred full-document projection changed the route value.");
+
+        await clearHarnessDebugLog(page);
+        await dispatchRackKnobPointerEvents(knob, [
+            { type: "pointerdown", pointerId: 41, buttons: 1 },
+            { type: "pointermove", pointerId: 41, buttons: 1, deltaY: -8 },
+            { type: "pointermove", pointerId: 41, buttons: 1, deltaY: -40 },
+        ]);
+        const hud = page.locator('[data-role="mobile-voice-hud"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-hud"]')?.getAttribute("data-hud-axis") === "modulation"
+        ));
+        const midDragFirst = await hud.innerText();
+        await dispatchRackKnobPointerEvents(knob, [
+            { type: "pointermove", pointerId: 41, buttons: 1, deltaY: -90 },
+        ]);
+        await page.waitForFunction((previousText) => (
+            (document.querySelector('[data-role="mobile-voice-hud"]')?.textContent ?? "") !== previousText
+        ), midDragFirst, { timeout: 3000 });
+        await dispatchRackKnobPointerEvents(knob, [
+            { type: "pointerup", pointerId: 41, buttons: 0, deltaY: -90 },
+        ]);
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "knob-owned rack route amount update",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
+                route.id === "mobile-rack-amount-route" && route.amount > 0
+            )),
+        );
+        assert.equal(snapshot.sentMessages.some(({ endpointID, value }) => (
+            endpointID === "modulationAmount" && Number(value?.amount) > 0
+        )), true, "The knob's amount edit must use the small runtime update path.");
     } finally {
         await page.close();
     }
@@ -2290,6 +2280,9 @@ test("source preview and valid hover stay transient while the armed ring and foc
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
+        // ADR-025 row 9: a bypassed effect's controls are honestly grey, so
+        // exercise the armed-ring colors on a POWERED effect.
+        await page.locator('[data-rack-effect-id="reverb"] .rack-power').click();
         await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-mseg-1"]');
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
@@ -2320,7 +2313,12 @@ test("source preview and valid hover stay transient while the armed ring and foc
             };
         });
         assert.equal(live.isHover, true);
-        assert.equal(live.borderColor, "rgba(223, 230, 232, 0.78)");
+        // ADR-025 row 2: the selected target's border carries the owning
+        // effect accent (reverb) rather than the old neutral.
+        assert.ok(
+            live.borderColor.startsWith("color(srgb 0.88") || live.borderColor.includes("225, 180, 86"),
+            `selected-target border must be the reverb accent, got ${live.borderColor}`,
+        );
         assert.notEqual(live.boxShadow, "none");
         assert.equal(live.dragAccent, "#b8e236");
         assert.match(live.outline, /rgb\(245, 255, 255\)/);
@@ -3441,6 +3439,664 @@ test("desktop distortion graph renders occupancy bands on the fixed transfer sca
         assert.equal(overlayState.historyRemovedColumnCount > 0, true);
         assert.equal(overlayState.legacyTraceCount, 0);
         assert.equal(overlayState.legacyClippedPointCount, 0);
+    } finally {
+        await page.close();
+    }
+});
+
+test("T02C: the wavetable graphic shades only the armed source's live Index route on the focused oscillator", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    // The rail always keeps one source selected, so the unshaded reference
+    // state is an armed UNROUTED source (env-1), never "nothing armed".
+    const installShadingProbe = () => page.evaluate(() => {
+        const readPixels = () => {
+            const canvas = document.querySelector('[data-role="mobile-voice-graph"] canvas');
+            if (!(canvas instanceof HTMLCanvasElement) || canvas.width === 0) {
+                throw new Error("The Voice wavetable canvas is missing.");
+            }
+            return canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+        };
+        window.__t02cShading = {
+            baseline: null,
+            capture() {
+                this.baseline = readPixels();
+            },
+            /** Pixels whose colour moved versus the captured baseline; -1 while unusable. */
+            diff() {
+                const current = readPixels();
+                if (!this.baseline || this.baseline.length !== current.length) {
+                    return -1;
+                }
+                let differing = 0;
+                for (let index = 0; index < current.length; index += 4) {
+                    if (
+                        Math.abs(current[index] - this.baseline[index]) > 4
+                        || Math.abs(current[index + 1] - this.baseline[index + 1]) > 4
+                        || Math.abs(current[index + 2] - this.baseline[index + 2]) > 4
+                    ) {
+                        differing += 1;
+                    }
+                }
+                return differing;
+            },
+        };
+    });
+    const captureBaseline = () => page.evaluate(() => window.__t02cShading.capture());
+    const shadingDiff = () => page.evaluate(() => window.__t02cShading.diff());
+    const waitForShading = (predicate) => page.waitForFunction(
+        (source) => new Function("diff", `return ${source};`)(window.__t02cShading.diff()),
+        predicate,
+    );
+    const waitForFocusedOscillatorArtwork = (oscillatorID) => page.waitForFunction((expectedID) => {
+        const editor = document.querySelector('[data-role="mobile-voice-editor"]');
+        if (editor?.getAttribute("data-selected-oscillator-id") !== expectedID) {
+            return false;
+        }
+        const canvas = document.querySelector('[data-role="mobile-voice-graph"] canvas');
+        if (!(canvas instanceof HTMLCanvasElement) || canvas.width === 0) {
+            return false;
+        }
+        const data = canvas.getContext("2d").getImageData(0, 0, canvas.width, canvas.height).data;
+        for (let index = 3; index < data.length; index += 4) {
+            if (data[index] !== 0) {
+                return true;
+            }
+        }
+        return false;
+    }, oscillatorID);
+    const seedRoute = async ({ amount, enabled }) => {
+        const state = normalizeModulationState({
+            routes: [{
+                id: "t02c-live-route",
+                enabled,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "oscA.wavetablePosition",
+                amount,
+                reducer: "max",
+            }],
+        });
+        await page.evaluate((nextState) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(nextState));
+        }, state);
+        await waitForHarnessSnapshot(
+            page,
+            "seeded the T02C Index shading route",
+            (snapshot) => {
+                const route = readStoredModulationState(snapshot).routes[0];
+                return route?.amount === amount && route?.enabled === enabled;
+            },
+        );
+    };
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await seedRoute({ amount: 0.4, enabled: true });
+        await waitForFocusedOscillatorArtwork("A");
+        await installShadingProbe();
+
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        await waitForReactFrames(page, 4);
+        await captureBaseline();
+
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await waitForShading("diff > 500");
+        const mappedDiff = await shadingDiff();
+
+        // The graphic follows the route live: a larger amount widens the
+        // section; 0% and bypass clear it without changing the armed source.
+        await seedRoute({ amount: 0.8, enabled: true });
+        await waitForShading(`diff > ${mappedDiff}`);
+        await seedRoute({ amount: 0.4, enabled: true });
+        await waitForShading(`diff > 500 && diff <= ${mappedDiff}`);
+        await seedRoute({ amount: 0, enabled: true });
+        await waitForShading("diff === 0");
+        await seedRoute({ amount: 0.4, enabled: false });
+        await waitForReactFrames(page, 4);
+        assert.equal(await shadingDiff(), 0, "A bypassed route must draw no range.");
+        await seedRoute({ amount: 0.4, enabled: true });
+        await waitForShading("diff > 500");
+
+        // An armed source with no Index route draws nothing.
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        await waitForShading("diff === 0");
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await waitForShading("diff > 500");
+
+        // The range belongs to the FOCUSED oscillator: B has no Index route.
+        await collapseGlobalModRail(page);
+        await page.click('[data-role="mobile-voice-tab-b"]');
+        await waitForFocusedOscillatorArtwork("B");
+        await captureBaseline();
+        await waitForReactFrames(page, 4);
+        assert.equal(
+            await shadingDiff(),
+            0,
+            "A source routed only to oscillator A must not shade oscillator B.",
+        );
+
+        // Returning to A re-shades from the same armed route.
+        await page.click('[data-role="mobile-voice-tab-a"]');
+        await waitForFocusedOscillatorArtwork("A");
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        await waitForReactFrames(page, 4);
+        await captureBaseline();
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await waitForShading("diff > 500");
+    } finally {
+        await page.close();
+    }
+});
+
+test("the instrument is never text-selectable; only real text entry opts back in", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await expandGlobalModRail(page);
+
+        // Representative labels across the bar, Voice, and FX surfaces.
+        const surfaces = [
+            '[data-role="rack-mod-source-mseg-1"]',
+            '[data-role="mobile-global-mod-rail-route-count"]',
+            '[data-role="mobile-global-mod-rail-auto-toggle"]',
+            '[data-role="mobile-voice-editor"]',
+        ];
+        for (const selector of surfaces) {
+            assert.equal(
+                await page.locator(selector).first().evaluate((element) => getComputedStyle(element).userSelect),
+                "none",
+                `${selector} must not be text-selectable.`,
+            );
+        }
+
+        // Behavioral proof on the bar: a real double-tap lands on the grip
+        // (it owns the collapsed rail's pointer surface) and selects nothing.
+        await collapseGlobalModRail(page);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').dblclick();
+        assert.equal(
+            await page.evaluate(() => window.getSelection()?.toString() ?? ""),
+            "",
+            "Double-tapping the collapsed bar must select no text.",
+        );
+
+        // The taps legitimately open the quick sheet (T13), and the drawer
+        // covers the screen bottom by design — dismiss it before navigating.
+        await page.locator('[data-role="quick-source-sheet-close"]').click();
+        await page.locator('[data-role="quick-source-sheet"]').waitFor({ state: "detached" });
+
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        const rackList = page.locator('[data-role="rack-module-list"]');
+        await rackList.waitFor();
+        assert.equal(
+            await rackList.evaluate((element) => getComputedStyle(element).userSelect),
+            "none",
+            "The FX rack must not be text-selectable.",
+        );
+
+        // Real text entry stays selectable: exact-value fields keep their caret.
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        const anyInput = page.locator('[data-role="mobile-workspace-panel-mod"] input[type="text"]').first();
+        await anyInput.waitFor();
+        assert.equal(
+            await anyInput.evaluate((element) => getComputedStyle(element).userSelect),
+            "text",
+            "Text-entry fields must keep normal selection.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T13: the quick sheet opens from the bar over Voice/FX, resizes, dismisses, and hands off to the full editor", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const sheet = page.locator('[data-role="quick-source-sheet"]');
+    const dragGripBy = async (deltaY) => {
+        const grip = page.locator('[data-role="quick-source-sheet-grip"]');
+        const box = await grip.boundingBox();
+        assert.ok(box);
+        const start = { x: box.x + (box.width / 2), y: box.y + (box.height / 2) };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x, start.y + (deltaY / 2), { steps: 4 });
+        await page.mouse.move(start.x, start.y + deltaY, { steps: 4 });
+        await page.mouse.up();
+    };
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await page.waitForTimeout(240);
+
+        // Collapsed bar: tapping the active-source icon opens the quick sheet
+        // and the drawer does NOT expand (the grip owns expansion).
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        await sheet.waitFor();
+        assert.equal(await sheet.getAttribute("data-source-kind"), "mseg");
+        assert.equal(await sheet.getAttribute("data-detent"), "compact");
+        assert.equal(await rail.getAttribute("data-expanded"), "false", "The grip alone owns expansion.");
+
+        // The strip is the shared cell language: a horizontal drag on the Rate
+        // cell edits the MSEG rate document value with the shared HUD.
+        const rateCell = page.locator('[data-role="quick-source-sheet-cell-rate"]');
+        await rateCell.waitFor();
+        const rateBefore = Number(await rateCell.getAttribute("aria-valuenow"));
+        const cellBox = await rateCell.boundingBox();
+        assert.ok(cellBox);
+        await page.mouse.move(cellBox.x + (cellBox.width / 2), cellBox.y + (cellBox.height / 2));
+        await page.mouse.down();
+        await page.mouse.move(cellBox.x + (cellBox.width / 2) + 12, cellBox.y + (cellBox.height / 2), { steps: 2 });
+        await page.mouse.move(cellBox.x + (cellBox.width / 2) + 60, cellBox.y + (cellBox.height / 2), { steps: 4 });
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-hud"]').getAttribute("data-hud-axis"),
+            "base",
+            "The strip's horizontal axis edits the base value under the shared HUD.",
+        );
+        await page.mouse.up();
+        // The rate is an engine parameter: the edit must reach the runtime.
+        await waitForHarnessSnapshot(
+            page,
+            "quick-sheet rate edit",
+            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "mseg1Rate" && Number(value) > rateBefore
+            )),
+        );
+
+        // Upward grab-rail drag snaps to the half detent.
+        await dragGripBy(-170);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-source-sheet"]')?.getAttribute("data-detent") === "half"
+        ));
+
+        // Dragging all the way up transitions into the REAL full-screen MSEG
+        // editor and the sheet is gone.
+        await dragGripBy(-400);
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
+        assert.equal(await sheet.count(), 0, "The full editor replaces the sheet — never a near-full duplicate.");
+        await page.click('[data-role="mseg-editor-done"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
+
+        // Reopen; the explicit Full editor button is the discoverable route.
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        await sheet.waitFor();
+        await page.click('[data-role="quick-source-sheet-full-editor"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
+        await page.click('[data-role="mseg-editor-done"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
+
+        // Reopen; a downward drag past the threshold dismisses, revealing the
+        // unchanged Voice context.
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        await sheet.waitFor();
+        await dragGripBy(200);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-source-sheet"]') === null
+        ));
+        assert.equal(await page.locator('[data-role="mobile-voice-editor"]').count(), 1);
+
+    } finally {
+        await page.close();
+    }
+});
+
+test("T13: the drawer's selected-source tap opens the sheet; the Mod page keeps full-editor navigation", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const sheet = page.locator('[data-role="quick-source-sheet"]');
+    const tapChip = async (selector) => {
+        // A plain second tap on the just-armed chip: dispatched directly so
+        // Playwright's actionability retries cannot race the drawer collapse
+        // that the tap itself triggers.
+        await page.locator(selector).first().evaluate((element) => {
+            const fire = (type, buttons) => element.dispatchEvent(new PointerEvent(type, {
+                bubbles: true,
+                pointerId: 91,
+                pointerType: "touch",
+                isPrimary: true,
+                button: 0,
+                buttons,
+                clientX: element.getBoundingClientRect().left + 10,
+                clientY: element.getBoundingClientRect().top + 10,
+            }));
+            fire("pointerdown", 1);
+            fire("pointerup", 0);
+        });
+    };
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+
+        // Expanded drawer: tapping the already-selected source opens the sheet
+        // for it (an env source shows the four envelope cells).
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        await waitForReactFrames(page, 3);
+        await tapChip('[data-role="rack-mod-source-env-1"]');
+        await sheet.waitFor();
+        assert.equal(await sheet.getAttribute("data-source-kind"), "env");
+        assert.equal(await page.locator('[data-role="quick-source-sheet-cell-attack"]').count(), 1);
+        assert.equal(await page.locator('[data-role="quick-source-sheet-cell-release"]').count(), 1);
+        await page.locator('[data-role="quick-source-sheet-close"]').click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-source-sheet"]') === null
+        ));
+
+        // On the Mod page the same tap keeps the existing full-editor
+        // navigation; the sheet never covers the Source panel.
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        await waitForReactFrames(page, 3);
+        await tapChip('[data-role="rack-mod-source-env-1"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mod-source-editor"]')?.getAttribute("data-source-kind") === "env"
+        ));
+        assert.equal(await sheet.count(), 0, "The quick sheet belongs to Voice/FX only.");
+    } finally {
+        await page.close();
+    }
+});
+test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-sheet cells", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+    const menu = page.locator('[data-role="rack-parameter-menu"]');
+    const longPress = async (locator) => {
+        const box = await locator.boundingBox();
+        assert.ok(box);
+        await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+        await page.mouse.down();
+        await menu.waitFor({ state: "visible", timeout: 10000 });
+        await page.mouse.up();
+    };
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        const cell = page.locator('[data-role="mobile-voice-cell-framePosition"]');
+        await cell.waitFor();
+
+        // Movement past slop must NEVER open the menu (it is a drag).
+        {
+            const box = await cell.boundingBox();
+            await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+            await page.mouse.down();
+            await page.mouse.move(box.x + (box.width / 2) + 18, box.y + (box.height / 2), { steps: 3 });
+            await page.waitForTimeout(700);
+            assert.equal(await menu.count(), 0, "Movement must cancel the long press.");
+            await page.mouse.up();
+        }
+
+        // A stationary long press opens the menu for the pressed cell.
+        await longPress(cell);
+        assert.equal(await menu.getAttribute("data-endpoint-id"), "framePosition");
+
+        // Edit values…: typed unit-aware entry commits through the binding
+        // (the cell readout renders the committed value).
+        await page.click('[data-role="rack-parameter-menu-item"][data-action="edit-values"]');
+        const baseInput = page.locator('[data-role="rack-base-value-input"]');
+        await baseInput.waitFor();
+        await baseInput.fill("62%");
+        await page.click('[data-role="rack-value-sheet-apply"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-cell-framePosition"]')?.textContent?.includes("62%")
+        ));
+
+        // Reset base to default restores the canonical initial value.
+        await longPress(cell);
+        await page.click('[data-role="rack-parameter-menu-item"][data-action="reset-base"]');
+        await page.waitForFunction(() => {
+            const text = document.querySelector('[data-role="mobile-voice-cell-framePosition"]')?.textContent ?? "";
+            return !text.includes("62%");
+        });
+
+        // Quick-sheet cells share the same menu. The MSEG Rate cell is a
+        // stored-document value with no canonical default: reset is hidden,
+        // and typed entry reaches the runtime.
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        const rateCell = page.locator('[data-role="quick-source-sheet-cell-rate"]');
+        await rateCell.waitFor();
+        await longPress(rateCell);
+        assert.equal(
+            await page.locator('[data-role="rack-parameter-menu-item"][data-action="reset-base"]').count(),
+            0,
+            "A document-owned cell with no canonical default must not offer reset.",
+        );
+        await page.click('[data-role="rack-parameter-menu-item"][data-action="edit-values"]');
+        await baseInput.waitFor();
+        await baseInput.fill("500 ms");
+        await page.click('[data-role="rack-value-sheet-apply"]');
+        await waitForHarnessSnapshot(
+            page,
+            "quick-sheet menu rate entry",
+            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "mseg1Rate" && Math.abs(Number(value) - 0.5) < 0.001
+            )),
+        );
+        await page.locator('[data-role="quick-source-sheet-close"]').click();
+
+        // Voice FILTER knobs long-press into the same menu (the shipped code
+        // swallowed this callback with a no-op). The filter boots Off with
+        // pointer-events disabled, so power it on via its Mode chip first.
+        await page.locator('[data-role="filter-mode-chip"]').click();
+        const filterKnob = page.locator('[data-role="voice-filter-knob-filterCutoff"]');
+        await filterKnob.scrollIntoViewIfNeeded();
+        await longPress(filterKnob);
+        assert.equal(await menu.getAttribute("data-endpoint-id"), "filterCutoff");
+        await page.locator('[data-role="rack-parameter-menu-layer"]').click({ position: { x: 4, y: 4 } });
+        await menu.waitFor({ state: "detached" });
+
+        // The MSEG editor modal's Time slider long-presses into the menu too.
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        await page.locator('[data-role="quick-source-sheet"]').waitFor();
+        await page.click('[data-role="quick-source-sheet-full-editor"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
+        // The floating Mod rail deliberately stays live ABOVE the editor
+        // (T11) and its persisted dock can cover parts of the controls row:
+        // press a point of the Time label the rail does not intercept.
+        const timePress = await page.evaluate(() => {
+            const label = document.querySelector(".mseg-editor-time");
+            if (!label) {
+                throw new Error("Time slider missing.");
+            }
+            const rect = label.getBoundingClientRect();
+            for (const fx of [0.5, 0.3, 0.7, 0.15, 0.85]) {
+                for (const fy of [0.5, 0.3, 0.75]) {
+                    const x = rect.left + (rect.width * fx);
+                    const y = rect.top + (rect.height * fy);
+                    const hit = document.elementFromPoint(x, y);
+                    if (hit && label.contains(hit)) {
+                        return { x, y };
+                    }
+                }
+            }
+            throw new Error("The Time slider is fully covered by the rail.");
+        });
+        await page.mouse.move(timePress.x, timePress.y);
+        await page.mouse.down();
+        await menu.waitFor({ state: "visible", timeout: 10000 });
+        await page.mouse.up();
+        assert.equal(await menu.getAttribute("data-endpoint-id"), "mseg1Rate");
+    } finally {
+        await page.close();
+    }
+});
+
+test("T20: desktop knobs and number fields long-press into the parameter menu", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 1280, height: 900 }),
+    });
+    const menu = page.locator('[data-role="rack-parameter-menu"]');
+    const longPress = async (locator) => {
+        const box = await locator.boundingBox();
+        assert.ok(box);
+        await page.mouse.move(box.x + (box.width / 2), box.y + (box.height / 2));
+        await page.mouse.down();
+        await menu.waitFor({ state: "visible", timeout: 10000 });
+        await page.mouse.up();
+    };
+
+    try {
+        // Desktop oscillator performance knobs (previously hardcoded off).
+        const semiKnob = page.locator('[data-role="oscillator-semitone"]');
+        await semiKnob.waitFor();
+        await semiKnob.scrollIntoViewIfNeeded();
+        await longPress(semiKnob);
+        assert.equal(
+            await page.locator('[data-role="rack-parameter-menu-item"][data-action="reset-base"]').count(),
+            1,
+            "Engine knobs carry a canonical default and must offer reset.",
+        );
+        await page.locator('[data-role="rack-parameter-menu-layer"]').click({ position: { x: 4, y: 4 } });
+        await menu.waitFor({ state: "detached" });
+
+        // Number fields self-serve the menu through the shared context:
+        // the Warp amount Nexus field, and a unison Precision field behind
+        // the Voice controls mode.
+        const warpField = page.locator('[data-role="warp-amount-field"]');
+        await warpField.scrollIntoViewIfNeeded();
+        await longPress(warpField);
+        await page.locator('[data-role="rack-parameter-menu-layer"]').click({ position: { x: 4, y: 4 } });
+        await menu.waitFor({ state: "detached" });
+
+        await page.click('[data-role="keyboard-control-mode-voice"]');
+        const detuneInput = page.locator('input[aria-label="Unison detune"]');
+        await detuneInput.scrollIntoViewIfNeeded();
+        await longPress(detuneInput);
+    } finally {
+        await page.close();
+    }
+});
+
+test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, the macro bar writes", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+
+        // MSEG sheet: dragging a point on the sheet's surface edits the
+        // stored shape (the same handlers as the full editor).
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        const surface = page.locator('[data-role="quick-sheet-mseg-surface"]');
+        await surface.waitFor();
+        const before = readStoredMsegShape(await getHarnessSnapshot(page), 0);
+        const box = await surface.boundingBox();
+        assert.ok(box);
+        // The default shape is two endpoints (0,0)->(1,1): drag the end
+        // point DOWNWARD (it sits at the value ceiling) so the edit lands.
+        const handle = surface.locator("circle").nth(1);
+        const handleBox = await handle.boundingBox();
+        assert.ok(handleBox, "The sheet surface must render draggable point handles.");
+        const start = { x: handleBox.x + (handleBox.width / 2), y: handleBox.y + (handleBox.height / 2) };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x, start.y + 40, { steps: 4 });
+        await page.mouse.up();
+        await page.waitForFunction((previous) => {
+            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            const raw = snapshot.storedStateValues?.["modulation.v6"] ?? snapshot.storedState?.["modulation.v6"];
+            return typeof raw === "string" && raw !== previous;
+        }, JSON.stringify(before) === "null" ? "" : undefined, { timeout: 5000 }).catch(() => null);
+        const after = readStoredMsegShape(await getHarnessSnapshot(page), 0);
+        assert.notDeepEqual(after, before, "Dragging a sheet point must edit the stored MSEG shape.");
+        await page.locator('[data-role="quick-source-sheet-close"]').click();
+
+        // Envelope sheet: the graphic is the REAL draggable ADSR editor.
+        await expandGlobalModRail(page);
+        await page.locator('[data-role="rack-mod-source-env-1"]').click();
+        await collapseGlobalModRail(page);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        await page.locator('[data-role="quick-source-sheet"] [data-role="adsr-editor-surface"]').waitFor();
+        await page.locator('[data-role="quick-source-sheet-close"]').click();
+
+        // Macro sheet: the value bar is directly draggable and writes the
+        // macro's base value.
+        await expandGlobalModRail(page);
+        await page.locator('[data-role="rack-mod-source-macro-1"]').click();
+        await collapseGlobalModRail(page);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+        const bar = page.locator('[data-role="quick-source-sheet-macro"]');
+        await bar.waitFor();
+        const barBox = await bar.boundingBox();
+        assert.ok(barBox);
+        await page.mouse.move(barBox.x + (barBox.width * 0.2), barBox.y + (barBox.height / 2));
+        await page.mouse.down();
+        await page.mouse.move(barBox.x + (barBox.width * 0.8), barBox.y + (barBox.height / 2), { steps: 5 });
+        await page.mouse.up();
+        await waitForHarnessSnapshot(
+            page,
+            "macro bar drag",
+            (snapshot) => snapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "macro1" && Number(value) > 0.7
+            )),
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T21: a drag that dwell-navigates FX to Voice keeps eligibility and capture painting", async () => {
+    // The drag machinery already captures cross-page targets; this pins the
+    // PAINT: the mapping flag on the surface must survive React re-rendering
+    // the surface's own attributes on the page switch.
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await expandGlobalModRail(page);
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const sourceBox = await source.boundingBox();
+        assert.ok(sourceBox);
+        await page.mouse.move(sourceBox.x + (sourceBox.width / 2), sourceBox.y + (sourceBox.height / 2));
+        await page.mouse.down();
+        await page.mouse.move(196, 300, { steps: 4 });
+
+        const voiceTab = page.locator('[data-role="mobile-workspace-tab-voice"]');
+        const voiceBox = await voiceTab.boundingBox();
+        assert.ok(voiceBox);
+        await page.mouse.move(voiceBox.x + (voiceBox.width / 2), voiceBox.y + (voiceBox.height / 2), { steps: 3 });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-workspace-tab-voice"]')?.getAttribute("aria-selected") === "true"
+        ));
+
+        // Hover the Voice graph (the compact page's wavetable target):
+        // capture must PAINT, not just latch.
+        const card = page.locator('[data-role="mobile-voice-editor"] [data-modulation-target-kind]').first();
+        const cardBox = await card.boundingBox();
+        assert.ok(cardBox);
+        await page.mouse.move(cardBox.x + (cardBox.width / 2), cardBox.y + (cardBox.height / 2), { steps: 6 });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-editor"] [data-modulation-target-kind]')
+                ?.classList.contains("is-mod-hover")
+        ));
+        const capturedShadow = await card.evaluate((element) => getComputedStyle(element).boxShadow);
+        assert.notEqual(capturedShadow, "none", "The captured Voice target must paint after a cross-page drag.");
+
+        // Moving off to a non-target spot restores the THIN eligibility
+        // outline (still not "none": the surface stays in mapping mode).
+        await page.mouse.move(60, cardBox.y + cardBox.height + 40, { steps: 4 });
+        await page.waitForTimeout(250);
+        const eligibleShadow = await card.evaluate((element) => getComputedStyle(element).boxShadow);
+        assert.notEqual(eligibleShadow, "none", "Eligibility must stay painted across the page switch.");
+        await page.mouse.up();
     } finally {
         await page.close();
     }

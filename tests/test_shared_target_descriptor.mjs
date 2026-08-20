@@ -10,6 +10,7 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const catalogPromise = loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
 const rackCatalogPromise = loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
+const modulationTargetsPromise = loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
 
 test("modulation-source assets deliberately contain no separate LFO family", async () => {
     const manifest = JSON.parse(await readFile(
@@ -58,14 +59,23 @@ const EXPECTED_VOICE_BINDINGS = {
 test("the catalog is the complete eight-effect DSP inventory plus the voice surface", async () => {
     const catalog = await catalogPromise;
     const rackCatalog = await rackCatalogPromise;
+    const modulationTargets = await modulationTargetsPromise;
     const all = catalog.allTargetDescriptors();
     const rackParameters = rackCatalog.allRackParameterDescriptors();
     const rackTargets = all.filter((descriptor) => descriptor.workspace === "effects");
     const voiceTargets = all.filter((descriptor) => descriptor.workspace === "voice");
+    const describedVoiceModulationKinds = voiceTargets.flatMap((descriptor) => (
+        descriptor.modulationTargetKind === null ? [] : [descriptor.modulationTargetKind]
+    ));
+    const canonicalVoiceModulationKinds = modulationTargets.VOICE_MODULATION_TARGET_IDENTITIES
+        .map((identity) => identity.kind);
 
     assert.equal(rackCatalog.RACK_EFFECT_DESCRIPTORS.length, 8);
     assert.equal(rackTargets.length, rackParameters.length);
-    assert.equal(voiceTargets.length, Object.keys(EXPECTED_VOICE_BINDINGS).length);
+    assert.deepEqual(
+        describedVoiceModulationKinds.toSorted(),
+        canonicalVoiceModulationKinds.toSorted(),
+    );
     assert.deepEqual(
         rackTargets.map((descriptor) => descriptor.targetId),
         rackParameters.map((parameter) => `${parameter.effectId}.${parameter.endpointID}`),
@@ -119,17 +129,20 @@ test("all bound endpoint conversions roundtrip across the normalized domain", as
 
 test("voice bindings retain their shipped endpoint and articulation contract", async () => {
     const catalog = await catalogPromise;
-    for (const descriptor of catalog.allTargetDescriptors().filter((candidate) => candidate.workspace === "voice")) {
-        const expected = EXPECTED_VOICE_BINDINGS[descriptor.targetId];
-        assert.notEqual(expected, undefined, descriptor.targetId);
+    const descriptorById = new Map(
+        catalog.allTargetDescriptors().map((descriptor) => [descriptor.targetId, descriptor]),
+    );
+    for (const [targetId, expected] of Object.entries(EXPECTED_VOICE_BINDINGS)) {
+        const descriptor = descriptorById.get(targetId);
+        assert.notEqual(descriptor, undefined, targetId);
         const [tag, detail, articulationParameterId] = expected;
-        assert.equal(descriptor.binding._tag, tag, descriptor.targetId);
+        assert.equal(descriptor.binding._tag, tag, targetId);
         assert.equal(
             descriptor.binding._tag === "endpoint" ? descriptor.binding.endpointId : descriptor.binding.reason,
             detail,
-            descriptor.targetId,
+            targetId,
         );
-        assert.equal(descriptor.articulationParameterId, articulationParameterId, descriptor.targetId);
+        assert.equal(descriptor.articulationParameterId, articulationParameterId, targetId);
     }
 });
 

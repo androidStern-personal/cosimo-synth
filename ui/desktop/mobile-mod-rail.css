@@ -622,7 +622,7 @@
         border-radius: 999px;
     }
 
-    .cosimo-surface.is-mod-source-mapping .rack-editor-controls > :not([data-modulation-target-kind]) {
+    .cosimo-surface[data-mod-source-mapping] .rack-editor-controls > :not([data-modulation-target-kind]) {
         opacity: 0.42;
     }
 }
@@ -631,5 +631,23 @@
     .mobile-global-mod-rail,
     .mobile-global-mod-rail-drawer {
         transition-duration: 1ms;
+    }
+}
+
+/* ADR-025 row 15: the mapping count briefly pulses in the confirmed route's
+   source color when a creation is authoritatively confirmed. */
+@keyframes mobile-mod-rail-count-pulse {
+    0% {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--source-color) 55%, transparent);
+        background: color-mix(in srgb, var(--source-color) 45%, transparent);
+    }
+    100% {
+        box-shadow: 0 0 0 0 transparent;
+    }
+}
+
+@media (max-width: 639px) {
+    .mobile-global-mod-rail-route-count[data-count-pulsing] {
+        animation: mobile-mod-rail-count-pulse 650ms ease-out;
     }
 }

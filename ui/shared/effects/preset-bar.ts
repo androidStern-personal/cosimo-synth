@@ -547,6 +547,7 @@ const PRESET_BAR_CSS = /* css */ `
     font-family: inherit;
     color: var(--foreground, #eff7ee);
   }
+  .dialog[hidden] { display: none; }
 
   .dialog h3 {
     font-size: 13px;
@@ -806,13 +807,21 @@ const PRESET_BAR_HTML = /* html */ `
   </div>
 
   <div class="dialog-overlay" data-el="dialog-overlay">
-    <div class="dialog">
+    <div class="dialog" data-el="save-dialog">
       <h3 data-el="dialog-title">Save Preset</h3>
       <label for="cpb-save-name">Preset Name</label>
       <input type="text" id="cpb-save-name" data-el="dialog-input" value="">
       <div class="dialog-actions">
         <button data-action="dialog-cancel">Cancel</button>
         <button class="primary" data-action="dialog-confirm" data-el="dialog-confirm">Save</button>
+      </div>
+    </div>
+    <div class="dialog" data-el="sound-replacement-dialog" hidden>
+      <h3>Unsaved Changes</h3>
+      <div class="dialog-actions">
+        <button data-action="sound-replacement-cancel">Cancel</button>
+        <button data-action="sound-replacement-discard">Discard and Init</button>
+        <button class="primary" data-action="sound-replacement-save">Save and Init</button>
       </div>
     </div>
   </div>
@@ -825,15 +834,19 @@ const PRESET_BAR_HTML = /* html */ `
 const ELEMENT_NAME = "cosimo-preset-bar";
 
 class PresetBar extends HTMLElement {
+    static readonly observedAttributes = ["compact-synth"];
+
     private _controller: StandaloneEffectPresetController | null = null;
     private _unsubscribe: (() => void) | null = null;
     private _state: StandaloneEffectPresetState | null = null;
     private _mutations: ReturnType<StandaloneEffectPresetController["getMutations"]> | null = null;
+    private _synthMutations: ReturnType<StandaloneEffectPresetController["getSynthMutations"]> = null;
 
     private _flyoutOpen = false;
     private _ctxTarget: StandaloneEffectPresetListItem | null = null;
     private _saveDialogMode: SaveDialogMode = "new";
     private _saveDialogPresetKey: string | null = null;
+    private _dialogContinuesSoundReplacement = false;
 
     // Cached DOM refs
     private _els!: Record<string, HTMLElement>;
@@ -890,10 +903,14 @@ class PresetBar extends HTMLElement {
 
         this._controller = next;
         this._mutations = null;
+        this._synthMutations = null;
         this._state = null;
 
         if (next) {
             this._mutations = next.getMutations();
+            this._synthMutations = typeof next.getSynthMutations === "function"
+                ? next.getSynthMutations()
+                : null;
             this._unsubscribe = next.subscribe((state) => this._onState(state));
             this._onState(next.getState());
         }
@@ -909,6 +926,10 @@ class PresetBar extends HTMLElement {
         this._closeFlyout();
         this._closeCtxMenu();
         this._closeDialog();
+    }
+
+    attributeChangedCallback() {
+        this._syncInitMenuRow();
     }
 
     // ── DOM cache ────────────────────────────────────────
@@ -1048,8 +1069,12 @@ class PresetBar extends HTMLElement {
                 this._closeFlyout();
                 this._doPaste();
                 break;
+            case "init": this._doInit(); break;
             case "dialog-cancel": this._closeDialog(); break;
             case "dialog-confirm": this._confirmDialog(); break;
+            case "sound-replacement-cancel": this._cancelSoundReplacement(); break;
+            case "sound-replacement-discard": this._discardSoundReplacement(); break;
+            case "sound-replacement-save": this._saveSoundReplacement(); break;
             case "shell-back":
                 this.dispatchEvent(new CustomEvent("cosimo-shell-back", { bubbles: true, composed: true }));
                 break;
@@ -1079,6 +1104,29 @@ class PresetBar extends HTMLElement {
         this._shellMenuOpen = false;
         this._els["shell-menu"].classList.remove("open");
         this._els["shell-more"].setAttribute("aria-expanded", "false");
+    }
+
+    private _syncInitMenuRow() {
+        const shellMenu = this._els["shell-menu"];
+        const existingRow = shellMenu.querySelector('[data-action="init"]');
+        const shouldShow = this.hasAttribute("compact-synth") && this._state?.supportsInit === true;
+
+        if (!shouldShow) {
+            existingRow?.remove();
+            return;
+        }
+
+        if (existingRow) {
+            return;
+        }
+
+        const row = document.createElement("button");
+        row.className = "shell-menu-row";
+        row.setAttribute("role", "menuitem");
+        row.dataset.action = "init";
+        row.textContent = "Init";
+        const nextRow = shellMenu.querySelector('[data-action="next"]');
+        shellMenu.insertBefore(row, nextRow?.nextSibling ?? shellMenu.firstChild);
     }
 
     /** Whether universal Back has somewhere to go (compact synth shell only). */
@@ -1149,14 +1197,26 @@ class PresetBar extends HTMLElement {
 
     private _applyPreset(presetKey: string) {
         const result = this._mutations?.applyPreset(presetKey);
-        if (result && !result.ok) showToast(this._els["toast-host"], result.message, "error");
+        if (result) this._handleSoundReplacementResult(result);
         this._closeFlyout();
         this._closeCtxMenu();
     }
 
+    private _doInit() {
+        const result = this._synthMutations?.initSound();
+        if (result) this._handleSoundReplacementResult(result);
+    }
+
     private _doSave() {
         const state = this._state;
-        if (!state?.activePreset) return;
+        if (!state) return;
+
+        if (!state.activePreset && state.supportsInit && state.dirty) {
+            this._openSaveDialog("new");
+            return;
+        }
+
+        if (!state.activePreset) return;
 
         const activeItem = state.presets.find((p) => p.isActive);
         if (!activeItem?.canOverwrite) return;
@@ -1184,8 +1244,72 @@ class PresetBar extends HTMLElement {
 
     private _doPaste() {
         void this._mutations?.pastePresetFromClipboard({ applyAfterImport: true }).then((result) => {
-            if (result) handleMutationResult(result, this._els["toast-host"]);
+            if (result) this._handleSoundReplacementResult(result, true);
         });
+    }
+
+    private _handleSoundReplacementResult(
+        result: StandaloneEffectPresetMutationResult<unknown>,
+        showSuccess = false,
+    ) {
+        if (result.ok) {
+            if (showSuccess) {
+                showToast(this._els["toast-host"], result.message, "success");
+            }
+            return;
+        }
+
+        if ("actionRequired" in result) {
+            if (result.actionRequired === "confirm-sound-replacement") {
+                this._openSoundReplacementDialog();
+                return;
+            }
+
+            this._openSaveDialog("new", undefined, undefined, true);
+            return;
+        }
+
+        showToast(this._els["toast-host"], result.message, "error");
+    }
+
+    private _openSoundReplacementDialog() {
+        this._dialogContinuesSoundReplacement = true;
+        this._els["save-dialog"].hidden = true;
+        this._els["sound-replacement-dialog"].hidden = false;
+        this._els["dialog-overlay"].classList.add("open");
+    }
+
+    private _cancelSoundReplacement() {
+        const result = this._synthMutations?.cancelSoundReplacement();
+        if (result && !result.ok && !("actionRequired" in result)) {
+            showToast(this._els["toast-host"], result.message, "error");
+        }
+        this._closeDialog(false);
+    }
+
+    private _discardSoundReplacement() {
+        const result = this._synthMutations?.discardAndContinueSoundReplacement();
+        if (result) {
+            this._handleSoundReplacementResult(result);
+        }
+        this._closeDialog(false);
+    }
+
+    private _saveSoundReplacement() {
+        const result = this._synthMutations?.saveAndContinueSoundReplacement();
+        if (!result) {
+            return;
+        }
+
+        if (!result.ok && "actionRequired" in result && result.actionRequired === "save-as-for-sound-replacement") {
+            this._openSaveDialog("new", undefined, undefined, true);
+            return;
+        }
+
+        this._handleSoundReplacementResult(result);
+        if (result.ok) {
+            this._closeDialog(false);
+        }
     }
 
     // ── Flyout ───────────────────────────────────────────
@@ -1250,9 +1374,15 @@ class PresetBar extends HTMLElement {
 
     // ── Save Dialog ──────────────────────────────────────
 
-    private _openSaveDialog(mode: SaveDialogMode, presetKey?: string, prefill?: string) {
+    private _openSaveDialog(
+        mode: SaveDialogMode,
+        presetKey?: string,
+        prefill?: string,
+        continuesSoundReplacement = false,
+    ) {
         this._saveDialogMode = mode;
         this._saveDialogPresetKey = presetKey ?? null;
+        this._dialogContinuesSoundReplacement = continuesSoundReplacement;
 
         const titleEl = this._els["dialog-title"];
         const confirmEl = this._els["dialog-confirm"];
@@ -1276,11 +1406,18 @@ class PresetBar extends HTMLElement {
                 break;
         }
 
+        this._els["sound-replacement-dialog"].hidden = true;
+        this._els["save-dialog"].hidden = false;
         this._els["dialog-overlay"].classList.add("open");
         setTimeout(() => { inputEl.focus(); inputEl.select(); }, 30);
     }
 
-    private _closeDialog() {
+    private _closeDialog(cancelPendingSoundReplacement = true) {
+        if (cancelPendingSoundReplacement && this._dialogContinuesSoundReplacement) {
+            this._synthMutations?.cancelSoundReplacement();
+        }
+
+        this._dialogContinuesSoundReplacement = false;
         this._els["dialog-overlay"].classList.remove("open");
     }
 
@@ -1292,7 +1429,9 @@ class PresetBar extends HTMLElement {
 
         switch (this._saveDialogMode) {
             case "new":
-                result = this._mutations?.saveCurrentAsNewPreset(name);
+                result = this._dialogContinuesSoundReplacement
+                    ? this._synthMutations?.saveCurrentAsNewPresetAndContinueSoundReplacement(name)
+                    : this._mutations?.saveCurrentAsNewPreset(name);
                 break;
             case "rename":
                 if (this._saveDialogPresetKey) {
@@ -1306,14 +1445,27 @@ class PresetBar extends HTMLElement {
                 break;
         }
 
-        if (result) handleMutationResult(result, this._els["toast-host"]);
-        this._closeDialog();
+        if (!result) {
+            return;
+        }
+
+        if (this._dialogContinuesSoundReplacement) {
+            this._handleSoundReplacementResult(result);
+            if (result.ok) {
+                this._closeDialog(false);
+            }
+            return;
+        }
+
+        handleMutationResult(result, this._els["toast-host"]);
+        this._closeDialog(false);
     }
 
     // ── State → DOM ──────────────────────────────────────
 
     private _onState(state: StandaloneEffectPresetState) {
         this._state = state;
+        this._syncInitMenuRow();
         this._updateBar(state);
         if (this._flyoutOpen) this._renderFlyoutList();
 
@@ -1336,9 +1488,10 @@ class PresetBar extends HTMLElement {
         this._els["source-tag"].textContent = activeItem?.source ?? "";
 
         // Action buttons
-        (this._els["btn-save"] as HTMLButtonElement).disabled = !state.dirty || !activeItem?.canOverwrite;
+        const canSave = state.dirty && (activeItem?.canOverwrite === true || (state.supportsInit && !state.activePreset));
+        (this._els["btn-save"] as HTMLButtonElement).disabled = !canSave;
         (this._els["btn-revert"] as HTMLButtonElement).disabled = !state.dirty;
-        (this._els["menu-save"] as HTMLButtonElement).disabled = !state.dirty || !activeItem?.canOverwrite;
+        (this._els["menu-save"] as HTMLButtonElement).disabled = !canSave;
         (this._els["menu-revert"] as HTMLButtonElement).disabled = !state.dirty;
 
         // Sync filter pill active state

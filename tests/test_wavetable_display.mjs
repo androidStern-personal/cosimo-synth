@@ -1154,3 +1154,214 @@ test("compact-cutover options suppress the background fill and slice caption wit
     const defaultStrokes = defaults.commands.filter((command) => command.type === "stroke");
     assert.equal(artStrokes.length, defaultStrokes.length, "the retained artwork is untouched");
 });
+
+/* ------------------------------------------------------------------ */
+/* T02C — Index modulation range overlay                               */
+/* ------------------------------------------------------------------ */
+
+const OVERLAY_ACCENT = [105, 213, 197];
+
+function recordDraw(model, options) {
+    const context = new FakeContext();
+    drawWavetableModel(context, model, undefined, options);
+    return context.commands;
+}
+
+function parseRGBAAlpha(style) {
+    const match = /^rgba\(\d+, \d+, \d+, ([0-9.]+)\)$/.exec(style);
+    assert.ok(match, `expected an rgba() style, received "${style}"`);
+    return Number(match[1]);
+}
+
+/**
+ * Pair the two command streams and split the paint-affecting pairs into
+ * identical and tinted, proving geometry, alpha, and everything that is not
+ * a colour stays byte-identical.
+ */
+function diffDrawStreams(baseline, tinted) {
+    assert.equal(tinted.length, baseline.length, "an overlay may never add or remove draw commands");
+    const differingStrokeIndices = [];
+    const differingFillIndices = [];
+
+    baseline.forEach((command, index) => {
+        const twin = tinted[index];
+        assert.equal(twin.type, command.type, `command ${index} keeps its type`);
+        if (command.type === "stroke") {
+            assert.deepEqual(twin.path, command.path, `stroke ${index} keeps its geometry`);
+            assert.equal(twin.lineWidth, command.lineWidth, `stroke ${index} keeps its line width`);
+            assert.equal(twin.shadowBlur, command.shadowBlur, `stroke ${index} keeps its glow`);
+            if (twin.strokeStyle !== command.strokeStyle) {
+                assert.equal(
+                    parseRGBAAlpha(twin.strokeStyle),
+                    parseRGBAAlpha(command.strokeStyle),
+                    `tinted stroke ${index} keeps its exact alpha`,
+                );
+                differingStrokeIndices.push(index);
+            }
+        } else if (command.type === "fill") {
+            assert.deepEqual(twin.path, command.path, `fill ${index} keeps its geometry`);
+            if (twin.fillStyle !== command.fillStyle) {
+                assert.equal(
+                    parseRGBAAlpha(twin.fillStyle),
+                    parseRGBAAlpha(command.fillStyle),
+                    `tinted fill ${index} keeps its exact transparency`,
+                );
+                differingFillIndices.push(index);
+            }
+        } else {
+            assert.deepEqual(twin, command, `non-paint command ${index} is untouched`);
+        }
+    });
+
+    return { differingStrokeIndices, differingFillIndices };
+}
+
+function strokeCountForSegments(items) {
+    return items.reduce((count, item) => (
+        count + item.segments.filter((segment) => segment.length >= 2).length
+    ), 0);
+}
+
+test("index modulation overlay tints exactly the in-range slice lines and skin", async () => {
+    const { frames } = await loadCurrentBank();
+    const model = buildWavetableRenderModel({
+        frames,
+        position: 0.25,
+        width: 640,
+        height: 320,
+    });
+    const lowPosition = 0.25;
+    const highPosition = 0.75;
+    const lowIndex = createFrameState(model.frameCount, lowPosition).frameIndex;
+    const highIndex = createFrameState(model.frameCount, highPosition).frameIndex;
+    const epsilon = 1e-6;
+
+    const baseline = recordDraw(model, {});
+    const tinted = recordDraw(model, {
+        modulationRange: { lowPosition, highPosition, color: OVERLAY_ACCENT },
+    });
+    const { differingStrokeIndices, differingFillIndices } = diffDrawStreams(baseline, tinted);
+
+    const inRange = (frameIndex) => frameIndex >= lowIndex - epsilon && frameIndex <= highIndex + epsilon;
+    const expectedSliceStrokes = strokeCountForSegments(model.surfaceSlices.filter((slice) => inRange(slice.frameIndex)));
+    const expectedContourStrokes = strokeCountForSegments(model.contours.filter((contour) => inRange(contour.frameIndex)));
+    const expectedBandFills = model.surfaceBands.filter((band) => (
+        Math.min(band.frameHi, highIndex) - Math.max(band.frameLo, lowIndex) > epsilon
+    )).length;
+
+    assert.ok(expectedSliceStrokes > 0, "the fixture range must cover interpolated slices");
+    assert.ok(expectedContourStrokes > 0, "the fixture range must cover contour lines");
+    assert.ok(expectedBandFills > 0, "the fixture range must cover surface bands");
+    assert.ok(
+        expectedSliceStrokes + expectedContourStrokes
+            < strokeCountForSegments(model.surfaceSlices) + strokeCountForSegments(model.contours),
+        "the fixture range must also leave lines untouched",
+    );
+    assert.equal(
+        differingStrokeIndices.length,
+        expectedSliceStrokes + expectedContourStrokes,
+        "exactly the in-range slice lines change colour (current slice, ribs, and guides never do)",
+    );
+    assert.equal(
+        differingFillIndices.length,
+        expectedBandFills,
+        "exactly the overlapped skin faces change colour",
+    );
+});
+
+test("index modulation overlay full range tints every line and face; a collapsed edge range marks only the edge slice", async () => {
+    const { frames } = await loadCurrentBank();
+    const model = buildWavetableRenderModel({
+        frames,
+        position: 0.25,
+        width: 640,
+        height: 320,
+    });
+    const baseline = recordDraw(model, {});
+    const epsilon = 1e-6;
+
+    const fullDiff = diffDrawStreams(baseline, recordDraw(model, {
+        modulationRange: { lowPosition: 0, highPosition: 1, color: OVERLAY_ACCENT },
+    }));
+    assert.equal(
+        fullDiff.differingStrokeIndices.length,
+        strokeCountForSegments(model.surfaceSlices) + strokeCountForSegments(model.contours),
+        "a full-range overlay tints every slice line and contour",
+    );
+    assert.equal(
+        fullDiff.differingFillIndices.length,
+        model.surfaceBands.length,
+        "a full-range overlay tints every skin face",
+    );
+
+    const lastIndex = model.frameCount - 1;
+    const collapsedDiff = diffDrawStreams(baseline, recordDraw(model, {
+        modulationRange: { lowPosition: 1, highPosition: 1, color: OVERLAY_ACCENT },
+    }));
+    const expectedEdgeStrokes = strokeCountForSegments([
+        ...model.surfaceSlices.filter((slice) => Math.abs(slice.frameIndex - lastIndex) <= epsilon),
+        ...model.contours.filter((contour) => Math.abs(contour.frameIndex - lastIndex) <= epsilon),
+    ]);
+    assert.ok(expectedEdgeStrokes > 0, "the fixture must draw a line at the last frame");
+    assert.equal(
+        collapsedDiff.differingStrokeIndices.length,
+        expectedEdgeStrokes,
+        "a range fully clipped to the edge marks only the edge slice line",
+    );
+    assert.equal(collapsedDiff.differingFillIndices.length, 0, "a zero-width range tints no skin");
+});
+
+test("a null modulation overlay draws the identical default stream", async () => {
+    const { frames } = await loadCurrentBank();
+    const model = buildWavetableRenderModel({
+        frames,
+        position: 0.25,
+        width: 640,
+        height: 320,
+    });
+
+    assert.deepEqual(
+        recordDraw(model, { modulationRange: null }),
+        recordDraw(model, {}),
+        "a null overlay is byte-identical to no overlay",
+    );
+});
+
+test("canvas display coalesces modulation-range updates and clearing the range restores the exact base paint", () => {
+    const frames = createSimpleFrames([
+        [-1, -0.25, 0.5, 1],
+        [-1, -0.25, 0.5, 1],
+        [-1, -0.25, 0.5, 1],
+    ]);
+    const canvas = new FakeCanvas();
+    const animationFrame = createAnimationFrameHarness();
+    const display = new CanvasWavetableDisplay(canvas, {
+        requestAnimationFrame: animationFrame.requestAnimationFrame,
+        cancelAnimationFrame: animationFrame.cancelAnimationFrame,
+    });
+
+    display.resize(320, 220, 1);
+    display.setFrames(frames);
+    animationFrame.flush();
+    // The fake context keeps shadow state between paints (a real context's
+    // save/restore resets it), so capture the base stream from a second,
+    // state-primed paint that later repaints can match exactly.
+    const primedLength = canvas.context.commands.length;
+    display.setPosition(display.position);
+    animationFrame.flush();
+    const basePaint = canvas.context.commands.slice(primedLength);
+
+    display.setModulationRange({ lowPosition: 0, highPosition: 1, color: OVERLAY_ACCENT });
+    display.setModulationRange({ lowPosition: 0.5, highPosition: 1, color: OVERLAY_ACCENT });
+    assert.equal(animationFrame.pendingCount, 1, "range updates coalesce into one repaint");
+
+    animationFrame.flush();
+    const tintedPaint = canvas.context.commands.slice(primedLength + basePaint.length);
+    assert.equal(tintedPaint.length, basePaint.length);
+    assert.notDeepEqual(tintedPaint, basePaint, "the coalesced repaint shows the overlay");
+
+    display.setModulationRange(null);
+    animationFrame.flush();
+    const clearedPaint = canvas.context.commands.slice(primedLength + basePaint.length + tintedPaint.length);
+    assert.deepEqual(clearedPaint, basePaint, "clearing the range restores the untouched artwork");
+});

@@ -2,29 +2,30 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 
 import type { PatchControlBinding } from "../shared/patch-controls";
 import type { ModulationTargetKind } from "../shared/modulation-targets";
+import { useLongPressParameterMenu } from "../shared/parameter-context-menu";
+import {
+    formatParameterEntry,
+    parseParameterEntry,
+    type ParameterEntrySpec,
+} from "../shared/parameter-value-entry";
 
 const DRAG_START_THRESHOLD_PX = 2;
 
 export type PrecisionNumberFieldProps = {
     ariaLabel: string;
     binding: PatchControlBinding<number>;
-    min: number;
-    max: number;
-    step?: number;
+    entrySpec: ParameterEntrySpec;
+    suffix: string;
     width?: number;
     height?: number;
     variant?: "default" | "compactOverlay" | "inlineDark";
     leadingLabel?: string | null;
     enableWheel?: boolean;
     wheelStep?: number;
-    suffix?: string | null;
     normalizedFromValue?: (bindingValue: number) => number;
     valueFromNormalized?: (normalizedValue: number) => number;
     pixelsPerFullRange?: number;
     fineDragMultiplier?: number;
-    formatDisplay?: (value: number) => string;
-    formatEditingValue?: (value: number) => string;
-    parseText?: (rawText: string) => number | null;
     dataRole?: string;
     modulationTargetKind?: ModulationTargetKind;
 };
@@ -60,38 +61,36 @@ function quantizeToStep(value: number, min: number, max: number, step: number) {
     return clampNumber(Number(quantized.toFixed(8)), min, max);
 }
 
-function defaultFormatEditingValue(value: number) {
-    return String(value);
-}
-
-function defaultParseText(rawText: string) {
-    const numericValue = Number.parseFloat(rawText.trim());
-    return Number.isFinite(numericValue) ? numericValue : null;
-}
-
 export function PrecisionNumberField({
     ariaLabel,
     binding,
-    min,
-    max,
-    step = 0,
+    entrySpec,
+    suffix,
     width = 128,
     height = 40,
     variant = "default",
     leadingLabel = null,
     enableWheel = false,
     wheelStep,
-    suffix = null,
     normalizedFromValue = (value) => value,
     valueFromNormalized = (value) => value,
     pixelsPerFullRange = 180,
     fineDragMultiplier = 0.2,
-    formatDisplay = defaultFormatEditingValue,
-    formatEditingValue = defaultFormatEditingValue,
-    parseText = defaultParseText,
     dataRole,
     modulationTargetKind,
 }: PrecisionNumberFieldProps) {
+    const { min, max, step } = entrySpec;
+    // T20: a stationary long press opens the ADR-017 parameter menu; the
+    // field's own drag cancels it through ordinary movement bubbling.
+    const longPressMenu = useLongPressParameterMenu(useCallback(() => ({
+        controlKey: binding.endpointID,
+        label: ariaLabel,
+        targetKind: modulationTargetKind ?? null,
+        baseSpec: entrySpec,
+        baseValue: binding.value,
+        defaultValue: binding.initialValue ?? null,
+        commitBase: binding.commitValue,
+    }), [ariaLabel, binding.commitValue, binding.endpointID, binding.initialValue, binding.value, entrySpec, modulationTargetKind]));
     const inputRef = useRef<HTMLInputElement | null>(null);
     const fieldRef = useRef<HTMLLabelElement | null>(null);
     const activeDragRef = useRef<ActiveDragState | null>(null);
@@ -102,8 +101,11 @@ export function PrecisionNumberField({
     const isMountedRef = useRef(true);
     const bindingRef = useRef(binding);
     bindingRef.current = binding;
+    const editingSpecRef = useRef(entrySpec);
+    const editingSuffixRef = useRef(suffix);
     const [isEditing, setIsEditing] = useState(false);
     const [draftValue, setDraftValue] = useState("");
+    const [entryError, setEntryError] = useState("");
     const [isWheelCursorHidden, setIsWheelCursorHidden] = useState(false);
     const [optimisticDragValue, setOptimisticDragValue] = useState<OptimisticDragValue | null>(null);
     const optimisticDragValueRef = useRef<OptimisticDragValue | null>(null);
@@ -124,9 +126,18 @@ export function PrecisionNumberField({
     const presentedBindingValue = optimisticDragValue?.endpointID === binding.endpointID
         ? optimisticDragValue.value
         : binding.value;
+    if (!isEditing) {
+        editingSpecRef.current = entrySpec;
+        editingSuffixRef.current = suffix;
+    }
+    const activeEntrySpec = isEditing ? editingSpecRef.current : entrySpec;
     const displayValue = useMemo(() => (
-        isEditing ? draftValue : formatDisplay(presentedBindingValue)
-    ), [draftValue, formatDisplay, isEditing, presentedBindingValue]);
+        isEditing ? draftValue : formatParameterEntry(entrySpec, presentedBindingValue).display
+    ), [draftValue, entrySpec, isEditing, presentedBindingValue]);
+    const specUnit = formatParameterEntry(activeEntrySpec, presentedBindingValue).unit;
+    if (!isEditing && suffix !== specUnit) {
+        throw new RangeError(`Precision field "${ariaLabel}" suffix must match its parameter entry spec.`);
+    }
     const isCompactOverlay = variant === "compactOverlay";
     const isInlineDark = variant === "inlineDark";
     const shouldShowLeadingLabel = isInlineDark && Boolean(leadingLabel);
@@ -174,9 +185,9 @@ export function PrecisionNumberField({
             bindingRef.current.setValue(nextValue);
         });
         if (inputRef.current) {
-            inputRef.current.value = formatDisplay(nextValue);
+            inputRef.current.value = formatParameterEntry(entrySpec, nextValue).display;
         }
-    }, [formatDisplay, step]);
+    }, [entrySpec, step]);
 
     useEffect(() => {
         const pendingValue = optimisticDragValueRef.current;
@@ -203,9 +214,12 @@ export function PrecisionNumberField({
     }, []);
 
     const beginTextEntry = useCallback(() => {
-        updateDraftValue(formatEditingValue(readPresentedBindingValue()));
+        editingSpecRef.current = entrySpec;
+        editingSuffixRef.current = suffix;
+        updateDraftValue(formatParameterEntry(entrySpec, readPresentedBindingValue()).draft);
+        setEntryError("");
         setIsEditing(true);
-    }, [formatEditingValue, readPresentedBindingValue, updateDraftValue]);
+    }, [entrySpec, readPresentedBindingValue, suffix, updateDraftValue]);
 
     const finishDrag = useCallback((pointerId?: number) => {
         const activeDrag = activeDragRef.current;
@@ -330,21 +344,25 @@ export function PrecisionNumberField({
     }, [isEditing]);
 
     const commitTextEntry = (rawText: string) => {
-        const parsedValue = parseText(rawText);
+        const result = parseParameterEntry(editingSpecRef.current, rawText);
+        if (result._tag === "rejected") {
+            setEntryError(result.message);
+            return false;
+        }
+        if (result.commit._tag !== "value") {
+            throw new Error("A precision number field cannot commit a tempo division.");
+        }
         const currentValue = readPresentedBindingValue();
-        const nextValue = quantizeToStep(
-            clampNumber(parsedValue ?? currentValue, min, max),
-            min,
-            max,
-            step,
-        );
+        const nextValue = result.commit.value;
 
-        updateDraftValue(formatEditingValue(nextValue));
+        updateDraftValue(result.echo.draft);
+        setEntryError("");
         if (Math.abs(nextValue - currentValue) <= Math.max(step / 10, 1e-9)) {
-            return;
+            return true;
         }
 
         bindingRef.current.commitValue(nextValue);
+        return true;
     };
 
     const adjustByWheel = useCallback((deltaDirection: number) => {
@@ -398,18 +416,26 @@ export function PrecisionNumberField({
 
     const finishTextEntry = (commit: boolean) => {
         if (!isEditing) {
-            return;
+            return false;
         }
 
         const nextDraftValue = draftValueRef.current;
-        setIsEditing(false);
 
         if (commit) {
-            commitTextEntry(nextDraftValue);
-            return;
+            if (!commitTextEntry(nextDraftValue)) {
+                window.requestAnimationFrame(() => {
+                    inputRef.current?.focus();
+                    inputRef.current?.select();
+                });
+                return false;
+            }
+        } else {
+            updateDraftValue(formatParameterEntry(editingSpecRef.current, readPresentedBindingValue()).draft);
+            setEntryError("");
         }
 
-        updateDraftValue(formatEditingValue(readPresentedBindingValue()));
+        setIsEditing(false);
+        return true;
     };
 
     return (
@@ -417,6 +443,7 @@ export function PrecisionNumberField({
             ref={fieldRef}
             data-role={isInlineDark ? dataRole : undefined}
             data-modulation-target-kind={modulationTargetKind}
+            {...longPressMenu}
             className={isInlineDark
                 ? "inline-flex h-6 min-w-0 items-center gap-1 rounded-[5px] border border-[rgb(var(--cosimo-edge-rgb)/0.34)] bg-[rgb(var(--cosimo-control-rgb)/0.58)] px-1 text-[var(--cosimo-text)] shadow-[var(--cosimo-contact-shadow)]"
                 : "grid gap-1"
@@ -455,7 +482,7 @@ export function PrecisionNumberField({
                             isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize"
                         }`
                         : `synth-readout-text h-full w-full bg-transparent outline-none ${isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${
-                            suffix && !isEditing ? "pr-11" : "pr-4"
+                            isEditing ? "pr-11" : "pr-4"
                         } pl-4`
                         } ${
                             isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize select-none"
@@ -520,9 +547,12 @@ export function PrecisionNumberField({
                         updateDraftValue(event.currentTarget.value);
                     }}
                     onBlur={() => {
-                        const shouldCommit = !skipCommitOnBlurRef.current;
+                        if (skipCommitOnBlurRef.current) {
+                            skipCommitOnBlurRef.current = false;
+                            return;
+                        }
                         skipCommitOnBlurRef.current = false;
-                        finishTextEntry(shouldCommit);
+                        finishTextEntry(true);
                     }}
                     onKeyDown={(event) => {
                         if (!isEditing) {
@@ -535,7 +565,10 @@ export function PrecisionNumberField({
 
                         if (event.key === "Enter") {
                             event.preventDefault();
-                            inputRef.current?.blur();
+                            if (finishTextEntry(true)) {
+                                skipCommitOnBlurRef.current = true;
+                                inputRef.current?.blur();
+                            }
                             return;
                         }
 
@@ -547,11 +580,23 @@ export function PrecisionNumberField({
                         }
                     }}
                 />
-                {suffix && !isEditing ? (
-                    <span className={`synth-readout-text pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${
+                {isEditing ? (
+                    <span
+                        data-role="parameter-entry-unit"
+                        className={`synth-readout-text pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${
                         isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"
-                    }`}>
-                        {suffix}
+                    }`}
+                    >
+                        {editingSuffixRef.current}
+                    </span>
+                ) : null}
+                {entryError ? (
+                    <span
+                        role="alert"
+                        data-role="parameter-entry-error"
+                        className="absolute left-0 top-full z-30 mt-1 min-w-full rounded bg-red-950/95 px-1.5 py-1 text-[9px] leading-tight text-red-100 shadow-lg"
+                    >
+                        {entryError}
                     </span>
                 ) : null}
             </div>

@@ -1,0 +1,110 @@
+/*
+ * T13 quick-editor sheet. Non-modal bottom sheet over the Voice/FX workspace:
+ * below the Mod rail (z 60) and the HUD/toast layer (z 70), above the page.
+ * It is a DRAWER: it slides up from the screen bottom and may cover whatever
+ * sits there (workspace tabs, keyboard) — accepted product behavior
+ * (2026-08-20). The strip row reuses the mobile-voice cell classes verbatim;
+ * only the graphic area re-orients with its aspect ratio.
+ */
+
+@media (max-width: 639px) {
+    .quick-source-sheet {
+        position: fixed;
+        z-index: 55;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: grid;
+        grid-template-rows: auto auto minmax(0, 1fr);
+        overflow: hidden;
+        border-top: 1px solid color-mix(in srgb, var(--quick-sheet-accent) 45%, rgb(255 255 255 / 0.12));
+        border-radius: 16px 16px 0 0;
+        background:
+            linear-gradient(180deg, color-mix(in srgb, var(--quick-sheet-accent) 7%, transparent), transparent 30%),
+            rgb(10 13 15 / 0.97);
+        box-shadow: 0 -14px 42px rgb(0 0 0 / 0.5);
+        transition: height 200ms ease;
+    }
+
+    /* One compact top row: the whole row is the grab rail; the title and
+       the two actions ride it (T13 feedback: chrome must not dwarf the
+       graphic). */
+    .quick-source-sheet-top {
+        display: flex;
+        height: 34px;
+        align-items: center;
+        gap: 8px;
+        padding: 0 10px;
+        cursor: grab;
+        touch-action: none;
+    }
+
+    .quick-source-sheet-top > strong {
+        color: var(--quick-sheet-accent);
+        font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+    }
+
+    .quick-source-sheet-grip-pill {
+        width: 42px;
+        height: 4px;
+        flex: 0 0 auto;
+        margin-inline: auto;
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.28);
+    }
+
+    .quick-source-sheet-top > button {
+        min-height: 26px;
+        padding: 0 8px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        border-radius: 7px;
+        background: rgb(255 255 255 / 0.03);
+        color: rgb(232 236 239 / 0.82);
+        font-size: 10px;
+    }
+
+    .quick-source-sheet-strip {
+        display: grid;
+        min-height: 40px;
+        border-top: 1px solid rgb(255 255 255 / 0.055);
+        border-bottom: 1px solid rgb(255 255 255 / 0.055);
+    }
+
+    .quick-source-sheet-strip .mobile-voice-cell {
+        --mobile-voice-owner-accent: var(--quick-sheet-accent);
+    }
+
+    /* The graphic area is the sheet's dominant region: the REAL editable
+       surfaces mount here edge-to-edge. */
+    .quick-source-sheet-graphic {
+        position: relative;
+        min-height: 0;
+        padding: 4px 8px 6px;
+    }
+
+    .quick-source-sheet-graphic > * {
+        height: 100%;
+        width: 100%;
+    }
+
+    .quick-source-sheet-macro {
+        position: relative;
+        height: 28px;
+        align-self: center;
+        touch-action: none;
+        overflow: hidden;
+        border: 1px solid rgb(255 255 255 / 0.1);
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.04);
+    }
+
+    .quick-source-sheet-macro-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        border-radius: inherit;
+        opacity: 0.8;
+    }
+}

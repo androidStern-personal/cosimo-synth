@@ -2,6 +2,7 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
@@ -10,21 +11,25 @@ import {
 import {
     MODULATION_SOURCE_OPTIONS,
     MODULATION_TARGET_OPTIONS,
-    clampModulationRouteAmount,
     composeModulationAmount,
-    formatModulationAmountEditingValue,
     formatModulationAmountReadout,
     getModulationAmountSliderPosition,
     isRackModulationTarget,
     isVoiceModulationSource,
-    parseModulationAmountEditingValue,
     type GeneratedModulationRouteInput,
     type ModulationRoute,
     type ModulationRouteUpdate,
     type ModulationSourceKind,
     type ModulationTargetKind,
 } from "../shared/modulation";
-import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
+import {
+    useModulationAmountParameterEntrySpec,
+    useModulationRouteAmountBinding,
+} from "../shared/modulation-route-amount";
+import {
+    formatParameterEntry,
+    parseParameterEntry,
+} from "../shared/parameter-value-entry";
 import {
     allRackParameterDescriptors,
     getRackEffectDescriptor,
@@ -42,6 +47,8 @@ type FocusedModulationSource = {
 type MobileModMatrixProps = {
     routes: ModulationRoute[];
     focusedSource?: FocusedModulationSource | null;
+    /** ADR-025 row 15: the just-confirmed route's row pulses in source color. */
+    recentConfirmedRouteId?: string | null;
     onCreateRoute: (route: GeneratedModulationRouteInput) => boolean;
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
@@ -151,8 +158,13 @@ function ScreenHeader({
 
 function RouteAmountEditor({ route }: { route: ModulationRoute }) {
     const amountBinding = useModulationRouteAmountBinding(route);
+    const entrySpec = useModulationAmountParameterEntrySpec(route.targetKind);
     const presentedAmount = amountBinding.value;
-    const [draft, setDraft] = useState(() => formatModulationAmountEditingValue(route.targetKind, route.amount));
+    const focusedRef = useRef(false);
+    const skipCommitOnBlurRef = useRef(false);
+    const [draft, setDraft] = useState(() => formatParameterEntry(entrySpec, route.amount).draft);
+    const [entryError, setEntryError] = useState<string | null>(null);
+    const formattedAmount = formatParameterEntry(entrySpec, presentedAmount);
 
     const publishAmount = useCallback((nextAmount: number) => {
         if (Math.abs(nextAmount - presentedAmount) <= 1e-9) {
@@ -162,24 +174,37 @@ function RouteAmountEditor({ route }: { route: ModulationRoute }) {
     }, [amountBinding, presentedAmount]);
 
     useEffect(() => {
-        setDraft(formatModulationAmountEditingValue(route.targetKind, presentedAmount));
-    }, [presentedAmount, route.targetKind]);
+        if (!focusedRef.current) {
+            setDraft(formatParameterEntry(entrySpec, presentedAmount).draft);
+            setEntryError(null);
+        }
+    }, [entrySpec, presentedAmount]);
 
     const commitDraft = () => {
-        const parsed = parseModulationAmountEditingValue(route.targetKind, draft);
-        if (parsed === null) {
-            setDraft(formatModulationAmountEditingValue(route.targetKind, presentedAmount));
-            return;
+        const result = parseParameterEntry(entrySpec, draft);
+        if (result._tag === "rejected") {
+            setEntryError(result.message);
+            return false;
         }
-        publishAmount(clampModulationRouteAmount(route.targetKind, parsed));
+        if (result.commit._tag !== "value") {
+            throw new Error("A modulation amount entry produced a tempo division.");
+        }
+        setEntryError(null);
+        setDraft(result.echo.draft);
+        publishAmount(result.commit.value);
+        return true;
     };
     const handleKeyDown = (event: ReactKeyboardEvent<HTMLInputElement>) => {
         if (event.key === "Enter") {
             event.preventDefault();
-            commitDraft();
-            event.currentTarget.blur();
+            if (commitDraft()) {
+                skipCommitOnBlurRef.current = true;
+                event.currentTarget.blur();
+            }
         } else if (event.key === "Escape") {
-            setDraft(formatModulationAmountEditingValue(route.targetKind, presentedAmount));
+            setDraft(formattedAmount.draft);
+            setEntryError(null);
+            skipCommitOnBlurRef.current = true;
             event.currentTarget.blur();
         }
     };
@@ -209,12 +234,28 @@ function RouteAmountEditor({ route }: { route: ModulationRoute }) {
                     data-role="mobile-mod-amount-input"
                     aria-label="Exact route amount"
                     value={draft}
-                    onChange={(event) => setDraft(event.currentTarget.value)}
-                    onBlur={commitDraft}
+                    onChange={(event) => {
+                        setDraft(event.currentTarget.value);
+                        setEntryError(null);
+                    }}
+                    onFocus={() => {
+                        focusedRef.current = true;
+                    }}
+                    onBlur={() => {
+                        focusedRef.current = false;
+                        if (skipCommitOnBlurRef.current) {
+                            skipCommitOnBlurRef.current = false;
+                        } else {
+                            commitDraft();
+                        }
+                    }}
                     onKeyDown={handleKeyDown}
                 />
-                <span>{formatModulationAmountReadout(route.targetKind, presentedAmount, route.polarity)}</span>
+                <em data-role="parameter-entry-unit">{formattedAmount.unit}</em>
             </label>
+            {entryError === null ? null : (
+                <span data-role="parameter-entry-error" role="alert">{entryError}</span>
+            )}
         </section>
     );
 }
@@ -222,6 +263,7 @@ function RouteAmountEditor({ route }: { route: ModulationRoute }) {
 export function MobileModMatrix({
     routes,
     focusedSource = null,
+    recentConfirmedRouteId = null,
     onCreateRoute,
     onRemoveRoute,
     onRouteChange,
@@ -542,8 +584,16 @@ export function MobileModMatrix({
                         {displayedRoutes.map(({ route, routeIndex }) => {
                             const source = sourceOptionForRoute(route);
                             const target = targetPresentation(route.targetKind);
+                            const rowFamily = RACK_MODULATION_SOURCE_PAGES[0]?.find(
+                                (candidate) => candidate.sourceKind === route.sourceKind,
+                            );
                             return (
-                                <article key={route.id} className={route.enabled ? "" : "is-bypassed"} data-role="mobile-mod-route-row">
+                                <article
+                                    key={route.id}
+                                    className={`${route.enabled ? "" : "is-bypassed"}${route.id === recentConfirmedRouteId ? " is-just-created" : ""}`}
+                                    data-role="mobile-mod-route-row"
+                                    style={{ "--route-source-accent": rowFamily?.accent ?? "#8e969b" } as CSSProperties}
+                                >
                                     <button
                                         type="button"
                                         className="mobile-mod-route-open"
@@ -554,7 +604,10 @@ export function MobileModMatrix({
                                         <span className="mobile-mod-route-source">{source.label}</span>
                                         <span className="mobile-mod-route-arrow" aria-hidden="true">→</span>
                                         <span className="mobile-mod-route-target"><strong>{target.category}</strong><span>{target.parameter}</span></span>
-                                        <span className="mobile-mod-route-amount">{formatModulationAmountReadout(route.targetKind, route.amount, "unipolar")}</span>
+                                        <span className="mobile-mod-route-amount">{formatModulationAmountReadout(route.targetKind, route.amount, route.polarity)}</span>
+                                        {route.enabled ? null : (
+                                            <span className="mobile-mod-route-bypassed-label" data-role="mobile-mod-route-bypassed">BYPASSED</span>
+                                        )}
                                     </button>
                                     <button
                                         type="button"

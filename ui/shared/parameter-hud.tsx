@@ -10,6 +10,8 @@
 
 import { createContext, type CSSProperties } from "react";
 
+import { hexToRGBColor } from "./theme";
+
 import { ParameterKnobArtwork, type ParameterKnobModRing } from "./parameter-knob-artwork";
 
 /** How long the HUD lingers after a released drag before hiding (ADR-024). */
@@ -24,15 +26,7 @@ export const ParameterHudLayerContext = createContext<Element | null>(null);
 
 /** "#rrggbb" (or "#rgb") to the "R G B" triplet the HUD frame consumes. */
 export function hexToRgbTriplet(hex: string): string {
-    const normalized = hex.trim().replace(/^#/, "");
-    const expanded = normalized.length === 3
-        ? normalized.split("").map((digit) => digit + digit).join("")
-        : normalized;
-    if (!/^[0-9a-fA-F]{6}$/.test(expanded)) {
-        throw new Error(`Expected a hex color, received "${hex}"`);
-    }
-    const value = Number.parseInt(expanded, 16);
-    return `${(value >> 16) & 0xff} ${(value >> 8) & 0xff} ${value & 0xff}`;
+    return hexToRGBColor(hex).join(" ");
 }
 
 export type ParameterHudModel = {

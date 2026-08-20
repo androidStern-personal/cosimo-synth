@@ -16,6 +16,18 @@ let browser;
 const NOTE_A_36_ON = 9_446_500;
 const NOTE_A_36_OFF = 8_397_824;
 
+function buildShortMidi(status, noteNumber, velocity = 0) {
+    return ((status & 0xff) << 16) | ((noteNumber & 0x7f) << 8) | (velocity & 0x7f);
+}
+
+function decodeMidiInputEvents(events) {
+    return events.map(({ value }) => ({
+        status: value >>> 16,
+        note: (value >>> 8) & 0x7f,
+        velocity: value & 0x7f,
+    }));
+}
+
 async function openModulePage() {
     const page = await browser.newPage();
     await page.goto(new URL("tests/helpers/module_test_shell.html", server.baseUrl).toString(), { waitUntil: "load" });
@@ -73,6 +85,15 @@ async function getHarnessSnapshot(page) {
 
         return getSnapshot();
     });
+}
+
+async function installAutoPreviewHarness(page) {
+    await page.clock.install();
+    await page.clock.pauseAt(Date.now() + 1_000);
+    await installHarness(page, "installAutoPreviewSynthHookHarness");
+    await page.waitForFunction(() => (
+        window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().ready === true
+    ));
 }
 
 async function getSurfaceRect(page) {
@@ -933,6 +954,171 @@ test("useSynthKeyboardRouting ignores malformed native CHOC keyboard relay messa
         assert.deepEqual(snapshot.midiInputEvents, []);
         assert.deepEqual(snapshot.keyboardLog.externalMidi, []);
         assert.deepEqual(snapshot.keyboardLog.handledKeys, []);
+    } finally {
+        await page.close();
+    }
+});
+
+test("Auto-preview stays completely silent throughout an intentional held note", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installAutoPreviewHarness(page);
+        await invokeHarness(page, "sendIntentionalNote", 0x90, 64, 100);
+        await invokeHarness(page, "beginParameterGesture");
+        await invokeHarness(page, "setParameterValue", 1_200);
+        await page.clock.runFor(100);
+        await invokeHarness(page, "setParameterValue", 1_300);
+        await invokeHarness(page, "endParameterGesture");
+        await invokeHarness(page, "sendIntentionalNote", 0x80, 64, 0);
+        await page.clock.runFor(1_000);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 64, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 64, 0) },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("an intentional note press immediately releases only the sounding Auto-preview group", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installAutoPreviewHarness(page);
+        await invokeHarness(page, "configureLoopSync");
+        await invokeHarness(page, "beginParameterGesture");
+        await invokeHarness(page, "setParameterValue", 1_200);
+        await page.clock.runFor(100);
+        await invokeHarness(page, "setParameterValue", 1_300);
+        await page.clock.runFor(150);
+        await invokeHarness(page, "sendIntentionalNote", 0x90, 67, 100);
+        await page.clock.runFor(1_000);
+        await invokeHarness(page, "sendIntentionalNote", 0x80, 67, 0);
+        await invokeHarness(page, "endParameterGesture");
+
+        const snapshot = await getHarnessSnapshot(page);
+        const decodedEvents = decodeMidiInputEvents(snapshot.midiInputEvents);
+        assert.deepEqual(decodedEvents, [
+            { status: 0x90, note: 60, velocity: 100 },
+            { status: 0x80, note: 60, velocity: 0 },
+            { status: 0x90, note: 67, velocity: 100 },
+            { status: 0x80, note: 67, velocity: 0 },
+        ]);
+        for (const note of [60, 67]) {
+            assert.equal(
+                decodedEvents.filter((event) => event.status === 0x90 && event.note === note).length,
+                decodedEvents.filter((event) => event.status === 0x80 && event.note === note).length,
+            );
+        }
+    } finally {
+        await page.close();
+    }
+});
+
+test("Auto-preview strikes every pitch from the newest rolled chord and releases them together", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installAutoPreviewHarness(page);
+        await invokeHarness(page, "sendIntentionalNote", 0x90, 60, 100);
+        await invokeHarness(page, "sendIntentionalNote", 0x90, 64, 100);
+        await invokeHarness(page, "sendIntentionalNote", 0x80, 60, 0);
+        await invokeHarness(page, "sendIntentionalNote", 0x90, 67, 100);
+        await invokeHarness(page, "sendIntentionalNote", 0x80, 64, 0);
+        await invokeHarness(page, "sendIntentionalNote", 0x80, 67, 0);
+        await invokeHarness(page, "clearDebugLog");
+
+        await invokeHarness(page, "beginParameterGesture");
+        await invokeHarness(page, "setParameterValue", 1_200);
+        await invokeHarness(page, "endParameterGesture");
+        await page.clock.runFor(1_000);
+
+        const snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(decodeMidiInputEvents(snapshot.midiInputEvents), [
+            { status: 0x90, note: 60, velocity: 100 },
+            { status: 0x90, note: 64, velocity: 100 },
+            { status: 0x90, note: 67, velocity: 100 },
+            { status: 0x80, note: 60, velocity: 0 },
+            { status: 0x80, note: 64, velocity: 0 },
+            { status: 0x80, note: 67, velocity: 0 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("a gesture spanning note release previews only after a later changed edit", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installAutoPreviewHarness(page);
+        await invokeHarness(page, "sendIntentionalNote", 0x90, 64, 100);
+        await invokeHarness(page, "beginParameterGesture");
+        await invokeHarness(page, "setParameterValue", 1_200);
+        await invokeHarness(page, "sendIntentionalNote", 0x80, 64, 0);
+        await page.clock.runFor(1_000);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 64, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 64, 0) },
+        ]);
+
+        await invokeHarness(page, "clearDebugLog");
+        await invokeHarness(page, "setParameterValue", 1_300);
+        await invokeHarness(page, "endParameterGesture");
+        await page.clock.runFor(1_000);
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(decodeMidiInputEvents(snapshot.midiInputEvents), [
+            { status: 0x90, note: 64, velocity: 100 },
+            { status: 0x80, note: 64, velocity: 0 },
+        ]);
+    } finally {
+        await page.close();
+    }
+});
+
+test("the Note-key replay suppresses edits without replacing chord memory", async () => {
+    const page = await openModulePage();
+
+    try {
+        await installAutoPreviewHarness(page);
+        await invokeHarness(page, "sendIntentionalNote", 0x90, 60, 100);
+        await invokeHarness(page, "sendIntentionalNote", 0x90, 64, 100);
+        await invokeHarness(page, "sendIntentionalNote", 0x80, 60, 0);
+        await invokeHarness(page, "sendIntentionalNote", 0x80, 64, 0);
+        await invokeHarness(page, "clearDebugLog");
+
+        await invokeHarness(page, "startNoteKeyAudition");
+        await invokeHarness(page, "beginParameterGesture");
+        await invokeHarness(page, "setParameterValue", 1_200);
+        await invokeHarness(page, "endParameterGesture");
+        await invokeHarness(page, "stopNoteKeyAudition");
+        await page.clock.runFor(1_000);
+
+        let snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(decodeMidiInputEvents(snapshot.midiInputEvents), [
+            { status: 0x90, note: 64, velocity: 100 },
+            { status: 0x80, note: 64, velocity: 0 },
+        ]);
+
+        await invokeHarness(page, "clearDebugLog");
+        await invokeHarness(page, "beginParameterGesture");
+        await invokeHarness(page, "setParameterValue", 1_300);
+        await invokeHarness(page, "endParameterGesture");
+        await page.clock.runFor(1_000);
+
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(decodeMidiInputEvents(snapshot.midiInputEvents), [
+            { status: 0x90, note: 60, velocity: 100 },
+            { status: 0x90, note: 64, velocity: 100 },
+            { status: 0x80, note: 60, velocity: 0 },
+            { status: 0x80, note: 64, velocity: 0 },
+        ]);
     } finally {
         await page.close();
     }

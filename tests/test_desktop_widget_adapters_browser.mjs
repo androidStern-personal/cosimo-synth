@@ -190,14 +190,16 @@ test("NexusNumberField keeps one widget instance and uses passiveUpdate for exte
 
         let snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.createdCount, 1);
+        // ADR-028: the widget operates in the DISPLAYED unit (ms here);
+        // the binding underneath stays in seconds.
         assert.deepEqual(snapshot.options, {
             size: [118, 42],
-            value: 0.25,
+            value: 250,
             min: 0,
-            max: 2,
-            step: 0.001,
+            max: 2000,
+            step: 1,
         });
-        assert.equal(snapshot.decimalPlaces, 3);
+        assert.equal(snapshot.decimalPlaces, 0);
         assert.equal(snapshot.ariaLabel, "Glide Time");
         assert.equal(snapshot.inputStyles.borderRadius, "16px");
         assert.equal(snapshot.hostStyles.cursor, "ns-resize");
@@ -205,14 +207,14 @@ test("NexusNumberField keeps one widget instance and uses passiveUpdate for exte
         await invokeHarness(page, "setBindingValue", 0.75);
         await page.waitForFunction(() => {
             const nextSnapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
-            return Array.isArray(nextSnapshot?.passiveUpdates) && nextSnapshot.passiveUpdates.includes(0.75);
+            return Array.isArray(nextSnapshot?.passiveUpdates) && nextSnapshot.passiveUpdates.includes(750);
         });
         await settleBrowser(page);
 
         snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.createdCount, 1);
         assert.equal(snapshot.destroyCount, 0);
-        assert.deepEqual(snapshot.passiveUpdates, [0.75]);
+        assert.deepEqual(snapshot.passiveUpdates, [750]);
         assert.equal(snapshot.renderCount, 1);
     } finally {
         await page.close();
@@ -226,14 +228,24 @@ test("NexusNumberField clamps widget changes, keeps focus-owned updates local, a
         await installHarness(page, "installNexusNumberFieldHarness");
         await page.waitForFunction(() => window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().createdCount === 1);
 
-        await invokeHarness(page, "emitChange", 3.5);
-        await page.waitForFunction(() => {
-            const snapshot = window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.();
-            return Array.isArray(snapshot?.passiveUpdates) && snapshot.passiveUpdates.includes(2);
-        });
+        await invokeHarness(page, "emitChange", 3500);
+        // Committing 3500 (ms domain) clamps to 2 s. Crossing the ms/s
+        // display threshold re-domains the widget: a fresh instance is
+        // created with the seconds options.
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_MODULE_HARNESS__?.getSnapshot?.().createdCount === 2
+        ));
         await settleBrowser(page);
         let snapshot = await getHarnessSnapshot(page);
+        // The widget speaks display units; the binding write must be SECONDS.
         assert.deepEqual(snapshot.setValueCalls, [2]);
+        assert.deepEqual(snapshot.options, {
+            size: [118, 42],
+            value: 2,
+            min: 0,
+            max: 2,
+            step: 0.001,
+        });
         const passiveUpdatesAfterClamp = [...snapshot.passiveUpdates];
         const renderCountAfterClamp = snapshot.renderCount;
 
@@ -253,7 +265,8 @@ test("NexusNumberField clamps widget changes, keeps focus-owned updates local, a
 
         await invokeHarness(page, "unmount");
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.destroyCount, 1);
+        // One destroy from the ms->s re-domain above, one from unmount.
+        assert.equal(snapshot.destroyCount, 2);
         assert.deepEqual(snapshot.activationLog, ["activate", "begin", "end"]);
     } finally {
         await page.close();

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import runWavetableWorker, {
     WAVETABLE_RUNTIME_STATE_SYNC_SERIAL,
@@ -17,6 +18,7 @@ import {
 } from "../patch_gui/modulation-targets.js";
 
 const samplesPerFrame = 2048;
+const wavetableMipFrameBatchSize = 3;
 const failurePhaseLoadSource = 1;
 const failurePhaseBuildMip = 2;
 const failurePhaseTransferMip = 3;
@@ -103,11 +105,242 @@ function createRuntimeState(overrides = {}) {
     };
 }
 
+test("worker and engine pin the same bridge-safe three-frame wavetable batch size", () => {
+    const workerSource = readFileSync(
+        new URL("../ui/worker/wavetable-worker.ts", import.meta.url),
+        "utf8",
+    );
+    const engineSource = readFileSync(
+        new URL("../cmajor/FixedFrameOscillator.cmajor", import.meta.url),
+        "utf8",
+    );
+    const workerBatchSize = workerSource.match(
+        /export const WAVETABLE_MIP_FRAME_BATCH_SIZE = (\d+);/,
+    );
+    const engineBatchSize = engineSource.match(
+        /let wavetableMipFrameBatchSize = (\d+);/,
+    );
+
+    assert.ok(workerBatchSize, "worker exposes its protocol batch size");
+    assert.ok(engineBatchSize, "engine exposes its protocol batch size");
+    assert.equal(Number(workerBatchSize[1]), wavetableMipFrameBatchSize);
+    assert.equal(Number(engineBatchSize[1]), wavetableMipFrameBatchSize);
+    assert.equal(workerBatchSize[1], engineBatchSize[1]);
+});
+
+test("worker defaults to two in-flight wavetable batch events", async () => {
+    const connection = new FakePatchConnection({
+        catalog: createDefaultCatalog(),
+        audioFiles: createDefaultAudioFiles(),
+        maxAutoAckBatches: 0,
+    });
+    const startLogs = [];
+    const originalConsoleInfo = console.info;
+    console.info = (message, fields) => {
+        if (message === "[wavetable-worker] Starting wavetable worker controller") {
+            startLogs.push(fields);
+        }
+    };
+
+    try {
+        const controller = createWavetableWorkerController(connection, { mipLevelCount: 1 });
+        await controller.start();
+    } finally {
+        console.info = originalConsoleInfo;
+    }
+
+    assert.equal(startLogs.length, 1);
+    // Measured native ceiling (QuickJS restore probe): one three-frame batch
+    // in flight; two 24 KiB payloads starve the performer's 64 KiB FIFO.
+    assert.equal(startLogs[0].maxFramesInFlight, 1);
+});
+
+test("worker sends three-frame mip batches with a fixed-size zero-padded tail", async () => {
+    const sourcePath = "assets/factory_sources/five-frames.wav";
+    const sourceFrames = Array.from({ length: 5 }, (_, frameIndex) =>
+        createSineFrame(frameIndex * 0.125)
+    );
+    const connection = new FakePatchConnection({
+        catalog: {
+            tables: [{
+                tableId: "five-frames",
+                name: "Five Frames",
+                frameCount: sourceFrames.length,
+                sourceWav: sourcePath,
+            }],
+        },
+        audioFiles: {
+            [sourcePath]: createAudioFileFromFrames(sourceFrames),
+        },
+        maxAutoAckBatches: 0,
+    });
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 1,
+        mipLevelCount: 1,
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint("runtimeState", createRuntimeState({
+        desiredIntentSerial: 5,
+        generationFrontier: 10,
+    }));
+    await flushMicrotasks(64);
+
+    const mipBatches = () => connection.sentEvents.filter(
+        ({ endpointID }) => endpointID === "wavetableMipFrame",
+    );
+    assert.equal(mipBatches().length, 1);
+    const firstBatch = mipBatches()[0].value;
+    assert.deepEqual(
+        Object.keys(firstBatch).sort(),
+        [
+            "dspSessionId",
+            "frameCount",
+            "frameIndexBase",
+            "generation",
+            "mipIndex",
+            "oscillatorIndex",
+            "samples",
+            "tableIndex",
+        ],
+    );
+    assert.equal(firstBatch.frameIndexBase, 0);
+    assert.equal(firstBatch.frameCount, wavetableMipFrameBatchSize);
+    assert.equal(
+        firstBatch.samples.length,
+        wavetableMipFrameBatchSize * samplesPerFrame,
+    );
+    for (let batchFrameIndex = 0; batchFrameIndex < wavetableMipFrameBatchSize; batchFrameIndex += 1) {
+        const frameSamples = firstBatch.samples.slice(
+            batchFrameIndex * samplesPerFrame,
+            (batchFrameIndex + 1) * samplesPerFrame,
+        );
+        assert.equal(
+            frameSamples.some((sample) => sample !== 0),
+            true,
+            `batched frame ${batchFrameIndex} carries its mip content`,
+        );
+    }
+
+    for (const mismatchedIdentity of [
+        { dspSessionId: firstBatch.dspSessionId + 1 },
+        { generation: firstBatch.generation + 1 },
+        { frameIndexBase: firstBatch.frameIndexBase + 1 },
+        { frameCount: firstBatch.frameCount - 1 },
+    ]) {
+        connection.emitEndpoint(
+            "wavetableUploadAck",
+            createUploadAck(firstBatch, mismatchedIdentity),
+        );
+        await flushMicrotasks(4);
+        assert.equal(
+            mipBatches().length,
+            1,
+            "session, generation, base, and extent must all match the in-flight batch",
+        );
+    }
+
+    connection.emitEndpoint("wavetableUploadAck", createUploadAck(firstBatch));
+    await flushMicrotasks(16);
+
+    assert.equal(mipBatches().length, 2);
+    const tailBatch = mipBatches()[1].value;
+    assert.equal(tailBatch.frameIndexBase, wavetableMipFrameBatchSize);
+    assert.equal(tailBatch.frameCount, 2);
+    assert.equal(
+        tailBatch.samples.length,
+        wavetableMipFrameBatchSize * samplesPerFrame,
+    );
+    assert.equal(
+        tailBatch.samples.slice(2 * samplesPerFrame).every((sample) => sample === 0),
+        true,
+        "unused samples in the fixed-size tail are zero padding",
+    );
+});
+
+test("worker pipelines batches and accepts their acknowledgements out of order", async () => {
+    const sourcePath = "assets/factory_sources/seven-frames.wav";
+    const sourceFrames = Array.from({ length: 7 }, (_, frameIndex) =>
+        createSineFrame(frameIndex * 0.0625)
+    );
+    const connection = new FakePatchConnection({
+        catalog: {
+            tables: [{
+                tableId: "seven-frames",
+                name: "Seven Frames",
+                frameCount: sourceFrames.length,
+                sourceWav: sourcePath,
+            }],
+        },
+        audioFiles: {
+            [sourcePath]: createAudioFileFromFrames(sourceFrames),
+        },
+        maxAutoAckBatches: 0,
+    });
+    const controller = createWavetableWorkerController(connection, {
+        maxFramesInFlight: 2,
+        mipLevelCount: 1,
+    });
+    await controller.start();
+    await flushMicrotasks();
+
+    connection.emitEndpoint("runtimeState", createRuntimeState({
+        oscillatorIndex: 0,
+        desiredIntentSerial: 1,
+    }));
+    connection.emitEndpoint("runtimeState", createRuntimeState({
+        oscillatorIndex: 1,
+        desiredIntentSerial: 1,
+    }));
+    await flushMicrotasks(64);
+
+    const loadBegins = () => connection.sentEvents.filter(
+        ({ endpointID }) => endpointID === "wavetableLoadBegin",
+    );
+    const firstOscillatorBatches = () => connection.sentEvents.filter(
+        ({ endpointID, value }) => endpointID === "wavetableMipFrame" && value.oscillatorIndex === 0,
+    );
+    assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0]);
+    assert.deepEqual(
+        firstOscillatorBatches().map(({ value }) => value.frameIndexBase),
+        [0, 3],
+    );
+
+    const middleBatch = firstOscillatorBatches()[1].value;
+    connection.emitEndpoint("wavetableUploadAck", createUploadAck(middleBatch));
+    await flushMicrotasks(8);
+    assert.deepEqual(
+        firstOscillatorBatches().map(({ value }) => value.frameIndexBase),
+        [0, 3, 6],
+        "an out-of-order ack opens exactly one place in the bounded window",
+    );
+
+    connection.emitEndpoint("wavetableUploadAck", createUploadAck(middleBatch));
+    await flushMicrotasks(4);
+    assert.equal(firstOscillatorBatches().length, 3, "a duplicate ack is idempotent");
+
+    connection.emitEndpoint(
+        "wavetableUploadAck",
+        createUploadAck(firstOscillatorBatches()[2].value),
+    );
+    await flushMicrotasks(4);
+    assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0]);
+
+    connection.emitEndpoint(
+        "wavetableUploadAck",
+        createUploadAck(firstOscillatorBatches()[0].value),
+    );
+    await flushMicrotasks(64);
+    assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0, 1]);
+    assert.deepEqual(connection.readAudioPaths, [sourcePath]);
+});
+
 test("worker keeps oscillator identity on every table transfer message", async () => {
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
 
     const controller = createWavetableWorkerController(connection, {
@@ -140,7 +373,7 @@ test("worker serializes A/B/C loads and rejects a crossed oscillator acknowledge
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
     const controller = createWavetableWorkerController(connection, {
         maxFramesInFlight: 1,
@@ -169,32 +402,27 @@ test("worker serializes A/B/C loads and rejects a crossed oscillator acknowledge
     const loadBegins = () => connection.sentEvents.filter(
         ({ endpointID }) => endpointID === "wavetableLoadBegin",
     );
-    const mipFrames = () => connection.sentEvents.filter(
+    const mipBatches = () => connection.sentEvents.filter(
         ({ endpointID }) => endpointID === "wavetableMipFrame",
     );
-    const acknowledge = (frame, oscillatorIndex = frame.value.oscillatorIndex) => {
-        connection.emitEndpoint("wavetableUploadAck", {
-            ...frame.value,
+    const acknowledge = (batch, oscillatorIndex = batch.value.oscillatorIndex) => {
+        connection.emitEndpoint("wavetableUploadAck", createUploadAck(batch.value, {
             oscillatorIndex,
-            samples: undefined,
-        });
+        }));
     };
 
     assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0]);
-    const aFrame = mipFrames().at(-1);
-    acknowledge(aFrame, 1);
+    const aBatch = mipBatches().at(-1);
+    acknowledge(aBatch, 1);
     await flushMicrotasks(16);
     assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0]);
 
-    acknowledge(aFrame);
+    acknowledge(aBatch);
     await flushMicrotasks(64);
     assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0, 1]);
 
-    const bFrame0 = mipFrames().at(-1);
-    acknowledge(bFrame0);
-    await flushMicrotasks(16);
-    const bFrame1 = mipFrames().at(-1);
-    acknowledge(bFrame1);
+    const bBatch = mipBatches().at(-1);
+    acknowledge(bBatch);
     await flushMicrotasks(64);
 
     assert.deepEqual(loadBegins().map(({ value }) => value.oscillatorIndex), [0, 1, 2]);
@@ -208,6 +436,19 @@ async function flushMicrotasks(turns = 8) {
     for (let index = 0; index < turns; index += 1) {
         await Promise.resolve();
     }
+}
+
+function createUploadAck(batch, overrides = {}) {
+    return {
+        dspSessionId: batch.dspSessionId,
+        oscillatorIndex: batch.oscillatorIndex,
+        generation: batch.generation,
+        tableIndex: batch.tableIndex,
+        mipIndex: batch.mipIndex,
+        frameIndexBase: batch.frameIndexBase,
+        frameCount: batch.frameCount,
+        ...overrides,
+    };
 }
 
 class FakeTimeoutHarness {
@@ -243,12 +484,12 @@ class FakePatchConnection {
     constructor({
         catalog,
         audioFiles,
-        maxAutoAckFrames = Infinity,
+        maxAutoAckBatches = Infinity,
         resourceRootUrl = null,
     }) {
         this.catalog = catalog;
         this.audioFiles = new Map(Object.entries(audioFiles));
-        this.maxAutoAckFrames = maxAutoAckFrames;
+        this.maxAutoAckBatches = maxAutoAckBatches;
         this.resourceRootUrl = resourceRootUrl ? new URL(resourceRootUrl) : null;
         this.parameterListeners = new Map();
         this.endpointListeners = new Map();
@@ -308,17 +549,10 @@ class FakePatchConnection {
 
         if (
             endpointID === "wavetableMipFrame" &&
-            value.frameIndex < this.maxAutoAckFrames
+            (value.frameIndexBase / wavetableMipFrameBatchSize) < this.maxAutoAckBatches
         ) {
             queueMicrotask(() => {
-                this.emitEndpoint("wavetableUploadAck", {
-                    dspSessionId: value.dspSessionId,
-                    oscillatorIndex: value.oscillatorIndex,
-                    generation: value.generation,
-                    tableIndex: value.tableIndex,
-                    mipIndex: value.mipIndex,
-                    frameIndex: value.frameIndex,
-                });
+                this.emitEndpoint("wavetableUploadAck", createUploadAck(value));
             });
         }
     }
@@ -712,7 +946,7 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
 
     const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
@@ -754,11 +988,11 @@ test("worker bootstraps from runtimeState instead of requesting wavetableSelect 
     );
 });
 
-test("worker stages every mip frame for a selected table without waiting for lazy mip requests", async () => {
+test("worker stages every mip batch for a selected table without waiting for lazy mip requests", async () => {
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: Infinity,
+        maxAutoAckBatches: Infinity,
     });
 
     const controller = createWavetableWorkerController(connection, {
@@ -784,26 +1018,21 @@ test("worker stages every mip frame for a selected table without waiting for laz
         false
     );
 
-    const mipFrames = connection.sentEvents
+    const mipBatches = connection.sentEvents
         .filter(({ endpointID }) => endpointID === "wavetableMipFrame")
         .map(({ value }) => ({
             generation: value.generation,
             tableIndex: value.tableIndex,
             mipIndex: value.mipIndex,
-            frameIndex: value.frameIndex,
+            frameIndexBase: value.frameIndexBase,
+            frameCount: value.frameCount,
         }))
-        .sort((left, right) => (
-            (left.mipIndex - right.mipIndex)
-            || (left.frameIndex - right.frameIndex)
-        ));
+        .sort((left, right) => left.mipIndex - right.mipIndex);
 
-    assert.deepEqual(mipFrames, [
-        { generation: 11, tableIndex: 1, mipIndex: 0, frameIndex: 0 },
-        { generation: 11, tableIndex: 1, mipIndex: 0, frameIndex: 1 },
-        { generation: 11, tableIndex: 1, mipIndex: 1, frameIndex: 0 },
-        { generation: 11, tableIndex: 1, mipIndex: 1, frameIndex: 1 },
-        { generation: 11, tableIndex: 1, mipIndex: 2, frameIndex: 0 },
-        { generation: 11, tableIndex: 1, mipIndex: 2, frameIndex: 1 },
+    assert.deepEqual(mipBatches, [
+        { generation: 11, tableIndex: 1, mipIndex: 0, frameIndexBase: 0, frameCount: 2 },
+        { generation: 11, tableIndex: 1, mipIndex: 1, frameIndexBase: 0, frameCount: 2 },
+        { generation: 11, tableIndex: 1, mipIndex: 2, frameIndexBase: 0, frameCount: 2 },
     ]);
 });
 
@@ -811,7 +1040,7 @@ test("worker prewarms source and spectrum cache without committing a DSP load", 
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: Infinity,
+        maxAutoAckBatches: Infinity,
     });
 
     const controller = createWavetableWorkerController(connection, {
@@ -853,7 +1082,7 @@ test("worker prewarms source and spectrum cache without committing a DSP load", 
     );
     assert.equal(
         connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableMipFrame").length,
-        6
+        3
     );
 });
 
@@ -861,7 +1090,7 @@ test("worker lets rapid adjacent prewarms complete instead of cancelling the ear
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: Infinity,
+        maxAutoAckBatches: Infinity,
     });
 
     const controller = createWavetableWorkerController(connection, {
@@ -916,7 +1145,7 @@ test("worker lets rapid adjacent prewarms complete instead of cancelling the ear
     assert.equal(spectrumMissesForPrewarmedTable, 0);
     assert.equal(
         connection.sentEvents.filter(({ endpointID }) => endpointID === "wavetableMipFrame").length,
-        6
+        3
     );
 });
 
@@ -926,7 +1155,7 @@ test("worker can load wavetable resources through an injected resource client ev
     const connection = new FakePatchConnection({
         catalog,
         audioFiles: {},
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
     const resourceClientReadJSONPaths = [];
     const resourceClientReadAudioPaths = [];
@@ -1001,7 +1230,7 @@ test("worker prefers the resolved resource URL for factory wavetable source path
     const connection = new FakePatchConnection({
         catalog,
         audioFiles: {},
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
         resourceRootUrl: "https://example.test/bundle/",
     });
     const waveBuffer = createFloat32WaveBufferFromFrames([
@@ -1073,7 +1302,7 @@ test("worker falls back to the resolved resource URL for spaced wavetable paths 
     const connection = new FakePatchConnection({
         catalog,
         audioFiles: {},
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
         resourceRootUrl: "https://example.test/bundle/",
     });
     connection.readResourceAsAudioData = undefined;
@@ -1125,7 +1354,7 @@ test("worker reconstructs the current loading generation and continues full stag
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 2,
+        maxAutoAckBatches: 2,
     });
 
     const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
@@ -1152,27 +1381,29 @@ test("worker reconstructs the current loading generation and continues full stag
         0
     );
 
-    const mipFrames = connection.sentEvents
+    const mipBatches = connection.sentEvents
         .filter(({ endpointID }) => endpointID === "wavetableMipFrame")
         .map(({ value }) => ({
             dspSessionId: value.dspSessionId,
             generation: value.generation,
             tableIndex: value.tableIndex,
             mipIndex: value.mipIndex,
-            frameIndex: value.frameIndex,
+            frameIndexBase: value.frameIndexBase,
+            frameCount: value.frameCount,
         }))
-        .sort((left, right) => (
-            (left.mipIndex - right.mipIndex)
-            || (left.frameIndex - right.frameIndex)
-        ));
+        .sort((left, right) => left.mipIndex - right.mipIndex);
 
-    assert.equal(mipFrames.length, 22);
+    assert.equal(mipBatches.length, 11);
     assert.deepEqual(
-        mipFrames,
-        Array.from({ length: 11 }, (_, mipIndex) => ([
-            { dspSessionId: 7, generation: 12, tableIndex: 1, mipIndex, frameIndex: 0 },
-            { dspSessionId: 7, generation: 12, tableIndex: 1, mipIndex, frameIndex: 1 },
-        ])).flat()
+        mipBatches,
+        Array.from({ length: 11 }, (_, mipIndex) => ({
+            dspSessionId: 7,
+            generation: 12,
+            tableIndex: 1,
+            mipIndex,
+            frameIndexBase: 0,
+            frameCount: 2,
+        }))
     );
 });
 
@@ -1180,7 +1411,7 @@ test("worker reconstructs the current active generation without re-uploading loa
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 2,
+        maxAutoAckBatches: 2,
     });
 
     const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
@@ -1271,7 +1502,7 @@ test("worker aborts an obsolete loading generation when the desired table change
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
 
     const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
@@ -1475,7 +1706,7 @@ test("worker classifies mip-build failures separately from source-load failures"
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
 
     const controller = createWavetableWorkerController(connection, { maxFramesInFlight: 1 });
@@ -1526,7 +1757,7 @@ test("worker aborts a committed loading generation when mip upload acks stall pa
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
 
     const controller = createWavetableWorkerController(connection, {
@@ -1592,7 +1823,7 @@ test("worker uses the declared 20 second watchdog timeout when no explicit timeo
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
 
     const controller = createWavetableWorkerController(connection, {
@@ -1636,7 +1867,7 @@ test("worker automatically retries one timed-out desired table load when runtime
     const connection = new FakePatchConnection({
         catalog: createDefaultCatalog(),
         audioFiles: createDefaultAudioFiles(),
-        maxAutoAckFrames: 0,
+        maxAutoAckBatches: 0,
     });
 
     const controller = createWavetableWorkerController(connection, {

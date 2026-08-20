@@ -15,20 +15,26 @@ import {
     applyModulationSourceOption,
     clampModulationRouteAmount,
     composeModulationAmount,
-    formatModulationAmountEditingValue,
     formatModulationAmountReadout,
     getModulationAmountBounds,
     getModulationAmountSliderPosition,
     getModulationSourceOptionValue,
     isRackModulationTarget,
     isVoiceModulationSource,
-    parseModulationAmountEditingValue,
     type ModulationPolarity,
     type ModulationRoute,
     type ModulationRouteUpdate,
     type ModulationTargetKind,
 } from "../shared/modulation";
-import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
+import {
+    useModulationAmountParameterEntrySpec,
+    useModulationRouteAmountBinding,
+} from "../shared/modulation-route-amount";
+import {
+    formatParameterEntry,
+    parseParameterEntry,
+    type ParameterEntrySpec,
+} from "../shared/parameter-value-entry";
 
 const MINI_KNOB_VIEWBOX_SIZE = 32;
 const MINI_KNOB_CENTER = MINI_KNOB_VIEWBOX_SIZE / 2;
@@ -198,9 +204,11 @@ function MiniKnob({
     onChange: (value: number) => void;
     ariaLabel: string;
 }) {
+    const entrySpec = useModulationAmountParameterEntrySpec(targetKind);
     const gestureRef = useRef<MiniKnobGesture | null>(null);
     const inputRef = useRef<HTMLInputElement | null>(null);
     const draftValueRef = useRef("");
+    const entrySpecRef = useRef<ParameterEntrySpec>(entrySpec);
     const isEditingRef = useRef(false);
     const onChangeRef = useRef(onChange);
     const targetKindRef = useRef(targetKind);
@@ -211,6 +219,10 @@ function MiniKnob({
     valueRef.current = displayValue;
     const [isEditing, setIsEditing] = useState(false);
     const [draftValue, setDraftValue] = useState("");
+    const [entryError, setEntryError] = useState<string | null>(null);
+    if (!isEditingRef.current) {
+        entrySpecRef.current = entrySpec;
+    }
     const sliderPosition = getModulationAmountSliderPosition(targetKind, displayValue);
     const angle = (sliderPosition - 0.5) * (MINI_KNOB_SIDE_SWEEP_DEGREES * 2);
     const fillExtentDegrees = Math.abs(angle);
@@ -282,25 +294,34 @@ function MiniKnob({
     }, []);
 
     const beginEditing = useCallback(() => {
-        updateDraftValue(formatModulationAmountEditingValue(targetKindRef.current, valueRef.current));
+        entrySpecRef.current = entrySpec;
+        updateDraftValue(formatParameterEntry(entrySpec, valueRef.current).draft);
+        setEntryError(null);
         isEditingRef.current = true;
         setIsEditing(true);
-    }, [updateDraftValue]);
+    }, [entrySpec, updateDraftValue]);
 
     const finishEditing = useCallback((commit: boolean) => {
         if (!isEditingRef.current) {
             return;
         }
 
-        isEditingRef.current = false;
         if (commit) {
-            const parsedValue = parseModulationAmountEditingValue(targetKindRef.current, draftValueRef.current);
-            if (parsedValue !== null) {
-                publishValue(parsedValue);
+            const result = parseParameterEntry(entrySpecRef.current, draftValueRef.current);
+            if (result._tag === "rejected") {
+                setEntryError(result.message);
+                window.requestAnimationFrame(() => inputRef.current?.focus());
+                return;
             }
+            if (result.commit._tag !== "value") {
+                throw new Error("A modulation amount entry produced a tempo division.");
+            }
+            publishValue(result.commit.value);
         }
 
+        isEditingRef.current = false;
         setIsEditing(false);
+        setEntryError(null);
         updateDraftValue("");
     }, [publishValue, updateDraftValue]);
 
@@ -503,31 +524,51 @@ function MiniKnob({
                 <div className="synth-accent-solid-bg absolute left-1/2 top-0.5 h-1.5 w-0.5 -translate-x-1/2 rounded-full" />
             </div>
             {isEditing ? (
-                <input
-                    ref={inputRef}
-                    aria-label={`${ariaLabel} value`}
-                    type="text"
-                    inputMode="decimal"
-                    autoComplete="off"
-                    spellCheck={false}
-                    value={draftValue}
-                    onChange={(event) => updateDraftValue(event.currentTarget.value)}
-                    onBlur={() => finishEditing(true)}
-                    onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
-                        if (event.key === "Enter") {
-                            event.preventDefault();
-                            finishEditing(true);
-                            return;
-                        }
+                <>
+                    <input
+                        ref={inputRef}
+                        aria-label={`${ariaLabel} value`}
+                        type="text"
+                        inputMode="decimal"
+                        autoComplete="off"
+                        spellCheck={false}
+                        value={draftValue}
+                        onChange={(event) => {
+                            updateDraftValue(event.currentTarget.value);
+                            setEntryError(null);
+                        }}
+                        onBlur={() => finishEditing(true)}
+                        onKeyDown={(event: ReactKeyboardEvent<HTMLInputElement>) => {
+                            if (event.key === "Enter") {
+                                event.preventDefault();
+                                finishEditing(true);
+                                return;
+                            }
 
-                        if (event.key === "Escape") {
-                            event.preventDefault();
-                            finishEditing(false);
-                        }
-                    }}
-                    onMouseDown={(event) => event.stopPropagation()}
-                    className="synth-menu-surface synth-readout-text absolute left-1/2 top-1/2 z-10 h-6 w-16 -translate-x-1/2 -translate-y-1/2 rounded-md px-2 text-center text-[10px] outline-none"
-                />
+                            if (event.key === "Escape") {
+                                event.preventDefault();
+                                finishEditing(false);
+                            }
+                        }}
+                        onMouseDown={(event) => event.stopPropagation()}
+                        className="synth-menu-surface synth-readout-text absolute left-1/2 top-1/2 z-10 h-6 w-20 -translate-x-1/2 -translate-y-1/2 rounded-md px-2 pr-7 text-center text-[10px] outline-none"
+                    />
+                    <span
+                        data-role="parameter-entry-unit"
+                        className="pointer-events-none absolute left-[calc(50%+10px)] top-1/2 z-20 -translate-y-1/2 text-[9px] text-muted"
+                    >
+                        {formatParameterEntry(entrySpecRef.current, valueRef.current).unit}
+                    </span>
+                    {entryError === null ? null : (
+                        <span
+                            data-role="parameter-entry-error"
+                            role="alert"
+                            className="synth-menu-surface absolute left-1/2 top-[calc(50%+16px)] z-20 w-52 -translate-x-1/2 rounded px-2 py-1 text-[9px] text-red-300"
+                        >
+                            {entryError}
+                        </span>
+                    )}
+                </>
             ) : null}
         </div>
     );

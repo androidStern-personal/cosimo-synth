@@ -29,8 +29,11 @@ const desktopBundleBudgetBytes = 3_200_000;
 // The 2026-08-19 Voice filter Mix append (T05) adds one shared voice target
 // plus its catalog descriptor and amount policy; re-measured at 142,969 raw
 // and 34,341 gzipped.
-const wavetableWorkerBudgetBytes = 143_100;
-const wavetableWorkerGzipBudgetBytes = 34_400;
+// Raised 2026-08-21 for the T22 batched mip-upload protocol (+700 raw /
+// +103 gzip): batch assembly and per-batch ack matching are deliberate
+// features, not drift. Keep the headroom tight.
+const wavetableWorkerBudgetBytes = 145_000;
+const wavetableWorkerGzipBudgetBytes = 34_900;
 
 test("compiled desktop production entry stays within its browser parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");

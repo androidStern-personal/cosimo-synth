@@ -1,23 +1,24 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Nexus from "nexusui";
 
 import type { PatchControlBinding } from "../shared/patch-controls";
 import type { ModulationTargetKind } from "../shared/modulation-targets";
+import { useLongPressParameterMenu } from "../shared/parameter-context-menu";
+import {
+    formatParameterEntry,
+    parseParameterEntry,
+    type ParameterEntrySpec,
+} from "../shared/parameter-value-entry";
 
 export type NexusNumberFieldProps = {
     label: string;
     binding: PatchControlBinding<number>;
-    min: number;
-    max: number;
-    step: number;
+    entrySpec: ParameterEntrySpec;
     decimalPlaces?: number;
-    suffix?: string | null;
     variant?: "default" | "overlay" | "compactOverlay";
     showLabel?: boolean;
     width?: number;
     height?: number;
-    displayValueFromBinding?: (bindingValue: number) => number;
-    bindingValueFromDisplay?: (displayValue: number) => number;
     onActivate?: () => void;
     onBeginTextEntry?: () => void;
     onEndTextEntry?: () => void;
@@ -57,10 +58,6 @@ let nexusNumberConstructor: NexusNumberConstructorLike = Nexus.Number as unknown
 
 export function setNexusNumberConstructorForTests(nextConstructor: NexusNumberConstructorLike | null) {
     nexusNumberConstructor = nextConstructor ?? Nexus.Number as unknown as NexusNumberConstructorLike;
-}
-
-function clampNumber(value: number, min: number, max: number) {
-    return Math.min(Math.max(value, min), max);
 }
 
 export function styleNexusNumberInput(
@@ -103,17 +100,12 @@ export function styleNexusNumberInput(
 export function NexusNumberField({
     label,
     binding,
-    min,
-    max,
-    step,
-    decimalPlaces = 3,
-    suffix = "s",
+    entrySpec,
+    decimalPlaces,
     variant = "default",
     showLabel = true,
     width = 118,
     height = 42,
-    displayValueFromBinding,
-    bindingValueFromDisplay,
     onActivate,
     onBeginTextEntry,
     onEndTextEntry,
@@ -123,7 +115,10 @@ export function NexusNumberField({
     const hostRef = useRef<HTMLDivElement | null>(null);
     const widgetRef = useRef<NexusNumberWidgetLike | null>(null);
     const bindingRef = useRef(binding);
+    const entrySpecRef = useRef(entrySpec);
     const textEntryActiveRef = useRef(false);
+    const [isTextEntryActive, setIsTextEntryActive] = useState(false);
+    const [entryError, setEntryError] = useState("");
     const callbackRef = useRef({
         onActivate,
         onBeginTextEntry,
@@ -132,12 +127,53 @@ export function NexusNumberField({
 
     useEffect(() => {
         bindingRef.current = binding;
+        if (!textEntryActiveRef.current) {
+            entrySpecRef.current = entrySpec;
+        }
         callbackRef.current = {
             onActivate,
             onBeginTextEntry,
             onEndTextEntry,
         };
-    }, [binding, onActivate, onBeginTextEntry, onEndTextEntry]);
+    }, [binding, entrySpec, onActivate, onBeginTextEntry, onEndTextEntry]);
+
+    const activeEntrySpec = isTextEntryActive ? entrySpecRef.current : entrySpec;
+    const displayMin = Number(formatParameterEntry(activeEntrySpec, activeEntrySpec.min).draft);
+    const displayMax = Number(formatParameterEntry(activeEntrySpec, activeEntrySpec.max).draft);
+    const displayStep = Math.abs(
+        Number(formatParameterEntry(
+            activeEntrySpec,
+            Math.min(activeEntrySpec.max, activeEntrySpec.min + activeEntrySpec.step),
+        ).draft)
+        - displayMin,
+    );
+    const displayValue = Number(formatParameterEntry(activeEntrySpec, binding.value).draft);
+    const suffix = formatParameterEntry(activeEntrySpec, binding.value).unit;
+    if (!Number.isFinite(displayMin)
+        || !Number.isFinite(displayMax)
+        || !Number.isFinite(displayStep)
+        || !(displayStep > 0)
+        || !Number.isFinite(displayValue)) {
+        throw new RangeError(`Nexus field "${label}" requires a finite displayed numeric domain.`);
+    }
+    // T20: a stationary long press anywhere on the field opens the ADR-017
+    // parameter menu (typing stays available through normal focus).
+    const longPressMenu = useLongPressParameterMenu(useCallback(() => ({
+        controlKey: binding.endpointID,
+        label,
+        targetKind: modulationTargetKind ?? null,
+        baseSpec: entrySpec,
+        baseValue: binding.value,
+        defaultValue: binding.initialValue ?? null,
+        commitBase: binding.commitValue,
+    }), [binding.commitValue, binding.endpointID, binding.initialValue, binding.value, entrySpec, label, modulationTargetKind]));
+
+    // The rendered precision follows the DISPLAYED unit's step (500 ms shows
+    // no decimals; 0.500 s shows three) unless a caller explicitly overrides.
+    const stepText = String(displayStep);
+    const stepPointIndex = stepText.indexOf(".");
+    const resolvedDecimalPlaces = decimalPlaces
+        ?? (stepPointIndex === -1 ? 0 : stepText.length - stepPointIndex - 1);
 
     useEffect(() => {
         const host = hostRef.current;
@@ -150,12 +186,12 @@ export function NexusNumberField({
 
         const widget = new nexusNumberConstructor(host, {
             size: [width, height],
-            value: displayValueFromBinding ? displayValueFromBinding(binding.value) : binding.value,
-            min,
-            max,
-            step,
+            value: displayValue,
+            min: displayMin,
+            max: displayMax,
+            step: displayStep,
         });
-        widget.decimalPlaces = decimalPlaces;
+        widget.decimalPlaces = resolvedDecimalPlaces;
         widget.colors.fill = "rgba(255,255,255,0.06)";
         widget.colors.dark = "#d6f4ff";
         widget.colors.light = "#06101f";
@@ -167,18 +203,42 @@ export function NexusNumberField({
             callbackRef.current.onActivate?.();
         };
         const handleFocus = () => {
+            entrySpecRef.current = activeEntrySpec;
             textEntryActiveRef.current = true;
+            setIsTextEntryActive(true);
+            setEntryError("");
             callbackRef.current.onActivate?.();
             callbackRef.current.onBeginTextEntry?.();
         };
         const handleBlur = () => {
+            const result = parseParameterEntry(entrySpecRef.current, widget.element.value);
+            if (result._tag === "rejected") {
+                setEntryError(result.message);
+                window.requestAnimationFrame(() => widget.element.focus());
+                return;
+            }
+            if (result.commit._tag !== "value") {
+                throw new Error("A Nexus number field cannot commit a tempo division.");
+            }
+            widget.element.value = result.echo.draft;
+            setEntryError("");
             textEntryActiveRef.current = false;
+            setIsTextEntryActive(false);
             callbackRef.current.onEndTextEntry?.();
         };
         const handleWidgetChange = (nextValue?: number) => {
-            const safeDisplayValue = clampNumber(Number(nextValue) || 0, min, max);
-            const bindingValue = bindingValueFromDisplay ? bindingValueFromDisplay(safeDisplayValue) : safeDisplayValue;
-            bindingRef.current.setValue(bindingValue);
+            const entryText = nextValue === undefined ? widget.element.value : String(nextValue);
+            const result = parseParameterEntry(entrySpecRef.current, entryText);
+            if (result._tag === "rejected") {
+                setEntryError(result.message);
+                return;
+            }
+            if (result.commit._tag !== "value") {
+                throw new Error("A Nexus number field cannot commit a tempo division.");
+            }
+            widget.element.value = result.echo.draft;
+            setEntryError("");
+            bindingRef.current.setValue(result.commit.value);
         };
 
         widget.element.addEventListener("mousedown", handleMouseDown);
@@ -194,12 +254,13 @@ export function NexusNumberField({
             widget.element.removeEventListener("blur", handleBlur);
             if (textEntryActiveRef.current) {
                 textEntryActiveRef.current = false;
+                setIsTextEntryActive(false);
                 callbackRef.current.onEndTextEntry?.();
             }
             widget.destroy();
             widgetRef.current = null;
         };
-    }, [bindingValueFromDisplay, decimalPlaces, displayValueFromBinding, height, label, max, min, step, variant, width]);
+    }, [displayMax, displayMin, displayStep, height, label, resolvedDecimalPlaces, variant, width]);
 
     useEffect(() => {
         const widget = widgetRef.current;
@@ -212,21 +273,20 @@ export function NexusNumberField({
             return;
         }
 
-        const displayValue = displayValueFromBinding ? displayValueFromBinding(binding.value) : binding.value;
-
-        if (Math.abs(widget.value - displayValue) <= step / 10) {
+        if (Math.abs(widget.value - displayValue) <= displayStep / 10) {
             return;
         }
 
         widget.passiveUpdate(displayValue);
         widget.render();
-    }, [binding.value, displayValueFromBinding, step]);
+    }, [binding.value, displayValue, displayStep]);
 
     return (
         <label
             className="grid gap-2"
             data-role={dataRole}
             data-modulation-target-kind={modulationTargetKind}
+            {...longPressMenu}
         >
             {showLabel ? (
                 <span className="text-[10px] uppercase tracking-[0.18em] text-slate-300/60">{label}</span>
@@ -240,7 +300,16 @@ export function NexusNumberField({
                     style={{ width: `${width}px`, height: `${height}px` }}
                 />
                 {suffix ? (
-                    <span className="font-mono text-xs tracking-[0.18em] text-cyan-200/80">{suffix}</span>
+                    <span data-role="parameter-entry-unit" className="font-mono text-xs tracking-[0.18em] text-cyan-200/80">{suffix}</span>
+                ) : null}
+                {entryError ? (
+                    <span
+                        role="alert"
+                        data-role="parameter-entry-error"
+                        className="rounded bg-red-950/95 px-1.5 py-1 text-[9px] leading-tight text-red-100 shadow-lg"
+                    >
+                        {entryError}
+                    </span>
                 ) : null}
             </div>
         </label>

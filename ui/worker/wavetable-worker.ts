@@ -35,6 +35,15 @@ const mipRequestEndpointID = "wavetableMipRequest";
 const prewarmRequestEndpointID = "wavetablePrewarmRequest";
 const prewarmNotificationEndpointID = "wavetablePrewarmNotification";
 const defaultCatalogPath = "assets/factory-bank-catalog.json";
+/** Fixed frame count carried by one wavetable mip bridge event. */
+// Protocol twin: wt::wavetableMipFrameBatchSize in cmajor/FixedFrameOscillator.cmajor.
+// Three frames keep two fixed 24 KiB sample payloads within Cmajor's 64 KiB
+// performer input FIFO. Larger batches cannot be pipelined without dropped events.
+export const WAVETABLE_MIP_FRAME_BATCH_SIZE = 3;
+/** Default number of wavetable mip batch events allowed to await acknowledgement. */
+export const DEFAULT_MAX_WAVETABLE_BATCHES_IN_FLIGHT = 1;
+const wavetableMipFrameBatchSampleCount =
+    WAVETABLE_MIP_FRAME_BATCH_SIZE * DEFAULT_SAMPLES_PER_FRAME;
 export const FAILURE_PHASE_LOAD_SOURCE = 1;
 export const FAILURE_PHASE_BUILD_MIP = 2;
 export const FAILURE_PHASE_TRANSFER_MIP = 3;
@@ -57,6 +66,7 @@ type TimerHandle = ReturnType<NonNullable<typeof globalThis.setTimeout>> | numbe
 
 export type WavetableWorkerOptions = {
     catalogPath?: string;
+    /** Maximum in-flight mip batch events; the option name predates batching. */
     maxFramesInFlight?: number;
     mipLevelCount?: number;
     cacheBudgetBytes?: number;
@@ -110,7 +120,7 @@ type MipJob = {
     nextFrameIndex: number;
     ackedFrames: Uint8Array;
     ackedFrameCount: number;
-    inFlightFrames: Set<number>;
+    inFlightBatchBases: Set<number>;
     completed: boolean;
 };
 
@@ -183,7 +193,8 @@ type UploadAckLike = {
     generation?: unknown;
     tableIndex?: unknown;
     mipIndex?: unknown;
-    frameIndex?: unknown;
+    frameIndexBase?: unknown;
+    frameCount?: unknown;
 };
 
 function resolvePositiveIntegerOption(value: unknown, fallback: number) {
@@ -242,9 +253,9 @@ function summarizeRuntimeStateForLog(runtimeState: NormalizedRuntimeState) {
     };
 }
 
-function shouldLogFrameProgress(frameIndex: number, frameCount: number) {
-    const nextFrame = frameIndex + 1;
-    return nextFrame === 1 || nextFrame === frameCount || (nextFrame % 16) === 0;
+function shouldLogBatchProgress(frameIndexBase: number, batchFrameCount: number, frameCount: number) {
+    const nextFrame = frameIndexBase + batchFrameCount;
+    return frameIndexBase === 0 || nextFrame === frameCount || (nextFrame % 16) === 0;
 }
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -363,12 +374,12 @@ function estimateLoadedTableBytes(table: LoadedTable) {
     return bytes;
 }
 
-function createEmptyMipJobFrameState(frameCount: number) {
+function createEmptyMipJobTransferState(frameCount: number) {
     return {
         nextFrameIndex: 0,
         ackedFrames: new Uint8Array(frameCount),
         ackedFrameCount: 0,
-        inFlightFrames: new Set<number>(),
+        inFlightBatchBases: new Set<number>(),
     };
 }
 
@@ -391,7 +402,7 @@ export class WavetableWorkerController {
     private readonly connection: PatchConnectionLike;
     private readonly resourceClient: ResourceClient;
     private readonly catalogPath: string;
-    private readonly maxFramesInFlight: number;
+    private readonly maxBatchesInFlight: number;
     private readonly mipLevelCount: number;
     private readonly cacheBudgetBytes: number;
     private readonly serviceLoadTimeoutMs: number;
@@ -420,7 +431,10 @@ export class WavetableWorkerController {
         this.connection = connection;
         this.resourceClient = asResourceClient(options.resourceClient ?? connection);
         this.catalogPath = options.catalogPath ?? defaultCatalogPath;
-        this.maxFramesInFlight = resolvePositiveIntegerOption(options.maxFramesInFlight, 1);
+        this.maxBatchesInFlight = resolvePositiveIntegerOption(
+            options.maxFramesInFlight,
+            DEFAULT_MAX_WAVETABLE_BATCHES_IN_FLIGHT,
+        );
         this.mipLevelCount = options.mipLevelCount ?? DEFAULT_MIP_LEVEL_COUNT;
         this.cacheBudgetBytes = Math.max(0, Math.round(Number(options.cacheBudgetBytes ?? defaultCacheBudgetBytes) || 0));
         this.serviceLoadTimeoutMs = resolvePositiveIntegerOption(options.serviceLoadTimeoutMs, defaultServiceLoadTimeoutMs);
@@ -440,7 +454,7 @@ export class WavetableWorkerController {
         this.started = true;
         emitWorkerLog("info", "Starting wavetable worker controller", {
             catalogPath: this.catalogPath,
-            maxFramesInFlight: this.maxFramesInFlight,
+            maxFramesInFlight: this.maxBatchesInFlight,
             mipLevelCount: this.mipLevelCount,
             cacheBudgetBytes: this.cacheBudgetBytes,
             serviceLoadTimeoutMs: this.serviceLoadTimeoutMs,
@@ -589,7 +603,7 @@ export class WavetableWorkerController {
                 tableIndex: this.serviceTable.tableIndex,
                 mipIndex,
                 urgencyLevel,
-                ...createEmptyMipJobFrameState(this.serviceTable.frameCount),
+                ...createEmptyMipJobTransferState(this.serviceTable.frameCount),
                 completed: false,
             });
         }
@@ -615,7 +629,7 @@ export class WavetableWorkerController {
                 job.generation === this.serviceTable.generation &&
                 job.tableIndex === this.serviceTable.tableIndex &&
                 !job.completed &&
-                (job.inFlightFrames.size > 0 || job.nextFrameIndex > 0)
+                (job.inFlightBatchBases.size > 0 || job.nextFrameIndex > 0)
             ) {
                 return true;
             }
@@ -1325,7 +1339,7 @@ export class WavetableWorkerController {
                 tableIndex,
                 mipIndex,
                 urgencyLevel,
-                ...createEmptyMipJobFrameState(this.serviceTable.frameCount),
+                ...createEmptyMipJobTransferState(this.serviceTable.frameCount),
                 completed: false,
             };
             this.mipJobs.set(key, job);
@@ -1366,7 +1380,8 @@ export class WavetableWorkerController {
         const generation = Math.trunc(Number(uploadAck.generation));
         const tableIndex = Math.trunc(Number(uploadAck.tableIndex));
         const mipIndex = Math.trunc(Number(uploadAck.mipIndex));
-        const frameIndex = Math.trunc(Number(uploadAck.frameIndex));
+        const frameIndexBase = Math.trunc(Number(uploadAck.frameIndexBase));
+        const batchFrameCount = Math.trunc(Number(uploadAck.frameCount));
         const key = createMipJobKey(
             dspSessionId,
             oscillatorIndex,
@@ -1375,22 +1390,37 @@ export class WavetableWorkerController {
             mipIndex,
         );
         const job = this.mipJobs.get(key);
+        const tableFrameCount = this.serviceTable?.frameCount ?? 0;
+        const expectedBatchFrameCount = Math.min(
+            WAVETABLE_MIP_FRAME_BATCH_SIZE,
+            tableFrameCount - frameIndexBase,
+        );
 
-        if (!job || job.completed || !job.inFlightFrames.has(frameIndex)) {
+        if (
+            !job
+            || job.completed
+            || !job.inFlightBatchBases.has(frameIndexBase)
+            || batchFrameCount <= 0
+            || batchFrameCount !== expectedBatchFrameCount
+        ) {
             return;
         }
 
-        job.inFlightFrames.delete(frameIndex);
+        job.inFlightBatchBases.delete(frameIndexBase);
 
-        if (!job.ackedFrames[frameIndex]) {
-            job.ackedFrames[frameIndex] = 1;
-            job.ackedFrameCount += 1;
+        for (let batchOffset = 0; batchOffset < batchFrameCount; batchOffset += 1) {
+            const frameIndex = frameIndexBase + batchOffset;
+
+            if (!job.ackedFrames[frameIndex]) {
+                job.ackedFrames[frameIndex] = 1;
+                job.ackedFrameCount += 1;
+            }
         }
 
         if (
-            job.ackedFrameCount === this.serviceTable?.frameCount &&
-            job.nextFrameIndex >= (this.serviceTable?.frameCount ?? 0) &&
-            job.inFlightFrames.size === 0
+            job.ackedFrameCount === tableFrameCount &&
+            job.nextFrameIndex >= tableFrameCount &&
+            job.inFlightBatchBases.size === 0
         ) {
             job.completed = true;
             if (this.activeUploadKey === job.key) {
@@ -1398,16 +1428,18 @@ export class WavetableWorkerController {
             }
         }
 
-        if (shouldLogFrameProgress(frameIndex, this.serviceTable?.frameCount ?? 0)) {
-            emitWorkerLog("info", "Acknowledged wavetable mip frame", {
+        if (shouldLogBatchProgress(frameIndexBase, batchFrameCount, tableFrameCount)) {
+            emitWorkerLog("info", "Acknowledged wavetable mip batch", {
                 dspSessionId,
                 oscillatorIndex,
                 generation,
                 tableIndex: job.tableIndex,
                 mipIndex,
-                frameIndex,
+                frameIndexBase,
+                batchFrameCount,
                 ackedFrameCount: job.ackedFrameCount,
-                frameCount: this.serviceTable?.frameCount ?? 0,
+                frameCount: tableFrameCount,
+                inFlightBatches: job.inFlightBatchBases.size,
             });
         }
 
@@ -1483,15 +1515,23 @@ export class WavetableWorkerController {
         }
 
         while (
-            activeJob.inFlightFrames.size < this.maxFramesInFlight &&
+            activeJob.inFlightBatchBases.size < this.maxBatchesInFlight &&
             activeJob.nextFrameIndex < this.serviceTable.frameCount
         ) {
-            const frameIndex = activeJob.nextFrameIndex;
-            let mipSamples: Float32Array;
+            const frameIndexBase = activeJob.nextFrameIndex;
+            const batchFrameCount = Math.min(
+                WAVETABLE_MIP_FRAME_BATCH_SIZE,
+                this.serviceTable.frameCount - frameIndexBase,
+            );
+            const batchSamples = new Float32Array(wavetableMipFrameBatchSampleCount);
 
             try {
-                const spectrum = this.getSpectrumForFrame(frameIndex);
-                mipSamples = buildMipFrameFromSpectrum(spectrum, activeJob.mipIndex);
+                for (let batchOffset = 0; batchOffset < batchFrameCount; batchOffset += 1) {
+                    const frameIndex = frameIndexBase + batchOffset;
+                    const spectrum = this.getSpectrumForFrame(frameIndex);
+                    const mipSamples = buildMipFrameFromSpectrum(spectrum, activeJob.mipIndex);
+                    batchSamples.set(mipSamples, batchOffset * DEFAULT_SAMPLES_PER_FRAME);
+                }
             } catch (error) {
                 this.handleServiceTargetFailure(
                     {
@@ -1518,32 +1558,34 @@ export class WavetableWorkerController {
                 generation: activeJob.generation,
                 tableIndex: activeJob.tableIndex,
                 mipIndex: activeJob.mipIndex,
-                frameIndex,
-                samples: Array.from(mipSamples),
+                frameIndexBase,
+                frameCount: batchFrameCount,
+                samples: Array.from(batchSamples),
             });
 
-            if (shouldLogFrameProgress(frameIndex, this.serviceTable.frameCount)) {
-                emitWorkerLog("info", "Sent wavetable mip frame", {
+            if (shouldLogBatchProgress(frameIndexBase, batchFrameCount, this.serviceTable.frameCount)) {
+                emitWorkerLog("info", "Sent wavetable mip batch", {
                     dspSessionId: activeJob.dspSessionId,
                     oscillatorIndex: activeJob.oscillatorIndex,
                     generation: activeJob.generation,
                     tableIndex: activeJob.tableIndex,
                     mipIndex: activeJob.mipIndex,
-                    frameIndex,
+                    frameIndexBase,
+                    batchFrameCount,
                     frameCount: this.serviceTable.frameCount,
-                    inFlightFrames: activeJob.inFlightFrames.size + 1,
+                    inFlightBatches: activeJob.inFlightBatchBases.size + 1,
                 });
             }
 
-            activeJob.inFlightFrames.add(frameIndex);
-            activeJob.nextFrameIndex += 1;
+            activeJob.inFlightBatchBases.add(frameIndexBase);
+            activeJob.nextFrameIndex += batchFrameCount;
             this.armServiceLoadWatchdog();
         }
 
         if (
             activeJob.ackedFrameCount === this.serviceTable.frameCount &&
             activeJob.nextFrameIndex >= this.serviceTable.frameCount &&
-            activeJob.inFlightFrames.size === 0
+            activeJob.inFlightBatchBases.size === 0
         ) {
             activeJob.completed = true;
             this.activeUploadKey = null;

@@ -116,21 +116,23 @@ processor Core03TableAndControlSchedule
         loadBeginOut <- request;
     }
 
-    void emitMipFrame (int32 oscillatorIndex, int32 mipIndex, int32 frameIndex)
+    void emitMipBatch (int32 oscillatorIndex, int32 mipIndex)
     {
-        wt::OscillatorWavetableMipFrame frame;
-        frame.dspSessionId = int32 (processor.session);
-        frame.oscillatorIndex = oscillatorIndex;
-        frame.generation = 1;
-        frame.tableIndex = 100 + oscillatorIndex;
-        frame.mipIndex = mipIndex;
-        frame.frameIndex = frameIndex;
+        wt::OscillatorWavetableMipFrame batch;
+        batch.dspSessionId = int32 (processor.session);
+        batch.oscillatorIndex = oscillatorIndex;
+        batch.generation = 1;
+        batch.tableIndex = 100 + oscillatorIndex;
+        batch.mipIndex = mipIndex;
+        batch.frameIndexBase = 0;
+        batch.frameCount = 2;
 
-        for (int32 sampleIndex = 0; sampleIndex < wt::samplesPerFrame; ++sampleIndex)
-            frame.samples.at (sampleIndex)
-                = tableSample (oscillatorIndex, frameIndex, sampleIndex);
+        for (int32 frameIndex = 0; frameIndex < batch.frameCount; ++frameIndex)
+            for (int32 sampleIndex = 0; sampleIndex < wt::samplesPerFrame; ++sampleIndex)
+                batch.samples.at ((frameIndex * wt::samplesPerFrame) + sampleIndex)
+                    = tableSample (oscillatorIndex, frameIndex, sampleIndex);
 
-        mipFrameOut <- frame;
+        mipFrameOut <- batch;
     }
 
     void publishInitialControls()
@@ -331,28 +333,25 @@ processor Core03TableAndControlSchedule
                 publishInitialControls();
                 emitLoadBegin (wt::oscillatorA);
             }
-            else if (frameCounter >= 1 && frameCounter <= 22)
+            else if (frameCounter >= 1 && frameCounter <= 11)
             {
-                let uploadIndex = frameCounter - 1;
-                emitMipFrame (wt::oscillatorA, uploadIndex / 2, uploadIndex % 2);
+                emitMipBatch (wt::oscillatorA, frameCounter - 1);
             }
             else if (frameCounter == 23)
             {
                 emitLoadBegin (wt::oscillatorB);
             }
-            else if (frameCounter >= 24 && frameCounter <= 45)
+            else if (frameCounter >= 24 && frameCounter <= 34)
             {
-                let uploadIndex = frameCounter - 24;
-                emitMipFrame (wt::oscillatorB, uploadIndex / 2, uploadIndex % 2);
+                emitMipBatch (wt::oscillatorB, frameCounter - 24);
             }
             else if (frameCounter == 46)
             {
                 emitLoadBegin (wt::oscillatorC);
             }
-            else if (frameCounter >= 47 && frameCounter <= 68)
+            else if (frameCounter >= 47 && frameCounter <= 57)
             {
-                let uploadIndex = frameCounter - 47;
-                emitMipFrame (wt::oscillatorC, uploadIndex / 2, uploadIndex % 2);
+                emitMipBatch (wt::oscillatorC, frameCounter - 47);
             }
             else if (frameCounter == 96)
             {

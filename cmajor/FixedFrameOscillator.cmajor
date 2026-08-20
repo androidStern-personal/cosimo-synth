@@ -1,6 +1,14 @@
 namespace wt
 {
     let samplesPerFrame = 2048;
+    // Protocol twin: WAVETABLE_MIP_FRAME_BATCH_SIZE in ui/worker/wavetable-worker.ts.
+    // Measured against the native performer's 64 KiB input FIFO (QuickJS
+    // restore probe, 2026-08-21): ONE 24 KiB three-frame payload in flight is
+    // the reliable ceiling — batch 4 or 5, or two batches in flight, starve
+    // alongside the session's other event traffic and the probe deadline
+    // fails. The window default therefore stays 1; the win is the batching.
+    let wavetableMipFrameBatchSize = 3;
+    let wavetableMipFrameBatchSampleCount = wavetableMipFrameBatchSize * samplesPerFrame;
     let paddedFrameSize = samplesPerFrame + 3;
     let mipLevelCount = 11;
     let brightestMipIndex = mipLevelCount - 1;
@@ -258,8 +266,9 @@ namespace wt
         int32 generation;
         int32 tableIndex;
         int32 mipIndex;
-        int32 frameIndex;
-        float32[samplesPerFrame] samples;
+        int32 frameIndexBase;
+        int32 frameCount;
+        float32[wavetableMipFrameBatchSampleCount] samples;
     }
 
     struct OscillatorWavetableUploadAck
@@ -269,7 +278,8 @@ namespace wt
         int32 generation;
         int32 tableIndex;
         int32 mipIndex;
-        int32 frameIndex;
+        int32 frameIndexBase;
+        int32 frameCount;
     }
 
     struct OscillatorWavetableMipRequest
@@ -1715,11 +1725,16 @@ namespace wt
             }
         }
 
-        bool hasValidWavetableSamples (const float32[] sourceSamples)
+        bool hasValidWavetableBatchSamples (const float32[] sourceSamples,
+                                            int32 batchFrameCount)
         {
-            for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
-                if (! isFiniteRuntimeValue (sourceSamples.at (sampleIndex)))
-                    return false;
+            for (int32 batchFrameIndex = 0; batchFrameIndex < batchFrameCount; ++batchFrameIndex)
+            {
+                for (int32 sampleIndex = 0; sampleIndex < samplesPerFrame; ++sampleIndex)
+                    if (! isFiniteRuntimeValue (
+                            sourceSamples.at ((batchFrameIndex * samplesPerFrame) + sampleIndex)))
+                        return false;
+            }
 
             return true;
         }
@@ -1727,6 +1742,7 @@ namespace wt
         void writePackedMipFrame (int32 slotIndex,
                                   int32 mipIndex,
                                   int32 uploadedFrameIndex,
+                                  int32 sourceBase,
                                   const float32[] sourceSamples)
         {
             let length = packedMipLength (mipIndex);
@@ -1743,8 +1759,10 @@ namespace wt
                 let nextIndex = sourceIndex + sourceStep >= samplesPerFrame
                     ? sourceIndex + sourceStep - samplesPerFrame
                     : sourceIndex + sourceStep;
-                let value = sourceSamples.at (sourceIndex);
-                let derivative = 0.5f * (sourceSamples.at (nextIndex) - sourceSamples.at (previousIndex));
+                let value = sourceSamples.at (sourceBase + sourceIndex);
+                let derivative = 0.5f * (
+                    sourceSamples.at (sourceBase + nextIndex)
+                  - sourceSamples.at (sourceBase + previousIndex));
                 writePackedPoolPoint (
                     slotIndex, destinationBase + pointIndex, packSourcePoint (value, derivative));
             }
@@ -3371,7 +3389,8 @@ namespace wt
                             int32 generation,
                             int32 tableIndex,
                             int32 mipIndex,
-                            int32 uploadedFrameIndex)
+                            int32 uploadedFrameIndexBase,
+                            int32 uploadedFrameCount)
         {
             OscillatorWavetableUploadAck oscillatorAck;
             oscillatorAck.dspSessionId = currentDspSessionId;
@@ -3379,7 +3398,8 @@ namespace wt
             oscillatorAck.generation = generation;
             oscillatorAck.tableIndex = tableIndex;
             oscillatorAck.mipIndex = mipIndex;
-            oscillatorAck.frameIndex = uploadedFrameIndex;
+            oscillatorAck.frameIndexBase = uploadedFrameIndexBase;
+            oscillatorAck.frameCount = uploadedFrameCount;
             oscillatorWavetableUploadAckOut <- oscillatorAck;
         }
 
@@ -4418,12 +4438,13 @@ namespace wt
             emitRuntimeServiceState (oscillator);
         }
 
-        void receiveWavetableMipFrame (int32 dspSessionId,
+        void receiveWavetableMipBatch (int32 dspSessionId,
                                        int32 oscillatorIndex,
                                        int32 uploadedGeneration,
                                        int32 uploadedTableIndex,
                                        int32 uploadedMipIndex,
-                                       int32 uploadedFrameIndex,
+                                       int32 uploadedFrameIndexBase,
+                                       int32 uploadedFrameCount,
                                        const float32[] samples)
         {
             let resolvedMipIndex = resolveMipIndex (uploadedMipIndex);
@@ -4437,37 +4458,40 @@ namespace wt
                 || uploadedTableIndex != tableStagingTableIndex)
                 return;
 
-            if (uploadedFrameIndex < 0 || uploadedFrameIndex >= tableStagingFrameCount
-                || ! hasValidWavetableSamples (samples))
+            if (uploadedFrameIndexBase < 0
+                || uploadedFrameCount <= 0
+                || uploadedFrameCount > wavetableMipFrameBatchSize
+                || uploadedFrameIndexBase + uploadedFrameCount > tableStagingFrameCount
+                || ! hasValidWavetableBatchSamples (samples, uploadedFrameCount))
                 return;
 
-            let readyIndex = packedReadinessIndex (
-                tableStagingSlotIndex, resolvedMipIndex, uploadedFrameIndex);
-
-            if (packedReadyFrameFlags.at (readyIndex) != 0)
+            for (int32 batchFrameIndex = 0; batchFrameIndex < uploadedFrameCount; ++batchFrameIndex)
             {
-                emitUploadAck (
-                    oscillatorIndex,
-                    uploadedGeneration,
-                    uploadedTableIndex,
-                    resolvedMipIndex,
-                    uploadedFrameIndex
-                );
-                return;
-            }
+                let uploadedFrameIndex = uploadedFrameIndexBase + batchFrameIndex;
+                let readyIndex = packedReadinessIndex (
+                    tableStagingSlotIndex, resolvedMipIndex, uploadedFrameIndex);
 
-            writePackedMipFrame (
-                tableStagingSlotIndex, resolvedMipIndex, uploadedFrameIndex, samples);
-            packedReadyFrameFlags.at (readyIndex) = 1;
-            packedLoadedFrameCounts.at (packedSlotMipIndex (
-                tableStagingSlotIndex, resolvedMipIndex)) += 1;
+                if (packedReadyFrameFlags.at (readyIndex) == 0)
+                {
+                    writePackedMipFrame (
+                        tableStagingSlotIndex,
+                        resolvedMipIndex,
+                        uploadedFrameIndex,
+                        batchFrameIndex * samplesPerFrame,
+                        samples);
+                    packedReadyFrameFlags.at (readyIndex) = 1;
+                    packedLoadedFrameCounts.at (packedSlotMipIndex (
+                        tableStagingSlotIndex, resolvedMipIndex)) += 1;
+                }
+            }
 
             emitUploadAck (
                 oscillatorIndex,
                 uploadedGeneration,
                 uploadedTableIndex,
                 resolvedMipIndex,
-                uploadedFrameIndex
+                uploadedFrameIndexBase,
+                uploadedFrameCount
             );
 
             if (isPackedStagingComplete())
@@ -4499,9 +4523,9 @@ namespace wt
 
         event oscillatorWavetableMipFrameIn (OscillatorWavetableMipFrame frame)
         {
-            receiveWavetableMipFrame (frame.dspSessionId, frame.oscillatorIndex,
+            receiveWavetableMipBatch (frame.dspSessionId, frame.oscillatorIndex,
                                       frame.generation, frame.tableIndex, frame.mipIndex,
-                                      frame.frameIndex, frame.samples);
+                                      frame.frameIndexBase, frame.frameCount, frame.samples);
         }
 
         event oscillatorServiceLoadAbortIn (OscillatorServiceLoadAbort abort)

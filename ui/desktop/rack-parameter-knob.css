@@ -57,10 +57,11 @@
     opacity: 0;
 }
 
+/* ADR-025 row 4: dots in the SOURCE color mean "selected but not mapped". */
 .rack-knob-mod-track.is-unmapped {
     fill: none;
-    opacity: 0.42;
-    stroke: rgb(210 220 222 / 0.42);
+    opacity: 0.5;
+    stroke: var(--rack-knob-mod-accent);
     stroke-width: 2.2;
     stroke-dasharray: 1.2 4.6;
 }
@@ -69,16 +70,26 @@
     opacity: 0.38;
 }
 
+/* ADR-025 row 8: a bypassed mapping's ring is GREY and dashed — the route is
+   real but silent, and source color may not claim an effective mapping. */
 .rack-knob-mod-track.is-bypassed,
 .rack-knob-mod-fill.is-bypassed {
-    opacity: 0.24;
-    stroke: var(--rack-knob-mod-accent);
+    fill: none;
+    opacity: 0.5;
+    stroke: var(--rack-knob-bypassed-ink);
     stroke-width: 1.2;
     stroke-dasharray: 2.4 2.4;
 }
 
 .rack-knob-base-fill {
     fill: var(--rack-knob-accent);
+}
+
+/* ADR-025: ring state changes (deletion included) settle with a quick fade. */
+.rack-knob-mod-track,
+.rack-knob-mod-fill,
+.rack-knob-route-presence {
+    transition: opacity 140ms ease;
 }
 
 .rack-knob-mod-fill {
@@ -96,7 +107,9 @@
 .rack-knob-route-presence.is-bypassed {
     fill: transparent;
     opacity: 0.34;
+    stroke: var(--rack-knob-bypassed-ink);
     stroke-dasharray: 1 1;
+    filter: none;
 }
 
 .rack-parameter-knob[data-dragging="base"] .rack-knob-base-track,

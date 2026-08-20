@@ -7,10 +7,17 @@ import {
 
 import { usePatchConnection } from "./cmajor-react";
 import {
+    modulationAmountBaseBindingSpec,
+    parameterEntrySpecForModulationAmount,
+    type ParameterEntrySpec,
+} from "./parameter-value-entry";
+import { usePatchParameterBinding } from "./patch-controls";
+import {
     acquireModulationRuntimeBridge,
     releaseModulationRuntimeBridge,
     type ModulationRoute,
     type ModulationRuntimeBridge,
+    type ModulationTargetKind,
 } from "./modulation";
 
 /** The live UI amount interface, backed by the canonical modulation bridge. */
@@ -23,6 +30,30 @@ export type OptionalModulationRouteAmountBinding = {
     readonly value: number | null;
     readonly setValue: (nextAmount: number) => boolean;
 };
+
+/** Keep exact-entry logarithmic intervals anchored to the target's live base value. */
+export function useModulationAmountParameterEntrySpec(
+    targetKind: ModulationTargetKind,
+): ParameterEntrySpec {
+    const baseSpec = modulationAmountBaseBindingSpec(targetKind);
+    const endpointID = baseSpec?.endpointID ?? "filterCutoff";
+    const initialValue = baseSpec?.initialValue ?? 1;
+    const coerceBaseValue = useCallback((rawValue: unknown) => {
+        const numericValue = Number(rawValue);
+        return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : initialValue;
+    }, [initialValue]);
+    const baseBinding = usePatchParameterBinding<number>({
+        endpointID,
+        initialValue,
+        coerce: coerceBaseValue,
+        active: baseSpec !== null,
+    });
+
+    return useMemo(
+        () => parameterEntrySpecForModulationAmount(targetKind, baseBinding.value),
+        [baseBinding.value, targetKind],
+    );
+}
 
 /**
  * ADR-023: a route presented on a live control must carry its CANONICAL

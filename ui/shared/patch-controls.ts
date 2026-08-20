@@ -13,6 +13,8 @@ function serializeIdentity<TValue>(value: TValue) {
 export type PatchControlBinding<TValue> = {
     endpointID: string;
     value: TValue;
+    /** The canonical default this parameter boots with (ADR-017 base reset). */
+    initialValue?: TValue;
     setValue: (nextValue: TValue) => void;
     commitValue: (nextValue: TValue) => void;
     beginGesture: () => void;
@@ -52,11 +54,12 @@ export function usePatchParameterBinding<TValue>({
     return useMemo(() => ({
         endpointID,
         value,
+        initialValue,
         setValue,
         commitValue,
         beginGesture: parameter.beginGesture,
         endGesture: parameter.endGesture,
-    }), [endpointID, parameter.beginGesture, parameter.endGesture, value, setValue, commitValue]);
+    }), [endpointID, initialValue, parameter.beginGesture, parameter.endGesture, value, setValue, commitValue]);
 }
 
 export function usePatchEventTrigger<TValue = unknown>(endpointID: string) {

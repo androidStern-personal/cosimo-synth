@@ -117,8 +117,12 @@
 
 .mobile-voice-graph {
     position: relative;
-    min-height: 180px;
-    flex: 1 1 auto;
+    /* The graph is the ONLY flexible piece. Its content is an absolute
+       canvas with no intrinsic height, so the 180px BASIS is what sizes it
+       inside content-driven hosts (iOS); min-height 0 lets it give height
+       on short screens before the fixed readout strip's rail is clipped. */
+    min-height: 0;
+    flex: 1 1 180px;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
@@ -308,8 +312,17 @@
     background: rgb(213 220 222 / 0.03);
 }
 
+/* ADR-025 row 3: editing the base value glows in the OWNING color. */
 .mobile-voice-cell[data-dragging="base"] {
-    background: linear-gradient(110deg, rgb(213 220 222 / 0.075), rgb(213 220 222 / 0.018));
+    background: linear-gradient(
+        110deg,
+        rgb(var(--mobile-voice-owner-accent-rgb) / 0.10),
+        rgb(var(--mobile-voice-owner-accent-rgb) / 0.02)
+    );
+}
+
+.mobile-voice-cell[data-dragging="base"] .mobile-voice-cell-value {
+    text-shadow: 0 0 12px rgb(var(--mobile-voice-owner-accent-rgb) / 0.62);
 }
 
 .mobile-voice-cell[data-dragging="modulation"] {

@@ -432,13 +432,18 @@ export class EffectPresetRuntimeBridgeV2 {
         return nextState.userPresets[effectID] ?? [];
     }
 
-    setActivePresetMetadata(effectID: string, metadata: EffectPresetActiveMetadata) {
+    setActivePresetMetadata(effectID: string, metadata: EffectPresetActiveMetadata | null) {
+        const activePresetByEffect = { ...this.state.activePresetByEffect };
+
+        if (metadata === null) {
+            delete activePresetByEffect[effectID];
+        } else {
+            activePresetByEffect[effectID] = cloneActivePresetMetadata(metadata);
+        }
+
         this.commitState({
             ...this.state,
-            activePresetByEffect: {
-                ...this.state.activePresetByEffect,
-                [effectID]: cloneActivePresetMetadata(metadata),
-            },
+            activePresetByEffect,
         });
     }
 

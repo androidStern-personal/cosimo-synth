@@ -22,6 +22,7 @@ import {
 import { runProgrammaticWrites, subscribeToUserEdits } from "./user-edit-bus";
 import { createAutoPreviewEngine, type AutoPreviewEngine } from "./auto-preview-engine";
 import { createAutoPreviewScheduler } from "./auto-preview-scheduler";
+import { createPreviewNoteMemory } from "./preview-note-memory";
 import {
     AUTO_PREVIEW_SYNC_CONFIG,
     quantizeStrikeTime,
@@ -353,6 +354,11 @@ function useOscillatorRuntimeTableState(oscillatorIndex: OscillatorRuntimeIndex)
 type HeldMidiNote = {
     velocity: number;
     order: number;
+};
+
+type AutoPreviewOwnedGroup = {
+    readonly pitches: ReadonlyArray<number>;
+    readonly startedAt: number;
 };
 
 type VoiceArticulationStartMessage = {
@@ -2892,6 +2898,10 @@ export function useSynthPatchViewModel({
     });
     const activeAuditionRef = useRef<{ slotId: string; note: number } | null>(null);
     const lastPlayedNoteRef = useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
+    const previewNoteMemoryRef = useRef<ReturnType<typeof createPreviewNoteMemory> | null>(null);
+    const previewNoteMemory = previewNoteMemoryRef.current
+        ?? createPreviewNoteMemory(ARTICULATION_AUDITION_FALLBACK_NOTE);
+    previewNoteMemoryRef.current = previewNoteMemory;
     const heldMidiNotesRef = useRef(new Map<number, HeldMidiNote>());
     const heldMidiOrderRef = useRef(0);
     /** When the newest voice started (any note-on we emitted or tracked) — the T12B loop-phase anchor. */
@@ -3724,34 +3734,58 @@ export function useSynthPatchViewModel({
         });
     }, []);
 
-    const trackMidiInputForArticulationLane = useCallback((status: number, note: number, velocity = 0) => {
+    const trackMidiInputForArticulationLane = useCallback((
+        status: number,
+        note: number,
+        intentional: boolean,
+        velocity = 0,
+    ) => {
         const messageKind = status & 0xf0;
         const safeNote = clamp(Math.round(note), 0, 127);
         const safeVelocity = clamp(Math.round(velocity), 0, 127);
         const isNoteOn = messageKind === 0x90 && safeVelocity > 0;
         const isNoteOff = messageKind === 0x80 || (messageKind === 0x90 && safeVelocity === 0);
+        const heldCountBefore = heldMidiNotesRef.current.size;
 
         if (isNoteOn) {
             // The newest note-on anchors every per-voice MSEG loop's phase
             // (T12B): loop-sync boundaries are computed from this moment.
             lastNoteOnAtRef.current = performance.now();
-            lastPlayedNoteRef.current = safeNote;
+            if (intentional) {
+                lastPlayedNoteRef.current = safeNote;
+            }
+            previewNoteMemory.noteOn(safeNote, intentional);
             heldMidiNotesRef.current.set(safeNote, {
                 velocity: safeVelocity,
                 order: heldMidiOrderRef.current += 1,
             });
+            if (heldCountBefore === 0 && heldMidiNotesRef.current.size === 1) {
+                // endPreview turns a deferred hold strike into a capped one;
+                // remove that reach-in state and every owned gate first.
+                autoPreviewClearPendingRef.current?.();
+                autoPreviewReleaseOwnedRef.current?.();
+                autoPreviewEngineRef.current?.manualHoldStarted();
+            }
             publishHeldMidiNote();
             return;
         }
 
         if (isNoteOff) {
+            previewNoteMemory.noteOff(safeNote);
             heldMidiNotesRef.current.delete(safeNote);
+            if (heldCountBefore > 0 && heldMidiNotesRef.current.size === 0) {
+                autoPreviewEngineRef.current?.manualHoldEnded();
+            }
             publishHeldMidiNote();
         }
-    }, [publishHeldMidiNote]);
+    }, [previewNoteMemory, publishHeldMidiNote]);
+
+    const trackIntentionalNoteInput = useCallback((status: number, note: number, velocity = 0) => {
+        trackMidiInputForArticulationLane(status, note, true, velocity);
+    }, [trackMidiInputForArticulationLane]);
 
     const sendMidiInputEvent = useCallback((status: number, note: number, velocity = 0) => {
-        trackMidiInputForArticulationLane(status, note, velocity);
+        trackMidiInputForArticulationLane(status, note, false, velocity);
         patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID, buildShortMidi(status, note, velocity));
     }, [patchConnection, trackMidiInputForArticulationLane]);
 
@@ -3776,8 +3810,8 @@ export function useSynthPatchViewModel({
     }, [handleStopArticulationAudition, selectArticulationSlot, sendMidiInputEvent]);
 
     // The Mod rail's Note key (T10B): one piano key fixed to the most recently
-    // played intentional pitch. It goes through sendMidiInputEvent so the held
-    // set and last-played bookkeeping stay correct, and it remembers its own
+    // played intentional pitch. It goes through sendMidiInputEvent so it joins
+    // the held set without replacing chord memory, and it remembers its own
     // started pitch so a keyboard note played mid-press cannot orphan the
     // eventual note-off.
     const noteKeyAuditionRef = useRef<{ note: number } | null>(null);
@@ -3801,21 +3835,21 @@ export function useSynthPatchViewModel({
         sendMidiInputEvent(0x90, note, 100);
     }, [handleStopNoteKeyAudition, sendMidiInputEvent]);
 
-    // ── Auto-preview (T12): retrigger the held chord (or the remembered
-    // intentional pitch) when a direct user edit actually changes a value.
+    // ── Auto-preview (T12/T12C): when no manual notes are held, retrigger the
+    // most recent completed intentional group after a real changed edit.
     // Engine-owned strikes take the raw connection so they never disturb the
-    // held-note/last-played bookkeeping; user-held notes are re-struck but
-    // their release always stays user-owned.
+    // held-note, chord-memory, or last-played bookkeeping.
     const autoPreviewEnabledRef = useRef(autoPreviewEnabled);
     autoPreviewEnabledRef.current = autoPreviewEnabled;
     const autoPreviewEngineRef = useRef<AutoPreviewEngine | null>(null);
-    const autoPreviewOwnedNoteRef = useRef<{ note: number; startedAt: number } | null>(null);
+    const autoPreviewOwnedGroupRef = useRef<AutoPreviewOwnedGroup | null>(null);
     const autoPreviewOffTimerRef = useRef<number | null>(null);
     // T12B loop-sync state: the strike currently deferred to a loop boundary,
     // a reach-in to clear it from outside the mount closure, and live MSEG
     // rates mirrored for the resolver.
     const autoPreviewPendingStrikeRef = useRef<{ timer: number; capMs: number | null } | null>(null);
     const autoPreviewClearPendingRef = useRef<(() => void) | null>(null);
+    const autoPreviewReleaseOwnedRef = useRef<(() => void) | null>(null);
     const msegRatesRef = useRef<[number, number, number]>([1, 1, 1]);
     msegRatesRef.current = [mseg1Rate.value, mseg2Rate.value, mseg3Rate.value];
 
@@ -3829,19 +3863,22 @@ export function useSynthPatchViewModel({
                 autoPreviewOffTimerRef.current = null;
             }
         };
-        const releaseOwnedNote = () => {
+        const releaseOwnedGroup = () => {
             clearOwnedOffTimer();
-            const owned = autoPreviewOwnedNoteRef.current;
+            const owned = autoPreviewOwnedGroupRef.current;
             if (owned) {
-                autoPreviewOwnedNoteRef.current = null;
-                sendRawMidi(0x80, owned.note, 0);
+                autoPreviewOwnedGroupRef.current = null;
+                for (const pitch of owned.pitches) {
+                    sendRawMidi(0x80, pitch, 0);
+                }
             }
         };
+        autoPreviewReleaseOwnedRef.current = releaseOwnedGroup;
         const scheduleOwnedRelease = (delayMs: number) => {
             clearOwnedOffTimer();
             autoPreviewOffTimerRef.current = window.setTimeout(() => {
                 autoPreviewOffTimerRef.current = null;
-                releaseOwnedNote();
+                releaseOwnedGroup();
             }, Math.max(0, delayMs));
         };
         const clearPendingStrike = () => {
@@ -3858,7 +3895,7 @@ export function useSynthPatchViewModel({
         // Unmapped MSEGs are ignored entirely.
         const resolveLoopSyncSource = (): LoopSyncSource | null => {
             const anchorMs = lastNoteOnAtRef.current;
-            const sounding = autoPreviewOwnedNoteRef.current !== null || heldMidiNotesRef.current.size > 0;
+            const sounding = autoPreviewOwnedGroupRef.current !== null || heldMidiNotesRef.current.size > 0;
             if (anchorMs === null || !sounding) {
                 return null;
             }
@@ -3898,25 +3935,12 @@ export function useSynthPatchViewModel({
             playPreview: (capMs) => {
                 const strikePreview = (strikeCapMs: number | null) => {
                     const strikeAtMs = performance.now();
-                    const heldNotes = [...heldMidiNotesRef.current.entries()];
-                    if (heldNotes.length > 0) {
-                        // Re-strike the user's chord. Its gates stay
-                        // user-owned: neither the cap nor endPreview may
-                        // note-off held keys.
-                        releaseOwnedNote();
-                        for (const [note, held] of heldNotes) {
-                            sendRawMidi(0x80, note, 0);
-                            sendRawMidi(0x90, note, held.velocity);
-                        }
-                        // Raw strikes bypass tracking but still restart every
-                        // per-voice MSEG: they are the new loop anchor.
-                        lastNoteOnAtRef.current = strikeAtMs;
-                        return;
+                    const pitches = previewNoteMemory.rememberedGroup();
+                    releaseOwnedGroup();
+                    autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
+                    for (const pitch of pitches) {
+                        sendRawMidi(0x90, pitch, 100);
                     }
-                    const note = clamp(Math.round(lastPlayedNoteRef.current), 0, 127);
-                    releaseOwnedNote();
-                    autoPreviewOwnedNoteRef.current = { note, startedAt: strikeAtMs };
-                    sendRawMidi(0x90, note, 100);
                     lastNoteOnAtRef.current = strikeAtMs;
                     if (strikeCapMs !== null) {
                         scheduleOwnedRelease(strikeCapMs);
@@ -3925,7 +3949,7 @@ export function useSynthPatchViewModel({
 
                 clearPendingStrike();
                 const now = performance.now();
-                const sounding = autoPreviewOwnedNoteRef.current !== null
+                const sounding = autoPreviewOwnedGroupRef.current !== null
                     || heldMidiNotesRef.current.size > 0;
                 const kind: AutoPreviewStrikeKind = capMs !== null
                     ? "trailing"
@@ -3960,7 +3984,7 @@ export function useSynthPatchViewModel({
                 if (pending && pending.capMs === null) {
                     pending.capMs = AUTO_PREVIEW_SCHEDULER_CONFIG.releaseNoteCapMs;
                 }
-                const owned = autoPreviewOwnedNoteRef.current;
+                const owned = autoPreviewOwnedGroupRef.current;
                 if (!owned) {
                     return;
                 }
@@ -3972,10 +3996,13 @@ export function useSynthPatchViewModel({
                     scheduleOwnedRelease(AUTO_PREVIEW_MIN_NOTE_MS - age);
                     return;
                 }
-                releaseOwnedNote();
+                releaseOwnedGroup();
             },
         });
         autoPreviewEngineRef.current = engine;
+        if (heldMidiNotesRef.current.size > 0) {
+            engine.manualHoldStarted();
+        }
         engine.setEnabled(autoPreviewEnabledRef.current && document.visibilityState === "visible");
         const unsubscribe = subscribeToUserEdits({
             onParameterEdit: (edit) => engine.parameterEdited(edit.changed),
@@ -3987,7 +4014,7 @@ export function useSynthPatchViewModel({
         const handleSuspend = () => {
             clearPendingStrike();
             engine.setEnabled(false);
-            releaseOwnedNote();
+            releaseOwnedGroup();
         };
         const handleResume = () => engine.setEnabled(autoPreviewEnabledRef.current);
         const handleVisibility = () => {
@@ -4007,8 +4034,9 @@ export function useSynthPatchViewModel({
             unsubscribe();
             engine.dispose();
             clearPendingStrike();
-            releaseOwnedNote();
+            releaseOwnedGroup();
             autoPreviewClearPendingRef.current = null;
+            autoPreviewReleaseOwnedRef.current = null;
             autoPreviewEngineRef.current = null;
         };
     }, [patchConnection]);
@@ -4140,7 +4168,7 @@ export function useSynthPatchViewModel({
         onPreviewNoteOn: (noteNumber) => {
             lastPlayedNoteRef.current = clamp(Math.round(noteNumber), 0, 127);
         },
-        onPreviewMidiEvent: trackMidiInputForArticulationLane,
+        onPreviewMidiEvent: trackIntentionalNoteInput,
         sendMIDIInputEvent: patchConnection.sendMIDIInputEvent?.bind(patchConnection),
     });
 
@@ -4260,7 +4288,7 @@ export function useSynthPatchViewModel({
         handleStartNoteKeyAudition,
         handleStopNoteKeyAudition,
         /** Feed one user-intentional MIDI note into last-played/held bookkeeping. */
-        trackIntentionalNoteInput: trackMidiInputForArticulationLane,
+        trackIntentionalNoteInput,
         handleSelectWavetable,
         handlePrewarmWavetablePicker,
         handleRetryLoad,

@@ -5,8 +5,13 @@
  * Responsibilities (the behavioral contract, pinned by
  * tests/test_auto_preview_engine.mjs):
  * - Only edits with `changed === true` reach the scheduler, and only while the
- *   engine is enabled. Unchanged writes (pointer motion inside one detent) and
- *   anything while disabled are ignored entirely.
+ *   engine is enabled with no manual notes held. Unchanged writes (pointer
+ *   motion inside one detent), disabled edits, and edits heard during a manual
+ *   hold are ignored entirely.
+ * - Manual playing is state even while disabled. Starting a hold while enabled
+ *   cancels all scheduler activity and deadlines; ending it schedules nothing.
+ *   Gesture depth still follows brackets across the hold, so only a changed
+ *   edit after release begins a fresh scheduler cycle.
  * - Gesture depth: gestureStarted/gestureEnded may nest (multi-pointer).
  *   scheduler.gestureEnded fires only when depth returns to zero.
  * - Stillness synthesis: an edit arriving at gesture depth zero (a control
@@ -51,6 +56,10 @@ export type AutoPreviewEngine = {
     parameterEdited(changed: boolean): void;
     gestureStarted(): void;
     gestureEnded(): void;
+    /** Cancel preview activity and suppress edits while manual notes are held. */
+    manualHoldStarted(): void;
+    /** End suppression without scheduling a preview. */
+    manualHoldEnded(): void;
     dispose(): void;
 };
 
@@ -63,6 +72,7 @@ export function createAutoPreviewEngine(deps: AutoPreviewEngineDeps): AutoPrevie
 
     let isEnabled = false;
     let isDisposed = false;
+    let manualHoldActive = false;
     let gestureDepth = 0;
     let stillnessDeadline: number | null = null;
     let armedTimer: ArmedTimer | null = null;
@@ -102,7 +112,7 @@ export function createAutoPreviewEngine(deps: AutoPreviewEngineDeps): AutoPrevie
     };
 
     const timerFired = (): void => {
-        if (!isEnabled || isDisposed) {
+        if (!isEnabled || isDisposed || manualHoldActive) {
             return;
         }
 
@@ -122,7 +132,7 @@ export function createAutoPreviewEngine(deps: AutoPreviewEngineDeps): AutoPrevie
 
     const armTimer = (): void => {
         cancelTimer();
-        if (!isEnabled || isDisposed) {
+        if (!isEnabled || isDisposed || manualHoldActive) {
             return;
         }
 
@@ -162,7 +172,7 @@ export function createAutoPreviewEngine(deps: AutoPreviewEngineDeps): AutoPrevie
         },
 
         parameterEdited(changed) {
-            if (isDisposed || !isEnabled || !changed) {
+            if (isDisposed || !isEnabled || manualHoldActive || !changed) {
                 return;
             }
 
@@ -175,30 +185,61 @@ export function createAutoPreviewEngine(deps: AutoPreviewEngineDeps): AutoPrevie
         },
 
         gestureStarted() {
-            if (isDisposed || !isEnabled) {
+            if (isDisposed || (!isEnabled && !manualHoldActive)) {
                 return;
             }
 
             gestureDepth += 1;
+            if (!isEnabled) {
+                return;
+            }
             stillnessDeadline = null;
             armTimer();
         },
 
         gestureEnded() {
-            if (isDisposed || !isEnabled) {
+            if (isDisposed || (!isEnabled && gestureDepth === 0)) {
                 return;
             }
             if (gestureDepth === 0) {
-                armTimer();
+                if (isEnabled && !manualHoldActive) {
+                    armTimer();
+                }
                 return;
             }
 
             gestureDepth -= 1;
+            if (!isEnabled || manualHoldActive) {
+                return;
+            }
             if (gestureDepth === 0) {
                 stillnessDeadline = null;
                 dispatch(deps.scheduler.gestureEnded(deps.now()));
             }
             armTimer();
+        },
+
+        manualHoldStarted() {
+            if (isDisposed || manualHoldActive) {
+                return;
+            }
+
+            manualHoldActive = true;
+            if (!isEnabled) {
+                return;
+            }
+
+            dispatch(deps.scheduler.cancelled(deps.now()));
+            stillnessDeadline = null;
+            armTimer();
+        },
+
+        manualHoldEnded() {
+            if (isDisposed || !manualHoldActive) {
+                return;
+            }
+
+            manualHoldActive = false;
         },
 
         dispose() {

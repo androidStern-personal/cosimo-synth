@@ -1934,6 +1934,7 @@ test("desktop envelope editor drags handles and commits compact rail values for 
         assert.equal(Math.abs(Number(snapshot.parameterValues.env1Sustain) - 0.5) <= 1e-9, true);
 
         const releaseInput = page.locator('input[aria-label="Envelope release value"]');
+        await releaseInput.focus();
         await releaseInput.fill("800 ms");
         await releaseInput.blur();
 
@@ -1961,6 +1962,7 @@ test("desktop envelope exact entry preserves the focused draft across a host ech
     try {
         await page.getByRole("button", { name: "Select envelope 2" }).click();
         const attackInput = page.locator('input[aria-label="Envelope attack value"]');
+        await attackInput.focus();
         await attackInput.fill("250 ms");
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("env2Attack", 0.9);
@@ -1978,6 +1980,38 @@ test("desktop envelope exact entry preserves the focused draft across a host ech
             (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.env2Attack) - 0.25) <= 1e-9,
         );
         assert.equal(snapshot.parameterValues.env2Attack, 0.25);
+    } finally {
+        await page.close();
+    }
+});
+
+test("envelope bare exact values use the displayed unit and keep that unit visible", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        await page.getByRole("button", { name: "Select envelope 2" }).click();
+        await page.evaluate(() => {
+            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("env2Attack", 0.008, true);
+        });
+        const attackInput = page.locator('input[aria-label="Envelope attack value"]');
+        await page.waitForFunction(() => (
+            document.querySelector('input[aria-label="Envelope attack value"]')?.value === "8 ms"
+        ));
+        await attackInput.focus();
+        assert.equal(await attackInput.inputValue(), "8");
+        assert.equal(
+            (await attackInput.locator("xpath=following-sibling::*[@data-role='parameter-entry-unit']").textContent()).trim(),
+            "ms",
+        );
+        await attackInput.fill("5");
+        await attackInput.press("Enter");
+
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "bare envelope value commits in the displayed milliseconds",
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.env2Attack) - 0.005) <= 1e-9,
+        );
+        assert.equal(snapshot.parameterValues.env2Attack, 0.005);
     } finally {
         await page.close();
     }
@@ -3348,31 +3382,26 @@ test("MSEG overview rate updates its host parameter while loop policy updates mo
         assert.equal(depthInputCount, 0);
 
         await clearHarnessDebugLog(page);
-        const rateAfterChange = await page.evaluate(async () => {
+        const rateInput = page.locator('input[aria-label="MSEG rate"]').first();
+        await rateInput.click();
+        await page.waitForFunction(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
             const viewRoot = host?.shadowRoot ?? host;
-            const rateInput = viewRoot?.querySelector('input[aria-label="MSEG rate"]');
-
-            if (!(rateInput instanceof HTMLInputElement)) {
-                throw new Error("MSEG rate input is missing.");
-            }
-
-            rateInput.value = "0.500";
-            rateInput.dispatchEvent(new Event("input", { bubbles: true }));
-            rateInput.dispatchEvent(new Event("change", { bubbles: true }));
-
-            for (let attempt = 0; attempt < 80; attempt += 1) {
-                const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-                if (Math.abs(Number(snapshot.parameterValues.mseg1Rate) - 0.5) <= 1e-9) {
-                    return Number(snapshot.parameterValues.mseg1Rate);
-                }
-
-                await new Promise((resolve) => setTimeout(resolve, 50));
-            }
-
-            const snapshot = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
-            return Number(snapshot.parameterValues.mseg1Rate);
+            const input = viewRoot?.querySelector('input[aria-label="MSEG rate"]');
+            return input instanceof HTMLInputElement && !input.readOnly;
         });
+        assert.equal(
+            (await rateInput.locator("xpath=following-sibling::*[@data-role='parameter-entry-unit']").textContent()).trim(),
+            "s",
+        );
+        await rateInput.fill("500 ms");
+        await rateInput.press("Enter");
+        const rateSnapshot = await waitForHarnessSnapshot(
+            page,
+            "MSEG exact rate commits an explicit millisecond value",
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.mseg1Rate) - 0.5) <= 1e-9,
+        );
+        const rateAfterChange = Number(rateSnapshot.parameterValues.mseg1Rate);
         assert.equal(rateAfterChange, 0.5);
         let snapshot = await getHarnessSnapshot(page);
         assert.equal(Number(snapshot.parameterValues.mseg1Rate), 0.5);
@@ -3420,5 +3449,83 @@ test("MSEG overview rate updates its host parameter while loop policy updates mo
         await page.close();
         await isolatedBrowser.close();
         await isolatedServer.stop();
+    }
+});
+
+test("the Mod page's shape graph opens the MSEG the page shows, and page/bar selection stays one selection", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        const numberSelect = page.locator('[data-role="mobile-mod-source-number"]');
+        await numberSelect.waitFor();
+
+        // Page → bar: choosing MSEG 2 on the page IS the one selection.
+        await numberSelect.selectOption("2");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-global-mod-rail-selected"]')?.textContent?.includes("2") === true
+        ));
+
+        // The graph tap edits exactly what the page shows.
+        await page.click('button[aria-label="Open MSEG editor"]');
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        await dialog.waitFor();
+        assert.equal(
+            await dialog.getAttribute("aria-label"),
+            "MSEG 2 editor",
+            "Tapping the shape graph must open the MSEG the page displays.",
+        );
+        await page.click('[data-role="mseg-editor-done"]');
+        await page.waitForSelector('[data-role="mseg-editor-dialog"]', { state: "detached" });
+
+        // Bar → page: arming ENV 1 on the bar moves the same one selection.
+        const grip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
+        if (await grip.getAttribute("aria-expanded") !== "true") {
+            await grip.click({ position: { x: 28, y: 12 } });
+        }
+        await page.locator('[data-role="mobile-global-mod-rail"][data-expanded="true"]').waitFor();
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        await page.waitForFunction(() => {
+            const kind = document.querySelector('[data-role="mobile-mod-source-type"]');
+            const number = document.querySelector('[data-role="mobile-mod-source-number"]');
+            return kind instanceof HTMLSelectElement && kind.value === "envelope"
+                && number instanceof HTMLSelectElement && number.value === "1";
+        });
+    } finally {
+        await page.close();
+    }
+});
+
+test("the floating bar keeps playing while the MSEG editor is open", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('button[aria-label="Open MSEG editor"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
+
+        const noteKey = page.locator('[data-role="mobile-global-mod-rail-note"]');
+        await noteKey.waitFor();
+        assert.equal(
+            await noteKey.evaluate((element) => element.closest("[inert]") !== null),
+            false,
+            "The bar must not be deadened by the open editor.",
+        );
+
+        await clearHarnessDebugLog(page);
+        await noteKey.dispatchEvent("pointerdown", { pointerId: 7, pointerType: "touch", isPrimary: true, button: 0, bubbles: true });
+        await noteKey.dispatchEvent("pointerup", { pointerId: 7, pointerType: "touch", isPrimary: true, button: 0, bubbles: true });
+        await page.waitForFunction(() => {
+            const events = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents;
+            const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
+            const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
+            return noteOns === 1 && noteOffs === 1;
+        }, undefined, { timeout: 3000 });
+    } finally {
+        await page.close();
     }
 });

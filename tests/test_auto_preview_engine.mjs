@@ -197,6 +197,118 @@ test("nested gestures release only when the last pointer lifts", async () => {
     ]);
 });
 
+test("manual playing cancels a sounding preview and every engine deadline", async () => {
+    const { engine, calls, at, advanceTo, pendingTimers } = await makeEngine();
+    engine.setEnabled(true);
+
+    at(0, () => engine.gestureStarted());
+    at(10, () => engine.parameterEdited(true));
+    at(60, () => engine.parameterEdited(true));
+    at(80, () => engine.manualHoldStarted());
+    advanceTo(2000);
+
+    assert.deepEqual(calls, [
+        { call: "play", at: 10, capMs: null },
+        { call: "end", at: 80 },
+    ]);
+    assert.equal(pendingTimers.size, 0);
+});
+
+test("edits during a manual hold produce no commands or timers", async () => {
+    const { engine, calls, at, advanceTo, pendingTimers } = await makeEngine();
+    engine.setEnabled(true);
+
+    at(0, () => engine.manualHoldStarted());
+    at(10, () => engine.parameterEdited(true));
+    at(40, () => engine.parameterEdited(false));
+    at(80, () => engine.parameterEdited(true));
+    advanceTo(2000);
+
+    assert.deepEqual(calls, []);
+    assert.equal(pendingTimers.size, 0);
+});
+
+test("a gesture spanning a manual hold restarts only from its post-hold edit", async () => {
+    const { engine, calls, at, advanceTo } = await makeEngine();
+    engine.setEnabled(true);
+
+    at(0, () => engine.gestureStarted());
+    at(10, () => engine.manualHoldStarted());
+    at(20, () => engine.parameterEdited(true));
+    at(300, () => engine.manualHoldEnded());
+    at(310, () => engine.parameterEdited(true));
+    at(400, () => engine.gestureEnded());
+    advanceTo(2000);
+
+    assert.deepEqual(calls, [
+        { call: "play", at: 310, capMs: null },
+        { call: "end", at: 400 },
+    ]);
+});
+
+test("manual playing cancels a pending capped trailing strike", async () => {
+    const { engine, calls, at, advanceTo, pendingTimers } = await makeEngine();
+    engine.setEnabled(true);
+
+    at(0, () => engine.gestureStarted());
+    at(0, () => engine.parameterEdited(true));
+    at(100, () => engine.parameterEdited(true));
+    at(120, () => engine.gestureEnded());
+    at(150, () => engine.manualHoldStarted());
+    advanceTo(2000);
+
+    assert.deepEqual(calls, [
+        { call: "play", at: 0, capMs: null },
+        { call: "end", at: 150 },
+    ]);
+    assert.equal(pendingTimers.size, 0);
+});
+
+test("enabling during a manual hold stays silent until the hold ends", async () => {
+    const { engine, calls, at, advanceTo, pendingTimers } = await makeEngine();
+
+    at(0, () => engine.manualHoldStarted());
+    at(10, () => engine.setEnabled(true));
+    at(20, () => engine.parameterEdited(true));
+    assert.deepEqual(calls, []);
+    assert.equal(pendingTimers.size, 0);
+
+    at(100, () => engine.manualHoldEnded());
+    at(110, () => engine.parameterEdited(true));
+    advanceTo(1000);
+
+    assert.deepEqual(calls, [
+        { call: "play", at: 110, capMs: null },
+        { call: "end", at: 260 },
+    ]);
+});
+
+test("ending a manual hold alone dispatches nothing", async () => {
+    const { engine, calls, at, advanceTo, pendingTimers } = await makeEngine();
+    engine.setEnabled(true);
+
+    at(0, () => engine.manualHoldStarted());
+    at(100, () => engine.manualHoldEnded());
+    advanceTo(1000);
+
+    assert.deepEqual(calls, []);
+    assert.equal(pendingTimers.size, 0);
+});
+
+test("during-hold edits never arm a delayed stillness end", async () => {
+    const { engine, calls, at, advanceTo, pendingTimers } = await makeEngine();
+    engine.setEnabled(true);
+
+    at(0, () => engine.manualHoldStarted());
+    at(20, () => engine.parameterEdited(true));
+    advanceTo(500);
+    at(500, () => engine.manualHoldEnded());
+    advanceTo(2000);
+
+    assert.deepEqual(calls, []);
+    assert.equal(pendingTimers.size, 0);
+});
+
 test("disabling mid-hold ends the preview and cancels every pending timer", async () => {
     const { engine, calls, at, advanceTo, pendingTimers } = await makeEngine();
     engine.setEnabled(true);

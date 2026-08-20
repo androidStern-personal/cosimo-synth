@@ -35,6 +35,13 @@ function cancelNextAnimationFrame(handle) {
 function lerp(start, end, amount) {
     return start + ((end - start) * amount);
 }
+/**
+ * T02C tint strengths: a hue shift only, strong enough to read on thin
+ * low-alpha lines while the depth fade and lighting stay untouched.
+ */
+const MODULATION_OVERLAY_LINE_MIX = 0.6;
+const MODULATION_OVERLAY_SKIN_MIX = 0.55;
+const MODULATION_OVERLAY_EPSILON = 1e-6;
 function mixRGB(from, to, amount) {
     return [
         Math.round(lerp(from[0], to[0], amount)),
@@ -776,8 +783,32 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
     // both so one page-owned gradient can run behind the graph AND its
     // parameter strip, and because the cutover removes any permanent
     // Frame/Index display. The retained artwork is identical either way.
-    const { paintBackground = true, showSliceCaption = true } = options;
+    const { paintBackground = true, showSliceCaption = true, modulationRange = null } = options;
     const meshColour = mixRGB(theme.meshColor, [214, 246, 255], 0.34);
+    // T02C: map the overlay's normalized positions through the same frame-state
+    // law the current slice uses, then tint colours only — every alpha, glow,
+    // and geometry stays exactly the untinted draw's.
+    const overlayLowIndex = modulationRange === null
+        ? 0
+        : createFrameState(model.frameCount, modulationRange.lowPosition).frameIndex;
+    const overlayHighIndex = modulationRange === null
+        ? 0
+        : createFrameState(model.frameCount, modulationRange.highPosition).frameIndex;
+    const overlayLineTint = (frameIndex) => (modulationRange !== null
+        && frameIndex >= overlayLowIndex - MODULATION_OVERLAY_EPSILON
+        && frameIndex <= overlayHighIndex + MODULATION_OVERLAY_EPSILON
+        ? MODULATION_OVERLAY_LINE_MIX
+        : 0);
+    const overlaySkinTint = (frameLo, frameHi) => {
+        if (modulationRange === null) {
+            return 0;
+        }
+        const overlap = Math.min(frameHi, overlayHighIndex) - Math.max(frameLo, overlayLowIndex);
+        return overlap > MODULATION_OVERLAY_EPSILON
+            ? MODULATION_OVERLAY_SKIN_MIX * (overlap / (frameHi - frameLo))
+            : 0;
+    };
+    const tintColour = (colour, tint) => (tint > 0 && modulationRange !== null ? mixRGB(colour, modulationRange.color, tint) : colour);
     context.clearRect(0, 0, model.width, model.height);
     if (paintBackground) {
         const gradient = context.createLinearGradient?.(0, 0, 0, model.height);
@@ -811,7 +842,7 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
         const alpha = lerp(0.085, 0.024, band.depthNormalized) + (band.ridgeAmount * 0.018);
         const bandColour = mixRGB(mixRGB(theme.frameColor, theme.highlightColor, band.slopeLight * 0.24), theme.backgroundRGB, lerp(0.08, 0.68, band.depthNormalized) - (band.slopeLight * 0.06));
         context.save();
-        context.fillStyle = toRGBA(bandColour, alpha);
+        context.fillStyle = toRGBA(tintColour(bandColour, overlaySkinTint(band.frameLo, band.frameHi)), alpha);
         context.beginPath();
         tracePath(context, band.points);
         context.closePath?.();
@@ -820,7 +851,7 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
     }
     for (const slice of model.surfaceSlices) {
         context.save();
-        context.strokeStyle = toRGBA(meshColour, Math.min(0.46, slice.alpha * 2.05));
+        context.strokeStyle = toRGBA(tintColour(meshColour, overlayLineTint(slice.frameIndex)), Math.min(0.46, slice.alpha * 2.05));
         context.lineWidth = 1.15;
         context.shadowBlur = 8;
         context.shadowColor = toRGBA(theme.meshColor, 0.2);
@@ -841,7 +872,7 @@ export function drawWavetableModel(context, model, theme = DEFAULT_WAVETABLE_THE
     for (const contour of model.contours) {
         const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp(contour.colourMix, 0, 0.92));
         context.save();
-        context.strokeStyle = toRGBA(strokeColour, contour.alpha);
+        context.strokeStyle = toRGBA(tintColour(strokeColour, overlayLineTint(contour.frameIndex)), contour.alpha);
         context.lineWidth = contour.lineWidth;
         strokePolylineSegments(context, contour.segments);
         context.restore();
@@ -880,6 +911,7 @@ export class CanvasWavetableDisplay {
     cssWidth;
     cssHeight;
     drawableInsets;
+    modulationRange;
     staticScene;
     staticKey;
     pendingRenderHandle;
@@ -899,6 +931,7 @@ export class CanvasWavetableDisplay {
         this.cssWidth = 0;
         this.cssHeight = 0;
         this.drawableInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+        this.modulationRange = null;
         this.staticScene = null;
         this.staticKey = "";
         this.pendingRenderHandle = null;
@@ -920,6 +953,23 @@ export class CanvasWavetableDisplay {
     setWarp(mode, amount) {
         this.warpMode = resolveWarpMode(mode);
         this.warpAmount = clamp(Number(amount) || 0, 0, 1);
+        this.queueRender();
+    }
+    setModulationRange(overlay) {
+        const current = this.modulationRange;
+        if (current !== null
+            && overlay !== null
+            && current.lowPosition === overlay.lowPosition
+            && current.highPosition === overlay.highPosition
+            && current.color[0] === overlay.color[0]
+            && current.color[1] === overlay.color[1]
+            && current.color[2] === overlay.color[2]) {
+            return;
+        }
+        if (current === null && overlay === null) {
+            return;
+        }
+        this.modulationRange = overlay;
         this.queueRender();
     }
     setDrawableInsets(insets = {}) {
@@ -1011,6 +1061,7 @@ export class CanvasWavetableDisplay {
         drawWavetableModel(this.context, model, this.theme, {
             paintBackground: this.paintBackground,
             showSliceCaption: this.showSliceCaption,
+            modulationRange: this.modulationRange,
         });
     }
 }

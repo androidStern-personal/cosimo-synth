@@ -190,6 +190,8 @@
     }
 
     .mobile-filter-knob-cell {
+        /* The ADR-025 route-count badge anchors to the cell. */
+        position: relative;
         display: grid;
         min-width: 0;
         justify-items: center;

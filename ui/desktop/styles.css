@@ -6,6 +6,7 @@
 @import "./rack-parameter-knob.css";
 @import "./mobile-workspace.css";
 @import "./mobile-mod-rail.css";
+@import "./mobile-quick-source-sheet.css";
 @import "./mobile-mod-matrix.css";
 @import "../shared/mobile-voice-editor.css";
 
@@ -40,6 +41,18 @@
     width: 100%;
     height: 100%;
     color-scheme: dark;
+    /* This is an instrument panel, not a document: double-tapping a label
+       must never start a browser text selection anywhere. Real text entry
+       opts back in below. */
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+:host input,
+:host textarea,
+:host [contenteditable="true"] {
+    user-select: text;
+    -webkit-user-select: text;
 }
 
 * {
@@ -83,15 +96,22 @@
     box-shadow: 0 26px 80px rgb(0 0 0 / 0.48);
 }
 
-.cosimo-surface.is-mod-source-mapping [data-modulation-target-kind] {
+/* ADR-025 row 12: eligibility marks only pairs that can actually be created —
+   an existing or ineligible pair must never carry the droppable outline. */
+.cosimo-surface[data-mod-source-mapping] [data-modulation-target-kind]:not([data-drag-creation="existing"]):not([data-drag-creation="ineligible"]) {
     box-shadow:
         inset 0 0 0 1px color-mix(in srgb, var(--active-source-color) 42%, transparent),
         0 0 7px color-mix(in srgb, var(--active-source-color) 20%, transparent);
 }
 
-.cosimo-surface.is-mod-source-mapping [data-modulation-target-kind].is-mod-hover {
+/* ADR-025 row 13: capture stays in the dragged source's own color — mixing
+   toward white was the audited divergence. The :not() qualifiers keep this
+   rule MORE specific than the eligibility outline above (T08A: without them
+   eligibility wins and capture is invisible), and structurally bar an
+   existing/ineligible pair from ever taking the capture treatment. */
+.cosimo-surface[data-mod-source-mapping] [data-modulation-target-kind].is-mod-hover:not([data-drag-creation="existing"]):not([data-drag-creation="ineligible"]) {
     box-shadow:
-        inset 0 0 0 2px color-mix(in srgb, var(--drag-source-color) 74%, white),
+        inset 0 0 0 2px var(--drag-source-color),
         0 0 12px color-mix(in srgb, var(--drag-source-color) 76%, transparent);
 }
 

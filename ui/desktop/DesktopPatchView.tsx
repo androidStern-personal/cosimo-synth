@@ -81,13 +81,32 @@ import { NexusNumberField } from "./desktop-nexus-number-field";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { BaseParameterKnob, RackParameterKnob } from "./rack-parameter-knob";
 import { ParameterHudLayerContext } from "../shared/parameter-hud";
+import {
+    formatParameterEntry,
+    parameterEntrySpecForFrequency,
+    parameterEntrySpecForMobileVoiceControl,
+    parameterEntrySpecForScalar,
+    parameterEntrySpecForModulationAmount,
+    parameterEntrySpecForRackParameter,
+    parameterEntrySpecForSeconds,
+    parseParameterEntry,
+    type ParameterEntrySpec,
+} from "../shared/parameter-value-entry";
+import {
+    ParameterMenuContext,
+    useLongPressParameterMenu,
+    useParameterMenu,
+} from "../shared/parameter-context-menu";
+import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import type { RackParameterDescriptor } from "../shared/rack-parameter-descriptors";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
 import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
+    MOBILE_VOICE_OWNER_ACCENT,
     MobileVoiceFocusedEditor,
     type MobileVoiceEditorBindings,
 } from "../shared/mobile-voice-editor";
+import { MobileQuickSourceSheet } from "./mobile-quick-source-sheet";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import {
     DesktopOscillatorConnectionBoundary,
@@ -117,6 +136,7 @@ import {
 } from "../shared/synth-hooks";
 import { createPresetBar } from "../shared/effects/preset-bar";
 import { createStandaloneEffectPresetController } from "../shared/effects/standalone-effect-presets";
+import { createSynthPresetInitOptions } from "../shared/effects/synth-init-state";
 import { buildSynthPresetMigrations } from "../shared/effects/synth-preset-migrations";
 import type { EffectStoredStateAdapter } from "../shared/effects/effect-preset-v2";
 import {
@@ -147,6 +167,7 @@ import {
     MODULATION_MACRO_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
     clampModulationRouteAmount,
+    isVoiceModulationSource,
     type ModulationRoute,
     type ModulationRouteUpdate,
 } from "../shared/modulation";
@@ -195,6 +216,28 @@ const ARTICULATION_CARD_COLORS = [
     "#fcd34d",
 ] as const;
 const MIDI_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"] as const;
+const UNISON_VOICES_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("unisonVoices");
+const UNISON_DETUNE_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("unisonDetune");
+const UNISON_BLEND_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("unisonBlend");
+const UNISON_WIDTH_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("unisonWidth");
+const UNISON_PHASE_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("phase");
+const UNISON_RANDOM_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("phaseRandom");
+const UNISON_WAVETABLE_SPREAD_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("unisonWavetablePositionSpread");
+const UNISON_WARP_SPREAD_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("unisonWarpSpread");
+const FILTER_CUTOFF_ENTRY_SPEC = parameterEntrySpecForFrequency({
+    minHz: FILTER_CUTOFF_MIN_HZ,
+    maxHz: FILTER_CUTOFF_MAX_HZ,
+    stepHz: 0,
+    allowLogPercent: true,
+});
+const FILTER_RESONANCE_ENTRY_SPEC = parameterEntrySpecForScalar({
+    min: FILTER_Q_MIN,
+    max: FILTER_Q_MAX,
+    step: 0.01,
+    unit: "Q",
+    digits: 2,
+});
+const PAN_ENTRY_SPEC = parameterEntrySpecForMobileVoiceControl("pan");
 
 function getArticulationColor(runtimeSlot: number) {
     return ARTICULATION_CARD_COLORS[Math.abs(runtimeSlot) % ARTICULATION_CARD_COLORS.length];
@@ -364,6 +407,9 @@ type MsegEditorModalProps = {
 type ModulationMatrixSectionProps = {
     compact?: boolean;
     focusedSource?: MobileModSource | null;
+    /** Compact only: the floating Mod bar's selection — the page shares it (T14). */
+    armedSource?: GlobalModRailState["selectedSource"] | null;
+    onArmSource?: (source: GlobalModRailState["selectedSource"]) => void;
     selectedMsegSlot: number;
     msegState: MsegState | null;
     selectedMsegMorph: PatchControlBinding<number>;
@@ -389,6 +435,23 @@ type ModulationMatrixSectionProps = {
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     msegRateFocusBindings: SynthFocusBindings;
 };
+
+type EnvelopeEntryField = "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds";
+
+type EnvelopeEntryParameter = {
+    readonly label: string;
+    readonly compactLabel: string;
+    readonly ariaLabel: string;
+    readonly field: EnvelopeEntryField;
+    readonly target: string;
+    readonly draft: string;
+    readonly setDraft: (nextValue: string) => void;
+    readonly current: number;
+};
+
+function envelopeEntryParameter(parameter: EnvelopeEntryParameter): EnvelopeEntryParameter {
+    return parameter;
+}
 
 function formatSeconds(seconds: number) {
     return `${seconds.toFixed(3)} s`;
@@ -418,71 +481,23 @@ function formatSemitoneOffset(value: number) {
     return `${prefix}${semitones.toFixed(2)} st`;
 }
 
-function formatPanEditingValue(value: number) {
-    return String(Math.round(clamp(value, -1, 1) * 100));
+function envelopeTimeEntrySpec(currentSeconds: number) {
+    return parameterEntrySpecForSeconds({
+        minSeconds: ENVELOPE_TIME_MIN_SECONDS,
+        maxSeconds: ENVELOPE_TIME_MAX_SECONDS,
+        stepSeconds: 0.001,
+        currentSeconds,
+    });
 }
 
-function parsePanInput(text: string) {
-    const normalizedText = String(text ?? "")
-        .trim()
-        .toLowerCase()
-        .replace(/%/g, "")
-        .replace(/\s+/g, "");
-
-    if (!normalizedText) {
-        return null;
-    }
-
-    const numericValue = Number.parseFloat(normalizedText);
-
-    if (!Number.isFinite(numericValue)) {
-        return null;
-    }
-
-    return numericValue / 100;
-}
-
-function formatEnvelopeTimeDisplay(seconds: number) {
-    return seconds >= 1 ? `${seconds.toFixed(2)} s` : `${Math.round(seconds * 1000)} ms`;
-}
-
-function parseEnvelopeTimeInput(text: string, currentSeconds: number) {
-    const normalizedText = String(text ?? "")
-        .trim()
-        .toLowerCase();
-
-    if (!normalizedText) {
-        return null;
-    }
-
-    const match = normalizedText.match(/^(-?\d+(?:\.\d+)?)\s*(ms|msec|milliseconds|s|sec|secs|second|seconds)?$/);
-
-    if (!match) {
-        return null;
-    }
-
-    const numericValue = Number(match[1]);
-
-    if (!Number.isFinite(numericValue)) {
-        return null;
-    }
-
-    const unit = match[2];
-
-    if (unit === "ms" || unit === "msec" || unit === "milliseconds") {
-        return numericValue / 1000;
-    }
-
-    if (unit === "s" || unit === "sec" || unit === "secs" || unit === "second" || unit === "seconds") {
-        return numericValue;
-    }
-
-    if (currentSeconds < 1) {
-        return numericValue >= 10 ? numericValue / 1000 : numericValue;
-    }
-
-    return numericValue;
-}
+const ENVELOPE_SUSTAIN_ENTRY_SPEC = parameterEntrySpecForScalar({
+    min: 0,
+    max: 1,
+    step: 0.001,
+    unit: "%",
+    canonicalPerDisplayedUnit: 0.01,
+    digits: 1,
+});
 
 function clamp(value: number, min: number, max: number) {
     return Math.min(Math.max(value, min), max);
@@ -586,50 +601,6 @@ function formatCutoffDisplay(value: number) {
     return `${Math.round(safeValue)}`;
 }
 
-function formatFrequencyHz(value: number) {
-    const safeValue = Math.max(20, Number(value) || 0);
-
-    if (safeValue >= 10_000) {
-        return `${(safeValue / 1000).toFixed(1)} kHz`;
-    }
-
-    if (safeValue >= 1000) {
-        return `${(safeValue / 1000).toFixed(2)} kHz`;
-    }
-
-    return `${Math.round(safeValue)} Hz`;
-}
-
-function formatCutoffEditingValue(value: number) {
-    return `${Math.round(Math.min(Math.max(Number(value) || FILTER_CUTOFF_MIN_HZ, FILTER_CUTOFF_MIN_HZ), FILTER_CUTOFF_MAX_HZ))}`;
-}
-
-function parseCutoffInput(text: string) {
-    const normalizedText = String(text ?? "")
-        .trim()
-        .toLowerCase()
-        .replace(/,/g, "")
-        .replace(/\s+/g, "");
-
-    if (!normalizedText) {
-        return null;
-    }
-
-    const match = normalizedText.match(/^(-?\d*\.?\d+)(k|khz|hz)?$/);
-
-    if (!match) {
-        return null;
-    }
-
-    const numericValue = Number(match[1]);
-
-    if (!Number.isFinite(numericValue)) {
-        return null;
-    }
-
-    return match[2]?.startsWith("k") ? numericValue * 1000 : numericValue;
-}
-
 function formatResonanceDisplay(value: number) {
     const safeValue = Math.min(Math.max(Number(value) || FILTER_Q_MIN, FILTER_Q_MIN), FILTER_Q_MAX);
     return safeValue.toFixed(safeValue >= 10 ? 1 : 2);
@@ -685,20 +656,6 @@ function buildFilterModulationTravel(args: {
         baseHandleMode: anyRoutedUnipolar ? "start" : "translate",
         centerHandle: anyRoutedUnipolar,
     };
-}
-
-function parseResonanceInput(text: string) {
-    const normalizedText = String(text ?? "")
-        .trim()
-        .toLowerCase()
-        .replace(/q/g, "");
-
-    if (!normalizedText) {
-        return null;
-    }
-
-    const numericValue = Number(normalizedText);
-    return Number.isFinite(numericValue) ? numericValue : null;
 }
 
 function WarpModeGlyph({ mode }: { mode: number }) {
@@ -1083,11 +1040,7 @@ function WarpControlCluster({
             <NexusNumberField
                 label="Warp amount"
                 binding={warpAmount}
-                min={0}
-                max={1}
-                step={0.001}
-                decimalPlaces={3}
-                suffix={null}
+                entrySpec={parameterEntrySpecForMobileVoiceControl("warpAmount")}
                 variant="compactOverlay"
                 showLabel={false}
                 width={62}
@@ -1105,24 +1058,6 @@ const UNISON_PHASE_MODE_LABELS = ["Free", "Reset"] as const;
 
 function cycleDiscreteValue(binding: PatchControlBinding<number>, maxValue: number) {
     binding.commitValue((Math.round(Number(binding.value) || 0) + 1) % (maxValue + 1));
-}
-
-function formatUnisonVoiceCount(value: number) {
-    return `${Math.round(clamp(value, 1, 8))}`;
-}
-
-function formatUnisonDetune(value: number) {
-    return `${Math.round(clamp(value, 0, 1) * 50)} ct`;
-}
-
-function parsePercentInput(text: string) {
-    const numeric = Number.parseFloat(String(text).replace("%", "").trim());
-    return Number.isFinite(numeric) ? clamp(numeric / 100, 0, 1) : null;
-}
-
-function parseUnisonDetuneInput(text: string) {
-    const numeric = Number.parseFloat(String(text).replace(/ct|cents?/gi, "").trim());
-    return Number.isFinite(numeric) ? clamp(numeric / 50, 0, 1) : null;
 }
 
 function unisonSpreadScalar(index: number, count: number, mode: number) {
@@ -1371,14 +1306,10 @@ function UnisonControlSurface({
                     <PrecisionNumberField
                         ariaLabel="Unison voices"
                         binding={unisonVoices}
-                        min={1}
-                        max={8}
-                        step={1}
+                        entrySpec={UNISON_VOICES_ENTRY_SPEC}
+                        suffix={UNISON_VOICES_ENTRY_SPEC.defaultUnit}
                         width={58}
                         height={30}
-                        formatDisplay={formatUnisonVoiceCount}
-                        formatEditingValue={(value) => String(Math.round(value))}
-                        parseText={(text) => Number.parseInt(text.trim(), 10)}
                         dataRole="unison-voices-control"
                     />
                     <button
@@ -1410,14 +1341,10 @@ function UnisonControlSurface({
                             <PrecisionNumberField
                                 ariaLabel="Unison detune"
                                 binding={unisonDetune}
-                                min={0}
-                                max={1}
-                                step={0.001}
+                                entrySpec={UNISON_DETUNE_ENTRY_SPEC}
+                                suffix={UNISON_DETUNE_ENTRY_SPEC.defaultUnit}
                                 width={82}
                                 height={30}
-                                formatDisplay={formatUnisonDetune}
-                                formatEditingValue={(value) => String(Math.round(value * 50))}
-                                parseText={parseUnisonDetuneInput}
                                 dataRole="unison-detune-control"
                                 modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "unisonDetune")}
                             />
@@ -1426,14 +1353,10 @@ function UnisonControlSurface({
                             <PrecisionNumberField
                                 ariaLabel="Unison blend"
                                 binding={unisonBlend}
-                                min={0}
-                                max={1}
-                                step={0.001}
+                                entrySpec={UNISON_BLEND_ENTRY_SPEC}
+                                suffix={UNISON_BLEND_ENTRY_SPEC.defaultUnit}
                                 width={82}
                                 height={30}
-                                formatDisplay={formatPercent}
-                                formatEditingValue={(value) => String(Math.round(value * 100))}
-                                parseText={parsePercentInput}
                                 dataRole="unison-blend-control"
                                 modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "unisonBlend")}
                             />
@@ -1442,14 +1365,10 @@ function UnisonControlSurface({
                             <PrecisionNumberField
                                 ariaLabel="Unison width"
                                 binding={unisonWidth}
-                                min={0}
-                                max={1}
-                                step={0.001}
+                                entrySpec={UNISON_WIDTH_ENTRY_SPEC}
+                                suffix={UNISON_WIDTH_ENTRY_SPEC.defaultUnit}
                                 width={82}
                                 height={30}
-                                formatDisplay={formatPercent}
-                                formatEditingValue={(value) => String(Math.round(value * 100))}
-                                parseText={parsePercentInput}
                                 dataRole="unison-width-control"
                                 modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "unisonWidth")}
                             />
@@ -1460,14 +1379,10 @@ function UnisonControlSurface({
                             <PrecisionNumberField
                                 ariaLabel="Unison phase"
                                 binding={unisonPhase}
-                                min={0}
-                                max={1}
-                                step={0.001}
+                                entrySpec={UNISON_PHASE_ENTRY_SPEC}
+                                suffix={UNISON_PHASE_ENTRY_SPEC.defaultUnit}
                                 width={82}
                                 height={30}
-                                formatDisplay={formatPercent}
-                                formatEditingValue={(value) => String(Math.round(value * 100))}
-                                parseText={parsePercentInput}
                                 dataRole="unison-phase-control"
                             />
                         </UnisonField>
@@ -1475,14 +1390,10 @@ function UnisonControlSurface({
                             <PrecisionNumberField
                                 ariaLabel="Unison random"
                                 binding={unisonRandom}
-                                min={0}
-                                max={1}
-                                step={0.001}
+                                entrySpec={UNISON_RANDOM_ENTRY_SPEC}
+                                suffix={UNISON_RANDOM_ENTRY_SPEC.defaultUnit}
                                 width={82}
                                 height={30}
-                                formatDisplay={formatPercent}
-                                formatEditingValue={(value) => String(Math.round(value * 100))}
-                                parseText={parsePercentInput}
                                 dataRole="unison-random-control"
                             />
                         </UnisonField>
@@ -1490,14 +1401,10 @@ function UnisonControlSurface({
                             <PrecisionNumberField
                                 ariaLabel="Unison wavetable position spread"
                                 binding={unisonWavetablePositionSpread}
-                                min={0}
-                                max={1}
-                                step={0.001}
+                                entrySpec={UNISON_WAVETABLE_SPREAD_ENTRY_SPEC}
+                                suffix={UNISON_WAVETABLE_SPREAD_ENTRY_SPEC.defaultUnit}
                                 width={82}
                                 height={30}
-                                formatDisplay={formatPercent}
-                                formatEditingValue={(value) => String(Math.round(value * 100))}
-                                parseText={parsePercentInput}
                                 dataRole="unison-wt-spread-control"
                                 modulationTargetKind={oscillatorModulationTargetKind(
                                     oscillatorID,
@@ -1511,14 +1418,10 @@ function UnisonControlSurface({
                             <PrecisionNumberField
                                 ariaLabel="Unison warp spread"
                                 binding={unisonWarpSpread}
-                                min={0}
-                                max={1}
-                                step={0.001}
+                                entrySpec={UNISON_WARP_SPREAD_ENTRY_SPEC}
+                                suffix={UNISON_WARP_SPREAD_ENTRY_SPEC.defaultUnit}
                                 width={82}
                                 height={30}
-                                formatDisplay={formatPercent}
-                                formatEditingValue={(value) => String(Math.round(value * 100))}
-                                parseText={parsePercentInput}
                                 dataRole="unison-warp-spread-control"
                                 modulationTargetKind={oscillatorModulationTargetKind(oscillatorID, "unisonWarpSpread")}
                             />
@@ -1870,6 +1773,7 @@ function SynthPresetBarHost({
         patchConnection,
         storedStateAdapters,
         presetMigrations: buildSynthPresetMigrations,
+        synth: createSynthPresetInitOptions(patchConnection, storedStateAdapters),
     }), [patchConnection, storedStateAdapters]);
 
     useEffect(() => {
@@ -2003,12 +1907,25 @@ function VoiceFilterKnob({
     const amountBinding = useModulationRouteAmountBinding(armedRoute);
     const presentedRoute = presentRouteWithCanonicalAmount(armedRoute, amountBinding);
     const sourceDescriptor = findRackModulationSource(armedSource.sourceKind, armedSource.sourceSlot);
+    // ADR-025 row 7: Voice knobs report the same real mapping total as FX.
+    const targetRouteCount = routes.filter((route) => route.targetKind === targetKind).length;
+    const anyTargetRouteEnabled = routes.some((route) => route.targetKind === targetKind && route.enabled);
+    const openParameterMenu = useParameterMenu();
 
     return (
         <div
             className={`mobile-filter-knob-cell${disabled ? " is-disabled" : ""}`}
             data-modulation-target-kind={targetKind}
         >
+            {targetRouteCount > 0 ? (
+                <span
+                    className={`rack-route-count-badge ${anyTargetRouteEnabled ? "is-solid" : "is-hollow"}`}
+                    data-role={`voice-filter-route-count-${descriptor.endpointID}`}
+                    aria-label={`${targetRouteCount} modulation ${targetRouteCount === 1 ? "route" : "routes"} target ${descriptor.label}`}
+                >
+                    {targetRouteCount}
+                </span>
+            ) : null}
             <RackParameterKnob
                 descriptor={descriptor}
                 binding={binding}
@@ -2025,7 +1942,19 @@ function VoiceFilterKnob({
                 handleDataRole={`voice-filter-knob-handle-${descriptor.endpointID}`}
                 onSelect={() => {}}
                 onModulationAmountChange={(amount) => amountBinding.setValue(amount)}
-                onRequestContextMenu={() => {}}
+                onRequestContextMenu={(clientX: number, clientY: number) => {
+                    openParameterMenu?.({
+                        controlKey: descriptor.endpointID,
+                        label: descriptor.label,
+                        targetKind,
+                        baseSpec: parameterEntrySpecForRackParameter(descriptor, binding.value),
+                        baseValue: binding.value,
+                        defaultValue: descriptor.initial,
+                        commitBase: binding.commitValue,
+                        clientX,
+                        clientY,
+                    });
+                }}
             />
         </div>
     );
@@ -2390,12 +2319,8 @@ function FilterSection({
                     <PrecisionNumberField
                         ariaLabel="Filter cutoff"
                         binding={filterCutoff}
-                        min={FILTER_CUTOFF_MIN_HZ}
-                        max={FILTER_CUTOFF_MAX_HZ}
-                        step={1}
-                        formatDisplay={formatCutoffDisplay}
-                        formatEditingValue={formatCutoffEditingValue}
-                        parseText={parseCutoffInput}
+                        entrySpec={FILTER_CUTOFF_ENTRY_SPEC}
+                        suffix={FILTER_CUTOFF_ENTRY_SPEC.defaultUnit}
                         normalizedFromValue={filterCutoffHzToNormalized}
                         valueFromNormalized={normalizedToFilterCutoffHz}
                         pixelsPerFullRange={220}
@@ -2410,11 +2335,8 @@ function FilterSection({
                     <PrecisionNumberField
                         ariaLabel="Filter resonance"
                         binding={filterQ}
-                        min={FILTER_Q_MIN}
-                        max={FILTER_Q_MAX}
-                        step={0.01}
-                        formatDisplay={formatResonanceDisplay}
-                        parseText={parseResonanceInput}
+                        entrySpec={FILTER_RESONANCE_ENTRY_SPEC}
+                        suffix={FILTER_RESONANCE_ENTRY_SPEC.defaultUnit}
                         normalizedFromValue={resonanceNormalizedFromQ}
                         valueFromNormalized={resonanceQFromSurface}
                         pixelsPerFullRange={180}
@@ -2482,6 +2404,7 @@ function OscillatorPerformanceControls({
             {fields.map((field) => (
                 <BaseParameterKnob
                     key={field.role}
+                    ownerAccent={MOBILE_VOICE_OWNER_ACCENT}
                     descriptor={{
                         endpointID: field.binding.endpointID,
                         label: field.label,
@@ -2500,6 +2423,13 @@ function OscillatorPerformanceControls({
                     modulationTargetKind={field.modulationParameterKind === null
                         ? undefined
                         : oscillatorModulationTargetKind(oscillatorID, field.modulationParameterKind)}
+                    entrySpec={parameterEntrySpecForScalar({
+                        min: field.min,
+                        max: field.max,
+                        step: field.step,
+                        unit: field.suffix,
+                        digits: field.step >= 1 ? 0 : 1,
+                    })}
                     formatValue={(value) => `${value > 0 ? "+" : ""}${Number.isInteger(value) ? value : value.toFixed(1)} ${field.suffix}`}
                 />
             ))}
@@ -2585,9 +2515,12 @@ function KeyboardToolbar({
                     <NexusNumberField
                         label="Glide"
                         binding={glideTime}
-                        min={GLIDE_TIME_MIN_SECONDS}
-                        max={GLIDE_TIME_MAX_SECONDS}
-                        step={GLIDE_TIME_STEP_SECONDS}
+                        entrySpec={parameterEntrySpecForSeconds({
+                            minSeconds: GLIDE_TIME_MIN_SECONDS,
+                            maxSeconds: GLIDE_TIME_MAX_SECONDS,
+                            stepSeconds: GLIDE_TIME_STEP_SECONDS,
+                            currentSeconds: glideTime.value,
+                        })}
                         onActivate={glideFocusTarget.onActivate}
                         onBeginTextEntry={glideFocusTarget.onBeginTextEntry}
                         onEndTextEntry={glideFocusTarget.onEndTextEntry}
@@ -2749,7 +2682,12 @@ function MsegEditorModal({
         const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
         const modalRoot = backdropRef.current;
         const siblings = Array.from(modalRoot.parentElement?.children ?? []).filter(
-            (candidate): candidate is HTMLElement => candidate instanceof HTMLElement && candidate !== modalRoot,
+            (candidate): candidate is HTMLElement => candidate instanceof HTMLElement
+                && candidate !== modalRoot
+                // The floating Mod bar is the universal play surface (T11);
+                // editing a shape while auditioning it is the point, so the
+                // modal must never deaden it.
+                && candidate.getAttribute("data-role") !== "mobile-global-mod-rail-portal",
         );
         const inertStates = siblings.map((element) => ({ element, inert: element.inert }));
         for (const sibling of siblings) {
@@ -2784,6 +2722,31 @@ function MsegEditorModal({
             previouslyFocused?.focus({ preventScroll: true });
         };
     }, [isOpen]);
+
+    // T20: the modal's two sliders long-press into the ADR-017 menu.
+    const morphLongPress = useLongPressParameterMenu(useCallback(() => ({
+        controlKey: `mseg${slotIndex + 1}Morph`,
+        label: "MSEG morph",
+        targetKind: `mseg${slotIndex + 1}Morph`,
+        baseSpec: parameterEntrySpecForScalar({ min: 0, max: 1, step: 0.001, unit: "%", canonicalPerDisplayedUnit: 0.01, digits: 0 }),
+        baseValue: morphBinding.value,
+        defaultValue: morphBinding.initialValue ?? null,
+        commitBase: (value: number) => onMorphChange(value),
+    }), [morphBinding.initialValue, morphBinding.value, onMorphChange, slotIndex]));
+    const rateLongPress = useLongPressParameterMenu(useCallback(() => ({
+        controlKey: `mseg${slotIndex + 1}Rate`,
+        label: "MSEG rate",
+        targetKind: `mseg${slotIndex + 1}Rate`,
+        baseSpec: parameterEntrySpecForSeconds({
+            minSeconds: MSEG_RATE_MIN_SECONDS,
+            maxSeconds: MSEG_RATE_MAX_SECONDS,
+            stepSeconds: 0.001,
+            currentSeconds: clampMsegRateSeconds(msegState?.playback.rate.seconds ?? 1),
+        }),
+        baseValue: clampMsegRateSeconds(msegState?.playback.rate.seconds ?? 1),
+        defaultValue: null,
+        commitBase: (value: number) => onRateChange(value),
+    }), [msegState?.playback.rate.seconds, onRateChange, slotIndex]));
 
     if (!isOpen || !msegState) {
         return null;
@@ -2868,7 +2831,7 @@ function MsegEditorModal({
                 </div>
 
                 <div className="mseg-editor-controls" data-role="mseg-editor-controls">
-                    <label className="mseg-editor-range">
+                    <label className="mseg-editor-range" {...morphLongPress}>
                         <span>Morph</span>
                         <input
                             className="cosimo-range"
@@ -2887,7 +2850,7 @@ function MsegEditorModal({
                         />
                         <output className="synth-readout-text">{formatPercent(morphBinding.value)}</output>
                     </label>
-                    <label className="mseg-editor-range mseg-editor-time">
+                    <label className="mseg-editor-range mseg-editor-time" {...rateLongPress}>
                         <span>Time</span>
                         <input
                             className="cosimo-range"
@@ -2979,6 +2942,8 @@ function MacroSourceEditor({
 function ModulationMatrixSection({
     compact = false,
     focusedSource = null,
+    armedSource = null,
+    onArmSource,
     selectedMsegSlot,
     msegState,
     selectedMsegMorph,
@@ -3048,6 +3013,43 @@ function ModulationMatrixSection({
         ));
     }, [focusedSource, onSelectEnvelopeSlot, onSelectMsegSlot]);
 
+    // T14: the page and the floating Mod bar share ONE selection. The bar's
+    // armed source drives the page's editor here; the page's own selectors
+    // push back through onArmSource, so the shape the user sees is always the
+    // shape the full editor opens.
+    const armedSourceKind = armedSource?.sourceKind ?? null;
+    const armedSourceSlot = armedSource?.sourceSlot ?? 0;
+    useEffect(() => {
+        if (armedSourceKind === null) {
+            return;
+        }
+
+        const slotIndex = armedSourceSlot - 1;
+        if (armedSourceKind === "mseg") {
+            onSelectMsegSlot(slotIndex);
+            setActiveEditorTab((current) => (
+                current.kind === "mseg" && current.slotIndex === slotIndex
+                    ? current
+                    : { kind: "mseg", slotIndex }
+            ));
+            return;
+        }
+        if (armedSourceKind === "env") {
+            onSelectEnvelopeSlot(slotIndex);
+            setActiveEditorTab((current) => (
+                current.kind === "envelope" && current.slotIndex === slotIndex
+                    ? current
+                    : { kind: "envelope", slotIndex }
+            ));
+            return;
+        }
+        setActiveEditorTab((current) => (
+            current.kind === "macro" && current.slotIndex === slotIndex
+                ? current
+                : { kind: "macro", slotIndex }
+        ));
+    }, [armedSourceKind, armedSourceSlot, onSelectEnvelopeSlot, onSelectMsegSlot]);
+
     // MSEG rate drag/edit state
     const msegRateRef = useRef<HTMLInputElement | null>(null);
     const msegRateWheelCursorTimerRef = useRef<number>(0);
@@ -3060,6 +3062,9 @@ function ModulationMatrixSection({
     } | null>(null);
     const [isEditingMsegRate, setIsEditingMsegRate] = useState(false);
     const [draftMsegRate, setDraftMsegRate] = useState("");
+    const [msegRateEntryError, setMsegRateEntryError] = useState("");
+    const msegRateEditingSpecRef = useRef<ParameterEntrySpec | null>(null);
+    const skipMsegRateBlurRef = useRef(false);
     const [isMsegMorphAdjusting, setIsMsegMorphAdjusting] = useState(false);
 
     const cancelMsegRateDrag = useCallback((pointerId?: number) => {
@@ -3101,6 +3106,19 @@ function ModulationMatrixSection({
     }, [cancelMsegRateDrag]);
 
     const currentMsegRate = clampMsegRateSeconds(Number(msegState?.playback.rate.seconds ?? 1));
+    const msegRateEntrySpec = parameterEntrySpecForSeconds({
+        minSeconds: MSEG_RATE_MIN_SECONDS,
+        maxSeconds: MSEG_RATE_MAX_SECONDS,
+        stepSeconds: 0.001,
+        currentSeconds: currentMsegRate,
+    });
+
+    const beginMsegRateTextEntry = useCallback(() => {
+        msegRateEditingSpecRef.current = msegRateEntrySpec;
+        setDraftMsegRate(formatParameterEntry(msegRateEntrySpec, currentMsegRate).draft);
+        setMsegRateEntryError("");
+        setIsEditingMsegRate(true);
+    }, [currentMsegRate, msegRateEntrySpec]);
 
     const updateMsegRateDrag = useCallback((event: Pick<PointerEvent, "pointerId" | "pointerType" | "buttons" | "clientX" | "preventDefault">) => {
         const drag = msegRateDragRef.current;
@@ -3157,37 +3175,67 @@ function ModulationMatrixSection({
     }, [isEditingMsegRate, currentMsegRate, onMsegRateChange]);
 
     const commitMsegRateText = useCallback((text: string) => {
-        const parsed = parseFloat(text);
-        if (Number.isFinite(parsed)) {
-            onMsegRateChange(clamp(parsed, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
+        const spec = msegRateEditingSpecRef.current ?? msegRateEntrySpec;
+        const result = parseParameterEntry(spec, text);
+        if (result._tag === "rejected") {
+            setMsegRateEntryError(result.message);
+            return false;
         }
+        if (result.commit._tag !== "value") {
+            throw new Error("MSEG rate cannot commit a tempo division.");
+        }
+        setDraftMsegRate(result.echo.draft);
+        setMsegRateEntryError("");
+        onMsegRateChange(result.commit.value);
         setIsEditingMsegRate(false);
-    }, [onMsegRateChange]);
+        return true;
+    }, [msegRateEntrySpec, onMsegRateChange]);
 
     // ADSR draft state (for envelope tab top-bar inputs)
     const [draftAttack, setDraftAttack] = useState("");
     const [draftDecay, setDraftDecay] = useState("");
     const [draftSustain, setDraftSustain] = useState("");
     const [draftRelease, setDraftRelease] = useState("");
-    const [activeEnvelopeDraftField, setActiveEnvelopeDraftField] = useState<
-        "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds" | null
-    >(null);
+    const [activeEnvelopeDraftField, setActiveEnvelopeDraftField] = useState<EnvelopeEntryField | null>(null);
+    const [envelopeEntryError, setEnvelopeEntryError] = useState<{
+        readonly field: EnvelopeEntryField;
+        readonly message: string;
+    } | null>(null);
+    const skipEnvelopeBlurFieldRef = useRef<EnvelopeEntryField | null>(null);
+    const envelopeEditingSpecRef = useRef<{
+        readonly field: EnvelopeEntryField;
+        readonly spec: ParameterEntrySpec;
+    } | null>(null);
+
+    const entrySpecForEnvelopeField = (
+        field: EnvelopeEntryField,
+        currentValue: number,
+    ) => field === "sustain" ? ENVELOPE_SUSTAIN_ENTRY_SPEC : envelopeTimeEntrySpec(currentValue);
 
     useEffect(() => {
         if (!selectedEnvelope) {
             return;
         }
         if (activeEnvelopeDraftField !== "attackSeconds") {
-            setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
+            setDraftAttack(formatParameterEntry(
+                envelopeTimeEntrySpec(selectedEnvelope.attackSeconds),
+                selectedEnvelope.attackSeconds,
+            ).display);
         }
         if (activeEnvelopeDraftField !== "decaySeconds") {
-            setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
+            setDraftDecay(formatParameterEntry(
+                envelopeTimeEntrySpec(selectedEnvelope.decaySeconds),
+                selectedEnvelope.decaySeconds,
+            ).display);
         }
         if (activeEnvelopeDraftField !== "sustain") {
-            setDraftSustain(formatPercent(selectedEnvelope.sustain));
+            setDraftSustain(formatParameterEntry(ENVELOPE_SUSTAIN_ENTRY_SPEC, selectedEnvelope.sustain).display);
         }
         if (activeEnvelopeDraftField !== "releaseSeconds") {
-            setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
+            setDraftRelease(formatParameterEntry(
+                envelopeTimeEntrySpec(selectedEnvelope.releaseSeconds),
+                selectedEnvelope.releaseSeconds,
+            ).display);
         }
     }, [
         activeEnvelopeDraftField,
@@ -3197,51 +3245,67 @@ function ModulationMatrixSection({
         selectedEnvelope?.sustain,
     ]);
 
-    const commitEnvelopeDurationField = useCallback((
-        field: "attackSeconds" | "decaySeconds" | "releaseSeconds",
+    const commitEnvelopeEntryField = useCallback((
+        field: EnvelopeEntryField,
         draftValue: string,
-        currentSeconds: number,
+        currentValue: number,
+        setDraft: (nextValue: string) => void,
     ) => {
         if (!selectedEnvelope) {
-            return;
+            return false;
         }
-        const parsedValue = parseEnvelopeTimeInput(draftValue, currentSeconds);
-        if (parsedValue === null) {
-            setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
-            setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
-            setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
-            return;
+        const activeSpec = envelopeEditingSpecRef.current;
+        const spec = activeSpec?.field === field
+            ? activeSpec.spec
+            : entrySpecForEnvelopeField(field, currentValue);
+        const result = parseParameterEntry(spec, draftValue);
+        if (result._tag === "rejected") {
+            setEnvelopeEntryError({ field, message: result.message });
+            return false;
         }
-        onEnvelopeChange(field, clamp(parsedValue, ENVELOPE_TIME_MIN_SECONDS, ENVELOPE_TIME_MAX_SECONDS));
+        if (result.commit._tag !== "value") {
+            throw new Error("An envelope field cannot commit a tempo division.");
+        }
+        setEnvelopeEntryError(null);
+        setDraft(result.echo.display);
+        envelopeEditingSpecRef.current = null;
+        onEnvelopeChange(field, result.commit.value);
+        return true;
     }, [onEnvelopeChange, selectedEnvelope]);
 
     const handleEnvelopeFieldKeyDown = useCallback((
         event: ReactKeyboardEvent<HTMLInputElement>,
-        field: "attackSeconds" | "decaySeconds" | "releaseSeconds",
+        field: EnvelopeEntryField,
         draftValue: string,
-        currentSeconds: number,
+        currentValue: number,
+        setDraft: (nextValue: string) => void,
     ) => {
         if (!selectedEnvelope) {
             return;
         }
         if (event.key === "Enter") {
             event.preventDefault();
-            commitEnvelopeDurationField(field, draftValue, currentSeconds);
-            event.currentTarget.blur();
+            if (commitEnvelopeEntryField(field, draftValue, currentValue, setDraft)) {
+                skipEnvelopeBlurFieldRef.current = field;
+                setActiveEnvelopeDraftField(null);
+                event.currentTarget.blur();
+            }
             return;
         }
         if (event.key === "Escape") {
             event.preventDefault();
-            if (field === "attackSeconds") {
-                setDraftAttack(formatEnvelopeTimeDisplay(selectedEnvelope.attackSeconds));
-            } else if (field === "decaySeconds") {
-                setDraftDecay(formatEnvelopeTimeDisplay(selectedEnvelope.decaySeconds));
-            } else {
-                setDraftRelease(formatEnvelopeTimeDisplay(selectedEnvelope.releaseSeconds));
-            }
+            const activeSpec = envelopeEditingSpecRef.current;
+            const spec = activeSpec?.field === field
+                ? activeSpec.spec
+                : entrySpecForEnvelopeField(field, currentValue);
+            setDraft(formatParameterEntry(spec, currentValue).display);
+            setEnvelopeEntryError(null);
+            envelopeEditingSpecRef.current = null;
+            skipEnvelopeBlurFieldRef.current = field;
+            setActiveEnvelopeDraftField(null);
             event.currentTarget.blur();
         }
-    }, [commitEnvelopeDurationField, selectedEnvelope]);
+    }, [commitEnvelopeEntryField, selectedEnvelope]);
 
     return (
         <section
@@ -3285,11 +3349,14 @@ function ModulationMatrixSection({
                                     if (nextKind === "mseg") {
                                         onSelectMsegSlot(0);
                                         setActiveEditorTab({ kind: "mseg", slotIndex: 0 });
+                                        onArmSource?.({ sourceKind: "mseg", sourceSlot: 1 });
                                     } else if (nextKind === "envelope") {
                                         onSelectEnvelopeSlot(0);
                                         setActiveEditorTab({ kind: "envelope", slotIndex: 0 });
+                                        onArmSource?.({ sourceKind: "env", sourceSlot: 1 });
                                     } else if (nextKind === "macro") {
                                         setActiveEditorTab({ kind: "macro", slotIndex: 0 });
+                                        onArmSource?.({ sourceKind: "macro", sourceSlot: 1 });
                                     }
                                 }}
                             >
@@ -3315,6 +3382,13 @@ function ModulationMatrixSection({
                                         onSelectEnvelopeSlot(nextSlotIndex);
                                     }
                                     setActiveEditorTab({ kind: activeEditorTab.kind, slotIndex: nextSlotIndex });
+                                    const nextSlotNumber = nextSlotIndex + 1;
+                                    if (nextSlotNumber === 1 || nextSlotNumber === 2 || nextSlotNumber === 3) {
+                                        onArmSource?.({
+                                            sourceKind: activeEditorTab.kind === "envelope" ? "env" : activeEditorTab.kind,
+                                            sourceSlot: nextSlotNumber,
+                                        });
+                                    }
                                 }}
                             >
                                 {Array.from({ length: activeEditorSlotCount }, (_, slotIndex) => (
@@ -3453,6 +3527,7 @@ function ModulationMatrixSection({
                                 <path d="M4 6 L12 6 L12 4 L15 7 L12 10 L12 8 L4 8 L4 10 L1 7 L4 4 Z" strokeLinecap="round" />
                             </svg>
                         </button>
+                        <span className="relative flex items-center">
                         <input
                             ref={msegRateRef}
                             type="text"
@@ -3462,12 +3537,14 @@ function ModulationMatrixSection({
                             readOnly={!isEditingMsegRate}
                             aria-label="MSEG rate"
                             data-modulation-target-kind={`mseg${selectedMsegSlot + 1}Rate`}
-                            className={`synth-readout-text w-[56px] touch-none select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-center text-[10px] leading-none outline-none max-[480px]:w-[64px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
+                            className={`synth-readout-text w-[64px] touch-none select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-left text-[10px] leading-none outline-none max-[480px]:w-[68px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
                                 isEditingMsegRate
                                     ? "cursor-text"
                                     : "cursor-ew-resize"
                             }`}
-                            value={isEditingMsegRate ? draftMsegRate : formatSeconds(currentMsegRate)}
+                            value={isEditingMsegRate
+                                ? draftMsegRate
+                                : formatParameterEntry(msegRateEntrySpec, currentMsegRate).display}
                             tabIndex={activeEditorTab.kind === "mseg" ? 0 : -1}
                             onPointerDown={(event) => {
                                 if (event.button !== 0 || isEditingMsegRate) return;
@@ -3499,8 +3576,7 @@ function ModulationMatrixSection({
                                     // Capture may already be gone at normal pointer release.
                                 }
                                 if (!drag.moved) {
-                                    setDraftMsegRate(currentMsegRate.toFixed(3));
-                                    setIsEditingMsegRate(true);
+                                    beginMsegRateTextEntry();
                                     requestAnimationFrame(() => {
                                         msegRateRef.current?.focus();
                                         msegRateRef.current?.select();
@@ -3514,82 +3590,133 @@ function ModulationMatrixSection({
                             onChange={(event) => {
                                 if (isEditingMsegRate) {
                                     setDraftMsegRate(event.currentTarget.value);
-                                } else {
-                                    commitMsegRateText(event.currentTarget.value);
-                                }
-                            }}
-                            onInput={(event) => {
-                                if (!isEditingMsegRate) {
-                                    commitMsegRateText(event.currentTarget.value);
                                 }
                             }}
                             onKeyDown={(event) => {
                                 if (!isEditingMsegRate) {
-                                    if (event.key === "Enter") { event.preventDefault(); setDraftMsegRate(currentMsegRate.toFixed(3)); setIsEditingMsegRate(true); }
+                                    if (event.key === "Enter") { event.preventDefault(); beginMsegRateTextEntry(); }
                                     return;
                                 }
-                                if (event.key === "Enter") { event.preventDefault(); commitMsegRateText(draftMsegRate); msegRateRef.current?.blur(); }
-                                if (event.key === "Escape") { event.preventDefault(); setIsEditingMsegRate(false); msegRateRef.current?.blur(); }
+                                if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    if (commitMsegRateText(draftMsegRate)) {
+                                        skipMsegRateBlurRef.current = true;
+                                        msegRateRef.current?.blur();
+                                    }
+                                }
+                                if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    setMsegRateEntryError("");
+                                    setIsEditingMsegRate(false);
+                                    skipMsegRateBlurRef.current = true;
+                                    msegRateRef.current?.blur();
+                                }
                             }}
                             onBlur={() => {
-                                if (isEditingMsegRate) commitMsegRateText(draftMsegRate);
+                                if (skipMsegRateBlurRef.current) {
+                                    skipMsegRateBlurRef.current = false;
+                                } else if (isEditingMsegRate && !commitMsegRateText(draftMsegRate)) {
+                                    requestAnimationFrame(() => msegRateRef.current?.focus());
+                                }
                             }}
                             {...msegRateFocusBindings}
                         />
+                        {isEditingMsegRate ? (
+                            <span
+                                data-role="parameter-entry-unit"
+                                className="synth-readout-text pointer-events-none absolute right-1.5 text-[8px] opacity-60"
+                            >
+                                {formatParameterEntry(msegRateEditingSpecRef.current ?? msegRateEntrySpec, currentMsegRate).unit}
+                            </span>
+                        ) : null}
+                        {msegRateEntryError ? (
+                            <span
+                                role="alert"
+                                data-role="parameter-entry-error"
+                                className="absolute right-0 top-full z-30 mt-1 min-w-40 rounded bg-red-950/95 px-1.5 py-1 text-[9px] text-red-100 shadow-lg"
+                            >
+                                {msegRateEntryError}
+                            </span>
+                        ) : null}
+                        </span>
                     </div>
 
                     {/* Envelope ADSR controls */}
                     <div className={`absolute inset-0 flex items-center justify-end gap-1.5 ${activeEditorTab.kind === "envelope" && selectedEnvelope ? "visible" : "invisible"}`}>
                         {selectedEnvelope ? ([
-                            { label: "A", compactLabel: "Attack", ariaLabel: "Envelope attack value", field: "attackSeconds" as const, target: "Attack", draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds },
-                            { label: "D", compactLabel: "Decay", ariaLabel: "Envelope decay value", field: "decaySeconds" as const, target: "Decay", draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds },
-                            { label: "S", compactLabel: "Sustain", ariaLabel: "Envelope sustain value", field: null, target: "Sustain", draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain },
-                            { label: "R", compactLabel: "Release", ariaLabel: "Envelope release value", field: "releaseSeconds" as const, target: "Release", draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds },
-                        ] as const).map((param) => (
+                            envelopeEntryParameter({ label: "A", compactLabel: "Attack", ariaLabel: "Envelope attack value", field: "attackSeconds", target: "Attack", draft: draftAttack, setDraft: setDraftAttack, current: selectedEnvelope.attackSeconds }),
+                            envelopeEntryParameter({ label: "D", compactLabel: "Decay", ariaLabel: "Envelope decay value", field: "decaySeconds", target: "Decay", draft: draftDecay, setDraft: setDraftDecay, current: selectedEnvelope.decaySeconds }),
+                            envelopeEntryParameter({ label: "S", compactLabel: "Sustain", ariaLabel: "Envelope sustain value", field: "sustain", target: "Sustain", draft: draftSustain, setDraft: setDraftSustain, current: selectedEnvelope.sustain }),
+                            envelopeEntryParameter({ label: "R", compactLabel: "Release", ariaLabel: "Envelope release value", field: "releaseSeconds", target: "Release", draft: draftRelease, setDraft: setDraftRelease, current: selectedEnvelope.releaseSeconds }),
+                        ]).map((param) => (
                             <label key={param.label} className="flex items-center gap-[3px]">
                                 <span className="text-[9px] font-semibold uppercase text-slate-400/60">
                                     {compact ? param.compactLabel : param.label}
                                 </span>
+                                <div className="relative flex items-center">
                                 <input
                                     aria-label={param.ariaLabel}
                                     data-modulation-target-kind={`env${selectedEnvelopeSlot + 1}${param.target}`}
                                     type="text"
                                     inputMode="decimal"
-                                    className="synth-readout-text w-[38px] rounded border border-white/[0.06] bg-white/[0.03] px-1 py-[2px] text-left text-[9px] leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[44px] max-[480px]:text-[10px]"
+                                    className="synth-readout-text w-[52px] rounded border border-white/[0.06] bg-white/[0.03] py-[2px] pl-1 pr-5 text-left text-[9px] leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[56px] max-[480px]:text-[10px]"
                                     value={param.draft}
-                                    onFocus={() => setActiveEnvelopeDraftField(param.field ?? "sustain")}
+                                    onFocus={(event) => {
+                                        const spec = entrySpecForEnvelopeField(param.field, param.current);
+                                        const editingDraft = formatParameterEntry(spec, param.current).draft;
+                                        envelopeEditingSpecRef.current = { field: param.field, spec };
+                                        event.currentTarget.value = editingDraft;
+                                        param.setDraft(editingDraft);
+                                        setEnvelopeEntryError(null);
+                                        setActiveEnvelopeDraftField(param.field);
+                                    }}
                                     onChange={(e) => param.setDraft(e.target.value)}
-                                    onBlur={() => {
-                                        if (param.field) {
-                                            commitEnvelopeDurationField(param.field, param.draft, param.current);
-                                        } else {
-                                            const parsed = parseFloat(param.draft);
-                                            if (!Number.isFinite(parsed)) {
-                                                param.setDraft(formatPercent(selectedEnvelope.sustain));
-                                            } else {
-                                                onEnvelopeChange("sustain", clamp(parsed / 100, 0, 1));
-                                            }
+                                    onBlur={(event) => {
+                                        if (skipEnvelopeBlurFieldRef.current === param.field) {
+                                            skipEnvelopeBlurFieldRef.current = null;
+                                            return;
                                         }
-                                        setActiveEnvelopeDraftField(null);
+                                        if (commitEnvelopeEntryField(param.field, param.draft, param.current, param.setDraft)) {
+                                            setActiveEnvelopeDraftField(null);
+                                        } else {
+                                            const input = event.currentTarget;
+                                            requestAnimationFrame(() => input.focus());
+                                        }
                                     }}
                                     onKeyDown={(e) => {
-                                        if (param.field) {
-                                            handleEnvelopeFieldKeyDown(e, param.field, param.draft, param.current);
-                                        } else if (e.key === "Enter") {
-                                            e.preventDefault();
-                                            const parsed = parseFloat(param.draft);
-                                            if (Number.isFinite(parsed)) {
-                                                onEnvelopeChange("sustain", clamp(parsed / 100, 0, 1));
-                                            }
-                                            e.currentTarget.blur();
-                                        } else if (e.key === "Escape") {
-                                            e.preventDefault();
-                                            param.setDraft(formatPercent(selectedEnvelope.sustain));
-                                            e.currentTarget.blur();
-                                        }
+                                        handleEnvelopeFieldKeyDown(
+                                            e,
+                                            param.field,
+                                            param.draft,
+                                            param.current,
+                                            param.setDraft,
+                                        );
                                     }}
                                     tabIndex={activeEditorTab.kind === "envelope" ? 0 : -1}
                                 />
+                                {activeEnvelopeDraftField === param.field ? (
+                                    <span
+                                        data-role="parameter-entry-unit"
+                                        className="synth-readout-text pointer-events-none absolute right-1 text-[7px] opacity-60"
+                                    >
+                                        {formatParameterEntry(
+                                            envelopeEditingSpecRef.current?.field === param.field
+                                                ? envelopeEditingSpecRef.current.spec
+                                                : entrySpecForEnvelopeField(param.field, param.current),
+                                            param.current,
+                                        ).unit}
+                                    </span>
+                                ) : null}
+                                {envelopeEntryError?.field === param.field ? (
+                                    <span
+                                        role="alert"
+                                        data-role="parameter-entry-error"
+                                        className="absolute right-0 top-full z-30 mt-1 min-w-36 rounded bg-red-950/95 px-1.5 py-1 text-[9px] text-red-100 shadow-lg"
+                                    >
+                                        {envelopeEntryError.message}
+                                    </span>
+                                ) : null}
+                                </div>
                             </label>
                         )) : null}
                     </div>
@@ -3813,6 +3940,7 @@ function DesktopPatchViewBody({
         [workspaceShell.details.mod],
     );
     const mobileReturnTarget = universalBackTarget(workspaceShell);
+    const workspacePanelsRef = useRef(new Map<WorkspaceTabId, HTMLElement>());
     const workspacePanelScrollsRef = useRef(new Map<WorkspaceTabId, number>());
     const [mobileModRailPortalTarget, setMobileModRailPortalTarget] = useState<HTMLElement | null>(null);
     const [mobileVoiceHudLayer, setMobileVoiceHudLayer] = useState<HTMLDivElement | null>(null);
@@ -3929,24 +4057,32 @@ function DesktopPatchViewBody({
     const [keyboardControlMode, setKeyboardControlMode] = useState<"articulation" | "voice">("articulation");
     const [isArticulationEditorExpanded, setIsArticulationEditorExpanded] = useState(false);
     const [dismissedContextualToolbarKey, setDismissedContextualToolbarKey] = useState<string | null>(null);
-    const selectedGlobalModSourceKind = globalModRailState.selectedSource.sourceKind;
-    const selectedGlobalModSourceSlot = globalModRailState.selectedSource.sourceSlot;
+    // T14: the Mod page and the floating bar share ONE selection. The page's
+    // selectors arm the bar through this signal (the rail workspace owns the
+    // real selection state and re-reports it); the bar's own changes reach
+    // the page through the mirrored globalModRailState.selectedSource. The
+    // Mod page's armed-source effect owns keeping the hook's MSEG slot in
+    // step, so the editor always opens exactly the shape the page shows.
+    const [armModSourceSignal, setArmModSourceSignal] = useState<{
+        source: GlobalModRailState["selectedSource"];
+        serial: number;
+    } | null>(null);
+    const handleArmModSource = useCallback((source: GlobalModRailState["selectedSource"]) => {
+        setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
+        setArmModSourceSignal((previous) => ({ source, serial: (previous?.serial ?? 0) + 1 }));
+    }, []);
+    // ADR-025 row 15: the just-confirmed route's matrix row pulses briefly.
+    const [recentConfirmedRouteId, setRecentConfirmedRouteId] = useState<string | null>(null);
+    const handleRouteCreationConfirmed = useCallback((routeId: string) => {
+        setRecentConfirmedRouteId(routeId);
+    }, []);
     useEffect(() => {
-        if (
-            !isCompactViewport
-            || selectedGlobalModSourceKind !== "mseg"
-            || synthView.selectedMsegSlot === selectedGlobalModSourceSlot - 1
-        ) {
+        if (recentConfirmedRouteId === null) {
             return;
         }
-        synthView.handleSelectMsegSlot(selectedGlobalModSourceSlot - 1);
-    }, [
-        isCompactViewport,
-        selectedGlobalModSourceKind,
-        selectedGlobalModSourceSlot,
-        synthView.handleSelectMsegSlot,
-        synthView.selectedMsegSlot,
-    ]);
+        const timeout = window.setTimeout(() => setRecentConfirmedRouteId(null), 1100);
+        return () => window.clearTimeout(timeout);
+    }, [recentConfirmedRouteId]);
     const selectedArticulationId = synthView.selectedArticulationSlot?.id ?? null;
     const selectedArticulationName = synthView.selectedArticulationSlot?.name ?? null;
     const articulationMode = synthView.articulationBank.activeTriggerMode as ArticulationUiTriggerMode;
@@ -4107,12 +4243,8 @@ function DesktopPatchViewBody({
         <PrecisionNumberField
             ariaLabel="Pan"
             binding={synthView.pan}
-            min={-1}
-            max={1}
-            step={0.001}
-            formatDisplay={formatSignedPercent}
-            formatEditingValue={formatPanEditingValue}
-            parseText={parsePanInput}
+            entrySpec={PAN_ENTRY_SPEC}
+            suffix={PAN_ENTRY_SPEC.defaultUnit}
             pixelsPerFullRange={180}
             enableWheel
             wheelStep={0.01}
@@ -4253,7 +4385,7 @@ function DesktopPatchViewBody({
     );
 
     const workspacePanelElement = useCallback((tab: WorkspaceTabId) => (
-        document.querySelector<HTMLElement>(`[data-role="mobile-workspace-panel-${tab}"]`)
+        workspacePanelsRef.current.get(tab) ?? null
     ), []);
 
     const activateWorkspaceTab = useCallback((tab: WorkspaceTabId) => {
@@ -4313,7 +4445,7 @@ function DesktopPatchViewBody({
         }
     }, [isCompactViewport, workspacePanelElement, workspaceShell.activeTab]);
 
-    const openMobileModSource = useCallback((source: MobileModSource) => {
+    const openMobileModSourceDetail = useCallback((source: MobileModSource) => {
         setWorkspaceShell((current) => openDeepLink(current, {
             tab: "mod",
             detail: `${source.sourceKind}:${source.sourceSlot}`,
@@ -4321,12 +4453,62 @@ function DesktopPatchViewBody({
         }));
     }, []);
 
+    // T13: on Voice/FX the selected source opens the quick-editor sheet over
+    // the CURRENT workspace; on the Mod page the existing full-editor
+    // navigation remains the tap's meaning.
+    const [quickEditorOpen, setQuickEditorOpen] = useState(false);
+
+    /* T20 — the ADR-017 long-press parameter menu: one shared shell state
+       machine (also used by the iOS shell). */
+    const { openParameterMenu: openShellParameterMenu, parameterMenuOverlays } = useParameterMenuShell({
+        routes: synthView.routes,
+        armedSourceKind: globalModRailState.selectedSource.sourceKind,
+        armedSourceSlot: globalModRailState.selectedSource.sourceSlot,
+        onRouteChange: synthView.handleRouteChange,
+        onRemoveRoute: synthView.handleRemoveRoute,
+    });
+    const openMobileModSource = useCallback((source: MobileModSource) => {
+        setWorkspaceShell((current) => {
+            if (current.activeTab === "mod") {
+                return openDeepLink(current, {
+                    tab: "mod",
+                    detail: `${source.sourceKind}:${source.sourceSlot}`,
+                    from: current.activeTab,
+                });
+            }
+            setQuickEditorOpen(true);
+            return current;
+        });
+    }, []);
+    const closeQuickEditor = useCallback(() => setQuickEditorOpen(false), []);
+    const openQuickEditorFullEditor = useCallback(() => {
+        setQuickEditorOpen(false);
+        const source = globalModRailState.selectedSource;
+        if (source.sourceKind === "mseg") {
+            synthView.msegEditor.openEditor();
+            return;
+        }
+        openMobileModSourceDetail(source);
+    }, [globalModRailState.selectedSource, openMobileModSourceDetail, synthView.msegEditor]);
+    useEffect(() => {
+        // The quick sheet belongs to Voice/FX; the Mod workspace shows the
+        // full source panel instead.
+        if (mobileWorkspaceSection === "mod") {
+            setQuickEditorOpen(false);
+        }
+    }, [mobileWorkspaceSection]);
+    const quickMacroCoerce = useCallback((rawValue: unknown) => clamp(Number(rawValue) || 0, 0, 1), []);
+    const quickMacro1 = usePatchParameterBinding<number>({ endpointID: "macro1", initialValue: 0, coerce: quickMacroCoerce });
+    const quickMacro2 = usePatchParameterBinding<number>({ endpointID: "macro2", initialValue: 0, coerce: quickMacroCoerce });
+    const quickMacro3 = usePatchParameterBinding<number>({ endpointID: "macro3", initialValue: 0, coerce: quickMacroCoerce });
+    const quickMacroBindings = [quickMacro1, quickMacro2, quickMacro3];
+
     const handleUniversalBack = useCallback(() => {
         setWorkspaceShell(universalBack);
     }, []);
 
     const resolveMobileVoiceScrollLocks = useCallback(() => (
-        Array.from(document.querySelectorAll<HTMLElement>(".mobile-workspace-panel"))
+        Array.from(workspacePanelsRef.current.values())
     ), []);
     const triggerMobileVoiceHaptic = useCallback(() => {
         const trigger = (globalThis as typeof globalThis & {
@@ -4410,6 +4592,7 @@ function DesktopPatchViewBody({
                             routes={synthView.routes}
                             armedSource={globalModRailState.selectedSource}
                             hudContainer={mobileVoiceHudLayer}
+                            onRequestParameterMenu={openShellParameterMenu}
                             resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
                             onRequestHaptic={triggerMobileVoiceHaptic}
                         />
@@ -4493,6 +4676,8 @@ function DesktopPatchViewBody({
                 <ModulationMatrixSection
                     compact={isCompactViewport}
                     focusedSource={mobileModSource}
+                    armedSource={isCompactViewport ? globalModRailState.selectedSource : null}
+                    onArmSource={isCompactViewport ? handleArmModSource : undefined}
                     selectedMsegSlot={synthView.selectedMsegSlot}
                     msegState={synthView.msegState}
                     selectedMsegMorph={synthView.selectedMsegMorph}
@@ -4518,6 +4703,7 @@ function DesktopPatchViewBody({
                     <MobileModMatrix
                         routes={synthView.routes}
                         focusedSource={mobileModSource}
+                        recentConfirmedRouteId={recentConfirmedRouteId}
                         onCreateRoute={synthView.handleAddRouteWithOverrides}
                         onRemoveRoute={synthView.handleRemoveRoute}
                         onRouteChange={synthView.handleRouteChange}
@@ -4559,6 +4745,8 @@ function DesktopPatchViewBody({
             onRouteChange={synthView.handleRouteChange}
             onOpenModSource={openMobileModSource}
             onGlobalModRailStateChange={setGlobalModRailState}
+            selectModSourceSignal={armModSourceSignal}
+            onRouteCreationConfirmed={handleRouteCreationConfirmed}
             onSelectedEffectChange={setSelectedRackEffectId}
             mobileGlobalModRail={isCompactViewport}
             mobileModRailPortalTarget={mobileModRailPortalTarget}
@@ -4578,6 +4766,7 @@ function DesktopPatchViewBody({
 
     return (
         <ParameterHudLayerContext.Provider value={mobileVoiceHudLayer}>
+        <ParameterMenuContext.Provider value={openShellParameterMenu}>
         <div className={`cosimo-surface relative flex h-full w-full flex-col gap-3 overflow-hidden rounded-[28px] border border-white/[0.05] px-4 pb-4 pt-2.5 text-slate-100${isCompactViewport ? " is-mobile-shell" : ""}${isMobileEffectsPage ? " is-mobile-effects-page" : ""}`}>
             {!isCompactViewport ? <StatusHeader statusText={synthView.topStatus} /> : null}
             <SynthPresetBarHost
@@ -4609,6 +4798,13 @@ function DesktopPatchViewBody({
                         return (
                             <div
                                 key={id}
+                                ref={(element) => {
+                                    if (element) {
+                                        workspacePanelsRef.current.set(id, element);
+                                    } else {
+                                        workspacePanelsRef.current.delete(id);
+                                    }
+                                }}
                                 id={`mobile-workspace-panel-${id}`}
                                 data-role={`mobile-workspace-panel-${id}`}
                                 role="tabpanel"
@@ -4696,6 +4892,54 @@ function DesktopPatchViewBody({
                 />
             </div>
 
+            {isCompactViewport && quickEditorOpen && mobileWorkspaceSection !== "mod" ? (
+                <MobileQuickSourceSheet
+                    source={globalModRailState.selectedSource}
+                    routes={synthView.routes}
+                    hudContainer={mobileVoiceHudLayer}
+                    resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
+                    onRequestHaptic={triggerMobileVoiceHaptic}
+                    msegSurface={synthView.msegState === null ? null : (
+                        <EditableMsegSurface
+                            surfaceRef={msegEditorSurfaceRef}
+                            points={synthView.msegState.shape.points}
+                            referencePoints={synthView.msegState.referenceShape?.points ?? null}
+                            morphShapeAPoints={synthView.msegState.shapeA?.points ?? null}
+                            morphShapeBPoints={synthView.msegState.shapeB?.points ?? null}
+                            morphValue={synthView.selectedMsegMorph.value}
+                            showMorphCurve={false}
+                            selectedPointIndex={synthView.msegEditor.selectedPointIndex}
+                            hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
+                            activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
+                            onPointerDown={synthView.msegEditor.handlePointerDown}
+                            onPointerMove={synthView.msegEditor.handlePointerMove}
+                            onPointerLeave={synthView.msegEditor.handlePointerLeave}
+                            onPointerUp={synthView.msegEditor.handlePointerUp}
+                            className="h-full w-full"
+                            dataRole="quick-sheet-mseg-surface"
+                        />
+                    )}
+                    envelopeSurface={synthView.selectedEnvelope === null ? null : (
+                        <DesktopEnvelopeEditor
+                            selectedEnvelope={synthView.selectedEnvelope}
+                            onEnvelopeChange={synthView.handleEnvelopeChange}
+                            compact
+                        />
+                    )}
+                    msegRateSeconds={clampMsegRateSeconds(Number(synthView.msegState?.playback.rate.seconds ?? 1))}
+                    onMsegRateChange={synthView.handleMsegRateChange}
+                    msegMorphBinding={synthView.selectedMsegMorph}
+                    envelope={synthView.selectedEnvelope}
+                    onEnvelopeChange={synthView.handleEnvelopeChange}
+                    macroBinding={quickMacroBindings[globalModRailState.selectedSource.sourceSlot - 1] ?? null}
+                    onRequestParameterMenu={openShellParameterMenu}
+                    onClose={closeQuickEditor}
+                    onOpenFullEditor={openQuickEditorFullEditor}
+                />
+            ) : null}
+
+            {parameterMenuOverlays}
+
             <MsegEditorModal
                 isOpen={synthView.msegEditor.isOpen}
                 slotIndex={synthView.selectedMsegSlot}
@@ -4737,6 +4981,7 @@ function DesktopPatchViewBody({
 
             {curveLab.panel}
         </div>
+        </ParameterMenuContext.Provider>
         </ParameterHudLayerContext.Provider>
     );
 }

@@ -118,6 +118,31 @@ export function projectMobileVoiceRailBand(
     });
 }
 
+export type WavetableModulationShadingRange = {
+    /** Normalized Index positions of the shaded travel, low <= high. */
+    readonly lowPosition: number;
+    readonly highPosition: number;
+};
+
+/**
+ * T02C: the wavetable graphic shades the selected route's possible Index
+ * travel only while that route is live — mapped with a nonzero amount. Every
+ * other truth-table state (including mapped-zero and bypassed) draws nothing,
+ * and the range is exactly the Index rail's clamped band.
+ */
+export function wavetableModulationShadingRange(
+    railState: MobileVoiceRailState,
+    band: MobileVoiceRailBand | null,
+): WavetableModulationShadingRange | null {
+    if (railState !== "mapped") {
+        return null;
+    }
+    if (band === null) {
+        throw new Error("A mapped cell must carry its projected rail band");
+    }
+    return { lowPosition: band.lowNormalized, highPosition: band.highNormalized };
+}
+
 /* ------------------------------------------------------------------ */
 /* Aggregate Tune                                                      */
 /* ------------------------------------------------------------------ */

@@ -312,6 +312,19 @@ test("mod matrix amount knob double-click entry uses the displayed units", async
 
         const amountInput = page.locator('input[aria-label="Route 1 amount value"]:visible');
         await amountInput.waitFor({ state: "visible" });
+        assert.equal(
+            await amountKnob.locator('[data-role="parameter-entry-unit"]').innerText(),
+            "%",
+        );
+        await amountInput.fill("2 st");
+        await amountInput.press("Enter");
+        await amountKnob.locator('[data-role="parameter-entry-error"]').waitFor({ state: "visible" });
+        assert.equal(await amountInput.isVisible(), true, "a rejected amount must keep the editor open");
+        assert.match(
+            await amountKnob.locator('[data-role="parameter-entry-error"]').innerText(),
+            /st is not compatible/i,
+        );
+        assert.equal(readStoredModulationState(await getHarnessSnapshot(page)).routes[0]?.amount, 0);
         await amountInput.fill("12");
         await amountInput.blur();
 
@@ -615,48 +628,77 @@ test("desktop effects rack renders the complete ordered eight-module surface", a
     }
 });
 
-test("a second tap on the selected rack source deep-links Mod and Back restores the exact FX context", async () => {
+async function tapArmedSourceChip(page, selector) {
+    await page.locator(selector).first().evaluate((element) => {
+        const fire = (type, buttons) => element.dispatchEvent(new PointerEvent(type, {
+            bubbles: true,
+            pointerId: 93,
+            pointerType: "touch",
+            isPrimary: true,
+            button: 0,
+            buttons,
+            clientX: element.getBoundingClientRect().left + 10,
+            clientY: element.getBoundingClientRect().top + 10,
+        }));
+        fire("pointerdown", 1);
+        fire("pointerup", 0);
+    });
+}
+
+test("a second tap on the selected rack source opens the quick sheet over FX; the full editor round-trips the context", async () => {
+    // T13 changed the second-tap contract: it opens the quick-editor sheet in
+    // place instead of navigating to Mod. The FX context must stay live
+    // beneath, and the sheet's Full editor is the route to the real editor.
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
 
     try {
         await page.click('[data-role="mobile-workspace-tab-fx"]');
+        assert.equal(await page.locator('[data-role="rack-editor-drive"]').count(), 1);
         await expandGlobalModRail(page);
         const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
         await source.click();
-        await source.click();
+        await tapArmedSourceChip(page, '[data-role="rack-mod-source-mseg-1"]');
 
+        const sheet = page.locator('[data-role="quick-source-sheet"]');
+        await sheet.waitFor();
+        assert.equal(await sheet.getAttribute("data-source-kind"), "mseg");
+        assert.equal(await sheet.getAttribute("data-source-slot"), "1");
+        assert.equal(
+            await page.locator('[data-role="mobile-workspace-tab-fx"]').getAttribute("aria-selected"),
+            "true",
+            "The sheet floats over FX — the second tap is not a navigation.",
+        );
         assert.equal(
             await page.locator('[data-role="mobile-workspace-tab-mod"]').getAttribute("aria-selected"),
+            "false",
+        );
+        assert.equal(await page.locator('[data-role="rack-editor-drive"]').count(), 1);
+
+        // The Full editor button is the route into the REAL editor for the
+        // source kind — the full-screen MSEG editor here — and Done lands
+        // back on the untouched FX context with the source still armed.
+        await page.click('[data-role="quick-source-sheet-full-editor"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
+        assert.equal(await sheet.count(), 0, "The full editor replaces the sheet.");
+        await page.click('[data-role="mseg-editor-done"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
+        assert.equal(
+            await page.locator('[data-role="mobile-workspace-tab-fx"]').getAttribute("aria-selected"),
             "true",
         );
-        const editor = page.locator('[data-role="mod-source-editor"]');
-        assert.equal(await editor.getAttribute("data-source-kind"), "mseg");
-        assert.equal(await editor.getAttribute("data-source-slot"), "1");
-        assert.match(
-            (await page.locator('[data-role="mobile-mod-filter-token"]').innerText()).trim(),
-            /MSEG 1\s*×/,
-        );
-        assert.equal(
-            await page.locator('[data-role="mobile-mod-route-row"]').evaluateAll((rows) => (
-                rows.every((row) => /MSEG 1/.test(row.textContent ?? ""))
-            )),
-            true,
-        );
-
-        await page.click('[data-action="shell-back"]');
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="mobile-workspace-tab-fx"]')?.getAttribute("aria-selected") === "true"
-        ));
-        assert.equal(await source.getAttribute("aria-pressed"), "true");
         assert.equal(await page.locator('[data-role="rack-editor-drive"]').count(), 1);
+        assert.equal(await source.getAttribute("aria-pressed"), "true");
     } finally {
         await page.close();
     }
 });
 
-test("rack deep links open the exact Envelope and Macro editor slots without introducing LFOs", async () => {
+test("the quick sheet's Full editor opens the exact Envelope and Macro slots without introducing LFOs", async () => {
+    // T13: tap-tap opens the quick sheet for the exact source; its Full
+    // editor button is the deep link into the detail editor. The exact-slot
+    // and no-LFO claims survive unchanged.
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -667,8 +709,15 @@ test("rack deep links open the exact Envelope and Macro editor slots without int
 
         const envelope = page.locator('[data-role="rack-mod-source-env-1"]');
         await envelope.click();
-        await envelope.click();
+        await tapArmedSourceChip(page, '[data-role="rack-mod-source-env-1"]');
+        const sheet = page.locator('[data-role="quick-source-sheet"]');
+        await sheet.waitFor();
+        assert.equal(await sheet.getAttribute("data-source-kind"), "env");
+        assert.equal(await sheet.getAttribute("data-source-slot"), "1");
+        await page.click('[data-role="quick-source-sheet-full-editor"]');
+        // The editor role is a hidden state-marker span; wait on attachment.
         let editor = page.locator('[data-role="mod-source-editor"]');
+        await editor.waitFor({ state: "attached" });
         assert.equal(await editor.getAttribute("data-source-kind"), "env");
         assert.equal(await editor.getAttribute("data-source-slot"), "1");
 
@@ -678,9 +727,16 @@ test("rack deep links open the exact Envelope and Macro editor slots without int
         await page.waitForTimeout(300);
         const macro = page.locator('[data-role="rack-mod-source-macro-2"]');
         await macro.click();
-        await macro.click();
+        await tapArmedSourceChip(page, '[data-role="rack-mod-source-macro-2"]');
+        await sheet.waitFor();
+        assert.equal(await sheet.getAttribute("data-source-kind"), "macro");
+        assert.equal(await sheet.getAttribute("data-source-slot"), "2");
+        await page.click('[data-role="quick-source-sheet-full-editor"]');
 
         editor = page.locator('[data-role="mod-source-editor"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mod-source-editor"]')?.getAttribute("data-source-kind") === "macro"
+        ));
         assert.equal(await editor.getAttribute("data-source-kind"), "macro");
         assert.equal(await editor.getAttribute("data-source-slot"), "2");
         assert.equal(await page.locator('[data-role="macro-source-value-2"]').count(), 1);
@@ -993,6 +1049,7 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await page.locator('[data-rack-effect-id="drive"] .rack-power').click();
         await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-env-1"]');
         await collapseGlobalModRail(page);
@@ -1023,17 +1080,21 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
         assert.equal(visual.routeState, "unmapped");
         assert.equal(visual.borderColor, "rgba(255, 255, 255, 0.08)");
         assert.equal(/184, 226, 54/.test(`${visual.borderColor} ${visual.boxShadow}`), false);
-        assert.equal(visual.trackStroke, "rgba(210, 220, 222, 0.42)");
-        assert.equal(visual.innerFill, "rgb(213, 220, 222)");
+        // ADR-025 rows 1 + 4: the unmapped dotted ring speaks in the armed
+        // SOURCE color and the inside speaks in the OWNING effect color.
+        assert.equal(visual.trackStroke, "rgb(184, 226, 54)");
+        assert.equal(visual.innerFill, "rgb(255, 106, 39)");
         assert.equal(await mixKnob.getAttribute("aria-label"), "Mix");
         const badge = mixSurface.locator('[data-role="rack-route-count-distortionWet"]');
         assert.equal((await badge.textContent()).trim(), "1");
         assert.match(await badge.getAttribute("aria-label"), /1 modulation route target Mix/);
         assert.equal((await badge.getAttribute("class")).includes("is-solid"), true);
         assert.equal((await driveSurface.getAttribute("class")).includes("is-selected-target"), true);
-        assert.equal(
-            await driveSurface.evaluate((element) => getComputedStyle(element).borderColor),
-            "rgba(223, 230, 232, 0.78)",
+        // ADR-025 row 2: selection brightens the owning drive accent.
+        const selectedBorder = await driveSurface.evaluate((element) => getComputedStyle(element).borderColor);
+        assert.ok(
+            selectedBorder.startsWith("color(srgb 1 0.4") || selectedBorder.includes("255, 106, 39"),
+            `selected-target border must be the drive accent, got ${selectedBorder}`,
         );
     } finally {
         await page.close();
@@ -1057,6 +1118,7 @@ test("switching armed sources swaps only selected-route outer geometry and prese
             window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWet", 0.6, true);
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await page.locator('[data-rack-effect-id="drive"] .rack-power').click();
         await expandGlobalModRail(page);
         const mix = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
         const readRing = () => mix.evaluate((element) => {
@@ -1170,7 +1232,11 @@ test("editing a bypassed rack route preserves bypass and renders the outer ring 
             const style = getComputedStyle(element);
             return { opacity: style.opacity, dash: style.strokeDasharray, filter: style.filter };
         });
-        assert.equal(liveBypassedStyle.opacity, "0.28");
+        // The ADR-025 quick-fade transition settles within 140ms.
+        await page.waitForFunction(() => {
+            const track = document.querySelector('[data-role="rack-parameter-reverbSize"] .rack-knob-mod-track');
+            return track instanceof SVGElement && getComputedStyle(track).opacity === "0.28";
+        });
         assert.notEqual(liveBypassedStyle.dash, "none");
         assert.equal(liveBypassedStyle.filter, "none");
         await page.mouse.up();
@@ -1214,6 +1280,9 @@ test("a stationary touch hold on a rack knob opens its routing menu with one hap
             )),
         );
         await clearHarnessDebugLog(page);
+        // ADR-025: creation confirmation itself gives one light tick; the
+        // claim under test is the HOLD's single bump, so start clean.
+        await page.evaluate(() => { window.__rackHaptics.length = 0; });
 
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
         const box = await knob.boundingBox();
@@ -1520,6 +1589,59 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
     }
 });
 
+test("rack exact entry keeps units visible, rejects incompatible units, and commits tempo divisions", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "filter");
+        const cutoff = page.locator('[data-role="rack-parameter-globalFilterCutoff"]');
+        await cutoff.click({ button: "right" });
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        let sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        let baseInput = sheet.locator('[data-role="rack-base-value-input"]');
+        assert.equal((await baseInput.locator("xpath=following-sibling::em").textContent()).trim(), "Hz");
+        await baseInput.fill("12khz");
+        await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+        await waitForHarnessSnapshot(
+            page,
+            "rack cutoff exact entry applies 12 kHz",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.globalFilterCutoff) - 12_000) <= 1e-9,
+        );
+
+        await cutoff.click({ button: "right" });
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        baseInput = sheet.locator('[data-role="rack-base-value-input"]');
+        await baseInput.fill("12 st");
+        await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+        assert.equal(await sheet.count(), 1, "a rejection must keep the rack editor open");
+        assert.match(await sheet.getByRole("alert").textContent(), /st.*not compatible.*Hz/i);
+        assert.equal(Number((await getHarnessSnapshot(page)).parameterValues.globalFilterCutoff), 12_000);
+        await sheet.locator('[data-role="rack-value-sheet-cancel"]').click();
+
+        await selectRackEffect(page, "delay");
+        const delayTime = page.locator('[data-role="rack-parameter-delayTime"]');
+        await delayTime.click({ button: "right" });
+        await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+        sheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+        await sheet.locator('[data-role="rack-base-value-input"]').fill("1/8");
+        await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
+        await waitForHarnessSnapshot(
+            page,
+            "delay exact division commits Sync and the descriptor division",
+            (snapshot) => Number(snapshot.parameterValues.delayTimeMode) === 1
+                && Number(snapshot.parameterValues.delayDivision) === 8,
+        );
+        assert.match(await page.locator('[data-role="rack-parameter-delayTimeMode"]').innerText(), /Sync/i);
+        assert.match(await page.locator('[data-role="rack-parameter-delayDivision"]').innerText(), /1\/8/i);
+    } finally {
+        await page.close();
+    }
+});
+
 test("rack exact-value editing never creates an unrequested modulation route", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
@@ -1760,11 +1882,15 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
     });
 
     try {
+        // T13 made tap-tap open the quick sheet; the detail editor is now
+        // reached through the sheet's Full editor button (env/macro kinds).
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await expandGlobalModRail(page);
-        const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
         await source.click();
-        await source.click();
+        await tapArmedSourceChip(page, '[data-role="rack-mod-source-env-1"]');
+        await page.locator('[data-role="quick-source-sheet"]').waitFor();
+        await page.click('[data-role="quick-source-sheet-full-editor"]');
 
         const editor = page.locator('.mobile-mod-source-editor');
         const frame = editor.locator('[data-role="mobile-mod-integrated-editor"]');
@@ -1914,7 +2040,7 @@ test("mobile Mod uses a complete one-dimensional route list with detail, filters
         assert.equal(geometry.documentScrollWidth <= 393, true);
         assert.equal(geometry.rows.every((row) => row.left >= 0 && row.right <= 393 && row.height >= 56), true);
         const msegRouteRow = matrix.locator('[data-role="mobile-mod-route-row"]', { hasText: "MSEG 1" });
-        assert.match(await msegRouteRow.innerText(), /MSEG 1.*Flanger.*Depth.*-39%/s);
+        assert.match(await msegRouteRow.innerText(), /MSEG 1.*Flanger.*Depth.*±39%/s);
 
         await matrix.locator('[data-role="mobile-mod-route-open-0"]').click();
         const detail = matrix.locator('[data-role="mobile-mod-route-detail"]');
@@ -1927,6 +2053,7 @@ test("mobile Mod uses a complete one-dimensional route list with detail, filters
         assert.equal(await detail.locator('[data-role="mobile-mod-reducer"]').count(), 1);
         assert.equal(await detail.locator('[data-role="mobile-mod-amount-slider"]').count(), 1);
         assert.equal(await detail.locator('[data-role="mobile-mod-amount-input"]').count(), 1);
+        assert.equal(await detail.locator('[data-role="parameter-entry-unit"]').innerText(), "%");
         await detail.locator('[data-role="mobile-mod-amount-input"]').fill("-25");
         await detail.locator('[data-role="mobile-mod-amount-input"]').press("Enter");
         await waitForHarnessSnapshot(
@@ -2383,5 +2510,595 @@ test("mobile FX subpage keeps all eight approved rack rows visible and confines 
         } finally {
             await page.close();
         }
+    }
+});
+
+test("the rack Resonance knob walks the modulated value along its dial instead of slamming the Q floor", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+
+    const seedResonanceRoute = async () => {
+        const state = normalizeModulationState({
+            routes: [{
+                id: "rack-res-dial-walk",
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "rack.globalFilterResonance",
+                amount: 0,
+                reducer: "max",
+            }],
+        });
+        await page.evaluate((nextState) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(nextState));
+        }, state);
+        await waitForHarnessSnapshot(
+            page,
+            "seeded rack resonance dial-walk route",
+            (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === "rack-res-dial-walk"
+                && readStoredModulationState(snapshot).routes[0]?.amount === 0,
+        );
+    };
+    const dragDown = async (deltaY, pointerId) => {
+        const knob = page.locator('[data-role="rack-parameter-globalFilterResonance"]');
+        await knob.waitFor();
+        await dispatchRackKnobPointerEvents(knob, [
+            { type: "pointerdown", pointerId, buttons: 1 },
+            { type: "pointermove", pointerId, buttons: 1, deltaY: 8 },
+            { type: "pointermove", pointerId, buttons: 1, deltaY },
+            { type: "pointerup", pointerId, buttons: 0, deltaY },
+        ]);
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "rack resonance amount write",
+            (nextSnapshot) => (readStoredModulationState(nextSnapshot).routes[0]?.amount ?? 0) < 0,
+        );
+        return readStoredModulationState(snapshot).routes[0].amount;
+    };
+
+    try {
+        await seedResonanceRoute();
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "filter");
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await collapseGlobalModRail(page);
+
+        // Dial-walk: a short downward drag covers a small dial fraction and
+        // must NOT bank huge dead amount past the audible Q floor (0.1).
+        const shortDrag = await dragDown(40, 71);
+        assert.ok(
+            shortDrag > -0.55 && shortDrag < -0.02,
+            `40px down must walk the dial gently, got amount ${shortDrag}`,
+        );
+
+        await seedResonanceRoute();
+        const longDrag = await dragDown(200, 72);
+        assert.ok(
+            longDrag < shortDrag && longDrag >= -0.65,
+            `200px down must approach the floor without banking dead amount, got ${longDrag} vs ${shortDrag}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("ADR-025 identity colors: owner color inside, source color outside, grey only for real off-states", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
+    });
+    const knobStyle = (selector, part) => page.locator(selector).evaluate((element, targetPart) => {
+        const node = element.querySelector(targetPart);
+        if (!node) {
+            throw new Error(`Missing knob part ${targetPart}`);
+        }
+        const style = getComputedStyle(node);
+        return { fill: style.fill, stroke: style.stroke };
+    }, part);
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "reverb");
+        const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
+        await knob.waitFor();
+
+        // Every effect boots bypassed, so the knob must START grey (row 9)…
+        assert.equal(
+            (await knobStyle('[data-role="rack-parameter-reverbSize"]', ".rack-knob-base-fill")).fill,
+            "rgb(117, 128, 132)",
+            "A bypassed effect's parameter must be grey before it is enabled.",
+        );
+        // …and take its owning color the moment the effect can affect sound.
+        await page.locator('[data-rack-effect-id="reverb"] .rack-power').click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-parameter-reverbSize"]')
+                ?.getAttribute("data-route-effectiveness") === "active"
+        ));
+
+        // Row 1: the inside/base value carries the OWNING effect accent, not
+        // the old neutral #d5dcde.
+        assert.equal(
+            (await knobStyle('[data-role="rack-parameter-reverbSize"]', ".rack-knob-base-fill")).fill,
+            "rgb(225, 180, 86)",
+            "The reverb knob's base value must use the reverb accent.",
+        );
+
+        // Row 2: the selected target's border brightens in the owning color.
+        await knob.click();
+        const selectedBorder = await page.locator('[data-role="rack-parameter-surface-reverbSize"]').evaluate((element) => (
+            getComputedStyle(element).borderTopColor
+        ));
+        const borderChannels = selectedBorder.startsWith("color(srgb")
+            ? selectedBorder.match(/color\(srgb ([\d.]+) ([\d.]+) ([\d.]+)/).slice(1, 4).map((channel) => Math.round(Number(channel) * 255))
+            : selectedBorder.match(/rgba?\((\d+), (\d+), (\d+)/).slice(1, 4).map(Number);
+        assert.deepEqual(
+            borderChannels,
+            [225, 180, 86],
+            `The selected target's border must use the owning accent, got ${selectedBorder}`,
+        );
+
+        // Row 4: armed-but-unmapped shows a DOTTED ring in the SOURCE color.
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await collapseGlobalModRail(page);
+        assert.equal(
+            (await knobStyle('[data-role="rack-parameter-reverbSize"]', ".rack-knob-mod-track.is-unmapped")).stroke,
+            "rgb(204, 89, 210)",
+            "The unmapped dotted ring must use the selected source's color.",
+        );
+
+        // Row 8: a bypassed route's ring is GREY and dashed, never source-colored.
+        const seededState = normalizeModulationState({
+            routes: [{
+                id: "adr025-bypassed-route",
+                enabled: false,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "rack.reverbSize",
+                amount: 0.3,
+                reducer: "max",
+            }],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await waitForHarnessSnapshot(
+            page,
+            "seeded bypassed reverb route",
+            (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === "adr025-bypassed-route",
+        );
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-parameter-reverbSize"] .rack-knob-mod-track.is-bypassed') !== null
+        ));
+        assert.equal(
+            (await knobStyle('[data-role="rack-parameter-reverbSize"]', ".rack-knob-mod-track.is-bypassed")).stroke,
+            "rgb(117, 128, 132)",
+            "A bypassed mapping's ring must be grey, not source-colored.",
+        );
+
+        // Row 9: bypassing the owning effect again greys the WHOLE control.
+        await page.locator('[data-rack-effect-id="reverb"] .rack-power').click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-parameter-reverbSize"]')
+                ?.getAttribute("data-route-effectiveness") === "effect-bypassed"
+        ));
+        assert.equal(
+            (await knobStyle('[data-role="rack-parameter-reverbSize"]', ".rack-knob-base-fill")).fill,
+            "rgb(117, 128, 132)",
+            "A bypassed effect's parameter must lose its identity color entirely.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("ADR-025 duplicate pairs are never droppable and failures raise the top toast", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                window.__rackHaptics = [];
+                window.cmaj_triggerHaptic = (style = "light") => window.__rackHaptics.push(style);
+            });
+        },
+    });
+    const readHaptics = () => page.evaluate(() => window.__rackHaptics.slice());
+    const toastCount = () => page.locator('[data-role="synth-feedback-toast"]').count();
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [{
+                id: "adr025-duplicate-route",
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: 1,
+                polarity: "unipolar",
+                targetKind: "rack.reverbSize",
+                amount: 0.2,
+                reducer: "max",
+            }],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await waitForHarnessSnapshot(
+            page,
+            "seeded duplicate-pair route",
+            (snapshot) => readStoredModulationState(snapshot).routes[0]?.id === "adr025-duplicate-route",
+        );
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "reverb");
+        const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        await surface.waitFor();
+        const surfaceBox = await surface.boundingBox();
+        assert.ok(surfaceBox);
+        const targetCenter = {
+            x: surfaceBox.x + (surfaceBox.width / 2),
+            y: surfaceBox.y + (surfaceBox.height / 2),
+        };
+
+        await expandGlobalModRail(page);
+        const chip = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        const chipBox = await chip.boundingBox();
+        assert.ok(chipBox);
+        await page.mouse.move(chipBox.x + (chipBox.width / 2), chipBox.y + (chipBox.height / 2));
+        await page.mouse.down();
+        await page.mouse.move(196, 420, { steps: 4 });
+        await page.evaluate(() => { window.__rackHaptics.length = 0; });
+
+        // The duplicate target never looks droppable.
+        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 4 });
+        await page.waitForTimeout(120);
+        assert.equal(
+            (await surface.getAttribute("class")).includes("is-mod-hover"),
+            false,
+            "An already-mapped pair must never take the droppable highlight.",
+        );
+        assert.equal(
+            (await readHaptics()).includes("light"),
+            false,
+            "Hovering a duplicate must not give the positive acquisition tick.",
+        );
+        assert.equal(await surface.getAttribute("data-drag-creation"), "existing");
+        const greyed = await surface.evaluate((element) => getComputedStyle(element).filter);
+        assert.ok(greyed.includes("grayscale"), `A duplicate target must grey out during the drag, got filter ${greyed}`);
+
+        // Flyover shorter than 500ms stays silent.
+        await page.mouse.move(196, 420, { steps: 3 });
+        await page.waitForTimeout(700);
+        assert.equal(await toastCount(), 0, "A quick flyover must not warn.");
+
+        // Deliberate hover reports exactly once per target per drag.
+        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 3 });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="synth-feedback-toast"]')?.textContent === "DUPLICATE"
+        ), undefined, { timeout: 2500 });
+        assert.deepEqual(await readHaptics(), ["heavy"], "The duplicate warning is one deliberately noticeable buzz.");
+        await page.waitForTimeout(700);
+        assert.equal(
+            (await readHaptics()).filter((style) => style === "heavy").length,
+            1,
+            "A duplicate target reports at most once per drag.",
+        );
+
+        // Releasing there changes nothing.
+        await page.mouse.move(targetCenter.x, targetCenter.y, { steps: 2 });
+        await page.mouse.up();
+        await page.waitForTimeout(150);
+        const routesAfterDrop = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        assert.equal(routesAfterDrop.length, 1, "Releasing on a duplicate must create nothing.");
+
+        // Creation failure: land the drop in the same tick as a document
+        // update that already contains the pair. The UI still believes the
+        // pair is creatable (its props are one render behind), the bridge
+        // refuses the duplicate commit, and the failure feedback must fire.
+        await page.evaluate(() => { window.__rackHaptics.length = 0; });
+        await collapseGlobalModRail(page);
+        await selectRackEffect(page, "delay");
+        const delayKnob = page.locator('[data-role="rack-parameter-surface-delayTime"]');
+        await delayKnob.waitFor();
+        const delayBox = await delayKnob.boundingBox();
+        assert.ok(delayBox);
+        await expandGlobalModRail(page);
+        const failureDoc = JSON.stringify(normalizeModulationState({
+            routes: [
+                {
+                    id: "adr025-duplicate-route",
+                    enabled: true,
+                    sourceKind: "mseg",
+                    sourceSlot: 1,
+                    polarity: "unipolar",
+                    targetKind: "rack.reverbSize",
+                    amount: 0.2,
+                    reducer: "max",
+                },
+                {
+                    id: "adr025-raced-route",
+                    enabled: true,
+                    sourceKind: "mseg",
+                    sourceSlot: 1,
+                    polarity: "unipolar",
+                    targetKind: "rack.delayTime",
+                    amount: 0,
+                    reducer: "max",
+                },
+            ],
+        }));
+        await page.evaluate(({ targetPoint, blockedDoc }) => {
+            const chip = document.querySelector('[data-role="rack-mod-source-mseg-1"]');
+            if (!(chip instanceof HTMLElement)) {
+                throw new Error("Missing the mseg-1 chip.");
+            }
+            const fire = (type, x, y, buttons) => chip.dispatchEvent(new PointerEvent(type, {
+                bubbles: true,
+                pointerId: 77,
+                pointerType: "mouse",
+                isPrimary: true,
+                button: 0,
+                buttons,
+                clientX: x,
+                clientY: y,
+            }));
+            const chipBox = chip.getBoundingClientRect();
+            fire("pointerdown", chipBox.left + (chipBox.width / 2), chipBox.top + (chipBox.height / 2), 1);
+            fire("pointermove", chipBox.left + 50, chipBox.top - 40, 1);
+            fire("pointermove", targetPoint.x, targetPoint.y, 1);
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", blockedDoc);
+            fire("pointerup", targetPoint.x, targetPoint.y, 0);
+        }, {
+            targetPoint: { x: delayBox.x + (delayBox.width / 2), y: delayBox.y + (delayBox.height / 2) },
+            blockedDoc: failureDoc,
+        });
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="synth-feedback-toast"]')?.textContent === "MAPPING NOT CREATED"
+        ), undefined, { timeout: 3000 });
+        assert.equal(
+            (await readHaptics()).includes("rigid"),
+            true,
+            "A failed creation buzzes shorter/sharper than the duplicate warning.",
+        );
+        const routesAfterFailure = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        assert.equal(routesAfterFailure.length, 2, "The raced document is exactly what remains.");
+        assert.equal(
+            await page.locator('[data-role="rack-parameter-surface-delayTime"]').getAttribute("data-creation-confirmed"),
+            null,
+            "A failed creation must not flash success.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and delete stay truthful end-to-end", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                window.__rackHaptics = [];
+                window.cmaj_triggerHaptic = (style = "light") => window.__rackHaptics.push(style);
+            });
+        },
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "reverb");
+        await page.locator('[data-rack-effect-id="reverb"] .rack-power').click();
+        const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        await surface.waitFor();
+        const surfaceBox = await surface.boundingBox();
+        assert.ok(surfaceBox);
+
+        await expandGlobalModRail(page);
+        const chip = page.locator('[data-role="rack-mod-source-mseg-1"]');
+        const chipBox = await chip.boundingBox();
+        assert.ok(chipBox);
+        await page.evaluate(() => { window.__rackHaptics.length = 0; });
+        await page.mouse.move(chipBox.x + (chipBox.width / 2), chipBox.y + (chipBox.height / 2));
+        await page.mouse.down();
+        await page.mouse.move(196, 420, { steps: 4 });
+        await page.mouse.move(surfaceBox.x + (surfaceBox.width / 2), surfaceBox.y + (surfaceBox.height / 2), { steps: 4 });
+        await page.mouse.up();
+
+        // Authoritative confirmation: flash + rising checkmark + light tick,
+        // the rail count pulses, and the matrix's new 0% row pulses too.
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-parameter-surface-reverbSize"]')
+                ?.getAttribute("data-creation-confirmed") === "true"
+        ), undefined, { timeout: 3000 });
+        assert.equal(await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(), 1);
+        assert.equal((await page.evaluate(() => window.__rackHaptics.slice())).includes("light"), true);
+        assert.equal(
+            await page.locator('[data-role="mobile-global-mod-rail-route-count"][data-count-pulsing]').count(),
+            1,
+            "The rail's mapping count must pulse on confirmation.",
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-mod-route-row"].is-just-created').count(),
+            1,
+            "The new matrix row must pulse in the source color.",
+        );
+        const createdRoute = readStoredModulationState(await getHarnessSnapshot(page)).routes
+            .find((route) => route.targetKind === "rack.reverbSize");
+        assert.ok(createdRoute);
+        assert.equal(createdRoute.amount, 0, "A confirmed creation starts at exactly 0%.");
+
+        // The transient choreography settles into the truthful mapped-at-0%
+        // state with no lingering flash.
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-parameter-surface-reverbSize"]')
+                ?.getAttribute("data-creation-confirmed") === null
+        ), undefined, { timeout: 3000 });
+        assert.equal(await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(), 0);
+
+        // Bypass from the matrix: the row keeps its identity, shows a grey
+        // amount + BYPASSED, and the rail count does NOT change.
+        await collapseGlobalModRail(page);
+        const countBefore = await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText();
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        const row = page.locator('[data-role="mobile-mod-route-row"]');
+        await row.waitFor();
+        await row.locator(".mobile-mod-route-power").click();
+        await page.locator('[data-role="mobile-mod-route-bypassed"]').waitFor();
+        assert.equal(
+            await row.evaluate((element) => getComputedStyle(element).opacity),
+            "1",
+            "Bypass isolates the mapping treatment; the row itself must not dim.",
+        );
+        assert.equal(
+            await row.locator(".mobile-mod-route-amount").evaluate((element) => getComputedStyle(element).color),
+            "rgb(117, 128, 132)",
+            "A bypassed mapping's amount reads grey.",
+        );
+        assert.equal(
+            await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText(),
+            countBefore,
+            "Bypass never changes the mapping count.",
+        );
+
+        // Delete: row, ring, and count contribution all go, with no toast.
+        await row.locator(".mobile-mod-route-open").click();
+        await page.click('[data-role="mobile-mod-delete"]');
+        await page.waitForFunction(() => (
+            document.querySelectorAll('[data-role="mobile-mod-route-row"]').length === 0
+        ));
+        assert.equal(await page.locator('[data-role="synth-feedback-toast"]').count(), 0);
+        assert.equal(
+            readStoredModulationState(await getHarnessSnapshot(page)).routes.length,
+            0,
+            "Deletion removes the route entirely.",
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T08A: the target claiming the drag shows an unmistakably stronger treatment than mere eligibility", async () => {
+    // ADR-025 rows 12/13: every creatable target carries a thin source-colored
+    // eligibility outline; the ONE target that has claimed the drop carries a
+    // stronger source-colored capture treatment. Capture is sticky — one
+    // target always holds the claim during mapping — so each target's
+    // "eligible" baseline is read while the OTHER target holds capture. The
+    // claims compare COMPUTED box-shadows: class presence alone is explicitly
+    // insufficient (the shipped bug kept is-mod-hover while the eligibility
+    // rule's higher specificity painted the very same thin outline).
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                window.cmaj_triggerHaptic = () => undefined;
+            });
+        },
+    });
+    const cdp = await page.context().newCDPSession(page);
+    // Treatments fade (T08 added a ~140ms transition): a raw read can catch a
+    // mid-fade frame, so every read polls until two consecutive samples agree.
+    const readShadow = async (locator) => {
+        let previous = await locator.evaluate((element) => getComputedStyle(element).boxShadow);
+        for (let attempt = 0; attempt < 30; attempt += 1) {
+            await new Promise((resolve) => setTimeout(resolve, 90));
+            const next = await locator.evaluate((element) => getComputedStyle(element).boxShadow);
+            if (next === previous) {
+                return next;
+            }
+            previous = next;
+        }
+        throw new Error("The treatment never settled.");
+    };
+    const waitForCapture = (hoveredRole, freedRole) => page.waitForFunction(([hovered, freed]) => (
+        document.querySelector(`[data-role="${hovered}"]`)?.classList.contains("is-mod-hover") === true
+        && document.querySelector(`[data-role="${freed}"]`)?.classList.contains("is-mod-hover") === false
+    ), [hoveredRole, freedRole]);
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await selectRackEffect(page, "reverb");
+        await expandGlobalModRail(page);
+
+        const source = page.locator('[data-role="rack-mod-source-env-1"]');
+        const sizeTarget = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
+        const mixTarget = page.locator('[data-role="rack-parameter-surface-reverbMix"]');
+        const sourceBox = await source.boundingBox();
+        const sizeBox = await sizeTarget.boundingBox();
+        const mixBox = await mixTarget.boundingBox();
+        assert.ok(sourceBox && sizeBox && mixBox);
+        const sourceCenter = { x: sourceBox.x + (sourceBox.width / 2), y: sourceBox.y + (sourceBox.height / 2) };
+        const centerOf = (box) => ({ x: box.x + (box.width / 2), y: box.y + (box.height / 2) });
+        const touchMoveTo = async (previewPoint) => {
+            const finger = touchPointForModSourcePreviewTarget(sourceCenter, previewPoint, 393);
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ ...finger, radiusX: 8, radiusY: 8, force: 1 }],
+            });
+        };
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...sourceCenter, radiusX: 8, radiusY: 8, force: 1 }],
+        });
+
+        // Capture on MIX: read Size's thin eligibility baseline + Mix's
+        // capture treatment.
+        await touchMoveTo(centerOf(mixBox));
+        await page.locator('[data-role="mobile-global-mod-source-ghost"]').waitFor({ state: "visible" });
+        await waitForCapture("rack-parameter-surface-reverbMix", "rack-parameter-surface-reverbSize");
+        const sizeEligibleShadow = await readShadow(sizeTarget);
+        const mixHoveredShadow = await readShadow(mixTarget);
+        assert.notEqual(sizeEligibleShadow, "none", "Eligibility must be visible during the drag.");
+
+        // Capture on SIZE: its treatment must DIFFER from its eligibility
+        // baseline, and Mix's eligibility baseline must differ from its
+        // capture treatment.
+        await touchMoveTo(centerOf(sizeBox));
+        await waitForCapture("rack-parameter-surface-reverbSize", "rack-parameter-surface-reverbMix");
+        const sizeHoveredShadow = await readShadow(sizeTarget);
+        const mixEligibleShadow = await readShadow(mixTarget);
+        assert.notEqual(
+            sizeHoveredShadow,
+            sizeEligibleShadow,
+            "The target claiming the drop must render a stronger treatment than eligibility.",
+        );
+        assert.notEqual(mixHoveredShadow, mixEligibleShadow);
+
+        // Leaving (capture transferring back) restores the thin outline.
+        await touchMoveTo(centerOf(mixBox));
+        await waitForCapture("rack-parameter-surface-reverbMix", "rack-parameter-surface-reverbSize");
+        assert.equal(await readShadow(sizeTarget), sizeEligibleShadow, "Leaving must restore the thin eligibility outline.");
+
+        // Drop on Mix to create the env-1 route, then drag again: the now-
+        // EXISTING pair must never acquire the capture treatment.
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForFunction(() => {
+            const state = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot();
+            return JSON.stringify(state).includes("reverb");
+        });
+        const routes = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        assert.equal(routes.length >= 1, true, "The drop must have created the route.");
+
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...sourceCenter, radiusX: 8, radiusY: 8, force: 1 }],
+        });
+        await touchMoveTo(centerOf(sizeBox));
+        await waitForCapture("rack-parameter-surface-reverbSize", "rack-parameter-surface-reverbMix");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="rack-parameter-surface-reverbMix"]')?.getAttribute("data-drag-creation") === "existing"
+        ));
+        const existingIdleShadow = await readShadow(mixTarget);
+        await touchMoveTo(centerOf(mixBox));
+        await page.waitForTimeout(250);
+        assert.equal((await mixTarget.getAttribute("class")).includes("is-mod-hover"), false, "An existing pair must never capture.");
+        assert.equal(
+            await readShadow(mixTarget),
+            existingIdleShadow,
+            "Hovering an existing pair must not change its treatment.",
+        );
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } finally {
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchCancel", touchPoints: [] }).catch(() => undefined);
+        await page.close();
     }
 });

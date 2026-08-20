@@ -17,6 +17,7 @@ import {
     parseEffectPresetV2Text,
     type EffectPresetMigration,
     type EffectPresetV2,
+    type EffectStoredStateContext,
     type EffectStoredStateAdapter,
 } from "./effect-preset-v2";
 import {
@@ -73,6 +74,8 @@ export type StandaloneEffectPresetState = {
     missingCurrentValueEndpointIDs: string[];
     currentContract: EffectPluginStateContract | null;
     lastError: string | null;
+    supportsInit: boolean;
+    pendingSoundReplacement: StandaloneEffectPendingSoundReplacement | null;
 };
 
 export type StandaloneEffectPresetMutationResult<T> = {
@@ -83,9 +86,36 @@ export type StandaloneEffectPresetMutationResult<T> = {
     ok: false;
     error: Error;
     message: string;
+} | {
+    ok: false;
+    actionRequired: "confirm-sound-replacement" | "save-as-for-sound-replacement";
+    message: string;
 };
 
+/** Public identity of a sound replacement waiting for the unsaved-work decision. */
+export type StandaloneEffectPendingSoundReplacement =
+    | { readonly kind: "init" }
+    | { readonly kind: "preset"; readonly presetKey: string }
+    | { readonly kind: "import"; readonly presetID: string };
+
 export type StandaloneEffectFactoryPreset = EffectPresetV2 | EffectPreset;
+
+/** One sound-owned document absent from the ordinary preset contract but required by Init. */
+export type StandaloneEffectInitOnlyStateAdapter = {
+    readonly key: string;
+    capture: () => unknown;
+    createDefaultValue: () => unknown;
+    normalizeForTransaction: (value: unknown, context?: EffectStoredStateContext) => unknown;
+    serializeForTransaction: (value: unknown, context?: EffectStoredStateContext) => unknown;
+    apply: (value: unknown, context?: EffectStoredStateContext) => void;
+    subscribe?: (listener: () => void) => () => void;
+};
+
+/** Synth-only policy that enables canonical Init and guarded sound replacement. */
+export type StandaloneEffectPresetSynthOptions = {
+    createCanonicalStoredState: (currentContract: EffectPluginStateContract) => Readonly<Record<string, unknown>>;
+    initOnlyStateAdapters?: ReadonlyArray<StandaloneEffectInitOnlyStateAdapter>;
+};
 
 export type StandaloneEffectPresetControllerOptions = {
     effectID: string;
@@ -108,6 +138,7 @@ export type StandaloneEffectPresetControllerOptions = {
     }) => string;
     readClipboardText?: () => string | Promise<string>;
     writeClipboardText?: (text: string) => void | Promise<void>;
+    synth?: StandaloneEffectPresetSynthOptions;
 
     // Kept only so older callers fail by behavior, not by TypeScript shape.
     descriptorRegistry?: unknown;
@@ -126,10 +157,40 @@ type ResolvedPreset = {
     preset: EffectPresetV2;
 };
 
+type PreparedSoundReplacement = {
+    readonly pending: StandaloneEffectPendingSoundReplacement;
+    readonly successMessage: string;
+    readonly apply: () => EffectPresetV2;
+};
+
+type PreparedInitOnlyStateValue = {
+    readonly adapter: StandaloneEffectInitOnlyStateAdapter;
+    readonly serialized: unknown;
+    readonly value: unknown;
+};
+
+type SoundRollbackOperation =
+    | { readonly kind: "parameter"; readonly endpointID: string }
+    | { readonly kind: "stored-state"; readonly key: string; readonly adapter?: EffectStoredStateAdapter }
+    | { readonly kind: "init-only"; readonly adapter: StandaloneEffectInitOnlyStateAdapter };
+
+type SuppressedParameterValue = {
+    readonly generation: number;
+    readonly value: EffectParameterValue;
+};
+
+type ApplyPresetValuesOptions = {
+    readonly generation: number;
+    readonly beforeParameterWrite?: (endpointID: string) => void;
+    readonly beforeStoredStateWrite?: (key: string, adapter?: EffectStoredStateAdapter) => void;
+};
+
 const defaultFilter: StandaloneEffectPresetFilter = {
     query: "",
     source: "all",
 };
+
+const SYNTH_INIT_TRANSACTION_PRESET_ID = "cosimo.init.current";
 
 function errorFromUnknown(error: unknown) {
     return error instanceof Error ? error : new Error(String(error));
@@ -281,7 +342,8 @@ export class StandaloneEffectPresetController {
     private readonly listeners = new Set<StandaloneEffectPresetStateListener>();
     private readonly currentValues = new Map<string, EffectParameterValue>();
     private readonly hydratingEndpointIDs = new Set<string>();
-    private readonly suppressedParameterValues = new Map<string, EffectParameterValue[]>();
+    private readonly suppressedParameterValues = new Map<string, SuppressedParameterValue[]>();
+    private readonly latestParameterLoadGeneration = new Map<string, number>();
     private readonly parameterListenerCleanups: Array<() => void> = [];
     private readonly storedStateListenerCleanups: Array<() => void> = [];
     private readonly handleBridgeStateBound: (state: EffectPresetStateV2) => void;
@@ -294,6 +356,11 @@ export class StandaloneEffectPresetController {
     private attached = false;
     private ready = false;
     private applyingPresetValuesDepth = 0;
+    private loadGeneration = 0;
+    private synthInitBaseline: EffectPresetV2 | null = null;
+    private synthCleanInitOnlyState = new Map<string, unknown>();
+    private unnamedSynthDirty = false;
+    private pendingSoundReplacement: PreparedSoundReplacement | null = null;
     private lastError: string | null = null;
 
     constructor(private readonly options: StandaloneEffectPresetControllerOptions) {
@@ -370,17 +437,21 @@ export class StandaloneEffectPresetController {
             userPresets,
             activePreset: activePreset ? { ...activePreset } : null,
             activePresetID: activePreset?.presetID ?? null,
-            activeLabel: activePreset?.label ?? "",
-            dirty: activePreset?.dirty ?? false,
+            activeLabel: activePreset?.label ?? (this.options.synth ? "INIT" : ""),
+            dirty: activePreset?.dirty ?? (this.options.synth ? this.unnamedSynthDirty : false),
             currentValues: this.getCurrentValuesRecord(),
             missingCurrentValueEndpointIDs: this.getMissingCurrentValueEndpointIDs(),
             currentContract: this.currentContract ? clonePluginStateContract(this.currentContract) : null,
             lastError: this.lastError,
+            supportsInit: this.options.synth !== undefined,
+            pendingSoundReplacement: this.pendingSoundReplacement
+                ? { ...this.pendingSoundReplacement.pending }
+                : null,
         };
     }
 
     getMutations() {
-        return {
+        const mutations = {
             setFilter: this.setFilter.bind(this),
             clearLastError: this.clearLastError.bind(this),
             refreshCurrentValues: this.refreshCurrentValues.bind(this),
@@ -395,6 +466,22 @@ export class StandaloneEffectPresetController {
             importPresetText: this.importPresetText.bind(this),
             copyPresetToClipboard: this.copyPresetToClipboard.bind(this),
             pastePresetFromClipboard: this.pastePresetFromClipboard.bind(this),
+        };
+
+        return mutations;
+    }
+
+    getSynthMutations() {
+        if (!this.options.synth) {
+            return null;
+        }
+
+        return {
+            initSound: this.initSound.bind(this),
+            cancelSoundReplacement: this.cancelSoundReplacement.bind(this),
+            discardAndContinueSoundReplacement: this.discardAndContinueSoundReplacement.bind(this),
+            saveAndContinueSoundReplacement: this.saveAndContinueSoundReplacement.bind(this),
+            saveCurrentAsNewPresetAndContinueSoundReplacement: this.saveCurrentAsNewPresetAndContinueSoundReplacement.bind(this),
         };
     }
 
@@ -418,20 +505,106 @@ export class StandaloneEffectPresetController {
         }, "Current parameter values refreshed.");
     }
 
-    applyPreset(presetKey: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+    initSound(): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+        try {
+            return this.requestSoundReplacement(this.prepareInitSoundReplacement());
+        } catch (error) {
+            return this.fail(errorFromUnknown(error));
+        }
+    }
+
+    cancelSoundReplacement(): StandaloneEffectPresetMutationResult<undefined> {
         return this.runMutation(() => {
+            this.pendingSoundReplacement = null;
+            return undefined;
+        }, "Sound replacement cancelled.");
+    }
+
+    discardAndContinueSoundReplacement(): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+        const replacement = this.pendingSoundReplacement;
+
+        if (!replacement) {
+            return this.fail(new Error("No sound replacement is waiting for confirmation."));
+        }
+
+        return this.runMutation(() => {
+            const value = replacement.apply();
+            this.pendingSoundReplacement = null;
+            return value;
+        }, replacement.successMessage);
+    }
+
+    saveAndContinueSoundReplacement(): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+        if (!this.pendingSoundReplacement) {
+            return this.fail(new Error("No sound replacement is waiting for confirmation."));
+        }
+
+        const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+        const writablePreset = activePreset
+            ? this.getUserPresets().find((preset) => preset.presetID === activePreset.presetID)
+            : undefined;
+
+        if (!writablePreset) {
+            return {
+                ok: false,
+                actionRequired: "save-as-for-sound-replacement",
+                message: "Save the current sound as a new preset before continuing.",
+            };
+        }
+
+        const saveResult = this.overwriteUserPreset(presetKeyFor("user", writablePreset.presetID));
+        if (!saveResult.ok) {
+            return saveResult;
+        }
+
+        return this.discardAndContinueSoundReplacement();
+    }
+
+    saveCurrentAsNewPresetAndContinueSoundReplacement(
+        label: string,
+    ): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+        if (!this.pendingSoundReplacement) {
+            return this.fail(new Error("No sound replacement is waiting for confirmation."));
+        }
+
+        const saveResult = this.saveCurrentAsNewPreset(label);
+        if (!saveResult.ok) {
+            return saveResult;
+        }
+
+        return this.discardAndContinueSoundReplacement();
+    }
+
+    applyPreset(presetKey: string): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+        try {
             ensureStoredStateWriter(this.options.patchConnection, "apply effect presets");
             ensureParameterWriter(this.options.patchConnection, "apply effect presets");
 
             const { preset } = this.resolvePreset(presetKey);
             const normalizedPreset = this.normalizePresetForCurrentContract(preset);
-            this.commitActivePresetAndApply(normalizedPreset);
-
-            return cloneEffectPresetV2(normalizedPreset);
-        }, "Preset applied.");
+            return this.requestSoundReplacement({
+                pending: { kind: "preset", presetKey },
+                successMessage: "Preset applied.",
+                apply: () => {
+                    this.commitActivePresetAndApply(normalizedPreset);
+                    return cloneEffectPresetV2(normalizedPreset);
+                },
+            });
+        } catch (error) {
+            return this.fail(errorFromUnknown(error));
+        }
     }
 
     reapplyActivePreset(): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+        if (!this.bridgeState.activePresetByEffect[this.options.effectID] && this.options.synth) {
+            try {
+                const replacement = this.prepareInitSoundReplacement();
+                return this.runMutation(replacement.apply, "Preset reapplied.");
+            } catch (error) {
+                return this.fail(errorFromUnknown(error));
+            }
+        }
+
         return this.runMutation(() => {
             const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
 
@@ -464,6 +637,7 @@ export class StandaloneEffectPresetController {
             const preset = this.captureCurrentPreset(presetID, normalizedLabel);
 
             this.bridge.saveUserPreset(preset, { activate: true });
+            this.synthCleanInitOnlyState = this.captureSerializedInitOnlyState(preset);
             return cloneEffectPresetV2(preset);
         }, "Preset saved.");
     }
@@ -480,6 +654,7 @@ export class StandaloneEffectPresetController {
 
             const nextPreset = this.captureCurrentPreset(preset.presetID, preset.label);
             this.bridge.saveUserPreset(nextPreset, { activate: true });
+            this.synthCleanInitOnlyState = this.captureSerializedInitOnlyState(nextPreset);
 
             return cloneEffectPresetV2(nextPreset);
         }, "Preset overwritten.");
@@ -567,7 +742,7 @@ export class StandaloneEffectPresetController {
         text: string,
         options: StandaloneEffectPresetImportOptions = {},
     ): StandaloneEffectPresetMutationResult<EffectPresetV2> {
-        return this.runMutation(() => {
+        try {
             ensureStoredStateWriter(this.options.patchConnection, "import effect presets");
 
             const preset = this.prepareImportedPreset(
@@ -578,13 +753,23 @@ export class StandaloneEffectPresetController {
 
             if (options.applyAfterImport) {
                 ensureParameterWriter(this.options.patchConnection, "import and apply effect presets");
-                this.commitImportedPresetAndApply(preset);
-            } else {
-                this.bridge.saveUserPreset(preset);
+                return this.requestSoundReplacement({
+                    pending: { kind: "import", presetID: preset.presetID },
+                    successMessage: "Preset imported.",
+                    apply: () => {
+                        this.commitImportedPresetAndApply(preset);
+                        return cloneEffectPresetV2(preset);
+                    },
+                });
             }
 
-            return cloneEffectPresetV2(preset);
-        }, "Preset imported.");
+            return this.runMutation(() => {
+                this.bridge.saveUserPreset(preset);
+                return cloneEffectPresetV2(preset);
+            }, "Preset imported.");
+        } catch (error) {
+            return this.fail(errorFromUnknown(error));
+        }
     }
 
     async copyPresetToClipboard(presetKey: string): Promise<StandaloneEffectPresetMutationResult<string>> {
@@ -689,6 +874,7 @@ export class StandaloneEffectPresetController {
         this.parameterListenerCleanups.length = 0;
         this.hydratingEndpointIDs.clear();
         this.suppressedParameterValues.clear();
+        this.latestParameterLoadGeneration.clear();
     }
 
     private attachStoredStateListeners() {
@@ -698,6 +884,15 @@ export class StandaloneEffectPresetController {
             }
 
             const cleanup = adapter.subscribe(() => this.handleStoredStateAdapterChange(adapter));
+            this.storedStateListenerCleanups.push(cleanup);
+        }
+
+        for (const adapter of this.options.synth?.initOnlyStateAdapters ?? []) {
+            if (typeof adapter.subscribe !== "function") {
+                continue;
+            }
+
+            const cleanup = adapter.subscribe(() => this.handleInitOnlyStateAdapterChange(adapter));
             this.storedStateListenerCleanups.push(cleanup);
         }
     }
@@ -727,18 +922,27 @@ export class StandaloneEffectPresetController {
             return;
         }
 
-        this.currentValues.set(endpointID, normalizedValue);
-
         if (this.hydratingEndpointIDs.delete(endpointID)) {
+            this.currentValues.set(endpointID, normalizedValue);
             this.notify();
             return;
         }
 
-        if (this.consumeSuppressedParameterValue(endpointID, normalizedValue)) {
+        const suppressedValue = this.consumeSuppressedParameterValue(endpointID, normalizedValue);
+
+        if (suppressedValue) {
+            if (this.latestParameterLoadGeneration.get(endpointID) === suppressedValue.generation) {
+                this.currentValues.set(endpointID, normalizedValue);
+            }
             this.notify();
             return;
         }
 
+        // The load writes as one synchronous burst, so UI input can only arrive after
+        // that burst. Apply and dirty any unqueued callback; advancing the generation
+        // keeps older, delayed load echoes from replacing that genuine edit.
+        this.latestParameterLoadGeneration.set(endpointID, this.nextLoadGeneration());
+        this.currentValues.set(endpointID, normalizedValue);
         this.markActivePresetDirtyIfNeeded(endpointID, normalizedValue);
         this.notify();
     }
@@ -756,7 +960,19 @@ export class StandaloneEffectPresetController {
     private markActivePresetDirtyIfNeeded(endpointID: string, value: EffectParameterValue) {
         const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
 
-        if (!activePreset || activePreset.dirty) {
+        if (!activePreset) {
+            if (
+                this.options.synth
+                && !this.unnamedSynthDirty
+                && this.synthInitBaseline
+                && !valuesEqual(this.synthInitBaseline.parameters[endpointID], value)
+            ) {
+                this.unnamedSynthDirty = true;
+            }
+            return;
+        }
+
+        if (activePreset.dirty) {
             return;
         }
 
@@ -793,11 +1009,13 @@ export class StandaloneEffectPresetController {
 
         const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
 
-        if (!activePreset || activePreset.dirty) {
+        if (activePreset?.dirty) {
             return;
         }
 
-        const activePresetPayload = this.findPresetByID(activePreset.presetID);
+        // Fresh instances and the post-Init INIT identity have NO active
+        // preset; the payload lookup belongs to the active-preset branch only.
+        const activePresetPayload = activePreset ? this.findPresetByID(activePreset.presetID) : null;
         const capturedStoredState: Record<string, unknown> = {};
 
         for (const currentAdapter of this.storedStateAdapters) {
@@ -815,6 +1033,18 @@ export class StandaloneEffectPresetController {
             context,
         );
 
+        if (!activePreset) {
+            if (
+                this.options.synth
+                && this.synthInitBaseline
+                && !this.unnamedSynthDirty
+                && !storedStateValuesEqual(this.synthInitBaseline.storedState[adapter.key], currentStoredState)
+            ) {
+                this.unnamedSynthDirty = true;
+            }
+            return;
+        }
+
         if (activePresetPayload && storedStateValuesEqual(activePresetPayload.storedState[adapter.key], currentStoredState)) {
             return;
         }
@@ -823,6 +1053,51 @@ export class StandaloneEffectPresetController {
             ...activePreset,
             dirty: true,
         });
+    }
+
+    private handleInitOnlyStateAdapterChange(adapter: StandaloneEffectInitOnlyStateAdapter) {
+        if (this.applyingPresetValuesDepth > 0) {
+            return;
+        }
+
+        try {
+            const baseline = this.synthCleanInitOnlyState.get(adapter.key);
+            const activePreset = this.bridgeState.activePresetByEffect[this.options.effectID];
+
+            if (activePreset?.dirty) {
+                return;
+            }
+
+            const currentPreset = this.captureCurrentPreset("cosimo.compare.current", "Compare");
+            const context: EffectStoredStateContext = {
+                parameters: currentPreset.parameters,
+                storedState: currentPreset.storedState,
+            };
+            const currentValue = adapter.serializeForTransaction(
+                adapter.normalizeForTransaction(adapter.capture(), context),
+                context,
+            );
+
+            if (baseline !== undefined && storedStateValuesEqual(baseline, currentValue)) {
+                return;
+            }
+
+            if (!activePreset) {
+                if (this.synthInitBaseline && !this.unnamedSynthDirty) {
+                    this.unnamedSynthDirty = true;
+                }
+                return;
+            }
+
+            this.bridge.setActivePresetMetadata(this.options.effectID, {
+                ...activePreset,
+                dirty: true,
+            });
+        } catch (error) {
+            this.lastError = errorFromUnknown(error).message;
+        }
+
+        this.notify();
     }
 
     private requireCurrentContract() {
@@ -1070,27 +1345,53 @@ export class StandaloneEffectPresetController {
     }
 
     private commitActivePresetAndApply(preset: EffectPresetV2) {
-        const previousState = this.bridge.getState();
+        if (!this.options.synth) {
+            const previousState = this.bridge.getState();
+            this.bridge.setActivePresetMetadata(
+                this.options.effectID,
+                createActivePresetMetadataFromPresetV2(preset),
+            );
 
-        this.bridge.setActivePresetMetadata(this.options.effectID, createActivePresetMetadataFromPresetV2(preset));
-
-        try {
-            this.applyPresetValuesToPatch(preset);
-        } catch (error) {
-            this.restoreBridgeStateAfterApplyFailure(previousState, error);
+            try {
+                this.applyPresetValuesOutsideTransaction(preset);
+            } catch (error) {
+                this.restoreBridgeStateAfterApplyFailure(previousState, error);
+            }
+            return;
         }
+
+        this.applySoundTransaction({
+            preset,
+            commit: () => {
+                this.synthCleanInitOnlyState = this.captureSerializedInitOnlyState(preset);
+                this.bridge.setActivePresetMetadata(
+                    this.options.effectID,
+                    createActivePresetMetadataFromPresetV2(preset),
+                );
+            },
+        });
     }
 
     private commitImportedPresetAndApply(preset: EffectPresetV2) {
-        const previousState = this.bridge.getState();
+        if (!this.options.synth) {
+            const previousState = this.bridge.getState();
+            this.bridge.saveUserPreset(preset, { activate: true });
 
-        this.bridge.saveUserPreset(preset, { activate: true });
-
-        try {
-            this.applyPresetValuesToPatch(preset);
-        } catch (error) {
-            this.restoreBridgeStateAfterApplyFailure(previousState, error);
+            try {
+                this.applyPresetValuesOutsideTransaction(preset);
+            } catch (error) {
+                this.restoreBridgeStateAfterApplyFailure(previousState, error);
+            }
+            return;
         }
+
+        this.applySoundTransaction({
+            preset,
+            commit: () => {
+                this.synthCleanInitOnlyState = this.captureSerializedInitOnlyState(preset);
+                this.bridge.saveUserPreset(preset, { activate: true });
+            },
+        });
     }
 
     private restoreBridgeStateAfterApplyFailure(previousState: EffectPresetStateV2, originalError: unknown): never {
@@ -1105,30 +1406,12 @@ export class StandaloneEffectPresetController {
         throw errorFromUnknown(originalError);
     }
 
-    private applyPresetValuesToPatch(preset: EffectPresetV2) {
-        const sendEventOrValue = this.options.patchConnection.sendEventOrValue;
-        const currentContract = this.requireCurrentContract();
-
-        if (typeof sendEventOrValue !== "function") {
-            throw new Error("Cannot apply effect presets because the patch connection cannot write parameter values.");
-        }
-
-        this.queueSuppressedPresetValues(preset);
-
+    private applyPresetValuesOutsideTransaction(preset: EffectPresetV2) {
         this.applyingPresetValuesDepth += 1;
 
         try {
-            applyEffectPresetV2({
-                patchConnection: {
-                    sendParameterGestureStart: this.options.patchConnection.sendParameterGestureStart?.bind(this.options.patchConnection),
-                    sendEventOrValue: sendEventOrValue.bind(this.options.patchConnection),
-                    sendParameterGestureEnd: this.options.patchConnection.sendParameterGestureEnd?.bind(this.options.patchConnection),
-                    sendStoredStateValue: this.options.patchConnection.sendStoredStateValue?.bind(this.options.patchConnection),
-                },
-                preset,
-                currentContract,
-                storedStateAdapters: this.storedStateAdapters,
-                migrations: this.resolvePresetMigrations(currentContract),
+            this.applyPresetValuesToPatch(preset, {
+                generation: this.nextLoadGeneration(),
             });
         } catch (error) {
             this.suppressedParameterValues.clear();
@@ -1138,11 +1421,319 @@ export class StandaloneEffectPresetController {
         }
     }
 
-    private queueSuppressedPresetValues(preset: EffectPresetV2) {
-        for (const [endpointID, value] of Object.entries(preset.parameters)) {
-            const queue = this.suppressedParameterValues.get(endpointID) ?? [];
-            queue.push(value);
-            this.suppressedParameterValues.set(endpointID, queue);
+    private applySoundTransaction({
+        preset,
+        initOnlyValues = [],
+        commit,
+    }: {
+        preset: EffectPresetV2;
+        initOnlyValues?: ReadonlyArray<PreparedInitOnlyStateValue>;
+        commit: () => void;
+    }) {
+        const previousPreset = this.captureCurrentPreset("cosimo.rollback.current", "Rollback");
+        const previousInitOnlyValues = this.captureInitOnlyStateValues(previousPreset);
+        const previousBridgeState = this.bridge.getState();
+        const previousInitBaseline = this.synthInitBaseline
+            ? cloneEffectPresetV2(this.synthInitBaseline)
+            : null;
+        const previousCleanInitOnlyState = new Map(this.synthCleanInitOnlyState);
+        const previousUnnamedDirty = this.unnamedSynthDirty;
+        const operations: SoundRollbackOperation[] = [];
+        const generation = this.nextLoadGeneration();
+        let commitStarted = false;
+
+        this.applyingPresetValuesDepth += 1;
+
+        try {
+            this.applyPresetValuesToPatch(preset, {
+                generation,
+                beforeParameterWrite: (endpointID) => {
+                    operations.push({ kind: "parameter", endpointID });
+                },
+                beforeStoredStateWrite: (key, adapter) => {
+                    operations.push({ kind: "stored-state", key, adapter });
+                },
+            });
+
+            const context: EffectStoredStateContext = {
+                parameters: preset.parameters,
+                storedState: preset.storedState,
+            };
+
+            for (const entry of initOnlyValues) {
+                operations.push({ kind: "init-only", adapter: entry.adapter });
+                entry.adapter.apply(entry.value, context);
+            }
+
+            commitStarted = true;
+            commit();
+        } catch (error) {
+            const rollbackErrors = this.rollbackSoundOperations(
+                operations,
+                previousPreset,
+                previousInitOnlyValues,
+            );
+
+            if (commitStarted) {
+                try {
+                    this.bridge.replaceState(previousBridgeState);
+                } catch (rollbackError) {
+                    rollbackErrors.push(errorFromUnknown(rollbackError));
+                }
+            }
+
+            this.synthInitBaseline = previousInitBaseline;
+            this.synthCleanInitOnlyState = previousCleanInitOnlyState;
+            this.unnamedSynthDirty = previousUnnamedDirty;
+
+            const original = errorFromUnknown(error);
+
+            if (rollbackErrors.length > 0) {
+                throw new Error(
+                    `${original.message}; failed to restore the previous sound: ${rollbackErrors.map((entry) => entry.message).join("; ")}`,
+                );
+            }
+
+            throw original;
+        } finally {
+            this.applyingPresetValuesDepth -= 1;
+        }
+    }
+
+    private captureInitOnlyStateValues(preset: EffectPresetV2) {
+        const context: EffectStoredStateContext = {
+            parameters: preset.parameters,
+            storedState: preset.storedState,
+        };
+
+        return (this.options.synth?.initOnlyStateAdapters ?? []).map((adapter): PreparedInitOnlyStateValue => {
+            const normalized = adapter.normalizeForTransaction(adapter.capture(), context);
+            const serialized = adapter.serializeForTransaction(normalized, context);
+
+            return {
+                adapter,
+                serialized,
+                value: adapter.normalizeForTransaction(serialized, context),
+            };
+        });
+    }
+
+    private captureSerializedInitOnlyState(preset: EffectPresetV2) {
+        return new Map(
+            this.captureInitOnlyStateValues(preset).map((entry) => [entry.adapter.key, entry.serialized]),
+        );
+    }
+
+    private rollbackSoundOperations(
+        operations: ReadonlyArray<SoundRollbackOperation>,
+        previousPreset: EffectPresetV2,
+        previousInitOnlyValues: ReadonlyArray<PreparedInitOnlyStateValue>,
+    ) {
+        const rollbackErrors: Error[] = [];
+        const generation = this.nextLoadGeneration();
+        const context: EffectStoredStateContext = {
+            parameters: previousPreset.parameters,
+            storedState: previousPreset.storedState,
+        };
+        const previousInitOnlyByKey = new Map(
+            previousInitOnlyValues.map((entry) => [entry.adapter.key, entry]),
+        );
+        const parameterEndpointIDs = new Set(
+            operations.flatMap((operation) => operation.kind === "parameter" ? [operation.endpointID] : []),
+        );
+        const storedStateOperations = new Map<
+            string,
+            Extract<SoundRollbackOperation, { kind: "stored-state" }>
+        >();
+        for (const operation of operations) {
+            if (operation.kind === "stored-state") {
+                storedStateOperations.set(operation.key, operation);
+            }
+        }
+        const initOnlyKeys = new Set(
+            operations.flatMap((operation) => operation.kind === "init-only" ? [operation.adapter.key] : []),
+        );
+
+        const attemptRollback = (rollback: () => void) => {
+            try {
+                rollback();
+            } catch (rollbackError) {
+                rollbackErrors.push(errorFromUnknown(rollbackError));
+            }
+        };
+
+        for (const parameter of this.requireCurrentContract().parameters) {
+            if (!parameterEndpointIDs.has(parameter.endpointID)) {
+                continue;
+            }
+
+            attemptRollback(() => this.restoreParameterValue(
+                parameter.endpointID,
+                previousPreset.parameters[parameter.endpointID],
+                generation,
+            ));
+        }
+
+        const restoreStoredState = (operation: Extract<SoundRollbackOperation, { kind: "stored-state" }>) => {
+            const value = previousPreset.storedState[operation.key];
+
+            if (operation.adapter?.apply) {
+                operation.adapter.apply(
+                    operation.adapter.normalizeForPreset(value, context),
+                    context,
+                );
+                return;
+            }
+
+            this.options.patchConnection.sendStoredStateValue?.(operation.key, value);
+        };
+
+        for (const adapter of this.storedStateAdapters) {
+            const operation = storedStateOperations.get(adapter.key);
+
+            if (operation) {
+                attemptRollback(() => restoreStoredState(operation));
+                storedStateOperations.delete(adapter.key);
+            }
+        }
+
+        for (const entry of this.requireCurrentContract().storedState) {
+            const operation = storedStateOperations.get(entry.key);
+
+            if (operation) {
+                attemptRollback(() => restoreStoredState(operation));
+                storedStateOperations.delete(entry.key);
+            }
+        }
+
+        for (const adapter of this.options.synth?.initOnlyStateAdapters ?? []) {
+            if (!initOnlyKeys.has(adapter.key)) {
+                continue;
+            }
+
+            attemptRollback(() => {
+                const previousValue = previousInitOnlyByKey.get(adapter.key);
+
+                if (!previousValue) {
+                    throw new Error(`Missing rollback value for ${adapter.key}.`);
+                }
+
+                adapter.apply(previousValue.value, context);
+            });
+        }
+
+        return rollbackErrors;
+    }
+
+    private restoreParameterValue(
+        endpointID: string,
+        value: EffectParameterValue,
+        generation: number,
+    ) {
+        const sendEventOrValue = this.options.patchConnection.sendEventOrValue;
+
+        if (typeof sendEventOrValue !== "function") {
+            throw new Error(`Cannot restore parameter "${endpointID}" because parameter writes are unavailable.`);
+        }
+
+        const suppression = this.queueSuppressedParameterValue(endpointID, value, generation);
+        this.options.patchConnection.sendParameterGestureStart?.(endpointID);
+
+        try {
+            sendEventOrValue.call(this.options.patchConnection, endpointID, value);
+            this.currentValues.set(endpointID, value);
+        } catch (error) {
+            this.removeSuppressedParameterValue(endpointID, suppression);
+            throw error;
+        } finally {
+            this.options.patchConnection.sendParameterGestureEnd?.(endpointID);
+        }
+    }
+
+    private applyPresetValuesToPatch(preset: EffectPresetV2, options: ApplyPresetValuesOptions) {
+        const sendEventOrValue = this.options.patchConnection.sendEventOrValue;
+        const currentContract = this.requireCurrentContract();
+
+        if (typeof sendEventOrValue !== "function") {
+            throw new Error("Cannot apply effect presets because the patch connection cannot write parameter values.");
+        }
+
+        const transactionalAdapters = this.storedStateAdapters.map((adapter): EffectStoredStateAdapter => ({
+            ...adapter,
+            apply: adapter.apply
+                ? (value, context) => {
+                    options.beforeStoredStateWrite?.(adapter.key, adapter);
+                    adapter.apply?.(value, context);
+                }
+                : undefined,
+        }));
+
+        applyEffectPresetV2({
+            patchConnection: {
+                sendParameterGestureStart: this.options.patchConnection.sendParameterGestureStart?.bind(this.options.patchConnection),
+                sendEventOrValue: (endpointID, value) => {
+                    const normalizedValue = this.normalizeEndpointValue(endpointID, value);
+                    const suppression = this.queueSuppressedParameterValue(
+                        endpointID,
+                        normalizedValue,
+                        options.generation,
+                    );
+                    options.beforeParameterWrite?.(endpointID);
+
+                    try {
+                        sendEventOrValue.call(this.options.patchConnection, endpointID, value);
+                        this.currentValues.set(endpointID, normalizedValue);
+                    } catch (error) {
+                        this.removeSuppressedParameterValue(endpointID, suppression);
+                        throw error;
+                    }
+                },
+                sendParameterGestureEnd: this.options.patchConnection.sendParameterGestureEnd?.bind(this.options.patchConnection),
+                sendStoredStateValue: (key, value) => {
+                    options.beforeStoredStateWrite?.(key);
+                    this.options.patchConnection.sendStoredStateValue?.(key, value);
+                },
+            },
+            preset,
+            currentContract,
+            storedStateAdapters: transactionalAdapters,
+            migrations: this.resolvePresetMigrations(currentContract),
+        });
+    }
+
+    private nextLoadGeneration() {
+        this.loadGeneration += 1;
+        return this.loadGeneration;
+    }
+
+    private queueSuppressedParameterValue(
+        endpointID: string,
+        value: EffectParameterValue,
+        generation: number,
+    ): SuppressedParameterValue {
+        const suppression = { generation, value };
+        const queue = this.suppressedParameterValues.get(endpointID) ?? [];
+        queue.push(suppression);
+        this.suppressedParameterValues.set(endpointID, queue);
+        this.latestParameterLoadGeneration.set(endpointID, generation);
+        return suppression;
+    }
+
+    private removeSuppressedParameterValue(endpointID: string, suppression: SuppressedParameterValue) {
+        const queue = this.suppressedParameterValues.get(endpointID);
+
+        if (!queue) {
+            return;
+        }
+
+        const index = queue.indexOf(suppression);
+
+        if (index !== -1) {
+            queue.splice(index, 1);
+        }
+
+        if (queue.length === 0) {
+            this.suppressedParameterValues.delete(endpointID);
         }
     }
 
@@ -1150,23 +1741,97 @@ export class StandaloneEffectPresetController {
         const queue = this.suppressedParameterValues.get(endpointID);
 
         if (!queue || queue.length === 0) {
-            return false;
+            return null;
         }
 
-        const matchIndex = queue.findIndex((candidate) => valuesEqual(candidate, value));
+        const matchIndex = queue.findIndex((candidate) => valuesEqual(candidate.value, value));
 
         if (matchIndex === -1) {
-            this.suppressedParameterValues.delete(endpointID);
-            return false;
+            return null;
         }
 
-        queue.splice(matchIndex, 1);
+        const [suppression] = queue.splice(matchIndex, 1);
 
         if (queue.length === 0) {
             this.suppressedParameterValues.delete(endpointID);
         }
 
-        return true;
+        return suppression;
+    }
+
+    private prepareInitSoundReplacement(): PreparedSoundReplacement {
+        const synth = this.options.synth;
+
+        if (!synth) {
+            throw new Error("Init is only available for synth preset controllers.");
+        }
+
+        ensureStoredStateWriter(this.options.patchConnection, "initialize the synth sound");
+        ensureParameterWriter(this.options.patchConnection, "initialize the synth sound");
+
+        const currentContract = this.requireCurrentContract();
+        const initPreset = this.normalizePresetForCurrentContract({
+            kind: EFFECT_PRESET_V2_KIND,
+            version: EFFECT_PRESET_V2_SCHEMA_VERSION,
+            effectID: this.options.effectID,
+            presetID: SYNTH_INIT_TRANSACTION_PRESET_ID,
+            label: "INIT",
+            contract: clonePluginStateContract(currentContract),
+            parameters: defaultParameterValues(currentContract),
+            storedState: synth.createCanonicalStoredState(currentContract),
+        });
+        const context: EffectStoredStateContext = {
+            parameters: initPreset.parameters,
+            storedState: initPreset.storedState,
+        };
+        const initOnlyValues = (synth.initOnlyStateAdapters ?? []).map((adapter): PreparedInitOnlyStateValue => {
+            const value = adapter.normalizeForTransaction(adapter.createDefaultValue(), context);
+
+            return {
+                adapter,
+                serialized: adapter.serializeForTransaction(value, context),
+                value,
+            };
+        });
+
+        return {
+            pending: { kind: "init" },
+            successMessage: "Synth initialized.",
+            apply: () => {
+                this.applySoundTransaction({
+                    preset: initPreset,
+                    initOnlyValues,
+                    commit: () => {
+                        this.synthInitBaseline = cloneEffectPresetV2(initPreset);
+                        this.synthCleanInitOnlyState = new Map(
+                            initOnlyValues.map((entry) => [entry.adapter.key, entry.serialized]),
+                        );
+                        this.unnamedSynthDirty = false;
+                        this.bridge.setActivePresetMetadata(this.options.effectID, null);
+                    },
+                });
+
+                return cloneEffectPresetV2(initPreset);
+            },
+        };
+    }
+
+    private requestSoundReplacement(
+        replacement: PreparedSoundReplacement,
+    ): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+        if (this.options.synth && this.getState().dirty) {
+            this.pendingSoundReplacement = replacement;
+            this.lastError = null;
+            this.notify();
+
+            return {
+                ok: false,
+                actionRequired: "confirm-sound-replacement",
+                message: "The current sound has unsaved changes.",
+            };
+        }
+
+        return this.runMutation(replacement.apply, replacement.successMessage);
     }
 
     private runMutation<T>(

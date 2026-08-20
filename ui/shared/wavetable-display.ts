@@ -131,7 +131,23 @@ export type WavetableRenderModel = WavetableStaticScene & {
     currentSlice: CurrentSlice;
 };
 
-export type WavetableDrawOptions = { paintBackground?: boolean; showSliceCaption?: boolean };
+/**
+ * T02C: the selected source's possible Index travel, shaded onto the graphic.
+ * Positions use the Index parameter's normalized 0..1 axis; the caller owns
+ * the canonical route projection (mobile-voice-rail-projection) and passes
+ * only its already-clamped result.
+ */
+export type WavetableModulationRangeOverlay = {
+    readonly lowPosition: number;
+    readonly highPosition: number;
+    readonly color: RGBColor;
+};
+
+export type WavetableDrawOptions = {
+    paintBackground?: boolean;
+    showSliceCaption?: boolean;
+    modulationRange?: WavetableModulationRangeOverlay | null;
+};
 
 export type WavetableRenderContext = {
     fillStyle: string | CanvasGradient | CanvasPattern;
@@ -206,6 +222,14 @@ function cancelNextAnimationFrame(handle: number): void {
 function lerp(start: number, end: number, amount: number): number {
     return start + ((end - start) * amount);
 }
+
+/**
+ * T02C tint strengths: a hue shift only, strong enough to read on thin
+ * low-alpha lines while the depth fade and lighting stay untouched.
+ */
+const MODULATION_OVERLAY_LINE_MIX = 0.6;
+const MODULATION_OVERLAY_SKIN_MIX = 0.55;
+const MODULATION_OVERLAY_EPSILON = 1e-6;
 
 function mixRGB(from: RGBColor, to: RGBColor, amount: number): RGBColor {
     return [
@@ -1141,8 +1165,36 @@ export function drawWavetableModel(context: WavetableRenderContext, model: Wavet
     // both so one page-owned gradient can run behind the graph AND its
     // parameter strip, and because the cutover removes any permanent
     // Frame/Index display. The retained artwork is identical either way.
-    const { paintBackground = true, showSliceCaption = true } = options;
+    const { paintBackground = true, showSliceCaption = true, modulationRange = null } = options;
     const meshColour = mixRGB(theme.meshColor, [214, 246, 255], 0.34);
+    // T02C: map the overlay's normalized positions through the same frame-state
+    // law the current slice uses, then tint colours only — every alpha, glow,
+    // and geometry stays exactly the untinted draw's.
+    const overlayLowIndex = modulationRange === null
+        ? 0
+        : createFrameState(model.frameCount, modulationRange.lowPosition).frameIndex;
+    const overlayHighIndex = modulationRange === null
+        ? 0
+        : createFrameState(model.frameCount, modulationRange.highPosition).frameIndex;
+    const overlayLineTint = (frameIndex: number): number => (
+        modulationRange !== null
+            && frameIndex >= overlayLowIndex - MODULATION_OVERLAY_EPSILON
+            && frameIndex <= overlayHighIndex + MODULATION_OVERLAY_EPSILON
+            ? MODULATION_OVERLAY_LINE_MIX
+            : 0
+    );
+    const overlaySkinTint = (frameLo: number, frameHi: number): number => {
+        if (modulationRange === null) {
+            return 0;
+        }
+        const overlap = Math.min(frameHi, overlayHighIndex) - Math.max(frameLo, overlayLowIndex);
+        return overlap > MODULATION_OVERLAY_EPSILON
+            ? MODULATION_OVERLAY_SKIN_MIX * (overlap / (frameHi - frameLo))
+            : 0;
+    };
+    const tintColour = (colour: RGBColor, tint: number): RGBColor => (
+        tint > 0 && modulationRange !== null ? mixRGB(colour, modulationRange.color, tint) : colour
+    );
 
     context.clearRect(0, 0, model.width, model.height);
 
@@ -1189,7 +1241,7 @@ export function drawWavetableModel(context: WavetableRenderContext, model: Wavet
         );
 
         context.save();
-        context.fillStyle = toRGBA(bandColour, alpha);
+        context.fillStyle = toRGBA(tintColour(bandColour, overlaySkinTint(band.frameLo, band.frameHi)), alpha);
         context.beginPath();
         tracePath(context, band.points);
         context.closePath?.();
@@ -1199,7 +1251,7 @@ export function drawWavetableModel(context: WavetableRenderContext, model: Wavet
 
     for (const slice of model.surfaceSlices) {
         context.save();
-        context.strokeStyle = toRGBA(meshColour, Math.min(0.46, slice.alpha * 2.05));
+        context.strokeStyle = toRGBA(tintColour(meshColour, overlayLineTint(slice.frameIndex)), Math.min(0.46, slice.alpha * 2.05));
         context.lineWidth = 1.15;
         context.shadowBlur = 8;
         context.shadowColor = toRGBA(theme.meshColor, 0.2);
@@ -1223,7 +1275,7 @@ export function drawWavetableModel(context: WavetableRenderContext, model: Wavet
         const strokeColour = mixRGB(theme.frameColor, theme.backgroundRGB, clamp(contour.colourMix, 0, 0.92));
 
         context.save();
-        context.strokeStyle = toRGBA(strokeColour, contour.alpha);
+        context.strokeStyle = toRGBA(tintColour(strokeColour, overlayLineTint(contour.frameIndex)), contour.alpha);
         context.lineWidth = contour.lineWidth;
         strokePolylineSegments(context, contour.segments);
         context.restore();
@@ -1265,6 +1317,7 @@ export class CanvasWavetableDisplay {
     cssWidth: number;
     cssHeight: number;
     drawableInsets: { top: number; right: number; bottom: number; left: number };
+    modulationRange: WavetableModulationRangeOverlay | null;
     staticScene: WavetableStaticScene | null;
     staticKey: string;
     pendingRenderHandle: number | null;
@@ -1294,6 +1347,7 @@ export class CanvasWavetableDisplay {
         this.cssWidth = 0;
         this.cssHeight = 0;
         this.drawableInsets = { top: 0, right: 0, bottom: 0, left: 0 };
+        this.modulationRange = null;
         this.staticScene = null;
         this.staticKey = "";
         this.pendingRenderHandle = null;
@@ -1321,6 +1375,27 @@ export class CanvasWavetableDisplay {
     setWarp(mode: number, amount: number): void {
         this.warpMode = resolveWarpMode(mode);
         this.warpAmount = clamp(Number(amount) || 0, 0, 1);
+        this.queueRender();
+    }
+
+    setModulationRange(overlay: WavetableModulationRangeOverlay | null): void {
+        const current = this.modulationRange;
+        if (
+            current !== null
+            && overlay !== null
+            && current.lowPosition === overlay.lowPosition
+            && current.highPosition === overlay.highPosition
+            && current.color[0] === overlay.color[0]
+            && current.color[1] === overlay.color[1]
+            && current.color[2] === overlay.color[2]
+        ) {
+            return;
+        }
+        if (current === null && overlay === null) {
+            return;
+        }
+
+        this.modulationRange = overlay;
         this.queueRender();
     }
 
@@ -1434,6 +1509,7 @@ export class CanvasWavetableDisplay {
         drawWavetableModel(this.context, model, this.theme, {
             paintBackground: this.paintBackground,
             showSliceCaption: this.showSliceCaption,
+            modulationRange: this.modulationRange,
         });
     }
 }

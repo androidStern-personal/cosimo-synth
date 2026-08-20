@@ -629,6 +629,16 @@ export function getTargetDescriptor(targetId: TargetId): TargetDescriptor {
     return descriptor;
 }
 
+/** Resolve the descriptor that owns one canonical modulation destination. */
+export function getModulationTargetDescriptor(targetKind: ModulationTargetKind): TargetDescriptor {
+    const descriptor = TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(targetKind);
+    if (descriptor === undefined) {
+        return shouldNeverHappen(`Modulation target "${targetKind}" has no display descriptor`);
+    }
+
+    return descriptor;
+}
+
 /**
  * Every descriptor, in stable module/parameter order.
  *
@@ -645,55 +655,12 @@ export function allTargetDescriptors(): ReadonlyArray<TargetDescriptor> {
 export function getModulationTargetDisplayLabel(targetKind: ModulationTargetKind): string {
     const oscillatorMatch = /^osc([ABC])\.(.+)$/.exec(targetKind);
     if (oscillatorMatch !== null) {
-        const descriptor = TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(targetKind);
-        if (descriptor === undefined) {
-            return shouldNeverHappen(`Modulation target "${targetKind}" has no display descriptor`);
-        }
+        const descriptor = getModulationTargetDescriptor(targetKind);
         return `${oscillatorMatch[1]} ${descriptor.label.toUpperCase()}`;
     }
 
-    const descriptor = TARGET_DESCRIPTOR_BY_MODULATION_KIND.get(targetKind);
-    if (descriptor === undefined) {
-        return shouldNeverHappen(`Modulation target "${targetKind}" has no display descriptor`);
-    }
+    const descriptor = getModulationTargetDescriptor(targetKind);
     return descriptor.workspace === "effects"
         ? `${descriptor.moduleId.toUpperCase()} ${descriptor.label.toUpperCase()}`
         : descriptor.label.toUpperCase();
-}
-
-/**
- * Render a normalized value in the target's display unit.
- *
- * @param descriptor - The target's descriptor.
- * @param value - The normalized value to render.
- * @returns The formatted display string (e.g. "1.45 kHz", "+12 st", "64%").
- */
-export function formatTargetValue(descriptor: TargetDescriptor, value: NormalizedValue): string {
-    const prototypeValue = value * 100;
-
-    switch (descriptor.format.kind) {
-        case "percent":
-            return `${Math.round(prototypeValue)}%`;
-        case "frequency": {
-            const { minHz, maxHz } = descriptor.format;
-            const hz = Math.round(minHz * (maxHz / minHz) ** value);
-            return hz >= 1000 ? `${(hz / 1000).toFixed(2)} kHz` : `${hz} Hz`;
-        }
-        case "rate": {
-            const { minHz, maxHz } = descriptor.format;
-            return `${(minHz + value * (maxHz - minHz)).toFixed(2)} Hz`;
-        }
-        case "time": {
-            const { minSeconds, maxSeconds } = descriptor.format;
-            return `${(minSeconds + value * (maxSeconds - minSeconds)).toFixed(3)} s`;
-        }
-        case "phase":
-            return `${Math.round((prototypeValue / 100) * 360)}°`;
-        case "signed-percent":
-            return `${Math.round((prototypeValue - 50) * 2)}%`;
-        case "semitone":
-            return `${prototypeValue >= 50 ? "+" : ""}${Math.round((prototypeValue - 50) / 2)} st`;
-        default:
-            return casesHandled(descriptor.format);
-    }
 }
