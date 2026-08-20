@@ -322,6 +322,22 @@ PHASE 1 — SETTLE THE MOBILE VOICE SURFACE
     - Behavioral tests: five travel cases (two-axis end-handle edit, inert-axis honesty, independent bipolar endpoints with base following the midpoint, unipolar center-grip translate vs base-pins-end, pair-drop at 0% with parked tab), knob-contract migrations across the rail/fx shards (axis flips, shared-HUD roles, capture-loss survival, inert unmapped vertical), and the HUD-collision case now runs against the fixed HUD.
     - Gates: desktop sharded suite 180/180, iPhone shell 20/20, web bundle 14/14, web-poc routing 34/34 + chromium 15/15 + webkit 15/15, shared hooks 29/29, shared logic 36/36, tsc clean. The shared-components "wavetable stage Retry Load" failure remains pre-existing (verified at HEAD earlier today).
 
+[ ] T05C — Fix the Voice Play Mode/Glide popover disappearing when touched
+    Origin (2026-08-20 physical-use report):
+    - The expanded Mod bar's Voice popover opens and displays Poly, Mono, Legato, and Glide, but touching a control makes the entire popover disappear before the control responds. The Mod bar itself remains expanded.
+    Confirmed diagnosis:
+    - The popover's window-level outside-pointer handler checks only `event.target`. In the compiled product, the React UI lives inside `cosimo-desktop-react-view`'s shadow root, so the browser retargets that window event to the outer custom element. The handler therefore mistakes an inside touch for an outside touch and closes the popover on pointer-down.
+    - A production-equivalent compiled shadow-root touch repro fails deterministically. The existing light-DOM browser test passes, which is why the shipped test did not catch the real product failure. The event's composed path correctly contains the touched mode button and the popover.
+    Scope:
+    - Make inside/outside detection shadow-root-safe so touches on Poly, Mono, Legato, the enabled Glide control, and the popover's own padding remain inside interactions.
+    - Preserve intentional dismissal when the user touches genuinely outside the popover or collapses the Mod bar drawer.
+    - Preserve the existing Voice behavior: Poly keeps Glide visibly disabled; selecting Mono or Legato enables it; this bug fix does not redesign or relocate the popover.
+    Done when:
+    - A production-equivalent compiled shadow-root browser regression at phone width uses a real pointer/touch sequence, selects Mono without closing the popover, verifies the play-mode parameter changed, and then operates the enabled Glide control.
+    - The same regression proves a genuine outside touch and drawer collapse still dismiss the popover.
+    - The existing light-DOM coverage remains green but is not accepted as the sole proof.
+    - A physical iPhone check confirms the photographed failure no longer reproduces.
+
 [-] T05A — Find a future mobile home for Articulations
     Parked 2026-08-19:
     - The current mobile articulation pane is deliberately removed to make Voice an instrument surface divided between the wavetable and filter.
