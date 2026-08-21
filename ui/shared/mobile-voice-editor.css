@@ -423,6 +423,22 @@
     transform: translateX(-1px);
 }
 
+/* The traveling live-modulation light; the mod-source-live driver owns
+   `left` and opacity, so it stays invisible until playback arms it. */
+.mobile-voice-rail-light {
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background: #ffffff;
+    box-shadow:
+        0 0 4px var(--mobile-voice-source-accent),
+        0 0 8px color-mix(in srgb, var(--mobile-voice-source-accent) 65%, transparent);
+    transform: translateX(-1.5px);
+    opacity: 0;
+    transition: opacity 160ms ease;
+    pointer-events: none;
+}
+
 /* ------------------------------------------------------------------ */
 /* Precision HUD: fixed top-center in the shell overlay layer.          */
 /* ------------------------------------------------------------------ */

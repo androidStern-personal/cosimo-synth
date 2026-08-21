@@ -150,6 +150,24 @@ function applyRouteOffset(descriptor: RackParameterDescriptor, baseValue: number
     return clamp(rawValue, descriptor.min, descriptor.max);
 }
 
+/**
+ * The live light's knob position for a clamped [0,1] source value, applied
+ * exactly as the rack DSP does: bipolar sources map onto [-1,+1], the offset
+ * applies linearly or in octaves per the descriptor, and the result clamps
+ * to the descriptor range before log/linear display normalization.
+ */
+export function projectRackRouteLiveNormalized(
+    descriptor: RackParameterDescriptor,
+    baseValue: number,
+    route: Pick<ModulationRoute, "amount" | "polarity">,
+    sourceValue01: number,
+): number {
+    const clampedBase = clamp(baseValue, descriptor.min, descriptor.max);
+    const s = clamp(sourceValue01, 0, 1);
+    const offset = route.amount * (route.polarity === "bipolar" ? (s * 2) - 1 : s);
+    return normalizeDisplayedValue(descriptor, applyRouteOffset(descriptor, clampedBase, offset));
+}
+
 export type RackRouteTravel = {
     readonly values: readonly [number, number];
     readonly normalized: readonly [number, number];

@@ -1276,6 +1276,7 @@ namespace wt
         output event wt::EffectiveUnisonStateMonitor effectiveUnisonStateOut;
         output event wt::EffectiveFilterStateMonitor effectiveFilterStateOut;
         output event wt::EffectiveMsegStateMonitor effectiveMsegStateOut;
+        output event wt::EffectiveModSourceStateMonitor effectiveModSourceStateOut;
         output event wt::VoiceArticulationMonitor voiceArticulationStartOut;
         output event wt::OscillatorVoiceStartMonitor oscillatorVoiceStartOut;
         output stream float32<2> out;
@@ -1543,6 +1544,8 @@ namespace wt
         int32 framesUntilNextFilterMonitorUpdate = 0;
         int32 msegMonitorUpdateIntervalFrames = 1;
         int32 framesUntilNextMsegMonitorUpdate = 0;
+        int32 modSourceMonitorUpdateIntervalFrames = 1;
+        int32 framesUntilNextModSourceMonitorUpdate = 0;
         float32 previewFrequencyHzState = previewFrequencyHz;
         float32 glideTimeSecondsState = 0.0f;
         float32[oscillatorCount] indexedFramePositionState;
@@ -3585,6 +3588,34 @@ namespace wt
             effectiveMsegStateOut <- monitor;
         }
 
+        void emitEffectiveModSourceStateMonitor()
+        {
+            wt::EffectiveModSourceStateMonitor monitor;
+            let newestVoiceIndex = findNewestMonitoredVoiceIndex();
+
+            if (newestVoiceIndex >= 0)
+            {
+                monitor.voiceGeneration = voiceGeneration.at (newestVoiceIndex);
+                monitor.hasActive = 1;
+
+                for (wrap<modulationVoiceSourceCount> source)
+                    monitor.values[source] = std::intrinsics::clamp (
+                        resolveVoiceSourceValue (newestVoiceIndex, int32 (source)),
+                        0.0f,
+                        1.0f);
+            }
+            else
+            {
+                monitor.voiceGeneration = findNewestVisibleGeneration();
+                monitor.hasActive = 0;
+
+                for (wrap<modulationVoiceSourceCount> source)
+                    monitor.values[source] = 0.0f;
+            }
+
+            effectiveModSourceStateOut <- monitor;
+        }
+
         void maybeEmitMonitorUpdate()
         {
             if (framesUntilNextMonitorUpdate <= 0)
@@ -3635,6 +3666,16 @@ namespace wt
             else
             {
                 framesUntilNextMsegMonitorUpdate -= 1;
+            }
+
+            if (framesUntilNextModSourceMonitorUpdate <= 0)
+            {
+                emitEffectiveModSourceStateMonitor();
+                framesUntilNextModSourceMonitorUpdate = modSourceMonitorUpdateIntervalFrames - 1;
+            }
+            else
+            {
+                framesUntilNextModSourceMonitorUpdate -= 1;
             }
         }
 
@@ -4568,6 +4609,11 @@ namespace wt
             );
             msegMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedMsegInterval);
             framesUntilNextMsegMonitorUpdate = 0;
+            let requestedModSourceInterval = int32 (
+                std::intrinsics::floor ((processor.frequency / wt::effectiveModSourceStateMonitorHz) + 0.5f)
+            );
+            modSourceMonitorUpdateIntervalFrames = std::intrinsics::max (1, requestedModSourceInterval);
+            framesUntilNextModSourceMonitorUpdate = 0;
             rackModGateReleaseStepState = rackModGateReleaseStep (float32 (processor.frequency));
             rackModSmoothingCoefficientState = rackModOnePoleCoefficient (
                 rackModSmoothingMs, float32 (processor.frequency));

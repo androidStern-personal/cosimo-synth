@@ -40,9 +40,11 @@ import {
     type RackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
 import {
+    projectRackRouteLiveNormalized,
     projectRackRouteTravel,
     type RackRouteEffectiveness,
 } from "../shared/rack-route-presentation";
+import { useModSourceLight, type ModSourceLightPlacement } from "../shared/mod-source-live";
 
 const KNOB_CENTER = 50;
 const KNOB_SWEEP_START_DEGREES = 225;
@@ -50,6 +52,11 @@ const KNOB_SWEEP_DEGREES = 270;
 const BASE_RADIUS = 25;
 const MOD_INNER_RADIUS = 36;
 const MOD_OUTER_RADIUS = 48;
+
+const KNOB_LIGHT_PLACEMENT: ModSourceLightPlacement = {
+    kind: "knob-arc",
+    radius: (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2,
+};
 
 type Point = {
     readonly x: number;
@@ -289,6 +296,32 @@ function ParameterKnobSurface({
     const routeTravel = route === null || rackDescriptor === null
         ? null
         : projectRackRouteTravel(rackDescriptor, binding.value, route);
+    // The traveling live light rides the mod fill only while the fill itself
+    // is visible: an enabled route on the armed source with real travel.
+    const liveLightRoute = route !== null
+        && rackDescriptor !== null
+        && route.enabled
+        && sourceIsSelected
+        && routeTravel !== null
+        && routeTravel.hasVisibleTravel
+        && effectiveness === "active"
+        ? route
+        : null;
+    const liveLightProject = liveLightRoute === null || rackDescriptor === null
+        ? null
+        : (sourceValue01: number) => projectRackRouteLiveNormalized(
+            rackDescriptor,
+            binding.value,
+            liveLightRoute,
+            sourceValue01,
+        );
+    const attachModLight = useModSourceLight({
+        source: liveLightRoute !== null
+            ? { sourceKind: liveLightRoute.sourceKind, sourceSlot: liveLightRoute.sourceSlot }
+            : null,
+        project: liveLightProject ?? ((sourceValue01) => sourceValue01),
+        placement: KNOB_LIGHT_PLACEMENT,
+    });
     const routePresencePoint = pointOnCircle(angleForNormalized(baseNormalized), (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2);
     const handlePoint = pointOnCircle(angleForNormalized(baseNormalized), BASE_RADIUS * 0.72);
     const defaultPoint = pointOnCircle(
@@ -502,6 +535,15 @@ function ParameterKnobSurface({
             highText: formatValue(routeTravel?.values[1] ?? binding.value),
             limitsVisible: route !== null && Math.abs(modulationAmount) > 1e-9,
             modRing,
+            liveLight: liveLightRoute !== null && liveLightProject !== null
+                ? {
+                    source: {
+                        sourceKind: liveLightRoute.sourceKind,
+                        sourceSlot: liveLightRoute.sourceSlot,
+                    },
+                    project: liveLightProject,
+                }
+                : null,
         };
     })();
 
@@ -619,6 +661,17 @@ function ParameterKnobSurface({
                         ? ""
                         : annularSectorPath(routeTravel.normalized[0], routeTravel.normalized[1], MOD_INNER_RADIUS, MOD_OUTER_RADIUS)}
                 />
+                {liveLightRoute !== null ? (
+                    <circle
+                        data-role="rack-knob-mod-light"
+                        data-mod-live="0"
+                        className="rack-knob-mod-light"
+                        ref={attachModLight}
+                        cx={routePresencePoint.x}
+                        cy={routePresencePoint.y}
+                        r="2.4"
+                    />
+                ) : null}
                 <circle
                     className="rack-knob-default-marker"
                     cx={defaultPoint.x}

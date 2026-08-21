@@ -104,6 +104,16 @@
     filter: drop-shadow(0 0 2px var(--rack-knob-mod-accent));
 }
 
+/* The traveling live-modulation light; the mod-source-live driver owns
+   cx/cy and opacity, so it stays invisible until playback arms it. */
+.rack-knob-mod-light {
+    fill: rgb(255 255 255 / 0.95);
+    filter: drop-shadow(0 0 3px var(--rack-knob-mod-accent));
+    opacity: 0;
+    transition: opacity 160ms ease;
+    pointer-events: none;
+}
+
 .rack-knob-route-presence.is-bypassed {
     fill: transparent;
     opacity: 0.34;
