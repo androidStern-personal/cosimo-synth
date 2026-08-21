@@ -12,7 +12,16 @@ import { createContext, type CSSProperties } from "react";
 
 import { hexToRGBColor } from "./theme";
 
-import { ParameterKnobArtwork, type ParameterKnobModRing } from "./parameter-knob-artwork";
+import {
+    MOD_LIGHT_RADIUS,
+    ParameterKnobArtwork,
+    type ParameterKnobModRing,
+} from "./parameter-knob-artwork";
+import {
+    useModSourceLight,
+    type ModSourceIdentity,
+    type ModSourceLightPlacement,
+} from "./mod-source-live";
 
 /** How long the HUD lingers after a released drag before hiding (ADR-024). */
 export const PARAMETER_HUD_LINGER_MS = 420;
@@ -46,10 +55,27 @@ export type ParameterHudModel = {
     readonly highText: string;
     readonly limitsVisible: boolean;
     readonly modRing: ParameterKnobModRing;
+    /** Live traveling light on the mod ring; absent → no light rendered. */
+    readonly liveLight?: {
+        readonly source: ModSourceIdentity;
+        readonly project: (sourceValue01: number) => number;
+    } | null;
 };
+
+const HUD_KNOB_LIGHT_PLACEMENT: ModSourceLightPlacement = {
+    kind: "knob-arc",
+    radius: MOD_LIGHT_RADIUS,
+};
+
+const IDENTITY_PROJECTION = (sourceValue01: number) => sourceValue01;
 
 export function ParameterPrecisionHud({ model }: { model: ParameterHudModel }) {
     const isModulation = model.axis === "modulation";
+    const liveLightRef = useModSourceLight({
+        source: model.liveLight?.source ?? null,
+        project: model.liveLight?.project ?? IDENTITY_PROJECTION,
+        placement: HUD_KNOB_LIGHT_PLACEMENT,
+    });
 
     return (
         <div
@@ -88,6 +114,7 @@ export function ParameterPrecisionHud({ model }: { model: ParameterHudModel }) {
                     sourceAccent={model.sourceAccent}
                     modRing={model.modRing}
                     emphasis={model.axis === "base" ? "base" : "modulation"}
+                    liveLightRef={model.liveLight ? liveLightRef : undefined}
                 />
                 <div className="mobile-voice-hud-center">
                     <span>Base</span>

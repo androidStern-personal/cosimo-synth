@@ -66,6 +66,36 @@ export function routeAmountOffsets(
     return route.amount < 0 ? [route.amount, 0] : [0, route.amount];
 }
 
+/**
+ * One route's live contribution for a clamped [0,1] source value, in
+ * route-amount units — the engine's law exactly: a unipolar source passes
+ * through, a bipolar source maps onto [-1,+1] (so at rest it sits at -amount).
+ */
+export function routeLiveOffset(
+    route: Pick<ModulationRoute, "amount" | "polarity">,
+    sourceValue01: number,
+): number {
+    const s = clamp01(sourceValue01);
+    return route.amount * (route.polarity === "bipolar" ? (s * 2) - 1 : s);
+}
+
+/**
+ * The live light's rail position for a route whose band spans `amountSpan`
+ * route-amount units across the full rail (the display domain width for
+ * plain cells, the component semitone span for aggregate Tune cells).
+ */
+export function projectRailLiveNormalized(
+    baseNormalized: number,
+    route: Pick<ModulationRoute, "amount" | "polarity">,
+    sourceValue01: number,
+    amountSpan: number,
+): number {
+    if (!(amountSpan > 0)) {
+        throw new Error("A rail light span must be positive");
+    }
+    return clamp01(clamp01(baseNormalized) + (routeLiveOffset(route, sourceValue01) / amountSpan));
+}
+
 export type MobileVoiceRailBand = {
     /** Normalized [0,1] rail position of the base tick. */
     readonly baseNormalized: number;

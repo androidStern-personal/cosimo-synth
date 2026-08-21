@@ -38,10 +38,12 @@ import type { ParameterKnobModRing } from "./parameter-knob-artwork";
 import type { PatchControlBinding } from "./patch-controls";
 import {
     projectMobileVoiceRailBand,
+    projectRailLiveNormalized,
     resolveMobileVoiceRailState,
     type MobileVoiceRailBand,
     type MobileVoiceRailState,
 } from "./mobile-voice-rail-projection";
+import { useModSourceLight, type ModSourceLightPlacement } from "./mod-source-live";
 import {
     formatModulationAmountReadout,
     getModulationAmountBounds,
@@ -97,6 +99,12 @@ export type ReadoutCellSpec = {
         baseNormalized: number,
         route: Pick<ModulationRoute, "amount" | "polarity">,
     ) => MobileVoiceRailBand;
+    /**
+     * Route-amount units spanned by the full rail, for the live light's
+     * projection; defaults to the display domain width. Cells with a
+     * `projectBand` override (aggregate Tune) must supply their own span.
+     */
+    readonly railAmountSpan?: number;
     /** HUD Low/High override (voice Tune aggregates three cells). */
     readonly presentHudTravel?: (
         route: Pick<ModulationRoute, "amount" | "polarity"> | null,
@@ -513,6 +521,9 @@ export function useReadoutCells({
                     bypassed: presentation.railState === "bypassed",
                 };
 
+        const liveLightProjection = presentation.railState === "mapped"
+            ? readoutCellLiveLightProjection(presentation)
+            : null;
         const model: ParameterHudModel = {
             visible: hudState.phase !== "hidden",
             axis: hudState.axis,
@@ -528,6 +539,15 @@ export function useReadoutCells({
             highText,
             limitsVisible,
             modRing,
+            liveLight: liveLightProjection !== null && presentation.route !== null
+                ? {
+                    source: {
+                        sourceKind: presentation.route.sourceKind,
+                        sourceSlot: presentation.route.sourceSlot,
+                    },
+                    project: liveLightProjection,
+                }
+                : null,
         };
 
         return createPortal(<ParameterPrecisionHud model={model} />, hudContainer);
@@ -549,10 +569,35 @@ export function useReadoutCells({
 
 export type ReadoutCellsApi = ReturnType<typeof useReadoutCells>;
 
+const RAIL_LIGHT_PLACEMENT: ModSourceLightPlacement = { kind: "rail" };
+
+/** The traveling live-modulation light on a mapped rail's band. */
+function readoutCellLiveLightProjection(presentation: ReadoutCellPresentation) {
+    const route = presentation.route;
+    if (route === null) {
+        return null;
+    }
+    const { cell, baseNormalized } = presentation;
+    const span = cell.railAmountSpan ?? (cell.display.max - cell.display.min);
+    return (sourceValue01: number) => (
+        projectRailLiveNormalized(baseNormalized, route, sourceValue01, span)
+    );
+}
+
 /** The truth-table rail under a readout cell (shared markup + classes). */
 export function ReadoutCellRail({ presentation }: { presentation: ReadoutCellPresentation }) {
     const { railState, band } = presentation;
     const tickLeft = `${(presentation.baseNormalized * 100).toFixed(2)}%`;
+    const lightProjection = railState === "mapped"
+        ? readoutCellLiveLightProjection(presentation)
+        : null;
+    const attachLight = useModSourceLight({
+        source: lightProjection !== null && presentation.route !== null
+            ? { sourceKind: presentation.route.sourceKind, sourceSlot: presentation.route.sourceSlot }
+            : null,
+        project: lightProjection ?? ((sourceValue01) => sourceValue01),
+        placement: RAIL_LIGHT_PLACEMENT,
+    });
     return (
         <span className="mobile-voice-rail" data-rail-state={railState} aria-hidden="true">
             {railState !== "not-modulatable" ? (
@@ -579,6 +624,14 @@ export function ReadoutCellRail({ presentation }: { presentation: ReadoutCellPre
                 <span
                     className="mobile-voice-rail-clip"
                     style={band.clippedHigh ? { right: 0 } : { left: 0 }}
+                />
+            ) : null}
+            {lightProjection !== null ? (
+                <span
+                    data-role="mobile-voice-rail-mod-light"
+                    data-mod-live="0"
+                    className="mobile-voice-rail-light"
+                    ref={attachLight}
                 />
             ) : null}
             <span className="mobile-voice-rail-tick" style={{ left: tickLeft }} />

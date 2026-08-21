@@ -23,10 +23,17 @@ const MOD_INNER_RADIUS = 36;
 const MOD_OUTER_RADIUS = 48;
 const HANDLE_RADIUS = BASE_RADIUS * 0.72;
 const PRESENCE_RADIUS = (MOD_INNER_RADIUS + MOD_OUTER_RADIUS) / 2;
+/** Mid-annulus radius the traveling live-modulation light rides on. */
+export const MOD_LIGHT_RADIUS = PRESENCE_RADIUS;
 export const BYPASSED_GREY = "#758084";
 
 function clamp01(value: number): number {
     return Math.min(Math.max(value, 0), 1);
+}
+
+/** Map a normalized sweep position to knob user-space (shared with the live mod light driver). */
+export function knobArcPoint(normalized: number, radius: number): { x: number; y: number } {
+    return polarPoint(normalized, radius);
 }
 
 function polarPoint(normalized: number, radius: number): { x: number; y: number } {
@@ -101,6 +108,12 @@ export type ParameterKnobArtworkProps = {
     readonly modRing: ParameterKnobModRing;
     /** Which half of the artwork the active gesture emphasizes. */
     readonly emphasis: "base" | "modulation" | "none";
+    /**
+     * Ref for the traveling live-modulation light (a circle riding the mod
+     * annulus). The mod-source-live driver positions and fades it; the
+     * artwork stays purely presentational. Omitted → no light is rendered.
+     */
+    readonly liveLightRef?: (element: SVGCircleElement | null) => void;
     readonly className?: string;
 };
 
@@ -112,6 +125,7 @@ export function ParameterKnobArtwork({
     sourceAccent,
     modRing,
     emphasis,
+    liveLightRef,
     className,
 }: ParameterKnobArtworkProps) {
     const patternIDBase = useId();
@@ -210,6 +224,23 @@ export function ParameterKnobArtwork({
                             ? { opacity: 0.32 }
                             : { filter: `drop-shadow(0 0 2px ${sourceAccent})` }}
                     />
+                    {liveLightRef !== undefined && !modRing.bypassed ? (
+                        <circle
+                            data-role="knob-artwork-mod-light"
+                            data-mod-live="0"
+                            ref={liveLightRef}
+                            cx={presence.x.toFixed(3)}
+                            cy={presence.y.toFixed(3)}
+                            r="2.4"
+                            fill="rgba(255, 255, 255, 0.95)"
+                            style={{
+                                opacity: 0,
+                                transition: "opacity 160ms ease",
+                                filter: `drop-shadow(0 0 3px ${sourceAccent})`,
+                                pointerEvents: "none",
+                            }}
+                        />
+                    ) : null}
                 </g>
             ) : null}
 

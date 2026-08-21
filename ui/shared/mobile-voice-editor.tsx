@@ -69,6 +69,7 @@ import {
     aggregateTuneBaseSemitones,
     projectAggregateTuneTravel,
     projectTuneComponentBand,
+    TUNE_COMPONENT_SEMITONE_SPANS,
     wavetableModulationShadingRange,
     type AggregateTuneComponentID,
 } from "./mobile-voice-rail-projection";
@@ -331,6 +332,9 @@ export function MobileVoiceFocusedEditor({
                 stickyIntegerAmounts: spec.modulationParameterKind === "pitchSemitones",
                 projectBand: tuneComponent
                     ? (baseNormalized, route) => projectTuneComponentBand(controlID, baseNormalized, route)
+                    : undefined,
+                railAmountSpan: tuneComponent
+                    ? TUNE_COMPONENT_SEMITONE_SPANS[controlID]
                     : undefined,
                 presentHudTravel: tuneComponent
                     ? (route) => {

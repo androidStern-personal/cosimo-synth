@@ -103,6 +103,11 @@ export function usePatchConnection() {
     return usePatchHost().patchConnection;
 }
 
+/** The connection when a provider is present, or null (bare component tests). */
+export function useOptionalPatchConnection(): PatchConnectionLike | null {
+    return useContext(PatchHostContext)?.patchConnection ?? null;
+}
+
 export function useResourceClient() {
     return usePatchHost().resourceClient;
 }

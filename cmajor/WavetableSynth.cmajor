@@ -1347,6 +1347,7 @@ graph WavetableSynth [[ main ]]
     output event wt::EffectiveUnisonStateMonitor effectiveUnisonState;
     output event wt::EffectiveFilterStateMonitor effectiveFilterState;
     output event wt::EffectiveMsegStateMonitor effectiveMsegState;
+    output event wt::EffectiveModSourceStateMonitor effectiveModSourceState;
     output event wt::VoiceArticulationMonitor voiceArticulationStart;
     output stream float32<2> audioOut;
     output filterSpectrumAnalyzer.filterSpectrum;
@@ -1518,6 +1519,7 @@ graph WavetableSynth [[ main ]]
         sharedEngine.effectiveUnisonStateOut -> effectiveUnisonState;
         sharedEngine.effectiveFilterStateOut -> effectiveFilterState;
         sharedEngine.effectiveMsegStateOut -> effectiveMsegState;
+        sharedEngine.effectiveModSourceStateOut -> effectiveModSourceState;
         sharedEngine.voiceArticulationStartOut -> voiceArticulationStart;
         sharedEngine.out -> trim.in;
         trim.out -> analyzerDownmix.in, rack.in;

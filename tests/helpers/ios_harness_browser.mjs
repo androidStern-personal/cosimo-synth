@@ -887,6 +887,9 @@ export function createIOSHarnessInitScript(baseUrl) {
             emitEffectiveMsegState(nextState) {
                 emitEndpoint("effectiveMsegState", nextState);
             },
+            emitEffectiveModSourceState(nextState) {
+                emitEndpoint("effectiveModSourceState", nextState);
+            },
             setStoredStateValue(key, value) {
                 storedState.set(key, value);
                 emitStoredStateValue(key);
