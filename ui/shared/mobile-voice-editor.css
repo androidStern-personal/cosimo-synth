@@ -598,3 +598,23 @@
     flex: 0 0 auto;
     border-radius: 999px;
 }
+
+/* The fixed-bar/directional-panel transition (shared segmented tabs): the
+   viewport clips the slide; the live panel keeps the editor's own column
+   layout so steady-state geometry is byte-identical to the pre-transition
+   markup. */
+.mobile-voice-panel-viewport {
+    position: relative;
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.mobile-voice-panel-live {
+    display: flex;
+    min-height: 0;
+    flex: 1 1 auto;
+    flex-direction: column;
+}

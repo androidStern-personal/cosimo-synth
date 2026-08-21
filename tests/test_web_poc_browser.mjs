@@ -808,23 +808,44 @@ async function measureProductUiLatestValueCadence(
     { blockCount = 768, updateCount = 119 } = {},
 ) {
     await resetMeasuredAudioMetrics(page);
-    const finalSliderPosition = 0.731;
-    const finalRouteAmount = composeModulationAmount("filterCutoffOctaves", finalSliderPosition);
-    const gesture = await page.evaluate(async ({ expectedFinalAmount, finalPosition, updates }) => {
+    const finalRouteAmount = composeModulationAmount("filterCutoffOctaves", 0.731);
+    const gesture = await page.evaluate(async ({ expectedFinalAmount, updates }) => {
         const api = globalThis.__COSIMO_WEB_POC__;
         const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-        const slider = root?.querySelector('[role="slider"][aria-label="Route 1 amount"]')
-            ?? root?.querySelector('[data-role="mobile-mod-amount-slider"]');
-        if (!(slider instanceof HTMLInputElement)) {
-            throw new Error("The mobile product modulation amount control is unavailable.");
+        // T14/T15: the mapping ROW is the product's amount-editing surface —
+        // its rail cell's vertical (rolling-axis) gesture edits this route's
+        // amount through the canonical binding. The cadence drives that real
+        // pointer path; there is no amount slider element any more.
+        const cell = root?.querySelector('[data-role="mod-mappings-rail-0"] .mobile-voice-cell.is-readout');
+        if (!(cell instanceof HTMLElement)) {
+            throw new Error("The mobile product mapping row rail is unavailable.");
         }
 
-        const dispatchStep = (direction) => {
-            const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-            const nextValue = Number(slider.value) + (direction * (Number(slider.step) || 0.001));
-            setValue?.call(slider, String(nextValue));
-            slider.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
-            slider.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
+        const nextFrame = () => new Promise((resolve) => requestAnimationFrame(resolve));
+        const pointer = (() => {
+            const rect = cell.getBoundingClientRect();
+            return { id: 7777, x: rect.left + (rect.width / 2), y: rect.top + (rect.height / 2) };
+        })();
+        const pointerEvent = (type) => new PointerEvent(type, {
+            pointerId: pointer.id,
+            pointerType: "touch",
+            isPrimary: true,
+            clientX: pointer.x,
+            clientY: pointer.y,
+            bubbles: true,
+            cancelable: true,
+            composed: true,
+        });
+        // Up-positive, like the gesture's own convention. Returns the
+        // synchronous dispatch cost (classifier + integration); the binding
+        // write commits on the next animation frame, which every loop below
+        // awaits, so frame pacing still carries any main-thread overload
+        // into the inputRateHz and audio-continuity assertions.
+        const moveBy = (dyUp) => {
+            pointer.y -= dyUp;
+            const startedAt = performance.now();
+            window.dispatchEvent(pointerEvent("pointermove"));
+            return performance.now() - startedAt;
         };
         const nativePostMessage = MessagePort.prototype.postMessage;
         let latestSentAmount = null;
@@ -846,23 +867,56 @@ async function measureProductUiLatestValueCadence(
                 throw new Error("The product modulation publisher has no accepted frontier.");
             }
 
+            cell.dispatchEvent(pointerEvent("pointerdown"));
+            // One decisive upward move claims the vertical (amount) axis;
+            // the classifying sample itself applies no delta.
+            moveBy(12);
+            await nextFrame();
+            if (cell.getAttribute("data-dragging") !== "modulation") {
+                throw new Error(`The rail gesture did not arm the amount axis: ${cell.getAttribute("data-dragging")}`);
+            }
+
             const beganAt = performance.now();
             let dispatchLatencyTotalMs = 0;
             let dispatchLatencyMaxMs = 0;
             for (let updateIndex = 0; updateIndex < updates; updateIndex += 1) {
-                const dispatchStartedAt = performance.now();
-                dispatchStep(updateIndex % 2 === 0 ? 1 : -1);
-                const dispatchLatencyMs = performance.now() - dispatchStartedAt;
+                // Asymmetric alternation: every frame commits a DISTINCT
+                // amount (never a deduped rewrite) while the net drift stays
+                // far from the amount clamp.
+                const dispatchLatencyMs = moveBy(updateIndex % 2 === 0 ? 3.5 : -3);
                 dispatchLatencyTotalMs += dispatchLatencyMs;
                 dispatchLatencyMaxMs = Math.max(dispatchLatencyMaxMs, dispatchLatencyMs);
-                await new Promise((resolve) => requestAnimationFrame(resolve));
+                await nextFrame();
             }
             const inputElapsedMs = performance.now() - beganAt;
+            if (!Number.isFinite(latestSentAmount)) {
+                throw new Error("The rail cadence produced no modulation amount sends.");
+            }
+
+            // Land the EXACT final amount. A pixel surface has no value
+            // setter, so the dial calibrates the observed pixel:amount ratio
+            // and homes in with a bounded number of corrections.
             const finalStartedAt = performance.now();
-            const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-            setValue?.call(slider, String(finalPosition));
-            slider.dispatchEvent(new Event("input", { bubbles: true, cancelable: true }));
-            slider.dispatchEvent(new Event("change", { bubbles: true, cancelable: true }));
+            let dialEventCount = 0;
+            const calibrationStart = latestSentAmount;
+            moveBy(10);
+            dialEventCount += 1;
+            await nextFrame();
+            const amountPerPixel = (latestSentAmount - calibrationStart) / 10;
+            if (!(amountPerPixel > 0)) {
+                throw new Error(`The rail calibration move changed no amount: ${JSON.stringify({ calibrationStart, latestSentAmount })}`);
+            }
+            for (let attempt = 0;
+                attempt < 8 && Math.abs(latestSentAmount - expectedFinalAmount) >= 0.000001;
+                attempt += 1) {
+                moveBy((expectedFinalAmount - latestSentAmount) / amountPerPixel);
+                dialEventCount += 1;
+                await nextFrame();
+            }
+            if (Math.abs(latestSentAmount - expectedFinalAmount) >= 0.000001) {
+                throw new Error(`The rail dial never reached the target amount: ${JSON.stringify({ expectedFinalAmount, latestSentAmount })}`);
+            }
+            window.dispatchEvent(pointerEvent("pointerup"));
 
             while (true) {
                 const acknowledgement = api.runtimeInstallAckForTest();
@@ -886,12 +940,14 @@ async function measureProductUiLatestValueCadence(
             return {
                 acknowledgedEventCount: finalFrontier - baselineFrontier,
                 baselineFrontier,
-                dispatchedEventCount: updates + 1,
+                cadenceEventCount: updates,
+                dialEventCount,
+                dispatchedEventCount: updates + dialEventCount,
                 dispatchLatencyAverageMs: dispatchLatencyTotalMs / updates,
                 dispatchLatencyMaxMs,
                 finalAcknowledgementLatencyMs: performance.now() - finalStartedAt,
-                finalAmount: finalPosition,
-                finalAmountKind: "sliderPosition",
+                finalAmount: latestSentAmount,
+                finalAmountKind: "amount",
                 finalFrontier,
                 inputElapsedMs,
                 inputRateHz: (updates * 1_000) / inputElapsedMs,
@@ -900,7 +956,7 @@ async function measureProductUiLatestValueCadence(
         } finally {
             MessagePort.prototype.postMessage = nativePostMessage;
         }
-    }, { expectedFinalAmount: finalRouteAmount, finalPosition: finalSliderPosition, updates: updateCount });
+    }, { expectedFinalAmount: finalRouteAmount, updates: updateCount });
     await page.waitForFunction((expectedEvents) => (
         globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletMarkedEventCount >= expectedEvents
     ), gesture.acknowledgedEventCount, { timeout: 5_000 });
@@ -1581,16 +1637,16 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
             await selectMobileWorkspaceSection(page, "voice");
         }
         await selectMobileWorkspaceSection(page, "mod");
+        // T14: Mod opens on SOURCE; the mappings table is the sibling panel.
         await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
-            const mobileRoute = root?.querySelector('[data-role="mobile-mod-route-open-0"]');
-            if (mobileRoute instanceof HTMLButtonElement) mobileRoute.click();
+            const mappingsTab = root?.querySelector('[data-role="mobile-mod-panel-tab-mappings"]');
+            if (mappingsTab instanceof HTMLElement) mappingsTab.click();
         });
         await page.waitForFunction(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             return Boolean(
-                root?.querySelector('[role="slider"][aria-label="Route 1 amount"]')
-                ?? root?.querySelector('[data-role="mobile-mod-amount-slider"]'),
+                root?.querySelector('[data-role="mod-mappings-rail-0"] .mobile-voice-cell.is-readout'),
             );
         });
         await page.evaluate(() => {
@@ -1606,7 +1662,19 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
         }, null, { timeout: 10_000 });
 
         const latestValueCadence = await measureProductUiLatestValueCadence(page);
-        assert.equal(latestValueCadence.dispatchedEventCount, 120, JSON.stringify(latestValueCadence));
+        // 119 frame-paced cadence moves plus a bounded exact-value dial
+        // (calibration + corrections) on the pixel surface — every one of
+        // them sent AND acknowledged.
+        assert.equal(latestValueCadence.cadenceEventCount, 119, JSON.stringify(latestValueCadence));
+        assert.ok(
+            latestValueCadence.dialEventCount >= 1 && latestValueCadence.dialEventCount <= 9,
+            JSON.stringify(latestValueCadence),
+        );
+        assert.equal(
+            latestValueCadence.dispatchedEventCount,
+            latestValueCadence.cadenceEventCount + latestValueCadence.dialEventCount,
+            JSON.stringify(latestValueCadence),
+        );
         assert.equal(
             latestValueCadence.sentEventCount,
             latestValueCadence.acknowledgedEventCount,

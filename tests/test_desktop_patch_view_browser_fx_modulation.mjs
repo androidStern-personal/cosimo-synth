@@ -1,5 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import path from "node:path";
+
+import { formatModulationAmountReadout } from "../patch_gui/modulation.js";
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
 
 import {
     normalizeArticulationEditorState,
@@ -1993,12 +1997,13 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
     }
 });
 
-test("mobile Mod uses a complete one-dimensional route list with detail, filters, and hierarchical creation", async () => {
+test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inline creation", async () => {
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
             await nextPage.addInitScript(() => {
                 localStorage.clear();
+                sessionStorage.clear();
             });
         },
     });
@@ -2012,81 +2017,415 @@ test("mobile Mod uses a complete one-dimensional route list with detail, filters
             ],
         });
         await page.evaluate((state) => {
-            const harness = window.__COSIMO_DESKTOP_HARNESS__;
-            harness.setStoredStateValue("modulation.v6", JSON.stringify(state));
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.waitForFunction(() => {
             const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"]));
             return state.routes?.length === 3;
         });
         await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
 
-        const matrix = page.locator('[data-role="mobile-mod-matrix"]');
-        await matrix.waitFor();
-        assert.equal(await page.locator('[data-role="desktop-mod-matrix"]').count(), 0);
-        assert.equal(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), "3 mappings");
-        assert.equal(await matrix.locator('[data-role="mobile-mod-route-row"]').count(), 3);
+        // T14: entry shows EVERY mapping — no hidden filter, no blind scroll.
+        const panel = page.locator('[data-role="mod-mappings-panel"]');
+        await panel.waitFor();
+        assert.equal(await panel.locator('[data-role="mod-mappings-count"]').innerText(), "3");
+        assert.equal(await panel.locator('[data-role="mod-mappings-row"]').count(), 3);
 
-        const geometry = await matrix.evaluate((element) => ({
+        const geometry = await panel.evaluate((element) => ({
             clientWidth: element.clientWidth,
             scrollWidth: element.scrollWidth,
             documentScrollWidth: document.documentElement.scrollWidth,
-            rows: Array.from(element.querySelectorAll('[data-role="mobile-mod-route-row"]')).map((row) => {
+            rows: Array.from(element.querySelectorAll('[data-role="mod-mappings-row"]')).map((row) => {
                 const bounds = row.getBoundingClientRect();
                 return { left: bounds.left, right: bounds.right, height: bounds.height };
             }),
         }));
         assert.equal(geometry.scrollWidth <= geometry.clientWidth + 1, true);
         assert.equal(geometry.documentScrollWidth <= 393, true);
-        assert.equal(geometry.rows.every((row) => row.left >= 0 && row.right <= 393 && row.height >= 56), true);
-        const msegRouteRow = matrix.locator('[data-role="mobile-mod-route-row"]', { hasText: "MSEG 1" });
-        assert.match(await msegRouteRow.innerText(), /MSEG 1.*Flanger.*Depth.*±39%/s);
+        assert.equal(geometry.rows.every((row) => row.left >= 0 && row.right <= 393 && row.height >= 44), true);
 
-        await matrix.locator('[data-role="mobile-mod-route-open-0"]').click();
-        const detail = matrix.locator('[data-role="mobile-mod-route-detail"]');
-        await detail.waitFor();
-        for (const role of ["mobile-mod-detail-back", "mobile-mod-polarity", "mobile-mod-bypass", "mobile-mod-delete"]) {
-            const bounds = await detail.locator(`[data-role="${role}"]`).boundingBox();
-            assert.ok(bounds);
-            assert.equal(bounds.width >= 44 && bounds.height >= 44, true, `${role} must be touchable`);
-        }
-        assert.equal(await detail.locator('[data-role="mobile-mod-reducer"]').count(), 1);
-        assert.equal(await detail.locator('[data-role="mobile-mod-amount-slider"]').count(), 1);
-        assert.equal(await detail.locator('[data-role="mobile-mod-amount-input"]').count(), 1);
-        assert.equal(await detail.locator('[data-role="parameter-entry-unit"]').innerText(), "%");
-        await detail.locator('[data-role="mobile-mod-amount-input"]').fill("-25");
-        await detail.locator('[data-role="mobile-mod-amount-input"]').press("Enter");
+        // The MSEG row shows its relationship and carries a live mapped rail
+        // (T15: the rail is the shared cell language, band and all).
+        const msegRow = panel.locator('[data-role="mod-mappings-row"]', { hasText: "MSEG 1" });
+        assert.match(await msegRow.innerText(), /MSEG 1[\s\S]*Flanger[\s\S]*Depth/);
+        assert.equal(
+            await msegRow.locator('[data-rail-state="mapped"]').count() >= 1,
+            true,
+            "The row rail must present this route's own band.",
+        );
+
+        // T15 exact editing: long-press the row rail into the ADR-017 menu,
+        // type the amount, and the stored route follows.
+        const railCell = msegRow.locator(".mobile-voice-cell").first();
+        const cellBox = await railCell.boundingBox();
+        assert.ok(cellBox);
+        await page.mouse.move(cellBox.x + (cellBox.width / 2), cellBox.y + (cellBox.height / 2));
+        await page.mouse.down();
+        await page.locator('[data-role="rack-parameter-menu"]').waitFor({ state: "visible", timeout: 10000 });
+        await page.mouse.up();
+        await page.click('[data-role="rack-parameter-menu-item"][data-action="edit-values"]');
+        const amountInput = page.locator('[data-role="rack-modulation-value-input"]');
+        await amountInput.waitFor();
+        await amountInput.fill("-25");
+        await page.click('[data-role="rack-value-sheet-apply"]');
         await waitForHarnessSnapshot(
             page,
             "mobile exact route amount",
             (snapshot) => Math.abs(readStoredModulationState(snapshot).routes[0]?.amount - (-0.25)) < 0.0001,
         );
-        await detail.locator('[data-role="mobile-mod-detail-back"]').click();
 
-        await matrix.locator('[data-role="mobile-mod-filter"]').click();
-        const filters = matrix.locator('[data-role="mobile-mod-filter-sheet"]');
-        await filters.locator('[data-role="mobile-mod-filter-source-mseg-1"]').click();
-        await filters.locator('[data-role="mobile-mod-filter-done"]').click();
-        assert.equal(await matrix.locator('[data-role="mobile-mod-filter-token"]').count(), 1);
-        assert.equal(await matrix.locator('[data-role="mobile-mod-route-row"]').count(), 1);
-        await matrix.locator('[data-role="mobile-mod-filter-token-remove"]').click();
-        assert.equal(await matrix.locator('[data-role="mobile-mod-route-row"]').count(), 3);
+        // Filters: multi-select source narrows; the criteria chip removes.
+        await panel.locator('[data-role="mod-mappings-filter-button"]').click();
+        await panel.locator('[data-role="mod-mappings-filter-source-mseg-1"]').click();
+        assert.equal(await panel.locator('[data-role="mod-mappings-row"]').count(), 1);
+        assert.match(await panel.locator('[data-role="mod-mappings-count"]').innerText(), /1 of 3/);
+        assert.equal(await panel.locator('[data-role="mod-mappings-criterion"]').count(), 1);
+        await panel.locator('[data-role="mod-mappings-criterion"]').click();
+        assert.equal(await panel.locator('[data-role="mod-mappings-row"]').count(), 3);
 
-        await matrix.locator('[data-role="mobile-mod-add"]').click();
-        await matrix.locator('[data-role="mobile-mod-create-source-macro-2"]').click();
-        await matrix.locator('[data-role="mobile-mod-create-category-fx"]').click();
-        await matrix.locator('[data-role="mobile-mod-create-effect-reverb"]').click();
-        await matrix.locator('[data-role="mobile-mod-create-target-rack-reverbSize"]').click();
+        // Inline creation: the draft row's pickers disable duplicates and a
+        // confirmed create lands at exactly 0%.
+        await panel.locator('[data-role="mod-mappings-add"]').click();
+        await panel.locator('[data-role="mod-mappings-draft-source"]').selectOption("macro-2");
+        assert.equal(
+            await panel.locator('[data-role="mod-mappings-draft-target"] option[value="rack.reverbSize"]').isDisabled(),
+            false,
+        );
+        await panel.locator('[data-role="mod-mappings-draft-target"]').selectOption("rack.reverbSize");
+        await panel.locator('[data-role="mod-mappings-draft-create"]').click();
         await waitForHarnessSnapshot(
             page,
-            "hierarchically-created mobile route",
+            "inline-created mobile route",
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "macro"
                 && route.sourceSlot === 2
                 && route.targetKind === "rack.reverbSize"
+                && route.amount === 0
             )),
         );
-        assert.match(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), /4 mappings/i);
+        assert.equal(await panel.locator('[data-role="mod-mappings-count"]').innerText(), "4");
+
+        // A duplicate draft cannot submit: the freshly created pair disables
+        // its target option outright.
+        await panel.locator('[data-role="mod-mappings-add"]').click();
+        await panel.locator('[data-role="mod-mappings-draft-source"]').selectOption("macro-2");
+        assert.equal(
+            await panel.locator('[data-role="mod-mappings-draft-target"] option[value="rack.reverbSize"]').isDisabled(),
+            true,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T15: mapping rows read as LED meters with a live polarity toggle, one label, and even spacing", async () => {
+    // The row already names source and target in its identity column, so the
+    // readout drops the duplicated label and spends the reclaimed height on
+    // the amount itself: a segmented LED band lit from the base tick, with
+    // the canonical amount readout riding the lit end and the base value in
+    // a small corner. The +/- marker is a REAL polarity toggle, and the
+    // row's five columns sit on one even spacing unit.
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.clear();
+                sessionStorage.clear();
+            });
+        },
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "led-route-1", enabled: true, sourceKind: "env", sourceSlot: 2, polarity: "unipolar", targetKind: "filterCutoffOctaves", amount: 1.5, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        const row = page.locator('[data-role="mod-mappings-row"][data-route-id="led-route-1"]');
+        await row.waitFor();
+
+        // One label per fact: the identity column names the target, so the
+        // cell itself must not repeat it.
+        const cell = row.locator(".mobile-voice-cell.is-readout");
+        assert.equal(await cell.locator(".mobile-voice-cell-label").count(), 0, "The readout must not duplicate the target label.");
+        assert.equal(/CUTOFF/i.test(await cell.innerText()), false);
+
+        // The LED rail: segmented band lit between the base tick and the
+        // amount edge, still speaking the shared rail-state contract.
+        assert.equal(await cell.locator('.mod-led-rail[data-rail-state="mapped"]').count(), 1);
+        assert.equal(await cell.locator(".mod-led-fill").count(), 1);
+        assert.equal(await cell.locator(".mod-led-tick").count(), 1);
+        const flag = cell.locator('[data-role="mod-mappings-amount-flag"]');
+        assert.equal(await flag.innerText(), formatModulationAmountReadout("filterCutoffOctaves", 1.5, "unipolar"));
+        assert.notEqual((await row.locator('[data-role="mod-mappings-base-val"]').innerText()).trim(), "");
+
+        // The rail speaks the parameter's own display scale: 1000 Hz sits
+        // logarithmically on the 20..20000 track (ln50/ln1000 = 0.566), and
+        // the +1.5 oct amount travels 1.5/log2(1000) of the width — never
+        // 1.5 raw Hz (the invisible-band bug).
+        const railGeometry = await cell.locator(".mod-led-rail").evaluate((rail) => {
+            const width = rail.clientWidth;
+            const tick = rail.querySelector(".mod-led-tick");
+            const fill = rail.querySelector(".mod-led-fill");
+            return {
+                tick: tick.offsetLeft / width,
+                fillLow: fill.offsetLeft / width,
+                fillHigh: (fill.offsetLeft + fill.offsetWidth) / width,
+            };
+        });
+        const expectedBase = Math.log(1000 / 20) / Math.log(20000 / 20);
+        const expectedHigh = expectedBase + (1.5 / Math.log2(1000));
+        assert.ok(Math.abs(railGeometry.tick - expectedBase) < 0.02, JSON.stringify(railGeometry));
+        assert.ok(Math.abs(railGeometry.fillLow - expectedBase) < 0.02, JSON.stringify(railGeometry));
+        assert.ok(Math.abs(railGeometry.fillHigh - expectedHigh) < 0.02, JSON.stringify(railGeometry));
+
+        // The polarity marker is a WORKING toggle: tap flips the stored
+        // route between unipolar and bipolar and the readout follows.
+        const polarity = row.locator("button[data-role^='mod-mappings-polarity-']");
+        assert.equal(await polarity.innerText(), "+");
+        await polarity.click();
+        await page.waitForFunction(() => {
+            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"]));
+            return state.routes[0]?.polarity === "bipolar";
+        });
+        assert.equal(await polarity.innerText(), "\u00b1");
+        assert.equal(await flag.innerText(), formatModulationAmountReadout("filterCutoffOctaves", 1.5, "bipolar"));
+        await polarity.click();
+        await page.waitForFunction(() => {
+            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"]));
+            return state.routes[0]?.polarity === "unipolar";
+        });
+        assert.equal(await polarity.innerText(), "+");
+
+        // Intentional even spacing: every horizontal seam between the row's
+        // five columns is the same one unit.
+        const gaps = await row.evaluate((element) => {
+            const rects = Array.from(element.children).map((child) => child.getBoundingClientRect());
+            const seams = [];
+            for (let index = 1; index < rects.length; index += 1) {
+                seams.push(rects[index].left - rects[index - 1].right);
+            }
+            return seams;
+        });
+        assert.equal(gaps.length, 4);
+        for (const gap of gaps) {
+            assert.ok(Math.abs(gap - gaps[0]) <= 0.5, `Uneven row seam: ${JSON.stringify(gaps)}`);
+        }
+    } finally {
+        await page.close();
+    }
+});
+
+test("T15: base drags on log-scale rows walk the display scale, matching the knobs' settled rule", async () => {
+    // Cutoff and resonance felt "sigmoid" on rows: the drag moved the value
+    // linearly in raw Hz while the tick sat on a log track, so the musical
+    // range lived in the first pixels and the top went numb. The base axis
+    // must walk the DISPLAY scale — equal finger travel = equal octaves,
+    // finger and tick in lockstep — exactly as rack-parameter-knob resolved
+    // this same argument for the knobs.
+    const { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } = await loadUIModule(
+        path.resolve(import.meta.dirname, ".."),
+        "ui/shared/parameter-gesture.ts",
+    );
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.clear();
+                sessionStorage.clear();
+            });
+        },
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "log-drag-route", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "filterCutoffOctaves", amount: 0, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        const row = page.locator('[data-role="mod-mappings-row"][data-route-id="log-drag-route"]');
+        await row.waitFor();
+        const cell = row.locator(".mobile-voice-cell.is-readout");
+        const cellBox = await cell.boundingBox();
+        assert.ok(cellBox);
+
+        await clearHarnessDebugLog(page);
+        const startX = cellBox.x + (cellBox.width / 2);
+        const startY = cellBox.y + (cellBox.height / 2);
+        await page.mouse.move(startX, startY);
+        await page.mouse.down();
+        // The first move classifies the horizontal axis and applies nothing;
+        // the eight 5px moves after it are the applied 40px of travel.
+        await page.mouse.move(startX + 6, startY);
+        for (let step = 1; step <= 8; step += 1) {
+            await page.mouse.move(startX + 6 + (step * 5), startY);
+        }
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mod-mappings-row"] .mobile-voice-cell[data-dragging="base"]') !== null
+        ));
+        await page.mouse.up();
+
+        const snapshot = await waitForHarnessSnapshot(page, "log base drag writes", (nextSnapshot) => (
+            nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "filterCutoff")
+        ));
+        const writes = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "filterCutoff");
+        const finalValue = Number(writes[writes.length - 1].value);
+        // 40px of a 220px-per-full-range drag on a log 20..20000 track from
+        // 1000 Hz: 1000 * 1000^(40/220) ≈ 3511 Hz. The old raw-Hz walk would
+        // land near 1000 + 19980*(40/220) ≈ 4633 Hz.
+        const expected = 1000 * ((20000 / 20) ** (40 / PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE));
+        assert.ok(
+            Math.abs(finalValue - expected) / expected < 0.02,
+            `Expected ~${expected.toFixed(0)} Hz (display-scale walk), got ${finalValue}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T15: resonance amount drags walk the modulated value along the dial (effective-value), like the knobs", async () => {
+    // Resonance's base (0.707) rests by the bottom of a log 0.1..20 domain:
+    // a linear amount-domain drag crams all the audible travel into a few
+    // pixels — the exact case the knobs resolved with modulationDragStyle
+    // "effective-value". The row rail must obey the same descriptor rule:
+    // vertical travel walks base+amount along the dial at base-drag speed,
+    // and the amount is derived storage.
+    const { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } = await loadUIModule(
+        path.resolve(import.meta.dirname, ".."),
+        "ui/shared/parameter-gesture.ts",
+    );
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.clear();
+                sessionStorage.clear();
+            });
+        },
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "reso-route", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "filterQ", amount: 0, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        const row = page.locator('[data-role="mod-mappings-row"][data-route-id="reso-route"]');
+        await row.waitFor();
+        const cell = row.locator(".mobile-voice-cell.is-readout");
+        const cellBox = await cell.boundingBox();
+        assert.ok(cellBox);
+
+        await clearHarnessDebugLog(page);
+        const startX = cellBox.x + (cellBox.width / 2);
+        const startY = cellBox.y + (cellBox.height / 2);
+        await page.mouse.move(startX, startY);
+        await page.mouse.down();
+        // First move classifies the vertical axis (consumed); the eight 5px
+        // moves after it are the applied 40px of upward travel.
+        await page.mouse.move(startX, startY - 6);
+        for (let step = 1; step <= 8; step += 1) {
+            await page.mouse.move(startX, startY - 6 - (step * 5));
+        }
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mod-mappings-row"] .mobile-voice-cell[data-dragging="modulation"]') !== null
+        ));
+        await page.mouse.up();
+
+        const snapshot = await waitForHarnessSnapshot(page, "resonance amount drag stored", (nextSnapshot) => (
+            Math.abs(readStoredModulationState(nextSnapshot).routes[0]?.amount ?? 0) > 0.0001
+        ));
+        const storedAmount = readStoredModulationState(snapshot).routes[0].amount;
+        // Dial walk from base 0.707 (amount 0): 40px of a 220px-per-range
+        // drag up a log 0.1..20 dial lands the modulated value at
+        // 0.1 * 200^(normalize(0.707) + 40/220), and the amount is that
+        // value minus the base — ~1.15 Q. The old linear amount-domain walk
+        // would store ~4.4 Q (40/360 of the ±19.9 span).
+        const startNormalized = Math.log(0.707107 / 0.1) / Math.log(20 / 0.1);
+        const effective = 0.1 * ((20 / 0.1) ** (startNormalized + (40 / PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE)));
+        const expected = effective - 0.707107;
+        assert.ok(
+            Math.abs(storedAmount - expected) / expected < 0.03,
+            `Expected ~${expected.toFixed(3)} Q (dial walk), got ${storedAmount}`,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("T15: a horizontal base drag on a mapping row writes finite values for stepless parameters", async () => {
+    // Continuous parameters record entrySpec.step 0 ("no quantization"). The
+    // row rail's base axis must treat that as UNSNAPPED — never divide by the
+    // zero step (the device bug: every drag frame sent NaN and the engine
+    // toasted "must be a finite number" per frame).
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.clear();
+                sessionStorage.clear();
+            });
+        },
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "stepless-route", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.flangerDepth", amount: 0.2, reducer: "max" },
+            ],
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        const row = page.locator('[data-role="mod-mappings-row"][data-route-id="stepless-route"]');
+        await row.waitFor();
+        const cell = row.locator(".mobile-voice-cell.is-readout");
+        const cellBox = await cell.boundingBox();
+        assert.ok(cellBox);
+
+        await clearHarnessDebugLog(page);
+        const startX = cellBox.x + (cellBox.width / 2);
+        const startY = cellBox.y + (cellBox.height / 2);
+        await page.mouse.move(startX, startY);
+        await page.mouse.down();
+        for (let step = 1; step <= 10; step += 1) {
+            await page.mouse.move(startX + (step * 5), startY);
+        }
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mod-mappings-row"] .mobile-voice-cell[data-dragging="base"]') !== null
+        ));
+        await page.mouse.up();
+
+        const snapshot = await waitForHarnessSnapshot(page, "stepless base drag writes", (nextSnapshot) => (
+            nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "flangerDepth")
+        ));
+        const driveWrites = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "flangerDepth");
+        assert.ok(driveWrites.length >= 1);
+        for (const write of driveWrites) {
+            assert.ok(
+                Number.isFinite(Number(write.value)),
+                `Base drag sent a non-finite value: ${JSON.stringify(write)}`,
+            );
+        }
+        assert.equal(await page.locator('[data-role="synth-feedback-toast"]').count(), 0);
     } finally {
         await page.close();
     }
@@ -2137,16 +2476,17 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-mod"]');
-        const matrix = page.locator('[data-role="mobile-mod-matrix"]');
-        await matrix.waitFor();
-        assert.equal(await matrix.locator('[data-role="mobile-mod-add"]').isDisabled(), false);
-        assert.match(await matrix.locator('[data-role="mobile-mod-route-count"]').innerText(), /101 mappings/i);
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        const panel = page.locator('[data-role="mod-mappings-panel"]');
+        await panel.waitFor();
+        assert.equal(await panel.locator('[data-role="mod-mappings-add"]').isDisabled(), false);
+        assert.equal(await panel.locator('[data-role="mod-mappings-count"]').innerText(), "101");
 
         await clearHarnessDebugLog(page);
-        await matrix.locator('[data-role="mobile-mod-add"]').click();
-        await matrix.locator('[data-role="mobile-mod-create-source-slide"]').click();
-        await matrix.locator('[data-role="mobile-mod-create-category-voice"]').click();
-        await matrix.locator('[data-role="mobile-mod-create-target-oscA-ampGainDb"]').click();
+        await panel.locator('[data-role="mod-mappings-add"]').click();
+        await panel.locator('[data-role="mod-mappings-draft-source"]').selectOption("slide");
+        await panel.locator('[data-role="mod-mappings-draft-target"]').selectOption("oscA.ampGainDb");
+        await panel.locator('[data-role="mod-mappings-draft-create"]').click();
         let snapshot = await waitForHarnessSnapshot(page, "102nd explicit mobile mapping", (nextSnapshot) => (
             readStoredModulationState(nextSnapshot).routes.length === 102
         ));
@@ -2167,26 +2507,50 @@ test("mobile Mod creates, reloads, edits, and deletes more than 100 mappings wit
         await page.reload({ waitUntil: "commit" });
         await waitForHarnessReady(page);
         await page.click('[data-role="mobile-workspace-tab-mod"]');
-        await page.locator('[data-role="mobile-mod-matrix"]').waitFor();
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        await page.locator('[data-role="mod-mappings-panel"]').waitFor();
         await page.waitForFunction((routeId) => {
             const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"];
             if (rawState === undefined) return false;
             const state = JSON.parse(String(rawState));
             return state.routes?.length === 102 && state.routes.some((route) => route.id === routeId);
         }, createdRoute.id);
-        assert.match(await page.locator('[data-role="mobile-mod-route-count"]').innerText(), /102 mappings/i);
+        assert.equal(await page.locator('[data-role="mod-mappings-count"]').innerText(), "102");
 
-        await page.locator('[data-role="mobile-mod-route-open-101"]').click();
+        // T15: edit the restored route ON ITS ROW — long-press into the menu
+        // and type the amount exactly.
+        const createdRow = page.locator(`[data-role="mod-mappings-row"][data-route-id="${createdRoute.id}"]`);
+        await createdRow.scrollIntoViewIfNeeded();
         await clearHarnessDebugLog(page);
-        const amountInput = page.locator('[data-role="mobile-mod-amount-input"]');
+        const railCell = createdRow.locator(".mobile-voice-cell").first();
+        // content-visibility rows paint a beat after a programmatic scroll:
+        // wait until the cell is actually hit-testable before pressing.
+        await page.waitForFunction((routeId) => {
+            const cell = document
+                .querySelector(`[data-role="mod-mappings-row"][data-route-id="${routeId}"]`)
+                ?.querySelector(".mobile-voice-cell");
+            if (!cell) return false;
+            const rect = cell.getBoundingClientRect();
+            const hit = document.elementFromPoint(rect.left + (rect.width / 2), rect.top + (rect.height / 2));
+            return hit !== null && cell.contains(hit);
+        }, createdRoute.id);
+        const cellBox = await railCell.boundingBox();
+        assert.ok(cellBox);
+        await page.mouse.move(cellBox.x + (cellBox.width / 2), cellBox.y + (cellBox.height / 2));
+        await page.mouse.down();
+        await page.locator('[data-role="rack-parameter-menu"]').waitFor({ state: "visible", timeout: 10000 });
+        await page.mouse.up();
+        await page.click('[data-role="rack-parameter-menu-item"][data-action="edit-values"]');
+        const amountInput = page.locator('[data-role="rack-modulation-value-input"]');
+        await amountInput.waitFor();
         await amountInput.fill("-12");
-        await amountInput.blur();
+        await page.click('[data-role="rack-value-sheet-apply"]');
         snapshot = await waitForHarnessSnapshot(page, "editing the restored 102nd mapping", (nextSnapshot) => (
             Math.abs(Number(readStoredModulationState(nextSnapshot).routes[101]?.amount) - (-12)) <= 1e-9
         ));
         assert.equal(hasRuntimeAmount(snapshot, readStoredModulationState(snapshot).routes[101], -12), true);
 
-        await page.locator('[data-role="mobile-mod-delete"]').click();
+        await createdRow.locator("button[data-role^='mod-mappings-delete-']").click();
         snapshot = await waitForHarnessSnapshot(page, "deleting the restored 102nd mapping", (nextSnapshot) => {
             const nextRoutes = readStoredModulationState(nextSnapshot).routes;
             return nextRoutes.length === 101 && !nextRoutes.some((route) => route.id === createdRoute.id);
@@ -2916,8 +3280,10 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
             1,
             "The rail's mapping count must pulse on confirmation.",
         );
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
         assert.equal(
-            await page.locator('[data-role="mobile-mod-route-row"].is-just-created').count(),
+            await page.locator('[data-role="mod-mappings-row"].is-just-created').count(),
             1,
             "The new matrix row must pulse in the source color.",
         );
@@ -2934,24 +3300,46 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
         ), undefined, { timeout: 3000 });
         assert.equal(await page.locator('[data-role="rack-parameter-surface-reverbSize"] .rack-confirm-check').count(), 0);
 
-        // Bypass from the matrix: the row keeps its identity, shows a grey
-        // amount + BYPASSED, and the rail count does NOT change.
+        // Bypass (ADR-025 amended for T15 rows): the mapping content dims as
+        // one piece, the source art greys, and the UNLIT power light carries
+        // the whole state — no BYPASSED text anywhere. The rail band still
+        // takes the bypassed treatment and the count never changes.
         await collapseGlobalModRail(page);
         const countBefore = await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText();
-        await page.click('[data-role="mobile-workspace-tab-mod"]');
-        const row = page.locator('[data-role="mobile-mod-route-row"]');
+        const row = page.locator('[data-role="mod-mappings-row"]');
         await row.waitFor();
-        await row.locator(".mobile-mod-route-power").click();
-        await page.locator('[data-role="mobile-mod-route-bypassed"]').waitFor();
+        const power = row.locator("button[data-role^='mod-mappings-power-']");
+        await power.click();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mod-mappings-row"]')?.classList.contains("is-bypassed") === true
+        ));
         assert.equal(
-            await row.evaluate((element) => getComputedStyle(element).opacity),
+            (await row.innerText()).toUpperCase().includes("BYPASSED"),
+            false,
+            "No BYPASSED text: the unlit power light IS the state.",
+        );
+        const identityOpacity = Number(await row.locator(".mod-mappings-row-identity")
+            .evaluate((element) => getComputedStyle(element).opacity));
+        assert.ok(
+            identityOpacity > 0.2 && identityOpacity < 0.6,
+            `An off row's content must dim without disappearing (opacity ${identityOpacity}).`,
+        );
+        assert.match(
+            await row.locator(".mobile-mod-source-art, .mobile-mod-fixed-source").first()
+                .evaluate((element) => getComputedStyle(element).filter),
+            /grayscale/,
+            "The source art loses its family color while the mapping is off.",
+        );
+        assert.equal(await power.getAttribute("aria-pressed"), "false");
+        assert.equal(
+            await power.evaluate((element) => getComputedStyle(element).opacity),
             "1",
-            "Bypass isolates the mapping treatment; the row itself must not dim.",
+            "The power control never dims: it is how you leave the state.",
         );
         assert.equal(
-            await row.locator(".mobile-mod-route-amount").evaluate((element) => getComputedStyle(element).color),
-            "rgb(117, 128, 132)",
-            "A bypassed mapping's amount reads grey.",
+            await row.locator('[data-rail-state="bypassed"]').count(),
+            1,
+            "The row rail's band must take the bypassed treatment.",
         );
         assert.equal(
             await page.locator('[data-role="mobile-global-mod-rail-route-count"]').innerText(),
@@ -2959,11 +3347,34 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
             "Bypass never changes the mapping count.",
         );
 
-        // Delete: row, ring, and count contribution all go, with no toast.
-        await row.locator(".mobile-mod-route-open").click();
-        await page.click('[data-role="mobile-mod-delete"]');
+        // Dimmed is not dead: touching a bypassed row's rail lifts the row
+        // back to full emphasis for the duration of the gesture.
+        const railCell = row.locator(".mobile-voice-cell.is-readout");
+        const cellBox = await railCell.boundingBox();
+        assert.ok(cellBox);
+        await page.mouse.move(cellBox.x + (cellBox.width / 2), cellBox.y + (cellBox.height / 2));
+        await page.mouse.down();
+        for (let step = 1; step <= 6; step += 1) {
+            await page.mouse.move(
+                cellBox.x + (cellBox.width / 2),
+                cellBox.y + (cellBox.height / 2) - (step * 4),
+            );
+        }
         await page.waitForFunction(() => (
-            document.querySelectorAll('[data-role="mobile-mod-route-row"]').length === 0
+            document.querySelector('[data-role="mod-mappings-row"] .mobile-voice-cell[data-dragging="modulation"]') !== null
+        ));
+        assert.equal(
+            await row.locator(".mod-mappings-row-identity").evaluate((element) => getComputedStyle(element).opacity),
+            "1",
+            "A touched bypassed row lifts to full emphasis while editing.",
+        );
+        await page.mouse.up();
+
+        // Delete lives ON the row (T15): no detail page, no confirmation,
+        // no toast — the row and its count contribution simply go.
+        await row.locator("button[data-role^='mod-mappings-delete-']").click();
+        await page.waitForFunction(() => (
+            document.querySelectorAll('[data-role="mod-mappings-row"]').length === 0
         ));
         assert.equal(await page.locator('[data-role="synth-feedback-toast"]').count(), 0);
         assert.equal(

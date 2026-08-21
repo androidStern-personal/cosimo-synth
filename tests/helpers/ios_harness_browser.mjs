@@ -906,6 +906,12 @@ export async function openIOSHarnessPage(browser, baseUrl, { viewportSize = null
         viewport: viewportSize ?? { width: 390, height: 844 },
         hasTouch: true,
         isMobile: true,
+        // Same policy as the desktop harness: decorative motion (the T14
+        // panel slide) is off by default so mid-animation transforms never
+        // trip Playwright's actionability auto-scroll. A test that asserts
+        // motion must opt out via page.emulateMedia({ reducedMotion:
+        // "no-preference" }).
+        reducedMotion: "reduce",
     });
     const page = await context.newPage();
 

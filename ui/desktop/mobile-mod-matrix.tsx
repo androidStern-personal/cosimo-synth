@@ -70,7 +70,7 @@ const EFFECT_IDS = Array.from(new Set(
     allRackParameterDescriptors().map((parameter) => parameter.effectId),
 ));
 
-function sourceOptionForRoute(route: Pick<ModulationRoute, "sourceKind" | "sourceSlot">) {
+export function sourceOptionForRoute(route: Pick<ModulationRoute, "sourceKind" | "sourceSlot">) {
     return MODULATION_SOURCE_OPTIONS.find((option) => (
         option.sourceKind === route.sourceKind && option.sourceSlot === route.sourceSlot
     )) ?? MODULATION_SOURCE_OPTIONS[0];
@@ -85,7 +85,7 @@ function sourceValueForFocusedSource(source: FocusedModulationSource | null | un
     ))?.value ?? null;
 }
 
-function targetPresentation(targetKind: ModulationTargetKind) {
+export function targetPresentation(targetKind: ModulationTargetKind) {
     if (isRackModulationTarget(targetKind)) {
         const parameter = getRackParameterDescriptor(targetKind.slice("rack.".length));
         if (parameter) {
@@ -103,14 +103,14 @@ function targetPresentation(targetKind: ModulationTargetKind) {
     };
 }
 
-function targetCategory(targetKind: ModulationTargetKind): TargetCategory {
+export function targetCategory(targetKind: ModulationTargetKind): TargetCategory {
     if (!isRackModulationTarget(targetKind)) {
         return "voice";
     }
     return targetKind.startsWith("rack.globalFilter") ? "global-filter" : "fx";
 }
 
-function SourceIdentity({
+export function SourceIdentity({
     sourceKind,
     sourceSlot,
 }: Pick<ModulationRoute, "sourceKind" | "sourceSlot">) {

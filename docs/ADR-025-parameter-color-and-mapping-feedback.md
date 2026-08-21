@@ -107,6 +107,36 @@ through bypass.
 
 These are implementation inputs, not production changes made by this ADR.
 
+## Amendment (2026-08-21): bypass on T15 mapping rows
+
+The original row treatment ("grey amount + `BYPASSED` label, row never dims") was
+written for the read-only matrix list. T15 made each row an editing surface with its
+own power control, which changes what is honest:
+
+- **Off things look off.** A bypassed row's mapping content — identity, source art,
+  rail, polarity, delete — dims as one piece (0.45), the source art loses its family
+  color (grayscale), and the row's accent edge goes neutral. The base parameter is
+  NOT off, so dimmed is never disabled: a live gesture on the row lifts it to full
+  emphasis for the duration.
+- **The power light carries the whole state.** Lit teal ring when active, unlit faint
+  ring when bypassed; the power control itself never dims — it is how you leave the
+  state. The word `BYPASSED` is deleted from rows: it existed to compensate for an
+  invisible state and physically collided with the row's controls.
+- The knob-side treatments (inside stays in owning color; outside ring grey and
+  dashed) are unchanged. Any surface WITHOUT an on-row power control keeps the
+  original labelled treatment.
+
+Same batch, row anatomy: the readout cell in a mapping row drops the duplicated
+target label (the identity column already names it) and becomes an LED amount meter
+— segmented fill lit from the base tick in the source color, with the two numbers
+in fixed corners so they can never collide: the canonical amount readout top-left
+in the source color, the base value top-right.
+The rail projects in the parameter's own display scale (log ticks for log
+parameters; octave-application amounts travel in octaves — `railProjection` on
+`resolveModulationTargetBase`). The +/- direction marker became a real polarity
+toggle button. The row sits on one 6px spacing unit with three equal 32px control
+modules.
+
 ## Consequences
 
 - Active controls no longer become colorless simply because they are idle or selected.

@@ -2150,11 +2150,11 @@ test("first mobile Mod Bar drop appears in the matrix after restoring routes", a
             (snapshot) => readStoredModulationState(snapshot).routes.length === 1,
         );
         await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
         await page.waitForFunction(() => {
-            const matrix = document.querySelector('[data-role="mobile-mod-matrix"]');
-            const count = matrix?.querySelector('[data-role="mobile-mod-route-count"]')?.textContent?.trim();
-            const rows = Array.from(matrix?.querySelectorAll('[data-role="mobile-mod-route-row"]') ?? []);
-            return count === "1 mappings" && rows.some((row) => row.textContent?.includes("ENV 3"));
+            const count = document.querySelector('[data-role="mod-mappings-count"]')?.textContent?.trim();
+            const rows = Array.from(document.querySelectorAll('[data-role="mod-mappings-row"]'));
+            return count === "1" && rows.some((row) => row.textContent?.includes("ENV 3"));
         });
         await page.locator('[data-role="mobile-workspace-tab-voice"]').click();
         const railGrip = page.locator('[data-role="mobile-global-mod-rail-grip"]');
@@ -2260,11 +2260,11 @@ test("first mobile Mod Bar drop appears in the matrix after restoring routes", a
             )),
         );
         await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
         await page.waitForFunction(() => {
-            const matrix = document.querySelector('[data-role="mobile-mod-matrix"]');
-            const count = matrix?.querySelector('[data-role="mobile-mod-route-count"]')?.textContent?.trim();
-            const rows = Array.from(matrix?.querySelectorAll('[data-role="mobile-mod-route-row"]') ?? []);
-            return count === "2 mappings" && rows.some((row) => row.textContent?.includes("MSEG 1"));
+            const count = document.querySelector('[data-role="mod-mappings-count"]')?.textContent?.trim();
+            const rows = Array.from(document.querySelectorAll('[data-role="mod-mappings-row"]'));
+            return count === "2" && rows.some((row) => row.textContent?.includes("MSEG 1"));
         });
         assert.equal(readStoredModulationState(await getHarnessSnapshot(page)).routes.length, 2);
     } finally {
@@ -2408,6 +2408,29 @@ test("envelope decay accepts a real touch modulation drop", async () => {
                     radiusY: 5,
                     force: 1,
                 }],
+            });
+        }
+        // The preview's path-dependent amplification can land a few px shy
+        // of a SMALL target (this input is 20px tall): close the residual by
+        // chasing the preview error with bounded finger nudges — exactly a
+        // human's micro-correction.
+        let finger = { ...end };
+        for (let attempt = 0; attempt < 10; attempt += 1) {
+            if ((await target.getAttribute("class")).includes("is-mod-hover")) {
+                break;
+            }
+            const ghostPosition = await page.evaluate(() => {
+                const ghost = document.querySelector('[data-role="mobile-global-mod-source-ghost"]');
+                return ghost ? { x: parseFloat(ghost.style.left), y: parseFloat(ghost.style.top) } : null;
+            });
+            assert.ok(ghostPosition, "The drag preview must stay alive while correcting.");
+            finger = {
+                x: finger.x + ((targetCenter.x - ghostPosition.x) * 0.4),
+                y: finger.y + ((targetCenter.y - ghostPosition.y) * 0.4),
+            };
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ ...finger, radiusX: 5, radiusY: 5, force: 1 }],
             });
         }
         assert.equal((await target.getAttribute("class")).includes("is-mod-hover"), true);
@@ -3730,7 +3753,7 @@ test("mobile workspace shows one tab-selected panel while all three stay mounted
         assert.deepEqual(await sectionButtons.evaluateAll((buttons) => (
             buttons.map((button) => button.getAttribute("aria-selected"))
         )), ["false", "false", "true"]);
-        assert.equal(await panels.locator('[data-role="mobile-workspace-panel-mod"] [data-role="mobile-mod-matrix"]').count(), 1);
+        assert.equal(await panels.locator('[data-role="mobile-workspace-panel-mod"] [data-role="mobile-mod-workspace-pager"]').count(), 1);
         await page.waitForFunction(() => {
             const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
             return (counts.filterSpectrum ?? 0) === 0
@@ -3746,17 +3769,21 @@ test("mobile workspace shows one tab-selected panel while all three stay mounted
                 positions: [0.72, 0.4, 0.2],
             });
         });
-        await page.waitForFunction(() => Boolean(
-            window.__COSIMO_DESKTOP_HARNESS__.getRenderedState().msegPreviewState?.progressClip,
-        ));
+        // T14: the compact graph is the editable surface; its playhead line
+        // carries the live progress the old preview clip showed.
+        await page.waitForFunction(() => {
+            const playhead = document.querySelector('[data-role="mod-source-mseg-playhead"]');
+            return playhead !== null && Math.abs(Number(playhead.getAttribute("data-progress")) - 0.72) < 0.05;
+        });
         await tabList.locator('[data-role="mobile-workspace-tab-voice"]').click();
         await tabList.locator('[data-role="mobile-workspace-tab-mod"]').click();
         await page.evaluate(() => new Promise((resolve) => {
             requestAnimationFrame(() => requestAnimationFrame(resolve));
         }));
-        const renderedState = await getHarnessRenderedState(page);
         assert.ok(
-            renderedState.msegPreviewState?.progressClip,
+            await page.evaluate(() => (
+                document.querySelector('[data-role="mod-source-mseg-playhead"]') !== null
+            )),
             "The globally visible MSEG activity monitor must survive tab navigation.",
         );
     } finally {
@@ -4296,8 +4323,8 @@ test("the Voice page fits without scrolling, owned drags stay scroll-free, and n
         });
         assert.ok(voiceOverflow >= 0 && voiceOverflow <= 1, `The Voice page must fit its panel: overflow ${voiceOverflow}`);
 
-        // Neutral swipes still scroll a panel that genuinely overflows: the
-        // Mod workspace at a short phone height.
+        // T14: the redesigned Mod page fits its panel — the matrix can no
+        // longer sit invisibly below a tall graph (no blind scrolling).
         await page.setViewportSize({ width: 393, height: 600 });
         await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
         await page.waitForSelector('[data-role="mobile-mod-source-selector"]');
@@ -4305,12 +4332,32 @@ test("the Voice page fits without scrolling, owned drags stay scroll-free, and n
             const panel = document.querySelector('[data-role="mobile-workspace-panel-mod"]');
             return panel ? panel.scrollHeight - panel.clientHeight : 0;
         });
-        assert.ok(modOverflow > 40, `The Mod panel must overflow at 600: ${modOverflow}`);
-        const modSelector = await page.locator('[data-role="mobile-mod-source-selector"]').boundingBox();
-        assert.ok(modSelector);
-        await swipeUp(modSelector.x + (modSelector.width * 0.5), modSelector.y + (modSelector.height * 0.5));
+        assert.ok(modOverflow <= 40, `The redesigned Mod page must fit its panel at 600: ${modOverflow}`);
+
+        // Neutral swipes still scroll a surface that genuinely overflows:
+        // the MAPPINGS list with a real route population.
+        const swipeSeededState = normalizeModulationState({
+            routes: MODULATION_TARGET_OPTIONS.slice(0, 24).map((option, index) => ({
+                id: `swipe-seed-${index}`,
+                enabled: true,
+                sourceKind: "mseg",
+                sourceSlot: (index % 3) + 1,
+                polarity: "bipolar",
+                targetKind: option.value,
+                amount: 0.2,
+                reducer: "max",
+            })),
+        });
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, swipeSeededState);
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        await page.waitForSelector('[data-role="mod-mappings-row"]');
+        const firstRowIdentity = await page.locator('[data-role="mod-mappings-row"] .mod-mappings-row-identity').first().boundingBox();
+        assert.ok(firstRowIdentity);
+        await swipeUp(firstRowIdentity.x + (firstRowIdentity.width * 0.5), firstRowIdentity.y + (firstRowIdentity.height * 0.5));
         await page.waitForFunction(() => (
-            (document.querySelector('[data-role="mobile-workspace-panel-mod"]')?.scrollTop ?? 0) > 20
+            (document.querySelector('[data-role="mod-mappings-list"]')?.scrollTop ?? 0) > 20
         ), null, { timeout: 3_000 });
 
         // Back on Voice: an owned readout drag edits its parameter and never
@@ -4563,6 +4610,52 @@ test("short compact Voice never clips the readout strip: the graph yields, the r
         });
         assert.ok(Math.abs(strip.toolbarHeight - 40) <= 0.5, `the strip keeps its 40px: ${strip.toolbarHeight}`);
         assert.ok(strip.graphHeight < 180, `the graph must shrink below its old floor here: ${strip.graphHeight}`);
+    } finally {
+        await page.close();
+    }
+});
+
+test("ADR-024 tabs: selecting an oscillator slides the panel directionally and stays instantly interactive", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        // This test ASSERTS the slide; the harness default is reduced-motion.
+        await page.emulateMedia({ reducedMotion: "no-preference" });
+        await page.locator('[data-role="mobile-voice-tab-b"]').waitFor();
+
+
+        // A -> B: the outgoing ghost slides LEFT, the live panel enters from
+        // the right and is interactive from its first frame.
+        await page.click('[data-role="mobile-voice-tab-b"]');
+        const ghost = page.locator("[data-panel-ghost]");
+        await ghost.waitFor({ state: "visible", timeout: 2000 });
+        const ghostShift = await ghost.evaluate((element) => new Promise((resolve) => {
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+                resolve(new DOMMatrixReadOnly(getComputedStyle(element).transform).m41);
+            }));
+        }));
+        assert.equal(ghostShift < 0, true, `A->B must slide the outgoing panel left, got ${ghostShift}px.`);
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-editor"]').getAttribute("data-selected-oscillator-id"),
+            "B",
+            "The selection binds immediately — the slide never postpones it.",
+        );
+        // The ghost carries no live roles (sanitized) and leaves promptly.
+        assert.equal(await ghost.locator("[data-role]").count(), 0);
+        await ghost.waitFor({ state: "detached", timeout: 2000 });
+
+        // B -> A slides the other way.
+        await page.click('[data-role="mobile-voice-tab-a"]');
+        const secondShift = await page.locator("[data-panel-ghost]").evaluate(
+            (element) => new Promise((resolve) => {
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    resolve(new DOMMatrixReadOnly(getComputedStyle(element).transform).m41);
+                }));
+            }),
+        );
+        assert.equal(secondShift > 0, true, `B->A must slide the outgoing panel right, got ${secondShift}px.`);
     } finally {
         await page.close();
     }

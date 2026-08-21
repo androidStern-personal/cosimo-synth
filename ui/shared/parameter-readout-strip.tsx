@@ -92,6 +92,17 @@ export type ReadoutCellSpec = {
     readonly detented?: boolean;
     /** Amount drags lock to whole integers inside a capture window. */
     readonly stickyIntegerAmounts?: boolean;
+    /** "effective-value": vertical travel walks the MODULATED value along
+        the cell's own dial at base-drag speed (the knobs' settled resonance
+        rule); the amount is derived storage. Requires the normalize/
+        denormalize pair. Defaults to the linear amount-domain walk. */
+    readonly amountDragStyle?: "amount-span" | "effective-value";
+    /** Tick-position override for cells whose display scale is not linear
+        (e.g. a log Hz track). Defaults to linear normalization. Supply
+        denormalizeValue with it: the base drag walks the display scale
+        through the pair, so equal finger travel is equal display travel. */
+    readonly normalizeValue?: (value: number) => number;
+    readonly denormalizeValue?: (normalized: number) => number;
     /** Band override for cells whose rail is not the plain display domain. */
     readonly projectBand?: (
         baseNormalized: number,
@@ -113,7 +124,8 @@ export type ReadoutCellPresentation = {
 
 export type ReadoutStripSource = {
     readonly sourceKind: ModulationRoute["sourceKind"];
-    readonly sourceSlot: number;
+    /** Performance sources (velocity, pressure, track) carry no slot. */
+    readonly sourceSlot: number | null;
     readonly shortLabel: string;
     readonly accent: string;
 };
@@ -157,7 +169,9 @@ export function presentReadoutCell(
 ): ReadoutCellPresentation {
     const display = cell.display;
     const value = clamp(binding.value, display.min, display.max);
-    const baseNormalized = (value - display.min) / (display.max - display.min);
+    const baseNormalized = cell.normalizeValue !== undefined
+        ? clamp(cell.normalizeValue(value), 0, 1)
+        : (value - display.min) / (display.max - display.min);
     const topologyRoute = cell.targetKind === null || armedSource === null
         ? null
         : routes.find((route) => (
@@ -316,16 +330,25 @@ export function useReadoutCells({
                 : null,
         };
 
+        const startValue = clamp(bindingsRef.current[cellId].value, display.min, display.max);
         const baseChannel: ParameterGestureChannel = {
-            startNormalized: clamp01(
-                (clamp(bindingsRef.current[cellId].value, display.min, display.max) - display.min)
-                    / (display.max - display.min),
-            ),
+            // The drag walks the cell's DISPLAY scale: gesture-normalized and
+            // tick position are the same number, so the tick tracks the
+            // finger and a log track moves in octaves, not raw units.
+            startNormalized: clamp01(cell.normalizeValue !== undefined
+                ? cell.normalizeValue(startValue)
+                : (startValue - display.min) / (display.max - display.min)),
             pixelsPerFullSpan: PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
             write: (normalized) => {
-                const raw = display.min + (normalized * (display.max - display.min));
-                const snapped = display.min
-                    + (Math.round((raw - display.min) / display.step) * display.step);
+                const raw = cell.denormalizeValue !== undefined
+                    ? cell.denormalizeValue(normalized)
+                    : display.min + (normalized * (display.max - display.min));
+                // step <= 0 means a continuous parameter (entry specs record
+                // "no quantization" as 0): write unsnapped — never divide by
+                // the zero step.
+                const snapped = display.step > 0
+                    ? display.min + (Math.round((raw - display.min) / display.step) * display.step)
+                    : raw;
                 const value = clamp(snapped, display.min, display.max);
                 if (cell.detented) {
                     if (gestureScratchRef.current.lastDetentValue !== value) {
@@ -345,14 +368,36 @@ export function useReadoutCells({
             },
         };
 
+        const dialWalk = cell.amountDragStyle === "effective-value"
+            && cell.normalizeValue !== undefined
+            && cell.denormalizeValue !== undefined;
+        const baseValueAtStart = clamp(bindingsRef.current[cellId].value, display.min, display.max);
         const modulationChannel: ParameterGestureChannel = {
             startNormalized: amountBounds === null
                 ? 0
-                : clamp01(((topologyRoute?.amount ?? 0) - amountBounds.min) / (amountBounds.max - amountBounds.min)),
-            pixelsPerFullSpan: PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
+                : dialWalk
+                    ? clamp01(cell.normalizeValue!(baseValueAtStart + (topologyRoute?.amount ?? 0)))
+                    : clamp01(((topologyRoute?.amount ?? 0) - amountBounds.min) / (amountBounds.max - amountBounds.min)),
+            pixelsPerFullSpan: dialWalk
+                ? PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE
+                : PARAMETER_GESTURE_MODULATION_PIXELS_PER_FULL_SPAN,
             // No armed source, unmapped pair, or non-modulatable target:
             // vertical motion is inert (the HUD explains why).
             write: amountBounds === null ? null : (normalized) => {
+                if (dialWalk) {
+                    // Walk the modulated value along the dial: every pixel
+                    // covers the same fraction of the range in both
+                    // directions, and the amount is derived storage.
+                    const amountBinding = activeAmountBindingRef.current;
+                    if (amountBinding.value !== null) {
+                        amountBinding.setValue(clamp(
+                            cell.denormalizeValue!(normalized) - baseValueAtStart,
+                            amountBounds.min,
+                            amountBounds.max,
+                        ));
+                    }
+                    return;
+                }
                 const span = amountBounds.max - amountBounds.min;
                 const freeAmount = amountBounds.min + (normalized * span);
                 let amountToWrite = freeAmount;
@@ -425,7 +470,19 @@ export function useReadoutCells({
             throw new Error(`Unknown readout cell ${cellId}`);
         }
         const binding = bindingsRef.current[cellId];
-        const step = cell.display.step * (coarse ? 10 : 1);
+        if (cell.normalizeValue !== undefined && cell.denormalizeValue !== undefined) {
+            // Display-scale cells nudge 1% of the TRACK, matching the drag.
+            const travel = 0.01 * (coarse ? 10 : 1) * direction;
+            const next = cell.denormalizeValue(clamp(cell.normalizeValue(binding.value) + travel, 0, 1));
+            binding.commitValue(clamp(next, cell.display.min, cell.display.max));
+            return;
+        }
+        // Continuous cells (display step 0) nudge by 1% of their span so the
+        // keyboard contract still moves the value.
+        const baseStep = cell.display.step > 0
+            ? cell.display.step
+            : (cell.display.max - cell.display.min) / 100;
+        const step = baseStep * (coarse ? 10 : 1);
         binding.commitValue(clamp(binding.value + (direction * step), cell.display.min, cell.display.max));
     }, []);
 

@@ -179,6 +179,12 @@ export async function startDesktopHarnessServer() {
             env: {
                 ...process.env,
                 BROWSER: "none",
+                // Harness servers skip file watching (tests never use HMR;
+                // repo-wide 120ms polling costs ~4 CPU cores per server) and
+                // self-exit when their spawner dies, so killed runs cannot
+                // leave core-burning orphans behind (T17B).
+                COSIMO_TEST_HARNESS: "1",
+                COSIMO_HARNESS_SPAWNER_PID: String(process.pid),
             },
         },
     );

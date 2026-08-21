@@ -832,12 +832,12 @@ test("the Note key triggers audible output from every mobile editor state", asyn
         await collapseGlobalModRail(page);
 
         await page.click('[data-role="mobile-workspace-tab-mod"]');
-        await pressNoteKey("Mod overview");
+        await pressNoteKey("Mod SOURCE panel");
 
-        const routeRow = page.locator('[data-role="mobile-mod-route-row"]').first();
-        await routeRow.waitFor();
-        await routeRow.click();
-        await pressNoteKey("Route detail");
+        // T14: the second top-level state is the MAPPINGS panel.
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        await page.locator('[data-role="mod-mappings-row"]').first().waitFor();
+        await pressNoteKey("Mod MAPPINGS panel");
 
         // Deep-link into the selected source's full editor from the drawer: the
         // first tap arms the source if it is not armed; the tap on an armed
@@ -1629,6 +1629,8 @@ test("rail flick keeps moving after touch release and faster releases travel far
     });
     const cdp = await page.context().newCDPSession(page);
 
+    // This test ASSERTS motion; the harness default is reduced-motion.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     try {
         const rail = page.locator('[data-role="mobile-global-mod-rail"]');
         const handle = rail.locator(".mobile-global-mod-rail-handle");
@@ -1742,6 +1744,8 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
 
+    // This test ASSERTS motion; the harness default is reduced-motion.
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     try {
         await expandGlobalModRail(page);
         await page.waitForSelector('[data-role="rack-mod-source-track"]');
@@ -4097,6 +4101,122 @@ test("T21: a drag that dwell-navigates FX to Voice keeps eligibility and capture
         const eligibleShadow = await card.evaluate((element) => getComputedStyle(element).boxShadow);
         assert.notEqual(eligibleShadow, "none", "Eligibility must stay painted across the page switch.");
         await page.mouse.up();
+    } finally {
+        await page.close();
+    }
+});
+
+test("T14: the Mod panels ARE the Voice selector component, restore per instance, and follow the bar", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        const tabs = page.locator('[data-role="mobile-mod-panel-tabs"]');
+        await tabs.waitFor();
+
+        // Not an approximation: the SAME component and classes as the Voice
+        // A/B/C selector (T14's one-selector rule).
+        assert.equal(await tabs.getAttribute("class"), "mobile-voice-tabs");
+        assert.equal(await tabs.getAttribute("role"), "tablist");
+        assert.deepEqual(
+            await tabs.locator('[role="tab"]').allTextContents(),
+            ["SOURCE", "MAPPINGS"],
+        );
+        assert.equal(
+            await tabs.locator('[role="tab"]').first().evaluate((element) => element.className.includes("mobile-voice-tab")),
+            true,
+        );
+        assert.equal(await page.locator('[data-role="mobile-mod-panel-source"]').count(), 1);
+
+        // Switch to MAPPINGS; the choice survives a relaunch of the same
+        // instance session (sessionStorage — the shell's workspace scope).
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        await page.locator('[data-role="mod-mappings-panel"]').waitFor();
+        await page.reload({ waitUntil: "commit" });
+        await waitForHarnessReady(page);
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.locator('[data-role="mobile-mod-panel-source"]').waitFor({ state: "detached" }).catch(() => null);
+        assert.equal(
+            await page.locator('[data-role="mobile-mod-panel-tab-mappings"]').getAttribute("aria-selected"),
+            "true",
+            "The instance restores its last panel.",
+        );
+        assert.equal(await page.locator('[data-role="mod-mappings-panel"]').count(), 1);
+
+        // Choosing a source from the floating bar while inside Mod selects it
+        // AND surfaces the SOURCE panel — never a sheet over the full panel.
+        await expandGlobalModRail(page);
+        await page.click('[data-role="rack-mod-source-env-1"]');
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-mod-panel-tab-source"]')?.getAttribute("aria-selected") === "true"
+        ));
+        assert.equal(await page.locator('[data-role="quick-source-sheet"]').count(), 0);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mod-source-editor"]')?.getAttribute("data-source-kind") === "env"
+        ));
+    } finally {
+        await page.close();
+    }
+});
+
+test("T14: the SOURCE graph edits points directly with Expand explicit; the 320px toolbar stays composed", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        const surface = page.locator('[data-role="mod-source-mseg-surface"]');
+        await surface.waitFor();
+
+        // Direct point editing: drag the end point down; the stored shape
+        // follows through the SAME editing brain as the full editor.
+        const before = readStoredMsegShape(await getHarnessSnapshot(page), 0);
+        const handle = surface.locator("circle").nth(1);
+        const handleBox = await handle.boundingBox();
+        assert.ok(handleBox, "The compact SOURCE graph must render draggable point handles.");
+        const start = { x: handleBox.x + (handleBox.width / 2), y: handleBox.y + (handleBox.height / 2) };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+        await page.mouse.move(start.x, start.y + 30, { steps: 4 });
+        await page.mouse.up();
+        await page.waitForFunction((previousShape) => {
+            const raw = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"];
+            return typeof raw === "string" && raw !== previousShape;
+        }, JSON.stringify(before), { timeout: 5000 }).catch(() => null);
+        const after = readStoredMsegShape(await getHarnessSnapshot(page), 0);
+        assert.notDeepEqual(after, before, "Dragging a SOURCE-panel point must edit the stored shape.");
+
+        // The explicit Expand control opens the real full-screen editor.
+        await page.click('[data-role="mod-source-mseg-expand"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
+        await page.click('[data-role="mseg-editor-done"]');
+        await page.locator('[data-role="mseg-editor-dialog"]').waitFor({ state: "detached" });
+
+        // 320px: the toolbar keeps ONE composed row — every control inside
+        // the viewport, nothing wrapped into a pile, the table intact.
+        await page.setViewportSize({ width: 320, height: 600 });
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+        const toolbar = page.locator('[data-role="mod-mappings-toolbar"]');
+        await toolbar.waitFor();
+        const composure = await toolbar.evaluate((element) => {
+            const bounds = element.getBoundingClientRect();
+            const children = Array.from(element.children)
+                .map((child) => child.getBoundingClientRect())
+                .filter((rect) => rect.width > 0);
+            return {
+                height: bounds.height,
+                allInside: children.every((rect) => rect.left >= 0 && rect.right <= 320 + 1),
+                singleRow: children.every((rect) => Math.abs((rect.top + rect.height / 2) - (bounds.top + bounds.height / 2)) < 8),
+                documentScrollWidth: document.documentElement.scrollWidth,
+            };
+        });
+        assert.equal(composure.height <= 44, true, `One toolbar row, got ${composure.height}px.`);
+        assert.equal(composure.allInside, true, "Toolbar controls must stay inside 320px.");
+        assert.equal(composure.singleRow, true, "Toolbar controls must not wrap into a pile.");
+        assert.equal(composure.documentScrollWidth <= 320, true);
     } finally {
         await page.close();
     }

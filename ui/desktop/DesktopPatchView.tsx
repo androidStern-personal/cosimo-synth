@@ -100,6 +100,7 @@ import {
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import type { RackParameterDescriptor } from "../shared/rack-parameter-descriptors";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
+import { VOICE_FILTER_KNOB_DESCRIPTORS } from "../shared/voice-filter-descriptors";
 import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
     MOBILE_VOICE_OWNER_ACCENT,
@@ -113,7 +114,8 @@ import {
     DesktopOscillatorPresentation,
 } from "./desktop-oscillator-presentation";
 import { DesktopModMatrix } from "./desktop-mod-matrix";
-import { MobileModMatrix } from "./mobile-mod-matrix";
+import { MobileModWorkspacePager } from "./mobile-mod-workspace-pager";
+import { MobileModMappingsPanel } from "./mobile-mod-mappings-panel";
 import {
     EffectsRackWorkspace,
     type GlobalModRailState,
@@ -434,6 +436,20 @@ type ModulationMatrixSectionProps = {
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     msegRateFocusBindings: SynthFocusBindings;
+    /** T14 compact SOURCE panel: direct point editing on the graph. The
+        handlers are the FULL editor's own (one shape-editing brain); the
+        shared surface ref is claimed just-in-time on pointer-down because
+        the full-screen editor reuses the same ref while it is open. */
+    msegDirectEditing?: {
+        sharedSurfaceRef: RefObject<SVGSVGElement | null>;
+        selectedPointIndex: number;
+        hoveredSegmentIndex: number;
+        activeSegmentIndex: number;
+        onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
+        onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
+        onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
+        onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
+    } | null;
 };
 
 type EnvelopeEntryField = "attackSeconds" | "decaySeconds" | "sustain" | "releaseSeconds";
@@ -1829,56 +1845,7 @@ function SynthPresetBarHost({
  * menu is deliberately not offered here — value editing happens on the knob
  * and modulation feedback on its ring, per the T04 settled list.
  */
-const VOICE_FILTER_KNOB_DESCRIPTORS: Readonly<Record<"cutoff" | "resonance" | "mix", RackParameterDescriptor>> = {
-    cutoff: {
-        id: "voiceFilterCutoff",
-        effectId: "filter",
-        endpointID: "filterCutoff",
-        label: "Cutoff",
-        shortLabel: "Cut",
-        min: 20,
-        max: 20000,
-        initial: 1000,
-        step: 1,
-        scale: "log",
-        unit: "Hz",
-        quick: false,
-        modulationTargetIndex: null,
-        modulationApplication: "octaves",
-    },
-    resonance: {
-        id: "voiceFilterResonance",
-        effectId: "filter",
-        endpointID: "filterQ",
-        label: "Resonance",
-        shortLabel: "Res",
-        min: 0.1,
-        max: 20,
-        initial: 0.707107,
-        step: 0.01,
-        scale: "log",
-        unit: "",
-        quick: false,
-        modulationTargetIndex: null,
-        modulationApplication: "linear",
-    },
-    mix: {
-        id: "voiceFilterMix",
-        effectId: "filter",
-        endpointID: "filterMix",
-        label: "Mix",
-        shortLabel: "Mix",
-        min: 0,
-        max: 1,
-        initial: 1,
-        step: 0.01,
-        scale: "linear",
-        unit: "%",
-        quick: false,
-        modulationTargetIndex: null,
-        modulationApplication: "linear",
-    },
-};
+
 
 function VoiceFilterKnob({
     descriptor,
@@ -2939,6 +2906,78 @@ function MacroSourceEditor({
     );
 }
 
+function EditableMsegSurfaceHost({
+    msegState,
+    morphValue,
+    showMorphCurve,
+    editing,
+    progressFillEnd,
+}: {
+    msegState: NonNullable<ModulationMatrixSectionProps["msegState"]>;
+    morphValue: number;
+    showMorphCurve: boolean;
+    editing: NonNullable<ModulationMatrixSectionProps["msegDirectEditing"]>;
+    /** Live playback progress (0..1) — the compact editable graph keeps the
+        preview's playhead so editability never costs the activity light. */
+    progressFillEnd: number;
+}) {
+    const localRef = useRef<SVGSVGElement | null>(null);
+    const attachSurface = useCallback((element: SVGSVGElement | null) => {
+        localRef.current = element;
+        // Steady-state owner: whichever editable surface mounted last. The
+        // pointer-down claim below covers the full editor handing back.
+        if (element !== null) {
+            editing.sharedSurfaceRef.current = element;
+        }
+    }, [editing.sharedSurfaceRef]);
+    const surfaceRefObject = useMemo(() => ({
+        get current() {
+            return localRef.current;
+        },
+        set current(element: SVGSVGElement | null) {
+            attachSurface(element);
+        },
+    }), [attachSurface]);
+
+    return (
+        <EditableMsegSurface
+            surfaceRef={surfaceRefObject}
+            points={msegState.shape.points}
+            referencePoints={msegState.referenceShape?.points ?? null}
+            morphShapeAPoints={msegState.shapeA?.points ?? null}
+            morphShapeBPoints={msegState.shapeB?.points ?? null}
+            morphValue={morphValue}
+            showMorphCurve={showMorphCurve}
+            selectedPointIndex={editing.selectedPointIndex}
+            hoveredSegmentIndex={editing.hoveredSegmentIndex}
+            activeSegmentIndex={editing.activeSegmentIndex}
+            onPointerDown={(event) => {
+                // Claim the shape-editing brain's geometry ref for THIS
+                // surface (the modal releases it by closing).
+                editing.sharedSurfaceRef.current = localRef.current;
+                editing.onPointerDown(event);
+            }}
+            onPointerMove={editing.onPointerMove}
+            onPointerLeave={editing.onPointerLeave}
+            onPointerUp={editing.onPointerUp}
+            className="h-full w-full"
+            dataRole="mod-source-mseg-surface"
+        />
+    );
+}
+
+function EditableMsegPlayhead({ progressFillEnd }: { progressFillEnd: number }) {
+    return (
+        <div
+            data-role="mod-source-mseg-playhead"
+            data-progress={progressFillEnd.toFixed(3)}
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 w-px bg-cyan-200/50"
+            style={{ left: `${(progressFillEnd * 100).toFixed(2)}%` }}
+        />
+    );
+}
+
 function ModulationMatrixSection({
     compact = false,
     focusedSource = null,
@@ -2963,6 +3002,7 @@ function ModulationMatrixSection({
     onRemoveRoute,
     onRouteChange,
     msegRateFocusBindings,
+    msegDirectEditing = null,
 }: ModulationMatrixSectionProps) {
     const [activeEditorTab, setActiveEditorTab] = useState<{
         kind: "mseg" | "envelope" | "macro";
@@ -3749,7 +3789,50 @@ function ModulationMatrixSection({
 
             {/* ── Body: MSEG preview or envelope editor ── */}
             <div data-role="mobile-mod-editor-body" className="mobile-mod-editor-body min-h-0 flex-1">
-                {activeEditorTab.kind === "mseg" ? (
+                {activeEditorTab.kind === "mseg" && compact && msegDirectEditing !== null ? (
+                    <div className="relative h-full w-full">
+                        <div className="absolute inset-x-0 top-0 bottom-[48px]" data-role="mod-source-mseg-editable">
+                            {msegState ? (
+                                <>
+                                    <EditableMsegSurfaceHost
+                                        msegState={msegState}
+                                        morphValue={selectedMsegMorph.value}
+                                        showMorphCurve={isMsegMorphAdjusting}
+                                        editing={msegDirectEditing}
+                                        progressFillEnd={observedMsegPlayhead.progressFillEnd ?? 0}
+                                    />
+                                    {observedMsegPlayhead.progressFillEnd !== null ? (
+                                        <EditableMsegPlayhead progressFillEnd={observedMsegPlayhead.progressFillEnd} />
+                                    ) : null}
+                                </>
+                            ) : (
+                                <div className="h-full w-full bg-white/[0.02]" />
+                            )}
+                        </div>
+                        <div className="absolute inset-x-3 bottom-2 flex items-center gap-2">
+                            <div className="min-w-0 flex-1">
+                                <MsegMorphRail
+                                    binding={selectedMsegMorph}
+                                    modulationTargetKind={`mseg${selectedMsegSlot + 1}Morph` as ModulationTargetKind}
+                                    onChange={onMsegMorphChange}
+                                    onAdjustingChange={setIsMsegMorphAdjusting}
+                                />
+                            </div>
+                            {/* Outside the graph: a fixed corner chip collides
+                                with real point positions (the default shape's
+                                end point lives at the top right). */}
+                            <button
+                                type="button"
+                                data-role="mod-source-mseg-expand"
+                                className="synth-readout-text shrink-0 rounded-[6px] border border-white/[0.12] bg-[rgba(3,5,12,0.6)] px-2 py-1 text-[10px]"
+                                onClick={onOpenMsegEditor}
+                                aria-label="Open MSEG editor"
+                            >
+                                ⤢
+                            </button>
+                        </div>
+                    </div>
+                ) : activeEditorTab.kind === "mseg" ? (
                     <div className="relative h-full w-full">
                         <button
                             type="button"
@@ -4071,6 +4154,25 @@ function DesktopPatchViewBody({
         setGlobalModRailState((current) => ({ ...current, selectedSource: source }));
         setArmModSourceSignal((previous) => ({ source, serial: (previous?.serial ?? 0) + 1 }));
     }, []);
+    // T14: choosing a source from the floating bar while inside Mod surfaces
+    // the SOURCE panel (never the quick sheet over the full panel).
+    const [modPagerFocusSerial, setModPagerFocusSerial] = useState(0);
+    const modPagerSourceKey = `${globalModRailState.selectedSource.sourceKind}-${globalModRailState.selectedSource.sourceSlot}`;
+    const modPagerSectionRef = useRef(mobileWorkspaceSection);
+    modPagerSectionRef.current = mobileWorkspaceSection;
+    const modPagerFocusMountedRef = useRef(false);
+    useEffect(() => {
+        if (!modPagerFocusMountedRef.current) {
+            // The mount run is not a selection CHANGE — bumping here would
+            // clobber the instance's restored MAPPINGS panel on relaunch.
+            modPagerFocusMountedRef.current = true;
+            return;
+        }
+        if (modPagerSectionRef.current === "mod") {
+            setModPagerFocusSerial((serial) => serial + 1);
+        }
+    }, [modPagerSourceKey]);
+
     // ADR-025 row 15: the just-confirmed route's matrix row pulses briefly.
     const [recentConfirmedRouteId, setRecentConfirmedRouteId] = useState<string | null>(null);
     const handleRouteCreationConfirmed = useCallback((routeId: string) => {
@@ -4673,42 +4775,88 @@ function DesktopPatchViewBody({
             ) : null}
 
             <section className={`grid min-h-0 items-stretch ${isCompactViewport ? "mobile-mod-workspace gap-2" : "gap-4 md:grid-cols-2"}`}>
-                <ModulationMatrixSection
-                    compact={isCompactViewport}
-                    focusedSource={mobileModSource}
-                    armedSource={isCompactViewport ? globalModRailState.selectedSource : null}
-                    onArmSource={isCompactViewport ? handleArmModSource : undefined}
-                    selectedMsegSlot={synthView.selectedMsegSlot}
-                    msegState={synthView.msegState}
-                    selectedMsegMorph={synthView.selectedMsegMorph}
-                    observedMsegPlayhead={synthView.observedMsegPlayhead}
-                    selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
-                    selectedEnvelope={synthView.selectedEnvelope}
-                    routes={synthView.routes}
-                    onSelectMsegSlot={synthView.handleSelectMsegSlot}
-                    onSelectMsegShape={synthView.handleSelectMsegShape}
-                    onOpenMsegEditor={synthView.msegEditor.openEditor}
-                    onMsegMorphChange={synthView.handleMsegMorphChange}
-                    onMsegRateChange={synthView.handleMsegRateChange}
-                    onToggleMsegLoop={synthView.handleToggleMsegLoop}
-                    onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
-                    onEnvelopeChange={synthView.handleEnvelopeChange}
-                    onAddRoute={synthView.handleAddRoute}
-                    onRemoveRoute={synthView.handleRemoveRoute}
-                    onRouteChange={synthView.handleRouteChange}
-                    msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
-                />
-
                 {isCompactViewport ? (
-                    <MobileModMatrix
-                        routes={synthView.routes}
-                        focusedSource={mobileModSource}
-                        recentConfirmedRouteId={recentConfirmedRouteId}
-                        onCreateRoute={synthView.handleAddRouteWithOverrides}
-                        onRemoveRoute={synthView.handleRemoveRoute}
-                        onRouteChange={synthView.handleRouteChange}
+                    <MobileModWorkspacePager
+                        focusSourceSerial={modPagerFocusSerial}
+                        sourcePanel={(
+                        <ModulationMatrixSection
+                            compact={isCompactViewport}
+                            focusedSource={mobileModSource}
+                            armedSource={isCompactViewport ? globalModRailState.selectedSource : null}
+                            onArmSource={isCompactViewport ? handleArmModSource : undefined}
+                            selectedMsegSlot={synthView.selectedMsegSlot}
+                            msegState={synthView.msegState}
+                            selectedMsegMorph={synthView.selectedMsegMorph}
+                            observedMsegPlayhead={synthView.observedMsegPlayhead}
+                            selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
+                            selectedEnvelope={synthView.selectedEnvelope}
+                            routes={synthView.routes}
+                            onSelectMsegSlot={synthView.handleSelectMsegSlot}
+                            onSelectMsegShape={synthView.handleSelectMsegShape}
+                            onOpenMsegEditor={synthView.msegEditor.openEditor}
+                            onMsegMorphChange={synthView.handleMsegMorphChange}
+                            onMsegRateChange={synthView.handleMsegRateChange}
+                            onToggleMsegLoop={synthView.handleToggleMsegLoop}
+                            onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
+                            onEnvelopeChange={synthView.handleEnvelopeChange}
+                            onAddRoute={synthView.handleAddRoute}
+                            onRemoveRoute={synthView.handleRemoveRoute}
+                            onRouteChange={synthView.handleRouteChange}
+                            msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
+                            msegDirectEditing={{
+                                sharedSurfaceRef: msegEditorSurfaceRef,
+                                selectedPointIndex: synthView.msegEditor.selectedPointIndex,
+                                hoveredSegmentIndex: synthView.msegEditor.hoveredSegmentIndex,
+                                activeSegmentIndex: synthView.msegEditor.activeSegmentIndex,
+                                onPointerDown: synthView.msegEditor.handlePointerDown,
+                                onPointerMove: synthView.msegEditor.handlePointerMove,
+                                onPointerLeave: synthView.msegEditor.handlePointerLeave,
+                                onPointerUp: synthView.msegEditor.handlePointerUp,
+                            }}
+                        />
+                        )}
+                        mappingsPanel={(
+                            <MobileModMappingsPanel
+                                routes={synthView.routes}
+                                recentConfirmedRouteId={recentConfirmedRouteId}
+                                hudContainer={mobileVoiceHudLayer}
+                                resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
+                                onRequestHaptic={triggerMobileVoiceHaptic}
+                                onCreateRoute={synthView.handleAddRouteWithOverrides}
+                                onRemoveRoute={synthView.handleRemoveRoute}
+                                onRouteChange={synthView.handleRouteChange}
+                            />
+                        )}
                     />
                 ) : (
+                    <ModulationMatrixSection
+                        compact={isCompactViewport}
+                        focusedSource={mobileModSource}
+                        armedSource={isCompactViewport ? globalModRailState.selectedSource : null}
+                        onArmSource={isCompactViewport ? handleArmModSource : undefined}
+                        selectedMsegSlot={synthView.selectedMsegSlot}
+                        msegState={synthView.msegState}
+                        selectedMsegMorph={synthView.selectedMsegMorph}
+                        observedMsegPlayhead={synthView.observedMsegPlayhead}
+                        selectedEnvelopeSlot={synthView.selectedEnvelopeSlot}
+                        selectedEnvelope={synthView.selectedEnvelope}
+                        routes={synthView.routes}
+                        onSelectMsegSlot={synthView.handleSelectMsegSlot}
+                        onSelectMsegShape={synthView.handleSelectMsegShape}
+                        onOpenMsegEditor={synthView.msegEditor.openEditor}
+                        onMsegMorphChange={synthView.handleMsegMorphChange}
+                        onMsegRateChange={synthView.handleMsegRateChange}
+                        onToggleMsegLoop={synthView.handleToggleMsegLoop}
+                        onSelectEnvelopeSlot={synthView.handleSelectEnvelopeSlot}
+                        onEnvelopeChange={synthView.handleEnvelopeChange}
+                        onAddRoute={synthView.handleAddRoute}
+                        onRemoveRoute={synthView.handleRemoveRoute}
+                        onRouteChange={synthView.handleRouteChange}
+                        msegRateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
+                    />
+                )}
+
+                {isCompactViewport ? null : (
                     <section
                         data-role="mod-matrix-card"
                         data-layout-card="desktop-grid-card"

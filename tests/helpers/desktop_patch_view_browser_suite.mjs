@@ -790,7 +790,13 @@ export async function readDesktopRangeViewport(page) {
 export async function openHarnessPage({
     beforeGoto = null,
 } = {}) {
-    const page = await browser.newPage();
+    const page = await browser.newPage({
+        // The segmented-panel slide honors prefers-reduced-motion; tests run
+        // reduced by default so panel switches are instant and never overlay
+        // a transition ghost. The one transition-proof test opts back out via
+        // page.emulateMedia({ reducedMotion: "no-preference" }).
+        reducedMotion: "reduce",
+    });
     const diagnostics = [];
     page.__cosimoDiagnostics = diagnostics;
     page.on("pageerror", (error) => diagnostics.push(`pageerror: ${error.message}`));

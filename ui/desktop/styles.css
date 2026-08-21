@@ -8,6 +8,7 @@
 @import "./mobile-mod-rail.css";
 @import "./mobile-quick-source-sheet.css";
 @import "./mobile-mod-matrix.css";
+@import "./mobile-mod-mappings.css";
 @import "../shared/mobile-voice-editor.css";
 
 /* The complete matrix is intentionally present for search and accessibility,

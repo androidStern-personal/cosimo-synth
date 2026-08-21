@@ -1,0 +1,475 @@
+/*
+ * T14 MAPPINGS panel: Linear-quality list discipline at phone widths. The
+ * toolbar is one 40px row that never wraps into a pile at 320px; criteria
+ * are removable chips; rows are editing surfaces (T15) sharing the voice
+ * cell language for their rails.
+ */
+
+@media (max-width: 639px) {
+    .mobile-mod-workspace-pager {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+    }
+
+    .mod-mappings-panel {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 4px;
+        padding: 4px;
+    }
+
+    .mod-mappings-toolbar {
+        display: flex;
+        height: 40px;
+        flex: 0 0 40px;
+        align-items: center;
+        gap: 4px;
+        padding: 0 2px;
+        border-bottom: 1px solid rgb(255 255 255 / 0.055);
+    }
+
+    .mod-mappings-count {
+        min-width: 34px;
+        color: rgb(232 236 239 / 0.55);
+        font-size: 10px;
+        letter-spacing: 0.06em;
+        text-align: center;
+    }
+
+    .mod-mappings-search {
+        min-width: 0;
+        flex: 1 1 auto;
+        height: 28px;
+        padding: 0 8px;
+        border: 1px solid rgb(255 255 255 / 0.1);
+        border-radius: 7px;
+        background: rgb(255 255 255 / 0.04);
+        color: #e8ecef;
+        font-size: 11px;
+    }
+
+    .mod-mappings-search-clear {
+        flex: 0 0 auto;
+        width: 24px;
+        height: 28px;
+        border: 0;
+        background: transparent;
+        color: rgb(232 236 239 / 0.6);
+    }
+
+    .mod-mappings-tool,
+    .mod-mappings-add {
+        flex: 0 0 auto;
+        height: 28px;
+        padding: 0 8px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        border-radius: 7px;
+        background: rgb(255 255 255 / 0.03);
+        color: rgb(232 236 239 / 0.82);
+        font-size: 10px;
+        white-space: nowrap;
+    }
+
+    .mod-mappings-tool[aria-expanded="true"] {
+        border-color: rgb(105 213 197 / 0.6);
+        color: #69d5c5;
+    }
+
+    .mod-mappings-add {
+        border-color: rgb(105 213 197 / 0.4);
+        color: #69d5c5;
+    }
+
+    @media (max-width: 355px) {
+        /* 320px: the count folds into the search placeholder space. */
+        .mod-mappings-count {
+            display: none;
+        }
+    }
+
+    .mod-mappings-toolsheet {
+        display: flex;
+        flex: 0 0 auto;
+        flex-direction: column;
+        gap: 6px;
+        padding: 6px;
+        border: 1px solid rgb(255 255 255 / 0.08);
+        border-radius: 10px;
+        background: rgb(255 255 255 / 0.02);
+    }
+
+    .mod-mappings-toolsheet-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .mod-mappings-toolsheet-group > span {
+        color: rgb(232 236 239 / 0.5);
+        font-size: 9px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    .mod-mappings-choice-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+    }
+
+    .mod-mappings-choice-row > button {
+        height: 26px;
+        padding: 0 8px;
+        border: 1px solid rgb(255 255 255 / 0.1);
+        border-radius: 999px;
+        background: rgb(255 255 255 / 0.03);
+        color: rgb(232 236 239 / 0.75);
+        font-size: 10px;
+    }
+
+    .mod-mappings-choice-row > button[aria-pressed="true"] {
+        border-color: rgb(105 213 197 / 0.65);
+        background: rgb(105 213 197 / 0.12);
+        color: #9df0e2;
+    }
+
+    .mod-mappings-criteria {
+        display: flex;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .mod-mappings-criteria > button {
+        height: 24px;
+        padding: 0 8px;
+        border: 1px solid rgb(105 213 197 / 0.4);
+        border-radius: 999px;
+        background: rgb(105 213 197 / 0.08);
+        color: #9df0e2;
+        font-size: 10px;
+    }
+
+    .mod-mappings-clear-all {
+        border-color: rgb(255 255 255 / 0.14) !important;
+        background: transparent !important;
+        color: rgb(232 236 239 / 0.7) !important;
+    }
+
+    .mod-mappings-draft {
+        display: grid;
+        flex: 0 0 auto;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 4px;
+        padding: 6px;
+        border: 1px dashed rgb(105 213 197 / 0.45);
+        border-radius: 10px;
+    }
+
+    .mod-mappings-draft > select {
+        min-width: 0;
+        height: 30px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        border-radius: 7px;
+        background: rgb(10 13 15 / 0.9);
+        color: #e8ecef;
+        font-size: 11px;
+    }
+
+    .mod-mappings-draft > button {
+        height: 28px;
+        border: 1px solid rgb(255 255 255 / 0.12);
+        border-radius: 7px;
+        background: rgb(255 255 255 / 0.03);
+        color: rgb(232 236 239 / 0.82);
+        font-size: 10px;
+    }
+
+    .mod-mappings-draft > button[data-role="mod-mappings-draft-create"]:not(:disabled) {
+        border-color: rgb(105 213 197 / 0.6);
+        color: #69d5c5;
+    }
+
+    .mod-mappings-draft > [role="alert"] {
+        grid-column: 1 / -1;
+        color: #f3a683;
+        font-size: 10px;
+    }
+
+    .mod-mappings-list {
+        display: flex;
+        min-height: 0;
+        flex: 1 1 auto;
+        flex-direction: column;
+        gap: 3px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    .mod-mappings-row {
+        display: grid;
+        flex: 0 0 auto;
+        /* One spacing unit (6px) between every column; one 32px control
+           module for polarity, power, and delete. */
+        grid-template-columns: minmax(72px, 96px) minmax(0, 1fr) 32px 32px 32px;
+        align-items: center;
+        gap: 6px;
+        min-height: 44px;
+        padding: 5px 6px;
+        border: 1px solid rgb(255 255 255 / 0.06);
+        border-left: 3px solid var(--route-source-accent, rgb(255 255 255 / 0.14));
+        border-radius: 9px;
+        background: rgb(255 255 255 / 0.015);
+        content-visibility: auto;
+        contain-intrinsic-size: auto 48px;
+    }
+
+    /* ADR-025 (amended for T15 rows): off things look off. The mapping's
+       content dims as one piece and the source art loses its family color;
+       the UNLIT power light carries the whole state — no BYPASSED text.
+       The power control itself never dims: it is how you leave the state. */
+    .mod-mappings-row.is-bypassed {
+        border-left-color: rgb(232 236 239 / 0.18);
+    }
+
+    .mod-mappings-row.is-bypassed .mod-mappings-row-identity,
+    .mod-mappings-row.is-bypassed .mod-mappings-row-rail,
+    .mod-mappings-row.is-bypassed .mod-mappings-row-polarity,
+    .mod-mappings-row.is-bypassed .mod-mappings-row-delete {
+        opacity: 0.45;
+    }
+
+    .mod-mappings-row.is-bypassed .mobile-mod-source-art,
+    .mod-mappings-row.is-bypassed .mobile-mod-fixed-source {
+        filter: grayscale(1);
+    }
+
+    /* Dimmed is not dead: a live gesture lifts the row to full emphasis. */
+    .mod-mappings-row.is-bypassed:has(.mobile-voice-cell[data-dragging]) .mod-mappings-row-identity,
+    .mod-mappings-row.is-bypassed:has(.mobile-voice-cell[data-dragging]) .mod-mappings-row-rail,
+    .mod-mappings-row.is-bypassed:has(.mobile-voice-cell[data-dragging]) .mod-mappings-row-polarity,
+    .mod-mappings-row.is-bypassed:has(.mobile-voice-cell[data-dragging]) .mod-mappings-row-delete {
+        opacity: 1;
+    }
+
+    .mod-mappings-row.is-just-created {
+        animation: mod-mappings-created 900ms ease-out;
+    }
+
+    @keyframes mod-mappings-created {
+        0% { background: rgb(105 213 197 / 0.18); }
+        100% { background: rgb(255 255 255 / 0.015); }
+    }
+
+    .mod-mappings-row-identity {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .mod-mappings-row-labels {
+        display: flex;
+        min-width: 0;
+        flex-direction: column;
+    }
+
+    .mod-mappings-row-source {
+        overflow: hidden;
+        color: rgb(232 236 239 / 0.85);
+        font-size: 10px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mod-mappings-row-target {
+        overflow: hidden;
+        color: rgb(232 236 239 / 0.55);
+        font-size: 9px;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .mod-mappings-row-target > strong {
+        color: rgb(232 236 239 / 0.7);
+        font-weight: 600;
+    }
+
+    .mod-mappings-row-rail {
+        min-width: 0;
+    }
+
+    .mod-mappings-row-rail .mobile-voice-cell {
+        --mobile-voice-owner-accent: var(--route-source-accent, #69d5c5);
+        width: 100%;
+    }
+
+    .mod-mappings-row-amount-only {
+        color: rgb(232 236 239 / 0.6);
+        font-size: 10px;
+        text-align: center;
+    }
+
+    .mod-mappings-row-polarity {
+        width: 32px;
+        height: 28px;
+        padding: 0;
+        border: 1px solid rgb(255 255 255 / 0.14);
+        border-radius: 6px;
+        background: rgb(255 255 255 / 0.03);
+        color: rgb(232 236 239 / 0.7);
+        font-family: var(--cosimo-font-readout, monospace);
+        font-size: 12px;
+    }
+
+    .mod-mappings-row-power,
+    .mod-mappings-row-delete {
+        display: grid;
+        width: 32px;
+        height: 32px;
+        place-items: center;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: rgb(232 236 239 / 0.6);
+        font-size: 13px;
+    }
+
+    .mod-mappings-row-power {
+        color: rgb(232 236 239 / 0.25);
+    }
+
+    .mod-mappings-row-power[aria-pressed="true"] {
+        color: #69d5c5;
+        filter: drop-shadow(0 0 3px rgb(105 213 197 / 0.65));
+    }
+
+    .mod-mappings-row-delete {
+        color: rgb(243 166 131 / 0.8);
+    }
+
+    /* T15 LED readout: no duplicated label; base value in a small corner;
+       a segmented meter lit from the base tick fills the cell. */
+    .mobile-voice-cell.is-mapping-led {
+        display: block;
+        height: 34px;
+        padding: 0;
+    }
+
+    .mod-led-base-val {
+        position: absolute;
+        top: 2px;
+        right: 6px;
+        color: #9deee0;
+        font-family: var(--cosimo-font-readout, monospace);
+        font-size: 8.5px;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 0 8px rgb(105 213 197 / 0.3);
+        white-space: nowrap;
+    }
+
+    /* Fixed corners so the two numbers can never collide: modulation
+       amount top-left in the source color, base value top-right. The lit
+       band below is what shows WHERE the modulation reaches. */
+    .mod-led-flag {
+        position: absolute;
+        top: 2px;
+        left: 6px;
+        color: var(--mobile-voice-source-accent, #69d5c5);
+        font-family: var(--cosimo-font-readout, monospace);
+        font-size: 8.5px;
+        font-variant-numeric: tabular-nums;
+        text-shadow: 0 0 8px color-mix(in srgb, var(--mobile-voice-source-accent, #69d5c5) 40%, transparent);
+        white-space: nowrap;
+        pointer-events: none;
+    }
+
+    .mod-led-rail {
+        position: absolute;
+        right: 4px;
+        bottom: 3px;
+        left: 4px;
+        height: 15px;
+    }
+
+    .mod-led-rail > span {
+        position: absolute;
+        display: block;
+    }
+
+    .mod-led-track {
+        inset: 0;
+        background: repeating-linear-gradient(90deg, rgb(211 227 232 / 0.07) 0 4px, transparent 4px 6px);
+    }
+
+    .mod-led-fill {
+        top: 0;
+        bottom: 0;
+        background: var(--mobile-voice-source-accent, #69d5c5);
+        box-shadow: 0 0 7px color-mix(in srgb, var(--mobile-voice-source-accent, #69d5c5) 65%, transparent);
+        -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 6px);
+        mask-image: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 6px);
+    }
+
+    .mod-led-rail[data-rail-state="bypassed"] .mod-led-fill {
+        background: rgb(232 236 239 / 0.5);
+        box-shadow: none;
+    }
+
+    .mod-led-tick {
+        top: -2px;
+        bottom: 0;
+        width: 2px;
+        background: #fff;
+        box-shadow: 0 0 6px rgb(255 255 255 / 0.6);
+    }
+
+    .mod-led-clip {
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: var(--mobile-voice-source-accent, #69d5c5);
+        box-shadow: 0 0 5px var(--mobile-voice-source-accent, #69d5c5);
+    }
+
+    .mod-mappings-empty {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        padding: 22px 10px;
+        color: rgb(232 236 239 / 0.6);
+        font-size: 11px;
+        text-align: center;
+    }
+
+    .mod-mappings-empty > button {
+        height: 28px;
+        padding: 0 10px;
+        border: 1px solid rgb(255 255 255 / 0.14);
+        border-radius: 7px;
+        background: transparent;
+        color: rgb(232 236 239 / 0.75);
+        font-size: 10px;
+    }
+}
+
+@media (max-width: 639px) {
+    /* The pager owns the panel's full height so the MAPPINGS toolbar stays
+       fixed while ONLY the list scrolls (T14), and SOURCE gets the full
+       panel height for its graph. The wrapping workspace grid must forward
+       the definite height or the percentage chain dies at the grid. */
+    .mobile-workspace-panel .mobile-mod-workspace {
+        height: 100%;
+        grid-template-rows: minmax(0, 1fr);
+    }
+
+    .mobile-mod-workspace .mobile-mod-workspace-pager {
+        min-height: 0;
+    }
+}

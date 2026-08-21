@@ -64,6 +64,7 @@ import {
     type ReadoutCellSpec,
 } from "./parameter-readout-strip";
 import { hexToRGBColor } from "./theme";
+import { SegmentedEditorTabs, useDirectionalPanelTransition } from "./segmented-editor-tabs";
 import { PROVISIONAL_WAVETABLE_GRAPH_AXES } from "./wavetable-graph-axis-projection";
 import {
     aggregateTuneBaseSemitones,
@@ -258,6 +259,14 @@ export function MobileVoiceFocusedEditor({
     const page = MOBILE_VOICE_PAGES[pageIndex];
 
     const [graphAxis, setGraphAxis] = useState<RollingAxis | null>(null);
+
+    /* ADR-024 tabs: the fixed bar + directional panel slide (shared with the
+       Mod page's SOURCE/MAPPINGS pair — T14's one-selector rule). */
+    const panelTransition = useDirectionalPanelTransition({
+        order: selection.options.map((option) => option.id),
+        activeId: oscillatorID,
+    });
+    const beginTabTransition = panelTransition.beginTabTransition;
 
     const targetKindFor = useCallback((parameterKind: OscillatorModulationParameterKind) => {
         const address = contract.modulationTargets.find(
@@ -571,59 +580,23 @@ export function MobileVoiceFocusedEditor({
             data-selected-oscillator-id={oscillatorID}
             className="mobile-voice-editor"
         >
-            <nav
-                role="tablist"
-                aria-label="Oscillator editor"
-                data-role="mobile-voice-tabs"
-                className="mobile-voice-tabs"
-            >
-                {selection.options.map((oscillator) => {
+            <SegmentedEditorTabs
+                tabs={selection.options.map((oscillator) => {
                     const isActive = oscillator.id === oscillatorID;
                     const toggles = toggleBindings[oscillator.id];
                     const oscillatorMuted = toggles.mute.value >= 0.5;
                     const oscillatorSoloed = toggles.solo.value >= 0.5;
-                    return (
-                        <div
-                            key={oscillator.id}
-                            role="tab"
-                            tabIndex={isActive ? 0 : -1}
-                            aria-selected={isActive}
-                            aria-label={isActive
-                                ? `Turn oscillator ${oscillator.id} ${oscillatorMuted ? "on" : "off"}`
-                                : `Select oscillator ${oscillator.id}`}
-                            data-role={`mobile-voice-tab-${oscillator.id.toLowerCase()}`}
-                            data-oscillator-id={oscillator.id}
-                            data-drag-dwell={`oscillator-tab:${oscillator.id}`}
-                            className={`mobile-voice-tab${isActive ? " is-active" : ""}${oscillatorMuted ? " is-muted" : ""}`}
-                            onClick={() => {
-                                if (isActive) {
-                                    toggles.mute.commitValue(oscillatorMuted ? 0 : 1);
-                                } else {
-                                    selection.selectOscillator(oscillator.id);
-                                }
-                            }}
-                            onKeyDown={(event) => {
-                                if (event.key === "Enter" || event.key === " ") {
-                                    event.preventDefault();
-                                    if (isActive) {
-                                        toggles.mute.commitValue(oscillatorMuted ? 0 : 1);
-                                    } else {
-                                        selection.selectOscillator(oscillator.id);
-                                    }
-                                    return;
-                                }
-                                if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                                    event.preventDefault();
-                                    const ids = selection.options.map((option) => option.id);
-                                    const currentIndex = ids.indexOf(oscillator.id);
-                                    const nextIndex = event.key === "ArrowLeft"
-                                        ? (currentIndex + ids.length - 1) % ids.length
-                                        : (currentIndex + 1) % ids.length;
-                                    selection.selectOscillator(ids[nextIndex]);
-                                }
-                            }}
-                        >
-                            <span>{oscillator.id}</span>
+                    return {
+                        id: oscillator.id,
+                        label: oscillator.id,
+                        ariaLabel: isActive
+                            ? `Turn oscillator ${oscillator.id} ${oscillatorMuted ? "on" : "off"}`
+                            : `Select oscillator ${oscillator.id}`,
+                        dataRole: `mobile-voice-tab-${oscillator.id.toLowerCase()}`,
+                        dataDragDwell: `oscillator-tab:${oscillator.id}`,
+                        stateClassName: oscillatorMuted ? " is-muted" : "",
+                        onActiveTap: () => toggles.mute.commitValue(oscillatorMuted ? 0 : 1),
+                        accessory: (
                             <button
                                 type="button"
                                 aria-label={`Solo oscillator ${oscillator.id}`}
@@ -638,11 +611,20 @@ export function MobileVoiceFocusedEditor({
                             >
                                 S
                             </button>
-                        </div>
-                    );
+                        ),
+                    };
                 })}
-            </nav>
+                activeId={oscillatorID}
+                ariaLabel="Oscillator editor"
+                dataRole="mobile-voice-tabs"
+                onSelect={(id) => {
+                    beginTabTransition(id);
+                    selection.selectOscillator(id as OscillatorID);
+                }}
+            />
 
+            <div ref={panelTransition.viewportRef} className="mobile-voice-panel-viewport">
+            <div ref={panelTransition.panelRef} className="mobile-voice-panel-live">
             {children}
 
             <div className="mobile-voice-unit">
@@ -789,6 +771,8 @@ export function MobileVoiceFocusedEditor({
             </div>
 
             {cellApi.hud}
+        </div>
+        </div>
         </div>
     );
 }
