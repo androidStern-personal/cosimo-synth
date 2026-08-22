@@ -223,6 +223,66 @@ processor LaneSecondDelayTest [[ main ]]
         out <- (windowPeak (echoSumFrame) > expectedPeakMinimum ? 1 : 0);
         advance();
 
+        // Frames 11-13: MODULATION reaches the pool instance. The lane mod bus
+        // (laneModIn, the pool's own reduced-offset inputs) drives delay #2's
+        // parameters exactly as rackModIn drives the base modules: mix as a
+        // linear offset, time in octaves.
+        // Claim A: slot mix param is 0 (no echo); a +0.5 bus offset on the mix
+        // lane makes the 90ms echo appear — modulation, not the base value.
+        wt::LaneSlotParamsUpload silentMix = makeDelayTwoParams();
+        silentMix.values[wt::laneDelayParamMix] = 0.0f;
+        rack.laneSlotParams <- silentMix;
+
+        for (int32 frame = 0; frame < 512; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            rack.laneModIn[wt::laneModDelayTwoMix] <- 0.5f;
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+
+        out <- (windowPeak (echoTwoFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+
+        // Claim B: without the bus offset the echo is gone again (the slot's
+        // own base mix is still 0) — the offset was doing the work.
+        for (int32 frame = 0; frame < 512; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            rack.laneModIn[wt::laneModDelayTwoMix] <- 0.0f;
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+
+        out <- (windowPeak (echoTwoFrame) < controlCeiling ? 1 : 0);
+        advance();
+
+        // Claim C: time modulates in OCTAVES: base 90ms with a -1 octave bus
+        // offset echoes at 45ms (frame 1984 at 44100), and no longer at 90ms.
+        rack.laneSlotParams <- makeDelayTwoParams();
+
+        // The delay line GLIDES time changes (40ms exponential constant):
+        // settle ~5 time constants so the -1 octave target is fully reached.
+        for (int32 frame = 0; frame < 12000; ++frame)
+        {
+            rack.laneModIn[wt::laneModDelayTwoTimeOctaves] <- -1.0f;
+            advanceRack (0.0f);
+        }
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            rack.laneModIn[wt::laneModDelayTwoTimeOctaves] <- -1.0f;
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+
+        out <- (windowPeak (1984) > expectedPeakMinimum && windowPeak (echoTwoFrame) < controlCeiling ? 1 : 0);
+        advance();
+
         loop
         {
             out <- 1;
