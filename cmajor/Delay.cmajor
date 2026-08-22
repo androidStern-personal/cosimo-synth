@@ -39,7 +39,7 @@ namespace wt
     //  candidate for the effect-local sleep ADR-005 permits: sleeping it would drop
     //  the tail it exists to produce.
     //
-    //  THE ONE EXPLICIT EXCEPTION is lineResetIn, which exists for the Effects Lane
+    //  THE ONE EXPLICIT EXCEPTION is poolResetIn, which exists for the Effects Lane
     //  pool lifecycle: a pool slot ENTERING a committed chain is a newly created
     //  device and must sound like one — an empty line, not a frozen tail from its
     //  previous life. Only the rack's commit path sends it, and never to a base
@@ -210,7 +210,7 @@ namespace wt
 
         // Lane pool lifecycle only (see the header note): clears the line and the
         // loop filter state so a slot entering a chain sounds like a new device.
-        input event int32 lineResetIn;
+        input event int32 poolResetIn;
 
         output stream float32<2> out;
 
@@ -237,7 +237,7 @@ namespace wt
             loopHighpassCoefficient = delayCoefficientForCutoff (sampleRate, delayLoopHighpassHz);
         }
 
-        event lineResetIn (int32 ignored)
+        event poolResetIn (int32 ignored)
         {
             for (wrap<delayChannelCount> channel)
             {

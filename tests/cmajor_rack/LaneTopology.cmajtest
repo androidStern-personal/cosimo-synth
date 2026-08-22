@@ -53,8 +53,7 @@ processor LaneSecondDelayTest [[ main ]]
         upload.chainLength = 2;
         upload.slotIds[0] = wt::rackModuleDelay;
         upload.slotIds[1] = wt::laneSlotDelayTwo;
-        upload.enabledFlags[wt::rackModuleDelay] = 1;
-        upload.enabledFlags[wt::laneSlotDelayTwo] = 1;
+        upload.enabledMask = (1 << wt::rackModuleDelay) | (1 << wt::laneSlotDelayTwo);
         return upload;
     }
 
@@ -165,7 +164,7 @@ processor LaneSecondDelayTest [[ main ]]
         duplicate.chainLength = 2;
         duplicate.slotIds[0] = wt::rackModuleDelay;
         duplicate.slotIds[1] = wt::rackModuleDelay;
-        duplicate.enabledFlags[wt::rackModuleDelay] = 1;
+        duplicate.enabledMask = 1 << wt::rackModuleDelay;
         rack.laneTopology <- duplicate;
 
         for (int32 frame = 0; frame < 64; ++frame)
@@ -181,7 +180,7 @@ processor LaneSecondDelayTest [[ main ]]
         wt::LaneTopologyUpload oneDelay;
         oneDelay.chainLength = 1;
         oneDelay.slotIds[0] = wt::rackModuleDelay;
-        oneDelay.enabledFlags[wt::rackModuleDelay] = 1;
+        oneDelay.enabledMask = 1 << wt::rackModuleDelay;
 
         // Feed an impulse, then IMMEDIATELY remove delay #2 so its 90ms echo is
         // still buffered, un-emitted, when the slot goes to sleep.
@@ -245,7 +244,7 @@ processor LaneSecondDelayTest [[ main ]]
 
         for (int32 frame = 0; frame < recordFrames; ++frame)
         {
-            rack.rackModIn[wt::rackModTargetLaneDelayTwoMix] <- 0.5f;
+            rack.rackModIn[wt::rackModTargetLaneDelayMix] <- 0.5f;
             advanceRack (frame == 0 ? 1.0f : 0.0f);
             recordedLeft.at (frame) = rack.out[0];
         }
@@ -260,7 +259,7 @@ processor LaneSecondDelayTest [[ main ]]
 
         for (int32 frame = 0; frame < recordFrames; ++frame)
         {
-            rack.rackModIn[wt::rackModTargetLaneDelayTwoMix] <- 0.0f;
+            rack.rackModIn[wt::rackModTargetLaneDelayMix] <- 0.0f;
             advanceRack (frame == 0 ? 1.0f : 0.0f);
             recordedLeft.at (frame) = rack.out[0];
         }
@@ -276,18 +275,87 @@ processor LaneSecondDelayTest [[ main ]]
         // settle ~5 time constants so the -1 octave target is fully reached.
         for (int32 frame = 0; frame < 12000; ++frame)
         {
-            rack.rackModIn[wt::rackModTargetLaneDelayTwoTimeOctaves] <- -1.0f;
+            rack.rackModIn[wt::rackModTargetLaneDelayTimeOctaves] <- -1.0f;
             advanceRack (0.0f);
         }
 
         for (int32 frame = 0; frame < recordFrames; ++frame)
         {
-            rack.rackModIn[wt::rackModTargetLaneDelayTwoTimeOctaves] <- -1.0f;
+            rack.rackModIn[wt::rackModTargetLaneDelayTimeOctaves] <- -1.0f;
             advanceRack (frame == 0 ? 1.0f : 0.0f);
             recordedLeft.at (frame) = rack.out[0];
         }
 
         out <- (windowPeak (1984) > expectedPeakMinimum && windowPeak (echoTwoFrame) < controlCeiling ? 1 : 0);
+        advance();
+
+        // Frames 14-15: a SECOND pool type proves the pattern generalizes,
+        // and the reverb's fresh-entry reset (the longest tail in the rack).
+        // A reverbTwo chain rings after an impulse; after removing and
+        // re-adding the slot, silence in means silence out — no frozen tail.
+        wt::LaneTopologyUpload reverbChain;
+        reverbChain.chainLength = 1;
+        reverbChain.slotIds[0] = wt::laneSlotReverbTwo;
+        reverbChain.enabledMask = 1 << wt::laneSlotReverbTwo;
+
+        wt::LaneSlotParamsUpload reverbParams;
+        reverbParams.slotId = wt::laneSlotReverbTwo;
+        reverbParams.deliverySerial = 9;
+        reverbParams.values[wt::laneReverbParamSize] = 0.7f;
+        reverbParams.values[wt::laneReverbParamDecay] = 0.8f;
+        reverbParams.values[wt::laneReverbParamDamping] = 0.2f;
+        reverbParams.values[wt::laneReverbParamMix] = 1.0f;
+        rack.laneSlotParams <- reverbParams;
+        rack.laneTopology <- reverbChain;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        // Impulse, then measure tail energy 300-800ms later.
+        advanceRack (1.0f);
+        var reverbTailPeak = 0.0f;
+
+        for (int32 frame = 0; frame < 36000; ++frame)
+        {
+            advanceRack (0.0f);
+            let magnitude = std::intrinsics::abs (rack.out[0]);
+
+            if (frame > 13000 && magnitude > reverbTailPeak)
+                reverbTailPeak = magnitude;
+        }
+
+        out <- (reverbTailPeak > 0.002f ? 1 : 0);
+        advance();
+
+        // Load the tail again, remove the slot mid-ring, re-add it: the
+        // commit reset must leave NOTHING of the old ring.
+        advanceRack (1.0f);
+
+        for (int32 frame = 0; frame < 2000; ++frame)
+            advanceRack (0.0f);
+
+        rack.laneTopology <- oneDelay;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        rack.laneTopology <- reverbChain;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        var stalePeakReverb = 0.0f;
+
+        for (int32 frame = 0; frame < 24000; ++frame)
+        {
+            advanceRack (0.0f);
+            let magnitude = std::intrinsics::abs (rack.out[0]);
+
+            if (magnitude > stalePeakReverb)
+                stalePeakReverb = magnitude;
+        }
+
+        out <- (stalePeakReverb < controlCeiling ? 1 : 0);
         advance();
 
         loop

@@ -1,29 +1,32 @@
 /**
- * Effects Lane modulation target kinds (M1 slice 3).
+ * Effects Lane modulation target kinds (M1).
  *
  * `lane.<instanceId>.<endpointID>` names ONE pool device's parameter — e.g.
  * `lane.delay#2.delayTime`. Lane kinds are per-patch DYNAMIC: they exist only
  * while their device instance does, so they never join the static legal-pair
  * domain; the compiler resolves them through the patch's slot assignments
- * into the pool block of the one rackMod bus (engine indices from
- * MODULATION_RACK_TARGET_COUNT upward, matching cmajor's
- * rackModStaticTargetCount + laneModPoolTargetCount layout).
+ * into the pool block of the one rackMod bus.
  *
- * A lane device speaks its type's canonical modulation language: each pool
- * endpoint mirrors the SAME-named base-module rack target for units, limits,
- * clamping, and readout formatting. One language per parameter, wherever it
- * lives.
+ * The pool block MIRRORS the static vocabulary one for one (engine:
+ * laneModPoolTargetCount = rackModStaticTargetCount): a pool parameter's bus
+ * index is the static count plus its mirror target's static index, derived —
+ * never hand-numbered — so the two vocabularies cannot drift. A lane device
+ * speaks its type's canonical modulation language: units, limits, clamping,
+ * and readout formatting all defer to the same-named base-module target.
  */
 
 import {
     MODULATION_RACK_TARGET_COUNT,
+    getRackModulationTargetIndex,
     type RackModulationTargetKind,
 } from "./modulation-targets";
 
-/** Pool lanes on the rackMod bus (M1: the pool delay's four destinations). */
-export const MODULATION_LANE_POOL_TARGET_COUNT = 4;
+/** Pool lanes on the rackMod bus: a complete mirror of the static vocabulary. */
+export const MODULATION_LANE_POOL_TARGET_COUNT = MODULATION_RACK_TARGET_COUNT;
 
-export type LaneDeviceType = "delay";
+export type LaneDeviceType =
+    | "globalFilter" | "distortion" | "ott" | "chorus"
+    | "flanger" | "phaser" | "delay" | "reverb";
 
 export type ParsedLaneModulationTarget = {
     readonly instanceId: string;
@@ -31,26 +34,24 @@ export type ParsedLaneModulationTarget = {
     readonly endpointID: string;
 };
 
-/** instanceId -> the device's pool-slot base lane offset within the block. */
+/** instanceId -> pool-instance ordinal. M1 pools carry ONE instance per type
+    (ordinal 0); any other ordinal resolves to no slot. */
 export type LaneSlotAssignments = ReadonlyMap<string, number>;
 
-type LaneEndpointSpec = {
-    readonly endpointID: string;
-    readonly laneOffset: number;
-    /** Units/limits/format authority: the same-named base-module target. */
-    readonly mirrorRackKind: RackModulationTargetKind;
-};
-
-const LANE_DEVICE_ENDPOINTS: ReadonlyMap<LaneDeviceType, ReadonlyArray<LaneEndpointSpec>> = new Map([
-    ["delay", [
-        { endpointID: "delayTime", laneOffset: 0, mirrorRackKind: "rack.delayTime" },
-        { endpointID: "delayFeedback", laneOffset: 1, mirrorRackKind: "rack.delayFeedback" },
-        { endpointID: "delayFilter", laneOffset: 2, mirrorRackKind: "rack.delayFilter" },
-        { endpointID: "delayMix", laneOffset: 3, mirrorRackKind: "rack.delayMix" },
-    ]],
+/** Modulatable pool endpoints per device type; the mirror target is always
+    `rack.<endpointID>`. */
+const LANE_DEVICE_ENDPOINTS: ReadonlyMap<LaneDeviceType, ReadonlyArray<string>> = new Map([
+    ["globalFilter", ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"]],
+    ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"]],
+    ["ott", ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"]],
+    ["chorus", ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones"]],
+    ["flanger", ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"]],
+    ["phaser", ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"]],
+    ["delay", ["delayTime", "delayFeedback", "delayFilter", "delayMix"]],
+    ["reverb", ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]],
 ]);
 
-const LANE_KIND_PATTERN = /^lane\.([a-z]+)#([1-9][0-9]*)\.([A-Za-z0-9]+)$/;
+const LANE_KIND_PATTERN = /^lane\.([a-zA-Z]+)#([1-9][0-9]*)\.([A-Za-z0-9]+)$/;
 
 /** Parse an untrusted lane target without accepting unknown devices/params. */
 export function parseLaneModulationTargetKind(value: unknown): ParsedLaneModulationTarget | null {
@@ -67,7 +68,7 @@ export function parseLaneModulationTargetKind(value: unknown): ParsedLaneModulat
         return null;
     }
     const endpointID = match[3];
-    if (!endpoints.some((endpoint) => endpoint.endpointID === endpointID)) {
+    if (!endpoints.includes(endpointID)) {
         return null;
     }
     return {
@@ -77,24 +78,15 @@ export function parseLaneModulationTargetKind(value: unknown): ParsedLaneModulat
     };
 }
 
-function laneEndpointSpec(parsed: ParsedLaneModulationTarget): LaneEndpointSpec {
-    const endpoints = LANE_DEVICE_ENDPOINTS.get(parsed.deviceType);
-    const spec = endpoints?.find((endpoint) => endpoint.endpointID === parsed.endpointID);
-    if (spec === undefined) {
-        throw new Error(`Unknown lane endpoint ${parsed.deviceType}.${parsed.endpointID}`);
-    }
-    return spec;
-}
-
 /** The base-module rack target that owns this lane parameter's language. */
 export function laneMirrorRackKind(parsed: ParsedLaneModulationTarget): RackModulationTargetKind {
-    return laneEndpointSpec(parsed).mirrorRackKind;
+    return `rack.${parsed.endpointID}` as RackModulationTargetKind;
 }
 
 /**
  * Resolve a parsed lane target to its engine bus index through the patch's
- * slot assignments. Null = the instance holds no pool slot (device deleted):
- * the route stays stored but compiles to nothing.
+ * slot assignments. Null = the instance holds no pool slot (device deleted or
+ * beyond the pool): the route stays stored but compiles to nothing.
  */
 export function getLaneModulationTargetIndex(
     parsed: ParsedLaneModulationTarget | null,
@@ -103,9 +95,9 @@ export function getLaneModulationTargetIndex(
     if (parsed === null) {
         return null;
     }
-    const slotBase = assignments.get(parsed.instanceId);
-    if (slotBase === undefined) {
+    const ordinal = assignments.get(parsed.instanceId);
+    if (ordinal !== 0) {
         return null;
     }
-    return MODULATION_RACK_TARGET_COUNT + slotBase + laneEndpointSpec(parsed).laneOffset;
+    return MODULATION_RACK_TARGET_COUNT + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
 }

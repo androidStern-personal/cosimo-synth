@@ -209,6 +209,12 @@ namespace wt
         // Internal plumbing, not a host parameter - see the note at the top of the file.
         input value float32 tempoBpmIn [[ init: 120.0f, rampFrames: 0 ]];
 
+        // Effects Lane pool lifecycle only: a pool slot entering a committed
+        // chain is a newly created device and must sound like one — empty
+        // audio memory, never touched parameters. Only the rack's commit path
+        // sends this, and never to a base instance.
+        input event int32 poolResetIn;
+
         output stream float32<2> out;
 
         // The whole of the module's state: eight second-order sections, one feedback
@@ -220,6 +226,19 @@ namespace wt
         float32 lfoPhase;
         int32 framesUntilCoefficientUpdate;
         bool sectionsAreAsleep = true;
+
+
+        event poolResetIn (int32 ignored)
+        {
+            for (wrap<phaserSectionCount> section)
+                for (wrap<phaserChannelCount> channel)
+                    sections[section, channel].reset();
+
+            feedbackState = ();
+            lfoPhase = 0.0f;
+            // Force the section frequencies to recompute on the next frame.
+            framesUntilCoefficientUpdate = 0;
+        }
 
         void init()
         {

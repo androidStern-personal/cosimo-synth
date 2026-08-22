@@ -71,7 +71,9 @@ namespace wt
     // validation, and the rackMod bus all run at the TOTAL width; the static
     // count remains the contiguous named-vocabulary pin.
     let rackModStaticTargetCount = 36;
-    let laneModPoolTargetCount = 4;
+    // The pool block MIRRORS the static vocabulary one-for-one (one extra
+    // resident instance per effect type), so the bus is exactly twice wide.
+    let laneModPoolTargetCount = rackModStaticTargetCount;
     let rackModTargetCount = rackModStaticTargetCount + laneModPoolTargetCount;
     let modulationVoiceRouteCellCount = modulationVoiceSourceCount * modulationVoiceTargetCount;
     let modulationMacroVoiceRouteCellCount = modulationMacroSourceCount * modulationVoiceTargetCount;

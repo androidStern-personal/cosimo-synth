@@ -24,6 +24,7 @@ bool testCompleteMappingDomainCellCountsArePinned()
             + wt::modulationVoiceRackRouteCellCount
             + wt::modulationMacroRackRouteCellCount
         == 1131 + ((wt::modulationVoiceSourceCount + wt::modulationMacroSourceCount) * wt::laneModPoolTargetCount);
+    // (13 sources x 36 mirror lanes = 468 pool cells; static pairs stay 1,131.)
 }
 
 bool testRackDestinationVocabularyIsCompleteAndContiguous()
@@ -34,10 +35,10 @@ bool testRackDestinationVocabularyIsCompleteAndContiguous()
     return wt::rackModStaticTargetCount == 36
         && wt::rackModTargetGlobalFilterCutoffOctaves == 0
         && wt::rackModTargetReverbMix == wt::rackModStaticTargetCount - 1
-        && wt::rackModTargetLaneDelayTwoTimeOctaves == wt::rackModStaticTargetCount
-        && wt::rackModTargetLaneDelayTwoMix == wt::rackModTargetCount - 1
-        && wt::laneModPoolTargetCount == 4
-        && wt::rackModTargetCount == 40;
+        && wt::rackModTargetLaneGlobalFilterCutoffOctaves == wt::rackModStaticTargetCount
+        && wt::rackModTargetLaneReverbMix == wt::rackModTargetCount - 1
+        && wt::laneModPoolTargetCount == wt::rackModStaticTargetCount
+        && wt::rackModTargetCount == 72;
 }
 
 bool testRackSmoothingAndReleaseTimingContractsArePinned()

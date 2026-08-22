@@ -121,6 +121,12 @@ namespace wt
         input value float32 dampingIn [[ name: "Reverb Damping", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
         input value float32 mixIn     [[ name: "Reverb Mix",     min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
 
+        // Effects Lane pool lifecycle only: a pool slot entering a committed
+        // chain is a newly created device and must sound like one — empty
+        // audio memory, never touched parameters. Only the rack's commit path
+        // sends this, and never to a base instance.
+        input event int32 poolResetIn;
+
         output stream float32<2> out;
 
         let reverbLineBufferSize = int (processor.maxFrequency * reverbMaxLineMs * 0.001f) + 8;
@@ -148,6 +154,24 @@ namespace wt
         float32 currentSize = -1.0f;
         float32 currentDecay = -1.0f;
         float32 currentDamping = -1.0f;
+
+
+        event poolResetIn (int32 ignored)
+        {
+            lineBuffers = ();
+            lineWritePositions = ();
+            diffusionBuffers = ();
+            diffusionWritePositions = ();
+            diffusionPhases = ();
+
+            for (wrap<reverbLineCount> line)
+                dampingFilters[line].reset();
+
+            // Sentinels force size/decay/damping-derived values to recompute.
+            currentSize = -1.0f;
+            currentDecay = -1.0f;
+            currentDamping = -1.0f;
+        }
 
         void init()
         {

@@ -95,13 +95,46 @@ namespace wt
     let rackModTargetReverbDamping              = 34;
     let rackModTargetReverbMix                  = 35;
 
-    // Effects Lane pool block (indices rackModStaticTargetCount..): the pool
-    // delay's destinations, same unit conventions as the base delay (time and
-    // filter in octaves, feedback and mix linear).
-    let rackModTargetLaneDelayTwoTimeOctaves    = 36;
-    let rackModTargetLaneDelayTwoFeedback       = 37;
-    let rackModTargetLaneDelayTwoFilterOctaves  = 38;
-    let rackModTargetLaneDelayTwoMix            = 39;
+    // Effects Lane pool block: a complete MIRROR of the static vocabulary at
+    // indices rackModStaticTargetCount.. — one lane per pool instance's
+    // destination, derived (never hand-numbered) so the two vocabularies can
+    // never drift. Same unit conventions as the mirrored base target.
+    let rackModTargetLaneGlobalFilterCutoffOctaves = rackModStaticTargetCount + rackModTargetGlobalFilterCutoffOctaves;
+    let rackModTargetLaneGlobalFilterResonance = rackModStaticTargetCount + rackModTargetGlobalFilterResonance;
+    let rackModTargetLaneGlobalFilterDrive = rackModStaticTargetCount + rackModTargetGlobalFilterDrive;
+    let rackModTargetLaneDistortionDriveDb = rackModStaticTargetCount + rackModTargetDistortionDriveDb;
+    let rackModTargetLaneDistortionKnee = rackModStaticTargetCount + rackModTargetDistortionKnee;
+    let rackModTargetLaneDistortionWet = rackModStaticTargetCount + rackModTargetDistortionWet;
+    let rackModTargetLaneDistortionWetHPOctaves = rackModStaticTargetCount + rackModTargetDistortionWetHPOctaves;
+    let rackModTargetLaneDistortionWetLPOctaves = rackModStaticTargetCount + rackModTargetDistortionWetLPOctaves;
+    let rackModTargetLaneOttMix = rackModStaticTargetCount + rackModTargetOttMix;
+    let rackModTargetLaneOttAmount = rackModStaticTargetCount + rackModTargetOttAmount;
+    let rackModTargetLaneOttTimePercent = rackModStaticTargetCount + rackModTargetOttTimePercent;
+    let rackModTargetLaneOttBandDrive = rackModStaticTargetCount + rackModTargetOttBandDrive;
+    let rackModTargetLaneOttEnvelopeMatch = rackModStaticTargetCount + rackModTargetOttEnvelopeMatch;
+    let rackModTargetLaneChorusMix = rackModStaticTargetCount + rackModTargetChorusMix;
+    let rackModTargetLaneChorusTone = rackModStaticTargetCount + rackModTargetChorusTone;
+    let rackModTargetLaneChorusFeedback = rackModStaticTargetCount + rackModTargetChorusFeedback;
+    let rackModTargetLaneChorusRingAmount = rackModStaticTargetCount + rackModTargetChorusRingAmount;
+    let rackModTargetLaneChorusRingFineSemitones = rackModStaticTargetCount + rackModTargetChorusRingFineSemitones;
+    let rackModTargetLaneFlangerRate = rackModStaticTargetCount + rackModTargetFlangerRate;
+    let rackModTargetLaneFlangerDepth = rackModStaticTargetCount + rackModTargetFlangerDepth;
+    let rackModTargetLaneFlangerFeedback = rackModStaticTargetCount + rackModTargetFlangerFeedback;
+    let rackModTargetLaneFlangerMix = rackModStaticTargetCount + rackModTargetFlangerMix;
+    let rackModTargetLanePhaserRate = rackModStaticTargetCount + rackModTargetPhaserRate;
+    let rackModTargetLanePhaserDepth = rackModStaticTargetCount + rackModTargetPhaserDepth;
+    let rackModTargetLanePhaserFrequencyOctaves = rackModStaticTargetCount + rackModTargetPhaserFrequencyOctaves;
+    let rackModTargetLanePhaserFeedback = rackModStaticTargetCount + rackModTargetPhaserFeedback;
+    let rackModTargetLanePhaserPhase = rackModStaticTargetCount + rackModTargetPhaserPhase;
+    let rackModTargetLanePhaserMix = rackModStaticTargetCount + rackModTargetPhaserMix;
+    let rackModTargetLaneDelayTimeOctaves = rackModStaticTargetCount + rackModTargetDelayTimeOctaves;
+    let rackModTargetLaneDelayFeedback = rackModStaticTargetCount + rackModTargetDelayFeedback;
+    let rackModTargetLaneDelayFilterOctaves = rackModStaticTargetCount + rackModTargetDelayFilterOctaves;
+    let rackModTargetLaneDelayMix = rackModStaticTargetCount + rackModTargetDelayMix;
+    let rackModTargetLaneReverbSize = rackModStaticTargetCount + rackModTargetReverbSize;
+    let rackModTargetLaneReverbDecay = rackModStaticTargetCount + rackModTargetReverbDecay;
+    let rackModTargetLaneReverbDamping = rackModStaticTargetCount + rackModTargetReverbDamping;
+    let rackModTargetLaneReverbMix = rackModStaticTargetCount + rackModTargetReverbMix;
 
     //==============================================================================
     // Timing.

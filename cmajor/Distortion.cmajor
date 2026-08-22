@@ -116,6 +116,12 @@ namespace wt
         input value float32 wetHPHzIn [[ init: 40.0f ]];
         input value float32 wetLPHzIn [[ init: 18000.0f ]];
 
+        // Effects Lane pool lifecycle only: a pool slot entering a committed
+        // chain is a newly created device and must sound like one — empty
+        // audio memory, never touched parameters. Only the rack's commit path
+        // sends this, and never to a base instance.
+        input event int32 poolResetIn;
+
         output stream float32<2> out;
         output stream float32 previewInputLeft;
         output stream float32 previewInputRight;
@@ -137,6 +143,19 @@ namespace wt
         );
         var classicDcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
         var residueDcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
+
+
+        event poolResetIn (int32 ignored)
+        {
+            // The oversampled cores are memoryless; the band filters and DC
+            // blockers are the module's only audio memory. Coefficients are
+            // preserved — reset() clears state only. The preview-scope
+            // history is diagnostic, not audio, and is left alone.
+            wetHighPass.reset();
+            wetLowPass.reset();
+            classicDcBlocker.reset();
+            residueDcBlocker.reset();
+        }
 
         float32 currentWetHPHz = 40.0f;
         float32 currentWetLPHz = 18000.0f;

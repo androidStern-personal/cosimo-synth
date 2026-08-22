@@ -486,6 +486,12 @@ namespace wt
         input value float32 bandDriveIn [[ init: 0.0f ]];
         input value float32 envelopeMatchIn [[ init: 0.0f ]];
 
+        // Effects Lane pool lifecycle only: a pool slot entering a committed
+        // chain is a newly created device and must sound like one — empty
+        // audio memory, never touched parameters. Only the rack's commit path
+        // sends this, and never to a base instance.
+        input event int32 poolResetIn;
+
         output stream float32<2> out;
 
         // ADR-008: no lookahead, so there is no processor.latency declaration to
@@ -526,6 +532,17 @@ namespace wt
         OttBandDynamicsState midDynamics;
         OttBandDynamicsState highDynamics;
         OttBroadbandEnvelopeMatcher envelopeMatcher;
+
+
+        event poolResetIn (int32 ignored)
+        {
+            lowMidCrossover.reset();
+            midHighCrossover.reset();
+            lowDynamics = ();
+            midDynamics = ();
+            highDynamics = ();
+            envelopeMatcher = ();
+        }
 
         void updateTimeCoefficients()
         {

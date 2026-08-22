@@ -95,6 +95,12 @@ namespace wt
         input value float32 resonanceIn [[ init: 0.707107f ]];
         input value float32 driveIn     [[ init: 0.0f ]];
 
+        // Effects Lane pool lifecycle only: a pool slot entering a committed
+        // chain is a newly created device and must sound like one — empty
+        // audio memory, never touched parameters. Only the rack's commit path
+        // sends this, and never to a base instance.
+        input event int32 poolResetIn;
+
         output stream float32<2> out;
 
         // ADR-008 / rack invariant C10, enforced at compile time rather than by review.
@@ -106,9 +112,21 @@ namespace wt
 
         std::filters::simper::Implementation[globalFilterChannelCount] filters;
 
+
         int32 currentMode = filterModeOff;
         float32 currentCutoffHz = 0.0f;
         float32 currentQ = 0.0f;
+
+        event poolResetIn (int32 ignored)
+        {
+            for (wrap<globalFilterChannelCount> channel)
+                filters[channel].reset();
+
+            // Cache sentinels force full reconfiguration on the next write.
+            currentMode = filterModeOff;
+            currentCutoffHz = 0.0f;
+            currentQ = 0.0f;
+        }
 
         void resetFilterState()
         {

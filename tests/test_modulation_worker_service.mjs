@@ -37,9 +37,9 @@ const laneTails = [
         polarities: "voiceRackRoutePolarities",
         amounts: "voiceRackRouteAmounts",
         reducers: "voiceRackRouteReducers",
-        // Rack cell indices run at the bus width (static 36 + lane pool 4):
-        // final static voiceRack pair = 8*40 + 35.
-        expected: { count: 324, cellIndex: 355, sourceIndex: 8, targetIndex: 35, polarity: 0 },
+        // Rack cell indices run at the bus width (static 36 + full pool
+        // mirror 36 = 72): final static voiceRack pair = 8*72 + 35.
+        expected: { count: 324, cellIndex: 611, sourceIndex: 8, targetIndex: 35, polarity: 0 },
     },
     {
         count: "macroRackRouteCount",
@@ -48,8 +48,8 @@ const laneTails = [
         targets: "macroRackRouteTargets",
         polarities: "macroRackRoutePolarities",
         amounts: "macroRackRouteAmounts",
-        // Final static macroRack pair = 3*40 + 35.
-        expected: { count: 144, cellIndex: 155, sourceIndex: 3, targetIndex: 35, polarity: 0 },
+        // Final static macroRack pair = 3*72 + 35.
+        expected: { count: 144, cellIndex: 251, sourceIndex: 3, targetIndex: 35, polarity: 0 },
     },
 ];
 

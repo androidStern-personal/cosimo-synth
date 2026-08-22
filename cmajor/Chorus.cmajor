@@ -128,6 +128,12 @@ namespace wt
         input value float32 ringOffsetModeIn [[ name: "Chorus Ring Pitch", min: 0.0f, max: 3.0f, init: 0.0f, discrete: true, step: 1.0f, text: "+5th|Low 5th|+Oct|-Oct", rampFrames: 0 ]];
         input value float32 ringFineSemitonesIn [[ name: "Chorus Ring Fine", min: -2.0f, max: 2.0f, init: 0.0f, unit: "st", rampFrames: 128 ]];
 
+        // Effects Lane pool lifecycle only: a pool slot entering a committed
+        // chain is a newly created device and must sound like one — empty
+        // audio memory, never touched parameters. Only the rack's commit path
+        // sends this, and never to a base instance.
+        input event int32 poolResetIn;
+
         output stream float32<2> out;
 
         let chorusBufferSize = int (processor.maxFrequency * chorusMaxDelayMs * 0.001f) + 8;
@@ -157,6 +163,28 @@ namespace wt
         float32[chorusGroupCount] shimmerPhase;
         float32 ringPhase;
         float32 trackedRingHz;
+
+
+        event poolResetIn (int32 ignored)
+        {
+            delayBuffers = ();
+            delayWritePositions = ();
+            loopHighpassState = ();
+            loopLowpassState = ();
+            regenInjectionState = ();
+            diffusionBuffers = ();
+            diffusionWritePositions = ();
+            shimmerBuffers = ();
+            shimmerWritePositions = ();
+            shimmerLowpassState = ();
+            driftValue = ();
+            driftTarget = ();
+            driftCounter = ();
+            lfoPhase = 0.0f;
+            shimmerPhase = ();
+            ringPhase = 0.0f;
+            trackedRingHz = 0.0f;
+        }
 
         void init()
         {
