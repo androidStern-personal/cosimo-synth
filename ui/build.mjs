@@ -108,6 +108,7 @@ if (shouldBuild("--desktop") || shouldBuild("--desktop-runtime") || shouldBuild(
     await emitGeneratedPatchGuiModule("ui/shared/target-descriptor.ts", "patch_gui/target-descriptor.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation-runtime-program.ts", "patch_gui/modulation-runtime-program.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation-targets.ts", "patch_gui/modulation-targets.js");
+    await emitGeneratedPatchGuiModule("ui/shared/lane-modulation-targets.ts", "patch_gui/lane-modulation-targets.js");
     await emitGeneratedPatchGuiModule("ui/shared/user-edit-bus.ts", "patch_gui/user-edit-bus.js");
     await emitGeneratedPatchGuiModule("ui/shared/modulation.ts", "patch_gui/modulation.js");
     await emitGeneratedPatchGuiModule("ui/shared/rack-route-presentation.ts", "patch_gui/rack-route-presentation.js");

@@ -6,6 +6,12 @@
 
 import type { ModulationRoute, ModulationTargetKind } from "./modulation";
 import {
+    MODULATION_LANE_POOL_TARGET_COUNT,
+    getLaneModulationTargetIndex,
+    parseLaneModulationTargetKind,
+    type LaneSlotAssignments,
+} from "./lane-modulation-targets";
+import {
     MODULATION_SOURCE_IDENTITIES,
     MODULATION_RACK_TARGET_COUNT as CANONICAL_RACK_TARGET_COUNT,
     MODULATION_VOICE_TARGET_COUNT as CANONICAL_VOICE_TARGET_COUNT,
@@ -36,8 +42,14 @@ export const MODULATION_MACRO_SOURCE_COUNT = MODULATION_SOURCE_IDENTITIES
 /** Number of voice-local destinations. */
 export const MODULATION_VOICE_TARGET_COUNT = CANONICAL_VOICE_TARGET_COUNT;
 
-/** Number of global rack destinations. */
+/** Number of STATIC global rack destinations (the enumerable legal domain). */
 export const MODULATION_RACK_TARGET_COUNT = CANONICAL_RACK_TARGET_COUNT;
+
+/** The rackMod bus width: the static vocabulary plus the Effects Lane pool
+    block (per-patch dynamic lane devices). Mirrors cmajor's
+    rackModStaticTargetCount + laneModPoolTargetCount — cell tables and cell
+    index math run at this TOTAL on both sides of the wire. */
+export const MODULATION_RACK_TARGET_TOTAL = MODULATION_RACK_TARGET_COUNT + MODULATION_LANE_POOL_TARGET_COUNT;
 
 /** Complete voice-source to voice-target mapping domain. */
 export const MODULATION_VOICE_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_VOICE_TARGET_COUNT;
@@ -45,21 +57,23 @@ export const MODULATION_VOICE_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT *
 /** Complete Macro to voice-target mapping domain. */
 export const MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_COUNT * MODULATION_VOICE_TARGET_COUNT;
 
-/** Complete voice-source to rack-target mapping domain. */
-export const MODULATION_VOICE_RACK_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_RACK_TARGET_COUNT;
+/** Voice-source rack cell table (wire width: static + lane pool). */
+export const MODULATION_VOICE_RACK_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_RACK_TARGET_TOTAL;
 
-/** Complete Macro to rack-target mapping domain. */
-export const MODULATION_MACRO_RACK_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_COUNT * MODULATION_RACK_TARGET_COUNT;
+/** Macro rack cell table (wire width: static + lane pool). */
+export const MODULATION_MACRO_RACK_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_COUNT * MODULATION_RACK_TARGET_TOTAL;
 
 /** Number of voice-destination cells that can carry per-note articulation amounts. */
 export const MODULATION_ARTICULATION_ROUTE_CELL_COUNT = MODULATION_VOICE_ROUTE_CELL_COUNT
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT;
 
-/** Number of legal source/target pairs in Cosimo's closed modulation domain. */
+/** Number of legal source/target pairs in the closed STATIC modulation
+    domain (1,131). Lane-pool pairs are per-patch dynamic and deliberately
+    excluded: they exist only while their device instance does. */
 export const MODULATION_MAPPING_CELL_COUNT = MODULATION_VOICE_ROUTE_CELL_COUNT
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT
-    + MODULATION_VOICE_RACK_ROUTE_CELL_COUNT
-    + MODULATION_MACRO_RACK_ROUTE_CELL_COUNT;
+    + (MODULATION_VOICE_SOURCE_COUNT * MODULATION_RACK_TARGET_COUNT)
+    + (MODULATION_MACRO_SOURCE_COUNT * MODULATION_RACK_TARGET_COUNT);
 
 /** The four execution paths have different source lifetime and reduction rules. */
 export type ModulationRuntimePath = "voice" | "macroVoice" | "voiceRack" | "macroRack";
@@ -178,10 +192,22 @@ function voiceTargetIndex(targetKind: ModulationTargetKind): number | null {
  * @param route - A normalized declarative mapping.
  * @returns Its execution path and deterministic cell coordinates.
  */
-export function getModulationRuntimeCell(route: ModulationRoute): ModulationRuntimeCell {
+export function getModulationRuntimeCell(
+    route: ModulationRoute,
+    laneAssignments: LaneSlotAssignments = EMPTY_LANE_ASSIGNMENTS,
+): ModulationRuntimeCell {
     const voiceTarget = voiceTargetIndex(route.targetKind);
     const rackTargetKind = parseRackModulationTargetKind(route.targetKind);
-    const rackTarget = rackTargetKind === null ? undefined : getRackModulationTargetIndex(rackTargetKind);
+    let rackTarget = rackTargetKind === null ? undefined : getRackModulationTargetIndex(rackTargetKind);
+
+    if (rackTarget === undefined) {
+        // Lane kinds address the pool block through the patch's assignments.
+        const laneIndex = getLaneModulationTargetIndex(
+            parseLaneModulationTargetKind(route.targetKind), laneAssignments);
+        if (laneIndex !== null) {
+            rackTarget = laneIndex;
+        }
+    }
 
     if (voiceTarget === null && rackTarget === undefined) {
         throw new Error(`Unknown modulation target: ${route.targetKind}`);
@@ -207,7 +233,7 @@ export function getModulationRuntimeCell(route: ModulationRoute): ModulationRunt
         const targetIndex = rackTarget ?? 0;
         return {
             path: "macroRack",
-            cellIndex: sourceIndex * MODULATION_RACK_TARGET_COUNT + targetIndex,
+            cellIndex: sourceIndex * MODULATION_RACK_TARGET_TOTAL + targetIndex,
             sourceIndex,
             targetIndex,
             articulationCellIndex: null,
@@ -229,7 +255,7 @@ export function getModulationRuntimeCell(route: ModulationRoute): ModulationRunt
     const targetIndex = rackTarget ?? 0;
     return {
         path: "voiceRack",
-        cellIndex: sourceIndex * MODULATION_RACK_TARGET_COUNT + targetIndex,
+        cellIndex: sourceIndex * MODULATION_RACK_TARGET_TOTAL + targetIndex,
         sourceIndex,
         targetIndex,
         articulationCellIndex: null,
@@ -247,9 +273,21 @@ export function getModulationArticulationCellIndex(route: ModulationRoute): numb
     return getModulationRuntimeCell(route).articulationCellIndex;
 }
 
-function compileRoute(route: ModulationRoute): CompiledRoute {
+const EMPTY_LANE_ASSIGNMENTS: LaneSlotAssignments = new Map();
+
+/** A lane route whose instance holds no pool slot compiles to nothing. */
+function laneRouteIsUnassigned(route: ModulationRoute, laneAssignments: LaneSlotAssignments): boolean {
+    const parsedLane = parseLaneModulationTargetKind(route.targetKind);
+    return parsedLane !== null
+        && getLaneModulationTargetIndex(parsedLane, laneAssignments) === null;
+}
+
+function compileRoute(
+    route: ModulationRoute,
+    laneAssignments: LaneSlotAssignments,
+): CompiledRoute {
     return {
-        ...getModulationRuntimeCell(route),
+        ...getModulationRuntimeCell(route, laneAssignments),
         enabled: route.enabled,
         polarity: route.polarity === "bipolar" ? 1 : 0,
         reducer: route.reducer === "mean" ? 2 : 1,
@@ -259,7 +297,10 @@ function compileRoute(route: ModulationRoute): CompiledRoute {
 
 type CompiledRoutesByPath = Record<ModulationRuntimePath, Map<number, CompiledRoute>>;
 
-function createCompiledRoutesByPath(routes: ReadonlyArray<ModulationRoute>): CompiledRoutesByPath {
+function createCompiledRoutesByPath(
+    routes: ReadonlyArray<ModulationRoute>,
+    laneAssignments: LaneSlotAssignments = EMPTY_LANE_ASSIGNMENTS,
+): CompiledRoutesByPath {
     const routesByPath: CompiledRoutesByPath = {
         voice: new Map(),
         macroVoice: new Map(),
@@ -268,7 +309,10 @@ function createCompiledRoutesByPath(routes: ReadonlyArray<ModulationRoute>): Com
     };
 
     for (const route of routes) {
-        const compiled = compileRoute(route);
+        if (laneRouteIsUnassigned(route, laneAssignments)) {
+            continue;
+        }
+        const compiled = compileRoute(route, laneAssignments);
         const pathRoutes = routesByPath[compiled.path];
         if (pathRoutes.has(compiled.cellIndex)) {
             throw new Error(`Duplicate modulation route cell ${compiled.path}:${compiled.cellIndex}`);
@@ -321,8 +365,9 @@ function copyActiveRouteFields(
  */
 export function compileModulationRuntimeProgram(
     routes: ReadonlyArray<ModulationRoute>,
+    laneAssignments: LaneSlotAssignments = EMPTY_LANE_ASSIGNMENTS,
 ): ModulationRuntimeProgramUpload {
-    const routesByPath = createCompiledRoutesByPath(routes);
+    const routesByPath = createCompiledRoutesByPath(routes, laneAssignments);
 
     const voiceRoutes = sortedActiveRoutes(routesByPath.voice);
     const macroVoiceRoutes = sortedActiveRoutes(routesByPath.macroVoice);

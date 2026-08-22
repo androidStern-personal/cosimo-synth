@@ -102,16 +102,6 @@ namespace wt
     let laneDelayParamFilterHz = 2;
     let laneDelayParamMix      = 3;
 
-    // The pool's own reduced-modulation bus, the exact shape of rackModIn for
-    // the base modules: one lane per modulatable pool destination, offsets in
-    // the destination's own units (octaves for frequency-like, linear else).
-    // Unconnected in the product graph until the lane program lands (slice 3)
-    // - an unconnected stream input reads 0.0f, which is "unmodulated".
-    let laneModDelayTwoTimeOctaves   = 0;
-    let laneModDelayTwoFeedback      = 1;
-    let laneModDelayTwoFilterOctaves = 2;
-    let laneModDelayTwoMix           = 3;
-    let laneModTargetCount           = 4;
 
     // Distortion.cmajor:144-160's rule, in octave units: 0.001 octaves is 0.07% of a
     // frequency, so recomputing pow() below that buys nothing.
@@ -314,9 +304,6 @@ namespace wt
         // carried from wt::SharedVoiceEngine in a single graph connection. See
         // VoiceReducer.cmajor for the vocabulary and the reduction itself.
         input stream float32 rackModIn[rackModTargetCount];
-
-        // The pool's reduced-modulation bus (see the constants above).
-        input stream float32 laneModIn[laneModTargetCount];
 
         // Host transport tempo, for the phaser's and delay's sync modes. Declared the
         // way the modules declare theirs - no `name:`, so it is plumbing rather than a
@@ -814,19 +801,19 @@ namespace wt
             delayTwo.timeMsIn <- clampDelayTimeMs (
                 delayTwoParams[laneDelayParamTimeMs]
                     * rackOctaveScale (octaveScalers[rackOctaveScalerDelayTwoTime],
-                                       laneModIn[laneModDelayTwoTimeOctaves]));
+                                       rackModIn[rackModTargetLaneDelayTwoTimeOctaves]));
             delayTwo.timeModeIn <- 0.0f;
             delayTwo.divisionIn <- 0.0f;
             delayTwo.feedbackIn <- clampDelayFeedback (
                 rackModulateLinear (delayTwoParams[laneDelayParamFeedback],
-                                    laneModIn[laneModDelayTwoFeedback]));
+                                    rackModIn[rackModTargetLaneDelayTwoFeedback]));
             delayTwo.filterHzIn <- clampDelayFilterHz (
                 delayTwoParams[laneDelayParamFilterHz]
                     * rackOctaveScale (octaveScalers[rackOctaveScalerDelayTwoFilter],
-                                       laneModIn[laneModDelayTwoFilterOctaves]));
+                                       rackModIn[rackModTargetLaneDelayTwoFilterOctaves]));
             delayTwo.mixIn <- clampDelayMix (
                 rackModulateLinear (delayTwoParams[laneDelayParamMix],
-                                    laneModIn[laneModDelayTwoMix]));
+                                    rackModIn[rackModTargetLaneDelayTwoMix]));
             delayTwo.tempoBpmIn <- clampDelayTempoBpm (tempoBpmIn);
         }
 

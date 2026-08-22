@@ -95,6 +95,14 @@ namespace wt
     let rackModTargetReverbDamping              = 34;
     let rackModTargetReverbMix                  = 35;
 
+    // Effects Lane pool block (indices rackModStaticTargetCount..): the pool
+    // delay's destinations, same unit conventions as the base delay (time and
+    // filter in octaves, feedback and mix linear).
+    let rackModTargetLaneDelayTwoTimeOctaves    = 36;
+    let rackModTargetLaneDelayTwoFeedback       = 37;
+    let rackModTargetLaneDelayTwoFilterOctaves  = 38;
+    let rackModTargetLaneDelayTwoMix            = 39;
+
     //==============================================================================
     // Timing.
 

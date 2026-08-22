@@ -65,7 +65,14 @@ namespace wt
     let modulationVoiceGeneratorLaneCount = 32;
     // Shared rack destination domain. Kept here because several isolated oscillator
     // tests compile this module without VoiceReducer.cmajor.
-    let rackModTargetCount = 36;
+    // The bus is the STATIC vocabulary (the 36 named base-module destinations,
+    // VoiceReducer.cmajor) plus the Effects Lane pool block: one lane per
+    // modulatable pool destination (M1: delay #2's four). Cell math, program
+    // validation, and the rackMod bus all run at the TOTAL width; the static
+    // count remains the contiguous named-vocabulary pin.
+    let rackModStaticTargetCount = 36;
+    let laneModPoolTargetCount = 4;
+    let rackModTargetCount = rackModStaticTargetCount + laneModPoolTargetCount;
     let modulationVoiceRouteCellCount = modulationVoiceSourceCount * modulationVoiceTargetCount;
     let modulationMacroVoiceRouteCellCount = modulationMacroSourceCount * modulationVoiceTargetCount;
     let modulationVoiceRackRouteCellCount = modulationVoiceSourceCount * rackModTargetCount;

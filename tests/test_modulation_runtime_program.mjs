@@ -240,9 +240,13 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
         runtime.getModulationRuntimeCell,
         { voice: 30, macroVoice: 20, voiceRack: 30, macroRack: 20 },
     );
+    // Cell indices run at the rackMod BUS width (static vocabulary + Effects
+    // Lane pool block): the final static macroRack pair (source 3, target 35)
+    // sits at 3*MODULATION_RACK_TARGET_TOTAL + 35.
+    const finalLegalCellIndex = (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 35;
     const finalLegalRoute = allRoutes.find((route) => {
         const cell = runtime.getModulationRuntimeCell(route);
-        return cell.path === "macroRack" && cell.cellIndex === 143;
+        return cell.path === "macroRack" && cell.cellIndex === finalLegalCellIndex;
     });
     assert.notEqual(finalLegalRoute, undefined);
     const sentinel = {
@@ -257,7 +261,7 @@ test("a deliberate 101st final-legal sentinel survives in its active prefix", as
     assert.equal(runtimeLaneCounts(program).reduce((total, count) => total + count, 0), 101);
     assert.deepEqual(runtimeLaneCounts(program), [30, 20, 30, 21]);
     assert.deepEqual(runtimeLaneTail(program, macroRack), {
-        cellIndex: 143,
+        cellIndex: finalLegalCellIndex,
         sourceIndex: 3,
         targetIndex: 35,
         polarity: 1,
@@ -273,13 +277,15 @@ test("all 1131 legal mappings publish exact deterministic lane tails without tru
 
     assert.equal(routes.length, runtime.MODULATION_MAPPING_CELL_COUNT);
     assert.deepEqual(runtimeLaneCounts(program), [459, 204, 324, 144]);
+    // Rack-path cell indices run at the BUS width (static + lane pool):
+    // source*TOTAL + target. Voice-path indices are untouched by the pool.
     assert.deepEqual(
         runtimeLaneSpecifications.map((specification) => runtimeLaneTail(program, specification)),
         [
             { cellIndex: 458, sourceIndex: 8, targetIndex: 50, polarity: 0, amount: 0.25, reducer: null },
             { cellIndex: 203, sourceIndex: 3, targetIndex: 50, polarity: 1, amount: 0.25, reducer: null },
-            { cellIndex: 323, sourceIndex: 8, targetIndex: 35, polarity: 1, amount: 0.25, reducer: 2 },
-            { cellIndex: 143, sourceIndex: 3, targetIndex: 35, polarity: 0, amount: 0.25, reducer: null },
+            { cellIndex: (8 * runtime.MODULATION_RACK_TARGET_TOTAL) + 35, sourceIndex: 8, targetIndex: 35, polarity: 1, amount: 0.25, reducer: 2 },
+            { cellIndex: (3 * runtime.MODULATION_RACK_TARGET_TOTAL) + 35, sourceIndex: 3, targetIndex: 35, polarity: 0, amount: 0.25, reducer: null },
         ],
     );
     assert.deepEqual(

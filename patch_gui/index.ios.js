@@ -15436,10 +15436,65 @@ function getVoiceModulationParameterKind(targetKind) {
   const separatorIndex = targetKind.indexOf(".");
   return separatorIndex >= 0 ? targetKind.slice(separatorIndex + 1) : targetKind;
 }
+const MODULATION_LANE_POOL_TARGET_COUNT = 4;
+const LANE_DEVICE_ENDPOINTS = /* @__PURE__ */ new Map([
+  ["delay", [
+    { endpointID: "delayTime", laneOffset: 0, mirrorRackKind: "rack.delayTime" },
+    { endpointID: "delayFeedback", laneOffset: 1, mirrorRackKind: "rack.delayFeedback" },
+    { endpointID: "delayFilter", laneOffset: 2, mirrorRackKind: "rack.delayFilter" },
+    { endpointID: "delayMix", laneOffset: 3, mirrorRackKind: "rack.delayMix" }
+  ]]
+]);
+const LANE_KIND_PATTERN = /^lane\.([a-z]+)#([1-9][0-9]*)\.([A-Za-z0-9]+)$/;
+function parseLaneModulationTargetKind(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const match = LANE_KIND_PATTERN.exec(value);
+  if (match === null) {
+    return null;
+  }
+  const deviceType = match[1];
+  const endpoints = LANE_DEVICE_ENDPOINTS.get(deviceType);
+  if (endpoints === void 0) {
+    return null;
+  }
+  const endpointID = match[3];
+  if (!endpoints.some((endpoint) => endpoint.endpointID === endpointID)) {
+    return null;
+  }
+  return {
+    instanceId: `${deviceType}#${match[2]}`,
+    deviceType,
+    endpointID
+  };
+}
+function laneEndpointSpec(parsed) {
+  const endpoints = LANE_DEVICE_ENDPOINTS.get(parsed.deviceType);
+  const spec = endpoints?.find((endpoint) => endpoint.endpointID === parsed.endpointID);
+  if (spec === void 0) {
+    throw new Error(`Unknown lane endpoint ${parsed.deviceType}.${parsed.endpointID}`);
+  }
+  return spec;
+}
+function laneMirrorRackKind(parsed) {
+  return laneEndpointSpec(parsed).mirrorRackKind;
+}
+function getLaneModulationTargetIndex(parsed, assignments) {
+  if (parsed === null) {
+    return null;
+  }
+  const slotBase = assignments.get(parsed.instanceId);
+  if (slotBase === void 0) {
+    return null;
+  }
+  return MODULATION_RACK_TARGET_COUNT$1 + slotBase + laneEndpointSpec(parsed).laneOffset;
+}
 const MODULATION_VOICE_SOURCE_COUNT = MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === "voice").length;
 MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === "macro").length;
 const MODULATION_VOICE_TARGET_COUNT = MODULATION_VOICE_TARGET_COUNT$1;
 const MODULATION_RACK_TARGET_COUNT = MODULATION_RACK_TARGET_COUNT$1;
+const MODULATION_RACK_TARGET_TOTAL = MODULATION_RACK_TARGET_COUNT + MODULATION_LANE_POOL_TARGET_COUNT;
 const MODULATION_VOICE_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_VOICE_TARGET_COUNT;
 function voiceSourceIndex(route) {
   const identity = getModulationSourceIdentity(route.sourceKind, route.sourceSlot);
@@ -15452,10 +15507,19 @@ function voiceTargetIndex(targetKind) {
   const voiceTargetKind = parseVoiceModulationTargetKind(targetKind);
   return voiceTargetKind === null ? null : getVoiceModulationTargetIndex(voiceTargetKind);
 }
-function getModulationRuntimeCell(route) {
+function getModulationRuntimeCell(route, laneAssignments = EMPTY_LANE_ASSIGNMENTS) {
   const voiceTarget = voiceTargetIndex(route.targetKind);
   const rackTargetKind = parseRackModulationTargetKind(route.targetKind);
-  const rackTarget = rackTargetKind === null ? void 0 : getRackModulationTargetIndex(rackTargetKind);
+  let rackTarget = rackTargetKind === null ? void 0 : getRackModulationTargetIndex(rackTargetKind);
+  if (rackTarget === void 0) {
+    const laneIndex = getLaneModulationTargetIndex(
+      parseLaneModulationTargetKind(route.targetKind),
+      laneAssignments
+    );
+    if (laneIndex !== null) {
+      rackTarget = laneIndex;
+    }
+  }
   if (voiceTarget === null && rackTarget === void 0) {
     throw new Error(`Unknown modulation target: ${route.targetKind}`);
   }
@@ -15478,7 +15542,7 @@ function getModulationRuntimeCell(route) {
     const targetIndex2 = rackTarget ?? 0;
     return {
       path: "macroRack",
-      cellIndex: sourceIndex2 * MODULATION_RACK_TARGET_COUNT + targetIndex2,
+      cellIndex: sourceIndex2 * MODULATION_RACK_TARGET_TOTAL + targetIndex2,
       sourceIndex: sourceIndex2,
       targetIndex: targetIndex2,
       articulationCellIndex: null
@@ -15498,7 +15562,7 @@ function getModulationRuntimeCell(route) {
   const targetIndex = rackTarget ?? 0;
   return {
     path: "voiceRack",
-    cellIndex: sourceIndex * MODULATION_RACK_TARGET_COUNT + targetIndex,
+    cellIndex: sourceIndex * MODULATION_RACK_TARGET_TOTAL + targetIndex,
     sourceIndex,
     targetIndex,
     articulationCellIndex: null
@@ -15507,6 +15571,7 @@ function getModulationRuntimeCell(route) {
 function getModulationArticulationCellIndex(route) {
   return getModulationRuntimeCell(route).articulationCellIndex;
 }
+const EMPTY_LANE_ASSIGNMENTS = /* @__PURE__ */ new Map();
 function ok(value) {
   return { _tag: "ok", value };
 }
@@ -16009,14 +16074,20 @@ function getRackRouteAmountLimit(descriptor) {
   const span = descriptor.max - descriptor.min;
   return { min: -span, max: span };
 }
-function getRouteAmountLimit(targetKind) {
+function amountAuthorityKind(targetKind) {
+  const parsedLane = parseLaneModulationTargetKind(targetKind);
+  return parsedLane !== null ? laneMirrorRackKind(parsedLane) : targetKind;
+}
+function getRouteAmountLimit(rawTargetKind) {
+  const targetKind = amountAuthorityKind(rawTargetKind);
   const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
   if (rackParameter !== void 0) {
     return getRackRouteAmountLimit(rackParameter);
   }
   return ROUTE_AMOUNT_LIMITS[getVoiceModulationParameterKind(targetKind)];
 }
-function getRouteAmountStep(targetKind) {
+function getRouteAmountStep(rawTargetKind) {
+  const targetKind = amountAuthorityKind(rawTargetKind);
   const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
   if (rackParameter !== void 0) {
     return rackParameter.modulationApplication === "octaves" ? 0.01 : (rackParameter.max - rackParameter.min) / 1e3;
@@ -16116,7 +16187,8 @@ function getModulationAmountSliderPosition(targetKind, amount) {
   }
   return clamp$a(0.5 + 0.5 * (clampedAmount / limits.max), 0.5, 1);
 }
-function formatModulationAmountReadout(targetKind, amount, polarity = "unipolar") {
+function formatModulationAmountReadout(rawTargetKind, amount, polarity = "unipolar") {
+  const targetKind = amountAuthorityKind(rawTargetKind);
   const clampedAmount = clampModulationRouteAmount(targetKind, amount);
   const prefix = polarity === "bipolar" ? Math.abs(clampedAmount) <= 1e-9 ? "" : "±" : clampedAmount > 0 ? "+" : clampedAmount < 0 ? "-" : "";
   const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind);
@@ -16253,7 +16325,11 @@ function normalizeSourceKind(value) {
   return parseSourceKind(value) ?? "mseg";
 }
 function parseTargetKind(value) {
-  return parseModulationTargetKind(value);
+  const canonical = parseModulationTargetKind(value);
+  if (canonical !== null) {
+    return canonical;
+  }
+  return parseLaneModulationTargetKind(value) !== null ? value : null;
 }
 function normalizeTargetKind(value) {
   return parseTargetKind(value) ?? "oscA.wavetablePosition";
