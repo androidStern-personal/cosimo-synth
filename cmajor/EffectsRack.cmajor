@@ -145,10 +145,16 @@ namespace wt
         int32[laneSlotCount] enabledFlags;
     }
 
-    // One pool slot's parameter record, addressed by slot id.
+    // One pool slot's parameter record, addressed by slot id. The delivery
+    // serial is the HOT PATH's acknowledgment contract: the rack echoes the
+    // last APPLIED record's serial on laneParamsAcknowledgedSerial the same
+    // frame it applies, so a live knob drag can measure edit-to-ack latency
+    // end to end (rejected records echo nothing and count on the rejection
+    // diagnostic instead).
     struct LaneSlotParamsUpload
     {
         int32 slotId;
+        int32 deliverySerial;
         float32[laneSlotParamCount] values;
     }
 
@@ -402,6 +408,7 @@ namespace wt
         output value int32 rackRejectedEnableCount;
         output value int32 laneCommittedGeneration;
         output value int32 laneRejectedUploadCount;
+        output value int32 laneParamsAcknowledgedSerial;
 
         //----------------------------------------------------------------------
         // Exactly one stable instance of each effect (ADR-001 effect identity). The
@@ -455,6 +462,7 @@ namespace wt
         bool[laneSlotCount] pendingLaneEnabled;
         int32 laneGeneration;
         int32 laneRejectedCount;
+        int32 laneParamsSerial;
         float32[laneSlotParamCount] delayTwoParams;
         bool[laneSlotCount] slotInCurrentChain;
 
@@ -543,10 +551,12 @@ namespace wt
         event laneSlotParams (LaneSlotParamsUpload upload)
         {
             // Parameter records apply immediately, like host parameter writes;
-            // only STRUCTURE rides the transition ramp.
+            // only STRUCTURE rides the transition ramp. Applying acknowledges
+            // the record's serial the same frame.
             if (upload.slotId == laneSlotDelayTwo)
             {
                 delayTwoParams = upload.values;
+                laneParamsSerial = upload.deliverySerial;
                 return;
             }
 
@@ -635,6 +645,7 @@ namespace wt
             rackRejectedEnableCount <- rejectedEnableCount;
             laneCommittedGeneration <- laneGeneration;
             laneRejectedUploadCount <- laneRejectedCount;
+            laneParamsAcknowledgedSerial <- laneParamsSerial;
         }
 
         //----------------------------------------------------------------------

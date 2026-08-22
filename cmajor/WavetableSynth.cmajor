@@ -34,6 +34,12 @@ namespace wt
         int32 committedEnableMask;
         int32 rejectedOrderCount;
         int32 rejectedEnableCount;
+        // Effects Lane readbacks: the committed lane-topology generation, the
+        // lane rejection counter, and the last APPLIED slot-param record's
+        // delivery serial (the hot path's acknowledgment).
+        int32 laneCommittedGeneration;
+        int32 laneRejectedUploadCount;
+        int32 laneParamsAcknowledgedSerial;
     }
 
     struct RuntimeState
@@ -894,6 +900,9 @@ namespace wt
         input value int32 committedEnableMaskIn;
         input value int32 rejectedOrderCountIn;
         input value int32 rejectedEnableCountIn;
+        input value int32 laneCommittedGenerationIn;
+        input value int32 laneRejectedUploadCountIn;
+        input value int32 laneParamsAcknowledgedSerialIn;
 
         output event EffectiveRackState effectiveRackStateOut;
 
@@ -904,6 +913,9 @@ namespace wt
         int32 lastEnableMask = -1;
         int32 lastRejectedOrderCount = -1;
         int32 lastRejectedEnableCount = -1;
+        int32 lastLaneGeneration = -1;
+        int32 lastLaneRejectedCount = -1;
+        int32 lastLaneParamsSerial = -1;
 
         event syncIn (int32 unused)
         {
@@ -912,6 +924,9 @@ namespace wt
             lastEnableMask = -1;
             lastRejectedOrderCount = -1;
             lastRejectedEnableCount = -1;
+            lastLaneGeneration = -1;
+            lastLaneRejectedCount = -1;
+            lastLaneParamsSerial = -1;
         }
 
         void main()
@@ -922,13 +937,19 @@ namespace wt
                      || committedOrderCodeIn != lastOrderCode
                      || committedEnableMaskIn != lastEnableMask
                      || rejectedOrderCountIn != lastRejectedOrderCount
-                     || rejectedEnableCountIn != lastRejectedEnableCount)
+                     || rejectedEnableCountIn != lastRejectedEnableCount
+                     || laneCommittedGenerationIn != lastLaneGeneration
+                     || laneRejectedUploadCountIn != lastLaneRejectedCount
+                     || laneParamsAcknowledgedSerialIn != lastLaneParamsSerial)
                 {
                     lastStructureGeneration = committedStructureGenerationIn;
                     lastOrderCode = committedOrderCodeIn;
                     lastEnableMask = committedEnableMaskIn;
                     lastRejectedOrderCount = rejectedOrderCountIn;
                     lastRejectedEnableCount = rejectedEnableCountIn;
+                    lastLaneGeneration = laneCommittedGenerationIn;
+                    lastLaneRejectedCount = laneRejectedUploadCountIn;
+                    lastLaneParamsSerial = laneParamsAcknowledgedSerialIn;
 
                     EffectiveRackState state;
                     state.committedStructureGeneration = lastStructureGeneration;
@@ -936,6 +957,9 @@ namespace wt
                     state.committedEnableMask = lastEnableMask;
                     state.rejectedOrderCount = lastRejectedOrderCount;
                     state.rejectedEnableCount = lastRejectedEnableCount;
+                    state.laneCommittedGeneration = lastLaneGeneration;
+                    state.laneRejectedUploadCount = lastLaneRejectedCount;
+                    state.laneParamsAcknowledgedSerial = lastLaneParamsSerial;
                     effectiveRackStateOut <- state;
                 }
 
@@ -1335,6 +1359,10 @@ graph WavetableSynth [[ main ]]
     // non-automatable rather than non-automatable by convention.
     input rack.rackOrder;
     input rack.rackEnable;
+    // Effects Lane structure and per-slot parameter records: patch state and
+    // live edits, one delivery path, never host automation slots.
+    input rack.laneTopology;
+    input rack.laneSlotParams;
     // Host transport, not a user parameter: no `name:`, so it never becomes an
     // automation slot. See wt::TempoMonitor.
     input event std::timeline::Tempo tempo;
@@ -1547,6 +1575,9 @@ graph WavetableSynth [[ main ]]
         rack.rackCommittedEnableMask -> rackStateMonitor.committedEnableMaskIn;
         rack.rackRejectedOrderCount -> rackStateMonitor.rejectedOrderCountIn;
         rack.rackRejectedEnableCount -> rackStateMonitor.rejectedEnableCountIn;
+        rack.laneCommittedGeneration -> rackStateMonitor.laneCommittedGenerationIn;
+        rack.laneRejectedUploadCount -> rackStateMonitor.laneRejectedUploadCountIn;
+        rack.laneParamsAcknowledgedSerial -> rackStateMonitor.laneParamsAcknowledgedSerialIn;
         rackStateMonitor.effectiveRackStateOut -> effectiveRackState;
         sharedEngine.modulationRejectedRouteCountOut -> modulationRejectedRouteCount;
         sharedEngine.runtimeInstallAckOut -> runtimeInstallAck;

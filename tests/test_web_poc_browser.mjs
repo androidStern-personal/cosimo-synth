@@ -1720,6 +1720,111 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
     }
 });
 
+test("lane slot-param edits stream at drag rate with serial acknowledgment and no deadline misses", {
+    timeout: 120_000,
+}, async () => {
+    // The Effects Lane HOT PATH: live per-slot parameter records are small
+    // acked deltas, never full-state reuploads. This measures the whole
+    // product path — sendEvent -> engine apply -> same-frame serial echo ->
+    // effectiveRackState readback — at knob-drag cadence under sounding
+    // audio, and reports the numbers rather than judging them.
+    const page = await browser.newPage({ ...devices["iPhone 13"] });
+    const pageFailures = observePageFailures(page);
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__.getSnapshot().phase === "running");
+
+        // A lane chain with the pool delay, committed and acknowledged.
+        // (Program-install latency at the widened tables is exercised by the
+        // product's own boot install and the 100-mapping stress suite; direct
+        // installs need exclusive host-lane ownership this page's worker
+        // holds, so no separate timing probe here.)
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.sendEvent("laneTopology", {
+                chainLength: 2,
+                slotIds: [6, 8, 0, 0, 0, 0, 0, 0, 0],
+                enabledFlags: [0, 0, 0, 0, 0, 0, 1, 0, 1],
+            });
+            api.noteOn(48, 96);
+        });
+        await page.waitForFunction(() => (
+            Number(globalThis.__COSIMO_WEB_POC__.getSnapshot()
+                .latestEffectiveRackState?.laneCommittedGeneration) >= 1
+        ), null, { timeout: 10_000 });
+
+        await resetMeasuredAudioMetrics(page);
+        const stream = await page.evaluate(async () => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            const updates = 120;
+            const beganAt = performance.now();
+            let dispatchLatencyTotalMs = 0;
+            let dispatchLatencyMaxMs = 0;
+
+            for (let serial = 1; serial <= updates; serial += 1) {
+                const startedAt = performance.now();
+                api.sendEvent("laneSlotParams", {
+                    slotId: 8,
+                    deliverySerial: serial,
+                    values: [90, 0, 18000, 0.2 + ((serial % 50) * 0.01), 0, 0, 0, 0],
+                });
+                const dispatchLatencyMs = performance.now() - startedAt;
+                dispatchLatencyTotalMs += dispatchLatencyMs;
+                dispatchLatencyMaxMs = Math.max(dispatchLatencyMaxMs, dispatchLatencyMs);
+                await new Promise((resolve) => requestAnimationFrame(resolve));
+            }
+            const inputElapsedMs = performance.now() - beganAt;
+
+            const finalStartedAt = performance.now();
+            while (true) {
+                const rackState = api.getSnapshot().latestEffectiveRackState;
+                if (Number(rackState?.laneParamsAcknowledgedSerial) === updates) {
+                    break;
+                }
+                if (performance.now() - finalStartedAt > 5_000) {
+                    throw new Error(`Lane param acknowledgment never reached ${updates}: ${JSON.stringify(rackState)}`);
+                }
+                await new Promise((resolve) => requestAnimationFrame(resolve));
+            }
+
+            return {
+                updates,
+                dispatchLatencyAverageMs: dispatchLatencyTotalMs / updates,
+                dispatchLatencyMaxMs,
+                inputElapsedMs,
+                inputRateHz: (updates * 1_000) / inputElapsedMs,
+                finalAcknowledgementLatencyMs: performance.now() - finalStartedAt,
+                rejectedUploads: Number(api.getSnapshot().latestEffectiveRackState?.laneRejectedUploadCount),
+            };
+        });
+        await page.waitForFunction(() => (
+            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletBlockCount >= 512
+        ), null, { timeout: 15_000 });
+        const audio = await readMeasuredAudioMetrics(page);
+
+        assert.equal(stream.rejectedUploads, 0, JSON.stringify(stream));
+        assert.ok(stream.inputRateHz >= 30 && stream.inputRateHz <= 144, JSON.stringify(stream));
+        // The hot-path bound: the FINAL edit's acknowledgment lands within the
+        // same envelope as the modulation-amount stream (~25ms measured
+        // baseline; 250ms is the same generous ceiling that path asserts).
+        assert.ok(stream.finalAcknowledgementLatencyMs < 250, JSON.stringify(stream));
+        assert.equal(audio.definiteDeadlineMissBlocks, 0, JSON.stringify(audio));
+        assert.equal(audio.frameDiscontinuityBlocks, 0, JSON.stringify(audio));
+        console.log(`# ${JSON.stringify({ laneHotPath: stream })}`);
+        pageFailures.assertClean();
+    } finally {
+        await page.evaluate(() => {
+            globalThis.__COSIMO_WEB_POC__?.noteOff(48);
+        }).catch(() => {});
+        await page.close();
+    }
+});
+
 test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 1131-cell domain", {
     timeout: 240_000,
 }, async (t) => {
