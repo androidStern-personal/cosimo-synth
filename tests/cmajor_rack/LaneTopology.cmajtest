@@ -223,10 +223,10 @@ processor LaneSecondDelayTest [[ main ]]
         out <- (windowPeak (echoSumFrame) > expectedPeakMinimum ? 1 : 0);
         advance();
 
-        // Frames 11-13: MODULATION reaches the pool instance. The lane mod bus
-        // (laneModIn, the pool's own reduced-offset inputs) drives delay #2's
-        // parameters exactly as rackModIn drives the base modules: mix as a
-        // linear offset, time in octaves.
+        // Frames 11-13: MODULATION reaches the pool instance through the ONE
+        // rackMod bus, at the lane block's indices (static vocabulary + pool),
+        // exactly as rackModIn drives the base modules: mix as a linear
+        // offset, time in octaves.
         // Claim A: slot mix param is 0 (no echo); a +0.5 bus offset on the mix
         // lane makes the 90ms echo appear — modulation, not the base value.
         wt::LaneSlotParamsUpload silentMix = makeDelayTwoParams();
@@ -238,7 +238,7 @@ processor LaneSecondDelayTest [[ main ]]
 
         for (int32 frame = 0; frame < recordFrames; ++frame)
         {
-            rack.laneModIn[wt::laneModDelayTwoMix] <- 0.5f;
+            rack.rackModIn[wt::rackModTargetLaneDelayTwoMix] <- 0.5f;
             advanceRack (frame == 0 ? 1.0f : 0.0f);
             recordedLeft.at (frame) = rack.out[0];
         }
@@ -253,7 +253,7 @@ processor LaneSecondDelayTest [[ main ]]
 
         for (int32 frame = 0; frame < recordFrames; ++frame)
         {
-            rack.laneModIn[wt::laneModDelayTwoMix] <- 0.0f;
+            rack.rackModIn[wt::rackModTargetLaneDelayTwoMix] <- 0.0f;
             advanceRack (frame == 0 ? 1.0f : 0.0f);
             recordedLeft.at (frame) = rack.out[0];
         }
@@ -269,13 +269,13 @@ processor LaneSecondDelayTest [[ main ]]
         // settle ~5 time constants so the -1 octave target is fully reached.
         for (int32 frame = 0; frame < 12000; ++frame)
         {
-            rack.laneModIn[wt::laneModDelayTwoTimeOctaves] <- -1.0f;
+            rack.rackModIn[wt::rackModTargetLaneDelayTwoTimeOctaves] <- -1.0f;
             advanceRack (0.0f);
         }
 
         for (int32 frame = 0; frame < recordFrames; ++frame)
         {
-            rack.laneModIn[wt::laneModDelayTwoTimeOctaves] <- -1.0f;
+            rack.rackModIn[wt::rackModTargetLaneDelayTwoTimeOctaves] <- -1.0f;
             advanceRack (frame == 0 ? 1.0f : 0.0f);
             recordedLeft.at (frame) = rack.out[0];
         }

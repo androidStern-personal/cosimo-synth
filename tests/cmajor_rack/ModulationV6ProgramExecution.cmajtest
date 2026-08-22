@@ -24,7 +24,10 @@ graph ModulationV6ProgramExecution [[ main ]]
         engine.runtimeInstallAckOut -> witness.ackIn;
         engine.effectiveFilterStateOut -> witness.filterIn;
         engine.rackModOut[19] -> witness.hundredRackIn;
-        engine.rackModOut[35] -> witness.tailRackIn;
+        // The tail sentinel rides the domain's FINAL cell, which since the
+        // Effects Lane pool block is a LANE destination — so this claim now
+        // also proves pool targets execute through the full program path.
+        engine.rackModOut[wt::rackModTargetCount - 1] -> witness.tailRackIn;
         witness.out -> out;
     }
 }

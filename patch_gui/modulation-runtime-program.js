@@ -4,6 +4,7 @@
  * by the audio engine. Mapping capacity belongs to the closed source/target domain;
  * per-sample work belongs only to enabled mappings.
  */
+import { MODULATION_LANE_POOL_TARGET_COUNT, getLaneModulationTargetIndex, parseLaneModulationTargetKind, } from "./lane-modulation-targets.js";
 import { MODULATION_SOURCE_IDENTITIES, MODULATION_RACK_TARGET_COUNT as CANONICAL_RACK_TARGET_COUNT, MODULATION_VOICE_TARGET_COUNT as CANONICAL_VOICE_TARGET_COUNT, getModulationSourceIdentity, getRackModulationTargetIndex, getVoiceModulationTargetIndex, parseRackModulationTargetKind, parseVoiceModulationTargetKind, } from "./modulation-targets.js";
 /** Runtime endpoint for atomically replacing the active modulation program. */
 export const MODULATION_PROGRAM_ENDPOINT_ID = "modulationProgram";
@@ -17,24 +18,31 @@ export const MODULATION_MACRO_SOURCE_COUNT = MODULATION_SOURCE_IDENTITIES
     .filter((identity) => identity.group === "macro").length;
 /** Number of voice-local destinations. */
 export const MODULATION_VOICE_TARGET_COUNT = CANONICAL_VOICE_TARGET_COUNT;
-/** Number of global rack destinations. */
+/** Number of STATIC global rack destinations (the enumerable legal domain). */
 export const MODULATION_RACK_TARGET_COUNT = CANONICAL_RACK_TARGET_COUNT;
+/** The rackMod bus width: the static vocabulary plus the Effects Lane pool
+    block (per-patch dynamic lane devices). Mirrors cmajor's
+    rackModStaticTargetCount + laneModPoolTargetCount — cell tables and cell
+    index math run at this TOTAL on both sides of the wire. */
+export const MODULATION_RACK_TARGET_TOTAL = MODULATION_RACK_TARGET_COUNT + MODULATION_LANE_POOL_TARGET_COUNT;
 /** Complete voice-source to voice-target mapping domain. */
 export const MODULATION_VOICE_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_VOICE_TARGET_COUNT;
 /** Complete Macro to voice-target mapping domain. */
 export const MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_COUNT * MODULATION_VOICE_TARGET_COUNT;
-/** Complete voice-source to rack-target mapping domain. */
-export const MODULATION_VOICE_RACK_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_RACK_TARGET_COUNT;
-/** Complete Macro to rack-target mapping domain. */
-export const MODULATION_MACRO_RACK_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_COUNT * MODULATION_RACK_TARGET_COUNT;
+/** Voice-source rack cell table (wire width: static + lane pool). */
+export const MODULATION_VOICE_RACK_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_RACK_TARGET_TOTAL;
+/** Macro rack cell table (wire width: static + lane pool). */
+export const MODULATION_MACRO_RACK_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_COUNT * MODULATION_RACK_TARGET_TOTAL;
 /** Number of voice-destination cells that can carry per-note articulation amounts. */
 export const MODULATION_ARTICULATION_ROUTE_CELL_COUNT = MODULATION_VOICE_ROUTE_CELL_COUNT
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT;
-/** Number of legal source/target pairs in Cosimo's closed modulation domain. */
+/** Number of legal source/target pairs in the closed STATIC modulation
+    domain (1,131). Lane-pool pairs are per-patch dynamic and deliberately
+    excluded: they exist only while their device instance does. */
 export const MODULATION_MAPPING_CELL_COUNT = MODULATION_VOICE_ROUTE_CELL_COUNT
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT
-    + MODULATION_VOICE_RACK_ROUTE_CELL_COUNT
-    + MODULATION_MACRO_RACK_ROUTE_CELL_COUNT;
+    + (MODULATION_VOICE_SOURCE_COUNT * MODULATION_RACK_TARGET_COUNT)
+    + (MODULATION_MACRO_SOURCE_COUNT * MODULATION_RACK_TARGET_COUNT);
 /**
  * Compile and validate the rack catalog's DSP target addresses.
  *
@@ -78,10 +86,17 @@ function voiceTargetIndex(targetKind) {
  * @param route - A normalized declarative mapping.
  * @returns Its execution path and deterministic cell coordinates.
  */
-export function getModulationRuntimeCell(route) {
+export function getModulationRuntimeCell(route, laneAssignments = EMPTY_LANE_ASSIGNMENTS) {
     const voiceTarget = voiceTargetIndex(route.targetKind);
     const rackTargetKind = parseRackModulationTargetKind(route.targetKind);
-    const rackTarget = rackTargetKind === null ? undefined : getRackModulationTargetIndex(rackTargetKind);
+    let rackTarget = rackTargetKind === null ? undefined : getRackModulationTargetIndex(rackTargetKind);
+    if (rackTarget === undefined) {
+        // Lane kinds address the pool block through the patch's assignments.
+        const laneIndex = getLaneModulationTargetIndex(parseLaneModulationTargetKind(route.targetKind), laneAssignments);
+        if (laneIndex !== null) {
+            rackTarget = laneIndex;
+        }
+    }
     if (voiceTarget === null && rackTarget === undefined) {
         throw new Error(`Unknown modulation target: ${route.targetKind}`);
     }
@@ -104,7 +119,7 @@ export function getModulationRuntimeCell(route) {
         const targetIndex = rackTarget ?? 0;
         return {
             path: "macroRack",
-            cellIndex: sourceIndex * MODULATION_RACK_TARGET_COUNT + targetIndex,
+            cellIndex: sourceIndex * MODULATION_RACK_TARGET_TOTAL + targetIndex,
             sourceIndex,
             targetIndex,
             articulationCellIndex: null,
@@ -124,7 +139,7 @@ export function getModulationRuntimeCell(route) {
     const targetIndex = rackTarget ?? 0;
     return {
         path: "voiceRack",
-        cellIndex: sourceIndex * MODULATION_RACK_TARGET_COUNT + targetIndex,
+        cellIndex: sourceIndex * MODULATION_RACK_TARGET_TOTAL + targetIndex,
         sourceIndex,
         targetIndex,
         articulationCellIndex: null,
@@ -140,16 +155,23 @@ export function getModulationRuntimeCell(route) {
 export function getModulationArticulationCellIndex(route) {
     return getModulationRuntimeCell(route).articulationCellIndex;
 }
-function compileRoute(route) {
+const EMPTY_LANE_ASSIGNMENTS = new Map();
+/** A lane route whose instance holds no pool slot compiles to nothing. */
+function laneRouteIsUnassigned(route, laneAssignments) {
+    const parsedLane = parseLaneModulationTargetKind(route.targetKind);
+    return parsedLane !== null
+        && getLaneModulationTargetIndex(parsedLane, laneAssignments) === null;
+}
+function compileRoute(route, laneAssignments) {
     return {
-        ...getModulationRuntimeCell(route),
+        ...getModulationRuntimeCell(route, laneAssignments),
         enabled: route.enabled,
         polarity: route.polarity === "bipolar" ? 1 : 0,
         reducer: route.reducer === "mean" ? 2 : 1,
         amount: route.amount,
     };
 }
-function createCompiledRoutesByPath(routes) {
+function createCompiledRoutesByPath(routes, laneAssignments = EMPTY_LANE_ASSIGNMENTS) {
     const routesByPath = {
         voice: new Map(),
         macroVoice: new Map(),
@@ -157,7 +179,10 @@ function createCompiledRoutesByPath(routes) {
         macroRack: new Map(),
     };
     for (const route of routes) {
-        const compiled = compileRoute(route);
+        if (laneRouteIsUnassigned(route, laneAssignments)) {
+            continue;
+        }
+        const compiled = compileRoute(route, laneAssignments);
         const pathRoutes = routesByPath[compiled.path];
         if (pathRoutes.has(compiled.cellIndex)) {
             throw new Error(`Duplicate modulation route cell ${compiled.path}:${compiled.cellIndex}`);
@@ -199,8 +224,8 @@ function copyActiveRouteFields(routes, cells, sources, targets, polarities) {
  * @param routes - Normalized declarative mappings in stored order.
  * @returns One fixed aggregate payload for atomic engine installation.
  */
-export function compileModulationRuntimeProgram(routes) {
-    const routesByPath = createCompiledRoutesByPath(routes);
+export function compileModulationRuntimeProgram(routes, laneAssignments = EMPTY_LANE_ASSIGNMENTS) {
+    const routesByPath = createCompiledRoutesByPath(routes, laneAssignments);
     const voiceRoutes = sortedActiveRoutes(routesByPath.voice);
     const macroVoiceRoutes = sortedActiveRoutes(routesByPath.macroVoice);
     const voiceRackRoutes = sortedActiveRoutes(routesByPath.voiceRack);

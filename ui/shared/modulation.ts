@@ -1,6 +1,10 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 import { reportUserParameterEdit } from "./user-edit-bus";
 import {
+    laneMirrorRackKind,
+    parseLaneModulationTargetKind,
+} from "./lane-modulation-targets";
+import {
     allRackParameterDescriptors,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
@@ -328,7 +332,15 @@ function getRackRouteAmountLimit(descriptor: RackParameterDescriptor) {
     return { min: -span, max: span };
 }
 
-function getRouteAmountLimit(targetKind: ModulationTargetKind) {
+/** A lane parameter speaks its device type's canonical language: amounts,
+    limits, and readouts defer to the same-named base-module target. */
+function amountAuthorityKind(targetKind: ModulationTargetKind): ModulationTargetKind {
+    const parsedLane = parseLaneModulationTargetKind(targetKind);
+    return parsedLane !== null ? laneMirrorRackKind(parsedLane) : targetKind;
+}
+
+function getRouteAmountLimit(rawTargetKind: ModulationTargetKind) {
+    const targetKind = amountAuthorityKind(rawTargetKind);
     const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
     if (rackParameter !== undefined) {
         return getRackRouteAmountLimit(rackParameter);
@@ -336,7 +348,8 @@ function getRouteAmountLimit(targetKind: ModulationTargetKind) {
     return ROUTE_AMOUNT_LIMITS[getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)];
 }
 
-function getRouteAmountStep(targetKind: ModulationTargetKind) {
+function getRouteAmountStep(rawTargetKind: ModulationTargetKind) {
+    const targetKind = amountAuthorityKind(rawTargetKind);
     const rackParameter = RACK_MODULATION_PARAMETER_BY_KIND.get(targetKind as RackModulationTargetKind);
     if (rackParameter !== undefined) {
         return rackParameter.modulationApplication === "octaves" ? 0.01 : (rackParameter.max - rackParameter.min) / 1000;
@@ -468,10 +481,11 @@ export function getModulationAmountSliderPosition(targetKind: ModulationTargetKi
 }
 
 export function formatModulationAmountReadout(
-    targetKind: ModulationTargetKind,
+    rawTargetKind: ModulationTargetKind,
     amount: number,
     polarity: ModulationPolarity = "unipolar",
 ) {
+    const targetKind = amountAuthorityKind(rawTargetKind);
     const clampedAmount = clampModulationRouteAmount(targetKind, amount);
     const prefix = polarity === "bipolar"
         ? (Math.abs(clampedAmount) <= 1e-9 ? "" : "±")
@@ -622,7 +636,15 @@ function normalizeSourceKind(value: unknown): ModulationSourceKind {
 }
 
 function parseTargetKind(value: unknown): ModulationTargetKind | null {
-    return parseCanonicalModulationTargetKind(value);
+    const canonical = parseCanonicalModulationTargetKind(value);
+    if (canonical !== null) {
+        return canonical;
+    }
+    // Lane kinds are per-patch dynamic: grammar-validated here, resolved to a
+    // pool slot only at compile time through the patch's assignments.
+    return parseLaneModulationTargetKind(value) !== null
+        ? value as ModulationTargetKind
+        : null;
 }
 
 function normalizeTargetKind(value: unknown): ModulationTargetKind {

@@ -58,8 +58,12 @@ export type VoiceModulationTargetKind = OscillatorModulationTargetKind | SharedV
 export type VoiceModulationParameterKind = OscillatorModulationParameterKind | SharedVoiceModulationTargetKind;
 /** Canonical identity for one authored rack destination. */
 export type RackModulationTargetKind = `rack.${string}`;
-/** Any canonical voice or rack modulation destination. */
-export type ModulationTargetKind = VoiceModulationTargetKind | RackModulationTargetKind;
+/** One pool device's parameter (Effects Lane): `lane.<instanceId>.<endpointID>`.
+    Per-patch dynamic — never part of the static legal-pair domain; grammar and
+    resolution live in lane-modulation-targets.ts. */
+export type LaneModulationTargetKind = `lane.${string}`;
+/** Any canonical voice, rack, or lane modulation destination. */
+export type ModulationTargetKind = VoiceModulationTargetKind | RackModulationTargetKind | LaneModulationTargetKind;
 
 /** Runtime behavior family for one modulation source. */
 export type ModulationSourceKind = "mseg" | "env" | "velocity" | "pressure" | "slide" | "macro";
