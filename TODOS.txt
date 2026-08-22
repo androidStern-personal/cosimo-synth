@@ -821,6 +821,11 @@ PHASE 5 — PARKED UNTIL ITS QUALIFICATION CHANGES
     - Then rerun browser qualification, complete the physical-phone campaign, review the existing Effects Lane branch, and make an explicit merge/rework/abandon decision.
     Do not:
     - Merge or begin production Effects Lane implementation merely because the phone becomes available.
+    Requalification v3 (2026-08-21, codex-executed browser campaign against master ed6b39d7, Fable-verified: independent raw-record reduction matches the report; verifier green; freeze-before-measurement and the experiments/-only fence held; branch codex/effects-lane-requalification-v3, RESULT-V3.md):
+    - STILL PARKED under the frozen rule — C2 (two extra active instances of every effect) fails the 0.75 average-load gate on BOTH backends (Chromium 0.85, WebKit 0.92-0.97), H3 exceeds 1.0 on both.
+    - Real movement since v2 all the same: every variant improved ~0.04-0.09 absolute load; WebKit's BASELINE flipped fail->pass (0.76->0.72), so the v2 "campaign cannot validate its own baseline" defect is gone and what remains is genuine capacity; WebKit H3's misses collapsed 695-788 -> 22-53.
+    - Remaining C2 gap to the ceiling: ~0.10 absolute on Chromium, ~0.17-0.22 on WebKit.
+    - The physical iPhone/AUv3 campaign (authoritative) remains unexecuted behind the xctrace-offline device blocker — needs the user's hands on the phone.
 
 INFRASTRUCTURE AND TOOLING
 
