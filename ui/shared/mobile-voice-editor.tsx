@@ -521,14 +521,14 @@ export function MobileVoiceFocusedEditor({
                 data-role={`mobile-voice-chip-${controlID}`}
                 data-modulation-target-kind={modulationTargetKind}
                 className="mobile-voice-chip is-readout"
-                style={spec.placements.includes("graph-overlay-bottom-left")
-                    ? { bottom: 8, left: 8 }
-                    : { bottom: 8, right: 8 }}
+                data-corner={spec.placements.includes("graph-overlay-bottom-left")
+                    ? "bottom-left"
+                    : "bottom-right"}
                 onPointerDown={(event) => cellApi.cellPointerDown(event, controlID)}
                 onKeyDown={(event) => cellApi.handleReadoutKeyDown(event, controlID)}
             >
-                <span className="mobile-voice-chip-label">{spec.shortLabel}</span>
-                <strong className="mobile-voice-chip-value">
+                <span className="cosimo-label">{spec.shortLabel}</span>
+                <strong className="cosimo-readout">
                     {formatMobileVoiceCellValue(format, value)}
                 </strong>
                 {presentation.railState === "mapped"
@@ -621,9 +621,9 @@ export function MobileVoiceFocusedEditor({
                 activeId={oscillatorID}
                 ariaLabel="Oscillator editor"
                 dataRole="mobile-voice-tabs"
-                onSelect={(id) => {
+                onSelect={(id: OscillatorID) => {
                     beginTabTransition(id);
-                    selection.selectOscillator(id as OscillatorID);
+                    selection.selectOscillator(id);
                 }}
             />
 
@@ -651,15 +651,16 @@ export function MobileVoiceFocusedEditor({
                     <div
                         data-role="mobile-voice-wavetable-overlay"
                         className="mobile-voice-chip"
-                        style={{ top: 8, left: 8, minWidth: 118 }}
+                        data-corner="top-left"
+                        style={{ minWidth: 118 }}
                         onPointerDown={stopOverlayPointer}
                     >
                         <span
                             className={`mobile-voice-chip-layer${graphAxis !== null ? " is-hidden" : ""}`}
                             data-role="mobile-voice-wavetable-idle"
                         >
-                            <span className="mobile-voice-chip-label">WT</span>
-                            <strong className="mobile-voice-chip-value" data-role="mobile-voice-table-name">
+                            <span className="cosimo-label">WT</span>
+                            <strong className="cosimo-readout is-caps" data-role="mobile-voice-table-name">
                                 {stage.pendingTableName === null ? stage.tableName : `Loading ${stage.pendingTableName}…`}
                             </strong>
                             <svg width="8" height="6" viewBox="0 0 8 6" fill="none" aria-hidden="true">
@@ -691,10 +692,10 @@ export function MobileVoiceFocusedEditor({
                             className={`mobile-voice-chip-layer is-overlaid${graphAxis === null ? " is-hidden" : ""}`}
                             data-role="mobile-voice-graph-readout"
                         >
-                            <span className="mobile-voice-chip-label">
+                            <span className="cosimo-label">
                                 {graphAxis === "horizontal" ? "Warp" : "Index"}
                             </span>
-                            <strong className="mobile-voice-chip-value">{graphValueText}</strong>
+                            <strong className="cosimo-readout">{graphValueText}</strong>
                         </span>
                     </div>
 
@@ -703,11 +704,11 @@ export function MobileVoiceFocusedEditor({
                             type="button"
                             data-role="mobile-voice-retry-load"
                             className="mobile-voice-chip"
-                            style={{ top: 42, left: 8 }}
+                            data-corner="top-left-stacked"
                             onPointerDown={stopOverlayPointer}
                             onClick={stage.onRetry}
                         >
-                            <strong className="mobile-voice-chip-value">Retry Load</strong>
+                            <strong className="cosimo-readout">Retry Load</strong>
                         </button>
                     ) : null}
 
@@ -715,13 +716,13 @@ export function MobileVoiceFocusedEditor({
                         type="button"
                         data-role="mobile-voice-warp-mode"
                         className="mobile-voice-chip"
-                        style={{ top: 8, right: 8 }}
+                        data-corner="top-right"
                         aria-label={`Warp mode: ${WARP_MODE_LABELS[warpModeIndex]}. Cycle warp mode`}
                         onPointerDown={stopOverlayPointer}
                         onClick={() => cellApi.cycleChoice("warpMode")}
                     >
-                        <span className="mobile-voice-chip-label">Warp</span>
-                        <strong className="mobile-voice-chip-value">{WARP_MODE_LABELS[warpModeIndex]}</strong>
+                        <span className="cosimo-label">Warp</span>
+                        <strong className="cosimo-readout is-caps">{WARP_MODE_LABELS[warpModeIndex]}</strong>
                     </button>
 
                     {renderReadoutChip("unisonVoices")}
@@ -742,7 +743,7 @@ export function MobileVoiceFocusedEditor({
                         <svg width="7" height="10" viewBox="0 0 7 10" fill="none" aria-hidden="true">
                             <path d="M5.5 1 L1.5 5 L5.5 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
-                        <span className="mobile-voice-paddle-caption">{page.name}</span>
+                        <span className="cosimo-label">{page.name}</span>
                     </button>
                     <div
                         data-role="mobile-voice-page"
@@ -764,7 +765,7 @@ export function MobileVoiceFocusedEditor({
                         aria-label="Next control page"
                         onClick={() => setPage(1)}
                     >
-                        <span className="mobile-voice-paddle-caption">
+                        <span className="cosimo-label">
                             {pageIndex + 1}/{MOBILE_VOICE_PAGES.length}
                         </span>
                         <svg width="7" height="10" viewBox="0 0 7 10" fill="none" aria-hidden="true">

@@ -445,7 +445,7 @@ export function PrecisionNumberField({
             data-modulation-target-kind={modulationTargetKind}
             {...longPressMenu}
             className={isInlineDark
-                ? "inline-flex h-6 min-w-0 items-center gap-1 rounded-[5px] border border-[rgb(var(--cosimo-edge-rgb)/0.34)] bg-[rgb(var(--cosimo-control-rgb)/0.58)] px-1 text-[var(--cosimo-text)] shadow-[var(--cosimo-contact-shadow)]"
+                ? "inline-flex h-6 min-w-0 items-center gap-1 rounded-[5px] border border-[rgb(var(--cosimo-edge-rgb)/0.34)] bg-[rgb(var(--cosimo-raised-rgb)/0.58)] px-1 text-[var(--cosimo-ink)] shadow-[var(--cosimo-shadow-raised)]"
                 : "grid gap-1"
             }
         >
@@ -459,7 +459,7 @@ export function PrecisionNumberField({
                 data-role={isInlineDark ? undefined : dataRole}
                 className={isInlineDark
                     ? "relative flex items-center rounded-[4px] border border-white/[0.07] bg-[rgba(3,5,12,0.58)] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]"
-                    : `synth-compact-control relative ${
+                    : `cosimo-control relative ${
                         isCompactOverlay
                             ? "rounded-[5px]"
                             : "rounded-full"
@@ -478,10 +478,10 @@ export function PrecisionNumberField({
                     value={displayValue}
                     style={isWheelCursorHidden && !isEditing ? { cursor: "none" } : undefined}
                     className={isInlineDark
-                        ? `synth-readout-text w-full select-none whitespace-nowrap bg-transparent px-1.5 py-[3px] text-center text-[10px] leading-none tracking-[0.08em] outline-none ${
+                        ? `cosimo-readout is-caps w-full select-none whitespace-nowrap bg-transparent px-1.5 py-[3px] text-center leading-none tracking-[0.08em] outline-none ${
                             isEditing ? "cursor-text selection:bg-cyan-300/25" : "cursor-ew-resize"
                         }`
-                        : `synth-readout-text h-full w-full bg-transparent outline-none ${isCompactOverlay ? "px-1.5 text-[9px] tracking-[0.06em]" : `text-[13px] tracking-[0.12em] ${
+                        : `cosimo-readout is-caps h-full w-full bg-transparent outline-none ${isCompactOverlay ? "is-caption px-1.5 tracking-[0.06em]" : `is-title tracking-[0.12em] ${
                             isEditing ? "pr-11" : "pr-4"
                         } pl-4`
                         } ${
@@ -583,8 +583,8 @@ export function PrecisionNumberField({
                 {isEditing ? (
                     <span
                         data-role="parameter-entry-unit"
-                        className={`synth-readout-text pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${
-                        isCompactOverlay ? "right-1.5 text-[7px] tracking-[0.08em]" : "right-4 text-[10px] tracking-[0.16em]"
+                        className={`cosimo-readout is-caps pointer-events-none absolute top-1/2 -translate-y-1/2 opacity-60 ${
+                        isCompactOverlay ? "is-caption right-1.5 tracking-[0.08em]" : "right-4 tracking-[0.16em]"
                     }`}
                     >
                         {editingSuffixRef.current}

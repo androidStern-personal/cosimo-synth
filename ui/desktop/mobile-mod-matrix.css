@@ -2,10 +2,10 @@
     width: 100%;
     min-width: 0;
     overflow: hidden;
-    border: 1px solid rgb(255 255 255 / 0.08);
+    border: 1px solid var(--cosimo-line);
     border-radius: 16px;
-    background: linear-gradient(180deg, #111619, #090d0f);
-    box-shadow: inset 0 1px rgb(255 255 255 / 0.035);
+    background: linear-gradient(180deg, var(--cosimo-ground), var(--cosimo-ground));
+    box-shadow: inset 0 1px var(--cosimo-wash);
 }
 
 .mobile-mod-workspace {
@@ -17,7 +17,7 @@
     aspect-ratio: auto;
     padding: 35px 5px 5px;
     overflow: hidden;
-    background: #080d0f;
+    background: var(--cosimo-ground);
 }
 
 .mobile-mod-source-editor[data-source-kind="mseg"] {
@@ -43,10 +43,10 @@
     flex: 1;
     flex-direction: column;
     overflow: visible;
-    border: 1px solid rgb(226 238 239 / 0.17);
+    border: 1px solid var(--cosimo-line);
     border-radius: 11px 0 11px 11px;
-    background: #070c0e;
-    box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.012);
+    background: var(--cosimo-ground);
+    box-shadow: inset 0 0 0 1px var(--cosimo-wash);
 }
 
 .mobile-mod-integrated-editor::before {
@@ -81,10 +81,10 @@
     justify-content: flex-end;
     gap: 4px;
     padding: 3px 4px 2px;
-    border: 1px solid rgb(226 238 239 / 0.17);
+    border: 1px solid var(--cosimo-line);
     border-bottom: 0;
     border-radius: 10px 10px 0 0;
-    background: #070c0e;
+    background: var(--cosimo-ground);
 }
 
 .mobile-mod-source-selector::after {
@@ -93,7 +93,7 @@
     bottom: -2px;
     left: 0;
     height: 3px;
-    background: #070c0e;
+    background: var(--cosimo-ground);
     content: "";
 }
 
@@ -107,13 +107,13 @@
     padding: 0 17px 0 9px;
     overflow: hidden;
     border: 0;
-    border-radius: 7px;
+    border-radius: var(--cosimo-radius-sm);
     background: rgb(var(--section-accent-rgb) / 0.10);
 }
 
 .mobile-mod-source-select-number {
     width: 40px;
-    background: rgb(221 234 235 / 0.055);
+    background: var(--cosimo-line);
 }
 
 .mobile-mod-source-editor[data-source-kind="env"] .mobile-mod-source-select-kind {
@@ -138,9 +138,9 @@
     outline: 0;
     appearance: none;
     background: transparent;
-    color: rgb(218 229 230 / 0.88);
+    color: var(--cosimo-ink);
     font-family: "Departure Mono", "SFMono-Regular", Menlo, ui-monospace, monospace;
-    font-size: 9px;
+    font-size: var(--cosimo-type-label);
     font-weight: 650;
     letter-spacing: 0.055em;
     text-transform: uppercase;
@@ -150,9 +150,9 @@
     position: absolute;
     top: 50%;
     right: 7px;
-    color: rgb(207 220 222 / 0.46);
+    color: var(--cosimo-ink-muted);
     content: "⌄";
-    font-size: 9px;
+    font-size: var(--cosimo-type-label);
     pointer-events: none;
     transform: translateY(-45%);
 }
@@ -163,7 +163,7 @@
     margin: 7px;
     overflow: hidden;
     border-radius: 8px;
-    background: rgb(var(--cosimo-recess-rgb) / 0.92);
+    background: rgb(var(--cosimo-ground-rgb) / 0.92);
 }
 
 .mobile-mod-source-editor .mod-source-active-controls {
@@ -174,7 +174,7 @@
     margin: 0 7px 7px;
     border: 0;
     border-radius: 8px;
-    background: rgb(221 234 235 / 0.035);
+    background: var(--cosimo-wash);
 }
 
 .mobile-mod-source-editor .mod-source-active-controls > div {
@@ -198,7 +198,7 @@
     align-content: center;
     gap: 4px;
     padding: 5px 7px 6px;
-    border-right: 1px solid rgb(222 236 237 / 0.06);
+    border-right: 1px solid var(--cosimo-line);
 }
 
 .mobile-mod-source-editor .mod-source-active-controls > div:last-child label:last-child {
@@ -206,9 +206,9 @@
 }
 
 .mobile-mod-source-editor .mod-source-active-controls > div:last-child label > span {
-    color: #6e7a7d;
-    font-size: 7px;
-    letter-spacing: 0.10em;
+    color: var(--cosimo-ink-faint);
+    font-size: var(--cosimo-type-caption);
+    letter-spacing: var(--cosimo-track-wide);
 }
 
 .mobile-mod-source-editor .mod-source-active-controls > div:last-child input {
@@ -218,8 +218,8 @@
     padding: 0;
     border: 0;
     background: transparent;
-    color: #cbd5d6;
-    font-size: 9px;
+    color: var(--cosimo-ink);
+    font-size: var(--cosimo-type-label);
 }
 
 .mobile-mod-source-editor .mod-source-active-controls > div:first-child {
@@ -228,7 +228,7 @@
 }
 
 .mobile-mod-source-editor .mod-source-active-controls > div:first-child > * {
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
 }
 
 .mobile-mod-source-editor .mod-source-active-controls[data-active-source-kind="macro"] {
@@ -262,7 +262,7 @@
 .mobile-mod-screen-header {
     display: flex;
     min-width: 0;
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
     align-items: center;
     gap: 6px;
 }
@@ -275,17 +275,17 @@
 .mobile-mod-list-header h2,
 .mobile-mod-screen-header h3 {
     margin: 0;
-    color: #dce4e6;
-    font-size: 11px;
+    color: var(--cosimo-ink);
+    font-size: var(--cosimo-type-label);
     font-weight: 650;
     letter-spacing: 0.13em;
     text-transform: uppercase;
 }
 
 .mobile-mod-list-header > div > span {
-    color: #8d989c;
-    font-size: 9px;
-    letter-spacing: 0.08em;
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-label);
+    letter-spacing: var(--cosimo-track);
 }
 
 .mobile-mod-list-header > button,
@@ -296,12 +296,12 @@
     height: 44px;
     place-items: center;
     padding: 0 8px;
-    border: 1px solid rgb(255 255 255 / 0.08);
+    border: 1px solid var(--cosimo-line);
     border-radius: 10px;
-    background: rgb(255 255 255 / 0.025);
-    color: #aeb8bb;
-    font-size: 9px;
-    letter-spacing: 0.06em;
+    background: var(--cosimo-wash);
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-label);
+    letter-spacing: var(--cosimo-track-tight);
     text-transform: uppercase;
 }
 
@@ -356,10 +356,10 @@
     gap: 4px;
     padding-left: 9px;
     border: 1px solid rgb(var(--section-accent-rgb) / 0.25);
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     background: rgb(var(--section-accent-rgb) / 0.07);
-    color: #b9c3c6;
-    font-size: 9px;
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-label);
     text-transform: uppercase;
 }
 
@@ -367,7 +367,7 @@
     width: 30px;
     height: 30px;
     color: var(--section-accent);
-    font-size: 16px;
+    font-size: var(--cosimo-type-display);
 }
 
 .mobile-mod-route-list {
@@ -385,23 +385,23 @@
     grid-template-columns: minmax(0, 1fr) 44px;
     align-items: stretch;
     overflow: hidden;
-    border: 1px solid rgb(255 255 255 / 0.075);
+    border: 1px solid var(--cosimo-line);
     border-radius: 10px;
-    background: rgb(255 255 255 / 0.025);
+    background: var(--cosimo-wash);
 }
 
 .mobile-mod-route-list article.is-bypassed .mobile-mod-route-amount {
-    color: #758084;
+    color: var(--cosimo-ink-muted);
 }
 
 .mobile-mod-route-bypassed-label {
     flex: none;
     padding: 2px 5px;
-    border: 1px solid rgb(117 128 132 / 0.5);
-    border-radius: 5px;
-    color: #758084;
-    font-size: 7.5px;
-    letter-spacing: 0.1em;
+    border: 1px solid rgb(var(--cosimo-text-rgb) / 0.5);
+    border-radius: var(--cosimo-radius-sm);
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-caption);
+    letter-spacing: var(--cosimo-track-wide);
 }
 
 /* ADR-025 row 15: the just-confirmed route's row pulses in its source color. */
@@ -427,7 +427,7 @@
     align-items: center;
     gap: 5px;
     padding: 6px;
-    color: #cbd3d5;
+    color: var(--cosimo-ink);
     text-align: left;
 }
 
@@ -437,14 +437,14 @@
     width: 32px;
     height: 32px;
     flex: none;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
 }
 
 .mobile-mod-source-art img {
     display: block;
     width: 32px;
     height: 32px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     object-fit: cover;
 }
 
@@ -456,10 +456,10 @@
     width: 9px;
     height: 12px;
     place-items: center;
-    border-radius: 3px;
-    background: #1a1b1b;
+    border-radius: var(--cosimo-radius-xs);
+    background: var(--cosimo-ground);
     color: var(--source-color);
-    font-size: 8px;
+    font-size: var(--cosimo-type-caption);
     font-weight: 750;
     line-height: 1;
 }
@@ -470,23 +470,23 @@
     height: 32px;
     place-items: center;
     border: 1px solid rgb(var(--section-accent-rgb) / 0.36);
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     background: rgb(var(--section-accent-rgb) / 0.08);
     color: var(--section-accent);
-    font-size: 7px;
+    font-size: var(--cosimo-type-caption);
     font-weight: 700;
 }
 
 .mobile-mod-route-source {
     overflow: hidden;
-    font-size: 9px;
+    font-size: var(--cosimo-type-label);
     letter-spacing: 0.04em;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
 .mobile-mod-route-arrow {
-    color: #687378;
+    color: var(--cosimo-ink-faint);
 }
 
 .mobile-mod-route-target {
@@ -503,21 +503,21 @@
 }
 
 .mobile-mod-route-target strong {
-    color: #98a3a7;
-    font-size: 8px;
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-caption);
     font-weight: 500;
 }
 
 .mobile-mod-route-target span {
-    color: #d5dcde;
-    font-size: 10px;
+    color: var(--cosimo-ink);
+    font-size: var(--cosimo-type-label);
 }
 
 .mobile-mod-route-amount {
     /* ADR-025: the amount belongs to the route's actual SOURCE, not the page. */
     color: var(--route-source-accent, var(--section-accent));
     font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: 9px;
+    font-size: var(--cosimo-type-label);
     white-space: nowrap;
 }
 
@@ -528,7 +528,7 @@
     height: 100%;
     min-height: 56px;
     place-items: center;
-    border-left: 1px solid rgb(255 255 255 / 0.06);
+    border-left: 1px solid var(--cosimo-line);
     color: var(--section-accent);
     font-size: 18px;
 }
@@ -537,8 +537,8 @@
 .mobile-mod-limit {
     margin: 0;
     padding: 10px;
-    color: #7f8a8f;
-    font-size: 9px;
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-label);
     text-align: center;
     text-transform: uppercase;
 }
@@ -554,9 +554,9 @@
     align-items: center;
     gap: 8px;
     padding: 7px;
-    border: 1px solid rgb(255 255 255 / 0.07);
+    border: 1px solid var(--cosimo-line);
     border-radius: 10px;
-    background: rgb(255 255 255 / 0.025);
+    background: var(--cosimo-wash);
 }
 
 .mobile-mod-detail-pair > div {
@@ -574,12 +574,12 @@
 
 .mobile-mod-detail-pair span {
     color: var(--section-accent);
-    font-size: 10px;
+    font-size: var(--cosimo-type-label);
 }
 
 .mobile-mod-detail-pair strong {
-    color: #c6d0d2;
-    font-size: 11px;
+    color: var(--cosimo-ink);
+    font-size: var(--cosimo-type-label);
     font-weight: 500;
 }
 
@@ -588,35 +588,35 @@
     min-width: 0;
     gap: 9px;
     padding: 10px;
-    border: 1px solid rgb(255 255 255 / 0.07);
+    border: 1px solid var(--cosimo-line);
     border-radius: 10px;
-    background: #080c0e;
+    background: var(--cosimo-ground);
 }
 
 .mobile-mod-field-heading {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    color: #8f9a9e;
-    font-size: 9px;
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-label);
     text-transform: uppercase;
 }
 
 .mobile-mod-field-heading strong {
     color: var(--section-accent);
     font-family: var(--font-mono, ui-monospace, monospace);
-    font-size: 11px;
+    font-size: var(--cosimo-type-label);
 }
 
 .mobile-mod-exact-row {
     display: grid;
     min-width: 0;
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
     grid-template-columns: auto minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
-    color: #7f8b8f;
-    font-size: 9px;
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-label);
     text-transform: uppercase;
 }
 
@@ -625,10 +625,10 @@
     min-width: 0;
     height: 40px;
     padding: 0 9px;
-    border: 1px solid rgb(255 255 255 / 0.09);
+    border: 1px solid var(--cosimo-line);
     border-radius: 8px;
-    background: rgb(255 255 255 / 0.035);
-    color: #d7dfe1;
+    background: var(--cosimo-wash);
+    color: var(--cosimo-ink);
     font-family: var(--font-mono, ui-monospace, monospace);
     outline: none;
 }
@@ -647,18 +647,18 @@
     align-content: center;
     gap: 2px;
     padding: 6px;
-    border: 1px solid rgb(255 255 255 / 0.075);
+    border: 1px solid var(--cosimo-line);
     border-radius: 10px;
-    background: rgb(255 255 255 / 0.025);
-    color: #8f9a9d;
-    font-size: 8px;
+    background: var(--cosimo-wash);
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-caption);
     text-align: left;
     text-transform: uppercase;
 }
 
 .mobile-mod-detail-actions button strong {
-    color: #d3dbdd;
-    font-size: 10px;
+    color: var(--cosimo-ink);
+    font-size: var(--cosimo-type-label);
     font-weight: 550;
 }
 
@@ -673,26 +673,26 @@
     flex-wrap: wrap;
     gap: 4px;
     padding: 7px;
-    border: 1px solid rgb(255 255 255 / 0.07);
+    border: 1px solid var(--cosimo-line);
     border-radius: 10px;
 }
 
 .mobile-mod-filter-group legend {
     padding: 0 4px;
-    color: #859095;
-    font-size: 8px;
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-caption);
     letter-spacing: 0.11em;
     text-transform: uppercase;
 }
 
 .mobile-mod-filter-group button {
     min-width: 44px;
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
     padding: 5px 8px;
-    border: 1px solid rgb(255 255 255 / 0.07);
+    border: 1px solid var(--cosimo-line);
     border-radius: 8px;
-    color: #a3adb0;
-    font-size: 8px;
+    color: var(--cosimo-ink-muted);
+    font-size: var(--cosimo-type-caption);
     text-transform: uppercase;
 }
 
@@ -703,12 +703,12 @@
 }
 
 .mobile-mod-primary {
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
     border: 1px solid rgb(var(--section-accent-rgb) / 0.48);
     border-radius: 10px;
     background: rgb(var(--section-accent-rgb) / 0.1);
     color: var(--section-accent);
-    font-size: 9px;
+    font-size: var(--cosimo-type-label);
     text-transform: uppercase;
 }
 
@@ -726,11 +726,11 @@
     align-items: center;
     gap: 8px;
     padding: 6px 10px;
-    border: 1px solid rgb(255 255 255 / 0.07);
+    border: 1px solid var(--cosimo-line);
     border-radius: 9px;
-    background: rgb(255 255 255 / 0.025);
-    color: #c4ced0;
-    font-size: 10px;
+    background: var(--cosimo-wash);
+    color: var(--cosimo-ink);
+    font-size: var(--cosimo-type-label);
     text-align: left;
 }
 

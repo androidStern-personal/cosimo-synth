@@ -1,8 +1,12 @@
 /**
- * The ONE segmented editor selector (ADR-024's A/B/C bar generalized) and its
- * fixed-bar/directional-panel transition. The Voice oscillator tabs and the
- * Mod page's SOURCE/MAPPINGS tabs are the same component with different
- * labels (T14: never a second tab dialect).
+ * THE segmented selector, and its fixed-bar/directional-panel transition.
+ * Voice A/B/C, the Mod page's SOURCE/MAPPINGS, the Voice/FX/Mod workspace
+ * bar, the iOS oscillator bar and the articulation mode bar are all this
+ * component with different labels (T14: never a second tab dialect).
+ *
+ * It renders the neutral `.cosimo-tabs` / `.cosimo-tab` classes from the
+ * design system. It previously hardcoded `mobile-voice-tab*`, which is why
+ * every other bar in the app was rewritten by hand instead of reusing it.
  *
  * Transition semantics (MOBILE_VOICE_FOCUSED_OSCILLATOR_SPEC "Tabs"):
  * the bar stays stationary; selecting a later tab slides the outgoing panel
@@ -18,18 +22,30 @@ import {
     useCallback,
     useEffect,
     useRef,
+    useState,
     type KeyboardEvent as ReactKeyboardEvent,
     type ReactNode,
 } from "react";
 
+/** Duration of the optional directional panel transition. */
 export const SEGMENTED_PANEL_SLIDE_MS = 170;
 
-export type SegmentedEditorTab = {
-    readonly id: string;
+/** Whether moving keyboard focus also selects the newly focused tab. */
+export type SegmentedTabActivationMode = "automatic" | "manual";
+
+/** One logical tab consumed by {@link SegmentedEditorTabs}. */
+export type SegmentedEditorTab<TId extends string = string> = {
+    readonly id: TId;
     readonly label: ReactNode;
     readonly ariaLabel: string;
     readonly dataRole: string;
     readonly dataDragDwell?: string;
+    /** DOM id, so a panel may point at its tab with aria-labelledby.
+        Deliberately NOT `id` — that field is the tab's LOGICAL identity,
+        used for active matching and handed to onSelect. */
+    readonly domId?: string;
+    /** The panel this tab controls. */
+    readonly ariaControls?: string;
     /** Extra state classes on the tab (e.g. the Voice bar's is-muted). */
     readonly stateClassName?: string;
     /** Rendered inside the tab after the label (e.g. the Solo chip). */
@@ -38,20 +54,64 @@ export type SegmentedEditorTab = {
     readonly onActiveTap?: () => void;
 };
 
-export function SegmentedEditorTabs({
+type SegmentedEditorTabsProps<TId extends string> = {
+    readonly tabs: ReadonlyArray<SegmentedEditorTab<TId>>;
+    readonly activeId: TId;
+    readonly ariaLabel: string;
+    readonly dataRole: string;
+    readonly onSelect: (id: TId) => void;
+    /** "top" puts the hairline above a bar docked to the bottom of a panel. */
+    readonly dock?: "top";
+    /** Neutral ink instead of the section accent. */
+    readonly neutral?: boolean;
+    /** Compact segmented controls use the canonical 24 px module. */
+    readonly size?: "regular" | "small";
+    /** Manual mode follows ADR-026: arrows move focus; Enter/Space select. */
+    readonly activationMode?: SegmentedTabActivationMode;
+};
+
+/**
+ * Render the shared segmented tab primitive with roving keyboard focus.
+ *
+ * @template TId Stable logical identity shared by the active value and tabs.
+ */
+export function SegmentedEditorTabs<TId extends string>({
     tabs,
     activeId,
     ariaLabel,
     dataRole,
     onSelect,
-}: {
-    tabs: ReadonlyArray<SegmentedEditorTab>;
-    activeId: string;
-    ariaLabel: string;
-    dataRole: string;
-    onSelect: (id: string) => void;
-}) {
-    const activate = useCallback((tab: SegmentedEditorTab) => {
+    dock,
+    neutral = false,
+    size = "regular",
+    activationMode = "automatic",
+}: SegmentedEditorTabsProps<TId>) {
+    const tabListRef = useRef<HTMLElement | null>(null);
+    const tabRefs = useRef(new Map<TId, HTMLButtonElement>());
+    const [focusId, setFocusId] = useState<TId>(activeId);
+    const tabIdsKey = tabs.map((tab) => tab.id).join("\u001f");
+
+    useEffect(() => {
+        const tabList = tabListRef.current;
+        const root = tabList?.getRootNode();
+        const activeElement = root instanceof Document || root instanceof ShadowRoot
+            ? root.activeElement
+            : null;
+        const focusIsInTabList = activeElement !== null && tabList?.contains(activeElement) === true;
+        setFocusId((current) => (
+            focusIsInTabList && tabs.some((tab) => tab.id === current) ? current : activeId
+        ));
+        // A fresh tab-array instance is normal; logical membership is the dependency.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeId, tabIdsKey]);
+
+    const select = useCallback((tab: SegmentedEditorTab<TId>) => {
+        if (tab.id !== activeId) {
+            onSelect(tab.id);
+        }
+    }, [activeId, onSelect]);
+
+    const activate = useCallback((tab: SegmentedEditorTab<TId>) => {
         if (tab.id === activeId) {
             tab.onActiveTap?.();
         } else {
@@ -59,46 +119,83 @@ export function SegmentedEditorTabs({
         }
     }, [activeId, onSelect]);
 
-    const handleKeyDown = useCallback((event: ReactKeyboardEvent, tab: SegmentedEditorTab) => {
+    const focusTab = useCallback((tab: SegmentedEditorTab<TId>) => {
+        setFocusId(tab.id);
+        tabRefs.current.get(tab.id)?.focus();
+    }, []);
+
+    const handleKeyDown = useCallback((event: ReactKeyboardEvent, tab: SegmentedEditorTab<TId>) => {
         if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             activate(tab);
             return;
         }
-        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-            event.preventDefault();
-            const ids = tabs.map((candidate) => candidate.id);
-            const currentIndex = ids.indexOf(tab.id);
-            const nextIndex = event.key === "ArrowLeft"
-                ? (currentIndex + ids.length - 1) % ids.length
-                : (currentIndex + 1) % ids.length;
-            onSelect(ids[nextIndex]);
+
+        const currentIndex = tabs.findIndex((candidate) => candidate.id === tab.id);
+        if (currentIndex < 0 || tabs.length === 0) {
+            return;
         }
-    }, [activate, onSelect, tabs]);
+
+        let nextTab: SegmentedEditorTab<TId> | undefined;
+        if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+            const nextIndex = event.key === "ArrowLeft"
+                ? (currentIndex + tabs.length - 1) % tabs.length
+                : (currentIndex + 1) % tabs.length;
+            nextTab = tabs[nextIndex];
+        } else if (event.key === "Home") {
+            nextTab = tabs[0];
+        } else if (event.key === "End") {
+            nextTab = tabs[tabs.length - 1];
+        }
+
+        if (nextTab === undefined) {
+            return;
+        }
+
+        event.preventDefault();
+        focusTab(nextTab);
+        if (activationMode === "automatic") {
+            select(nextTab);
+        }
+    }, [activate, activationMode, focusTab, select, tabs]);
 
     return (
         <nav
+            ref={tabListRef}
             role="tablist"
             aria-label={ariaLabel}
             data-role={dataRole}
-            className="mobile-voice-tabs"
+            data-dock={dock}
+            className={`cosimo-tabs${neutral ? " is-neutral" : ""}${size === "small" ? " is-small" : ""}`}
         >
             {tabs.map((tab) => {
                 const isActive = tab.id === activeId;
                 return (
-                    <div
-                        key={tab.id}
-                        role="tab"
-                        tabIndex={isActive ? 0 : -1}
-                        aria-selected={isActive}
-                        aria-label={tab.ariaLabel}
-                        data-role={tab.dataRole}
-                        data-drag-dwell={tab.dataDragDwell}
-                        className={`mobile-voice-tab${isActive ? " is-active" : ""}${tab.stateClassName ?? ""}`}
-                        onClick={() => activate(tab)}
-                        onKeyDown={(event) => handleKeyDown(event, tab)}
-                    >
-                        <span>{tab.label}</span>
+                    <div key={tab.id} role="presentation" className="cosimo-tab-slot">
+                        <button
+                            ref={(element) => {
+                                if (element === null) {
+                                    tabRefs.current.delete(tab.id);
+                                } else {
+                                    tabRefs.current.set(tab.id, element);
+                                }
+                            }}
+                            type="button"
+                            role="tab"
+                            tabIndex={tab.id === focusId ? 0 : -1}
+                            aria-selected={isActive}
+                            aria-label={tab.ariaLabel}
+                            aria-controls={tab.ariaControls}
+                            id={tab.domId}
+                            data-role={tab.dataRole}
+                            data-drag-dwell={tab.dataDragDwell}
+                            className={`cosimo-tab${isActive ? " is-active" : ""}${tab.stateClassName ?? ""}`}
+                            onFocus={() => setFocusId(tab.id)}
+                            onClick={() => activate(tab)}
+                            onKeyDown={(event) => handleKeyDown(event, tab)}
+                        >
+                            <span>{tab.label}</span>
+                        </button>
                         {tab.accessory}
                     </div>
                 );

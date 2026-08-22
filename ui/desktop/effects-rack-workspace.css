@@ -69,7 +69,7 @@
 .rack-effects-nav {
     display: grid;
     grid-template-columns: 88px minmax(0, 1fr) 54px;
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
     align-items: center;
     margin-bottom: 5px;
     overflow: hidden;
@@ -96,7 +96,7 @@
 }
 
 .rack-nav-back {
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
     padding: 0 9px;
     border-right: 1px solid rgb(105 213 197 / 0.18);
     color: #69d5c5;
@@ -189,7 +189,7 @@
 .rack-quick-surface {
     position: relative;
     z-index: 3;
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
     border: 0;
     background: transparent;
     color: inherit;
@@ -230,7 +230,7 @@
 .rack-grip-dots > span {
     width: 4px;
     height: 4px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     background: rgb(225 233 235 / 0.72);
     box-shadow: inset 0 1px rgb(255 255 255 / 0.5);
 }
@@ -299,7 +299,7 @@
     padding: 1px 5px 0;
     overflow: hidden;
     border: 2px solid var(--wordmark-edge);
-    border-radius: 4px;
+    border-radius: var(--cosimo-radius-sm);
     background: var(--wordmark-backdrop);
     color: var(--wordmark-ink);
     font-size: 18px;
@@ -438,7 +438,7 @@
     overflow: hidden;
     flex: none;
     border: 1px solid rgb(255 255 255 / 0.08);
-    border-radius: 7px;
+    border-radius: var(--cosimo-radius-sm);
     background: rgb(0 0 0 / 0.38);
 }
 
@@ -544,7 +544,7 @@
     min-height: 76px;
     overflow: hidden;
     border: 1px solid rgb(255 255 255 / 0.08);
-    border-radius: 7px;
+    border-radius: var(--cosimo-radius-sm);
     background: rgb(255 255 255 / 0.025);
     color: #d7dcde;
 }
@@ -612,7 +612,7 @@
     left: 4px;
     padding: 2px 3px;
     border: 1px solid rgb(224 229 230 / 0.22);
-    border-radius: 3px;
+    border-radius: var(--cosimo-radius-xs);
     color: rgb(224 229 230 / 0.5);
     font-size: 6px;
     letter-spacing: 0.08em;
@@ -668,7 +668,7 @@
     display: grid;
     width: 20px;
     min-width: 20px;
-    min-height: 44px;
+    min-height: var(--cosimo-hit-min);
     place-items: center;
     padding: 0;
     border: 0;
@@ -742,7 +742,7 @@
     min-width: 28px;
     height: 28px;
     min-height: 28px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     font-size: inherit;
 }
 
@@ -783,7 +783,7 @@
     overflow: visible;
     padding: 4px 0;
     border: 0;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     background: transparent;
     box-shadow: none;
     filter: none;
@@ -799,7 +799,7 @@
     width: 36px;
     height: 36px;
     place-items: center;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     background:
         radial-gradient(circle at 34% 30%, rgb(255 255 255 / 0.06), transparent 58%),
         rgb(9 13 15 / 0.94);
@@ -825,7 +825,7 @@
     width: 10px;
     height: 13px;
     place-items: center;
-    border-radius: 4px;
+    border-radius: var(--cosimo-radius-sm);
     background: #1a1b1b;
     color: var(--source-color);
     font-size: 9px;
@@ -877,10 +877,10 @@
     min-height: 36px;
     padding-inline: 9px;
     border: 1px solid color-mix(in srgb, var(--editor-accent) 48%, transparent);
-    border-radius: 7px;
+    border-radius: var(--cosimo-radius-sm);
     background: color-mix(in srgb, var(--editor-accent) 10%, #0b0f11);
     color: color-mix(in srgb, var(--editor-accent) 82%, white);
-    font: 600 7px/1 var(--cosimo-mono-font);
+    font: 600 var(--cosimo-type-caption)/1 var(--cosimo-font-readout);
     letter-spacing: 0.07em;
     white-space: nowrap;
 }
@@ -957,7 +957,7 @@
     .is-mobile-effects-page [data-role="sticky-keyboard"] .synth-control-rail > button {
         width: 44px;
         height: 44px;
-        min-height: 44px;
+        min-height: var(--cosimo-hit-min);
         border-radius: 14px;
     }
 
@@ -1046,7 +1046,7 @@
     min-height: 32px;
     padding: 6px 10px;
     border: 0;
-    border-radius: 5px;
+    border-radius: var(--cosimo-radius-sm);
     background: transparent;
     color: #f2f2f4;
     font: 400 13px/1.25 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -1218,7 +1218,7 @@
 
 .rack-remove-routes-confirmation {
     display: grid;
-    gap: 12px;
+    gap: var(--cosimo-space-3);
     width: min(360px, calc(100vw - 24px));
     padding: 20px;
     border: 1px solid rgb(255 255 255 / 18%);

@@ -13,6 +13,8 @@ import {
     type ReactNode,
 } from "react";
 
+import { SegmentedEditorTabs } from "../shared/segmented-editor-tabs";
+
 export type ArticulationTriggerMode = "chain" | "key" | "vel";
 
 export type MsegThumbnailPoint = {
@@ -165,10 +167,6 @@ const PILL_AMBER_ACTIVE = "border-[rgb(var(--section-accent-rgb)/0.38)] bg-[rgb(
 const PILL_CYAN = "border-cyan-300/20 bg-cyan-300/8 text-cyan-100/90 hover:border-cyan-200/32 hover:bg-cyan-300/14 active:bg-cyan-300/20";
 const PILL_PINK = "border-pink-300/24 bg-pink-300/10 text-pink-100/90 hover:border-pink-200/38 hover:bg-pink-300/16 active:bg-pink-300/22";
 const FRAME_CLASS = "synth-display-recess rounded-[14px]";
-const SEGMENTED_GROUP_CLASS = "synth-control-rail inline-flex h-6 shrink-0 items-center gap-0.5 rounded-[6px] p-0.5";
-const SEGMENTED_BUTTON_BASE = "h-5 rounded-[4px] px-2 text-[10px] font-semibold tracking-[0.04em] transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
-const SEGMENTED_BUTTON_ACTIVE = "bg-[rgb(var(--section-accent-rgb)/0.16)] text-[var(--section-accent)]";
-const SEGMENTED_BUTTON_INACTIVE = "text-slate-300/65 hover:text-slate-100";
 const LANE_ACTION_CLASS = "inline-flex h-5 shrink-0 items-center rounded-[4px] bg-white/[0.035] px-1.5 text-[9px] font-semibold uppercase tracking-[0.10em] text-slate-300/72 transition hover:bg-white/[0.075] hover:text-slate-100 active:bg-white/[0.10] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
 const LANE_ACTION_CLASS_PINK = "inline-flex h-5 shrink-0 items-center rounded-[4px] bg-pink-300/[0.08] px-1.5 text-[9px] font-semibold uppercase tracking-[0.10em] text-pink-200/85 transition hover:bg-pink-300/[0.16] hover:text-pink-100 active:bg-pink-300/[0.22] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45";
 
@@ -832,7 +830,7 @@ function ArticulationCard({
     }, [card.id, clearLongPressTimer, onOpenMenu]);
 
     const containerClass = joinClasses(
-        "synth-compact-control group relative flex h-[80px] w-[148px] shrink-0 flex-col gap-1 rounded-[7px] border py-1 px-1.5 transition cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
+        "cosimo-control group relative flex h-[80px] w-[148px] shrink-0 flex-col gap-1 rounded-[7px] border py-1 px-1.5 transition cursor-grab active:cursor-grabbing focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-200/45",
         card.isSelected
             ? "border-[rgb(var(--section-accent-rgb)/0.68)] bg-[rgb(var(--section-accent-rgb)/0.09)]"
             : "hover:border-[rgb(var(--section-accent-rgb)/0.32)] hover:bg-[rgb(var(--section-accent-rgb)/0.04)]",
@@ -991,32 +989,19 @@ function ModeSegmentedControl({
     onSelectMode: (mode: ArticulationTriggerMode) => void;
 }) {
     return (
-        <div
-            role="tablist"
-            aria-label="Articulation trigger mode"
-            className={SEGMENTED_GROUP_CLASS}
-        >
-            {MODE_OPTIONS.map((option) => {
-                const isActive = option.mode === activeMode;
-                return (
-                    <button
-                        key={option.mode}
-                        type="button"
-                        role="tab"
-                        aria-selected={isActive}
-                        data-role="articulation-mode-tab"
-                        data-mode={option.mode}
-                        onClick={() => onSelectMode(option.mode)}
-                        className={joinClasses(
-                            SEGMENTED_BUTTON_BASE,
-                            isActive ? SEGMENTED_BUTTON_ACTIVE : SEGMENTED_BUTTON_INACTIVE,
-                        )}
-                    >
-                        {option.label}
-                    </button>
-                );
-            })}
-        </div>
+        <SegmentedEditorTabs
+            tabs={MODE_OPTIONS.map((option) => ({
+                id: option.mode,
+                label: option.label,
+                ariaLabel: option.label,
+                dataRole: "articulation-mode-tab",
+            }))}
+            activeId={activeMode}
+            ariaLabel="Articulation trigger mode"
+            dataRole="articulation-mode-tabs"
+            onSelect={onSelectMode}
+            size="small"
+        />
     );
 }
 
@@ -2341,7 +2326,7 @@ function ArticulationRangeLane({
                 {placementPreview && previewSegment ? (
                     <span
                         data-role="articulation-range-ghost-label"
-                        className="synth-compact-control pointer-events-none absolute top-1 z-[3] inline-flex max-w-[140px] -translate-x-1/2 items-center gap-1 rounded-[4px] px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-[0.02em] text-cyan-50"
+                        className="cosimo-control pointer-events-none absolute top-1 z-[3] inline-flex max-w-[140px] -translate-x-1/2 items-center gap-1 rounded-[4px] px-1.5 py-0.5 font-mono text-[9px] tabular-nums tracking-[0.02em] text-cyan-50"
                         style={{
                             left: `${(((previewSegment.visibleMin ?? placementPreview.min) + (previewSegment.visibleMax ?? placementPreview.max)) / 2 - viewMinValue + 0.5) / viewTotalSlots * 100}%`,
                         }}
@@ -2733,7 +2718,7 @@ function FloatingArticulationToolbar({
 
 function ActiveModeReadout({ activeMode }: { activeMode: ArticulationTriggerMode }) {
     return (
-        <div className="synth-compact-control inline-flex h-6 shrink-0 items-center gap-1 rounded-[5px] px-2">
+        <div className="cosimo-control inline-flex h-6 shrink-0 items-center gap-1 rounded-[5px] px-2">
             <span className="text-[9px] tracking-[0.04em] text-slate-300/45">Mode</span>
             <span className="font-mono text-[10px] tracking-[0.04em] text-cyan-200/95">
                 {formatModeLabel(activeMode)}

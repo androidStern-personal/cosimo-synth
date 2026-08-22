@@ -91,16 +91,16 @@ export function ParameterPrecisionHud({ model }: { model: ParameterHudModel }) {
         >
             <header className="mobile-voice-hud-header">
                 <span
-                    className="mobile-voice-hud-micro"
+                    className="cosimo-label is-strong"
                     style={{ color: isModulation ? model.sourceAccent : model.ownerAccent }}
                 >
                     {isModulation ? "MOD ↕" : "BASE ↔"}
                 </span>
-                <strong className="mobile-voice-hud-label">
+                <strong className="cosimo-label is-strong is-centered">
                     {model.label}
                 </strong>
                 <span
-                    className="mobile-voice-hud-micro mobile-voice-hud-source"
+                    className="cosimo-label is-strong mobile-voice-hud-source"
                     style={{ color: isModulation ? model.sourceAccent : "rgba(232, 236, 239, 0.6)" }}
                 >
                     {model.sourceLine}
@@ -139,13 +139,13 @@ export function ParameterPrecisionHud({ model }: { model: ParameterHudModel }) {
             </div>
             <footer className="mobile-voice-hud-footer">
                 <span
-                    className="mobile-voice-hud-micro"
+                    className="cosimo-label is-strong"
                     style={{ color: !isModulation ? model.ownerAccent : "rgba(232, 236, 239, 0.35)" }}
                 >
                     ↔ Base
                 </span>
                 <span
-                    className="mobile-voice-hud-micro"
+                    className="cosimo-label is-strong"
                     style={{ color: isModulation ? model.sourceAccent : "rgba(232, 236, 239, 0.35)" }}
                 >
                     ↕ Mod amount

@@ -14,29 +14,79 @@
     font-display: swap;
 }
 
+
+/* ------------------------------------------------------------------------ */
+/* Cosimo design system.                                                      */
+/*                                                                            */
+/* A deliberately small set of scales and semantic roles. Variants override   */
+/* these tokens on a containing surface; component-owned geometry stays local */
+/* when it does not represent a reusable design decision.                      */
+/* ------------------------------------------------------------------------ */
+
 :host,
 .cosimo-surface,
 .ios-shell {
+    /* -- Type ---------------------------------------------------------- */
     --cosimo-font-label: "IBM Plex Sans Condensed", "Avenir Next Condensed", "Arial Narrow", sans-serif;
     --cosimo-font-readout: "Departure Mono", "SF Mono", "IBM Plex Mono", Menlo, monospace;
     --cosimo-font-system: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 
-    --cosimo-body: #1c1c1c;
-    --cosimo-body-rgb: 28 28 28;
-    --cosimo-control: #373737;
-    --cosimo-control-rgb: 55 55 55;
-    --cosimo-surface-raised: #262626;
-    --cosimo-surface-raised-rgb: 38 38 38;
-    --cosimo-surface-raised-high: #2b2b2b;
-    --cosimo-recess: #101010;
-    --cosimo-recess-rgb: 16 16 16;
-    --cosimo-recess-high: #161616;
+    --cosimo-type-caption: 8px;
+    --cosimo-type-label: 10px;
+    --cosimo-type-title: 13px;
+    --cosimo-type-display: 16px;
+    --cosimo-track-tight: 0.05em;
+    --cosimo-track: 0.08em;
+    --cosimo-track-wide: 0.10em;
+
+    /* -- Depth: four surfaces, recessed to proud ------------------------ */
+    --cosimo-ground: #101010;
+    --cosimo-ground-rgb: 16 16 16;
+    --cosimo-surface: #1c1c1c;
+    --cosimo-surface-rgb: 28 28 28;
+    --cosimo-raised: #2b2b2b;
+    --cosimo-raised-rgb: 43 43 43;
     --cosimo-edge: #4d4d4d;
     --cosimo-edge-rgb: 77 77 77;
-    --cosimo-etched: #373737;
-    --cosimo-text: #e8ecef;
-    --cosimo-text-muted: #8e969b;
 
+    /* -- Ink: three weights --------------------------------------------- */
+    --cosimo-text-rgb: 232 236 239;
+    --cosimo-ink: rgb(var(--cosimo-text-rgb) / 1);
+    --cosimo-ink-muted: rgb(var(--cosimo-text-rgb) / 0.62);
+    --cosimo-ink-faint: rgb(var(--cosimo-text-rgb) / 0.38);
+
+    /* -- Line: three weights -------------------------------------------- */
+    --cosimo-wash: rgb(255 255 255 / 0.03);
+    --cosimo-line: rgb(255 255 255 / 0.08);
+    --cosimo-stroke: rgb(255 255 255 / 0.30);
+    --cosimo-line-width: 1px;
+
+    /* -- Space: 4px base ------------------------------------------------ */
+    --cosimo-space-1: 4px;
+    --cosimo-space-2: 8px;
+    --cosimo-space-3: 12px;
+    --cosimo-space-4: 16px;
+
+    /* -- Module: one row height, three variants ------------------------- */
+    --cosimo-module: 40px;
+    --cosimo-module-sm: 24px;
+    --cosimo-module-lg: 48px;
+    --cosimo-hit-min: 44px;
+
+    /* -- Radius: compact controls, panels, and fully rounded shapes ----- */
+    --cosimo-radius-xs: 3px;
+    --cosimo-radius-sm: 5px;
+    --cosimo-radius: 8px;
+    --cosimo-radius-lg: 14px;
+    --cosimo-radius-full: 999px;
+
+    /* -- Shadow: three roles -------------------------------------------- */
+    --cosimo-shadow-inset: inset 0 1px 2px rgb(0 0 0 / 0.76), inset 0 -1px 0 var(--cosimo-wash);
+    --cosimo-shadow-raised: inset 0 1px 0 var(--cosimo-line), 0 4px 10px rgb(0 0 0 / 0.30);
+    --cosimo-shadow-float: 0 18px 52px rgb(0 0 0 / 0.72), inset 0 1px var(--cosimo-line);
+
+    /* -- Accent: one palette. Section and source identity both draw from
+          it, so there are no stray one-off hues anywhere in the app. ----- */
     --cosimo-accent-cyan: #7df7ff;
     --cosimo-accent-cyan-rgb: 125 247 255;
     --cosimo-accent-ion: #6fa8ff;
@@ -53,26 +103,41 @@
     --cosimo-accent-lime-rgb: 183 255 106;
     --cosimo-accent-mint: #68ffc2;
     --cosimo-accent-mint-rgb: 104 255 194;
+    --cosimo-accent-teal: #69d5c5;
+    --cosimo-accent-teal-rgb: 105 213 197;
 
     --section-accent: var(--cosimo-accent-cyan);
     --section-accent-rgb: var(--cosimo-accent-cyan-rgb);
     --section-accent-dim: rgb(var(--section-accent-rgb) / 0.24);
     --section-accent-soft: rgb(var(--section-accent-rgb) / 0.12);
     --section-accent-glow: rgb(var(--section-accent-rgb) / 0.36);
-
-    --cosimo-radius-chassis: 28px;
-    --cosimo-radius-panel: 14px;
-    --cosimo-radius-control: 5px;
-    --cosimo-radius-display: 8px;
-    --cosimo-panel-shadow: inset 0 1px 0 rgb(255 255 255 / 0.055), inset 0 -34px 58px rgb(0 0 0 / 0.30), 0 18px 42px rgb(0 0 0 / 0.30);
-    --cosimo-recess-shadow: inset 0 1px 2px rgb(0 0 0 / 0.76), inset 0 -1px 0 rgb(255 255 255 / 0.03);
-    --cosimo-contact-shadow: 0 4px 10px rgb(0 0 0 / 0.26);
     --cosimo-emissive-shadow: 0 0 12px var(--section-accent-glow);
-    --cosimo-glass-shadow: inset 0 1px 0 rgb(255 255 255 / 0.18), inset 0 -1px 0 rgb(255 255 255 / 0.045), 0 0 16px rgb(var(--section-accent-rgb) / 0.16);
+
+    /* -- Structure: the levers a variant flips --------------------------- */
+    --cosimo-shell-pad: 0px;
+    --cosimo-panel-pad: 0px;
+    --cosimo-graph-pad: 0px;
+    --cosimo-panel-radius: 0px;
+    --cosimo-panel-border: transparent;
+    --cosimo-panel-bg: var(--cosimo-ground);
+    /* The global Mod rail is a fixed overlay docked to a screen edge;
+       content on that edge must clear it. */
+    --cosimo-rail-dock: 40px;
+    /* A bare card by default; a skin that wants cards back sets this. */
+    --cosimo-card-bg: transparent;
+    /* Cast-shadow COLOUR (for drop-shadow filters), not a shadow definition. */
+    --cosimo-cast-shadow: rgb(0 0 0 / 0.55);
+
+    /* -- Graph field ----------------------------------------------------- */
+    --cosimo-field-top: #4b164f;
+    --cosimo-field-bottom: #1f4f5c;
+    --cosimo-field: linear-gradient(180deg, var(--cosimo-field-top), var(--cosimo-field-bottom));
+
 }
 
+
 .cosimo-mod-prototype-theme {
-    color: var(--cosimo-text);
+    color: var(--cosimo-ink);
     font-family: var(--cosimo-font-label);
 }
 
@@ -116,32 +181,91 @@
     --section-accent-rgb: var(--cosimo-accent-mint-rgb);
 }
 
+[data-section-accent="teal"] {
+    --section-accent: var(--cosimo-accent-teal);
+    --section-accent-rgb: var(--cosimo-accent-teal-rgb);
+}
+
 .cosimo-surface,
 .ios-shell {
-    color: var(--cosimo-text);
+    color: var(--cosimo-ink);
     font-family: var(--cosimo-font-label);
 }
 
 .cosimo-surface .font-mono,
-.ios-shell .font-mono,
-.cosimo-readout,
-.synth-value,
-[data-role$="-chip"],
-[data-role$="-readout"] {
+.ios-shell .font-mono {
     font-family: var(--cosimo-font-readout);
 }
 
-.cosimo-label,
-.synth-label,
-.cosimo-surface [class*="uppercase"],
-.ios-shell [class*="uppercase"] {
-    font-family: var(--cosimo-font-label);
-    letter-spacing: 0.14em;
+/* ------------------------------------------------------------------------ */
+/* Label and readout — THE parameter annotation and THE parameter value.     */
+/*                                                                            */
+/* Replaces eleven label classes and sixteen readout classes that differed    */
+/* only in tracking, size and weight. The style guide used to chase strays    */
+/* with [data-role$="-readout"] and [class*="uppercase"] selectors because    */
+/* the primitives existed in name only and had zero adopters.                 */
+/* ------------------------------------------------------------------------ */
+
+.cosimo-label {
+    overflow: hidden;
+    color: var(--cosimo-ink-muted);
+    font-family: var(--cosimo-font-readout);
+    font-size: var(--cosimo-type-caption);
+    font-weight: 700;
+    letter-spacing: var(--cosimo-track-wide);
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
 }
 
-.synth-value {
+.cosimo-readout {
+    overflow: hidden;
     color: var(--section-accent);
-    text-shadow: 0 0 12px var(--section-accent-glow);
+    font-family: var(--cosimo-font-readout);
+    font-size: var(--cosimo-type-label);
+    font-weight: 400;
+    letter-spacing: var(--cosimo-track);
+    text-overflow: ellipsis;
+    text-shadow: 0 0 10px var(--section-accent-glow);
+    white-space: nowrap;
+}
+
+/* A readout is NOT uppercased: unit symbols carry meaning in their case
+   (dB, ct, Hz, ms). Name-style values opt in. */
+.cosimo-readout.is-caps {
+    text-transform: uppercase;
+}
+
+.cosimo-readout.is-caption {
+    font-size: var(--cosimo-type-caption);
+}
+
+.cosimo-readout.is-title {
+    font-size: var(--cosimo-type-title);
+}
+
+.cosimo-readout.is-display {
+    font-size: var(--cosimo-type-display);
+}
+
+/* The only other differences that are real: emphasis and placement. */
+.cosimo-label.is-strong {
+    color: var(--cosimo-ink);
+    font-size: var(--cosimo-type-label);
+}
+
+.cosimo-label.is-centered,
+.cosimo-readout.is-centered {
+    text-align: center;
+}
+
+.cosimo-readout.is-end {
+    justify-self: end;
+}
+
+.cosimo-readout.is-neutral {
+    color: var(--cosimo-ink);
+    text-shadow: none;
 }
 
 .synth-grid-card-shell,
@@ -150,37 +274,23 @@
     isolation: isolate;
     border-color: rgb(var(--cosimo-edge-rgb) / 0.28);
     background:
-        linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / 0.96), rgb(var(--cosimo-body-rgb) / 0.98));
-    box-shadow: var(--cosimo-panel-shadow);
+        linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / 0.96), rgb(var(--cosimo-surface-rgb) / 0.98));
+    box-shadow: var(--cosimo-shadow-raised);
 }
 
-.synth-section-title {
+.cosimo-section-title {
     font-family: var(--cosimo-font-label);
-    font-size: 10px;
+    font-size: var(--cosimo-type-label);
     font-weight: 600;
     line-height: 1;
-    letter-spacing: 0.18em;
+    letter-spacing: var(--cosimo-track-wide);
     text-transform: uppercase;
     color: rgb(var(--section-accent-rgb) / 0.56);
     text-shadow: 0 0 12px rgb(var(--section-accent-rgb) / 0.18);
 }
 
-.synth-section-code,
-.synth-readout-text {
-    font-family: var(--cosimo-font-readout);
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--section-accent);
-    text-shadow: 0 0 12px var(--section-accent-glow);
-}
-
-.synth-muted-marking {
-    font-family: var(--cosimo-font-label);
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: rgb(var(--cosimo-control-rgb) / 0.92);
+.cosimo-section-title.is-title {
+    font-size: var(--cosimo-type-title);
 }
 
 .synth-grid-card-inset {
@@ -191,23 +301,22 @@
     box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.05), inset 0 -34px 58px rgb(0 0 0 / 0.30);
 }
 
-.synth-compact-control,
-.cosimo-button,
-.cosimo-select {
+.cosimo-control,
+.cosimo-button {
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
-    background: rgb(var(--cosimo-control-rgb) / 0.58);
-    color: var(--cosimo-text);
-    box-shadow: var(--cosimo-contact-shadow);
+    background: rgb(var(--cosimo-raised-rgb) / 0.58);
+    color: var(--cosimo-ink);
+    box-shadow: var(--cosimo-shadow-raised);
 }
 
-.synth-compact-control-text {
+.cosimo-control-text {
     font-family: var(--cosimo-font-readout);
-    font-size: 8px;
-    letter-spacing: 0.10em;
+    font-size: var(--cosimo-type-caption);
+    letter-spacing: var(--cosimo-track-wide);
     text-transform: uppercase;
 }
 
-.synth-compact-control-value {
+.cosimo-control-value {
     color: var(--section-accent);
     text-shadow: 0 0 10px var(--section-accent-glow);
 }
@@ -243,31 +352,31 @@
 
 .synth-display-recess {
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.24);
-    background: rgb(var(--cosimo-recess-rgb) / 0.92);
-    box-shadow: var(--cosimo-recess-shadow);
+    background: rgb(var(--cosimo-ground-rgb) / 0.92);
+    box-shadow: var(--cosimo-shadow-inset);
 }
 
 .synth-control-rail {
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.24);
-    background: rgb(var(--cosimo-control-rgb) / 0.22);
+    background: rgb(var(--cosimo-raised-rgb) / 0.22);
 }
 
 .synth-modal-backdrop {
-    background: rgb(var(--cosimo-recess-rgb) / 0.86);
+    background: rgb(var(--cosimo-ground-rgb) / 0.86);
     backdrop-filter: blur(10px);
 }
 
 .synth-modal-frame {
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
     background:
-        linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / 0.98), rgb(var(--cosimo-body-rgb) / 0.99));
+        linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / 0.98), rgb(var(--cosimo-surface-rgb) / 0.99));
     box-shadow: 0 36px 80px rgb(0 0 0 / 0.50);
 }
 
 .synth-menu-surface {
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
-    background: rgb(var(--cosimo-recess-rgb) / 0.97);
-    box-shadow: var(--cosimo-contact-shadow);
+    background: rgb(var(--cosimo-ground-rgb) / 0.97);
+    box-shadow: var(--cosimo-shadow-raised);
     backdrop-filter: blur(6px);
     font-family: var(--cosimo-font-system);
     letter-spacing: normal;
@@ -277,7 +386,7 @@
 .synth-menu-surface button,
 .synth-menu-surface input,
 .synth-menu-surface select,
-.synth-menu-surface .synth-readout-text {
+.synth-menu-surface .cosimo-readout {
     font-family: inherit;
     letter-spacing: normal;
     text-shadow: none;
@@ -292,7 +401,7 @@
     border: 1px solid rgb(255 255 255 / 0.16);
     background:
         linear-gradient(135deg, rgb(255 255 255 / 0.18), rgb(var(--section-accent-rgb) / 0.09) 38%, rgb(255 255 255 / 0.035));
-    box-shadow: var(--cosimo-glass-shadow);
+    box-shadow: var(--cosimo-shadow-raised);
     backdrop-filter: blur(9px) saturate(1.28);
 }
 
@@ -301,7 +410,7 @@
     left: 14px;
     right: 14px;
     height: 12px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     opacity: 0.72;
 }
 
@@ -310,7 +419,7 @@
     bottom: 10px;
     width: 52px;
     height: 10px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
 }
 
 [data-liquid-detail="icon-lens"]::before {
@@ -318,7 +427,7 @@
     right: 10px;
     width: 20px;
     height: 20px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
 }
 
 [data-liquid-detail="section-tab"]::before {
@@ -326,7 +435,7 @@
     left: 10px;
     width: 10px;
     height: 28px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
 }
 
 [data-liquid-detail="routing-node"]::before {
@@ -334,7 +443,7 @@
     top: 14px;
     width: 13px;
     height: 13px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
 }
 
 [data-liquid-detail="edge-rail"]::before {
@@ -342,7 +451,7 @@
     bottom: 14px;
     right: 10px;
     width: 6px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
 }
 
 .synth-display-lip-controls {
@@ -359,8 +468,8 @@
     padding: 4px 5px;
     border: 1px solid rgb(var(--section-accent-rgb) / 0.18);
     border-radius: 10px;
-    background: rgb(var(--cosimo-recess-rgb) / 0.54);
-    box-shadow: var(--cosimo-glass-shadow);
+    background: rgb(var(--cosimo-ground-rgb) / 0.54);
+    box-shadow: var(--cosimo-shadow-raised);
     backdrop-filter: blur(8px) saturate(1.18);
 }
 
@@ -371,8 +480,111 @@
     right: 18px;
     top: 3px;
     height: 2px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.24), transparent);
     opacity: 0.58;
     pointer-events: none;
+}
+
+/* ------------------------------------------------------------------------ */
+/* Tabs — THE segmented selector.                                            */
+/*                                                                            */
+/* Replaces four production dialects that were the same control: the Voice    */
+/* A/B/C bar, the Voice/FX/Mod workspace bar, the iOS oscillator bar, and the */
+/* articulation mode bar (which was Tailwind utility constants).              */
+/*                                                                            */
+/* Variation is expressed through tokens the host sets, not new classes:      */
+/*   --section-accent      the active item's ink and underline                */
+/*   data-dock="top"       hairline above instead of below (bottom-docked bar)*/
+/* ------------------------------------------------------------------------ */
+
+.cosimo-tabs {
+    position: relative;
+    display: grid;
+    height: var(--cosimo-module);
+    flex: 0 0 var(--cosimo-module);
+    grid-auto-columns: minmax(0, 1fr);
+    grid-auto-flow: column;
+    border-bottom: var(--cosimo-line-width) solid var(--cosimo-line);
+    background: var(--cosimo-wash);
+}
+
+.cosimo-tabs[data-dock="top"] {
+    border-top: var(--cosimo-line-width) solid var(--cosimo-line);
+    border-bottom: 0;
+}
+
+.cosimo-tabs.is-small {
+    width: max-content;
+    height: var(--cosimo-module-sm);
+    flex: 0 0 auto;
+    padding: 2px;
+    border: var(--cosimo-line-width) solid var(--cosimo-line);
+    border-radius: var(--cosimo-radius-sm);
+    background: rgb(var(--cosimo-raised-rgb) / 0.22);
+}
+
+.cosimo-tab-slot {
+    position: relative;
+    display: grid;
+    min-width: 0;
+}
+
+.cosimo-tabs.is-small .cosimo-tab-slot {
+    min-width: var(--cosimo-module);
+}
+
+.cosimo-tab-slot:not(:last-child) {
+    border-right: var(--cosimo-line-width) solid var(--cosimo-line);
+}
+
+.cosimo-tab {
+    position: relative;
+    display: grid;
+    width: 100%;
+    height: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--cosimo-ink-muted);
+    cursor: pointer;
+    font-family: var(--cosimo-font-label, sans-serif);
+    font-size: var(--cosimo-type-title);
+    font-weight: 600;
+    letter-spacing: var(--cosimo-track);
+    text-transform: uppercase;
+}
+
+.cosimo-tabs.is-small .cosimo-tab {
+    font-size: var(--cosimo-type-label);
+}
+
+.cosimo-tab.is-active {
+    background: var(--cosimo-wash);
+    box-shadow: inset 0 -2px var(--section-accent);
+    color: var(--section-accent);
+}
+
+.cosimo-tab.is-muted:not(.is-active) {
+    color: var(--cosimo-ink-faint);
+    opacity: 0.6;
+}
+
+.cosimo-tab.is-muted.is-active {
+    box-shadow: inset 0 -2px var(--cosimo-ink-faint);
+    color: var(--cosimo-ink-faint);
+}
+
+.cosimo-tab:focus-visible {
+    outline: 2px solid var(--cosimo-ink);
+    outline-offset: -3px;
+}
+
+/* The workspace bar is neutral rather than section-coloured. */
+.cosimo-tabs.is-neutral {
+    --section-accent: var(--cosimo-ink);
 }

@@ -721,8 +721,8 @@ export function ReadoutCell({
                 aria-label={`${cell.fullLabel}: ${label}`}
                 onClick={() => api.cycleChoice(cell.id)}
             >
-                <span className="mobile-voice-cell-label">{cell.shortLabel}</span>
-                <strong className="mobile-voice-cell-value">{label}</strong>
+                <span className="cosimo-label">{cell.shortLabel}</span>
+                <strong className="cosimo-readout is-end">{label}</strong>
             </button>
         );
     }
@@ -750,8 +750,8 @@ export function ReadoutCell({
             onPointerDown={(event) => api.cellPointerDown(event, cell.id)}
             onKeyDown={(event) => api.handleReadoutKeyDown(event, cell.id)}
         >
-            <span className="mobile-voice-cell-label">{cell.shortLabel}</span>
-            <strong className="mobile-voice-cell-value">
+            <span className="cosimo-label">{cell.shortLabel}</span>
+            <strong className="cosimo-readout is-end">
                 {(cell.formatCellValue ?? cell.formatValue)(value)}
             </strong>
             <ReadoutCellRail presentation={presentation} />

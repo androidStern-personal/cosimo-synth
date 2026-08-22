@@ -10,7 +10,7 @@
     padding: 3px;
     border: 0;
     background: transparent;
-    color: #d7dcde;
+    color: var(--cosimo-ink-muted);
     cursor: grab;
     touch-action: none;
     user-select: none;
@@ -30,14 +30,14 @@
 .rack-knob-readout {
     max-width: 100%;
     overflow: hidden;
-    font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
-    font-size: 9px;
+    font-family: var(--cosimo-font-readout);
+    font-size: var(--cosimo-type-label);
     line-height: 1;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.rack-knob-label { color: #cbd2d4; }
+.rack-knob-label { color: var(--cosimo-ink-muted); }
 .rack-knob-readout { color: var(--editor-accent); }
 
 .rack-knob-art {
@@ -99,7 +99,7 @@
 
 .rack-knob-route-presence {
     fill: var(--rack-knob-mod-accent);
-    stroke: rgb(255 255 255 / 0.84);
+    stroke: var(--cosimo-ink);
     stroke-width: 0.9;
     filter: drop-shadow(0 0 2px var(--rack-knob-mod-accent));
 }
@@ -107,7 +107,7 @@
 /* The traveling live-modulation light; the mod-source-live driver owns
    cx/cy and opacity, so it stays invisible until playback arms it. */
 .rack-knob-mod-light {
-    fill: rgb(255 255 255 / 0.95);
+    fill: var(--cosimo-ink);
     filter: drop-shadow(0 0 3px var(--rack-knob-mod-accent));
     opacity: 0;
     transition: opacity 160ms ease;
@@ -160,13 +160,13 @@
 }
 
 .rack-knob-handle {
-    fill: #f5f6f6;
-    stroke: rgb(3 5 12 / 0.72);
+    fill: var(--cosimo-ink);
+    stroke: rgb(var(--cosimo-ground-rgb) / 0.72);
     stroke-width: 1;
 }
 
 .rack-knob-default-marker {
-    fill: #090d0f;
-    stroke: rgb(239 244 245 / 78%);
+    fill: var(--cosimo-ground);
+    stroke: var(--cosimo-ink);
     stroke-width: 1.2;
 }

@@ -29,14 +29,14 @@
         align-items: center;
         gap: 4px;
         padding: 0 2px;
-        border-bottom: 1px solid rgb(255 255 255 / 0.055);
+        border-bottom: 1px solid var(--cosimo-line);
     }
 
     .mod-mappings-count {
         min-width: 34px;
-        color: rgb(232 236 239 / 0.55);
-        font-size: 10px;
-        letter-spacing: 0.06em;
+        color: var(--cosimo-ink-muted);
+        font-size: var(--cosimo-type-label);
+        letter-spacing: var(--cosimo-track-tight);
         text-align: center;
     }
 
@@ -45,11 +45,11 @@
         flex: 1 1 auto;
         height: 28px;
         padding: 0 8px;
-        border: 1px solid rgb(255 255 255 / 0.1);
-        border-radius: 7px;
-        background: rgb(255 255 255 / 0.04);
-        color: #e8ecef;
-        font-size: 11px;
+        border: 1px solid var(--cosimo-line);
+        border-radius: var(--cosimo-radius-sm);
+        background: var(--cosimo-wash);
+        color: var(--cosimo-ink);
+        font-size: var(--cosimo-type-label);
     }
 
     .mod-mappings-search-clear {
@@ -58,7 +58,7 @@
         height: 28px;
         border: 0;
         background: transparent;
-        color: rgb(232 236 239 / 0.6);
+        color: var(--cosimo-ink-muted);
     }
 
     .mod-mappings-tool,
@@ -66,22 +66,22 @@
         flex: 0 0 auto;
         height: 28px;
         padding: 0 8px;
-        border: 1px solid rgb(255 255 255 / 0.12);
-        border-radius: 7px;
-        background: rgb(255 255 255 / 0.03);
-        color: rgb(232 236 239 / 0.82);
-        font-size: 10px;
+        border: 1px solid var(--cosimo-line);
+        border-radius: var(--cosimo-radius-sm);
+        background: var(--cosimo-wash);
+        color: var(--cosimo-ink);
+        font-size: var(--cosimo-type-label);
         white-space: nowrap;
     }
 
     .mod-mappings-tool[aria-expanded="true"] {
-        border-color: rgb(105 213 197 / 0.6);
-        color: #69d5c5;
+        border-color: rgb(var(--cosimo-accent-teal-rgb) / 0.6);
+        color: var(--cosimo-accent-teal);
     }
 
     .mod-mappings-add {
-        border-color: rgb(105 213 197 / 0.4);
-        color: #69d5c5;
+        border-color: rgb(var(--cosimo-accent-teal-rgb) / 0.4);
+        color: var(--cosimo-accent-teal);
     }
 
     @media (max-width: 355px) {
@@ -97,9 +97,9 @@
         flex-direction: column;
         gap: 6px;
         padding: 6px;
-        border: 1px solid rgb(255 255 255 / 0.08);
+        border: 1px solid var(--cosimo-line);
         border-radius: 10px;
-        background: rgb(255 255 255 / 0.02);
+        background: var(--cosimo-wash);
     }
 
     .mod-mappings-toolsheet-group {
@@ -109,8 +109,8 @@
     }
 
     .mod-mappings-toolsheet-group > span {
-        color: rgb(232 236 239 / 0.5);
-        font-size: 9px;
+        color: var(--cosimo-ink-muted);
+        font-size: var(--cosimo-type-label);
         letter-spacing: 0.12em;
         text-transform: uppercase;
     }
@@ -124,17 +124,17 @@
     .mod-mappings-choice-row > button {
         height: 26px;
         padding: 0 8px;
-        border: 1px solid rgb(255 255 255 / 0.1);
-        border-radius: 999px;
-        background: rgb(255 255 255 / 0.03);
-        color: rgb(232 236 239 / 0.75);
-        font-size: 10px;
+        border: 1px solid var(--cosimo-line);
+        border-radius: var(--cosimo-radius-full);
+        background: var(--cosimo-wash);
+        color: var(--cosimo-ink);
+        font-size: var(--cosimo-type-label);
     }
 
     .mod-mappings-choice-row > button[aria-pressed="true"] {
-        border-color: rgb(105 213 197 / 0.65);
-        background: rgb(105 213 197 / 0.12);
-        color: #9df0e2;
+        border-color: rgb(var(--cosimo-accent-teal-rgb) / 0.65);
+        background: rgb(var(--cosimo-accent-teal-rgb) / 0.12);
+        color: var(--cosimo-accent-teal);
     }
 
     .mod-mappings-criteria {
@@ -148,17 +148,17 @@
     .mod-mappings-criteria > button {
         height: 24px;
         padding: 0 8px;
-        border: 1px solid rgb(105 213 197 / 0.4);
-        border-radius: 999px;
-        background: rgb(105 213 197 / 0.08);
-        color: #9df0e2;
-        font-size: 10px;
+        border: 1px solid rgb(var(--cosimo-accent-teal-rgb) / 0.4);
+        border-radius: var(--cosimo-radius-full);
+        background: rgb(var(--cosimo-accent-teal-rgb) / 0.08);
+        color: var(--cosimo-accent-teal);
+        font-size: var(--cosimo-type-label);
     }
 
     .mod-mappings-clear-all {
-        border-color: rgb(255 255 255 / 0.14) !important;
+        border-color: var(--cosimo-line) !important;
         background: transparent !important;
-        color: rgb(232 236 239 / 0.7) !important;
+        color: var(--cosimo-ink) !important;
     }
 
     .mod-mappings-draft {
@@ -167,38 +167,38 @@
         grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
         gap: 4px;
         padding: 6px;
-        border: 1px dashed rgb(105 213 197 / 0.45);
+        border: 1px dashed rgb(var(--cosimo-accent-teal-rgb) / 0.45);
         border-radius: 10px;
     }
 
     .mod-mappings-draft > select {
         min-width: 0;
         height: 30px;
-        border: 1px solid rgb(255 255 255 / 0.12);
-        border-radius: 7px;
-        background: rgb(10 13 15 / 0.9);
-        color: #e8ecef;
-        font-size: 11px;
+        border: 1px solid var(--cosimo-line);
+        border-radius: var(--cosimo-radius-sm);
+        background: rgb(var(--cosimo-ground-rgb) / 0.9);
+        color: var(--cosimo-ink);
+        font-size: var(--cosimo-type-label);
     }
 
     .mod-mappings-draft > button {
         height: 28px;
-        border: 1px solid rgb(255 255 255 / 0.12);
-        border-radius: 7px;
-        background: rgb(255 255 255 / 0.03);
-        color: rgb(232 236 239 / 0.82);
-        font-size: 10px;
+        border: 1px solid var(--cosimo-line);
+        border-radius: var(--cosimo-radius-sm);
+        background: var(--cosimo-wash);
+        color: var(--cosimo-ink);
+        font-size: var(--cosimo-type-label);
     }
 
     .mod-mappings-draft > button[data-role="mod-mappings-draft-create"]:not(:disabled) {
-        border-color: rgb(105 213 197 / 0.6);
-        color: #69d5c5;
+        border-color: rgb(var(--cosimo-accent-teal-rgb) / 0.6);
+        color: var(--cosimo-accent-teal);
     }
 
     .mod-mappings-draft > [role="alert"] {
         grid-column: 1 / -1;
-        color: #f3a683;
-        font-size: 10px;
+        color: var(--cosimo-accent-coral);
+        font-size: var(--cosimo-type-label);
     }
 
     .mod-mappings-list {
@@ -219,12 +219,12 @@
         grid-template-columns: minmax(72px, 96px) minmax(0, 1fr) 32px 32px 32px;
         align-items: center;
         gap: 6px;
-        min-height: 44px;
+        min-height: var(--cosimo-hit-min);
         padding: 5px 6px;
-        border: 1px solid rgb(255 255 255 / 0.06);
-        border-left: 3px solid var(--route-source-accent, rgb(255 255 255 / 0.14));
+        border: 1px solid var(--cosimo-line);
+        border-left: 3px solid var(--route-source-accent, var(--cosimo-line));
         border-radius: 9px;
-        background: rgb(255 255 255 / 0.015);
+        background: var(--cosimo-wash);
         content-visibility: auto;
         contain-intrinsic-size: auto 48px;
     }
@@ -234,7 +234,7 @@
        the UNLIT power light carries the whole state — no BYPASSED text.
        The power control itself never dims: it is how you leave the state. */
     .mod-mappings-row.is-bypassed {
-        border-left-color: rgb(232 236 239 / 0.18);
+        border-left-color: var(--cosimo-line);
     }
 
     .mod-mappings-row.is-bypassed .mod-mappings-row-identity,
@@ -262,8 +262,8 @@
     }
 
     @keyframes mod-mappings-created {
-        0% { background: rgb(105 213 197 / 0.18); }
-        100% { background: rgb(255 255 255 / 0.015); }
+        0% { background: rgb(var(--cosimo-accent-teal-rgb) / 0.18); }
+        100% { background: var(--cosimo-wash); }
     }
 
     .mod-mappings-row-identity {
@@ -281,22 +281,22 @@
 
     .mod-mappings-row-source {
         overflow: hidden;
-        color: rgb(232 236 239 / 0.85);
-        font-size: 10px;
+        color: var(--cosimo-ink);
+        font-size: var(--cosimo-type-label);
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
     .mod-mappings-row-target {
         overflow: hidden;
-        color: rgb(232 236 239 / 0.55);
-        font-size: 9px;
+        color: var(--cosimo-ink-muted);
+        font-size: var(--cosimo-type-label);
         text-overflow: ellipsis;
         white-space: nowrap;
     }
 
     .mod-mappings-row-target > strong {
-        color: rgb(232 236 239 / 0.7);
+        color: var(--cosimo-ink);
         font-weight: 600;
     }
 
@@ -305,13 +305,13 @@
     }
 
     .mod-mappings-row-rail .mobile-voice-cell {
-        --mobile-voice-owner-accent: var(--route-source-accent, #69d5c5);
+        --mobile-voice-owner-accent: var(--route-source-accent, var(--cosimo-accent-teal));
         width: 100%;
     }
 
     .mod-mappings-row-amount-only {
-        color: rgb(232 236 239 / 0.6);
-        font-size: 10px;
+        color: var(--cosimo-ink-muted);
+        font-size: var(--cosimo-type-label);
         text-align: center;
     }
 
@@ -319,12 +319,12 @@
         width: 32px;
         height: 28px;
         padding: 0;
-        border: 1px solid rgb(255 255 255 / 0.14);
-        border-radius: 6px;
-        background: rgb(255 255 255 / 0.03);
-        color: rgb(232 236 239 / 0.7);
+        border: 1px solid var(--cosimo-line);
+        border-radius: var(--cosimo-radius-sm);
+        background: var(--cosimo-wash);
+        color: var(--cosimo-ink);
         font-family: var(--cosimo-font-readout, monospace);
-        font-size: 12px;
+        font-size: var(--cosimo-type-label);
     }
 
     .mod-mappings-row-power,
@@ -334,23 +334,23 @@
         height: 32px;
         place-items: center;
         border: 0;
-        border-radius: 7px;
+        border-radius: var(--cosimo-radius-sm);
         background: transparent;
-        color: rgb(232 236 239 / 0.6);
-        font-size: 13px;
+        color: var(--cosimo-ink-muted);
+        font-size: var(--cosimo-type-title);
     }
 
     .mod-mappings-row-power {
-        color: rgb(232 236 239 / 0.25);
+        color: var(--cosimo-ink-faint);
     }
 
     .mod-mappings-row-power[aria-pressed="true"] {
-        color: #69d5c5;
-        filter: drop-shadow(0 0 3px rgb(105 213 197 / 0.65));
+        color: var(--cosimo-accent-teal);
+        filter: drop-shadow(0 0 3px rgb(var(--cosimo-accent-teal-rgb) / 0.65));
     }
 
     .mod-mappings-row-delete {
-        color: rgb(243 166 131 / 0.8);
+        color: rgb(var(--cosimo-accent-coral-rgb) / 0.8);
     }
 
     /* T15 LED readout: no duplicated label; base value in a small corner;
@@ -365,11 +365,11 @@
         position: absolute;
         top: 2px;
         right: 6px;
-        color: #9deee0;
+        color: var(--cosimo-accent-teal);
         font-family: var(--cosimo-font-readout, monospace);
         font-size: 8.5px;
         font-variant-numeric: tabular-nums;
-        text-shadow: 0 0 8px rgb(105 213 197 / 0.3);
+        text-shadow: 0 0 8px rgb(var(--cosimo-accent-teal-rgb) / 0.3);
         white-space: nowrap;
     }
 
@@ -380,11 +380,11 @@
         position: absolute;
         top: 2px;
         left: 6px;
-        color: var(--mobile-voice-source-accent, #69d5c5);
+        color: var(--mobile-voice-source-accent, var(--cosimo-accent-teal));
         font-family: var(--cosimo-font-readout, monospace);
         font-size: 8.5px;
         font-variant-numeric: tabular-nums;
-        text-shadow: 0 0 8px color-mix(in srgb, var(--mobile-voice-source-accent, #69d5c5) 40%, transparent);
+        text-shadow: 0 0 8px color-mix(in srgb, var(--mobile-voice-source-accent, var(--cosimo-accent-teal)) 40%, transparent);
         white-space: nowrap;
         pointer-events: none;
     }
@@ -404,20 +404,20 @@
 
     .mod-led-track {
         inset: 0;
-        background: repeating-linear-gradient(90deg, rgb(211 227 232 / 0.07) 0 4px, transparent 4px 6px);
+        background: repeating-linear-gradient(90deg, var(--cosimo-line) 0 4px, transparent 4px 6px);
     }
 
     .mod-led-fill {
         top: 0;
         bottom: 0;
-        background: var(--mobile-voice-source-accent, #69d5c5);
-        box-shadow: 0 0 7px color-mix(in srgb, var(--mobile-voice-source-accent, #69d5c5) 65%, transparent);
+        background: var(--mobile-voice-source-accent, var(--cosimo-accent-teal));
+        box-shadow: 0 0 7px color-mix(in srgb, var(--mobile-voice-source-accent, var(--cosimo-accent-teal)) 65%, transparent);
         -webkit-mask-image: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 6px);
         mask-image: repeating-linear-gradient(90deg, #000 0 4px, transparent 4px 6px);
     }
 
     .mod-led-rail[data-rail-state="bypassed"] .mod-led-fill {
-        background: rgb(232 236 239 / 0.5);
+        background: var(--cosimo-ink-muted);
         box-shadow: none;
     }
 
@@ -425,16 +425,16 @@
         top: -2px;
         bottom: 0;
         width: 2px;
-        background: #fff;
-        box-shadow: 0 0 6px rgb(255 255 255 / 0.6);
+        background: var(--cosimo-ink);
+        box-shadow: 0 0 6px var(--cosimo-stroke);
     }
 
     .mod-led-clip {
         top: 0;
         bottom: 0;
         width: 2px;
-        background: var(--mobile-voice-source-accent, #69d5c5);
-        box-shadow: 0 0 5px var(--mobile-voice-source-accent, #69d5c5);
+        background: var(--mobile-voice-source-accent, var(--cosimo-accent-teal));
+        box-shadow: 0 0 5px var(--mobile-voice-source-accent, var(--cosimo-accent-teal));
     }
 
     .mod-mappings-empty {
@@ -443,19 +443,19 @@
         align-items: center;
         gap: 8px;
         padding: 22px 10px;
-        color: rgb(232 236 239 / 0.6);
-        font-size: 11px;
+        color: var(--cosimo-ink-muted);
+        font-size: var(--cosimo-type-label);
         text-align: center;
     }
 
     .mod-mappings-empty > button {
         height: 28px;
         padding: 0 10px;
-        border: 1px solid rgb(255 255 255 / 0.14);
-        border-radius: 7px;
+        border: 1px solid var(--cosimo-line);
+        border-radius: var(--cosimo-radius-sm);
         background: transparent;
-        color: rgb(232 236 239 / 0.75);
-        font-size: 10px;
+        color: var(--cosimo-ink);
+        font-size: var(--cosimo-type-label);
     }
 }
 

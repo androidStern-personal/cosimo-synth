@@ -4118,14 +4118,14 @@ test("T14: the Mod panels ARE the Voice selector component, restore per instance
 
         // Not an approximation: the SAME component and classes as the Voice
         // A/B/C selector (T14's one-selector rule).
-        assert.equal(await tabs.getAttribute("class"), "mobile-voice-tabs");
+        assert.equal(await tabs.getAttribute("class"), "cosimo-tabs");
         assert.equal(await tabs.getAttribute("role"), "tablist");
         assert.deepEqual(
             await tabs.locator('[role="tab"]').allTextContents(),
             ["SOURCE", "MAPPINGS"],
         );
         assert.equal(
-            await tabs.locator('[role="tab"]').first().evaluate((element) => element.className.includes("mobile-voice-tab")),
+            await tabs.locator('[role="tab"]').first().evaluate((element) => element.className.includes("cosimo-tab")),
             true,
         );
         assert.equal(await page.locator('[data-role="mobile-mod-panel-source"]').count(), 1);

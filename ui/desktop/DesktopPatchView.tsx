@@ -1016,7 +1016,7 @@ function MsegMorphRail({
                     style={{ left: `${value * 100}%` }}
                 />
             </div>
-            <span className="synth-readout-text w-10 shrink-0 text-right text-[10px] opacity-85">
+            <span className="cosimo-readout is-caps w-10 shrink-0 text-right opacity-85">
                 {value.toFixed(3)}
             </span>
         </div>
@@ -1614,7 +1614,7 @@ function DesktopEnvelopeEditor({
     }, []);
 
     return (
-        <div className="relative h-full overflow-hidden bg-[rgb(var(--cosimo-recess-rgb)/0.92)]">
+        <div className="relative h-full overflow-hidden bg-[rgb(var(--cosimo-ground-rgb)/0.92)]">
                 <svg
                     ref={svgRef}
                     viewBox={`0 0 ${ENVELOPE_VIEWBOX.width} ${ENVELOPE_VIEWBOX.height}`}
@@ -1699,7 +1699,7 @@ function DesktopEnvelopeEditor({
                         cx={geometry.attackX}
                         cy={geometry.plotTop}
                         r={13}
-                        fill="rgb(var(--cosimo-recess-rgb) / 0.94)"
+                        fill="rgb(var(--cosimo-ground-rgb) / 0.94)"
                         stroke="var(--section-accent)"
                         strokeWidth={3}
                     />
@@ -1718,7 +1718,7 @@ function DesktopEnvelopeEditor({
                         cx={geometry.decayX}
                         cy={geometry.sustainY}
                         r={13}
-                        fill="rgb(var(--cosimo-recess-rgb) / 0.94)"
+                        fill="rgb(var(--cosimo-ground-rgb) / 0.94)"
                         stroke="var(--section-accent)"
                         strokeWidth={3}
                     />
@@ -1737,7 +1737,7 @@ function DesktopEnvelopeEditor({
                         cx={geometry.releaseX}
                         cy={geometry.plotBottom}
                         r={13}
-                        fill="rgb(var(--cosimo-recess-rgb) / 0.94)"
+                        fill="rgb(var(--cosimo-ground-rgb) / 0.94)"
                         stroke="var(--section-accent)"
                         strokeWidth={3}
                     />
@@ -1760,7 +1760,7 @@ function StatusHeader({ statusText }: HeaderProps) {
     return (
         <header className="flex items-center justify-between gap-3">
             <span className="text-[10px] font-semibold uppercase tracking-[0.24em] text-blue-300/55">Cosimo Synth</span>
-            <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--cosimo-text-muted)]">{statusText}</span>
+            <span className="text-[10px] uppercase tracking-[0.16em] text-[var(--cosimo-ink-muted)]">{statusText}</span>
         </header>
     );
 }
@@ -2731,7 +2731,7 @@ function MsegEditorModal({
                 className="synth-modal-frame mseg-editor-frame"
             >
                 <header className="mseg-editor-header">
-                    <div className="synth-section-title mseg-editor-title">{slotLabel}</div>
+                    <div className="cosimo-section-title mseg-editor-title">{slotLabel}</div>
                     <div className="mseg-editor-shapes" role="group" aria-label="MSEG shape">
                         {[0, 1].map((shapeIndex) => (
                             <button
@@ -2815,7 +2815,7 @@ function MsegEditorModal({
                             onPointerUp={() => setIsMorphAdjusting(false)}
                             onPointerCancel={() => setIsMorphAdjusting(false)}
                         />
-                        <output className="synth-readout-text">{formatPercent(morphBinding.value)}</output>
+                        <output className="cosimo-readout is-caps">{formatPercent(morphBinding.value)}</output>
                     </label>
                     <label className="mseg-editor-range mseg-editor-time" {...rateLongPress}>
                         <span>Time</span>
@@ -2831,7 +2831,7 @@ function MsegEditorModal({
                             onChange={(event) => onRateChange(Number(event.currentTarget.value))}
                             {...rateFocusBindings}
                         />
-                        <output className="synth-readout-text" data-role="mseg-rate-readout">
+                        <output className="cosimo-readout is-caps" data-role="mseg-rate-readout">
                             {formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
                         </output>
                     </label>
@@ -2886,7 +2886,7 @@ function MacroSourceEditor({
         <div className="grid h-full place-items-center p-5">
             <div className="grid w-full max-w-[420px] gap-5 rounded-[18px] border border-white/[0.07] bg-white/[0.025] p-5">
                 <div>
-                    <div className="synth-section-title">Macro {slotIndex + 1}</div>
+                    <div className="cosimo-section-title">Macro {slotIndex + 1}</div>
                     <p className="mt-1 text-xs text-slate-300/55">
                         One global control feeding every route assigned to this source.
                     </p>
@@ -3463,7 +3463,7 @@ function ModulationMatrixSection({
                             </button>
                         ))}
                     </div>
-                    <span className="synth-section-title ml-0.5">Mseg</span>
+                    <span className="cosimo-section-title ml-0.5">Mseg</span>
                 </div>
 
                 {/* Separator */}
@@ -3491,7 +3491,7 @@ function ModulationMatrixSection({
                             </button>
                         ))}
                     </div>
-                    <span className="synth-section-title ml-0.5">Env</span>
+                    <span className="cosimo-section-title ml-0.5">Env</span>
                 </div>
 
                 <div className="mod-source-separator mx-0.5 h-3 w-px shrink-0 bg-white/[0.06]" />
@@ -3514,7 +3514,7 @@ function ModulationMatrixSection({
                             </button>
                         ))}
                     </div>
-                    <span className="synth-section-title ml-0.5">Macro</span>
+                    <span className="cosimo-section-title ml-0.5">Macro</span>
                 </div>
                     </>
                 )}
@@ -3577,7 +3577,7 @@ function ModulationMatrixSection({
                             readOnly={!isEditingMsegRate}
                             aria-label="MSEG rate"
                             data-modulation-target-kind={`mseg${selectedMsegSlot + 1}Rate`}
-                            className={`synth-readout-text w-[64px] touch-none select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-left text-[10px] leading-none outline-none max-[480px]:w-[68px] max-[480px]:px-2 max-[480px]:py-1 max-[480px]:text-[11px] ${
+                            className={`cosimo-readout is-caps w-[64px] touch-none select-none whitespace-nowrap rounded border border-white/[0.04] bg-white/[0.03] px-1.5 py-[3px] text-left leading-none outline-none max-[480px]:w-[68px] max-[480px]:px-2 max-[480px]:py-1 ${
                                 isEditingMsegRate
                                     ? "cursor-text"
                                     : "cursor-ew-resize"
@@ -3664,7 +3664,7 @@ function ModulationMatrixSection({
                         {isEditingMsegRate ? (
                             <span
                                 data-role="parameter-entry-unit"
-                                className="synth-readout-text pointer-events-none absolute right-1.5 text-[8px] opacity-60"
+                                className="cosimo-readout is-caps is-caption pointer-events-none absolute right-1.5 opacity-60"
                             >
                                 {formatParameterEntry(msegRateEditingSpecRef.current ?? msegRateEntrySpec, currentMsegRate).unit}
                             </span>
@@ -3699,7 +3699,7 @@ function ModulationMatrixSection({
                                     data-modulation-target-kind={`env${selectedEnvelopeSlot + 1}${param.target}`}
                                     type="text"
                                     inputMode="decimal"
-                                    className="synth-readout-text w-[52px] rounded border border-white/[0.06] bg-white/[0.03] py-[2px] pl-1 pr-5 text-left text-[9px] leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[56px] max-[480px]:text-[10px]"
+                                    className="cosimo-readout is-caps is-caption w-[52px] rounded border border-white/[0.06] bg-white/[0.03] py-[2px] pl-1 pr-5 text-left leading-none outline-none focus:border-[var(--section-accent)] max-[480px]:w-[56px]"
                                     value={param.draft}
                                     onFocus={(event) => {
                                         const spec = entrySpecForEnvelopeField(param.field, param.current);
@@ -3737,7 +3737,7 @@ function ModulationMatrixSection({
                                 {activeEnvelopeDraftField === param.field ? (
                                     <span
                                         data-role="parameter-entry-unit"
-                                        className="synth-readout-text pointer-events-none absolute right-1 text-[7px] opacity-60"
+                                        className="cosimo-readout is-caps is-caption pointer-events-none absolute right-1 opacity-60"
                                     >
                                         {formatParameterEntry(
                                             envelopeEditingSpecRef.current?.field === param.field
@@ -3768,7 +3768,7 @@ function ModulationMatrixSection({
                     data-role="mod-fixed-sources"
                     className="flex shrink-0 items-center gap-1.5 border-y border-white/[0.05] bg-white/[0.018] px-2.5 py-1.5"
                 >
-                    <span className="synth-section-title mr-1">Fixed</span>
+                    <span className="cosimo-section-title mr-1">Fixed</span>
                     {[
                         { label: "VEL", title: "Note velocity" },
                         { label: "AT", title: "Polyphonic pressure" },
@@ -3824,7 +3824,7 @@ function ModulationMatrixSection({
                             <button
                                 type="button"
                                 data-role="mod-source-mseg-expand"
-                                className="synth-readout-text shrink-0 rounded-[6px] border border-white/[0.12] bg-[rgba(3,5,12,0.6)] px-2 py-1 text-[10px]"
+                                className="cosimo-readout is-caps shrink-0 rounded-[6px] border border-white/[0.12] bg-[rgba(3,5,12,0.6)] px-2 py-1"
                                 onClick={onOpenMsegEditor}
                                 aria-label="Open MSEG editor"
                             >
@@ -3855,7 +3855,7 @@ function ModulationMatrixSection({
                                 <div className="h-full w-full bg-white/[0.02]" />
                             )}
                             <div className="pointer-events-none absolute inset-0 grid place-items-center opacity-0 transition-opacity group-hover:opacity-100">
-                                <span className="synth-readout-text rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 text-[10px] opacity-45">
+                                <span className="cosimo-readout is-caps rounded-[6px] bg-[rgba(3,5,12,0.6)] px-2.5 py-1 opacity-45">
                                     Edit Shape
                                 </span>
                             </div>

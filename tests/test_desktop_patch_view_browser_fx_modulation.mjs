@@ -1938,6 +1938,7 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
                     clientWidth: element.clientWidth,
                     scrollWidth: element.scrollWidth,
                     documentScrollWidth: document.documentElement.scrollWidth,
+                    smallRadius: parseFloat(getComputedStyle(element).getPropertyValue("--cosimo-radius-sm")),
                     dockRightAligned: Math.abs(dockBounds.right - bounds.right) <= 1,
                     dockLoopsAboveFrame: dockBounds.top < bounds.top && dockBounds.bottom >= bounds.top,
                     bodyPrecedesControls: bodyBounds.bottom <= controlsBounds.top + 1,
@@ -1952,7 +1953,8 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
             assert.equal(layout.bodyPrecedesControls, true);
             assert.equal(layout.typeControl.borderWidth, "0px");
             assert.equal(layout.numberControl.borderWidth, "0px");
-            assert.equal(layout.typeControl.borderRadius >= 6 && layout.numberControl.borderRadius >= 6, true);
+            assert.equal(layout.typeControl.borderRadius, layout.smallRadius);
+            assert.equal(layout.numberControl.borderRadius, layout.smallRadius);
             assert.notEqual(layout.typeControl.backgroundColor, "rgba(0, 0, 0, 0)");
             assert.notEqual(layout.numberControl.backgroundColor, "rgba(0, 0, 0, 0)");
             assert.equal(layout.typeControl.height >= 24 && layout.typeControl.width <= 72, true);
@@ -2274,6 +2276,11 @@ test("T15: base drags on log-scale rows walk the display scale, matching the kno
         await page.waitForFunction(() => (
             document.querySelector('[data-role="mod-mappings-row"] .mobile-voice-cell[data-dragging="base"]') !== null
         ));
+        assert.match(
+            await cell.locator(".mod-led-base-val").evaluate((element) => getComputedStyle(element).textShadow),
+            /12px/,
+            "Base editing must strengthen the owning-color value glow.",
+        );
         await page.mouse.up();
 
         const snapshot = await waitForHarnessSnapshot(page, "log base drag writes", (nextSnapshot) => (
@@ -2346,6 +2353,11 @@ test("T15: resonance amount drags walk the modulated value along the dial (effec
         await page.waitForFunction(() => (
             document.querySelector('[data-role="mod-mappings-row"] .mobile-voice-cell[data-dragging="modulation"]') !== null
         ));
+        assert.notEqual(
+            await cell.evaluate((element) => getComputedStyle(element).backgroundImage),
+            "none",
+            "Modulation editing must paint source-colored cell feedback.",
+        );
         await page.mouse.up();
 
         const snapshot = await waitForHarnessSnapshot(page, "resonance amount drag stored", (nextSnapshot) => (

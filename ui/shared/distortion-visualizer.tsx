@@ -378,7 +378,7 @@ export function DistortionVisualizer({
                         </filter>
                     </defs>
 
-                    <rect x="0" y="0" width={COMPACT_VIEWBOX_WIDTH} height={COMPACT_VIEWBOX_HEIGHT} fill="var(--cosimo-recess)" />
+                    <rect x="0" y="0" width={COMPACT_VIEWBOX_WIDTH} height={COMPACT_VIEWBOX_HEIGHT} fill="var(--cosimo-ground)" />
                     <rect
                         x={COMPACT_PLOT.left}
                         y={COMPACT_PLOT.top}
@@ -511,7 +511,7 @@ export function DistortionVisualizer({
         <div className={joinClasses("grid gap-3", className)}>
             <div className="flex items-center justify-between gap-3 text-[11px] uppercase tracking-[0.18em] text-slate-300/62">
                 <div>Driven Transfer</div>
-                <div className="synth-readout-text text-[10px] opacity-75">
+                <div className="cosimo-readout is-caps opacity-75">
                     {overshoot > 0 ? `Overshoot +${overshoot.toFixed(2)}` : `Headroom ${(headroom * 100).toFixed(0)}%`}
                 </div>
             </div>
@@ -533,7 +533,7 @@ export function DistortionVisualizer({
                         </filter>
                     </defs>
 
-                    <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="var(--cosimo-recess)" />
+                    <rect x="0" y="0" width={VIEWBOX_WIDTH} height={VIEWBOX_HEIGHT} fill="var(--cosimo-ground)" />
 
                     <rect
                         x={TRANSFER_PLOT.left}

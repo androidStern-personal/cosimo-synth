@@ -12,8 +12,8 @@
     min-height: 100dvh;
     overflow-x: hidden;
     overscroll-behavior: none;
-    background: var(--cosimo-body);
-    color: var(--cosimo-text);
+    background: var(--cosimo-surface);
+    color: var(--cosimo-ink);
     color-scheme: dark;
     font-family: var(--cosimo-font-label);
     --cosimo-ios-top-inset: 0px;
@@ -53,7 +53,7 @@ select {
     padding: 4px;
     border-radius: 16px;
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
-    background: rgb(var(--cosimo-control-rgb) / 0.42);
+    background: rgb(var(--cosimo-raised-rgb) / 0.42);
 }
 
 .cosimo-mod-direction-button {
@@ -91,9 +91,9 @@ select {
     position: relative;
     width: 100%;
     height: 100%;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.28);
-    box-shadow: var(--cosimo-contact-shadow);
+    box-shadow: var(--cosimo-shadow-raised);
 }
 
 .cosimo-mod-knob-arc {
@@ -125,8 +125,8 @@ select {
     inset: 9px;
     display: grid;
     place-items: center;
-    border-radius: 999px;
-    background: var(--cosimo-recess);
+    border-radius: var(--cosimo-radius-full);
+    background: var(--cosimo-ground);
     color: var(--section-accent);
 }
 
@@ -144,7 +144,7 @@ select {
     top: 7px;
     width: 3px;
     height: 19px;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     background: var(--cosimo-accent-coral);
     transform-origin: 50% 26px;
     box-shadow: var(--cosimo-emissive-shadow);
@@ -157,14 +157,14 @@ select {
     top: 3px;
     width: 2px;
     height: 9px;
-    border-radius: 999px;
-    background: rgb(var(--cosimo-control-rgb) / 0.40);
+    border-radius: var(--cosimo-radius-full);
+    background: rgb(var(--cosimo-raised-rgb) / 0.40);
     transform: translateX(-50%);
     pointer-events: none;
 }
 
 .cosimo-mod-knob[data-polarity="bipolar"] .cosimo-mod-knob-center-marker {
-    background: rgb(var(--cosimo-control-rgb) / 0.84);
+    background: rgb(var(--cosimo-raised-rgb) / 0.84);
 }
 
 .cosimo-mod-knob-input {
@@ -187,7 +187,7 @@ select {
     font-size: 11px;
     font-weight: 600;
     letter-spacing: 0.08em;
-    color: var(--cosimo-text);
+    color: var(--cosimo-ink);
     white-space: nowrap;
 }
 
@@ -196,7 +196,7 @@ select {
     font-size: 9px;
     letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--cosimo-text-muted);
+    color: var(--cosimo-ink-muted);
 }
 
 .ios-shell {
@@ -251,89 +251,6 @@ select {
     padding: 0 16px;
 }
 
-.ios-oscillator-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 0.4rem;
-    padding: 0.3rem;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.9rem;
-    background: rgba(5, 10, 18, 0.7);
-}
-
-.ios-oscillator-tab {
-    min-height: 44px;
-    border: 1px solid transparent;
-    border-radius: 0.7rem;
-    background: transparent;
-    color: rgba(220, 230, 241, 0.62);
-    font-size: 0.75rem;
-    font-weight: 750;
-    letter-spacing: 0.16em;
-}
-
-.ios-oscillator-tab[data-selected="true"] {
-    border-color: rgba(112, 224, 255, 0.28);
-    background: rgba(74, 199, 235, 0.15);
-    color: rgba(224, 249, 255, 0.96);
-}
-
-.ios-oscillator-performance {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr)) repeat(2, minmax(52px, 0.7fr));
-    gap: 8px;
-    padding: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 0.9rem;
-    background: rgba(5, 10, 18, 0.7);
-}
-
-.ios-oscillator-number {
-    display: grid;
-    gap: 4px;
-    min-width: 0;
-    color: rgba(220, 230, 241, 0.56);
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.ios-oscillator-number input,
-.ios-oscillator-performance button {
-    box-sizing: border-box;
-    min-width: 0;
-    min-height: 44px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 0.65rem;
-    background: rgba(255, 255, 255, 0.04);
-    color: rgba(238, 247, 255, 0.92);
-    font: inherit;
-}
-
-.ios-oscillator-number input {
-    width: 100%;
-    padding: 0 8px;
-    font-size: 14px;
-    font-variant-numeric: tabular-nums;
-}
-
-.ios-oscillator-performance button {
-    align-self: end;
-    padding: 0 8px;
-    color: rgba(220, 230, 241, 0.62);
-    font-size: 11px;
-    font-weight: 750;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-}
-
-.ios-oscillator-performance button[data-active="true"] {
-    border-color: rgba(112, 224, 255, 0.28);
-    background: rgba(74, 199, 235, 0.15);
-    color: rgba(224, 249, 255, 0.96);
-}
-
 .wavetable-panel,
 .play-panel,
 .mseg-shell,
@@ -350,8 +267,8 @@ select {
     border-radius: 24px;
     padding: 1rem;
     background:
-        linear-gradient(180deg, rgb(var(--cosimo-surface-raised-rgb) / 0.96), rgb(var(--cosimo-body-rgb) / 0.98));
-    box-shadow: var(--cosimo-panel-shadow);
+        linear-gradient(180deg, rgb(var(--cosimo-raised-rgb) / 0.96), rgb(var(--cosimo-surface-rgb) / 0.98));
+    box-shadow: var(--cosimo-shadow-raised);
     overflow: hidden;
 }
 
@@ -385,7 +302,7 @@ select {
     aspect-ratio: 1.55 / 1;
     overflow: hidden;
     border-radius: 18px;
-    background: var(--cosimo-recess);
+    background: var(--cosimo-ground);
     touch-action: none;
 }
 
@@ -421,7 +338,7 @@ select {
     padding: 20px;
     font-size: 13px;
     color: rgb(var(--cosimo-accent-amber-rgb) / 0.86);
-    background: rgb(var(--cosimo-recess-rgb) / 0.82);
+    background: rgb(var(--cosimo-ground-rgb) / 0.82);
     backdrop-filter: blur(4px);
 }
 
@@ -435,7 +352,7 @@ select {
     display: grid;
     grid-template-rows: auto 1fr auto;
     gap: 8px;
-    padding: 12px;
+    padding: var(--cosimo-space-3);
     pointer-events: none;
 }
 
@@ -473,8 +390,8 @@ select {
 .display-status {
     justify-self: start;
     padding: 6px 10px;
-    border-radius: 999px;
-    background: rgb(var(--cosimo-control-rgb) / 0.42);
+    border-radius: var(--cosimo-radius-full);
+    background: rgb(var(--cosimo-raised-rgb) / 0.42);
 }
 
 .shape-readout {
@@ -517,7 +434,7 @@ select {
 
 .table-retry-button {
     border: 1px solid rgb(var(--cosimo-accent-pink-rgb) / 0.28);
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
     background: rgb(var(--cosimo-accent-pink-rgb) / 0.08);
     color: #ffd8e8;
     padding: 6px 10px;
@@ -565,8 +482,8 @@ select {
     min-height: 36px;
     border-radius: 12px;
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
-    background: rgb(var(--cosimo-control-rgb) / 0.58);
-    color: var(--cosimo-text);
+    background: rgb(var(--cosimo-raised-rgb) / 0.58);
+    color: var(--cosimo-ink);
     padding: 8px 10px;
     font-size: 13px;
 }
@@ -599,14 +516,14 @@ select {
 
 .mseg-launcher {
     display: grid;
-    gap: 12px;
+    gap: var(--cosimo-space-3);
 }
 
 .mseg-launcher-head {
     display: flex;
     justify-content: space-between;
     align-items: end;
-    gap: 12px;
+    gap: var(--cosimo-space-3);
 }
 
 .mseg-launcher-copy,
@@ -627,7 +544,7 @@ select {
 .mseg-route-title {
     font-size: 15px;
     font-weight: 600;
-    color: var(--cosimo-text);
+    color: var(--cosimo-ink);
     letter-spacing: 0.02em;
 }
 
@@ -645,8 +562,8 @@ select {
     height: 128px;
     min-height: 128px;
     border-radius: 18px;
-    background: var(--cosimo-recess);
-    box-shadow: var(--cosimo-recess-shadow);
+    background: var(--cosimo-ground);
+    box-shadow: var(--cosimo-shadow-inset);
     overflow: hidden;
 }
 
@@ -731,7 +648,7 @@ select {
     border: 0;
     border-radius: 0;
     background: transparent;
-    color: var(--cosimo-text);
+    color: var(--cosimo-ink);
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -768,7 +685,7 @@ select {
 .mseg-modal-footer {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
-    gap: 12px;
+    gap: var(--cosimo-space-3);
     align-items: center;
 }
 
@@ -785,8 +702,8 @@ select {
 
 .mseg-loop-button {
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.28);
-    border-radius: 999px;
-    background: rgb(var(--cosimo-control-rgb) / 0.42);
+    border-radius: var(--cosimo-radius-full);
+    background: rgb(var(--cosimo-raised-rgb) / 0.42);
     color: var(--section-accent);
     padding: 0 10px;
     min-width: 36px;
@@ -805,7 +722,7 @@ select {
     display: grid;
     gap: 0;
     padding: 0 12px;
-    background: var(--cosimo-body);
+    background: var(--cosimo-surface);
 }
 
 .keyboard-toolbar {
@@ -825,9 +742,9 @@ select {
     min-width: 72px;
     min-height: 34px;
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
-    border-radius: 999px;
-    background: rgb(var(--cosimo-control-rgb) / 0.58);
-    color: var(--cosimo-text);
+    border-radius: var(--cosimo-radius-full);
+    background: rgb(var(--cosimo-raised-rgb) / 0.58);
+    color: var(--cosimo-ink);
     font-size: 12px;
     letter-spacing: 0.08em;
     text-transform: uppercase;
@@ -856,8 +773,8 @@ select {
     height: var(--cosimo-keyboard-height);
     border-radius: 14px 14px 0 0;
     overflow: hidden;
-    background: var(--cosimo-recess);
-    box-shadow: var(--cosimo-recess-shadow);
+    background: var(--cosimo-ground);
+    box-shadow: var(--cosimo-shadow-inset);
     padding: 6px 6px 0;
     touch-action: none;
 }
@@ -924,25 +841,25 @@ select {
 
 .cosimo-mseg-point-default {
     fill: var(--section-accent);
-    stroke: var(--cosimo-recess);
+    stroke: var(--cosimo-ground);
     stroke-width: 2px;
 }
 
 .cosimo-mseg-point-selected {
     fill: var(--cosimo-accent-pink);
-    stroke: var(--cosimo-recess);
+    stroke: var(--cosimo-ground);
     stroke-width: 3px;
 }
 
 .cosimo-mseg-point-highlight {
     fill: var(--cosimo-accent-mint);
-    stroke: var(--cosimo-recess);
+    stroke: var(--cosimo-ground);
     stroke-width: 2px;
 }
 
 .cosimo-mseg-point-muted {
     fill: rgb(225 231 240 / 0.78);
-    stroke: var(--cosimo-recess);
+    stroke: var(--cosimo-ground);
     stroke-width: 2px;
     opacity: 0.62;
 }
@@ -959,8 +876,8 @@ select {
     min-height: 36px;
     border: 1px solid rgb(var(--cosimo-edge-rgb) / 0.34);
     border-radius: 12px;
-    background: rgb(var(--cosimo-control-rgb) / 0.58);
-    color: var(--cosimo-text);
+    background: rgb(var(--cosimo-raised-rgb) / 0.58);
+    color: var(--cosimo-ink);
     padding: 8px 28px 8px 10px;
 }
 
@@ -1006,7 +923,7 @@ select {
 }
 
 .ios-armed-source-row .ios-armed-source-label {
-    color: var(--cosimo-text-muted, #8e969b);
+    color: var(--cosimo-ink-muted, #8e969b);
     font-family: var(--cosimo-font-readout, monospace);
     font-size: 9px;
     letter-spacing: 0.1em;
@@ -1019,8 +936,8 @@ select {
     padding: 0 8px;
     border: 1px solid rgb(var(--cosimo-edge-rgb, 77 77 77) / 0.34);
     border-radius: 8px;
-    background: rgb(var(--cosimo-control-rgb, 55 55 55) / 0.58);
-    color: var(--cosimo-text, #e8ecef);
+    background: rgb(var(--cosimo-raised-rgb, 55 55 55) / 0.58);
+    color: var(--cosimo-ink, #e8ecef);
     color-scheme: light;
 }
 
@@ -1034,7 +951,7 @@ select {
     border: 1px solid rgb(255 122 108 / 0.30);
     border-radius: 10px;
     background: rgb(255 122 108 / 0.06);
-    color: var(--cosimo-text, #e8ecef);
+    color: var(--cosimo-ink, #e8ecef);
     font-family: var(--cosimo-font-readout, monospace);
     font-size: 10px;
     line-height: 1.4;
