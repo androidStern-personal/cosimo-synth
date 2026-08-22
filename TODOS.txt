@@ -810,7 +810,7 @@ PHASE 4 — REDESIGN MODULATION AROUND QUICK EDITING
 
 PHASE 5 — PARKED UNTIL ITS QUALIFICATION CHANGES
 
-[-] T16 — Resume the nested Effects Lane
+[ ] T16 — Nested Effects Lane: UNPARKED, hard-cut build (2026-08-22)
     Desired product:
     - Multiple effect instances nested inside utilities such as Parallel and Frequency Split, using an Ableton-like lane model.
     Current blocker:
@@ -826,6 +826,7 @@ PHASE 5 — PARKED UNTIL ITS QUALIFICATION CHANGES
     - Real movement since v2 all the same: every variant improved ~0.04-0.09 absolute load; WebKit's BASELINE flipped fail->pass (0.76->0.72), so the v2 "campaign cannot validate its own baseline" defect is gone and what remains is genuine capacity; WebKit H3's misses collapsed 695-788 -> 22-53.
     - Remaining C2 gap to the ceiling: ~0.10 absolute on Chromium, ~0.17-0.22 on WebKit.
     - The physical iPhone/AUv3 campaign (authoritative) remains unexecuted behind the xctrace-offline device blocker — needs the user's hands on the phone.
+    Direction change (2026-08-22, Andrew): the frozen performance gates are VOID as requirements — they were arbitrary. No governor, no capacity ceiling; overload glitches. HARD CUT: every effect becomes an addressable lane device (lane.<instanceId>.<endpointID>); the rack.* namespace, the permanent eight, the 45 per-parameter host endpoints, and rack state v1 are DELETED, not shimmed — one application, no backwards compatibility (never shipped). Architecture: EFFECTS_LANE_ARCHITECTURE_PLAN.md. No spike (every mechanism proven or arithmetic — Andrew rejected the spike as busywork and was right: no design fork existed for it to decide). Build order: M1 engine (pool slots + extended target matrix + laneState upload; the five former spike criteria become M1's permanent acceptance tests), M2 the namespace hard cut, M3 lane UI, M4 product surface + phone pass. Sound quality: never claim parity from the existing differential harnesses (Andrew distrusts their coverage); DSP-touching changes get their own scoped verification conversation first.
 
 INFRASTRUCTURE AND TOOLING
 
