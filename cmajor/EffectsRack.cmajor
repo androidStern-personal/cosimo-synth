@@ -165,6 +165,36 @@ namespace wt
     let laneReverbParamDamping = 2;
     let laneReverbParamMix     = 3;
 
+    // Host-style parameter smoothing for pool records, mirroring each base
+    // endpoint's rampFrames annotation EXACTLY (the annotations are inert on
+    // composed children, so the rack owns the ramp). 0 = snap: discrete
+    // modes/divisions, and the delay's time, which the module glides itself.
+    // Rows follow the pool-slot order (delay, globalFilter, distortion, ott,
+    // chorus, flanger, phaser, reverb); columns are the type's param indices.
+    int32[lanePoolSlotCount, laneSlotParamCount] lanePoolParamRampFrames()
+    {
+        int32[lanePoolSlotCount, laneSlotParamCount] table;
+
+        // delay: timeMs 0, feedback 64, filterHz 64, mix 128, timeMode 0, division 0
+        table[0, 1] = 64;  table[0, 2] = 64;  table[0, 3] = 128;
+        // globalFilter: mode 0, cutoff 64, resonance 64, drive 64
+        table[1, 1] = 64;  table[1, 2] = 64;  table[1, 3] = 64;
+        // distortion: mode 0, driveDb 64, knee 64, wet 64, wetHP 64, wetLP 64
+        table[2, 1] = 64;  table[2, 2] = 64;  table[2, 3] = 64;  table[2, 4] = 64;  table[2, 5] = 64;
+        // ott: all five 128
+        table[3, 0] = 128; table[3, 1] = 128; table[3, 2] = 128; table[3, 3] = 128; table[3, 4] = 128;
+        // chorus: mix 128, motion 0, bloom 0, tone 128, feedback 128, ringAmount 128, ringOffsetMode 0, ringFine 128
+        table[4, 0] = 128; table[4, 3] = 128; table[4, 4] = 128; table[4, 5] = 128; table[4, 7] = 128;
+        // flanger: rate 64, depth 64, feedback 64, mix 128
+        table[5, 0] = 64;  table[5, 1] = 64;  table[5, 2] = 64;  table[5, 3] = 128;
+        // phaser: rate 64, rateMode 0, division 0, depth 64, frequency 64, feedback 64, phase 64, mix 128
+        table[6, 0] = 64;  table[6, 3] = 64;  table[6, 4] = 64;  table[6, 5] = 64;  table[6, 6] = 64;  table[6, 7] = 128;
+        // reverb: all four 128
+        table[7, 0] = 128; table[7, 1] = 128; table[7, 2] = 128; table[7, 3] = 128;
+
+        return table;
+    }
+
 
     // Distortion.cmajor:144-160's rule, in octave units: 0.001 octaves is 0.07% of a
     // frequency, so recomputing pow() below that buys nothing.
@@ -540,6 +570,13 @@ namespace wt
         int32 laneRejectedCount;
         int32 laneParamsSerial;
         float32[lanePoolSlotCount, laneSlotParamCount] poolSlotParams;
+        // Host-style linear ramps toward the records (see the table above):
+        // the CURRENT values the forwarding blocks actually read, plus each
+        // cell's per-frame step and the target it was computed against.
+        float32[lanePoolSlotCount, laneSlotParamCount] poolParamCurrent;
+        float32[lanePoolSlotCount, laneSlotParamCount] poolParamStep;
+        float32[lanePoolSlotCount, laneSlotParamCount] poolParamKnownTarget;
+        int32[lanePoolSlotCount, laneSlotParamCount] poolParamRampTable;
         bool[laneSlotCount] slotInCurrentChain;
 
         RackOctaveScaler[rackOctaveScalerCount] octaveScalers;
@@ -562,6 +599,54 @@ namespace wt
             // computes a pow() at all.
             for (wrap<rackOctaveScalerCount> scaler)
                 octaveScalers[scaler].scale = 1.0f;
+
+            poolParamRampTable = lanePoolParamRampFrames();
+        }
+
+        // One frame of host-style linear ramping for every pool record cell.
+        // A changed target recomputes the step; rampFrames 0 snaps; arrival
+        // clamps exactly to the target so ramps terminate.
+        void advancePoolParamSmoothing()
+        {
+            for (wrap<lanePoolSlotCount> slot)
+            {
+                for (wrap<laneSlotParamCount> param)
+                {
+                    let target = poolSlotParams[slot, param];
+
+                    if (target != poolParamKnownTarget[slot, param])
+                    {
+                        poolParamKnownTarget[slot, param] = target;
+                        let rampFrames = poolParamRampTable[slot, param];
+
+                        if (rampFrames <= 0)
+                        {
+                            poolParamCurrent[slot, param] = target;
+                            poolParamStep[slot, param] = 0.0f;
+                        }
+                        else
+                        {
+                            poolParamStep[slot, param] =
+                                (target - poolParamCurrent[slot, param]) / float32 (rampFrames);
+                        }
+                    }
+
+                    let step = poolParamStep[slot, param];
+
+                    if (step != 0.0f)
+                    {
+                        var next = poolParamCurrent[slot, param] + step;
+
+                        if ((step > 0.0f && next >= target) || (step < 0.0f && next <= target))
+                        {
+                            next = target;
+                            poolParamStep[slot, param] = 0.0f;
+                        }
+
+                        poolParamCurrent[slot, param] = next;
+                    }
+                }
+            }
         }
 
         //----------------------------------------------------------------------
@@ -682,6 +767,14 @@ namespace wt
                     if (selector >= rackModuleCount
                          && slotInPendingChain[slot] && ! slotInCurrentChain[slot])
                     {
+                        for (wrap<laneSlotParamCount> param)
+                        {
+                            let poolOffset = wrap<lanePoolSlotCount> (selector - rackModuleCount);
+                            poolParamCurrent[poolOffset, param] = poolSlotParams[poolOffset, param];
+                            poolParamKnownTarget[poolOffset, param] = poolSlotParams[poolOffset, param];
+                            poolParamStep[poolOffset, param] = 0.0f;
+                        }
+
                         if (selector == laneSlotDelayTwo)         delayTwo.poolResetIn <- 1;
                         if (selector == laneSlotGlobalFilterTwo)  globalFilterTwo.poolResetIn <- 1;
                         if (selector == laneSlotDistortionTwo)    distortionTwo.poolResetIn <- 1;
@@ -896,13 +989,14 @@ namespace wt
             reverb.mixIn <- rackModulateLinear (reverbMix, rackModIn[rackModTargetReverbMix]);
 
             // --- Lane pool -------------------------------------------------
+            advancePoolParamSmoothing();
             // Each pool instance mirrors its base module's forwarding exactly:
             // per-slot parameter record composed with the pool block of the
             // one rackMod bus, through the same clamps, octave conventions,
             // and helper functions. `pp` is the slot's parameter record.
 
             {
-                let pp = poolSlotParams[wrap<lanePoolSlotCount> (laneSlotGlobalFilterTwo - rackModuleCount)];
+                let pp = poolParamCurrent[wrap<lanePoolSlotCount> (laneSlotGlobalFilterTwo - rackModuleCount)];
                 globalFilterTwo.modeIn <- pp[laneGlobalFilterParamMode];
                 globalFilterTwo.cutoffHzIn <- clampFilterCutoffHz (
                     pp[laneGlobalFilterParamCutoffHz]
@@ -918,7 +1012,7 @@ namespace wt
             }
 
             {
-                let pp = poolSlotParams[wrap<lanePoolSlotCount> (laneSlotDistortionTwo - rackModuleCount)];
+                let pp = poolParamCurrent[wrap<lanePoolSlotCount> (laneSlotDistortionTwo - rackModuleCount)];
                 let laneWetHPHz = clampDistortionWetHPHz (
                     pp[laneDistortionParamWetHPHz]
                         * rackOctaveScale (octaveScalers[rackOctaveScalerLaneDistortionWetHP],
@@ -942,7 +1036,7 @@ namespace wt
             }
 
             {
-                let pp = poolSlotParams[wrap<lanePoolSlotCount> (laneSlotOttTwo - rackModuleCount)];
+                let pp = poolParamCurrent[wrap<lanePoolSlotCount> (laneSlotOttTwo - rackModuleCount)];
                 ottTwo.mixIn <- ottClampMixPercent (
                     rackModulateLinear (pp[laneOttParamMix], rackModIn[rackModTargetLaneOttMix]));
                 ottTwo.amountIn <- ottClampAmountPercent (
@@ -956,7 +1050,7 @@ namespace wt
             }
 
             {
-                let pp = poolSlotParams[wrap<lanePoolSlotCount> (laneSlotChorusTwo - rackModuleCount)];
+                let pp = poolParamCurrent[wrap<lanePoolSlotCount> (laneSlotChorusTwo - rackModuleCount)];
                 chorusTwo.enabledIn <- 1.0f;
                 chorusTwo.mixIn <- rackModulateLinear (pp[laneChorusParamMix], rackModIn[rackModTargetLaneChorusMix]);
                 chorusTwo.motionModeIn <- pp[laneChorusParamMotionMode];
@@ -973,7 +1067,7 @@ namespace wt
             }
 
             {
-                let pp = poolSlotParams[wrap<lanePoolSlotCount> (laneSlotFlangerTwo - rackModuleCount)];
+                let pp = poolParamCurrent[wrap<lanePoolSlotCount> (laneSlotFlangerTwo - rackModuleCount)];
                 flangerTwo.rateIn <- clampFlangerRateHz (
                     rackModulateLinear (pp[laneFlangerParamRate], rackModIn[rackModTargetLaneFlangerRate]));
                 flangerTwo.depthIn <- clampFlangerDepth (
@@ -985,7 +1079,7 @@ namespace wt
             }
 
             {
-                let pp = poolSlotParams[wrap<lanePoolSlotCount> (laneSlotPhaserTwo - rackModuleCount)];
+                let pp = poolParamCurrent[wrap<lanePoolSlotCount> (laneSlotPhaserTwo - rackModuleCount)];
                 phaserTwo.rateIn <- clampPhaserRateHz (
                     rackModulateLinear (pp[lanePhaserParamRate], rackModIn[rackModTargetLanePhaserRate]));
                 phaserTwo.rateModeIn <- pp[lanePhaserParamRateMode];
@@ -1006,7 +1100,7 @@ namespace wt
             }
 
             {
-                let pp = poolSlotParams[wrap<lanePoolSlotCount> (laneSlotDelayTwo - rackModuleCount)];
+                let pp = poolParamCurrent[wrap<lanePoolSlotCount> (laneSlotDelayTwo - rackModuleCount)];
                 delayTwo.timeMsIn <- clampDelayTimeMs (
                     pp[laneDelayParamTimeMs]
                         * rackOctaveScale (octaveScalers[rackOctaveScalerLaneDelayTime],
@@ -1025,7 +1119,7 @@ namespace wt
             }
 
             {
-                let pp = poolSlotParams[wrap<lanePoolSlotCount> (laneSlotReverbTwo - rackModuleCount)];
+                let pp = poolParamCurrent[wrap<lanePoolSlotCount> (laneSlotReverbTwo - rackModuleCount)];
                 reverbTwo.sizeIn <- rackModulateLinear (pp[laneReverbParamSize], rackModIn[rackModTargetLaneReverbSize]);
                 reverbTwo.decayIn <- rackModulateLinear (pp[laneReverbParamDecay], rackModIn[rackModTargetLaneReverbDecay]);
                 reverbTwo.dampingIn <- rackModulateLinear (pp[laneReverbParamDamping], rackModIn[rackModTargetLaneReverbDamping]);

@@ -358,6 +358,113 @@ processor LaneSecondDelayTest [[ main ]]
         out <- (stalePeakReverb < controlCeiling ? 1 : 0);
         advance();
 
+        // Frames 16-18: pool parameter writes are SMOOTHED like base writes,
+        // and structure changes never click. A steady sine through the pool
+        // delay shifts LEVEL when mix changes (dry + delayed interfere), so
+        // a one-frame mix step is a one-frame level jump — the claims bound
+        // per-frame motion while proving the change actually lands.
+        rack.laneTopology <- makeTwoDelayChain();
+        rack.laneSlotParams <- makeDelayTwoParams();
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        wt::LaneSlotParamsUpload mixRecord = makeDelayTwoParams();
+        mixRecord.deliverySerial = 11;
+        mixRecord.values[wt::laneDelayParamMix] = 0.0f;
+        rack.laneSlotParams <- mixRecord;
+
+        int32 toneClock = 0;
+
+        for (int32 frame = 0; frame < 6000; ++frame)
+        {
+            advanceRack (0.3f * float32 (std::intrinsics::sin (float32 (toneClock) * 0.05f)));
+            ++toneClock;
+        }
+
+        // Level with mix 0 (dry only), then jump the record to full wet.
+        var dryLevel = 0.0f;
+
+        for (int32 frame = 0; frame < 1024; ++frame)
+        {
+            advanceRack (0.3f * float32 (std::intrinsics::sin (float32 (toneClock) * 0.05f)));
+            ++toneClock;
+            let magnitude = std::intrinsics::abs (rack.out[0]);
+
+            if (magnitude > dryLevel)
+                dryLevel = magnitude;
+        }
+
+        // Mix 0.5: at 350Hz the delayed copy lands ~3.7 rad out of phase, so
+        // HALF wet cancels to ~0.26x amplitude — a strong, measurable level
+        // shift (full wet would restore the original level and hide it).
+        mixRecord.deliverySerial = 12;
+        mixRecord.values[wt::laneDelayParamMix] = 0.5f;
+        rack.laneSlotParams <- mixRecord;
+
+        var maxFrameDelta = 0.0f;
+        var previousSample = rack.out[0];
+
+        for (int32 frame = 0; frame < 512; ++frame)
+        {
+            advanceRack (0.3f * float32 (std::intrinsics::sin (float32 (toneClock) * 0.05f)));
+            ++toneClock;
+            let sample = rack.out[0];
+            let delta = std::intrinsics::abs (sample - previousSample);
+
+            if (delta > maxFrameDelta)
+                maxFrameDelta = delta;
+
+            previousSample = sample;
+        }
+
+        // The sine's own per-frame motion is ~0.015; a one-frame full-wet
+        // step adds a ~0.1+ discontinuity, a 128-frame ramp adds ~0.002.
+        out <- (maxFrameDelta < 0.04f ? 1 : 0);
+        advance();
+
+        // ...and the mix change actually LANDS: the settled level differs
+        // audibly from the dry-only level (interference shifts it).
+        var wetLevel = 0.0f;
+
+        for (int32 frame = 0; frame < 6000; ++frame)
+        {
+            advanceRack (0.3f * float32 (std::intrinsics::sin (float32 (toneClock) * 0.05f)));
+            ++toneClock;
+            let magnitude = std::intrinsics::abs (rack.out[0]);
+
+            if (frame > 5000 && magnitude > wetLevel)
+                wetLevel = magnitude;
+        }
+
+        out <- (std::intrinsics::abs (wetLevel - dryLevel) > 0.05f ? 1 : 0);
+        advance();
+
+
+
+        // Click-free removal: with the line ringing, drop the pool slot; the
+        // ADR-003 fade must keep every frame-to-frame step small.
+        rack.laneTopology <- oneDelay;
+
+        var removalMaxDelta = 0.0f;
+        previousSample = rack.out[0];
+
+        for (int32 frame = 0; frame < 1024; ++frame)
+        {
+            advanceRack (0.3f * float32 (std::intrinsics::sin (float32 (toneClock) * 0.05f)));
+            ++toneClock;
+            let sample = rack.out[0];
+            let delta = std::intrinsics::abs (sample - previousSample);
+
+            if (delta > removalMaxDelta)
+                removalMaxDelta = delta;
+
+            previousSample = sample;
+        }
+
+        out <- (removalMaxDelta < 0.05f ? 1 : 0);
+        advance();
+
         loop
         {
             out <- 1;
