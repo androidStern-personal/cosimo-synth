@@ -40,137 +40,139 @@ processor ModulationV6ProgramSource
     output value float32 macro4Out;
     output value float32 filterQOut;
 
-    wt::ModulationProgramUpload emptyProgram (int32 serial)
+    // The upload is a processor MEMBER: at the mirrored 72-wide rack domain
+    // the struct is tens of kilobytes, and building it through chained
+    // return-by-value locals overflows the interpreter stack (SIGBUS).
+    wt::ModulationProgramUpload scratch;
+
+    void resetScratchProgram (int32 serial)
     {
         wt::ModulationProgramUpload upload;
         upload.dspSessionId = int32 (processor.session);
         upload.deliverySerial = serial;
-        return upload;
+        scratch = upload;
     }
 
-    wt::ModulationProgramUpload hundredProgram (int32 serial, bool includeSentinel)
+    void buildHundredProgram (int32 serial, bool includeSentinel)
     {
-        wt::ModulationProgramUpload upload = emptyProgram (serial);
-        upload.voiceRouteCount = 30;
-        upload.macroVoiceRouteCount = 20;
-        upload.voiceRackRouteCount = 30;
-        upload.macroRackRouteCount = includeSentinel ? 21 : 20;
+        resetScratchProgram (serial);
+        scratch.voiceRouteCount = 30;
+        scratch.macroVoiceRouteCount = 20;
+        scratch.voiceRackRouteCount = 30;
+        scratch.macroRackRouteCount = includeSentinel ? 21 : 20;
 
         for (int32 targetIndex = 0; targetIndex < 30; ++targetIndex)
         {
-            upload.voiceRouteCells.at (targetIndex) = targetIndex;
-            upload.voiceRouteSources.at (targetIndex) = 0;
-            upload.voiceRouteTargets.at (targetIndex) = targetIndex;
-            upload.voiceRoutePolarities.at (targetIndex) = wt::modulationPolarityUnipolar;
+            scratch.voiceRouteCells.at (targetIndex) = targetIndex;
+            scratch.voiceRouteSources.at (targetIndex) = 0;
+            scratch.voiceRouteTargets.at (targetIndex) = targetIndex;
+            scratch.voiceRoutePolarities.at (targetIndex) = wt::modulationPolarityUnipolar;
 
-            upload.voiceRackRouteCells.at (targetIndex) = targetIndex;
-            upload.voiceRackRouteSources.at (targetIndex) = 0;
-            upload.voiceRackRouteTargets.at (targetIndex) = targetIndex;
-            upload.voiceRackRoutePolarities.at (targetIndex) = wt::modulationPolarityUnipolar;
-            upload.voiceRackRouteReducers.at (targetIndex) = wt::modulationReducerMaximum;
+            scratch.voiceRackRouteCells.at (targetIndex) = targetIndex;
+            scratch.voiceRackRouteSources.at (targetIndex) = 0;
+            scratch.voiceRackRouteTargets.at (targetIndex) = targetIndex;
+            scratch.voiceRackRoutePolarities.at (targetIndex) = wt::modulationPolarityUnipolar;
+            scratch.voiceRackRouteReducers.at (targetIndex) = wt::modulationReducerMaximum;
         }
 
         for (int32 targetIndex = 0; targetIndex < 19; ++targetIndex)
         {
-            upload.macroVoiceRouteCells.at (targetIndex) = targetIndex;
-            upload.macroVoiceRouteSources.at (targetIndex) = 0;
-            upload.macroVoiceRouteTargets.at (targetIndex) = targetIndex;
-            upload.macroVoiceRoutePolarities.at (targetIndex) = wt::modulationPolarityUnipolar;
+            scratch.macroVoiceRouteCells.at (targetIndex) = targetIndex;
+            scratch.macroVoiceRouteSources.at (targetIndex) = 0;
+            scratch.macroVoiceRouteTargets.at (targetIndex) = targetIndex;
+            scratch.macroVoiceRoutePolarities.at (targetIndex) = wt::modulationPolarityUnipolar;
         }
 
-        upload.macroVoiceRouteCells[19] = wt::modulationTargetFilterQ;
-        upload.macroVoiceRouteSources[19] = 0;
-        upload.macroVoiceRouteTargets[19] = wt::modulationTargetFilterQ;
-        upload.macroVoiceRoutePolarities[19] = wt::modulationPolarityUnipolar;
-        upload.macroVoiceRouteAmounts[wt::modulationTargetFilterQ] = 1.0f;
+        scratch.macroVoiceRouteCells[19] = wt::modulationTargetFilterQ;
+        scratch.macroVoiceRouteSources[19] = 0;
+        scratch.macroVoiceRouteTargets[19] = wt::modulationTargetFilterQ;
+        scratch.macroVoiceRoutePolarities[19] = wt::modulationPolarityUnipolar;
+        scratch.macroVoiceRouteAmounts[wt::modulationTargetFilterQ] = 1.0f;
 
         for (int32 targetIndex = 0; targetIndex < 20; ++targetIndex)
         {
-            upload.macroRackRouteCells.at (targetIndex) = targetIndex;
-            upload.macroRackRouteSources.at (targetIndex) = 0;
-            upload.macroRackRouteTargets.at (targetIndex) = targetIndex;
-            upload.macroRackRoutePolarities.at (targetIndex) = wt::modulationPolarityUnipolar;
+            scratch.macroRackRouteCells.at (targetIndex) = targetIndex;
+            scratch.macroRackRouteSources.at (targetIndex) = 0;
+            scratch.macroRackRouteTargets.at (targetIndex) = targetIndex;
+            scratch.macroRackRoutePolarities.at (targetIndex) = wt::modulationPolarityUnipolar;
         }
-        upload.macroRackRouteAmounts[19] = 1.0f;
+        scratch.macroRackRouteAmounts[19] = 1.0f;
 
         if (includeSentinel)
         {
             let finalCell = wt::modulationMacroRackRouteCellCount - 1;
-            upload.macroRackRouteCells[20] = finalCell;
-            upload.macroRackRouteSources[20] = wt::modulationMacroSourceCount - 1;
-            upload.macroRackRouteTargets[20] = wt::rackModTargetCount - 1;
-            upload.macroRackRoutePolarities[20] = wt::modulationPolarityUnipolar;
-            upload.macroRackRouteAmounts[finalCell] = 0.5f;
+            scratch.macroRackRouteCells[20] = finalCell;
+            scratch.macroRackRouteSources[20] = wt::modulationMacroSourceCount - 1;
+            scratch.macroRackRouteTargets[20] = wt::rackModTargetCount - 1;
+            scratch.macroRackRoutePolarities[20] = wt::modulationPolarityUnipolar;
+            scratch.macroRackRouteAmounts[finalCell] = 0.5f;
         }
 
-        return upload;
-    }
+        }
 
-    wt::ModulationProgramUpload fullDomainProgram (int32 serial)
+    void buildFullDomainProgram (int32 serial)
     {
-        wt::ModulationProgramUpload upload = emptyProgram (serial);
-        upload.voiceRouteCount = wt::modulationVoiceRouteCellCount;
-        upload.macroVoiceRouteCount = wt::modulationMacroVoiceRouteCellCount;
-        upload.voiceRackRouteCount = wt::modulationVoiceRackRouteCellCount;
-        upload.macroRackRouteCount = wt::modulationMacroRackRouteCellCount;
+        resetScratchProgram (serial);
+        scratch.voiceRouteCount = wt::modulationVoiceRouteCellCount;
+        scratch.macroVoiceRouteCount = wt::modulationMacroVoiceRouteCellCount;
+        scratch.voiceRackRouteCount = wt::modulationVoiceRackRouteCellCount;
+        scratch.macroRackRouteCount = wt::modulationMacroRackRouteCellCount;
 
         for (int32 cellIndex = 0; cellIndex < wt::modulationVoiceRouteCellCount; ++cellIndex)
         {
-            upload.voiceRouteCells.at (cellIndex) = cellIndex;
-            upload.voiceRouteSources.at (cellIndex) = cellIndex / wt::modulationVoiceTargetCount;
-            upload.voiceRouteTargets.at (cellIndex) = cellIndex % wt::modulationVoiceTargetCount;
-            upload.voiceRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
+            scratch.voiceRouteCells.at (cellIndex) = cellIndex;
+            scratch.voiceRouteSources.at (cellIndex) = cellIndex / wt::modulationVoiceTargetCount;
+            scratch.voiceRouteTargets.at (cellIndex) = cellIndex % wt::modulationVoiceTargetCount;
+            scratch.voiceRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
         }
 
         for (int32 cellIndex = 0; cellIndex < wt::modulationMacroVoiceRouteCellCount; ++cellIndex)
         {
-            upload.macroVoiceRouteCells.at (cellIndex) = cellIndex;
-            upload.macroVoiceRouteSources.at (cellIndex) = cellIndex / wt::modulationVoiceTargetCount;
-            upload.macroVoiceRouteTargets.at (cellIndex) = cellIndex % wt::modulationVoiceTargetCount;
-            upload.macroVoiceRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
+            scratch.macroVoiceRouteCells.at (cellIndex) = cellIndex;
+            scratch.macroVoiceRouteSources.at (cellIndex) = cellIndex / wt::modulationVoiceTargetCount;
+            scratch.macroVoiceRouteTargets.at (cellIndex) = cellIndex % wt::modulationVoiceTargetCount;
+            scratch.macroVoiceRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
         }
 
         for (int32 cellIndex = 0; cellIndex < wt::modulationVoiceRackRouteCellCount; ++cellIndex)
         {
-            upload.voiceRackRouteCells.at (cellIndex) = cellIndex;
-            upload.voiceRackRouteSources.at (cellIndex) = cellIndex / wt::rackModTargetCount;
-            upload.voiceRackRouteTargets.at (cellIndex) = cellIndex % wt::rackModTargetCount;
-            upload.voiceRackRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
-            upload.voiceRackRouteReducers.at (cellIndex) = wt::modulationReducerMaximum;
+            scratch.voiceRackRouteCells.at (cellIndex) = cellIndex;
+            scratch.voiceRackRouteSources.at (cellIndex) = cellIndex / wt::rackModTargetCount;
+            scratch.voiceRackRouteTargets.at (cellIndex) = cellIndex % wt::rackModTargetCount;
+            scratch.voiceRackRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
+            scratch.voiceRackRouteReducers.at (cellIndex) = wt::modulationReducerMaximum;
         }
 
         for (int32 cellIndex = 0; cellIndex < wt::modulationMacroRackRouteCellCount; ++cellIndex)
         {
-            upload.macroRackRouteCells.at (cellIndex) = cellIndex;
-            upload.macroRackRouteSources.at (cellIndex) = cellIndex / wt::rackModTargetCount;
-            upload.macroRackRouteTargets.at (cellIndex) = cellIndex % wt::rackModTargetCount;
-            upload.macroRackRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
+            scratch.macroRackRouteCells.at (cellIndex) = cellIndex;
+            scratch.macroRackRouteSources.at (cellIndex) = cellIndex / wt::rackModTargetCount;
+            scratch.macroRackRouteTargets.at (cellIndex) = cellIndex % wt::rackModTargetCount;
+            scratch.macroRackRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
         }
 
-        upload.voiceRouteAmounts[wt::modulationVoiceRouteCellCount - 1] = 1.0f;
-        upload.voiceRouteAmounts[
+        scratch.voiceRouteAmounts[wt::modulationVoiceRouteCellCount - 1] = 1.0f;
+        scratch.voiceRouteAmounts[
             (wt::modulationVoiceSourceCount - 1) * wt::modulationVoiceTargetCount
                 + wt::modulationTargetFilterQ
         ] = 1.0f;
-        upload.macroVoiceRouteAmounts[wt::modulationMacroVoiceRouteCellCount - 1] = 2.0f;
-        upload.macroVoiceRouteAmounts[
+        scratch.macroVoiceRouteAmounts[wt::modulationMacroVoiceRouteCellCount - 1] = 2.0f;
+        scratch.macroVoiceRouteAmounts[
             (wt::modulationMacroSourceCount - 1) * wt::modulationVoiceTargetCount
                 + wt::modulationTargetFilterQ
         ] = 2.0f;
-        upload.voiceRackRouteAmounts[wt::modulationVoiceRackRouteCellCount - 1] = 1.0f;
-        upload.macroRackRouteAmounts[wt::modulationMacroRackRouteCellCount - 1] = 2.0f;
-        return upload;
-    }
+        scratch.voiceRackRouteAmounts[wt::modulationVoiceRackRouteCellCount - 1] = 1.0f;
+        scratch.macroRackRouteAmounts[wt::modulationMacroRackRouteCellCount - 1] = 2.0f;
+        }
 
-    wt::ModulationProgramUpload populatedZeroCountProgram (int32 serial)
+    void buildPopulatedZeroCountProgram (int32 serial)
     {
-        wt::ModulationProgramUpload upload = fullDomainProgram (serial);
-        upload.voiceRouteCount = 0;
-        upload.macroVoiceRouteCount = 0;
-        upload.voiceRackRouteCount = 0;
-        upload.macroRackRouteCount = 0;
-        return upload;
-    }
+        buildFullDomainProgram (serial);
+        scratch.voiceRouteCount = 0;
+        scratch.macroVoiceRouteCount = 0;
+        scratch.voiceRackRouteCount = 0;
+        scratch.macroRackRouteCount = 0;
+        }
 
     std::notes::NoteOn noteOn()
     {
@@ -198,22 +200,40 @@ processor ModulationV6ProgramSource
         for (int32 frame = 0; ; ++frame)
         {
             if (frame == 1)
-                programOut <- emptyProgram (1);
+            {
+                resetScratchProgram (1);
+                programOut <- scratch;
+            }
             if (frame == 2)
             {
                 voiceOut <- noteOn();
                 voiceOut <- slide();
             }
             if (frame == 5)
-                programOut <- hundredProgram (2, false);
+            {
+                buildHundredProgram (2, false);
+                programOut <- scratch;
+            }
             if (frame == 20)
-                programOut <- hundredProgram (3, true);
+            {
+                buildHundredProgram (3, true);
+                programOut <- scratch;
+            }
             if (frame == 35)
-                programOut <- fullDomainProgram (4);
+            {
+                buildFullDomainProgram (4);
+                programOut <- scratch;
+            }
             if (frame == 50)
-                programOut <- populatedZeroCountProgram (5);
+            {
+                buildPopulatedZeroCountProgram (5);
+                programOut <- scratch;
+            }
             if (frame == 75)
-                programOut <- emptyProgram (6);
+            {
+                resetScratchProgram (6);
+                programOut <- scratch;
+            }
             advance();
         }
     }

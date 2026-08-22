@@ -99,6 +99,12 @@ namespace wt
         input value float32 feedbackIn [[ name: "Flanger Feedback", min: -0.95f, max: 0.95f, init: 0.0f,  rampFrames: 64 ]];
         input value float32 mixIn      [[ name: "Flanger Mix",      min: 0.0f,   max: 1.0f,  init: 0.0f,  rampFrames: 128 ]];
 
+        // Effects Lane pool lifecycle only: a pool slot entering a committed
+        // chain is a newly created device and must sound like one — empty
+        // audio memory, never touched parameters. Only the rack's commit path
+        // sends this, and never to a base instance.
+        input event int32 poolResetIn;
+
         output stream float32<2> out;
 
         // The standing check, not a comment anyone can drift past. A composed child's
@@ -123,6 +129,17 @@ namespace wt
         float32 currentDepth = -1.0f;
         float32 sweepDelaySamples;
         float32 baseDelaySamples;
+
+
+        event poolResetIn (int32 ignored)
+        {
+            delayBuffers = ();
+            delayWritePositions = ();
+            lfoPhase = 0.0f;
+            // Sentinels force rate/depth-derived values to recompute.
+            currentRateHz = -1.0f;
+            currentDepth = -1.0f;
+        }
 
         void init()
         {

@@ -22,18 +22,57 @@ test("lane kind grammar accepts real pool params and rejects everything else", a
     assert.equal(lanes.parseLaneModulationTargetKind("rack.delayTime"), null);
 });
 
-test("assigned lane targets resolve to the pool block indices; unassigned resolve null", async () => {
+test("assigned lane targets resolve to the MIRROR pool indices; unassigned resolve null", async () => {
     const lanes = await loadUIModule(repoRoot, "ui/shared/lane-modulation-targets.ts");
     const targets = await loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
     const assignments = new Map([["delay#2", 0]]);
+    // The pool block mirrors the static vocabulary: index = static count +
+    // the mirror target's own static index. Derived on both sides, so the
+    // engine and UI cannot drift.
     const timeIndex = lanes.getLaneModulationTargetIndex(
         lanes.parseLaneModulationTargetKind("lane.delay#2.delayTime"), assignments);
     const mixIndex = lanes.getLaneModulationTargetIndex(
         lanes.parseLaneModulationTargetKind("lane.delay#2.delayMix"), assignments);
-    assert.equal(timeIndex, targets.MODULATION_RACK_TARGET_COUNT);
-    assert.equal(mixIndex, targets.MODULATION_RACK_TARGET_COUNT + 3);
+    assert.equal(timeIndex,
+        targets.MODULATION_RACK_TARGET_COUNT + targets.getRackModulationTargetIndex("rack.delayTime"));
+    assert.equal(mixIndex,
+        targets.MODULATION_RACK_TARGET_COUNT + targets.getRackModulationTargetIndex("rack.delayMix"));
     assert.equal(lanes.getLaneModulationTargetIndex(
         lanes.parseLaneModulationTargetKind("lane.delay#7.delayMix"), assignments), null);
+});
+
+test("every device type's every pool endpoint parses, mirrors a real rack target, and resolves", async () => {
+    const lanes = await loadUIModule(repoRoot, "ui/shared/lane-modulation-targets.ts");
+    const targets = await loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
+    const deviceEndpoints = {
+        globalFilter: ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
+        distortion: ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
+        ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
+        chorus: ["chorusMix", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingFineSemitones"],
+        flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"],
+        phaser: ["phaserRate", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"],
+        delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix"],
+        reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"],
+    };
+    const seenIndices = new Set();
+    for (const [deviceType, endpoints] of Object.entries(deviceEndpoints)) {
+        const instanceId = `${deviceType}#3`;
+        const assignments = new Map([[instanceId, 0]]);
+        for (const endpointID of endpoints) {
+            const kind = `lane.${instanceId}.${endpointID}`;
+            const parsed = lanes.parseLaneModulationTargetKind(kind);
+            assert.notEqual(parsed, null, kind);
+            const index = lanes.getLaneModulationTargetIndex(parsed, assignments);
+            assert.ok(
+                index >= targets.MODULATION_RACK_TARGET_COUNT
+                    && index < targets.MODULATION_RACK_TARGET_COUNT + lanes.MODULATION_LANE_POOL_TARGET_COUNT,
+                `${kind} -> ${index}`,
+            );
+            assert.ok(!seenIndices.has(index), `duplicate pool index for ${kind}`);
+            seenIndices.add(index);
+        }
+    }
+    assert.equal(lanes.MODULATION_LANE_POOL_TARGET_COUNT, targets.MODULATION_RACK_TARGET_COUNT);
 });
 
 test("lane params speak their device type's canonical modulation language", async () => {
@@ -87,9 +126,11 @@ test("the compiler places assigned lane routes in the pool block and drops unass
     };
     const assignments = new Map([["delay#2", 0]]);
 
+    const targets = await loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
     const compiled = program.compileModulationRuntimeProgram([route], assignments);
     assert.equal(compiled.voiceRackRouteCount, 1);
-    const laneTargetIndex = program.MODULATION_RACK_TARGET_TOTAL - 1; // delayMix = last pool lane
+    const laneTargetIndex = targets.MODULATION_RACK_TARGET_COUNT
+        + targets.getRackModulationTargetIndex("rack.delayMix");
     assert.equal(compiled.voiceRackRouteTargets[0], laneTargetIndex);
     // Cell math runs at the TOTAL width on both sides of the wire.
     assert.equal(compiled.voiceRackRouteCells[0] % program.MODULATION_RACK_TARGET_TOTAL, laneTargetIndex);
@@ -98,8 +139,8 @@ test("the compiler places assigned lane routes in the pool block and drops unass
     assert.equal(dropped.voiceRackRouteCount, 0);
 
     // The wire shape: cell tables are sources x TOTAL (matching the engine's
-    // rackModTargetCount = 40).
-    assert.equal(program.MODULATION_RACK_TARGET_TOTAL, 40);
+    // rackModTargetCount = 72: static vocabulary + its full pool mirror).
+    assert.equal(program.MODULATION_RACK_TARGET_TOTAL, 72);
     assert.equal(
         program.MODULATION_VOICE_RACK_ROUTE_CELL_COUNT,
         program.MODULATION_VOICE_SOURCE_COUNT * program.MODULATION_RACK_TARGET_TOTAL,
