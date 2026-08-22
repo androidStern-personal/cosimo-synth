@@ -132,6 +132,22 @@ are M1's permanent acceptance tests, not a throwaway report.
   install latency reported against today's measured baseline; MSEG modulates
   instance #2 and provably not #1; teardown leaves zero installed routes and
   a clean post-tail output.
+- **M1 progress (2026-08-22, branch claude/effects-lane-m1, five commits):**
+  DONE: pool slot + topology/params uploads + lifecycle (sleep outside chain,
+  fresh entry) + modulation through the one program (`lane.*` kinds, slot
+  assignments, pool block on the one bus, static 1,131 domain untouched) +
+  the hot-path acknowledgment contract, measured on the real product page:
+  120Hz edit stream, final ack 0.3ms Chromium / same-frame WebKit, zero
+  misses (vs ~25ms on today's modulation-amount path). All platforms green
+  including native parity fingerprints.
+- **M1 COMPLETE (2026-08-22, six commits):** all eight types pooled with
+  per-module-audited fresh-entry resets (delay + reverb discrimination-
+  proven); the pool block is a full derived MIRROR of the static vocabulary
+  (bus width 72, no offset tables, cannot drift); topology enables travel as
+  a bitmask; the program-execution suite's tail sentinel permanently
+  exercises pool modulation. Full cross-platform gate green. Known harness
+  constraint recorded: composed-parent event writes cap near 19 ints — big
+  structs travel graph connections.
 - **M2 — The hard cut:** delete the `rack.*` namespace and the 45
   per-parameter endpoints; rewrite target descriptors, the resolver, the
   legal-pair domain, and every fixture to `lane.*`; lane state v1 replaces
