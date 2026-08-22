@@ -142,6 +142,44 @@ are M1's permanent acceptance tests, not a throwaway report.
 - **M4 — Product surface:** device add/remove UX, the default starter patch,
   and the physical phone pass.
 
+## 3.1 M1 engine breakdown (reconnaissance 2026-08-22, verified in cmajor/)
+
+The engine already contains all three mechanisms M1 generalizes — nothing is
+invented from scratch:
+
+- **Runtime routing exists.** `EffectsRack` is deliberately a `processor`,
+  not a `graph`: eight resident `node`s with `main()` dispatching the runtime
+  order (this is how 8! reorderings work today, with crossfaded transitions).
+  Lanes generalize the dispatch from "a permutation of eight" to "a topology
+  tree over pool slots" — same mechanism, richer program. The Parallel and
+  FrequencySplit utilities become new resident nodes (crossover spec from the
+  feasibility work; the C10 latency discipline in the file header governs the
+  compensated dry paths).
+- **The structured, acked upload exists.** `RackOrderUpload` /
+  `RackEnableUpload` are struct events with committed-generation readbacks
+  and rejection counters — exactly the laneState pattern. LaneTopologyUpload
+  (tree + pool-slot occupancy + per-slot parameter table) is a third sibling,
+  not a new idea.
+- **The modulation bus is one indexed array.** Voice-reduced modulation
+  arrives as `rackModIn[rackModTargetCount]` (engine constant 36 in
+  FixedFrameOscillator.cmajor, mirrored by MODULATION_RACK_TARGET_COUNT on
+  the UI side). Pool slots widen this array and the VoiceReducer vocabulary;
+  cell counts scale linearly and execution stays sparse.
+
+The 45 hoisted `input value` parameter endpoints on EffectsRack are what the
+hard cut deletes: per-slot parameters move into the laneState upload.
+
+**Sequencing constraint (no-dual-path rule):** master never carries two
+addressing schemes. The lane work builds on ONE feature branch where the
+intermediate dual state may exist while tests migrate; it merges only as the
+completed cut (engine + namespace + UI landing together, full gate green).
+Milestones M1-M3 are review checkpoints on that branch, not master merges.
+
+**First failing test (M1 start):** a cmajor_rack suite case asserting the
+engine accepts a LaneTopologyUpload placing a second delay in series and the
+rendered output contains both delays' distinct echo spacings — red today
+because neither the upload type nor the second delay node exists.
+
 ## 4. Open product questions (Andrew's calls, not blockers for E1)
 
 1. Pool sizes per effect type at compile time (the feasibility evidence used

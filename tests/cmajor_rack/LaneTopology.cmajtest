@@ -1,0 +1,176 @@
+// Behavioural contract for the Effects Lane pool (M1 slice 1): the rack accepts a
+// LaneTopologyUpload placing a SECOND delay instance in a serial chain, per-slot
+// parameters address the pool instance individually, and the rendered audio proves
+// two INDEPENDENT delay lines with distinct times.
+//
+// The discrimination this pins: an impulse through delay(40ms, mix .5) -> delay#2
+// (90ms, mix .5) with zero feedback produces echoes at 40ms, 90ms, AND 130ms. The
+// 90ms echo can only exist if the second instance is a real, individually
+// addressable delay line — a rack with one delay cannot produce it.
+//
+// `## testProcessor()` renders exactly 100 frames in ONE block and scans the first
+// output endpoint: <0 stops, >0 is a pass, ==0 is a failure. The composed rack is
+// advanced by hand inside main(), so multi-thousand-frame echoes are reachable.
+//
+// NOTE (same as Delay.cmajtest): a composed child's `init:` annotations are INERT —
+// every rack endpoint the scenario depends on is written explicitly below.
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
+
+//==============================================================================
+// A second delay instance in the chain is individually addressable and audible.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneSecondDelayTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    // 40ms and 90ms at 44100: echoes at 1764, 3969, and (series) 5733 frames.
+    let delayOneMs = 40.0f;
+    let delayTwoMs = 90.0f;
+    let echoOneFrame = 1764;
+    let echoTwoFrame = 3969;
+    let echoSumFrame = 5733;
+
+    let settleFrames = 2048;
+    let recordFrames = 6400;
+
+    // Echo detection windows: catmull-rom interpolation and the parameter ramps
+    // spread the impulse slightly, so each expected echo is scanned in a +/-8
+    // frame window and each control (no-echo) point in the same window.
+    let peakWindow = 8;
+    let expectedPeakMinimum = 0.08f;
+    let controlCeiling = 0.015f;
+
+    float32[6400] recordedLeft;
+
+    wt::LaneTopologyUpload makeTwoDelayChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 2;
+        upload.slotIds[0] = wt::rackModuleDelay;
+        upload.slotIds[1] = wt::laneSlotDelayTwo;
+        upload.enabledFlags[wt::rackModuleDelay] = 1;
+        upload.enabledFlags[wt::laneSlotDelayTwo] = 1;
+        return upload;
+    }
+
+    wt::LaneSlotParamsUpload makeDelayTwoParams()
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::laneSlotDelayTwo;
+        upload.values[wt::laneDelayParamTimeMs] = delayTwoMs;
+        upload.values[wt::laneDelayParamFeedback] = 0.0f;
+        upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        upload.values[wt::laneDelayParamMix] = 0.5f;
+        return upload;
+    }
+
+    void configure()
+    {
+        // Delay slot #1 (the base delay) via the rack's parameter endpoints.
+        rack.delayTime <- delayOneMs;
+        rack.delayFeedback <- 0.0f;
+        rack.delayFilter <- 18000.0f;
+        rack.delayMix <- 0.5f;
+        rack.tempoBpmIn <- 120.0f;
+
+        // Pool slot delay#2, addressed individually.
+        rack.laneSlotParams <- makeDelayTwoParams();
+        rack.laneTopology <- makeTwoDelayChain();
+    }
+
+    void advanceRack (float32 sample)
+    {
+        rack.in <- float32<2> (sample, sample);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+    }
+
+    float32 windowPeak (int32 center)
+    {
+        var peak = 0.0f;
+
+        for (int32 offset = -peakWindow; offset <= peakWindow; ++offset)
+        {
+            let index = center + offset;
+
+            if (index >= 0 && index < recordFrames)
+            {
+                let magnitude = std::intrinsics::abs (recordedLeft.at (index));
+
+                if (magnitude > peak)
+                    peak = magnitude;
+            }
+        }
+
+        return peak;
+    }
+
+    void main()
+    {
+        configure();
+
+        // Settle: parameter ramps complete and the ADR-003 transition commits
+        // the lane chain (3ms ramp down + 3ms back at 44100 is ~266 frames).
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        // One impulse, then silence, recording the response.
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+
+        // Frame 1: the dry path passed the impulse (both delays half-dry).
+        out <- (windowPeak (0) > expectedPeakMinimum ? 1 : 0);
+        advance();
+
+        // Frame 2: delay #1's own echo exists.
+        out <- (windowPeak (echoOneFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+
+        // Frame 3: THE claim — delay #2's echo exists at ITS OWN time. Only a
+        // second, individually parameterised delay line can produce this.
+        out <- (windowPeak (echoTwoFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+
+        // Frame 4: the series echo proves they are chained, not parallel copies.
+        out <- (windowPeak (echoSumFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+
+        // Frame 5: a control point between the echoes stays silent — the peaks
+        // are real echoes, not smear.
+        out <- (windowPeak (2646) < controlCeiling ? 1 : 0);
+        advance();
+
+        // Frame 6: the committed lane generation is readable back.
+        out <- (rack.laneCommittedGeneration > 0 ? 1 : 0);
+        advance();
+
+        // Frame 7: a malformed upload (duplicate slot) is rejected, counted, and
+        // leaves the running chain untouched.
+        wt::LaneTopologyUpload duplicate;
+        duplicate.chainLength = 2;
+        duplicate.slotIds[0] = wt::rackModuleDelay;
+        duplicate.slotIds[1] = wt::rackModuleDelay;
+        duplicate.enabledFlags[wt::rackModuleDelay] = 1;
+        rack.laneTopology <- duplicate;
+
+        for (int32 frame = 0; frame < 64; ++frame)
+            advanceRack (0.0f);
+
+        out <- (rack.laneRejectedUploadCount > 0 ? 1 : 0);
+        advance();
+
+        loop
+        {
+            out <- 1;
+            advance();
+        }
+    }
+}
