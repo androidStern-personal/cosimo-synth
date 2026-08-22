@@ -62,6 +62,7 @@ processor LaneSecondDelayTest [[ main ]]
     {
         wt::LaneSlotParamsUpload upload;
         upload.slotId = wt::laneSlotDelayTwo;
+        upload.deliverySerial = 7;
         upload.values[wt::laneDelayParamTimeMs] = delayTwoMs;
         upload.values[wt::laneDelayParamFeedback] = 0.0f;
         upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
@@ -150,6 +151,12 @@ processor LaneSecondDelayTest [[ main ]]
 
         // Frame 6: the committed lane generation is readable back.
         out <- (rack.laneCommittedGeneration > 0 ? 1 : 0);
+        advance();
+
+        // Frame 6b: the HOT PATH is acknowledged: an applied param record
+        // echoes its delivery serial the same frame it applies, so a knob
+        // drag can measure edit-to-acknowledgment latency end to end.
+        out <- (rack.laneParamsAcknowledgedSerial == 7 ? 1 : 0);
         advance();
 
         // Frame 7: a malformed upload (duplicate slot) is rejected, counted, and
