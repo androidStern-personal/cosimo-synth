@@ -564,7 +564,7 @@ export function DesktopCurveLabStandaloneView() {
     }
 
     return (
-        <div className="min-h-[100dvh] bg-[var(--cosimo-body)] p-4 text-slate-100">
+        <div className="min-h-[100dvh] bg-[var(--cosimo-surface)] p-4 text-slate-100">
             <CurveLabPanel
                 state={state}
                 onStateChange={(updater) => {
@@ -741,7 +741,7 @@ export function useDesktopCurveLab() {
         }
 
         popupRoot.render(
-            <div className="min-h-[100dvh] bg-[var(--cosimo-body)] p-4 text-slate-100">
+            <div className="min-h-[100dvh] bg-[var(--cosimo-surface)] p-4 text-slate-100">
                 <CurveLabPanel state={state} onStateChange={updateState} />
             </div>,
         );
@@ -801,7 +801,7 @@ export function useDesktopCurveLab() {
                     aria-label={usesNativeCurveLabWindow
                         ? "Open curve lab"
                         : (state.isOpen ? "Focus curve lab" : "Open curve lab")}
-                    className="synth-compact-control rounded-full px-4 py-3 text-[10px] uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200/30"
+                    className="cosimo-control rounded-full px-4 py-3 text-[10px] uppercase tracking-[0.24em] text-amber-100 transition hover:border-amber-200/30"
                     onClick={() => {
                         if (usesNativeCurveLabWindow && nativeBridge) {
                             updateState((previousState) => ({ ...previousState, isOpen: true }));

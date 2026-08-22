@@ -81,8 +81,8 @@ export const VOICE_MODE_OPTIONS: VoiceModeOption[] = [
 export const SYNTH_GRID_CARD_SIZE_CLASS = "aspect-[50/27]";
 export const SYNTH_GRID_CARD_SHELL_CLASS = "synth-grid-card-shell relative min-h-0 overflow-hidden rounded-[14px]";
 export const SYNTH_GRID_CARD_INSET_SHADOW_CLASS = "synth-grid-card-inset";
-export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "synth-compact-control rounded-[5px]";
-export const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "synth-compact-control-text";
+export const SYNTH_COMPACT_CONTROL_CHROME_CLASS = "cosimo-control rounded-[5px]";
+export const SYNTH_COMPACT_CONTROL_TEXT_CLASS = "cosimo-control-text";
 const WAVETABLE_DRAWABLE_CONTROL_GAP_PX = 0;
 const MSEG_GRID_STEPS = [0.25, 0.5, 0.75] as const;
 const MSEG_PREVIEW_HORIZONTAL_PADDING_PX = 24;
@@ -1069,7 +1069,7 @@ export function RangeField({
                     onChange={(event) => onChange(Number(event.target.value))}
                     {...focusBindings}
                 />
-                <div className="synth-readout-text text-right text-sm">
+                <div className="cosimo-readout is-caps is-title text-right">
                     {displayValue}
                 </div>
             </div>
@@ -2063,7 +2063,7 @@ export function FilterResponseGraph({
                         cy={baseHandle.y}
                         r="15"
                         fill="rgb(var(--section-accent-rgb) / 0.16)"
-                        stroke="rgb(var(--section-accent-rgb) / 0.24)"
+                        stroke="var(--section-accent-dim)"
                         strokeWidth="1"
                         pointerEvents="none"
                     />
@@ -2396,7 +2396,7 @@ export function KeyboardSectionShell({
                 >
                     <OctaveShiftGlyph direction="down" />
                 </button>
-                <div className="synth-readout-text text-[10px] opacity-70">
+                <div className="cosimo-readout is-caps opacity-70">
                     {keyboardRootLabel}
                 </div>
             </div>
@@ -2477,7 +2477,7 @@ export function WavetableStageSection({
                     onFocus={onTablePrewarm}
                     onPointerEnter={onTablePrewarm}
                 >
-                    <div data-role="wavetable-select-chip" className={`relative inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
+                    <div data-role="wavetable-select-chip" className={`relative inline-flex h-5 min-w-0 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 pr-5 text-left ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} cosimo-control-value`}>
                         <span
                             data-role="wavetable-stage-title"
                             className={`truncate${pendingTableName === null ? "" : " opacity-0"}`}
@@ -2511,7 +2511,7 @@ export function WavetableStageSection({
                 </label>
 
                 <div className="flex min-w-0 items-center gap-1">
-                    <div data-role="wavetable-frame-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} synth-compact-control-value`}>
+                    <div data-role="wavetable-frame-chip" className={`flex h-5 items-center ${SYNTH_COMPACT_CONTROL_CHROME_CLASS} px-1.5 ${SYNTH_COMPACT_CONTROL_TEXT_CLASS} cosimo-control-value`}>
                         Frame {formatFrameIndex(position, frameCount)}
                     </div>
                 </div>
@@ -2688,8 +2688,8 @@ export function MsegOverviewSection({
             className,
         )}>
             <div className="flex items-center justify-between gap-4">
-                <div className="synth-section-title text-[11px]">MSEG</div>
-                <div className="synth-readout-text text-sm">
+                <div className="cosimo-section-title">MSEG</div>
+                <div className="cosimo-readout is-caps is-title">
                     {msegState ? formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds)) : "0.000 s"}
                 </div>
             </div>
@@ -2723,7 +2723,7 @@ export function MsegOverviewSection({
                                     {...depthFocusBindings}
                                 />
                             </div>
-                            <div className="synth-readout-text text-right text-sm">
+                            <div className="cosimo-readout is-caps is-title text-right">
                                 {Number(msegState.depth).toFixed(3)}
                             </div>
                         </div>
@@ -2743,7 +2743,7 @@ export function MsegOverviewSection({
                                     {...rateFocusBindings}
                                 />
                             </div>
-                            <div className="synth-readout-text text-right text-sm">
+                            <div className="cosimo-readout is-caps is-title text-right">
                                 {formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
                             </div>
                             <button

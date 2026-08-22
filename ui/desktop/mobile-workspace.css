@@ -1,14 +1,21 @@
 /* The compact-phone persistent workspace shell (ADR-026): one Voice/FX/Mod
    tab row above the sticky keyboard, one full-height active panel, all three
    workspaces mounted. The perimeter-docked Mod rail overlaying it lives in
-   mobile-mod-rail.css. */
+   mobile-mod-rail.css.
+
+   Every surface, line, size and space here reads from the token layer in
+   synth-style-guide.css. The shell previously stacked three boxes to draw
+   one graph — shell padding, then a bordered rounded panel, then a filter
+   card with the SAME background, border and radius as the panel it sat in,
+   then padding again around the graph. That is now one ground plane; the
+   boxes are token-gated and default to nothing. */
 
 @media (max-width: 639px) {
     .cosimo-surface.is-mobile-shell {
-        --compact-shell-row: 40px;
-        gap: 2px;
-        padding: 4px;
-        border-radius: 18px;
+        --compact-shell-row: var(--cosimo-module);
+        gap: var(--cosimo-space-1);
+        padding: var(--cosimo-shell-pad);
+        border-radius: var(--cosimo-panel-radius);
     }
 
     .mobile-workspace-panels {
@@ -24,65 +31,17 @@
         min-width: 0;
         min-height: 0;
         flex: 1 1 auto;
-        padding: 4px;
+        padding: var(--cosimo-panel-pad);
         overflow-x: hidden;
         overflow-y: auto;
         overscroll-behavior: contain;
-        border: 1px solid rgb(255 255 255 / 0.09);
-        border-radius: 12px;
-        background: #0b1012;
+        border: var(--cosimo-line-width) solid var(--cosimo-panel-border);
+        border-radius: var(--cosimo-panel-radius);
+        background: var(--cosimo-panel-bg);
     }
 
     .mobile-workspace-panel[hidden] {
         display: none;
-    }
-
-    /* ADR-026 tab row in the SAME visual language as the oscillator A/B/C
-       tabs (mobile-voice-editor.css): one flat 40px strip, hairline rules,
-       full-width inset underline on the active item. No radius, no gradient,
-       no per-workspace color. */
-    .mobile-workspace-tabs {
-        position: relative;
-        display: grid;
-        height: var(--compact-shell-row);
-        flex: 0 0 var(--compact-shell-row);
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        border-top: 1px solid rgb(255 255 255 / 0.055);
-        background: rgb(255 255 255 / 0.008);
-    }
-
-    .mobile-workspace-tab {
-        position: relative;
-        display: grid;
-        min-width: 0;
-        align-items: center;
-        justify-items: center;
-        padding: 0;
-        border: 0;
-        background: transparent;
-        box-shadow: none;
-        color: rgb(232 236 239 / 0.42);
-        cursor: pointer;
-        font-family: var(--cosimo-font-label, sans-serif);
-        font-size: 13px;
-        font-weight: 600;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-    }
-
-    .mobile-workspace-tab:not(:last-of-type) {
-        border-right: 1px solid rgb(255 255 255 / 0.045);
-    }
-
-    .mobile-workspace-tab.is-active {
-        background: rgb(255 255 255 / 0.03);
-        box-shadow: inset 0 -2px rgb(232 237 238 / 0.85);
-        color: #f3f6f7;
-    }
-
-    .mobile-workspace-tab:focus-visible {
-        outline: 2px solid #f5ffff;
-        outline-offset: -3px;
     }
 
     .mobile-workspace-panel.is-fx-panel {
@@ -107,17 +66,17 @@
     }
 
     .mobile-workspace-panel.is-fx-panel .rack-list {
-        grid-template-rows: repeat(8, 48px);
+        grid-template-rows: repeat(8, var(--cosimo-module-lg));
         gap: 0;
     }
 
     .mobile-workspace-panel.is-fx-panel .rack-unit {
-        min-height: 48px;
-        grid-template-rows: 48px;
+        min-height: var(--cosimo-module-lg);
+        grid-template-rows: var(--cosimo-module-lg);
     }
 
     .mobile-workspace-panel.is-fx-panel .rack-quick-surface {
-        min-height: 48px;
+        min-height: var(--cosimo-module-lg);
     }
 
     /* T05: the Voice page's main content splits 50/50 between the wavetable
@@ -125,7 +84,7 @@
     .mobile-workspace-panel .mobile-voice-grid {
         height: 100%;
         grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-        gap: 8px;
+        gap: var(--cosimo-space-2);
     }
 
     /* The connection boundary is the grid item; the editor inside it must
@@ -141,15 +100,18 @@
         flex: 1 1 auto;
     }
 
+    /* Was a second bordered, rounded, #0b1012 box drawn on top of a panel
+       that already had that exact border, radius and background. It is now
+       a bare layout box unless a variant re-enables the card tokens. */
     .mobile-filter-card {
         position: relative;
         display: flex;
         min-height: 0;
         flex-direction: column;
         overflow: hidden;
-        border: 1px solid rgb(255 255 255 / 0.09);
-        border-radius: 12px;
-        background: #0b1012;
+        border: var(--cosimo-line-width) solid var(--cosimo-panel-border);
+        border-radius: var(--cosimo-panel-radius);
+        background: var(--cosimo-card-bg);
     }
 
     .mobile-filter-stage {
@@ -161,7 +123,7 @@
     .mobile-filter-graph {
         position: absolute;
         inset: 0;
-        padding: 6px;
+        padding: var(--cosimo-graph-pad);
     }
 
     .mobile-filter-graph[data-disabled="true"] {
@@ -173,8 +135,8 @@
     .mobile-filter-stage.is-mod-hover::after {
         position: absolute;
         z-index: 5;
-        border: 2px solid var(--drag-source-color, #cc59d2);
-        border-radius: 10px;
+        border: 2px solid var(--drag-source-color, var(--cosimo-accent-pink));
+        border-radius: var(--cosimo-radius);
         content: "";
         inset: 2px;
         pointer-events: none;
@@ -184,9 +146,9 @@
         display: grid;
         flex: none;
         grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 6px;
-        padding: 6px;
-        border-top: 1px solid rgb(255 255 255 / 0.055);
+        gap: var(--cosimo-space-1);
+        padding: var(--cosimo-space-1);
+        border-top: var(--cosimo-line-width) solid var(--cosimo-line);
     }
 
     .mobile-filter-knob-cell {
@@ -208,15 +170,15 @@
 
     .is-mobile-shell [data-role="sticky-keyboard"] > section {
         height: 84px;
-        grid-template-columns: 48px minmax(0, 1fr);
+        grid-template-columns: var(--cosimo-module-lg) minmax(0, 1fr);
         gap: 5px;
         overflow: hidden;
     }
 
     .is-mobile-shell [data-role="sticky-keyboard"] .synth-control-rail {
         height: 84px;
-        gap: 2px;
-        padding: 0 2px;
+        gap: var(--cosimo-space-1);
+        padding: 0 var(--cosimo-space-1);
     }
 
     .is-mobile-shell [data-role="sticky-keyboard"] .synth-control-rail > span,
@@ -225,10 +187,10 @@
     }
 
     .is-mobile-shell [data-role="sticky-keyboard"] .synth-control-rail > button {
-        width: 40px;
-        height: 40px;
-        min-height: 40px;
-        border-radius: 12px;
+        width: var(--cosimo-module);
+        height: var(--cosimo-module);
+        min-height: var(--cosimo-module);
+        border-radius: var(--cosimo-panel-radius);
     }
 
     .is-mobile-shell [data-role="sticky-keyboard"] section > div:last-child,

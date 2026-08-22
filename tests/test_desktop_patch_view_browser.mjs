@@ -120,6 +120,64 @@ test("desktop harness renders the real React patch view and requests runtime syn
     }
 });
 
+test("design-system typography preserves utility intent and active knob labels remain readable", async () => {
+    const page = await openHarnessPage();
+
+    try {
+        const surface = page.locator(".cosimo-surface").first();
+        await surface.evaluate((element) => {
+            const probe = document.createElement("span");
+            probe.dataset.role = "design-system-mono-utility-probe";
+            probe.className = "font-mono text-xs text-cyan-200/80";
+            probe.textContent = "Utility probe";
+            element.appendChild(probe);
+        });
+
+        const utilityStyle = await page.locator('[data-role="design-system-mono-utility-probe"]').evaluate((element) => {
+            const style = getComputedStyle(element);
+            return {
+                fontSize: style.fontSize,
+                textTransform: style.textTransform,
+            };
+        });
+        assert.deepEqual(utilityStyle, {
+            fontSize: "12px",
+            textTransform: "none",
+        });
+
+        const activeLabel = page.locator('.rack-parameter-knob:not(:disabled) .rack-knob-label').first();
+        await activeLabel.waitFor();
+        const labelContrast = await activeLabel.evaluate((element) => {
+            const style = getComputedStyle(element);
+            const channels = style.color.match(/[\d.]+/g)?.map(Number) ?? [];
+            const raised = style.getPropertyValue("--cosimo-raised-rgb").trim().split(/\s+/).map(Number);
+            if (channels.length < 3 || raised.length !== 3) {
+                return 0;
+            }
+            const alpha = channels[3] ?? 1;
+            const composited = channels.slice(0, 3).map((channel, index) => (
+                (channel * alpha) + (raised[index] * (1 - alpha))
+            ));
+            const luminance = (rgb) => {
+                const linear = rgb.map((channel) => {
+                    const normalized = channel / 255;
+                    return normalized <= 0.04045
+                        ? normalized / 12.92
+                        : ((normalized + 0.055) / 1.055) ** 2.4;
+                });
+                return (0.2126 * linear[0]) + (0.7152 * linear[1]) + (0.0722 * linear[2]);
+            };
+            const foreground = luminance(composited);
+            const background = luminance(raised);
+            return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+        });
+        assert.ok(labelContrast >= 4.5, `Expected active knob-label contrast >= 4.5, got ${labelContrast}`);
+        assert.deepEqual(page.__cosimoDiagnostics, []);
+    } finally {
+        await page.close();
+    }
+});
+
 test("desktop Vite harness installs React Grab and registers the official MCP plugin in dev mode", async () => {
     const page = await openHarnessPage();
 
@@ -3687,6 +3745,105 @@ test("desktop custom-element wrapper detaches the keyboard when the host element
         const snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.keyboardAttachCalls, [{ endpointID: "midiIn" }]);
         assert.equal(snapshot.keyboardDetachCount, 1);
+    } finally {
+        await page.close();
+    }
+});
+
+test("shared tabs preserve manual workspace focus and automatic oscillator selection", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        const workspaceTabs = page.locator('[data-role="mobile-workspace-tabs"] [role="tab"]');
+        const voiceTab = workspaceTabs.nth(0);
+        const fxTab = workspaceTabs.nth(1);
+        const modTab = workspaceTabs.nth(2);
+
+        await voiceTab.focus();
+        await page.keyboard.press("ArrowRight");
+        assert.equal(await fxTab.evaluate((element) => element.getRootNode().activeElement === element), true);
+        assert.deepEqual(await workspaceTabs.evaluateAll((tabs) => (
+            tabs.map((tab) => ({
+                selected: tab.getAttribute("aria-selected"),
+                tabIndex: tab.getAttribute("tabindex"),
+            }))
+        )), [
+            { selected: "true", tabIndex: "-1" },
+            { selected: "false", tabIndex: "0" },
+            { selected: "false", tabIndex: "-1" },
+        ]);
+
+        await page.keyboard.press("End");
+        assert.equal(await modTab.evaluate((element) => element.getRootNode().activeElement === element), true);
+        assert.equal(await voiceTab.getAttribute("aria-selected"), "true");
+        await page.keyboard.press("Home");
+        assert.equal(await voiceTab.evaluate((element) => element.getRootNode().activeElement === element), true);
+        await page.keyboard.press("ArrowRight");
+        await page.keyboard.press("Space");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-workspace-tab-fx"]')?.getAttribute("aria-selected") === "true"
+        ));
+        assert.equal(await fxTab.evaluate((element) => element.getRootNode().activeElement === element), true);
+
+        await voiceTab.click();
+        const oscillatorA = page.locator('[data-role="mobile-voice-tab-a"]');
+        const oscillatorB = page.locator('[data-role="mobile-voice-tab-b"]');
+        await oscillatorA.focus();
+        await page.keyboard.press("ArrowRight");
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="mobile-voice-tab-b"]')?.getAttribute("aria-selected") === "true"
+        ));
+        assert.equal(await oscillatorB.evaluate((element) => element.getRootNode().activeElement === element), true);
+        assert.equal(await oscillatorB.evaluate((element) => element.tagName), "BUTTON");
+        assert.equal(await oscillatorB.locator("button").count(), 0, "The Solo control must be a sibling, not nested in the tab button.");
+        assert.deepEqual(page.__cosimoDiagnostics, []);
+    } finally {
+        await page.close();
+    }
+});
+
+test("one surface-level theme override reaches shared Voice, FX, Mod, and shell recipes", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator(".cosimo-surface").first().evaluate((element) => {
+            element.style.setProperty("--cosimo-type-caption", "9px");
+            element.style.setProperty("--cosimo-type-label", "11px");
+            element.style.setProperty("--cosimo-module", "42px");
+            element.style.setProperty("--cosimo-panel-bg", "rgb(12 34 56)");
+            element.style.setProperty("--cosimo-radius-sm", "6px");
+        });
+
+        const workspaceTabs = page.locator('[data-role="mobile-workspace-tabs"]');
+        const voicePanel = page.locator('[data-role="mobile-workspace-panel-voice"]');
+        const voiceLabel = voicePanel.locator(".cosimo-label").first();
+        const voiceReadout = voicePanel.locator(".cosimo-readout").first();
+        await voiceLabel.waitFor();
+        assert.deepEqual(await workspaceTabs.evaluate((element) => {
+            const style = getComputedStyle(element);
+            return { height: style.height };
+        }), { height: "42px" });
+        assert.equal(await voicePanel.evaluate((element) => getComputedStyle(element).backgroundColor), "rgb(12, 34, 56)");
+        assert.equal(await voiceLabel.evaluate((element) => getComputedStyle(element).fontSize), "9px");
+        assert.equal(await voiceReadout.evaluate((element) => getComputedStyle(element).fontSize), "11px");
+        assert.equal(
+            await page.locator('[data-role="mobile-voice-solo-a"]').evaluate((element) => getComputedStyle(element).borderRadius),
+            "6px",
+        );
+
+        await page.locator('[data-role="mobile-workspace-tab-fx"]').click();
+        const fxLabel = page.locator('[data-role="mobile-workspace-panel-fx"] .rack-knob-label').first();
+        await fxLabel.waitFor();
+        assert.equal(await fxLabel.evaluate((element) => getComputedStyle(element).fontSize), "11px");
+
+        await page.locator('[data-role="mobile-workspace-tab-mod"]').click();
+        const modTabs = page.locator('[data-role="mobile-mod-panel-tabs"]');
+        await modTabs.waitFor();
+        assert.equal(await modTabs.evaluate((element) => getComputedStyle(element).height), "42px");
     } finally {
         await page.close();
     }

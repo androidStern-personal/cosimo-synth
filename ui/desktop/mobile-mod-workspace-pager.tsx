@@ -14,8 +14,10 @@ import {
     useDirectionalPanelTransition,
 } from "../shared/segmented-editor-tabs";
 
+/** Stable identities for the two compact Mod workspace panels. */
 export type MobileModPanelId = "source" | "mappings";
 
+/** Session-scoped presentation-state key for the selected Mod panel. */
 export const MOD_WORKSPACE_PANEL_STORAGE_KEY = "cosimo.mod-workspace-panel.v1";
 
 const PANEL_ORDER: ReadonlyArray<MobileModPanelId> = ["source", "mappings"];
@@ -56,9 +58,9 @@ export function MobileModWorkspacePager({
         activeId: panel,
     });
     const beginTabTransition = transition.beginTabTransition;
-    const selectPanel = useCallback((id: string) => {
+    const selectPanel = useCallback((id: MobileModPanelId) => {
         beginTabTransition(id);
-        setPanel(id as MobileModPanelId);
+        setPanel(id);
     }, [beginTabTransition]);
 
     return (

@@ -12,65 +12,23 @@
  */
 
 .mobile-voice-editor {
-    --mobile-voice-owner-accent: #69d5c5;
-    --mobile-voice-owner-accent-rgb: 105 213 197;
+    --mobile-voice-owner-accent: var(--cosimo-accent-teal);
+    --mobile-voice-owner-accent-rgb: var(--cosimo-accent-teal-rgb);
+    /* Voice owns the teal accent, so the shared --section-accent tokens
+       (and every shadow built on them) resolve to it inside this editor. */
+    --section-accent: var(--cosimo-accent-teal);
+    --section-accent-rgb: var(--cosimo-accent-teal-rgb);
     position: relative;
     display: flex;
     min-width: 0;
     flex-direction: column;
     overflow: hidden;
-    color: var(--cosimo-text, #e8ecef);
+    color: var(--cosimo-ink);
 }
 
 /* ------------------------------------------------------------------ */
 /* Oscillator tabs                                                      */
 /* ------------------------------------------------------------------ */
-
-.mobile-voice-tabs {
-    position: relative;
-    display: grid;
-    height: 40px;
-    flex: 0 0 40px;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    border-bottom: 1px solid rgb(255 255 255 / 0.055);
-    background: rgb(255 255 255 / 0.008);
-}
-
-.mobile-voice-tab {
-    position: relative;
-    display: grid;
-    min-width: 0;
-    align-items: center;
-    justify-items: center;
-    padding: 0;
-    border: 0;
-    background: transparent;
-    color: rgb(232 236 239 / 0.42);
-    cursor: pointer;
-    font-family: var(--cosimo-font-label, sans-serif);
-    font-size: 15px;
-    font-weight: 600;
-}
-
-.mobile-voice-tab:not(:last-of-type) {
-    border-right: 1px solid rgb(255 255 255 / 0.045);
-}
-
-.mobile-voice-tab.is-active {
-    background: rgb(var(--mobile-voice-owner-accent-rgb) / 0.09);
-    box-shadow: inset 0 -2px var(--mobile-voice-owner-accent);
-    color: var(--mobile-voice-owner-accent);
-}
-
-.mobile-voice-tab.is-muted:not(.is-active) {
-    color: rgb(142 150 155 / 0.28);
-}
-
-.mobile-voice-tab.is-muted.is-active {
-    background: rgb(255 255 255 / 0.018);
-    box-shadow: inset 0 -2px rgb(142 150 155 / 0.30);
-    color: rgb(142 150 155 / 0.45);
-}
 
 /* DAW-style per-tab Solo badge: yellow outline off, yellow fill on. */
 .mobile-voice-tab-solo {
@@ -79,26 +37,26 @@
     top: 3px;
     right: 4px;
     display: grid;
-    width: 14px;
-    height: 14px;
+    width: var(--cosimo-space-4);
+    height: var(--cosimo-space-4);
     place-items: center;
-    border: 1px solid rgb(255 211 110 / 0.65);
-    border-radius: 3px;
+    border: 1px solid rgb(var(--cosimo-accent-amber-rgb) / 0.65);
+    border-radius: var(--cosimo-radius-sm);
     background: transparent;
-    color: #ffd36e;
+    color: var(--cosimo-accent-amber);
     cursor: pointer;
     font-family: var(--cosimo-font-readout, monospace);
-    font-size: 8px;
+    font-size: var(--cosimo-type-caption);
     font-weight: 700;
     line-height: 1;
     opacity: 0.75;
 }
 
 .mobile-voice-tab-solo.is-active {
-    border-color: #ffd36e;
-    background: #ffd36e;
-    box-shadow: 0 0 8px rgb(255 211 110 / 0.35);
-    color: #0b1012;
+    border-color: var(--cosimo-accent-amber);
+    background: var(--cosimo-accent-amber);
+    box-shadow: 0 0 8px rgb(var(--cosimo-accent-amber-rgb) / 0.35);
+    color: var(--cosimo-ground);
     opacity: 1;
 }
 
@@ -112,7 +70,7 @@
     flex: 1 1 auto;
     flex-direction: column;
     /* The renderer's own hardcoded background, extended through the strip. */
-    background: linear-gradient(180deg, #4b164f, #1f4f5c);
+    background: var(--cosimo-field);
 }
 
 .mobile-voice-graph {
@@ -139,20 +97,46 @@
     position: absolute;
     z-index: 5;
     display: flex;
-    height: 26px;
+    height: var(--cosimo-module-sm);
     align-items: center;
-    gap: 6px;
-    padding: 0 9px;
+    gap: var(--cosimo-space-1);
+    padding: 0 var(--cosimo-space-2);
     border: 1px solid rgb(var(--mobile-voice-owner-accent-rgb) / 0.20);
-    border-radius: 8px;
-    background: rgb(16 16 16 / 0.54);
-    box-shadow:
-        inset 0 1px 0 rgb(255 255 255 / 0.18),
-        inset 0 -1px 0 rgb(255 255 255 / 0.045),
-        0 0 16px rgb(var(--mobile-voice-owner-accent-rgb) / 0.14);
+    border-radius: var(--cosimo-radius);
+    background: rgb(var(--cosimo-ground-rgb) / 0.54);
+    box-shadow: var(--cosimo-shadow-raised);
     backdrop-filter: blur(8px) saturate(1.18);
-    color: var(--cosimo-text, #e8ecef);
+    color: var(--cosimo-ink);
     cursor: pointer;
+}
+
+/* Corner placement. These were inline `style={{ bottom: 8, right: 8 }}`
+   literals in the TSX, unreachable by any token. Right-docked chips also
+   clear the global Mod rail, which the shell gutter used to hide. */
+.mobile-voice-chip[data-corner="top-left"] {
+    top: var(--cosimo-space-2);
+    left: var(--cosimo-space-2);
+}
+
+.mobile-voice-chip[data-corner="top-right"] {
+    top: var(--cosimo-space-2);
+    right: calc(var(--cosimo-space-2) + var(--cosimo-rail-dock));
+}
+
+.mobile-voice-chip[data-corner="bottom-left"] {
+    bottom: var(--cosimo-space-2);
+    left: var(--cosimo-space-2);
+}
+
+.mobile-voice-chip[data-corner="bottom-right"] {
+    bottom: var(--cosimo-space-2);
+    right: calc(var(--cosimo-space-2) + var(--cosimo-rail-dock));
+}
+
+/* Stacked beneath the top-left chip. */
+.mobile-voice-chip[data-corner="top-left-stacked"] {
+    top: calc((var(--cosimo-space-2) * 2) + var(--cosimo-module-sm));
+    left: var(--cosimo-space-2);
 }
 
 .mobile-voice-chip.is-readout {
@@ -163,33 +147,11 @@
     -webkit-touch-callout: none;
 }
 
-.mobile-voice-chip-label {
-    color: var(--cosimo-text-muted, #8e969b);
-    font-family: var(--cosimo-font-readout, monospace);
-    font-size: 8px;
-    letter-spacing: 0.10em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.mobile-voice-chip-value {
-    overflow: hidden;
-    max-width: 128px;
-    color: var(--mobile-voice-owner-accent);
-    font-family: var(--cosimo-font-readout, monospace);
-    font-size: 10px;
-    letter-spacing: 0.08em;
-    text-overflow: ellipsis;
-    text-shadow: 0 0 10px rgb(var(--mobile-voice-owner-accent-rgb) / 0.36);
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
 /* Crossfading layers inside the top-left chip (Wavetable <-> live value). */
 .mobile-voice-chip-layer {
     display: flex;
     align-items: center;
-    gap: 6px;
+    gap: var(--cosimo-space-1);
     transition: opacity 120ms ease;
 }
 
@@ -200,7 +162,7 @@
 
 .mobile-voice-chip-layer.is-overlaid {
     position: absolute;
-    left: 9px;
+    left: var(--cosimo-space-2);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -231,10 +193,10 @@
 
 .mobile-voice-toolbar {
     display: grid;
-    height: 40px;
-    flex: 0 0 40px;
+    height: var(--cosimo-module);
+    flex: 0 0 var(--cosimo-module);
     grid-template-columns: 38px minmax(0, 1fr) 30px;
-    border-bottom: 1px solid rgb(255 255 255 / 0.055);
+    border-bottom: 1px solid var(--cosimo-line);
 }
 
 .mobile-voice-paddle {
@@ -242,7 +204,7 @@
     min-width: 0;
     align-content: center;
     justify-items: center;
-    gap: 2px;
+    gap: var(--cosimo-space-1);
     padding: 0;
     border: 0;
     background: rgb(var(--mobile-voice-owner-accent-rgb) / 0.05);
@@ -251,30 +213,17 @@
 }
 
 .mobile-voice-paddle.is-previous {
-    border-right: 1px solid rgb(255 255 255 / 0.045);
+    border-right: 1px solid var(--cosimo-line);
 }
 
 .mobile-voice-paddle.is-next {
-    border-left: 1px solid rgb(255 255 255 / 0.045);
-}
-
-.mobile-voice-paddle-caption {
-    overflow: hidden;
-    max-width: 100%;
-    color: rgb(232 236 239 / 0.40);
-    font-family: var(--cosimo-font-readout, monospace);
-    font-size: 6px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
+    border-left: 1px solid var(--cosimo-line);
 }
 
 .mobile-voice-page {
     display: grid;
-    gap: 3px;
-    padding: 3px;
+    gap: var(--cosimo-space-1);
+    padding: var(--cosimo-space-1);
 }
 
 /* One compact readout or choice cell. */
@@ -286,12 +235,12 @@
     align-items: center;
     justify-items: start;
     grid-template-columns: auto minmax(0, 1fr);
-    column-gap: 4px;
-    padding: 0 6px 4px;
+    column-gap: var(--cosimo-space-1);
+    padding: 0 var(--cosimo-space-1) var(--cosimo-space-1);
     overflow: hidden;
-    border: 1px solid rgb(255 255 255 / 0.07);
-    border-radius: 1px;
-    background: rgb(255 255 255 / 0.008);
+    border: 1px solid var(--cosimo-line);
+    border-radius: var(--cosimo-panel-radius);
+    background: var(--cosimo-wash);
     text-align: left;
 }
 
@@ -309,46 +258,28 @@
 }
 
 .mobile-voice-cell[data-dragging="pending"] {
-    background: rgb(213 220 222 / 0.03);
+    background: var(--cosimo-wash);
 }
 
 /* ADR-025 row 3: editing the base value glows in the OWNING color. */
 .mobile-voice-cell[data-dragging="base"] {
     background: linear-gradient(
         110deg,
-        rgb(var(--mobile-voice-owner-accent-rgb) / 0.10),
-        rgb(var(--mobile-voice-owner-accent-rgb) / 0.02)
+        rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / 0.10),
+        rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / 0.02)
     );
 }
 
-.mobile-voice-cell[data-dragging="base"] .mobile-voice-cell-value {
-    text-shadow: 0 0 12px rgb(var(--mobile-voice-owner-accent-rgb) / 0.62);
+.mobile-voice-cell[data-dragging="base"] :is(.cosimo-readout, .mod-led-base-val) {
+    text-shadow: 0 0 12px rgb(var(--mobile-voice-owner-accent-rgb, var(--cosimo-accent-teal-rgb)) / 0.62);
 }
 
 .mobile-voice-cell[data-dragging="modulation"] {
     background: linear-gradient(
         110deg,
-        rgb(255 255 255 / 0.012),
+        var(--cosimo-wash),
         color-mix(in srgb, var(--mobile-voice-source-accent, transparent) 13%, transparent)
     );
-}
-
-.mobile-voice-cell-label {
-    color: rgb(232 236 239 / 0.46);
-    font-family: var(--cosimo-font-readout, monospace);
-    font-size: 7.5px;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.mobile-voice-cell-value {
-    justify-self: end;
-    color: var(--mobile-voice-owner-accent);
-    font-family: var(--cosimo-font-readout, monospace);
-    font-size: 10px;
-    text-shadow: 0 0 10px rgb(var(--mobile-voice-owner-accent-rgb) / 0.30);
-    white-space: nowrap;
 }
 
 /* ------------------------------------------------------------------ */
@@ -360,9 +291,9 @@
     right: 0;
     bottom: 0;
     left: 0;
-    height: 4px;
+    height: var(--cosimo-space-1);
     overflow: hidden;
-    background: rgb(255 255 255 / 0.025);
+    background: var(--cosimo-wash);
 }
 
 .mobile-voice-rail > span {
@@ -372,12 +303,12 @@
 
 .mobile-voice-rail-track {
     inset: 0;
-    background: repeating-linear-gradient(90deg, rgb(211 227 232 / 0.12) 0 1px, transparent 1px 4px);
+    background: repeating-linear-gradient(90deg, rgb(var(--cosimo-text-rgb) / 0.12) 0 1px, transparent 1px 4px);
     opacity: 0.6;
 }
 
 .mobile-voice-rail-track.is-unmapped {
-    background: repeating-linear-gradient(90deg, rgb(211 227 232 / 0.30) 0 1.5px, transparent 1.5px 6px);
+    background: repeating-linear-gradient(90deg, rgb(var(--cosimo-text-rgb) / 0.30) 0 1.5px, transparent 1.5px 6px);
     opacity: 0.5;
 }
 
@@ -418,8 +349,8 @@
     top: 0;
     bottom: 0;
     width: 2px;
-    background: #e8ecef;
-    box-shadow: 0 0 4px rgb(232 236 239 / 0.72);
+    background: var(--cosimo-ink);
+    box-shadow: 0 0 4px rgb(var(--cosimo-text-rgb) / 0.72);
     transform: translateX(-1px);
 }
 
@@ -429,7 +360,7 @@
     top: 0;
     bottom: 0;
     width: 3px;
-    background: #ffffff;
+    background: var(--cosimo-ink);
     box-shadow:
         0 0 4px var(--mobile-voice-source-accent),
         0 0 8px color-mix(in srgb, var(--mobile-voice-source-accent) 65%, transparent);
@@ -444,11 +375,11 @@
 /* ------------------------------------------------------------------ */
 
 .mobile-voice-hud {
-    --mobile-voice-owner-accent: #69d5c5;
-    --mobile-voice-owner-accent-rgb: 105 213 197;
+    --mobile-voice-owner-accent: var(--cosimo-accent-teal);
+    --mobile-voice-owner-accent-rgb: var(--cosimo-accent-teal-rgb);
     position: absolute;
     z-index: 40;
-    top: max(12px, env(safe-area-inset-top));
+    top: max(var(--cosimo-space-3), env(safe-area-inset-top));
     left: 50%;
     display: grid;
     width: 252px;
@@ -456,9 +387,9 @@
     grid-template-rows: 32px minmax(0, 1fr) 24px;
     overflow: hidden;
     border: 1px solid rgb(var(--mobile-voice-owner-accent-rgb) / 0.46);
-    border-radius: 13px;
-    background: rgb(7 11 13 / 0.97);
-    box-shadow: 0 18px 52px rgb(0 0 0 / 0.72), inset 0 1px rgb(255 255 255 / 0.045);
+    border-radius: var(--cosimo-radius-lg);
+    background: rgb(var(--cosimo-ground-rgb) / 0.97);
+    box-shadow: var(--cosimo-shadow-float);
     opacity: 0;
     pointer-events: none;
     transform: translate(-50%, 7px) scale(0.96);
@@ -475,7 +406,7 @@
 }
 
 .mobile-voice-hud.is-modulation {
-    border-color: color-mix(in srgb, var(--mobile-voice-source-accent, #cc59d2) 40%, transparent);
+    border-color: color-mix(in srgb, var(--mobile-voice-source-accent, var(--cosimo-accent-pink)) 40%, transparent);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -489,14 +420,14 @@
 .mobile-voice-hud-footer {
     display: flex;
     align-items: center;
-    padding: 0 9px;
+    padding: 0 var(--cosimo-space-2);
 }
 
 .mobile-voice-hud-header {
     display: grid;
     grid-template-columns: 58px minmax(0, 1fr) 96px;
-    gap: 7px;
-    border-bottom: 1px solid rgb(255 255 255 / 0.06);
+    gap: var(--cosimo-space-2);
+    border-bottom: 1px solid var(--cosimo-line);
 }
 
 .mobile-voice-hud-source {
@@ -508,34 +439,7 @@
 
 .mobile-voice-hud-footer {
     justify-content: space-between;
-    border-top: 1px solid rgb(255 255 255 / 0.055);
-}
-
-.mobile-voice-hud-micro {
-    font-family: var(--cosimo-font-readout, monospace);
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.1em;
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
-.mobile-voice-hud-micro.is-message {
-    color: rgb(232 236 239 / 0.5);
-    font-size: 8px;
-}
-
-.mobile-voice-hud-label {
-    overflow: hidden;
-    color: rgb(232 236 239 / 0.90);
-    font-family: var(--cosimo-font-readout, monospace);
-    font-size: 10px;
-    font-weight: 400;
-    letter-spacing: 0.08em;
-    text-align: center;
-    text-overflow: ellipsis;
-    text-transform: uppercase;
-    white-space: nowrap;
+    border-top: 1px solid var(--cosimo-line);
 }
 
 .mobile-voice-hud-knob {
@@ -560,33 +464,33 @@
     display: grid;
     width: 96px;
     justify-items: center;
-    gap: 3px;
+    gap: var(--cosimo-space-1);
     transform: translateX(-50%);
 }
 
 .mobile-voice-hud-center span,
 .mobile-voice-hud-limit span {
-    color: rgb(232 236 239 / 0.36);
+    color: var(--cosimo-ink-faint);
     font-family: var(--cosimo-font-readout, monospace);
-    font-size: 8px;
+    font-size: var(--cosimo-type-caption);
     font-weight: 700;
-    letter-spacing: 0.1em;
+    letter-spacing: var(--cosimo-track-wide);
     text-transform: uppercase;
 }
 
 .mobile-voice-hud-center strong {
-    color: #f4fbfc;
+    color: var(--cosimo-ink);
     font-family: var(--cosimo-font-readout, monospace);
-    font-size: 16px;
+    font-size: var(--cosimo-type-display);
     font-weight: 400;
-    text-shadow: 0 0 6px rgb(3 5 12 / 0.9), 0 0 2px rgb(3 5 12 / 0.9);
+    text-shadow: 0 0 6px rgb(var(--cosimo-ground-rgb) / 0.9), 0 0 2px rgb(var(--cosimo-ground-rgb) / 0.9);
 }
 
 .mobile-voice-hud-limit {
     position: absolute;
     bottom: 1px;
     display: grid;
-    gap: 2px;
+    gap: var(--cosimo-space-1);
     min-width: 60px;
 }
 
@@ -601,9 +505,9 @@
 }
 
 .mobile-voice-hud-limit strong {
-    color: var(--mobile-voice-source-accent, #cc59d2);
+    color: var(--mobile-voice-source-accent, var(--cosimo-accent-pink));
     font-family: var(--cosimo-font-readout, monospace);
-    font-size: 11px;
+    font-size: var(--cosimo-type-label);
     font-weight: 400;
 }
 
@@ -612,7 +516,7 @@
     width: 5px;
     height: 5px;
     flex: 0 0 auto;
-    border-radius: 999px;
+    border-radius: var(--cosimo-radius-full);
 }
 
 /* The fixed-bar/directional-panel transition (shared segmented tabs): the
@@ -633,4 +537,9 @@
     min-height: 0;
     flex: 1 1 auto;
     flex-direction: column;
+}
+
+/* Chip geometry the primitives do not own. */
+.mobile-voice-chip .cosimo-readout {
+    max-width: 128px;
 }
