@@ -31,12 +31,19 @@ namespace wt
     //  ceiling is 8.0, i.e. +18 dBFS, which is exactly the level the rack's fixed
     //  output stage exists to prevent.
     //
-    //  STATE IS NEVER RESET. A rack reorder is an atomic swap that preserves every
-    //  instance's internal state (ADR-003), and the module is advanced every frame
-    //  whatever its position and whatever its enabled state, so the line is never
-    //  cleared and tails survive both a reorder and any parameter change. Delay is
-    //  therefore explicitly NOT a candidate for the effect-local sleep ADR-005
-    //  permits: sleeping it would drop the tail it exists to produce.
+    //  STATE IS NEVER RESET BY REORDER, ENABLE, OR PARAMETERS. A rack reorder is an
+    //  atomic swap that preserves every instance's internal state (ADR-003), and a
+    //  BASE rack instance is advanced every frame whatever its position and whatever
+    //  its enabled state, so its line is never cleared and tails survive both a
+    //  reorder and any parameter change. A base Delay is therefore explicitly NOT a
+    //  candidate for the effect-local sleep ADR-005 permits: sleeping it would drop
+    //  the tail it exists to produce.
+    //
+    //  THE ONE EXPLICIT EXCEPTION is lineResetIn, which exists for the Effects Lane
+    //  pool lifecycle: a pool slot ENTERING a committed chain is a newly created
+    //  device and must sound like one — an empty line, not a frozen tail from its
+    //  previous life. Only the rack's commit path sends it, and never to a base
+    //  instance.
     //
     //  REUSE. Fractional interpolation is wt::catmullRom (FixedFrameOscillator.cmajor).
     //  The ring-buffer read/write shape and the in-loop tone shaping follow
@@ -201,6 +208,10 @@ namespace wt
         // user parameter and never a host automation slot.
         input value float32 tempoBpmIn [[ init: delayTempoInitBpm ]];
 
+        // Lane pool lifecycle only (see the header note): clears the line and the
+        // loop filter state so a slot entering a chain sounds like a new device.
+        input event int32 lineResetIn;
+
         output stream float32<2> out;
 
         let delayBufferSize = int (processor.maxFrequency * delayMaxMs * 0.001f) + delayReadHeadroomSamples;
@@ -224,6 +235,22 @@ namespace wt
 
             timeGlideCoefficient = 1.0f - std::intrinsics::exp (-1.0f / glideSamples);
             loopHighpassCoefficient = delayCoefficientForCutoff (sampleRate, delayLoopHighpassHz);
+        }
+
+        event lineResetIn (int32 ignored)
+        {
+            for (wrap<delayChannelCount> channel)
+            {
+                for (wrap<delayBufferSize> position)
+                    delayBuffers[channel, position] = 0.0f;
+
+                delayWritePositions[channel] = wrap<delayBufferSize> (0);
+                loopLowpassState[channel] = 0.0f;
+                loopHighpassState[channel] = 0.0f;
+            }
+
+            trackedDelaySamples = delayUnsetDelaySamples;
+            currentFilterHz = delayUnsetFilterHz;
         }
 
         float32 readDelaySample (wrap<delayChannelCount> channel, float32 delaySamples)

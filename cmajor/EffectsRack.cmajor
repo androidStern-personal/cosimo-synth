@@ -453,6 +453,7 @@ namespace wt
         int32 laneGeneration;
         int32 laneRejectedCount;
         float32[laneSlotParamCount] delayTwoParams;
+        bool[laneSlotCount] slotInCurrentChain;
 
         RackOctaveScaler[rackOctaveScalerCount] octaveScalers;
 
@@ -576,6 +577,19 @@ namespace wt
 
             if (pendingLaneUpload)
             {
+                bool[laneSlotCount] slotInPendingChain;
+
+                for (wrap<maxLaneChainLength> position)
+                    if (int32 (position) < pendingLaneChainLength)
+                        slotInPendingChain[pendingLaneChain[position]] = true;
+
+                // A POOL slot entering the chain is a newly created device: it
+                // starts with an empty line, never a frozen tail from a
+                // previous life. Base instances are never reset (ADR-003).
+                if (slotInPendingChain[laneSlotDelayTwo] && ! slotInCurrentChain[laneSlotDelayTwo])
+                    delayTwo.lineResetIn <- 1;
+
+                slotInCurrentChain = slotInPendingChain;
                 currentLaneChainLength = pendingLaneChainLength;
                 currentLaneChain = pendingLaneChain;
                 currentLaneEnabled = pendingLaneEnabled;
@@ -898,12 +912,14 @@ namespace wt
                         }
                     }
 
-                    // Time-base invariant: every resident module advances exactly
-                    // once per rack frame. Slots outside the chain idle on the
-                    // live input; their output is discarded.
+                    // Time-base invariant: every resident BASE module advances
+                    // exactly once per rack frame (idling on the live input, its
+                    // output discarded). POOL slots sleep outside the chain — a
+                    // device that does not exist yet costs nothing — and enter
+                    // fresh via the commit-path reset.
                     for (wrap<laneSlotCount> slot)
                     {
-                        if (! advancedThisFrame[slot])
+                        if (! advancedThisFrame[slot] && int32 (slot) < rackModuleCount)
                         {
                             let idleOut = advanceLaneSlot (slot, in);
                         }
@@ -915,9 +931,8 @@ namespace wt
                         chain = advanceModule (currentOrder[position], chain,
                                                currentEnabled[currentOrder[position]]);
 
-                    // Pool slots keep time even before any lane topology exists.
-                    delayTwo.in <- in;
-                    delayTwo.advance();
+                    // Pool slots sleep until a lane topology commits them into a
+                    // chain; a device that does not exist yet costs nothing.
                 }
 
                 let transition = nextTransitionGain();

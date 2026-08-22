@@ -167,6 +167,62 @@ processor LaneSecondDelayTest [[ main ]]
         out <- (rack.laneRejectedUploadCount > 0 ? 1 : 0);
         advance();
 
+        // Frames 8-10: pool lifecycle. Load delay #2's line with an un-emitted
+        // echo, remove the slot from the chain (it sleeps, line frozen), re-add
+        // it, and prove the frozen tail does NOT replay: a slot entering a
+        // chain is a NEW device with an empty line. Then prove it still works.
+        wt::LaneTopologyUpload oneDelay;
+        oneDelay.chainLength = 1;
+        oneDelay.slotIds[0] = wt::rackModuleDelay;
+        oneDelay.enabledFlags[wt::rackModuleDelay] = 1;
+
+        // Feed an impulse, then IMMEDIATELY remove delay #2 so its 90ms echo is
+        // still buffered, un-emitted, when the slot goes to sleep.
+        advanceRack (1.0f);
+
+        for (int32 frame = 0; frame < 256; ++frame)
+            advanceRack (0.0f);
+
+        rack.laneTopology <- oneDelay;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        // Re-add delay #2 and let the transition commit (the entry reset fires).
+        rack.laneTopology <- makeTwoDelayChain();
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        // Frame 8: under silence, a full delay-two period stays silent — the
+        // frozen echo from before removal never emerges.
+        var stalePeak = 0.0f;
+
+        for (int32 frame = 0; frame < echoTwoFrame + 512; ++frame)
+        {
+            advanceRack (0.0f);
+            let magnitude = std::intrinsics::abs (rack.out[0]);
+
+            if (magnitude > stalePeak)
+                stalePeak = magnitude;
+        }
+
+        out <- (stalePeak < controlCeiling ? 1 : 0);
+        advance();
+
+        // Frames 9-10: the re-added slot still works — a fresh impulse produces
+        // the 90ms echo again.
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+
+        out <- (windowPeak (echoTwoFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+        out <- (windowPeak (echoSumFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+
         loop
         {
             out <- 1;
