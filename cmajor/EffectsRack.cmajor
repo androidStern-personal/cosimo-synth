@@ -111,6 +111,44 @@ namespace wt
     // proven composed-event size while the SLOT domain grows with the pool.
     let maxLaneChainLength = 16;
 
+    //==============================================================================
+    // Parallel groups (M3 slice T1). A parallel section is encoded IN PLACE in
+    // the topology upload: each slotIds entry carries the slot id in its low
+    // byte and a BRANCH TAG in the three bits above it, so the upload struct —
+    // and its proven harness event size — is unchanged. Tag 0 is the trunk; a
+    // maximal run of tagged positions is ONE parallel group whose branches all
+    // read the group's input. Branch outputs are SUMMED at the merge (no
+    // per-branch level in v1; wt::RackOutputStage owns overload, and overload
+    // glitching is the decided policy, not a governor's job).
+    //
+    // Tag grammar, validated and never coerced (the C11 rule): inside a run
+    // the tags start at 1, never decrease, never skip, and must reach at
+    // least 2 — a one-branch group is not a group, it is a serial chain the
+    // adapter must send as one. Tags beyond laneMaxBranchesPerGroup (the
+    // physical campaign's proven fan-out) and any bit above the tag field
+    // reject the upload whole.
+
+    let laneBranchTagShift = 8;
+    let laneBranchTagBits = 3;
+    let laneBranchTagFieldMask = (1 << laneBranchTagBits) - 1;
+    let laneSlotIdFieldMask = (1 << laneBranchTagShift) - 1;
+    let laneMaxBranchesPerGroup = 4;
+
+    int32 laneEncodeSlotWithBranchTag (int32 slotId, int32 branchTag)
+    {
+        return slotId | (branchTag << laneBranchTagShift);
+    }
+
+    int32 laneDecodeSlotId (int32 encoded)
+    {
+        return encoded & laneSlotIdFieldMask;
+    }
+
+    int32 laneDecodeBranchTag (int32 encoded)
+    {
+        return (encoded >> laneBranchTagShift) & laneBranchTagFieldMask;
+    }
+
     // Per-slot parameter records travel in LaneSlotParamsUpload.values; each pool
     // slot type documents its own value vocabulary below (indices into `values`).
     let laneSlotParamCount = 8;
@@ -299,21 +337,62 @@ namespace wt
     // leaves the running state completely untouched. Neither coerces.
 
     // A lane topology is validated, never coerced (the C11 rule): out-of-range
-    // slot ids, duplicate slots, or non-flag enables reject the whole upload and
-    // leave the running chain untouched.
+    // slot ids, duplicate slots, malformed branch-tag grammar, or non-flag
+    // enables reject the whole upload and leave the running chain untouched.
     bool isValidLaneTopology (LaneTopologyUpload upload)
     {
         if (upload.chainLength < 0 || upload.chainLength > maxLaneChainLength)
             return false;
 
         bool[laneSlotCount] seen;
+        var runTag = 0;
+        var runMaxTag = 0;
 
         for (int32 position = 0; position < upload.chainLength; ++position)
         {
-            let slotId = upload.slotIds.at (position);
+            let encoded = upload.slotIds.at (position);
 
-            if (slotId < 0 || slotId >= laneSlotCount)
+            // Junk above the tag field (including any negative value) is
+            // malformed, not ignorable.
+            if ((encoded >> (laneBranchTagShift + laneBranchTagBits)) != 0)
                 return false;
+
+            let slotId = laneDecodeSlotId (encoded);
+            let tag = laneDecodeBranchTag (encoded);
+
+            if (slotId >= laneSlotCount)
+                return false;
+
+            if (tag > laneMaxBranchesPerGroup)
+                return false;
+
+            if (tag == 0)
+            {
+                // Leaving a group run: it must have forked into at least two
+                // branches to have been a group at all.
+                if (runTag != 0 && runMaxTag < 2)
+                    return false;
+
+                runTag = 0;
+                runMaxTag = 0;
+            }
+            else
+            {
+                if (runTag == 0)
+                {
+                    if (tag != 1)
+                        return false;
+                }
+                else if (tag != runTag && tag != runTag + 1)
+                {
+                    return false;
+                }
+
+                runTag = tag;
+
+                if (tag > runMaxTag)
+                    runMaxTag = tag;
+            }
 
             let index = wrap<laneSlotCount> (slotId);
 
@@ -322,6 +401,10 @@ namespace wt
 
             seen[index] = true;
         }
+
+        // A chain ending inside a group closes it: same completeness rule.
+        if (runTag != 0 && runMaxTag < 2)
+            return false;
 
         // Mask bits above the chain length are malformed, not ignorable.
         if (upload.enabledMask < 0 || upload.enabledMask >= (1 << upload.chainLength))
@@ -433,6 +516,11 @@ namespace wt
         output value int32 laneCommittedChainLength;
         output value int32 laneCommittedChainCode;
         output value int32 laneCommittedPositionMask;
+        // Committed branch tags, three bits per position: Lo carries
+        // positions 0..9, Hi carries 10..15. Zero = an all-trunk (serial)
+        // chain, so the pre-parallel readback shape is a strict subset.
+        output value int32 laneCommittedBranchTagsLo;
+        output value int32 laneCommittedBranchTagsHi;
         output value int32 laneCommittedGeneration;
         output value int32 laneRejectedUploadCount;
         output value int32 laneParamsAcknowledgedSerial;
@@ -478,6 +566,8 @@ namespace wt
         int32 pendingLaneChainLength;
         wrap<laneSlotCount>[maxLaneChainLength] currentLaneChain;
         wrap<laneSlotCount>[maxLaneChainLength] pendingLaneChain;
+        int32[maxLaneChainLength] currentLaneBranchTag;
+        int32[maxLaneChainLength] pendingLaneBranchTag;
         bool[laneSlotCount] currentLaneEnabled;
         bool[laneSlotCount] pendingLaneEnabled;
         int32 laneGeneration;
@@ -573,11 +663,16 @@ namespace wt
             for (wrap<maxLaneChainLength> position)
             {
                 var slotValue = 0;
+                var tagValue = 0;
 
                 if (int32 (position) < upload.chainLength)
-                    slotValue = upload.slotIds[position];
+                {
+                    slotValue = laneDecodeSlotId (upload.slotIds[position]);
+                    tagValue = laneDecodeBranchTag (upload.slotIds[position]);
+                }
 
                 pendingLaneChain[position] = wrap<laneSlotCount> (slotValue);
+                pendingLaneBranchTag[position] = tagValue;
             }
 
             // Enable is position-indexed on the wire; store it per SLOT for
@@ -587,7 +682,7 @@ namespace wt
 
             for (wrap<maxLaneChainLength> position)
                 if (int32 (position) < upload.chainLength)
-                    pendingLaneEnabled[wrap<laneSlotCount> (upload.slotIds[position])] =
+                    pendingLaneEnabled[wrap<laneSlotCount> (laneDecodeSlotId (upload.slotIds[position]))] =
                         ((upload.enabledMask >> int32 (position)) & 1) != 0;
 
             pendingPositionMask = upload.enabledMask;
@@ -600,7 +695,8 @@ namespace wt
 
             for (wrap<maxLaneChainLength> position)
                 if (int32 (position) < pendingLaneChainLength
-                     && pendingLaneChain[position] != currentLaneChain[position])
+                     && (pendingLaneChain[position] != currentLaneChain[position]
+                          || pendingLaneBranchTag[position] != currentLaneBranchTag[position]))
                     differs = true;
 
             for (wrap<laneSlotCount> slot)
@@ -695,6 +791,7 @@ namespace wt
                 slotInCurrentChain = slotInPendingChain;
                 currentLaneChainLength = pendingLaneChainLength;
                 currentLaneChain = pendingLaneChain;
+                currentLaneBranchTag = pendingLaneBranchTag;
                 currentLaneEnabled = pendingLaneEnabled;
                 currentPositionMask = pendingPositionMask;
                 laneGeneration += 1;
@@ -718,11 +815,29 @@ namespace wt
             return code;
         }
 
+        int32 committedBranchTags (int32 firstPosition, int32 positionCount)
+        {
+            var packed = 0;
+
+            for (wrap<maxLaneChainLength> position)
+            {
+                let offset = int32 (position) - firstPosition;
+
+                if (offset >= 0 && offset < positionCount
+                     && int32 (position) < currentLaneChainLength)
+                    packed |= currentLaneBranchTag[position] << (laneBranchTagBits * offset);
+            }
+
+            return packed;
+        }
+
         void publishStructureDiagnostics()
         {
             laneCommittedChainLength <- currentLaneChainLength;
             laneCommittedChainCode <- committedChainCode();
             laneCommittedPositionMask <- currentPositionMask;
+            laneCommittedBranchTagsLo <- committedBranchTags (0, 10);
+            laneCommittedBranchTagsHi <- committedBranchTags (10, 6);
             laneCommittedGeneration <- laneGeneration;
             laneRejectedUploadCount <- laneRejectedCount;
             laneParamsAcknowledgedSerial <- laneParamsSerial;
@@ -1038,11 +1153,50 @@ namespace wt
                 // outside the chain does not exist — it advances nothing and
                 // costs nothing; it enters fresh through the commit reset.
                 // An empty chain is the dry instrument.
+                //
+                // Parallel groups walk the SAME positions: every branch of a
+                // group reads the trunk signal at the fork, a branch change
+                // banks the finished branch and restarts from the fork, and
+                // the merge SUMS the branches into the continuing trunk. An
+                // all-trunk chain (every tag 0) takes none of these paths and
+                // is bit-identical to the pre-parallel serial walk.
+                var groupInput = float32<rackChannelCount> ();
+                var branchSum = float32<rackChannelCount> ();
+                var runTag = 0;
+
                 for (wrap<maxLaneChainLength> position)
                 {
                     if (int32 (position) < currentLaneChainLength)
+                    {
+                        let tag = currentLaneBranchTag[position];
+
+                        if (runTag == 0 && tag != 0)
+                        {
+                            // Fork: the group reads the trunk signal here.
+                            groupInput = chain;
+                            branchSum = float32<rackChannelCount> ();
+                        }
+                        else if (runTag != 0 && tag == runTag + 1)
+                        {
+                            // Next branch: bank the finished one, restart
+                            // from the fork.
+                            branchSum += chain;
+                            chain = groupInput;
+                        }
+                        else if (runTag != 0 && tag == 0)
+                        {
+                            // Merge: the trunk continues from the sum.
+                            chain += branchSum;
+                        }
+
+                        runTag = tag;
                         chain = advanceLaneSlot (currentLaneChain[position], chain);
+                    }
                 }
+
+                // A chain ending inside a group merges at its end.
+                if (runTag != 0)
+                    chain += branchSum;
 
                 let transition = nextTransitionGain();
                 out <- float32<2> (

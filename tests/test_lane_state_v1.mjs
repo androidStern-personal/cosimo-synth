@@ -129,3 +129,29 @@ test("the pre-commit empty chain is not a lane.v1 structure", async () => {
         laneParamsAcknowledgedSerial: 0,
     }), null);
 });
+
+test("branch tags ride the slot id's upper bits and the v1 replay stays all-trunk", async () => {
+    const lane = await laneStatePromise;
+    // The bit layout is a WIRE CONTRACT with EffectsRack.cmajor's
+    // laneEncodeSlotWithBranchTag: slot id in the low byte, three tag bits
+    // above it, tag 0 = trunk. LaneParallel.cmajtest pins the same layout on
+    // the engine side.
+    assert.equal(lane.LANE_BRANCH_TAG_SHIFT, 8);
+    assert.equal(lane.LANE_BRANCH_TAG_BITS, 3);
+    assert.equal(lane.LANE_MAX_BRANCHES_PER_GROUP, 4);
+    assert.equal(lane.encodeLaneSlotWithBranchTag(6, 2), 6 | (2 << 8));
+    assert.equal(lane.decodeLaneSlotId(6 | (2 << 8)), 6);
+    assert.equal(lane.decodeLaneBranchTag(6 | (2 << 8)), 2);
+    assert.equal(lane.decodeLaneBranchTag(38), 0);
+    assert.throws(() => lane.encodeLaneSlotWithBranchTag(6, 5), /Invalid lane branch tag/);
+    assert.throws(() => lane.encodeLaneSlotWithBranchTag(6, -1), /Invalid lane branch tag/);
+
+    // The v1 document has no tree, so its replay must encode every placed
+    // device as a trunk entry — the engine's serial walk is bit-identical.
+    const events = lane.buildLaneRuntimeEvents(lane.createDefaultLaneState());
+    const topology = events[events.length - 1];
+    assert.equal(topology.endpointID, "laneTopology");
+    for (const encoded of topology.value.slotIds) {
+        assert.equal(lane.decodeLaneBranchTag(encoded), 0);
+    }
+});

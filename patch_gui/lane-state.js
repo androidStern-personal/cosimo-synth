@@ -21,6 +21,32 @@ export const LANE_SLOT_PARAM_VALUE_ENDPOINT_ID = "laneSlotParamValue";
 export const EFFECTIVE_RACK_STATE_ENDPOINT_ID = "effectiveRackState";
 /** Wire capacity of one lane chain (engine maxLaneChainLength). */
 export const LANE_MAX_CHAIN_LENGTH = 16;
+/**
+ * Branch-tag wire encoding (parallel groups, M3 slice T1). The topology
+ * upload's slotIds carry the slot id in the low byte and a BRANCH TAG in the
+ * three bits above it: tag 0 is the trunk, 1..LANE_MAX_BRANCHES_PER_GROUP
+ * are the branches of the current parallel group. A maximal run of tagged
+ * positions is one group; tags start at 1, never decrease, never skip, and
+ * must reach at least 2 — the engine validates and never coerces. Mirrors
+ * EffectsRack.cmajor's laneEncodeSlotWithBranchTag exactly; the bit layout
+ * is pinned by test on both sides of the wire.
+ */
+export const LANE_BRANCH_TAG_SHIFT = 8;
+export const LANE_BRANCH_TAG_BITS = 3;
+export const LANE_MAX_BRANCHES_PER_GROUP = 4;
+/** Encode one placed device's wire entry. Tag 0 = a trunk (serial) device. */
+export function encodeLaneSlotWithBranchTag(slotId, branchTag) {
+    if (!Number.isInteger(branchTag) || branchTag < 0 || branchTag > LANE_MAX_BRANCHES_PER_GROUP) {
+        throw new Error(`Invalid lane branch tag: ${String(branchTag)}`);
+    }
+    return slotId | (branchTag << LANE_BRANCH_TAG_SHIFT);
+}
+export function decodeLaneSlotId(encoded) {
+    return encoded & ((1 << LANE_BRANCH_TAG_SHIFT) - 1);
+}
+export function decodeLaneBranchTag(encoded) {
+    return (encoded >> LANE_BRANCH_TAG_SHIFT) & ((1 << LANE_BRANCH_TAG_BITS) - 1);
+}
 /** Stable effect identity order and wire-id vocabulary. */
 export const RACK_EFFECT_ORDER = Object.freeze([
     "filter",
