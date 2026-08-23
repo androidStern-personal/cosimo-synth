@@ -2640,8 +2640,9 @@ test("generated product UI restores oscillator parameters and rack state through
             const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
             return Math.abs(Number(saved?.sound?.parameters?.oscBPan) - 0.25) < 0.0001;
         });
+        await page.locator('[data-role="rack-station-chorus"]').click({ button: "right" });
         await page.locator('[data-role="rack-enabled-chorus"]').click();
-        const reorderHandle = page.locator('[data-role="rack-reorder-handle-reverb"]');
+        const reorderHandle = page.locator('[data-role="rack-station-reverb"]');
         const reorderTarget = page.locator('[data-role="rack-module-filter"]');
         await reorderHandle.scrollIntoViewIfNeeded();
         const handleBox = await reorderHandle.boundingBox();
@@ -2677,7 +2678,7 @@ test("generated product UI restores oscillator parameters and rack state through
                 local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.storedState?.["lane.v1"] ?? null,
                 localOscBPan: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.parameters?.oscBPan ?? null,
                 firstRole: root?.querySelector('[data-role="rack-module-list"]')?.firstElementChild?.getAttribute("data-role") ?? null,
-                chorusPressed: root?.querySelector('[data-role="rack-enabled-chorus"]')?.getAttribute("aria-pressed") ?? null,
+                chorusPressed: root?.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") ?? null,
             };
         });
         t.diagnostic(`After reload: ${JSON.stringify(afterReload)}`);
@@ -2708,7 +2709,7 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
                 regionY: scrollRegion instanceof HTMLElement ? scrollRegion.scrollTop : 0,
             };
         });
-        const reorderStart = await centerOf(page.locator('[data-role="rack-reorder-handle-reverb"]'));
+        const reorderStart = await centerOf(page.locator('[data-role="rack-station-reverb"]'));
         const reorderEnd = await centerOf(page.locator('[data-role="rack-module-filter"]'));
         await dispatchTouchDrag(page, reorderStart, reorderEnd);
         await waitForAsyncPageCondition(page, async () => {
@@ -2722,7 +2723,7 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
         const reorderResult = await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const list = root?.querySelector('[data-role="rack-module-list"]');
-            const handle = root?.querySelector('[data-role="rack-reorder-handle-reverb"]');
+            const handle = root?.querySelector('[data-role="rack-station-reverb"]');
             const scrollRegion = root?.querySelector('[data-role="desktop-scroll-region"]');
             return {
                 documentY: window.scrollY,

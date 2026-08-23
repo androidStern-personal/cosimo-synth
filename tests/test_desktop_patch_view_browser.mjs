@@ -311,7 +311,7 @@ test("built desktop bundle renders visible distortion dual-ring knobs inside the
         await page.waitForSelector("cosimo-desktop-react-view");
         await page.evaluate(() => {
             const host = document.querySelector("cosimo-desktop-react-view");
-            const selectDrive = host?.shadowRoot?.querySelector('[data-role="rack-quick-drive"]');
+            const selectDrive = host?.shadowRoot?.querySelector('[data-role="rack-station-drive"]');
 
             if (!(selectDrive instanceof HTMLButtonElement)) {
                 throw new Error("Expected the Distortion rack selector in the built bundle.");
@@ -3891,14 +3891,14 @@ test("mobile workspace shows one tab-selected panel while all three stay mounted
                 && counts.effectiveMsegState === 1;
         });
 
-        await page.locator('[data-role="rack-quick-filter"]').click();
+        await page.locator('[data-role="rack-station-filter"]').click();
         await page.waitForFunction(() => {
             const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
             return counts.filterSpectrum === 1
                 && (counts.distortionHistory ?? 0) === 0
                 && (counts.distortionScope ?? 0) === 0;
         });
-        await page.locator('[data-role="rack-quick-chorus"]').click();
+        await page.locator('[data-role="rack-station-chorus"]').click();
         await page.waitForFunction(() => {
             const counts = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().endpointListenerCounts;
             return (counts.filterSpectrum ?? 0) === 0

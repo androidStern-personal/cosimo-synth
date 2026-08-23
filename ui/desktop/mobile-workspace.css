@@ -65,17 +65,7 @@
         height: 100%;
     }
 
-    .mobile-workspace-panel.is-fx-panel .rack-list {
-        grid-template-rows: repeat(8, var(--cosimo-module-lg));
-        gap: 0;
-    }
-
-    .mobile-workspace-panel.is-fx-panel .rack-unit {
-        min-height: var(--cosimo-module-lg);
-        grid-template-rows: var(--cosimo-module-lg);
-    }
-
-    .mobile-workspace-panel.is-fx-panel .rack-quick-surface {
+    .mobile-workspace-panel.is-fx-panel .subway-station-row {
         min-height: var(--cosimo-module-lg);
     }
 

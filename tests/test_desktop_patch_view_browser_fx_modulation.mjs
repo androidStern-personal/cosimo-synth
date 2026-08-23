@@ -57,6 +57,7 @@ import {
     buildDistortionHistoryFixture,
     dispatchInputValueChange,
     selectRackEffect,
+    toggleRackEffectEnabled,
     expandGlobalModRail,
     collapseGlobalModRail,
     touchPointForModSourcePreviewTarget,
@@ -1046,7 +1047,7 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
-        await page.locator('[data-rack-effect-id="drive"] .rack-power').click();
+        await page.click('[data-role="rack-editor-power"]');
         await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-env-1"]');
         await collapseGlobalModRail(page);
@@ -1115,7 +1116,7 @@ test("switching armed sources swaps only selected-route outer geometry and prese
             window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("distortionWet", 0.6);
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
-        await page.locator('[data-rack-effect-id="drive"] .rack-power').click();
+        await page.click('[data-role="rack-editor-power"]');
         await expandGlobalModRail(page);
         const mix = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
         const readRing = () => mix.evaluate((element) => {
@@ -2675,7 +2676,7 @@ test("phone touch drags are captured by rack grips and modulation chips without 
             documentY: document.documentElement.scrollTop,
         }));
 
-        const gripBox = await page.locator('[data-role="rack-reorder-handle-reverb"]').boundingBox();
+        const gripBox = await page.locator('[data-role="rack-station-reverb"]').boundingBox();
         const filterBox = await page.locator('[data-role="rack-module-filter"]').boundingBox();
         assert.ok(gripBox && filterBox);
         await touchDrag(
@@ -2755,7 +2756,7 @@ test("rack reorder keeps the latest desired enable state across an older effecti
     const page = await openHarnessPage();
 
     try {
-        await page.click('[data-role="rack-enabled-chorus"]');
+        await toggleRackEffectEnabled(page, "chorus");
         await page.waitForFunction(() => {
             const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["lane.v1"];
             return rawState !== undefined && JSON.parse(String(rawState)).enabled.chorus === true;
@@ -2812,7 +2813,7 @@ test("rack no-op release adopts authoritative stored order received during the g
     try {
         await clearHarnessDebugLog(page);
         await beginRackReorderWithoutPointerCapture(page, { pointerId: 94 });
-        await page.waitForSelector(".rack-unit.is-reordering");
+        await page.waitForSelector(".subway-station-row.is-reordering");
         await page.evaluate(() => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", JSON.stringify({
                 ...window.__COSIMO_DESKTOP_HARNESS__.createDefaultLaneState(),
@@ -2831,7 +2832,7 @@ test("rack no-op release adopts authoritative stored order received during the g
         });
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") === "true"
-            && document.querySelector(".rack-unit.is-reordering") !== null
+            && document.querySelector(".subway-station-row.is-reordering") !== null
         ));
         assert.equal(
             await page.locator('[data-role="rack-module-list"] > :first-child').getAttribute("data-role"),
@@ -2854,7 +2855,7 @@ test("rack no-op release adopts authoritative stored order received during the g
     }
 });
 
-test("mobile FX subpage keeps all eight approved rack rows visible and confines modulation controls to the editor", async () => {
+test("mobile FX subpage keeps all eight stations on the line and confines modulation controls to the editor", async () => {
     for (const width of [320, 375, 390, 430]) {
         const page = await openHarnessPage({
             beforeGoto: (nextPage) => nextPage.setViewportSize({ width, height: 667 }),
@@ -2881,9 +2882,8 @@ test("mobile FX subpage keeps all eight approved rack rows visible and confines 
                 const editor = document.querySelector(".rack-effect-editor");
                 const amount = document.querySelector(".rack-mod-amount, [data-role=\"rack-unmapped-pair\"]");
                 const keyboard = document.querySelector('[data-role="sticky-keyboard"]');
-                const wordmarks = Array.from(document.querySelectorAll(".rack-wordmark"));
-                const powers = Array.from(document.querySelectorAll(".rack-power"));
-                const quickLines = Array.from(document.querySelectorAll(".rack-quick-line"));
+                const stations = Array.from(document.querySelectorAll(".subway-station"));
+                const pills = Array.from(document.querySelectorAll(".subway-station-pill"));
                 const rawRanges = Array.from(document.querySelectorAll(
                     '[data-role="effects-rack-card"] input[type="range"]',
                 ));
@@ -2902,18 +2902,11 @@ test("mobile FX subpage keeps all eight approved rack rows visible and confines 
                     editor: rectOf(editor),
                     amount: amount instanceof HTMLElement ? rectOf(amount) : null,
                     keyboard: rectOf(keyboard),
-                    wordmarks: wordmarks.map((wordmark, index) => ({
-                        ...rectOf(wordmark),
-                        row: rectOf(units[index]),
-                    })),
-                    powers: powers.map(rectOf),
-                    quickLinesAreSingleRow: quickLines.every((line) => {
-                        const children = Array.from(line.children).map(rectOf);
-                        return getComputedStyle(line).display === "flex"
-                            && children.length === 2
-                            && Math.abs(children[0].top - children[1].top) <= 1
-                            && Math.abs(children[0].bottom - children[1].bottom) <= 1
-                            && Array.from(line.children).every((child) => getComputedStyle(child).whiteSpace === "nowrap");
+                    stations: stations.map(rectOf),
+                    pillsAreSingleLine: pills.every((pill) => {
+                        const style = getComputedStyle(pill);
+                        return style.whiteSpace === "nowrap"
+                            && pill.getBoundingClientRect().height <= 24;
                     }),
                     rawRangesAreVisuallyHidden: rawRanges.every((range) => {
                         const style = getComputedStyle(range);
@@ -2925,33 +2918,32 @@ test("mobile FX subpage keeps all eight approved rack rows visible and confines 
                 };
             });
 
-            assert.ok(layout, `Expected compact rack layout at ${width}px.`);
-            assert.equal(layout.units.length, 8, `Expected eight rack rows at ${width}px.`);
+            assert.ok(layout, `Expected subway-map rack layout at ${width}px.`);
+            assert.equal(layout.units.length, 8, `Expected eight stations at ${width}px.`);
             assert.equal(layout.documentScrollWidth <= layout.viewportWidth, true, `Horizontal overflow at ${width}px.`);
-            assert.equal(
-                layout.units.every((unit) => Math.abs(unit.height - 48) <= 0.5),
-                true,
-                `Rack rows are not 48px at ${width}px: ${JSON.stringify(layout.units)}`,
-            );
-            assert.equal(layout.units[7].bottom <= layout.keyboard.top + 0.5, true, `Last rack row clips keyboard at ${width}px.`);
-            assert.equal(layout.units[7].bottom <= 667, true, `All rack rows must remain in the viewport at ${width}px.`);
+            // The WHOLE line stays in view: last station above the keyboard
+            // and inside the viewport, list tall enough to hold it.
+            assert.equal(layout.units[7].bottom <= layout.keyboard.top + 0.5, true, `Last station clips keyboard at ${width}px.`);
+            assert.equal(layout.units[7].bottom <= 667, true, `All stations must remain in the viewport at ${width}px.`);
+            assert.equal(layout.list.bottom >= layout.units[7].bottom - 0.5, true);
             if (layout.amount) {
                 assert.equal(layout.amount.left >= layout.editor.left - 0.5, true, `Amount control escapes editor at ${width}px.`);
                 assert.equal(layout.amount.right <= layout.editor.right + 0.5, true, `Amount control escapes editor at ${width}px.`);
                 assert.equal(layout.amount.left >= layout.list.right - 0.5, true, `Amount control steals rack width at ${width}px.`);
             }
-            assert.equal(layout.list.bottom >= layout.units[7].bottom - 0.5, true);
+            // Station rows keep the 44px touch floor while the pills stay
+            // compact single-line badges (the whole point of station scale).
             assert.equal(
-                layout.wordmarks.every(({ left, top, row }) => left >= row.left && top >= row.top && top - row.top <= 9),
+                layout.units.every((unit) => unit.height >= 43.5),
                 true,
-                `Rack names are not upper-left aligned at ${width}px.`
+                `Station rows lost the touch floor at ${width}px: ${JSON.stringify(layout.units)}`,
             );
             assert.equal(
-                layout.powers.every(({ width: powerWidth, height: powerHeight }) => powerWidth >= 44 && powerHeight >= 44),
+                layout.stations.every((station) => station.width >= 44 && station.height >= 43.5),
                 true,
-                `Power targets are not touchable at ${width}px.`
+                `Station hit areas are not touchable at ${width}px.`,
             );
-            assert.equal(layout.quickLinesAreSingleRow, true, `Quick values wrapped at ${width}px.`);
+            assert.equal(layout.pillsAreSingleLine, true, `Station pills wrapped or grew at ${width}px.`);
             assert.equal(layout.rawRangesAreVisuallyHidden, true, `Native rack ranges leaked visually at ${width}px.`);
         } finally {
             await page.close();
@@ -3057,7 +3049,7 @@ test("ADR-025 identity colors: owner color inside, source color outside, grey on
             "A bypassed effect's parameter must be grey before it is enabled.",
         );
         // …and take its owning color the moment the effect can affect sound.
-        await page.locator('[data-rack-effect-id="reverb"] .rack-power').click();
+        await page.click('[data-role="rack-editor-power"]');
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-parameter-reverbSize"]')
                 ?.getAttribute("data-route-effectiveness") === "active"
@@ -3126,7 +3118,7 @@ test("ADR-025 identity colors: owner color inside, source color outside, grey on
         );
 
         // Row 9: bypassing the owning effect again greys the WHOLE control.
-        await page.locator('[data-rack-effect-id="reverb"] .rack-power').click();
+        await page.click('[data-role="rack-editor-power"]');
         await page.waitForFunction(() => (
             document.querySelector('[data-role="rack-parameter-reverbSize"]')
                 ?.getAttribute("data-route-effectiveness") === "effect-bypassed"
@@ -3332,7 +3324,7 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
     try {
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
-        await page.locator('[data-rack-effect-id="reverb"] .rack-power').click();
+        await page.click('[data-role="rack-editor-power"]');
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
         await surface.waitFor();
         const surfaceBox = await surface.boundingBox();

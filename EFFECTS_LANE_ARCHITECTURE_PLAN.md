@@ -418,9 +418,57 @@ are M1's permanent acceptance tests, not a throwaway report.
   in the rack workspace, cut the adapter over to lane.v2
   (deserialize/commit/assignments), and swap listLaneDeviceInstances to
   the v2 listing.
+- **T4 SUBWAY MAP SHIPPED (2026-08-23):** the rack column IS the line map.
+  ui/desktop/subway-map-column.tsx renders the T3 pipeline end to end —
+  the live lane.v1 document projects through upgradeLaneStateV1 into
+  buildSubwayLayout and the station rows render from the layout script —
+  so the M4 cutover to stored lane.v2 changes the projection, not the
+  renderer. Station pills (type code + instance number, effect accent;
+  hollow dashed = bypassed, amber ring = selected) sit on an infra-teal
+  line between terminus dots; rows keep the 44px touch floor with the
+  pill as the visual inside. RackUnit, RackQuickSurface, the grip, the
+  per-row power button, and ~220 lines of row-era CSS are DELETED — the
+  accepted tradeoff: quick edits live in the editor, one tap away.
+  Gestures per the accepted mocks: TAP selects; DRAGGING a station along
+  the line reorders through the workspace's existing preview/commit
+  machinery (stations carry data-rack-effect-id, so the same nearest-row
+  walk drives the live preview); LONG-PRESS or right-click opens the
+  STATION MENU — Bypass and Exact value now, Move/Remove with M4 —
+  reusing the parameter-menu presentation; keyboard arrows still
+  reorder. The editor header gains the relocated FACEPLATE ART (the
+  rack-faceplates strip behind a legibility scrim, keyed by the selected
+  effect) and a power toggle for the selected device. Two real bugs
+  found by the browser suites and fixed: (1) a station must CAPTURE the
+  pointer at pointerdown — mouse pointers have no implicit capture, so
+  the threshold-crossing move otherwise lands off the 20px pill and the
+  drag never arms; a pointerleave cancel had the same effect for touch
+  and is gone; (2) the capture HANDOFF to the list fires
+  lostpointercapture on the station, which BUBBLES into the list's
+  cancel handler and killed every drag until the handler learned to
+  ignore capture losses that are not its own (event.target check).
+  Browser suites rewritten to station flows: select via station click,
+  bypass via the station menu (toggleRackEffectEnabled helper) or the
+  editor power, reorder drags the pill itself, the row layout scan is
+  now a station scan (44px rows, whole line in view, single-line pills),
+  and the removed quick-slider behavior tests are replaced by a
+  station-semantics test (hover inert; tap selects with ZERO DSP
+  traffic; one drag = exactly one laneTopology commit and no parameter
+  gestures). Gates (this container): desktop browser suites 212/213
+  twice (the one red is the rail-flick momentum test — a load flake,
+  green solo, red only under 4-way CPU contention, untouched by this
+  diff); browser:orphans 114/117 (+1 skip; both reds pre-existing
+  container-environment failures verified on the CLEAN baseline —
+  Avenir Next font metrics, and the renderer-WASM worklet needing the
+  macOS clang build); units:orphans 706/706; tsc clean; desktop twin
+  rebuilt (the iOS bundle does not include the rack workspace). web:poc
+  suite updated textually (station selectors, menu bypass, station-row
+  data-enabled reads) but not runnable here — deferred with WebKit, iOS
+  shell, and native benchmarks.
 - **M3 — UI:** the subway-map FX graph in the rack workspace (locked
-  direction above), dynamic per-patch target pickers, instance labels
-  through the mappings table.
+  direction above — SHIPPED as T4 for serial documents), dynamic
+  per-patch target pickers, instance labels through the mappings table.
+  Remaining for M3: group rendering in the map once M4's add/remove UX
+  can create groups.
 - **M4 — Product surface:** device add/remove UX, the default starter patch,
   and the physical phone pass.
 

@@ -112,7 +112,7 @@ test("pointer and keyboard X/Y gestures reach each tabled pair through the host 
         await waitForHarnessReady(page);
 
         for (const expected of XY_EFFECTS) {
-            await page.locator(`[data-role="rack-quick-${expected.effectId}"]`).click();
+            await page.locator(`[data-role="rack-station-${expected.effectId}"]`).click();
             const visual = page.locator(
                 `[data-role="rack-xy-visual"][data-effect-id="${expected.effectId}"]`,
             );
