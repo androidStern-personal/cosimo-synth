@@ -976,7 +976,7 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         await collapseGlobalModRail(page);
@@ -1008,14 +1008,14 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
                 && route.amount > 0.01
             )),
         );
         const route = readStoredModulationState(snapshot).routes.find((candidate) => (
             candidate.sourceKind === "mseg"
             && candidate.sourceSlot === 1
-            && candidate.targetKind === "rack.reverbSize"
+            && candidate.targetKind === "lane.reverb#1.reverbSize"
         ));
         assert.ok(route);
         assert.equal(Number(snapshot.laneParams.reverbSize), 0.5);
@@ -1039,7 +1039,7 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
     try {
         const seededState = normalizeModulationState({
             routes: [
-                { id: "mseg-mix", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.distortionWet", amount: 0.35, reducer: "max" },
+                { id: "mseg-mix", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.distortion#1.distortionWet", amount: 0.35, reducer: "max" },
             ],
         });
         await page.evaluate((state) => {
@@ -1106,8 +1106,8 @@ test("switching armed sources swaps only selected-route outer geometry and prese
     try {
         const seededState = normalizeModulationState({
             routes: [
-                { id: "mseg-mix", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.distortionWet", amount: 0.2, reducer: "max" },
-                { id: "env-mix", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.distortionWet", amount: -0.55, reducer: "max" },
+                { id: "mseg-mix", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.distortion#1.distortionWet", amount: 0.2, reducer: "max" },
+                { id: "env-mix", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.distortion#1.distortionWet", amount: -0.55, reducer: "max" },
             ],
         });
         await page.evaluate((state) => {
@@ -1179,7 +1179,7 @@ test("an unmapped rack knob shows a neutral outer track and its modulation axis 
             readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
             false,
         );
@@ -1206,14 +1206,14 @@ test("editing a bypassed rack route preserves bypass and renders the outer ring 
         await page.click('[data-role="rack-mod-source-mseg-1"]');
         await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(page, "route before bypass-preserving edit", (snapshot) => (
-            readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "rack.reverbSize")
+            readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "lane.reverb#1.reverbSize")
         ));
         await collapseGlobalModRail(page);
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
         await knob.click({ button: "right" });
         await page.locator('[data-role="rack-parameter-menu-item"][data-action="toggle-route"]').click();
         await waitForHarnessSnapshot(page, "bypassed route before amount edit", (snapshot) => (
-            readStoredModulationState(snapshot).routes.find((route) => route.targetKind === "rack.reverbSize")?.enabled === false
+            readStoredModulationState(snapshot).routes.find((route) => route.targetKind === "lane.reverb#1.reverbSize")?.enabled === false
         ));
         assert.equal(await knob.getAttribute("data-route-state"), "bypassed");
         assert.equal(await knob.locator(".rack-knob-route-presence.is-bypassed").count(), 1);
@@ -1238,11 +1238,11 @@ test("editing a bypassed rack route preserves bypass and renders the outer ring 
         assert.equal(liveBypassedStyle.filter, "none");
         await page.mouse.up();
         const snapshot = await waitForHarnessSnapshot(page, "bypassed route amount edit", (nextSnapshot) => {
-            const route = readStoredModulationState(nextSnapshot).routes.find((candidate) => candidate.targetKind === "rack.reverbSize");
+            const route = readStoredModulationState(nextSnapshot).routes.find((candidate) => candidate.targetKind === "lane.reverb#1.reverbSize");
             return route !== undefined && route.amount > 0.01;
         });
         assert.equal(
-            readStoredModulationState(snapshot).routes.find((route) => route.targetKind === "rack.reverbSize")?.enabled,
+            readStoredModulationState(snapshot).routes.find((route) => route.targetKind === "lane.reverb#1.reverbSize")?.enabled,
             false,
         );
     } finally {
@@ -1273,7 +1273,7 @@ test("a stationary touch hold on a rack knob opens its routing menu with one hap
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         await clearHarnessDebugLog(page);
@@ -1419,7 +1419,7 @@ test("rack parameter reset restores the base default without deleting modulation
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         await collapseGlobalModRail(page);
@@ -1440,7 +1440,7 @@ test("rack parameter reset restores the base default without deleting modulation
             readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
             true,
         );
@@ -1467,7 +1467,7 @@ test("rack parameter menu edits the active route enablement polarity and voice r
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         await collapseGlobalModRail(page);
@@ -1475,7 +1475,7 @@ test("rack parameter menu edits the active route enablement polarity and voice r
         const routeForSize = (snapshot) => readStoredModulationState(snapshot).routes.find((route) => (
             route.sourceKind === "mseg"
             && route.sourceSlot === 1
-            && route.targetKind === "rack.reverbSize"
+            && route.targetKind === "lane.reverb#1.reverbSize"
         ));
 
         await knob.click({ button: "right" });
@@ -1533,7 +1533,7 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         await collapseGlobalModRail(page);
@@ -1572,7 +1572,7 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
                 const route = readStoredModulationState(nextSnapshot).routes.find((candidate) => (
                     candidate.sourceKind === "mseg"
                     && candidate.sourceSlot === 1
-                    && candidate.targetKind === "rack.reverbSize"
+                    && candidate.targetKind === "lane.reverb#1.reverbSize"
                 ));
                 return Math.abs(Number(nextSnapshot.laneParams.reverbSize) - 0.72) < 0.0001
                     && route !== undefined
@@ -1664,7 +1664,7 @@ test("rack exact-value editing never creates an unrequested modulation route", a
             (nextSnapshot) => Math.abs(Number(nextSnapshot.laneParams.reverbSize) - 0.64) < 0.0001,
         );
         assert.equal(
-            readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "rack.reverbSize"),
+            readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "lane.reverb#1.reverbSize"),
             false,
         );
     } finally {
@@ -1699,7 +1699,7 @@ test("rack parameter menus never edit a hidden default-source route while no sou
     try {
         const seededState = normalizeModulationState({
             routes: [
-                { id: "hidden-mseg-route", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.reverbSize", amount: 0.45, reducer: "max" },
+                { id: "hidden-mseg-route", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.reverb#1.reverbSize", amount: 0.45, reducer: "max" },
             ],
         });
         await page.evaluate((state) => {
@@ -1751,7 +1751,7 @@ test("rack parameter route removal targets one source or confirms removal of eve
             page,
             "two source routes before removal",
             (snapshot) => readStoredModulationState(snapshot).routes.filter(
-                (route) => route.targetKind === "rack.reverbSize",
+                (route) => route.targetKind === "lane.reverb#1.reverbSize",
             ).length === 2,
         );
         await collapseGlobalModRail(page);
@@ -1778,12 +1778,12 @@ test("rack parameter route removal targets one source or confirms removal of eve
             "single selected rack route removed",
             (nextSnapshot) => {
                 const routes = readStoredModulationState(nextSnapshot).routes;
-                return !routes.some((route) => route.sourceKind === "env" && route.targetKind === "rack.reverbSize")
-                    && routes.some((route) => route.sourceKind === "mseg" && route.targetKind === "rack.reverbSize");
+                return !routes.some((route) => route.sourceKind === "env" && route.targetKind === "lane.reverb#1.reverbSize")
+                    && routes.some((route) => route.sourceKind === "mseg" && route.targetKind === "lane.reverb#1.reverbSize");
             },
         );
         assert.equal(
-            readStoredModulationState(snapshot).routes.filter((route) => route.targetKind === "rack.reverbSize").length,
+            readStoredModulationState(snapshot).routes.filter((route) => route.targetKind === "lane.reverb#1.reverbSize").length,
             1,
         );
 
@@ -1807,7 +1807,7 @@ test("rack parameter route removal targets one source or confirms removal of eve
         assert.equal(confirmationVisual.fontFamilies.every((fontFamily) => /system-ui/.test(fontFamily)), true);
         snapshot = await getHarnessSnapshot(page);
         assert.equal(
-            readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "rack.reverbSize"),
+            readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "lane.reverb#1.reverbSize"),
             true,
         );
         await confirmation.locator('[data-role="rack-remove-target-routes-confirm"]').click();
@@ -1815,7 +1815,7 @@ test("rack parameter route removal targets one source or confirms removal of eve
             page,
             "all rack target routes removed",
             (nextSnapshot) => !readStoredModulationState(nextSnapshot).routes.some(
-                (route) => route.targetKind === "rack.reverbSize",
+                (route) => route.targetKind === "lane.reverb#1.reverbSize",
             ),
         );
         assert.equal(await confirmation.count(), 0);
@@ -2006,7 +2006,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
     try {
         const seededState = normalizeModulationState({
             routes: [
-                { id: "mobile-route-1", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "bipolar", targetKind: "rack.flangerDepth", amount: -0.39, reducer: "max" },
+                { id: "mobile-route-1", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "bipolar", targetKind: "lane.flanger#1.flangerDepth", amount: -0.39, reducer: "max" },
                 { id: "mobile-route-2", enabled: true, sourceKind: "macro", sourceSlot: 1, polarity: "unipolar", targetKind: "oscA.wavetablePosition", amount: 0.2, reducer: "max" },
                 { id: "mobile-route-3", enabled: false, sourceKind: "env", sourceSlot: 2, polarity: "unipolar", targetKind: "filterCutoffOctaves", amount: 1.5, reducer: "max" },
             ],
@@ -2084,10 +2084,10 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
         await panel.locator('[data-role="mod-mappings-add"]').click();
         await panel.locator('[data-role="mod-mappings-draft-source"]').selectOption("macro-2");
         assert.equal(
-            await panel.locator('[data-role="mod-mappings-draft-target"] option[value="rack.reverbSize"]').isDisabled(),
+            await panel.locator('[data-role="mod-mappings-draft-target"] option[value="lane.reverb#1.reverbSize"]').isDisabled(),
             false,
         );
-        await panel.locator('[data-role="mod-mappings-draft-target"]').selectOption("rack.reverbSize");
+        await panel.locator('[data-role="mod-mappings-draft-target"]').selectOption("lane.reverb#1.reverbSize");
         await panel.locator('[data-role="mod-mappings-draft-create"]').click();
         await waitForHarnessSnapshot(
             page,
@@ -2095,7 +2095,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "macro"
                 && route.sourceSlot === 2
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
                 && route.amount === 0
             )),
         );
@@ -2106,7 +2106,7 @@ test("mobile Mod MAPPINGS is a complete table with row editing, filters, and inl
         await panel.locator('[data-role="mod-mappings-add"]').click();
         await panel.locator('[data-role="mod-mappings-draft-source"]').selectOption("macro-2");
         assert.equal(
-            await panel.locator('[data-role="mod-mappings-draft-target"] option[value="rack.reverbSize"]').isDisabled(),
+            await panel.locator('[data-role="mod-mappings-draft-target"] option[value="lane.reverb#1.reverbSize"]').isDisabled(),
             true,
         );
     } finally {
@@ -2392,7 +2392,7 @@ test("T15: a horizontal base drag on a mapping row writes finite values for step
     try {
         const seededState = normalizeModulationState({
             routes: [
-                { id: "stepless-route", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.flangerDepth", amount: 0.2, reducer: "max" },
+                { id: "stepless-route", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.flanger#1.flangerDepth", amount: 0.2, reducer: "max" },
             ],
         });
         await page.evaluate((state) => {
@@ -2638,7 +2638,7 @@ test("phone touch drags are captured by rack grips and modulation chips without 
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "env"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         assert.deepEqual(await page.evaluate(() => ({
@@ -2897,7 +2897,7 @@ test("the rack Resonance knob walks the modulated value along its dial instead o
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "unipolar",
-                targetKind: "rack.globalFilterResonance",
+                targetKind: "lane.globalFilter#1.globalFilterResonance",
                 amount: 0,
                 reducer: "max",
             }],
@@ -3028,7 +3028,7 @@ test("ADR-025 identity colors: owner color inside, source color outside, grey on
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "unipolar",
-                targetKind: "rack.reverbSize",
+                targetKind: "lane.reverb#1.reverbSize",
                 amount: 0.3,
                 reducer: "max",
             }],
@@ -3087,7 +3087,7 @@ test("ADR-025 duplicate pairs are never droppable and failures raise the top toa
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "unipolar",
-                targetKind: "rack.reverbSize",
+                targetKind: "lane.reverb#1.reverbSize",
                 amount: 0.2,
                 reducer: "max",
             }],
@@ -3182,7 +3182,7 @@ test("ADR-025 duplicate pairs are never droppable and failures raise the top toa
                     sourceKind: "mseg",
                     sourceSlot: 1,
                     polarity: "unipolar",
-                    targetKind: "rack.reverbSize",
+                    targetKind: "lane.reverb#1.reverbSize",
                     amount: 0.2,
                     reducer: "max",
                 },
@@ -3192,7 +3192,7 @@ test("ADR-025 duplicate pairs are never droppable and failures raise the top toa
                     sourceKind: "mseg",
                     sourceSlot: 1,
                     polarity: "unipolar",
-                    targetKind: "rack.delayTime",
+                    targetKind: "lane.delay#1.delayTime",
                     amount: 0,
                     reducer: "max",
                 },
@@ -3295,7 +3295,7 @@ test("ADR-025 journey: a confirmed drop flashes, ticks, and pulses; bypass and d
             "The new matrix row must pulse in the source color.",
         );
         const createdRoute = readStoredModulationState(await getHarnessSnapshot(page)).routes
-            .find((route) => route.targetKind === "rack.reverbSize");
+            .find((route) => route.targetKind === "lane.reverb#1.reverbSize");
         assert.ok(createdRoute);
         assert.equal(createdRoute.amount, 0, "A confirmed creation starts at exactly 0%.");
 

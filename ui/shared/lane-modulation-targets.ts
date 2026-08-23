@@ -39,13 +39,13 @@ export type ParsedLaneModulationTarget = {
     readonly endpointID: string;
 };
 
-/** instanceId -> pool-instance ordinal (0..MODULATION_LANE_POOL_SET_COUNT-1,
-    i.e. which pool SET holds the instance). Ordinals beyond the pool resolve
-    to no slot. */
+/** instanceId -> SLOT ordinal (0..MODULATION_LANE_POOL_SET_COUNT): ordinal 0
+    is the base block (the resident instance-#1 devices), ordinals 1.. are the
+    pool sets. Ordinals beyond the pool resolve to no slot. */
 export type LaneSlotAssignments = ReadonlyMap<string, number>;
 
 /** Modulatable pool endpoints per device type; the mirror target is always
-    `rack.<endpointID>`. */
+    the instance-#1 base target. */
 const LANE_DEVICE_ENDPOINTS: ReadonlyMap<LaneDeviceType, ReadonlyArray<string>> = new Map([
     ["globalFilter", ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"]],
     ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"]],
@@ -84,15 +84,17 @@ export function parseLaneModulationTargetKind(value: unknown): ParsedLaneModulat
     };
 }
 
-/** The base-module rack target that owns this lane parameter's language. */
+/** The base-instance (#1) target that owns this lane parameter's language. */
 export function laneMirrorRackKind(parsed: ParsedLaneModulationTarget): RackModulationTargetKind {
-    return `rack.${parsed.endpointID}` as RackModulationTargetKind;
+    return `lane.${parsed.deviceType}#1.${parsed.endpointID}`;
 }
 
 /**
  * Resolve a parsed lane target to its engine bus index through the patch's
- * slot assignments. Null = the instance holds no pool slot (device deleted or
- * beyond the pool): the route stays stored but compiles to nothing.
+ * slot assignments: index = slotOrdinal * static count + the mirror target's
+ * static index (ordinal 0 = the base block). Null = the instance holds no
+ * slot (device deleted or beyond the pool): the route stays stored but
+ * compiles to nothing.
  */
 export function getLaneModulationTargetIndex(
     parsed: ParsedLaneModulationTarget | null,
@@ -103,10 +105,9 @@ export function getLaneModulationTargetIndex(
     }
     const ordinal = assignments.get(parsed.instanceId);
     if (ordinal === undefined || !Number.isInteger(ordinal)
-            || ordinal < 0 || ordinal >= MODULATION_LANE_POOL_SET_COUNT) {
+            || ordinal < 0 || ordinal > MODULATION_LANE_POOL_SET_COUNT) {
         return null;
     }
-    return MODULATION_RACK_TARGET_COUNT
-        + (ordinal * MODULATION_RACK_TARGET_COUNT)
+    return (ordinal * MODULATION_RACK_TARGET_COUNT)
         + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
 }

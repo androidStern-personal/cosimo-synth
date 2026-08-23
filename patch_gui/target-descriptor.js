@@ -8,7 +8,7 @@
  * The UI-canonical scale is NormalizedValue (0..1). Engine units exist only
  * inside each binding's conversion pair and are property-tested to roundtrip.
  */
-import { MODULATION_TARGET_IDENTITIES, OSCILLATOR_IDS, } from "./modulation-targets.js";
+import { MODULATION_TARGET_IDENTITIES, OSCILLATOR_IDS, laneBaseKindForRackEndpoint, } from "./modulation-targets.js";
 import { RACK_EFFECT_DESCRIPTORS, } from "./rack-parameter-descriptors.js";
 import { casesHandled, err, ok, shouldNeverHappen } from "./result.js";
 function parameter(id, label, initialPercent, defaultPercent, format = "percent", compound = null) {
@@ -326,7 +326,7 @@ function createRackTargetDescriptor(parameter) {
         articulationParameterId: null,
         modulationTargetKind: parameter.modulationTargetIndex === null
             ? null
-            : `rack.${parameter.endpointID}`,
+            : laneBaseKindForRackEndpoint(parameter.endpointID),
     });
 }
 const TARGET_DESCRIPTORS = Object.freeze([

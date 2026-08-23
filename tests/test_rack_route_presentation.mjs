@@ -8,7 +8,7 @@ import {
 } from "../patch_gui/rack-route-presentation.js";
 
 const SOURCE = { sourceKind: "env", sourceSlot: 1 };
-const TARGET_KIND = "rack.distortionWet";
+const TARGET_KIND = "lane.distortion#1.distortionWet";
 
 function route(overrides = {}) {
     return {
@@ -59,7 +59,7 @@ test("rack route presentation separates the armed pair from target-wide topology
                     id: `existing-${index}`,
                     sourceKind: "mseg",
                     sourceSlot: (index % 3) + 1,
-                    targetKind: `rack.existing-${index}`,
+                    targetKind: `lane.delay#${index + 2}.delayTime`,
                 })),
                 armedSource: SOURCE,
             },
@@ -125,49 +125,49 @@ test("rack route travel matches the DSP's linear and octave application before d
             label: "positive unipolar linear",
             endpointID: "globalFilterResonance",
             base: 4,
-            route: route({ targetKind: "rack.globalFilterResonance", amount: 3 }),
+            route: route({ targetKind: "lane.globalFilter#1.globalFilterResonance", amount: 3 }),
             expectedValues: [4, 7],
         },
         {
             label: "negative unipolar linear",
             endpointID: "ottTimePercent",
             base: 100,
-            route: route({ targetKind: "rack.ottTimePercent", amount: -40 }),
+            route: route({ targetKind: "lane.ott#1.ottTimePercent", amount: -40 }),
             expectedValues: [60, 100],
         },
         {
             label: "bipolar linear",
             endpointID: "flangerRate",
             base: 2,
-            route: route({ targetKind: "rack.flangerRate", amount: 1.5, polarity: "bipolar" }),
+            route: route({ targetKind: "lane.flanger#1.flangerRate", amount: 1.5, polarity: "bipolar" }),
             expectedValues: [0.5, 3.5],
         },
         {
             label: "phaser rate stays linear despite log display",
             endpointID: "phaserRate",
             base: 1,
-            route: route({ targetKind: "rack.phaserRate", amount: 2 }),
+            route: route({ targetKind: "lane.phaser#1.phaserRate", amount: 2 }),
             expectedValues: [1, 3],
         },
         {
             label: "frequency target applies octaves",
             endpointID: "phaserFrequency",
             base: 500,
-            route: route({ targetKind: "rack.phaserFrequency", amount: 2 }),
+            route: route({ targetKind: "lane.phaser#1.phaserFrequency", amount: 2 }),
             expectedValues: [500, 2_000],
         },
         {
             label: "lower clipping",
             endpointID: "distortionDriveDb",
             base: 4,
-            route: route({ targetKind: "rack.distortionDriveDb", amount: -10 }),
+            route: route({ targetKind: "lane.distortion#1.distortionDriveDb", amount: -10 }),
             expectedValues: [0, 4],
         },
         {
             label: "upper clipping",
             endpointID: "distortionWet",
             base: 0.8,
-            route: route({ targetKind: "rack.distortionWet", amount: 0.7 }),
+            route: route({ targetKind: "lane.distortion#1.distortionWet", amount: 0.7 }),
             expectedValues: [0.8, 1],
         },
     ];
@@ -191,7 +191,7 @@ test("a nonzero route clipped completely at a rail remains explicitly routed", (
     const travel = projectRackRouteTravel(
         descriptor,
         1,
-        route({ targetKind: "rack.distortionWet", amount: 0.5 }),
+        route({ targetKind: "lane.distortion#1.distortionWet", amount: 0.5 }),
     );
 
     assert.deepEqual(travel.values, [1, 1]);
@@ -202,7 +202,7 @@ test("a nonzero route clipped completely at a rail remains explicitly routed", (
 test("base host echo re-anchors route travel without changing route amount", () => {
     const descriptor = getRackParameterDescriptor("delayFilter");
     assert.ok(descriptor);
-    const selectedRoute = route({ targetKind: "rack.delayFilter", amount: 1 });
+    const selectedRoute = route({ targetKind: "lane.delay#1.delayFilter", amount: 1 });
     const before = projectRackRouteTravel(descriptor, 1_000, selectedRoute);
     const after = projectRackRouteTravel(descriptor, 2_000, selectedRoute);
 

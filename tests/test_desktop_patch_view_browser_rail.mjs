@@ -354,7 +354,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "env"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         assert.ok(snapshot);
@@ -421,7 +421,7 @@ test("global Mod Bar grip movement and source mapping have disjoint touch owners
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "env"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbMix"
+                && route.targetKind === "lane.reverb#1.reverbMix"
             )),
         );
         assert.equal(await rail.getAttribute("data-expanded"), "false");
@@ -827,7 +827,7 @@ test("the Note key triggers audible output from every mobile editor state", asyn
             page,
             "note key path route creation",
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
-                route.sourceKind === "env" && route.targetKind === "rack.reverbSize"
+                route.sourceKind === "env" && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         await collapseGlobalModRail(page);
@@ -1003,7 +1003,7 @@ test("Auto-preview with a routed looping MSEG still strikes, settles balanced, a
             page,
             "mseg loop-sync route creation",
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
-                route.sourceKind === "mseg" && route.targetKind === "rack.reverbSize"
+                route.sourceKind === "mseg" && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
 
@@ -1157,7 +1157,7 @@ test("touch source mapping keeps its free preview while a sticky target claims t
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "env"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
     } finally {
@@ -1980,7 +1980,7 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.distortionDriveDb"
+                && route.targetKind === "lane.distortion#1.distortionDriveDb"
             )),
             false,
             "Selecting a source must not imply a modulation route.",
@@ -2000,13 +2000,13 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.distortionDriveDb"
+                && route.targetKind === "lane.distortion#1.distortionDriveDb"
             )),
         );
         const sourceFirstRoute = readStoredModulationState(snapshot).routes.find((route) => (
             route.sourceKind === "mseg"
             && route.sourceSlot === 1
-            && route.targetKind === "rack.distortionDriveDb"
+            && route.targetKind === "lane.distortion#1.distortionDriveDb"
         ));
         assert.ok(sourceFirstRoute);
 
@@ -2041,7 +2041,7 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.distortionDriveDb"
+                && route.targetKind === "lane.distortion#1.distortionDriveDb"
                 && route.amount > 1
             )),
         );
@@ -2087,7 +2087,7 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "macro"
                 && route.sourceSlot === 2
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
             false,
             "Target-first selection must remain context-only.",
@@ -2100,7 +2100,7 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.some((route) => (
                 route.sourceKind === "macro"
                 && route.sourceSlot === 2
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         assert.equal(
@@ -2129,7 +2129,7 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
                 readStoredModulationState(nextSnapshot).routes.some((route) => (
                     route.sourceKind === "macro"
                     && route.sourceSlot === 2
-                    && route.targetKind === "rack.reverbSize"
+                    && route.targetKind === "lane.reverb#1.reverbSize"
                     && route.amount > 0
                 ))
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
@@ -2168,7 +2168,7 @@ test("the FX workspace has no separate route AMOUNT control: the target knob edi
                 sourceKind: "mseg",
                 sourceSlot: 1,
                 polarity: "bipolar",
-                targetKind: "rack.reverbSize",
+                targetKind: "lane.reverb#1.reverbSize",
                 amount: 0,
                 reducer: "max",
             }],
@@ -2277,7 +2277,7 @@ test("source preview and valid hover stay transient while the armed ring and foc
     try {
         const seededState = normalizeModulationState({
             routes: [
-                { id: "armed-mseg-size", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.reverbSize", amount: 0.4, reducer: "max" },
+                { id: "armed-mseg-size", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.reverb#1.reverbSize", amount: 0.4, reducer: "max" },
             ],
         });
         await page.evaluate((state) => {
@@ -2336,7 +2336,7 @@ test("source preview and valid hover stay transient while the armed ring and foc
         assert.equal((await surface.getAttribute("class")).includes("is-mod-hover"), false);
         assert.equal(await knob.evaluate((element) => element.style.getPropertyValue("--rack-knob-mod-accent")), "#cc59d2");
         const routes = readStoredModulationState(await getHarnessSnapshot(page)).routes;
-        assert.equal(routes.some((route) => route.sourceKind === "env" && route.targetKind === "rack.reverbSize"), false);
+        assert.equal(routes.some((route) => route.sourceKind === "env" && route.targetKind === "lane.reverb#1.reverbSize"), false);
     } finally {
         await page.close();
     }
@@ -2423,7 +2423,7 @@ test("a source drag dwell-navigates tabs and rack effects while the gesture surv
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "env"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
     } finally {
@@ -2442,7 +2442,7 @@ test("a real source drop creates a mapping after 100 existing mappings", async (
         )).filter(({ source, target }) => !(
             source.sourceKind === "env"
             && source.sourceSlot === 1
-            && target.value === "rack.reverbSize"
+            && target.value === "lane.reverb#1.reverbSize"
         )).slice(0, 100).map(({ source, target }, routeIndex) => ({
             id: `large-set-drop-${routeIndex}`,
             enabled: true,
@@ -2483,7 +2483,7 @@ test("a real source drop creates a mapping after 100 existing mappings", async (
             (snapshot) => readStoredModulationState(snapshot).routes.some((route) => (
                 route.sourceKind === "env"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.reverbSize"
+                && route.targetKind === "lane.reverb#1.reverbSize"
             )),
         );
         assert.equal(readStoredModulationState(after).routes.length, 101);
@@ -2504,10 +2504,10 @@ test("effect bypass and mode suspension preserve route geometry without claiming
     try {
         const seededState = normalizeModulationState({
             routes: [
-                { id: "env-reverb", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.reverbSize", amount: 0.4, reducer: "max" },
-                { id: "env-filter", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.globalFilterResonance", amount: 2, reducer: "max" },
-                { id: "env-phaser", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.phaserRate", amount: 1.2, reducer: "max" },
-                { id: "env-delay", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "rack.delayTime", amount: 1, reducer: "max" },
+                { id: "env-reverb", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.reverb#1.reverbSize", amount: 0.4, reducer: "max" },
+                { id: "env-filter", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.globalFilter#1.globalFilterResonance", amount: 2, reducer: "max" },
+                { id: "env-phaser", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.phaser#1.phaserRate", amount: 1.2, reducer: "max" },
+                { id: "env-delay", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.delay#1.delayTime", amount: 1, reducer: "max" },
             ],
         });
         await page.evaluate((state) => {
@@ -2627,7 +2627,7 @@ test("a two-digit exact route badge stays contained at 320px without changing th
                 sourceKind,
                 sourceSlot,
                 polarity: "unipolar",
-                targetKind: "rack.distortionWet",
+                targetKind: "lane.distortion#1.distortionWet",
                 amount: routeIndex / 100,
                 reducer: "max",
             })),

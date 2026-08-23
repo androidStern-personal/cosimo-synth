@@ -7,6 +7,7 @@ import {
     type CSSProperties,
     type PointerEvent as ReactPointerEvent,
 } from "react";
+import { maybeLaneBaseKindForRackEndpoint } from "../shared/modulation-targets";
 import { createPortal } from "react-dom";
 
 import {
@@ -97,7 +98,7 @@ export type RackParameterKnobProps = {
     readonly onSelect: () => void;
     readonly onModulationAmountChange: (amount: number) => void;
     readonly onRequestContextMenu: (clientX: number, clientY: number) => void;
-    /** Overrides the `rack.<endpoint>` default for voice-endpoint callers. */
+    /** Overrides the lane base-instance default for voice-endpoint callers. */
     readonly modulationTargetKind?: ModulationTargetKind;
     /** Overrides the rack readout so voice endpoints keep their surface's display language. */
     readonly formatValue?: (value: number) => string;
@@ -287,8 +288,11 @@ function ParameterKnobSurface({
     const baseNormalized = normalizedValue(descriptor, binding.value);
     // Rack knobs address their own rack destination; voice-endpoint callers
     // (the compact filter row) pass the canonical voice kind instead.
+    // A non-effect endpoint has no lane kind; the sentinel misses every
+    // route/limit lookup exactly as the untargeted case always has.
     const targetKind = modulationTargetKind
-        ?? (`rack.${descriptor.endpointID}` as RackModulationTargetKind);
+        ?? maybeLaneBaseKindForRackEndpoint(descriptor.endpointID)
+        ?? (`lane.none#1.${descriptor.endpointID}` as RackModulationTargetKind);
     const modulationAmount = route?.amount ?? 0;
     const baseOrigin = descriptor.min < 0 && descriptor.max > 0
         ? normalizedValue(descriptor, 0)
@@ -390,7 +394,8 @@ function ParameterKnobSurface({
 
         const gestureDescriptor = descriptor;
         const gestureTargetKind = modulationTargetKind
-            ?? (`rack.${gestureDescriptor.endpointID}` as RackModulationTargetKind);
+            ?? maybeLaneBaseKindForRackEndpoint(gestureDescriptor.endpointID)
+            ?? (`lane.none#1.${gestureDescriptor.endpointID}` as RackModulationTargetKind);
         const amountBounds = enableModulationGesture && route !== null
             ? getModulationAmountBounds(gestureTargetKind)
             : null;

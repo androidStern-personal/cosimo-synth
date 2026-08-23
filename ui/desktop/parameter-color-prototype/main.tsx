@@ -101,7 +101,7 @@ function createRoute(mode: RouteMode): ModulationRoute | null {
         sourceKind: "mseg",
         sourceSlot: 1,
         polarity: "unipolar",
-        targetKind: "rack.reverbSize",
+        targetKind: "lane.reverb#1.reverbSize",
         amount: mode === "zero" ? 0 : 0.38,
         reducer: "max",
     };

@@ -277,8 +277,8 @@ test("modulation amount families use each target's canonical unit and depth perc
         ["filterQ", 0.707, "2 Q", 2, "Q"],
         ["mseg1Rate", 1, "250 ms", 0.25, "s"],
         ["oscA.unisonBlend", 0.75, "50%", 0.5, "%"],
-        ["rack.chorusMix", 0.5, "25%", 0.25, "%"],
-        ["rack.ottMix", 50, "25%", 25, "%"],
+        ["lane.chorus#1.chorusMix", 0.5, "25%", 0.25, "%"],
+        ["lane.ott#1.ottMix", 50, "25%", 25, "%"],
     ];
 
     for (const [targetKind, baseValue, input, expectedValue, expectedUnit] of cases) {
@@ -292,12 +292,12 @@ test("modulation amount families use each target's canonical unit and depth perc
 
 test("logarithmic rack amounts accept signed physical movement relative to the base", async () => {
     const [entries] = await modulesPromise;
-    const delaySpec = entries.parameterEntrySpecForModulationAmount("rack.delayTime", 250);
+    const delaySpec = entries.parameterEntrySpecForModulationAmount("lane.delay#1.delayTime", 250);
     const delay = entries.parseParameterEntry(delaySpec, "+250 ms");
     assert.equal(delay._tag, "accepted");
     assert.equal(delay.commit.value, 1);
 
-    const filterSpec = entries.parameterEntrySpecForModulationAmount("rack.delayFilter", 1_000);
+    const filterSpec = entries.parameterEntrySpecForModulationAmount("lane.delay#1.delayFilter", 1_000);
     const filter = entries.parseParameterEntry(filterSpec, "+1 kHz");
     assert.equal(filter._tag, "accepted");
     assert.equal(filter.commit.value, 1);

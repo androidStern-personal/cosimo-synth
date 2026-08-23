@@ -20,6 +20,7 @@ import {
     getVoiceModulationTargetIndex,
     parseRackModulationTargetKind,
     parseVoiceModulationTargetKind,
+    laneBaseKindForRackEndpoint,
 } from "./modulation-targets";
 import {
     type RackParameterDescriptor,
@@ -181,7 +182,7 @@ export function compileRackModulationTargetCatalog(
         }
 
         endpointByTargetIndex.set(targetIndex, descriptor.endpointID);
-        targetIndexByKind.set(`rack.${descriptor.endpointID}`, targetIndex);
+        targetIndexByKind.set(laneBaseKindForRackEndpoint(descriptor.endpointID), targetIndex);
     }
 
     return targetIndexByKind;
@@ -289,8 +290,12 @@ export function getModulationArticulationCellIndex(route: ModulationRoute): numb
 
 const EMPTY_LANE_ASSIGNMENTS: LaneSlotAssignments = new Map();
 
-/** A lane route whose instance holds no pool slot compiles to nothing. */
+/** A lane route whose instance holds no slot compiles to nothing. The static
+    vocabulary (the base #1 instances) needs no assignment. */
 function laneRouteIsUnassigned(route: ModulationRoute, laneAssignments: LaneSlotAssignments): boolean {
+    if (parseRackModulationTargetKind(route.targetKind) !== null) {
+        return false;
+    }
     const parsedLane = parseLaneModulationTargetKind(route.targetKind);
     return parsedLane !== null
         && getLaneModulationTargetIndex(parsedLane, laneAssignments) === null;

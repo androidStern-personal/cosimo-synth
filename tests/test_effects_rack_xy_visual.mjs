@@ -67,7 +67,9 @@ test("the fallback X/Y table names continuous modulatable endpoints with descrip
             assert.equal(target.binding.endpointId, endpointID, `${expected.effectId} ${axis} host endpoint`);
             assert.equal(
                 target.modulationTargetKind,
-                `rack.${endpointID}`,
+                targetCatalog.allTargetDescriptors === undefined
+                    ? null
+                    : (await import("../patch_gui/modulation-targets.js")).laneBaseKindForRackEndpoint(endpointID),
                 `${expected.effectId} ${axis} modulation endpoint`,
             );
 

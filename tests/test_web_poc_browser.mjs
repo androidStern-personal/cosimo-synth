@@ -176,7 +176,7 @@ const matrixStoredFullDomainHundredProgram = compileModulationRuntimeProgram(
 );
 const matrixActiveFullDomainProgram = compileModulationRuntimeProgram(matrixBenchmarkState("active-1131").routes);
 const macroRackDistortionWetProgram = compileModulationRuntimeProgram([{
-    ...requireStressRoute("macro", 1, "rack.distortionWet"),
+    ...requireStressRoute("macro", 1, "lane.distortion#1.distortionWet"),
     enabled: true,
     polarity: "unipolar",
     amount: 1,
@@ -2796,7 +2796,7 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
             return Array.isArray(state.routes) && state.routes.some((route) => (
                 route.sourceKind === "mseg"
                 && route.sourceSlot === 1
-                && route.targetKind === "rack.distortionKnee"
+                && route.targetKind === "lane.distortion#1.distortionKnee"
             ));
         }, MODULATION_STATE_KEY, { timeout: 3_000 });
         const modulationState = await page.evaluate(async (modulationStateKey) => {
@@ -2806,7 +2806,7 @@ test("generated mobile modulation source touch-drops onto a parameter inside the
         const route = deserializeModulationState(modulationState).routes.find((candidate) => (
             candidate.sourceKind === "mseg"
             && candidate.sourceSlot === 1
-            && candidate.targetKind === "rack.distortionKnee"
+            && candidate.targetKind === "lane.distortion#1.distortionKnee"
         ));
         assert.ok(
             route,

@@ -5,7 +5,7 @@
  * per-sample work belongs only to enabled mappings.
  */
 import { MODULATION_LANE_POOL_TARGET_COUNT, getLaneModulationTargetIndex, parseLaneModulationTargetKind, } from "./lane-modulation-targets.js";
-import { MODULATION_SOURCE_IDENTITIES, MODULATION_RACK_TARGET_COUNT as CANONICAL_RACK_TARGET_COUNT, MODULATION_VOICE_TARGET_COUNT as CANONICAL_VOICE_TARGET_COUNT, getModulationSourceIdentity, getRackModulationTargetIndex, getVoiceModulationTargetIndex, parseRackModulationTargetKind, parseVoiceModulationTargetKind, } from "./modulation-targets.js";
+import { MODULATION_SOURCE_IDENTITIES, MODULATION_RACK_TARGET_COUNT as CANONICAL_RACK_TARGET_COUNT, MODULATION_VOICE_TARGET_COUNT as CANONICAL_VOICE_TARGET_COUNT, getModulationSourceIdentity, getRackModulationTargetIndex, getVoiceModulationTargetIndex, parseRackModulationTargetKind, parseVoiceModulationTargetKind, laneBaseKindForRackEndpoint, } from "./modulation-targets.js";
 /** Runtime endpoint for atomically replacing the active modulation program. */
 export const MODULATION_PROGRAM_ENDPOINT_ID = "modulationProgram";
 /** Runtime endpoint for changing one deterministic cell's base amount. */
@@ -78,7 +78,7 @@ export function compileRackModulationTargetCatalog(descriptors) {
             throw new Error(`Duplicate rack modulation target index ${targetIndex}: ${existingEndpointID} and ${descriptor.endpointID}`);
         }
         endpointByTargetIndex.set(targetIndex, descriptor.endpointID);
-        targetIndexByKind.set(`rack.${descriptor.endpointID}`, targetIndex);
+        targetIndexByKind.set(laneBaseKindForRackEndpoint(descriptor.endpointID), targetIndex);
     }
     return targetIndexByKind;
 }
@@ -169,8 +169,12 @@ export function getModulationArticulationCellIndex(route) {
     return getModulationRuntimeCell(route).articulationCellIndex;
 }
 const EMPTY_LANE_ASSIGNMENTS = new Map();
-/** A lane route whose instance holds no pool slot compiles to nothing. */
+/** A lane route whose instance holds no slot compiles to nothing. The static
+    vocabulary (the base #1 instances) needs no assignment. */
 function laneRouteIsUnassigned(route, laneAssignments) {
+    if (parseRackModulationTargetKind(route.targetKind) !== null) {
+        return false;
+    }
     const parsedLane = parseLaneModulationTargetKind(route.targetKind);
     return parsedLane !== null
         && getLaneModulationTargetIndex(parsedLane, laneAssignments) === null;

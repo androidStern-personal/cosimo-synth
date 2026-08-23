@@ -579,7 +579,7 @@ export function createMockCosimoAdapter({
         setMappingAmount(mappingId, amount, layer) {
             const mapping = requireMapping(state, mappingId);
             const targetKind = getTargetDescriptor(requireTargetId(mapping.targetKey)).modulationTargetKind;
-            if (layer._tag === "articulationOverride" && targetKind?.startsWith("rack.")) {
+            if (layer._tag === "articulationOverride" && targetKind?.startsWith("lane.")) {
                 return;
             }
             dispatch({

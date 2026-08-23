@@ -4,6 +4,7 @@ import {
     type RackParameterChoice,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
+import { parseLaneModulationTargetKind } from "./lane-modulation-targets";
 import {
     getModulationAmountBounds,
     isRackModulationTarget,
@@ -470,7 +471,7 @@ export function parameterEntrySpecForModulationAmount(
     if (!isRackModulationTarget(targetKind)) {
         throw new Error(`Unknown modulation target "${targetKind}".`);
     }
-    const descriptor = getRackParameterDescriptor(targetKind.slice("rack.".length));
+    const descriptor = getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "");
     if (descriptor === null || descriptor.modulationTargetIndex === null) {
         throw new Error(`Unknown rack modulation target "${targetKind}".`);
     }
@@ -487,7 +488,7 @@ export function modulationAmountBaseBindingSpec(
     const voiceTargetKind = parseVoiceModulationTargetKind(targetKind);
     const needsBase = voiceTargetKind === "filterCutoffOctaves"
         || (isRackModulationTarget(targetKind)
-            && getRackParameterDescriptor(targetKind.slice("rack.".length))?.modulationApplication === "octaves");
+            && getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "")?.modulationApplication === "octaves");
     if (!needsBase) {
         return null;
     }

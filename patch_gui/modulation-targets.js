@@ -67,11 +67,30 @@ export const VOICE_MODULATION_TARGET_KINDS = Object.freeze([
 export const VOICE_MODULATION_TARGET_IDENTITIES = Object.freeze(VOICE_MODULATION_TARGET_KINDS.map((kind, runtimeIndex) => ({ kind, group: "voice", runtimeIndex })));
 const rackModulationParameters = allRackParameterDescriptors()
     .filter((parameter) => parameter.modulationTargetIndex !== null);
-/** Rack destinations paired with their descriptor-owned runtime indexes. */
+const LANE_DEVICE_TYPE_PREFIXES = [
+    "globalFilter", "distortion", "ott", "chorus", "flanger", "phaser", "delay", "reverb",
+];
+/** The canonical base-instance lane kind for one effect endpoint. Every
+    effect endpoint is prefixed by its device type name, so the type is
+    derived, never hand-mapped. */
+export function laneBaseKindForRackEndpoint(endpointID) {
+    const kind = maybeLaneBaseKindForRackEndpoint(endpointID);
+    if (kind === null) {
+        throw new Error(`Effect endpoint has no device-type prefix: ${endpointID}`);
+    }
+    return kind;
+}
+/** The base-instance lane kind, or null for a non-effect endpoint (shared
+    surfaces sometimes drive voice endpoints through the same components). */
+export function maybeLaneBaseKindForRackEndpoint(endpointID) {
+    const deviceType = LANE_DEVICE_TYPE_PREFIXES.find((prefix) => endpointID.startsWith(prefix));
+    return deviceType === undefined ? null : `lane.${deviceType}#1.${endpointID}`;
+}
+/** Base-instance lane destinations paired with their descriptor-owned runtime indexes. */
 export const RACK_MODULATION_TARGET_IDENTITIES = Object.freeze(rackModulationParameters.map((parameter) => ({
     // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
     // and indexes are both minted only by the rack descriptor catalog.
-    kind: `rack.${parameter.endpointID}`,
+    kind: laneBaseKindForRackEndpoint(parameter.endpointID),
     group: "rack",
     runtimeIndex: parameter.modulationTargetIndex,
 })).sort((left, right) => left.runtimeIndex - right.runtimeIndex));
@@ -150,7 +169,7 @@ export function parseVoiceModulationTargetKind(value) {
         ? targetKind
         : null;
 }
-/** Parse an untrusted rack target without accepting unknown `rack.*` strings. */
+/** Parse an untrusted base lane target against the static vocabulary. */
 export function parseRackModulationTargetKind(value) {
     const targetKind = parseModulationTargetKind(value);
     return targetKind !== null && targetIdentityByKind.get(targetKind)?.group === "rack"

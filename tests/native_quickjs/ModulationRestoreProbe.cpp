@@ -68,7 +68,7 @@ const auto routedStoredState = std::string (storedStatePrefix) + R"json([
     "sourceKind": "macro",
     "sourceSlot": 1,
     "polarity": "unipolar",
-    "targetKind": "rack.globalFilterCutoff",
+    "targetKind": "lane.globalFilter#1.globalFilterCutoff",
     "amount": -6,
     "reducer": "max"
   }
