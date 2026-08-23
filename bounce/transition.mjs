@@ -1,4 +1,4 @@
-import { digestBounceBank } from "./capture.mjs";
+import { digestBounceBank } from "./digest.mjs";
 import {
     attachBounceDocument,
     createBounceDocument,

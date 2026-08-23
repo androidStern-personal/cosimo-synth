@@ -226,3 +226,50 @@ amplitude-release tests; 6/6 sampled-source tests; and 15/15 web bundle tests.
 Validation: production `web:build`; 5/5 transition/atomicity/Revert tests;
 4/4 live-install/document-adapter tests; 6/6 sampler tests; and 15/15 web
 bundle tests. Oscillator audio remains bit-identical to the M1/M2 pinned hash.
+
+## 2026-08-23 — M5: content-addressed persistence and safe restore
+
+- Added a browser `BounceBankStore` with OPFS as the primary backend. A bank
+  is SHA-256 checked before write, written to a unique same-directory staging
+  file, reopened and checked, atomically renamed to
+  `bank-<digest>.csbk`, and checked again through its published name. Existing
+  content is idempotent. IndexedDB is the capability-only fallback; quota and
+  integrity failures remain visible rather than being disguised by fallback.
+- Browser reload keeps `sourceMode` at the safe oscillator default until the
+  user starts audio, the referenced bytes and all `bounce.v1` metadata verify,
+  the current DSP session is read back, and an inactive bank slot commits.
+  Persisted semantic generations are separated from engine-local FIFO
+  generations, so a restored bank cannot make a later recursive operation
+  stale. The same verified digest is not redundantly reinstalled.
+- Runtime safety writes no longer mutate durable parameter intent. In
+  particular, a host readback of the temporary source-mode default and a
+  missing-bank oscillator fallback cannot overwrite saved sampled mode. A
+  later explicit user write still persists normally.
+- Missing, corrupt, mismatched-length, and invalid-document restores expose a
+  typed error. The web host presents a persistent `role=alert` stating that
+  oscillator fallback is active instead of displaying a working sampled UI
+  over silence.
+- Added the required synth preset adapter. Presets carry only canonical
+  `bounce.v1` metadata/digest; PCM remains out of localStorage, JSON, and
+  Cmajor stored state. Init produces `bounce.v1: null`. Migration paths add
+  that null value to pre-Bounce presets and compose with the older pre-filter-
+  Mix migration.
+- Locked the native design in `docs/BOUNCE_NATIVE_PERSISTENCE.md`: the existing
+  `group.dev.cosimo.wavetable-synth` App Group on iOS/AUv3, Application
+  Support on desktop, verified atomic content files, lifecycle/session rules,
+  conservative retirement, and an opt-in binary JUCE/DAW chunk for project
+  portability without base64.
+
+The Chromium end-to-end proof wrote a 5-second stereo bank through real OPFS,
+reloaded the page, restored it through the generated AudioWorklet bank
+protocol, and measured audible sampled output. The entire test case took
+about 2.2 seconds on this VM and launched zero Bounce render workers after
+reload. The missing-bank case reached its visible typed fallback in about
+1.3 seconds and retained the recoverable digest/source intent. These are
+functional observations, not Mac/iOS performance claims; absolute VM timing
+remains advisory.
+
+Validation: production `web:build`; 2/2 Chromium persistence/reload tests;
+5/5 persistence/preset unit tests; 39/39 combined persistence, transition,
+preset-migration, and web-bundle tests; 692/692 pure Node tests; and the full
+Linux Chromium web POC at 13 passed, 5 expected environment skips, 0 failed.

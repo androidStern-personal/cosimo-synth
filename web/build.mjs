@@ -13,6 +13,15 @@ import { copyWebHostAssets } from "./web-host-assets.mjs";
 const webDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(webDirectory, "..");
 const outputDirectory = path.join(repoRoot, "build", "web");
+const bounceBrowserRuntimeFiles = Object.freeze([
+    "bank-format.mjs",
+    "bank-install.mjs",
+    "browser-bank-store.mjs",
+    "digest.mjs",
+    "document.mjs",
+    "live-bank-install.mjs",
+    "runtime-restorer.mjs",
+]);
 
 function run(command, args) {
     const result = spawnSync(command, args, {
@@ -104,6 +113,15 @@ async function instrumentAudioWorklet() {
     );
 }
 
+async function copyBounceBrowserRuntime() {
+    const targetDirectory = path.join(outputDirectory, "bounce");
+    await fs.mkdir(targetDirectory, { recursive: true });
+    await Promise.all(bounceBrowserRuntimeFiles.map((fileName) => fs.copyFile(
+        path.join(repoRoot, "bounce", fileName),
+        path.join(targetDirectory, fileName),
+    )));
+}
+
 async function buildWebProof() {
     await fs.rm(outputDirectory, { recursive: true, force: true });
 
@@ -138,6 +156,7 @@ async function buildWebProof() {
         sourceDirectory: webDirectory,
         outputDirectory,
     });
+    await copyBounceBrowserRuntime();
     await fs.cp(path.join(repoRoot, "assets"), path.join(outputDirectory, "assets"), {
         recursive: true,
     });

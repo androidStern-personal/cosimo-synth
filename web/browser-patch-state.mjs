@@ -78,6 +78,7 @@ export function readBrowserPatchState({
 export function installBrowserPatchStatePersistence(connection, {
     storage,
     storageKey = BROWSER_PATCH_STATE_KEY,
+    deferParameterRestore = () => false,
 } = {}) {
     const activeStorage = resolveStorage(storage);
     let browserState = readBrowserPatchState({ storage: activeStorage, storageKey });
@@ -87,6 +88,9 @@ export function installBrowserPatchStatePersistence(connection, {
             ? [endpoint.endpointID]
             : []
     )));
+    const deferredParameters = {};
+    const deferredParameterEndpointIDs = new Set();
+    const runtimeOnlyParameterEchoes = new Map();
 
     const persistState = (nextState) => {
         let serializedState;
@@ -107,7 +111,22 @@ export function installBrowserPatchStatePersistence(connection, {
         }
     };
 
-    const persistParameter = (endpointID, value) => {
+    const persistParameter = (endpointID, value, { explicitWrite = false } = {}) => {
+        const suppressed = runtimeOnlyParameterEchoes.get(endpointID) ?? [];
+        const now = Date.now();
+        const matchIndex = suppressed.findIndex((entry) => entry.value === value && entry.expiresAt >= now);
+        if (matchIndex !== -1) {
+            suppressed.splice(matchIndex, 1);
+            if (suppressed.length === 0) runtimeOnlyParameterEchoes.delete(endpointID);
+            return;
+        }
+        const liveSuppressed = suppressed.filter((entry) => entry.expiresAt >= now);
+        if (liveSuppressed.length > 0) runtimeOnlyParameterEchoes.set(endpointID, liveSuppressed);
+        else runtimeOnlyParameterEchoes.delete(endpointID);
+        if (deferredParameterEndpointIDs.has(endpointID)) {
+            if (!explicitWrite) return;
+            deferredParameterEndpointIDs.delete(endpointID);
+        }
         if (!parameterEndpointIDs.has(endpointID)
             || typeof value !== "number"
             || !Number.isFinite(value)
@@ -148,7 +167,13 @@ export function installBrowserPatchStatePersistence(connection, {
     for (const endpoint of connection.inputEndpoints ?? []) {
         if (endpoint?.purpose !== "parameter" || typeof endpoint.endpointID !== "string") continue;
         if (Object.prototype.hasOwnProperty.call(browserState.sound.parameters, endpoint.endpointID)) {
-            sendEventOrValue?.(endpoint.endpointID, browserState.sound.parameters[endpoint.endpointID]);
+            const value = browserState.sound.parameters[endpoint.endpointID];
+            if (deferParameterRestore(endpoint.endpointID, value, browserState)) {
+                deferredParameters[endpoint.endpointID] = value;
+                deferredParameterEndpointIDs.add(endpoint.endpointID);
+            } else {
+                sendEventOrValue?.(endpoint.endpointID, value);
+            }
         }
     }
     for (const [key, value] of Object.entries(browserState.sound.storedState)) {
@@ -161,7 +186,7 @@ export function installBrowserPatchStatePersistence(connection, {
     if (sendEventOrValue) {
         connection.sendEventOrValue = (endpointID, value, ...rest) => {
             const result = sendEventOrValue(endpointID, value, ...rest);
-            persistParameter(endpointID, value);
+            persistParameter(endpointID, value, { explicitWrite: true });
             return result;
         };
     }
@@ -180,6 +205,24 @@ export function installBrowserPatchStatePersistence(connection, {
 
     for (const endpointID of parameterEndpointIDs) {
         connection.addParameterListener?.(endpointID, (value) => persistParameter(endpointID, value));
-        connection.requestParameterValue?.(endpointID);
+        // A deferred sampled source intentionally leaves the engine at its
+        // safe oscillator default until OPFS restore commits. Reading that
+        // temporary default must not overwrite the durable sampled intent.
+        if (!Object.hasOwn(deferredParameters, endpointID)) {
+            connection.requestParameterValue?.(endpointID);
+        }
     }
+
+    return Object.freeze({
+        browserState,
+        deferredParameters: Object.freeze({ ...deferredParameters }),
+        sendRuntimeEventOrValue(endpointID, value, ...rest) {
+            if (parameterEndpointIDs.has(endpointID)) {
+                const queue = runtimeOnlyParameterEchoes.get(endpointID) ?? [];
+                queue.push({ value, expiresAt: Date.now() + 5_000 });
+                runtimeOnlyParameterEchoes.set(endpointID, queue);
+            }
+            return sendEventOrValue?.(endpointID, value, ...rest);
+        },
+    });
 }

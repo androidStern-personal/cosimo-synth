@@ -102,6 +102,14 @@ test("Bounce ships a class-only performer and a background render worker", async
     assert.match(worker, /render-root-complete/);
 });
 
+test("Bounce ships the OPFS persistence and safe runtime-restore modules", async () => {
+    await Promise.all([
+        fs.access(path.join(repoRoot, "build", "web", "bounce", "browser-bank-store.mjs")),
+        fs.access(path.join(repoRoot, "build", "web", "bounce", "runtime-restorer.mjs")),
+        fs.access(path.join(repoRoot, "build", "web", "bounce", "document.mjs")),
+    ]);
+});
+
 test("public asset policy removes build-only artifacts without touching runtime files", async (context) => {
     const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-public-assets-"));
     context.after(async () => fs.rm(fixtureRoot, { recursive: true, force: true }));
@@ -383,6 +391,54 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
         },
         auxiliary: {},
     });
+});
+
+test("deferred sampled mode ignores safety echoes until an explicit user write", () => {
+    const storageWrites = [];
+    const parameterListeners = new Map();
+    const runtimeWrites = [];
+    const connection = {
+        inputEndpoints: [{ endpointID: "sourceMode", purpose: "parameter" }],
+        addParameterListener(endpointID, listener) {
+            parameterListeners.set(endpointID, listener);
+        },
+        requestParameterValue(endpointID) {
+            parameterListeners.get(endpointID)?.(0);
+        },
+        sendEventOrValue(endpointID, value) {
+            runtimeWrites.push([endpointID, value]);
+            parameterListeners.get(endpointID)?.(value);
+        },
+        sendStoredStateValue() {},
+    };
+    const initial = {
+        format: "cosimo.browserPatchState",
+        version: 2,
+        sound: {
+            parameters: { sourceMode: 1 },
+            storedState: { "bounce.v1": "reference" },
+        },
+        auxiliary: {},
+    };
+    const storage = {
+        getItem() { return JSON.stringify(initial); },
+        setItem(_key, value) { storageWrites.push(JSON.parse(value)); },
+    };
+
+    const persistence = installBrowserPatchStatePersistence(connection, {
+        storage,
+        deferParameterRestore: (endpointID) => endpointID === "sourceMode",
+    });
+    // Another host observer may request the temporary engine default. It is
+    // runtime state, not a durable edit.
+    parameterListeners.get("sourceMode")(0);
+    persistence.sendRuntimeEventOrValue("sourceMode", 0);
+    assert.deepEqual(storageWrites, []);
+    assert.deepEqual(runtimeWrites, [["sourceMode", 0]]);
+
+    connection.sendEventOrValue("sourceMode", 0);
+    assert.equal(storageWrites.length, 1);
+    assert.equal(storageWrites[0].sound.parameters.sourceMode, 0);
 });
 
 test("web host packaging includes every runtime-owned module", async (context) => {
