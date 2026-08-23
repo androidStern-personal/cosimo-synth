@@ -190,3 +190,135 @@ test("base rack routes are untouched by the widening", async () => {
     assert.ok(targetIndex < 36, `base target leaked into the pool block: ${targetIndex}`);
     assert.equal(compiled.voiceRackRouteCells[0] % program.MODULATION_RACK_TARGET_TOTAL, targetIndex);
 });
+
+// The dynamic target domain (M2b): every display and editing authority is
+// TOTAL over the lane grammar. A pool instance speaks its device type's
+// canonical language and is labeled by its instance number; instance #1
+// keeps today's resident labels exactly.
+
+test("pool instances are display-labeled by instance number; instance #1 keeps its resident label", async () => {
+    const descriptors = await loadUIModule(repoRoot, "ui/shared/target-descriptor.ts");
+
+    assert.equal(descriptors.getModulationTargetDisplayLabel("lane.delay#1.delayFeedback"), "DELAY FEEDBACK");
+    assert.equal(descriptors.getModulationTargetDisplayLabel("lane.delay#2.delayFeedback"), "DELAY 2 FEEDBACK");
+    assert.equal(descriptors.getModulationTargetDisplayLabel("lane.globalFilter#3.globalFilterCutoff"), "FILTER 3 CUTOFF");
+    // The lane grammar speaks the DEVICE type ("distortion"); the display
+    // authority is the catalog module ("drive") — same split as instance #1.
+    assert.equal(descriptors.getModulationTargetDisplayLabel("lane.distortion#2.distortionWet"), "DRIVE 2 MIX");
+
+    // The table/list presentation splits the same authority into category and
+    // parameter; pool instances gain the number on the category side.
+    assert.deepEqual(
+        descriptors.getModulationTargetPresentation("lane.delay#1.delayFeedback"),
+        { category: "Delay", parameter: "Feedback" },
+    );
+    assert.deepEqual(
+        descriptors.getModulationTargetPresentation("lane.delay#2.delayFeedback"),
+        { category: "Delay 2", parameter: "Feedback" },
+    );
+    assert.deepEqual(
+        descriptors.getModulationTargetPresentation("lane.globalFilter#1.globalFilterCutoff"),
+        { category: "Global Filter", parameter: "Cutoff" },
+    );
+    assert.deepEqual(
+        descriptors.getModulationTargetPresentation("lane.globalFilter#4.globalFilterCutoff"),
+        { category: "Global Filter 4", parameter: "Cutoff" },
+    );
+    assert.deepEqual(
+        descriptors.getModulationTargetPresentation("oscA.pan"),
+        { category: "Voice", parameter: "A PAN" },
+    );
+});
+
+test("amount editing authorities defer to the type's #1 language for pool instances", async () => {
+    const entry = await loadUIModule(repoRoot, "ui/shared/parameter-value-entry.ts");
+    const modulation = await loadUIModule(repoRoot, "ui/shared/modulation.ts");
+
+    // Exact-entry amount specs: identical for #2 and #1, log and linear alike.
+    assert.deepEqual(
+        entry.parameterEntrySpecForModulationAmount("lane.delay#2.delayTime", 375),
+        entry.parameterEntrySpecForModulationAmount("lane.delay#1.delayTime", 375),
+    );
+    assert.deepEqual(
+        entry.parameterEntrySpecForModulationAmount("lane.reverb#4.reverbMix", 0),
+        entry.parameterEntrySpecForModulationAmount("lane.reverb#1.reverbMix", 0),
+    );
+
+    // The log-anchor base binding spec resolves through the mirror: an octave
+    // target needs one, a linear target deliberately has none.
+    const poolBaseSpec = entry.modulationAmountBaseBindingSpec("lane.delay#2.delayTime");
+    const residentBaseSpec = entry.modulationAmountBaseBindingSpec("lane.delay#1.delayTime");
+    assert.notEqual(residentBaseSpec, null);
+    assert.deepEqual(poolBaseSpec, residentBaseSpec);
+    assert.equal(entry.modulationAmountBaseBindingSpec("lane.reverb#2.reverbMix"), null);
+
+    const poolHint = modulation.getModulationTargetClampHint("lane.delay#2.delayTime");
+    assert.equal(poolHint, modulation.getModulationTargetClampHint("lane.delay#1.delayTime"));
+    assert.ok(poolHint.length > 0);
+});
+
+test("no lane route carries a per-note articulation cell — pool routes included, without slot resolution", async () => {
+    // Regression pin: a stored pool route used to CRASH the whole patch view
+    // through this call — currentArticulationRouteIds asked for the route's
+    // articulation cell, cell resolution needed a slot the patch could not
+    // provide, and the throw took down DesktopPatchViewBody at mount.
+    const program = await loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts");
+    const laneRoute = (targetKind) => ({
+        id: "articulation-probe", enabled: true, sourceKind: "mseg", sourceSlot: 1,
+        polarity: "unipolar", targetKind, amount: 0.4, reducer: "max",
+    });
+    assert.equal(program.getModulationArticulationCellIndex(laneRoute("lane.delay#2.delayMix")), null);
+    assert.equal(program.getModulationArticulationCellIndex(laneRoute("lane.delay#1.delayMix")), null);
+    assert.notEqual(program.getModulationArticulationCellIndex(laneRoute("oscA.pan")), null);
+});
+
+test("a pool instance's base is not addressable in a fixed-eight patch", async () => {
+    const resolver = await loadUIModule(repoRoot, "ui/shared/modulation-target-base.ts");
+    // lane.v1 stores one device per type, so instance #2's base parameter has
+    // no document slot to edit — its row edits the modulation amount only.
+    // Per-instance base bindings arrive with the device-instance tree.
+    assert.equal(resolver.resolveModulationTargetBase("lane.delay#2.delayMix"), null);
+    assert.notEqual(resolver.resolveModulationTargetBase("lane.delay#1.delayMix"), null);
+});
+
+test("the per-patch target domain is the static core plus one entry per live lane device parameter", async () => {
+    const laneState = await loadUIModule(repoRoot, "ui/shared/lane-state.ts");
+    const modulation = await loadUIModule(repoRoot, "ui/shared/modulation.ts");
+
+    // The resident device set: one instance-#1 device per type, in the stable
+    // identity order (never the chain order — reordering the chain must not
+    // reshuffle pickers).
+    const resident = laneState.listLaneDeviceInstances(laneState.createDefaultLaneState());
+    assert.deepEqual(resident, [
+        { instanceId: "globalFilter#1", deviceType: "globalFilter" },
+        { instanceId: "distortion#1", deviceType: "distortion" },
+        { instanceId: "ott#1", deviceType: "ott" },
+        { instanceId: "chorus#1", deviceType: "chorus" },
+        { instanceId: "flanger#1", deviceType: "flanger" },
+        { instanceId: "phaser#1", deviceType: "phaser" },
+        { instanceId: "delay#1", deviceType: "delay" },
+        { instanceId: "reverb#1", deviceType: "reverb" },
+    ]);
+
+    // The resident set reproduces the static option list EXACTLY — the
+    // default patch's pickers cannot change under the dynamic domain.
+    assert.deepEqual(
+        modulation.buildPatchModulationTargetOptions(resident),
+        modulation.MODULATION_TARGET_OPTIONS,
+    );
+
+    // A live pool device appends its parameters, instance-labeled, in the
+    // catalog's endpoint order.
+    const withPoolDelay = modulation.buildPatchModulationTargetOptions([
+        ...resident,
+        { instanceId: "delay#2", deviceType: "delay" },
+    ]);
+    assert.equal(withPoolDelay.length, modulation.MODULATION_TARGET_OPTIONS.length + 4);
+    assert.deepEqual(withPoolDelay.slice(0, modulation.MODULATION_TARGET_OPTIONS.length), modulation.MODULATION_TARGET_OPTIONS);
+    assert.deepEqual(withPoolDelay.slice(-4), [
+        { value: "lane.delay#2.delayTime", label: "DELAY 2 TIME" },
+        { value: "lane.delay#2.delayFeedback", label: "DELAY 2 FEEDBACK" },
+        { value: "lane.delay#2.delayFilter", label: "DELAY 2 FILTER" },
+        { value: "lane.delay#2.delayMix", label: "DELAY 2 MIX" },
+    ]);
+});

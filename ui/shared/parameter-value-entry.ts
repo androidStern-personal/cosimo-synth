@@ -4,7 +4,7 @@ import {
     type RackParameterChoice,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
-import { parseLaneModulationTargetKind } from "./lane-modulation-targets";
+import { laneMirrorRackKind, parseLaneModulationTargetKind } from "./lane-modulation-targets";
 import {
     getModulationAmountBounds,
     isRackModulationTarget,
@@ -459,6 +459,13 @@ function rackAmountSpec(
     });
 }
 
+/** A lane parameter's amount language is its device type's canonical (#1)
+    language — pool instances defer to the same-named base-module target. */
+function laneAmountAuthorityKind(targetKind: ModulationTargetKind): ModulationTargetKind {
+    const parsedLane = parseLaneModulationTargetKind(targetKind);
+    return parsedLane !== null ? laneMirrorRackKind(parsedLane) : targetKind;
+}
+
 /** Derive a modulation-amount spec from the canonical target and route limit table. */
 export function parameterEntrySpecForModulationAmount(
     targetKind: ModulationTargetKind,
@@ -468,7 +475,7 @@ export function parameterEntrySpecForModulationAmount(
     if (voiceTargetKind !== null) {
         return voiceAmountSpec(voiceTargetKind, baseValue);
     }
-    if (!isRackModulationTarget(targetKind)) {
+    if (!isRackModulationTarget(laneAmountAuthorityKind(targetKind))) {
         throw new Error(`Unknown modulation target "${targetKind}".`);
     }
     const descriptor = getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "");
@@ -486,14 +493,15 @@ export function modulationAmountBaseBindingSpec(
     targetKind: ModulationTargetKind,
 ): ModulationAmountBaseBindingSpec | null {
     const voiceTargetKind = parseVoiceModulationTargetKind(targetKind);
+    const authorityKind = laneAmountAuthorityKind(targetKind);
     const needsBase = voiceTargetKind === "filterCutoffOctaves"
-        || (isRackModulationTarget(targetKind)
+        || (isRackModulationTarget(authorityKind)
             && getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "")?.modulationApplication === "octaves");
     if (!needsBase) {
         return null;
     }
 
-    const descriptor = getModulationTargetDescriptor(targetKind);
+    const descriptor = getModulationTargetDescriptor(authorityKind);
     if (descriptor.binding._tag !== "endpoint") {
         throw new Error(`Logarithmic modulation target "${targetKind}" has no base endpoint.`);
     }

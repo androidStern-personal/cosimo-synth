@@ -62,6 +62,20 @@ export function parseLaneModulationTargetKind(value) {
 export function laneMirrorRackKind(parsed) {
     return `lane.${parsed.deviceType}#1.${parsed.endpointID}`;
 }
+/** The instance's display number: `delay#2` -> 2. Total for parsed targets —
+    the grammar only admits positive integers after the `#`. */
+export function laneInstanceNumber(parsed) {
+    return Number(parsed.instanceId.slice(parsed.instanceId.indexOf("#") + 1));
+}
+/** One device's modulation target kinds, in the canonical catalog order the
+    static vocabulary uses (pinned by the resident-domain invariant test). */
+export function getLaneDeviceModulationTargetKinds(device) {
+    const endpoints = LANE_DEVICE_ENDPOINTS.get(device.deviceType);
+    if (endpoints === undefined) {
+        throw new Error(`Unknown lane device type: ${device.deviceType}`);
+    }
+    return endpoints.map((endpointID) => `lane.${device.instanceId}.${endpointID}`);
+}
 /**
  * Resolve a parsed lane target to its engine bus index through the patch's
  * slot assignments: index = slotOrdinal * static count + the mirror target's

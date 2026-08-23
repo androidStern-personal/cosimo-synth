@@ -11,10 +11,15 @@ import {
     commitLaneState,
     createDefaultLaneState,
     deserializeLaneState,
+    listLaneDeviceInstances,
     sendLaneParamValue,
     serializeLaneState,
     type LaneState,
 } from "./lane-state";
+import {
+    buildPatchModulationTargetOptions,
+    type ModulationTargetOption,
+} from "./modulation";
 import { usePatchParameterBinding, type PatchControlBinding } from "./patch-controls";
 import {
     getRackParameterDescriptor,
@@ -146,6 +151,25 @@ export function useLaneStateDoc(): {
 
     return useMemo(() => ({ laneState, commit, setParamValue, persist }),
         [laneState, commit, setParamValue, persist]);
+}
+
+/**
+ * The patch's modulation target picker domain: the static voice core plus one
+ * entry per live lane device parameter (instance-labeled). Identity-keyed on
+ * the DEVICE LIST, not the document — parameter-value traffic through the
+ * lane store must not re-render every mounted picker.
+ */
+export function usePatchModulationTargetOptions(): ReadonlyArray<ModulationTargetOption> {
+    const { laneState } = useLaneStateDoc();
+    const devices = listLaneDeviceInstances(laneState);
+    const deviceSignature = devices.map((device) => device.instanceId).join("\n");
+    // An unchanged signature is an unchanged device list, so the captured
+    // `devices` from the first matching render stays correct.
+    return useMemo(
+        () => buildPatchModulationTargetOptions(devices),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [deviceSignature],
+    );
 }
 
 /**

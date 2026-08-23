@@ -39,6 +39,14 @@ export type ParsedLaneModulationTarget = {
     readonly endpointID: string;
 };
 
+/** One live lane device: the per-patch unit the dynamic target domain is
+    built from. lane.v1 pins exactly one instance-#1 device per type; the
+    device-instance tree arrives with the add/remove UX. */
+export type LaneDeviceInstance = {
+    readonly instanceId: string;
+    readonly deviceType: LaneDeviceType;
+};
+
 /** instanceId -> SLOT ordinal (0..MODULATION_LANE_POOL_SET_COUNT): ordinal 0
     is the base block (the resident instance-#1 devices), ordinals 1.. are the
     pool sets. Ordinals beyond the pool resolve to no slot. */
@@ -87,6 +95,24 @@ export function parseLaneModulationTargetKind(value: unknown): ParsedLaneModulat
 /** The base-instance (#1) target that owns this lane parameter's language. */
 export function laneMirrorRackKind(parsed: ParsedLaneModulationTarget): RackModulationTargetKind {
     return `lane.${parsed.deviceType}#1.${parsed.endpointID}`;
+}
+
+/** The instance's display number: `delay#2` -> 2. Total for parsed targets —
+    the grammar only admits positive integers after the `#`. */
+export function laneInstanceNumber(parsed: ParsedLaneModulationTarget): number {
+    return Number(parsed.instanceId.slice(parsed.instanceId.indexOf("#") + 1));
+}
+
+/** One device's modulation target kinds, in the canonical catalog order the
+    static vocabulary uses (pinned by the resident-domain invariant test). */
+export function getLaneDeviceModulationTargetKinds(
+    device: LaneDeviceInstance,
+): ReadonlyArray<string> {
+    const endpoints = LANE_DEVICE_ENDPOINTS.get(device.deviceType);
+    if (endpoints === undefined) {
+        throw new Error(`Unknown lane device type: ${device.deviceType}`);
+    }
+    return endpoints.map((endpointID) => `lane.${device.instanceId}.${endpointID}`);
 }
 
 /**

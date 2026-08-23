@@ -2217,6 +2217,81 @@ test("T15: mapping rows read as LED meters with a live polarity toggle, one labe
     }
 });
 
+test("a stored pool-instance route renders instance-labeled, edits amount-only, and stays out of the fixed-eight picker", async () => {
+    // Effects Lane dynamic domain: `lane.delay#2.delayMix` is a legal stored
+    // kind since the namespace cut, but lane.v1 cannot represent the device
+    // that owns it. The table must render it in the delay's canonical
+    // language under a numbered category, with no base rail to a parameter
+    // this patch cannot address — and the create picker lists only the
+    // resident instance-#1 domain.
+    const page = await openHarnessPage({
+        beforeGoto: async (nextPage) => {
+            await nextPage.setViewportSize({ width: 393, height: 852 });
+            await nextPage.addInitScript(() => {
+                localStorage.clear();
+                sessionStorage.clear();
+            });
+        },
+    });
+
+    try {
+        const seededState = normalizeModulationState({
+            routes: [
+                { id: "pool-route-1", enabled: true, sourceKind: "mseg", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.delay#2.delayMix", amount: 0.4, reducer: "max" },
+                { id: "resident-route-1", enabled: true, sourceKind: "env", sourceSlot: 1, polarity: "unipolar", targetKind: "lane.delay#1.delayMix", amount: 0.25, reducer: "max" },
+            ],
+        });
+        assert.equal(seededState.routes.length, 2, "both lane kinds must survive normalization");
+        await page.evaluate((state) => {
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
+        }, seededState);
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
+
+        // The pool row: numbered category, mirror parameter label, and the
+        // amount readout in the delay's canonical language.
+        const poolRow = page.locator('[data-role="mod-mappings-row"][data-route-id="pool-route-1"]');
+        await poolRow.waitFor();
+        assert.equal(
+            (await poolRow.locator(".mod-mappings-row-target").innerText()).replace(/\s+/g, " ").trim(),
+            "Delay 2 Mix",
+        );
+        assert.equal(await poolRow.locator(".mod-mappings-row-target strong").innerText(), "Delay 2");
+        const amountOnly = poolRow.locator('[data-role="mod-mappings-amount-only"]');
+        assert.equal(await amountOnly.count(), 1, "a pool route's base is not addressable in a fixed-eight patch");
+        assert.equal(
+            await amountOnly.innerText(),
+            formatModulationAmountReadout("lane.delay#1.delayMix", 0.4, "unipolar"),
+        );
+        assert.equal(await poolRow.locator(".mod-led-rail").count(), 0);
+
+        // The resident row keeps today's un-numbered label and its live rail.
+        const residentRow = page.locator('[data-role="mod-mappings-row"][data-route-id="resident-route-1"]');
+        assert.equal(
+            (await residentRow.locator(".mod-mappings-row-target").innerText()).replace(/\s+/g, " ").trim(),
+            "Delay Mix",
+        );
+        assert.equal(await residentRow.locator(".mod-led-rail").count(), 1);
+
+        // Route mutations work without a base: the polarity toggle writes the
+        // stored route.
+        await poolRow.locator("button[data-role^='mod-mappings-polarity-']").click();
+        await page.waitForFunction(() => {
+            const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"]));
+            return state.routes.find((route) => route.id === "pool-route-1")?.polarity === "bipolar";
+        });
+
+        // The draft picker speaks the per-patch domain: the resident kind is
+        // offered, the pool kind is not (no live delay#2 in a v1 patch).
+        await page.locator('[data-role="mod-mappings-add"]').click();
+        const draftTarget = page.locator('[data-role="mod-mappings-draft-target"]');
+        assert.equal(await draftTarget.locator('option[value="lane.delay#1.delayMix"]').count(), 1);
+        assert.equal(await draftTarget.locator('option[value="lane.delay#2.delayMix"]').count(), 0);
+    } finally {
+        await page.close();
+    }
+});
+
 test("T15: base drags on log-scale rows walk the display scale, matching the knobs' settled rule", async () => {
     // Cutoff and resonance felt "sigmoid" on rows: the drag moved the value
     // linearly in raw Hz while the tick sat on a log track, so the musical

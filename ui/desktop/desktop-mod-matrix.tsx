@@ -11,7 +11,6 @@ import {
 
 import {
     MODULATION_SOURCE_OPTIONS,
-    MODULATION_TARGET_OPTIONS,
     applyModulationSourceOption,
     clampModulationRouteAmount,
     composeModulationAmount,
@@ -19,13 +18,15 @@ import {
     getModulationAmountBounds,
     getModulationAmountSliderPosition,
     getModulationSourceOptionValue,
-    isRackModulationTarget,
+    isRackBusModulationTarget,
     isVoiceModulationSource,
     type ModulationPolarity,
     type ModulationRoute,
     type ModulationRouteUpdate,
     type ModulationTargetKind,
 } from "../shared/modulation";
+import { usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
+import { getModulationTargetDisplayLabel } from "../shared/target-descriptor";
 import {
     useModulationAmountParameterEntrySpec,
     useModulationRouteAmountBinding,
@@ -619,6 +620,17 @@ const RouteRow = memo(function RouteRow({
     const sourceValue = getModulationSourceOptionValue(route);
     const targetBounds = getModulationAmountBounds(route.targetKind);
     const amountBinding = useModulationRouteAmountBinding(route);
+    const patchTargetOptions = usePatchModulationTargetOptions();
+    // A stored route can point at a device this patch no longer lists (a pool
+    // instance today); the select still renders it, instance-labeled.
+    const targetOptions = useMemo(() => (
+        patchTargetOptions.some((option) => option.value === route.targetKind)
+            ? patchTargetOptions
+            : [...patchTargetOptions, {
+                value: route.targetKind,
+                label: getModulationTargetDisplayLabel(route.targetKind),
+            }]
+    ), [patchTargetOptions, route.targetKind]);
 
     return (
         <div
@@ -663,7 +675,7 @@ const RouteRow = memo(function RouteRow({
             <PrototypeSelect
                 ariaLabel={`Route ${routeIndex + 1} target`}
                 value={route.targetKind}
-                options={MODULATION_TARGET_OPTIONS.map((option) => ({ value: option.value, label: option.label }))}
+                options={targetOptions.map((option) => ({ value: option.value, label: option.label }))}
                 onChange={(nextTargetKind) => {
                     const targetKind = nextTargetKind as ModulationTargetKind;
                     onRouteChange(routeIndex, {
@@ -682,7 +694,7 @@ const RouteRow = memo(function RouteRow({
                 onChange={(polarity) => onRouteChange(routeIndex, { polarity })}
             />
 
-            {isRackModulationTarget(route.targetKind) && isVoiceModulationSource(route.sourceKind) ? (
+            {isRackBusModulationTarget(route.targetKind) && isVoiceModulationSource(route.sourceKind) ? (
                 <PrototypeSelect
                     ariaLabel={`Route ${routeIndex + 1} voice reducer`}
                     value={route.reducer}

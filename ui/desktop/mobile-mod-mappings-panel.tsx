@@ -37,7 +37,6 @@ import {
 } from "../shared/mod-mappings-table-model";
 import {
     MODULATION_SOURCE_OPTIONS,
-    MODULATION_TARGET_OPTIONS,
     formatModulationAmountReadout,
     type GeneratedModulationRouteInput,
     type ModulationRoute,
@@ -46,7 +45,7 @@ import {
 import type { ModulationTargetKind } from "../shared/modulation-targets";
 import { resolveModulationTargetBase } from "../shared/modulation-target-base";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
-import { useLaneOrHostParameterBinding } from "../shared/lane-param-bindings";
+import { useLaneOrHostParameterBinding, usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
 import { formatParameterEntry } from "../shared/parameter-value-entry";
 import { useParameterGesture } from "../shared/parameter-gesture";
 import { useReadoutCells, type ReadoutCellSpec } from "../shared/parameter-readout-strip";
@@ -364,6 +363,7 @@ export function MobileModMappingsPanel({
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
 }) {
+    const targetOptions = usePatchModulationTargetOptions();
     const [prefs, setPrefs] = useState<MappingsViewPrefs>(loadStoredViewPrefs);
     const dispatch = useCallback((action: ViewPrefsAction) => {
         setPrefs((current: MappingsViewPrefs) => viewPrefsReducer(current, action));
@@ -660,7 +660,7 @@ export function MobileModMappingsPanel({
                         onChange={(event) => setDraftTargetKind((event.currentTarget.value || null) as ModulationTargetKind | null)}
                     >
                         <option value="">Target…</option>
-                        {MODULATION_TARGET_OPTIONS.map((option) => (
+                        {targetOptions.map((option) => (
                             <option
                                 key={option.value}
                                 value={option.value}
