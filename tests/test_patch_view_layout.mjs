@@ -339,20 +339,21 @@ test("desktop synth reserves Cmajor host parameter slot 0 away from musical cont
     );
 });
 
-test("Filter Mix and Amp Release are append-only additions to the frozen synth host-parameter order", async () => {
+test("Bounce parameters are append-only additions to the frozen synth host-parameter order", async () => {
     const synthSource = await fs.readFile(path.join(repoRoot, "cmajor", "WavetableSynth.cmajor"), "utf8");
     const parameterOrder = parseGraphHostParameterIdentifiers(synthSource, "WavetableSynth");
     const inputValues = parseGraphInputValues(synthSource, "WavetableSynth");
     const filterMix = inputValues.find(({ identifier }) => identifier === "filterMix");
     const ampRelease = inputValues.find(({ identifier }) => identifier === "ampRelease");
+    const sourceMode = inputValues.find(({ identifier }) => identifier === "sourceMode");
 
     assert.deepEqual(
-        parameterOrder.slice(0, -2),
+        parameterOrder.slice(0, -3),
         EXISTING_SYNTH_HOST_PARAMETER_ORDER,
-        "appending Filter Mix and Amp Release must not move any existing DAW automation slot",
+        "appending Bounce controls must not move any existing DAW automation slot",
     );
-    assert.deepEqual(parameterOrder.slice(-2), ["filterMix", "ampRelease"]);
-    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 2);
+    assert.deepEqual(parameterOrder.slice(-3), ["filterMix", "ampRelease", "sourceMode"]);
+    assert.equal(parameterOrder.length, EXISTING_SYNTH_HOST_PARAMETER_ORDER.length + 3);
     assert.notEqual(filterMix, undefined);
     assert.equal(filterMix.type, "float32");
     assert.match(filterMix.annotation, /name:\s*"Filter Mix"/);
@@ -368,6 +369,15 @@ test("Filter Mix and Amp Release are append-only additions to the frozen synth h
     assert.match(ampRelease.annotation, /init:\s*0\.2f?/);
     assert.match(ampRelease.annotation, /unit:\s*"s"/);
     assert.match(ampRelease.annotation, /rampFrames:\s*0/);
+    assert.notEqual(sourceMode, undefined);
+    assert.equal(sourceMode.type, "float32");
+    assert.match(sourceMode.annotation, /name:\s*"Source Mode"/);
+    assert.match(sourceMode.annotation, /min:\s*0(?:\.0)?f?/);
+    assert.match(sourceMode.annotation, /max:\s*1(?:\.0)?f?/);
+    assert.match(sourceMode.annotation, /init:\s*0(?:\.0)?f?/);
+    assert.match(sourceMode.annotation, /discrete:\s*true/);
+    assert.match(sourceMode.annotation, /text:\s*"Oscillator\|Bounce"/);
+    assert.match(sourceMode.annotation, /rampFrames:\s*0/);
 });
 
 test("legacy synth presets resolve an omitted Filter Mix to fully wet through an exact-contract migration", async () => {

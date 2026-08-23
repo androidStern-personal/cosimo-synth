@@ -124,7 +124,10 @@ test("Amp Release is appended with the locked 0.2 second default and range", asy
 
     const parameterEndpoints = CmajorClass.prototype.getInputEndpoints()
         .filter(({ purpose }) => purpose === "parameter");
-    assert.equal(parameterEndpoints.at(-1)?.endpointID, "ampRelease");
+    assert.deepEqual(
+        parameterEndpoints.slice(-2).map(({ endpointID }) => endpointID),
+        ["ampRelease", "sourceMode"],
+    );
 });
 
 test("a dry voice with a 3 second Amp Release remains audible 2 seconds after note-off", async () => {

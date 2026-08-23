@@ -80,3 +80,57 @@ four-worker). The committed M0 run was 2.798×. Per the small-cloud-VM rule,
 this cross-session absolute change is informational, not claimed as a speedup;
 it provides no evidence of a regression and remains far below the explicit
 five-minute pivot threshold. Mac/iOS performance must be measured separately.
+
+## 2026-08-23 — M2: sampled source and staged bank residency
+
+- Added deterministic `CSBNK001` stereo-i16 bank encoding plus a CLI converter
+  for uncompressed integer PCM (8/16/24/32-bit) and IEEE-float (32/64-bit) WAV
+  inputs. Mono is duplicated to stereo and multichannel inputs use the first
+  two channels. Root ranges are strictly ascending, contiguous, and validated
+  before PCM becomes visible.
+- Appended `sourceMode` after every previous host parameter. Oscillator mode
+  retains the committed M1 render SHA-256 exactly
+  (`8d930510bc1f7e522b999a94cb36159bc2787a99844295838ae581f36a935561`).
+- Implemented the Path-B `BounceBankStore` seam in pure Cmajor: session,
+  generation, and gap-checked delivery serials; one acknowledged 6,000-frame
+  batch in flight; staged metadata/PCM; explicit commit/abort; silence before
+  commit; and active-slot latching per voice. An old slot is not reused while
+  any one-shot voice still reads it.
+- Correct atomic replacement requires two immutable 5,472,000-frame slots.
+  Each slot is 19 roots × 6 s × 48 kHz = 20.9 MiB, so the correct double-buffer
+  cost is 41.7 MiB rather than the feasibility note's single-slot ~19 MiB
+  estimate. Generated memory grew from 96,010,240 to 139,853,824 bytes
+  (+41.8 MiB including metadata/events), still below the browser budget. The
+  first codegen attempt hit Cmajor's per-array element ceiling; splitting each
+  slot into eight 684,000-frame chunks (the existing wavetable-pool pattern)
+  fixed it. The production browser build passes, so this is not a B→A pivot.
+- The sampler uses nearest-root selection with lower-root tie breaking,
+  float64 position, 4-point interpolation, and per-sample rate
+  `2^((voice-root)/12) * bankSR/liveSR`; glide and bend therefore act on the
+  in-flight one-shot. It enters the existing per-voice filter/release path and
+  keeps sampled segment activity in the voice-lifetime predicate.
+- Playback applies the locked structural `1/0.18` (+14.9 dB) makeup before the
+  shared trim. Separately, its amplitude gate is normalized around the locked
+  capture velocity 100, so velocity 100 is the unity A/B path and other live
+  velocities scale loudness. This avoids applying the capture velocity twice.
+- Added generated-performer coverage for staging/readiness/abort, root A/B
+  within one i16 step, trim makeup, nearest root, rate repitch, two-voice
+  polyphony, velocity scaling, early release, legato glide, and the exact M1
+  oscillator regression.
+
+Path-B performance evidence: the committed full-capacity probe uploads a
+20.9 MiB candidate in 912 ack-paced batches while an oscillator note remains
+held. On this small VM it completed in 1,608 ms. Across 912 interleaved pairs,
+control audio blocks were 0.801 ms p95 and upload blocks 0.797 ms p95, with
+zero 2.667 ms deadline misses in either lane; host enqueue was 0.302 ms p95
+and is outside the audio callback. Two adjacent pre-M2/M2 oscillator probes
+measured 3.783×→3.702× (-2.16%) and 3.708×→3.689× (-0.50%), inside the 5%
+paired-regression gate. Absolute VM timing remains informational; real
+AudioWorklet output and Mac/iOS must be remeasured before a platform claim.
+
+Validation: production `web:build`; 6/6 sampler tests; 3/3 bank-format tests;
+3/3 amplitude-release tests; 65/65 Cmajor rack tests; 691/691 pure Node tests;
+34/34 modulation-routing tests; 14/14 web bundle tests; 27/27 patch/layout
+tests; and Linux Chromium web POC at 13 passed, 5 expected environment skips,
+0 failed. The headless worklet's absolute load/deadline telemetry is not used
+as a hard gate because this VM has no realtime audio sink.
