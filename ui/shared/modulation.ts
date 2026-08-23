@@ -669,6 +669,13 @@ function normalizeSourceKind(value: unknown): ModulationSourceKind {
     return parseSourceKind(value) ?? "mseg";
 }
 
+/** Parse canonical OR per-patch lane grammar — the stored-route rule.
+    Surfaces creating routes against live device instances use this; the
+    static parse admits only the canonical (instance-#1) vocabulary. */
+export function parseAnyModulationTargetKind(value: unknown): ModulationTargetKind | null {
+    return parseTargetKind(value);
+}
+
 function parseTargetKind(value: unknown): ModulationTargetKind | null {
     const canonical = parseCanonicalModulationTargetKind(value);
     if (canonical !== null) {

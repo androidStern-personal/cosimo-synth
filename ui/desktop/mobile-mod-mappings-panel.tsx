@@ -43,6 +43,7 @@ import {
     type ModulationRouteUpdate,
 } from "../shared/modulation";
 import type { ModulationTargetKind } from "../shared/modulation-targets";
+import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets";
 import { resolveModulationTargetBase } from "../shared/modulation-target-base";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
 import { useLaneOrHostParameterBinding, usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
@@ -116,6 +117,7 @@ function MappingRow({
         initialValue: base?.initialValue ?? 0,
         coerce: (rawValue) => Number(rawValue) || 0,
         active: base !== null,
+        deviceId: parseLaneModulationTargetKind(route.targetKind)?.instanceId,
     });
 
     const gestureController = useParameterGesture();

@@ -18,7 +18,7 @@ import {
     allRackParameterDescriptors,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
-import { laneInstanceNumber, parseLaneModulationTargetKind } from "./lane-modulation-targets";
+import { parseLaneModulationTargetKind } from "./lane-modulation-targets";
 import { getModulationTargetDescriptor } from "./target-descriptor";
 import {
     OSCILLATOR_IDS,
@@ -156,14 +156,10 @@ function parseOscillatorTarget(targetKind: string): {
 export function resolveModulationTargetBase(targetKind: ModulationTargetKind): ModulationTargetBase | null {
     const parsedLane = parseLaneModulationTargetKind(targetKind);
     if (parsedLane !== null) {
-        // lane.v1 stores one device per type, so a pool instance's base
-        // parameter has no document slot to edit: its rail edits the
-        // modulation amount only. Per-instance base bindings arrive with the
-        // device-instance tree; display and amount language still defer to
-        // the type's instance-#1 target everywhere.
-        if (laneInstanceNumber(parsedLane) !== 1) {
-            return null;
-        }
+        // T6: every instance has its own lane.v2 document slot, and the base
+        // CONTRACT (endpoint, spec, labels) is the type's. Which slot a
+        // binding edits comes from the deviceId its caller threads through
+        // useLaneOrHostParameterBinding.
         const endpointID = parsedLane.endpointID;
         const descriptor = rackDescriptorsByEndpoint.get(endpointID);
         if (descriptor === undefined) {

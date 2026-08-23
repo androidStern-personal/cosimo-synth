@@ -452,6 +452,42 @@
     opacity: 0.7;
 }
 
+/* Ghosts are buttons (a tap opens the type picker); the trunk's trailing
+   ghost is a full row on the line, branch ghosts stay lane cells. */
+.subway-ghost-cell,
+.subway-ghost-row {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+}
+
+.subway-ghost-row {
+    position: relative;
+    display: grid;
+    min-height: var(--cosimo-hit-min);
+    place-items: center;
+}
+
+.subway-ghost-row::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 3px;
+    background: rgb(105 213 197 / 0.72);
+    transform: translateX(-50%);
+    content: "";
+}
+
+.subway-ghost-cell:focus-visible .subway-ghost-pill,
+.subway-ghost-row:focus-visible .subway-ghost-pill {
+    outline: 2px solid #69d5c5;
+    outline-offset: 2px;
+}
+
 .subway-merge {
     position: relative;
     display: grid;
@@ -617,6 +653,21 @@
     background:
         linear-gradient(135deg, rgb(255 255 255 / 0.025) 25%, transparent 25%) 0 0 / 8px 8px,
         linear-gradient(180deg, rgb(24 27 29 / 0.98), rgb(10 12 14 / 0.98));
+}
+
+/* The removed-everything state: the pane keeps its footprint and points at
+   the map's add affordance instead of rendering stale controls. */
+.rack-effect-editor.is-empty {
+    display: grid;
+    place-items: center;
+}
+
+.rack-editor-empty-note {
+    max-width: 26ch;
+    color: rgb(199 210 208 / 0.75);
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    text-align: center;
 }
 
 .rack-effect-editor[data-effect-enabled="false"] .rack-editor-heading > span {

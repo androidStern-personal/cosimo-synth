@@ -8,10 +8,11 @@ import {
 } from "react";
 
 import { LANE_TYPE_TO_EFFECT_ID } from "../shared/lane-state";
-import { encodeLaneDevicePath, type LaneStateV2 } from "../shared/lane-state-v2";
+import { encodeLaneDevicePath, type LaneDevicePathV2, type LaneStateV2 } from "../shared/lane-state-v2";
 import {
     buildSubwayLayout,
     type SubwayCell,
+    type SubwayGhostCell,
     type SubwayRow,
     type SubwayStationCell,
     type SubwayTint,
@@ -44,7 +45,7 @@ const STATION_DRAG_THRESHOLD_PX = 7;
 const STATION_LONG_PRESS_MS = 550;
 
 export type SubwayStationMenuRequest = {
-    readonly effectId: EffectModuleId;
+    readonly deviceId: string;
     readonly clientX: number;
     readonly clientY: number;
 };
@@ -57,17 +58,19 @@ export type SubwayGroupMenuRequest = {
 
 type SubwayMapColumnProps = {
     readonly laneState: LaneStateV2;
-    readonly selectedEffectId: EffectModuleId;
+    readonly selectedDeviceId: string;
     readonly selectedGroupId: string | null;
-    readonly reorderingEffectId: EffectModuleId | null;
+    readonly reorderingDeviceId: string | null;
     readonly accents: Readonly<Record<EffectModuleId, string>>;
-    readonly onSelect: (effectId: EffectModuleId) => void;
+    readonly onSelect: (deviceId: string) => void;
     readonly onSelectGroup: (groupId: string) => void;
     readonly onOpenStationMenu: (request: SubwayStationMenuRequest) => void;
     readonly onOpenGroupMenu: (request: SubwayGroupMenuRequest) => void;
     /** Called once a station drag crosses the reorder threshold. */
-    readonly onArmReorder: (effectId: EffectModuleId, event: ReactPointerEvent<HTMLElement>) => void;
-    readonly onKeyboardMove: (effectId: EffectModuleId, offset: -1 | 1) => void;
+    readonly onArmReorder: (deviceId: string, event: ReactPointerEvent<HTMLElement>) => void;
+    readonly onKeyboardMove: (deviceId: string, offset: -1 | 1) => void;
+    /** A ghost add-stub was tapped: open the type picker for its path. */
+    readonly onRequestAdd: (path: LaneDevicePathV2, clientX: number, clientY: number) => void;
 };
 
 type StationPointerState = {
@@ -182,8 +185,8 @@ function SubwayStation({
     position,
     asCell,
     accents,
-    selectedEffectId,
-    reorderingEffectId,
+    selectedDeviceId,
+    reorderingDeviceId,
     onSelect,
     onOpenStationMenu,
     onArmReorder,
@@ -194,19 +197,22 @@ function SubwayStation({
     /** Trunk stations are list-child ROWS; branch stations are lane CELLS. */
     readonly asCell: boolean;
 } & Pick<SubwayMapColumnProps,
-    "accents" | "selectedEffectId" | "reorderingEffectId"
+    "accents" | "selectedDeviceId" | "reorderingDeviceId"
     | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove">) {
     const effectId = LANE_TYPE_TO_EFFECT_ID.get(station.deviceType);
     if (effectId === undefined) {
         throw new Error(`Unknown lane device type on the map: ${station.deviceType}`);
     }
     const effect = getRackEffectDescriptor(effectId);
-    const selected = selectedEffectId === effectId;
-    const reordering = reorderingEffectId === effectId;
+    const label = station.instanceNumber > 1
+        ? `${effect.label} ${station.instanceNumber}`
+        : effect.label;
+    const selected = selectedDeviceId === station.deviceId;
+    const reordering = reorderingDeviceId === station.deviceId;
     const gestures = usePressableGestures({
-        onTap: () => onSelect(effectId),
-        onLongPress: (clientX, clientY) => onOpenStationMenu({ effectId, clientX, clientY }),
-        onDragArm: (event) => onArmReorder(effectId, event),
+        onTap: () => onSelect(station.deviceId),
+        onLongPress: (clientX, clientY) => onOpenStationMenu({ deviceId: station.deviceId, clientX, clientY }),
+        onDragArm: (event) => onArmReorder(station.deviceId, event),
     });
 
     return (
@@ -215,6 +221,7 @@ function SubwayStation({
             data-rack-effect-id={effectId}
             data-rack-position={position}
             data-effect-id={effectId}
+            data-device-id={station.deviceId}
             data-enabled={station.enabled ? "true" : "false"}
             data-drag-dwell={`rack-effect:${effectId}`}
             data-lane-path={encodeLaneDevicePath(station.path)}
@@ -225,7 +232,7 @@ function SubwayStation({
             <button
                 type="button"
                 data-role={`rack-station-${effectId}`}
-                aria-label={`${effect.label}${station.enabled ? "" : " (bypassed)"}${selected ? ", selected" : ""}`}
+                aria-label={`${label}${station.enabled ? "" : " (bypassed)"}${selected ? ", selected" : ""}`}
                 className="subway-station"
                 onPointerDown={gestures.handlePointerDown}
                 onPointerMove={gestures.handlePointerMove}
@@ -236,10 +243,10 @@ function SubwayStation({
                 onKeyDown={(event: ReactKeyboardEvent<HTMLButtonElement>) => {
                     if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
                         event.preventDefault();
-                        onKeyboardMove(effectId, -1);
+                        onKeyboardMove(station.deviceId, -1);
                     } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
                         event.preventDefault();
-                        onKeyboardMove(effectId, 1);
+                        onKeyboardMove(station.deviceId, 1);
                     }
                 }}
             >
@@ -249,12 +256,38 @@ function SubwayStation({
     );
 }
 
+function SubwayGhost({
+    cell,
+    asCell,
+    onRequestAdd,
+}: {
+    readonly cell: SubwayGhostCell;
+    /** Branch ghosts are lane CELLS; the trunk's trailing ghost is a ROW. */
+    readonly asCell: boolean;
+    readonly onRequestAdd: SubwayMapColumnProps["onRequestAdd"];
+}) {
+    return (
+        <button
+            type="button"
+            data-role="rack-ghost-add"
+            aria-label="Add a device here"
+            className={asCell ? "subway-ghost-cell" : "subway-ghost-row"}
+            data-lane-path={encodeLaneDevicePath(cell.path)}
+            data-lane-tint={cell.tint}
+            onClick={(event) => onRequestAdd(cell.path, event.clientX, event.clientY)}
+        >
+            <span className="subway-ghost-pill" aria-hidden="true">+</span>
+        </button>
+    );
+}
+
 function laneCells(
     cells: ReadonlyArray<SubwayCell>,
     positionOf: (cell: SubwayStationCell) => number,
     stationProps: Pick<SubwayMapColumnProps,
-        "accents" | "selectedEffectId" | "reorderingEffectId"
+        "accents" | "selectedDeviceId" | "reorderingDeviceId"
         | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove">,
+    onRequestAdd: SubwayMapColumnProps["onRequestAdd"],
 ): ReactNode[] {
     return cells.map((cell, laneIndex) => {
         if (cell.kind === "station") {
@@ -270,14 +303,7 @@ function laneCells(
         }
         if (cell.kind === "ghost") {
             return (
-                <div
-                    key={`ghost-${laneIndex}`}
-                    className="subway-ghost-cell"
-                    data-lane-path={encodeLaneDevicePath(cell.path)}
-                    data-lane-tint={cell.tint}
-                >
-                    <span className="subway-ghost-pill" aria-hidden="true">+</span>
-                </div>
+                <SubwayGhost key={`ghost-${laneIndex}`} cell={cell} asCell onRequestAdd={onRequestAdd} />
             );
         }
         return (
@@ -292,9 +318,9 @@ function laneCells(
 
 export function SubwayMapColumn({
     laneState,
-    selectedEffectId,
+    selectedDeviceId,
     selectedGroupId,
-    reorderingEffectId,
+    reorderingDeviceId,
     accents,
     onSelect,
     onSelectGroup,
@@ -302,6 +328,7 @@ export function SubwayMapColumn({
     onOpenGroupMenu,
     onArmReorder,
     onKeyboardMove,
+    onRequestAdd,
 }: SubwayMapColumnProps) {
     const layout = buildSubwayLayout(laneState);
 
@@ -321,8 +348,8 @@ export function SubwayMapColumn({
 
     const stationProps = {
         accents,
-        selectedEffectId,
-        reorderingEffectId,
+        selectedDeviceId,
+        reorderingDeviceId,
         onSelect,
         onOpenStationMenu,
         onArmReorder,
@@ -388,7 +415,7 @@ export function SubwayMapColumn({
         if (openGroup !== null) {
             groupRows.push(
                 <div key={`body-${rowIndex}`} className="subway-lane-row">
-                    {laneCells(row.cells, positionOf, stationProps)}
+                    {laneCells(row.cells, positionOf, stationProps, onRequestAdd)}
                 </div>,
             );
             continue;
@@ -403,6 +430,11 @@ export function SubwayMapColumn({
                     asCell={false}
                     {...stationProps}
                 />,
+            );
+        }
+        if (cell !== undefined && cell.kind === "ghost") {
+            rendered.push(
+                <SubwayGhost key={`trunk-ghost-${rowIndex}`} cell={cell} asCell={false} onRequestAdd={onRequestAdd} />,
             );
         }
     }

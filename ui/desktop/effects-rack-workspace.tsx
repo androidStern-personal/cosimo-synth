@@ -1,4 +1,5 @@
 import {
+    createContext,
     useCallback,
     useContext,
     useEffect,
@@ -39,24 +40,30 @@ import {
     parseParameterEntry,
     type ParameterEntryCommit,
 } from "../shared/parameter-value-entry";
-import { EFFECT_ID_TO_LANE_TYPE, LANE_MAX_BRANCHES_PER_GROUP } from "../shared/lane-state";
+import { EFFECT_ID_TO_LANE_TYPE, LANE_MAX_BRANCHES_PER_GROUP, LANE_TYPE_TO_EFFECT_ID } from "../shared/lane-state";
 import {
+    addLaneDevice,
     dissolveLaneGroup,
     findLaneDevicePath,
     getLaneDeviceEnabled,
+    listLaneDeviceInstancesV2,
     moveLaneDevice,
     parseLaneDevicePath,
     serializeLaneStateV2,
     setLaneDeviceEnabled,
     setLaneGroupBranchCount,
+    parseLaneInstanceId,
+    removeLaneDevice,
     setLaneGroupEnabled,
     wrapLaneDeviceInGroup,
+    type LaneDevicePathV2,
     type LaneGroupV2,
     type LaneStateV2,
 } from "../shared/lane-state-v2";
 import { useLaneParameterBinding, useLaneStateDoc } from "../shared/lane-param-bindings";
 import {
     MODULATION_SOURCE_OPTIONS,
+    parseAnyModulationTargetKind,
     formatModulationAmountReadout,
     getModulationAmountSliderPosition,
     isVoiceModulationSource,
@@ -194,7 +201,7 @@ type SourceDragPresentation = {
 
 type ReorderGesture = {
     readonly pointerId: number;
-    readonly effectId: EffectModuleId;
+    readonly deviceId: string;
     readonly originalDoc: LaneStateV2;
     readonly captureElement: HTMLDivElement;
 };
@@ -290,7 +297,7 @@ function parseCompanionKinds(element: HTMLElement): ReadonlyArray<ModulationTarg
         return [];
     }
     return raw.split(/\s+/).filter(Boolean).map((candidate) => {
-        const kind = parseModulationTargetKind(candidate);
+        const kind = parseAnyModulationTargetKind(candidate);
         if (kind === null) {
             throw new Error(`Unknown companion modulation target "${candidate}"`);
         }
@@ -305,14 +312,14 @@ function modulationTargetAtPoint(
 ): ModulationDropTarget | null {
     const element = elementAtPointInRenderRoot(referenceElement, clientX, clientY)
         ?.closest<HTMLElement>("[data-modulation-target-kind]") ?? null;
-    const targetKind = parseModulationTargetKind(element?.dataset.modulationTargetKind);
+    const targetKind = parseAnyModulationTargetKind(element?.dataset.modulationTargetKind);
     return element === null || targetKind === null
         ? null
         : { element, targetKind, companionKinds: parseCompanionKinds(element) };
 }
 
 function modulationTargetFromElement(element: HTMLElement | null): ModulationDropTarget | null {
-    const targetKind = parseModulationTargetKind(element?.dataset.modulationTargetKind);
+    const targetKind = parseAnyModulationTargetKind(element?.dataset.modulationTargetKind);
     return element === null || targetKind === null
         ? null
         : { element, targetKind, companionKinds: parseCompanionKinds(element) };
@@ -439,6 +446,64 @@ function resolveModulationTargetForDrag(
         .sort((left, right) => right.entry - left.entry)[0]?.candidate ?? null;
 }
 
+/**
+ * The SELECTED lane device instance. Everything under the editor's provider
+ * — knob bindings, target kinds, drop attributes — speaks this instance;
+ * outside it (or for descriptors of another type) instance #1 holds, which
+ * is the entire pre-instance world.
+ */
+const SelectedLaneDeviceContext = createContext<string | null>(null);
+
+function laneDeviceIdForDescriptor(
+    selectedDeviceId: string | null,
+    descriptor: RackParameterDescriptor,
+): string {
+    const fallback = `${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`;
+    if (selectedDeviceId === null) {
+        return fallback;
+    }
+    return parseLaneInstanceId(selectedDeviceId)?.deviceType === EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]
+        ? selectedDeviceId
+        : fallback;
+}
+
+function laneKindForDevice(deviceId: string, endpointID: string): RackModulationTargetKind {
+    return `lane.${deviceId}.${endpointID}`;
+}
+
+function effectIdForLaneDeviceId(deviceId: string): EffectModuleId {
+    const deviceType = parseLaneInstanceId(deviceId)?.deviceType;
+    const effectId = deviceType === undefined ? undefined : LANE_TYPE_TO_EFFECT_ID.get(deviceType);
+    if (effectId === undefined) {
+        throw new Error(`Not a lane device instance id: ${deviceId}`);
+    }
+    return effectId;
+}
+
+/** The first device in dispatch order — the selection fallback after a removal. */
+function firstLaneDeviceId(state: LaneStateV2): string | null {
+    for (const node of state.chain) {
+        if (node.kind === "device") {
+            return node.deviceId;
+        }
+        for (const branch of node.branches) {
+            const first = branch[0];
+            if (first !== undefined) {
+                return first.deviceId;
+            }
+        }
+    }
+    return null;
+}
+
+/** The selected instance's target kind for one of ITS endpoints. */
+function useLaneKindResolver(): (descriptor: RackParameterDescriptor) => RackModulationTargetKind {
+    const selectedDeviceId = useContext(SelectedLaneDeviceContext);
+    return useCallback((descriptor: RackParameterDescriptor) => (
+        laneKindForDevice(laneDeviceIdForDescriptor(selectedDeviceId, descriptor), descriptor.endpointID)
+    ), [selectedDeviceId]);
+}
+
 function useRackState() {
     // lane.v1 is the editor's desired and persisted authority. effectiveRackState is
     // diagnostic readback without a correlated intent id, so an older DSP event must
@@ -451,9 +516,19 @@ function useRackState() {
     return { rackState: laneState, rackStateRef, commit, setSplitCrossover, persist };
 }
 
-function useRackParameterBinding(descriptor: RackParameterDescriptor, active = true) {
+/**
+ * The workspace body itself sits ABOVE its own provider, so its overlay
+ * bindings pass the selection explicitly through `deviceId`; components
+ * under the provider omit it and read the context.
+ */
+function useRackParameterBinding(
+    descriptor: RackParameterDescriptor,
+    active = true,
+    deviceId: string | null = null,
+) {
     void active;
-    return useLaneParameterBinding(descriptor);
+    const contextDeviceId = useContext(SelectedLaneDeviceContext);
+    return useLaneParameterBinding(descriptor, laneDeviceIdForDescriptor(deviceId ?? contextDeviceId, descriptor));
 }
 
 function normalizedRackParameterValue(descriptor: RackParameterDescriptor, value: number) {
@@ -488,8 +563,8 @@ function PowerGlyph() {
     );
 }
 
-function isRouteForTarget(route: ModulationRoute, endpointID: string) {
-    return route.targetKind === laneBaseKindForRackEndpoint(endpointID);
+function isRouteForTarget(route: ModulationRoute, targetKind: ModulationTargetKind) {
+    return route.targetKind === targetKind;
 }
 
 function routePairKey(source: RackRouteSource, targetKind: ModulationTargetKind) {
@@ -555,11 +630,13 @@ function RackParameterControl({
     onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
 }) {
     const binding = useRackParameterBinding(descriptor);
+    const resolveLaneKind = useLaneKindResolver();
+    const controlTargetKind = resolveLaneKind(descriptor);
     const isTarget = descriptor.modulationTargetIndex !== null;
     const presentation = projectRackRoutePresentation({
         routes,
         armedSource: sourceIsSelected ? activeSource : null,
-        targetKind: isTarget ? laneBaseKindForRackEndpoint(descriptor.endpointID) : null,
+        targetKind: isTarget ? controlTargetKind : null,
         effectEnabled,
         targetEffective,
         pending,
@@ -574,7 +651,7 @@ function RackParameterControl({
     const dragCreation = dragSource === null ? null : getModulationRouteCreation({
         routes,
         source: dragSource,
-        targetKind: parseModulationTargetKind(laneBaseKindForRackEndpoint(descriptor.endpointID)),
+        targetKind: controlTargetKind,
         pending,
     });
     const rootStyle = {
@@ -621,7 +698,7 @@ function RackParameterControl({
         <div
             data-role={`rack-parameter-surface-${descriptor.endpointID}`}
             data-rack-mod-target={isTarget ? descriptor.endpointID : undefined}
-            data-modulation-target-kind={isTarget ? laneBaseKindForRackEndpoint(descriptor.endpointID) : undefined}
+            data-modulation-target-kind={isTarget ? controlTargetKind : undefined}
             data-creation-state={presentation.creation}
             data-drag-creation={dragCreation ?? undefined}
             data-creation-confirmed={confirmed || undefined}
@@ -1088,17 +1165,19 @@ function SyncParameterList({
     onRequestContextMenu: (endpointID: string, clientX: number, clientY: number) => void;
 }) {
     const descriptor = getRackEffectDescriptor(effectId);
+    const resolveLaneKind = useLaneKindResolver();
     const modeEndpointID = effectId === "phaser" ? "phaserRateMode" : "delayTimeMode";
     const freeEndpointID = effectId === "phaser" ? "phaserRate" : "delayTime";
     const divisionEndpointID = effectId === "phaser" ? "phaserRateDivision" : "delayDivision";
     const modeDescriptor = descriptor.parameters.find((parameter) => parameter.endpointID === modeEndpointID)!;
+    const freeDescriptor = descriptor.parameters.find((parameter) => parameter.endpointID === freeEndpointID)!;
     const modeBinding = useRackParameterBinding(modeDescriptor);
     const syncMode = modeBinding.value >= 0.5;
     const visibleParameters = descriptor.parameters.filter((parameter) => {
         if (parameter.endpointID === freeEndpointID) {
             return !syncMode
                 || selectedTargetEndpointID === freeEndpointID
-                || routes.some((route) => isRouteForTarget(route, freeEndpointID));
+                || routes.some((route) => isRouteForTarget(route, resolveLaneKind(freeDescriptor)));
         }
         if (parameter.endpointID === divisionEndpointID) {
             return syncMode;
@@ -2992,7 +3071,9 @@ export function EffectsRackWorkspace({
     const { rackState, rackStateRef, commit, setSplitCrossover, persist } = useRackState();
     const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
     const [groupMenu, setGroupMenu] = useState<SubwayGroupMenuRequest | null>(null);
-    const [selectedEffectId, setSelectedEffectId] = useState<EffectModuleId>("drive");
+    // Selection is a DEVICE INSTANCE (T6): the effect id derives from it.
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string>("distortion#1");
+    const selectedEffectId = effectIdForLaneDeviceId(selectedDeviceId);
     const [quickEndpointByEffect, setQuickEndpointByEffect] = useState<Readonly<Record<EffectModuleId, string>>>(() => (
         Object.fromEntries(RACK_EFFECT_DESCRIPTORS.map((effect) => [effect.id, effect.initialQuickEndpointID])) as Record<EffectModuleId, string>
     ));
@@ -3000,7 +3081,7 @@ export function EffectsRackWorkspace({
     const previewDocRef = useRef<LaneStateV2>(rackState);
     const rackListRef = useRef<HTMLDivElement | null>(null);
     const reorderRef = useRef<ReorderGesture | null>(null);
-    const [reorderingEffectId, setReorderingEffectId] = useState<EffectModuleId | null>(null);
+    const [reorderingDeviceId, setReorderingDeviceId] = useState<string | null>(null);
     const [selectedSource, setSelectedSource] = useState<SelectedSource>({ sourceKind: "mseg", sourceSlot: 1 });
     // T14 one-selection: the Mod page's selectors arm the bar. This state is
     // the real selection owner; onGlobalModRailStateChange re-reports it.
@@ -3058,13 +3139,18 @@ export function EffectsRackWorkspace({
     const [railCollapseSignal, setRailCollapseSignal] = useState(0);
     const [parameterMenu, setParameterMenu] = useState<RackParameterMenuState | null>(null);
     const [stationMenu, setStationMenu] = useState<SubwayStationMenuRequest | null>(null);
+    const [addSheet, setAddSheet] = useState<{
+        path: LaneDevicePathV2;
+        clientX: number;
+        clientY: number;
+    } | null>(null);
     const [parameterValueSheetEndpointID, setParameterValueSheetEndpointID] = useState<string | null>(null);
     const [removeTargetRoutesEndpointID, setRemoveTargetRoutesEndpointID] = useState<string | null>(null);
     const pendingRouteRef = useRef<{ key: string } | null>(null);
     const [pendingRouteKey, setPendingRouteKey] = useState<string | null>(null);
 
     useEffect(() => {
-        if (parameterMenu === null && stationMenu === null && groupMenu === null) {
+        if (parameterMenu === null && stationMenu === null && groupMenu === null && addSheet === null) {
             return;
         }
         const handleKeyDown = (event: KeyboardEvent) => {
@@ -3072,11 +3158,12 @@ export function EffectsRackWorkspace({
                 setParameterMenu(null);
                 setStationMenu(null);
                 setGroupMenu(null);
+                setAddSheet(null);
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [parameterMenu, stationMenu, groupMenu]);
+    }, [parameterMenu, stationMenu, groupMenu, addSheet]);
 
     useEffect(() => {
         if (reorderRef.current !== null) {
@@ -3086,9 +3173,25 @@ export function EffectsRackWorkspace({
         setPreviewDoc(rackState);
     }, [rackState]);
 
+    // A document swap (preset restore, storage hydrate) can strand the
+    // selection on a device that no longer exists; heal it to the first
+    // placed device. Only a truly empty document keeps the stale id — the
+    // editor pane shows its empty placeholder for that.
+    useEffect(() => {
+        if (rackState.devices[selectedDeviceId] !== undefined) {
+            return;
+        }
+        const fallback = firstLaneDeviceId(rackState);
+        if (fallback !== null) {
+            setSelectedDeviceId(fallback);
+            onSelectedEffectChange?.(effectIdForLaneDeviceId(fallback));
+        }
+    }, [onSelectedEffectChange, rackState, selectedDeviceId]);
+
     const selectedEffect = getRackEffectDescriptor(selectedEffectId);
-    const selectedEffectEnabled = getLaneDeviceEnabled(
-        rackState, `${EFFECT_ID_TO_LANE_TYPE[selectedEffectId]}#1`) ?? false;
+    const selectedDeviceExists = rackState.devices[selectedDeviceId] !== undefined;
+    const selectedInstanceNumber = parseLaneInstanceId(selectedDeviceId)?.instanceNumber ?? 1;
+    const selectedEffectEnabled = getLaneDeviceEnabled(rackState, selectedDeviceId) ?? false;
     // The map draws the PREVIEW structure, but enables stay LIVE: an
     // authoritative enable arriving mid-drag paints immediately, exactly as
     // it did when order and enables were separate documents.
@@ -3111,6 +3214,7 @@ export function EffectsRackWorkspace({
     const groupMenuNode = groupMenu === null
         ? null
         : rackState.chain.find((node) => node.kind !== "device" && node.groupId === groupMenu.groupId) ?? null;
+    const stationMenuEffectId = stationMenu === null ? null : effectIdForLaneDeviceId(stationMenu.deviceId);
     const selectedTargetCandidate = getRackParameterDescriptor(selectedTargetEndpointID);
     const selectedTarget = selectedTargetCandidate !== null
         && selectedTargetCandidate.modulationTargetIndex !== null
@@ -3121,7 +3225,10 @@ export function EffectsRackWorkspace({
     const dragSourceDescriptor = dragSource === null
         ? null
         : findRackModulationSource(dragSource.sourceKind, dragSource.sourceSlot);
-    const selectedTargetKind = laneBaseKindForRackEndpoint(selectedTarget.endpointID);
+    const kindForDescriptor = useCallback((descriptor: RackParameterDescriptor) => (
+        laneKindForDevice(laneDeviceIdForDescriptor(selectedDeviceId, descriptor), descriptor.endpointID)
+    ), [selectedDeviceId]);
+    const selectedTargetKind = kindForDescriptor(selectedTarget);
     const selectedRouteIndex = routes.findIndex((route) => (
         route.sourceKind === selectedSource.sourceKind
         && route.sourceSlot === selectedSource.sourceSlot
@@ -3140,6 +3247,7 @@ export function EffectsRackWorkspace({
     const parameterOverlayBinding = useRackParameterBinding(
         parameterOverlayDescriptor,
         parameterOverlayEndpointID !== undefined && parameterOverlayEndpointID !== null,
+        selectedDeviceId,
     );
     const parameterOverlaySyncModeEndpointID = parameterOverlayDescriptor.endpointID === "delayTime"
         ? "delayTimeMode"
@@ -3160,12 +3268,14 @@ export function EffectsRackWorkspace({
     const parameterOverlaySyncModeBinding = useRackParameterBinding(
         parameterOverlaySyncModeDescriptor,
         parameterValueSheetEndpointID !== null && parameterOverlaySyncModeEndpointID !== null,
+        selectedDeviceId,
     );
     const parameterOverlaySyncDivisionBinding = useRackParameterBinding(
         parameterOverlaySyncDivisionDescriptor,
         parameterValueSheetEndpointID !== null && parameterOverlaySyncDivisionEndpointID !== null,
+        selectedDeviceId,
     );
-    const parameterOverlayTargetKind = laneBaseKindForRackEndpoint(parameterOverlayDescriptor.endpointID);
+    const parameterOverlayTargetKind = kindForDescriptor(parameterOverlayDescriptor);
     const parameterOverlayRouteIndex = sourceIsArmed ? routes.findIndex((route) => (
         route.sourceKind === selectedSource.sourceKind
         && route.sourceSlot === selectedSource.sourceSlot
@@ -3227,23 +3337,18 @@ export function EffectsRackWorkspace({
         return () => window.clearTimeout(timeout);
     }, [pendingRouteKey, routes]);
 
-    const laneDeviceIdForEffect = useCallback((effectId: EffectModuleId) => (
-        `${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`
-    ), []);
-
-    const toggleEffectEnabled = useCallback((effectId: EffectModuleId) => {
+    const toggleDeviceEnabled = useCallback((deviceId: string) => {
         const current = rackStateRef.current;
-        const deviceId = laneDeviceIdForEffect(effectId);
         const next = setLaneDeviceEnabled(
             current, deviceId, !(getLaneDeviceEnabled(current, deviceId) ?? false));
         if (next !== null) {
             commit(next);
         }
-    }, [commit, laneDeviceIdForEffect, rackStateRef]);
+    }, [commit, rackStateRef]);
 
     // A station drag that crosses the lift threshold hands the pointer to the
     // list-level reorder machinery — the same physics the grip handle drove.
-    const armStationReorder = useCallback((effectId: EffectModuleId, event: ReactPointerEvent<HTMLElement>) => {
+    const armStationReorder = useCallback((deviceId: string, event: ReactPointerEvent<HTMLElement>) => {
         const captureElement = rackListRef.current;
         if (!captureElement || reorderRef.current !== null) {
             return;
@@ -3258,16 +3363,15 @@ export function EffectsRackWorkspace({
         }
         reorderRef.current = {
             pointerId: event.pointerId,
-            effectId,
+            deviceId,
             originalDoc: previewDocRef.current,
             captureElement,
         };
-        setReorderingEffectId(effectId);
+        setReorderingDeviceId(deviceId);
     }, []);
 
-    const moveEffectByOffset = useCallback((effectId: EffectModuleId, offset: -1 | 1) => {
+    const moveDeviceByOffset = useCallback((deviceId: string, offset: -1 | 1) => {
         const doc = rackStateRef.current;
-        const deviceId = laneDeviceIdForEffect(effectId);
         const path = findLaneDevicePath(doc, deviceId);
         if (path === null) {
             return;
@@ -3281,7 +3385,7 @@ export function EffectsRackWorkspace({
             setPreviewDoc(next);
             commit(next);
         }
-    }, [commit, laneDeviceIdForEffect, rackStateRef]);
+    }, [commit, rackStateRef]);
 
     const finishReorder = useCallback((pointerId: number, shouldCommit: boolean) => {
         const gesture = reorderRef.current;
@@ -3290,7 +3394,7 @@ export function EffectsRackWorkspace({
         }
 
         reorderRef.current = null;
-        setReorderingEffectId(null);
+        setReorderingDeviceId(null);
         try {
             if (gesture.captureElement.hasPointerCapture(pointerId)) {
                 gesture.captureElement.releasePointerCapture(pointerId);
@@ -3356,8 +3460,7 @@ export function EffectsRackWorkspace({
             return;
         }
 
-        const draggedDeviceId = `${EFFECT_ID_TO_LANE_TYPE[gesture.effectId]}#1`;
-        const nextDoc = moveLaneDevice(previewDocRef.current, draggedDeviceId, targetPath);
+        const nextDoc = moveLaneDevice(previewDocRef.current, gesture.deviceId, targetPath);
         if (nextDoc !== null
                 && serializeLaneStateV2(nextDoc) !== serializeLaneStateV2(previewDocRef.current)) {
             previewDocRef.current = nextDoc;
@@ -3397,7 +3500,7 @@ export function EffectsRackWorkspace({
         source: SelectedSource,
         requestedTargetKind: string,
     ): RackRouteCreation => {
-        const targetKind = parseModulationTargetKind(requestedTargetKind);
+        const targetKind = parseAnyModulationTargetKind(requestedTargetKind);
         return getModulationRouteCreation({
             routes,
             source,
@@ -3443,9 +3546,10 @@ export function EffectsRackWorkspace({
         return true;
     }, [getPairCreation, onAddRouteWithOverrides]);
 
-    const selectEffect = useCallback((effectId: EffectModuleId) => {
+    const selectDevice = useCallback((deviceId: string) => {
+        const effectId = effectIdForLaneDeviceId(deviceId);
         setSelectedGroupId(null);
-        setSelectedEffectId(effectId);
+        setSelectedDeviceId(deviceId);
         onSelectedEffectChange?.(effectId);
         const effect = getRackEffectDescriptor(effectId);
         const preferredEndpointID = quickEndpointByEffect[effectId];
@@ -3458,16 +3562,33 @@ export function EffectsRackWorkspace({
         }
     }, [onSelectedEffectChange, quickEndpointByEffect]);
 
+    // Effect-typed entry points (dwell navigation, parameter taps) resolve to
+    // the selection itself when the type already matches, else the document's
+    // lowest-numbered instance of the type, else the pool's #1.
+    const deviceIdForEffectSelection = useCallback((effectId: EffectModuleId): string => {
+        const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+        if (parseLaneInstanceId(selectedDeviceId)?.deviceType === deviceType) {
+            return selectedDeviceId;
+        }
+        const placed = listLaneDeviceInstancesV2(rackStateRef.current)
+            .find((instance) => instance.deviceType === deviceType);
+        return placed?.instanceId ?? `${deviceType}#1`;
+    }, [rackStateRef, selectedDeviceId]);
+
+    const selectEffect = useCallback((effectId: EffectModuleId) => {
+        selectDevice(deviceIdForEffectSelection(effectId));
+    }, [deviceIdForEffectSelection, selectDevice]);
+
     const selectTarget = useCallback((endpointID: string) => {
         const parameter = getRackParameterDescriptor(endpointID);
         if (!parameter || parameter.modulationTargetIndex === null) {
             return;
         }
         setSelectedTargetEndpointID(endpointID);
-        setSelectedEffectId(parameter.effectId);
+        setSelectedDeviceId(deviceIdForEffectSelection(parameter.effectId));
         onSelectedEffectChange?.(parameter.effectId);
         setRouteStatus("");
-    }, [onSelectedEffectChange]);
+    }, [deviceIdForEffectSelection, onSelectedEffectChange]);
 
     // T06: a source drag dwelling on a navigation surface switches views
     // while the drag stays alive under its original owner.
@@ -3494,8 +3615,8 @@ export function EffectsRackWorkspace({
         targetKind: ModulationTargetKind,
         companionKinds: ReadonlyArray<ModulationTargetKind> = [],
     ) => {
-        const rackEndpointID = parseLaneModulationTargetKind(targetKind)?.endpointID ?? null;
-        const targetParameter = rackEndpointID === null ? null : getRackParameterDescriptor(rackEndpointID);
+        const parsedTarget = parseLaneModulationTargetKind(targetKind);
+        const targetParameter = parsedTarget === null ? null : getRackParameterDescriptor(parsedTarget.endpointID);
         const creation = getPairCreation(source, targetKind);
         if (creation !== "existing" && creation !== "creatable") {
             return;
@@ -3512,7 +3633,8 @@ export function EffectsRackWorkspace({
         setSourceIsArmed(true);
         if (targetParameter && targetParameter.modulationTargetIndex !== null) {
             setSelectedTargetEndpointID(targetParameter.endpointID);
-            setSelectedEffectId(targetParameter.effectId);
+            // The dropped kind names its instance — selection follows it.
+            setSelectedDeviceId(parsedTarget?.instanceId ?? deviceIdForEffectSelection(targetParameter.effectId));
             onSelectedEffectChange?.(targetParameter.effectId);
         }
         if (creation === "creatable") {
@@ -3529,7 +3651,7 @@ export function EffectsRackWorkspace({
                 });
             }
         }
-    }, [createRoute, getPairCreation, onAddRouteWithOverrides, onSelectedEffectChange]);
+    }, [createRoute, deviceIdForEffectSelection, getPairCreation, onAddRouteWithOverrides, onSelectedEffectChange]);
 
     const changeSourcePage = useCallback((nextPageIndex: number) => {
         const normalizedPageIndex = ((nextPageIndex % RACK_MODULATION_SOURCE_PAGES.length)
@@ -3618,7 +3740,7 @@ export function EffectsRackWorkspace({
                     target={selectedTarget}
                     onCreate={() => createRoute(
                         selectedSource,
-                        laneBaseKindForRackEndpoint(selectedTarget.endpointID),
+                        selectedTargetKind,
                     )}
                 />
             ) : null}
@@ -3636,6 +3758,9 @@ export function EffectsRackWorkspace({
     );
 
     return (
+        // Every parameter surface below (knobs, visuals, sheets, mod rows —
+        // portals included) resolves lane bindings against the selection.
+        <SelectedLaneDeviceContext.Provider value={selectedDeviceId}>
         <section
             data-role="effects-rack-card"
             data-layout-card="mobile-effects-workspace"
@@ -3662,10 +3787,10 @@ export function EffectsRackWorkspace({
                     onSelectAction={handleParameterMenuAction}
                 />
             ) : null}
-            {stationMenu ? (
+            {stationMenu !== null && stationMenuEffectId !== null ? (
                 // The station's long-press menu: everything the old row
-                // offered, none of the bulk. Move and remove join it with the
-                // add/remove UX (M4).
+                // offered, none of the bulk. Actions speak the station's own
+                // device instance; the data-role contract stays effect-typed.
                 <div
                     className="rack-parameter-menu-layer"
                     data-role="rack-station-menu-layer"
@@ -3673,9 +3798,10 @@ export function EffectsRackWorkspace({
                 >
                     <div
                         role="menu"
-                        aria-label={`${getRackEffectDescriptor(stationMenu.effectId).label} station actions`}
+                        aria-label={`${getRackEffectDescriptor(stationMenuEffectId).label} station actions`}
                         data-role="rack-station-menu"
-                        data-effect-id={stationMenu.effectId}
+                        data-effect-id={stationMenuEffectId}
+                        data-device-id={stationMenu.deviceId}
                         className="rack-parameter-menu"
                         style={{
                             "--rack-menu-x": `${stationMenu.clientX}px`,
@@ -3686,26 +3812,24 @@ export function EffectsRackWorkspace({
                         <button
                             type="button"
                             role="menuitem"
-                            data-role={`rack-enabled-${stationMenu.effectId}`}
-                            aria-pressed={getLaneDeviceEnabled(rackState, `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`) ?? false}
+                            data-role={`rack-enabled-${stationMenuEffectId}`}
+                            aria-pressed={getLaneDeviceEnabled(rackState, stationMenu.deviceId) ?? false}
                             onClick={() => {
-                                toggleEffectEnabled(stationMenu.effectId);
+                                toggleDeviceEnabled(stationMenu.deviceId);
                                 setStationMenu(null);
                             }}
                         >
-                            {(getLaneDeviceEnabled(rackState, `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`) ?? false) ? "Bypass" : "Enable"}
+                            {(getLaneDeviceEnabled(rackState, stationMenu.deviceId) ?? false) ? "Bypass" : "Enable"}
                         </button>
-                        {findLaneDevicePath(rackState, `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`)?.kind === "trunk" ? (
+                        {findLaneDevicePath(rackState, stationMenu.deviceId)?.kind === "trunk" ? (
                             <>
                                 <button
                                     type="button"
                                     role="menuitem"
-                                    data-role={`rack-station-wrap-parallel-${stationMenu.effectId}`}
+                                    data-role={`rack-station-wrap-parallel-${stationMenuEffectId}`}
                                     onClick={() => {
                                         const next = wrapLaneDeviceInGroup(
-                                            rackStateRef.current,
-                                            `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`,
-                                            "parallel");
+                                            rackStateRef.current, stationMenu.deviceId, "parallel");
                                         if (next === null) {
                                             showFeedbackToast("NO ROOM TO GROUP");
                                         } else {
@@ -3719,12 +3843,10 @@ export function EffectsRackWorkspace({
                                 <button
                                     type="button"
                                     role="menuitem"
-                                    data-role={`rack-station-wrap-split-${stationMenu.effectId}`}
+                                    data-role={`rack-station-wrap-split-${stationMenuEffectId}`}
                                     onClick={() => {
                                         const next = wrapLaneDeviceInGroup(
-                                            rackStateRef.current,
-                                            `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`,
-                                            "split");
+                                            rackStateRef.current, stationMenu.deviceId, "split");
                                         if (next === null) {
                                             showFeedbackToast("NO ROOM TO GROUP");
                                         } else {
@@ -3740,17 +3862,37 @@ export function EffectsRackWorkspace({
                         <button
                             type="button"
                             role="menuitem"
-                            data-role={`rack-station-exact-${stationMenu.effectId}`}
+                            data-role={`rack-station-exact-${stationMenuEffectId}`}
                             onClick={() => {
-                                const effect = getRackEffectDescriptor(stationMenu.effectId);
-                                const quickEndpointID = quickEndpointByEffect[stationMenu.effectId]
+                                const effect = getRackEffectDescriptor(stationMenuEffectId);
+                                const quickEndpointID = quickEndpointByEffect[stationMenuEffectId]
                                     ?? effect.initialQuickEndpointID;
-                                selectEffect(stationMenu.effectId);
+                                selectDevice(stationMenu.deviceId);
                                 setParameterValueSheetEndpointID(quickEndpointID);
                                 setStationMenu(null);
                             }}
                         >
                             Exact value
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            data-role={`rack-station-remove-${stationMenuEffectId}`}
+                            onClick={() => {
+                                const next = removeLaneDevice(rackStateRef.current, stationMenu.deviceId);
+                                if (next !== null) {
+                                    commit(next);
+                                    if (selectedDeviceId === stationMenu.deviceId) {
+                                        const fallback = firstLaneDeviceId(next);
+                                        if (fallback !== null) {
+                                            selectDevice(fallback);
+                                        }
+                                    }
+                                }
+                                setStationMenu(null);
+                            }}
+                        >
+                            Remove
                         </button>
                     </div>
                 </div>
@@ -3833,6 +3975,56 @@ export function EffectsRackWorkspace({
                     </div>
                 </div>
             ) : null}
+            {addSheet !== null ? (
+                // The ghost's type picker: all eight devices, with the ones
+                // the document cannot take (pool or wire capacity) disabled.
+                <div
+                    className="rack-parameter-menu-layer"
+                    data-role="rack-add-sheet-layer"
+                    onPointerDown={() => setAddSheet(null)}
+                >
+                    <div
+                        role="menu"
+                        aria-label="Add a device"
+                        data-role="rack-add-sheet"
+                        className="rack-parameter-menu"
+                        style={{
+                            "--rack-menu-x": `${addSheet.clientX}px`,
+                            "--rack-menu-y": `${addSheet.clientY}px`,
+                        } as CSSProperties}
+                        onPointerDown={(event) => event.stopPropagation()}
+                    >
+                        {RACK_EFFECT_DESCRIPTORS.map((effect) => {
+                            const deviceType = EFFECT_ID_TO_LANE_TYPE[effect.id];
+                            const creatable = addLaneDevice(rackState, deviceType, addSheet.path) !== null;
+                            return (
+                                <button
+                                    key={effect.id}
+                                    type="button"
+                                    role="menuitem"
+                                    data-role={`rack-add-${effect.id}`}
+                                    disabled={!creatable}
+                                    onClick={() => {
+                                        const current = rackStateRef.current;
+                                        const next = addLaneDevice(current, deviceType, addSheet.path);
+                                        if (next !== null) {
+                                            const newDeviceId = Object.keys(next.devices)
+                                                .find((deviceId) => current.devices[deviceId] === undefined);
+                                            commit(next);
+                                            if (newDeviceId !== undefined) {
+                                                selectDevice(newDeviceId);
+                                            }
+                                        }
+                                        setAddSheet(null);
+                                    }}
+                                >
+                                    {effect.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+            ) : null}
             {parameterValueSheetEndpointID ? (
                 <ParameterValueSheet
                     key={`${parameterValueSheetEndpointID}:${selectedSource.sourceKind}:${selectedSource.sourceSlot}`}
@@ -3842,7 +4034,7 @@ export function EffectsRackWorkspace({
                     baseValue={parameterOverlayBinding.value}
                     defaultValue={parameterOverlayDescriptor.initial}
                     amountSpec={(() => {
-                        const targetKind = parseModulationTargetKind(laneBaseKindForRackEndpoint(parameterOverlayDescriptor.endpointID));
+                        const targetKind = parseAnyModulationTargetKind(kindForDescriptor(parameterOverlayDescriptor));
                         return targetKind === null
                             ? null
                             : parameterEntrySpecForModulationAmount(targetKind, parameterOverlayBinding.value);
@@ -3919,16 +4111,17 @@ export function EffectsRackWorkspace({
                     >
                         <SubwayMapColumn
                             laneState={mapDoc}
-                            selectedEffectId={selectedEffectId}
+                            selectedDeviceId={selectedDeviceId}
                             selectedGroupId={selectedGroupId}
-                            reorderingEffectId={reorderingEffectId}
+                            reorderingDeviceId={reorderingDeviceId}
                             accents={EFFECT_ACCENTS}
-                            onSelect={selectEffect}
+                            onSelect={selectDevice}
                             onSelectGroup={(groupId) => setSelectedGroupId(groupId)}
                             onOpenStationMenu={setStationMenu}
                             onOpenGroupMenu={setGroupMenu}
                             onArmReorder={armStationReorder}
-                            onKeyboardMove={moveEffectByOffset}
+                            onKeyboardMove={moveDeviceByOffset}
+                            onRequestAdd={(path, clientX, clientY) => setAddSheet({ path, clientX, clientY })}
                         />
                     </div>
                 </div>
@@ -3962,10 +4155,21 @@ export function EffectsRackWorkspace({
                         onCrossoverDrag={(which, hz) => setSplitCrossover(selectedGroup.groupId, which, hz)}
                         onCrossoverGestureEnd={persist}
                     />
+                ) : !selectedDeviceExists ? (
+                <section
+                    data-role="rack-editor-empty"
+                    className="rack-effect-editor is-empty"
+                    aria-label="Selected effect editor"
+                >
+                    <p className="rack-editor-empty-note">
+                        The line is empty. Tap a + stub on the map to add a device.
+                    </p>
+                </section>
                 ) : (
                 <section
                     data-role={`rack-editor-${selectedEffectId}`}
                     data-selected-effect={selectedEffectId}
+                    data-device-id={selectedDeviceId}
                     data-effect-enabled={selectedEffectEnabled ? "true" : "false"}
                     className="rack-effect-editor"
                     style={{ "--editor-accent": EFFECT_ACCENTS[selectedEffectId] } as CSSProperties}
@@ -3976,7 +4180,11 @@ export function EffectsRackWorkspace({
                             the one place with room for it at station scale. */}
                         <div className="rack-editor-heading">
                             <span>{selectedEffectEnabled ? "SELECTED FX" : "FX BYPASSED"}</span>
-                            <strong className="rack-editor-name">{selectedEffect.label}</strong>
+                            <strong className="rack-editor-name">
+                                {selectedInstanceNumber > 1
+                                    ? `${selectedEffect.label} ${selectedInstanceNumber}`
+                                    : selectedEffect.label}
+                            </strong>
                             <p>{selectedEffect.summary}</p>
                         </div>
                         <button
@@ -3985,7 +4193,7 @@ export function EffectsRackWorkspace({
                             aria-label={`${selectedEffectEnabled ? "Bypass" : "Enable"} ${selectedEffect.label}`}
                             aria-pressed={selectedEffectEnabled}
                             className="rack-power rack-editor-power"
-                            onClick={() => toggleEffectEnabled(selectedEffectId)}
+                            onClick={() => toggleDeviceEnabled(selectedDeviceId)}
                         >
                             <PowerGlyph />
                         </button>
@@ -4060,5 +4268,6 @@ export function EffectsRackWorkspace({
                 mobileModRailPortalTarget,
             ) : null}
         </section>
+        </SelectedLaneDeviceContext.Provider>
     );
 }

@@ -65,7 +65,8 @@
         height: 100%;
     }
 
-    .mobile-workspace-panel.is-fx-panel .subway-station-row {
+    .mobile-workspace-panel.is-fx-panel .subway-station-row,
+    .mobile-workspace-panel.is-fx-panel .subway-ghost-row {
         min-height: var(--cosimo-module-lg);
     }
 
