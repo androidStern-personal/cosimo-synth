@@ -284,9 +284,51 @@ are M1's permanent acceptance tests, not a throwaway report.
   per-parameter endpoints; rewrite target descriptors, the resolver, the
   legal-pair domain, and every fixture to `lane.*`; lane state v1 replaces
   rack state v1. One namespace, one delivery path, one application.
-- **M3 — UI:** lane containers in the rack workspace (locked direction,
-  08f70bab), dynamic per-patch target pickers, instance labels through the
-  mappings table.
+- **M3 DIRECTION PIVOT (2026-08-23, Andrew):** the lane-container row
+  treatment (08f70bab lineage) was reviewed as mocks and REJECTED — it never
+  shows the full graph and spends too much row height. The locked mobile
+  direction is the SUBWAY MAP: the rack list column becomes a top-to-bottom
+  line map with the whole topology always in view; devices shrink to
+  station pills (effect accent + short code + instance number; hollow =
+  bypassed, amber ring = selected); parallel forks at a dot junction with
+  lettered lanes, frequency splits at a diamond with band-tinted lanes and
+  crossover readouts; empty branches are dashed lanes with ghost add
+  stations; the faceplate art moves into the editor header. Design canvas:
+  "FX Rack Subway Map" (claude.ai artifact 62b9012a). Accepted tradeoff:
+  the per-row quick slider goes away at station scale — quick edits live in
+  the editor. Open: station codes vs glyphs, parallel lane coloring, map
+  mode trigger.
+- **T1 PARALLEL GROUPS COMPLETE (2026-08-23):** the engine renders parallel
+  lanes. Branch tags ride the UPPER BITS of each topology slotIds entry
+  (slot id low byte, three tag bits above; tag 0 = trunk) so the upload
+  struct and its proven harness event size are unchanged. Grammar,
+  validated never coerced: a maximal tagged run is one group; tags start at
+  1, never decrease, never skip, reach at least 2; fan-out caps at 4 (the
+  physical campaign's ceiling); junk above the tag field rejects whole.
+  Dispatch: every branch reads the group's fork signal, a branch change
+  banks the finished branch, the merge SUMS branches into the continuing
+  trunk (no per-branch level in v1; RackOutputStage owns overload). An
+  all-tag-0 chain takes none of the new paths — the serial walk is
+  unchanged. Readback: laneCommittedBranchTagsLo/Hi, three bits per
+  position (0..9 / 10..15); zero = serial, so the old shape is a strict
+  subset. TS mirrors the encoding in lane-state.ts
+  (encodeLaneSlotWithBranchTag + decode pair, layout pinned by test on both
+  sides); the v1 document replay stays all-trunk by construction.
+  Discrimination-proven in tests/cmajor_rack/LaneParallel.cmajtest:
+  full-wet 40∥90ms delays echo at 40 AND 90 with NOTHING at the 130ms
+  series time; a chained branch ([40→90]∥[60]) through a 25ms trunk delay
+  peaks only at the +25-shifted times (in-branch chaining AND
+  merge-feeds-trunk); a disabled device inside a branch passes its branch
+  through; six malformed-tag uploads reject with the running chain
+  untouched, and a valid re-upload still commits. Gates (this container,
+  cmaj 1.0.3066 linux binary): cmajor_rack 69/69 (was 65 baseline),
+  units:orphans 692/692, tsc clean. Not run here: browser suites (no UI
+  code changed; twins additive), WebKit/iOS/native benchmarks. NEXT: T2
+  frequency split (65-tap crossover + compensated paths), then lane.v2
+  (device instances + tree document) feeding the subway map.
+- **M3 — UI:** the subway-map FX graph in the rack workspace (locked
+  direction above), dynamic per-patch target pickers, instance labels
+  through the mappings table.
 - **M4 — Product surface:** device add/remove UX, the default starter patch,
   and the physical phone pass.
 
