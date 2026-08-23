@@ -28,45 +28,41 @@ test("lane kind grammar accepts real device params and rejects everything else",
     assert.equal(lanes.parseLaneModulationTargetKind("rack.delayTime"), null);
 });
 
-test("assigned lane targets resolve by slot ordinal; unassigned resolve null", async () => {
+test("lane targets resolve STATICALLY: instance #n is slot ordinal n-1", async () => {
     const lanes = await loadUIModule(repoRoot, "ui/shared/lane-modulation-targets.ts");
     const targets = await loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
-    // Slot ordinals: 0 is the base block, 1.. are the pool sets. Bus index =
-    // ordinal * static count + the mirror target's static index — derived on
-    // both sides, so the engine and UI cannot drift.
-    const assignments = new Map([["delay#1", 0], ["delay#2", 1]]);
+    // Identity IS the assignment (the lane.v2 document allocates the same
+    // way): bus index = (n-1) * static count + the mirror target's static
+    // index — derived on both sides, so the engine and UI cannot drift, and
+    // resolution needs no document.
     assert.equal(
         lanes.getLaneModulationTargetIndex(
-            lanes.parseLaneModulationTargetKind("lane.delay#1.delayTime"), assignments),
+            lanes.parseLaneModulationTargetKind("lane.delay#1.delayTime")),
         targets.getRackModulationTargetIndex("lane.delay#1.delayTime"),
     );
-    const timeIndex = lanes.getLaneModulationTargetIndex(
-        lanes.parseLaneModulationTargetKind("lane.delay#2.delayTime"), assignments);
-    const mixIndex = lanes.getLaneModulationTargetIndex(
-        lanes.parseLaneModulationTargetKind("lane.delay#2.delayMix"), assignments);
-    assert.equal(timeIndex,
-        targets.MODULATION_RACK_TARGET_COUNT + targets.getRackModulationTargetIndex("lane.delay#1.delayTime"));
-    assert.equal(mixIndex,
-        targets.MODULATION_RACK_TARGET_COUNT + targets.getRackModulationTargetIndex("lane.delay#1.delayMix"));
-    assert.equal(lanes.getLaneModulationTargetIndex(
-        lanes.parseLaneModulationTargetKind("lane.delay#7.delayMix"), assignments), null);
-
-    // The last pool set resolves; ordinals beyond the pool resolve to nothing.
-    const lastSet = new Map([
-        ["delay#9", lanes.MODULATION_LANE_POOL_SET_COUNT],
-        ["delay#10", lanes.MODULATION_LANE_POOL_SET_COUNT + 1],
-    ]);
     assert.equal(
         lanes.getLaneModulationTargetIndex(
-            lanes.parseLaneModulationTargetKind("lane.delay#9.delayMix"), lastSet),
+            lanes.parseLaneModulationTargetKind("lane.delay#2.delayTime")),
+        targets.MODULATION_RACK_TARGET_COUNT + targets.getRackModulationTargetIndex("lane.delay#1.delayTime"));
+    assert.equal(
+        lanes.getLaneModulationTargetIndex(
+            lanes.parseLaneModulationTargetKind("lane.delay#2.delayMix")),
+        targets.MODULATION_RACK_TARGET_COUNT + targets.getRackModulationTargetIndex("lane.delay#1.delayMix"));
+
+    // The last pool set resolves; instance numbers beyond the pool resolve
+    // to nothing (the route stays stored, compiles to nothing).
+    assert.equal(
+        lanes.getLaneModulationTargetIndex(
+            lanes.parseLaneModulationTargetKind("lane.delay#5.delayMix")),
         targets.MODULATION_RACK_TARGET_COUNT * lanes.MODULATION_LANE_POOL_SET_COUNT
             + targets.getRackModulationTargetIndex("lane.delay#1.delayMix"),
     );
     assert.equal(
         lanes.getLaneModulationTargetIndex(
-            lanes.parseLaneModulationTargetKind("lane.delay#10.delayMix"), lastSet),
+            lanes.parseLaneModulationTargetKind("lane.delay#6.delayMix")),
         null,
     );
+    assert.equal(lanes.getLaneModulationTargetIndex(null), null);
 });
 
 test("every device type's every pool endpoint parses, mirrors a real rack target, and resolves", async () => {
@@ -85,12 +81,11 @@ test("every device type's every pool endpoint parses, mirrors a real rack target
     const seenIndices = new Set();
     for (const [deviceType, endpoints] of Object.entries(deviceEndpoints)) {
         const instanceId = `${deviceType}#3`;
-        const assignments = new Map([[instanceId, 1]]);
         for (const endpointID of endpoints) {
             const kind = `lane.${instanceId}.${endpointID}`;
             const parsed = lanes.parseLaneModulationTargetKind(kind);
             assert.notEqual(parsed, null, kind);
-            const index = lanes.getLaneModulationTargetIndex(parsed, assignments);
+            const index = lanes.getLaneModulationTargetIndex(parsed);
             assert.ok(
                 index >= targets.MODULATION_RACK_TARGET_COUNT
                     && index < targets.MODULATION_RACK_TARGET_COUNT + lanes.MODULATION_LANE_POOL_TARGET_COUNT,
@@ -149,16 +144,15 @@ test("stored lane routes survive normalization with their kind intact", async ()
     assert.notEqual(garbage.routes[0].targetKind, "lane.delay#2.zzz");
 });
 
-test("the compiler places assigned lane routes in the pool block and drops unassigned ones", async () => {
+test("the compiler places lane routes in the pool block statically and drops out-of-pool ones", async () => {
     const program = await loadUIModule(repoRoot, "ui/shared/modulation-runtime-program.ts");
     const route = {
         id: "lane-route-1", enabled: true, sourceKind: "mseg", sourceSlot: 1,
         polarity: "unipolar", targetKind: "lane.delay#2.delayMix", amount: 0.5, reducer: "max",
     };
-    const assignments = new Map([["delay#2", 1]]);
 
     const targets = await loadUIModule(repoRoot, "ui/shared/modulation-targets.ts");
-    const compiled = program.compileModulationRuntimeProgram([route], assignments);
+    const compiled = program.compileModulationRuntimeProgram([route]);
     assert.equal(compiled.voiceRackRouteCount, 1);
     const laneTargetIndex = targets.MODULATION_RACK_TARGET_COUNT
         + targets.getRackModulationTargetIndex("lane.delay#1.delayMix");
@@ -166,7 +160,10 @@ test("the compiler places assigned lane routes in the pool block and drops unass
     // Cell math runs at the TOTAL width on both sides of the wire.
     assert.equal(compiled.voiceRackRouteCells[0] % program.MODULATION_RACK_TARGET_TOTAL, laneTargetIndex);
 
-    const dropped = program.compileModulationRuntimeProgram([route]);
+    // An instance number beyond the pool never reaches the program.
+    const dropped = program.compileModulationRuntimeProgram([
+        { ...route, targetKind: "lane.delay#6.delayMix" },
+    ]);
     assert.equal(dropped.voiceRackRouteCount, 0);
 
     // The wire shape: the per-CELL tables are sources x TOTAL (the engine's

@@ -1,5 +1,5 @@
 import type { PatchConnectionLike } from "./cmajor-react";
-import type { LaneDeviceInstance, LaneDeviceType, LaneSlotAssignments } from "./lane-modulation-targets";
+import type { LaneDeviceInstance, LaneDeviceType } from "./lane-modulation-targets";
 import {
     LANE_SLOT_ORDINAL_COUNT,
     LANE_SLOT_PARAM_COUNT,
@@ -7,8 +7,10 @@ import {
     getLaneSlotId,
     laneDeviceParamEndpoints,
 } from "./lane-slot-params";
+import { getRackEffectDescriptor } from "./rack-parameter-descriptors";
 import {
     EFFECT_ID_TO_LANE_TYPE,
+    LANE_TYPE_TO_EFFECT_ID,
     LANE_BRANCH_TAG_BITS,
     LANE_BRANCH_TAG_SHIFT,
     LANE_CHAIN_SLOT_COUNT,
@@ -460,20 +462,6 @@ export function listLaneDeviceInstancesV2(state: LaneStateV2): ReadonlyArray<Lan
                 - LANE_DEVICE_TYPE_ORDER.indexOf(b.parsed.deviceType))
             || (a.parsed.instanceNumber - b.parsed.instanceNumber))
         .map(({ instanceId, parsed }) => ({ instanceId, deviceType: parsed.deviceType }));
-}
-
-/**
- * The modulation compiler's slot assignments, total over the document:
- * instance #n statically holds ordinal n-1.
- */
-export function buildLaneSlotAssignments(state: LaneStateV2): LaneSlotAssignments {
-    return new Map(Object.keys(state.devices).map((instanceId) => {
-        const parsed = parseLaneInstanceId(instanceId);
-        if (parsed === null) {
-            throw new Error(`Invalid lane instance id in state: ${instanceId}`);
-        }
-        return [instanceId, parsed.instanceNumber - 1];
-    }));
 }
 
 function deviceSlotId(deviceId: string): number {
@@ -996,6 +984,92 @@ export function setLaneGroupBranchCount(
             ? { ...candidate, branches }
             : candidate
     )) as LaneChainNodeV2[]);
+}
+
+/** One device type's default parameter record, descriptor initials in WIRE
+    order (serialize stability rides on the order — see upgradeLaneStateV1). */
+export function laneDefaultParamsForType(deviceType: LaneDeviceType): Record<string, number> {
+    const effectId = LANE_TYPE_TO_EFFECT_ID.get(deviceType);
+    if (effectId === undefined) {
+        throw new Error(`Unknown lane device type: ${deviceType}`);
+    }
+    const descriptors = getRackEffectDescriptor(effectId).parameters;
+    return Object.fromEntries(laneDeviceParamEndpoints(deviceType).map((endpointID) => [
+        endpointID,
+        descriptors.find((descriptor) => descriptor.endpointID === endpointID)?.initial ?? 0,
+    ]));
+}
+
+function allocateLaneInstanceId(state: LaneStateV2, deviceType: LaneDeviceType): string | null {
+    for (let instanceNumber = 1; instanceNumber <= LANE_SLOT_ORDINAL_COUNT; instanceNumber += 1) {
+        const candidate = `${deviceType}#${instanceNumber}`;
+        if (state.devices[candidate] === undefined) {
+            return candidate;
+        }
+    }
+    return null;
+}
+
+/**
+ * Create a device of one type at a path — the ghost stubs' add affordance.
+ * The smallest free instance number is allocated (the pool holds five per
+ * type), the record starts on the type's descriptor defaults, and the
+ * placement arrives ENABLED — adding a device is an audible act. Null when
+ * the type's pool or the topology upload is full, or the path is invalid.
+ */
+export function addLaneDevice(
+    state: LaneStateV2,
+    deviceType: LaneDeviceType,
+    target: LaneDevicePathV2,
+): LaneStateV2 | null {
+    const deviceId = allocateLaneInstanceId(state, deviceType);
+    if (deviceId === null || laneWireEntryCount(state) + 1 > LANE_MAX_CHAIN_LENGTH) {
+        return null;
+    }
+    if (target.kind === "branch") {
+        const group = state.chain.find((node) => node.kind !== "device" && node.groupId === target.groupId);
+        if (group === undefined || group.kind === "device" || target.branchIndex >= group.branches.length) {
+            return null;
+        }
+    }
+
+    const withDevice: LaneStateV2 = {
+        ...state,
+        devices: {
+            ...state.devices,
+            [deviceId]: { params: laneDefaultParamsForType(deviceType) },
+        },
+    };
+    const placement: LaneDevicePlacementV2 = { kind: "device", deviceId, enabled: true };
+    const chain = cloneChain(withDevice);
+    if (target.kind === "trunk") {
+        chain.splice(Math.min(target.index, chain.length), 0, placement);
+    } else {
+        const group = chain.find((node) => node.kind !== "device" && node.groupId === target.groupId) as LaneGroupV2;
+        const branch = group.branches[target.branchIndex] as LaneDevicePlacementV2[];
+        branch.splice(Math.min(target.index, branch.length), 0, placement);
+    }
+    return withChain(withDevice, chain);
+}
+
+/** Delete a device: the placement leaves the tree and the record leaves the
+    table (placement is existence). Routes that target the instance stay
+    stored and modulate an idle slot nothing reads. */
+export function removeLaneDevice(state: LaneStateV2, deviceId: string): LaneStateV2 | null {
+    const source = findLaneDevicePath(state, deviceId);
+    if (source === null) {
+        return null;
+    }
+    const chain = cloneChain(state);
+    if (source.kind === "trunk") {
+        chain.splice(source.index, 1);
+    } else {
+        const group = chain.find((node) => node.kind !== "device" && node.groupId === source.groupId) as LaneGroupV2;
+        (group.branches[source.branchIndex] as LaneDevicePlacementV2[]).splice(source.index, 1);
+    }
+    const devices = { ...state.devices };
+    delete devices[deviceId];
+    return { ...state, devices, chain };
 }
 
 /** Device ids in DISPATCH order — the flattened chain walk host surfaces

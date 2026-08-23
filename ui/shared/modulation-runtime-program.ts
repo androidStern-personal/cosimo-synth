@@ -9,7 +9,6 @@ import {
     MODULATION_LANE_POOL_TARGET_COUNT,
     getLaneModulationTargetIndex,
     parseLaneModulationTargetKind,
-    type LaneSlotAssignments,
 } from "./lane-modulation-targets";
 import {
     MODULATION_SOURCE_IDENTITIES,
@@ -207,10 +206,7 @@ function voiceTargetIndex(targetKind: ModulationTargetKind): number | null {
  * @param route - A normalized declarative mapping.
  * @returns Its execution path and deterministic cell coordinates.
  */
-export function getModulationRuntimeCell(
-    route: ModulationRoute,
-    laneAssignments: LaneSlotAssignments = EMPTY_LANE_ASSIGNMENTS,
-): ModulationRuntimeCell {
+export function getModulationRuntimeCell(route: ModulationRoute): ModulationRuntimeCell {
     const voiceTarget = voiceTargetIndex(route.targetKind);
     const rackTargetKind = parseRackModulationTargetKind(route.targetKind);
     let rackTarget = rackTargetKind === null ? undefined : getRackModulationTargetIndex(rackTargetKind);
@@ -218,7 +214,7 @@ export function getModulationRuntimeCell(
     if (rackTarget === undefined) {
         // Lane kinds address the pool block through the patch's assignments.
         const laneIndex = getLaneModulationTargetIndex(
-            parseLaneModulationTargetKind(route.targetKind), laneAssignments);
+            parseLaneModulationTargetKind(route.targetKind));
         if (laneIndex !== null) {
             rackTarget = laneIndex;
         }
@@ -295,25 +291,20 @@ export function getModulationArticulationCellIndex(route: ModulationRoute): numb
     return getModulationRuntimeCell(route).articulationCellIndex;
 }
 
-const EMPTY_LANE_ASSIGNMENTS: LaneSlotAssignments = new Map();
-
 /** A lane route whose instance holds no slot compiles to nothing. The static
     vocabulary (the base #1 instances) needs no assignment. */
-function laneRouteIsUnassigned(route: ModulationRoute, laneAssignments: LaneSlotAssignments): boolean {
+function laneRouteIsUnassigned(route: ModulationRoute): boolean {
     if (parseRackModulationTargetKind(route.targetKind) !== null) {
         return false;
     }
     const parsedLane = parseLaneModulationTargetKind(route.targetKind);
     return parsedLane !== null
-        && getLaneModulationTargetIndex(parsedLane, laneAssignments) === null;
+        && getLaneModulationTargetIndex(parsedLane) === null;
 }
 
-function compileRoute(
-    route: ModulationRoute,
-    laneAssignments: LaneSlotAssignments,
-): CompiledRoute {
+function compileRoute(route: ModulationRoute): CompiledRoute {
     return {
-        ...getModulationRuntimeCell(route, laneAssignments),
+        ...getModulationRuntimeCell(route),
         enabled: route.enabled,
         polarity: route.polarity === "bipolar" ? 1 : 0,
         reducer: route.reducer === "mean" ? 2 : 1,
@@ -325,7 +316,6 @@ type CompiledRoutesByPath = Record<ModulationRuntimePath, Map<number, CompiledRo
 
 function createCompiledRoutesByPath(
     routes: ReadonlyArray<ModulationRoute>,
-    laneAssignments: LaneSlotAssignments = EMPTY_LANE_ASSIGNMENTS,
 ): CompiledRoutesByPath {
     const routesByPath: CompiledRoutesByPath = {
         voice: new Map(),
@@ -335,10 +325,10 @@ function createCompiledRoutesByPath(
     };
 
     for (const route of routes) {
-        if (laneRouteIsUnassigned(route, laneAssignments)) {
+        if (laneRouteIsUnassigned(route)) {
             continue;
         }
-        const compiled = compileRoute(route, laneAssignments);
+        const compiled = compileRoute(route);
         const pathRoutes = routesByPath[compiled.path];
         if (pathRoutes.has(compiled.cellIndex)) {
             throw new Error(`Duplicate modulation route cell ${compiled.path}:${compiled.cellIndex}`);
@@ -391,9 +381,8 @@ function copyActiveRouteFields(
  */
 export function compileModulationRuntimeProgram(
     routes: ReadonlyArray<ModulationRoute>,
-    laneAssignments: LaneSlotAssignments = EMPTY_LANE_ASSIGNMENTS,
 ): ModulationRuntimeProgramUpload {
-    const routesByPath = createCompiledRoutesByPath(routes, laneAssignments);
+    const routesByPath = createCompiledRoutesByPath(routes);
 
     const voiceRoutes = sortedActiveRoutes(routesByPath.voice);
     const macroVoiceRoutes = sortedActiveRoutes(routesByPath.macroVoice);
