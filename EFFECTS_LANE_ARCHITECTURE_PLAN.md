@@ -76,8 +76,10 @@ carrying a structured program (`MODULATION_PROGRAM_ENDPOINT_ID` precedent,
 with the runtime-install-channel serial acknowledgment). A `laneState` upload
 carries:
 
-- topology: the utility tree (serial / parallel-4 / nested-3 / multiband with
-  the frozen 65-tap crossover — the four proven plans are the vocabulary),
+- topology: the utility tree (serial / parallel-4 / nested-3 / multiband —
+  the four proven plans are the vocabulary; crossovers are Linkwitz-Riley
+  LR4, zero latency — the early frozen-65-tap FIR idea is superseded, see
+  the T2 entry),
 - pool-slot occupancy: which instance ID sits in which compiled slot,
 - per-instance parameter bases and enable flags.
 
@@ -324,8 +326,59 @@ are M1's permanent acceptance tests, not a throwaway report.
   cmaj 1.0.3066 linux binary): cmajor_rack 69/69 (was 65 baseline),
   units:orphans 692/692, tsc clean. Not run here: browser suites (no UI
   code changed; twins additive), WebKit/iOS/native benchmarks. NEXT: T2
-  frequency split (65-tap crossover + compensated paths), then lane.v2
-  (device instances + tree document) feeding the subway map.
+  frequency split (see the next entry — the grammar and crossover plan
+  both evolved), then lane.v2 (device instances + tree document) feeding
+  the subway map.
+- **T2 FREQUENCY SPLIT COMPLETE (2026-08-23):** the engine renders 2- and
+  3-band frequency splits, and the group grammar HARDENED to marker form
+  while T1 was hours old — one migration nobody pays for later. DSP
+  decision (Andrew, voice): "let's use the Linkwitz-Riley filters …
+  just pick something instantaneous phase. You can double them up …
+  twenty-four dBs per octave. Do that." — LR4, minimum phase, ZERO
+  LATENCY, superseding the frozen 65-tap linear-phase FIR idea and
+  deleting the sibling-branch latency-compensation architecture with it.
+  The stdlib crossover is exactly that form (low = LP2², high = its
+  2nd-order allpass − low; the bands sum to that allpass — the OTT
+  precedent: allpass colour is an effect characteristic, not latency).
+  The 3-band tree splits low off first, then the rest at the high
+  crossover, and repays the high crossover's allpass on the LOW path with
+  a compensation allpass, so the recombined magnitude is EXACTLY flat at
+  any crossover spacing.
+  Wire: groups are opened by MARKER SLOTS — utility units above the
+  device pool (parallel base 40, split base 44, four units each, chain
+  slot domain 48) placed in the chain like devices. The marker's tag
+  field carries the branch/band count (parallel 2..4, split 2..3, band
+  tag 1 = low); members carry tags 1..N monotone non-decreasing with
+  skips allowed (an empty branch is representable); a trunk device, the
+  next marker, or the chain's end closes the group. The marker's position
+  enable bit is the GROUP BYPASS: members and split filters still advance
+  on their branch signals while the trunk hands the fork through. An
+  empty parallel branch contributes silence; an empty split band its raw
+  filtered band; a group with no devices at all is a hard passthrough —
+  placing structure never changes the sound. Split markers own a param
+  RECORD: values[0]/[1] = crossover Hz (clamped 40..18000), riding the
+  same laneSlotParams/laneSlotParamValue + acked-serial machinery as
+  every device with the 64-frame utility ramp row — the subway map's
+  draggable crossovers get the hot path for free. Filter state resets
+  when a unit enters the chain or changes band count (both land on the
+  transition's dry frame); retunes only when a crossover actually moves.
+  Proven in tests/cmajor_rack/LaneSplit.cmajtest: a full-wet delay in one
+  band follows LIVE field-edited crossovers (18k→60 Hz flips echo to dry
+  passthrough; a 9000/9500 mid sliver collapses the echo), sine-RMS
+  recombination flat within ±0.5 dB at nine frequency/config points
+  including crossovers HALF AN OCTAVE apart (400/550 — the case that
+  combs by several dB if the compensation allpass is dropped;
+  mutation-verified), split grammar rejects (N=1, N=4, tag>N, duplicate
+  marker unit), and marker-disabled + zero-device passthroughs.
+  LaneParallel.cmajtest rewritten to the marker grammar (7 rejects incl.
+  the old markerless form, adjacent groups, tags readback incl. marker
+  N). TS mirror: marker slot bases/domain, split param indices, marker
+  predicates in lane-state.ts, pinned in test_lane_state_v1.mjs. Gates
+  (this container, cmaj 1.0.3066 linux binary): cmajor_rack 73/73,
+  units:orphans 693/693, tsc clean, twins regenerated. Not run here:
+  browser suites (no UI surface changed), WebKit/iOS/native benchmarks.
+  NEXT: lane.v2 document (device instances + topology tree) + the
+  subway-map layout model, then the subway-map UI (M3).
 - **M3 — UI:** the subway-map FX graph in the rack workspace (locked
   direction above), dynamic per-patch target pickers, instance labels
   through the mappings table.
@@ -341,10 +394,10 @@ invented from scratch:
   not a `graph`: eight resident `node`s with `main()` dispatching the runtime
   order (this is how 8! reorderings work today, with crossfaded transitions).
   Lanes generalize the dispatch from "a permutation of eight" to "a topology
-  tree over pool slots" — same mechanism, richer program. The Parallel and
-  FrequencySplit utilities become new resident nodes (crossover spec from the
-  feasibility work; the C10 latency discipline in the file header governs the
-  compensated dry paths).
+  tree over pool slots" — same mechanism, richer program. (Superseded in the
+  build: T1/T2 shipped the utilities as MARKER SLOTS dispatched in-processor,
+  not resident nodes, and the crossovers are zero-latency LR4 IIR — no
+  compensated dry paths exist anywhere.)
 - **The structured, acked upload exists.** `RackOrderUpload` /
   `RackEnableUpload` are struct events with committed-generation readbacks
   and rejection counters — exactly the laneState pattern. LaneTopologyUpload

@@ -1,0 +1,569 @@
+// Behavioural contract for frequency-split lane groups (M3 slice T2). A split
+// group is opened by a SPLIT MARKER SLOT (laneSplitSlotBase..) whose tag field
+// carries the BAND COUNT (2 or 3); members carry band tags 1..N in ascending
+// frequency order (1 = low). The marker slot owns the crossover state and its
+// crossover frequencies travel through the SAME param-record machinery as
+// every device (values[0] = low crossover Hz, values[1] = high crossover Hz),
+// so a dragged crossover gets the acknowledged laneSlotParamValue hot path.
+//
+// The DSP decision (Andrew, 2026-08-23): Linkwitz-Riley, minimum phase, zero
+// latency — doubled second-order sections for 24 dB/oct — NOT linear-phase
+// FIR. The stdlib crossover is exactly that LR4 form (low = LP2², high =
+// allpass − low, summing to a 2nd-order allpass); the 3-band tree compensates
+// the low path with the high crossover's allpass so the recombined magnitude
+// is EXACTLY flat at any crossover spacing. An allpass phase response is an
+// effect characteristic, not latency (the OTT precedent); ADR-008 is about
+// latency, and every path here is zero-latency IIR.
+//
+// Band semantics mirror the parallel grammar where they can and differ where
+// the physics differs: an EMPTY BAND passes its raw filtered band through
+// (never silence — the spectrum always survives), a band's devices form a
+// serial chain fed by that band, a disabled device passes its band through
+// exactly, the marker's enable bit bypasses the whole group as a hard
+// passthrough (members and filters still advance), and a split group with no
+// devices at all is a hard passthrough — adding an empty split never changes
+// the sound.
+//
+// `## testProcessor()` scans the first output endpoint: <0 stops, >0 passes,
+// ==0 fails. Composed child `init:` annotations are INERT — every endpoint a
+// scenario depends on is written explicitly (same as LaneTopology.cmajtest).
+
+## global ("../../cmajor/Mseg.cmajor", "../../cmajor/FixedFrameOscillator.cmajor", "../../cmajor/VoiceReducer.cmajor", "../../cmajor/GlobalFilter.cmajor", "../../cmajor/Distortion.cmajor", "../../cmajor/Ott.cmajor", "../../cmajor/Chorus.cmajor", "../../cmajor/Flanger.cmajor", "../../cmajor/Phaser.cmajor", "../../cmajor/Delay.cmajor", "../../cmajor/Reverb.cmajor", "../../cmajor/EffectsRack.cmajor")
+
+//==============================================================================
+// Band routing follows the crossovers LIVE: a full-wet delay in one band only
+// echoes what its band contains, and a laneSlotParamValue field edit moves the
+// crossover (and the band's content) without a topology upload.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneSplitBandRoutingTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let echoFrame = 1764;          // 40ms at 44100
+
+    let settleFrames = 2048;
+    let recordFrames = 6400;
+    let peakWindow = 8;
+    let expectedEchoMinimum = 0.25f;
+    let echoResidueCeiling = 0.05f;
+    let passthroughMinimum = 0.9f;
+
+    float32[6400] recordedLeft;
+
+    wt::LaneSlotParamsUpload makeDelayParams (int32 slotId, int32 serial, float32 timeMs)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = slotId;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneDelayParamTimeMs] = timeMs;
+        upload.values[wt::laneDelayParamFeedback] = 0.0f;
+        upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        upload.values[wt::laneDelayParamMix] = 1.0f;
+        return upload;
+    }
+
+    wt::LaneSlotParamsUpload makeSplitParams (int32 serial, float32 lowHz, float32 highHz)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::laneSplitSlotBase;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneSplitParamXoverLowHz] = lowHz;
+        upload.values[wt::laneSplitParamXoverHighHz] = highHz;
+        return upload;
+    }
+
+    wt::LaneSlotParamValueUpload makeSplitFieldEdit (int32 paramIndex, int32 serial, float32 value)
+    {
+        wt::LaneSlotParamValueUpload upload;
+        upload.slotId = wt::laneSplitSlotBase;
+        upload.paramIndex = paramIndex;
+        upload.deliverySerial = serial;
+        upload.value = value;
+        return upload;
+    }
+
+    // One delay placed in ONE band of a split group; every other band is empty
+    // and passes its raw filtered band through.
+    wt::LaneTopologyUpload makeSplitChain (int32 bandCount, int32 deviceBandTag)
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 2;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, bandCount);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, deviceBandTag);
+        upload.enabledMask = 0b11;
+        return upload;
+    }
+
+    void advanceRack (float32 sample)
+    {
+        rack.in <- float32<2> (sample, sample);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+    }
+
+    void captureImpulseResponse()
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+    }
+
+    float32 windowPeak (int32 center)
+    {
+        var peak = 0.0f;
+
+        for (int32 offset = -peakWindow; offset <= peakWindow; ++offset)
+        {
+            let index = center + offset;
+
+            if (index >= 0 && index < recordFrames)
+            {
+                let magnitude = std::intrinsics::abs (recordedLeft.at (index));
+
+                if (magnitude > peak)
+                    peak = magnitude;
+            }
+        }
+
+        return peak;
+    }
+
+    void main()
+    {
+        rack.tempoBpmIn <- 120.0f;
+        rack.laneSlotParams <- makeDelayParams (wt::rackModuleDelay, 1, 40.0f);
+
+        // Scene A: 2-band split, delay in the LOW band, low crossover at
+        // 18 kHz — essentially the whole impulse lives in the low band, so it
+        // echoes at 40ms.
+        rack.laneSlotParams <- makeSplitParams (2, 18000.0f, 40.0f);
+        rack.laneTopology <- makeSplitChain (2, 1);
+        captureImpulseResponse();
+
+        let echoHighCrossover = windowPeak (echoFrame);
+        out <- (echoHighCrossover > expectedEchoMinimum ? 1 : 0);
+        advance();
+        out <- (rack.laneParamsAcknowledgedSerial == 2 ? 1 : 0);
+        advance();
+
+        // Scene B: FIELD EDIT drags the low crossover down to 60 Hz — no
+        // topology upload. The low band empties out, so the echo collapses
+        // and the raw high band carries the impulse through near-unity.
+        rack.laneSlotParamValue <- makeSplitFieldEdit (wt::laneSplitParamXoverLowHz, 21, 60.0f);
+        captureImpulseResponse();
+
+        out <- (windowPeak (echoFrame) < echoResidueCeiling ? 1 : 0);
+        advance();
+        out <- (windowPeak (0) > passthroughMinimum ? 1 : 0);
+        advance();
+        out <- (rack.laneParamsAcknowledgedSerial == 21 ? 1 : 0);
+        advance();
+
+        // Scene C: 3-band split, delay in the MID band, crossovers at
+        // 60 / 18000 — the mid band spans nearly everything, so the echo is
+        // back. The band-count change re-enters the marker through the
+        // commit path (fresh filter state).
+        rack.laneSlotParams <- makeSplitParams (22, 60.0f, 18000.0f);
+        rack.laneTopology <- makeSplitChain (3, 2);
+        captureImpulseResponse();
+
+        let echoWideMid = windowPeak (echoFrame);
+        out <- (echoWideMid > expectedEchoMinimum ? 1 : 0);
+        advance();
+        out <- (rack.laneParamsAcknowledgedSerial == 22 ? 1 : 0);
+        advance();
+
+        // Scene D: field-edit BOTH crossovers to a 9000..9500 sliver. The mid
+        // band is bounded by both crossovers, so its echo collapses relative
+        // to the wide-mid scene.
+        rack.laneSlotParamValue <- makeSplitFieldEdit (wt::laneSplitParamXoverLowHz, 23, 9000.0f);
+        rack.laneSlotParamValue <- makeSplitFieldEdit (wt::laneSplitParamXoverHighHz, 24, 9500.0f);
+        captureImpulseResponse();
+
+        out <- (windowPeak (echoFrame) < echoWideMid * 0.3f ? 1 : 0);
+        advance();
+        out <- (rack.laneParamsAcknowledgedSerial == 24 ? 1 : 0);
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
+
+//==============================================================================
+// The bands RECOMBINE FLAT: with a transparent member (a disabled device holds
+// one band open, passing it through exactly, and the empty bands pass their
+// raw filtered bands), the group's output is the crossover tree's allpass sum,
+// whose magnitude must be unity at every frequency. The close-crossover
+// 3-band scene is the teeth: without the low path's compensation allpass,
+// crossovers half an octave apart comb hard at the seam.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneSplitFlatSumTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let settlePhaseFrames = 4096;
+    let measurePhaseFrames = 4096;
+    let sineAmplitude = 0.5f;
+
+    // ±0.5 dB as amplitude ratios.
+    let ratioFloor = 0.944f;
+    let ratioCeiling = 1.06f;
+
+    wt::LaneSlotParamsUpload makeSplitParams (int32 serial, float32 lowHz, float32 highHz)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::laneSplitSlotBase;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneSplitParamXoverLowHz] = lowHz;
+        upload.values[wt::laneSplitParamXoverHighHz] = highHz;
+        return upload;
+    }
+
+    // The delay is DISABLED: it holds band 1 open as a member while passing
+    // the band through bit-exactly (ADR-005), so the group output is purely
+    // the crossover tree's recombination.
+    wt::LaneTopologyUpload makeTransparentMemberChain (int32 bandCount)
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 2;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, bandCount);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.enabledMask = 0b01;
+        return upload;
+    }
+
+    float32 measureRmsRatio (float32 frequencyHz)
+    {
+        let phaseStep = float32 (twoPi) * frequencyHz / float32 (processor.frequency);
+        var phase = 0.0f;
+        var inputSumSquares = 0.0f;
+        var outputSumSquares = 0.0f;
+
+        for (int32 frame = 0; frame < settlePhaseFrames + measurePhaseFrames; ++frame)
+        {
+            let sample = std::intrinsics::sin (phase) * sineAmplitude;
+            phase += phaseStep;
+
+            if (phase > float32 (twoPi))
+                phase -= float32 (twoPi);
+
+            rack.in <- float32<2> (sample, sample);
+            rack.trackingPitchHzIn <- 220.0f;
+            rack.advance();
+
+            if (frame >= settlePhaseFrames)
+            {
+                inputSumSquares += sample * sample;
+                outputSumSquares += rack.out[0] * rack.out[0];
+            }
+        }
+
+        return std::intrinsics::sqrt (outputSumSquares / inputSumSquares);
+    }
+
+    bool ratioIsFlat (float32 ratio)
+    {
+        return ratio > ratioFloor && ratio < ratioCeiling;
+    }
+
+    void main()
+    {
+        rack.tempoBpmIn <- 120.0f;
+
+        // Scene 1: 2-band at 800 Hz. The 1 kHz probe sits at the seam — the
+        // Linkwitz-Riley property under test is precisely that the two -6 dB
+        // band edges sum back to unity.
+        rack.laneSlotParams <- makeSplitParams (1, 800.0f, 40.0f);
+        rack.laneTopology <- makeTransparentMemberChain (2);
+
+        out <- (ratioIsFlat (measureRmsRatio (120.0f)) ? 1 : 0);
+        advance();
+        out <- (ratioIsFlat (measureRmsRatio (1000.0f)) ? 1 : 0);
+        advance();
+        out <- (ratioIsFlat (measureRmsRatio (8000.0f)) ? 1 : 0);
+        advance();
+
+        // Scene 2: 3-band at 400 / 1600.
+        rack.laneSlotParams <- makeSplitParams (2, 400.0f, 1600.0f);
+        rack.laneTopology <- makeTransparentMemberChain (3);
+
+        out <- (ratioIsFlat (measureRmsRatio (120.0f)) ? 1 : 0);
+        advance();
+        out <- (ratioIsFlat (measureRmsRatio (800.0f)) ? 1 : 0);
+        advance();
+        out <- (ratioIsFlat (measureRmsRatio (8000.0f)) ? 1 : 0);
+        advance();
+
+        // Scene 3: 3-band at 400 / 550 — crossovers HALF AN OCTAVE apart.
+        // The low band still carries real level where the high crossover's
+        // allpass rotates hardest, so a missing compensation allpass on the
+        // low path combs the seam by several dB. The 470 Hz probe sits in it.
+        rack.laneSlotParams <- makeSplitParams (3, 400.0f, 550.0f);
+
+        out <- (ratioIsFlat (measureRmsRatio (120.0f)) ? 1 : 0);
+        advance();
+        out <- (ratioIsFlat (measureRmsRatio (470.0f)) ? 1 : 0);
+        advance();
+        out <- (ratioIsFlat (measureRmsRatio (8000.0f)) ? 1 : 0);
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
+
+//==============================================================================
+// The split grammar is validated, never coerced: band counts are 2..3, member
+// tags never exceed the band count, marker units are single-use, and a split
+// group sits adjacent to a parallel group without a trunk between.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneSplitGrammarTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let settleFrames = 1024;
+
+    wt::LaneTopologyUpload makeBaseline()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 3;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
+        upload.enabledMask = 0b111;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload makePair (int32 first, int32 second)
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 2;
+        upload.slotIds[0] = first;
+        upload.slotIds[1] = second;
+        upload.enabledMask = 0b11;
+        return upload;
+    }
+
+    void advanceFrames (int32 frames)
+    {
+        for (int32 frame = 0; frame < frames; ++frame)
+        {
+            rack.in <- float32<2> (0.0f, 0.0f);
+            rack.trackingPitchHzIn <- 220.0f;
+            rack.advance();
+        }
+    }
+
+    void main()
+    {
+        rack.tempoBpmIn <- 120.0f;
+        rack.laneTopology <- makeBaseline();
+        advanceFrames (settleFrames);
+
+        let committedGeneration = rack.laneCommittedGeneration;
+        let committedCode = rack.laneCommittedChainCode;
+        let rejectedBefore = rack.laneRejectedUploadCount;
+
+        // Frame 1: the baseline committed and its tags read back — the split
+        // marker's band count rides the same packed-tag readback.
+        out <- (committedGeneration == 1 && rack.laneCommittedChainLength == 3 ? 1 : 0);
+        advance();
+        out <- (rack.laneCommittedBranchTagsLo == 138 && rack.laneCommittedBranchTagsHi == 0 ? 1 : 0);
+        advance();
+
+        // A one-band split is not a split.
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 1),
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1));
+        // Splits cap at three bands — parallel's four does not apply.
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 4),
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1));
+        // A member tag beyond the marker's band count.
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2),
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 3));
+        // A marker unit is a slot: using it twice is a duplicate.
+        wt::LaneTopologyUpload duplicated;
+        duplicated.chainLength = 4;
+        duplicated.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        duplicated.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        duplicated.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        duplicated.slotIds[3] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 1);
+        duplicated.enabledMask = 0b1111;
+        rack.laneTopology <- duplicated;
+
+        advanceFrames (settleFrames);
+
+        // Frame 3: every malformed upload rejected; the structure never moved.
+        out <- (rack.laneRejectedUploadCount == rejectedBefore + 4 ? 1 : 0);
+        advance();
+        out <- (rack.laneCommittedGeneration == committedGeneration
+                 && rack.laneCommittedChainCode == committedCode ? 1 : 0);
+        advance();
+
+        // Frame 5: a parallel group and a split group sit ADJACENT — the
+        // split marker closes the parallel group (with its second branch
+        // empty) and opens its own.
+        wt::LaneTopologyUpload adjacent;
+        adjacent.chainLength = 4;
+        adjacent.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        adjacent.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        adjacent.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        adjacent.slotIds[3] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
+        adjacent.enabledMask = 0b1111;
+        rack.laneTopology <- adjacent;
+        advanceFrames (settleFrames);
+
+        out <- (rack.laneCommittedGeneration == committedGeneration + 1
+                 && rack.laneCommittedBranchTagsLo == (2 | (1 << 3) | (2 << 6) | (2 << 9)) ? 1 : 0);
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
+
+//==============================================================================
+// The marker's enable bit bypasses the whole split as a HARD passthrough, and
+// a split with no devices at all is a hard passthrough too — placing split
+// structure never changes the sound until a device does.
+
+## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
+
+processor LaneSplitBypassTest [[ main ]]
+{
+    output stream int32 out;
+
+    node rack = wt::EffectsRack;
+
+    let echoFrame = 1764;
+
+    let settleFrames = 2048;
+    let recordFrames = 6400;
+    let peakWindow = 8;
+    let passthroughMinimum = 0.9f;
+    let controlCeiling = 0.015f;
+
+    float32[6400] recordedLeft;
+
+    wt::LaneSlotParamsUpload makeDelayParams (int32 serial, float32 timeMs)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleDelay;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneDelayParamTimeMs] = timeMs;
+        upload.values[wt::laneDelayParamFeedback] = 0.0f;
+        upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        upload.values[wt::laneDelayParamMix] = 1.0f;
+        return upload;
+    }
+
+    wt::LaneSlotParamsUpload makeSplitParams (int32 serial, float32 lowHz)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::laneSplitSlotBase;
+        upload.deliverySerial = serial;
+        upload.values[wt::laneSplitParamXoverLowHz] = lowHz;
+        upload.values[wt::laneSplitParamXoverHighHz] = 40.0f;
+        return upload;
+    }
+
+    void advanceRack (float32 sample)
+    {
+        rack.in <- float32<2> (sample, sample);
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+    }
+
+    void captureImpulseResponse()
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+    }
+
+    float32 windowPeak (int32 center)
+    {
+        var peak = 0.0f;
+
+        for (int32 offset = -peakWindow; offset <= peakWindow; ++offset)
+        {
+            let index = center + offset;
+
+            if (index >= 0 && index < recordFrames)
+            {
+                let magnitude = std::intrinsics::abs (recordedLeft.at (index));
+
+                if (magnitude > peak)
+                    peak = magnitude;
+            }
+        }
+
+        return peak;
+    }
+
+    void main()
+    {
+        rack.tempoBpmIn <- 120.0f;
+        rack.laneSlotParams <- makeDelayParams (1, 40.0f);
+        rack.laneSlotParams <- makeSplitParams (2, 18000.0f);
+
+        // Scene 1: the split marker DISABLED, with an enabled full-wet delay
+        // in the low band. The trunk passes the fork signal through exactly —
+        // no echo, no crossover colour — while the members keep advancing on
+        // their band signals.
+        wt::LaneTopologyUpload bypassed;
+        bypassed.chainLength = 2;
+        bypassed.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        bypassed.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        bypassed.enabledMask = 0b10;
+        rack.laneTopology <- bypassed;
+        captureImpulseResponse();
+
+        out <- (windowPeak (0) > passthroughMinimum ? 1 : 0);
+        advance();
+        out <- (windowPeak (echoFrame) < controlCeiling ? 1 : 0);
+        advance();
+
+        // Scene 2: an ENABLED split with no devices at all — a marker alone —
+        // is a hard passthrough, not an allpass and never a mute.
+        wt::LaneTopologyUpload emptySplit;
+        emptySplit.chainLength = 1;
+        emptySplit.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneSplitSlotBase, 2);
+        emptySplit.enabledMask = 0b1;
+        rack.laneTopology <- emptySplit;
+        captureImpulseResponse();
+
+        out <- (windowPeak (0) > passthroughMinimum ? 1 : 0);
+        advance();
+        out <- (windowPeak (echoFrame) < controlCeiling ? 1 : 0);
+        advance();
+
+        // Frame 5: both structures actually committed.
+        out <- (rack.laneCommittedGeneration == 2 ? 1 : 0);
+        advance();
+
+        loop { out <- -1; advance(); }
+    }
+}
