@@ -236,7 +236,12 @@
   </div>
 </div>
 
-<div id="gate"><button id="gateBtn">Power on</button></div>
+<div id="gate">
+  <div style="display:flex; flex-direction:column; align-items:center; gap:14px; padding:0 30px; text-align:center;">
+    <button id="gateBtn">Power on</button>
+    <span style="color:var(--dim); font-size:12.5px;">If it stays silent, nudge the volume buttons — the power readout up top shows the audio state.</span>
+  </div>
+</div>
 
 <script>
 "use strict";
@@ -274,19 +279,64 @@ const snapshotShape = () => shape.points.map((p) => ({ x: p.x, y: p.y }));
 
 let ctx = null;
 let master = null;
+let outEl = null;
+let outMode = "off";
+
+function updatePower() {
+  const on = !!ctx && ctx.state === "running";
+  document.getElementById("power").classList.toggle("on", on);
+  document.getElementById("powerLabel").textContent =
+    !ctx ? "off" : on ? "on · " + outMode : "tap to enable";
+}
 
 function ensureAudio() {
   if (!ctx) {
     ctx = new (window.AudioContext || window.webkitAudioContext)();
     master = ctx.createGain();
     master.gain.value = 0.22;
-    master.connect(ctx.destination);
+    // Output through a media element: on iPhone that uses the playback audio
+    // session, so the synth keeps sounding with the ring switch on silent
+    // (bare Web Audio is muted by it). Fall back to the direct output if the
+    // element refuses to play.
+    let routed = false;
+    try {
+      const msDest = ctx.createMediaStreamDestination();
+      master.connect(msDest);
+      outEl = document.createElement("audio");
+      outEl.setAttribute("playsinline", "");
+      outEl.srcObject = msDest.stream;
+      outEl.style.display = "none";
+      document.body.appendChild(outEl);
+      const attempt = outEl.play();
+      outMode = "media";
+      routed = true;
+      if (attempt && attempt.catch) {
+        attempt.catch(() => {
+          master.connect(ctx.destination);
+          outMode = "direct";
+          updatePower();
+        });
+      }
+    } catch {
+      /* handled below */
+    }
+    if (!routed) {
+      master.connect(ctx.destination);
+      outMode = "direct";
+    }
+    ctx.onstatechange = updatePower;
   }
   if (ctx.state === "suspended") { ctx.resume(); }
-  const on = ctx.state === "running";
-  document.getElementById("power").classList.toggle("on", on);
-  document.getElementById("powerLabel").textContent = on ? "on" : "off";
+  if (outEl && outEl.paused) {
+    const retry = outEl.play();
+    if (retry && retry.catch) { retry.catch(() => {}); }
+  }
+  updatePower();
 }
+
+// Any tap anywhere re-arms a context the browser suspended (tab switch,
+// phone lock, autoplay policy) — nobody debugs a silent synth.
+document.addEventListener("pointerdown", () => { if (ctx) { ensureAudio(); } }, true);
 
 const CHOKE_MS = 5;
 const BASE_HZ = 138.59; // C#3 — the ping's root
@@ -802,5 +852,11 @@ function frame() {
 requestAnimationFrame(frame);
 
 // Debug hook for automated smoke tests.
-window.__lab = { events, voices, shape, switchAlgo, algorithms, get algo() { return algo; }, gesture };
+window.__lab = {
+  events, voices, shape, switchAlgo, algorithms, gesture,
+  get algo() { return algo; },
+  get ctx() { return ctx; },
+  get master() { return master; },
+  get outMode() { return outMode; },
+};
 </script>
