@@ -80,6 +80,7 @@ import {
     type ArticulationVoiceParameterId,
     type OscillatorArticulationParameterId,
 } from "./articulation-image";
+import { createBouncePresetStoredStateAdapter } from "./bounce-preset-state";
 import {
     articulationEditorStatesEqual,
     articulationSnapshotsEqual,
@@ -1719,7 +1720,8 @@ function useSynthPresetStoredStateAdapters({
             },
         };
 
-        return [modulationAdapter, articulationAdapter];
+        const bounceAdapter = createBouncePresetStoredStateAdapter(patchConnection);
+        return [modulationAdapter, articulationAdapter, bounceAdapter];
     }, [modulationBridge, patchConnection, setAndPersistState, setArticulationPatchBase, stateRef]);
 }
 

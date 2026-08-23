@@ -4,19 +4,10 @@ import {
     encodeBounceBank,
 } from "./bank-format.mjs";
 import { createBounceCapturePlan } from "./capture-plan.mjs";
+import { digestBounceBank } from "./digest.mjs";
 import { renderBouncePlanInWorkers } from "./worker-pool.mjs";
 
-function bytesToHex(bytes) {
-    return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
-}
-
-export async function digestBounceBank(bytes) {
-    if (!globalThis.crypto?.subtle) {
-        throw new Error("Bounce capture requires the Web Crypto SHA-256 implementation");
-    }
-    const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);
-    return bytesToHex(new Uint8Array(digest));
-}
+export { digestBounceBank } from "./digest.mjs";
 
 /** Snapshot -> plan -> fresh worker renders -> bank -> content digest. */
 export async function captureBounceBank({

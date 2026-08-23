@@ -4,6 +4,9 @@ import {
     installBrowserPatchStatePersistence,
     readBrowserPatchState,
 } from "./browser-patch-state.mjs";
+import { createBrowserBounceBankStore } from "./bounce/browser-bank-store.mjs";
+import { BOUNCE_STATE_KEY } from "./bounce/document.mjs";
+import { createBounceRuntimeRestorer } from "./bounce/runtime-restorer.mjs";
 
 globalThis.__COSIMO_DESKTOP_RUNTIME_KIND__ = "standalone";
 
@@ -52,6 +55,9 @@ const state = {
     audioWorkletAcknowledgedPerfEpoch: 0,
     audioWorkletRenderQuantumFrames: null,
     audioWorkletSampleRateHz: null,
+    bounceRestore: { status: "idle", digest: null, error: null },
+    bounceRestorer: null,
+    bounceRestorePromise: null,
     heldNotes: new Set(),
     silentHeldNotePollCount: 0,
     connection: null,
@@ -91,6 +97,28 @@ function showError(error) {
     elements.error.style.display = "block";
     elements.startStatus.textContent = "Could not start Cosimo";
     elements.startOverlay.disabled = true;
+}
+
+function showBounceRestoreState(restoreState) {
+    if (restoreState.status === "error" && restoreState.error) {
+        elements.error.dataset.kind = "bounce-restore";
+        elements.error.textContent = [
+            "Bounced source unavailable — oscillator fallback is active.",
+            restoreState.error.message,
+        ].join("\n\n");
+        elements.error.style.display = "block";
+        return;
+    }
+
+    if (elements.error.dataset.kind === "bounce-restore") {
+        delete elements.error.dataset.kind;
+        elements.error.textContent = "";
+        elements.error.style.display = "none";
+    }
+
+    if (restoreState.status === "loading") {
+        elements.startStatus.textContent = "Restoring bounced source…";
+    }
 }
 
 function endpointEvent(message) {
@@ -306,6 +334,16 @@ async function startAudio() {
 
     await resumePromise;
 
+    if (state.bounceRestorer) {
+        state.bounceRestorer.start();
+        state.bounceRestorePromise ??= state.bounceRestorer.restore(
+            readBrowserPatchState().sound.storedState[BOUNCE_STATE_KEY] ?? null,
+        ).finally(() => {
+            state.bounceRestorePromise = null;
+        });
+        await state.bounceRestorePromise;
+    }
+
     if (!markAudioRunning()) {
         elements.startOverlay.style.display = "";
         elements.startOverlay.disabled = false;
@@ -352,6 +390,12 @@ function getSnapshot() {
         audioWorkletAcknowledgedPerfEpoch: state.audioWorkletAcknowledgedPerfEpoch,
         audioWorkletRenderQuantumFrames: state.audioWorkletRenderQuantumFrames,
         audioWorkletSampleRateHz: state.audioWorkletSampleRateHz ?? state.audioContext?.sampleRate ?? null,
+        bounceRestore: {
+            ...state.bounceRestore,
+            error: state.bounceRestore.error
+                ? { code: state.bounceRestore.error.code, message: state.bounceRestore.error.message }
+                : null,
+        },
         error: state.error,
         hasActiveTable: state.latestRuntimeStates.every((runtimeState) => Boolean(runtimeState?.hasActive)),
         latestEffectiveFilterState: state.latestEffectiveFilterState,
@@ -491,7 +535,35 @@ async function initialise() {
         audioContext,
         "cosimo-web-audio-worklet",
     );
-    installBrowserPatchStatePersistence(connection);
+    const persistence = installBrowserPatchStatePersistence(connection, {
+        // The engine stays on its safe oscillator default until the referenced
+        // OPFS bank has been verified and committed after audio starts.
+        deferParameterRestore: (endpointID, value, browserState) => (
+            endpointID === "sourceMode"
+            && value === 1
+            && browserState.sound.storedState[BOUNCE_STATE_KEY] != null
+        ),
+    });
+    const bounceRestorer = createBounceRuntimeRestorer({
+        connection,
+        store: createBrowserBounceBankStore(),
+        sendRuntimeSourceMode: (value) => persistence.sendRuntimeEventOrValue("sourceMode", value, 0, 0),
+    });
+    bounceRestorer.subscribe((restoreState) => {
+        state.bounceRestore = restoreState;
+        showBounceRestoreState(restoreState);
+    });
+    state.bounceRestorer = bounceRestorer;
+    const initialBounceValue = persistence.browserState.sound.storedState[BOUNCE_STATE_KEY] ?? null;
+    if (initialBounceValue === null) {
+        await bounceRestorer.restore(null);
+    } else {
+        state.bounceRestore = {
+            status: "pending-audio-start",
+            digest: null,
+            error: null,
+        };
+    }
 
     state.audioContext = audioContext;
     state.connection = connection;

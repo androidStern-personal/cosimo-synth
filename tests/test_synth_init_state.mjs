@@ -59,11 +59,13 @@ test("production synth Init options derive canonical documents from the current 
     const storedStateAdapters = [
         { key: "modulation.v6" },
         { key: "articulations.v4" },
+        { key: "bounce.v1" },
     ];
     const options = initState.createSynthPresetInitOptions(connection, storedStateAdapters);
     const canonical = options.createCanonicalStoredState({
         storedState: [
             { key: "articulations.v4", schemaVersion: 4, required: true },
+            { key: "bounce.v1", schemaVersion: 1, required: true },
             { key: "modulation.v6", schemaVersion: 6, required: true },
         ],
     });
@@ -76,6 +78,7 @@ test("production synth Init options derive canonical documents from the current 
         articulations.parseArticulationsV4(canonical["articulations.v4"], new Set()).value,
         articulations.createEmptyArticulationsState(),
     );
+    assert.equal(canonical["bounce.v1"], null);
     assert.deepEqual(options.initOnlyStateAdapters.map((adapter) => adapter.key), ["lane.v1"]);
     assert.throws(() => options.createCanonicalStoredState({
         storedState: [{ key: "unknown.v1", schemaVersion: 1, required: true }],

@@ -34,6 +34,7 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
             ...LEGACY_PARAMETERS,
             { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
         ],
+        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
     });
     const legacyPreset = {
         kind: "cosimo.effectPreset",
@@ -66,6 +67,40 @@ test("the derived synth migration applies a pre-Mix preset with filterMix at ful
     // The migrated preset keeps every stored legacy value.
     assert.equal(normalized.parameters.filterCutoff, 2_400);
     assert.equal(normalized.parameters.filterQ, 4);
+    assert.equal(normalized.storedState["bounce.v1"], null);
+});
+
+test("the derived synth migration adds an oscillator-mode bounce reference to pre-Bounce presets", async () => {
+    const { contractModule, presetModule, migrationsModule } = await loadModules();
+    const parameters = [
+        ...LEGACY_PARAMETERS,
+        { endpointID: "filterMix", type: "number", min: 0, max: 1, defaultValue: 1 },
+    ];
+    const legacyContract = contractModule.buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters,
+    });
+    const currentContract = contractModule.buildCanonicalPluginStateContract({
+        effectID: "wavetable-synth",
+        parameters,
+        storedState: [{ key: "bounce.v1", schemaVersion: 1, required: true }],
+    });
+    const normalized = presetModule.normalizeEffectPresetV2({
+        kind: "cosimo.effectPreset",
+        version: 2,
+        effectID: "wavetable-synth",
+        presetID: "user.pre-bounce",
+        label: "Pre-Bounce",
+        contract: legacyContract,
+        parameters: { filterMode: 1, filterCutoff: 2_400, filterQ: 4, filterMix: 0.5 },
+        storedState: {},
+    }, {
+        currentContract,
+        migrations: migrationsModule.buildSynthPresetMigrations(currentContract),
+    });
+
+    assert.equal(normalized.storedState["bounce.v1"], null);
+    assert.equal(normalized.parameters.filterMix, 0.5);
 });
 
 test("the migration builder rejects a contract that lacks the filterMix parameter", async () => {
