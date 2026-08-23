@@ -91,6 +91,17 @@ test("browser stress artifact includes its exclusive runtime-lane worker", async
     await fs.access(path.join(repoRoot, "build", "web", "patch_gui", "wavetable-test-worker.js"));
 });
 
+test("Bounce ships a class-only performer and a background render worker", async () => {
+    const [offlineClass, worker] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "build", "web", "cmaj_Cosimo_Synth.offline.js"), "utf8"),
+        fs.readFile(path.join(repoRoot, "build", "web", "patch_gui", "bounce-render-worker.js"), "utf8"),
+    ]);
+
+    assert.doesNotMatch(offlineClass, /cmaj-audio-worklet-helper/);
+    assert.match(offlineClass, /export default WavetableSynth/);
+    assert.match(worker, /render-root-complete/);
+});
+
 test("public asset policy removes build-only artifacts without touching runtime files", async (context) => {
     const fixtureRoot = await fs.mkdtemp(path.join(os.tmpdir(), "cosimo-public-assets-"));
     context.after(async () => fs.rm(fixtureRoot, { recursive: true, force: true }));

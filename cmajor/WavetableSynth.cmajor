@@ -64,6 +64,16 @@ namespace wt
         int32 failureReasonCode;
     }
 
+    // A tiny engine-owned status payload lets bounce capture pin its offline
+    // performer to the live engine's actual sample rate. Hosts must not infer
+    // this from an AudioContext or device preference: native wrappers can run
+    // the patch at a different rate, and the sampled source compensates from
+    // this exact value after a later device-rate change.
+    struct EngineStatus
+    {
+        float32 sampleRateHz;
+    }
+
     processor NoteDispatcher (int voiceCount,
                               int MPEMasterChannel = 0)
     {
@@ -881,6 +891,32 @@ namespace wt
         }
     }
 
+    // Emit once from DSP time, where processor.frequency is authoritative.
+    // This is an event (rather than a value) so its result is independent of
+    // the host's block size and can be consumed by both generated offline
+    // performers and realtime patch connections.
+    processor EngineStatusMonitor
+    {
+        output event EngineStatus engineStatusOut;
+        bool hasEmitted;
+
+        void main()
+        {
+            loop
+            {
+                if (! hasEmitted)
+                {
+                    EngineStatus status;
+                    status.sampleRateHz = float32 (processor.frequency);
+                    engineStatusOut <- status;
+                    hasEmitted = true;
+                }
+
+                advance();
+            }
+        }
+    }
+
     // Turns wt::EffectsRack's per-frame diagnostic values into one event emitted only
     // when the rack's committed structure actually moves - the same shape as
     // DesiredTableMonitor above, and the same shape as every other effective-state
@@ -1335,6 +1371,8 @@ graph WavetableSynth [[ main ]]
     output event wt::RuntimeInstallAck runtimeInstallAck;
     output event wt::BounceBankUploadAck bounceBankUploadAck;
     output event wt::BounceBankRuntimeState bounceBankRuntimeState;
+    // Append-only engine metadata used by Bounce capture.
+    output event wt::EngineStatus engineStatus;
 
     let voiceCount = 16;
 
@@ -1352,6 +1390,7 @@ graph WavetableSynth [[ main ]]
     node outputStage = wt::RackOutputStage;
     node rackStateMonitor = wt::RackStateMonitor;
     node tempoMonitor = wt::TempoMonitor;
+    node engineStatusMonitor = wt::EngineStatusMonitor;
     node analyzerDownmix = wt::StereoToMonoAverage;
     node filterSpectrumAnalyzer = wt::FilterSpectrumAnalyzer;
     node distortionScopeAnalyzer = wt::DistortionScopeAnalyzer;
@@ -1529,5 +1568,6 @@ graph WavetableSynth [[ main ]]
         sharedEngine.runtimeInstallAckOut -> runtimeInstallAck;
         sharedEngine.bounceBankUploadAckOut -> bounceBankUploadAck;
         sharedEngine.bounceBankRuntimeStateOut -> bounceBankRuntimeState;
+        engineStatusMonitor.engineStatusOut -> engineStatus;
     }
 }
