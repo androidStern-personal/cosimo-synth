@@ -46,6 +46,7 @@ function runAndRead(command, args) {
 
 async function buildRendererAwarePatchModule() {
     const generatedClassPath = path.join(outputDirectory, "cmaj_WavetableSynth.class.js");
+    const offlineClassPath = path.join(outputDirectory, "cmaj_Cosimo_Synth.offline.js");
     run("node", [
         "scripts/generate_cmajor_javascript_with_renderer.mjs",
         "WavetableSynth.cmajorpatch",
@@ -70,7 +71,15 @@ async function buildRendererAwarePatchModule() {
         + `}\n\n`
         + generatedClass;
 
-    await fs.writeFile(path.join(outputDirectory, "cmaj_Cosimo_Synth.js"), patchModule);
+    const offlineModule = `// Generated class-only Cosimo performer for offline Bounce workers.\n`
+        + `// It deliberately has no AudioWorklet helper import.\n\n`
+        + generatedClass
+        + `\nexport { WavetableSynth };\nexport default WavetableSynth;\n`;
+
+    await Promise.all([
+        fs.writeFile(path.join(outputDirectory, "cmaj_Cosimo_Synth.js"), patchModule),
+        fs.writeFile(offlineClassPath, offlineModule),
+    ]);
     await fs.rm(generatedClassPath);
 }
 
@@ -100,6 +109,7 @@ async function buildWebProof() {
 
     run("npm", ["run", "ui:desktop:build"]);
     run("npm", ["run", "ui:worker:build"]);
+    run("npm", ["run", "ui:bounce-worker:build"]);
     run("npm", ["run", "ui:worker:test:build"]);
     await fs.mkdir(path.join(outputDirectory, "patch_gui", "desktop"), { recursive: true });
     await Promise.all([
@@ -110,6 +120,10 @@ async function buildWebProof() {
         fs.copyFile(
             path.join(repoRoot, "patch_gui", "wavetable-worker.js"),
             path.join(outputDirectory, "patch_gui", "wavetable-worker.js"),
+        ),
+        fs.copyFile(
+            path.join(repoRoot, "patch_gui", "bounce-render-worker.js"),
+            path.join(outputDirectory, "patch_gui", "bounce-render-worker.js"),
         ),
         copyCmajorWebRuntime(),
         buildRendererAwarePatchModule(),
