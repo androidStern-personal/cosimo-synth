@@ -230,6 +230,21 @@ std::filesystem::path uniqueStagingPath (const std::filesystem::path& root,
                    + std::to_string (sequence.fetch_add (1)) + ".tmp");
 }
 
+std::vector<std::string> listDigestsUnlocked (const std::filesystem::path& root)
+{
+    std::vector<std::string> digests;
+    for (const auto& entry : std::filesystem::directory_iterator (root))
+    {
+        if (! entry.is_regular_file())
+            continue;
+        if (auto digest = digestFromFilename (entry.path().filename().string());
+            ! digest.empty())
+            digests.push_back (std::move (digest));
+    }
+    std::sort (digests.begin(), digests.end());
+    return digests;
+}
+
 struct RemoveOnExit
 {
     std::filesystem::path path;
@@ -239,6 +254,43 @@ struct RemoveOnExit
         if (! path.empty())
             std::filesystem::remove (path, ignored);
     }
+};
+
+class ScopedStoreLock final
+{
+public:
+    ScopedStoreLock (const std::filesystem::path& root, int operation)
+    {
+        descriptor = ::open ((root / ".gc.lock").c_str(),
+                             O_CREAT | O_RDWR,
+                             S_IRUSR | S_IWUSR);
+        if (descriptor < 0)
+            throw std::system_error (errno, std::generic_category(),
+                                     "Could not open the native Bounce store lock");
+        if (::flock (descriptor, operation) != 0)
+        {
+            const auto savedError = errno;
+            ::close (descriptor);
+            descriptor = -1;
+            throw std::system_error (savedError, std::generic_category(),
+                                     "Could not acquire the native Bounce store lock");
+        }
+    }
+
+    ~ScopedStoreLock()
+    {
+        if (descriptor >= 0)
+        {
+            ::flock (descriptor, LOCK_UN);
+            ::close (descriptor);
+        }
+    }
+
+    ScopedStoreLock (const ScopedStoreLock&) = delete;
+    ScopedStoreLock& operator= (const ScopedStoreLock&) = delete;
+
+private:
+    int descriptor = -1;
 };
 
 } // namespace
@@ -431,10 +483,18 @@ BounceBankStore::ExclusiveLock& BounceBankStore::ExclusiveLock::operator= (
     return *this;
 }
 
-BounceBankStore::BounceBankStore (std::filesystem::path rootDirectoryToUse)
+BounceBankStore::BounceBankStore (std::filesystem::path rootDirectoryToUse,
+                                  FilePreparation filePreparationToUse)
+    : filePreparation (std::move (filePreparationToUse))
 {
     require (! rootDirectoryToUse.empty(), "Native Bounce store root is empty");
     rootDirectory = std::filesystem::absolute (std::move (rootDirectoryToUse)).lexically_normal();
+}
+
+void BounceBankStore::prepareFile (const std::filesystem::path& path) const
+{
+    if (filePreparation)
+        filePreparation (path);
 }
 
 void BounceBankStore::initialise()
@@ -442,6 +502,10 @@ void BounceBankStore::initialise()
     std::filesystem::create_directories (rootDirectory);
     require (std::filesystem::is_directory (rootDirectory),
              "Native Bounce store root is not a directory");
+    // Cleanup holds the same exclusive lock as retirement. Publishers and
+    // readers take shared locks, so a newly started instance cannot unlink
+    // another process's active stage or an open verification candidate.
+    const ScopedStoreLock storeLock (rootDirectory, LOCK_EX);
     for (const auto& entry : std::filesystem::directory_iterator (rootDirectory))
     {
         const auto name = entry.path().filename().string();
@@ -473,9 +537,12 @@ PublishResult BounceBankStore::publish (const std::string& digest,
     require (digestBounceBankFile (source) == digest,
              "Native Bounce source bank SHA-256 mismatch");
     std::filesystem::create_directories (rootDirectory);
+    const ScopedStoreLock storeLock (rootDirectory, LOCK_SH);
     const auto destination = bankPath (digest);
     if (std::filesystem::exists (destination))
     {
+        verifyPublished (digest, destination);
+        prepareFile (destination);
         verifyPublished (digest, destination);
         return { destination, validateBounceBankFile (destination), true };
     }
@@ -484,12 +551,19 @@ PublishResult BounceBankStore::publish (const std::string& digest,
     RemoveOnExit cleanup { staging };
     copyFileStrict (source, staging);
     verifyPublished (digest, staging);
+    // iOS applies backup exclusion and first-unlock data protection here.
+    // The no-replace hard link below publishes the same inode and attributes.
+    prepareFile (staging);
+    flushFile (staging);
+    verifyPublished (digest, staging);
 
     if (::link (staging.c_str(), destination.c_str()) != 0)
     {
         if (errno != EEXIST)
             throw std::system_error (errno, std::generic_category(),
                                      "Could not atomically publish Bounce bank");
+        verifyPublished (digest, destination);
+        prepareFile (destination);
         verifyPublished (digest, destination);
         return { destination, validateBounceBankFile (destination), true };
     }
@@ -504,6 +578,9 @@ std::optional<std::vector<std::uint8_t>> BounceBankStore::readVerified (
     const std::string& digest,
     std::optional<std::uint64_t> expectedByteLength) const
 {
+    if (! std::filesystem::is_directory (rootDirectory))
+        return std::nullopt;
+    const ScopedStoreLock storeLock (rootDirectory, LOCK_SH);
     const auto path = bankPath (digest);
     if (! std::filesystem::exists (path))
         return std::nullopt;
@@ -518,24 +595,19 @@ std::optional<std::vector<std::uint8_t>> BounceBankStore::readVerified (
 
 std::vector<std::string> BounceBankStore::listDigests() const
 {
-    std::vector<std::string> digests;
     if (! std::filesystem::is_directory (rootDirectory))
-        return digests;
-    for (const auto& entry : std::filesystem::directory_iterator (rootDirectory))
-    {
-        if (! entry.is_regular_file())
-            continue;
-        if (auto digest = digestFromFilename (entry.path().filename().string()); ! digest.empty())
-            digests.push_back (std::move (digest));
-    }
-    std::sort (digests.begin(), digests.end());
-    return digests;
+        return {};
+    const ScopedStoreLock storeLock (rootDirectory, LOCK_SH);
+    return listDigestsUnlocked (rootDirectory);
 }
 
 StoreUsage BounceBankStore::usage() const
 {
+    if (! std::filesystem::is_directory (rootDirectory))
+        return {};
+    const ScopedStoreLock storeLock (rootDirectory, LOCK_SH);
     StoreUsage result;
-    for (const auto& digest : listDigests())
+    for (const auto& digest : listDigestsUnlocked (rootDirectory))
     {
         ++result.bankCount;
         result.byteLength += std::filesystem::file_size (bankPath (digest));

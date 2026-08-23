@@ -12,6 +12,7 @@
 #include <unistd.h>
 
 #include "../../native/bounce/BounceNativeBankStore.h"
+#include "../../native/bounce/BounceNativePlatform.h"
 
 namespace
 {
@@ -160,8 +161,49 @@ void testBuilderStoreAndEnvelope()
             "interprocess GC lock admitted a second writer");
     expect (store.remove (digest, *lock),
             "locked retirement did not remove the explicit bank");
+    lock.reset();
     expect (store.listDigests().empty() && ! store.readVerified (digest).has_value(),
             "retired bank remained reachable in the store");
+}
+
+void testPlatformPathsAndFilePreparation()
+{
+    expect (desktopBounceBankStoreRoot ("/Users/test/Library/Application Support")
+                == std::filesystem::path (
+                    "/Users/test/Library/Application Support/CosimoSynth/BounceBanks/v1"),
+            "desktop store escaped Application Support");
+    expect (iosBounceBankStoreRoot ("/private/app-group")
+                == std::filesystem::path (
+                    "/private/app-group/Library/Application Support/CosimoSynth/BounceBanks/v1"),
+            "iOS store escaped the App Group container");
+
+    TestDirectory temporary;
+    const auto source = createBank (temporary.path);
+    const auto digest = digestBounceBankFile (source);
+    std::vector<std::filesystem::path> prepared;
+    bool publicationHeldSharedLock = false;
+    BounceBankStore competingView (temporary.path / "protected-store");
+    BounceBankStore store (temporary.path / "protected-store",
+                           [&prepared, &publicationHeldSharedLock, &competingView]
+                           (const auto& path)
+                           {
+                               expect (std::filesystem::is_regular_file (path),
+                                       "file preparation ran before the staged bank existed");
+                               publicationHeldSharedLock =
+                                   ! competingView.tryAcquireExclusiveLock().has_value();
+                               prepared.push_back (path);
+                           });
+    store.initialise();
+    const auto first = store.publish (digest, source);
+    expect (prepared.size() == 1
+                && prepared.front().filename().string().rfind (".staging-", 0) == 0,
+            "new publish did not prepare the staging inode before publication");
+    expect (publicationHeldSharedLock,
+            "publication did not fence garbage collection with a shared lock");
+    const auto second = store.publish (digest, source);
+    expect (second.alreadyExisted && prepared.size() == 2
+                && prepared.back() == first.path,
+            "idempotent publish did not reassert platform file policy");
 }
 
 void testEmptyStoreRootIsRejected()
@@ -229,6 +271,7 @@ int main()
     {
         testSha256();
         testBuilderStoreAndEnvelope();
+        testPlatformPathsAndFilePreparation();
         testEmptyStoreRootIsRejected();
         testCorruptAndMismatchedBanksStayVisible();
         std::cout << "PASS native Bounce bank streaming, SHA-256, atomic store, lock, and binary envelope\n";
