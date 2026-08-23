@@ -551,3 +551,71 @@ Validation: the three-root `test:bounce:native:quickjs` passes; focused iOS
 source/build checks pass. Signed Xcode compilation, iPhone memory/jetsam,
 AUv3 lifecycle, and Ableton chunk behavior are intentionally unclaimed and
 remain recorded as human-only gates rather than inferred successes.
+
+## 2026-08-23 — End-of-run summary
+
+Bounce in Place is complete through M0–M8 on the Linux-verifiable path. The
+browser product now performs the full atomic workflow: snapshot, deterministic
+background capture, content-addressed persistence, verified live install,
+sampled playback, neutral post-bounce processing, reload/preset restore,
+single-level Revert, recursive Bounce, bounded retirement, and desktop/phone
+UI. The runtime amplitude release, staged sampler, source-mode transition,
+waveform, inactive-control treatment, native bounded driver, native store,
+desktop JIT factory, and iOS generated/AOT factory are all committed. The
+branch contains the required setup, persistence, feasibility, and human
+validation documents.
+
+Fresh final Linux gates:
+
+- Production `web:build` and `ios:ui:build` passed. The focused Bounce matrix
+  passed 42/42 tests, including waveform, bank format, release, sampler,
+  capture planning, offline capture, recursion, transitions, live install,
+  persistence, and retention. The Chromium Bounce UI matrix passed 3/3.
+- M3 remained deterministic. Pluck, pad/reverb+delay, and nonlinear OTT
+  digests were respectively `01354c...`, `0fd222...`, and `3f9edf...`; all
+  root comparisons had 0.000 dB mean and maximum error. Their three measured
+  offline-rate runs were 4.093/4.251/4.228x, 3.529/3.527/3.485x, and
+  3.321/3.257/3.222x realtime. The default bounce remains far below the
+  five-minute G1 pivot threshold even on this small VM.
+- M7 generation 1 and recursive generation 2 shared deterministic digest
+  `21f41d...` and matched at 0.000 dB mean/maximum error. The worker stayed at
+  2,134 Wasm pages. Generation-1 rates were 2.170/2.305/2.410x realtime and
+  generation-2 rates were 3.976/3.721/3.791x realtime.
+- G2 paired browser windows measured 0.5456543 oscillator load with 22
+  deadline misses, 0.4526367 sampled load with 1 miss, and 0.4995117
+  oscillator load with the bank resident and 7 misses. Resident-bank load was
+  about 8.46% below baseline, inside the <=10% regression gate, with no new
+  miss regression. These headless absolute loads/misses are advisory; the
+  enforced result is the paired relative comparison and continuity.
+- G4's maximum illegitimate transition step was 0.00692749 FS against the
+  0.01 ceiling. G5 completed ten Bounce/Revert cycles at 2,134 Wasm pages,
+  exactly two reachable OPFS banks totaling 76,896 bytes, and a flat quantized
+  JS heap.
+- G6 and surrounding regressions passed: 693/693 Node unit/orphan tests,
+  34/34 modulation-routing tests, 17/17 web-bundle contracts, 27/27 layout
+  tests, 65/65 Cmajor rack tests, and the full browser POC at 13 passed,
+  5 expected Linux hardware/realtime skips, and 0 failed. Native renderer and
+  iOS source/build contracts passed 70 tests with 16 expected Xcode-only
+  skips.
+- The native aggregate passed the sequential/cancellation/capacity driver,
+  streaming SHA-256/atomic/locked store, and production generated-C++ sampler.
+  The generated performer remains 135,615,616 bytes; sampled output measured
+  RMS 0.158111, peak 0.25, and early-release RMS 0.134863. The real QuickJS
+  adapter rendered three fresh recursive production-patch roots in bounded
+  128-frame pumps: 10,512 captured frames, peaks 0.250011/0.25/0.25, and
+  6.4264/6.5829/6.50282x realtime. Cold init was
+  10.4403/8.22673/8.08571 seconds and total wall time 27.1259 seconds on this
+  VM; these absolute timings are recorded for paired Mac/iPhone comparison,
+  not used as rejection criteria.
+
+No MVP milestone or required gate was descoped, and there is no hard blocker,
+so no `BLOCKED.md` is warranted. The optional looped-sustain/separate-release
+stretch goal was not implemented; the locked one-shot-with-real-release MVP
+is shipped. Linux cannot claim signed Xcode compilation, installed VST3/AU
+behavior, Ableton portable-chunk behavior, iPhone transient memory/jetsam, or
+AUv3 lifecycle/session/sample-rate behavior. M8 is therefore code-ready as
+specified, while those Apple/DAW observations remain explicitly human-only.
+
+Single next human action: execute `HUMAN_VALIDATION.md` end to end on a Mac
+and physical iPhone, beginning with the documented macOS build and three-run
+JIT timing table, and commit the filled evidence tables to this branch.
