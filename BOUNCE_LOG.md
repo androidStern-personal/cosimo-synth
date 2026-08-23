@@ -431,3 +431,24 @@ retains the pinned M1/M2 render hash exactly.
 Validation: `npm run test:bounce:native:generated` passes on Linux with the
 production patch, the real external renderer, 128-frame slices, the staged
 bank protocol, sampled playback, and early release.
+
+## 2026-08-23 — M8 checkpoint: bounded native capture driver
+
+- Added a platform-neutral C++ capture driver shaped after the existing
+  `ModulationRestoreProbe`: the host owns one background job, each root gets a
+  fresh offline performer and deterministic DSP session, and every pump is
+  bounded to at most 128 frames. Cancellation is checked at block boundaries
+  and monotonically increasing job IDs fence lifecycle callbacks.
+- The driver matches the browser's −80 dBFS window scan, tail padding, and
+  JavaScript-compatible i16 rounding. It rejects silent roots and aggregate
+  PCM above the fixed 5,472,000-frame bank capacity.
+- A root sink receives and may flush each completed i16 root before the next
+  performer is created. This is the iOS memory seam: no driver-owned full f32
+  bank coexists with a later root, and the platform adapter can append each
+  root to a staging file immediately. All capture allocation and callbacks
+  stay on the background thread, never `processBlock`.
+
+Validation: `npm run test:bounce:native:driver` passes fresh-session/root
+ordering, the 128-frame bound, deterministic segmentation/PCM shape,
+performer-memory metrics, block-boundary cancellation, capacity rejection,
+two successive background job fences, and completion cleanup.
