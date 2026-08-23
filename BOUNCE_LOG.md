@@ -452,3 +452,39 @@ Validation: `npm run test:bounce:native:driver` passes fresh-session/root
 ordering, the 128-frame bound, deterministic segmentation/PCM shape,
 performer-memory metrics, block-boundary cancellation, capacity rejection,
 two successive background job fences, and completion cleanup.
+
+## 2026-08-23 — M8 checkpoint: native Cmajor adapter and content store
+
+- Added the real `cmaj::Patch` offline adapter shared by desktop and iOS.
+  Desktop creates a second JIT patch with QuickJS and the canonical external
+  renderer while disabling file watching; iOS has a generated/AOT factory
+  over the same bounded driver. Snapshot parameters, stored state, setup
+  events, root-scoped events, tempo, and live sample rate are applied before
+  note-on. Recursive banks wait for DSP acknowledgement before capture.
+- The adapter reads the session identifier owned by each newly created Cmajor
+  DSP before stamping any scoped bank delivery. A probe initially demonstrated
+  that a planner-side session was correctly rejected as stale; the final path
+  now accepts only the current runtime session, so an old AUv3 lifecycle cannot
+  commit setup work into a fresh performer.
+- Added a streaming native bank builder and content-addressed store. Each root
+  is quantized by the background driver and flushed as i16 PCM; finalization
+  prepends only the bounded metadata table. Publication validates canonical
+  `CSBNK001` structure and SHA-256 before and after a same-directory staging
+  copy, fsyncs it, and uses an atomic no-replace hard link. Existing winners
+  are success only after full verification. Startup removes abandoned staging
+  files, and retirement requires this store's interprocess `flock`.
+- Added the native-only `COSIMOB1` binary DAW envelope: fixed versioned header,
+  raw 32-byte digest, u64 byte length, and exact bank bytes. Tests prove exact
+  round-trip and reject corrupt embedded PCM; no JSON PCM or base64 is used.
+
+The production-patch QuickJS probe rendered a recursive root to 3,760 frames
+with peak 0.25 at 6.61x realtime. Cold patch initialization took 10.12 seconds
+on this small Linux VM. Those wall-clock figures are informational rather than
+a Mac/iOS rejection signal; bounded blocks, current-session fencing, fixed
+performer size, and on-device transient memory are the hard native gates.
+
+Validation: `npm run test:bounce:native:driver`,
+`test:bounce:native:store`, `test:bounce:native:generated`, and
+`test:bounce:native:quickjs` all pass. The last test drives the production
+manifest, real renderer, QuickJS worker, recursive bank upload, note capture,
+silence truncation, and i16 result through the actual Cmajor runtime.
