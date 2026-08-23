@@ -74,6 +74,17 @@ def test_renderer_wasm_uses_only_the_supplied_shared_memory(tmp_path: Path) -> N
     assert inspection.stdout.strip() == "PASS renderer Wasm shares memory without overlap"
 
 
+def test_renderer_wasm_build_supports_homebrew_and_debian_wasi_layouts() -> None:
+    build_script = (REPO_ROOT / "scripts/build_three_oscillator_renderer_wasm.sh").read_text()
+
+    assert "include/wasm32-wasip1/c++/v1" in build_script
+    assert "include/wasm32-wasi/c++/v1" in build_script
+    assert 'wasi_target="wasm32-wasi"' in build_script
+    assert "crt1-reactor.o" in build_script
+    assert "--no-stack-first" in build_script
+    assert '"$llvm_root/bin/wasm-ld" --help' in build_script
+
+
 def test_two_wasm_modules_render_b_only_through_the_direct_import(tmp_path: Path) -> None:
     output = tmp_path / "ThreeOscillatorExternalSmokeWithRenderer.js"
     subprocess.run(

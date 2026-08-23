@@ -38,13 +38,23 @@ const webRoot = process.env.COSIMO_WEB_ROOT
 let browser;
 let server;
 let baseUrl;
-const chromiumLaunchOptions = {
-    channel: "chrome",
-    // Chromium's headless/null audio sink runs AudioWorklet callbacks ahead of
-    // wall clock. Performance qualification needs the real CoreAudio output.
-    headless: false,
-    ignoreDefaultArgs: ["--mute-audio"],
-};
+const isLinuxHeadless = process.platform === "linux";
+const qualifiesRealtimeAudio = !isLinuxHeadless || process.env.COSIMO_WEB_REALTIME_AUDIO === "1";
+const chromiumLaunchOptions = isLinuxHeadless
+    ? {
+        // Codespaces have neither a display server nor a system Chrome. The
+        // Playwright-pinned browser is the reproducible Linux integration
+        // target; relative (not absolute) worklet metrics remain meaningful.
+        headless: true,
+        ignoreDefaultArgs: ["--mute-audio"],
+      }
+    : {
+        channel: "chrome",
+        // Chromium's headless/null audio sink runs AudioWorklet callbacks ahead of
+        // wall clock. Performance qualification needs the real CoreAudio output.
+        headless: false,
+        ignoreDefaultArgs: ["--mute-audio"],
+      };
 
 const stressSources = [
     ["mseg", 1], ["mseg", 2], ["mseg", 3],
@@ -1591,6 +1601,9 @@ test("mobile workspace removes worklet listeners when a section closes", async (
 });
 
 test("mobile product stays realtime with four-way unison and one MSEG filter route after workspace history", {
+    skip: qualifiesRealtimeAudio
+        ? false
+        : "Linux headless has no realtime audio output; set COSIMO_WEB_REALTIME_AUDIO=1 when one is available.",
     timeout: 90_000,
 }, async (t) => {
     const page = await browser.newPage({ ...devices["iPhone 13"] });
@@ -1721,6 +1734,9 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
 });
 
 test("lane slot-param edits stream at drag rate with serial acknowledgment and no deadline misses", {
+    skip: qualifiesRealtimeAudio
+        ? false
+        : "Linux headless has no realtime audio output; set COSIMO_WEB_REALTIME_AUDIO=1 when one is available.",
     timeout: 120_000,
 }, async () => {
     // The Effects Lane HOT PATH: live per-slot parameter records are small
@@ -1826,6 +1842,9 @@ test("lane slot-param edits stream at drag rate with serial acknowledgment and n
 });
 
 test("16 sounding voices sustain 100 mappings, isolated live edits, and the full 1131-cell domain", {
+    skip: qualifiesRealtimeAudio
+        ? false
+        : "Linux headless has no realtime audio output; set COSIMO_WEB_REALTIME_AUDIO=1 when one is available.",
     timeout: 240_000,
 }, async (t) => {
     const page = await browser.newPage({ ...devices["iPhone 13"] });
