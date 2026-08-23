@@ -215,6 +215,87 @@ test("wrap respects the wire-length cap", async () => {
     assert.equal(laneV2.compileLaneTopologyUpload(doc).chainLength, 16);
 });
 
+test("addLaneDevice allocates instances, defaults params, and lands on the path", async () => {
+    const laneV2 = await laneV2Promise;
+    const doc = await makeSerialDoc();
+
+    // A second delay lands at the end of the trunk with instance #2 and the
+    // type's descriptor defaults, enabled from birth.
+    const added = laneV2.addLaneDevice(doc, "delay", { kind: "trunk", index: 3 });
+    assert.equal(added.chain[3].deviceId, "delay#2");
+    assert.equal(added.chain[3].enabled, true);
+    assert.equal(added.devices["delay#2"].params.delayTime, 375);
+    assert.equal(laneV2.parseLaneStateV2(JSON.parse(laneV2.serializeLaneStateV2(added)))._tag, "ok");
+
+    // Into a band: the new device claims the ghost's insertion point.
+    const wrapped = laneV2.wrapLaneDeviceInGroup(doc, "reverb#1", "split");
+    const banded = laneV2.addLaneDevice(wrapped, "ott", {
+        kind: "branch", groupId: "split#1", branchIndex: 1, index: 0,
+    });
+    assert.deepEqual(
+        banded.chain[1].branches.map((branch) => branch.map((p) => p.deviceId)),
+        [["reverb#1"], ["ott#1"]],
+    );
+
+    // Allocation reuses the smallest free number.
+    const third = laneV2.addLaneDevice(added, "delay", { kind: "trunk", index: 0 });
+    assert.equal(third.chain[0].deviceId, "delay#3");
+    const afterRemove = laneV2.removeLaneDevice(third, "delay#2");
+    const refilled = laneV2.addLaneDevice(afterRemove, "delay", { kind: "trunk", index: 0 });
+    assert.equal(refilled.chain[0].deviceId, "delay#2");
+
+    // The pool caps at five instances per type.
+    let stacked = doc;
+    for (let count = 0; count < 4; count += 1) {
+        stacked = laneV2.addLaneDevice(stacked, "flanger", { kind: "trunk", index: 0 });
+        assert.notEqual(stacked, null);
+    }
+    stacked = laneV2.addLaneDevice(stacked, "flanger", { kind: "trunk", index: 0 });
+    assert.notEqual(stacked, null);
+    assert.equal(laneV2.addLaneDevice(stacked, "flanger", { kind: "trunk", index: 0 }), null);
+
+    // And the wire stays inside one topology upload.
+    let full = laneV2.createDefaultLaneStateV2();
+    for (const deviceType of ["delay", "delay", "delay", "delay", "reverb", "reverb", "reverb", "reverb"]) {
+        full = laneV2.addLaneDevice(full, deviceType, { kind: "trunk", index: 0 });
+        assert.notEqual(full, null, deviceType);
+    }
+    assert.equal(laneV2.compileLaneTopologyUpload(full).chainLength, 16);
+    assert.equal(laneV2.addLaneDevice(full, "chorus", { kind: "trunk", index: 0 }), null);
+
+    // A bad target rejects.
+    assert.equal(laneV2.addLaneDevice(doc, "delay", {
+        kind: "branch", groupId: "split#9", branchIndex: 0, index: 0,
+    }), null);
+});
+
+test("removeLaneDevice drops the placement and the record, wherever it sits", async () => {
+    const laneV2 = await laneV2Promise;
+    const doc = await makeSerialDoc();
+
+    const removed = laneV2.removeLaneDevice(doc, "reverb#1");
+    assert.deepEqual(removed.chain.map((node) => node.deviceId), ["delay#1", "chorus#1"]);
+    assert.equal(removed.devices["reverb#1"], undefined);
+    assert.equal(laneV2.parseLaneStateV2(JSON.parse(laneV2.serializeLaneStateV2(removed)))._tag, "ok");
+
+    // From inside a branch too; the group survives with an empty band.
+    const wrapped = laneV2.wrapLaneDeviceInGroup(doc, "reverb#1", "split");
+    const removedFromBand = laneV2.removeLaneDevice(wrapped, "reverb#1");
+    assert.deepEqual(removedFromBand.chain[1].branches.map((branch) => branch.length), [0, 0]);
+    assert.equal(removedFromBand.devices["reverb#1"], undefined);
+
+    // Removing everything leaves the legal empty chain (the dry instrument).
+    let empty = doc;
+    for (const deviceId of ["delay#1", "reverb#1", "chorus#1"]) {
+        empty = laneV2.removeLaneDevice(empty, deviceId);
+    }
+    assert.deepEqual(empty.chain, []);
+    assert.equal(laneV2.parseLaneStateV2(JSON.parse(laneV2.serializeLaneStateV2(empty)))._tag, "ok");
+    assert.equal(laneV2.compileLaneTopologyUpload(empty).chainLength, 0);
+
+    assert.equal(laneV2.removeLaneDevice(doc, "ott#1"), null);
+});
+
 test("the chain walk lists device ids in dispatch order for host surfaces", async () => {
     const laneV2 = await laneV2Promise;
     const doc = await makeSerialDoc();

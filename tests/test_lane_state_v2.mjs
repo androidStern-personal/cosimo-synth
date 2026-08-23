@@ -263,12 +263,10 @@ test("instances list in identity order and hold their slot ordinals by number", 
         ],
     );
 
-    // instance #n sits at ordinal n-1, statically — the modulation compiler's
-    // LaneSlotAssignments is total over the document.
-    const assignments = laneV2.buildLaneSlotAssignments(parsed.value);
-    assert.equal(assignments.get("delay#1"), 0);
-    assert.equal(assignments.get("delay#2"), 1);
-    assert.equal(assignments.get("reverb#1"), 0);
+    // Instance #n sits at ordinal n-1, statically — resolution needs no
+    // document (pinned in test_modulation_lane_targets).
+    assert.deepEqual(laneV2.parseLaneInstanceId("delay#2"),
+                     { deviceType: "delay", instanceNumber: 2 });
 });
 
 test("the compiled wire matches lane.v1 exactly for an upgraded serial document", async () => {
