@@ -2851,9 +2851,12 @@ test("rack no-op release adopts authoritative stored order received during the g
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
+        // The release was a no-op: nothing was written, so storage still
+        // holds the seeded v1 document verbatim (it upgrades to lane.v2 on
+        // the next real edit).
         const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
-        assert.equal(storedRack.chain[0].deviceId, "reverb#1");
-        assert.equal(storedRack.chain.find((node) => node.deviceId === "chorus#1").enabled, true);
+        assert.equal(storedRack.order[0], "reverb");
+        assert.equal(storedRack.enabled.chorus, true);
     } finally {
         await page.close();
     }
