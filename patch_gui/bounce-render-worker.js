@@ -2,9 +2,9 @@ function R(e) {
   const n = Number.isFinite(e) ? e : 0, r = Math.max(-1, Math.min(1, n));
   return Math.max(-32768, Math.min(32767, Math.round(r * 32768)));
 }
-const D = "cosimo.bounce-capture-snapshot", M = 1, S = "cosimo.bounce-capture-plan", v = 1, B = Object.freeze(
+const D = "cosimo.bounce-capture-snapshot", y = 1, M = "cosimo.bounce-capture-plan", S = 1, B = Object.freeze(
   Array.from({ length: 19 }, (e, n) => 24 + n * 4)
-), N = 100, U = 3, g = 6, j = -80, z = 10 ** (j / 20), L = 0.05, T = 0.1, $ = 128;
+), O = 100, L = 3, N = 6, U = -80, j = 10 ** (U / 20), z = 0.05, T = 0.1, v = 128;
 function i(e, n) {
   if (!e) throw new Error(n);
 }
@@ -13,7 +13,7 @@ function w(e) {
   const n = Object.getPrototypeOf(e);
   return n === Object.prototype || n === null;
 }
-function O(e, n = "value", r = /* @__PURE__ */ new WeakMap()) {
+function g(e, n = "value", r = /* @__PURE__ */ new WeakMap()) {
   if (e === null || typeof e == "boolean" || typeof e == "string") return e;
   if (typeof e == "number")
     return i(Number.isFinite(e), `${n} must be finite`), e;
@@ -30,14 +30,14 @@ function O(e, n = "value", r = /* @__PURE__ */ new WeakMap()) {
     const o = e.slice(0);
     return r.set(e, o), o;
   }
-  return Array.isArray(e) ? e.map((t, o) => O(t, `${n}[${o}]`, r)) : (i(w(e), `${n} must be structured-clone data`), Object.fromEntries(
+  return Array.isArray(e) ? e.map((t, o) => g(t, `${n}[${o}]`, r)) : (i(w(e), `${n} must be structured-clone data`), Object.fromEntries(
     Object.keys(e).sort().map((t) => [
       t,
-      O(e[t], `${n}.${t}`, r)
+      g(e[t], `${n}.${t}`, r)
     ])
   ));
 }
-function y(e, n) {
+function $(e, n) {
   return i(
     typeof e == "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(e),
     `${n} must be a Cmajor endpoint ID`
@@ -45,8 +45,8 @@ function y(e, n) {
 }
 function P(e) {
   const r = (Array.isArray(e) ? e.map((t) => [t?.endpointID, t?.value]) : Object.entries(e ?? {})).map(([t, o], s) => ({
-    endpointID: y(t, `parameters[${s}].endpointID`),
-    value: O(o, `parameters.${t}`)
+    endpointID: $(t, `parameters[${s}].endpointID`),
+    value: g(o, `parameters.${t}`)
   }));
   r.sort((t, o) => t.endpointID.localeCompare(o.endpointID));
   for (let t = 1; t < r.length; t += 1)
@@ -72,8 +72,8 @@ function _(e, {
       `${n}[${s}].sessionScoped must be boolean`
     );
     const u = {
-      endpointID: y(o?.endpointID, `${n}[${s}].endpointID`),
-      value: O(o?.value, `${n}[${s}].value`, t),
+      endpointID: $(o?.endpointID, `${n}[${s}].endpointID`),
+      value: g(o?.value, `${n}[${s}].value`, t),
       advanceFrames: a,
       sessionScoped: c
     };
@@ -92,7 +92,7 @@ function x({
   parameters: r = {},
   setupEvents: t = [],
   rootSetupEvents: o = [],
-  settleFrames: s = $,
+  settleFrames: s = v,
   sourceGeneration: a = 0,
   sourceBankDigest: c = null
 } = {}) {
@@ -113,7 +113,7 @@ function x({
     "Capture sourceBankDigest must be null or a string"
   ), Object.freeze({
     format: D,
-    version: M,
+    version: y,
     sampleRate: e,
     tempoBpm: n,
     parameters: Object.freeze(P(r).map(Object.freeze)),
@@ -131,7 +131,7 @@ function x({
 }
 function k(e) {
   return i(
-    e?.format === D && e?.version === M,
+    e?.format === D && e?.version === y,
     "Unsupported Bounce capture snapshot"
   ), x(e);
 }
@@ -148,47 +148,47 @@ function W(e) {
 }
 function V(e, {
   roots: n = B,
-  holdSeconds: r = U,
-  tailCapSeconds: t = g,
-  captureVelocity: o = N,
-  blockFrames: s = $
+  holdSeconds: r = L,
+  tailCapSeconds: t = N,
+  captureVelocity: o = O,
+  blockFrames: s = v
 } = {}) {
   const a = k(e), c = W(n);
   i(
     typeof r == "number" && Number.isFinite(r) && r > 0,
     "Capture holdSeconds must be positive and finite"
   ), i(
-    typeof t == "number" && Number.isFinite(t) && t > 0 && t <= g,
-    `Capture tailCapSeconds must be in (0, ${g}]`
+    typeof t == "number" && Number.isFinite(t) && t > 0 && t <= N,
+    `Capture tailCapSeconds must be in (0, ${N}]`
   ), i(
-    Number.isInteger(o) && o === N,
-    `Bounce V1 captures at velocity ${N}`
+    Number.isInteger(o) && o === O,
+    `Bounce V1 captures at velocity ${O}`
   ), i(
     Number.isInteger(s) && s >= 1 && s <= 128,
     "Offline blockFrames must be from 1 to 128"
   );
-  const u = Math.max(1, Math.round(r * a.sampleRate)), m = Math.max(1, Math.round(t * a.sampleRate)), f = Math.max(
+  const u = Math.max(1, Math.round(r * a.sampleRate)), m = Math.max(1, Math.round(t * a.sampleRate)), p = Math.max(
     1,
-    Math.round(L * a.sampleRate)
+    Math.round(z * a.sampleRate)
   ), h = Math.max(
-    f,
+    p,
     Math.round(T * a.sampleRate)
-  ), b = c.map((p, E) => Object.freeze({
+  ), b = c.map((f, E) => Object.freeze({
     rootIndex: E,
-    rootNote: p,
+    rootNote: f,
     // Stable across identical bounces, while remaining distinct per root.
     sessionID: 4341760 + E
   }));
   return Object.freeze({
-    format: S,
-    version: v,
+    format: M,
+    version: S,
     snapshot: a,
     roots: Object.freeze(c),
     captureVelocity: o,
     holdFrames: u,
     tailCapFrames: m,
-    silenceThresholdLinear: z,
-    silenceWindowFrames: f,
+    silenceThresholdLinear: j,
+    silenceWindowFrames: p,
     tailPaddingFrames: h,
     blockFrames: s,
     jobs: Object.freeze(b)
@@ -196,7 +196,7 @@ function V(e, {
 }
 function q(e) {
   return i(
-    e?.format === S && e?.version === v,
+    e?.format === M && e?.version === S,
     "Unsupported Bounce capture plan"
   ), V(e.snapshot, {
     roots: e.roots,
@@ -230,8 +230,8 @@ function A(e, n, r, t, o) {
     const u = Math.min(o, t - c);
     e.advance(u), e.getOutputFrames_audioOut([s, a], u, 0);
     for (let m = 0; m < u; m += 1) {
-      const f = (r + c + m) * 2;
-      n[f] = s[m], n[f + 1] = a[m];
+      const p = (r + c + m) * 2;
+      n[p] = s[m], n[p + 1] = a[m];
     }
     c += u;
   }
@@ -264,7 +264,11 @@ function K(e, n = e.length / 2) {
     r = Math.max(r, Math.abs(e[t]));
   return r;
 }
-async function Y(e, n, r) {
+function Y(e) {
+  const n = e?.memoryDataView?.buffer?.byteLength ?? e?.byteMemory?.byteLength ?? null;
+  return Number.isInteger(n) && n > 0 ? n / 65536 : null;
+}
+async function G(e, n, r) {
   d(typeof e == "function", "Offline engine module has no performer class");
   const t = new e();
   d(typeof t.initialise == "function", "Offline performer has no initialise() method"), await t.initialise(r.sessionID, n.snapshot.sampleRate);
@@ -280,20 +284,20 @@ async function Y(e, n, r) {
   }
   return F(t, n.snapshot.settleFrames, n.blockFrames), t;
 }
-async function G(e, n, r) {
-  const t = q(n), o = t.jobs.find((p) => p.rootIndex === r?.rootIndex);
+async function J(e, n, r) {
+  const t = q(n), o = t.jobs.find((f) => f.rootIndex === r?.rootIndex);
   d(
     o !== void 0 && o.rootNote === r?.rootNote,
     "Bounce worker received a job outside its plan"
   );
-  const s = globalThis.performance?.now?.() ?? Date.now(), a = await Y(e, t, o), c = t.holdFrames + t.tailCapFrames, u = new Float32Array(c * 2);
-  for (const p of t.snapshot.rootSetupEvents) {
+  const s = globalThis.performance?.now?.() ?? Date.now(), a = await G(e, t, o), c = t.holdFrames + t.tailCapFrames, u = new Float32Array(c * 2);
+  for (const f of t.snapshot.rootSetupEvents) {
     const E = {
-      ...p.value,
-      [p.rootNoteField]: o.rootNote,
-      ...p.sessionScoped ? { dspSessionId: o.sessionID } : {}
+      ...f.value,
+      [f.rootNoteField]: o.rootNote,
+      ...f.sessionScoped ? { dspSessionId: o.sessionID } : {}
     };
-    l(a, "sendInputEvent", p.endpointID)(E), F(a, p.advanceFrames, t.blockFrames);
+    l(a, "sendInputEvent", f.endpointID)(E), F(a, f.advanceFrames, t.blockFrames);
   }
   l(a, "sendInputEvent", "midiIn")({
     message: C(144, o.rootNote, t.captureVelocity)
@@ -306,14 +310,14 @@ async function G(e, n, r) {
     t.tailCapFrames,
     t.blockFrames
   );
-  const m = Z(u, t.holdFrames, t), f = K(u, m);
+  const m = Z(u, t.holdFrames, t), p = K(u, m);
   d(
-    f >= t.silenceThresholdLinear,
+    p >= t.silenceThresholdLinear,
     `Bounce root ${o.rootNote} captured silence`
   );
   const h = new Int16Array(m * 2);
-  for (let p = 0; p < h.length; p += 1)
-    h[p] = R(u[p]);
+  for (let f = 0; f < h.length; f += 1)
+    h[f] = R(u[f]);
   const b = (globalThis.performance?.now?.() ?? Date.now()) - s;
   return {
     rootIndex: o.rootIndex,
@@ -321,26 +325,30 @@ async function G(e, n, r) {
     noteOffFrameOffset: t.holdFrames,
     frameCount: m,
     tailFrameCount: m - t.holdFrames,
-    peak: f,
+    peak: p,
     samples: h,
     metrics: {
       renderedFrameCount: c,
       elapsedMilliseconds: b,
-      realtimeMultiplier: b > 0 ? c / (b * t.snapshot.sampleRate / 1e3) : null
+      realtimeMultiplier: b > 0 ? c / (b * t.snapshot.sampleRate / 1e3) : null,
+      // Generated Cmajor performers have fixed-size wasm memory. The
+      // page count is reported before the short-lived worker exits so
+      // browser soak tests can prove recursion does not grow an engine.
+      wasmMemoryPages: Y(a)
     }
   };
 }
-async function J(e, n) {
+async function Q(e, n) {
   if (e?.type !== "render-root")
     throw new Error("Bounce worker received an unsupported message");
-  const t = await import(new URL(e.engineModuleURL, n).href), o = t.default ?? t.WavetableSynth, s = await G(o, e.plan, e.job);
+  const t = await import(new URL(e.engineModuleURL, n).href), o = t.default ?? t.WavetableSynth, s = await J(o, e.plan, e.job);
   return {
     type: "render-root-complete",
     requestID: e.requestID,
     result: s
   };
 }
-function Q(e) {
+function X(e) {
   return {
     name: e instanceof Error ? e.name : "Error",
     message: e instanceof Error ? e.message : String(e),
@@ -350,13 +358,13 @@ function Q(e) {
 const I = self;
 I.addEventListener("message", (e) => {
   const n = e.data;
-  J(n, I.location.href).then((r) => {
+  Q(n, I.location.href).then((r) => {
     I.postMessage(r, [r.result.samples.buffer]);
   }).catch((r) => {
     I.postMessage({
       type: "render-root-failed",
       requestID: n?.requestID,
-      error: Q(r)
+      error: X(r)
     }, []);
   });
 });

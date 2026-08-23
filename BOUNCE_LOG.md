@@ -355,3 +355,60 @@ routing tests; 17/17 web-bundle tests; 27/27 patch/layout tests; 65/65 Cmajor
 rack tests; and the full Linux Chromium web POC at 13 passed, 5 expected
 environment skips, 0 failed. Oscillator mode retains the pinned M1/M2 render
 hash exactly.
+
+## 2026-08-23 — M7: recursive Bounce and bounded retirement
+
+- Recursive Bounce now renders from the currently committed sampled bank. The
+  press-time recipe validates the source document and bytes, installs that bank
+  into every fresh offline worker before note-on, keeps the exact existing root
+  set, and never prepares unused oscillator wavetable data. Recursive capture
+  defaults to one concurrent bank copy; tests may explicitly request another
+  bounded value.
+- The fourth word already reserved in each `bounce.v1` root record now stores
+  `noteOffFrameOffset`. Zero remains backward-compatible with pre-M7 banks.
+  Sampled voices use the release baked into PCM at the recorded note-off and
+  only arm a live release gate for an earlier user note-off. This fixed a real
+  recursive A/B tail error caused by applying the same release twice, while
+  preserving bounded fixed-size voice and slot state on the audio thread.
+- Bounce and Revert remain available from the sampled-source presentation on
+  both desktop and compact layouts, with the same dirty-sound guard, progress,
+  cancellation, persistence, staging, verification, and atomic document flip
+  used by the first generation.
+- Added conservative two-slot retirement. The scanner retains the live bank,
+  its direct Revert target, direct references from every recognized user
+  preset, and in-flight patch documents. It deliberately does not walk older
+  history. Unknown preset schemas, external preset stores, invalid in-flight
+  state, incomplete scans, lock contention, and errors all retain data.
+  Deletion requires the browser Web Lock `cosimo-bounce-bank-gc-v1`, a complete
+  scan, an unreachable candidate, and explicit proof that the two-slot DSP
+  commit overwrote that candidate's slot.
+- Test-only bounded telemetry records only generation/digest/root sets, worker
+  Wasm page counts, and retirement results. It is capped at 64 entries and
+  contains no PCM. Offline metrics now expose performer Wasm pages directly.
+
+The deterministic three-root proof captured oscillator generation 1 and then
+sampled generation 2 at roots 48/60/72. Every root matched at 0.000 dB mean
+and 0.000 dB maximum error, comfortably inside the 2/6 dB gates, with a fixed
+2,134 Wasm pages per worker. Sample throughput on this small VM was about
+2.29–2.43× realtime for generation 1 and 3.44–3.71× for generation 2; those
+absolute rates are advisory and are not used as a Mac/iOS rejection signal.
+
+The Chromium lifecycle proof created distinct generations 1→2→3, verified the
+exact Revert chain, and after generation 3 found exactly the generation-2 and
+generation-3 content files in OPFS; generation 1 was safely retired. Ten more
+Bounce/Revert cycles stayed at 2,134 worker Wasm pages and two OPFS banks
+(76,896 bytes) with a stable quantized JS heap. The cycle took about 10 seconds
+on this VM and is informational. Paired G2 windows measured oscillator
+0.53613, sampled 0.43066, and resident-bank oscillator 0.49438 average load,
+with 16, 3, and 6 deadline misses respectively: bank residency remained within
+the ≤10% relative-load gate and introduced no miss regression. Absolute VM
+load and miss counts remain advisory.
+
+Validation: production `web:build` and `ios:ui:build`; 3/3 Chromium Bounce UI
+tests including recursion/retirement; 42/42 combined Bounce bank, release,
+sampler, planner, recursion, transition, install, persistence, and retention
+tests; the full deterministic three-patch capture suite; 693/693 pure Node
+tests; 78/78 routing, web-bundle, and patch/layout tests; 65/65 Cmajor rack
+tests; and the full Linux Chromium web POC at 13 passed, 5 expected environment
+skips, 0 failed. G4 remains 0.00692749 FS (−43.19 dBFS), and oscillator mode
+retains the pinned M1/M2 render hash exactly.

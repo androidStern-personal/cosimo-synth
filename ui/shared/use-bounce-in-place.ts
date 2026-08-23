@@ -7,6 +7,7 @@ import {
 } from "react";
 
 import { decodeBounceBank } from "../../bounce/bank-format.mjs";
+import { retireSupersededBounceBanks } from "../../bounce/bank-retention.mjs";
 import { createBrowserBounceBankStore } from "../../bounce/browser-bank-store.mjs";
 import { captureBounceBank } from "../../bounce/capture.mjs";
 import {
@@ -42,6 +43,7 @@ import {
     createEmptyArticulationsState,
     serializeArticulationsV4,
 } from "./articulation-image";
+import { EFFECT_PRESETS_V2_STATE_KEY } from "./effects/effect-preset-store-v2";
 
 const PRODUCT_STORED_STATE_DEFAULTS = Object.freeze({
     "modulation.v6": serializeModulationState(createDefaultModulationState()),
@@ -68,6 +70,7 @@ export type BounceBankView = {
         readonly note: number;
         readonly frameOffset: number;
         readonly frameCount: number;
+        readonly noteOffFrameOffset: number;
     }>;
     readonly totalFrameCount: number;
     readonly pcm: Int16Array;
@@ -80,11 +83,26 @@ type BounceTestConfig = {
     concurrency?: number;
 };
 
+type BounceTestDiagnostics = {
+    captures: Array<{
+        generation: number;
+        sourceGeneration: number;
+        digest: string;
+        roots: number[];
+        wasmMemoryPages: Array<number | null>;
+    }>;
+    retirements: Array<unknown>;
+};
+
 declare global {
     // Browser acceptance tests may shorten duration/root count while still
     // traversing the real worker/persistence/install transaction.
     // eslint-disable-next-line no-var
     var __COSIMO_BOUNCE_TEST_CONFIG__: BounceTestConfig | undefined;
+    // Test-only bounded telemetry for G5. It contains counters/digests only,
+    // never PCM or a retained performer.
+    // eslint-disable-next-line no-var
+    var __COSIMO_BOUNCE_TEST_DIAGNOSTICS__: BounceTestDiagnostics | undefined;
 }
 
 export type BounceUIState = {
@@ -148,6 +166,8 @@ function matchesBounceDocument(bank: BounceBankView, document: ReturnType<typeof
             root.note === document.roots[index]
             && root.frameOffset === document.segments[index].frameOffset
             && root.frameCount === document.segments[index].frameCount
+            && (root.noteOffFrameOffset === 0
+                || root.noteOffFrameOffset === document.segments[index].noteOffFrameOffset)
         ));
 }
 
@@ -171,6 +191,28 @@ function readTestConfig(): BounceTestConfig {
     return value && typeof value === "object" ? value : {};
 }
 
+function recordTestDiagnostic(
+    kind: keyof BounceTestDiagnostics,
+    value: BounceTestDiagnostics[typeof kind][number],
+) {
+    if (!globalThis.__COSIMO_BOUNCE_TEST_CONFIG__) return;
+    const diagnostics = globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__ ??= {
+        captures: [],
+        retirements: [],
+    };
+    const values = diagnostics[kind] as unknown[];
+    values.push(value);
+    if (values.length > 64) values.splice(0, values.length - 64);
+}
+
+function hasExternalPresetFileStore() {
+    const scope = globalThis as typeof globalThis & {
+        chocUserFiles?: unknown;
+        window?: { chocUserFiles?: unknown };
+    };
+    return Boolean(scope.chocUserFiles ?? scope.window?.chocUserFiles);
+}
+
 /** Browser product controller for snapshot -> workers -> OPFS -> live flip. */
 export function useBounceInPlace() {
     const connection = usePatchConnection();
@@ -180,6 +222,8 @@ export function useBounceInPlace() {
     const preparationAbortRef = useRef<AbortController | null>(null);
     const hydrationRevisionRef = useRef(0);
     const captureStateKeysRef = useRef(new Set<string>());
+    const userPresetStateRef = useRef<unknown>(null);
+    const userPresetStateKnownRef = useRef(false);
 
     const applyPatchDocument = useCallback((document: {
         storedState: Readonly<Record<string, unknown>>;
@@ -323,6 +367,10 @@ export function useBounceInPlace() {
             if (!event || typeof event !== "object") return;
             const record = event as Record<string, unknown>;
             if (typeof record.key === "string") acceptCaptureKey(record.key);
+            if (record.key === EFFECT_PRESETS_V2_STATE_KEY) {
+                userPresetStateRef.current = record.value ?? null;
+                userPresetStateKnownRef.current = true;
+            }
             if (record.key === BOUNCE_STATE_KEY) void presentStoredReference(record.value);
         };
         connection.addStoredStateValueListener?.(handleStoredState);
@@ -334,6 +382,8 @@ export function useBounceInPlace() {
                 // absence authoritative, rather than a hydration race.
                 Object.keys(PRODUCT_STORED_STATE_DEFAULTS).forEach(acceptCaptureKey);
                 Object.keys(values).forEach(acceptCaptureKey);
+                userPresetStateRef.current = values[EFFECT_PRESETS_V2_STATE_KEY] ?? null;
+                userPresetStateKnownRef.current = true;
                 void presentStoredReference(values[BOUNCE_STATE_KEY] ?? null);
             });
         } else {
@@ -375,9 +425,28 @@ export function useBounceInPlace() {
                 }),
                 requestBounceEngineStatus(connection, { signal: abortController.signal }),
             ]);
+            const previousBounceDocument = readBounceDocumentFromPatch(patchDocument);
+            const recursive = Math.round(Number(patchDocument.parameters.sourceMode) || 0) === 1;
+            let sourceBank: BounceBankView | null = null;
+            if (recursive) {
+                if (previousBounceDocument === null) {
+                    throw new Error("Recursive Bounce has no current bounce.v1 reference");
+                }
+                const sourceBytes = await store.get(previousBounceDocument.digest);
+                if (sourceBytes === null) {
+                    throw new Error(
+                        `Recursive Bounce bank ${previousBounceDocument.digest.slice(0, 12)}… is missing`,
+                    );
+                }
+                if (sourceBytes.byteLength !== previousBounceDocument.bankByteLength) {
+                    throw new Error("Recursive Bounce bank byte length does not match bounce.v1");
+                }
+                sourceBank = decodeBounceBank(sourceBytes) as BounceBankView;
+            }
             const recipe = await createProductBounceCaptureSnapshot({
                 patchDocument,
                 resourceClient,
+                sourceBank,
                 sampleRate: engineStatus.sampleRateHz,
                 tempoBpm: engineStatus.tempoBpm,
                 signal: abortController.signal,
@@ -385,7 +454,9 @@ export function useBounceInPlace() {
             });
             const testConfig = readTestConfig();
             const planOptions = {
-                ...(testConfig.roots ? { roots: testConfig.roots } : {}),
+                ...(recursive
+                    ? { roots: [...previousBounceDocument!.roots] }
+                    : (testConfig.roots ? { roots: testConfig.roots } : {})),
                 ...(testConfig.holdSeconds ? { holdSeconds: testConfig.holdSeconds } : {}),
                 ...(testConfig.tailCapSeconds ? { tailCapSeconds: testConfig.tailCapSeconds } : {}),
             };
@@ -394,7 +465,9 @@ export function useBounceInPlace() {
                 captureRequest: {
                     snapshot: recipe.snapshot,
                     planOptions,
-                    ...(testConfig.concurrency ? { concurrency: testConfig.concurrency } : {}),
+                    ...((testConfig.concurrency ?? (recursive ? 1 : null))
+                        ? { concurrency: testConfig.concurrency ?? 1 }
+                        : {}),
                     signal: abortController.signal,
                 },
             });
@@ -406,8 +479,19 @@ export function useBounceInPlace() {
             console.info("[bounce] capture completed (absolute VM timing is advisory)", {
                 roots: result.capture.plan.roots.length,
                 sampleRate: result.capture.plan.snapshot.sampleRate,
-                workers: testConfig.concurrency ?? "auto",
+                workers: testConfig.concurrency ?? (recursive ? 1 : "auto"),
                 metrics,
+            });
+            recordTestDiagnostic("captures", {
+                generation: result.bounceDocument.generation,
+                sourceGeneration: recipe.snapshot.sourceGeneration,
+                digest: result.capture.digest,
+                roots: [...result.capture.plan.roots],
+                wasmMemoryPages: metrics.map((entry) => (
+                    Number.isFinite((entry as { wasmMemoryPages?: number }).wasmMemoryPages)
+                        ? (entry as { wasmMemoryPages: number }).wasmMemoryPages
+                        : null
+                )),
             });
             setState((current) => ({
                 ...current,
@@ -418,6 +502,48 @@ export function useBounceInPlace() {
                 preparation: null,
                 error: null,
             }));
+
+            // A successful install overwrote the inactive DSP slot. Starting
+            // with generation 3, the prior document's own Revert bank is now
+            // beyond the locked one-level history and can be retired only if
+            // no live patch, preset, or state save still roots it.
+            const supersededDigest = previousBounceDocument?.revertRef.bankDigest ?? null;
+            let retirement: unknown;
+            try {
+                if (supersededDigest === null) {
+                    const usage = await store.usage();
+                    retirement = Object.freeze({
+                        completed: true,
+                        reason: "no-superseded-bank",
+                        deletedDigests: Object.freeze([]),
+                        before: usage,
+                        after: usage,
+                    });
+                } else {
+                    retirement = await retireSupersededBounceBanks({
+                        store,
+                        candidateDigests: [supersededDigest],
+                        dspOverwrittenDigests: [supersededDigest],
+                        livePatchDocument: result.patchDocument,
+                        userPresetState: userPresetStateRef.current,
+                        userPresetStateKnown: userPresetStateKnownRef.current,
+                        hasExternalPresetFileStore: hasExternalPresetFileStore(),
+                    });
+                }
+            } catch (cause) {
+                // Retirement is strictly post-commit housekeeping. Its safe
+                // failure mode is retaining bytes, never misreporting or
+                // rolling back a Bounce that is already audible.
+                retirement = Object.freeze({
+                    completed: false,
+                    reason: `gc-failed: ${errorMessage(cause)}`,
+                    deletedDigests: Object.freeze([]),
+                    before: null,
+                    after: null,
+                });
+            }
+            recordTestDiagnostic("retirements", retirement);
+            console.info("[bounce] bank retention", retirement);
         } catch (cause) {
             setState((current) => ({
                 ...current,

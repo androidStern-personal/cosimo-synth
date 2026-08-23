@@ -1,4 +1,11 @@
 import { createBounceCaptureSnapshot } from "../../bounce/capture-plan.mjs";
+import {
+    bounceBankInstallMessages,
+    validateInstallableBounceBank,
+} from "../../bounce/bank-install.mjs";
+import {
+    readBounceDocumentFromPatch,
+} from "../../bounce/document.mjs";
 import type { ResourceClient } from "./resource-client";
 import {
     loadFactoryBankCatalog,
@@ -55,6 +62,18 @@ type SetupEvent = {
     readonly value: unknown;
     readonly advanceFrames?: number;
     readonly sessionScoped?: boolean;
+};
+
+type BounceBankLike = {
+    readonly sampleRate: number;
+    readonly roots: ReadonlyArray<{
+        readonly note: number;
+        readonly frameOffset: number;
+        readonly frameCount: number;
+        readonly noteOffFrameOffset: number;
+    }>;
+    readonly totalFrameCount: number;
+    readonly pcm: Int16Array;
 };
 
 function throwIfAborted(signal?: AbortSignal) {
@@ -223,6 +242,43 @@ function wavetableSetupEvents(templates: ReadonlyArray<WavetableTemplate>) {
     return events;
 }
 
+function recursiveBankSetupEvents(bankInput: BounceBankLike, generation: number) {
+    const bank = validateInstallableBounceBank(bankInput);
+    return [...bounceBankInstallMessages(bank, {
+        // The worker substitutes its fresh session identity into every event.
+        dspSessionId: 0,
+        generation,
+    })].map((message): SetupEvent => ({
+        endpointID: message.endpointID,
+        sessionScoped: true,
+        // The pure-Cmajor install protocol consumes one event per frame and
+        // publishes its acknowledgement on the following frame.
+        advanceFrames: 2,
+        value: message.value,
+    }));
+}
+
+function assertRecursiveBankMatchesDocument(
+    bank: BounceBankLike,
+    document: NonNullable<ReturnType<typeof readBounceDocumentFromPatch>>,
+) {
+    if (bank.sampleRate !== document.capture.sampleRate
+        || bank.totalFrameCount !== document.segments.reduce(
+            (sum, segment) => sum + segment.frameCount,
+            0,
+        )
+        || bank.roots.length !== document.roots.length
+        || bank.roots.some((root, index) => (
+            root.note !== document.roots[index]
+            || root.frameOffset !== document.segments[index].frameOffset
+            || root.frameCount !== document.segments[index].frameCount
+            || (root.noteOffFrameOffset !== 0
+                && root.noteOffFrameOffset !== document.segments[index].noteOffFrameOffset)
+        ))) {
+        throw new Error("Recursive Bounce bank does not match its bounce.v1 reference");
+    }
+}
+
 function structuredRuntimeSetupEvents(document: PatchDocumentLike) {
     const modulationResult = parseModulationState(document.storedState["modulation.v6"]);
     if (modulationResult._tag === "err") throw modulationResult.error;
@@ -309,6 +365,7 @@ function articulationRootSetupEvents(
 export async function createProductBounceCaptureSnapshot({
     patchDocument,
     resourceClient,
+    sourceBank = null,
     sampleRate,
     tempoBpm = 120,
     signal,
@@ -316,23 +373,43 @@ export async function createProductBounceCaptureSnapshot({
 }: {
     patchDocument: PatchDocumentLike;
     resourceClient: ResourceClient;
+    sourceBank?: BounceBankLike | null;
     sampleRate: number;
     tempoBpm?: number;
     signal?: AbortSignal;
     onProgress?: (progress: BounceRecipeProgress) => void;
 }) {
-    if (Math.round(Number(patchDocument.parameters.sourceMode) || 0) !== 0) {
-        throw new Error("Recursive Bounce is enabled in milestone M7.");
+    const sourceMode = Math.round(Number(patchDocument.parameters.sourceMode) || 0);
+    if (sourceMode !== 0 && sourceMode !== 1) {
+        throw new Error(`Bounce snapshot has unsupported Source Mode ${sourceMode}`);
     }
-    const tableIndices = OSCILLATOR_TABLE_ENDPOINTS.map((endpointID) => {
-        const value = patchDocument.parameters[endpointID];
-        if (!Number.isFinite(value)) throw new Error(`Bounce snapshot is missing ${endpointID}`);
-        return value;
-    });
-    const templates = await buildWavetableTemplates(resourceClient, tableIndices, {
-        signal,
-        onProgress,
-    });
+    const sourceDocument = sourceMode === 1
+        ? readBounceDocumentFromPatch(patchDocument)
+        : null;
+    if (sourceMode === 1 && sourceDocument === null) {
+        throw new Error("Recursive Bounce requires the current bounce.v1 reference");
+    }
+    if (sourceMode === 1 && sourceBank === null) {
+        throw new Error("Recursive Bounce requires the current sampled bank");
+    }
+
+    let sourceSetupEvents: SetupEvent[];
+    if (sourceMode === 1) {
+        assertRecursiveBankMatchesDocument(sourceBank!, sourceDocument!);
+        sourceSetupEvents = recursiveBankSetupEvents(sourceBank!, sourceDocument!.generation);
+        onProgress?.({ completedUnits: 1, totalUnits: 1, tableIndex: -1 });
+    } else {
+        const tableIndices = OSCILLATOR_TABLE_ENDPOINTS.map((endpointID) => {
+            const value = patchDocument.parameters[endpointID];
+            if (!Number.isFinite(value)) throw new Error(`Bounce snapshot is missing ${endpointID}`);
+            return value;
+        });
+        const templates = await buildWavetableTemplates(resourceClient, tableIndices, {
+            signal,
+            onProgress,
+        });
+        sourceSetupEvents = wavetableSetupEvents(templates);
+    }
     throwIfAborted(signal);
     const structured = structuredRuntimeSetupEvents(patchDocument);
     return {
@@ -341,12 +418,15 @@ export async function createProductBounceCaptureSnapshot({
             tempoBpm,
             parameters: patchDocument.parameters,
             setupEvents: [
-                ...wavetableSetupEvents(templates),
+                ...sourceSetupEvents,
                 ...structured.events,
             ],
             rootSetupEvents: articulationRootSetupEvents(structured.articulationTriggerConfig),
+            sourceGeneration: sourceDocument?.generation ?? 0,
+            sourceBankDigest: sourceDocument?.digest ?? null,
         }),
         articulationTriggerConfig: structured.articulationTriggerConfig,
+        sourceDocument,
     };
 }
 
@@ -354,5 +434,7 @@ export const bounceCaptureRecipeInternals = Object.freeze({
     OSCILLATOR_TABLE_ENDPOINTS,
     WAVETABLE_BATCH_SAMPLE_COUNT,
     articulationRootSetupEvents,
+    assertRecursiveBankMatchesDocument,
+    recursiveBankSetupEvents,
     structuredRuntimeSetupEvents,
 });

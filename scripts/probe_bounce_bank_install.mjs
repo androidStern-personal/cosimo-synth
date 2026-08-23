@@ -99,6 +99,7 @@ for (let index = 0; index < 64; index += 1) performer.advance(blockFrames);
 const rootNotes = new Int32Array(rootCount);
 const rootFrameOffsets = new Int32Array(rootCount);
 const rootFrameCounts = new Int32Array(rootCount);
+const rootNoteOffFrameOffsets = new Int32Array(rootCount);
 for (let rootIndex = 0; rootIndex < rootCount; rootIndex += 1) {
     rootNotes[rootIndex] = 24 + (rootIndex * 4);
     rootFrameOffsets[rootIndex] = rootIndex * framesPerRoot;
@@ -116,6 +117,7 @@ performer.sendInputEvent_bounceBankLoadBegin({
     rootNotes,
     rootFrameOffsets,
     rootFrameCounts,
+    rootNoteOffFrameOffsets,
 });
 performer.advance(blockFrames);
 deliverySerial += 1;

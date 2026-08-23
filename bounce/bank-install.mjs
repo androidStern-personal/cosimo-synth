@@ -23,6 +23,10 @@ export function validateInstallableBounceBank(bank) {
     "Bounce bank has an invalid root count");
     invariant(bank.pcm instanceof Int16Array && bank.pcm.length === bank.totalFrameCount * 2,
         "Bounce bank PCM does not match its frame count");
+    invariant(bank.roots.every((root) => Number.isInteger(root.noteOffFrameOffset)
+        && root.noteOffFrameOffset >= 0
+        && (root.noteOffFrameOffset === 0 || root.noteOffFrameOffset < root.frameCount)),
+    "Bounce bank has invalid root note-off metadata");
     invariant(bank.totalFrameCount <= BOUNCE_BANK_FRAME_CAPACITY,
         "Bounce bank exceeds live-engine capacity");
     return bank;
@@ -32,12 +36,14 @@ function rootMetadata(bank) {
     const rootNotes = new Int32Array(BOUNCE_BANK_MAX_ROOTS);
     const rootFrameOffsets = new Int32Array(BOUNCE_BANK_MAX_ROOTS);
     const rootFrameCounts = new Int32Array(BOUNCE_BANK_MAX_ROOTS);
+    const rootNoteOffFrameOffsets = new Int32Array(BOUNCE_BANK_MAX_ROOTS);
     bank.roots.forEach((root, index) => {
         rootNotes[index] = root.note;
         rootFrameOffsets[index] = root.frameOffset;
         rootFrameCounts[index] = root.frameCount;
+        rootNoteOffFrameOffsets[index] = root.noteOffFrameOffset;
     });
-    return { rootNotes, rootFrameOffsets, rootFrameCounts };
+    return { rootNotes, rootFrameOffsets, rootFrameCounts, rootNoteOffFrameOffsets };
 }
 
 /** Yield the exact ack-paced Cmajor protocol without retaining duplicate PCM. */

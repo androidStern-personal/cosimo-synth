@@ -147,10 +147,13 @@ function waveformPath(columns: ReadonlyArray<{ minimum: number; maximum: number 
 export function BounceSampledSourceStage({
     state,
     lastPlayedNote,
+    onBounce,
+    onCancel,
     onRevert,
+    requestBounceGuard,
     compact = false,
     className = "",
-}: Pick<BounceActions, "state" | "onRevert"> & {
+}: BounceActions & {
     lastPlayedNote: number;
     compact?: boolean;
     className?: string;
@@ -178,7 +181,7 @@ export function BounceSampledSourceStage({
             data-source-mode="sampled"
             className={`relative flex min-h-[230px] min-w-0 flex-col overflow-hidden rounded-[18px] border border-cyan-200/10 bg-[radial-gradient(circle_at_50%_35%,rgb(34_211_238/0.08),transparent_62%),rgb(4_10_18/0.92)] ${className}`}
         >
-            <div className="relative z-10 flex items-start justify-between gap-3 px-3 pb-1 pt-3">
+            <div className="relative z-10 flex flex-wrap items-start justify-between gap-3 px-3 pb-1 pt-3">
                 <div className="min-w-0">
                     <div className="text-[9px] font-bold uppercase tracking-[0.2em] text-cyan-200/55">Sampled source</div>
                     <div className="mt-0.5 truncate text-[11px] font-semibold text-slate-100/85">
@@ -187,9 +190,14 @@ export function BounceSampledSourceStage({
                             : "Restoring bank…"}
                     </div>
                 </div>
-                {state.busy ? (
-                    <BounceProgress state={state} />
-                ) : (
+                <div className="flex items-center gap-1.5">
+                    <BounceActionControl
+                        state={state}
+                        onBounce={onBounce}
+                        onCancel={onCancel}
+                        requestBounceGuard={requestBounceGuard}
+                    />
+                    {!state.busy ? (
                     <button
                         type="button"
                         data-role="bounce-revert"
@@ -198,7 +206,8 @@ export function BounceSampledSourceStage({
                     >
                         Revert
                     </button>
-                )}
+                    ) : null}
+                </div>
             </div>
 
             <div className="relative min-h-0 flex-1 px-3 py-1">
