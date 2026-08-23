@@ -8,6 +8,19 @@ export const BOUNCE_INSTALL_SEND_TIMEOUT_MS = 0;
 export const BOUNCE_INSTALL_HEALTH_TIMEOUT_MS = 8_000;
 
 const activeConnections = new WeakSet();
+const runtimeGenerationByConnection = new WeakMap();
+
+/** Allocate an engine-local generation; persisted document generations are semantic, not FIFO frontiers. */
+export function allocateBounceRuntimeGeneration(connection, minimum = 1) {
+    const previous = runtimeGenerationByConnection.get(connection)
+        ?? ((Date.now() % 1_000_000_000) + 1);
+    const next = Math.max(previous + 1, Math.trunc(Number(minimum) || 1));
+    if (next > 2_147_483_647) {
+        throw new BounceBankInstallError("generation-exhausted", "Bounce runtime generation exhausted");
+    }
+    runtimeGenerationByConnection.set(connection, next);
+    return next;
+}
 
 export class BounceBankInstallError extends Error {
     constructor(code, message, options) {

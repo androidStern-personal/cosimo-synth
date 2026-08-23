@@ -3,6 +3,7 @@ import {
     type EffectPluginStateContract,
 } from "./effect-state-contract";
 import type { EffectPresetMigration } from "./effect-preset-v2";
+import { BOUNCE_STATE_KEY } from "../../../bounce/document.mjs";
 
 const FILTER_MIX_ENDPOINT_ID = "filterMix";
 
@@ -23,20 +24,60 @@ export function buildSynthPresetMigrations(
         throw new Error("The synth contract must include the filterMix parameter.");
     }
 
-    const legacyContract = buildCanonicalPluginStateContract({
+    const preBounceStoredState = currentContract.storedState.filter(
+        (entry) => entry.key !== BOUNCE_STATE_KEY,
+    );
+
+    if (preBounceStoredState.length === currentContract.storedState.length) {
+        throw new Error(`The synth contract must include ${BOUNCE_STATE_KEY}.`);
+    }
+
+    const preBounceContract = buildCanonicalPluginStateContract({
+        effectID: currentContract.effectID,
+        parameters: currentContract.parameters,
+        storedState: preBounceStoredState,
+    });
+    const preMixContract = buildCanonicalPluginStateContract({
         effectID: currentContract.effectID,
         parameters: legacyParameters,
         storedState: currentContract.storedState,
     });
-
-    return [{
+    const preMixAndBounceContract = buildCanonicalPluginStateContract({
         effectID: currentContract.effectID,
-        fromHash: legacyContract.hash,
-        toHash: currentContract.hash,
-        migrate: (preset) => ({
-            ...preset,
-            contract: currentContract,
-            parameters: { ...preset.parameters, [FILTER_MIX_ENDPOINT_ID]: 1 },
-        }),
-    }];
+        parameters: legacyParameters,
+        storedState: preBounceStoredState,
+    });
+
+    return [
+        {
+            effectID: currentContract.effectID,
+            fromHash: preMixAndBounceContract.hash,
+            toHash: preBounceContract.hash,
+            migrate: (preset) => ({
+                ...preset,
+                contract: preBounceContract,
+                parameters: { ...preset.parameters, [FILTER_MIX_ENDPOINT_ID]: 1 },
+            }),
+        },
+        {
+            effectID: currentContract.effectID,
+            fromHash: preBounceContract.hash,
+            toHash: currentContract.hash,
+            migrate: (preset) => ({
+                ...preset,
+                contract: currentContract,
+                storedState: { ...preset.storedState, [BOUNCE_STATE_KEY]: null },
+            }),
+        },
+        {
+            effectID: currentContract.effectID,
+            fromHash: preMixContract.hash,
+            toHash: currentContract.hash,
+            migrate: (preset) => ({
+                ...preset,
+                contract: currentContract,
+                parameters: { ...preset.parameters, [FILTER_MIX_ENDPOINT_ID]: 1 },
+            }),
+        },
+    ];
 }

@@ -5,6 +5,10 @@
 
 import type { PatchConnectionLike } from "../cmajor-react";
 import {
+    BOUNCE_DOCUMENT_VERSION,
+    BOUNCE_STATE_KEY,
+} from "../../../bounce/document.mjs";
+import {
     ARTICULATIONS_V4_STATE_KEY,
     createEmptyArticulationsState,
     serializeArticulationsV4,
@@ -234,6 +238,10 @@ function createCanonicalStoredState(currentContract: EffectPluginStateContract) 
             // self-versioned lane.v2 (the compat parse still reads v1).
             schemaVersion: 2,
             create: () => serializeLaneStateV2(createDefaultLaneStateV2()),
+        },
+        [BOUNCE_STATE_KEY]: {
+            schemaVersion: BOUNCE_DOCUMENT_VERSION,
+            create: () => null,
         },
     };
     const storedState: Record<string, unknown> = {};
