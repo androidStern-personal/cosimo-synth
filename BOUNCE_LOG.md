@@ -412,3 +412,22 @@ tests; 78/78 routing, web-bundle, and patch/layout tests; 65/65 Cmajor rack
 tests; and the full Linux Chromium web POC at 13 passed, 5 expected environment
 skips, 0 failed. G4 remains 0.00692749 FS (−43.19 dBFS), and oscillator mode
 retains the pinned M1/M2 render hash exactly.
+
+## 2026-08-23 — M8 checkpoint: production generated-C++ sampler
+
+- Added a Linux/native integration that generates the complete production
+  patch as C++ with the external renderer symbol preserved, checks both fixed
+  Bounce-bank slots and the root note-off field in the generated source,
+  links the canonical renderer, stages and atomically commits a real bank, and
+  renders that bank through sampled source mode. It also sends an early live
+  note-off and proves release audio remains present.
+- The generated `WavetableSynth` object is 135,615,616 bytes and the harness
+  measured RMS 0.158111, peak 0.25, and post-early-release RMS 0.134863. Code
+  generation plus the single-threaded Linux C++ compile/link completed in
+  about 3 seconds on this VM. Timing is advisory; the fixed object size is an
+  architecture/memory fact and is carried into the iOS transient-memory human
+  gate rather than treated as a speed rejection.
+
+Validation: `npm run test:bounce:native:generated` passes on Linux with the
+production patch, the real external renderer, 128-frame slices, the staged
+bank protocol, sampled playback, and early release.
