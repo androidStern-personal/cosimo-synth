@@ -17,6 +17,7 @@ import {
     deserializeLaneStateV2,
     laneSplitMarkerSlotId,
     listLaneDeviceInstancesV2,
+    parseLaneInstanceId,
     serializeLaneStateV2,
     setLaneDeviceParam,
     setLaneSplitCrossoverHz,
@@ -125,7 +126,7 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
 export function useLaneStateDoc(): {
     readonly laneState: LaneStateV2;
     readonly commit: (nextState: LaneStateV2) => void;
-    readonly setParamValue: (effectId: EffectModuleId, endpointID: string, value: number) => void;
+    readonly setParamValue: (deviceId: string, endpointID: string, value: number) => void;
     /** The split editor's hot path: optimistic doc update + the acked
         marker-record field upload. */
     readonly setSplitCrossover: (groupId: string, which: "low" | "high", hz: number) => void;
@@ -148,17 +149,18 @@ export function useLaneStateDoc(): {
         patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(nextState));
     }, [patchConnection, store]);
 
-    const setParamValue = useCallback((effectId: EffectModuleId, endpointID: string, value: number) => {
-        const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
-        const deviceId = `${deviceType}#1`;
-        const paramIndex = getLaneSlotParamIndex(deviceType, endpointID);
-        if (paramIndex === null) {
-            throw new Error(`Unknown lane parameter: ${effectId}.${endpointID}`);
+    const setParamValue = useCallback((deviceId: string, endpointID: string, value: number) => {
+        const parsedId = parseLaneInstanceId(deviceId);
+        const paramIndex = parsedId === null
+            ? null
+            : getLaneSlotParamIndex(parsedId.deviceType, endpointID);
+        if (parsedId === null || paramIndex === null) {
+            throw new Error(`Unknown lane parameter: ${deviceId}.${endpointID}`);
         }
         acceptLaneState(store, setLaneDeviceParam(store.state, deviceId, endpointID, value) ?? store.state);
         store.deliverySerial += 1;
         patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-            slotId: getLaneSlotId(deviceType, 0),
+            slotId: getLaneSlotId(parsedId.deviceType, parsedId.instanceNumber - 1),
             paramIndex,
             deliverySerial: store.deliverySerial,
             value,
@@ -213,9 +215,13 @@ export function usePatchModulationTargetOptions(): ReadonlyArray<ModulationTarge
  * PatchControlBinding surface every knob and slider already speaks, backed
  * by the lane document and the field-upload hot path.
  */
-export function useLaneParameterBinding(descriptor: RackParameterDescriptor): PatchControlBinding<number> {
+export function useLaneParameterBinding(
+    descriptor: RackParameterDescriptor,
+    deviceId?: string,
+): PatchControlBinding<number> {
     const patchConnection = usePatchConnection();
     const { laneState, setParamValue, persist } = useLaneStateDoc();
+    const boundDeviceId = deviceId ?? `${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`;
 
     const clampValue = useCallback((value: number) => {
         const numeric = Number.isFinite(value) ? value : descriptor.initial;
@@ -224,8 +230,7 @@ export function useLaneParameterBinding(descriptor: RackParameterDescriptor): Pa
     }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
 
     const value = clampValue(
-        laneState.devices[`${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`]
-            ?.params[descriptor.endpointID] ?? descriptor.initial);
+        laneState.devices[boundDeviceId]?.params[descriptor.endpointID] ?? descriptor.initial);
     const valueRef = { current: value };
     valueRef.current = value;
 
@@ -235,9 +240,9 @@ export function useLaneParameterBinding(descriptor: RackParameterDescriptor): Pa
     const setValue = useCallback((nextValue: number) => {
         const coerced = clampValue(nextValue);
         const changed = !Object.is(coerced, valueRef.current);
-        setParamValue(descriptor.effectId, descriptor.endpointID, coerced);
+        setParamValue(boundDeviceId, descriptor.endpointID, coerced);
         reportUserParameterEdit({ endpointID: descriptor.endpointID, changed });
-    }, [clampValue, descriptor.effectId, descriptor.endpointID, setParamValue]);
+    }, [boundDeviceId, clampValue, descriptor.endpointID, setParamValue]);
 
     const beginGesture = useCallback(() => {
         patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
@@ -280,17 +285,23 @@ export function useLaneOrHostParameterBinding({
     initialValue,
     coerce,
     active = true,
+    deviceId,
 }: {
     endpointID: string;
     initialValue: number;
     coerce: (rawValue: unknown) => number;
     active?: boolean;
+    /** The lane instance to edit (e.g. "delay#2"); the type's #1 without it. */
+    deviceId?: string;
 }): PatchControlBinding<number> {
     const laneDescriptor = getRackParameterDescriptor(endpointID);
     if (FALLBACK_LANE_DESCRIPTOR === null) {
         throw new Error("The lane parameter catalog is missing its fallback descriptor");
     }
-    const laneBinding = useLaneParameterBinding(laneDescriptor ?? FALLBACK_LANE_DESCRIPTOR);
+    const laneBinding = useLaneParameterBinding(
+        laneDescriptor ?? FALLBACK_LANE_DESCRIPTOR,
+        laneDescriptor === null ? undefined : deviceId,
+    );
     const hostBinding = usePatchParameterBinding<number>({
         endpointID,
         initialValue,

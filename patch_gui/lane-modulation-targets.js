@@ -77,19 +77,22 @@ export function getLaneDeviceModulationTargetKinds(device) {
     return endpoints.map((endpointID) => `lane.${device.instanceId}.${endpointID}`);
 }
 /**
- * Resolve a parsed lane target to its engine bus index through the patch's
- * slot assignments: index = slotOrdinal * static count + the mirror target's
- * static index (ordinal 0 = the base block). Null = the instance holds no
- * slot (device deleted or beyond the pool): the route stays stored but
- * compiles to nothing.
+ * Resolve a parsed lane target to its engine bus index. Instance identity IS
+ * the slot assignment — `#n` statically holds ordinal n-1 (the lane.v2
+ * document allocates instances the same way), so resolution needs no
+ * document: index = ordinal * static count + the mirror target's static
+ * index (ordinal 0 = the instance-#1 block). Null = the instance number
+ * lies beyond the pool: the route stays stored but compiles to nothing. A
+ * route to a pool instance the patch no longer holds still compiles — it
+ * modulates an idle slot's bus cell that no device reads, which is audibly
+ * identical and keeps the program independent of lane-document timing.
  */
-export function getLaneModulationTargetIndex(parsed, assignments) {
+export function getLaneModulationTargetIndex(parsed) {
     if (parsed === null) {
         return null;
     }
-    const ordinal = assignments.get(parsed.instanceId);
-    if (ordinal === undefined || !Number.isInteger(ordinal)
-        || ordinal < 0 || ordinal > MODULATION_LANE_POOL_SET_COUNT) {
+    const ordinal = laneInstanceNumber(parsed) - 1;
+    if (ordinal > MODULATION_LANE_POOL_SET_COUNT) {
         return null;
     }
     return (ordinal * MODULATION_RACK_TARGET_COUNT)

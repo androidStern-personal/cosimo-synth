@@ -15513,12 +15513,12 @@ function getLaneDeviceModulationTargetKinds(device) {
   }
   return endpoints.map((endpointID) => `lane.${device.instanceId}.${endpointID}`);
 }
-function getLaneModulationTargetIndex(parsed, assignments) {
+function getLaneModulationTargetIndex(parsed) {
   if (parsed === null) {
     return null;
   }
-  const ordinal = assignments.get(parsed.instanceId);
-  if (ordinal === void 0 || !Number.isInteger(ordinal) || ordinal < 0 || ordinal > MODULATION_LANE_POOL_SET_COUNT) {
+  const ordinal = laneInstanceNumber(parsed) - 1;
+  if (ordinal > MODULATION_LANE_POOL_SET_COUNT) {
     return null;
   }
   return ordinal * MODULATION_RACK_TARGET_COUNT$1 + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
@@ -15540,14 +15540,13 @@ function voiceTargetIndex(targetKind) {
   const voiceTargetKind = parseVoiceModulationTargetKind(targetKind);
   return voiceTargetKind === null ? null : getVoiceModulationTargetIndex(voiceTargetKind);
 }
-function getModulationRuntimeCell(route, laneAssignments = EMPTY_LANE_ASSIGNMENTS) {
+function getModulationRuntimeCell(route) {
   const voiceTarget = voiceTargetIndex(route.targetKind);
   const rackTargetKind = parseRackModulationTargetKind(route.targetKind);
   let rackTarget = rackTargetKind === null ? void 0 : getRackModulationTargetIndex(rackTargetKind);
   if (rackTarget === void 0) {
     const laneIndex = getLaneModulationTargetIndex(
-      parseLaneModulationTargetKind(route.targetKind),
-      laneAssignments
+      parseLaneModulationTargetKind(route.targetKind)
     );
     if (laneIndex !== null) {
       rackTarget = laneIndex;
@@ -15607,7 +15606,6 @@ function getModulationArticulationCellIndex(route) {
   }
   return getModulationRuntimeCell(route).articulationCellIndex;
 }
-const EMPTY_LANE_ASSIGNMENTS = /* @__PURE__ */ new Map();
 function ok(value) {
   return { _tag: "ok", value };
 }
@@ -19281,17 +19279,16 @@ function useLaneStateDoc() {
     commitLaneStateV2(patchConnection, nextState);
     patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(nextState));
   }, [patchConnection, store]);
-  const setParamValue = reactExports.useCallback((effectId, endpointID, value) => {
-    const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
-    const deviceId = `${deviceType}#1`;
-    const paramIndex = getLaneSlotParamIndex(deviceType, endpointID);
-    if (paramIndex === null) {
-      throw new Error(`Unknown lane parameter: ${effectId}.${endpointID}`);
+  const setParamValue = reactExports.useCallback((deviceId, endpointID, value) => {
+    const parsedId = parseLaneInstanceId(deviceId);
+    const paramIndex = parsedId === null ? null : getLaneSlotParamIndex(parsedId.deviceType, endpointID);
+    if (parsedId === null || paramIndex === null) {
+      throw new Error(`Unknown lane parameter: ${deviceId}.${endpointID}`);
     }
     acceptLaneState(store, setLaneDeviceParam(store.state, deviceId, endpointID, value) ?? store.state);
     store.deliverySerial += 1;
     patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-      slotId: getLaneSlotId(deviceType, 0),
+      slotId: getLaneSlotId(parsedId.deviceType, parsedId.instanceNumber - 1),
       paramIndex,
       deliverySerial: store.deliverySerial,
       value
@@ -19330,25 +19327,26 @@ function usePatchModulationTargetOptions() {
     [deviceSignature]
   );
 }
-function useLaneParameterBinding(descriptor) {
+function useLaneParameterBinding(descriptor, deviceId) {
   const patchConnection = usePatchConnection();
   const { laneState, setParamValue, persist } = useLaneStateDoc();
+  const boundDeviceId = `${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`;
   const clampValue = reactExports.useCallback((value2) => {
     const numeric = Number.isFinite(value2) ? value2 : descriptor.initial;
     const clamped = Math.min(descriptor.max, Math.max(descriptor.min, numeric));
     return descriptor.choices !== void 0 ? Math.round(clamped) : clamped;
   }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
   const value = clampValue(
-    laneState.devices[`${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`]?.params[descriptor.endpointID] ?? descriptor.initial
+    laneState.devices[boundDeviceId]?.params[descriptor.endpointID] ?? descriptor.initial
   );
   const valueRef = { current: value };
   valueRef.current = value;
   const setValue = reactExports.useCallback((nextValue) => {
     const coerced = clampValue(nextValue);
     const changed = !Object.is(coerced, valueRef.current);
-    setParamValue(descriptor.effectId, descriptor.endpointID, coerced);
+    setParamValue(boundDeviceId, descriptor.endpointID, coerced);
     reportUserParameterEdit({ endpointID: descriptor.endpointID, changed });
-  }, [clampValue, descriptor.effectId, descriptor.endpointID, setParamValue]);
+  }, [boundDeviceId, clampValue, descriptor.endpointID, setParamValue]);
   const beginGesture = reactExports.useCallback(() => {
     patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
     reportUserGestureStart();

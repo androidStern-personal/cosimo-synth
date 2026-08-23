@@ -269,13 +269,18 @@ test("no lane route carries a per-note articulation cell — pool routes include
     assert.notEqual(program.getModulationArticulationCellIndex(laneRoute("oscA.pan")), null);
 });
 
-test("a pool instance's base is not addressable in a fixed-eight patch", async () => {
+test("every pool instance's base resolves the type's editing contract", async () => {
     const resolver = await loadUIModule(repoRoot, "ui/shared/modulation-target-base.ts");
-    // lane.v1 stores one device per type, so instance #2's base parameter has
-    // no document slot to edit — its row edits the modulation amount only.
-    // Per-instance base bindings arrive with the device-instance tree.
-    assert.equal(resolver.resolveModulationTargetBase("lane.delay#2.delayMix"), null);
-    assert.notEqual(resolver.resolveModulationTargetBase("lane.delay#1.delayMix"), null);
+    // T6: the lane.v2 document has a real slot for every instance, so the
+    // base contract (endpoint, spec, labels) is the TYPE's; WHICH document
+    // slot a binding edits comes from the deviceId its caller threads.
+    const second = resolver.resolveModulationTargetBase("lane.delay#2.delayMix");
+    const first = resolver.resolveModulationTargetBase("lane.delay#1.delayMix");
+    assert.notEqual(first, null);
+    assert.notEqual(second, null);
+    assert.equal(second.endpointID, first.endpointID);
+    assert.equal(second.label, first.label);
+    assert.deepEqual(second.entrySpec, first.entrySpec);
 });
 
 test("the per-patch target domain is the static core plus one entry per live lane device parameter", async () => {

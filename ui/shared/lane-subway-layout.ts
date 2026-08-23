@@ -204,6 +204,14 @@ export function buildSubwayLayout(state: LaneStateV2): SubwayLayout {
         rows.push(...groupRows(node));
     }
 
+    // The line always ends with the trunk's add affordance: a ghost whose
+    // path is the end-of-chain insertion point — the tap target for adding
+    // a device and the drop target for moving one to the end.
+    rows.push({
+        kind: "stations",
+        cells: [{ kind: "ghost", tint: "infra", path: { kind: "trunk", index: state.chain.length } }],
+    });
+
     rows.push({ kind: "terminus", label: "out" });
     return { rows, laneCount };
 }

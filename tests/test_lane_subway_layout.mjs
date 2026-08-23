@@ -27,11 +27,17 @@ test("a serial document is a single teal line of stations between termini", asyn
 
     const rows = layout.buildSubwayLayout(laneV2.createDefaultLaneStateV2());
     assert.equal(rows.laneCount, 1);
-    assert.equal(rows.rows.length, 10); // in + 8 stations + out
+    assert.equal(rows.rows.length, 11); // in + 8 stations + add ghost + out
     assert.deepEqual(rows.rows[0], { kind: "terminus", label: "in" });
     assert.deepEqual(rows.rows.at(-1), { kind: "terminus", label: "out" });
+    // The line always ends with the trunk's add affordance: a ghost whose
+    // path is the end-of-chain insertion point (also a drop target).
+    assert.deepEqual(rows.rows.at(-2), {
+        kind: "stations",
+        cells: [{ kind: "ghost", tint: "infra", path: { kind: "trunk", index: 8 } }],
+    });
 
-    const stationRows = rows.rows.slice(1, -1);
+    const stationRows = rows.rows.slice(1, -2);
     for (const row of stationRows) {
         assert.equal(row.kind, "stations");
         assert.equal(row.cells.length, 1);
@@ -79,7 +85,10 @@ test("a parallel group forks teal lanes, ghosts its empty branch, and merges", a
     const built = layout.buildSubwayLayout(doc);
     assert.equal(built.laneCount, 2);
     assert.deepEqual(built.rows.map((row) => row.kind), [
-        "terminus", "fork", "stations", "stations", "merge", "stations", "terminus",
+        "terminus", "fork", "stations", "stations", "merge", "stations", "stations", "terminus",
+    ]);
+    assert.deepEqual(built.rows[6].cells, [
+        { kind: "ghost", tint: "infra", path: { kind: "trunk", index: 2 } },
     ]);
 
     const fork = built.rows[1];
@@ -140,7 +149,10 @@ test("a split group tints its bands, reads out crossovers, and marks bypass", as
     const built = layout.buildSubwayLayout(doc);
     assert.equal(built.laneCount, 3);
     assert.deepEqual(built.rows.map((row) => row.kind), [
-        "terminus", "fork", "stations", "merge", "terminus",
+        "terminus", "fork", "stations", "merge", "stations", "terminus",
+    ]);
+    assert.deepEqual(built.rows[4].cells, [
+        { kind: "ghost", tint: "infra", path: { kind: "trunk", index: 1 } },
     ]);
 
     const fork = built.rows[1];

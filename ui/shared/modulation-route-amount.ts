@@ -11,6 +11,7 @@ import {
     parameterEntrySpecForModulationAmount,
     type ParameterEntrySpec,
 } from "./parameter-value-entry";
+import { parseLaneModulationTargetKind } from "./lane-modulation-targets";
 import { useLaneOrHostParameterBinding } from "./lane-param-bindings";
 import {
     acquireModulationRuntimeBridge,
@@ -47,6 +48,7 @@ export function useModulationAmountParameterEntrySpec(
         initialValue,
         coerce: coerceBaseValue,
         active: baseSpec !== null,
+        deviceId: parseLaneModulationTargetKind(targetKind)?.instanceId,
     });
 
     return useMemo(

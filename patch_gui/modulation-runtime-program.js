@@ -99,13 +99,13 @@ function voiceTargetIndex(targetKind) {
  * @param route - A normalized declarative mapping.
  * @returns Its execution path and deterministic cell coordinates.
  */
-export function getModulationRuntimeCell(route, laneAssignments = EMPTY_LANE_ASSIGNMENTS) {
+export function getModulationRuntimeCell(route) {
     const voiceTarget = voiceTargetIndex(route.targetKind);
     const rackTargetKind = parseRackModulationTargetKind(route.targetKind);
     let rackTarget = rackTargetKind === null ? undefined : getRackModulationTargetIndex(rackTargetKind);
     if (rackTarget === undefined) {
         // Lane kinds address the pool block through the patch's assignments.
-        const laneIndex = getLaneModulationTargetIndex(parseLaneModulationTargetKind(route.targetKind), laneAssignments);
+        const laneIndex = getLaneModulationTargetIndex(parseLaneModulationTargetKind(route.targetKind));
         if (laneIndex !== null) {
             rackTarget = laneIndex;
         }
@@ -175,27 +175,26 @@ export function getModulationArticulationCellIndex(route) {
     }
     return getModulationRuntimeCell(route).articulationCellIndex;
 }
-const EMPTY_LANE_ASSIGNMENTS = new Map();
 /** A lane route whose instance holds no slot compiles to nothing. The static
     vocabulary (the base #1 instances) needs no assignment. */
-function laneRouteIsUnassigned(route, laneAssignments) {
+function laneRouteIsUnassigned(route) {
     if (parseRackModulationTargetKind(route.targetKind) !== null) {
         return false;
     }
     const parsedLane = parseLaneModulationTargetKind(route.targetKind);
     return parsedLane !== null
-        && getLaneModulationTargetIndex(parsedLane, laneAssignments) === null;
+        && getLaneModulationTargetIndex(parsedLane) === null;
 }
-function compileRoute(route, laneAssignments) {
+function compileRoute(route) {
     return {
-        ...getModulationRuntimeCell(route, laneAssignments),
+        ...getModulationRuntimeCell(route),
         enabled: route.enabled,
         polarity: route.polarity === "bipolar" ? 1 : 0,
         reducer: route.reducer === "mean" ? 2 : 1,
         amount: route.amount,
     };
 }
-function createCompiledRoutesByPath(routes, laneAssignments = EMPTY_LANE_ASSIGNMENTS) {
+function createCompiledRoutesByPath(routes) {
     const routesByPath = {
         voice: new Map(),
         macroVoice: new Map(),
@@ -203,10 +202,10 @@ function createCompiledRoutesByPath(routes, laneAssignments = EMPTY_LANE_ASSIGNM
         macroRack: new Map(),
     };
     for (const route of routes) {
-        if (laneRouteIsUnassigned(route, laneAssignments)) {
+        if (laneRouteIsUnassigned(route)) {
             continue;
         }
-        const compiled = compileRoute(route, laneAssignments);
+        const compiled = compileRoute(route);
         const pathRoutes = routesByPath[compiled.path];
         if (pathRoutes.has(compiled.cellIndex)) {
             throw new Error(`Duplicate modulation route cell ${compiled.path}:${compiled.cellIndex}`);
@@ -248,8 +247,8 @@ function copyActiveRouteFields(routes, cells, sources, targets, polarities) {
  * @param routes - Normalized declarative mappings in stored order.
  * @returns One fixed aggregate payload for atomic engine installation.
  */
-export function compileModulationRuntimeProgram(routes, laneAssignments = EMPTY_LANE_ASSIGNMENTS) {
-    const routesByPath = createCompiledRoutesByPath(routes, laneAssignments);
+export function compileModulationRuntimeProgram(routes) {
+    const routesByPath = createCompiledRoutesByPath(routes);
     const voiceRoutes = sortedActiveRoutes(routesByPath.voice);
     const macroVoiceRoutes = sortedActiveRoutes(routesByPath.macroVoice);
     const voiceRackRoutes = sortedActiveRoutes(routesByPath.voiceRack);

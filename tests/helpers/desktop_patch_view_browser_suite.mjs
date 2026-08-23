@@ -1428,24 +1428,24 @@ export {
  * knob edits ride laneSlotParamValue {slotId, paramIndex, ...} instead of a
  * per-parameter host endpoint.
  */
-export function laneParamWireLocation(endpointID) {
+export function laneParamWireLocation(endpointID, ordinal = 0) {
     const descriptor = getRackParameterDescriptor(endpointID);
     if (descriptor === null) {
         throw new Error(`Not a lane parameter endpoint: ${endpointID}`);
     }
     const deviceType = EFFECT_ID_TO_LANE_TYPE[descriptor.effectId];
     return {
-        slotId: getLaneSlotId(deviceType, 0),
+        slotId: getLaneSlotId(deviceType, ordinal),
         paramIndex: getLaneSlotParamIndex(deviceType, endpointID),
     };
 }
 
 /** Predicate for one sent lane field upload, optionally matching its value. */
-export function isLaneParamSend(message, endpointID, expectedValue, tolerance = 1e-6) {
+export function isLaneParamSend(message, endpointID, expectedValue, tolerance = 1e-6, ordinal = 0) {
     if (message.endpointID !== "laneSlotParamValue") {
         return false;
     }
-    const location = laneParamWireLocation(endpointID);
+    const location = laneParamWireLocation(endpointID, ordinal);
     if (Number(message.value?.slotId) !== location.slotId
             || Number(message.value?.paramIndex) !== location.paramIndex) {
         return false;
