@@ -81,6 +81,9 @@ namespace wt
     // proven static width and the pool adds whole BLOCKS of it — one 36-wide
     // vector per mirror set, never one wide vector that scalarises.
     let rackModBlockCount = 1 + lanePoolSetCount;
+    // Uniform instance count per effect type: ordinal 0 is the (former) base
+    // instance, ordinals 1..lanePoolSetCount are the pool sets.
+    let lanePoolInstanceCount = 1 + lanePoolSetCount;
     let modulationVoiceRouteCellCount = modulationVoiceSourceCount * modulationVoiceTargetCount;
     let modulationMacroVoiceRouteCellCount = modulationMacroSourceCount * modulationVoiceTargetCount;
     let modulationVoiceRackRouteCellCount = modulationVoiceSourceCount * rackModTargetCount;
