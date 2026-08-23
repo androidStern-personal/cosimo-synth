@@ -465,6 +465,51 @@ processor LaneSecondDelayTest [[ main ]]
         out <- (removalMaxDelta < 0.05f ? 1 : 0);
         advance();
 
+        // Frame 18b: LIVE edits ride per-FIELD uploads: one value, one slot,
+        // one serial — no whole-record read-modify-write race between UI
+        // surfaces. The field write lands (audible), acks its serial, and
+        // leaves every other field of the record untouched.
+        wt::LaneSlotParamValueUpload fieldEdit;
+        fieldEdit.slotId = wt::laneSlotDelayTwo;
+        fieldEdit.paramIndex = wt::laneDelayParamMix;
+        fieldEdit.deliverySerial = 31;
+        fieldEdit.value = 0.5f;
+        rack.laneSlotParamValue <- fieldEdit;
+
+        for (int32 frame = 0; frame < 512; ++frame)
+            advanceRack (0.0f);
+
+        out <- (rack.laneParamsAcknowledgedSerial == 31 ? 1 : 0);
+        advance();
+
+        // The un-edited fields survive: the 90ms time is intact, so with the
+        // slot back in the chain a fresh impulse still echoes at delay #2's
+        // own time.
+        rack.laneTopology <- makeTwoDelayChain();
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+
+        out <- (windowPeak (echoTwoFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+
+        // An out-of-range field index rejects without touching the record.
+        fieldEdit.paramIndex = wt::laneSlotParamCount;
+        fieldEdit.deliverySerial = 32;
+        rack.laneSlotParamValue <- fieldEdit;
+
+        for (int32 frame = 0; frame < 64; ++frame)
+            advanceRack (0.0f);
+
+        out <- (rack.laneParamsAcknowledgedSerial == 31 && rack.laneRejectedUploadCount > 1 ? 1 : 0);
+        advance();
+
         // Frame 19: THREE delays at once — the base delay plus pool SET 0
         // and pool SET 1 instances, 40/90/140ms, all individually addressed.
         // Echoes at all three times prove multi-set instances work: the
