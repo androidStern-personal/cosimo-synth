@@ -48,7 +48,7 @@ async function Ue(t, e) {
   const n = _e(t, e);
   return await n.start(), n;
 }
-const I = "rack.v1", Be = "rackOrder", Ke = "rackEnable", w = Object.freeze([
+const I = "rack.v1", Be = "laneTopology", Ke = 16, A = Object.freeze([
   "filter",
   "drive",
   "ott",
@@ -68,7 +68,7 @@ const I = "rack.v1", Be = "rackOrder", Ke = "rackEnable", w = Object.freeze([
   reverb: 7
 });
 new Map(
-  w.map((t) => [ve[t], t])
+  A.map((t) => [ve[t], t])
 );
 function Se() {
   return {
@@ -86,7 +86,7 @@ function ee() {
   return {
     format: "cosimo.rack",
     version: 1,
-    order: [...w],
+    order: [...A],
     enabled: Se()
   };
 }
@@ -106,7 +106,7 @@ function te(t) {
   return typeof t == "object" && t !== null && !Array.isArray(t);
 }
 function $e(t) {
-  return typeof t != "string" ? null : w.find((e) => e === t) ?? null;
+  return typeof t != "string" ? null : A.find((e) => e === t) ?? null;
 }
 function ze(t) {
   const e = Ve(t);
@@ -120,7 +120,7 @@ function ze(t) {
       return { _tag: "err", message: `${I} has unexpected field ${String(o)}` };
   if (e.value.format !== "cosimo.rack" || e.value.version !== 1)
     return { _tag: "err", message: `${I} must be cosimo.rack version 1` };
-  if (!Array.isArray(e.value.order) || e.value.order.length !== w.length)
+  if (!Array.isArray(e.value.order) || e.value.order.length !== A.length)
     return { _tag: "err", message: `${I}.order must contain every effect once` };
   const i = [], r = /* @__PURE__ */ new Set();
   for (const o of e.value.order) {
@@ -131,10 +131,10 @@ function ze(t) {
   }
   if (!te(e.value.enabled))
     return { _tag: "err", message: `${I}.enabled must be an object` };
-  if (Reflect.ownKeys(e.value.enabled).length !== w.length)
+  if (Reflect.ownKeys(e.value.enabled).length !== A.length)
     return { _tag: "err", message: `${I}.enabled must contain every effect once` };
   const a = Se();
-  for (const o of w) {
+  for (const o of A) {
     const l = e.value.enabled[o];
     if (typeof l != "boolean")
       return { _tag: "err", message: `${I}.enabled.${o} must be boolean` };
@@ -152,14 +152,14 @@ function We(t) {
   return e._tag === "ok" ? e.value : ee();
 }
 function qe(t) {
-  return [
+  const e = new Array(Ke).fill(0);
+  let n = 0;
+  return t.order.forEach((i, r) => {
+    e[r] = ve[i], t.enabled[i] && (n |= 1 << r);
+  }), [
     {
       endpointID: Be,
-      value: { moduleIds: t.order.map((e) => ve[e]) }
-    },
-    {
-      endpointID: Ke,
-      value: { enabledFlags: w.map((e) => t.enabled[e] ? 1 : 0) }
+      value: { chainLength: t.order.length, slotIds: e, enabledMask: n }
     }
   ];
 }
@@ -604,27 +604,27 @@ function dt(t) {
   return lt(t) ? st(t) : ot(t);
 }
 const F = 2048;
-function M(t, e) {
+function D(t, e) {
   if (!t)
     throw new Error(e);
 }
 function ct(t) {
-  M(
+  D(
     Array.isArray(t?.tables),
     "Factory bank catalog must provide a tables array"
   );
   const e = t;
   return e.tables.forEach((n, i) => {
-    M(
+    D(
       typeof n?.tableId == "string" && n.tableId.length > 0,
       `Factory bank catalog table ${i} must provide tableId`
-    ), M(
+    ), D(
       typeof n?.name == "string" && n.name.length > 0,
       `Factory bank catalog table ${i} must provide name`
-    ), M(
+    ), D(
       Number.isInteger(Number(n?.frameCount)) && Number(n.frameCount) > 0,
       `Factory bank catalog table ${i} must provide a positive frameCount`
-    ), M(
+    ), D(
       typeof n?.sourceWav == "string" && n.sourceWav.length > 0,
       `Factory bank catalog table ${i} must provide sourceWav`
     );
@@ -922,14 +922,14 @@ const y = Object.freeze({
       c("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 35 })
     ]
   }
-], Ae = vt, De = Object.freeze(
+], Ae = vt, Me = Object.freeze(
   Ae.flatMap((t) => t.parameters)
 );
 new Map(
-  De.map((t) => [t.endpointID, t])
+  Me.map((t) => [t.endpointID, t])
 );
-function Me() {
-  return De;
+function De() {
+  return Me;
 }
 const Ce = ["A", "B", "C"], St = [
   "wavetablePosition",
@@ -964,7 +964,7 @@ const Ce = ["A", "B", "C"], St = [
   "env3Sustain",
   "env3Release",
   "filterMix"
-], A = Object.freeze([
+], w = Object.freeze([
   { id: "mseg-1", sourceKind: "mseg", sourceSlot: 1, group: "voice", runtimeIndex: 0 },
   { id: "mseg-2", sourceKind: "mseg", sourceSlot: 2, group: "voice", runtimeIndex: 1 },
   { id: "mseg-3", sourceKind: "mseg", sourceSlot: 3, group: "voice", runtimeIndex: 2 },
@@ -985,7 +985,7 @@ const Ce = ["A", "B", "C"], St = [
   ...xt
 ]), ke = Object.freeze(
   yt.map((t, e) => ({ kind: t, group: "voice", runtimeIndex: e }))
-), Tt = Me().filter((t) => t.modulationTargetIndex !== null), Fe = Object.freeze(
+), Tt = De().filter((t) => t.modulationTargetIndex !== null), Fe = Object.freeze(
   Tt.map((t) => ({
     // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
     // and indexes are both minted only by the rack descriptor catalog.
@@ -996,15 +996,15 @@ const Ce = ["A", "B", "C"], St = [
 ), T = Object.freeze([
   ...ke,
   ...Fe
-]), L = A.length, Rt = ke.length, Et = Fe.length, wt = L * T.length, At = new Map(A.map((t) => [t.id, t])), Dt = new Map(A.map((t) => [
+]), L = w.length, Rt = ke.length, Et = Fe.length, wt = L * T.length, At = new Map(w.map((t) => [t.id, t])), Mt = new Map(w.map((t) => [
   `${t.sourceKind}:${t.sourceSlot ?? 0}`,
   t
-])), Mt = new Map(T.map((t) => [t.kind, t]));
+])), Dt = new Map(T.map((t) => [t.kind, t]));
 function Ct() {
   if (L !== 13 || Rt !== 51 || Et !== 36 || wt !== 1131)
     throw new Error("Unexpected modulation domain size");
   for (const [t, e] of [["voice", 9], ["macro", 4]]) {
-    const n = A.filter((i) => i.group === t);
+    const n = w.filter((i) => i.group === t);
     if (n.length !== e || n.some((i, r) => i.runtimeIndex !== r))
       throw new Error(`Bad modulation ${t} source indexes`);
   }
@@ -1013,12 +1013,12 @@ function Ct() {
     if (n.length !== e || n.some((i, r) => i.runtimeIndex !== r))
       throw new Error(`Bad modulation ${t} target indexes`);
   }
-  if (At.size !== L || Dt.size !== L || Mt.size !== T.length)
+  if (At.size !== L || Mt.size !== L || Dt.size !== T.length)
     throw new Error("Modulation identities must be unique");
 }
 Ct();
-A.filter((t) => t.group === "voice").length;
-A.filter((t) => t.group === "macro").length;
+w.filter((t) => t.group === "voice").length;
+w.filter((t) => t.group === "macro").length;
 function kt(t) {
   throw new Error(`Unhandled case: ${JSON.stringify(t)}`);
 }
@@ -1046,13 +1046,13 @@ const Lt = [
     ]
   }
 ], le = 1e-6;
-function D(t, e) {
+function M(t, e) {
   if (!Number.isFinite(t) || t < -le || t > 1 + le)
     throw new RangeError(`${e} produced non-normalized value ${t}`);
   return Math.min(1, Math.max(0, t));
 }
 function O(t, e) {
-  return D(t / 100, `${e} catalog percentage`);
+  return M(t / 100, `${e} catalog percentage`);
 }
 function H(t, e) {
   if (e.length === 0 || e.includes("."))
@@ -1063,19 +1063,19 @@ function Pt(t) {
   return 20 * 1e3 ** t;
 }
 function Ot(t) {
-  return D(Math.log(t / 20) / Math.log(1e3), "filterCutoff endpoint conversion");
+  return M(Math.log(t / 20) / Math.log(1e3), "filterCutoff endpoint conversion");
 }
 function Nt(t) {
   return 0.1 * 200 ** t;
 }
 function _t(t) {
-  return D(Math.log(t / 0.1) / Math.log(200), "filterQ endpoint conversion");
+  return M(Math.log(t / 0.1) / Math.log(200), "filterQ endpoint conversion");
 }
 function Ut(t) {
   return t;
 }
 function Bt(t) {
-  return D(t, "filterMix endpoint conversion");
+  return M(t, "filterMix endpoint conversion");
 }
 function P(t, e, n) {
   return { _tag: "endpoint", endpointId: t, toEngine: e, fromEngine: n };
@@ -1208,7 +1208,7 @@ const Ht = Object.freeze(
   { moduleId: "env3", targetIdSuffix: "release", endpointID: "env3Release", targetKind: "env3Release", label: "ENV 3 Release", min: 1e-3, max: 10, initial: 0.2, format: "time", articulationParameterId: "env3.releaseSeconds" }
 ]);
 function jt(t) {
-  const e = H(t.moduleId, t.targetIdSuffix), n = t.max - t.min, i = (a) => t.min + n * a, r = (a) => D(
+  const e = H(t.moduleId, t.targetIdSuffix), n = t.max - t.min, i = (a) => t.min + n * a, r = (a) => M(
     (a - t.min) / n,
     `${t.endpointID} endpoint conversion`
   );
@@ -1236,7 +1236,7 @@ function Qt(t) {
 }
 function U(t, e) {
   const n = t.scale === "log" ? Math.log(e / t.min) / Math.log(t.max / t.min) : (e - t.min) / (t.max - t.min);
-  return D(n, `${t.endpointID} endpoint conversion`);
+  return M(n, `${t.endpointID} endpoint conversion`);
 }
 function Yt(t, e) {
   return t.scale === "log" ? t.min * (t.max / t.min) ** e : t.min + (t.max - t.min) * e;
@@ -1316,7 +1316,7 @@ function nn(t) {
   const n = de(t);
   return n.workspace === "effects" ? `${n.moduleId.toUpperCase()} ${n.label.toUpperCase()}` : n.label.toUpperCase();
 }
-const an = Me().filter((t) => t.modulationTargetIndex !== null);
+const an = De().filter((t) => t.modulationTargetIndex !== null);
 new Map(
   an.map((t) => [`rack.${t.endpointID}`, t])
 );
@@ -1335,7 +1335,7 @@ const rn = {
   "macro-3": "MACRO 3",
   "macro-4": "MACRO 4"
 };
-A.map((t) => ({
+w.map((t) => ({
   value: t.id,
   label: rn[t.id],
   sourceKind: t.sourceKind,
@@ -1393,7 +1393,7 @@ Object.fromEntries(
 Object.fromEntries(
   sn.map((t, e) => [t, 2 ** e])
 );
-const ln = "runtimeSyncRequest", dn = 2147483647, cn = "runtimeState", un = "retryDesiredTableRequest", hn = "workerLoadFailure", fn = "serviceLoadAbort", mn = "wavetableLoadBegin", pn = "wavetableMipFrame", gn = "wavetableUploadAck", In = "wavetableMipRequest", bn = "wavetablePrewarmRequest", vn = "wavetablePrewarmNotification", Sn = "assets/factory-bank-catalog.json", q = 3, xn = 1, yn = q * F, Tn = 1, Rn = 2, En = 3, wn = 1, An = 2, Dn = 2e4, k = Tn, Mn = Rn, ce = En, E = wn, ue = An, Cn = 48 * 1024 * 1024, B = 3;
+const ln = "runtimeSyncRequest", dn = 2147483647, cn = "runtimeState", un = "retryDesiredTableRequest", hn = "workerLoadFailure", fn = "serviceLoadAbort", mn = "wavetableLoadBegin", pn = "wavetableMipFrame", gn = "wavetableUploadAck", In = "wavetableMipRequest", bn = "wavetablePrewarmRequest", vn = "wavetablePrewarmNotification", Sn = "assets/factory-bank-catalog.json", q = 3, xn = 1, yn = q * F, Tn = 1, Rn = 2, En = 3, wn = 1, An = 2, Mn = 2e4, k = Tn, Dn = Rn, ce = En, E = wn, ue = An, Cn = 48 * 1024 * 1024, B = 3;
 function he(t, e) {
   const n = Math.round(Number(t));
   return Number.isFinite(n) && n > 0 ? n : e;
@@ -1542,7 +1542,7 @@ class _n {
     this.connection = e, this.resourceClient = dt(n.resourceClient ?? e), this.catalogPath = n.catalogPath ?? Sn, this.maxBatchesInFlight = he(
       n.maxFramesInFlight,
       xn
-    ), this.mipLevelCount = n.mipLevelCount ?? Re, this.cacheBudgetBytes = Math.max(0, Math.round(Number(n.cacheBudgetBytes ?? Cn) || 0)), this.serviceLoadTimeoutMs = he(n.serviceLoadTimeoutMs, Dn), this.setTimeoutFn = typeof n.setTimeoutFn == "function" ? n.setTimeoutFn : globalThis.setTimeout?.bind(globalThis) ?? null, this.clearTimeoutFn = typeof n.clearTimeoutFn == "function" ? n.clearTimeoutFn : globalThis.clearTimeout?.bind(globalThis) ?? null, this.handleRuntimeState = this.handleRuntimeState.bind(this), this.handleUploadAck = this.handleUploadAck.bind(this), this.handleMipRequest = this.handleMipRequest.bind(this), this.handlePrewarmRequest = this.handlePrewarmRequest.bind(this);
+    ), this.mipLevelCount = n.mipLevelCount ?? Re, this.cacheBudgetBytes = Math.max(0, Math.round(Number(n.cacheBudgetBytes ?? Cn) || 0)), this.serviceLoadTimeoutMs = he(n.serviceLoadTimeoutMs, Mn), this.setTimeoutFn = typeof n.setTimeoutFn == "function" ? n.setTimeoutFn : globalThis.setTimeout?.bind(globalThis) ?? null, this.clearTimeoutFn = typeof n.clearTimeoutFn == "function" ? n.clearTimeoutFn : globalThis.clearTimeout?.bind(globalThis) ?? null, this.handleRuntimeState = this.handleRuntimeState.bind(this), this.handleUploadAck = this.handleUploadAck.bind(this), this.handleMipRequest = this.handleMipRequest.bind(this), this.handlePrewarmRequest = this.handlePrewarmRequest.bind(this);
   }
   async start() {
     return this.started ? this : (this.started = !0, m("info", "Starting wavetable worker controller", {
@@ -2135,7 +2135,7 @@ class _n {
             tableIndex: e.tableIndex
           },
           {
-            failurePhase: Mn,
+            failurePhase: Dn,
             failureReasonCode: E
           }
         ), this.serviceTable = null, this.clearMipTransferState(), this.scheduleRuntimeStateDrain();

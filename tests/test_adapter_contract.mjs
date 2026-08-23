@@ -592,14 +592,15 @@ test("bridge rack commands preserve desired state across an older effective read
 
     adapter.commands.setEffectEnabled("chorus", true);
     connection.emitEndpoint("effectiveRackState", {
-        committedStructureGeneration: 0,
-        committedOrderCode: [0, 1, 2, 3, 4, 5, 6, 7].reduce(
+        laneCommittedChainLength: 8,
+        laneCommittedChainCode: [0, 1, 2, 3, 4, 5, 6, 7].reduce(
             (code, moduleId, position) => code | (moduleId << (position * 3)),
             0,
         ),
-        committedEnableMask: 0,
-        rejectedOrderCount: 0,
-        rejectedEnableCount: 0,
+        laneCommittedPositionMask: 0,
+        laneCommittedGeneration: 0,
+        laneRejectedUploadCount: 0,
+        laneParamsAcknowledgedSerial: 0,
     });
     adapter.commands.reorderEffect("reverb", "filter");
 

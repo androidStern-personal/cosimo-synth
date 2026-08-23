@@ -45,8 +45,8 @@ namespace wt
     //   - Hoist with MODULE-PREFIX wildcards only (`input rack.distortion*;` and so on).
     //     A bare `input rack.*;` would also hoist `in`, `trackingPitchHzIn`,
     //     `tempoBpmIn`, `rackModIn` and the four preview streams.
-    //   - rackEnable is the only participation gate for every module. This is the first
-    //     production rack schema, so there is no deprecated Chorus gate or migration.
+    //   - laneTopology is the only structure gate for every device: chain membership
+    //     plus the per-position enable mask. There is no other participation path.
     //   - The distortion scope and history analyzers read the four preview streams
     //     forwarded below rather than reaching into wt::DistortionBus directly.
     //   - A composed processor cannot write to `console`, so every diagnostic here is a
@@ -57,9 +57,9 @@ namespace wt
     //     wt::SharedVoiceEngine's `rackModOut` in ONE graph connection. The destination
     //     vocabulary and reduction rules live in VoiceReducer.cmajor; the engine runs
     //     only active instructions from its compiled sparse route program.
-    //   - THE DEFAULT ENABLE MASK IS EMPTY. This preserves the deployed pre-rack sound
-    //     until the adapter restores the canonical rack.v1 document. A module's host
-    //     parameter default is never allowed to opt it into the audio path implicitly.
+    //   - THE DEFAULT CHAIN IS EMPTY. This preserves the deployed pre-rack sound until
+    //     the adapter restores the saved lane document. A device's host parameter
+    //     default is never allowed to opt it into the audio path implicitly.
 
     let rackModuleCount = 8;
     let rackChannelCount = 2;
@@ -264,22 +264,6 @@ namespace wt
     // (ADR-009): moving a module must not change what is on, and turning a module off
     // must not move it.
 
-    // Rack position -> effect instance id. Always a complete permutation.
-    struct RackOrderUpload
-    {
-        int32[rackModuleCount] moduleIds;
-    }
-
-    // Effect instance id -> enabled flag. A FLAG, so 0 or 1 - not a truthy integer.
-    struct RackEnableUpload
-    {
-        int32[rackModuleCount] enabledFlags;
-    }
-
-    // Effects Lane topology (M1 slice 1): a serial chain over lane slots. A slot
-    // present in the chain participates at its position; enabledFlags carries the
-    // per-slot bypass state (a bypassed slot stays in the chain and passes the
-    // signal through, exactly like rackEnable does for the base modules).
     struct LaneTopologyUpload
     {
         int32 chainLength;
@@ -320,37 +304,6 @@ namespace wt
     // runtime state the rack may occupy, so both of these fail fast and the caller
     // leaves the running state completely untouched. Neither coerces.
 
-    bool isCompleteRackPermutation (int32[rackModuleCount] moduleIds)
-    {
-        bool[rackModuleCount] seen;
-
-        for (wrap<rackModuleCount> position)
-        {
-            let moduleId = moduleIds[position];
-
-            if (moduleId < 0 || moduleId >= rackModuleCount)
-                return false;
-
-            let index = wrap<rackModuleCount> (moduleId);
-
-            if (seen[index])
-                return false;
-
-            seen[index] = true;
-        }
-
-        return true;
-    }
-
-    bool isValidRackEnableUpload (int32[rackModuleCount] enabledFlags)
-    {
-        for (wrap<rackModuleCount> moduleId)
-            if (enabledFlags[moduleId] != 0 && enabledFlags[moduleId] != 1)
-                return false;
-
-        return true;
-    }
-
     // A lane topology is validated, never coerced (the C11 rule): out-of-range
     // slot ids, duplicate slots, or non-flag enables reject the whole upload and
     // leave the running chain untouched.
@@ -383,24 +336,6 @@ namespace wt
         return true;
     }
 
-    //==============================================================================
-    // C7 / ADR-005 sleep hook.
-    //
-    // Return true for a module and the dispatch below will stop advancing it while it
-    // is disabled. It returns false for EVERY module in v1 - pending profiling - so the
-    // compiler folds the branch away entirely and always-advance costs nothing to keep
-    // as an option. The three plausible candidates are the modules whose "sleep" is a
-    // genuinely small local implementation: wt::GlobalFilterBus (mode Off already
-    // resets its state and is a bit-exact passthrough), wt::DistortionBus (memoryless
-    // cores; its band filters and DC blockers are the only memory) and wt::PhaserBus
-    // (allpass state only). Waking any of them must still satisfy ADR-005's "re-enabling
-    // must not expose an unsmoothed stale-state transient", which for the phaser means
-    // its LFO phase, so none of this is free - which is exactly why it waits for a
-    // measurement rather than a hunch.
-    bool rackModuleSleepsWhileDisabled (int32 moduleId)
-    {
-        return false;
-    }
 
     //==============================================================================
     // Modulation application (ADR-012). The rack is the single point at which a
@@ -480,8 +415,6 @@ namespace wt
         // events, which carry no parameter purpose, so they are structurally
         // non-automatable rather than non-automatable by convention.
 
-        input event RackOrderUpload rackOrder;
-        input event RackEnableUpload rackEnable;
         input event LaneTopologyUpload laneTopology;
         input event LaneSlotParamsUpload laneSlotParams;
         input event LaneSlotParamValueUpload laneSlotParamValue;
@@ -559,11 +492,12 @@ namespace wt
         output stream float32 previewOutputRight;
 
         // Diagnostics and state readback.
-        output value int32 rackCommittedStructureGeneration;
-        output value int32 rackCommittedOrderCode;
-        output value int32 rackCommittedEnableMask;
-        output value int32 rackRejectedOrderCount;
-        output value int32 rackRejectedEnableCount;
+        // The committed CHAIN, packed for the readback: three bits per
+        // position (valid while chains hold only ordinal-0 devices, i.e. the
+        // rack.v1 document) plus the per-position enable mask.
+        output value int32 laneCommittedChainLength;
+        output value int32 laneCommittedChainCode;
+        output value int32 laneCommittedPositionMask;
         output value int32 laneCommittedGeneration;
         output value int32 laneRejectedUploadCount;
         output value int32 laneParamsAcknowledgedSerial;
@@ -573,10 +507,10 @@ namespace wt
         // declaration order below is also the compile-time default rack order.
 
         // UNIFORM instances (M2): one array of lanePoolInstanceCount per
-        // type. Ordinal 0 is the (former) base instance — it keeps the
-        // legacy always-advance contract while rackOrder/rackEnable exist —
-        // and ordinals 1.. are the pool sets (asleep outside the chain,
-        // entered fresh through the commit-path reset).
+        // type. Ordinal 0 is the (former) base instance — it still reads the
+        // 45 annotated host parameters until the B3 parameter cut — and
+        // ordinals 1.. are the pool sets (asleep outside the chain, entered
+        // fresh through the commit-path reset).
         node globalFilterPool = wt::GlobalFilterBus[lanePoolInstanceCount];
         node distortionPool   = wt::DistortionBus[lanePoolInstanceCount];
         node ottPool          = wt::OttBus[lanePoolInstanceCount];
@@ -597,20 +531,13 @@ namespace wt
         let transitionFrames = int32 (std::intrinsics::max (1.0f,
                                         float32 (processor.frequency) * rackTransitionMs * 0.001f));
 
-        wrap<rackModuleCount>[rackModuleCount] currentOrder;
-        wrap<rackModuleCount>[rackModuleCount] pendingOrder;
-        bool[rackModuleCount] currentEnabled;
-        bool[rackModuleCount] pendingEnabled;
-
         bool hasPendingStructure;
         float32 transitionGain = 1.0f;
-        int32 committedStructureGeneration;
-        int32 rejectedOrderCount;
-        int32 rejectedEnableCount;
+        int32 currentPositionMask;
+        int32 pendingPositionMask;
 
         // Lane chain state. Once a topology commits, the lane chain drives the
         // dispatch instead of the legacy order permutation.
-        bool laneChainActive;
         bool pendingLaneUpload;
         int32 currentLaneChainLength;
         int32 pendingLaneChainLength;
@@ -635,18 +562,6 @@ namespace wt
 
         void init()
         {
-            for (wrap<rackModuleCount> position)
-            {
-                currentOrder[position] = position;
-                pendingOrder[position] = position;
-            }
-
-            for (wrap<rackModuleCount> moduleId)
-            {
-                currentEnabled[moduleId] = false;
-                pendingEnabled[moduleId] = false;
-            }
-
             // pow (2, 0) - the identity, so an unrouted frequency destination never
             // computes a pow() at all.
             for (wrap<rackOctaveScalerCount> scaler)
@@ -710,34 +625,6 @@ namespace wt
         //----------------------------------------------------------------------
         // Structure uploads.
 
-        event rackOrder (RackOrderUpload upload)
-        {
-            if (! isCompleteRackPermutation (upload.moduleIds))
-            {
-                rejectedOrderCount += 1;
-                return;
-            }
-
-            for (wrap<rackModuleCount> position)
-                pendingOrder[position] = wrap<rackModuleCount> (upload.moduleIds[position]);
-
-            hasPendingStructure = pendingStructureDiffersFromCurrent();
-        }
-
-        event rackEnable (RackEnableUpload upload)
-        {
-            if (! isValidRackEnableUpload (upload.enabledFlags))
-            {
-                rejectedEnableCount += 1;
-                return;
-            }
-
-            for (wrap<rackModuleCount> moduleId)
-                pendingEnabled[moduleId] = upload.enabledFlags[moduleId] != 0;
-
-            hasPendingStructure = pendingStructureDiffersFromCurrent();
-        }
-
         event laneTopology (LaneTopologyUpload upload)
         {
             if (! isValidLaneTopology (upload))
@@ -768,10 +655,30 @@ namespace wt
                     pendingLaneEnabled[wrap<laneSlotCount> (upload.slotIds[position])] =
                         ((upload.enabledMask >> int32 (position)) & 1) != 0;
 
-            // Drives the shared ADR-003 transition; the commit swaps the chain
-            // on the fully-dry frame exactly as a reorder does.
-            pendingLaneUpload = true;
-            hasPendingStructure = true;
+            pendingPositionMask = upload.enabledMask;
+
+            // Compared against the RUNNING structure so a redundant upload —
+            // the adapter re-sends on every patch load — costs zero dipped
+            // frames and burns no generation.
+            var differs = pendingLaneChainLength != currentLaneChainLength
+                          || pendingPositionMask != currentPositionMask;
+
+            for (wrap<maxLaneChainLength> position)
+                if (int32 (position) < pendingLaneChainLength
+                     && pendingLaneChain[position] != currentLaneChain[position])
+                    differs = true;
+
+            for (wrap<laneSlotCount> slot)
+                if (pendingLaneEnabled[slot] != currentLaneEnabled[slot])
+                    differs = true;
+
+            if (differs)
+            {
+                // Drives the shared ADR-003 transition; the commit swaps the
+                // chain on the fully-dry frame exactly as a reorder does.
+                pendingLaneUpload = true;
+                hasPendingStructure = true;
+            }
         }
 
         event laneSlotParams (LaneSlotParamsUpload upload)
@@ -807,27 +714,8 @@ namespace wt
         // that a redundant upload arriving mid-transition cannot cancel a real pending
         // change - and so that the adapter re-sending rack state on every patch load,
         // which it does, costs nothing instead of a 6 ms dropout.
-        bool pendingStructureDiffersFromCurrent()
-        {
-            for (wrap<rackModuleCount> position)
-                if (pendingOrder[position] != currentOrder[position])
-                    return true;
-
-            for (wrap<rackModuleCount> moduleId)
-                if (pendingEnabled[moduleId] != currentEnabled[moduleId])
-                    return true;
-
-            return false;
-        }
-
         void commitPendingStructure()
         {
-            for (wrap<rackModuleCount> position)
-                currentOrder[position] = pendingOrder[position];
-
-            for (wrap<rackModuleCount> moduleId)
-                currentEnabled[moduleId] = pendingEnabled[moduleId];
-
             if (pendingLaneUpload)
             {
                 bool[laneSlotCount] slotInPendingChain;
@@ -836,35 +724,41 @@ namespace wt
                     if (int32 (position) < pendingLaneChainLength)
                         slotInPendingChain[pendingLaneChain[position]] = true;
 
-                // A POOL slot entering the chain is a newly created device: it
+                // A slot entering the chain is a newly created device: it
                 // starts with empty audio memory, never a frozen tail from a
-                // previous life. Base instances are never reset (ADR-003).
+                // previous life. Reorders and bypass keep membership, so
+                // tails still survive both (ADR-003 semantics carried over).
                 for (wrap<laneSlotCount> slot)
                 {
                     let selector = int32 (slot);
 
-                    if (selector >= rackModuleCount
-                         && slotInPendingChain[slot] && ! slotInCurrentChain[slot])
+                    if (slotInPendingChain[slot] && ! slotInCurrentChain[slot])
                     {
-                        for (wrap<laneSlotParamCount> param)
+                        // Records (and their ramps) exist for pool slots; the
+                        // ordinal-0 devices keep host endpoints until the
+                        // parameter cut.
+                        if (selector >= rackModuleCount)
                         {
-                            let poolOffset = wrap<lanePoolSlotCount> (selector - rackModuleCount);
-                            poolParamCurrent[poolOffset, param] = poolSlotParams[poolOffset, param];
-                            poolParamKnownTarget[poolOffset, param] = poolSlotParams[poolOffset, param];
-                            poolParamStep[poolOffset, param] = 0.0f;
+                            for (wrap<laneSlotParamCount> param)
+                            {
+                                let poolOffset = wrap<lanePoolSlotCount> (selector - rackModuleCount);
+                                poolParamCurrent[poolOffset, param] = poolSlotParams[poolOffset, param];
+                                poolParamKnownTarget[poolOffset, param] = poolSlotParams[poolOffset, param];
+                                poolParamStep[poolOffset, param] = 0.0f;
+                            }
                         }
 
-                        let poolSet = wrap<lanePoolSetCount> ((selector - rackModuleCount) / rackModuleCount);
-                        let poolType = (selector - rackModuleCount) % rackModuleCount;
+                        let ordinal = wrap<lanePoolInstanceCount> (selector / rackModuleCount);
+                        let poolType = selector % rackModuleCount;
 
-                        if (poolType == rackModuleGlobalFilter)  globalFilterPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].poolResetIn <- 1;
-                        if (poolType == rackModuleDistortion)    distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].poolResetIn <- 1;
-                        if (poolType == rackModuleOtt)           ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].poolResetIn <- 1;
-                        if (poolType == rackModuleChorus)        chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].poolResetIn <- 1;
-                        if (poolType == rackModuleFlanger)       flangerPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].poolResetIn <- 1;
-                        if (poolType == rackModulePhaser)        phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].poolResetIn <- 1;
-                        if (poolType == rackModuleDelay)         delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].poolResetIn <- 1;
-                        if (poolType == rackModuleReverb)        reverbPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].poolResetIn <- 1;
+                        if (poolType == rackModuleGlobalFilter)  globalFilterPool[ordinal].poolResetIn <- 1;
+                        if (poolType == rackModuleDistortion)    distortionPool[ordinal].poolResetIn <- 1;
+                        if (poolType == rackModuleOtt)           ottPool[ordinal].poolResetIn <- 1;
+                        if (poolType == rackModuleChorus)        chorusPool[ordinal].poolResetIn <- 1;
+                        if (poolType == rackModuleFlanger)       flangerPool[ordinal].poolResetIn <- 1;
+                        if (poolType == rackModulePhaser)        phaserPool[ordinal].poolResetIn <- 1;
+                        if (poolType == rackModuleDelay)         delayPool[ordinal].poolResetIn <- 1;
+                        if (poolType == rackModuleReverb)        reverbPool[ordinal].poolResetIn <- 1;
                     }
                 }
 
@@ -872,43 +766,33 @@ namespace wt
                 currentLaneChainLength = pendingLaneChainLength;
                 currentLaneChain = pendingLaneChain;
                 currentLaneEnabled = pendingLaneEnabled;
-                laneChainActive = true;
+                currentPositionMask = pendingPositionMask;
                 laneGeneration += 1;
                 pendingLaneUpload = false;
             }
 
             hasPendingStructure = false;
-            committedStructureGeneration += 1;
         }
 
-        int32 committedOrderCode()
+        int32 committedChainCode()
         {
+            // Three bits per position: valid while chains hold only ordinal-0
+            // devices (the rack.v1 document); the general readback arrives
+            // with lane state.
             var code = 0;
 
-            for (wrap<rackModuleCount> position)
-                code |= int32 (currentOrder[position]) << (rackOrderCodeBitsPerPosition * int32 (position));
+            for (wrap<maxLaneChainLength> position)
+                if (int32 (position) < currentLaneChainLength)
+                    code |= int32 (currentLaneChain[position]) << (rackOrderCodeBitsPerPosition * int32 (position));
 
             return code;
         }
 
-        int32 committedEnableMask()
-        {
-            var mask = 0;
-
-            for (wrap<rackModuleCount> moduleId)
-                if (currentEnabled[moduleId])
-                    mask |= 1 << int32 (moduleId);
-
-            return mask;
-        }
-
         void publishStructureDiagnostics()
         {
-            rackCommittedStructureGeneration <- committedStructureGeneration;
-            rackCommittedOrderCode <- committedOrderCode();
-            rackCommittedEnableMask <- committedEnableMask();
-            rackRejectedOrderCount <- rejectedOrderCount;
-            rackRejectedEnableCount <- rejectedEnableCount;
+            laneCommittedChainLength <- currentLaneChainLength;
+            laneCommittedChainCode <- committedChainCode();
+            laneCommittedPositionMask <- currentPositionMask;
             laneCommittedGeneration <- laneGeneration;
             laneRejectedUploadCount <- laneRejectedCount;
             laneParamsAcknowledgedSerial <- laneParamsSerial;
@@ -1008,7 +892,7 @@ namespace wt
                 rackModulateLinear (ottEnvelopeMatch, rackModIn[rackModTargetOttEnvelopeMatch]));
 
             // --- Chorus / Bloom --------------------------------------------
-            // Pinned on internally: module participation is governed solely by rackEnable.
+            // Pinned on internally: device participation is governed solely by laneTopology.
             chorusPool[wrap<lanePoolInstanceCount> (0)].enabledIn <- 1.0f;
             chorusPool[wrap<lanePoolInstanceCount> (0)].mixIn <- rackModulateLinear (chorusMix, rackModIn[rackModTargetChorusMix]);
             chorusPool[wrap<lanePoolInstanceCount> (0)].motionModeIn <- chorusMotionMode;
@@ -1255,134 +1139,66 @@ namespace wt
         // lines hold the history they would have held. It simply contributes no wet
         // output and passes the signal through EXACTLY (ADR-005's hard audible bypass).
 
-        float32<rackChannelCount> advanceModule (wrap<rackModuleCount> moduleId,
-                                                 float32<rackChannelCount> signal,
-                                                 bool isEnabled)
-        {
-            let selector = int32 (moduleId);
-
-            if (! isEnabled && rackModuleSleepsWhileDisabled (selector))
-                return signal;
-
-            if (selector == rackModuleGlobalFilter)
-            {
-                globalFilterPool[wrap<lanePoolInstanceCount> (0)].in <- signal;
-                globalFilterPool[wrap<lanePoolInstanceCount> (0)].advance();
-                return isEnabled ? globalFilterPool[wrap<lanePoolInstanceCount> (0)].out : signal;
-            }
-
-            if (selector == rackModuleDistortion)
-            {
-                distortionPool[wrap<lanePoolInstanceCount> (0)].in <- signal;
-                distortionPool[wrap<lanePoolInstanceCount> (0)].advance();
-                return isEnabled ? distortionPool[wrap<lanePoolInstanceCount> (0)].out : signal;
-            }
-
-            if (selector == rackModuleOtt)
-            {
-                ottPool[wrap<lanePoolInstanceCount> (0)].in <- signal;
-                ottPool[wrap<lanePoolInstanceCount> (0)].advance();
-                return isEnabled ? ottPool[wrap<lanePoolInstanceCount> (0)].out : signal;
-            }
-
-            if (selector == rackModuleChorus)
-            {
-                chorusPool[wrap<lanePoolInstanceCount> (0)].in <- signal;
-                chorusPool[wrap<lanePoolInstanceCount> (0)].advance();
-                return isEnabled ? chorusPool[wrap<lanePoolInstanceCount> (0)].out : signal;
-            }
-
-            if (selector == rackModuleFlanger)
-            {
-                flangerPool[wrap<lanePoolInstanceCount> (0)].in <- signal;
-                flangerPool[wrap<lanePoolInstanceCount> (0)].advance();
-                return isEnabled ? flangerPool[wrap<lanePoolInstanceCount> (0)].out : signal;
-            }
-
-            if (selector == rackModulePhaser)
-            {
-                phaserPool[wrap<lanePoolInstanceCount> (0)].in <- signal;
-                phaserPool[wrap<lanePoolInstanceCount> (0)].advance();
-                return isEnabled ? phaserPool[wrap<lanePoolInstanceCount> (0)].out : signal;
-            }
-
-            if (selector == rackModuleDelay)
-            {
-                delayPool[wrap<lanePoolInstanceCount> (0)].in <- signal;
-                delayPool[wrap<lanePoolInstanceCount> (0)].advance();
-                return isEnabled ? delayPool[wrap<lanePoolInstanceCount> (0)].out : signal;
-            }
-
-            reverbPool[wrap<lanePoolInstanceCount> (0)].in <- signal;
-            reverbPool[wrap<lanePoolInstanceCount> (0)].advance();
-            return isEnabled ? reverbPool[wrap<lanePoolInstanceCount> (0)].out : signal;
-        }
-
         float32<rackChannelCount> advanceLaneSlot (wrap<laneSlotCount> slotId,
                                                    float32<rackChannelCount> signal)
         {
             let selector = int32 (slotId);
             let isEnabled = currentLaneEnabled[slotId];
-
-            if (selector < rackModuleCount)
-                return advanceModule (wrap<rackModuleCount> (selector), signal, isEnabled);
-
-            let poolOffset = selector - rackModuleCount;
-            let poolSet = wrap<lanePoolSetCount> (poolOffset / rackModuleCount);
-            let poolType = poolOffset % rackModuleCount;
+            let ordinal = wrap<lanePoolInstanceCount> (selector / rackModuleCount);
+            let poolType = selector % rackModuleCount;
 
             if (poolType == rackModuleGlobalFilter)
             {
-                globalFilterPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].in <- signal;
-                globalFilterPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].advance();
-                return isEnabled ? globalFilterPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].out : signal;
+                globalFilterPool[ordinal].in <- signal;
+                globalFilterPool[ordinal].advance();
+                return isEnabled ? globalFilterPool[ordinal].out : signal;
             }
 
             if (poolType == rackModuleDistortion)
             {
-                distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].in <- signal;
-                distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].advance();
-                return isEnabled ? distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].out : signal;
+                distortionPool[ordinal].in <- signal;
+                distortionPool[ordinal].advance();
+                return isEnabled ? distortionPool[ordinal].out : signal;
             }
 
             if (poolType == rackModuleOtt)
             {
-                ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].in <- signal;
-                ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].advance();
-                return isEnabled ? ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].out : signal;
+                ottPool[ordinal].in <- signal;
+                ottPool[ordinal].advance();
+                return isEnabled ? ottPool[ordinal].out : signal;
             }
 
             if (poolType == rackModuleChorus)
             {
-                chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].in <- signal;
-                chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].advance();
-                return isEnabled ? chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].out : signal;
+                chorusPool[ordinal].in <- signal;
+                chorusPool[ordinal].advance();
+                return isEnabled ? chorusPool[ordinal].out : signal;
             }
 
             if (poolType == rackModuleFlanger)
             {
-                flangerPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].in <- signal;
-                flangerPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].advance();
-                return isEnabled ? flangerPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].out : signal;
+                flangerPool[ordinal].in <- signal;
+                flangerPool[ordinal].advance();
+                return isEnabled ? flangerPool[ordinal].out : signal;
             }
 
             if (poolType == rackModulePhaser)
             {
-                phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].in <- signal;
-                phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].advance();
-                return isEnabled ? phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].out : signal;
+                phaserPool[ordinal].in <- signal;
+                phaserPool[ordinal].advance();
+                return isEnabled ? phaserPool[ordinal].out : signal;
             }
 
             if (poolType == rackModuleDelay)
             {
-                delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].in <- signal;
-                delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].advance();
-                return isEnabled ? delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].out : signal;
+                delayPool[ordinal].in <- signal;
+                delayPool[ordinal].advance();
+                return isEnabled ? delayPool[ordinal].out : signal;
             }
 
-            reverbPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].in <- signal;
-            reverbPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].advance();
-            return isEnabled ? reverbPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].out : signal;
+            reverbPool[ordinal].in <- signal;
+            reverbPool[ordinal].advance();
+            return isEnabled ? reverbPool[ordinal].out : signal;
         }
 
         void main()
@@ -1395,41 +1211,14 @@ namespace wt
 
                 var chain = in;
 
-                if (laneChainActive)
+                // ONE dispatch: the committed chain, in order. A device
+                // outside the chain does not exist — it advances nothing and
+                // costs nothing; it enters fresh through the commit reset.
+                // An empty chain is the dry instrument.
+                for (wrap<maxLaneChainLength> position)
                 {
-                    bool[laneSlotCount] advancedThisFrame;
-
-                    for (wrap<maxLaneChainLength> position)
-                    {
-                        if (int32 (position) < currentLaneChainLength)
-                        {
-                            let slot = currentLaneChain[position];
-                            chain = advanceLaneSlot (slot, chain);
-                            advancedThisFrame[slot] = true;
-                        }
-                    }
-
-                    // Time-base invariant: every resident BASE module advances
-                    // exactly once per rack frame (idling on the live input, its
-                    // output discarded). POOL slots sleep outside the chain — a
-                    // device that does not exist yet costs nothing — and enter
-                    // fresh via the commit-path reset.
-                    for (wrap<laneSlotCount> slot)
-                    {
-                        if (! advancedThisFrame[slot] && int32 (slot) < rackModuleCount)
-                        {
-                            let idleOut = advanceLaneSlot (slot, in);
-                        }
-                    }
-                }
-                else
-                {
-                    for (wrap<rackModuleCount> position)
-                        chain = advanceModule (currentOrder[position], chain,
-                                               currentEnabled[currentOrder[position]]);
-
-                    // Pool slots sleep until a lane topology commits them into a
-                    // chain; a device that does not exist yet costs nothing.
+                    if (int32 (position) < currentLaneChainLength)
+                        chain = advanceLaneSlot (currentLaneChain[position], chain);
                 }
 
                 let transition = nextTransitionGain();

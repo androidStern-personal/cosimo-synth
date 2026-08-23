@@ -2198,7 +2198,7 @@ private:
         }
         else if (endpointID == "effectiveRackState")
         {
-            const auto rackEnableMask = value["committedEnableMask"].getWithDefault<int32_t> (-1);
+            const auto rackEnableMask = value["laneCommittedPositionMask"].getWithDefault<int32_t> (-1);
             if (rackEnableMask >= 0 && rackEnableMask <= 255)
             {
                 benchmarkRackEnableMask.store (static_cast<uint32_t> (rackEnableMask));

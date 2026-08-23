@@ -307,7 +307,7 @@ int runProbe (const char* runtimePath, const char* patchPath)
         }
         else if (endpointID == "effectiveRackState")
         {
-            observations.rackEnableMask = value["committedEnableMask"].getWithDefault<int32_t> (0);
+            observations.rackEnableMask = value["laneCommittedPositionMask"].getWithDefault<int32_t> (0);
         }
     };
 
@@ -336,13 +336,17 @@ int runProbe (const char* runtimePath, const char* patchPath)
         return 1;
     }
 
-    auto enabledFlags = choc::value::createArray (8, [] (uint32_t moduleIndex)
+    // The full ordinal-0 chain in identity order with only position 0 (the
+    // filter) live: the position mask readback must land as 0b1.
+    auto slotIds = choc::value::createArray (16, [] (uint32_t position)
     {
-        return choc::value::Value (static_cast<int32_t> (moduleIndex == 0 ? 1 : 0));
+        return choc::value::Value (static_cast<int32_t> (position < 8 ? position : 0));
     });
-    auto rackEnable = choc::json::create ("enabledFlags", std::move (enabledFlags));
-    if (! patch.sendEventOrValueToPatch (cmaj::EndpointID::create (std::string_view { "rackEnable" }),
-                                         rackEnable,
+    auto laneTopology = choc::json::create ("chainLength", 8,
+                                            "slotIds", std::move (slotIds),
+                                            "enabledMask", 1);
+    if (! patch.sendEventOrValueToPatch (cmaj::EndpointID::create (std::string_view { "laneTopology" }),
+                                         laneTopology,
                                          0,
                                          sendTimeoutMilliseconds)
         || ! processUntil (patch, playback, observations, [] (const Snapshot& snapshot)

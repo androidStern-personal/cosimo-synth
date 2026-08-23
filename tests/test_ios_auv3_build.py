@@ -907,7 +907,7 @@ def test_ios_modulation_benchmark_installs_state_through_the_production_worker()
     assert "deadlineMissCount" in plugin_shell
     assert 'endpointID == "voiceArticulationStart"' in plugin_shell
     assert 'endpointID == "effectiveRackState"' in plugin_shell
-    assert 'value["committedEnableMask"]' in plugin_shell
+    assert 'value["laneCommittedPositionMask"]' in plugin_shell
     assert "benchmarkRackEnableMask.store" in plugin_shell
     assert '"rackEnableMask"' in host_harness
     assert "uniqueVoiceIndexes" in host_harness

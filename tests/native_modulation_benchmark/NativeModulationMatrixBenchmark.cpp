@@ -331,7 +331,8 @@ void loadSineWavetable (WavetableSynth& performer)
             frame.generation = wavetableGeneration;
             frame.tableIndex = wavetableTableIndex;
             frame.mipIndex = mipIndex;
-            frame.frameIndex = 0;
+            frame.frameIndexBase = 0;
+            frame.frameCount = 1;
             for (std::int32_t sampleIndex = 0; sampleIndex < 2048; ++sampleIndex)
                 frame.samples[sampleIndex] = static_cast<float> (std::sin (twoPi * sampleIndex / 2048.0));
             performer.addEvent_wavetableMipFrame (frame);
@@ -349,10 +350,12 @@ std::int32_t initialisePerformer (WavetableSynth& performer)
     for (std::int32_t macroIndex = 1; macroIndex <= 4; ++macroIndex)
         setParameter (performer, "macro" + std::to_string (macroIndex), benchmark_profiles::macroValue);
 
-    WavetableSynth::wt_RackEnableUpload rackEnable;
-    for (std::int32_t moduleIndex = 0; moduleIndex < 8; ++moduleIndex)
-        rackEnable.enabledFlags[moduleIndex] = 1;
-    performer.addEvent_rackEnable (rackEnable);
+    WavetableSynth::wt_LaneTopologyUpload laneTopology {};
+    laneTopology.chainLength = 8;
+    for (std::int32_t position = 0; position < 8; ++position)
+        laneTopology.slotIds[position] = position;
+    laneTopology.enabledMask = 255;
+    performer.addEvent_laneTopology (laneTopology);
 
     const auto serial = installNeutralSourcesAndEmptyProgram (performer);
     clearOutputEvents (performer);
@@ -402,10 +405,11 @@ void initialiseVoiceFloorPerformer (WavetableSynth& performer)
     performer.initialise (dspSessionID, sampleRate);
     loadSineWavetable (performer);
 
-    WavetableSynth::wt_RackEnableUpload rackEnable;
-    for (std::int32_t moduleIndex = 0; moduleIndex < 8; ++moduleIndex)
-        rackEnable.enabledFlags[moduleIndex] = 0;
-    performer.addEvent_rackEnable (rackEnable);
+    // The voice floor runs the deployed pre-rack sound: an EMPTY lane, which
+    // is the engine's default and its cheapest structure.
+    WavetableSynth::wt_LaneTopologyUpload laneTopology {};
+    laneTopology.chainLength = 0;
+    performer.addEvent_laneTopology (laneTopology);
 
     installNeutralSourcesAndEmptyProgram (performer);
     clearOutputEvents (performer);
@@ -422,7 +426,7 @@ void observeRackMask (WavetableSynth& performer, std::int32_t& latestMask)
         performer.readOutputEvent (rackHandle,
                                    eventIndex,
                                    reinterpret_cast<unsigned char*> (&state));
-        latestMask = state.committedEnableMask;
+        latestMask = state.laneCommittedPositionMask;
     }
 }
 

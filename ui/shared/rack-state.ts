@@ -3,12 +3,13 @@ import type { EffectModuleId } from "./target-descriptor";
 
 /** Canonical stored-state key for the first production effects rack schema. */
 export const RACK_STATE_KEY = "rack.v1";
-/** DSP endpoint receiving the complete position-to-module permutation. */
-export const RACK_ORDER_ENDPOINT_ID = "rackOrder";
-/** DSP endpoint receiving one enabled flag per stable module identity. */
-export const RACK_ENABLE_ENDPOINT_ID = "rackEnable";
+/** DSP endpoint receiving the complete lane structure: chain + enable mask. */
+export const LANE_TOPOLOGY_ENDPOINT_ID = "laneTopology";
 /** DSP endpoint reporting the committed structure after its transition. */
 export const EFFECTIVE_RACK_STATE_ENDPOINT_ID = "effectiveRackState";
+
+/** Wire capacity of one lane chain (engine maxLaneChainLength). */
+export const LANE_MAX_CHAIN_LENGTH = 16;
 
 /** Stable rack identity order and wire-id vocabulary. */
 export const RACK_EFFECT_ORDER: ReadonlyArray<EffectModuleId> = Object.freeze([
@@ -35,8 +36,8 @@ export type EffectiveRackState = {
     readonly generation: number;
     readonly order: ReadonlyArray<EffectModuleId>;
     readonly enabled: Readonly<Record<EffectModuleId, boolean>>;
-    readonly rejectedOrderCount: number;
-    readonly rejectedEnableCount: number;
+    readonly rejectedUploadCount: number;
+    readonly paramsAcknowledgedSerial: number;
 };
 
 /** A boundary parse outcome for stored rack state. */
@@ -187,16 +188,25 @@ export function serializeRackState(state: RackState): string {
     });
 }
 
-/** Build the two complete structure events consumed by the rack DSP. */
+/**
+ * Build the single structure event consumed by the rack DSP: rack.v1's
+ * complete permutation becomes an 8-position lane chain of the ordinal-0
+ * devices, and the per-module enabled flags become per-POSITION mask bits
+ * (bit N = the device standing at position N is live).
+ */
 export function buildRackRuntimeEvents(state: RackState): ReadonlyArray<{ readonly endpointID: string; readonly value: unknown }> {
+    const slotIds = new Array<number>(LANE_MAX_CHAIN_LENGTH).fill(0);
+    let enabledMask = 0;
+    state.order.forEach((effectId, position) => {
+        slotIds[position] = EFFECT_ID_TO_WIRE_ID[effectId];
+        if (state.enabled[effectId]) {
+            enabledMask |= 1 << position;
+        }
+    });
     return [
         {
-            endpointID: RACK_ORDER_ENDPOINT_ID,
-            value: { moduleIds: state.order.map((effectId) => EFFECT_ID_TO_WIRE_ID[effectId]) },
-        },
-        {
-            endpointID: RACK_ENABLE_ENDPOINT_ID,
-            value: { enabledFlags: RACK_EFFECT_ORDER.map((effectId) => state.enabled[effectId] ? 1 : 0) },
+            endpointID: LANE_TOPOLOGY_ENDPOINT_ID,
+            value: { chainLength: state.order.length, slotIds, enabledMask },
         },
     ];
 }
@@ -223,33 +233,43 @@ function decodeOrder(code: number): ReadonlyArray<EffectModuleId> | null {
     return order;
 }
 
-/** Parse DSP effective-state readback into stable effect identities. */
+/**
+ * Parse DSP effective-state readback into stable effect identities.
+ *
+ * Null when the committed chain is not a rack.v1 structure: before the
+ * adapter's first commit the engine runs the default EMPTY chain (the
+ * deployed pre-rack sound), which rack.v1 cannot represent.
+ */
 export function parseEffectiveRackState(input: unknown): EffectiveRackState | null {
     if (!isRecord(input)) {
         return null;
     }
-    const generation = Number(input.committedStructureGeneration);
-    const orderCode = Number(input.committedOrderCode);
-    const enableMask = Number(input.committedEnableMask);
-    const rejectedOrderCount = Number(input.rejectedOrderCount);
-    const rejectedEnableCount = Number(input.rejectedEnableCount);
-    if (![generation, orderCode, enableMask, rejectedOrderCount, rejectedEnableCount].every(Number.isFinite)) {
+    const chainLength = Number(input.laneCommittedChainLength);
+    const chainCode = Number(input.laneCommittedChainCode);
+    const positionMask = Number(input.laneCommittedPositionMask);
+    const generation = Number(input.laneCommittedGeneration);
+    const rejectedUploadCount = Number(input.laneRejectedUploadCount);
+    const paramsAcknowledgedSerial = Number(input.laneParamsAcknowledgedSerial);
+    if (![chainLength, chainCode, positionMask, generation, rejectedUploadCount, paramsAcknowledgedSerial]
+            .every(Number.isFinite)) {
         return null;
     }
-    const order = decodeOrder(Math.trunc(orderCode));
+    if (Math.trunc(chainLength) !== RACK_EFFECT_ORDER.length) {
+        return null;
+    }
+    const order = decodeOrder(Math.trunc(chainCode));
     if (order === null) {
         return null;
     }
     const enabled = defaultEnabled();
-    for (const effectId of RACK_EFFECT_ORDER) {
-        const wireId = EFFECT_ID_TO_WIRE_ID[effectId];
-        enabled[effectId] = ((Math.trunc(enableMask) >>> wireId) & 1) === 1;
-    }
+    order.forEach((effectId, position) => {
+        enabled[effectId] = ((Math.trunc(positionMask) >>> position) & 1) === 1;
+    });
     return {
         generation: Math.trunc(generation),
         order,
         enabled,
-        rejectedOrderCount: Math.trunc(rejectedOrderCount),
-        rejectedEnableCount: Math.trunc(rejectedEnableCount),
+        rejectedUploadCount: Math.trunc(rejectedUploadCount),
+        paramsAcknowledgedSerial: Math.trunc(paramsAcknowledgedSerial),
     };
 }

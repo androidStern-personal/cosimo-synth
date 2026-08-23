@@ -33,7 +33,7 @@ const synthStatus = {
 async function productionSynthStatus() {
     const source = await fs.readFile(path.join(repoRoot, "cmajor/WavetableSynth.cmajor"), "utf8");
     const graphStart = source.indexOf("graph WavetableSynth");
-    const rackStructureStart = source.indexOf("    input rack.rackOrder;", graphStart);
+    const rackStructureStart = source.indexOf("    input rack.laneTopology;", graphStart);
     if (graphStart < 0 || rackStructureStart < 0) {
         throw new Error("Production synth parameter block is missing.");
     }

@@ -18,13 +18,12 @@ processor RackModulationReachesRealDsp [[ main ]]
     node rackDry = wt::EffectsRack;
     node rackModulated = wt::EffectsRack;
 
-    wt::RackEnableUpload filterOnly()
+    wt::LaneTopologyUpload filterOnly()
     {
-        wt::RackEnableUpload upload;
-
-        for (wrap<wt::rackModuleCount> moduleId)
-            upload.enabledFlags[moduleId] = int32 (moduleId) == wt::rackModuleGlobalFilter ? 1 : 0;
-
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 1;
+        upload.slotIds[0] = wt::rackModuleGlobalFilter;
+        upload.enabledMask = 0b1;
         return upload;
     }
 
@@ -77,12 +76,12 @@ processor RackModulationReachesRealDsp [[ main ]]
         rackDry.globalFilterMode <- 1.0f;
         rackDry.globalFilterCutoff <- 4000.0f;
         rackDry.globalFilterResonance <- 4.0f;
-        rackDry.rackEnable <- filterOnly();
+        rackDry.laneTopology <- filterOnly();
 
         rackModulated.globalFilterMode <- 1.0f;
         rackModulated.globalFilterCutoff <- 4000.0f;
         rackModulated.globalFilterResonance <- 4.0f;
-        rackModulated.rackEnable <- filterOnly();
+        rackModulated.laneTopology <- filterOnly();
     }
 
     float32 renderDry (int32 frame)
@@ -220,6 +219,117 @@ processor RackModulationReachesRealDsp [[ main ]]
             engineModulated.advance();
         out <- (std::intrinsics::abs (engineModulated.rackModOut[cutoffTarget]) < 0.001f) ? 1 : 0;
         advance();
+
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// MACRO-rack live amount edits are SURGICAL.
+//
+// The macro tables run as 36-wide blocked vectors, and the live amount-edit
+// path once collapsed the blocked subscript: one edit smeared its scale across
+// an entire block (audibly detuning every other macro route from that source).
+// Two routes from macro 1 - one static-block target, one lane-pool mirror -
+// each edited in turn: only the edited lane may move, and unrouted lanes in
+// every block must stay at exact zero.
+
+## testProcessor()
+
+processor MacroRackAmountEditIsolation [[ main ]]
+{
+    output stream int32 out;
+
+    node engine = wt::SharedVoiceEngine (2);
+    node assertFoldGlobalFilter = wt::GlobalFilterBus;
+    node assertFoldDistortion   = wt::DistortionBus;
+    node assertFoldOtt          = wt::OttBus;
+    node assertFoldChorus       = wt::ChorusBus;
+    node assertFoldFlanger      = wt::FlangerBus;
+    node assertFoldPhaser      = wt::PhaserBus;
+    node assertFoldDelay        = wt::DelayBus;
+    node assertFoldReverb       = wt::ReverbBus;
+
+    let cutoffTarget = wt::rackModTargetGlobalFilterCutoffOctaves;
+    let laneCutoffTarget = wt::rackModTargetLaneGlobalFilterCutoffOctaves;
+
+    wt::ModulationProgramUpload scratch;
+
+    void buildMacroProgram (int32 serial)
+    {
+        wt::ModulationProgramUpload upload;
+        scratch = upload;
+        scratch.dspSessionId = int32 (processor.session);
+        scratch.deliverySerial = serial;
+        scratch.macroRackRouteCount = 2;
+        scratch.macroRackRouteCells[0] = cutoffTarget;
+        scratch.macroRackRouteSources[0] = 0;
+        scratch.macroRackRouteTargets[0] = cutoffTarget;
+        scratch.macroRackRoutePolarities[0] = wt::modulationPolarityUnipolar;
+        scratch.macroRackRouteAmounts[cutoffTarget] = -2.0f;
+        scratch.macroRackRouteCells[1] = laneCutoffTarget;
+        scratch.macroRackRouteSources[1] = 0;
+        scratch.macroRackRouteTargets[1] = laneCutoffTarget;
+        scratch.macroRackRoutePolarities[1] = wt::modulationPolarityUnipolar;
+        scratch.macroRackRouteAmounts[laneCutoffTarget] = 1.5f;
+    }
+
+    void main()
+    {
+        engine.macro1In <- 1.0f;
+        buildMacroProgram (1);
+        engine.modulationProgramIn <- scratch;
+
+        for (int32 frame = 0; frame < 4096; ++frame)
+            engine.advance();
+
+        out <- (std::intrinsics::abs (engine.rackModOut[cutoffTarget] + 2.0f) < 0.001f) ? 1 : 0;
+        advance();
+        out <- (std::intrinsics::abs (engine.rackModOut[laneCutoffTarget] - 1.5f) < 0.001f) ? 1 : 0;
+        advance();
+
+        // Edit the LANE route: its own lane follows, the static lane holds.
+        wt::ModulationAmountUpload edit;
+        edit.dspSessionId = int32 (processor.session);
+        edit.deliverySerial = 2;
+        edit.pathKind = wt::modulationPathMacroRack;
+        edit.cellIndex = laneCutoffTarget;
+        edit.amount = 0.5f;
+        engine.modulationAmountIn <- edit;
+
+        for (int32 frame = 0; frame < 4096; ++frame)
+            engine.advance();
+
+        out <- (std::intrinsics::abs (engine.rackModOut[laneCutoffTarget] - 0.5f) < 0.001f
+                 && std::intrinsics::abs (engine.rackModOut[cutoffTarget] + 2.0f) < 0.001f) ? 1 : 0;
+        advance();
+
+        // Edit the STATIC route: same in the other direction.
+        edit.deliverySerial = 3;
+        edit.cellIndex = cutoffTarget;
+        edit.amount = -1.0f;
+        engine.modulationAmountIn <- edit;
+
+        for (int32 frame = 0; frame < 4096; ++frame)
+            engine.advance();
+
+        out <- (std::intrinsics::abs (engine.rackModOut[cutoffTarget] + 1.0f) < 0.001f
+                 && std::intrinsics::abs (engine.rackModOut[laneCutoffTarget] - 0.5f) < 0.001f) ? 1 : 0;
+        advance();
+
+        // No smear anywhere: every unrouted lane in every block stays exact zero.
+        float32 smearResidue;
+
+        for (wrap<wt::rackModTargetCount> target)
+            if (int32 (target) != cutoffTarget && int32 (target) != laneCutoffTarget)
+                smearResidue = std::intrinsics::max (
+                    smearResidue,
+                    std::intrinsics::abs (engine.rackModOut[target]));
+
+        out <- (smearResidue == 0.0f) ? 1 : 0;
+        advance();
+
         out <- -1;
         advance();
     }

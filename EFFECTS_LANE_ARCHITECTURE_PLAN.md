@@ -148,6 +148,53 @@ are M1's permanent acceptance tests, not a throwaway report.
   exercises pool modulation. Full cross-platform gate green. Known harness
   constraint recorded: composed-parent event writes cap near 19 ints — big
   structs travel graph connections.
+- **M2 staging (2026-08-23):** the cut lands in three slices on the branch.
+  M2a ENGINE: slots become uniform — one array of (1 + lanePoolSetCount)
+  instances per type, ordinal 0 replacing the named base nodes; every device
+  sleeps outside the chain and enters fresh; rackOrder/rackEnable, the 45
+  hoisted parameter endpoints, the permutation machinery, and the
+  always-advance idle loop are DELETED; laneTopology + parameter records are
+  the only structure and parameter paths; a per-field
+  LaneSlotParamValueUpload joins the record upload (answers the
+  whole-record-race concern with the safer contract: fields for live edits,
+  records for bulk restore); the distortion analyzer taps ordinal 0. Default
+  chain is empty (dry) until the adapter restores lane state, mirroring the
+  legacy empty-enable default. M2b TS/WIRE: lane state v1 schema + adapter,
+  knob bindings over the field upload, dynamic target domain, picker/table
+  labels. M2c: fixtures, presets, benchmark-profile regeneration against the
+  default device set.
+- **B2 STRUCTURE CUT COMPLETE (2026-08-23):** rackOrder/rackEnable and the
+  permutation machinery are gone; laneTopology is the only structure path.
+  Readback = laneCommittedChainLength + laneCommittedChainCode (3 bits per
+  position, valid for ordinal-0 chains) + laneCommittedPositionMask +
+  laneCommittedGeneration (the ONE generation counter — the redundant
+  committedStructureGeneration was deleted) + laneRejectedUploadCount +
+  laneParamsAcknowledgedSerial. RackShape tests rewritten SEQUENTIAL
+  single-rack (two-instance interpreter anomaly); rack.v1 rides the seam in
+  `ui/shared/rack-state.ts` as one laneTopology event with position-indexed
+  enable bits; every consumer (browser tests, web:poc, iOS shell readback,
+  native quickjs probe, native benchmark) migrated; the orphaned legacy
+  `fixtures/rack_*` patch fixtures (runner deleted long ago) removed.
+  TWO REAL M1 REGRESSIONS caught and fixed during the gate:
+  (1) NATIVE TRANSPORT: the 180-wide matrix-sized program upload hit 68KB
+  against cmaj::Patch's fixed 64KB performer event FIFO — the program could
+  NEVER be delivered on the native (iPhone) path (wasm bypasses that FIFO,
+  so web gates were blind). Cut: the rack tables now carry a ROUTE BUDGET
+  (modulationVoiceRackRouteCapacity 512 / modulationMacroRackRouteCapacity
+  256 — covers the whole 1,131-route static stress contract: 324 + 144 —
+  plus lane routes) while per-CELL amount tables keep the full cell space;
+  upload is ~37KB. TS mirrors the capacities and fails fast over budget.
+  (2) MACRO-RACK LIVE EDITS: the amount-edit path missed the M1
+  blocked-vector conversion — a single-subscript on the [sources, blocks]
+  layout clamped the block index and broadcast a scalar across a whole
+  36-lane block (every macro-rack edit corrupted its source's other
+  routes). Fixed with the install-site block/lane decomposition; new
+  MacroRackAmountEditIsolation test pins surgical edits on a static and a
+  lane target (discrimination-proven against the reverted bug). Also fixed
+  pre-existing master drift: NativeModulationMatrixBenchmark still wrote
+  the pre-batching wavetable mip fields. Harness note: every testProcessor
+  section in a file whose globals include the rack modules must instantiate
+  them, or their latency static_asserts fail to constant-fold.
 - **M2 — The hard cut:** delete the `rack.*` namespace and the 45
   per-parameter endpoints; rewrite target descriptors, the resolver, the
   legal-pair domain, and every fixture to `lane.*`; lane state v1 replaces

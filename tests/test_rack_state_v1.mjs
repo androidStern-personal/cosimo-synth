@@ -23,7 +23,7 @@ test("rack.v1 is one complete clean schema with no legacy Chorus representation"
     }
 });
 
-test("rack structure commits exactly one complete order and enable event", async () => {
+test("rack structure commits exactly one complete lane topology event", async () => {
     const rack = await rackStatePromise;
     const defaultState = rack.createDefaultRackState();
     const state = {
@@ -31,24 +31,52 @@ test("rack structure commits exactly one complete order and enable event", async
         order: [...defaultState.order].reverse(),
         enabled: { ...defaultState.enabled, drive: true, reverb: true },
     };
+    // rack.v1's full permutation rides as an 8-position chain of the
+    // ordinal-0 devices; the enable bits are POSITION-indexed, so drive
+    // (position 6 in the reversed order) and reverb (position 0) set bits
+    // 6 and 0, not their wire ids.
     assert.deepEqual(rack.buildRackRuntimeEvents(state), [
-        { endpointID: "rackOrder", value: { moduleIds: [7, 6, 5, 4, 3, 2, 1, 0] } },
-        { endpointID: "rackEnable", value: { enabledFlags: [0, 1, 0, 0, 0, 0, 0, 1] } },
+        {
+            endpointID: "laneTopology",
+            value: {
+                chainLength: 8,
+                slotIds: [7, 6, 5, 4, 3, 2, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                enabledMask: (1 << 6) | (1 << 0),
+            },
+        },
     ]);
 });
 
-test("effective rack readback decodes committed order and enable identity", async () => {
+test("effective rack readback decodes committed chain and enable identity", async () => {
     const rack = await rackStatePromise;
     const parsed = rack.parseEffectiveRackState({
-        committedStructureGeneration: 7,
-        committedOrderCode: 0b000_001_010_011_100_101_110_111,
-        committedEnableMask: (1 << 1) | (1 << 7),
-        rejectedOrderCount: 2,
-        rejectedEnableCount: 3,
+        laneCommittedChainLength: 8,
+        laneCommittedChainCode: 0b000_001_010_011_100_101_110_111,
+        laneCommittedPositionMask: (1 << 6) | (1 << 0),
+        laneCommittedGeneration: 7,
+        laneRejectedUploadCount: 5,
+        laneParamsAcknowledgedSerial: 42,
     });
     assert.deepEqual(parsed.order, ["reverb", "delay", "phaser", "flanger", "chorus", "ott", "drive", "filter"]);
     assert.equal(parsed.enabled.drive, true);
     assert.equal(parsed.enabled.reverb, true);
     assert.equal(parsed.enabled.chorus, false);
     assert.equal(parsed.generation, 7);
+    assert.equal(parsed.rejectedUploadCount, 5);
+    assert.equal(parsed.paramsAcknowledgedSerial, 42);
+});
+
+test("the pre-commit empty chain is not a rack.v1 structure", async () => {
+    const rack = await rackStatePromise;
+    // Before the adapter's first commit the engine runs the default EMPTY
+    // chain (the deployed pre-rack sound); rack.v1 cannot represent it, so
+    // the parse must say "no committed structure" rather than invent one.
+    assert.equal(rack.parseEffectiveRackState({
+        laneCommittedChainLength: 0,
+        laneCommittedChainCode: 0,
+        laneCommittedPositionMask: 0,
+        laneCommittedGeneration: 0,
+        laneRejectedUploadCount: 0,
+        laneParamsAcknowledgedSerial: 0,
+    }), null);
 });
