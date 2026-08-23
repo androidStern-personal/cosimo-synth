@@ -3089,6 +3089,22 @@ export function EffectsRackWorkspace({
     const selectedEffect = getRackEffectDescriptor(selectedEffectId);
     const selectedEffectEnabled = getLaneDeviceEnabled(
         rackState, `${EFFECT_ID_TO_LANE_TYPE[selectedEffectId]}#1`) ?? false;
+    // The map draws the PREVIEW structure, but enables stay LIVE: an
+    // authoritative enable arriving mid-drag paints immediately, exactly as
+    // it did when order and enables were separate documents.
+    const mapDoc = useMemo(() => {
+        if (previewDoc === rackState) {
+            return rackState;
+        }
+        let doc = previewDoc;
+        for (const deviceId of Object.keys(previewDoc.devices)) {
+            const liveEnabled = getLaneDeviceEnabled(rackState, deviceId);
+            if (liveEnabled !== null && liveEnabled !== getLaneDeviceEnabled(previewDoc, deviceId)) {
+                doc = setLaneDeviceEnabled(doc, deviceId, liveEnabled) ?? doc;
+            }
+        }
+        return doc;
+    }, [previewDoc, rackState]);
     const selectedGroup = selectedGroupId === null
         ? null
         : rackState.chain.find((node) => node.kind !== "device" && node.groupId === selectedGroupId) ?? null;
@@ -3902,7 +3918,7 @@ export function EffectsRackWorkspace({
                         }}
                     >
                         <SubwayMapColumn
-                            laneState={previewDoc}
+                            laneState={mapDoc}
                             selectedEffectId={selectedEffectId}
                             selectedGroupId={selectedGroupId}
                             reorderingEffectId={reorderingEffectId}
