@@ -17,6 +17,8 @@
     "test:modulation:routing": "node --test tests/test_modulation_runtime_program.mjs",
     "test:native:quickjs": "./scripts/test_quickjs_modulation_restore.sh",
     "test:web:bundle": "node --test tests/test_web_bundle_contract.mjs",
+    "bounce:bank-from-wav": "node scripts/wav_to_bounce_bank.mjs",
+    "test:bounce:bank": "node --test tests/test_bounce_bank_format.mjs",
     "test:bounce:release": "node --test tests/test_bounce_amp_release.mjs",
     "synth:desktop:build": "./scripts/build_desktop_native.sh",
     "synth:desktop:dev": "./scripts/run_desktop_native_dev.sh",
