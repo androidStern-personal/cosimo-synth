@@ -155,3 +155,30 @@ test("branch tags ride the slot id's upper bits and the v1 replay stays all-trun
         assert.equal(lane.decodeLaneBranchTag(encoded), 0);
     }
 });
+
+test("marker slots extend the chain slot domain above the device pool", async () => {
+    const lane = await laneStatePromise;
+    // Wire contract with EffectsRack.cmajor's laneParallelSlotBase /
+    // laneSplitSlotBase: 40 device slots, then four parallel units, then
+    // four split units. LaneSplit.cmajtest pins the engine side.
+    assert.equal(lane.LANE_DEVICE_SLOT_COUNT, 40);
+    assert.equal(lane.LANE_PARALLEL_UNIT_COUNT, 4);
+    assert.equal(lane.LANE_SPLIT_UNIT_COUNT, 4);
+    assert.equal(lane.LANE_PARALLEL_SLOT_BASE, 40);
+    assert.equal(lane.LANE_SPLIT_SLOT_BASE, 44);
+    assert.equal(lane.LANE_CHAIN_SLOT_COUNT, 48);
+    assert.equal(lane.LANE_MAX_BANDS_PER_SPLIT, 3);
+    assert.equal(lane.LANE_SPLIT_PARAM_XOVER_LOW_HZ, 0);
+    assert.equal(lane.LANE_SPLIT_PARAM_XOVER_HIGH_HZ, 1);
+
+    // A marker's band count rides the same tag encode as a device tag.
+    assert.equal(lane.encodeLaneSlotWithBranchTag(lane.LANE_SPLIT_SLOT_BASE, 2), 44 | (2 << 8));
+
+    assert.equal(lane.isLaneGroupMarkerSlot(39), false);
+    assert.equal(lane.isLaneGroupMarkerSlot(40), true);
+    assert.equal(lane.isLaneGroupMarkerSlot(47), true);
+    assert.equal(lane.isLaneGroupMarkerSlot(48), false);
+    assert.equal(lane.isLaneSplitMarkerSlot(43), false);
+    assert.equal(lane.isLaneSplitMarkerSlot(44), true);
+    assert.equal(lane.isLaneSplitMarkerSlot(48), false);
+});

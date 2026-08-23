@@ -2,6 +2,8 @@ import type { PatchConnectionLike } from "./cmajor-react";
 import type { EffectModuleId } from "./target-descriptor";
 import type { LaneDeviceInstance, LaneDeviceType } from "./lane-modulation-targets";
 import {
+    LANE_SLOT_ORDINAL_COUNT,
+    LANE_SLOT_TYPE_COUNT,
     buildLaneSlotParamValues,
     getLaneSlotId,
     getLaneSlotParamIndex,
@@ -31,18 +33,48 @@ export const EFFECTIVE_RACK_STATE_ENDPOINT_ID = "effectiveRackState";
 export const LANE_MAX_CHAIN_LENGTH = 16;
 
 /**
- * Branch-tag wire encoding (parallel groups, M3 slice T1). The topology
- * upload's slotIds carry the slot id in the low byte and a BRANCH TAG in the
- * three bits above it: tag 0 is the trunk, 1..LANE_MAX_BRANCHES_PER_GROUP
- * are the branches of the current parallel group. A maximal run of tagged
- * positions is one group; tags start at 1, never decrease, never skip, and
- * must reach at least 2 — the engine validates and never coerces. Mirrors
- * EffectsRack.cmajor's laneEncodeSlotWithBranchTag exactly; the bit layout
- * is pinned by test on both sides of the wire.
+ * Branch-tag wire encoding (groups, M3 slices T1+T2). The topology upload's
+ * slotIds carry the slot id in the low byte and a BRANCH TAG in the three
+ * bits above it: tag 0 is the trunk. A group is opened by a MARKER SLOT —
+ * a utility unit placed in the chain like a device — whose tag field carries
+ * the branch/band count N; the members that follow carry tags 1..N, monotone
+ * non-decreasing with skips allowed (an empty branch is representable). A
+ * trunk device, the next marker, or the chain's end closes the group. The
+ * engine validates and never coerces. Mirrors EffectsRack.cmajor's
+ * laneEncodeSlotWithBranchTag exactly; the bit layout is pinned by test on
+ * both sides of the wire.
  */
 export const LANE_BRANCH_TAG_SHIFT = 8;
 export const LANE_BRANCH_TAG_BITS = 3;
 export const LANE_MAX_BRANCHES_PER_GROUP = 4;
+export const LANE_MAX_BANDS_PER_SPLIT = 3;
+
+/**
+ * Marker slot ids sit above the device pool: four parallel units, then four
+ * split units (engine laneParallelSlotBase / laneSplitSlotBase). The CHAIN
+ * slot domain — what a topology may reference and what param records may
+ * address — is therefore wider than the device pool. A split marker owns a
+ * param record: values[0]/values[1] are its Linkwitz-Riley crossover
+ * frequencies (LR4, 24 dB/oct, minimum phase, zero latency), band tag 1 = low.
+ */
+export const LANE_DEVICE_SLOT_COUNT = LANE_SLOT_ORDINAL_COUNT * LANE_SLOT_TYPE_COUNT;
+export const LANE_PARALLEL_UNIT_COUNT = 4;
+export const LANE_SPLIT_UNIT_COUNT = 4;
+export const LANE_PARALLEL_SLOT_BASE = LANE_DEVICE_SLOT_COUNT;
+export const LANE_SPLIT_SLOT_BASE = LANE_DEVICE_SLOT_COUNT + LANE_PARALLEL_UNIT_COUNT;
+export const LANE_CHAIN_SLOT_COUNT = LANE_DEVICE_SLOT_COUNT + LANE_PARALLEL_UNIT_COUNT + LANE_SPLIT_UNIT_COUNT;
+export const LANE_SPLIT_PARAM_XOVER_LOW_HZ = 0;
+export const LANE_SPLIT_PARAM_XOVER_HIGH_HZ = 1;
+
+/** True for any group-marker slot id (parallel or split), bounds included. */
+export function isLaneGroupMarkerSlot(slotId: number): boolean {
+    return slotId >= LANE_DEVICE_SLOT_COUNT && slotId < LANE_CHAIN_SLOT_COUNT;
+}
+
+/** True for a split-marker slot id, bounds included. */
+export function isLaneSplitMarkerSlot(slotId: number): boolean {
+    return slotId >= LANE_SPLIT_SLOT_BASE && slotId < LANE_CHAIN_SLOT_COUNT;
+}
 
 /** Encode one placed device's wire entry. Tag 0 = a trunk (serial) device. */
 export function encodeLaneSlotWithBranchTag(slotId: number, branchTag: number): number {

@@ -1,27 +1,23 @@
-// Behavioural contract for parallel lane groups (M3 slice T1): the topology
-// upload can mark consecutive chain positions as BRANCHES of one parallel
-// group — branch tags ride the upper bits of each slotId, so the wire struct
-// (and its proven harness size) is unchanged — and the rack renders every
-// branch from the group's input, sums the branch outputs, and feeds the sum
-// onward. The subway map draws exactly this structure.
+// Behavioural contract for parallel lane groups (M3 slices T1+T2): a group is
+// opened by a MARKER SLOT — a utility unit with its own slot id — whose tag
+// field carries the branch count, and the members that follow carry branch
+// tags 1..N (monotone, skips allowed: an empty branch is representable and
+// contributes SILENCE, so adding an empty lane never changes the sound). The
+// marker's enable bit bypasses the whole group: members still advance on
+// their branch signals (time bases never drift), but the trunk passes the
+// fork signal through. Branch outputs are summed at the merge; a parallel
+// group containing no devices at all is a hard passthrough, never a mute.
 //
-// The discrimination these cases pin, all with FULL-WET delays (mix 1.0, no
-// feedback, no dry leak):
-//   - parallel delay(40ms) ∥ delay(90ms) produces echoes at 40ms AND 90ms and
-//     NOTHING at 130ms. The same two devices in series produce ONLY 130ms.
-//     No serial rack can match the parallel signature.
-//   - a branch is a serial chain of its own: [40ms -> 90ms] ∥ [60ms], with a
-//     25ms trunk delay after the merge, peaks at 155ms and 85ms only — the
-//     155 proves in-branch chaining, the +25 shift proves the trunk device
-//     processed the MERGED sum.
-//   - a disabled device inside a branch passes the branch signal through
-//     (ADR-005 semantics are position-independent).
+// The audible discrimination, all with FULL-WET delays (mix 1.0, feedback 0):
+// parallel delay(40ms) ∥ delay(90ms) echoes at 40ms AND 90ms with NOTHING at
+// the 130ms series time — no serial rack can match it. A branch is a serial
+// chain of its own, and the merged sum feeds the trunk continuation.
 //
-// Tag grammar (validated, never coerced — the C11 rule): tag 0 is the trunk;
-// a maximal run of tagged positions is ONE group whose tags start at 1, never
-// decrease, never skip, and reach at least 2 (a one-branch group is not a
-// group); tags beyond laneMaxBranchesPerGroup and junk above the tag field
-// reject the upload whole.
+// Tag grammar (validated, never coerced — the C11 rule): members require an
+// open group; tags never exceed the marker's N and never decrease; parallel
+// N is 2..4 (the physical campaign's proven fan-out); junk above the tag
+// field, N out of range, and duplicate marker units reject the upload whole
+// with the running chain untouched.
 //
 // `## testProcessor()` scans the first output endpoint: <0 stops, >0 passes,
 // ==0 fails. Composed child `init:` annotations are INERT — every endpoint a
@@ -69,10 +65,11 @@ processor LaneParallelTwoDelaysTest [[ main ]]
     wt::LaneTopologyUpload makeParallelChain()
     {
         wt::LaneTopologyUpload upload;
-        upload.chainLength = 2;
-        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
-        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
-        upload.enabledMask = 0b11;
+        upload.chainLength = 3;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
+        upload.enabledMask = 0b111;
         return upload;
     }
 
@@ -199,12 +196,13 @@ processor LaneBranchChainAndMergeTest [[ main ]]
         let delayFour  = wt::rackModuleCount * 3 + wt::rackModuleDelay;
 
         wt::LaneTopologyUpload upload;
-        upload.chainLength = 4;
-        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
-        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 1);
-        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (delayThree, 2);
-        upload.slotIds[3] = wt::laneEncodeSlotWithBranchTag (delayFour, 0);
-        upload.enabledMask = 0b1111;
+        upload.chainLength = 5;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 1);
+        upload.slotIds[3] = wt::laneEncodeSlotWithBranchTag (delayThree, 2);
+        upload.slotIds[4] = wt::laneEncodeSlotWithBranchTag (delayFour, 0);
+        upload.enabledMask = 0b11111;
         return upload;
     }
 
@@ -283,21 +281,20 @@ processor LaneBranchChainAndMergeTest [[ main ]]
 }
 
 //==============================================================================
-// A disabled device inside a branch passes the branch signal through.
+// Branch-level semantics: a disabled device passes its branch through, an
+// EMPTY branch contributes silence, and the marker's enable bypasses the
+// whole group as a hard passthrough.
 
 ## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
 
-processor LaneDisabledInsideBranchTest [[ main ]]
+processor LaneBranchSemanticsTest [[ main ]]
 {
     output stream int32 out;
 
     node rack = wt::EffectsRack;
 
-    // Branch A: delay(40ms, full wet) DISABLED — its branch passes the dry
-    // impulse. Branch B: delay(90ms, full wet) enabled. The sum has the dry
-    // impulse at 0 plus the 90ms echo, and nothing at 40ms.
-    let echoEnabledFrame = 3969;
-    let controlDisabledFrame = 1764;
+    let echoDelayOneFrame = 1764;   // 40ms
+    let echoDelayTwoFrame = 3969;   // 90ms
 
     let settleFrames = 2048;
     let recordFrames = 6400;
@@ -319,18 +316,25 @@ processor LaneDisabledInsideBranchTest [[ main ]]
         return upload;
     }
 
-    void configure()
+    wt::LaneTopologyUpload makeTwoBranchChain (int32 enabledMask)
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 3;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
+        upload.enabledMask = enabledMask;
+        return upload;
+    }
+
+    wt::LaneTopologyUpload makeOneOccupiedBranchChain (int32 enabledMask)
     {
         wt::LaneTopologyUpload upload;
         upload.chainLength = 2;
-        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
-        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
-        upload.enabledMask = 0b10;  // position 0 disabled, position 1 enabled
-
-        rack.tempoBpmIn <- 120.0f;
-        rack.laneSlotParams <- makeDelayParams (wt::rackModuleDelay, 1, 40.0f);
-        rack.laneSlotParams <- makeDelayParams (wt::laneSlotDelayTwo, 2, 90.0f);
-        rack.laneTopology <- upload;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.enabledMask = enabledMask;
+        return upload;
     }
 
     void advanceRack (float32 sample)
@@ -338,6 +342,18 @@ processor LaneDisabledInsideBranchTest [[ main ]]
         rack.in <- float32<2> (sample, sample);
         rack.trackingPitchHzIn <- 220.0f;
         rack.advance();
+    }
+
+    void captureImpulseResponse()
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
     }
 
     float32 windowPeak (int32 center)
@@ -362,27 +378,41 @@ processor LaneDisabledInsideBranchTest [[ main ]]
 
     void main()
     {
-        configure();
+        rack.tempoBpmIn <- 120.0f;
+        rack.laneSlotParams <- makeDelayParams (wt::rackModuleDelay, 1, 40.0f);
+        rack.laneSlotParams <- makeDelayParams (wt::laneSlotDelayTwo, 2, 90.0f);
 
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            advanceRack (0.0f);
+        // Scene 1: branch A's device DISABLED (position 1 bit off) — its
+        // branch passes the dry impulse; branch B echoes at 90ms.
+        rack.laneTopology <- makeTwoBranchChain (0b101);
+        captureImpulseResponse();
 
-        for (int32 frame = 0; frame < recordFrames; ++frame)
-        {
-            advanceRack (frame == 0 ? 1.0f : 0.0f);
-            recordedLeft.at (frame) = rack.out[0];
-        }
-
-        // Frame 1: the disabled branch passed the impulse through at time 0.
         out <- (windowPeak (0) > expectedPeakMinimum ? 1 : 0);
         advance();
-
-        // Frame 2: the enabled branch's echo is present.
-        out <- (windowPeak (echoEnabledFrame) > expectedPeakMinimum ? 1 : 0);
+        out <- (windowPeak (echoDelayTwoFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+        out <- (windowPeak (echoDelayOneFrame) < controlCeiling ? 1 : 0);
         advance();
 
-        // Frame 3: the disabled device produced no wet output.
-        out <- (windowPeak (controlDisabledFrame) < controlCeiling ? 1 : 0);
+        // Scene 2: branch B EMPTY (no positions carry tag 2) — it contributes
+        // SILENCE, so the output is branch A's wet echo alone: no dry copy of
+        // the impulse anywhere.
+        rack.laneTopology <- makeOneOccupiedBranchChain (0b11);
+        captureImpulseResponse();
+
+        out <- (windowPeak (echoDelayOneFrame) > expectedPeakMinimum ? 1 : 0);
+        advance();
+        out <- (windowPeak (0) < controlCeiling ? 1 : 0);
+        advance();
+
+        // Scene 3: the MARKER disabled — the whole group bypasses as a hard
+        // passthrough: the impulse passes dry and no echo survives.
+        rack.laneTopology <- makeOneOccupiedBranchChain (0b10);
+        captureImpulseResponse();
+
+        out <- (windowPeak (0) > 0.9f ? 1 : 0);
+        advance();
+        out <- (windowPeak (echoDelayOneFrame) < controlCeiling ? 1 : 0);
         advance();
 
         loop { out <- -1; advance(); }
@@ -390,12 +420,11 @@ processor LaneDisabledInsideBranchTest [[ main ]]
 }
 
 //==============================================================================
-// The tag grammar is validated, never coerced: malformed groups reject whole,
-// the running chain stays untouched, and the committed tags read back packed.
+// The marker grammar is validated, never coerced; committed tags read back.
 
 ## testProcessor (true, { frequency: 44100, maxFrequency: 48000 })
 
-processor LaneBranchTagGrammarTest [[ main ]]
+processor LaneMarkerGrammarTest [[ main ]]
 {
     output stream int32 out;
 
@@ -405,26 +434,21 @@ processor LaneBranchTagGrammarTest [[ main ]]
 
     wt::LaneTopologyUpload makeBaseline()
     {
-        // The branch-chain shape: [A, A, B, trunk] — also the readback probe.
-        let delayThree = wt::rackModuleCount * 2 + wt::rackModuleDelay;
-        let delayFour  = wt::rackModuleCount * 3 + wt::rackModuleDelay;
-
         wt::LaneTopologyUpload upload;
-        upload.chainLength = 4;
-        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
-        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 1);
-        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (delayThree, 2);
-        upload.slotIds[3] = wt::laneEncodeSlotWithBranchTag (delayFour, 0);
-        upload.enabledMask = 0b1111;
+        upload.chainLength = 3;
+        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        upload.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
+        upload.enabledMask = 0b111;
         return upload;
     }
 
-    wt::LaneTopologyUpload makeTagged (int32 tagOne, int32 tagTwo)
+    wt::LaneTopologyUpload makePair (int32 first, int32 second)
     {
         wt::LaneTopologyUpload upload;
         upload.chainLength = 2;
-        upload.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, tagOne);
-        upload.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, tagTwo);
+        upload.slotIds[0] = first;
+        upload.slotIds[1] = second;
         upload.enabledMask = 0b11;
         return upload;
     }
@@ -453,32 +477,49 @@ processor LaneBranchTagGrammarTest [[ main ]]
         out <- (committedGeneration == 1 ? 1 : 0);
         advance();
 
-        // Frame 2: committed branch tags read back packed, three bits per
-        // position: [1, 1, 2, 0] -> 1 | 1<<3 | 2<<6 = 137; positions 10..15
-        // in the high word are empty.
-        out <- (rack.laneCommittedBranchTagsLo == 137 && rack.laneCommittedBranchTagsHi == 0 ? 1 : 0);
+        // Frame 2: committed tags read back packed, three bits per position:
+        // marker N=2, then branches [1, 2] -> 2 | 1<<3 | 2<<6 = 138.
+        out <- (rack.laneCommittedBranchTagsLo == 138 && rack.laneCommittedBranchTagsHi == 0 ? 1 : 0);
         advance();
 
+        // A tagged member with no open group (the old markerless T1 form).
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1),
+            wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2));
         // A one-branch group is not a group.
-        rack.laneTopology <- makeTagged (1, 1);
-        // Tags must not skip.
-        rack.laneTopology <- makeTagged (1, 3);
-        // A group must start at branch 1.
-        rack.laneTopology <- makeTagged (2, 2);
-        // Tags must never decrease inside a run — [2, 1] also fails start-at-1.
-        rack.laneTopology <- makeTagged (2, 1);
-        // Tags beyond the proven fan-out are malformed.
-        rack.laneTopology <- makeTagged (1, 5);
-
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 1),
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1));
+        // Parallel fan-out caps at 4.
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 5),
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1));
+        // A member tag beyond the marker's branch count.
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2),
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 3));
+        // Tags never decrease inside a group.
+        wt::LaneTopologyUpload decreasing;
+        decreasing.chainLength = 4;
+        decreasing.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 3);
+        decreasing.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 2);
+        decreasing.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 1);
+        decreasing.slotIds[3] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleCount * 2 + wt::rackModuleDelay, 3);
+        decreasing.enabledMask = 0b1111;
+        rack.laneTopology <- decreasing;
         // Junk above the tag field is malformed, not ignorable.
-        wt::LaneTopologyUpload junk = makeTagged (1, 2);
-        junk.slotIds[1] = junk.slotIds[1] | (1 << 12);
-        rack.laneTopology <- junk;
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2),
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1) | (1 << 12));
+        // A marker with tag 0 is not a trunk device.
+        rack.laneTopology <- makePair (
+            wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 0),
+            wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 0));
 
         advanceFrames (settleFrames);
 
         // Frame 3: every malformed upload rejected.
-        out <- (rack.laneRejectedUploadCount == rejectedBefore + 6 ? 1 : 0);
+        out <- (rack.laneRejectedUploadCount == rejectedBefore + 7 ? 1 : 0);
         advance();
 
         // Frame 4: the running structure never moved.
@@ -486,11 +527,19 @@ processor LaneBranchTagGrammarTest [[ main ]]
                  && rack.laneCommittedChainCode == committedCode ? 1 : 0);
         advance();
 
-        // Frame 5: a VALID parallel re-upload still commits after rejections.
-        rack.laneTopology <- makeTagged (1, 2);
+        // Frame 5: a valid upload with a SECOND marker unit still commits
+        // after the rejections (adjacent groups, no trunk between).
+        wt::LaneTopologyUpload adjacent;
+        adjacent.chainLength = 4;
+        adjacent.slotIds[0] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase, 2);
+        adjacent.slotIds[1] = wt::laneEncodeSlotWithBranchTag (wt::rackModuleDelay, 1);
+        adjacent.slotIds[2] = wt::laneEncodeSlotWithBranchTag (wt::laneParallelSlotBase + 1, 2);
+        adjacent.slotIds[3] = wt::laneEncodeSlotWithBranchTag (wt::laneSlotDelayTwo, 2);
+        adjacent.enabledMask = 0b1111;
+        rack.laneTopology <- adjacent;
         advanceFrames (settleFrames);
         out <- (rack.laneCommittedGeneration == committedGeneration + 1
-                 && rack.laneCommittedBranchTagsLo == (1 | (2 << 3)) ? 1 : 0);
+                 && rack.laneCommittedBranchTagsLo == (2 | (1 << 3) | (2 << 6) | (2 << 9)) ? 1 : 0);
         advance();
 
         loop { out <- -1; advance(); }

@@ -112,20 +112,29 @@ namespace wt
     let maxLaneChainLength = 16;
 
     //==============================================================================
-    // Parallel groups (M3 slice T1). A parallel section is encoded IN PLACE in
-    // the topology upload: each slotIds entry carries the slot id in its low
-    // byte and a BRANCH TAG in the three bits above it, so the upload struct —
-    // and its proven harness event size — is unchanged. Tag 0 is the trunk; a
-    // maximal run of tagged positions is ONE parallel group whose branches all
-    // read the group's input. Branch outputs are SUMMED at the merge (no
-    // per-branch level in v1; wt::RackOutputStage owns overload, and overload
-    // glitching is the decided policy, not a governor's job).
+    // Groups (M3 slices T1+T2). A group section is encoded IN PLACE in the
+    // topology upload: each slotIds entry carries the slot id in its low byte
+    // and a BRANCH TAG in the three bits above it, so the upload struct — and
+    // its proven harness event size — is unchanged. A group is OPENED by a
+    // MARKER SLOT — a utility unit placed in the chain like a device — whose
+    // tag field carries the branch/band count N; the members that follow
+    // carry tags 1..N, monotone non-decreasing with skips allowed (an empty
+    // branch is representable). A trunk device (tag 0), the next marker, or
+    // the chain's end closes the group. Branch outputs are SUMMED at the
+    // merge (no per-branch level in v1; wt::RackOutputStage owns overload,
+    // and overload glitching is the decided policy, not a governor's job).
     //
-    // Tag grammar, validated and never coerced (the C11 rule): inside a run
-    // the tags start at 1, never decrease, never skip, and must reach at
-    // least 2 — a one-branch group is not a group, it is a serial chain the
-    // adapter must send as one. Tags beyond laneMaxBranchesPerGroup (the
-    // physical campaign's proven fan-out) and any bit above the tag field
+    // Markers are slots: single-use per chain, addressed by the same param
+    // machinery (split markers own the crossover record), and their position
+    // enable bit is the GROUP BYPASS — members and split filters still
+    // advance on their branch signals (time bases never drift) while the
+    // trunk hands the fork signal through. A group with no devices at all is
+    // a hard passthrough too: placing structure never changes the sound.
+    //
+    // Tag grammar, validated and never coerced (the C11 rule): a member with
+    // no open group, a tag above the marker's N, a decreasing tag, a marker
+    // N outside 2..laneMaxBranchesPerGroup (parallel) or
+    // 2..laneMaxBandsPerSplit (split), and any bit above the tag field
     // reject the upload whole.
 
     let laneBranchTagShift = 8;
@@ -133,6 +142,44 @@ namespace wt
     let laneBranchTagFieldMask = (1 << laneBranchTagBits) - 1;
     let laneSlotIdFieldMask = (1 << laneBranchTagShift) - 1;
     let laneMaxBranchesPerGroup = 4;
+    let laneMaxBandsPerSplit = 3;
+
+    // Marker slot ids extend the slot domain above the device pool: four
+    // parallel units, then four split units. The CHAIN slot domain (what a
+    // topology may reference and what params may address) is therefore wider
+    // than the device pool.
+    let laneParallelUnitCount = 4;
+    let laneSplitUnitCount = 4;
+    let laneParallelSlotBase = laneSlotCount;
+    let laneSplitSlotBase = laneSlotCount + laneParallelUnitCount;
+    let laneChainSlotCount = laneSlotCount + laneParallelUnitCount + laneSplitUnitCount;
+
+    bool laneSlotIsGroupMarker (int32 slotId)   { return slotId >= laneSlotCount; }
+    bool laneSlotIsSplitMarker (int32 slotId)   { return slotId >= laneSplitSlotBase; }
+
+    // Split-type marker slots' param vocabulary: the crossover frequencies,
+    // Linkwitz-Riley LR4 (doubled second-order sections, 24 dB/oct, minimum
+    // phase, zero latency — Andrew's 2026-08-23 call, superseding the
+    // linear-phase FIR idea). Ascending band order: tag 1 is low.
+    let laneSplitParamXoverLowHz  = 0;
+    let laneSplitParamXoverHighHz = 1;
+
+    let laneSplitXoverMinHz = 40.0f;
+    let laneSplitXoverMaxHz = 18000.0f;
+
+    // Crossover drags glide like the filter-cutoff rows in the ramp table.
+    let laneUtilitySlotParamRampFrames = 64;
+
+    float32 laneClampSplitXoverHz (float32 hz)
+    {
+        return std::intrinsics::clamp (hz, laneSplitXoverMinHz, laneSplitXoverMaxHz);
+    }
+
+    // The stdlib crossover IS the decided LR4 form: low = LP2², high = its
+    // 2nd-order allpass minus low, so each edge is 24 dB/oct and the two
+    // bands sum to that allpass exactly — flat magnitude, zero latency. The
+    // frame type matches the rack bus (rackChannelCount = 2).
+    namespace laneSplitFilters = std::filters (float32<2>, float64, 32);
 
     int32 laneEncodeSlotWithBranchTag (int32 slotId, int32 branchTag)
     {
@@ -337,16 +384,16 @@ namespace wt
     // leaves the running state completely untouched. Neither coerces.
 
     // A lane topology is validated, never coerced (the C11 rule): out-of-range
-    // slot ids, duplicate slots, malformed branch-tag grammar, or non-flag
+    // slot ids, duplicate slots, malformed marker/tag grammar, or non-flag
     // enables reject the whole upload and leave the running chain untouched.
     bool isValidLaneTopology (LaneTopologyUpload upload)
     {
         if (upload.chainLength < 0 || upload.chainLength > maxLaneChainLength)
             return false;
 
-        bool[laneSlotCount] seen;
-        var runTag = 0;
-        var runMaxTag = 0;
+        bool[laneChainSlotCount] seen;
+        var openGroupFanout = 0;   // 0 = no open group
+        var lastMemberTag = 0;
 
         for (int32 position = 0; position < upload.chainLength; ++position)
         {
@@ -360,51 +407,50 @@ namespace wt
             let slotId = laneDecodeSlotId (encoded);
             let tag = laneDecodeBranchTag (encoded);
 
-            if (slotId >= laneSlotCount)
+            if (slotId >= laneChainSlotCount)
                 return false;
 
-            if (tag > laneMaxBranchesPerGroup)
-                return false;
-
-            if (tag == 0)
+            if (laneSlotIsGroupMarker (slotId))
             {
-                // Leaving a group run: it must have forked into at least two
-                // branches to have been a group at all.
-                if (runTag != 0 && runMaxTag < 2)
+                // A marker's tag is its branch/band count. It closes any open
+                // group (empty branches are legal, so there is nothing to
+                // check at a close) and opens its own.
+                let maxFanout = laneSlotIsSplitMarker (slotId) ? laneMaxBandsPerSplit
+                                                               : laneMaxBranchesPerGroup;
+
+                if (tag < 2 || tag > maxFanout)
                     return false;
 
-                runTag = 0;
-                runMaxTag = 0;
+                openGroupFanout = tag;
+                lastMemberTag = 0;
+            }
+            else if (tag == 0)
+            {
+                // A trunk device closes any open group.
+                openGroupFanout = 0;
+                lastMemberTag = 0;
             }
             else
             {
-                if (runTag == 0)
-                {
-                    if (tag != 1)
-                        return false;
-                }
-                else if (tag != runTag && tag != runTag + 1)
-                {
+                // A member needs an open group, stays within its fan-out, and
+                // never decreases — equal tags chain serially inside a
+                // branch, and skipped tags leave those branches empty.
+                if (openGroupFanout == 0)
                     return false;
-                }
 
-                runTag = tag;
+                if (tag > openGroupFanout || tag < lastMemberTag)
+                    return false;
 
-                if (tag > runMaxTag)
-                    runMaxTag = tag;
+                lastMemberTag = tag;
             }
 
-            let index = wrap<laneSlotCount> (slotId);
+            let index = wrap<laneChainSlotCount> (slotId);
 
             if (seen[index])
                 return false;
 
             seen[index] = true;
         }
-
-        // A chain ending inside a group closes it: same completeness rule.
-        if (runTag != 0 && runMaxTag < 2)
-            return false;
 
         // Mask bits above the chain length are malformed, not ignorable.
         if (upload.enabledMask < 0 || upload.enabledMask >= (1 << upload.chainLength))
@@ -560,30 +606,59 @@ namespace wt
         int32 pendingPositionMask;
 
         // Lane chain state. Once a topology commits, the lane chain drives the
-        // dispatch instead of the legacy order permutation.
+        // dispatch instead of the legacy order permutation. The slot domain
+        // here is laneChainSlotCount: device slots plus the marker units.
         bool pendingLaneUpload;
         int32 currentLaneChainLength;
         int32 pendingLaneChainLength;
-        wrap<laneSlotCount>[maxLaneChainLength] currentLaneChain;
-        wrap<laneSlotCount>[maxLaneChainLength] pendingLaneChain;
+        wrap<laneChainSlotCount>[maxLaneChainLength] currentLaneChain;
+        wrap<laneChainSlotCount>[maxLaneChainLength] pendingLaneChain;
         int32[maxLaneChainLength] currentLaneBranchTag;
         int32[maxLaneChainLength] pendingLaneBranchTag;
-        bool[laneSlotCount] currentLaneEnabled;
-        bool[laneSlotCount] pendingLaneEnabled;
+        bool[laneChainSlotCount] currentLaneEnabled;
+        bool[laneChainSlotCount] pendingLaneEnabled;
         int32 laneGeneration;
         int32 laneRejectedCount;
         int32 laneParamsSerial;
-        float32[laneSlotCount, laneSlotParamCount] slotParams;
+        float32[laneChainSlotCount, laneSlotParamCount] slotParams;
         // Host-style linear ramps toward the records (see the table above):
         // the CURRENT values the forwarding blocks actually read, plus each
         // cell's per-frame step and the target it was computed against.
-        float32[laneSlotCount, laneSlotParamCount] slotParamCurrent;
-        float32[laneSlotCount, laneSlotParamCount] slotParamStep;
-        float32[laneSlotCount, laneSlotParamCount] slotParamKnownTarget;
+        float32[laneChainSlotCount, laneSlotParamCount] slotParamCurrent;
+        float32[laneChainSlotCount, laneSlotParamCount] slotParamStep;
+        float32[laneChainSlotCount, laneSlotParamCount] slotParamKnownTarget;
         int32[rackModuleCount, laneSlotParamCount] slotParamRampTable;
-        bool[laneSlotCount] slotInCurrentChain;
+        bool[laneChainSlotCount] slotInCurrentChain;
 
         RackOctaveScaler[rackOctaveScalerCount] octaveScalers;
+
+        // Split marker DSP (T2): per unit, the LR4 crossover tree plus the
+        // low path's COMPENSATION ALLPASS. The 3-band tree splits low off
+        // first, then splits the rest at the high crossover; the low path is
+        // then rotated by the high crossover's own allpass so all three
+        // bands share the tree's full phase response — the recombined
+        // magnitude is exactly flat at ANY crossover spacing. State resets
+        // when a unit enters the chain or changes band count; both land on
+        // the transition's fully-dry frame.
+        laneSplitFilters::crossover::Implementation[laneSplitUnitCount] splitXoverLow;
+        laneSplitFilters::crossover::Implementation[laneSplitUnitCount] splitXoverHigh;
+        laneSplitFilters::tpt::svf::Implementation[laneSplitUnitCount] splitCompensation;
+        float32[laneSplitUnitCount] splitTunedLowHz;
+        float32[laneSplitUnitCount] splitTunedHighHz;
+        int32[laneSplitUnitCount] currentSplitBandCount;
+
+        // Per-frame group-walk scratch, held as members so the dispatch
+        // helpers can share it (Cmajor has no closures). laneGroupKind
+        // returns to 0 by the end of every frame's walk: every open group
+        // closes at a trunk device, the next marker, or the chain's end.
+        int32 laneGroupKind;          // 0 none, 1 parallel, 2 split
+        bool laneGroupEnabled;
+        int32 laneGroupBranchCount;
+        int32 laneGroupMemberCount;
+        int32 laneRunBranch;
+        float32<rackChannelCount> laneGroupInput;
+        float32<rackChannelCount> laneBranchSignal;
+        float32<rackChannelCount>[laneMaxBranchesPerGroup] laneGroupContributions;
 
         void init()
         {
@@ -600,7 +675,7 @@ namespace wt
         // clamps exactly to the target so ramps terminate.
         void advanceSlotParamSmoothing()
         {
-            for (wrap<laneSlotCount> slot)
+            for (wrap<laneChainSlotCount> slot)
             {
                 // A slot outside the committed chain does no work: its ramps
                 // snap to the record at commit-entry.
@@ -614,8 +689,11 @@ namespace wt
                     if (target != slotParamKnownTarget[slot, param])
                     {
                         slotParamKnownTarget[slot, param] = target;
-                        let slotType = wrap<rackModuleCount> (int32 (slot) % rackModuleCount);
-                        let rampFrames = slotParamRampTable[slotType, param];
+                        // The type table is device-shaped; marker slots take
+                        // the utility row (crossovers glide like cutoffs).
+                        let rampFrames = laneSlotIsGroupMarker (int32 (slot))
+                                           ? laneUtilitySlotParamRampFrames
+                                           : slotParamRampTable[wrap<rackModuleCount> (int32 (slot) % rackModuleCount), param];
 
                         if (rampFrames <= 0)
                         {
@@ -671,18 +749,19 @@ namespace wt
                     tagValue = laneDecodeBranchTag (upload.slotIds[position]);
                 }
 
-                pendingLaneChain[position] = wrap<laneSlotCount> (slotValue);
+                pendingLaneChain[position] = wrap<laneChainSlotCount> (slotValue);
                 pendingLaneBranchTag[position] = tagValue;
             }
 
             // Enable is position-indexed on the wire; store it per SLOT for
             // the dispatch (slots outside the chain never read their flag).
-            for (wrap<laneSlotCount> slot)
+            // A marker slot's flag is its group's bypass.
+            for (wrap<laneChainSlotCount> slot)
                 pendingLaneEnabled[slot] = false;
 
             for (wrap<maxLaneChainLength> position)
                 if (int32 (position) < upload.chainLength)
-                    pendingLaneEnabled[wrap<laneSlotCount> (laneDecodeSlotId (upload.slotIds[position]))] =
+                    pendingLaneEnabled[wrap<laneChainSlotCount> (laneDecodeSlotId (upload.slotIds[position]))] =
                         ((upload.enabledMask >> int32 (position)) & 1) != 0;
 
             pendingPositionMask = upload.enabledMask;
@@ -699,7 +778,7 @@ namespace wt
                           || pendingLaneBranchTag[position] != currentLaneBranchTag[position]))
                     differs = true;
 
-            for (wrap<laneSlotCount> slot)
+            for (wrap<laneChainSlotCount> slot)
                 if (pendingLaneEnabled[slot] != currentLaneEnabled[slot])
                     differs = true;
 
@@ -716,10 +795,11 @@ namespace wt
         {
             // Parameter records apply immediately, like host parameter writes
             // once did; only STRUCTURE rides the transition ramp. Applying
-            // acknowledges the record's serial the same frame.
-            if (upload.slotId >= 0 && upload.slotId < laneSlotCount)
+            // acknowledges the record's serial the same frame. Marker slots
+            // are addressable too: a split's crossovers are its record.
+            if (upload.slotId >= 0 && upload.slotId < laneChainSlotCount)
             {
-                slotParams[wrap<laneSlotCount> (upload.slotId)] = upload.values;
+                slotParams[wrap<laneChainSlotCount> (upload.slotId)] = upload.values;
                 laneParamsSerial = upload.deliverySerial;
                 return;
             }
@@ -729,10 +809,10 @@ namespace wt
 
         event laneSlotParamValue (LaneSlotParamValueUpload upload)
         {
-            if (upload.slotId >= 0 && upload.slotId < laneSlotCount
+            if (upload.slotId >= 0 && upload.slotId < laneChainSlotCount
                  && upload.paramIndex >= 0 && upload.paramIndex < laneSlotParamCount)
             {
-                slotParams[wrap<laneSlotCount> (upload.slotId),
+                slotParams[wrap<laneChainSlotCount> (upload.slotId),
                                wrap<laneSlotParamCount> (upload.paramIndex)] = upload.value;
                 laneParamsSerial = upload.deliverySerial;
                 return;
@@ -749,17 +829,27 @@ namespace wt
         {
             if (pendingLaneUpload)
             {
-                bool[laneSlotCount] slotInPendingChain;
+                bool[laneChainSlotCount] slotInPendingChain;
+                int32[laneSplitUnitCount] pendingSplitBandCount;
 
                 for (wrap<maxLaneChainLength> position)
+                {
                     if (int32 (position) < pendingLaneChainLength)
+                    {
                         slotInPendingChain[pendingLaneChain[position]] = true;
+
+                        if (laneSlotIsSplitMarker (int32 (pendingLaneChain[position])))
+                            pendingSplitBandCount[wrap<laneSplitUnitCount> (
+                                int32 (pendingLaneChain[position]) - laneSplitSlotBase)] =
+                                    pendingLaneBranchTag[position];
+                    }
+                }
 
                 // A slot entering the chain is a newly created device: it
                 // starts with empty audio memory, never a frozen tail from a
                 // previous life. Reorders and bypass keep membership, so
                 // tails still survive both (ADR-003 semantics carried over).
-                for (wrap<laneSlotCount> slot)
+                for (wrap<laneChainSlotCount> slot)
                 {
                     let selector = int32 (slot);
 
@@ -774,18 +864,43 @@ namespace wt
                             slotParamStep[slot, param] = 0.0f;
                         }
 
-                        let ordinal = wrap<lanePoolInstanceCount> (selector / rackModuleCount);
-                        let poolType = selector % rackModuleCount;
+                        // Marker slots are not pool devices; split state
+                        // resets are handled per unit below.
+                        if (selector < laneSlotCount)
+                        {
+                            let ordinal = wrap<lanePoolInstanceCount> (selector / rackModuleCount);
+                            let poolType = selector % rackModuleCount;
 
-                        if (poolType == rackModuleGlobalFilter)  globalFilterPool[ordinal].poolResetIn <- 1;
-                        if (poolType == rackModuleDistortion)    distortionPool[ordinal].poolResetIn <- 1;
-                        if (poolType == rackModuleOtt)           ottPool[ordinal].poolResetIn <- 1;
-                        if (poolType == rackModuleChorus)        chorusPool[ordinal].poolResetIn <- 1;
-                        if (poolType == rackModuleFlanger)       flangerPool[ordinal].poolResetIn <- 1;
-                        if (poolType == rackModulePhaser)        phaserPool[ordinal].poolResetIn <- 1;
-                        if (poolType == rackModuleDelay)         delayPool[ordinal].poolResetIn <- 1;
-                        if (poolType == rackModuleReverb)        reverbPool[ordinal].poolResetIn <- 1;
+                            if (poolType == rackModuleGlobalFilter)  globalFilterPool[ordinal].poolResetIn <- 1;
+                            if (poolType == rackModuleDistortion)    distortionPool[ordinal].poolResetIn <- 1;
+                            if (poolType == rackModuleOtt)           ottPool[ordinal].poolResetIn <- 1;
+                            if (poolType == rackModuleChorus)        chorusPool[ordinal].poolResetIn <- 1;
+                            if (poolType == rackModuleFlanger)       flangerPool[ordinal].poolResetIn <- 1;
+                            if (poolType == rackModulePhaser)        phaserPool[ordinal].poolResetIn <- 1;
+                            if (poolType == rackModuleDelay)         delayPool[ordinal].poolResetIn <- 1;
+                            if (poolType == rackModuleReverb)        reverbPool[ordinal].poolResetIn <- 1;
+                        }
                     }
+                }
+
+                // A split unit entering the chain — or re-entering with a new
+                // band count — starts with fresh filter state. Clearing the
+                // tuned frequencies forces a retune on the next forward pass
+                // (zero is below the clamp floor, so it can never match).
+                for (wrap<laneSplitUnitCount> unit)
+                {
+                    let pendingBands = pendingSplitBandCount[unit];
+
+                    if (pendingBands != 0 && pendingBands != currentSplitBandCount[unit])
+                    {
+                        splitXoverLow[unit].reset();
+                        splitXoverHigh[unit].reset();
+                        splitCompensation[unit].reset();
+                        splitTunedLowHz[unit] = 0.0f;
+                        splitTunedHighHz[unit] = 0.0f;
+                    }
+
+                    currentSplitBandCount[unit] = pendingBands;
                 }
 
                 slotInCurrentChain = slotInPendingChain;
@@ -894,6 +1009,37 @@ namespace wt
 
             advanceSlotParamSmoothing();
 
+            // Split markers: retune the crossover tree from the smoothed
+            // record. Exact inequality is the epsilon here — a resting ramp
+            // holds its target bit for bit, so tan() only recomputes while a
+            // crossover is actually moving. The compensation allpass always
+            // follows the HIGH crossover: it is that crossover's phase it
+            // repays on the low path.
+            for (wrap<laneSplitUnitCount> unit)
+            {
+                let slot = wrap<laneChainSlotCount> (laneSplitSlotBase + int32 (unit));
+
+                if (! slotInCurrentChain[slot])
+                    continue;
+
+                let lowHz = laneClampSplitXoverHz (slotParamCurrent[slot, laneSplitParamXoverLowHz]);
+                let highHz = laneClampSplitXoverHz (slotParamCurrent[slot, laneSplitParamXoverHighHz]);
+
+                if (lowHz != splitTunedLowHz[unit])
+                {
+                    splitXoverLow[unit].setFrequency (processor.frequency, float64 (lowHz));
+                    splitTunedLowHz[unit] = lowHz;
+                }
+
+                if (highHz != splitTunedHighHz[unit])
+                {
+                    splitXoverHigh[unit].setFrequency (processor.frequency, float64 (highHz));
+                    splitCompensation[unit].setFrequency (processor.frequency, float64 (highHz),
+                                                          float64 (laneSplitFilters::defaultQ));
+                    splitTunedHighHz[unit] = highHz;
+                }
+            }
+
             // ONE forwarding path for every ordinal. A slot's smoothed record
             // is composed with its ordinal's block of the one rackMod bus,
             // through the module's own clamps, octave conventions, and helper
@@ -906,9 +1052,9 @@ namespace wt
                 let laneBase = int32 (ordinal) * rackModStaticTargetCount;
                 let scalerBase = int32 (ordinal) * laneOctaveScalerBankSize;
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleGlobalFilter)])
+                if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleGlobalFilter)])
                 {
-                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleGlobalFilter)];
+                    let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleGlobalFilter)];
                     globalFilterPool[ordinal].modeIn <- pp[laneGlobalFilterParamMode];
                     globalFilterPool[ordinal].cutoffHzIn <- clampFilterCutoffHz (
                         pp[laneGlobalFilterParamCutoffHz]
@@ -923,9 +1069,9 @@ namespace wt
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetGlobalFilterDrive)]));
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleDistortion)])
+                if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleDistortion)])
                 {
-                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleDistortion)];
+                    let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleDistortion)];
                     let laneWetHPHz = clampDistortionWetHPHz (
                         pp[laneDistortionParamWetHPHz]
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDistortionWetHP)],
@@ -948,9 +1094,9 @@ namespace wt
                         laneWetHPHz);
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleOtt)])
+                if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleOtt)])
                 {
-                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleOtt)];
+                    let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleOtt)];
                     ottPool[ordinal].mixIn <- ottClampMixPercent (
                         rackModulateLinear (pp[laneOttParamMix],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetOttMix)]));
@@ -968,9 +1114,9 @@ namespace wt
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetOttEnvelopeMatch)]));
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleChorus)])
+                if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleChorus)])
                 {
-                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleChorus)];
+                    let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleChorus)];
                     chorusPool[ordinal].enabledIn <- 1.0f;
                     chorusPool[ordinal].mixIn <- rackModulateLinear (pp[laneChorusParamMix],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusMix)]);
@@ -988,9 +1134,9 @@ namespace wt
                     chorusPool[ordinal].trackingPitchHzIn <- trackingPitchHzIn;
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleFlanger)])
+                if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleFlanger)])
                 {
-                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleFlanger)];
+                    let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleFlanger)];
                     flangerPool[ordinal].rateIn <- clampFlangerRateHz (
                         rackModulateLinear (pp[laneFlangerParamRate],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetFlangerRate)]));
@@ -1005,9 +1151,9 @@ namespace wt
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetFlangerMix)]));
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModulePhaser)])
+                if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModulePhaser)])
                 {
-                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModulePhaser)];
+                    let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModulePhaser)];
                     phaserPool[ordinal].rateIn <- clampPhaserRateHz (
                         rackModulateLinear (pp[lanePhaserParamRate],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserRate)]));
@@ -1032,9 +1178,9 @@ namespace wt
                     phaserPool[ordinal].tempoBpmIn <- clampPhaserTempoBpm (tempoBpmIn);
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleDelay)])
+                if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleDelay)])
                 {
-                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleDelay)];
+                    let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleDelay)];
                     delayPool[ordinal].timeMsIn <- clampDelayTimeMs (
                         pp[laneDelayParamTimeMs]
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDelayTime)],
@@ -1054,9 +1200,9 @@ namespace wt
                     delayPool[ordinal].tempoBpmIn <- clampDelayTempoBpm (tempoBpmIn);
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleReverb)])
+                if (slotInCurrentChain[wrap<laneChainSlotCount> (slotBase + rackModuleReverb)])
                 {
-                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleReverb)];
+                    let pp = slotParamCurrent[wrap<laneChainSlotCount> (slotBase + rackModuleReverb)];
                     reverbPool[ordinal].sizeIn <- rackModulateLinear (pp[laneReverbParamSize],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetReverbSize)]);
                     reverbPool[ordinal].decayIn <- rackModulateLinear (pp[laneReverbParamDecay],
@@ -1081,7 +1227,7 @@ namespace wt
                                                    float32<rackChannelCount> signal)
         {
             let selector = int32 (slotId);
-            let isEnabled = currentLaneEnabled[slotId];
+            let isEnabled = currentLaneEnabled[wrap<laneChainSlotCount> (selector)];
             let ordinal = wrap<lanePoolInstanceCount> (selector / rackModuleCount);
             let poolType = selector % rackModuleCount;
 
@@ -1139,6 +1285,106 @@ namespace wt
             return isEnabled ? reverbPool[ordinal].out : signal;
         }
 
+        //----------------------------------------------------------------------
+        // Group walk helpers. A marker OPENS a group over the trunk signal;
+        // members are dispatched onto their branches; a trunk device, the
+        // next marker, or the chain's end CLOSES it through mergeOpenGroup.
+
+        void openGroup (int32 markerSlot, int32 fanout, float32<rackChannelCount> forkSignal)
+        {
+            laneGroupKind = laneSlotIsSplitMarker (markerSlot) ? 2 : 1;
+            laneGroupEnabled = currentLaneEnabled[wrap<laneChainSlotCount> (markerSlot)];
+            laneGroupBranchCount = fanout;
+            laneGroupMemberCount = 0;
+            laneRunBranch = 0;
+            laneGroupInput = forkSignal;
+
+            if (laneGroupKind == 2)
+            {
+                // The contribution slots are pre-filled with each band's RAW
+                // FILTERED SIGNAL: an untouched band passes itself to the
+                // merge, so the spectrum always survives an empty band. The
+                // filters run whether or not the group is bypassed — their
+                // time bases never drift (the ADR-005 posture).
+                let unit = wrap<laneSplitUnitCount> (markerSlot - laneSplitSlotBase);
+
+                if (fanout == 2)
+                {
+                    let split = splitXoverLow[unit].process (forkSignal);
+                    laneGroupContributions[0] = split[0];
+                    laneGroupContributions[1] = split[1];
+                    laneGroupContributions[2] = float32<rackChannelCount> ();
+                }
+                else
+                {
+                    let splitLowRest = splitXoverLow[unit].process (forkSignal);
+                    let splitMidHigh = splitXoverHigh[unit].process (splitLowRest[1]);
+                    let modes = splitCompensation[unit].processMultimode (splitLowRest[0]);
+
+                    // The high crossover's own allpass form (lp − √2·bp + hp)
+                    // applied to the LOW path, so all three bands share the
+                    // tree's full phase rotation and the recombined magnitude
+                    // is exactly flat at any crossover spacing.
+                    laneGroupContributions[0] = modes[0]
+                                                  - std::intrinsics::sqrt (2.0f) * modes[2]
+                                                  + modes[1];
+                    laneGroupContributions[1] = splitMidHigh[0];
+                    laneGroupContributions[2] = splitMidHigh[1];
+                }
+
+                laneGroupContributions[3] = float32<rackChannelCount> ();
+            }
+            else
+            {
+                // A parallel branch's empty contribution is SILENCE: every
+                // branch reads the whole fork signal, so an empty lane must
+                // add nothing at the merge.
+                for (wrap<laneMaxBranchesPerGroup> branch)
+                    laneGroupContributions[branch] = float32<rackChannelCount> ();
+            }
+        }
+
+        // A member's first appearance on a branch starts from that branch's
+        // input: parallel branches read the fork signal, split bands read
+        // their filtered band (sitting in the contribution slot until a
+        // device claims it). Later members continue the branch serially.
+        void startBranchMember (int32 tag)
+        {
+            if (tag != laneRunBranch)
+            {
+                if (laneRunBranch >= 1)
+                    laneGroupContributions[wrap<laneMaxBranchesPerGroup> (laneRunBranch - 1)] = laneBranchSignal;
+
+                laneBranchSignal = laneGroupKind == 2
+                                     ? laneGroupContributions[wrap<laneMaxBranchesPerGroup> (tag - 1)]
+                                     : laneGroupInput;
+                laneRunBranch = tag;
+            }
+        }
+
+        // Close the open group: bank the running branch, then merge by sum.
+        // A group with no members at all, and a group whose marker is
+        // disabled, hands the FORK signal through untouched — placing or
+        // bypassing structure is inaudible until an enabled device speaks.
+        float32<rackChannelCount> mergeOpenGroup()
+        {
+            if (laneRunBranch >= 1)
+                laneGroupContributions[wrap<laneMaxBranchesPerGroup> (laneRunBranch - 1)] = laneBranchSignal;
+
+            laneGroupKind = 0;
+
+            if (laneGroupMemberCount == 0 || ! laneGroupEnabled)
+                return laneGroupInput;
+
+            var merged = float32<rackChannelCount> ();
+
+            for (wrap<laneMaxBranchesPerGroup> branch)
+                if (int32 (branch) < laneGroupBranchCount)
+                    merged += laneGroupContributions[branch];
+
+            return merged;
+        }
+
         void main()
         {
             publishStructureDiagnostics();
@@ -1154,49 +1400,46 @@ namespace wt
                 // costs nothing; it enters fresh through the commit reset.
                 // An empty chain is the dry instrument.
                 //
-                // Parallel groups walk the SAME positions: every branch of a
-                // group reads the trunk signal at the fork, a branch change
-                // banks the finished branch and restarts from the fork, and
-                // the merge SUMS the branches into the continuing trunk. An
-                // all-trunk chain (every tag 0) takes none of these paths and
-                // is bit-identical to the pre-parallel serial walk.
-                var groupInput = float32<rackChannelCount> ();
-                var branchSum = float32<rackChannelCount> ();
-                var runTag = 0;
+                // Groups walk the SAME positions: a marker forks the trunk
+                // (splitting it into bands when the marker is a split),
+                // members ride their branches, and the group closes — merging
+                // by sum, or handing the fork through when bypassed or empty
+                // — at a trunk device, the next marker, or the chain's end.
+                // An all-trunk chain takes none of these paths and is
+                // bit-identical to the pre-group serial walk.
 
                 for (wrap<maxLaneChainLength> position)
                 {
                     if (int32 (position) < currentLaneChainLength)
                     {
+                        let slot = int32 (currentLaneChain[position]);
                         let tag = currentLaneBranchTag[position];
 
-                        if (runTag == 0 && tag != 0)
+                        if (laneSlotIsGroupMarker (slot))
                         {
-                            // Fork: the group reads the trunk signal here.
-                            groupInput = chain;
-                            branchSum = float32<rackChannelCount> ();
-                        }
-                        else if (runTag != 0 && tag == runTag + 1)
-                        {
-                            // Next branch: bank the finished one, restart
-                            // from the fork.
-                            branchSum += chain;
-                            chain = groupInput;
-                        }
-                        else if (runTag != 0 && tag == 0)
-                        {
-                            // Merge: the trunk continues from the sum.
-                            chain += branchSum;
-                        }
+                            if (laneGroupKind != 0)
+                                chain = mergeOpenGroup();
 
-                        runTag = tag;
-                        chain = advanceLaneSlot (currentLaneChain[position], chain);
+                            openGroup (slot, tag, chain);
+                        }
+                        else if (tag == 0)
+                        {
+                            if (laneGroupKind != 0)
+                                chain = mergeOpenGroup();
+
+                            chain = advanceLaneSlot (wrap<laneSlotCount> (slot), chain);
+                        }
+                        else
+                        {
+                            startBranchMember (tag);
+                            laneBranchSignal = advanceLaneSlot (wrap<laneSlotCount> (slot), laneBranchSignal);
+                            laneGroupMemberCount += 1;
+                        }
                     }
                 }
 
-                // A chain ending inside a group merges at its end.
-                if (runTag != 0)
-                    chain += branchSum;
+                if (laneGroupKind != 0)
+                    chain = mergeOpenGroup();
 
                 let transition = nextTransitionGain();
                 out <- float32<2> (
