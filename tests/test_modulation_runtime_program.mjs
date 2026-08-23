@@ -464,7 +464,7 @@ test("only synth-voice destinations expose a per-note articulation cell", async 
     assert.equal(getModulationArticulationCellIndex({
         ...voiceRoute,
         id: "rack-reverb",
-        targetKind: "rack.reverbDecay",
+        targetKind: "lane.reverb#1.reverbDecay",
     }), null);
 });
 
@@ -760,8 +760,8 @@ test("zero-depth rack mappings stay stored but leave the active runtime program"
         MODULATION_PROGRAM_ENDPOINT_ID,
     } = await programModulePromise;
     const rackRoute = modulationRoute({
-        id: "rack.reverbDecay::mseg-1",
-        targetKind: "rack.reverbDecay",
+        id: "lane.reverb#1.reverbDecay::mseg-1",
+        targetKind: "lane.reverb#1.reverbDecay",
         amount: 0.5,
     });
     const zeroRoute = { ...rackRoute, amount: 0 };

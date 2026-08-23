@@ -11,6 +11,7 @@ import {
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
 } from "react";
+import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets";
 import { createPortal } from "react-dom";
 
 import { ParameterHudLayerContext } from "../shared/parameter-hud";
@@ -74,7 +75,10 @@ import {
     type RailVerticalBounds,
 } from "../shared/mod-rail-perimeter";
 import { presentRouteWithCanonicalAmount, useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
-import { parseModulationTargetKind } from "../shared/modulation-targets";
+import {
+    laneBaseKindForRackEndpoint,
+    parseModulationTargetKind,
+} from "../shared/modulation-targets";
 import {
     ParameterContextMenu,
     ParameterValueSheet,
@@ -683,7 +687,7 @@ function RackUnit({
 }
 
 function isRouteForTarget(route: ModulationRoute, endpointID: string) {
-    return route.targetKind === `rack.${endpointID}`;
+    return route.targetKind === laneBaseKindForRackEndpoint(endpointID);
 }
 
 function routePairKey(source: RackRouteSource, targetKind: ModulationTargetKind) {
@@ -753,7 +757,7 @@ function RackParameterControl({
     const presentation = projectRackRoutePresentation({
         routes,
         armedSource: sourceIsSelected ? activeSource : null,
-        targetKind: isTarget ? `rack.${descriptor.endpointID}` as RackModulationTargetKind : null,
+        targetKind: isTarget ? laneBaseKindForRackEndpoint(descriptor.endpointID) : null,
         effectEnabled,
         targetEffective,
         pending,
@@ -768,7 +772,7 @@ function RackParameterControl({
     const dragCreation = dragSource === null ? null : getModulationRouteCreation({
         routes,
         source: dragSource,
-        targetKind: parseModulationTargetKind(`rack.${descriptor.endpointID}`),
+        targetKind: parseModulationTargetKind(laneBaseKindForRackEndpoint(descriptor.endpointID)),
         pending,
     });
     const rootStyle = {
@@ -815,7 +819,7 @@ function RackParameterControl({
         <div
             data-role={`rack-parameter-surface-${descriptor.endpointID}`}
             data-rack-mod-target={isTarget ? descriptor.endpointID : undefined}
-            data-modulation-target-kind={isTarget ? `rack.${descriptor.endpointID}` : undefined}
+            data-modulation-target-kind={isTarget ? laneBaseKindForRackEndpoint(descriptor.endpointID) : undefined}
             data-creation-state={presentation.creation}
             data-drag-creation={dragCreation ?? undefined}
             data-creation-confirmed={confirmed || undefined}
@@ -3069,7 +3073,7 @@ export function EffectsRackWorkspace({
     const dragSourceDescriptor = dragSource === null
         ? null
         : findRackModulationSource(dragSource.sourceKind, dragSource.sourceSlot);
-    const selectedTargetKind = `rack.${selectedTarget.endpointID}` as RackModulationTargetKind;
+    const selectedTargetKind = laneBaseKindForRackEndpoint(selectedTarget.endpointID);
     const selectedRouteIndex = routes.findIndex((route) => (
         route.sourceKind === selectedSource.sourceKind
         && route.sourceSlot === selectedSource.sourceSlot
@@ -3113,7 +3117,7 @@ export function EffectsRackWorkspace({
         parameterOverlaySyncDivisionDescriptor,
         parameterValueSheetEndpointID !== null && parameterOverlaySyncDivisionEndpointID !== null,
     );
-    const parameterOverlayTargetKind = `rack.${parameterOverlayDescriptor.endpointID}` as RackModulationTargetKind;
+    const parameterOverlayTargetKind = laneBaseKindForRackEndpoint(parameterOverlayDescriptor.endpointID);
     const parameterOverlayRouteIndex = sourceIsArmed ? routes.findIndex((route) => (
         route.sourceKind === selectedSource.sourceKind
         && route.sourceSlot === selectedSource.sourceSlot
@@ -3153,8 +3157,8 @@ export function EffectsRackWorkspace({
             // the canonical document, so flash, tick, and pulse now.
             confirmedRouteSerialRef.current += 1;
             setConfirmedRoute({
-                endpointID: confirmed.targetKind.startsWith("rack.")
-                    ? confirmed.targetKind.slice("rack.".length)
+                endpointID: parseLaneModulationTargetKind(confirmed.targetKind)?.endpointID
+                    ? parseLaneModulationTargetKind(confirmed.targetKind)?.endpointID ?? null
                     : null,
                 routeId: confirmed.id,
                 serial: confirmedRouteSerialRef.current,
@@ -3385,7 +3389,7 @@ export function EffectsRackWorkspace({
         targetKind: ModulationTargetKind,
         companionKinds: ReadonlyArray<ModulationTargetKind> = [],
     ) => {
-        const rackEndpointID = targetKind.startsWith("rack.") ? targetKind.slice("rack.".length) : null;
+        const rackEndpointID = parseLaneModulationTargetKind(targetKind)?.endpointID ?? null;
         const targetParameter = rackEndpointID === null ? null : getRackParameterDescriptor(rackEndpointID);
         const creation = getPairCreation(source, targetKind);
         if (creation !== "existing" && creation !== "creatable") {
@@ -3467,11 +3471,12 @@ export function EffectsRackWorkspace({
     ]);
 
     const hoverSourceTarget = useCallback((source: SelectedSource, targetKind: ModulationTargetKind | null) => {
-        if (targetKind === null || !targetKind.startsWith("rack.")) {
+        const parsedHoverTarget = targetKind === null ? null : parseLaneModulationTargetKind(targetKind);
+        if (targetKind === null || parsedHoverTarget === null) {
             setHoverTargetEndpointID(null);
             return;
         }
-        const endpointID = targetKind.slice("rack.".length);
+        const endpointID = parsedHoverTarget.endpointID;
         const creation = getPairCreation(source, targetKind);
         setHoverTargetEndpointID(creation === "creatable" ? endpointID : null);
     }, [getPairCreation]);
@@ -3508,7 +3513,7 @@ export function EffectsRackWorkspace({
                     target={selectedTarget}
                     onCreate={() => createRoute(
                         selectedSource,
-                        `rack.${selectedTarget.endpointID}` as RackModulationTargetKind,
+                        laneBaseKindForRackEndpoint(selectedTarget.endpointID),
                     )}
                 />
             ) : null}
@@ -3561,7 +3566,7 @@ export function EffectsRackWorkspace({
                     baseValue={parameterOverlayBinding.value}
                     defaultValue={parameterOverlayDescriptor.initial}
                     amountSpec={(() => {
-                        const targetKind = parseModulationTargetKind(`rack.${parameterOverlayDescriptor.endpointID}`);
+                        const targetKind = parseModulationTargetKind(laneBaseKindForRackEndpoint(parameterOverlayDescriptor.endpointID));
                         return targetKind === null
                             ? null
                             : parameterEntrySpecForModulationAmount(targetKind, parameterOverlayBinding.value);

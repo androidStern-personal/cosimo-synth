@@ -1300,7 +1300,7 @@ export async function installModulationRouteAmountBindingHarness(target: HTMLEle
     const routeId = "fine-grained-route-amount";
     const initialRoute = createDefaultRoute({
         id: routeId,
-        targetKind: "rack.distortionDriveDb",
+        targetKind: "lane.distortion#1.distortionDriveDb",
         amount: 0,
     });
     const initialState = {

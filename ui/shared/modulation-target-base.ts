@@ -6,7 +6,7 @@
  *
  * Sources of truth composed here, never duplicated:
  * - rack targets:      ui/shared/rack-parameter-descriptors (via target kind
- *                      "rack.<endpointID>")
+ *                      "lane.<instanceId>.<endpointID>")
  * - global filter:     ui/shared/target-descriptor (endpoint-bound entries)
  * - oscillator params: the Voice manifest (controlID <-> parameterKind) plus
  *                      the oscillator binding contract's per-osc endpoints
@@ -18,6 +18,7 @@ import {
     allRackParameterDescriptors,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
+import { parseLaneModulationTargetKind } from "./lane-modulation-targets";
 import { getModulationTargetDescriptor } from "./target-descriptor";
 import {
     OSCILLATOR_IDS,
@@ -153,8 +154,11 @@ function parseOscillatorTarget(targetKind: string): {
 }
 
 export function resolveModulationTargetBase(targetKind: ModulationTargetKind): ModulationTargetBase | null {
-    if (targetKind.startsWith("rack.")) {
-        const endpointID = targetKind.slice("rack.".length);
+    const parsedLane = parseLaneModulationTargetKind(targetKind);
+    if (parsedLane !== null) {
+        // Every lane instance speaks its device type's canonical language, so
+        // the base resolution is the same for instance #1 and pool instances.
+        const endpointID = parsedLane.endpointID;
         const descriptor = rackDescriptorsByEndpoint.get(endpointID);
         if (descriptor === undefined) {
             throw new Error(`Rack modulation target "${targetKind}" has no rack descriptor.`);

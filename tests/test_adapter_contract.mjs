@@ -691,7 +691,7 @@ test("bridge rejects a hydration document containing a non-articulable rack mapp
                 sourceKind: "macro",
                 sourceSlot: 1,
                 polarity: "bipolar",
-                targetKind: "rack.phaserPhase",
+                targetKind: "lane.phaser#1.phaserPhase",
                 amount: 180,
                 reducer: "max",
             },

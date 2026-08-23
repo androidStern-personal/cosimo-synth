@@ -56,11 +56,19 @@ export type SharedVoiceModulationTargetKind = typeof SHARED_VOICE_MODULATION_TAR
 export type VoiceModulationTargetKind = OscillatorModulationTargetKind | SharedVoiceModulationTargetKind;
 /** Policy key for an oscillator-local or shared voice destination. */
 export type VoiceModulationParameterKind = OscillatorModulationParameterKind | SharedVoiceModulationTargetKind;
-/** Canonical identity for one authored rack destination. */
-export type RackModulationTargetKind = `rack.${string}`;
+/**
+ * Canonical identity for one BASE (ordinal-0) lane destination:
+ * `lane.<type>#1.<endpointID>`. The rack.* namespace is DELETED (Effects Lane
+ * hard cut): the eight resident devices are lane devices like any other, and
+ * their instance-#1 kinds form the static vocabulary that mirrors the
+ * engine's 36-wide rackMod bus block. The type name keeps "Rack" because the
+ * ENGINE bus keeps that name (rackModTargetCount et al).
+ */
+export type RackModulationTargetKind = `lane.${string}`;
 /** One pool device's parameter (Effects Lane): `lane.<instanceId>.<endpointID>`.
-    Per-patch dynamic — never part of the static legal-pair domain; grammar and
-    resolution live in lane-modulation-targets.ts. */
+    Instances beyond #1 are per-patch dynamic — never part of the static
+    legal-pair domain; grammar and resolution live in
+    lane-modulation-targets.ts. */
 export type LaneModulationTargetKind = `lane.${string}`;
 /** Any canonical voice, rack, or lane modulation destination. */
 export type ModulationTargetKind = VoiceModulationTargetKind | RackModulationTargetKind | LaneModulationTargetKind;
@@ -132,12 +140,34 @@ export const VOICE_MODULATION_TARGET_IDENTITIES: ReadonlyArray<ModulationTargetI
 const rackModulationParameters = allRackParameterDescriptors()
     .filter((parameter) => parameter.modulationTargetIndex !== null);
 
-/** Rack destinations paired with their descriptor-owned runtime indexes. */
+const LANE_DEVICE_TYPE_PREFIXES = [
+    "globalFilter", "distortion", "ott", "chorus", "flanger", "phaser", "delay", "reverb",
+] as const;
+
+/** The canonical base-instance lane kind for one effect endpoint. Every
+    effect endpoint is prefixed by its device type name, so the type is
+    derived, never hand-mapped. */
+export function laneBaseKindForRackEndpoint(endpointID: string): RackModulationTargetKind {
+    const kind = maybeLaneBaseKindForRackEndpoint(endpointID);
+    if (kind === null) {
+        throw new Error(`Effect endpoint has no device-type prefix: ${endpointID}`);
+    }
+    return kind;
+}
+
+/** The base-instance lane kind, or null for a non-effect endpoint (shared
+    surfaces sometimes drive voice endpoints through the same components). */
+export function maybeLaneBaseKindForRackEndpoint(endpointID: string): RackModulationTargetKind | null {
+    const deviceType = LANE_DEVICE_TYPE_PREFIXES.find((prefix) => endpointID.startsWith(prefix));
+    return deviceType === undefined ? null : `lane.${deviceType}#1.${endpointID}`;
+}
+
+/** Base-instance lane destinations paired with their descriptor-owned runtime indexes. */
 export const RACK_MODULATION_TARGET_IDENTITIES: ReadonlyArray<ModulationTargetIdentity> = Object.freeze(
     rackModulationParameters.map((parameter) => ({
         // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
         // and indexes are both minted only by the rack descriptor catalog.
-        kind: `rack.${parameter.endpointID}` as RackModulationTargetKind,
+        kind: laneBaseKindForRackEndpoint(parameter.endpointID),
         group: "rack" as const,
         runtimeIndex: parameter.modulationTargetIndex as number,
     })).sort((left, right) => left.runtimeIndex - right.runtimeIndex),
@@ -231,7 +261,7 @@ export function parseVoiceModulationTargetKind(value: unknown): VoiceModulationT
         : null;
 }
 
-/** Parse an untrusted rack target without accepting unknown `rack.*` strings. */
+/** Parse an untrusted base lane target against the static vocabulary. */
 export function parseRackModulationTargetKind(value: unknown): RackModulationTargetKind | null {
     const targetKind = parseModulationTargetKind(value);
     return targetKind !== null && targetIdentityByKind.get(targetKind)?.group === "rack"

@@ -220,6 +220,23 @@ are M1's permanent acceptance tests, not a throwaway report.
   the host surface is oscillators + voice + macros + MSEG/env + filterMix.
   Native benchmark seeds effects via lane fields; every browser/iOS test
   speaks the field-upload wire.
+- **B4 NAMESPACE CUT COMPLETE (2026-08-23):** the `rack.*` target-kind
+  namespace is DELETED. The static vocabulary's kinds are the resident
+  instance-#1 lane kinds (`lane.<type>#1.<endpointID>`), minted by
+  `laneBaseKindForRackEndpoint` (device type derived from the endpoint's
+  own prefix, never hand-mapped); the 1,131-pair static domain and every
+  wire index are unchanged — only the naming key moved. ONE grammar for
+  every device: instance #1 parses like any other instance, and
+  `LaneSlotAssignments` now speak SLOT ordinals (0 = the base block,
+  1..4 = pool sets; bus index = ordinal x 36 + static index). The
+  compiler resolves static members without assignments; pool instances
+  still require them. Bounds/limits/readout authority defers to the
+  instance-#1 kind. Every extraction site (`slice("rack.".length)`)
+  now parses the lane grammar; every fixture, probe, profile generator
+  and stored-route document speaks `lane.*`; old `rack.*` routes are
+  not read (hard cut). Internal identifiers that mirror the ENGINE's
+  rackMod bus keep their "rack" names, matching the engine's own.
+  Full cross-platform battery green.
 - **M2 — The hard cut:** delete the `rack.*` namespace and the 45
   per-parameter endpoints; rewrite target descriptors, the resolver, the
   legal-pair domain, and every fixture to `lane.*`; lane state v1 replaces

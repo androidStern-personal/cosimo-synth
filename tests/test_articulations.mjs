@@ -1061,7 +1061,7 @@ test("headless hydration and live writes both reject whole phantom-route documen
                 sourceKind: "macro",
                 sourceSlot: 1,
                 polarity: "bipolar",
-                targetKind: "rack.phaserPhase",
+                targetKind: "lane.phaser#1.phaserPhase",
                 amount: 180,
                 reducer: "max",
             },

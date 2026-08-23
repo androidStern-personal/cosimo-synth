@@ -1008,9 +1008,9 @@ def test_ios_modulation_benchmark_profiles_are_strict_and_cover_shipping_and_tor
             )
             target_kind = route["targetKind"]
             path_kind = (
-                "macroRack" if source_kind == "macro" and str(target_kind).startswith("rack.")
+                "macroRack" if source_kind == "macro" and str(target_kind).startswith("lane.")
                 else "macroVoice" if source_kind == "macro"
-                else "voiceRack" if str(target_kind).startswith("rack.")
+                else "voiceRack" if str(target_kind).startswith("lane.")
                 else "voice"
             )
             key = (path_kind, target_kind, source_family, route["polarity"], route["reducer"])

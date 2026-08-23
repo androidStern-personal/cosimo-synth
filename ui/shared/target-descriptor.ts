@@ -16,6 +16,7 @@ import {
     type ModulationTargetKind,
     type OscillatorID,
     type OscillatorModulationParameterKind,
+    laneBaseKindForRackEndpoint,
 } from "./modulation-targets";
 import {
     RACK_EFFECT_DESCRIPTORS,
@@ -552,7 +553,7 @@ function createRackTargetDescriptor(parameter: RackParameterDescriptor): TargetD
         articulationParameterId: null,
         modulationTargetKind: parameter.modulationTargetIndex === null
             ? null
-            : `rack.${parameter.endpointID}` as ModulationTargetKind,
+            : laneBaseKindForRackEndpoint(parameter.endpointID),
     });
 }
 

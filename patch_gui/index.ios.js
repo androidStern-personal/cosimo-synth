@@ -15366,11 +15366,32 @@ const VOICE_MODULATION_TARGET_IDENTITIES = Object.freeze(
   VOICE_MODULATION_TARGET_KINDS.map((kind, runtimeIndex) => ({ kind, group: "voice", runtimeIndex }))
 );
 const rackModulationParameters = allRackParameterDescriptors().filter((parameter2) => parameter2.modulationTargetIndex !== null);
+const LANE_DEVICE_TYPE_PREFIXES = [
+  "globalFilter",
+  "distortion",
+  "ott",
+  "chorus",
+  "flanger",
+  "phaser",
+  "delay",
+  "reverb"
+];
+function laneBaseKindForRackEndpoint(endpointID) {
+  const kind = maybeLaneBaseKindForRackEndpoint(endpointID);
+  if (kind === null) {
+    throw new Error(`Effect endpoint has no device-type prefix: ${endpointID}`);
+  }
+  return kind;
+}
+function maybeLaneBaseKindForRackEndpoint(endpointID) {
+  const deviceType = LANE_DEVICE_TYPE_PREFIXES.find((prefix) => endpointID.startsWith(prefix));
+  return deviceType === void 0 ? null : `lane.${deviceType}#1.${endpointID}`;
+}
 const RACK_MODULATION_TARGET_IDENTITIES = Object.freeze(
   rackModulationParameters.map((parameter2) => ({
     // SAFETY: The preceding filter proves the authored index is non-null; endpoint IDs
     // and indexes are both minted only by the rack descriptor catalog.
-    kind: `rack.${parameter2.endpointID}`,
+    kind: laneBaseKindForRackEndpoint(parameter2.endpointID),
     group: "rack",
     runtimeIndex: parameter2.modulationTargetIndex
   })).sort((left, right) => left.runtimeIndex - right.runtimeIndex)
@@ -15480,17 +15501,17 @@ function parseLaneModulationTargetKind(value) {
   };
 }
 function laneMirrorRackKind(parsed) {
-  return `rack.${parsed.endpointID}`;
+  return `lane.${parsed.deviceType}#1.${parsed.endpointID}`;
 }
 function getLaneModulationTargetIndex(parsed, assignments) {
   if (parsed === null) {
     return null;
   }
   const ordinal = assignments.get(parsed.instanceId);
-  if (ordinal === void 0 || !Number.isInteger(ordinal) || ordinal < 0 || ordinal >= MODULATION_LANE_POOL_SET_COUNT) {
+  if (ordinal === void 0 || !Number.isInteger(ordinal) || ordinal < 0 || ordinal > MODULATION_LANE_POOL_SET_COUNT) {
     return null;
   }
-  return MODULATION_RACK_TARGET_COUNT$1 + ordinal * MODULATION_RACK_TARGET_COUNT$1 + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
+  return ordinal * MODULATION_RACK_TARGET_COUNT$1 + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
 }
 const MODULATION_VOICE_SOURCE_COUNT = MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === "voice").length;
 MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === "macro").length;
@@ -15880,7 +15901,7 @@ function createRackTargetDescriptor(parameter2) {
     isQuick: parameter2.quick,
     compound: parameter2.endpointID === "phaserRate" || parameter2.endpointID === "delayTime" ? "sync" : null,
     articulationParameterId: null,
-    modulationTargetKind: parameter2.modulationTargetIndex === null ? null : `rack.${parameter2.endpointID}`
+    modulationTargetKind: parameter2.modulationTargetIndex === null ? null : laneBaseKindForRackEndpoint(parameter2.endpointID)
   });
 }
 const TARGET_DESCRIPTORS = Object.freeze(
@@ -16007,7 +16028,7 @@ const ROUTE_AMOUNT_STEPS = {
 };
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors().filter((parameter2) => parameter2.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map(
-  RACK_MODULATION_PARAMETERS.map((parameter2) => [`rack.${parameter2.endpointID}`, parameter2])
+  RACK_MODULATION_PARAMETERS.map((parameter2) => [laneBaseKindForRackEndpoint(parameter2.endpointID), parameter2])
 );
 class ModulationStateParseError extends Error {
   name = "ModulationStateParseError";
@@ -19181,7 +19202,7 @@ function parameterEntrySpecForModulationAmount(targetKind, baseValue) {
   if (!isRackModulationTarget(targetKind)) {
     throw new Error(`Unknown modulation target "${targetKind}".`);
   }
-  const descriptor = getRackParameterDescriptor(targetKind.slice("rack.".length));
+  const descriptor = getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "");
   if (descriptor === null || descriptor.modulationTargetIndex === null) {
     throw new Error(`Unknown rack modulation target "${targetKind}".`);
   }

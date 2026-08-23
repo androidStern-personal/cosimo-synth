@@ -37,6 +37,7 @@ import {
     type ModulationTargetKind,
     type RackModulationTargetKind,
     type VoiceModulationTargetKind,
+    laneBaseKindForRackEndpoint,
 } from "./modulation-targets";
 import { buildModulationRuntimeProgramEvents } from "./modulation-runtime-program";
 import { err, ok, type Result } from "./result";
@@ -130,7 +131,7 @@ const ROUTE_AMOUNT_STEPS = {
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
     .filter((parameter) => parameter.modulationTargetIndex !== null);
 const RACK_MODULATION_PARAMETER_BY_KIND = new Map<RackModulationTargetKind, RackParameterDescriptor>(
-    RACK_MODULATION_PARAMETERS.map((parameter) => [`rack.${parameter.endpointID}`, parameter]),
+    RACK_MODULATION_PARAMETERS.map((parameter) => [laneBaseKindForRackEndpoint(parameter.endpointID), parameter]),
 );
 
 export type {

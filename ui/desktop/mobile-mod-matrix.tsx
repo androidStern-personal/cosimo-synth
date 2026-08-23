@@ -7,6 +7,7 @@ import {
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
 } from "react";
+import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets";
 
 import {
     MODULATION_SOURCE_OPTIONS,
@@ -87,7 +88,7 @@ function sourceValueForFocusedSource(source: FocusedModulationSource | null | un
 
 export function targetPresentation(targetKind: ModulationTargetKind) {
     if (isRackModulationTarget(targetKind)) {
-        const parameter = getRackParameterDescriptor(targetKind.slice("rack.".length));
+        const parameter = getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "");
         if (parameter) {
             const effect = getRackEffectDescriptor(parameter.effectId);
             return {
@@ -107,7 +108,7 @@ export function targetCategory(targetKind: ModulationTargetKind): TargetCategory
     if (!isRackModulationTarget(targetKind)) {
         return "voice";
     }
-    return targetKind.startsWith("rack.globalFilter") ? "global-filter" : "fx";
+    return parseLaneModulationTargetKind(targetKind)?.deviceType === "globalFilter" ? "global-filter" : "fx";
 }
 
 export function SourceIdentity({
@@ -361,13 +362,13 @@ export function MobileModMatrix({
                 return !isRackModulationTarget(option.value);
             }
             if (category === "global-filter") {
-                return option.value.startsWith("rack.globalFilter");
+                return parseLaneModulationTargetKind(option.value)?.deviceType === "globalFilter";
             }
             if (!effectId) {
                 return false;
             }
             const parameter = isRackModulationTarget(option.value)
-                ? getRackParameterDescriptor(option.value.slice("rack.".length))
+                ? getRackParameterDescriptor(parseLaneModulationTargetKind(option.value)?.endpointID ?? "")
                 : null;
             return parameter?.effectId === effectId;
         });

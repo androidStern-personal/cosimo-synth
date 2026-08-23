@@ -3,7 +3,7 @@ import { reportUserParameterEdit } from "./user-edit-bus.js";
 import { laneMirrorRackKind, parseLaneModulationTargetKind, } from "./lane-modulation-targets.js";
 import { allRackParameterDescriptors, } from "./rack-parameter-descriptors.js";
 import { MSEG_DEFAULT_DEPTH, MSEG_RATE_MAX_SECONDS, addMsegPoint, clamp01, createDefaultMsegPlayback, createDefaultMsegShape, deleteMsegPoint, msegShapesEqual, moveMsegPoint, normalizeMsegPlayback, normalizeMsegShape, renderMsegShape, setMsegSegmentCurvePower, } from "./mseg.js";
-import { MODULATION_SOURCE_IDENTITIES, MODULATION_TARGET_IDENTITIES, getVoiceModulationParameterKind, parseModulationTargetKind as parseCanonicalModulationTargetKind, } from "./modulation-targets.js";
+import { MODULATION_SOURCE_IDENTITIES, MODULATION_TARGET_IDENTITIES, getVoiceModulationParameterKind, parseModulationTargetKind as parseCanonicalModulationTargetKind, laneBaseKindForRackEndpoint, } from "./modulation-targets.js";
 import { buildModulationRuntimeProgramEvents } from "./modulation-runtime-program.js";
 import { err, ok } from "./result.js";
 import { getModulationTargetDisplayLabel } from "./target-descriptor.js";
@@ -92,7 +92,7 @@ const ROUTE_AMOUNT_STEPS = {
 };
 const RACK_MODULATION_PARAMETERS = allRackParameterDescriptors()
     .filter((parameter) => parameter.modulationTargetIndex !== null);
-const RACK_MODULATION_PARAMETER_BY_KIND = new Map(RACK_MODULATION_PARAMETERS.map((parameter) => [`rack.${parameter.endpointID}`, parameter]));
+const RACK_MODULATION_PARAMETER_BY_KIND = new Map(RACK_MODULATION_PARAMETERS.map((parameter) => [laneBaseKindForRackEndpoint(parameter.endpointID), parameter]));
 /** Expected boundary failure for a non-current modulation document. */
 export class ModulationStateParseError extends Error {
     name = "ModulationStateParseError";
