@@ -46,3 +46,37 @@ informational because the Codespace CPU is shared.
 
 Reproduction steps and exact toolchain paths are in
 `docs/BOUNCE_CODESPACE_SETUP.md`.
+
+## 2026-08-23 — M1: real amplitude release
+
+- Replaced the compile-fixed `RetriggerableFixedASR(0.01, 0.20)` voice gate
+  with a runtime release input and appended the public `ampRelease` host
+  parameter after every pre-existing automation slot. Its locked range is
+  0.005–10 s and its default remains 0.2 s.
+- Generated/headless performers leave undriven value inputs at zero rather
+  than applying endpoint annotations. Because zero is outside the public
+  range, the engine treats it as the legacy 0.2 s default. This keeps
+  isolated `SharedVoiceEngine` fixtures and hosted products identical.
+- The runtime decay coefficient is cached and recomputed only when the
+  release value changes. Idle/releasing voices do not add a per-sample
+  transcendental calculation to the audio thread.
+- Added `tests/test_bounce_amp_release.mjs`. A generated full-patch dry render
+  proves that a 3 s release is still audible 2 s after note-off, and that the
+  default path is sample-for-sample identical to an explicit 0.2 s release.
+  The append-only endpoint order and annotations are also covered by the
+  existing host-contract test.
+- Updated the old host-order test because its assertion that Filter Mix was
+  the final/sole append was no longer the correct contract. It now freezes
+  the same legacy prefix and requires `filterMix`, then `ampRelease`.
+
+Validation: 3/3 Bounce release tests; 65/65 Cmajor rack tests; 691/691 pure
+Node tests; 34/34 modulation-routing tests; 14/14 web bundle tests; 27/27
+patch/layout tests; and the Linux Chromium web POC at 13 passed, 5 expected
+environment skips, 0 failed.
+
+The post-M1 offline probe measured 3.725× realtime median and projects the
+locked 19-root/9-second worst-case render at 46.84 s serial (11.71 s ideal
+four-worker). The committed M0 run was 2.798×. Per the small-cloud-VM rule,
+this cross-session absolute change is informational, not claimed as a speedup;
+it provides no evidence of a regression and remains far below the explicit
+five-minute pivot threshold. Mac/iOS performance must be measured separately.

@@ -1045,15 +1045,17 @@ namespace wt
         return result;
     }
 
-    processor RetriggerableFixedASR (float32 attackSeconds,
-                                     float32 releaseSeconds)
+    processor RetriggerableASR (float32 attackSeconds)
     {
         input event (std::notes::NoteOn,
                      std::notes::NoteOff) eventIn;
+        input value float32 releaseSecondsIn;
 
         output stream float32 gainOut;
 
         float32 keyDownVelocity, currentLevel;
+        float32 lastReleaseSeconds = -1.0f;
+        float32 releaseDecayFactor = 0.0f;
         int32 noteOnSerial, handledNoteOnSerial;
 
         event eventIn (std::notes::NoteOn noteOn)
@@ -1075,20 +1077,29 @@ namespace wt
             {
                 while (keyDownVelocity == 0.0f)
                 {
-                    if const (releaseSeconds > 0.0f)
-                    {
-                        let decayFactor = pow (0.0001f, float32 (processor.period) / releaseSeconds);
+                    // Standalone/generated performers leave un-driven value
+                    // inputs at zero rather than applying endpoint annotations.
+                    // Zero is outside the public range, so preserve the legacy
+                    // 0.2 s release for those engines as well as hosted ones.
+                    let safeReleaseSeconds = releaseSecondsIn > 0.0f
+                        ? std::intrinsics::max (0.005f, releaseSecondsIn)
+                        : 0.2f;
 
-                        if (currentLevel > 0.0001f)
-                        {
-                            gainOut <- currentLevel;
-                            currentLevel *= decayFactor;
-                        }
-                        else
-                        {
-                            currentLevel = 0.0f;
-                            gainOut <- 0.0f;
-                        }
+                    // Runtime control must not turn coefficient calculation
+                    // into per-sample transcendental work on every idle voice.
+                    if (safeReleaseSeconds != lastReleaseSeconds)
+                    {
+                        lastReleaseSeconds = safeReleaseSeconds;
+                        releaseDecayFactor = pow (
+                            0.0001f,
+                            float32 (processor.period) / safeReleaseSeconds
+                        );
+                    }
+
+                    if (currentLevel > 0.0001f)
+                    {
+                        gainOut <- currentLevel;
+                        currentLevel *= releaseDecayFactor;
                     }
                     else
                     {
@@ -1298,6 +1309,7 @@ namespace wt
         input value float32 envelopeDecayIn[modulationEnvSlotCount];
         input value float32 envelopeSustainIn[modulationEnvSlotCount];
         input value float32 envelopeReleaseIn[modulationEnvSlotCount];
+        input value float32 ampReleaseIn [[ name: "Amp Release", min: 0.005f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
         output event OscillatorWavetableUploadAck oscillatorWavetableUploadAckOut;
         output event OscillatorWavetableMipRequest oscillatorWavetableMipRequestOut;
         output event OscillatorRuntimeServiceState oscillatorRuntimeServiceStateOut;
@@ -1326,7 +1338,7 @@ namespace wt
             return slots;
         }
 
-        node envelopes = wt::RetriggerableFixedASR (0.01f, 0.20f)[voiceCount];
+        node envelopes = wt::RetriggerableASR (0.01f)[voiceCount];
         node mseg1 = wt::MsegReader[voiceCount];
         node mseg2 = wt::MsegReader[voiceCount];
         node mseg3 = wt::MsegReader[voiceCount];
@@ -4730,6 +4742,7 @@ namespace wt
                     modEnv3[voice].decaySecondsIn <- voiceEffectiveEnvelopeDecaySeconds.at (envIndex2);
                     modEnv3[voice].sustainIn <- voiceEffectiveEnvelopeSustain.at (envIndex2);
                     modEnv3[voice].releaseSecondsIn <- voiceEffectiveEnvelopeReleaseSeconds.at (envIndex2);
+                    envelopes[voice].releaseSecondsIn <- ampReleaseIn;
                     mseg1[voice].advance();
                     mseg2[voice].advance();
                     mseg3[voice].advance();
