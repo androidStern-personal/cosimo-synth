@@ -1871,6 +1871,16 @@ def test_shared_wavetable_library_source_keeps_the_app_group_and_backup_exclusio
     assert "group.dev.cosimo.wavetable-synth" in entitlements
 
 
+def test_ios_bounce_driver_binds_the_shipping_generated_aot_performer() -> None:
+    plugin_main = IOS_PLUGIN_MAIN.read_text(encoding="utf-8")
+
+    assert "createIOSAOTBounceConfiguration<::WavetableSynth>" in plugin_main
+    assert "detail::createRuntimeResourceReader" in plugin_main
+    assert "detail::runtimeResourceExists" in plugin_main
+    assert "createCmajorPerformerFactory" in plugin_main
+    assert "sizeof (::WavetableSynth)" in plugin_main
+
+
 def test_ios_auv3_generator_rejects_a_missing_patch_file(tmp_path: Path) -> None:
     missing_patch = tmp_path / "missing.cmajorpatch"
     output_dir = tmp_path / "generated" / "cmajor"

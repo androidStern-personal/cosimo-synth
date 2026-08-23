@@ -9,6 +9,54 @@ in-repo or probe-reproduced) · **[I]** source-backed inference ·
 **[P]** product-semantic choice that cannot be inferred technically ·
 **[U]** unresolved uncertainty.
 
+## 0. 2026-08-23 implementation outcome
+
+This study is retained as the adversarial baseline at `bc0f363`; its
+"current architecture" statements are historical, not descriptions of the
+Bounce branch after M8. On `codex/bounce-in-place`, the feasibility verdict has
+been exercised as follows:
+
+- The browser V1 is implemented end to end: user-controlled real amplitude
+  release, one-shot sampled voices, two fixed staged/atomic bank slots,
+  nearest-root repitch, live SR/tempo readback, fresh worker performer per
+  root, deterministic i16 bank/digest, complete-chain capture, transactional
+  neutral-layer flip, OPFS persistence with typed fallback, Revert, responsive
+  waveform/UI, and recursive Bounce with conservative two-bank retirement [V].
+- The locked MVP chose one-shot playback rather than the study's proposed loop
+  stretch. Default capture remains 19 roots over MIDI 24–96, 3 s hold, and a
+  6 s silence-truncated tail cap. The live capacity is 5,472,000 stereo frames;
+  each root carries its logical note-off offset so recursion does not apply the
+  release twice [P][V].
+- Browser deterministic proofs cover pluck, reverb/delay pad, nonlinear OTT,
+  and generation-2 recursion. The M7 three-root recursion comparison measured
+  0.000 dB mean/max root error, fixed 2,134 Wasm pages per worker, and roughly
+  2.29–2.43× realtime for oscillator capture versus 3.44–3.71× for recursive
+  sampled capture on the small Linux VM [M]. Absolute VM rates are advisory;
+  relative regressions, deadlines, and bounds are the gates.
+- Browser persistence is no longer greenfield: SHA-256 content files, verified
+  staged publication, reload without re-render, preset references, typed
+  missing/corrupt fallback, and ten-cycle bounded memory/storage behavior are
+  automated. Native M8 adds the streaming C++ bank builder, SHA-256 store,
+  shared/exclusive interprocess lock, App Group/Application Support paths,
+  iOS backup/data-protection policy, and a binary `COSIMOB1` project envelope
+  without base64 [V].
+- Native readiness is code-complete, not Apple-validated: the generated
+  production sampler compiles and renders with the real external renderer on
+  Linux; a bounded background driver feeds desktop JIT/QuickJS and generated
+  iOS AOT factories; the real Linux JIT probe captures three recursive roots.
+  Signed Xcode builds, iPhone transient memory/jetsam, AUv3 lifecycle, and
+  Ableton chunk behavior remain the exact human gates in
+  `HUMAN_VALIDATION.md` [V][U].
+- The generated `WavetableSynth` object is 135,615,616 bytes, materially above
+  the original 54.6 MB pre-Bounce estimate. This strengthens—not resolves—the
+  iOS memory risk. A slow capture alone is not a hard no; jetsam, non-settling
+  memory, stale-session commits, callback-thread I/O/allocation, or deadline
+  regressions are hard failures. The prescribed AUv3-memory pivot is capture
+  in the standalone and playback from the shared App Group [M][U].
+
+Detailed milestone evidence and exact commands live in `BOUNCE_LOG.md`,
+`docs/BOUNCE_CODESPACE_SETUP.md`, and `HUMAN_VALIDATION.md`.
+
 ---
 
 ## 1. Verdict
