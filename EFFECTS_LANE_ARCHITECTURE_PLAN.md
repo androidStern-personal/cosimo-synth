@@ -506,12 +506,20 @@ are M1's permanent acceptance tests, not a throwaway report.
   topology asserted on the wire), crossover drag (field edits slotId 44
   paramIndex 0, doc persisted, ZERO topology traffic), cross-lane drag
   into the empty band (one topology commit, reverb tagged into band 2),
-  fork-menu bypass+dissolve, and the stored-v1 upgrade path. Gates at
-  this checkpoint (this container): units:orphans 706/706, tsc clean,
-  subway suite 5/5, twins rebuilt; the full sharded desktop re-run and
-  browser:orphans were IN FLIGHT when this checkpoint was cut on
-  request — results and any fixes land as follow-up commits. Deferred
-  as always: web:poc, WebKit, iOS shell, native benchmarks. NEXT (M4 remainder): device add/remove — the ghost stubs
+  fork-menu bypass+dissolve, and the stored-v1 upgrade path. The sweep
+  surfaced one more real regression, fixed in the follow-up commit: the
+  whole-document preview froze ENABLE state during a station drag, so an
+  authoritative enable arriving mid-gesture did not paint until release
+  — the map now renders the preview structure with LIVE enables merged
+  over it, restoring the old order-previewed/enables-live contract.
+  Final gates (this container): units:orphans 706/706, tsc clean,
+  subway suite 5/5, sharded desktop suites 217/218 (the one red is the
+  rail-flick momentum test — the established CPU-contention flake,
+  green solo, untouched by this work), browser:orphans 114/117 +1 skip
+  (both reds the pre-existing container-environment failures verified
+  on clean baseline: Avenir Next font metrics, renderer-WASM needing
+  macOS clang), twins rebuilt. Deferred as always: web:poc, WebKit, iOS
+  shell, native benchmarks. NEXT (M4 remainder): device add/remove — the ghost stubs
   become add affordances with a type picker, instance numbers beyond #1
   (slot assignments feed the modulation compiler), Remove/Move-to in the
   station menu, and the starter patch.
