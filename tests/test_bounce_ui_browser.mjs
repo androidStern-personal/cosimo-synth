@@ -146,6 +146,86 @@ async function averageHeldNoteWorkletLoad(page, windowCount = 2) {
     };
 }
 
+async function storedBounceDocument(page) {
+    return page.evaluate(async () => {
+        const state = await globalThis.__COSIMO_WEB_POC__.storedState();
+        const value = state.values?.["bounce.v1"] ?? state["bounce.v1"] ?? null;
+        return typeof value === "string" ? JSON.parse(value) : value;
+    });
+}
+
+async function bounceStoreUsage(page) {
+    return page.evaluate(async () => {
+        const root = await navigator.storage.getDirectory();
+        const directory = await root.getDirectoryHandle("cosimo-bounce-banks-v1", { create: true });
+        const entries = [];
+        for await (const [name, handle] of directory.entries()) {
+            const match = /^bank-([0-9a-f]{64})\.csbk$/.exec(name);
+            if (match && handle.kind === "file") {
+                entries.push({ digest: match[1], byteLength: (await handle.getFile()).size });
+            }
+        }
+        entries.sort((left, right) => left.digest.localeCompare(right.digest));
+        return {
+            bankCount: entries.length,
+            bankBytes: entries.reduce((sum, entry) => sum + entry.byteLength, 0),
+            entries,
+        };
+    });
+}
+
+async function discardBounceGuardIfOpen(page) {
+    await page.waitForTimeout(50);
+    return page.evaluate(() => {
+        const view = document.querySelector("cosimo-desktop-react-view");
+        const presetBar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
+        const shadow = presetBar?.shadowRoot;
+        const dialog = shadow?.querySelector('[data-el="sound-replacement-dialog"]');
+        const discard = shadow?.querySelector('[data-action="sound-replacement-discard"]');
+        if (!(dialog instanceof HTMLElement) || dialog.hidden
+            || !(discard instanceof HTMLButtonElement)) {
+            return false;
+        }
+        discard.click();
+        return true;
+    });
+}
+
+async function completeBounce(page, expectedGeneration) {
+    const before = await page.evaluate(() => ({
+        captures: globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__?.captures.length ?? 0,
+        retirements: globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__?.retirements.length ?? 0,
+    }));
+    await page.locator('[data-role="bounce-start"]').click();
+    await discardBounceGuardIfOpen(page);
+    await page.waitForFunction(({ captures, retirements, generation }) => {
+        const diagnostics = globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__;
+        const latest = diagnostics?.captures.at(-1);
+        return (diagnostics?.captures.length ?? 0) > captures
+            && (diagnostics?.retirements.length ?? 0) > retirements
+            && latest?.generation === generation;
+    }, {
+        captures: before.captures,
+        retirements: before.retirements,
+        generation: expectedGeneration,
+    }, { timeout: 120_000 });
+    await page.locator('[data-role="bounce-start"]').waitFor({ state: "visible" });
+    return storedBounceDocument(page);
+}
+
+async function completeRevert(page, expectedGeneration) {
+    await page.locator('[data-role="bounce-revert"]').click();
+    await page.waitForFunction(async (generation) => {
+        const state = await globalThis.__COSIMO_WEB_POC__.storedState();
+        const value = state.values?.["bounce.v1"] ?? state["bounce.v1"] ?? null;
+        const document = typeof value === "string" ? JSON.parse(value) : value;
+        return document?.generation === generation
+            && globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.sourceMode === 1;
+    }, expectedGeneration, { timeout: 30_000 });
+    await page.locator('[data-role="bounce-start"]').waitFor({ state: "visible" });
+    return storedBounceDocument(page);
+}
+
 test("Bounce UI cancels safely, completes through a real worker, and fits desktop plus 393x852", async () => {
     const { context, failures, page } = await openStartedPage();
     try {
@@ -270,6 +350,88 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         })}`);
 
         assert.deepEqual(failures, []);
+    } finally {
+        await context.close();
+    }
+});
+
+test("M7 recursively bounces the same roots, retires superseded bytes, and stays bounded for ten cycles", async () => {
+    const { context, failures, page } = await openStartedPage();
+    try {
+        const first = await completeBounce(page, 1);
+        assert.deepEqual(first.roots, [60]);
+
+        // Deliberately color each fresh layer so the three generations have
+        // distinct content digests and exercise actual retirement rather than
+        // content-addressed deduplication.
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.setParameter("filterMode", 1);
+            api.setParameter("filterCutoff", 6_000);
+        });
+        const second = await completeBounce(page, 2);
+        assert.deepEqual(second.roots, first.roots);
+        assert.equal(second.revertRef.bankDigest, first.digest);
+        assert.notEqual(second.digest, first.digest);
+        const exactSecondDocument = JSON.stringify(second);
+
+        await page.evaluate(() => {
+            const api = globalThis.__COSIMO_WEB_POC__;
+            api.setParameter("filterMode", 4);
+            api.setParameter("filterCutoff", 2_200);
+        });
+        const third = await completeBounce(page, 3);
+        assert.deepEqual(third.roots, first.roots);
+        assert.equal(third.revertRef.bankDigest, second.digest);
+        assert.notEqual(third.digest, second.digest);
+
+        const afterThird = await bounceStoreUsage(page);
+        assert.deepEqual(
+            afterThird.entries.map((entry) => entry.digest),
+            [second.digest, third.digest].sort(),
+            "generation 1 must be gone after its inactive DSP slot is overwritten",
+        );
+
+        const reverted = await completeRevert(page, 2);
+        assert.equal(JSON.stringify(reverted), exactSecondDocument,
+            "Revert must restore the latest pre-bounce document exactly");
+
+        const soakUsage = [];
+        const soakHeap = [];
+        for (let cycle = 0; cycle < 10; cycle += 1) {
+            const rebounced = await completeBounce(page, 3);
+            assert.equal(rebounced.digest, third.digest,
+                `cycle ${cycle + 1} must reproduce generation 3 deterministically`);
+            soakUsage.push(await bounceStoreUsage(page));
+            soakHeap.push((await page.evaluate(() => (
+                globalThis.__COSIMO_WEB_POC__.getSnapshot().usedJSHeapSize
+            ))) ?? null);
+            const cycleRevert = await completeRevert(page, 2);
+            assert.equal(JSON.stringify(cycleRevert), exactSecondDocument);
+        }
+
+        const diagnostics = await page.evaluate(() => (
+            structuredClone(globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__)
+        ));
+        const wasmPages = diagnostics.captures.flatMap((capture) => capture.wasmMemoryPages);
+        assert.equal(wasmPages.every(Number.isInteger), true);
+        assert.equal(new Set(wasmPages).size, 1,
+            `recursive worker wasm pages ratcheted: ${JSON.stringify(wasmPages)}`);
+        assert.equal(soakUsage.every((usage) => (
+            usage.bankCount === afterThird.bankCount
+            && usage.bankBytes === afterThird.bankBytes
+        )), true, JSON.stringify({ afterThird, soakUsage }));
+        assert.deepEqual(failures, []);
+        console.log(`# ${JSON.stringify({
+            bounceG5: {
+                cycles: 10,
+                workerWasmPages: wasmPages[0],
+                opfsBankCount: afterThird.bankCount,
+                opfsBankBytes: afterThird.bankBytes,
+                usedJSHeapSizeAdvisory: soakHeap,
+                absoluteVmTimingAdvisory: true,
+            },
+        })}`);
     } finally {
         await context.close();
     }

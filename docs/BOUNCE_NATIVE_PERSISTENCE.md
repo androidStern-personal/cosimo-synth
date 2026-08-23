@@ -1,7 +1,8 @@
 # Bounce in Place — native persistence contract
 
-Status: M5 design lock. Browser persistence is implemented and tested; this
-native contract is implemented and exercised in M8.
+Status: M7 browser implementation lock. Browser persistence, recursive
+retention, and bounded-cycle accounting are implemented and tested; the native
+store/driver portion of this contract is implemented and exercised in M8.
 
 ## Invariants shared with the browser
 
@@ -11,6 +12,12 @@ native contract is implemented and exercised in M8.
 - A bank is the exact `CSBNK001` byte stream defined by
   `bounce/bank-format.mjs`, named by lowercase SHA-256. The digest covers the
   complete header and interleaved stereo i16 payload.
+- Each V1 root record uses its formerly reserved fourth word for the logical
+  note-off frame offset. This lets sampled playback distinguish a genuinely
+  early live release from the release already baked into PCM, which prevents
+  recursive generations from applying the same amp fade twice. Zero remains
+  the backwards-compatible value for hand-built/pre-M7 banks with no baked
+  note-off metadata.
 - Restore verifies the filename digest, byte length, format/version, frame
   capacity, ordered roots, contiguous segments, and SHA-256 before staging
   anything into DSP. Sampled mode becomes audible only in the staged bank's
@@ -132,6 +139,15 @@ processes: an unrecognized index/version, lock failure, or incomplete scan
 means retain. Revert is single-level and restores the exact saved patch
 document; it must verify/stage the referenced prior bank before publishing the
 document.
+
+The M7 browser implementation takes an exclusive Web Lock, validates the
+recognized store/preset schemas, retains both the audible and direct-Revert
+digest for each local user preset, and deletes only an explicitly superseded
+ancestry digest after the next successful double-buffer install has overwritten
+the inactive DSP slot. A file-backed preset catalog, unavailable lock,
+unrecognized entry, or incomplete full-state read is a no-delete result. Native
+M8 must preserve those rules with its interprocess store lock and file-backed
+preset scan.
 
 ## M8 validation checklist
 

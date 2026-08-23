@@ -4763,7 +4763,10 @@ function DesktopPatchViewBody({
                             <BounceSampledSourceStage
                                 state={bounceController.state}
                                 lastPlayedNote={synthView.lastPlayedNote}
+                                onBounce={() => void bounceController.bounce()}
+                                onCancel={bounceController.cancel}
                                 onRevert={() => void bounceController.revert()}
+                                requestBounceGuard={requestBounceGuard}
                                 compact
                                 className="h-full"
                             />
@@ -4810,7 +4813,10 @@ function DesktopPatchViewBody({
                         <BounceSampledSourceStage
                             state={bounceController.state}
                             lastPlayedNote={synthView.lastPlayedNote}
+                            onBounce={() => void bounceController.bounce()}
+                            onCancel={bounceController.cancel}
                             onRevert={() => void bounceController.revert()}
+                            requestBounceGuard={requestBounceGuard}
                             className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
                         />
                     )}

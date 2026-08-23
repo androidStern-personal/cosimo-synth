@@ -81,6 +81,15 @@ function peakAbsolute(samples, frameCount = samples.length / 2) {
     return peak;
 }
 
+function performerWasmMemoryPages(performer) {
+    const byteLength = performer?.memoryDataView?.buffer?.byteLength
+        ?? performer?.byteMemory?.byteLength
+        ?? null;
+    return Number.isInteger(byteLength) && byteLength > 0
+        ? byteLength / 65_536
+        : null;
+}
+
 async function preparePerformer(CmajorClass, plan, job) {
     invariant(typeof CmajorClass === "function", "Offline engine module has no performer class");
     const performer = new CmajorClass();
@@ -167,11 +176,16 @@ export async function renderBounceRoot(CmajorClass, planInput, jobInput) {
             realtimeMultiplier: elapsedMilliseconds > 0
                 ? totalRenderFrames / (elapsedMilliseconds * plan.snapshot.sampleRate / 1000)
                 : null,
+            // Generated Cmajor performers have fixed-size wasm memory. The
+            // page count is reported before the short-lived worker exits so
+            // browser soak tests can prove recursion does not grow an engine.
+            wasmMemoryPages: performerWasmMemoryPages(performer),
         },
     };
 }
 
 export const bounceOfflineRenderInternals = Object.freeze({
     findTailEndFrame,
+    performerWasmMemoryPages,
     stereoWindowRms,
 });

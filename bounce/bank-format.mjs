@@ -70,10 +70,16 @@ export function buildBounceBank({ sampleRate, roots }) {
             `Bounce root ${root.note} must contain complete stereo frames`);
 
         const frameCount = samples.length / 2;
+        const noteOffFrameOffset = root.noteOffFrameOffset ?? 0;
+        invariant(Number.isInteger(noteOffFrameOffset)
+            && noteOffFrameOffset >= 0
+            && (noteOffFrameOffset === 0 || noteOffFrameOffset < frameCount),
+        `Bounce root ${root.note} has an invalid note-off offset`);
         const normalized = Object.freeze({
             note: root.note,
             frameOffset: totalFrameCount,
             frameCount,
+            noteOffFrameOffset,
         });
         totalFrameCount += frameCount;
         invariant(totalFrameCount <= BOUNCE_BANK_FRAME_CAPACITY,
@@ -131,12 +137,19 @@ export function encodeBounceBank(bank) {
             "Bounce root frames must be contiguous and ordered");
         invariant(Number.isInteger(root.frameCount) && root.frameCount > 0,
             `Bounce root ${root.note} has an invalid frame count`);
+        invariant(Number.isInteger(root.noteOffFrameOffset)
+            && root.noteOffFrameOffset >= 0
+            && (root.noteOffFrameOffset === 0 || root.noteOffFrameOffset < root.frameCount),
+        `Bounce root ${root.note} has an invalid note-off offset`);
 
         const offset = FIXED_HEADER_BYTES + (index * ROOT_RECORD_BYTES);
         view.setInt32(offset, root.note, true);
         view.setUint32(offset + 4, root.frameOffset, true);
         view.setUint32(offset + 8, root.frameCount, true);
-        view.setUint32(offset + 12, 0, true);
+        // V1 reserved this word as zero. A non-zero value now preserves the
+        // logical capture note-off so sampled playback can distinguish an
+        // early user release from the already-baked release in the PCM.
+        view.setUint32(offset + 12, root.noteOffFrameOffset, true);
         expectedFrameOffset += root.frameCount;
         previousNote = root.note;
     }
@@ -176,13 +189,16 @@ export function decodeBounceBank(value) {
         const note = view.getInt32(offset, true);
         const frameOffset = view.getUint32(offset + 4, true);
         const frameCount = view.getUint32(offset + 8, true);
+        const noteOffFrameOffset = view.getUint32(offset + 12, true);
         validateRootNote(note, index);
         invariant(note > previousNote, "Bounce roots must be strictly ascending");
         invariant(frameOffset === expectedFrameOffset && frameCount > 0,
             "Bounce root ranges must be non-empty, contiguous, and ordered");
         invariant(frameOffset + frameCount <= totalFrameCount,
             "Bounce root range exceeds the PCM payload");
-        roots.push(Object.freeze({ note, frameOffset, frameCount }));
+        invariant(noteOffFrameOffset === 0 || noteOffFrameOffset < frameCount,
+            "Bounce root note-off offset exceeds its PCM range");
+        roots.push(Object.freeze({ note, frameOffset, frameCount, noteOffFrameOffset }));
         expectedFrameOffset += frameCount;
         previousNote = note;
     }
