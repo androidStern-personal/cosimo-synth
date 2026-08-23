@@ -549,6 +549,9 @@ async function initialise() {
         store: createBrowserBounceBankStore(),
         sendRuntimeSourceMode: (value) => persistence.sendRuntimeEventOrValue("sourceMode", value, 0, 0),
     });
+    connection.acceptCommittedBounceDocument = (value) => (
+        bounceRestorer.acceptCommittedDocument(value)
+    );
     bounceRestorer.subscribe((restoreState) => {
         state.bounceRestore = restoreState;
         showBounceRestoreState(restoreState);

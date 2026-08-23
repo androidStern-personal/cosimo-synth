@@ -32,6 +32,11 @@ import {
     usePatchConnection,
     type PatchConnectionLike,
 } from "../shared/cmajor-react";
+import { useBounceInPlace } from "../shared/use-bounce-in-place";
+import {
+    BounceActionControl,
+    BounceSampledSourceStage,
+} from "../shared/bounce-source-stage";
 import type { ResourceClient } from "../shared/resource-client";
 import {
     usePatchParameterBinding,
@@ -1781,6 +1786,7 @@ function SynthPresetBarHost({
     onShellBack,
     perfTuningAvailable = false,
     onOpenPerfTuning,
+    onBounceGuardReady,
 }: {
     isHidden: boolean;
     storedStateAdapters: EffectStoredStateAdapter[];
@@ -1791,6 +1797,9 @@ function SynthPresetBarHost({
     /** Dev builds only: reveals the shell menu's Performance tuning row. */
     perfTuningAvailable?: boolean;
     onOpenPerfTuning?: () => void;
+    onBounceGuardReady?: (
+        guard: ((continuation: () => void) => void) | null,
+    ) => void;
 }) {
     const patchConnection = usePatchConnection();
     const hostRef = useRef<HTMLDivElement | null>(null);
@@ -1799,6 +1808,8 @@ function SynthPresetBarHost({
     onShellBackRef.current = onShellBack;
     const onOpenPerfTuningRef = useRef(onOpenPerfTuning);
     onOpenPerfTuningRef.current = onOpenPerfTuning;
+    const onBounceGuardReadyRef = useRef(onBounceGuardReady);
+    onBounceGuardReadyRef.current = onBounceGuardReady;
     const presetController = useMemo(() => createStandaloneEffectPresetController({
         effectID: SYNTH_PRESET_EFFECT_ID,
         patchConnection,
@@ -1823,8 +1834,12 @@ function SynthPresetBarHost({
         presetBarRef.current = presetBar;
         host.replaceChildren(presetBar);
         presetController.attach();
+        onBounceGuardReadyRef.current?.((continuation) => {
+            presetBar.requestBounceSoundReplacement(continuation);
+        });
 
         return () => {
+            onBounceGuardReadyRef.current?.(null);
             presetController.detach();
             presetBar.removeEventListener("cosimo-shell-back", handleShellBack);
             presetBar.removeEventListener("cosimo-open-perf-tuning", handleOpenPerfTuning);
@@ -2363,6 +2378,7 @@ function OscillatorPerformanceControls({
     volumeDb,
     mute,
     solo,
+    inactive = false,
 }: {
     oscillatorID: OscillatorID;
     octave: PatchControlBinding<number>;
@@ -2371,6 +2387,7 @@ function OscillatorPerformanceControls({
     volumeDb: PatchControlBinding<number>;
     mute: PatchControlBinding<number>;
     solo: PatchControlBinding<number>;
+    inactive?: boolean;
 }) {
     // The engine has ONE pitch MOD destination (semitones); SEMI alone
     // presents and receives it. OCT and FINE are base-only knobs — showing
@@ -2385,7 +2402,11 @@ function OscillatorPerformanceControls({
     return (
         <section
             data-role="oscillator-performance-controls"
-            className="flex min-w-0 flex-wrap items-end gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5"
+            data-bounce-inert={inactive ? "true" : undefined}
+            aria-disabled={inactive}
+            inert={inactive}
+            title={inactive ? "Baked into the sampled source. Revert to edit oscillator controls." : undefined}
+            className={`flex min-w-0 flex-wrap items-end gap-2 rounded-[12px] border border-white/[0.05] bg-white/[0.018] px-2 py-1.5 transition ${inactive ? "opacity-35 grayscale" : ""}`}
         >
             {fields.map((field) => (
                 <BaseParameterKnob
@@ -2469,6 +2490,7 @@ function KeyboardToolbar({
     observedUnisonState,
     playModeFocusBindings,
     glideFocusTarget,
+    oscillatorControlsInactive = false,
 }: VoiceGlideSectionProps & {
     oscillatorID: OscillatorID;
     unisonVoices: PatchControlBinding<number>;
@@ -2489,6 +2511,7 @@ function KeyboardToolbar({
         onBeginTextEntry: () => void;
         onEndTextEntry: () => void;
     };
+    oscillatorControlsInactive?: boolean;
 }) {
     return (
         <div className="grid gap-3 xl:grid-cols-[minmax(260px,0.76fr)_minmax(0,1.24fr)]">
@@ -2513,21 +2536,30 @@ function KeyboardToolbar({
                     />
                 )}
             />
-            <UnisonControlSurface
-                oscillatorID={oscillatorID}
-                unisonVoices={unisonVoices}
-                unisonDetune={unisonDetune}
-                unisonBlend={unisonBlend}
-                unisonWidth={unisonWidth}
-                unisonPhase={unisonPhase}
-                unisonRandom={unisonRandom}
-                unisonPhaseMode={unisonPhaseMode}
-                unisonDetuneMode={unisonDetuneMode}
-                unisonStackMode={unisonStackMode}
-                unisonWavetablePositionSpread={unisonWavetablePositionSpread}
-                unisonWarpSpread={unisonWarpSpread}
-                observedUnisonState={observedUnisonState}
-            />
+            <div
+                data-role="bounce-inert-unison-controls"
+                data-bounce-inert={oscillatorControlsInactive ? "true" : undefined}
+                aria-disabled={oscillatorControlsInactive}
+                inert={oscillatorControlsInactive}
+                title={oscillatorControlsInactive ? "Unison is baked into the sampled source. Revert to edit it." : undefined}
+                className={`relative transition ${oscillatorControlsInactive ? "opacity-35 grayscale" : ""}`}
+            >
+                <UnisonControlSurface
+                    oscillatorID={oscillatorID}
+                    unisonVoices={unisonVoices}
+                    unisonDetune={unisonDetune}
+                    unisonBlend={unisonBlend}
+                    unisonWidth={unisonWidth}
+                    unisonPhase={unisonPhase}
+                    unisonRandom={unisonRandom}
+                    unisonPhaseMode={unisonPhaseMode}
+                    unisonDetuneMode={unisonDetuneMode}
+                    unisonStackMode={unisonStackMode}
+                    unisonWavetablePositionSpread={unisonWavetablePositionSpread}
+                    unisonWarpSpread={unisonWarpSpread}
+                    observedUnisonState={observedUnisonState}
+                />
+            </div>
         </div>
     );
 }
@@ -4120,6 +4152,7 @@ function DesktopPatchViewBody({
     const closePerfTuning = useCallback(() => setPerfTuningOpen(false), []);
     const curveLab = useDesktopCurveLab();
     const oscillatorSelection = useOscillatorSelectionViewModel();
+    const bounceController = useBounceInPlace();
     const synthView = useSynthPatchViewModel({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
@@ -4138,7 +4171,22 @@ function DesktopPatchViewBody({
         onKeyboardOctaveDown: () => shiftKeyboardRootNote(-1, { releaseHeldNotes: false }),
         onKeyboardOctaveUp: () => shiftKeyboardRootNote(1, { releaseHeldNotes: false }),
         autoPreviewEnabled,
+        oscillatorTargetsActive: !bounceController.state.sampled,
     });
+    const bounceGuardRef = useRef<((continuation: () => void) => void) | null>(null);
+    const handleBounceGuardReady = useCallback((
+        guard: ((continuation: () => void) => void) | null,
+    ) => {
+        bounceGuardRef.current = guard;
+    }, []);
+    const requestBounceGuard = useCallback((continuation: () => void) => {
+        const guard = bounceGuardRef.current;
+        if (guard) {
+            guard(continuation);
+        } else {
+            continuation();
+        }
+    }, []);
     const modRailAudition = useMemo<ModRailAuditionBindings>(() => ({
         onNoteKeyDown: synthView.handleStartNoteKeyAudition,
         onNoteKeyUp: synthView.handleStopNoteKeyAudition,
@@ -4423,10 +4471,20 @@ function DesktopPatchViewBody({
                     volumeDb={synthView.oscillatorVolumeDb}
                     mute={synthView.oscillatorMute}
                     solo={synthView.oscillatorSolo}
+                    inactive={bounceController.state.sampled}
                 />
             )}
 
             {keyboardControlMode === "articulation" ? (
+                <div className="grid gap-2">
+                {bounceController.state.sampled ? (
+                    <div
+                        data-role="bounce-inert-articulation-notice"
+                        className="rounded-[9px] border border-cyan-200/10 bg-cyan-300/5 px-2.5 py-1.5 text-[9px] text-cyan-100/55"
+                    >
+                        Oscillator overrides are baked. Filter, MSEG and ENV articulation settings remain live.
+                    </div>
+                ) : null}
                 <ArticulationControlSurface
                     cards={articulationCards}
                     activeMode={articulationMode}
@@ -4464,6 +4522,7 @@ function DesktopPatchViewBody({
                     onRequestReplace={synthView.handleReplaceArticulationSlotWithCurrent}
                     onRequestDelete={synthView.handleDeleteArticulationSlot}
                 />
+                </div>
             ) : (
                 <KeyboardToolbar
                     oscillatorID={oscillatorSelection.selectedOscillatorID}
@@ -4483,6 +4542,7 @@ function DesktopPatchViewBody({
                     observedUnisonState={synthView.observedUnisonState}
                     playModeFocusBindings={synthView.keyboardRouting.playModeFocusBindings}
                     glideFocusTarget={synthView.keyboardRouting.glideFocusTarget}
+                    oscillatorControlsInactive={bounceController.state.sampled}
                 />
             )}
 
@@ -4490,6 +4550,7 @@ function DesktopPatchViewBody({
     ), [
         articulationCards,
         articulationMode,
+        bounceController.state.sampled,
         chainSegments,
         handleRenameArticulation,
         handleSelectRangeSegment,
@@ -4698,6 +4759,15 @@ function DesktopPatchViewBody({
                 <DesktopOscillatorConnectionBoundary
                     selectedOscillator={oscillatorSelection.selectedOscillator}
                     content={(
+                        bounceController.state.sampled ? (
+                            <BounceSampledSourceStage
+                                state={bounceController.state}
+                                lastPlayedNote={synthView.lastPlayedNote}
+                                onRevert={() => void bounceController.revert()}
+                                compact
+                                className="h-full"
+                            />
+                        ) : (
                         <MobileVoiceFocusedEditor
                             selection={oscillatorSelection}
                             bindings={mobileVoiceBindings}
@@ -4721,6 +4791,27 @@ function DesktopPatchViewBody({
                             onRequestParameterMenu={openShellParameterMenu}
                             resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
                             onRequestHaptic={triggerMobileVoiceHaptic}
+                        >
+                            <BounceActionControl
+                                state={bounceController.state}
+                                onBounce={() => void bounceController.bounce()}
+                                onCancel={bounceController.cancel}
+                                requestBounceGuard={requestBounceGuard}
+                                compact
+                            />
+                        </MobileVoiceFocusedEditor>
+                        )
+                    )}
+                />
+            ) : bounceController.state.sampled ? (
+                <DesktopOscillatorConnectionBoundary
+                    selectedOscillator={oscillatorSelection.selectedOscillator}
+                    content={(
+                        <BounceSampledSourceStage
+                            state={bounceController.state}
+                            lastPlayedNote={synthView.lastPlayedNote}
+                            onRevert={() => void bounceController.revert()}
+                            className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
                         />
                     )}
                 />
@@ -4728,6 +4819,7 @@ function DesktopPatchViewBody({
             <DesktopOscillatorPresentation
                 selection={oscillatorSelection}
                 selectedOscillatorStage={(
+                    <div className="relative min-w-0">
                     <WavetableStageSection
                         stageRef={stageRef}
                         frames={synthView.frames}
@@ -4755,6 +4847,15 @@ function DesktopPatchViewBody({
                         bottomRightAccessory={panField}
                         className={DESKTOP_VOICE_VISUALIZATION_CARD_CLASS}
                     />
+                    <div className="absolute right-3 top-3 z-30">
+                        <BounceActionControl
+                            state={bounceController.state}
+                            onBounce={() => void bounceController.bounce()}
+                            onCancel={bounceController.cancel}
+                            requestBounceGuard={requestBounceGuard}
+                        />
+                    </div>
+                    </div>
                 )}
             />
             )}
@@ -4849,6 +4950,7 @@ function DesktopPatchViewBody({
                                 onCreateRoute={synthView.handleAddRouteWithOverrides}
                                 onRemoveRoute={synthView.handleRemoveRoute}
                                 onRouteChange={synthView.handleRouteChange}
+                                oscillatorTargetsInactive={bounceController.state.sampled}
                             />
                         )}
                     />
@@ -4893,6 +4995,7 @@ function DesktopPatchViewBody({
                             onAddRoute={synthView.handleAddRoute}
                             onRemoveRoute={synthView.handleRemoveRoute}
                             onRouteChange={synthView.handleRouteChange}
+                            oscillatorTargetsInactive={bounceController.state.sampled}
                         />
                     </section>
                 )}
@@ -4949,6 +5052,7 @@ function DesktopPatchViewBody({
                 onShellBack={handleUniversalBack}
                 perfTuningAvailable={PERF_TUNING_AVAILABLE}
                 onOpenPerfTuning={openPerfTuning}
+                onBounceGuardReady={handleBounceGuardReady}
             />
             {PerfTuningPage !== null && perfTuningOpen ? (
                 <Suspense fallback={null}>

@@ -256,6 +256,72 @@ test("the Init guard dialog exposes exactly three actions and reuses Save As", a
     }
 });
 
+test("the Bounce entry reuses the dirty dialog with Bounce-specific actions", async () => {
+    const page = await openModulePage();
+
+    try {
+        const result = await page.evaluate(async () => {
+            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const mountPoint = document.getElementById("mount");
+            if (!(mountPoint instanceof HTMLElement)) throw new Error("Module test mount point is missing.");
+
+            const calls = [];
+            const state = {
+                effectID: "cosimo-synth",
+                ready: true,
+                filter: { query: "", source: "all" },
+                presets: [], visiblePresets: [], factoryPresets: [], userPresets: [],
+                activePreset: null, activePresetID: null, activeLabel: "INIT", dirty: true,
+                currentValues: {}, missingCurrentValueEndpointIDs: [], currentContract: null,
+                lastError: null, supportsInit: true, pendingSoundReplacement: null,
+            };
+            let pendingApply = null;
+            const mutations = {
+                clearLastError() {}, setFilter() {},
+                bounceSound(apply) {
+                    calls.push("guard");
+                    pendingApply = apply;
+                    state.pendingSoundReplacement = { kind: "bounce" };
+                    return {
+                        ok: false,
+                        actionRequired: "confirm-sound-replacement",
+                        message: "Unsaved changes.",
+                    };
+                },
+                discardAndContinueSoundReplacement() {
+                    calls.push("discard");
+                    pendingApply?.();
+                    pendingApply = null;
+                    state.pendingSoundReplacement = null;
+                    return { ok: true, value: undefined, message: "Bounce started." };
+                },
+            };
+            const controller = {
+                getState: () => state,
+                subscribe: () => () => {},
+                getMutations: () => mutations,
+                getSynthMutations: () => mutations,
+            };
+            const presetBar = createPresetBar();
+            presetBar.controller = controller;
+            mountPoint.append(presetBar);
+
+            presetBar.requestBounceSoundReplacement(() => calls.push("bounce"));
+            const shadow = presetBar.shadowRoot;
+            const labels = Array.from(
+                shadow.querySelectorAll('.dialog-overlay.open .dialog:not([hidden]) .dialog-actions button'),
+            ).map((button) => button.textContent?.trim());
+            shadow.querySelector('[data-action="sound-replacement-discard"]').click();
+            return { calls, labels };
+        });
+
+        assert.deepEqual(result.labels, ["Cancel", "Discard and Bounce", "Save and Bounce"]);
+        assert.deepEqual(result.calls, ["guard", "discard", "bounce"]);
+    } finally {
+        await page.close();
+    }
+});
+
 test("Save on a dirty unnamed INIT sound uses the existing Save As flow", async () => {
     const page = await openModulePage();
 

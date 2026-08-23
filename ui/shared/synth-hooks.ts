@@ -47,6 +47,7 @@ import {
 import {
     MODULATION_STATE_KEY,
     MODULATION_STATE_VERSION,
+    MODULATION_TARGET_OPTIONS,
     acquireModulationRuntimeBridge,
     buildDisplayedMsegState,
     clampModulationRouteAmount,
@@ -65,6 +66,7 @@ import {
     type ModulationStateChangeKind,
     type MsegEditorControllerLike,
 } from "./modulation";
+import { isOscillatorModulationTargetKind } from "./modulation-targets";
 import { getModulationArticulationCellIndex } from "./modulation-runtime-program";
 import type {
     EffectStoredStateAdapter,
@@ -506,6 +508,8 @@ export type SynthPatchViewModel = {
     handleStopNoteKeyAudition: () => void;
     /** Feed one user-intentional MIDI note into last-played/held bookkeeping. */
     trackIntentionalNoteInput: (status: number, noteNumber: number, velocity?: number) => void;
+    /** Last intentional note, used by sampled-source scopes to choose a root. */
+    lastPlayedNote: number;
     handleSelectWavetable: (nextValue: number) => void;
     handlePrewarmWavetablePicker: () => void;
     handleRetryLoad: () => void;
@@ -2467,6 +2471,7 @@ export function useSynthPatchViewModel({
     observeDistortionVisuals = true,
     observeMsegPlayhead = true,
     autoPreviewEnabled = false,
+    oscillatorTargetsActive = true,
 }: {
     oscillatorID?: OscillatorID;
     stageRef: RefObject<HTMLDivElement | null>;
@@ -2483,6 +2488,7 @@ export function useSynthPatchViewModel({
     observeDistortionVisuals?: boolean;
     observeMsegPlayhead?: boolean;
     autoPreviewEnabled?: boolean;
+    oscillatorTargetsActive?: boolean;
 }): SynthPatchViewModel {
     const patchConnection = usePatchConnection();
     const oscillator = getOscillatorBindingContract(oscillatorID);
@@ -2858,6 +2864,7 @@ export function useSynthPatchViewModel({
     });
     const activeAuditionRef = useRef<{ slotId: string; note: number } | null>(null);
     const lastPlayedNoteRef = useRef(ARTICULATION_AUDITION_FALLBACK_NOTE);
+    const [lastPlayedNote, setLastPlayedNote] = useState(ARTICULATION_AUDITION_FALLBACK_NOTE);
     const previewNoteMemoryRef = useRef<ReturnType<typeof createPreviewNoteMemory> | null>(null);
     const previewNoteMemory = previewNoteMemoryRef.current
         ?? createPreviewNoteMemory(ARTICULATION_AUDITION_FALLBACK_NOTE);
@@ -3060,14 +3067,22 @@ export function useSynthPatchViewModel({
     const handleAddRoute = useCallback(() => {
         const bridge = modulationBridge.current;
         if (!bridge) return;
-        const route = createFirstAvailableModulationRoute(bridge.getState().routes);
+        const targetOptions = oscillatorTargetsActive
+            ? MODULATION_TARGET_OPTIONS
+            : MODULATION_TARGET_OPTIONS.filter((option) => (
+                !isOscillatorModulationTargetKind(option.value)
+            ));
+        const route = createFirstAvailableModulationRoute(bridge.getState().routes, targetOptions);
         if (route) bridge.addRoute(route);
-    }, [modulationBridge]);
+    }, [modulationBridge, oscillatorTargetsActive]);
 
     const handleAddRouteWithOverrides = useCallback((overrides: GeneratedModulationRouteInput) => {
+        if (!oscillatorTargetsActive && isOscillatorModulationTargetKind(overrides.targetKind)) {
+            return false;
+        }
         const bridge = modulationBridge.current;
         return bridge !== null && bridge.addGeneratedRoute(overrides) !== null;
-    }, [modulationBridge]);
+    }, [modulationBridge, oscillatorTargetsActive]);
 
     const handleRemoveRoute = useCallback((routeIndex: number) => {
         modulationBridge.current?.removeRoute(routeIndex);
@@ -3713,6 +3728,7 @@ export function useSynthPatchViewModel({
             lastNoteOnAtRef.current = performance.now();
             if (intentional) {
                 lastPlayedNoteRef.current = safeNote;
+                setLastPlayedNote(safeNote);
             }
             previewNoteMemory.noteOn(safeNote, intentional);
             heldMidiNotesRef.current.set(safeNote, {
@@ -4176,7 +4192,9 @@ export function useSynthPatchViewModel({
         onKeyboardOctaveUp,
         keyboardInputMode,
         onPreviewNoteOn: (noteNumber) => {
-            lastPlayedNoteRef.current = clamp(Math.round(noteNumber), 0, 127);
+            const safeNote = clamp(Math.round(noteNumber), 0, 127);
+            lastPlayedNoteRef.current = safeNote;
+            setLastPlayedNote(safeNote);
         },
         onPreviewMidiEvent: trackIntentionalNoteInput,
         sendMIDIInputEvent: patchConnection.sendMIDIInputEvent?.bind(patchConnection),
@@ -4299,6 +4317,7 @@ export function useSynthPatchViewModel({
         handleStopNoteKeyAudition,
         /** Feed one user-intentional MIDI note into last-played/held bookkeeping. */
         trackIntentionalNoteInput,
+        lastPlayedNote,
         handleSelectWavetable,
         handlePrewarmWavetablePicker,
         handleRetryLoad,

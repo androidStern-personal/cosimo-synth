@@ -582,10 +582,10 @@ function canonicalJsonValuesEqual(left, right) {
         && canonicalJsonValuesEqual(leftRecord[key], rightRecord[key])));
 }
 /** Pick the first unused cell in the closed 1131-pair domain for generic Add. */
-export function createFirstAvailableModulationRoute(routes) {
+export function createFirstAvailableModulationRoute(routes, targetOptions = MODULATION_TARGET_OPTIONS) {
     const usedPairs = new Set(routes.map(modulationRoutePairKey));
     for (const source of MODULATION_SOURCE_OPTIONS) {
-        for (const target of MODULATION_TARGET_OPTIONS) {
+        for (const target of targetOptions) {
             const candidateShape = {
                 sourceKind: source.sourceKind,
                 sourceSlot: source.sourceSlot,

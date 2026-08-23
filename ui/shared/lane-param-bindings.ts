@@ -38,6 +38,7 @@ import {
     getRackParameterDescriptor,
     type RackParameterDescriptor,
 } from "./rack-parameter-descriptors";
+import { isOscillatorModulationTargetKind } from "./modulation-targets";
 
 /**
  * One shared lane-document store per patch connection.
@@ -197,16 +198,22 @@ export function useLaneStateDoc(): {
  * the DEVICE LIST, not the document — parameter-value traffic through the
  * lane store must not re-render every mounted picker.
  */
-export function usePatchModulationTargetOptions(): ReadonlyArray<ModulationTargetOption> {
+export function usePatchModulationTargetOptions({
+    includeOscillatorTargets = true,
+}: {
+    includeOscillatorTargets?: boolean;
+} = {}): ReadonlyArray<ModulationTargetOption> {
     const { laneState } = useLaneStateDoc();
     const devices = listLaneDeviceInstancesV2(laneState);
     const deviceSignature = devices.map((device) => device.instanceId).join("\n");
     // An unchanged signature is an unchanged device list, so the captured
     // `devices` from the first matching render stays correct.
     return useMemo(
-        () => buildPatchModulationTargetOptions(devices),
+        () => buildPatchModulationTargetOptions(devices).filter((option) => (
+            includeOscillatorTargets || !isOscillatorModulationTargetKind(option.value)
+        )),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [deviceSignature],
+        [deviceSignature, includeOscillatorTargets],
     );
 }
 
@@ -310,4 +317,3 @@ export function useLaneOrHostParameterBinding({
     });
     return laneDescriptor === null ? hostBinding : laneBinding;
 }
-

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import path from "node:path";
 import test from "node:test";
 
 import {
@@ -6,7 +7,13 @@ import {
     createBounceCapturePlan,
     createBounceCaptureSnapshot,
 } from "../bounce/capture-plan.mjs";
-import { bounceOfflineRenderInternals } from "../bounce/offline-render-core.mjs";
+import {
+    bounceOfflineRenderInternals,
+    renderBounceRoot,
+} from "../bounce/offline-render-core.mjs";
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "..");
 
 test("capture snapshot clones the button-press state and planner pins V1 defaults", () => {
     const samples = new Float32Array([0.25, -0.5]);
@@ -20,6 +27,12 @@ test("capture snapshot clones the button-press state and planner pins V1 default
             value: { dspSessionId: -1, samples },
             sessionScoped: true,
         }],
+        rootSetupEvents: [{
+            endpointID: "articulationNoteMeta",
+            rootNoteField: "noteNumber",
+            value: { channel: 0, noteNumber: 0, selectorA: 7 },
+            advanceFrames: 0,
+        }],
     });
     parameterValues.filterMode = 5;
     samples[0] = 1;
@@ -29,6 +42,13 @@ test("capture snapshot clones the button-press state and planner pins V1 default
         { endpointID: "sourceMode", value: 0 },
     ]);
     assert.deepEqual([...snapshot.setupEvents[0].value.samples], [0.25, -0.5]);
+    assert.deepEqual(snapshot.rootSetupEvents[0], {
+        endpointID: "articulationNoteMeta",
+        rootNoteField: "noteNumber",
+        value: { channel: 0, noteNumber: 0, selectorA: 7 },
+        advanceFrames: 0,
+        sessionScoped: false,
+    });
 
     const plan = createBounceCapturePlan(snapshot);
     assert.deepEqual(plan.roots, BOUNCE_DEFAULT_ROOTS);
@@ -64,4 +84,96 @@ test("capture recipes reject ambiguous roots and non-finite wire data", () => {
     const snapshot = createBounceCaptureSnapshot({ sampleRate: 48_000 });
     assert.throws(() => createBounceCapturePlan(snapshot, { roots: [60, 60] }), /ascending/);
     assert.throws(() => createBounceCapturePlan(snapshot, { captureVelocity: 127 }), /velocity 100/);
+});
+
+test("capture snapshots preserve shared binary payload aliases", () => {
+    const samples = new Float32Array([0.1, 0.2, 0.3]);
+    const snapshot = createBounceCaptureSnapshot({
+        sampleRate: 48_000,
+        setupEvents: [0, 1, 2].map((oscillatorIndex) => ({
+            endpointID: "wavetableMipFrame",
+            value: { oscillatorIndex, samples },
+        })),
+    });
+    assert.notStrictEqual(snapshot.setupEvents[0].value.samples, samples);
+    assert.strictEqual(
+        snapshot.setupEvents[0].value.samples,
+        snapshot.setupEvents[1].value.samples,
+    );
+    assert.strictEqual(
+        snapshot.setupEvents[1].value.samples,
+        snapshot.setupEvents[2].value.samples,
+    );
+});
+
+test("root-scoped setup substitutes the worker note immediately before note-on", async () => {
+    class ProbePerformer {
+        static latest = null;
+        log = [];
+        constructor() { ProbePerformer.latest = this; }
+        async initialise() {}
+        sendInputEvent_tempo(value) { this.log.push(["tempo", value]); }
+        sendInputEvent_articulationNoteMeta(value) { this.log.push(["meta", value]); }
+        sendInputEvent_midiIn(value) { this.log.push(["midi", value]); }
+        advance() {}
+        getOutputFrames_audioOut(channels, count) {
+            channels[0].fill(0.02, 0, count);
+            channels[1].fill(-0.02, 0, count);
+        }
+    }
+    const snapshot = createBounceCaptureSnapshot({
+        sampleRate: 8_000,
+        settleFrames: 1,
+        rootSetupEvents: [{
+            endpointID: "articulationNoteMeta",
+            rootNoteField: "noteNumber",
+            advanceFrames: 0,
+            value: {
+                channel: 0,
+                noteNumber: 0,
+                selectorA: 7,
+                selectorB: 0,
+                durationSamples: 0,
+                ageSamples: 0,
+            },
+        }],
+    });
+    const plan = createBounceCapturePlan(snapshot, {
+        roots: [64],
+        holdSeconds: 0.001,
+        tailCapSeconds: 0.01,
+    });
+    await renderBounceRoot(ProbePerformer, plan, plan.jobs[0]);
+
+    const metaIndex = ProbePerformer.latest.log.findIndex(([kind]) => kind === "meta");
+    const noteOnIndex = ProbePerformer.latest.log.findIndex(([kind, value]) => (
+        kind === "midi" && ((value.message >> 16) & 0xf0) === 0x90
+    ));
+    assert.ok(metaIndex >= 0 && metaIndex < noteOnIndex);
+    assert.equal(ProbePerformer.latest.log[metaIndex][1].noteNumber, 64);
+});
+
+test("the product recipe articulates velocity-100 roots only in Vel mode", async () => {
+    const { bounceCaptureRecipeInternals } = await loadUIModule(
+        repoRoot,
+        "ui/shared/bounce-capture-recipe.ts",
+    );
+    const unassigned = Array(128).fill(-1);
+    const velocity = [...unassigned];
+    velocity[100] = 23;
+    const velEvents = bounceCaptureRecipeInternals.articulationRootSetupEvents({
+        activeMode: "vel",
+        chain: unassigned,
+        key: unassigned,
+        velocity,
+    });
+    assert.equal(velEvents.length, 1);
+    assert.equal(velEvents[0].value.selectorA, 23);
+    assert.equal(velEvents[0].rootNoteField, "noteNumber");
+    assert.deepEqual(bounceCaptureRecipeInternals.articulationRootSetupEvents({
+        activeMode: "chain",
+        chain: unassigned,
+        key: unassigned,
+        velocity,
+    }), []);
 });

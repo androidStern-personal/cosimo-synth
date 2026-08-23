@@ -65,14 +65,14 @@ namespace wt
     }
 
     // A tiny engine-owned status payload lets bounce capture pin its offline
-    // performer to the live engine's actual sample rate. Hosts must not infer
-    // this from an AudioContext or device preference: native wrappers can run
-    // the patch at a different rate, and the sampled source compensates from
-    // this exact value after a later device-rate change.
+    // performer to the live engine's actual sample rate and transport tempo.
+    // Hosts must not infer SR from an AudioContext/device preference, and a
+    // tempo-synced rack must render against the press-time host BPM.
     struct EngineStatus
     {
         int32 dspSessionId;
         float32 sampleRateHz;
+        float32 tempoBpm;
     }
 
     processor NoteDispatcher (int voiceCount,
@@ -899,6 +899,7 @@ namespace wt
     processor EngineStatusMonitor
     {
         input event int32 syncIn;
+        input value float32 tempoBpmIn [[ init: 120.0f ]];
         output event EngineStatus engineStatusOut;
         bool hasEmitted;
 
@@ -916,6 +917,7 @@ namespace wt
                     EngineStatus status;
                     status.dspSessionId = int32 (processor.session);
                     status.sampleRateHz = float32 (processor.frequency);
+                    status.tempoBpm = tempoBpmIn;
                     engineStatusOut <- status;
                     hasEmitted = true;
                 }
@@ -1551,7 +1553,7 @@ graph WavetableSynth [[ main ]]
         sharedEngine.trackingPitchHzOut -> rack.trackingPitchHzIn;
         tempo -> tempoMonitor.tempoIn;
         engineStatusRequest -> engineStatusMonitor.syncIn;
-        tempoMonitor.bpmOut -> rack.tempoBpmIn;
+        tempoMonitor.bpmOut -> rack.tempoBpmIn, engineStatusMonitor.tempoBpmIn;
         sharedEngine.rackModOut -> rack.rackModIn;
         // wt::DistortionBus now lives inside the rack, so the two analyzers read the
         // preview taps the rack forwards on its behalf. A composed child's STREAM

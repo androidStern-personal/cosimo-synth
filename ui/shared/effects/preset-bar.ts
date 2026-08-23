@@ -821,8 +821,8 @@ const PRESET_BAR_HTML = /* html */ `
       <h3>Unsaved Changes</h3>
       <div class="dialog-actions">
         <button data-action="sound-replacement-cancel">Cancel</button>
-        <button data-action="sound-replacement-discard">Discard and Init</button>
-        <button class="primary" data-action="sound-replacement-save">Save and Init</button>
+        <button data-action="sound-replacement-discard" data-el="sound-replacement-discard">Discard and Init</button>
+        <button class="primary" data-action="sound-replacement-save" data-el="sound-replacement-save">Save and Init</button>
       </div>
     </div>
   </div>
@@ -1143,6 +1143,16 @@ class PresetBar extends HTMLElement {
         this._els["menu-perf-tuning"].toggleAttribute("hidden", !available);
     }
 
+    /** Entry point used by the source panel so Bounce shares the synth's
+        existing Save/Discard dirty guard instead of inventing another one. */
+    requestBounceSoundReplacement(apply: () => void) {
+        const result = this._synthMutations?.bounceSound(apply);
+        if (result) {
+            this._handleSoundReplacementResult(result);
+        }
+        return result;
+    }
+
     private _handleFilterPill(el: HTMLElement) {
         const source = el.dataset.filter as StandaloneEffectPresetSourceFilter;
         this._mutations?.setFilter({ source });
@@ -1282,6 +1292,11 @@ class PresetBar extends HTMLElement {
     }
 
     private _openSoundReplacementDialog() {
+        const actionLabel = this._state?.pendingSoundReplacement?.kind === "bounce"
+            ? "Bounce"
+            : "Init";
+        this._els["sound-replacement-discard"].textContent = `Discard and ${actionLabel}`;
+        this._els["sound-replacement-save"].textContent = `Save and ${actionLabel}`;
         this._dialogContinuesSoundReplacement = true;
         this._els["save-dialog"].hidden = true;
         this._els["sound-replacement-dialog"].hidden = false;
