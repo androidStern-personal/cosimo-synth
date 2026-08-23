@@ -1,0 +1,13 @@
+{
+  "name": "Cosimo Synth (phone SSH)",
+  "runArgs": [
+    "--device=/dev/net/tun"
+  ],
+  "features": {
+    "ghcr.io/tailscale/codespace/tailscale": {
+      "version": "latest"
+    }
+  },
+  "postStartCommand": "bash .devcontainer/post-start.sh",
+  "remoteUser": "codespace"
+}
