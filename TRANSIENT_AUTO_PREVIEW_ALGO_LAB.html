@@ -1,0 +1,806 @@
+<title>MSEG Preview Lab</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --bg: #14171b;
+    --panel: #1c2127;
+    --panel-edge: #2a323b;
+    --ink: #e8ebee;
+    --dim: #8b949e;
+    --accent: #ffb454;
+    --wave: #5fb2ff;
+    --danger: #ff6b6b;
+    --font-label: "Chakra Petch", "Avenir Next Condensed", sans-serif;
+    --font-body: "IBM Plex Sans", "Helvetica Neue", sans-serif;
+    --font-mono: "IBM Plex Mono", "SF Mono", monospace;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 15px;
+    line-height: 1.45;
+    overscroll-behavior: none;
+  }
+  .lab {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 14px 14px 28px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 2px 2px 0;
+  }
+  header h1 {
+    font-family: var(--font-label);
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin: 0;
+  }
+  header .power {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--dim);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  header .power .led {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #3a434d;
+  }
+  header .power.on .led { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+
+  .algos {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+  }
+  .algos button {
+    font-family: var(--font-label);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 10px 4px;
+    background: var(--panel);
+    color: var(--dim);
+    border: 1px solid var(--panel-edge);
+    border-radius: 8px;
+    cursor: pointer;
+  }
+  .algos button.active {
+    color: #16130c;
+    background: var(--accent);
+    border-color: var(--accent);
+    font-weight: 600;
+  }
+  .algos button:focus-visible { outline: 2px solid var(--wave); outline-offset: 2px; }
+  .desc {
+    min-height: 3.2em;
+    color: var(--dim);
+    font-size: 13.5px;
+    padding: 0 2px;
+  }
+  .desc b { color: var(--ink); font-weight: 600; }
+
+  .pad-wrap, .tl-wrap {
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; touch-action: none; }
+  #pad { height: 300px; }
+  #timeline { height: 110px; }
+  .tl-caption {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--dim);
+    padding: 8px 12px 9px;
+    border-top: 1px solid var(--panel-edge);
+  }
+  .tl-caption .k { display: inline-flex; align-items: center; gap: 5px; }
+  .tl-caption .swatch { width: 10px; height: 10px; border-radius: 2px; }
+
+  .controls {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: var(--panel);
+    border: 1px solid var(--panel-edge);
+    border-radius: 12px;
+    padding: 14px;
+  }
+  .ctl { display: grid; grid-template-columns: 108px 1fr 64px; align-items: center; gap: 10px; }
+  .ctl label {
+    font-family: var(--font-label);
+    font-size: 11.5px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .ctl output {
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .ctl input[type="range"] {
+    appearance: none; -webkit-appearance: none;
+    height: 26px; background: transparent; margin: 0; width: 100%;
+  }
+  .ctl input[type="range"]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px; background: #333c46;
+  }
+  .ctl input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ink); border: none; margin-top: -9px;
+  }
+  .ctl input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: #333c46; }
+  .ctl input[type="range"]::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: var(--ink); border: none; }
+  .ctl input[type="range"]:focus-visible { outline: 2px solid var(--wave); outline-offset: 2px; border-radius: 6px; }
+  .row { display: flex; gap: 10px; align-items: center; }
+  .row .hint { color: var(--dim); font-size: 12.5px; }
+  #playOnce {
+    font-family: var(--font-label);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid var(--panel-edge);
+    color: var(--ink);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  #playOnce:active { background: var(--panel-edge); }
+  #playOnce:focus-visible { outline: 2px solid var(--wave); outline-offset: 2px; }
+
+  #gate {
+    position: fixed; inset: 0;
+    background: rgba(14, 16, 19, 0.9);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 10;
+  }
+  #gate button {
+    font-family: var(--font-label);
+    font-size: 15px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 18px 34px;
+    border-radius: 12px;
+    background: var(--accent);
+    color: #16130c;
+    border: none;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="lab">
+  <header>
+    <h1>MSEG Preview Lab</h1>
+    <div class="power" id="power"><span class="led"></span><span id="powerLabel">off</span></div>
+  </header>
+
+  <div class="algos" id="algos" role="tablist" aria-label="Preview algorithm"></div>
+  <div class="desc" id="desc"></div>
+
+  <div class="pad-wrap"><canvas id="pad"></canvas></div>
+
+  <div class="tl-wrap">
+    <canvas id="timeline"></canvas>
+    <div class="tl-caption">
+      <span class="k"><span class="swatch" style="background:var(--accent)"></span>attack</span>
+      <span class="k"><span class="swatch" style="background:var(--danger)"></span>cut</span>
+      <span class="k"><span class="swatch" style="background:var(--wave)"></span>voice sounding</span>
+      <span class="k"><span class="swatch" style="background:#5a5145"></span>finger moving</span>
+    </div>
+  </div>
+
+  <div class="controls">
+    <div class="ctl">
+      <label for="loopMs">Loop period</label>
+      <input type="range" id="loopMs" min="300" max="3000" step="50" value="1000">
+      <output id="loopMsOut">1.00s</output>
+    </div>
+    <div class="ctl">
+      <label for="settleMs">Settle time</label>
+      <input type="range" id="settleMs" min="60" max="400" step="10" value="150">
+      <output id="settleMsOut">150ms</output>
+    </div>
+    <div class="ctl">
+      <label for="minGapMs">Min restrike gap</label>
+      <input type="range" id="minGapMs" min="100" max="600" step="25" value="250">
+      <output id="minGapMsOut">250ms</output>
+    </div>
+    <div class="row">
+      <button id="playOnce">Play once</button>
+      <span class="hint">Drag the dots. The loop modulates pitch of the ping, filter and volume.</span>
+    </div>
+  </div>
+</div>
+
+<div id="gate"><button id="gateBtn">Power on</button></div>
+
+<script>
+"use strict";
+
+/* ---------------------------------------------------------------- shape -- */
+
+const shape = {
+  // x strictly increasing, endpoints pinned to x=0 / x=1. y in 0..1 (1 = top).
+  points: [
+    { x: 0.00, y: 0.05 },
+    { x: 0.07, y: 0.95 },
+    { x: 0.34, y: 0.30 },
+    { x: 0.62, y: 0.62 },
+    { x: 1.00, y: 0.05 },
+  ],
+};
+
+function evalShape(points, phase) {
+  const p = Math.min(Math.max(phase, 0), 1);
+  for (let i = 1; i < points.length; i += 1) {
+    if (p <= points[i].x) {
+      const a = points[i - 1];
+      const b = points[i];
+      const span = b.x - a.x;
+      const t = span > 0 ? (p - a.x) / span : 1;
+      return a.y + ((b.y - a.y) * t);
+    }
+  }
+  return points[points.length - 1].y;
+}
+
+const snapshotShape = () => shape.points.map((p) => ({ x: p.x, y: p.y }));
+
+/* ---------------------------------------------------------------- audio -- */
+
+let ctx = null;
+let master = null;
+
+function ensureAudio() {
+  if (!ctx) {
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain();
+    master.gain.value = 0.22;
+    master.connect(ctx.destination);
+  }
+  if (ctx.state === "suspended") { ctx.resume(); }
+  const on = ctx.state === "running";
+  document.getElementById("power").classList.toggle("on", on);
+  document.getElementById("powerLabel").textContent = on ? "on" : "off";
+}
+
+const CHOKE_MS = 5;
+const BASE_HZ = 138.59; // C#3 — the ping's root
+const voices = [];      // every voice ever sounding; pruned once dead
+
+function makeVoice(mode /* "live" | "snapshot" */) {
+  ensureAudio();
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.value = BASE_HZ;
+  const lpf = ctx.createBiquadFilter();
+  lpf.type = "lowpass";
+  lpf.Q.value = 7;
+  lpf.frequency.value = 300;
+  const mod = ctx.createGain();   // follows the MSEG each frame
+  mod.gain.value = 0.0001;
+  const env = ctx.createGain();   // strike attack / release / choke
+  env.gain.value = 0;
+  env.gain.setTargetAtTime(1, now, 0.004);
+  osc.connect(lpf); lpf.connect(mod); mod.connect(env); env.connect(master);
+  osc.start();
+
+  const voice = {
+    mode,
+    snapshot: mode === "snapshot" ? snapshotShape() : null,
+    startMs: performance.now(),
+    periodMs: cfg.loopMs,
+    releasedAtMs: null,   // set when released (ring-out keeps looping)
+    deadAtMs: null,
+    lastCycle: 0,
+    onWrap: null,         // (voice) => void
+    nodes: { osc, lpf, mod, env },
+  };
+  voices.push(voice);
+  return voice;
+}
+
+function voiceShapePoints(voice) {
+  return voice.mode === "live" ? shape.points : voice.snapshot;
+}
+
+function releaseVoice(voice, fadeMs) {
+  if (voice.releasedAtMs !== null) { return; }
+  const now = ctx.currentTime;
+  voice.releasedAtMs = performance.now();
+  voice.deadAtMs = voice.releasedAtMs + fadeMs + 40;
+  voice.nodes.env.gain.cancelScheduledValues(now);
+  voice.nodes.env.gain.setValueAtTime(voice.nodes.env.gain.value, now);
+  voice.nodes.env.gain.linearRampToValueAtTime(0, now + (fadeMs / 1000));
+  voice.nodes.osc.stop(now + (fadeMs / 1000) + 0.03);
+}
+
+const chokeVoice = (voice) => releaseVoice(voice, CHOKE_MS);
+
+function updateVoices(nowMs) {
+  for (let i = voices.length - 1; i >= 0; i -= 1) {
+    const voice = voices[i];
+    if (voice.deadAtMs !== null && nowMs >= voice.deadAtMs) {
+      voices.splice(i, 1);
+      continue;
+    }
+    const elapsed = nowMs - voice.startMs;
+    const cycle = Math.floor(elapsed / voice.periodMs);
+    const phase = (elapsed / voice.periodMs) % 1;
+    if (cycle > voice.lastCycle) {
+      voice.lastCycle = cycle;
+      if (voice.onWrap) { voice.onWrap(voice); }
+    }
+    const v = evalShape(voiceShapePoints(voice), phase);
+    const t = ctx.currentTime;
+    voice.nodes.lpf.frequency.setTargetAtTime(150 * Math.pow(38, v), t, 0.012);
+    voice.nodes.mod.gain.setTargetAtTime(0.10 + (0.90 * Math.pow(v, 1.4)), t, 0.012);
+    voice.nodes.osc.frequency.setTargetAtTime(BASE_HZ * Math.pow(2, (v * 12) / 12), t, 0.012);
+  }
+}
+
+/* ------------------------------------------------------------ event log -- */
+
+const events = [];      // { t, type: "attack" | "cut" }
+const editTimes = [];   // movement samples for the timeline band
+const spans = [];       // { start, end|null } sounding spans, mirrors voices
+
+function logEvent(type) {
+  events.push({ t: performance.now(), type });
+  if (events.length > 400) { events.splice(0, events.length - 400); }
+}
+function openSpan(voice) {
+  const span = { start: voice.startMs, end: null, voice };
+  spans.push(span);
+  if (spans.length > 60) { spans.splice(0, spans.length - 60); }
+}
+function settleSpans(nowMs) {
+  for (const span of spans) {
+    if (span.end === null && span.voice.deadAtMs !== null) {
+      span.end = Math.min(span.voice.deadAtMs, nowMs);
+    }
+  }
+}
+
+/* ------------------------------------------------------------ algorithms -- */
+/*
+ * Each algorithm gets the full gesture picture: down/edit/up plus a frame
+ * tick. It owns its preview voices through these helpers. A/B/C/D keep a
+ * choke group of one (previous preview dies instantly on restrike); E
+ * reproduces the shipped engine: no bracket awareness, polite note-offs
+ * that ring out and keep looping, stillness treated as release.
+ */
+
+let previewVoice = null;
+
+function strikePreview(mode) {
+  if (previewVoice) { chokeVoice(previewVoice); }
+  previewVoice = makeVoice(mode);
+  openSpan(previewVoice);
+  logEvent("attack");
+  return previewVoice;
+}
+
+function endPreview(fadeMs) {
+  if (!previewVoice) { return; }
+  releaseVoice(previewVoice, fadeMs);
+  logEvent("cut");
+  previewVoice = null;
+}
+
+/** Let the current preview finish its pass, then fade; strike first if asked. */
+function finishPassThenFade(strikeIfSilent) {
+  if (!previewVoice && strikeIfSilent) { strikePreview("snapshot"); }
+  if (!previewVoice) { return; }
+  const voice = previewVoice;
+  previewVoice = null;
+  voice.onWrap = (self) => { releaseVoice(self, 120); };
+}
+
+const algorithms = [
+  {
+    id: "morph",
+    label: "Morph",
+    desc: "<b>One living note.</b> Strikes once when you grab, then never again — the loop keeps running and reads your edits live, so you hear the dot move inside the sound. Pause anywhere and that spot just repeats. Lift and it finishes the pass.",
+    onDown() { strikePreview("live"); },
+    onEdit() {},
+    onFrame() {},
+    onUp() { finishPassThenFade(false); },
+  },
+  {
+    id: "settle",
+    label: "Settle",
+    desc: "<b>Debounce.</b> While you move, the old note keeps looping untouched. Each time the dot rests for the settle time, one clean restrike with the new shape — then it loops at that spot until you move again. Fast drags play only where you land.",
+    dirty: false,
+    onDown() { this.dirty = false; strikePreview("snapshot"); },
+    onEdit() { this.dirty = true; },
+    onFrame(nowMs, gesture) {
+      if (gesture.down && this.dirty && nowMs - gesture.lastEditMs >= cfg.settleMs) {
+        this.dirty = false;
+        strikePreview("snapshot");
+      }
+    },
+    onUp() {
+      if (this.dirty) { this.dirty = false; strikePreview("snapshot"); }
+      finishPassThenFade(false);
+    },
+  },
+  {
+    id: "wrap",
+    label: "Wrap",
+    desc: "<b>Refresh at the loop point.</b> One note loops the whole drag; your edits are picked up silently at each wrap — never a new attack, and changes always land on the loop's downbeat. The audition cadence IS the loop.",
+    dirty: false,
+    onDown() {
+      this.dirty = false;
+      const voice = strikePreview("snapshot");
+      voice.onWrap = (self) => {
+        if (this.dirty && self === previewVoice) { self.snapshot = snapshotShape(); this.dirty = false; }
+      };
+    },
+    onEdit() { this.dirty = true; },
+    onFrame() {},
+    onUp() {
+      if (previewVoice && this.dirty) { previewVoice.snapshot = snapshotShape(); this.dirty = false; }
+      finishPassThenFade(false);
+    },
+  },
+  {
+    id: "paced",
+    label: "Paced",
+    desc: "<b>The shipped cadence, repaired.</b> Restrikes while you move, at most one per gap — but each restrike chokes the last (no pile), and when you rest: one final restrike, then it holds and loops under your finger. Nothing stays on deck.",
+    dirty: false,
+    lastStrikeMs: -1e9,
+    onDown() { this.dirty = false; this.lastStrikeMs = performance.now(); strikePreview("snapshot"); },
+    onEdit() { this.dirty = true; },
+    onFrame(nowMs, gesture) {
+      if (!gesture.down || !this.dirty) { return; }
+      const settled = nowMs - gesture.lastEditMs >= cfg.settleMs;
+      if (settled || nowMs - this.lastStrikeMs >= cfg.minGapMs) {
+        this.dirty = false;
+        this.lastStrikeMs = nowMs;
+        strikePreview("snapshot");
+      }
+    },
+    onUp() {
+      if (this.dirty) { this.dirty = false; strikePreview("snapshot"); }
+      finishPassThenFade(false);
+    },
+  },
+  {
+    id: "shipped",
+    label: "Shipped",
+    desc: "<b>Today's engine, for reference.</b> Can't see your finger: 150ms of quiet counts as a release. Restrikes ride a conveyor (one always on deck), old voices ring out and keep looping, the \"final\" note lands late and gets cut or capped at 600ms.",
+    lastRetriggerMs: null,
+    pendingMs: null,
+    trailing: false,
+    lastEditMs: null,
+    stillHandled: true,
+    strike(capMs) {
+      // Polite note-off: the previous voice rings out ~450ms, still looping.
+      if (previewVoice) { releaseVoice(previewVoice, 450); }
+      previewVoice = makeVoice("snapshot");
+      openSpan(previewVoice);
+      logEvent("attack");
+      if (capMs !== null) {
+        const capped = previewVoice;
+        previewVoice = null;
+        setTimeout(() => releaseVoice(capped, 450), capMs);
+      }
+    },
+    onDown() {},
+    onEdit() {
+      const nowMs = performance.now();
+      this.lastEditMs = nowMs;
+      this.stillHandled = false;
+      if (this.pendingMs !== null) { return; }
+      if (this.lastRetriggerMs !== null && nowMs < this.lastRetriggerMs + cfg.minGapMs) {
+        this.pendingMs = this.lastRetriggerMs + cfg.minGapMs;
+        return;
+      }
+      this.lastRetriggerMs = nowMs;
+      this.strike(null);
+    },
+    onFrame(nowMs) {
+      if (!this.stillHandled && this.lastEditMs !== null && nowMs - this.lastEditMs >= 150) {
+        this.stillHandled = true;
+        if (this.pendingMs !== null) {
+          this.trailing = true;
+        } else if (previewVoice) {
+          releaseVoice(previewVoice, 450);
+          logEvent("cut");
+          previewVoice = null;
+        }
+      }
+      if (this.pendingMs !== null && nowMs >= this.pendingMs) {
+        this.lastRetriggerMs = this.pendingMs;
+        this.pendingMs = null;
+        const cap = this.trailing ? 600 : null;
+        this.trailing = false;
+        this.strike(cap);
+      }
+    },
+    onUp() {},
+  },
+];
+
+let algo = algorithms[0];
+
+function switchAlgo(next) {
+  for (const voice of voices) { chokeVoice(voice); }
+  previewVoice = null;
+  algo = next;
+  algo.dirty = false;
+  if (algo.id === "shipped") {
+    algo.lastRetriggerMs = null; algo.pendingMs = null;
+    algo.trailing = false; algo.lastEditMs = null; algo.stillHandled = true;
+  }
+  document.getElementById("desc").innerHTML = algo.desc;
+  for (const button of document.querySelectorAll(".algos button")) {
+    const active = button.dataset.id === algo.id;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  }
+}
+
+/* ------------------------------------------------------------- controls -- */
+
+const cfg = { loopMs: 1000, settleMs: 150, minGapMs: 250 };
+
+function bindSlider(id, key, format) {
+  const input = document.getElementById(id);
+  const out = document.getElementById(id + "Out");
+  const apply = () => {
+    cfg[key] = Number(input.value);
+    out.textContent = format(cfg[key]);
+  };
+  input.addEventListener("input", apply);
+  apply();
+}
+bindSlider("loopMs", "loopMs", (v) => (v / 1000).toFixed(2) + "s");
+bindSlider("settleMs", "settleMs", (v) => v + "ms");
+bindSlider("minGapMs", "minGapMs", (v) => v + "ms");
+
+const algosHost = document.getElementById("algos");
+for (const candidate of algorithms) {
+  const button = document.createElement("button");
+  button.textContent = candidate.label;
+  button.dataset.id = candidate.id;
+  button.setAttribute("role", "tab");
+  button.addEventListener("click", () => { ensureAudio(); switchAlgo(candidate); });
+  algosHost.appendChild(button);
+}
+switchAlgo(algorithms[0]);
+
+document.getElementById("playOnce").addEventListener("click", () => {
+  ensureAudio();
+  finishPassThenFade(true);
+});
+
+const gate = document.getElementById("gate");
+document.getElementById("gateBtn").addEventListener("click", () => {
+  ensureAudio();
+  gate.remove();
+});
+
+/* ------------------------------------------------------------ MSEG pad -- */
+
+const pad = document.getElementById("pad");
+const padCtx = pad.getContext("2d");
+const gesture = { down: false, pointIndex: -1, lastEditMs: -1e9 };
+
+function padMetrics() {
+  const rect = pad.getBoundingClientRect();
+  return { w: rect.width, h: rect.height, inset: 22 };
+}
+const toPx = (m, p) => ({
+  x: m.inset + (p.x * (m.w - (2 * m.inset))),
+  y: (m.h - m.inset) - (p.y * (m.h - (2 * m.inset))),
+});
+const fromPx = (m, x, y) => ({
+  x: (x - m.inset) / (m.w - (2 * m.inset)),
+  y: ((m.h - m.inset) - y) / (m.h - (2 * m.inset)),
+});
+
+pad.addEventListener("pointerdown", (event) => {
+  ensureAudio();
+  const m = padMetrics();
+  const rect = pad.getBoundingClientRect();
+  const px = event.clientX - rect.left;
+  const py = event.clientY - rect.top;
+  let best = -1;
+  let bestDist = 34; // generous touch radius
+  shape.points.forEach((p, i) => {
+    const q = toPx(m, p);
+    const d = Math.hypot(q.x - px, q.y - py);
+    if (d < bestDist) { bestDist = d; best = i; }
+  });
+  if (best < 0) { return; }
+  gesture.down = true;
+  gesture.pointIndex = best;
+  pad.setPointerCapture(event.pointerId);
+  algo.onDown();
+  event.preventDefault();
+});
+
+pad.addEventListener("pointermove", (event) => {
+  if (!gesture.down) { return; }
+  const m = padMetrics();
+  const rect = pad.getBoundingClientRect();
+  const raw = fromPx(m, event.clientX - rect.left, event.clientY - rect.top);
+  const i = gesture.pointIndex;
+  const p = shape.points[i];
+  const isEnd = i === 0 || i === shape.points.length - 1;
+  const lo = isEnd ? p.x : shape.points[i - 1].x + 0.02;
+  const hi = isEnd ? p.x : shape.points[i + 1].x - 0.02;
+  const nx = Math.min(Math.max(raw.x, lo), hi);
+  const ny = Math.min(Math.max(raw.y, 0), 1);
+  if (nx !== p.x || ny !== p.y) {
+    p.x = nx; p.y = ny;
+    gesture.lastEditMs = performance.now();
+    editTimes.push(gesture.lastEditMs);
+    if (editTimes.length > 800) { editTimes.splice(0, editTimes.length - 800); }
+    algo.onEdit();
+  }
+  event.preventDefault();
+});
+
+function endGesture(event) {
+  if (!gesture.down) { return; }
+  gesture.down = false;
+  gesture.pointIndex = -1;
+  algo.onUp();
+  if (event) { event.preventDefault(); }
+}
+pad.addEventListener("pointerup", endGesture);
+pad.addEventListener("pointercancel", endGesture);
+
+/* -------------------------------------------------------------- drawing -- */
+
+const timeline = document.getElementById("timeline");
+const tlCtx = timeline.getContext("2d");
+
+function sizeCanvas(canvas, context) {
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if (canvas.width !== Math.round(rect.width * dpr)) {
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+  }
+  context.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return rect;
+}
+
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+function drawPad(nowMs) {
+  const rect = sizeCanvas(pad, padCtx);
+  const m = { w: rect.width, h: rect.height, inset: 22 };
+  padCtx.clearRect(0, 0, m.w, m.h);
+
+  padCtx.strokeStyle = "#262d35";
+  padCtx.lineWidth = 1;
+  for (let gx = 0; gx <= 4; gx += 1) {
+    const x = m.inset + ((gx / 4) * (m.w - (2 * m.inset)));
+    padCtx.beginPath(); padCtx.moveTo(x, m.inset); padCtx.lineTo(x, m.h - m.inset); padCtx.stroke();
+  }
+  for (let gy = 0; gy <= 2; gy += 1) {
+    const y = m.inset + ((gy / 2) * (m.h - (2 * m.inset)));
+    padCtx.beginPath(); padCtx.moveTo(m.inset, y); padCtx.lineTo(m.w - m.inset, y); padCtx.stroke();
+  }
+
+  const wave = css("--wave");
+  padCtx.strokeStyle = wave;
+  padCtx.lineWidth = 2.5;
+  padCtx.lineJoin = "round";
+  padCtx.beginPath();
+  shape.points.forEach((p, i) => {
+    const q = toPx(m, p);
+    if (i === 0) { padCtx.moveTo(q.x, q.y); } else { padCtx.lineTo(q.x, q.y); }
+  });
+  padCtx.stroke();
+
+  // Playheads for every sounding voice; the loudest story on the pad.
+  for (const voice of voices) {
+    if (voice.deadAtMs !== null && nowMs > voice.deadAtMs) { continue; }
+    const phase = ((nowMs - voice.startMs) / voice.periodMs) % 1;
+    const x = m.inset + (phase * (m.w - (2 * m.inset)));
+    padCtx.strokeStyle = voice === previewVoice ? css("--accent") : "rgba(255, 180, 84, 0.35)";
+    padCtx.lineWidth = voice === previewVoice ? 2 : 1;
+    padCtx.beginPath(); padCtx.moveTo(x, m.inset); padCtx.lineTo(x, m.h - m.inset); padCtx.stroke();
+  }
+
+  shape.points.forEach((p, i) => {
+    const q = toPx(m, p);
+    padCtx.fillStyle = i === gesture.pointIndex ? css("--accent") : css("--ink");
+    padCtx.beginPath();
+    padCtx.arc(q.x, q.y, i === gesture.pointIndex ? 11 : 8, 0, Math.PI * 2);
+    padCtx.fill();
+    padCtx.strokeStyle = "#14171b";
+    padCtx.lineWidth = 2;
+    padCtx.stroke();
+  });
+}
+
+const TL_WINDOW_MS = 8000;
+
+function drawTimeline(nowMs) {
+  const rect = sizeCanvas(timeline, tlCtx);
+  const w = rect.width;
+  const h = rect.height;
+  tlCtx.clearRect(0, 0, w, h);
+  const xFor = (t) => w - (((nowMs - t) / TL_WINDOW_MS) * w);
+
+  // finger-moving band
+  tlCtx.fillStyle = "#5a5145";
+  for (const t of editTimes) {
+    if (nowMs - t > TL_WINDOW_MS) { continue; }
+    tlCtx.fillRect(xFor(t) - 1.2, 6, 2.4, 7);
+  }
+
+  // sounding spans, stacked lanes — piling is visible as stacked bars
+  settleSpans(nowMs);
+  const laneH = 7;
+  const laneTop = 20;
+  const live = spans.filter((s) => nowMs - (s.end ?? nowMs) < TL_WINDOW_MS);
+  live.forEach((span, i) => {
+    const lane = i % 7;
+    const x0 = Math.max(0, xFor(span.start));
+    const x1 = xFor(span.end ?? nowMs);
+    tlCtx.fillStyle = "rgba(95, 178, 255, 0.65)";
+    tlCtx.fillRect(x0, laneTop + (lane * (laneH + 3)), Math.max(2, x1 - x0), laneH);
+  });
+
+  // event ticks on top
+  for (const ev of events) {
+    if (nowMs - ev.t > TL_WINDOW_MS) { continue; }
+    const x = xFor(ev.t);
+    if (ev.type === "attack") {
+      tlCtx.fillStyle = css("--accent");
+      tlCtx.fillRect(x - 1.25, 4, 2.5, h - 8);
+    } else {
+      tlCtx.fillStyle = css("--danger");
+      tlCtx.fillRect(x - 1.25, h - 26, 2.5, 22);
+    }
+  }
+}
+
+/* ----------------------------------------------------------- frame loop -- */
+
+function frame() {
+  const nowMs = performance.now();
+  algo.onFrame(nowMs, gesture);
+  if (ctx) { updateVoices(nowMs); }
+  drawPad(nowMs);
+  drawTimeline(nowMs);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+// Debug hook for automated smoke tests.
+window.__lab = { events, voices, shape, switchAlgo, algorithms, get algo() { return algo; }, gesture };
+</script>
