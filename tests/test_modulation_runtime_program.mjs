@@ -199,10 +199,12 @@ test("rack target catalog compilation rejects indices outside the DSP domain", a
 test("rack target catalog compilation rejects duplicate DSP indices", async () => {
     const { compileRackModulationTargetCatalog } = await programModulePromise;
 
+    // Real prefixed endpoints: the namespace cut mints each entry's lane kind
+    // from its device-type prefix, so unprefixed fixture names cannot compile.
     assert.throws(
         () => compileRackModulationTargetCatalog([
-            { endpointID: "firstRackTarget", modulationTargetIndex: 4 },
-            { endpointID: "secondRackTarget", modulationTargetIndex: 4 },
+            { endpointID: "delayTime", modulationTargetIndex: 4 },
+            { endpointID: "delayMix", modulationTargetIndex: 4 },
         ]),
         /Duplicate rack modulation target index 4/,
     );

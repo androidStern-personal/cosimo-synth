@@ -70,6 +70,21 @@ function defaultParams(effectId) {
     return Object.fromEntries(getRackEffectDescriptor(effectId).parameters
         .map((descriptor) => [descriptor.endpointID, descriptor.initial]));
 }
+/**
+ * The patch's live lane devices in STABLE IDENTITY ORDER — the order the
+ * dynamic target domain (pickers, table categories) lists devices in, which
+ * deliberately never follows the chain order: reordering the chain must not
+ * reshuffle pickers. A v1 document pins exactly one instance-#1 device per
+ * type; the device-instance tree arrives with the add/remove UX, and only
+ * this function changes when it does.
+ */
+export function listLaneDeviceInstances(state) {
+    void state;
+    return RACK_EFFECT_ORDER.map((effectId) => {
+        const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+        return { instanceId: `${deviceType}#1`, deviceType };
+    });
+}
 /** Create the lane state matching the deployed pre-lane sound. */
 export function createDefaultLaneState() {
     return {

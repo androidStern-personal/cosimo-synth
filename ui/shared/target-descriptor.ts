@@ -11,6 +11,12 @@
 import { type ArticulationVoiceParameterId } from "./articulation-image";
 import { type Brand, type NormalizedValue, type TargetId } from "./cosimo-ids";
 import {
+    laneInstanceNumber,
+    laneMirrorRackKind,
+    parseLaneModulationTargetKind,
+    type ParsedLaneModulationTarget,
+} from "./lane-modulation-targets";
+import {
     MODULATION_TARGET_IDENTITIES,
     OSCILLATOR_IDS,
     type ModulationTargetKind,
@@ -649,9 +655,22 @@ export function allTargetDescriptors(): ReadonlyArray<TargetDescriptor> {
     return TARGET_DESCRIPTORS;
 }
 
+const EFFECT_LABEL_BY_MODULE_ID = new Map<ModuleId, string>(
+    RACK_EFFECT_DESCRIPTORS.map((effect) => [effect.id, effect.label]),
+);
+
+/** ` 2` for instance #2, empty for the resident instance #1 — instance
+    labels appear only once a device is not its type's first. */
+function laneInstanceSuffix(parsed: ParsedLaneModulationTarget): string {
+    const instanceNumber = laneInstanceNumber(parsed);
+    return instanceNumber === 1 ? "" : ` ${instanceNumber}`;
+}
+
 /**
  * Resolve a modulation target label from the target descriptor catalog.
- * Corresponding A/B/C descriptors own equivalent policy under distinct identities.
+ * Corresponding A/B/C descriptors own equivalent policy under distinct
+ * identities, and every lane instance speaks through its type's instance-#1
+ * descriptor with the instance number spliced in ("DELAY 2 FEEDBACK").
  */
 export function getModulationTargetDisplayLabel(targetKind: ModulationTargetKind): string {
     const oscillatorMatch = /^osc([ABC])\.(.+)$/.exec(targetKind);
@@ -660,8 +679,35 @@ export function getModulationTargetDisplayLabel(targetKind: ModulationTargetKind
         return `${oscillatorMatch[1]} ${descriptor.label.toUpperCase()}`;
     }
 
-    const descriptor = getModulationTargetDescriptor(targetKind);
-    return descriptor.workspace === "effects"
-        ? `${descriptor.moduleId.toUpperCase()} ${descriptor.label.toUpperCase()}`
-        : descriptor.label.toUpperCase();
+    const parsedLane = parseLaneModulationTargetKind(targetKind);
+    if (parsedLane !== null) {
+        const descriptor = getModulationTargetDescriptor(laneMirrorRackKind(parsedLane));
+        return `${descriptor.moduleId.toUpperCase()}${laneInstanceSuffix(parsedLane)} ${descriptor.label.toUpperCase()}`;
+    }
+
+    return getModulationTargetDescriptor(targetKind).label.toUpperCase();
+}
+
+/**
+ * The table/list split of the same display authority: one category label
+ * (the owning module, instance-numbered for pool devices) and one parameter
+ * label. Voice-domain targets group under the one "Voice" category.
+ */
+export function getModulationTargetPresentation(targetKind: ModulationTargetKind): {
+    readonly category: string;
+    readonly parameter: string;
+} {
+    const parsedLane = parseLaneModulationTargetKind(targetKind);
+    if (parsedLane !== null) {
+        const descriptor = getModulationTargetDescriptor(laneMirrorRackKind(parsedLane));
+        const moduleLabel = descriptor.moduleId === "filter"
+            ? "Global Filter"
+            : EFFECT_LABEL_BY_MODULE_ID.get(descriptor.moduleId) ?? descriptor.moduleId;
+        return {
+            category: `${moduleLabel}${laneInstanceSuffix(parsedLane)}`,
+            parameter: descriptor.label,
+        };
+    }
+
+    return { category: "Voice", parameter: getModulationTargetDisplayLabel(targetKind) };
 }

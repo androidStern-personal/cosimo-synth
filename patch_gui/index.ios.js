@@ -15503,6 +15503,16 @@ function parseLaneModulationTargetKind(value) {
 function laneMirrorRackKind(parsed) {
   return `lane.${parsed.deviceType}#1.${parsed.endpointID}`;
 }
+function laneInstanceNumber(parsed) {
+  return Number(parsed.instanceId.slice(parsed.instanceId.indexOf("#") + 1));
+}
+function getLaneDeviceModulationTargetKinds(device) {
+  const endpoints = LANE_DEVICE_ENDPOINTS.get(device.deviceType);
+  if (endpoints === void 0) {
+    throw new Error(`Unknown lane device type: ${device.deviceType}`);
+  }
+  return endpoints.map((endpointID) => `lane.${device.instanceId}.${endpointID}`);
+}
 function getLaneModulationTargetIndex(parsed, assignments) {
   if (parsed === null) {
     return null;
@@ -15592,6 +15602,9 @@ function getModulationRuntimeCell(route, laneAssignments = EMPTY_LANE_ASSIGNMENT
   };
 }
 function getModulationArticulationCellIndex(route) {
+  if (parseLaneModulationTargetKind(route.targetKind) !== null) {
+    return null;
+  }
   return getModulationRuntimeCell(route).articulationCellIndex;
 }
 const EMPTY_LANE_ASSIGNMENTS = /* @__PURE__ */ new Map();
@@ -15938,14 +15951,25 @@ function getModulationTargetDescriptor(targetKind) {
   }
   return descriptor;
 }
+new Map(
+  RACK_EFFECT_DESCRIPTORS.map((effect) => [effect.id, effect.label])
+);
+function laneInstanceSuffix(parsed) {
+  const instanceNumber = laneInstanceNumber(parsed);
+  return instanceNumber === 1 ? "" : ` ${instanceNumber}`;
+}
 function getModulationTargetDisplayLabel(targetKind) {
   const oscillatorMatch = /^osc([ABC])\.(.+)$/.exec(targetKind);
   if (oscillatorMatch !== null) {
-    const descriptor2 = getModulationTargetDescriptor(targetKind);
-    return `${oscillatorMatch[1]} ${descriptor2.label.toUpperCase()}`;
+    const descriptor = getModulationTargetDescriptor(targetKind);
+    return `${oscillatorMatch[1]} ${descriptor.label.toUpperCase()}`;
   }
-  const descriptor = getModulationTargetDescriptor(targetKind);
-  return descriptor.workspace === "effects" ? `${descriptor.moduleId.toUpperCase()} ${descriptor.label.toUpperCase()}` : descriptor.label.toUpperCase();
+  const parsedLane = parseLaneModulationTargetKind(targetKind);
+  if (parsedLane !== null) {
+    const descriptor = getModulationTargetDescriptor(laneMirrorRackKind(parsedLane));
+    return `${descriptor.moduleId.toUpperCase()}${laneInstanceSuffix(parsedLane)} ${descriptor.label.toUpperCase()}`;
+  }
+  return getModulationTargetDescriptor(targetKind).label.toUpperCase();
 }
 const MODULATION_STATE_KEY = "modulation.v6";
 const MODULATION_STATE_VERSION = 6;
@@ -16058,6 +16082,16 @@ const MODULATION_TARGET_OPTIONS = MODULATION_TARGET_IDENTITIES.map((identity) =>
   value: identity.kind,
   label: getModulationTargetDisplayLabel(identity.kind)
 }));
+const VOICE_TARGET_OPTIONS = MODULATION_TARGET_OPTIONS.filter((option) => !isRackModulationTarget(option.value));
+function buildPatchModulationTargetOptions(devices) {
+  return [
+    ...VOICE_TARGET_OPTIONS,
+    ...devices.flatMap((device) => getLaneDeviceModulationTargetKinds(device).map((kind) => ({
+      value: kind,
+      label: getModulationTargetDisplayLabel(kind)
+    })))
+  ];
+}
 let generatedRouteIdCounter = 1;
 function hasOwnValue(record, key) {
   return Object.prototype.hasOwnProperty.call(record, key);
@@ -16282,7 +16316,7 @@ function getModulationAmountPercentLabel(targetKind, amount) {
   return `${Math.round(getModulationAmountDepth(targetKind, amount) * 100)}%`;
 }
 function getModulationTargetClampHint(targetKind) {
-  if (isRackModulationTarget(targetKind)) {
+  if (isRackModulationTarget(amountAuthorityKind(targetKind))) {
     return "Rack modulation adds to the base control and clamps to the effect's authored range.";
   }
   switch (getVoiceModulationParameterKind(targetKind)) {
@@ -18531,6 +18565,450 @@ function DistortionVisualizer({
     /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { "data-role": "distortion-graph-debug", className: "hidden", children: JSON.stringify(debugState) })
   ] });
 }
+const LANE_SLOT_PARAM_COUNT = 8;
+const LANE_SLOT_ORDINAL_COUNT = 5;
+const LANE_SLOT_TYPE_COUNT = 8;
+const LANE_TYPE_WIRE_IDS = Object.freeze({
+  globalFilter: 0,
+  distortion: 1,
+  ott: 2,
+  chorus: 3,
+  flanger: 4,
+  phaser: 5,
+  delay: 6,
+  reverb: 7
+});
+const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
+  globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
+  distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
+  ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
+  chorus: ["chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones"],
+  flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"],
+  phaser: ["phaserRate", "phaserRateMode", "phaserRateDivision", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"],
+  delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix", "delayTimeMode", "delayDivision"],
+  reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]
+});
+function getLaneSlotParamIndex(deviceType, endpointID) {
+  const index = LANE_DEVICE_PARAM_LAYOUT[deviceType].indexOf(endpointID);
+  return index >= 0 ? index : null;
+}
+function getLaneSlotId(deviceType, ordinal) {
+  if (!Number.isInteger(ordinal) || ordinal < 0 || ordinal >= LANE_SLOT_ORDINAL_COUNT) {
+    throw new Error(`Lane ordinal out of range: ${ordinal}`);
+  }
+  return ordinal * LANE_SLOT_TYPE_COUNT + LANE_TYPE_WIRE_IDS[deviceType];
+}
+function buildLaneSlotParamValues(deviceType, params) {
+  const values = new Array(LANE_SLOT_PARAM_COUNT).fill(0);
+  LANE_DEVICE_PARAM_LAYOUT[deviceType].forEach((endpointID, index) => {
+    const value = params[endpointID];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new Error(`Missing lane parameter value: ${deviceType}.${endpointID}`);
+    }
+    values[index] = value;
+  });
+  return values;
+}
+const LANE_STATE_KEY = "lane.v1";
+const LANE_TOPOLOGY_ENDPOINT_ID = "laneTopology";
+const LANE_SLOT_PARAMS_ENDPOINT_ID = "laneSlotParams";
+const LANE_SLOT_PARAM_VALUE_ENDPOINT_ID = "laneSlotParamValue";
+const LANE_MAX_CHAIN_LENGTH = 16;
+const RACK_EFFECT_ORDER = Object.freeze([
+  "filter",
+  "drive",
+  "ott",
+  "chorus",
+  "flanger",
+  "phaser",
+  "delay",
+  "reverb"
+]);
+const EFFECT_ID_TO_LANE_TYPE = Object.freeze({
+  filter: "globalFilter",
+  drive: "distortion",
+  ott: "ott",
+  chorus: "chorus",
+  flanger: "flanger",
+  phaser: "phaser",
+  delay: "delay",
+  reverb: "reverb"
+});
+const EFFECT_ID_TO_WIRE_ID = Object.freeze({
+  filter: 0,
+  drive: 1,
+  ott: 2,
+  chorus: 3,
+  flanger: 4,
+  phaser: 5,
+  delay: 6,
+  reverb: 7
+});
+new Map(
+  RACK_EFFECT_ORDER.map((effectId) => [EFFECT_ID_TO_WIRE_ID[effectId], effectId])
+);
+function defaultEnabled() {
+  return {
+    filter: false,
+    drive: false,
+    ott: false,
+    chorus: false,
+    flanger: false,
+    phaser: false,
+    delay: false,
+    reverb: false
+  };
+}
+function defaultParams(effectId) {
+  return Object.fromEntries(
+    getRackEffectDescriptor(effectId).parameters.map((descriptor) => [descriptor.endpointID, descriptor.initial])
+  );
+}
+function listLaneDeviceInstances(state) {
+  return RACK_EFFECT_ORDER.map((effectId) => {
+    const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+    return { instanceId: `${deviceType}#1`, deviceType };
+  });
+}
+function createDefaultLaneState() {
+  return {
+    format: "cosimo.lane",
+    version: 1,
+    order: [...RACK_EFFECT_ORDER],
+    enabled: defaultEnabled(),
+    params: Object.fromEntries(
+      RACK_EFFECT_ORDER.map((effectId) => [effectId, defaultParams(effectId)])
+    )
+  };
+}
+function parseJsonDocument(input) {
+  if (typeof input !== "string") {
+    return { _tag: "json", value: input };
+  }
+  if (input.trim().length === 0) {
+    return { _tag: "err", message: `${LANE_STATE_KEY} must not be empty` };
+  }
+  try {
+    const value = JSON.parse(input);
+    return { _tag: "json", value };
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    return { _tag: "err", message: `${LANE_STATE_KEY} is not valid JSON: ${detail}` };
+  }
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseEffectId(input) {
+  if (typeof input !== "string") {
+    return null;
+  }
+  return RACK_EFFECT_ORDER.find((candidate) => candidate === input) ?? null;
+}
+function parseLaneState(input) {
+  const document2 = parseJsonDocument(input);
+  if (document2._tag === "err") {
+    return document2;
+  }
+  if (!isRecord(document2.value)) {
+    return { _tag: "err", message: `${LANE_STATE_KEY} must be an object` };
+  }
+  const allowedKeys = /* @__PURE__ */ new Set(["format", "version", "order", "enabled", "params"]);
+  for (const key of Reflect.ownKeys(document2.value)) {
+    if (typeof key !== "string" || !allowedKeys.has(key)) {
+      return { _tag: "err", message: `${LANE_STATE_KEY} has unexpected field ${String(key)}` };
+    }
+  }
+  if (document2.value.format !== "cosimo.lane" || document2.value.version !== 1) {
+    return { _tag: "err", message: `${LANE_STATE_KEY} must be cosimo.lane version 1` };
+  }
+  if (!Array.isArray(document2.value.order) || document2.value.order.length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.order must contain every effect once` };
+  }
+  const order = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const rawEffectId of document2.value.order) {
+    const effectId = parseEffectId(rawEffectId);
+    if (effectId === null || seen.has(effectId)) {
+      return { _tag: "err", message: `${LANE_STATE_KEY}.order is not a complete permutation` };
+    }
+    seen.add(effectId);
+    order.push(effectId);
+  }
+  if (!isRecord(document2.value.enabled)) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must be an object` };
+  }
+  if (Reflect.ownKeys(document2.value.enabled).length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must contain every effect once` };
+  }
+  const enabled = defaultEnabled();
+  for (const effectId of RACK_EFFECT_ORDER) {
+    const rawEnabled = document2.value.enabled[effectId];
+    if (typeof rawEnabled !== "boolean") {
+      return { _tag: "err", message: `${LANE_STATE_KEY}.enabled.${effectId} must be boolean` };
+    }
+    enabled[effectId] = rawEnabled;
+  }
+  if (!isRecord(document2.value.params)) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.params must be an object` };
+  }
+  if (Reflect.ownKeys(document2.value.params).length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.params must contain every effect once` };
+  }
+  const params = {};
+  for (const effectId of RACK_EFFECT_ORDER) {
+    const rawDeviceParams = document2.value.params[effectId];
+    if (!isRecord(rawDeviceParams)) {
+      return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must be an object` };
+    }
+    const descriptors = getRackEffectDescriptor(effectId).parameters;
+    if (Reflect.ownKeys(rawDeviceParams).length !== descriptors.length) {
+      return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must contain every parameter once` };
+    }
+    const deviceParams = {};
+    for (const descriptor of descriptors) {
+      const rawValue = rawDeviceParams[descriptor.endpointID];
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId}.${descriptor.endpointID} must be a finite number` };
+      }
+      deviceParams[descriptor.endpointID] = rawValue;
+    }
+    params[effectId] = deviceParams;
+  }
+  return {
+    _tag: "ok",
+    value: { format: "cosimo.lane", version: 1, order, enabled, params }
+  };
+}
+function deserializeLaneState(input) {
+  if (input === void 0) {
+    return createDefaultLaneState();
+  }
+  const parsed = parseLaneState(input);
+  return parsed._tag === "ok" ? parsed.value : createDefaultLaneState();
+}
+function serializeLaneState(state) {
+  return JSON.stringify({
+    format: "cosimo.lane",
+    version: 1,
+    order: state.order,
+    enabled: state.enabled,
+    params: state.params
+  });
+}
+function buildLaneRuntimeEvents(state) {
+  const events = [];
+  let deliverySerial = 0;
+  for (const effectId of RACK_EFFECT_ORDER) {
+    deliverySerial += 1;
+    const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+    events.push({
+      endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
+      value: {
+        slotId: getLaneSlotId(deviceType, 0),
+        deliverySerial,
+        values: buildLaneSlotParamValues(deviceType, state.params[effectId])
+      }
+    });
+  }
+  const slotIds = new Array(LANE_MAX_CHAIN_LENGTH).fill(0);
+  let enabledMask = 0;
+  state.order.forEach((effectId, position) => {
+    slotIds[position] = EFFECT_ID_TO_WIRE_ID[effectId];
+    if (state.enabled[effectId]) {
+      enabledMask |= 1 << position;
+    }
+  });
+  events.push({
+    endpointID: LANE_TOPOLOGY_ENDPOINT_ID,
+    value: { chainLength: state.order.length, slotIds, enabledMask }
+  });
+  return events;
+}
+function commitLaneState(connection, state) {
+  for (const event of buildLaneRuntimeEvents(state)) {
+    connection.sendEventOrValue?.(event.endpointID, event.value);
+  }
+}
+function sendLaneParamValue(connection, effectId, endpointID, value, deliverySerial) {
+  const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+  const paramIndex = getLaneSlotParamIndex(deviceType, endpointID);
+  if (paramIndex === null) {
+    throw new Error(`Unknown lane parameter: ${effectId}.${endpointID}`);
+  }
+  connection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
+    slotId: getLaneSlotId(deviceType, 0),
+    paramIndex,
+    deliverySerial,
+    value
+  });
+}
+function serializeIdentity(value) {
+  return value;
+}
+function usePatchParameterBinding({
+  endpointID,
+  initialValue,
+  coerce,
+  serialize = serializeIdentity,
+  active = true,
+  presentationPriority = "immediate"
+}) {
+  const parameter2 = usePatchParameter(endpointID, serialize(initialValue), active, presentationPriority);
+  const value = reactExports.useMemo(() => coerce(parameter2.value), [coerce, parameter2.value]);
+  const setValue = reactExports.useCallback((nextValue) => {
+    parameter2.setValue(serialize(nextValue));
+  }, [parameter2.setValue, serialize]);
+  const commitValue = reactExports.useCallback((nextValue) => {
+    parameter2.beginGesture();
+    parameter2.setValue(serialize(nextValue));
+    parameter2.endGesture();
+  }, [parameter2.beginGesture, parameter2.endGesture, parameter2.setValue, serialize]);
+  return reactExports.useMemo(() => ({
+    endpointID,
+    value,
+    initialValue,
+    setValue,
+    commitValue,
+    beginGesture: parameter2.beginGesture,
+    endGesture: parameter2.endGesture
+  }), [endpointID, initialValue, parameter2.beginGesture, parameter2.endGesture, value, setValue, commitValue]);
+}
+function usePatchEventTrigger(endpointID) {
+  const patchConnection = usePatchConnection();
+  return reactExports.useCallback((value) => {
+    patchConnection.sendEventOrValue?.(endpointID, value);
+  }, [endpointID, patchConnection]);
+}
+const stores = /* @__PURE__ */ new WeakMap();
+function readLaneStateFromFullStoredState(fullState) {
+  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
+  return Object.hasOwn(values, LANE_STATE_KEY) ? values[LANE_STATE_KEY] : fullState[LANE_STATE_KEY];
+}
+function acceptLaneState(store, nextState) {
+  const serialized = serializeLaneState(nextState);
+  if (serialized === store.serialized) {
+    return;
+  }
+  store.state = nextState;
+  store.serialized = serialized;
+  for (const listener of [...store.listeners]) {
+    listener();
+  }
+}
+function getLaneStateStore(connection) {
+  const key = connection;
+  const existing = stores.get(key);
+  if (existing !== void 0) {
+    return existing;
+  }
+  const initialState = createDefaultLaneState();
+  const created = {
+    state: initialState,
+    listeners: /* @__PURE__ */ new Set(),
+    deliverySerial: 0,
+    serialized: serializeLaneState(initialState)
+  };
+  stores.set(key, created);
+  connection.addStoredStateValueListener?.((message) => {
+    if (typeof message !== "object" || message === null || Array.isArray(message)) {
+      return;
+    }
+    if (Reflect.get(message, "key") === LANE_STATE_KEY) {
+      acceptLaneState(created, deserializeLaneState(Reflect.get(message, "value")));
+    }
+  });
+  connection.requestFullStoredState?.((fullState) => {
+    acceptLaneState(created, deserializeLaneState(readLaneStateFromFullStoredState(fullState)));
+  });
+  return created;
+}
+function useLaneStateDoc() {
+  const patchConnection = usePatchConnection();
+  const store = getLaneStateStore(patchConnection);
+  const laneState = reactExports.useSyncExternalStore(
+    reactExports.useCallback((onChange) => {
+      store.listeners.add(onChange);
+      return () => store.listeners.delete(onChange);
+    }, [store]),
+    () => store.state
+  );
+  const commit = reactExports.useCallback((nextState) => {
+    acceptLaneState(store, nextState);
+    commitLaneState(patchConnection, nextState);
+    patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneState(nextState));
+  }, [patchConnection, store]);
+  const setParamValue = reactExports.useCallback((effectId, endpointID, value) => {
+    acceptLaneState(store, {
+      ...store.state,
+      params: {
+        ...store.state.params,
+        [effectId]: { ...store.state.params[effectId], [endpointID]: value }
+      }
+    });
+    store.deliverySerial += 1;
+    sendLaneParamValue(patchConnection, effectId, endpointID, value, store.deliverySerial);
+  }, [patchConnection, store]);
+  const persist = reactExports.useCallback(() => {
+    patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneState(store.state));
+  }, [patchConnection, store]);
+  return reactExports.useMemo(
+    () => ({ laneState, commit, setParamValue, persist }),
+    [laneState, commit, setParamValue, persist]
+  );
+}
+function usePatchModulationTargetOptions() {
+  const { laneState } = useLaneStateDoc();
+  const devices = listLaneDeviceInstances();
+  const deviceSignature = devices.map((device) => device.instanceId).join("\n");
+  return reactExports.useMemo(
+    () => buildPatchModulationTargetOptions(devices),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [deviceSignature]
+  );
+}
+function useLaneParameterBinding(descriptor) {
+  const patchConnection = usePatchConnection();
+  const { laneState, setParamValue, persist } = useLaneStateDoc();
+  const clampValue = reactExports.useCallback((value2) => {
+    const numeric = Number.isFinite(value2) ? value2 : descriptor.initial;
+    const clamped = Math.min(descriptor.max, Math.max(descriptor.min, numeric));
+    return descriptor.choices !== void 0 ? Math.round(clamped) : clamped;
+  }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
+  const value = clampValue(laneState.params[descriptor.effectId][descriptor.endpointID] ?? descriptor.initial);
+  const valueRef = { current: value };
+  valueRef.current = value;
+  const setValue = reactExports.useCallback((nextValue) => {
+    const coerced = clampValue(nextValue);
+    const changed = !Object.is(coerced, valueRef.current);
+    setParamValue(descriptor.effectId, descriptor.endpointID, coerced);
+    reportUserParameterEdit({ endpointID: descriptor.endpointID, changed });
+  }, [clampValue, descriptor.effectId, descriptor.endpointID, setParamValue]);
+  const beginGesture = reactExports.useCallback(() => {
+    patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+    reportUserGestureStart();
+  }, [descriptor.endpointID, patchConnection]);
+  const endGesture = reactExports.useCallback(() => {
+    patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+    reportUserGestureEnd();
+    persist();
+  }, [descriptor.endpointID, patchConnection, persist]);
+  const commitValue = reactExports.useCallback((nextValue) => {
+    beginGesture();
+    setValue(nextValue);
+    endGesture();
+  }, [beginGesture, endGesture, setValue]);
+  return reactExports.useMemo(() => ({
+    endpointID: descriptor.endpointID,
+    value,
+    initialValue: descriptor.initial,
+    setValue,
+    commitValue,
+    beginGesture,
+    endGesture
+  }), [descriptor.endpointID, descriptor.initial, value, setValue, commitValue, beginGesture, endGesture]);
+}
+getRackParameterDescriptor("delayMix");
 const WARP_MODE_LABELS = ["Off", "Bend +/-", "PWM", "Asym +/-", "Mirror"];
 const PHASE_MODE_LABELS = ["Free", "Reset"];
 const DETUNE_MODE_LABELS = ["Linear", "Super", "Exp", "Inv", "Random"];
@@ -19194,12 +19672,16 @@ function rackAmountSpec(targetKind, descriptor, baseValue) {
     physicalIntervalUnit: null
   });
 }
+function laneAmountAuthorityKind(targetKind) {
+  const parsedLane = parseLaneModulationTargetKind(targetKind);
+  return parsedLane !== null ? laneMirrorRackKind(parsedLane) : targetKind;
+}
 function parameterEntrySpecForModulationAmount(targetKind, baseValue) {
   const voiceTargetKind = parseVoiceModulationTargetKind(targetKind);
   if (voiceTargetKind !== null) {
     return voiceAmountSpec(voiceTargetKind, baseValue);
   }
-  if (!isRackModulationTarget(targetKind)) {
+  if (!isRackModulationTarget(laneAmountAuthorityKind(targetKind))) {
     throw new Error(`Unknown modulation target "${targetKind}".`);
   }
   const descriptor = getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "");
@@ -19536,434 +20018,6 @@ function parseParameterEntry(spec, text) {
   if (spec._tag === "choice") return parseChoice(spec, normalizedText);
   return parseAmount(spec, normalizedText);
 }
-const LANE_SLOT_PARAM_COUNT = 8;
-const LANE_SLOT_ORDINAL_COUNT = 5;
-const LANE_SLOT_TYPE_COUNT = 8;
-const LANE_TYPE_WIRE_IDS = Object.freeze({
-  globalFilter: 0,
-  distortion: 1,
-  ott: 2,
-  chorus: 3,
-  flanger: 4,
-  phaser: 5,
-  delay: 6,
-  reverb: 7
-});
-const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
-  globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
-  distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
-  ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
-  chorus: ["chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones"],
-  flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"],
-  phaser: ["phaserRate", "phaserRateMode", "phaserRateDivision", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"],
-  delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix", "delayTimeMode", "delayDivision"],
-  reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]
-});
-function getLaneSlotParamIndex(deviceType, endpointID) {
-  const index = LANE_DEVICE_PARAM_LAYOUT[deviceType].indexOf(endpointID);
-  return index >= 0 ? index : null;
-}
-function getLaneSlotId(deviceType, ordinal) {
-  if (!Number.isInteger(ordinal) || ordinal < 0 || ordinal >= LANE_SLOT_ORDINAL_COUNT) {
-    throw new Error(`Lane ordinal out of range: ${ordinal}`);
-  }
-  return ordinal * LANE_SLOT_TYPE_COUNT + LANE_TYPE_WIRE_IDS[deviceType];
-}
-function buildLaneSlotParamValues(deviceType, params) {
-  const values = new Array(LANE_SLOT_PARAM_COUNT).fill(0);
-  LANE_DEVICE_PARAM_LAYOUT[deviceType].forEach((endpointID, index) => {
-    const value = params[endpointID];
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      throw new Error(`Missing lane parameter value: ${deviceType}.${endpointID}`);
-    }
-    values[index] = value;
-  });
-  return values;
-}
-const LANE_STATE_KEY = "lane.v1";
-const LANE_TOPOLOGY_ENDPOINT_ID = "laneTopology";
-const LANE_SLOT_PARAMS_ENDPOINT_ID = "laneSlotParams";
-const LANE_SLOT_PARAM_VALUE_ENDPOINT_ID = "laneSlotParamValue";
-const LANE_MAX_CHAIN_LENGTH = 16;
-const RACK_EFFECT_ORDER = Object.freeze([
-  "filter",
-  "drive",
-  "ott",
-  "chorus",
-  "flanger",
-  "phaser",
-  "delay",
-  "reverb"
-]);
-const EFFECT_ID_TO_LANE_TYPE = Object.freeze({
-  filter: "globalFilter",
-  drive: "distortion",
-  ott: "ott",
-  chorus: "chorus",
-  flanger: "flanger",
-  phaser: "phaser",
-  delay: "delay",
-  reverb: "reverb"
-});
-const EFFECT_ID_TO_WIRE_ID = Object.freeze({
-  filter: 0,
-  drive: 1,
-  ott: 2,
-  chorus: 3,
-  flanger: 4,
-  phaser: 5,
-  delay: 6,
-  reverb: 7
-});
-new Map(
-  RACK_EFFECT_ORDER.map((effectId) => [EFFECT_ID_TO_WIRE_ID[effectId], effectId])
-);
-function defaultEnabled() {
-  return {
-    filter: false,
-    drive: false,
-    ott: false,
-    chorus: false,
-    flanger: false,
-    phaser: false,
-    delay: false,
-    reverb: false
-  };
-}
-function defaultParams(effectId) {
-  return Object.fromEntries(
-    getRackEffectDescriptor(effectId).parameters.map((descriptor) => [descriptor.endpointID, descriptor.initial])
-  );
-}
-function createDefaultLaneState() {
-  return {
-    format: "cosimo.lane",
-    version: 1,
-    order: [...RACK_EFFECT_ORDER],
-    enabled: defaultEnabled(),
-    params: Object.fromEntries(
-      RACK_EFFECT_ORDER.map((effectId) => [effectId, defaultParams(effectId)])
-    )
-  };
-}
-function parseJsonDocument(input) {
-  if (typeof input !== "string") {
-    return { _tag: "json", value: input };
-  }
-  if (input.trim().length === 0) {
-    return { _tag: "err", message: `${LANE_STATE_KEY} must not be empty` };
-  }
-  try {
-    const value = JSON.parse(input);
-    return { _tag: "json", value };
-  } catch (cause) {
-    const detail = cause instanceof Error ? cause.message : String(cause);
-    return { _tag: "err", message: `${LANE_STATE_KEY} is not valid JSON: ${detail}` };
-  }
-}
-function isRecord(value) {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-function parseEffectId(input) {
-  if (typeof input !== "string") {
-    return null;
-  }
-  return RACK_EFFECT_ORDER.find((candidate) => candidate === input) ?? null;
-}
-function parseLaneState(input) {
-  const document2 = parseJsonDocument(input);
-  if (document2._tag === "err") {
-    return document2;
-  }
-  if (!isRecord(document2.value)) {
-    return { _tag: "err", message: `${LANE_STATE_KEY} must be an object` };
-  }
-  const allowedKeys = /* @__PURE__ */ new Set(["format", "version", "order", "enabled", "params"]);
-  for (const key of Reflect.ownKeys(document2.value)) {
-    if (typeof key !== "string" || !allowedKeys.has(key)) {
-      return { _tag: "err", message: `${LANE_STATE_KEY} has unexpected field ${String(key)}` };
-    }
-  }
-  if (document2.value.format !== "cosimo.lane" || document2.value.version !== 1) {
-    return { _tag: "err", message: `${LANE_STATE_KEY} must be cosimo.lane version 1` };
-  }
-  if (!Array.isArray(document2.value.order) || document2.value.order.length !== RACK_EFFECT_ORDER.length) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.order must contain every effect once` };
-  }
-  const order = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const rawEffectId of document2.value.order) {
-    const effectId = parseEffectId(rawEffectId);
-    if (effectId === null || seen.has(effectId)) {
-      return { _tag: "err", message: `${LANE_STATE_KEY}.order is not a complete permutation` };
-    }
-    seen.add(effectId);
-    order.push(effectId);
-  }
-  if (!isRecord(document2.value.enabled)) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must be an object` };
-  }
-  if (Reflect.ownKeys(document2.value.enabled).length !== RACK_EFFECT_ORDER.length) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must contain every effect once` };
-  }
-  const enabled = defaultEnabled();
-  for (const effectId of RACK_EFFECT_ORDER) {
-    const rawEnabled = document2.value.enabled[effectId];
-    if (typeof rawEnabled !== "boolean") {
-      return { _tag: "err", message: `${LANE_STATE_KEY}.enabled.${effectId} must be boolean` };
-    }
-    enabled[effectId] = rawEnabled;
-  }
-  if (!isRecord(document2.value.params)) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.params must be an object` };
-  }
-  if (Reflect.ownKeys(document2.value.params).length !== RACK_EFFECT_ORDER.length) {
-    return { _tag: "err", message: `${LANE_STATE_KEY}.params must contain every effect once` };
-  }
-  const params = {};
-  for (const effectId of RACK_EFFECT_ORDER) {
-    const rawDeviceParams = document2.value.params[effectId];
-    if (!isRecord(rawDeviceParams)) {
-      return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must be an object` };
-    }
-    const descriptors = getRackEffectDescriptor(effectId).parameters;
-    if (Reflect.ownKeys(rawDeviceParams).length !== descriptors.length) {
-      return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must contain every parameter once` };
-    }
-    const deviceParams = {};
-    for (const descriptor of descriptors) {
-      const rawValue = rawDeviceParams[descriptor.endpointID];
-      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
-        return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId}.${descriptor.endpointID} must be a finite number` };
-      }
-      deviceParams[descriptor.endpointID] = rawValue;
-    }
-    params[effectId] = deviceParams;
-  }
-  return {
-    _tag: "ok",
-    value: { format: "cosimo.lane", version: 1, order, enabled, params }
-  };
-}
-function deserializeLaneState(input) {
-  if (input === void 0) {
-    return createDefaultLaneState();
-  }
-  const parsed = parseLaneState(input);
-  return parsed._tag === "ok" ? parsed.value : createDefaultLaneState();
-}
-function serializeLaneState(state) {
-  return JSON.stringify({
-    format: "cosimo.lane",
-    version: 1,
-    order: state.order,
-    enabled: state.enabled,
-    params: state.params
-  });
-}
-function buildLaneRuntimeEvents(state) {
-  const events = [];
-  let deliverySerial = 0;
-  for (const effectId of RACK_EFFECT_ORDER) {
-    deliverySerial += 1;
-    const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
-    events.push({
-      endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
-      value: {
-        slotId: getLaneSlotId(deviceType, 0),
-        deliverySerial,
-        values: buildLaneSlotParamValues(deviceType, state.params[effectId])
-      }
-    });
-  }
-  const slotIds = new Array(LANE_MAX_CHAIN_LENGTH).fill(0);
-  let enabledMask = 0;
-  state.order.forEach((effectId, position) => {
-    slotIds[position] = EFFECT_ID_TO_WIRE_ID[effectId];
-    if (state.enabled[effectId]) {
-      enabledMask |= 1 << position;
-    }
-  });
-  events.push({
-    endpointID: LANE_TOPOLOGY_ENDPOINT_ID,
-    value: { chainLength: state.order.length, slotIds, enabledMask }
-  });
-  return events;
-}
-function commitLaneState(connection, state) {
-  for (const event of buildLaneRuntimeEvents(state)) {
-    connection.sendEventOrValue?.(event.endpointID, event.value);
-  }
-}
-function sendLaneParamValue(connection, effectId, endpointID, value, deliverySerial) {
-  const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
-  const paramIndex = getLaneSlotParamIndex(deviceType, endpointID);
-  if (paramIndex === null) {
-    throw new Error(`Unknown lane parameter: ${effectId}.${endpointID}`);
-  }
-  connection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
-    slotId: getLaneSlotId(deviceType, 0),
-    paramIndex,
-    deliverySerial,
-    value
-  });
-}
-function serializeIdentity(value) {
-  return value;
-}
-function usePatchParameterBinding({
-  endpointID,
-  initialValue,
-  coerce,
-  serialize = serializeIdentity,
-  active = true,
-  presentationPriority = "immediate"
-}) {
-  const parameter2 = usePatchParameter(endpointID, serialize(initialValue), active, presentationPriority);
-  const value = reactExports.useMemo(() => coerce(parameter2.value), [coerce, parameter2.value]);
-  const setValue = reactExports.useCallback((nextValue) => {
-    parameter2.setValue(serialize(nextValue));
-  }, [parameter2.setValue, serialize]);
-  const commitValue = reactExports.useCallback((nextValue) => {
-    parameter2.beginGesture();
-    parameter2.setValue(serialize(nextValue));
-    parameter2.endGesture();
-  }, [parameter2.beginGesture, parameter2.endGesture, parameter2.setValue, serialize]);
-  return reactExports.useMemo(() => ({
-    endpointID,
-    value,
-    initialValue,
-    setValue,
-    commitValue,
-    beginGesture: parameter2.beginGesture,
-    endGesture: parameter2.endGesture
-  }), [endpointID, initialValue, parameter2.beginGesture, parameter2.endGesture, value, setValue, commitValue]);
-}
-function usePatchEventTrigger(endpointID) {
-  const patchConnection = usePatchConnection();
-  return reactExports.useCallback((value) => {
-    patchConnection.sendEventOrValue?.(endpointID, value);
-  }, [endpointID, patchConnection]);
-}
-const stores = /* @__PURE__ */ new WeakMap();
-function readLaneStateFromFullStoredState(fullState) {
-  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
-  return Object.hasOwn(values, LANE_STATE_KEY) ? values[LANE_STATE_KEY] : fullState[LANE_STATE_KEY];
-}
-function acceptLaneState(store, nextState) {
-  const serialized = serializeLaneState(nextState);
-  if (serialized === store.serialized) {
-    return;
-  }
-  store.state = nextState;
-  store.serialized = serialized;
-  for (const listener of [...store.listeners]) {
-    listener();
-  }
-}
-function getLaneStateStore(connection) {
-  const key = connection;
-  const existing = stores.get(key);
-  if (existing !== void 0) {
-    return existing;
-  }
-  const initialState = createDefaultLaneState();
-  const created = {
-    state: initialState,
-    listeners: /* @__PURE__ */ new Set(),
-    deliverySerial: 0,
-    serialized: serializeLaneState(initialState)
-  };
-  stores.set(key, created);
-  connection.addStoredStateValueListener?.((message) => {
-    if (typeof message !== "object" || message === null || Array.isArray(message)) {
-      return;
-    }
-    if (Reflect.get(message, "key") === LANE_STATE_KEY) {
-      acceptLaneState(created, deserializeLaneState(Reflect.get(message, "value")));
-    }
-  });
-  connection.requestFullStoredState?.((fullState) => {
-    acceptLaneState(created, deserializeLaneState(readLaneStateFromFullStoredState(fullState)));
-  });
-  return created;
-}
-function useLaneStateDoc() {
-  const patchConnection = usePatchConnection();
-  const store = getLaneStateStore(patchConnection);
-  const laneState = reactExports.useSyncExternalStore(
-    reactExports.useCallback((onChange) => {
-      store.listeners.add(onChange);
-      return () => store.listeners.delete(onChange);
-    }, [store]),
-    () => store.state
-  );
-  const commit = reactExports.useCallback((nextState) => {
-    acceptLaneState(store, nextState);
-    commitLaneState(patchConnection, nextState);
-    patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneState(nextState));
-  }, [patchConnection, store]);
-  const setParamValue = reactExports.useCallback((effectId, endpointID, value) => {
-    acceptLaneState(store, {
-      ...store.state,
-      params: {
-        ...store.state.params,
-        [effectId]: { ...store.state.params[effectId], [endpointID]: value }
-      }
-    });
-    store.deliverySerial += 1;
-    sendLaneParamValue(patchConnection, effectId, endpointID, value, store.deliverySerial);
-  }, [patchConnection, store]);
-  const persist = reactExports.useCallback(() => {
-    patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneState(store.state));
-  }, [patchConnection, store]);
-  return reactExports.useMemo(
-    () => ({ laneState, commit, setParamValue, persist }),
-    [laneState, commit, setParamValue, persist]
-  );
-}
-function useLaneParameterBinding(descriptor) {
-  const patchConnection = usePatchConnection();
-  const { laneState, setParamValue, persist } = useLaneStateDoc();
-  const clampValue = reactExports.useCallback((value2) => {
-    const numeric = Number.isFinite(value2) ? value2 : descriptor.initial;
-    const clamped = Math.min(descriptor.max, Math.max(descriptor.min, numeric));
-    return descriptor.choices !== void 0 ? Math.round(clamped) : clamped;
-  }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
-  const value = clampValue(laneState.params[descriptor.effectId][descriptor.endpointID] ?? descriptor.initial);
-  const valueRef = { current: value };
-  valueRef.current = value;
-  const setValue = reactExports.useCallback((nextValue) => {
-    const coerced = clampValue(nextValue);
-    const changed = !Object.is(coerced, valueRef.current);
-    setParamValue(descriptor.effectId, descriptor.endpointID, coerced);
-    reportUserParameterEdit({ endpointID: descriptor.endpointID, changed });
-  }, [clampValue, descriptor.effectId, descriptor.endpointID, setParamValue]);
-  const beginGesture = reactExports.useCallback(() => {
-    patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
-    reportUserGestureStart();
-  }, [descriptor.endpointID, patchConnection]);
-  const endGesture = reactExports.useCallback(() => {
-    patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
-    reportUserGestureEnd();
-    persist();
-  }, [descriptor.endpointID, patchConnection, persist]);
-  const commitValue = reactExports.useCallback((nextValue) => {
-    beginGesture();
-    setValue(nextValue);
-    endGesture();
-  }, [beginGesture, endGesture, setValue]);
-  return reactExports.useMemo(() => ({
-    endpointID: descriptor.endpointID,
-    value,
-    initialValue: descriptor.initial,
-    setValue,
-    commitValue,
-    beginGesture,
-    endGesture
-  }), [descriptor.endpointID, descriptor.initial, value, setValue, commitValue, beginGesture, endGesture]);
-}
-getRackParameterDescriptor("delayMix");
 function useModulationRouteAmountBinding(route) {
   const patchConnection = usePatchConnection();
   const bridgeRef = reactExports.useRef(null);
@@ -28138,6 +28192,7 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
   onRemoveRoute,
   onRouteChange
 }) {
+  const targetOptions = usePatchModulationTargetOptions();
   return /* @__PURE__ */ jsxRuntimeExports.jsxs(
     "div",
     {
@@ -28236,7 +28291,10 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
                           targetKind: nextTargetKind
                         });
                       },
-                      children: MODULATION_TARGET_OPTIONS.map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
+                      children: (targetOptions.some((option) => option.value === route.targetKind) ? targetOptions : [...targetOptions, {
+                        value: route.targetKind,
+                        label: getModulationTargetDisplayLabel(route.targetKind)
+                      }]).map((option) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: option.value, children: option.label }, option.value))
                     }
                   ),
                   /* @__PURE__ */ jsxRuntimeExports.jsx(

@@ -237,6 +237,49 @@ are M1's permanent acceptance tests, not a throwaway report.
   not read (hard cut). Internal identifiers that mirror the ENGINE's
   rackMod bus keep their "rack" names, matching the engine's own.
   Full cross-platform battery green.
+- **B5 DYNAMIC TARGET DOMAIN COMPLETE (2026-08-23):** the M2b remainder —
+  every display and editing authority is TOTAL over the lane grammar, and
+  the pickers speak a per-patch domain. Display: pool instances are
+  instance-labeled through the type's #1 descriptor
+  (`getModulationTargetDisplayLabel` "DELAY 2 FEEDBACK";
+  `getModulationTargetPresentation` category "Delay 2" / parameter
+  "Feedback" is the ONE shared table/list authority — the mobile matrix's
+  local `targetPresentation` now delegates). Editing language: amount entry
+  specs, the log-anchor base-binding spec, and clamp hints defer to the
+  instance-#1 mirror exactly like bounds/clamp/readout already did. Base
+  ownership stays honest: `resolveModulationTargetBase` returns null for
+  instances > 1 (lane.v1 has no document slot for them — their rows edit
+  amount only; per-instance base bindings arrive with the instance tree).
+  Domain: `buildPatchModulationTargetOptions(devices)` = static voice core
+  + one entry per live device parameter, fed by
+  `listLaneDeviceInstances(laneState)` (stable identity order, NEVER chain
+  order) through the identity-stable `usePatchModulationTargetOptions`
+  hook; all four picker surfaces (mappings draft, mobile create flow,
+  desktop matrix, iOS route selects) consume it, and the per-route selects
+  append a stored kind their patch no longer lists. The resident-#1 set
+  reproduces `MODULATION_TARGET_OPTIONS` exactly (pinned by test), so the
+  default patch's pickers are unchanged. New reducer-visibility predicate
+  `isRackBusModulationTarget` (any lane instance rides the rack bus) where
+  `isRackModulationTarget` stays static-membership. Browser-proven: a
+  stored `lane.delay#2.delayMix` route renders "Delay 2 Mix", edits
+  amount-only with working polarity, and stays out of the fixed-eight
+  picker. ONE REAL LATENT CRASH caught by that browser test and fixed:
+  `getModulationArticulationCellIndex` resolved the full runtime cell for
+  every stored route, and an unassigned pool route made that resolution
+  throw — taking down DesktopPatchViewBody at mount (error boundary, dead
+  patch view) and the runtime worker's upload builder with it. Lane
+  targets ride the rack bus, so no lane route carries a per-note
+  articulation cell: the function now answers null from the grammar,
+  before any cell resolution. Also fixed a B4 straggler: the
+  runtime-program duplicate-index test's synthetic fixtures now use
+  prefixed endpoints (kind minting requires the device-type prefix).
+  Gate scope (remote Linux container, no macOS toolchain): tsc clean;
+  units:orphans 691/691; the FULL fx-modulation browser file 51/51
+  (Chromium) plus targeted matrix/mappings/rail cases in the other three
+  desktop files and shared hooks 34/34. Deferred to the dev machine:
+  WebKit variants, web:poc (renderer-wasm build needs macOS clang), the
+  cmajor engine suite (no cmaj binary here — this slice touches no
+  cmajor/ source), iOS shell, native benchmarks.
 - **M2 — The hard cut:** delete the `rack.*` namespace and the 45
   per-parameter endpoints; rewrite target descriptors, the resolver, the
   legal-pair domain, and every fixture to `lane.*`; lane state v1 replaces

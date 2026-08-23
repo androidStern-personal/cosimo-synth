@@ -30,7 +30,6 @@ import {
 } from "../shared/mseg";
 import {
     MODULATION_SOURCE_OPTIONS,
-    MODULATION_TARGET_OPTIONS,
     applyModulationSourceOption,
     MODULATION_ENV_SLOT_COUNT,
     MODULATION_MSEG_SLOT_COUNT,
@@ -38,6 +37,8 @@ import {
     type ModulationRoute,
     type ModulationRouteUpdate,
 } from "../shared/modulation";
+import { usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
+import { getModulationTargetDisplayLabel } from "../shared/target-descriptor";
 import { useModulationRouteAmountBinding } from "../shared/modulation-route-amount";
 import {
     formatParameterEntry,
@@ -519,6 +520,7 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
 }) {
+    const targetOptions = usePatchModulationTargetOptions();
     return (
         <div
             className="ios-section-panel"
@@ -623,7 +625,13 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
                                     });
                                 }}
                             >
-                                {MODULATION_TARGET_OPTIONS.map((option) => (
+                                {(targetOptions.some((option) => option.value === route.targetKind)
+                                    ? targetOptions
+                                    : [...targetOptions, {
+                                        value: route.targetKind,
+                                        label: getModulationTargetDisplayLabel(route.targetKind),
+                                    }]
+                                ).map((option) => (
                                     <option key={option.value} value={option.value}>{option.label}</option>
                                 ))}
                             </select>

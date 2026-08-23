@@ -1,8 +1,10 @@
 import type { PatchConnectionLike } from "./cmajor-react";
 import { reportUserParameterEdit } from "./user-edit-bus";
 import {
+    getLaneDeviceModulationTargetKinds,
     laneMirrorRackKind,
     parseLaneModulationTargetKind,
+    type LaneDeviceInstance,
 } from "./lane-modulation-targets";
 import {
     allRackParameterDescriptors,
@@ -262,6 +264,29 @@ export const MODULATION_TARGET_OPTIONS: ModulationTargetOption[] = MODULATION_TA
     label: getModulationTargetDisplayLabel(identity.kind),
 }));
 
+const VOICE_TARGET_OPTIONS: ReadonlyArray<ModulationTargetOption> = MODULATION_TARGET_OPTIONS
+    .filter((option) => !isRackModulationTarget(option.value));
+
+/**
+ * The per-patch target domain: the static voice core plus one entry per live
+ * lane device parameter, instance-labeled. Callers pass the patch's live
+ * device list in stable identity order (lane-state's
+ * `listLaneDeviceInstances`); the resident instance-#1 set reproduces
+ * `MODULATION_TARGET_OPTIONS` exactly, so the default patch's pickers are
+ * unchanged by the dynamic domain.
+ */
+export function buildPatchModulationTargetOptions(
+    devices: ReadonlyArray<LaneDeviceInstance>,
+): ModulationTargetOption[] {
+    return [
+        ...VOICE_TARGET_OPTIONS,
+        ...devices.flatMap((device) => getLaneDeviceModulationTargetKinds(device).map((kind) => ({
+            value: kind as ModulationTargetKind,
+            label: getModulationTargetDisplayLabel(kind as ModulationTargetKind),
+        }))),
+    ];
+}
+
 type StoredStateMessage = {
     key?: unknown;
     value?: unknown;
@@ -319,6 +344,14 @@ function formatMagnitude(value: number, digits: number) {
 
 export function isRackModulationTarget(targetKind: ModulationTargetKind): targetKind is RackModulationTargetKind {
     return RACK_MODULATION_PARAMETER_BY_KIND.has(targetKind as RackModulationTargetKind);
+}
+
+/** Whether a route to this target runs on the effects rack bus and is
+    voice-reduced there. TRUE for every lane device target — pool instances
+    included — where `isRackModulationTarget` is static-vocabulary (#1)
+    membership only. */
+export function isRackBusModulationTarget(targetKind: ModulationTargetKind): boolean {
+    return parseLaneModulationTargetKind(targetKind) !== null;
 }
 
 export function isVoiceModulationSource(sourceKind: ModulationSourceKind) {
@@ -564,7 +597,7 @@ export function getModulationAmountPercentLabel(targetKind: ModulationTargetKind
 }
 
 export function getModulationTargetClampHint(targetKind: ModulationTargetKind) {
-    if (isRackModulationTarget(targetKind)) {
+    if (isRackModulationTarget(amountAuthorityKind(targetKind))) {
         return "Rack modulation adds to the base control and clamps to the effect's authored range.";
     }
     switch (getVoiceModulationParameterKind(targetKind as VoiceModulationTargetKind)) {

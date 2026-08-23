@@ -285,6 +285,13 @@ export function getModulationRuntimeCell(
  * @returns The per-note articulation cell, or `null` when unsupported.
  */
 export function getModulationArticulationCellIndex(route: ModulationRoute): number | null {
+    // Lane device targets ride the rack bus, and rack cells never carry
+    // per-note articulation amounts — answer before any cell resolution,
+    // because a pool instance may hold no slot in this patch at all (cell
+    // resolution would throw where the honest answer is simply null).
+    if (parseLaneModulationTargetKind(route.targetKind) !== null) {
+        return null;
+    }
     return getModulationRuntimeCell(route).articulationCellIndex;
 }
 

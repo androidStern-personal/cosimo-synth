@@ -11,11 +11,10 @@ import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets
 
 import {
     MODULATION_SOURCE_OPTIONS,
-    MODULATION_TARGET_OPTIONS,
     composeModulationAmount,
     formatModulationAmountReadout,
     getModulationAmountSliderPosition,
-    isRackModulationTarget,
+    isRackBusModulationTarget,
     isVoiceModulationSource,
     type GeneratedModulationRouteInput,
     type ModulationRoute,
@@ -23,6 +22,7 @@ import {
     type ModulationSourceKind,
     type ModulationTargetKind,
 } from "../shared/modulation";
+import { usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
 import {
     useModulationAmountParameterEntrySpec,
     useModulationRouteAmountBinding,
@@ -37,7 +37,7 @@ import {
     getRackParameterDescriptor,
 } from "../shared/rack-parameter-descriptors";
 import { RACK_MODULATION_SOURCE_PAGES } from "../shared/rack-modulation-sources";
-import type { EffectModuleId } from "../shared/target-descriptor";
+import { getModulationTargetPresentation, type EffectModuleId } from "../shared/target-descriptor";
 import { getModulationRouteCreation } from "../shared/rack-route-presentation";
 
 type FocusedModulationSource = {
@@ -87,28 +87,17 @@ function sourceValueForFocusedSource(source: FocusedModulationSource | null | un
 }
 
 export function targetPresentation(targetKind: ModulationTargetKind) {
-    if (isRackModulationTarget(targetKind)) {
-        const parameter = getRackParameterDescriptor(parseLaneModulationTargetKind(targetKind)?.endpointID ?? "");
-        if (parameter) {
-            const effect = getRackEffectDescriptor(parameter.effectId);
-            return {
-                category: parameter.effectId === "filter" ? "Global Filter" : effect.label,
-                parameter: parameter.label,
-            };
-        }
-    }
-
-    return {
-        category: "Voice",
-        parameter: MODULATION_TARGET_OPTIONS.find((option) => option.value === targetKind)?.label ?? targetKind,
-    };
+    // The one instance-aware display authority: pool devices come back
+    // category-numbered ("Delay 2"), instance #1 and voice targets unchanged.
+    return getModulationTargetPresentation(targetKind);
 }
 
 export function targetCategory(targetKind: ModulationTargetKind): TargetCategory {
-    if (!isRackModulationTarget(targetKind)) {
+    const parsedLane = parseLaneModulationTargetKind(targetKind);
+    if (parsedLane === null) {
         return "voice";
     }
-    return parseLaneModulationTargetKind(targetKind)?.deviceType === "globalFilter" ? "global-filter" : "fx";
+    return parsedLane.deviceType === "globalFilter" ? "global-filter" : "fx";
 }
 
 export function SourceIdentity({
@@ -269,6 +258,7 @@ export function MobileModMatrix({
     onRemoveRoute,
     onRouteChange,
 }: MobileModMatrixProps) {
+    const targetOptions = usePatchModulationTargetOptions();
     const [view, setView] = useState<MatrixView>({ kind: "list" });
     const [sourceFilter, setSourceFilter] = useState<string | null>(() => sourceValueForFocusedSource(focusedSource));
     const [targetFilter, setTargetFilter] = useState<TargetCategory | null>(null);
@@ -357,20 +347,20 @@ export function MobileModMatrix({
     const selectedRoute = selectedRouteIndex >= 0 ? routes[selectedRouteIndex] : null;
 
     const renderCreateTargets = (sourceValue: string, category: TargetCategory, effectId?: EffectModuleId) => {
-        const targets = MODULATION_TARGET_OPTIONS.filter((option) => {
+        // The per-patch domain, filtered by the lane grammar so every live
+        // instance of a type lists under that type's screen.
+        const targets = targetOptions.filter((option) => {
+            const parsedLane = parseLaneModulationTargetKind(option.value);
             if (category === "voice") {
-                return !isRackModulationTarget(option.value);
+                return parsedLane === null;
             }
             if (category === "global-filter") {
-                return parseLaneModulationTargetKind(option.value)?.deviceType === "globalFilter";
+                return parsedLane?.deviceType === "globalFilter";
             }
-            if (!effectId) {
+            if (!effectId || parsedLane === null) {
                 return false;
             }
-            const parameter = isRackModulationTarget(option.value)
-                ? getRackParameterDescriptor(parseLaneModulationTargetKind(option.value)?.endpointID ?? "")
-                : null;
-            return parameter?.effectId === effectId;
+            return getRackParameterDescriptor(parsedLane.endpointID)?.effectId === effectId;
         });
 
         return (
@@ -421,7 +411,7 @@ export function MobileModMatrix({
                             <span>Polarity</span>
                             <strong>{selectedRoute.polarity === "bipolar" ? "± Bipolar" : "+ Unipolar"}</strong>
                         </button>
-                        {isRackModulationTarget(selectedRoute.targetKind) && isVoiceModulationSource(selectedRoute.sourceKind) ? (
+                        {isRackBusModulationTarget(selectedRoute.targetKind) && isVoiceModulationSource(selectedRoute.sourceKind) ? (
                             <button
                                 type="button"
                                 data-role="mobile-mod-reducer"
