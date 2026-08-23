@@ -111,3 +111,37 @@ The committed M0 speed result is
 `docs/reference/BOUNCE_M0_OFFLINE_SPEED.json`. Re-run it before and after a
 material DSP change and compare the medians; do not compare unrelated
 Codespace sessions as though they were controlled hardware.
+
+## M8 native readiness probes
+
+The platform-neutral driver/store tests need only the host C++17 compiler.
+The generated integration uses the external-aware code generator above. The
+QuickJS probe builds the pinned `CmajPerformer` shared library serially on
+Linux, then drives the production patch from a background thread:
+
+```bash
+runtime_path=$(python3 scripts/ensure_cmajor_runtime.py --path)
+CMAJOR_SOURCE_PATH="$runtime_path" \
+COSIMO_CMAJOR_EXTERNAL_CODEGEN_BUILD_DIR="$PWD/build/cmajor_external_codegen-host" \
+COSIMO_CMAJOR_BUILD_JOBS=1 \
+npm run test:bounce:native
+```
+
+The aggregate runs:
+
+- the bounded sequential driver, cancellation/capacity, and lifecycle fence;
+- streaming bank encoding, SHA-256, atomic publication, platform paths/policy,
+  interprocess locking, and the `COSIMOB1` envelope;
+- production generated C++ plus the real renderer and sampled bank path;
+- three recursive roots through the real JIT patch and QuickJS worker.
+
+On the small M8 VM, recompiling the header-heavy QuickJS probe and cold JIT
+initialization can dominate wall time. Record those numbers but do not use them
+as a Mac/iPhone rejection. The generated object size (135,615,616 bytes),
+128-frame maximum, cancellation behavior, memory bounds, session fencing, and
+functional output are architecture gates. Apple memory, deadline, lifecycle,
+and Ableton gates are in `HUMAN_VALIDATION.md`.
+
+The QuickJS runner also supports macOS after `npm run synth:desktop:build`; it
+uses the bundled `libCmajPerformer.dylib` and Apple frameworks instead of the
+Linux GTK/shared-library build.

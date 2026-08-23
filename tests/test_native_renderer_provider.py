@@ -37,6 +37,22 @@ def test_ios_generation_uses_provider_aware_codegen_at_128_frames() -> None:
     assert 'setMaxBlockSize (maxFramesPerBlock)' in codegen
 
 
+def test_native_bounce_factories_bind_the_shipping_desktop_and_ios_programs() -> None:
+    desktop = (REPO_ROOT / "tools/desktop_native/Source/CosimoBounceNativePlatform.cpp").read_text()
+    desktop_cmake = (REPO_ROOT / "tools/desktop_native/CMakeLists.txt").read_text()
+    ios_main = (REPO_ROOT / "ios_auv3/Source/CosimoPluginMain.cpp").read_text()
+    ios_cmake = (REPO_ROOT / "ios_auv3/CMakeLists.txt").read_text()
+
+    assert "createDesktopJITBounceConfiguration (COSIMO_PATCH_PATH)" in desktop
+    assert "CosimoBounceNativePlatform.cpp" in desktop_cmake
+    assert "CmajorBounceOfflinePerformer.cpp" in desktop_cmake
+
+    assert "createIOSAOTBounceConfiguration<::WavetableSynth>" in ios_main
+    assert "detail::createRuntimeResourceReader" in ios_main
+    assert "sizeof (::WavetableSynth)" in ios_main
+    assert "CmajorBounceOfflinePerformer.cpp" in ios_cmake
+
+
 def test_external_codegen_builds_a_host_tool_when_called_from_an_ios_build(tmp_path: Path) -> None:
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()

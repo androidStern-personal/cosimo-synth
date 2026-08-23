@@ -517,3 +517,37 @@ Two focused iOS source/build-contract tests pass and assert the App Group,
 first-unlock protection, backup exclusion, and native source membership.
 Apple compilation and entitlement behavior remain in the required human M8
 run because this Linux VM has no Xcode SDK or signed device host.
+
+## 2026-08-23 — M8 checkpoint: shipping factory bindings and human gates
+
+- Bound the desktop adapter to the production manifest and the iOS adapter to
+  the actual generated `WavetableSynth` type plus the shipping virtual-resource
+  reader. The iOS target must now instantiate the AOT Bounce factory during its
+  Xcode compile; the binding also exposes the exact generated performer size
+  for on-device memory accounting.
+- Made the real QuickJS probe host-portable. Linux builds/loads its pinned
+  `libCmajPerformer.so`; macOS uses the runtime bundled by the desktop build and
+  the same Apple framework set as the established modulation-restore probe.
+  The probe now renders roots 48/60/72 rather than extrapolating from one root.
+- Added `HUMAN_VALIDATION.md` with exact Mac builds, three-run JIT timing,
+  Instruments callback/memory checks, installed VST3 path, Ableton digest-only
+  and portable-chunk matrix, signed iPhone commands, physical-device transient
+  memory, AUv3 lifecycle/session/SR cases, evidence tables, and pivot rules.
+  It explicitly distinguishes the M8 code-ready backend from host-facing
+  native controls that have not been validated or exposed.
+- Updated the Codespace setup, native persistence contract, and original
+  feasibility study with the implemented architecture, 56-byte binary
+  envelope, no-replace hard-link publication, lock domain, Apple file policy,
+  native code map, and the now-measured 135,615,616-byte performer.
+
+The upgraded three-root production JIT proof passed on this small VM. Fresh
+initialization was 13.1205/11.1700/10.9717 s; total was 35.6323 s; it retained
+10,512 frames with peaks 0.250011/0.25/0.25 and render rates
+6.47778/6.48767/6.53624x realtime. These absolute figures are advisory. The
+three fresh runtime sessions, recursive setup, bounded 128-frame pumping, and
+audible finite output are the enforced gates.
+
+Validation: the three-root `test:bounce:native:quickjs` passes; focused iOS
+source/build checks pass. Signed Xcode compilation, iPhone memory/jetsam,
+AUv3 lifecycle, and Ableton chunk behavior are intentionally unclaimed and
+remain recorded as human-only gates rather than inferred successes.
