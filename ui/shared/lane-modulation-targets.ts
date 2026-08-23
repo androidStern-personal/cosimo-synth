@@ -21,8 +21,13 @@ import {
     type RackModulationTargetKind,
 } from "./modulation-targets";
 
-/** Pool lanes on the rackMod bus: a complete mirror of the static vocabulary. */
-export const MODULATION_LANE_POOL_TARGET_COUNT = MODULATION_RACK_TARGET_COUNT;
+/** Additional resident instances per effect type (engine lanePoolSetCount). */
+export const MODULATION_LANE_POOL_SET_COUNT = 4;
+
+/** Pool lanes on the rackMod bus: one full mirror of the static vocabulary
+    per pool set. */
+export const MODULATION_LANE_POOL_TARGET_COUNT =
+    MODULATION_LANE_POOL_SET_COUNT * MODULATION_RACK_TARGET_COUNT;
 
 export type LaneDeviceType =
     | "globalFilter" | "distortion" | "ott" | "chorus"
@@ -34,8 +39,9 @@ export type ParsedLaneModulationTarget = {
     readonly endpointID: string;
 };
 
-/** instanceId -> pool-instance ordinal. M1 pools carry ONE instance per type
-    (ordinal 0); any other ordinal resolves to no slot. */
+/** instanceId -> pool-instance ordinal (0..MODULATION_LANE_POOL_SET_COUNT-1,
+    i.e. which pool SET holds the instance). Ordinals beyond the pool resolve
+    to no slot. */
 export type LaneSlotAssignments = ReadonlyMap<string, number>;
 
 /** Modulatable pool endpoints per device type; the mirror target is always
@@ -96,8 +102,11 @@ export function getLaneModulationTargetIndex(
         return null;
     }
     const ordinal = assignments.get(parsed.instanceId);
-    if (ordinal !== 0) {
+    if (ordinal === undefined || !Number.isInteger(ordinal)
+            || ordinal < 0 || ordinal >= MODULATION_LANE_POOL_SET_COUNT) {
         return null;
     }
-    return MODULATION_RACK_TARGET_COUNT + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
+    return MODULATION_RACK_TARGET_COUNT
+        + (ordinal * MODULATION_RACK_TARGET_COUNT)
+        + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
 }

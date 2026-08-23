@@ -53,7 +53,7 @@ processor LaneSecondDelayTest [[ main ]]
         upload.chainLength = 2;
         upload.slotIds[0] = wt::rackModuleDelay;
         upload.slotIds[1] = wt::laneSlotDelayTwo;
-        upload.enabledMask = (1 << wt::rackModuleDelay) | (1 << wt::laneSlotDelayTwo);
+        upload.enabledMask = 0b11;  // both chain positions enabled
         return upload;
     }
 
@@ -164,7 +164,7 @@ processor LaneSecondDelayTest [[ main ]]
         duplicate.chainLength = 2;
         duplicate.slotIds[0] = wt::rackModuleDelay;
         duplicate.slotIds[1] = wt::rackModuleDelay;
-        duplicate.enabledMask = 1 << wt::rackModuleDelay;
+        duplicate.enabledMask = 0b11;
         rack.laneTopology <- duplicate;
 
         for (int32 frame = 0; frame < 64; ++frame)
@@ -180,7 +180,7 @@ processor LaneSecondDelayTest [[ main ]]
         wt::LaneTopologyUpload oneDelay;
         oneDelay.chainLength = 1;
         oneDelay.slotIds[0] = wt::rackModuleDelay;
-        oneDelay.enabledMask = 1 << wt::rackModuleDelay;
+        oneDelay.enabledMask = 0b1;
 
         // Feed an impulse, then IMMEDIATELY remove delay #2 so its 90ms echo is
         // still buffered, un-emitted, when the slot goes to sleep.
@@ -296,7 +296,7 @@ processor LaneSecondDelayTest [[ main ]]
         wt::LaneTopologyUpload reverbChain;
         reverbChain.chainLength = 1;
         reverbChain.slotIds[0] = wt::laneSlotReverbTwo;
-        reverbChain.enabledMask = 1 << wt::laneSlotReverbTwo;
+        reverbChain.enabledMask = 0b1;
 
         wt::LaneSlotParamsUpload reverbParams;
         reverbParams.slotId = wt::laneSlotReverbTwo;
@@ -463,6 +463,43 @@ processor LaneSecondDelayTest [[ main ]]
         }
 
         out <- (removalMaxDelta < 0.05f ? 1 : 0);
+        advance();
+
+        // Frame 19: THREE delays at once — the base delay plus pool SET 0
+        // and pool SET 1 instances, 40/90/140ms, all individually addressed.
+        // Echoes at all three times prove multi-set instances work: the
+        // "delay per band" patch shape is real.
+        wt::LaneSlotParamsUpload setOneDelay;
+        setOneDelay.slotId = wt::rackModuleCount + wt::rackModuleCount + wt::rackModuleDelay;
+        setOneDelay.deliverySerial = 20;
+        setOneDelay.values[wt::laneDelayParamTimeMs] = 140.0f;
+        setOneDelay.values[wt::laneDelayParamFeedback] = 0.0f;
+        setOneDelay.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        setOneDelay.values[wt::laneDelayParamMix] = 0.5f;
+        rack.laneSlotParams <- setOneDelay;
+        rack.laneSlotParams <- makeDelayTwoParams();
+
+        wt::LaneTopologyUpload threeDelays;
+        threeDelays.chainLength = 3;
+        threeDelays.slotIds[0] = wt::rackModuleDelay;
+        threeDelays.slotIds[1] = wt::laneSlotDelayTwo;
+        threeDelays.slotIds[2] = setOneDelay.slotId;
+        threeDelays.enabledMask = 0b111;
+        rack.laneTopology <- threeDelays;
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            advanceRack (0.0f);
+
+        for (int32 frame = 0; frame < recordFrames; ++frame)
+        {
+            advanceRack (frame == 0 ? 1.0f : 0.0f);
+            recordedLeft.at (frame) = rack.out[0];
+        }
+
+        // 140ms at 44100 = frame 6174.
+        out <- (windowPeak (echoOneFrame) > 0.05f
+                 && windowPeak (echoTwoFrame) > 0.05f
+                 && windowPeak (6174) > 0.05f ? 1 : 0);
         advance();
 
         loop

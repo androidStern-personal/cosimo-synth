@@ -1748,8 +1748,8 @@ test("lane slot-param edits stream at drag rate with serial acknowledgment and n
             const api = globalThis.__COSIMO_WEB_POC__;
             api.sendEvent("laneTopology", {
                 chainLength: 2,
-                slotIds: [6, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                enabledMask: (1 << 6) | (1 << 8),
+                slotIds: [6, 14, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                enabledMask: 0b11,
             });
             api.noteOn(48, 96);
         });
@@ -1769,7 +1769,7 @@ test("lane slot-param edits stream at drag rate with serial acknowledgment and n
             for (let serial = 1; serial <= updates; serial += 1) {
                 const startedAt = performance.now();
                 api.sendEvent("laneSlotParams", {
-                    slotId: 8,
+                    slotId: 14,
                     deliverySerial: serial,
                     values: [90, 0, 18000, 0.2 + ((serial % 50) * 0.01), 0, 0, 0, 0],
                 });

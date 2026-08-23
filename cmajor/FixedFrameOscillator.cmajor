@@ -71,10 +71,16 @@ namespace wt
     // validation, and the rackMod bus all run at the TOTAL width; the static
     // count remains the contiguous named-vocabulary pin.
     let rackModStaticTargetCount = 36;
-    // The pool block MIRRORS the static vocabulary one-for-one (one extra
-    // resident instance per effect type), so the bus is exactly twice wide.
-    let laneModPoolTargetCount = rackModStaticTargetCount;
+    // Effects Lane pool sizing lives HERE with the other shared wire
+    // constants: lanePoolSetCount ADDITIONAL resident instances per type,
+    // each set mirroring the static vocabulary on the bus.
+    let lanePoolSetCount = 4;
+    let laneModPoolTargetCount = lanePoolSetCount * rackModStaticTargetCount;
     let rackModTargetCount = rackModStaticTargetCount + laneModPoolTargetCount;
+    // SIMD discipline (see the 32-wide note above): rack vectors stay at the
+    // proven static width and the pool adds whole BLOCKS of it — one 36-wide
+    // vector per mirror set, never one wide vector that scalarises.
+    let rackModBlockCount = 1 + lanePoolSetCount;
     let modulationVoiceRouteCellCount = modulationVoiceSourceCount * modulationVoiceTargetCount;
     let modulationMacroVoiceRouteCellCount = modulationMacroSourceCount * modulationVoiceTargetCount;
     let modulationVoiceRackRouteCellCount = modulationVoiceSourceCount * rackModTargetCount;
@@ -1464,14 +1470,14 @@ namespace wt
         int32[modulationMacroRackRouteCellCount] macroRackRoutePolarities;
         float32[modulationMacroRackRouteCellCount] macroRackRouteAmounts;
         bool[modulationMacroSourceCount] macroRackRouteSourceUsed;
-        float32<rackModTargetCount>[modulationMacroSourceCount] macroRackRouteScaleVectors;
-        float32<rackModTargetCount>[modulationMacroSourceCount] macroRackRouteBiasVectors;
+        float32<rackModStaticTargetCount>[modulationMacroSourceCount, rackModBlockCount] macroRackRouteScaleVectors;
+        float32<rackModStaticTargetCount>[modulationMacroSourceCount, rackModBlockCount] macroRackRouteBiasVectors;
         bool[modulationVoiceSourceCount] voiceRackSourceUsed;
         VoiceModulationTargets[voiceCount] voiceTargetOffsets;
         float32[modulationMacroSourceCount] macroSourceValues;
         float32<modulationVoiceCoreLaneCount> macroVoiceCoreBaseTargetOffsets;
         float32<modulationVoiceGeneratorLaneCount> macroVoiceGeneratorBaseTargetOffsets;
-        float32<rackModTargetCount> macroRackBaseTargetOffsets;
+        float32<rackModStaticTargetCount>[rackModBlockCount] macroRackBaseTargetOffsets;
         float32[modulationVoiceSourceCount] voiceRackSourceSums;
         float32[modulationVoiceSourceCount] voiceRackSourceMaxima;
         float32[modulationVoiceSourceCount] voiceRackSourceBipolarStrongest;
@@ -3329,20 +3335,27 @@ namespace wt
                     * voiceRackRouteAmounts[cellIndex];
             }
 
-            macroRackBaseTargetOffsets = float32<rackModTargetCount> (0.0f);
+            for (wrap<rackModBlockCount> block)
+                macroRackBaseTargetOffsets[block] = float32<rackModStaticTargetCount> (0.0f);
+
             for (wrap<modulationMacroSourceCount> sourceIndex)
             {
                 if (macroRackRouteSourceUsed[sourceIndex])
-                    macroRackBaseTargetOffsets += (
-                        macroRackRouteScaleVectors[sourceIndex] * macroSourceValues[sourceIndex]
-                    ) + macroRackRouteBiasVectors[sourceIndex];
+                {
+                    for (wrap<rackModBlockCount> block)
+                        macroRackBaseTargetOffsets[block] += (
+                            macroRackRouteScaleVectors[sourceIndex, block] * macroSourceValues[sourceIndex]
+                        ) + macroRackRouteBiasVectors[sourceIndex, block];
+                }
             }
 
             for (wrap<rackModTargetCount> target)
             {
+                let block = wrap<rackModBlockCount> (int32 (target) / rackModStaticTargetCount);
+                let lane = wrap<rackModStaticTargetCount> (int32 (target) % rackModStaticTargetCount);
                 rackModSmoothed[target] = rackModSmoothTowards (rackModSmoothed[target],
                                                                 rackModAccumulator[target]
-                                                                    + macroRackBaseTargetOffsets[target],
+                                                                    + macroRackBaseTargetOffsets[block][lane],
                                                                 rackModSmoothingCoefficientState);
                 rackModOut[target] <- rackModSmoothed[target];
             }
@@ -4043,10 +4056,13 @@ namespace wt
                 macroVoiceRouteGeneratorBiasVectors.at (sourceIndex)
                     = float32<modulationVoiceGeneratorLaneCount> (0.0f);
                 macroRackRouteSourceUsed.at (sourceIndex) = false;
-                macroRackRouteScaleVectors.at (sourceIndex)
-                    = float32<rackModTargetCount> (0.0f);
-                macroRackRouteBiasVectors.at (sourceIndex)
-                    = float32<rackModTargetCount> (0.0f);
+                for (wrap<rackModBlockCount> block)
+                {
+                    macroRackRouteScaleVectors.at (sourceIndex, block)
+                        = float32<rackModStaticTargetCount> (0.0f);
+                    macroRackRouteBiasVectors.at (sourceIndex, block)
+                        = float32<rackModStaticTargetCount> (0.0f);
+                }
             }
 
             for (int32 cellIndex = 0; cellIndex < modulationVoiceRouteCellCount; ++cellIndex)
@@ -4181,9 +4197,11 @@ namespace wt
                 macroRackRoutePolarities.at (routeIndex) = polarityKind;
                 macroRackRouteAmounts.at (cellIndex) = amount;
                 macroRackRouteSourceUsed.at (sourceIndex) = true;
-                macroRackRouteScaleVectors.at (sourceIndex).at (targetIndex)
+                let routeBlock = wrap<rackModBlockCount> (targetIndex / rackModStaticTargetCount);
+                let routeLane = wrap<rackModStaticTargetCount> (targetIndex % rackModStaticTargetCount);
+                macroRackRouteScaleVectors.at (sourceIndex, routeBlock).at (routeLane)
                     = modulationRouteScale (amount, polarityKind);
-                macroRackRouteBiasVectors.at (sourceIndex).at (targetIndex)
+                macroRackRouteBiasVectors.at (sourceIndex, routeBlock).at (routeLane)
                     = modulationRouteBias (amount, polarityKind);
             }
 

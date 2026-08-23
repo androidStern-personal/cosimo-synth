@@ -16,8 +16,11 @@
  * and readout formatting all defer to the same-named base-module target.
  */
 import { MODULATION_RACK_TARGET_COUNT, getRackModulationTargetIndex, } from "./modulation-targets.js";
-/** Pool lanes on the rackMod bus: a complete mirror of the static vocabulary. */
-export const MODULATION_LANE_POOL_TARGET_COUNT = MODULATION_RACK_TARGET_COUNT;
+/** Additional resident instances per effect type (engine lanePoolSetCount). */
+export const MODULATION_LANE_POOL_SET_COUNT = 4;
+/** Pool lanes on the rackMod bus: one full mirror of the static vocabulary
+    per pool set. */
+export const MODULATION_LANE_POOL_TARGET_COUNT = MODULATION_LANE_POOL_SET_COUNT * MODULATION_RACK_TARGET_COUNT;
 /** Modulatable pool endpoints per device type; the mirror target is always
     `rack.<endpointID>`. */
 const LANE_DEVICE_ENDPOINTS = new Map([
@@ -69,8 +72,11 @@ export function getLaneModulationTargetIndex(parsed, assignments) {
         return null;
     }
     const ordinal = assignments.get(parsed.instanceId);
-    if (ordinal !== 0) {
+    if (ordinal === undefined || !Number.isInteger(ordinal)
+        || ordinal < 0 || ordinal >= MODULATION_LANE_POOL_SET_COUNT) {
         return null;
     }
-    return MODULATION_RACK_TARGET_COUNT + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
+    return MODULATION_RACK_TARGET_COUNT
+        + (ordinal * MODULATION_RACK_TARGET_COUNT)
+        + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
 }
