@@ -29,14 +29,14 @@ namespace wt
     // upload was malformed and was rejected outright rather than coerced (ADR-009).
     struct EffectiveRackState
     {
-        int32 committedStructureGeneration;
-        int32 committedOrderCode;
-        int32 committedEnableMask;
-        int32 rejectedOrderCount;
-        int32 rejectedEnableCount;
-        // Effects Lane readbacks: the committed lane-topology generation, the
-        // lane rejection counter, and the last APPLIED slot-param record's
-        // delivery serial (the hot path's acknowledgment).
+        // The committed CHAIN: three bits per position (valid while chains
+        // hold only ordinal-0 devices, i.e. the rack.v1 document) plus the
+        // per-position enable mask, the topology generation, the rejection
+        // counter, and the last APPLIED parameter serial (the hot path's
+        // acknowledgment).
+        int32 laneCommittedChainLength;
+        int32 laneCommittedChainCode;
+        int32 laneCommittedPositionMask;
         int32 laneCommittedGeneration;
         int32 laneRejectedUploadCount;
         int32 laneParamsAcknowledgedSerial;
@@ -895,11 +895,9 @@ namespace wt
     processor RackStateMonitor
     {
         input event int32 syncIn;
-        input value int32 committedStructureGenerationIn;
-        input value int32 committedOrderCodeIn;
-        input value int32 committedEnableMaskIn;
-        input value int32 rejectedOrderCountIn;
-        input value int32 rejectedEnableCountIn;
+        input value int32 laneCommittedChainLengthIn;
+        input value int32 laneCommittedChainCodeIn;
+        input value int32 laneCommittedPositionMaskIn;
         input value int32 laneCommittedGenerationIn;
         input value int32 laneRejectedUploadCountIn;
         input value int32 laneParamsAcknowledgedSerialIn;
@@ -908,22 +906,18 @@ namespace wt
 
         // -1 is unreachable for every field - generations and counts only ever rise from
         // zero, and both packed codes are non-negative - so the first frame always emits.
-        int32 lastStructureGeneration = -1;
-        int32 lastOrderCode = -1;
-        int32 lastEnableMask = -1;
-        int32 lastRejectedOrderCount = -1;
-        int32 lastRejectedEnableCount = -1;
+        int32 lastChainLength = -1;
+        int32 lastChainCode = -1;
+        int32 lastPositionMask = -1;
         int32 lastLaneGeneration = -1;
         int32 lastLaneRejectedCount = -1;
         int32 lastLaneParamsSerial = -1;
 
         event syncIn (int32 unused)
         {
-            lastStructureGeneration = -1;
-            lastOrderCode = -1;
-            lastEnableMask = -1;
-            lastRejectedOrderCount = -1;
-            lastRejectedEnableCount = -1;
+            lastChainLength = -1;
+            lastChainCode = -1;
+            lastPositionMask = -1;
             lastLaneGeneration = -1;
             lastLaneRejectedCount = -1;
             lastLaneParamsSerial = -1;
@@ -933,30 +927,24 @@ namespace wt
         {
             loop
             {
-                if (committedStructureGenerationIn != lastStructureGeneration
-                     || committedOrderCodeIn != lastOrderCode
-                     || committedEnableMaskIn != lastEnableMask
-                     || rejectedOrderCountIn != lastRejectedOrderCount
-                     || rejectedEnableCountIn != lastRejectedEnableCount
+                if (laneCommittedChainLengthIn != lastChainLength
+                     || laneCommittedChainCodeIn != lastChainCode
+                     || laneCommittedPositionMaskIn != lastPositionMask
                      || laneCommittedGenerationIn != lastLaneGeneration
                      || laneRejectedUploadCountIn != lastLaneRejectedCount
                      || laneParamsAcknowledgedSerialIn != lastLaneParamsSerial)
                 {
-                    lastStructureGeneration = committedStructureGenerationIn;
-                    lastOrderCode = committedOrderCodeIn;
-                    lastEnableMask = committedEnableMaskIn;
-                    lastRejectedOrderCount = rejectedOrderCountIn;
-                    lastRejectedEnableCount = rejectedEnableCountIn;
+                    lastChainLength = laneCommittedChainLengthIn;
+                    lastChainCode = laneCommittedChainCodeIn;
+                    lastPositionMask = laneCommittedPositionMaskIn;
                     lastLaneGeneration = laneCommittedGenerationIn;
                     lastLaneRejectedCount = laneRejectedUploadCountIn;
                     lastLaneParamsSerial = laneParamsAcknowledgedSerialIn;
 
                     EffectiveRackState state;
-                    state.committedStructureGeneration = lastStructureGeneration;
-                    state.committedOrderCode = lastOrderCode;
-                    state.committedEnableMask = lastEnableMask;
-                    state.rejectedOrderCount = lastRejectedOrderCount;
-                    state.rejectedEnableCount = lastRejectedEnableCount;
+                    state.laneCommittedChainLength = lastChainLength;
+                    state.laneCommittedChainCode = lastChainCode;
+                    state.laneCommittedPositionMask = lastPositionMask;
                     state.laneCommittedGeneration = lastLaneGeneration;
                     state.laneRejectedUploadCount = lastLaneRejectedCount;
                     state.laneParamsAcknowledgedSerial = lastLaneParamsSerial;
@@ -1357,12 +1345,11 @@ graph WavetableSynth [[ main ]]
     // Rack structure is patch state, not host automation (ADR-007). These are struct
     // events, which carry no parameter purpose, so they are structurally
     // non-automatable rather than non-automatable by convention.
-    input rack.rackOrder;
-    input rack.rackEnable;
-    // Effects Lane structure and per-slot parameter records: patch state and
+    // Effects Lane structure and parameter records/fields: patch state and
     // live edits, one delivery path, never host automation slots.
     input rack.laneTopology;
     input rack.laneSlotParams;
+    input rack.laneSlotParamValue;
     // Host transport, not a user parameter: no `name:`, so it never becomes an
     // automation slot. See wt::TempoMonitor.
     input event std::timeline::Tempo tempo;
@@ -1570,11 +1557,9 @@ graph WavetableSynth [[ main ]]
         rack.previewOutputRight -> distortionHistoryAnalyzer.previewOutputRight;
         rack.out -> outputStage.in;
         outputStage.out -> audioOut;
-        rack.rackCommittedStructureGeneration -> rackStateMonitor.committedStructureGenerationIn;
-        rack.rackCommittedOrderCode -> rackStateMonitor.committedOrderCodeIn;
-        rack.rackCommittedEnableMask -> rackStateMonitor.committedEnableMaskIn;
-        rack.rackRejectedOrderCount -> rackStateMonitor.rejectedOrderCountIn;
-        rack.rackRejectedEnableCount -> rackStateMonitor.rejectedEnableCountIn;
+        rack.laneCommittedChainLength -> rackStateMonitor.laneCommittedChainLengthIn;
+        rack.laneCommittedChainCode -> rackStateMonitor.laneCommittedChainCodeIn;
+        rack.laneCommittedPositionMask -> rackStateMonitor.laneCommittedPositionMaskIn;
         rack.laneCommittedGeneration -> rackStateMonitor.laneCommittedGenerationIn;
         rack.laneRejectedUploadCount -> rackStateMonitor.laneRejectedUploadCountIn;
         rack.laneParamsAcknowledgedSerial -> rackStateMonitor.laneParamsAcknowledgedSerialIn;

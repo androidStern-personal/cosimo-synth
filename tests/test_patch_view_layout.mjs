@@ -67,7 +67,7 @@ function parseGraphHostParameterIdentifiers(sourceText, graphName) {
         throw new Error(`Graph not found: ${graphName}`);
     }
 
-    const rackStructureStart = sourceText.indexOf("    input rack.rackOrder;", graphStart);
+    const rackStructureStart = sourceText.indexOf("    input rack.laneTopology;", graphStart);
     if (rackStructureStart < 0) {
         throw new Error(`Rack structure boundary not found in graph: ${graphName}`);
     }

@@ -156,8 +156,8 @@ test("the compiler places assigned lane routes in the pool block and drops unass
     const dropped = program.compileModulationRuntimeProgram([route]);
     assert.equal(dropped.voiceRackRouteCount, 0);
 
-    // The wire shape: cell tables are sources x TOTAL (matching the engine's
-    // rackModTargetCount = 72: static vocabulary + its full pool mirror).
+    // The wire shape: the per-CELL tables are sources x TOTAL (the engine's
+    // rackModTargetCount = 180: static vocabulary + its full pool mirror).
     assert.equal(program.MODULATION_RACK_TARGET_TOTAL, 180);
     assert.equal(
         program.MODULATION_VOICE_RACK_ROUTE_CELL_COUNT,

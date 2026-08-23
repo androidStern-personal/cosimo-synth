@@ -111,7 +111,7 @@ test("the Init-only rack adapter strictly hydrates, applies runtime and stored s
 
     const nextRack = rack.createDefaultRackState();
     adapter.apply(nextRack);
-    assert.deepEqual(connection.events.map((event) => event.endpointID), ["rackOrder", "rackEnable"]);
+    assert.deepEqual(connection.events.map((event) => event.endpointID), ["laneTopology"]);
     assert.equal(connection.storedWrites.length, 1);
     assert.deepEqual(JSON.parse(connection.storedWrites[0].value), nextRack);
     assert.equal(notifications, 0);

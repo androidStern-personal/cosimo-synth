@@ -2688,7 +2688,7 @@ test("rack quick controls never reorder or stick after release and reorder is gr
                 && nextSnapshot.gestureEnds.includes("reverbSize"),
         );
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "reverbSize"), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "rackOrder"), false);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
 
         const valueAfterRelease = Number(snapshot.parameterValues.reverbSize);
         await clearHarnessDebugLog(page);
@@ -2886,9 +2886,9 @@ test("every rack editor binds live controls and one drop commits one complete DS
             page,
             "all rack enable commits",
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "rackEnable"
-                && Array.isArray(value?.enabledFlags)
-                && value.enabledFlags.every((flag) => Number(flag) === 1)
+                endpointID === "laneTopology"
+                && Number(value?.chainLength) === 8
+                && Number(value?.enabledMask) === 255
             )),
         );
         const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
@@ -2910,14 +2910,16 @@ test("every rack editor binds live controls and one drop commits one complete DS
             page,
             "one rack reorder commit",
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "rackOrder"
-                && Array.isArray(value?.moduleIds)
-                && Number(value.moduleIds[0]) === 7
+                endpointID === "laneTopology"
+                && Array.isArray(value?.slotIds)
+                && Number(value.slotIds[0]) === 7
             )),
         );
-        const orderMessages = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "rackOrder");
+        const orderMessages = snapshot.sentMessages.filter(({ endpointID, value }) => (
+            endpointID === "laneTopology" && Number(value?.slotIds?.[0]) === 7
+        ));
         assert.equal(orderMessages.length, 1, "drag previews must not write DSP structure");
-        assert.deepEqual(orderMessages[0].value.moduleIds, [7, 0, 1, 2, 3, 4, 5, 6]);
+        assert.deepEqual(orderMessages[0].value.slotIds.slice(0, 8), [7, 0, 1, 2, 3, 4, 5, 6]);
     } finally {
         await page.close();
     }
@@ -3059,9 +3061,9 @@ test("desktop chorus controls send exact parameter updates", async () => {
             "chorus parameter updates",
             (nextSnapshot) => (
                 nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                    endpointID === "rackEnable"
-                    && Array.isArray(value?.enabledFlags)
-                    && Number(value.enabledFlags[3]) === 1
+                    endpointID === "laneTopology"
+                    && Array.isArray(value?.slotIds)
+                    && ((Number(value.enabledMask) >> value.slotIds.indexOf(3)) & 1) === 1
                 ))
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusMix" && Math.abs(Number(value) - 0.66) <= 1e-6)
                 && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusMotionMode" && Number(value) === 1)

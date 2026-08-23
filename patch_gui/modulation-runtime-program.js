@@ -33,6 +33,19 @@ export const MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_C
 export const MODULATION_VOICE_RACK_ROUTE_CELL_COUNT = MODULATION_VOICE_SOURCE_COUNT * MODULATION_RACK_TARGET_TOTAL;
 /** Macro rack cell table (wire width: static + lane pool). */
 export const MODULATION_MACRO_RACK_ROUTE_CELL_COUNT = MODULATION_MACRO_SOURCE_COUNT * MODULATION_RACK_TARGET_TOTAL;
+/**
+ * Wire ROUTE CAPACITY for the two rack tables (engine
+ * modulationVoiceRackRouteCapacity / modulationMacroRackRouteCapacity).
+ * The per-route upload arrays are deliberately NOT sized as the full
+ * source x target matrix: at the 180-wide pooled bus that matrix put the
+ * program upload at 68KB, and cmaj::Patch's native performer event FIFO is
+ * a fixed 64KB — the event could never be delivered on the native (iPhone)
+ * transport. The budget covers the entire 36-target static domain active at
+ * once (324 voice-rack + 144 macro-rack routes) with lane-pool routes on
+ * top. The per-CELL amount tables keep the full cell space.
+ */
+export const MODULATION_VOICE_RACK_ROUTE_CAPACITY = 512;
+export const MODULATION_MACRO_RACK_ROUTE_CAPACITY = 256;
 /** Number of voice-destination cells that can carry per-note articulation amounts. */
 export const MODULATION_ARTICULATION_ROUTE_CELL_COUNT = MODULATION_VOICE_ROUTE_CELL_COUNT
     + MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT;
@@ -242,17 +255,23 @@ export function compileModulationRuntimeProgram(routes, laneAssignments = EMPTY_
     const macroVoiceRoutePolarities = Array.from({ length: MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT }, () => 0);
     const macroVoiceRouteAmounts = Array.from({ length: MODULATION_MACRO_VOICE_ROUTE_CELL_COUNT }, () => 0);
     copyActiveRouteFields(macroVoiceRoutes, macroVoiceRouteCells, macroVoiceRouteSources, macroVoiceRouteTargets, macroVoiceRoutePolarities);
-    const voiceRackRouteCells = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CELL_COUNT }, () => 0);
-    const voiceRackRouteSources = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CELL_COUNT }, () => 0);
-    const voiceRackRouteTargets = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CELL_COUNT }, () => 0);
-    const voiceRackRoutePolarities = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CELL_COUNT }, () => 0);
-    const voiceRackRouteReducers = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CELL_COUNT }, () => 0);
+    if (voiceRackRoutes.length > MODULATION_VOICE_RACK_ROUTE_CAPACITY
+        || macroRackRoutes.length > MODULATION_MACRO_RACK_ROUTE_CAPACITY) {
+        throw new Error(`Modulation program exceeds the rack route capacity: `
+            + `${voiceRackRoutes.length} voice-rack (max ${MODULATION_VOICE_RACK_ROUTE_CAPACITY}), `
+            + `${macroRackRoutes.length} macro-rack (max ${MODULATION_MACRO_RACK_ROUTE_CAPACITY})`);
+    }
+    const voiceRackRouteCells = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CAPACITY }, () => 0);
+    const voiceRackRouteSources = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CAPACITY }, () => 0);
+    const voiceRackRouteTargets = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CAPACITY }, () => 0);
+    const voiceRackRoutePolarities = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CAPACITY }, () => 0);
+    const voiceRackRouteReducers = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CAPACITY }, () => 0);
     const voiceRackRouteAmounts = Array.from({ length: MODULATION_VOICE_RACK_ROUTE_CELL_COUNT }, () => 0);
     copyActiveRouteFields(voiceRackRoutes, voiceRackRouteCells, voiceRackRouteSources, voiceRackRouteTargets, voiceRackRoutePolarities);
-    const macroRackRouteCells = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CELL_COUNT }, () => 0);
-    const macroRackRouteSources = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CELL_COUNT }, () => 0);
-    const macroRackRouteTargets = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CELL_COUNT }, () => 0);
-    const macroRackRoutePolarities = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CELL_COUNT }, () => 0);
+    const macroRackRouteCells = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CAPACITY }, () => 0);
+    const macroRackRouteSources = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CAPACITY }, () => 0);
+    const macroRackRouteTargets = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CAPACITY }, () => 0);
+    const macroRackRoutePolarities = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CAPACITY }, () => 0);
     const macroRackRouteAmounts = Array.from({ length: MODULATION_MACRO_RACK_ROUTE_CELL_COUNT }, () => 0);
     copyActiveRouteFields(macroRackRoutes, macroRackRouteCells, macroRackRouteSources, macroRackRouteTargets, macroRackRoutePolarities);
     for (const route of routesByPath.voice.values())

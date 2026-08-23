@@ -1651,14 +1651,14 @@ test("mobile product stays realtime with four-way unison and one MSEG filter rou
         });
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
-            api.sendEvent("rackEnable", { enabledFlags: [0, 0, 0, 0, 0, 0, 0, 0] });
+            api.sendEvent("laneTopology", { chainLength: 0, slotIds: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 0 });
             api.noteOn(48, 96);
         });
         await page.waitForFunction(() => {
             const snapshot = globalThis.__COSIMO_WEB_POC__.getSnapshot();
             return snapshot.audioPeak > 0.00001
                 && snapshot.startedVoiceIndices.length === 1
-                && snapshot.latestEffectiveRackState?.committedEnableMask === 0;
+                && snapshot.latestEffectiveRackState?.laneCommittedChainLength === 0;
         }, null, { timeout: 10_000 });
 
         const latestValueCadence = await measureProductUiLatestValueCadence(page);
@@ -1907,7 +1907,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
                 api.setParameter(`osc${oscillator}UnisonVoices`, 1);
                 api.setParameter(`osc${oscillator}WarpMode`, 0);
             }
-            api.sendEvent("rackEnable", { enabledFlags: [0, 0, 0, 0, 0, 0, 0, 0] });
+            api.sendEvent("laneTopology", { chainLength: 0, slotIds: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 0 });
         });
         await sendAcceptedModulationEvent(page, "modulationProgram", mixedHundredRouteProgram);
         await sendAcceptedArticulationEvent(page, "articulationSnapshot", {
@@ -2086,7 +2086,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             api.setParameter("phaserMix", 0.25);
             api.setParameter("delayMix", 0.25);
             api.setParameter("reverbMix", 0.3);
-            api.sendEvent("rackEnable", { enabledFlags: [1, 1, 1, 1, 1, 1, 1, 1] });
+            api.sendEvent("laneTopology", { chainLength: 8, slotIds: [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 255 });
             for (let note = 48; note < 64; note += 1) api.noteOn(note, 96, 1);
         });
         await page.waitForFunction(() => {
@@ -2146,7 +2146,7 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             api.setParameter("phaserMix", 0.25);
             api.setParameter("delayMix", 0.25);
             api.setParameter("reverbMix", 0.3);
-            api.sendEvent("rackEnable", { enabledFlags: [1, 1, 1, 1, 1, 1, 1, 1] });
+            api.sendEvent("laneTopology", { chainLength: 8, slotIds: [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 255 });
             for (let note = 48; note < 64; note += 1) api.noteOn(note, 100, 1);
         });
         await applyNeutralMatrixExpressionContract(page);
@@ -2436,7 +2436,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
 
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
-            api.sendEvent("rackEnable", { enabledFlags: [0, 0, 0, 0, 0, 0, 0, 0] });
+            api.sendEvent("laneTopology", { chainLength: 0, slotIds: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 0 });
             api.setParameter("distortionDriveDb", 30);
             api.setParameter("distortionWet", 0);
         });
@@ -2445,7 +2445,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
 
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
-            api.sendEvent("rackEnable", { enabledFlags: [0, 1, 0, 0, 0, 0, 0, 0] });
+            api.sendEvent("laneTopology", { chainLength: 1, slotIds: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 1 });
             api.setParameter("distortionWet", 1);
         });
         const drivenRms = await measureHeldNote(page);
@@ -2493,7 +2493,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
             api.setParameter("phaserMix", 0.25);
             api.setParameter("delayMix", 0.25);
             api.setParameter("reverbMix", 0.3);
-            api.sendEvent("rackEnable", { enabledFlags: [1, 1, 1, 1, 1, 1, 1, 1] });
+            api.sendEvent("laneTopology", { chainLength: 8, slotIds: [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 255 });
         });
         const allOnRms = await measureHeldNote(page);
         const allOnSnapshot = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot());
@@ -2562,7 +2562,7 @@ test("generated product renders oscillator A, B, and C independently", async (t)
 
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
-            api.sendEvent("rackEnable", { enabledFlags: [0, 0, 0, 0, 0, 0, 0, 0] });
+            api.sendEvent("laneTopology", { chainLength: 0, slotIds: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 0 });
             api.setParameter("filterMode", 0);
         });
 

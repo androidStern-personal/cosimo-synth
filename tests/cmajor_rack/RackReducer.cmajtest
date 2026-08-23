@@ -154,7 +154,7 @@ bool testVoiceRackProgramValidationRejectsEveryMalformedField()
     malformed.voiceRackRouteCount = -1;
     if (wt::isValidModulationProgram (malformed)) return false;
     malformed = valid;
-    malformed.voiceRackRouteCount = wt::modulationVoiceRackRouteCellCount + 1;
+    malformed.voiceRackRouteCount = wt::modulationVoiceRackRouteCapacity + 1;
     if (wt::isValidModulationProgram (malformed)) return false;
     malformed = valid;
     malformed.voiceRackRouteCells[0] = -1;
@@ -191,7 +191,7 @@ bool testMacroRackProgramValidationRejectsEveryMalformedField()
     malformed.macroRackRouteCount = -1;
     if (wt::isValidModulationProgram (malformed)) return false;
     malformed = valid;
-    malformed.macroRackRouteCount = wt::modulationMacroRackRouteCellCount + 1;
+    malformed.macroRackRouteCount = wt::modulationMacroRackRouteCapacity + 1;
     if (wt::isValidModulationProgram (malformed)) return false;
     malformed = valid;
     malformed.macroRackRouteCells[0] = -1;

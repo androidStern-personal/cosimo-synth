@@ -115,8 +115,8 @@ processor ModulationV6ProgramSource
         resetScratchProgram (serial);
         scratch.voiceRouteCount = wt::modulationVoiceRouteCellCount;
         scratch.macroVoiceRouteCount = wt::modulationMacroVoiceRouteCellCount;
-        scratch.voiceRackRouteCount = wt::modulationVoiceRackRouteCellCount;
-        scratch.macroRackRouteCount = wt::modulationMacroRackRouteCellCount;
+        scratch.voiceRackRouteCount = wt::modulationVoiceRackRouteCapacity;
+        scratch.macroRackRouteCount = wt::modulationMacroRackRouteCapacity;
 
         for (int32 cellIndex = 0; cellIndex < wt::modulationVoiceRouteCellCount; ++cellIndex)
         {
@@ -134,22 +134,37 @@ processor ModulationV6ProgramSource
             scratch.macroVoiceRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
         }
 
-        for (int32 cellIndex = 0; cellIndex < wt::modulationVoiceRackRouteCellCount; ++cellIndex)
+        // The rack tables carry a ROUTE BUDGET, not the full matrix: fill
+        // every slot but the last with the leading cells, then ride the
+        // final slot on the domain's FINAL cell so the tail sentinel still
+        // proves the last lane-pool destination executes.
+        for (int32 routeIndex = 0; routeIndex < wt::modulationVoiceRackRouteCapacity - 1; ++routeIndex)
         {
-            scratch.voiceRackRouteCells.at (cellIndex) = cellIndex;
-            scratch.voiceRackRouteSources.at (cellIndex) = cellIndex / wt::rackModTargetCount;
-            scratch.voiceRackRouteTargets.at (cellIndex) = cellIndex % wt::rackModTargetCount;
-            scratch.voiceRackRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
-            scratch.voiceRackRouteReducers.at (cellIndex) = wt::modulationReducerMaximum;
+            scratch.voiceRackRouteCells.at (routeIndex) = routeIndex;
+            scratch.voiceRackRouteSources.at (routeIndex) = routeIndex / wt::rackModTargetCount;
+            scratch.voiceRackRouteTargets.at (routeIndex) = routeIndex % wt::rackModTargetCount;
+            scratch.voiceRackRoutePolarities.at (routeIndex) = wt::modulationPolarityUnipolar;
+            scratch.voiceRackRouteReducers.at (routeIndex) = wt::modulationReducerMaximum;
         }
 
-        for (int32 cellIndex = 0; cellIndex < wt::modulationMacroRackRouteCellCount; ++cellIndex)
+        scratch.voiceRackRouteCells.at (wt::modulationVoiceRackRouteCapacity - 1) = wt::modulationVoiceRackRouteCellCount - 1;
+        scratch.voiceRackRouteSources.at (wt::modulationVoiceRackRouteCapacity - 1) = wt::modulationVoiceSourceCount - 1;
+        scratch.voiceRackRouteTargets.at (wt::modulationVoiceRackRouteCapacity - 1) = wt::rackModTargetCount - 1;
+        scratch.voiceRackRoutePolarities.at (wt::modulationVoiceRackRouteCapacity - 1) = wt::modulationPolarityUnipolar;
+        scratch.voiceRackRouteReducers.at (wt::modulationVoiceRackRouteCapacity - 1) = wt::modulationReducerMaximum;
+
+        for (int32 routeIndex = 0; routeIndex < wt::modulationMacroRackRouteCapacity - 1; ++routeIndex)
         {
-            scratch.macroRackRouteCells.at (cellIndex) = cellIndex;
-            scratch.macroRackRouteSources.at (cellIndex) = cellIndex / wt::rackModTargetCount;
-            scratch.macroRackRouteTargets.at (cellIndex) = cellIndex % wt::rackModTargetCount;
-            scratch.macroRackRoutePolarities.at (cellIndex) = wt::modulationPolarityUnipolar;
+            scratch.macroRackRouteCells.at (routeIndex) = routeIndex;
+            scratch.macroRackRouteSources.at (routeIndex) = routeIndex / wt::rackModTargetCount;
+            scratch.macroRackRouteTargets.at (routeIndex) = routeIndex % wt::rackModTargetCount;
+            scratch.macroRackRoutePolarities.at (routeIndex) = wt::modulationPolarityUnipolar;
         }
+
+        scratch.macroRackRouteCells.at (wt::modulationMacroRackRouteCapacity - 1) = wt::modulationMacroRackRouteCellCount - 1;
+        scratch.macroRackRouteSources.at (wt::modulationMacroRackRouteCapacity - 1) = wt::modulationMacroSourceCount - 1;
+        scratch.macroRackRouteTargets.at (wt::modulationMacroRackRouteCapacity - 1) = wt::rackModTargetCount - 1;
+        scratch.macroRackRoutePolarities.at (wt::modulationMacroRackRouteCapacity - 1) = wt::modulationPolarityUnipolar;
 
         scratch.voiceRouteAmounts[wt::modulationVoiceRouteCellCount - 1] = 1.0f;
         scratch.voiceRouteAmounts[
@@ -286,8 +301,8 @@ processor ModulationV6ProgramWitness
         else if (serial == 4
             && ack.installedVoiceRouteCount == wt::modulationVoiceRouteCellCount
             && ack.installedMacroVoiceRouteCount == wt::modulationMacroVoiceRouteCellCount
-            && ack.installedVoiceRackRouteCount == wt::modulationVoiceRackRouteCellCount
-            && ack.installedMacroRackRouteCount == wt::modulationMacroRackRouteCellCount)
+            && ack.installedVoiceRackRouteCount == wt::modulationVoiceRackRouteCapacity
+            && ack.installedMacroRackRouteCount == wt::modulationMacroRackRouteCapacity)
             acceptedMask |= 8;
         else if (serial == 5
             && ack.installedVoiceRouteCount == 0

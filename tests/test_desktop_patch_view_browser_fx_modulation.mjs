@@ -2618,12 +2618,12 @@ test("phone touch drags are captured by rack grips and modulation chips without 
             page,
             "touch rack reorder",
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "rackOrder"
-                && Array.isArray(value?.moduleIds)
-                && Number(value.moduleIds[0]) === 7
+                endpointID === "laneTopology"
+                && Array.isArray(value?.slotIds)
+                && Number(value.slotIds[0]) === 7
             )),
         );
-        assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "rackOrder").length, 1);
+        assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length, 1);
 
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
@@ -2672,12 +2672,12 @@ test("rack reorder survives a platform pointer-capture rejection", async () => {
             page,
             "pointer-capture fallback rack reorder",
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "rackOrder"
-                && Array.isArray(value?.moduleIds)
-                && Number(value.moduleIds[0]) === 7
+                endpointID === "laneTopology"
+                && Array.isArray(value?.slotIds)
+                && Number(value.slotIds[0]) === 7
             )),
         );
-        assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "rackOrder").length, 1);
+        assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length, 1);
     } finally {
         await page.close();
     }
@@ -2700,16 +2700,17 @@ test("rack reorder keeps the latest desired enable state across an older effecti
                 ?.getAttribute("data-role") === "rack-module-reverb"
         ), null, { timeout: 1_000 });
         await page.evaluate(() => {
-            const identityOrderCode = [0, 1, 2, 3, 4, 5, 6, 7].reduce(
+            const identityChainCode = [0, 1, 2, 3, 4, 5, 6, 7].reduce(
                 (code, moduleId, position) => code | (moduleId << (position * 3)),
                 0,
             );
             window.__COSIMO_DESKTOP_HARNESS__.patchConnection.emitEndpoint("effectiveRackState", {
-                committedStructureGeneration: 0,
-                committedOrderCode: identityOrderCode,
-                committedEnableMask: 0,
-                rejectedOrderCount: 0,
-                rejectedEnableCount: 0,
+                laneCommittedChainLength: 8,
+                laneCommittedChainCode: identityChainCode,
+                laneCommittedPositionMask: 0,
+                laneCommittedGeneration: 0,
+                laneRejectedUploadCount: 0,
+                laneParamsAcknowledgedSerial: 0,
             });
         });
         await endRackReorderWithoutPointerCapture(page, 93);
@@ -2728,8 +2729,10 @@ test("rack reorder keeps the latest desired enable state across an older effecti
         );
         const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
         assert.equal(storedRack.enabled.chorus, true);
-        const lastEnable = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "rackEnable").at(-1);
-        assert.equal(Number(lastEnable?.value?.enabledFlags?.[3]), 1);
+        const lastTopology = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").at(-1);
+        const chorusPosition = lastTopology?.value?.slotIds?.indexOf(3);
+        assert.ok(chorusPosition >= 0);
+        assert.equal((Number(lastTopology?.value?.enabledMask) >> chorusPosition) & 1, 1);
     } finally {
         await page.close();
     }
@@ -2775,7 +2778,7 @@ test("rack no-op release adopts authoritative stored order received during the g
         ), null, { timeout: 1_000 });
 
         const snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "rackOrder"), false);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
         const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
         assert.equal(storedRack.order[0], "reverb");
         assert.equal(storedRack.enabled.chorus, true);

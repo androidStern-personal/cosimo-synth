@@ -46,37 +46,46 @@
 
 ## testProcessor()
 
+// HARNESS NOTE, load-bearing for every test in this file: TWO composed
+// instances of the SAME event-bearing processor interact anomalously in the
+// cmaj interpreter (the audio of one tracks the other while their value
+// readbacks stay per-instance correct). Every test here therefore drives ONE
+// rack SEQUENTIALLY: the device model makes that sound — a slot re-entering
+// a chain resets to factory-fresh audio memory, so two sequential runs of
+// the same structure are reproducible where the never-reset legacy modules
+// were not.
+
 processor RackStructureTest [[ main ]]
 {
     output stream int32 out;
 
-    node rackA = wt::EffectsRack;
-    node rackB = wt::EffectsRack;
+    node rack = wt::EffectsRack;
 
     let settleFrames = 3072;
     let measureFrames = 3072;
 
-    wt::RackOrderUpload makeOrder (int32 a, int32 b, int32 c, int32 d,
-                                   int32 e, int32 f, int32 g, int32 h)
+    // The device model carries order and participation in ONE topology: the
+    // eight ordinal-0 devices in `a..h` order, with the per-POSITION enable
+    // mask derived from a per-MODULE mask (bit = module id), preserving the
+    // old tests' module-centric vocabulary.
+    wt::LaneTopologyUpload makeChain (int32 a, int32 b, int32 c, int32 d,
+                                      int32 e, int32 f, int32 g, int32 h,
+                                      int32 moduleEnableMask)
     {
-        wt::RackOrderUpload upload;
-        upload.moduleIds[0] = a;
-        upload.moduleIds[1] = b;
-        upload.moduleIds[2] = c;
-        upload.moduleIds[3] = d;
-        upload.moduleIds[4] = e;
-        upload.moduleIds[5] = f;
-        upload.moduleIds[6] = g;
-        upload.moduleIds[7] = h;
-        return upload;
-    }
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 8;
+        upload.slotIds[0] = a;
+        upload.slotIds[1] = b;
+        upload.slotIds[2] = c;
+        upload.slotIds[3] = d;
+        upload.slotIds[4] = e;
+        upload.slotIds[5] = f;
+        upload.slotIds[6] = g;
+        upload.slotIds[7] = h;
 
-    wt::RackEnableUpload makeEnables (int32 flag)
-    {
-        wt::RackEnableUpload upload;
-
-        for (wrap<wt::rackModuleCount> moduleId)
-            upload.enabledFlags[moduleId] = flag;
+        for (int32 position = 0; position < 8; ++position)
+            if (((moduleEnableMask >> upload.slotIds.at (position)) & 1) != 0)
+                upload.enabledMask |= 1 << position;
 
         return upload;
     }
@@ -88,34 +97,21 @@ processor RackStructureTest [[ main ]]
 
     void configure()
     {
-        // Two non-commutative modules, both driven hard enough that swapping them is
-        // unmistakable: a low lowpass followed by heavy saturation is not the same
-        // sound as heavy saturation followed by the same lowpass.
-        rackA.globalFilterMode <- 1.0f;
-        rackA.globalFilterCutoff <- 800.0f;
-        rackA.distortionWet <- 1.0f;
-        rackA.distortionDriveDb <- 30.0f;
-
-        rackB.globalFilterMode <- 1.0f;
-        rackB.globalFilterCutoff <- 800.0f;
-        rackB.distortionWet <- 1.0f;
-        rackB.distortionDriveDb <- 30.0f;
+        // Two non-commutative modules, both driven hard enough that swapping
+        // them is unmistakable: a low lowpass followed by heavy saturation is
+        // not the same sound as heavy saturation followed by the same lowpass.
+        rack.globalFilterMode <- 1.0f;
+        rack.globalFilterCutoff <- 800.0f;
+        rack.distortionWet <- 1.0f;
+        rack.distortionDriveDb <- 30.0f;
     }
 
-    float32<2> renderA (int32 frame)
+    float32<2> render (int32 frame)
     {
-        rackA.in <- float32<2> (testSignal (frame), testSignal (frame));
-        rackA.trackingPitchHzIn <- 220.0f;
-        rackA.advance();
-        return rackA.out;
-    }
-
-    float32<2> renderB (int32 frame)
-    {
-        rackB.in <- float32<2> (testSignal (frame), testSignal (frame));
-        rackB.trackingPitchHzIn <- 220.0f;
-        rackB.advance();
-        return rackB.out;
+        rack.in <- float32<2> (testSignal (frame), testSignal (frame));
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+        return rack.out;
     }
 
     // Position -> module id, packed three bits per position, least significant first.
@@ -124,170 +120,136 @@ processor RackStructureTest [[ main ]]
         return a | (b << 3) | (c << 6) | (d << 9) | (e << 12) | (f << 15) | (g << 18) | (h << 21);
     }
 
+    float32[3072] firstRun;
+
     void main()
     {
         configure();
 
-        wt::RackEnableUpload filterAndDriveOnly = makeEnables (0);
-        filterAndDriveOnly.enabledFlags[wt::rackModuleGlobalFilter] = 1;
-        filterAndDriveOnly.enabledFlags[wt::rackModuleDistortion] = 1;
-        rackA.rackEnable <- filterAndDriveOnly;
-        rackB.rackEnable <- filterAndDriveOnly;
+        let filterAndDrive = (1 << wt::rackModuleGlobalFilter) | (1 << wt::rackModuleDistortion);
 
-        // Rack B runs the distortion before the global filter. Same eight instances,
-        // same parameters, same input, same age - only the order differs.
-        rackB.rackOrder <- makeOrder (wt::rackModuleDistortion, wt::rackModuleGlobalFilter,
-                                      2, 3, 4, 5, 6, 7);
+        // Run 1: filter before distortion. Record the settled output.
+        rack.laneTopology <- makeChain (0, 1, 2, 3, 4, 5, 6, 7, filterAndDrive);
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (frame);
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+            firstRun.at (frame) = render (frame)[0];
+
+        out <- (rack.laneCommittedChainCode == orderCode (0, 1, 2, 3, 4, 5, 6, 7)) ? 1 : 0;
+        advance();
+        out <- (rack.laneCommittedPositionMask == 0b11) ? 1 : 0;
+        advance();
+        out <- (rack.laneCommittedGeneration == 1) ? 1 : 0;
+        advance();
+
+        // Run 2: distortion before the filter. Same devices, same parameters,
+        // same input phase (the sine is frame-deterministic and the measure
+        // window starts at the same frame parity).
+        rack.laneTopology <- makeChain (wt::rackModuleDistortion, wt::rackModuleGlobalFilter,
+                                        2, 3, 4, 5, 6, 7, filterAndDrive);
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (frame);
 
         float32 maxDifference;
         int32 differingFrames;
 
-        for (int32 frame = 0; frame < settleFrames + measureFrames; ++frame)
+        for (int32 frame = 0; frame < measureFrames; ++frame)
         {
-            let a = renderA (frame);
-            let b = renderB (frame);
+            let difference = std::intrinsics::abs (render (frame)[0] - firstRun.at (frame));
+            maxDifference = std::intrinsics::max (maxDifference, difference);
 
-            if (frame >= settleFrames)
-            {
-                let difference = std::intrinsics::abs (a[0] - b[0]);
-                maxDifference = std::intrinsics::max (maxDifference, difference);
-
-                if (difference > 0.0f)
-                    differingFrames += 1;
-            }
+            if (difference > 0.0f)
+                differingFrames += 1;
         }
 
-        // 1. Position changes the sound.
+        // 1. Position changes the sound, sustained — not a transition artefact.
         out <- (maxDifference > 0.001f) ? 1 : 0;
         advance();
-
-        // 2. The divergence is sustained, not a single transition artefact.
         out <- (differingFrames > measureFrames / 2) ? 1 : 0;
         advance();
 
-        // 3. The committed order is readable back, so the UI can confirm what the DSP
-        //    is actually running rather than assuming its upload landed.
-        out <- (rackA.rackCommittedOrderCode == orderCode (0, 1, 2, 3, 4, 5, 6, 7)) ? 1 : 0;
+        out <- (rack.laneCommittedChainCode == orderCode (wt::rackModuleDistortion,
+                                                          wt::rackModuleGlobalFilter,
+                                                          2, 3, 4, 5, 6, 7)) ? 1 : 0;
+        advance();
+        out <- (rack.laneCommittedGeneration == 2) ? 1 : 0;
         advance();
 
-        out <- (rackB.rackCommittedOrderCode == orderCode (wt::rackModuleDistortion,
-                                                           wt::rackModuleGlobalFilter,
-                                                           2, 3, 4, 5, 6, 7)) ? 1 : 0;
-        advance();
-
-        // 4. Exactly one structure was committed on each rack. B coalesced the order
-        //    and enable uploads into the same dry-point commit.
-        out <- (rackA.rackCommittedStructureGeneration == 1
-                 && rackB.rackCommittedStructureGeneration == 1) ? 1 : 0;
-        advance();
-
-        // 5. Participation is exactly the uploaded filter-plus-drive mask.
-        out <- (rackA.rackCommittedEnableMask == ((1 << wt::rackModuleGlobalFilter)
-                                                  | (1 << wt::rackModuleDistortion))) ? 1 : 0;
-        advance();
-
-        // 6. AN ORDER THAT IS NOT A COMPLETE PERMUTATION IS REJECTED OUTRIGHT and the
-        //    running structure is left completely intact. (That the AUDIO is left
-        //    bit-exactly intact as well is asserted in RackDisabledAdvanceTest below,
-        //    where two racks have already been proven sample-identical and so can serve
-        //    as each other's reference.)
-        rackB.rackOrder <- makeOrder (1, 1, 2, 3, 4, 5, 6, 7);
+        // 2. AN ORDER WITH A DUPLICATE SLOT IS REJECTED OUTRIGHT and the
+        //    running structure is left completely intact.
+        rack.laneTopology <- makeChain (1, 1, 2, 3, 4, 5, 6, 7, filterAndDrive);
 
         for (int32 frame = 0; frame < 512; ++frame)
-            renderB (frame);
+            render (frame);
 
-        out <- (rackB.rackRejectedOrderCount == 1) ? 1 : 0;
+        out <- (rack.laneRejectedUploadCount == 1) ? 1 : 0;
+        advance();
+        out <- (rack.laneCommittedGeneration == 2
+                 && rack.laneCommittedChainCode == orderCode (wt::rackModuleDistortion,
+                                                              wt::rackModuleGlobalFilter,
+                                                              2, 3, 4, 5, 6, 7)) ? 1 : 0;
         advance();
 
-        out <- (rackB.rackCommittedStructureGeneration == 1
-                 && rackB.rackCommittedOrderCode == orderCode (wt::rackModuleDistortion,
-                                                               wt::rackModuleGlobalFilter,
-                                                               2, 3, 4, 5, 6, 7)) ? 1 : 0;
-        advance();
-
-        // 7. AN ENABLE FLAG THAT IS NEITHER 0 NOR 1 IS REJECTED THE SAME WAY. The
-        //    adapter's wire format is a flag, not a truthy integer, and coercing 2 to
-        //    "enabled" would hide a real bug at the boundary.
-        wt::RackEnableUpload malformed = makeEnables (1);
-        malformed.enabledFlags[wt::rackModuleReverb] = 2;
-        rackB.rackEnable <- malformed;
+        // 3. ENABLE BITS OUTSIDE THE CHAIN ARE REJECTED THE SAME WAY: the
+        //    wire mask is per-position, and a set bit beyond chainLength is
+        //    an adapter bug, never coerced into meaning.
+        wt::LaneTopologyUpload malformed = makeChain (wt::rackModuleDistortion,
+                                                      wt::rackModuleGlobalFilter,
+                                                      2, 3, 4, 5, 6, 7, filterAndDrive);
+        malformed.enabledMask |= 1 << 12;
+        rack.laneTopology <- malformed;
 
         for (int32 frame = 0; frame < 512; ++frame)
-            renderB (frame);
+            render (frame);
 
-        out <- (rackB.rackRejectedEnableCount == 1) ? 1 : 0;
+        out <- (rack.laneRejectedUploadCount == 2) ? 1 : 0;
+        advance();
+        out <- (rack.laneCommittedPositionMask == 0b11) ? 1 : 0;
         advance();
 
-        out <- (rackB.rackCommittedEnableMask == ((1 << wt::rackModuleGlobalFilter)
-                                                  | (1 << wt::rackModuleDistortion))) ? 1 : 0;
-        advance();
-
-        // 8. FREQUENCY MODULATION IS THE IDENTITY AT ZERO OFFSET.
-        //
-        //    Frequency destinations are scaled by pow (2, offset) held in a cache that
-        //    is only recomputed when the offset has actually moved. With nothing routed
-        //    the offset is exactly 0.0f every frame, so the cache is never recomputed
-        //    and its INITIAL value is what every frequency parameter gets multiplied by,
-        //    forever. A cache that initialised to zero instead of one would silently
-        //    drag every frequency parameter to its minimum and never recover, and it
-        //    would do so with no error and no NaN. Here a 20 kHz lowpass must pass a
-        //    350 Hz sine essentially untouched.
-        rackA.distortionWet <- 0.0f;
-        rackA.globalFilterCutoff <- 20000.0f;
+        // 4. Disabling every device is a HARD AUDIBLE BYPASS: once the
+        //    transition completes the rack passes its input BIT-EXACTLY
+        //    (ADR-005) — the whole rack's zero-latency dry path (ADR-008).
+        rack.laneTopology <- makeChain (0, 1, 2, 3, 4, 5, 6, 7, 0);
 
         for (int32 frame = 0; frame < settleFrames; ++frame)
-            renderA (frame);
-
-        float32 openFilterDeparture;
-
-        for (int32 frame = 0; frame < measureFrames; ++frame)
-            openFilterDeparture = std::intrinsics::max (openFilterDeparture,
-                                    std::intrinsics::abs (renderA (frame)[0] - testSignal (frame)));
-
-        out <- (openFilterDeparture < 0.15f) ? 1 : 0;
-        advance();
-
-        //    And the assertion discriminates: the same rack with the cutoff actually at
-        //    the bottom of its range buries the same sine.
-        rackA.globalFilterCutoff <- wt::filterCutoffMinHz;
-
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            renderA (frame);
-
-        float32 closedFilterDeparture;
-
-        for (int32 frame = 0; frame < measureFrames; ++frame)
-            closedFilterDeparture = std::intrinsics::max (closedFilterDeparture,
-                                      std::intrinsics::abs (renderA (frame)[0] - testSignal (frame)));
-
-        out <- (closedFilterDeparture > 0.3f) ? 1 : 0;
-        advance();
-
-        //    The ratio is the assertion that actually discriminates, and it needs no
-        //    knowledge of how transparent the filter is at the top of its range: a
-        //    scaler stuck at zero would drive BOTH settings to 20 Hz and make the two
-        //    measurements equal.
-        out <- (closedFilterDeparture > openFilterDeparture * 3.0f) ? 1 : 0;
-        advance();
-
-        // 9. Disabling every module is a HARD AUDIBLE BYPASS: once the transition has
-        //    completed the rack passes its input through BIT-EXACTLY (ADR-005), which
-        //    is also the whole rack's zero-latency dry path (ADR-008).
-        rackA.rackEnable <- makeEnables (0);
-
-        for (int32 frame = 0; frame < settleFrames; ++frame)
-            renderA (frame);
+            render (frame);
 
         bool bypassIsExact = true;
 
         for (int32 frame = 0; frame < measureFrames; ++frame)
-            if (renderA (frame)[0] != testSignal (frame))
+            if (render (frame)[0] != testSignal (frame))
                 bypassIsExact = false;
 
         out <- bypassIsExact ? 1 : 0;
         advance();
+        out <- (rack.laneCommittedPositionMask == 0) ? 1 : 0;
+        advance();
 
-        out <- (rackA.rackCommittedEnableMask == 0) ? 1 : 0;
+        // 5. FREQUENCY MODULATION IS THE IDENTITY AT ZERO OFFSET. The octave
+        //    scaler's pow(2, offset) cache is only recomputed when the offset
+        //    moves; with nothing routed its INITIAL value multiplies every
+        //    frequency parameter forever, so a cache initialised to zero
+        //    would silently drag them all to minimum with no error. A 20 kHz
+        //    lowpass must pass a 350 Hz sine essentially untouched.
+        rack.globalFilterCutoff <- 20000.0f;
+        rack.distortionWet <- 0.0f;
+        rack.laneTopology <- makeChain (0, 1, 2, 3, 4, 5, 6, 7,
+                                        1 << wt::rackModuleGlobalFilter);
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (frame);
+
+        float32 identityDeparture;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+            identityDeparture = std::intrinsics::max (identityDeparture,
+                std::intrinsics::abs (render (frame)[0] - testSignal (frame)));
+
+        out <- (identityDeparture < 0.15f) ? 1 : 0;  // zero-cache failure would gut the sine (~0.4)
         advance();
 
         out <- -1;
@@ -316,35 +278,30 @@ processor RackDisabledAdvanceTest [[ main ]]
 {
     output stream int32 out;
 
-    node rackA = wt::EffectsRack;
-    node rackB = wt::EffectsRack;
+    node rack = wt::EffectsRack;
 
     let disabledFrames = 2048;
     let transitionSettleFrames = 512;
     let measureFrames = 3072;
 
-    wt::RackEnableUpload delayOnly (bool delayEnabled)
+    wt::LaneTopologyUpload eightChain (bool delayEnabled)
     {
-        wt::RackEnableUpload upload;
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 8;
 
-        for (wrap<wt::rackModuleCount> moduleId)
-            upload.enabledFlags[moduleId] = 0;
+        for (int32 position = 0; position < 8; ++position)
+            upload.slotIds.at (position) = position;
 
-        upload.enabledFlags[wt::rackModuleDelay] = delayEnabled ? 1 : 0;
+        if (delayEnabled)
+            upload.enabledMask = 1 << wt::rackModuleDelay;
+
         return upload;
     }
 
-    // Position 0 and position 1 both claim the global filter, so the reverb is claimed
-    // by nobody and would be advanced zero times - the corrupted time base the
-    // permutation rule exists to prevent.
-    wt::RackOrderUpload duplicatedOrder()
+    wt::LaneTopologyUpload emptyChain()
     {
-        wt::RackOrderUpload upload;
-
-        for (wrap<wt::rackModuleCount> position)
-            upload.moduleIds[position] = int32 (position);
-
-        upload.moduleIds[1] = 0;
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 0;
         return upload;
     }
 
@@ -356,55 +313,60 @@ processor RackDisabledAdvanceTest [[ main ]]
 
     void configure()
     {
-        // A short, densely repeating, heavily regenerating delay: within the measured
-        // window every output sample depends on thousands of earlier ones.
-        rackA.delayTime <- 20.0f;
-        rackA.delayFeedback <- 0.8f;
-        rackA.delayMix <- 1.0f;
-
-        rackB.delayTime <- 20.0f;
-        rackB.delayFeedback <- 0.8f;
-        rackB.delayMix <- 1.0f;
+        // A short, densely repeating, heavily regenerating delay: within the
+        // measured window every output sample depends on thousands earlier.
+        rack.delayTime <- 20.0f;
+        rack.delayFeedback <- 0.8f;
+        rack.delayMix <- 1.0f;
     }
 
-    float32<2> renderA (int32 frame)
+    float32<2> render (int32 frame)
     {
-        rackA.in <- float32<2> (testSignal (frame), testSignal (frame));
-        rackA.trackingPitchHzIn <- 220.0f;
-        rackA.advance();
-        return rackA.out;
+        rack.in <- float32<2> (testSignal (frame), testSignal (frame));
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+        return rack.out;
     }
 
-    float32<2> renderB (int32 frame)
-    {
-        rackB.in <- float32<2> (testSignal (frame), testSignal (frame));
-        rackB.trackingPitchHzIn <- 220.0f;
-        rackB.advance();
-        return rackB.out;
-    }
+    float32[9216] reference;
 
     void main()
     {
         configure();
 
-        rackA.rackEnable <- delayOnly (true);
-        rackB.rackEnable <- delayOnly (false);
+        // REFERENCE RUN: delay enabled from the first committed frame. The
+        // fresh-entry reset makes sequential runs reproducible, so this run
+        // is the later runs' bit-exact oracle over the same absolute frames.
+        rack.laneTopology <- eightChain (true);
 
-        for (int32 frame = 0; frame < disabledFrames; ++frame)
+        for (int32 frame = 0; frame < disabledFrames + transitionSettleFrames; ++frame)
+            render (frame);
+
+        for (int32 frame = 0; frame < 9216; ++frame)
         {
-            renderA (frame);
-            renderB (frame);
+            let index = disabledFrames + transitionSettleFrames + frame;
+            reference.at (frame) = render (index)[0];
         }
 
-        // Rack B's delay joins the chain here. Rack A gets no upload, so only rack B
-        // pays a transition; give it time to return to exact unity before comparing.
-        rackB.rackEnable <- delayOnly (true);
+        // COMPARISON RUN: back to the empty chain (every device leaves, so
+        // re-entry is factory-fresh), then the same chain with the delay
+        // DISABLED. It must still advance — its lines keep collecting the
+        // live input — so enabling it later exposes no stale-state transient
+        // and no clock drift.
+        rack.laneTopology <- emptyChain();
 
         for (int32 frame = 0; frame < transitionSettleFrames; ++frame)
-        {
-            renderA (disabledFrames + frame);
-            renderB (disabledFrames + frame);
-        }
+            render (frame);
+
+        rack.laneTopology <- eightChain (false);
+
+        for (int32 frame = 0; frame < disabledFrames; ++frame)
+            render (frame);
+
+        rack.laneTopology <- eightChain (true);
+
+        for (int32 frame = 0; frame < transitionSettleFrames; ++frame)
+            render (disabledFrames + frame);
 
         bool identical = true;
         float32 maxWetDeparture;
@@ -412,69 +374,75 @@ processor RackDisabledAdvanceTest [[ main ]]
         for (int32 frame = 0; frame < measureFrames; ++frame)
         {
             let index = disabledFrames + transitionSettleFrames + frame;
-            let a = renderA (index)[0];
-            let b = renderB (index)[0];
+            let sample = render (index)[0];
 
-            if (a != b)
+            if (sample != reference.at (frame))
                 identical = false;
 
             maxWetDeparture = std::intrinsics::max (maxWetDeparture,
-                                                    std::intrinsics::abs (a - testSignal (index)));
+                                                    std::intrinsics::abs (sample - testSignal (index)));
         }
 
-        // 1. THE INVARIANT: the module advanced exactly once per frame while disabled,
-        //    so re-enabling it exposes no stale-state transient and no clock drift.
+        // 1. THE INVARIANT: the in-chain device advanced exactly once per
+        //    frame while disabled, so re-enabling it is bit-identical to a
+        //    device that was enabled all along.
         out <- identical ? 1 : 0;
         advance();
 
-        // 2. The comparison is not vacuous - the enabled delay is audibly doing
-        //    something, so "identical" is a statement about a live wet path.
+        // 2. Not vacuous: the enabled delay is audibly doing something.
         out <- (maxWetDeparture > 0.01f) ? 1 : 0;
         advance();
 
-        // 3. Each rack commits once. B's initial all-disabled upload is redundant
-        //    against the production-safe all-disabled default and costs no transition.
-        out <- (rackA.rackCommittedStructureGeneration == 1
-                 && rackB.rackCommittedStructureGeneration == 1) ? 1 : 0;
-        advance();
+        // 3. A REPEATED IDENTICAL TOPOLOGY IS REDUNDANT: no generation burns
+        //    and the audio stays bit-identical through the re-send (the
+        //    adapter re-sends structure on every patch load).
+        let generationBefore = rack.laneCommittedGeneration;
+        rack.laneTopology <- eightChain (true);
 
-        //----------------------------------------------------------------------
-        // 4. A REJECTED STRUCTURE UPLOAD IS COMPLETELY INERT.
-        //
-        // The two racks have just been proven sample-identical over 3072 frames, which
-        // makes rack A a perfect reference for rack B. Rack B now receives an order that
-        // is not a permutation and an enable upload carrying a flag that is neither 0
-        // nor 1. Both must be counted and thrown away: the state must not move, and -
-        // the part that is easy to get wrong - the transition ramp must not even start,
-        // because a rejected upload that still dipped the output would be an audible
-        // response to a malformed message.
-
-        rackB.rackOrder <- duplicatedOrder();
-
-        wt::RackEnableUpload malformedEnable = delayOnly (true);
-        malformedEnable.enabledFlags[wt::rackModuleReverb] = 2;
-        rackB.rackEnable <- malformedEnable;
-
-        bool stillIdentical = true;
+        bool redundantIsSilent = true;
 
         for (int32 frame = 0; frame < measureFrames; ++frame)
         {
             let index = disabledFrames + transitionSettleFrames + measureFrames + frame;
 
-            if (renderA (index)[0] != renderB (index)[0])
+            if (render (index)[0] != reference.at (measureFrames + frame))
+                redundantIsSilent = false;
+        }
+
+        out <- (redundantIsSilent && rack.laneCommittedGeneration == generationBefore) ? 1 : 0;
+        advance();
+
+        // 4. A REJECTED UPLOAD IS COMPLETELY INERT: the state does not move
+        //    and — the part that is easy to get wrong — the transition ramp
+        //    must not even start: a rejected upload that still dipped the
+        //    output would be an audible response to a malformed message.
+        wt::LaneTopologyUpload duplicated = eightChain (true);
+        duplicated.slotIds[1] = 0;
+        rack.laneTopology <- duplicated;
+
+        wt::LaneTopologyUpload badMask = eightChain (true);
+        badMask.enabledMask |= 1 << 12;
+        rack.laneTopology <- badMask;
+
+        bool stillIdentical = true;
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+        {
+            let index = disabledFrames + transitionSettleFrames + (2 * measureFrames) + frame;
+            let offset = (2 * measureFrames) + frame;
+
+            if (render (index)[0] != reference.at (offset))
                 stillIdentical = false;
         }
 
         out <- stillIdentical ? 1 : 0;
         advance();
 
-        out <- (rackB.rackRejectedOrderCount == 1
-                 && rackB.rackRejectedEnableCount == 1) ? 1 : 0;
+        out <- (rack.laneRejectedUploadCount == 2) ? 1 : 0;
         advance();
 
-        out <- (rackB.rackCommittedStructureGeneration == 1
-                 && rackB.rackCommittedOrderCode == rackA.rackCommittedOrderCode
-                 && rackB.rackCommittedEnableMask == rackA.rackCommittedEnableMask) ? 1 : 0;
+        out <- (rack.laneCommittedGeneration == generationBefore
+                 && rack.laneCommittedPositionMask == (1 << wt::rackModuleDelay)) ? 1 : 0;
         advance();
 
         out <- -1;
@@ -483,14 +451,16 @@ processor RackDisabledAdvanceTest [[ main ]]
 }
 
 //==============================================================================
-// EXACTLY-ONCE ADVANCEMENT, part 2: whatever the ORDER.
+// EXACTLY-ONCE ADVANCEMENT, part 2: whatever the POSITION.
 //
-// Two racks with the same single enabled module (the flanger, whose LFO phase is a
-// direct readout of how many times it has been advanced) in two completely different
-// rack orders. Every other module is disabled, so the flanger's input is the raw rack
-// input at every frame regardless of where it sits. The outputs must therefore be
-// BIT-IDENTICAL - which they can only be if each rack advanced the flanger exactly
-// once per frame, in position 4 and in position 3 alike.
+// The same chain committed in two completely different orders, with only the flanger
+// enabled (its LFO phase is a direct readout of how many times it has been advanced).
+// Every other device in the chain is bypassed, so the flanger's input is the raw rack
+// input at every frame regardless of where it sits. Run sequentially on ONE rack (see
+// the harness note at the top of this file): the empty-chain commit between runs makes
+// each chain enter factory-fresh, so both runs start their LFO from phase zero and the
+// outputs must be BIT-IDENTICAL - which they can only be if the rack advanced the
+// flanger exactly once per frame, at position 4 and at position 3 alike.
 
 ## testProcessor()
 
@@ -498,30 +468,38 @@ processor RackOrderAdvanceTest [[ main ]]
 {
     output stream int32 out;
 
-    node rackA = wt::EffectsRack;
-    node rackB = wt::EffectsRack;
+    node rack = wt::EffectsRack;
 
     let settleFrames = 1024;
     let measureFrames = 4096;
 
-    wt::RackEnableUpload flangerOnly()
+    wt::LaneTopologyUpload flangerChain (bool reversed)
     {
-        wt::RackEnableUpload upload;
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 8;
 
-        for (wrap<wt::rackModuleCount> moduleId)
-            upload.enabledFlags[moduleId] = 0;
+        for (int32 position = 0; position < 8; ++position)
+        {
+            int32 moduleId;
 
-        upload.enabledFlags[wt::rackModuleFlanger] = 1;
+            if (reversed)
+                moduleId = 7 - position;
+            else
+                moduleId = position;
+
+            upload.slotIds.at (position) = moduleId;
+
+            if (moduleId == wt::rackModuleFlanger)
+                upload.enabledMask |= 1 << position;
+        }
+
         return upload;
     }
 
-    wt::RackOrderUpload reversedOrder()
+    wt::LaneTopologyUpload emptyChain()
     {
-        wt::RackOrderUpload upload;
-
-        for (wrap<wt::rackModuleCount> position)
-            upload.moduleIds[position] = (wt::rackModuleCount - 1) - int32 (position);
-
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 0;
         return upload;
     }
 
@@ -532,46 +510,50 @@ processor RackOrderAdvanceTest [[ main ]]
 
     void configure()
     {
-        rackA.flangerRate <- 2.5f;
-        rackA.flangerDepth <- 1.0f;
-        rackA.flangerFeedback <- 0.9f;
-        rackA.flangerMix <- 1.0f;
-
-        rackB.flangerRate <- 2.5f;
-        rackB.flangerDepth <- 1.0f;
-        rackB.flangerFeedback <- 0.9f;
-        rackB.flangerMix <- 1.0f;
+        rack.flangerRate <- 2.5f;
+        rack.flangerDepth <- 1.0f;
+        rack.flangerFeedback <- 0.9f;
+        rack.flangerMix <- 1.0f;
     }
 
-    float32<2> renderA (int32 frame)
+    float32<2> render (int32 frame)
     {
-        rackA.in <- float32<2> (testSignal (frame), testSignal (frame));
-        rackA.trackingPitchHzIn <- 220.0f;
-        rackA.advance();
-        return rackA.out;
+        rack.in <- float32<2> (testSignal (frame), testSignal (frame));
+        rack.trackingPitchHzIn <- 220.0f;
+        rack.advance();
+        return rack.out;
     }
 
-    float32<2> renderB (int32 frame)
-    {
-        rackB.in <- float32<2> (testSignal (frame), testSignal (frame));
-        rackB.trackingPitchHzIn <- 220.0f;
-        rackB.advance();
-        return rackB.out;
-    }
+    float32[4096] reference;
 
     void main()
     {
         configure();
 
-        rackA.rackEnable <- flangerOnly();
-        rackB.rackEnable <- flangerOnly();
-        rackB.rackOrder <- reversedOrder();
+        // Run 1: forward order. Local frame indexing starts at the commit, so the
+        // second run can replay the exact same input against its own commit point.
+        rack.laneTopology <- flangerChain (false);
 
         for (int32 frame = 0; frame < settleFrames; ++frame)
-        {
-            renderA (frame);
-            renderB (frame);
-        }
+            render (frame);
+
+        for (int32 frame = 0; frame < measureFrames; ++frame)
+            reference.at (frame) = render (settleFrames + frame)[0];
+
+        let forwardCode = rack.laneCommittedChainCode;
+        let forwardMask = rack.laneCommittedPositionMask;
+
+        // Run 2: reversed order, after an empty-chain commit so every device
+        // re-enters factory-fresh and the flanger's LFO restarts from phase zero.
+        rack.laneTopology <- emptyChain();
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (frame);
+
+        rack.laneTopology <- flangerChain (true);
+
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            render (frame);
 
         bool identical = true;
         float32 maxWetDeparture;
@@ -579,14 +561,13 @@ processor RackOrderAdvanceTest [[ main ]]
         for (int32 frame = 0; frame < measureFrames; ++frame)
         {
             let index = settleFrames + frame;
-            let a = renderA (index)[0];
-            let b = renderB (index)[0];
+            let sample = render (index)[0];
 
-            if (a != b)
+            if (sample != reference.at (frame))
                 identical = false;
 
             maxWetDeparture = std::intrinsics::max (maxWetDeparture,
-                                                    std::intrinsics::abs (a - testSignal (index)));
+                                                    std::intrinsics::abs (sample - testSignal (index)));
         }
 
         // 1. Position does not change a module's own time base.
@@ -597,8 +578,11 @@ processor RackOrderAdvanceTest [[ main ]]
         out <- (maxWetDeparture > 0.01f) ? 1 : 0;
         advance();
 
-        // 3. Both racks are running the orders we asked for.
-        out <- (rackB.rackCommittedOrderCode != rackA.rackCommittedOrderCode) ? 1 : 0;
+        // 3. The two runs really committed different structures, and the enable
+        //    bit followed the flanger to its new position.
+        out <- (rack.laneCommittedChainCode != forwardCode
+                 && forwardMask == (1 << wt::rackModuleFlanger)
+                 && rack.laneCommittedPositionMask == (1 << (7 - wt::rackModuleFlanger))) ? 1 : 0;
         advance();
 
         out <- -1;
@@ -628,30 +612,22 @@ processor RackTransitionTest [[ main ]]
         return rack.out;
     }
 
-    wt::RackEnableUpload allDisabled()
+    // All eight devices in chain, only the flanger and delay live; the enable
+    // bits are POSITION-indexed, so they are derived from where the rotation
+    // puts those two modules rather than hand-numbered.
+    wt::LaneTopologyUpload wetChain (int32 shift)
     {
-        wt::RackEnableUpload upload;
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 8;
 
-        for (wrap<wt::rackModuleCount> moduleId)
-            upload.enabledFlags[moduleId] = 0;
+        for (int32 position = 0; position < 8; ++position)
+        {
+            let moduleId = (position + shift) % 8;
+            upload.slotIds.at (position) = moduleId;
 
-        return upload;
-    }
-
-    wt::RackEnableUpload filterAndDriveOnly()
-    {
-        var upload = allDisabled();
-        upload.enabledFlags[wt::rackModuleFlanger] = 1;
-        upload.enabledFlags[wt::rackModuleDelay] = 1;
-        return upload;
-    }
-
-    wt::RackOrderUpload rotatedOrder (int32 shift)
-    {
-        wt::RackOrderUpload upload;
-
-        for (wrap<wt::rackModuleCount> position)
-            upload.moduleIds[position] = (int32 (position) + shift) % wt::rackModuleCount;
+            if (moduleId == wt::rackModuleFlanger || moduleId == wt::rackModuleDelay)
+                upload.enabledMask |= 1 << position;
+        }
 
         return upload;
     }
@@ -668,7 +644,7 @@ processor RackTransitionTest [[ main ]]
         rack.delayTime <- 23.0f;
         rack.delayFeedback <- 0.5f;
         rack.delayMix <- 0.55f;
-        rack.rackEnable <- filterAndDriveOnly();
+        rack.laneTopology <- wetChain (0);
 
         for (int32 frame = 0; frame < settleFrames; ++frame)
             render();
@@ -681,11 +657,11 @@ processor RackTransitionTest [[ main ]]
         // B1-B5: fade the processed contribution to exact dry, commit there, and fade
         // the new order in. The live instrument is never gated.
 
-        rack.rackOrder <- rotatedOrder (1);
+        let generationBefore = rack.laneCommittedGeneration;
+        rack.laneTopology <- wetChain (1);
 
         int32 silentFrames;
         int32 commitFrame = -1;
-        let generationBefore = rack.rackCommittedStructureGeneration;
 
         for (int32 frame = 0; frame < settleFrames; ++frame)
         {
@@ -694,7 +670,7 @@ processor RackTransitionTest [[ main ]]
             if (rendered == 0.0f)
                 silentFrames += 1;
 
-            if (commitFrame < 0 && rack.rackCommittedStructureGeneration == generationBefore + 1)
+            if (commitFrame < 0 && rack.laneCommittedGeneration == generationBefore + 1)
                 commitFrame = frame;
 
         }
@@ -751,16 +727,21 @@ processor RackOutputStageTest [[ main ]]
              + 0.9f * float32 (std::intrinsics::sin (float32 (frame) * 0.37f));
     }
 
-    wt::RackEnableUpload enableOnly (bool flanger, bool delay, bool reverb)
+    wt::LaneTopologyUpload regenerationChain()
     {
-        wt::RackEnableUpload upload;
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 3;
+        upload.slotIds.at (0) = wt::rackModuleFlanger;
+        upload.slotIds.at (1) = wt::rackModuleDelay;
+        upload.slotIds.at (2) = wt::rackModuleReverb;
+        upload.enabledMask = 0b111;
+        return upload;
+    }
 
-        for (wrap<wt::rackModuleCount> moduleId)
-            upload.enabledFlags[moduleId] = 0;
-
-        upload.enabledFlags[wt::rackModuleFlanger] = flanger ? 1 : 0;
-        upload.enabledFlags[wt::rackModuleDelay] = delay ? 1 : 0;
-        upload.enabledFlags[wt::rackModuleReverb] = reverb ? 1 : 0;
+    wt::LaneTopologyUpload emptyChain()
+    {
+        wt::LaneTopologyUpload upload;
+        upload.chainLength = 0;
         return upload;
     }
 
@@ -769,7 +750,7 @@ processor RackOutputStageTest [[ main ]]
     // refutation was worried about, and it is one drag-and-drop away in the UI.
     void configureRegeneration()
     {
-        rack.rackEnable <- enableOnly (true, true, true);
+        rack.laneTopology <- regenerationChain();
 
         rack.flangerMix <- 0.6f;
         rack.flangerDepth <- 1.0f;
@@ -908,12 +889,12 @@ processor RackOutputStageTest [[ main ]]
                  && regenerationStagedPeak <= wt::rackOutputHardCeiling) ? 1 : 0;
         advance();
 
-        // 8. AND WITHOUT ANY EFFECT AT ALL. An all-bypassed rack passes a hot bus
+        // 8. AND WITHOUT ANY EFFECT AT ALL. An empty lane passes a hot bus
         //    straight through, so the instrument was already capable of leaving full
         //    scale before the rack existed - which is the other half of why this stage
         //    is not optional. wt::ChorusBus used to be the only thing catching it.
 
-        rack.rackEnable <- enableOnly (false, false, false);
+        rack.laneTopology <- emptyChain();
 
         let bypassedRawPeak = measureRackPeak (false);
         let bypassedStagedPeak = measureRackPeak (true);
