@@ -927,6 +927,38 @@ CROSS-CUTTING EDITING FEATURES — REQUIRE PRODUCT AND ARCHITECTURE REVIEW
     Done when:
     - The same text means the same value everywhere that parameter can be edited, explicit units round-trip correctly, and no exact-value field silently guesses between genuinely different meanings.
 
+FUTURE DSP EXPLORATIONS — VALIDATE BEFORE PRODUCT INTEGRATION
+
+[ ] T23 — Explore a detail-preserving clipper as a Cosimo effect
+    Origin and scope (Andrew, 2026-08-22):
+    - Reference reel: https://www.instagram.com/reel/DZEVKuITTaJ/?igsi=YXE4OHZ2dzJpbHpw
+    - Determine whether the demonstrated detail-preserving clipping idea can add useful peak control and aggressive loudness/character without conventional clipping masking the patch's upper-frequency detail and transient edge.
+    - This ticket authorizes research and a throwaway DSP comparison only. It does not authorize a production effect, UI, preset contract, Effects Lane integration, or replacement of the current Distortion effect.
+    Evidence status and first gate:
+    - The supplied reel has not yet been captured in a browser session. Watch it first and record the author, exact signal graph, controls, claims, before/after material, and any caveats; do not infer those details from the phrase "detail-preserving clipper."
+    - Related public prior art is not evidence that the reel uses the same design. Au5 describes a high-passed clipping-delta/foldback path; Newfangled Saturate describes frequency-separated spectral treatment. Preserve them as different hypotheses, not interchangeable implementations:
+      - https://www.patreon.com/Au5Music/posts/detail-clipper-156412018
+      - https://www.newfangledaudio.com/saturate
+    Product hypothesis (provisional):
+    - For a sound designer driving dense or transient-rich Cosimo patches into clipping, a detail-preserving mode/effect may retain more audible snap, brightness, and separation at the same controlled peak level than the existing conventional distortion/clip baseline.
+    - Unknown until audition: whether this is broadly useful enough to be a lane device, only an extreme sound-design mode, or redundant with the current 4x-oversampled DistortionBus and its band-shaped wet path.
+    Investigation order:
+    1. Capture the reel and translate only its demonstrated behavior into an annotated signal-flow reference.
+    2. Freeze a small audio corpus that can expose both the proposed benefit and its failure modes: low-heavy material with quiet high-frequency detail, sharp transients, harmonically dense synth patches, and deliberately adversarial near-Nyquist content.
+    3. Freeze the comparison protocol before judging sound: identical source and drive condition, matched output ceiling/peak reduction, loudness-matched audition, and retained originals/renders/measurements.
+    4. Build an isolated Cmajor lab, leaving production DistortionBus untouched, with the current clip/distortion behavior as baseline and at least two genuine design forks:
+       - a high-passed clipping-delta/foldback detail path derived independently from the public Au5 explanation;
+       - an independently designed frequency-separated/detail-path alternative that does not copy Newfangled code, coefficients, UI, or proprietary implementation.
+    5. Sweep detail amount/frequency, clipping drive/shape, oversampling or other anti-alias treatment, and output trim. Check stereo coherence, DC, NaN/Inf containment, output ceiling, intersample overs, foldback harshness, and bypass/zero-detail identity.
+    6. Measure retained upper-band/transient behavior, alias products, peak reduction, latency, and CPU on the product-relevant backends. Keep sound quality and current-effect parity explicit; do not substitute a generic efficiency objective.
+    Decision gate — freeze numeric thresholds after the reference capture and baseline measurement, before tuning either fork:
+    - Advance only if one fork wins a level-matched user audition on more than one corpus item, the corresponding frozen measurements distinguish it from the conventional baseline, safety invariants pass, and its measured cost fits an explicitly named product placement.
+    - If no fork produces a repeatable advantage, close the ticket as a useful negative result. If the advantage exists only for extreme coloration, recommend that narrower scope rather than marketing it as transparent peak control.
+    - Any production proposal must separately decide lane device vs Distortion mode vs output-stage tool, define the minimal controls, and review naming/licensing/provenance. This exploration must not silently make that product decision.
+    Done when:
+    - The reel evidence, signal-flow hypotheses, frozen corpus/protocol, renders, metrics, and source commit are retained together.
+    - The result ends with one explicit recommendation: build a narrowly named product feature, run one identified follow-up experiment that would choose between real alternatives, defer, or do not build.
+
 IMPLEMENTED BASELINES TO CONFIRM, NOT REBUILD BLINDLY
 
 [x] B01 — Finger-clear modulation dragging exists at commit 3b769b21
