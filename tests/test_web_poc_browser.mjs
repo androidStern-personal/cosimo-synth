@@ -2766,7 +2766,11 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
             scrollBefore,
             "The rack reorder handle yielded its touch gesture to page scrolling.",
         );
-        assert.equal(storedRack.order[0], "reverb", "Touch reorder did not commit its new DSP order.");
+        assert.equal(
+            storedRack.chain?.[0]?.deviceId,
+            "reverb#1",
+            "Touch reorder did not commit its new DSP order.",
+        );
     } finally {
         await page.close();
     }

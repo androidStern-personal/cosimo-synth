@@ -126,6 +126,7 @@ async function measureHeldNoteWorkletLoad(page, note = 60, minimumBlocks = 256) 
             blockCount: snapshot.audioWorkletBlockCount,
             deadlineMisses: snapshot.audioWorkletDefiniteDeadlineMissBlocks,
             clockSource: snapshot.audioWorkletClockSource,
+            processMultiplier: snapshot.audioWorkletProcessMultiplier,
         };
     });
     await page.evaluate((noteNumber) => globalThis.__COSIMO_WEB_POC__.noteOff(noteNumber), note);
@@ -144,6 +145,16 @@ async function averageHeldNoteWorkletLoad(page, windowCount = 2) {
         averageLoad: windows.reduce((sum, entry) => sum + entry.averageLoad, 0) / windows.length,
         deadlineMisses: windows.reduce((sum, entry) => sum + entry.deadlineMisses, 0),
     };
+}
+
+async function setPerfProcessMultiplier(page, multiplier) {
+    await page.evaluate((nextMultiplier) => {
+        globalThis.__COSIMO_WEB_POC__.setPerfProcessMultiplier(nextMultiplier);
+    }, multiplier);
+    await page.waitForFunction((expectedMultiplier) => (
+        globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletProcessMultiplier
+            === expectedMultiplier
+    ), multiplier, { timeout: 5_000 });
 }
 
 async function storedBounceDocument(page) {
@@ -231,7 +242,16 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
     try {
         const bounce = page.locator('[data-role="bounce-start"]');
         await bounce.waitFor({ state: "visible" });
+        // Run two identical DSP passes per callback so the real work rises
+        // above Date.now's 1 ms quantization without exceeding the callback
+        // budget. This test-only multiplier applies equally to both sides.
+        await setPerfProcessMultiplier(page, 2);
+        // Headless Chromium exposes only integer-millisecond Date.now inside
+        // this AudioWorklet. Discard two cold windows before taking the paired
+        // oscillator baseline so JIT/clock warm-up is not mistaken for DSP.
+        await averageHeldNoteWorkletLoad(page);
         const preInstallLoad = await averageHeldNoteWorkletLoad(page);
+        await setPerfProcessMultiplier(page, 1);
 
         // Cancel is reachable from the first preparation paint, and no durable
         // or runtime source transition is allowed to leak from that attempt.
@@ -297,7 +317,9 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         ));
         assert.ok(sampledPeak > 0.001, `Expected sampled audio, measured peak ${sampledPeak}`);
         await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.noteOff(60));
+        await setPerfProcessMultiplier(page, 2);
         const sampledLoad = await averageHeldNoteWorkletLoad(page, 1);
+        await setPerfProcessMultiplier(page, 1);
 
         // The sampled source remains the source panel at the locked phone
         // viewport and does not force document-level horizontal scrolling.
@@ -319,6 +341,11 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         assert.ok(phoneLayout.left >= 0 && phoneLayout.right <= phoneLayout.viewportWidth + 1);
         assert.ok(phoneLayout.height >= 220);
 
+        // Compare like with like: restore the baseline viewport before the
+        // paired resident-bank measurement, then discard the transition/JIT
+        // windows under the same coarse worklet clock.
+        await page.setViewportSize({ width: 1280, height: 800 });
+
         await page.locator('[data-role="bounce-revert"]').click();
         await page.locator('[data-role="bounce-start"]').waitFor({ state: "visible", timeout: 30_000 });
         await page.waitForFunction(() => (
@@ -326,6 +353,8 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         ));
         const revertedState = await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.storedState());
         assert.equal(revertedState.values?.["bounce.v1"] ?? revertedState["bounce.v1"] ?? null, null);
+        await setPerfProcessMultiplier(page, 2);
+        await averageHeldNoteWorkletLoad(page);
         const residentOscillatorLoad = await averageHeldNoteWorkletLoad(page);
         assert.ok(
             residentOscillatorLoad.averageLoad <= preInstallLoad.averageLoad * 1.10,
