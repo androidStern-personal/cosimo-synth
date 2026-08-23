@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <iostream>
 #include <memory>
+#include <numeric>
 #include <string>
 #include <thread>
 #include <vector>
@@ -139,18 +140,18 @@ int runProbe (const char* runtimePath, const char* patchPath)
     }
     CmajorLibraryScope libraryScope;
 
-    auto initialisationTime = std::chrono::nanoseconds {};
+    std::vector<std::chrono::nanoseconds> initialisationTimes;
     auto configuration = createDesktopJITBounceConfiguration (patchPath);
     configuration.initialiseDurationReported = [&] (std::chrono::nanoseconds duration)
     {
-        initialisationTime = duration;
+        initialisationTimes.push_back (duration);
     };
     configuration.readyTimeout = std::chrono::seconds (30);
 
     CapturePlan plan;
     plan.sampleRate = sampleRate;
     plan.tempoBpm = 120.0;
-    plan.roots = { rootNote };
+    plan.roots = { 48, rootNote, 72 };
     plan.holdFrames = 1200;
     plan.tailCapFrames = 4800;
     plan.silenceWindowFrames = 256;
@@ -168,29 +169,52 @@ int runProbe (const char* runtimePath, const char* patchPath)
         cancelled);
     const auto totalElapsed = std::chrono::steady_clock::now() - totalStartedAt;
 
-    if (roots.size() != 1
-        || roots[0].rootNote != rootNote
-        || roots[0].noteOffFrameOffset != plan.holdFrames
-        || roots[0].frameCount <= plan.holdFrames
-        || roots[0].frameCount >= plan.holdFrames + plan.tailCapFrames
-        || roots[0].peak < 0.01f
-        || roots[0].interleavedStereo.size() != roots[0].frameCount * 2
-        || summary.totalFrameCount != roots[0].frameCount
-        || initialisationTime.count() <= 0)
+    const auto capturedFrames = std::accumulate (
+        roots.begin(), roots.end(), std::uint64_t { 0 },
+        [] (std::uint64_t total, const RootCapture& root)
+        {
+            return total + root.frameCount;
+        });
+    const auto malformedRoot = std::any_of (
+        roots.begin(), roots.end(), [&] (const RootCapture& root)
+        {
+            return root.rootIndex >= plan.roots.size()
+                || root.rootNote != plan.roots[root.rootIndex]
+                || root.noteOffFrameOffset != plan.holdFrames
+                || root.frameCount <= plan.holdFrames
+                || root.frameCount >= plan.holdFrames + plan.tailCapFrames
+                || root.peak < 0.01f
+                || root.interleavedStereo.size() != root.frameCount * 2;
+        });
+    if (roots.size() != plan.roots.size()
+        || malformedRoot
+        || summary.totalFrameCount != capturedFrames
+        || initialisationTimes.size() != plan.roots.size()
+        || std::any_of (initialisationTimes.begin(), initialisationTimes.end(),
+                        [] (auto duration) { return duration.count() <= 0; }))
     {
         std::cerr << "FAIL: native QuickJS Bounce capture violated its result contract\n";
         return 1;
     }
 
-    const auto initSeconds = std::chrono::duration<double> (initialisationTime).count();
     const auto totalSeconds = std::chrono::duration<double> (totalElapsed).count();
-    std::cout << "PASS: native QuickJS driver rendered a recursive production-patch root\n"
-              << "  initSeconds=" << initSeconds << '\n'
+    std::cout << "PASS: native QuickJS driver rendered three recursive production-patch roots\n"
+              << "  initSeconds=";
+    for (std::size_t index = 0; index < initialisationTimes.size(); ++index)
+        std::cout << (index == 0 ? "" : ",")
+                  << std::chrono::duration<double> (initialisationTimes[index]).count();
+    std::cout << '\n'
               << "  totalSeconds=" << totalSeconds << '\n'
-              << "  capturedFrames=" << roots[0].frameCount << '\n'
-              << "  peak=" << roots[0].peak << '\n'
-              << "  realtimeMultiplier=" << summary.metrics[0].realtimeMultiplier << '\n'
-              << "  absolute Linux VM timing is advisory; Mac/iOS must be measured separately\n";
+              << "  capturedFrames=" << capturedFrames << '\n'
+              << "  rootPeaks=";
+    for (std::size_t index = 0; index < roots.size(); ++index)
+        std::cout << (index == 0 ? "" : ",") << roots[index].peak;
+    std::cout << '\n' << "  realtimeMultipliers=";
+    for (std::size_t index = 0; index < summary.metrics.size(); ++index)
+        std::cout << (index == 0 ? "" : ",")
+                  << summary.metrics[index].realtimeMultiplier;
+    std::cout << '\n'
+              << "  absolute host timing is advisory; record hardware and compare paired runs\n";
     return 0;
 }
 }

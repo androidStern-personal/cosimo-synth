@@ -7,6 +7,10 @@
 
 #include <stdexcept>
 
+#ifndef COSIMO_PATCH_PATH
+ #error "COSIMO_PATCH_PATH must identify the production desktop patch"
+#endif
+
 namespace cosimo::desktop
 {
 
@@ -27,6 +31,14 @@ std::unique_ptr<bounce::BounceBankStore> createBounceBankStore()
         resolveBounceBankStoreRoot());
     store->initialise();
     return store;
+}
+
+bounce::PerformerFactory createBouncePerformerFactory (
+    bounce::CmajorPatchSnapshot snapshot)
+{
+    return bounce::createCmajorPerformerFactory (
+        bounce::createDesktopJITBounceConfiguration (COSIMO_PATCH_PATH),
+        std::move (snapshot));
 }
 
 } // namespace cosimo::desktop
