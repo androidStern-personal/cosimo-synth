@@ -265,6 +265,37 @@ test("runtime restore verifies metadata and commits sampled mode only after stag
     assert.deepEqual(log, ["status", "stage", "commit"], "same digest must not reinstall");
 });
 
+test("a verified live Bounce transaction suppresses the matching stored-state re-install", async () => {
+    const fixture = await bankFixture();
+    const document = bounceDocument(fixture);
+    let storeReads = 0;
+    let stageCalls = 0;
+    const restorer = new BounceRuntimeRestorer({
+        connection: { sendEventOrValue() {} },
+        store: {
+            async get() {
+                storeReads += 1;
+                return fixture.bytes;
+            },
+        },
+        statusRequest: async () => ({ dspSessionId: 1, sampleRateHz: 48_000 }),
+        stageInstall: async () => {
+            stageCalls += 1;
+            throw new Error("the live transaction already installed this bank");
+        },
+    });
+
+    const accepted = restorer.acceptCommittedDocument(serializeBounceDocument(document));
+    assert.equal(accepted.status, "ready");
+    assert.equal(accepted.digest, fixture.digest);
+
+    const echoed = await restorer.restore(document);
+    assert.equal(echoed.status, "ready");
+    assert.equal(echoed.digest, fixture.digest);
+    assert.equal(storeReads, 0);
+    assert.equal(stageCalls, 0);
+});
+
 test("missing or corrupt persisted banks expose typed errors and keep the oscillator fallback", async () => {
     const fixture = await bankFixture();
     const document = bounceDocument(fixture);

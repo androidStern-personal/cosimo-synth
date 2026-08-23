@@ -25,6 +25,7 @@ import {
     type ModulationRouteUpdate,
     type ModulationTargetKind,
 } from "../shared/modulation";
+import { isOscillatorModulationTargetKind } from "../shared/modulation-targets";
 import { usePatchModulationTargetOptions } from "../shared/lane-param-bindings";
 import { getModulationTargetDisplayLabel } from "../shared/target-descriptor";
 import {
@@ -610,17 +611,23 @@ const RouteRow = memo(function RouteRow({
     onRouteChange,
     onRemoveRoute,
     registerRow,
+    oscillatorTargetsInactive,
 }: {
     route: ModulationRoute;
     routeIndex: number;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     onRemoveRoute: (routeIndex: number) => void;
     registerRow: (routeIndex: number, element: HTMLDivElement | null) => void;
+    oscillatorTargetsInactive: boolean;
 }) {
     const sourceValue = getModulationSourceOptionValue(route);
     const targetBounds = getModulationAmountBounds(route.targetKind);
     const amountBinding = useModulationRouteAmountBinding(route);
-    const patchTargetOptions = usePatchModulationTargetOptions();
+    const patchTargetOptions = usePatchModulationTargetOptions({
+        includeOscillatorTargets: !oscillatorTargetsInactive,
+    });
+    const isBounceInert = oscillatorTargetsInactive
+        && isOscillatorModulationTargetKind(route.targetKind);
     // A stored route can point at a device this patch no longer lists (a pool
     // instance today); the select still renders it, instance-labeled.
     const targetOptions = useMemo(() => (
@@ -636,7 +643,12 @@ const RouteRow = memo(function RouteRow({
         <div
             ref={(element) => registerRow(routeIndex, element)}
             data-role={`route-row-${routeIndex + 1}`}
+            data-bounce-inert={isBounceInert ? "true" : undefined}
+            aria-disabled={isBounceInert}
+            inert={isBounceInert}
             className={`modulation-route-row synth-control-rail group flex items-center gap-2 rounded-lg px-3 py-2 transition-all hover:border-[rgb(var(--section-accent-rgb)/0.22)] hover:bg-[rgb(var(--section-accent-rgb)/0.045)] ${
+                isBounceInert ? "opacity-35 grayscale " : ""
+            }${
                 route.enabled ? "" : "opacity-40"
             }`}
         >
@@ -671,6 +683,12 @@ const RouteRow = memo(function RouteRow({
             </div>
 
             <ArrowRightIcon className="hidden h-3.5 w-3.5 shrink-0 text-[rgb(var(--cosimo-raised-rgb)/0.82)] sm:block" />
+
+            {isBounceInert ? (
+                <span className="rounded border border-cyan-200/10 bg-cyan-300/5 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-cyan-100/55">
+                    Baked
+                </span>
+            ) : null}
 
             <PrototypeSelect
                 ariaLabel={`Route ${routeIndex + 1} target`}
@@ -742,12 +760,14 @@ export function DesktopModMatrix({
     onRemoveRoute,
     onRouteChange,
     className = "",
+    oscillatorTargetsInactive = false,
 }: {
     routes: ModulationRoute[];
     onAddRoute: () => void;
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     className?: string;
+    oscillatorTargetsInactive?: boolean;
 }) {
     const routeRowRefs = useRef<Array<HTMLDivElement | null>>([]);
     const pendingRouteScrollIndexRef = useRef<number | null>(null);
@@ -807,6 +827,7 @@ export function DesktopModMatrix({
                         registerRow={registerRouteRow}
                         onRouteChange={onRouteChange}
                         onRemoveRoute={onRemoveRoute}
+                        oscillatorTargetsInactive={oscillatorTargetsInactive}
                     />
                 ))}
             </div>

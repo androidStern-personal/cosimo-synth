@@ -295,6 +295,12 @@ namespace wt
     let bounceBankFrameBatchCapacity = 6000;
     let sourceModeOscillator = 0;
     let sourceModeBounce = 1;
+    // A source replacement can arrive while a note is held. Fade the old
+    // source to zero before changing readers, then fade the new source in.
+    // This is fixed per-sample arithmetic: no allocation, lock, or unbounded
+    // audio-thread work is introduced by the sampled path.
+    let sourceModeFadeFrameCount = 192;
+    let sourceModeFadeStep = 1.0f / float32 (sourceModeFadeFrameCount);
     let bouncePlaybackMakeupGain = 1.0f / 0.18f;
     let bounceCaptureVelocityGain = 100.0f / 127.0f;
     let bounceInstallRejectionNone = 0;
@@ -1660,6 +1666,9 @@ namespace wt
         int32 bounceRejectedDeliverySerial = 0;
         int32 bounceInstallRejectionReason = bounceInstallRejectionNone;
         int32 sourceModeState = sourceModeOscillator;
+        int32 pendingSourceModeState = sourceModeOscillator;
+        int32 sourceModeFadeDirection = 0;
+        float32 sourceModeFadeGain = 1.0f;
 
         // Active slots are immutable while visible. Uploads write into the one
         // spare slot and publish only after every mip/frame has arrived.
@@ -3662,6 +3671,73 @@ namespace wt
                 || voiceBouncePlaying.at (voice);
         }
 
+        void requestSourceModeTransition (int32 requestedMode)
+        {
+            let resolvedMode = requestedMode == sourceModeBounce
+                ? sourceModeBounce : sourceModeOscillator;
+
+            if (resolvedMode != sourceModeState)
+            {
+                pendingSourceModeState = resolvedMode;
+                sourceModeFadeDirection = -1;
+            }
+            else if (sourceModeFadeDirection < 0)
+            {
+                // A host can supersede a queued swap before the zero crossing.
+                pendingSourceModeState = sourceModeState;
+                sourceModeFadeDirection = 1;
+            }
+        }
+
+        void publishPendingSourceMode()
+        {
+            sourceModeState = pendingSourceModeState;
+
+            for (wrap<voiceCount> voice)
+            {
+                let voiceIndex = int32 (voice);
+
+                if (sourceModeState == sourceModeBounce)
+                {
+                    if (voiceIsSoundingForRackModulation (voiceIndex))
+                        startBounceSampleForVoice (
+                            voiceIndex,
+                            voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice));
+                }
+                else
+                {
+                    // A paused reader would pin the old immutable bank slot.
+                    stopBounceSampleForVoice (voiceIndex);
+                }
+            }
+        }
+
+        float32 advanceSourceModeTransition()
+        {
+            if (sourceModeFadeDirection < 0)
+            {
+                sourceModeFadeGain = std::intrinsics::max (
+                    0.0f, sourceModeFadeGain - sourceModeFadeStep);
+
+                if (sourceModeFadeGain <= 0.0f)
+                {
+                    publishPendingSourceMode();
+                    sourceModeFadeDirection = 1;
+                }
+            }
+
+            if (sourceModeFadeDirection > 0)
+            {
+                sourceModeFadeGain = std::intrinsics::min (
+                    1.0f, sourceModeFadeGain + sourceModeFadeStep);
+
+                if (sourceModeFadeGain >= 1.0f)
+                    sourceModeFadeDirection = 0;
+            }
+
+            return sourceModeFadeGain;
+        }
+
         void updateRackModulationOutputs()
         {
             for (wrap<rackModTargetCount> target)
@@ -5215,6 +5291,9 @@ namespace wt
             previewFrequencyHzState = previewFrequencyHzState < 0.0f ? 0.0f : previewFrequencyHzState;
             glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
             sourceModeState = sourceModeIn >= 0.5f ? sourceModeBounce : sourceModeOscillator;
+            pendingSourceModeState = sourceModeState;
+            sourceModeFadeDirection = 0;
+            sourceModeFadeGain = 1.0f;
             updateOscillatorInputState();
 
             for (wrap<oscillatorCount> oscillator)
@@ -5275,7 +5354,9 @@ namespace wt
             loop
             {
                 glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
-                sourceModeState = sourceModeIn >= 0.5f ? sourceModeBounce : sourceModeOscillator;
+                requestSourceModeTransition (
+                    sourceModeIn >= 0.5f ? sourceModeBounce : sourceModeOscillator);
+                let sourceModeGain = advanceSourceModeTransition();
                 updateOscillatorInputState();
                 let isBounceSource = resolveSourceMode() == sourceModeBounce;
 
@@ -5573,7 +5654,9 @@ namespace wt
 
                 updateRackModulationOutputs();
 
-                out <- float32<2> (leftMix, rightMix);
+                out <- float32<2> (
+                    leftMix * sourceModeGain,
+                    rightMix * sourceModeGain);
                 trackingPitchHzOut <- trackingPitchHz;
                 maybeEmitMonitorUpdate();
                 advance();

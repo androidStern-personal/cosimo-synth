@@ -63,6 +63,12 @@ export const VOICE_MODULATION_TARGET_KINDS = Object.freeze([
     ...OSCILLATOR_IDS.flatMap((oscillatorID) => (OSCILLATOR_MODULATION_PARAMETER_KINDS.map((parameterKind) => `osc${oscillatorID}.${parameterKind}`))),
     ...SHARED_VOICE_MODULATION_TARGET_KINDS,
 ]);
+const OSCILLATOR_MODULATION_TARGET_KIND_SET = new Set(OSCILLATOR_IDS.flatMap((oscillatorID) => (OSCILLATOR_MODULATION_PARAMETER_KINDS.map((parameterKind) => `osc${oscillatorID}.${parameterKind}`))));
+/** Runtime grammar check used when sampled mode makes all 30 oscillator cells inert. */
+export function isOscillatorModulationTargetKind(value) {
+    return typeof value === "string"
+        && OSCILLATOR_MODULATION_TARGET_KIND_SET.has(value);
+}
 /** Voice destinations paired with their canonical runtime indexes. */
 export const VOICE_MODULATION_TARGET_IDENTITIES = Object.freeze(VOICE_MODULATION_TARGET_KINDS.map((kind, runtimeIndex) => ({ kind, group: "voice", runtimeIndex })));
 const rackModulationParameters = allRackParameterDescriptors()

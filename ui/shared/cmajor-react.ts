@@ -54,6 +54,9 @@ export type PatchConnectionLike = {
     sendStoredStateValue?: (key: string, value: unknown) => void;
     sendNativeArticulationTriggerConfig?: (serializedConfig: string) => void;
     sendMIDIInputEvent?: (endpointID: string, shortMIDICode: number) => void;
+    /** Browser/native restore bridge: the live two-phase transaction already
+        committed this reference, so a stored-state echo must not reinstall it. */
+    acceptCommittedBounceDocument?: (value: unknown) => unknown;
 };
 
 type ParameterBinding = {

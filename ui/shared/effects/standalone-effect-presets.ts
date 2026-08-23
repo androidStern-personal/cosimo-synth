@@ -96,7 +96,8 @@ export type StandaloneEffectPresetMutationResult<T> = {
 export type StandaloneEffectPendingSoundReplacement =
     | { readonly kind: "init" }
     | { readonly kind: "preset"; readonly presetKey: string }
-    | { readonly kind: "import"; readonly presetID: string };
+    | { readonly kind: "import"; readonly presetID: string }
+    | { readonly kind: "bounce" };
 
 export type StandaloneEffectFactoryPreset = EffectPresetV2 | EffectPreset;
 
@@ -157,10 +158,10 @@ type ResolvedPreset = {
     preset: EffectPresetV2;
 };
 
-type PreparedSoundReplacement = {
+type PreparedSoundReplacement<T = unknown> = {
     readonly pending: StandaloneEffectPendingSoundReplacement;
     readonly successMessage: string;
-    readonly apply: () => EffectPresetV2;
+    readonly apply: () => T;
 };
 
 type PreparedInitOnlyStateValue = {
@@ -360,7 +361,7 @@ export class StandaloneEffectPresetController {
     private synthInitBaseline: EffectPresetV2 | null = null;
     private synthCleanInitOnlyState = new Map<string, unknown>();
     private unnamedSynthDirty = false;
-    private pendingSoundReplacement: PreparedSoundReplacement | null = null;
+    private pendingSoundReplacement: PreparedSoundReplacement<unknown> | null = null;
     private lastError: string | null = null;
 
     constructor(private readonly options: StandaloneEffectPresetControllerOptions) {
@@ -478,6 +479,7 @@ export class StandaloneEffectPresetController {
 
         return {
             initSound: this.initSound.bind(this),
+            bounceSound: this.bounceSound.bind(this),
             cancelSoundReplacement: this.cancelSoundReplacement.bind(this),
             discardAndContinueSoundReplacement: this.discardAndContinueSoundReplacement.bind(this),
             saveAndContinueSoundReplacement: this.saveAndContinueSoundReplacement.bind(this),
@@ -513,6 +515,18 @@ export class StandaloneEffectPresetController {
         }
     }
 
+    /** Run the Bounce press through the same unsaved-sound policy as Init. */
+    bounceSound(apply: () => void): StandaloneEffectPresetMutationResult<void> {
+        if (typeof apply !== "function") {
+            return this.fail(new TypeError("Bounce requires a continuation."));
+        }
+        return this.requestSoundReplacement({
+            pending: { kind: "bounce" },
+            successMessage: "Bounce started.",
+            apply,
+        });
+    }
+
     cancelSoundReplacement(): StandaloneEffectPresetMutationResult<undefined> {
         return this.runMutation(() => {
             this.pendingSoundReplacement = null;
@@ -520,7 +534,7 @@ export class StandaloneEffectPresetController {
         }, "Sound replacement cancelled.");
     }
 
-    discardAndContinueSoundReplacement(): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+    discardAndContinueSoundReplacement(): StandaloneEffectPresetMutationResult<unknown> {
         const replacement = this.pendingSoundReplacement;
 
         if (!replacement) {
@@ -534,7 +548,7 @@ export class StandaloneEffectPresetController {
         }, replacement.successMessage);
     }
 
-    saveAndContinueSoundReplacement(): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+    saveAndContinueSoundReplacement(): StandaloneEffectPresetMutationResult<unknown> {
         if (!this.pendingSoundReplacement) {
             return this.fail(new Error("No sound replacement is waiting for confirmation."));
         }
@@ -562,7 +576,7 @@ export class StandaloneEffectPresetController {
 
     saveCurrentAsNewPresetAndContinueSoundReplacement(
         label: string,
-    ): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+    ): StandaloneEffectPresetMutationResult<unknown> {
         if (!this.pendingSoundReplacement) {
             return this.fail(new Error("No sound replacement is waiting for confirmation."));
         }
@@ -1759,7 +1773,7 @@ export class StandaloneEffectPresetController {
         return suppression;
     }
 
-    private prepareInitSoundReplacement(): PreparedSoundReplacement {
+    private prepareInitSoundReplacement(): PreparedSoundReplacement<EffectPresetV2> {
         const synth = this.options.synth;
 
         if (!synth) {
@@ -1816,9 +1830,9 @@ export class StandaloneEffectPresetController {
         };
     }
 
-    private requestSoundReplacement(
-        replacement: PreparedSoundReplacement,
-    ): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+    private requestSoundReplacement<T>(
+        replacement: PreparedSoundReplacement<T>,
+    ): StandaloneEffectPresetMutationResult<T> {
         if (this.options.synth && this.getState().dirty) {
             this.pendingSoundReplacement = replacement;
             this.lastError = null;

@@ -48,7 +48,11 @@ class FakePatchConnection {
         this.sends.push({ endpointID, value, rampFrames, timeoutMilliseconds });
         if (!this.acknowledge) return;
         if (endpointID === "engineStatusRequest") {
-            queueMicrotask(() => this.emit("engineStatus", { dspSessionId: 7, sampleRateHz: 48_000 }));
+            queueMicrotask(() => this.emit("engineStatus", {
+                dspSessionId: 7,
+                sampleRateHz: 48_000,
+                tempoBpm: 123,
+            }));
         } else if (endpointID === "bounceBankLoadBegin") {
             queueMicrotask(() => this.emit("bounceBankRuntimeState", {
                 dspSessionId: 7,
@@ -171,6 +175,7 @@ test("live install reads engine identity, ack-paces staging, and publishes only 
     assert.deepEqual(await requestBounceEngineStatus(connection), {
         dspSessionId: 7,
         sampleRateHz: 48_000,
+        tempoBpm: 123,
     });
     const progress = [];
     const staged = await stageBounceBankInstall(connection, tinyBank(), {
@@ -194,8 +199,9 @@ test("live staged installer composes with the actual generated Cmajor protocol",
     const performer = new engine.default();
     await performer.initialise(42, 48_000);
     const connection = new GeneratedPerformerConnection(performer);
+    connection.sendEventOrValue("tempo", { bpm: 137 });
     const status = await requestBounceEngineStatus(connection);
-    assert.deepEqual(status, { dspSessionId: 42, sampleRateHz: 48_000 });
+    assert.deepEqual(status, { dspSessionId: 42, sampleRateHz: 48_000, tempoBpm: 137 });
     const staged = await stageBounceBankInstall(connection, tinyBank(), {
         dspSessionId: status.dspSessionId,
         generation: 1,

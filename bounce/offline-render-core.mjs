@@ -119,6 +119,15 @@ export async function renderBounceRoot(CmajorClass, planInput, jobInput) {
     const totalRenderFrames = plan.holdFrames + plan.tailCapFrames;
     const rendered = new Float32Array(totalRenderFrames * 2);
 
+    for (const event of plan.snapshot.rootSetupEvents) {
+        const value = {
+            ...event.value,
+            [event.rootNoteField]: job.rootNote,
+            ...(event.sessionScoped ? { dspSessionId: job.sessionID } : {}),
+        };
+        endpointMethod(performer, "sendInputEvent", event.endpointID)(value);
+        advanceDiscard(performer, event.advanceFrames, plan.blockFrames);
+    }
     endpointMethod(performer, "sendInputEvent", "midiIn")({
         message: packMidi(0x90, job.rootNote, plan.captureVelocity),
     });

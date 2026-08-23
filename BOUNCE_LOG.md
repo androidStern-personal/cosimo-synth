@@ -273,3 +273,85 @@ Validation: production `web:build`; 2/2 Chromium persistence/reload tests;
 5/5 persistence/preset unit tests; 39/39 combined persistence, transition,
 preset-migration, and web-bundle tests; 692/692 pure Node tests; and the full
 Linux Chromium web POC at 13 passed, 5 expected environment skips, 0 failed.
+
+## 2026-08-23 — M6: product capture UI, source presentation, and quality gates
+
+- Added the product Bounce controller and connected the complete M3/M4/M5
+  transaction to both UI layouts. Bounce takes immutable parameter and
+  structured-document reads at the confirmed press, asks DSP for its actual
+  sample rate **and current host tempo**, prepares factory tables plus
+  modulation/articulation/Effects Lane runtime state, renders in background
+  workers, persists, stages, verifies, and only then publishes the sampled
+  document. Never-edited omitted stored documents resolve to their canonical
+  product defaults after a full-state reply, not during a hydration race.
+- Factory wavetable preparation deduplicates identical A/B/C selections and
+  preserves shared typed-array aliases in the capture snapshot. Source FFT and
+  mip work yields every eight frames, reports preparation progress, and checks
+  cancellation throughout instead of monopolizing the browser main thread.
+  Velocity-mode articulation at the locked capture velocity 100 now emits a
+  root-scoped `articulationNoteMeta` immediately before each worker note-on;
+  Chain/Key live external selection is intentionally not invented from patch
+  state that does not contain it.
+- Desktop swaps `DesktopOscillatorPresentation`'s source-stage slot for a PCM
+  waveform; compact swaps the focused-editor slot. The waveform uses a
+  peak-preserving stereo envelope for the root nearest the last intentional
+  note, with lower-root tie breaking, root markers, digest, recorded duration,
+  missing-bank alert, and Revert. The locked 393×852 proof has no document
+  overflow, keeps the stage within viewport bounds, and reserves at least
+  220 px of waveform height.
+- Added Bounce progress for preparation, roots, live-bank frames, validation,
+  persistence, install, verify, and flip, plus cancellation from the first
+  preparation paint. Cancellation/failure leaves Source Mode and durable state
+  unchanged. A coordinator settlement fix now publishes `busy=false` after
+  successful cleanup rather than leaving the control stuck at 100%.
+- Bounce reuses the synth preset controller's existing unsaved-sound choke
+  point. The dialog says exactly `Save and Bounce` / `Discard and Bounce`;
+  cancellation runs no continuation, and only the currently confirmed
+  press-time continuation can start capture.
+- Oscillator performance and unison controls remain visible but are inert,
+  grey, and explained as baked. Oscillator modulation destinations disappear
+  from both desktop and compact pickers; a transient existing row is itself
+  inert/grey and labelled Baked. Filter, ENV, MSEG, macros, Play Mode, Glide,
+  and fresh-layer rack/modulation destinations remain live. The articulation
+  surface explicitly distinguishes baked oscillator overrides from live
+  filter/MSEG/ENV overrides.
+- The browser restorer accepts a document already verified and committed by a
+  live transaction before the `bounce.v1` stored-state echo, preventing a
+  duplicate bank upload race. An explicit regression proves the echo performs
+  zero storage reads and zero stage calls.
+- A held-note Source Mode change had a real click edge: the old implementation
+  changed readers in one frame. Added a fixed 192-frame (4 ms at 48 kHz)
+  fade-down/swap/fade-up. It uses fixed scalar state and bounded 16-voice work,
+  with no allocation or lock on the audio thread; leaving sampled mode also
+  releases paused readers so an old immutable bank slot cannot remain pinned.
+
+G2 browser evidence, using paired 256-block held-note AudioWorklet windows:
+pre-install oscillator average load was 0.50830; sampled load was 0.44385;
+post-Revert oscillator load with the bank still resident was 0.50537, a
+−0.58% relative change and inside the ≤10% gate. Sampled/resident windows
+added no deadline misses versus the adjacent VM baseline (0 and 6 versus 8).
+The headless clock was `Date.now` and individual absolute windows contained VM
+scheduling misses, so those absolute values are advisory rather than a Mac/iOS
+performance verdict; the relative bank-residency comparison is the gate.
+
+G4 evidence: the committed generated-performer script renders a deliberately
+near-peak 0.12-FS/440-Hz held sample across Bounce→Oscillator→Bounce and through
+note-on/off. Maximum stereo inter-sample step was 0.00692749 FS (−43.19 dBFS),
+below the justified isolated-click ceiling of 0.01000 FS (−40.00 dBFS).
+
+The Chromium product proof cancels one real attempt, completes a second through
+exactly one new worker, verifies durable `bounce.v1`, audibly plays root 60,
+checks inert controls, resizes the same sampled state to desktop and 393×852,
+then Reverts to exact oscillator intent and clears the reference. Including
+the G2 windows it took about 7.2 seconds on this small VM; the duration is
+informational only.
+
+Validation: production `web:build`; 6/6 capture planner/recipe/segmenter tests;
+the full worker determinism/three-patch A/B test; 7/7 sampled-source tests;
+4/4 live-install tests; 6/6 persistence/preset tests; 15/15 synth Init/dirty-
+guard tests; Bounce preset-bar browser assertions; 1/1 PCM waveform test;
+1/1 real M6 Chromium UI transaction; 693/693 pure Node tests; 34/34 modulation
+routing tests; 17/17 web-bundle tests; 27/27 patch/layout tests; 65/65 Cmajor
+rack tests; and the full Linux Chromium web POC at 13 passed, 5 expected
+environment skips, 0 failed. Oscillator mode retains the pinned M1/M2 render
+hash exactly.
