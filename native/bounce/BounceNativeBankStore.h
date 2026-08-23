@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <optional>
 #include <string>
 #include <vector>
@@ -77,6 +78,8 @@ struct PublishResult
 class BounceBankStore final
 {
 public:
+    using FilePreparation = std::function<void (const std::filesystem::path&)>;
+
     class ExclusiveLock final
     {
     public:
@@ -95,7 +98,8 @@ public:
         std::filesystem::path ownerRoot;
     };
 
-    explicit BounceBankStore (std::filesystem::path rootDirectory);
+    explicit BounceBankStore (std::filesystem::path rootDirectory,
+                              FilePreparation = {});
 
     void initialise();
     const std::filesystem::path& root() const noexcept { return rootDirectory; }
@@ -114,8 +118,10 @@ public:
 private:
     void verifyPublished (const std::string& digest,
                           const std::filesystem::path& path) const;
+    void prepareFile (const std::filesystem::path&) const;
 
     std::filesystem::path rootDirectory;
+    FilePreparation filePreparation;
 };
 
 /** Native-only binary DAW envelope; no base64 and no JSON PCM. */

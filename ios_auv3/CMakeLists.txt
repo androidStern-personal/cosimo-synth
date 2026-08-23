@@ -231,6 +231,7 @@ target_sources(CosimoSynth PRIVATE
     "${CMAKE_CURRENT_LIST_DIR}/Source/cmaj_StaticLibraryShim.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/Source/CosimoSharedWavetableLibrary.mm"
     "${COSIMO_REPO_ROOT}/native/bounce/BounceNativeDriver.cpp"
+    "${COSIMO_REPO_ROOT}/native/bounce/BounceNativePlatform.cpp"
     "${COSIMO_REPO_ROOT}/native/bounce/Sha256.cpp"
     "${COSIMO_REPO_ROOT}/native/bounce/BounceNativeBankStore.cpp"
     "${COSIMO_REPO_ROOT}/native/bounce/CmajorBounceOfflinePerformer.cpp"

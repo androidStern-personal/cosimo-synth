@@ -55,7 +55,9 @@ juce_generate_juce_header(CosimoDesktopNative)
 
 target_sources(CosimoDesktopNative PRIVATE
     Source/cmaj_PatchLoaderPlugin.cpp
+    Source/CosimoBounceNativePlatform.cpp
     "${CMAKE_CURRENT_LIST_DIR}/../../native/bounce/BounceNativeDriver.cpp"
+    "${CMAKE_CURRENT_LIST_DIR}/../../native/bounce/BounceNativePlatform.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/bounce/Sha256.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/bounce/BounceNativeBankStore.cpp"
     "${CMAKE_CURRENT_LIST_DIR}/../../native/bounce/CmajorBounceOfflinePerformer.cpp"

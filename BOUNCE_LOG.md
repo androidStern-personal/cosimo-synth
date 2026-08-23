@@ -488,3 +488,32 @@ Validation: `npm run test:bounce:native:driver`,
 `test:bounce:native:quickjs` all pass. The last test drives the production
 manifest, real renderer, QuickJS worker, recursive bank upload, note capture,
 silence truncation, and i16 result through the actual Cmajor runtime.
+
+## 2026-08-23 — M8 checkpoint: native platform storage seam
+
+- Added canonical path adapters and compiled them into both native targets.
+  Desktop resolves JUCE `userApplicationDataDirectory` then appends
+  `CosimoSynth/BounceBanks/v1`; it never uses the bundle or working directory.
+  iOS resolves `Library/Application Support/CosimoSynth/BounceBanks/v1` under
+  `group.dev.cosimo.wavetable-synth`. The AUv3-facing API can forbid local
+  fallback, while a development standalone may opt into Application Support.
+- The iOS store factory creates the directory, excludes it and every staged
+  bank inode from backup, and applies
+  `NSFileProtectionCompleteUntilFirstUserAuthentication`. File policy runs on
+  the verified staging inode before its hard link becomes visible and is
+  reasserted when an existing content winner is reused. Any policy error is a
+  visible store-creation/publication failure.
+- Startup cleanup and all publication/read/accounting operations now share the
+  interprocess `.gc.lock` domain. Cleanup/retirement take it exclusively;
+  readers and racing publishers take it shared. This prevents one plug-in
+  instance from deleting another instance's active stage or verification
+  candidate, while unique staging names and atomic no-replace publication
+  still permit concurrent writers.
+
+Validation: the native store test proves exact desktop/iOS suffixes, platform
+file preparation before publication, policy reassertion on idempotent reuse,
+and that publication excludes concurrent GC. The full store suite passes.
+Two focused iOS source/build-contract tests pass and assert the App Group,
+first-unlock protection, backup exclusion, and native source membership.
+Apple compilation and entitlement behavior remain in the required human M8
+run because this Linux VM has no Xcode SDK or signed device host.

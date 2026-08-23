@@ -3,7 +3,13 @@
 #include <JuceHeader.h>
 
 #include <functional>
+#include <memory>
 #include <string_view>
+
+namespace cosimo::bounce
+{
+class BounceBankStore;
+}
 
 namespace cosimo::ios
 {
@@ -37,6 +43,19 @@ struct SharedWavetableLibraryComponentCallbacks
 bool isManagedWavetableAssetPath (std::string_view relativePath);
 juce::File resolveManagedWavetableAssetFile (std::string_view relativePath);
 SharedWavetableLibraryStatus inspectSharedWavetableLibrary();
+
+/**
+ * Resolves the Bounce store in the App Group. Production AUv3 callers pass
+ * false: a private fallback would be invisible to the containing app.
+ */
+juce::File resolveSharedBounceBankStoreRoot (
+    bool allowLocalDevelopmentFallback,
+    bool* usingSharedContainer = nullptr);
+juce::Result prepareSharedBounceBankStoreRoot (const juce::File& root);
+juce::Result protectPublishedBounceBankFile (const juce::File& bankFile);
+std::unique_ptr<bounce::BounceBankStore> createSharedBounceBankStore (
+    bool allowLocalDevelopmentFallback,
+    juce::String* errorMessage = nullptr);
 
 std::unique_ptr<juce::Component> createSharedWavetableLibraryComponent (SharedWavetableLibraryComponentMode mode,
                                                                        SharedWavetableLibraryComponentCallbacks callbacks);
