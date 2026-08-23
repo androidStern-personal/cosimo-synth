@@ -121,7 +121,9 @@ export class OPFSBounceBankStore {
                 );
             }
             try {
-                await temporary.move(bankFileName(digest));
+                // WebKit requires the destination directory even for a
+                // same-directory rename; Chromium accepts this form too.
+                await temporary.move(directory, bankFileName(digest));
             } catch (cause) {
                 // A racing content-addressed writer may have won. Its bytes
                 // are acceptable only if the exact digest verifies.

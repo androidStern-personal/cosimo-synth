@@ -53,7 +53,9 @@ class FakeFileHandle {
         };
     }
 
-    async move(nextName) {
+    async move(destination, nextName) {
+        if (arguments.length < 2) throw new TypeError("Not enough arguments");
+        assert.equal(destination, this.directory, "OPFS move must keep the atomic commit in the staging directory");
         this.directory.files.delete(this.name);
         this.name = nextName;
         this.directory.files.set(nextName, this);
@@ -169,7 +171,7 @@ function bounceDocument(fixture) {
     });
 }
 
-test("OPFS bank persistence verifies staged bytes, atomically renames by digest, and is idempotent", async () => {
+test("OPFS bank persistence uses the WebKit move contract, verifies staged bytes, and is idempotent", async () => {
     const storage = fakeStorage();
     const store = new OPFSBounceBankStore({ storage });
     const fixture = await bankFixture();

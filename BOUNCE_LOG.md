@@ -619,3 +619,26 @@ specified, while those Apple/DAW observations remain explicitly human-only.
 Single next human action: execute `HUMAN_VALIDATION.md` end to end on a Mac
 and physical iPhone, beginning with the documented macOS build and three-run
 JIT timing table, and commit the filled evidence tables to this branch.
+
+## 2026-08-24 — Safari OPFS atomic-move compatibility repair
+
+Physical iPhone Safari completed all 19 render roots but failed persistence
+with `TypeError: Not enough arguments`. The staged bytes and digest were valid;
+the fault was the one-argument `FileSystemHandle.move(name)` call accepted by
+Chromium. WebKit exposes `move` but requires
+`move(destinationDirectory, newName)`, so the capability-only IndexedDB
+fallback was not selected.
+
+The OPFS store now uses the two-argument same-directory form, which preserves
+the atomic commit and is accepted by both engines. The unit fake now enforces
+WebKit's signature: it reproduced the exact error against the old product call
+and passes after the repair. The generated desktop bundle and browser proof
+were rebuilt.
+
+Validation: 12/12 persistence, real Chromium OPFS reload, preset, and
+retention tests pass. The Chromium UI completed the real-worker Bounce/Revert
+transaction, and the ten-cycle recursive persistence/retirement gate passed.
+The unrelated G2 resident-bank load comparison remained red twice at
+12.5–13.6% above its paired baseline against a 10% gate, so it is recorded as
+unresolved rather than folded into this persistence repair. Physical Safari
+confirmation remains the final platform check.
