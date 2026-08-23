@@ -11,7 +11,7 @@ import {
     parameterEntrySpecForModulationAmount,
     type ParameterEntrySpec,
 } from "./parameter-value-entry";
-import { usePatchParameterBinding } from "./patch-controls";
+import { useLaneOrHostParameterBinding } from "./lane-param-bindings";
 import {
     acquireModulationRuntimeBridge,
     releaseModulationRuntimeBridge,
@@ -42,7 +42,7 @@ export function useModulationAmountParameterEntrySpec(
         const numericValue = Number(rawValue);
         return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : initialValue;
     }, [initialValue]);
-    const baseBinding = usePatchParameterBinding<number>({
+    const baseBinding = useLaneOrHostParameterBinding({
         endpointID,
         initialValue,
         coerce: coerceBaseValue,

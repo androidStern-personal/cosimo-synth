@@ -2078,14 +2078,14 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             }
             api.setParameter("filterMode", 1);
             api.setParameter("filterCutoff", 1_200);
-            api.setParameter("distortionWet", 0.35);
-            api.setParameter("ottAmount", 35);
-            api.setParameter("ottMix", 35);
-            api.setParameter("chorusMix", 0.3);
-            api.setParameter("flangerMix", 0.25);
-            api.setParameter("phaserMix", 0.25);
-            api.setParameter("delayMix", 0.25);
-            api.setParameter("reverbMix", 0.3);
+            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 0.35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 2, paramIndex: 1, deliverySerial: 0, value: 35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 2, paramIndex: 0, deliverySerial: 0, value: 35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 3, paramIndex: 0, deliverySerial: 0, value: 0.3 });
+            api.sendEvent("laneSlotParamValue", { slotId: 4, paramIndex: 3, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 5, paramIndex: 7, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 6, paramIndex: 3, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 7, paramIndex: 3, deliverySerial: 0, value: 0.3 });
             api.sendEvent("laneTopology", { chainLength: 8, slotIds: [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 255 });
             for (let note = 48; note < 64; note += 1) api.noteOn(note, 96, 1);
         });
@@ -2138,14 +2138,14 @@ test("16 sounding voices sustain 100 mappings, isolated live edits, and the full
             }
             api.setParameter("filterMode", 1);
             api.setParameter("filterCutoff", 1_200);
-            api.setParameter("distortionWet", 0.35);
-            api.setParameter("ottAmount", 35);
-            api.setParameter("ottMix", 35);
-            api.setParameter("chorusMix", 0.3);
-            api.setParameter("flangerMix", 0.25);
-            api.setParameter("phaserMix", 0.25);
-            api.setParameter("delayMix", 0.25);
-            api.setParameter("reverbMix", 0.3);
+            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 0.35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 2, paramIndex: 1, deliverySerial: 0, value: 35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 2, paramIndex: 0, deliverySerial: 0, value: 35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 3, paramIndex: 0, deliverySerial: 0, value: 0.3 });
+            api.sendEvent("laneSlotParamValue", { slotId: 4, paramIndex: 3, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 5, paramIndex: 7, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 6, paramIndex: 3, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 7, paramIndex: 3, deliverySerial: 0, value: 0.3 });
             api.sendEvent("laneTopology", { chainLength: 8, slotIds: [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 255 });
             for (let note = 48; note < 64; note += 1) api.noteOn(note, 100, 1);
         });
@@ -2437,8 +2437,8 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
             api.sendEvent("laneTopology", { chainLength: 0, slotIds: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 0 });
-            api.setParameter("distortionDriveDb", 30);
-            api.setParameter("distortionWet", 0);
+            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 1, deliverySerial: 0, value: 30 });
+            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 0 });
         });
         const dryRms = await measureHeldNote(page);
         assert.ok(dryRms > 1e-5, `Dry rack must be audible, received RMS ${dryRms}.`);
@@ -2446,7 +2446,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
             api.sendEvent("laneTopology", { chainLength: 1, slotIds: [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 1 });
-            api.setParameter("distortionWet", 1);
+            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 1 });
         });
         const drivenRms = await measureHeldNote(page);
         assert.ok(
@@ -2456,7 +2456,7 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
 
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
-            api.setParameter("distortionWet", 0);
+            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 0 });
             api.setParameter("macro1", 0);
         });
         await sendAcceptedModulationEvent(
@@ -2485,14 +2485,14 @@ test("generated WebAssembly rack changes audio, modulates a real target, and sta
         await page.evaluate(() => {
             const api = globalThis.__COSIMO_WEB_POC__;
             api.setParameter("macro1", 0);
-            api.setParameter("distortionWet", 0.35);
-            api.setParameter("ottAmount", 35);
-            api.setParameter("ottMix", 35);
-            api.setParameter("chorusMix", 0.3);
-            api.setParameter("flangerMix", 0.25);
-            api.setParameter("phaserMix", 0.25);
-            api.setParameter("delayMix", 0.25);
-            api.setParameter("reverbMix", 0.3);
+            api.sendEvent("laneSlotParamValue", { slotId: 1, paramIndex: 3, deliverySerial: 0, value: 0.35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 2, paramIndex: 1, deliverySerial: 0, value: 35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 2, paramIndex: 0, deliverySerial: 0, value: 35 });
+            api.sendEvent("laneSlotParamValue", { slotId: 3, paramIndex: 0, deliverySerial: 0, value: 0.3 });
+            api.sendEvent("laneSlotParamValue", { slotId: 4, paramIndex: 3, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 5, paramIndex: 7, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 6, paramIndex: 3, deliverySerial: 0, value: 0.25 });
+            api.sendEvent("laneSlotParamValue", { slotId: 7, paramIndex: 3, deliverySerial: 0, value: 0.3 });
             api.sendEvent("laneTopology", { chainLength: 8, slotIds: [0, 1, 2, 3, 4, 5, 6, 7, 0, 0, 0, 0, 0, 0, 0, 0], enabledMask: 255 });
         });
         const allOnRms = await measureHeldNote(page);
@@ -2654,12 +2654,12 @@ test("generated product UI restores oscillator parameters and rack state through
 
         await waitForAsyncPageCondition(page, async () => {
             const state = await globalThis.__COSIMO_WEB_POC__.storedState();
-            const rack = JSON.parse(String(state.values?.["rack.v1"]));
+            const rack = JSON.parse(String(state.values?.["lane.v1"]));
             return rack.order[0] === "reverb" && rack.enabled.chorus === true;
         });
         const beforeReload = await page.evaluate(async () => ({
-            connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["rack.v1"] ?? null,
-            local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.storedState?.["rack.v1"] ?? null,
+            connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["lane.v1"] ?? null,
+            local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.storedState?.["lane.v1"] ?? null,
             localOscBPan: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.parameters?.oscBPan ?? null,
         }));
         assert.equal(beforeReload.localOscBPan, 0.25);
@@ -2673,8 +2673,8 @@ test("generated product UI restores oscillator parameters and rack state through
         const afterReload = await page.evaluate(async () => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             return {
-                connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["rack.v1"] ?? null,
-                local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.storedState?.["rack.v1"] ?? null,
+                connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["lane.v1"] ?? null,
+                local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.storedState?.["lane.v1"] ?? null,
                 localOscBPan: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.parameters?.oscBPan ?? null,
                 firstRole: root?.querySelector('[data-role="rack-module-list"]')?.firstElementChild?.getAttribute("data-role") ?? null,
                 chorusPressed: root?.querySelector('[data-role="rack-enabled-chorus"]')?.getAttribute("aria-pressed") ?? null,
@@ -2715,7 +2715,7 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
             const list = root?.querySelector('[data-role="rack-module-list"]');
             const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
-            const rack = JSON.parse(String(stored.values?.["rack.v1"]));
+            const rack = JSON.parse(String(stored.values?.["lane.v1"]));
             return list?.firstElementChild?.getAttribute("data-role") === "rack-module-reverb"
                 && rack.order[0] === "reverb";
         }, null, { timeout: 3_000 });
@@ -2733,7 +2733,7 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
         });
         const storedRack = await page.evaluate(async () => {
             const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
-            return JSON.parse(String(stored.values?.["rack.v1"]));
+            return JSON.parse(String(stored.values?.["lane.v1"]));
         });
         assert.equal(
             reorderResult.firstRole,

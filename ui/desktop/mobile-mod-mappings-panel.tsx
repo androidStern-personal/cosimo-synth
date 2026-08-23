@@ -46,7 +46,7 @@ import {
 import type { ModulationTargetKind } from "../shared/modulation-targets";
 import { resolveModulationTargetBase } from "../shared/modulation-target-base";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
-import { usePatchParameterBinding } from "../shared/patch-controls";
+import { useLaneOrHostParameterBinding } from "../shared/lane-param-bindings";
 import { formatParameterEntry } from "../shared/parameter-value-entry";
 import { useParameterGesture } from "../shared/parameter-gesture";
 import { useReadoutCells, type ReadoutCellSpec } from "../shared/parameter-readout-strip";
@@ -112,7 +112,7 @@ function MappingRow({
     const target = targetPresentation(route.targetKind);
     const base = useMemo(() => resolveModulationTargetBase(route.targetKind), [route.targetKind]);
 
-    const baseBinding = usePatchParameterBinding<number>({
+    const baseBinding = useLaneOrHostParameterBinding({
         endpointID: base?.endpointID ?? `__unbacked_${route.targetKind}`,
         initialValue: base?.initialValue ?? 0,
         coerce: (rawValue) => Number(rawValue) || 0,

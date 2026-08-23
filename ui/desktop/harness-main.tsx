@@ -1,4 +1,5 @@
 import "./styles.css";
+import { createDefaultLaneState } from "../shared/lane-state";
 import { loadHarnessManifest, MockPatchConnection } from "../shared/patch-connection-mock";
 import { createDesktopPatchView } from "./patch-view-entry";
 
@@ -11,6 +12,7 @@ declare global {
         __COSIMO_DESKTOP_HARNESS__?: {
             patchConnection: MockPatchConnection;
             getSnapshot: () => ReturnType<MockPatchConnection["getDebugSnapshot"]>;
+            createDefaultLaneState: typeof createDefaultLaneState;
             getRenderedState: () => {
                 errorText: string | null;
                 hasCanvas: boolean;
@@ -33,6 +35,7 @@ declare global {
             };
             clearDebugLog: () => void;
             setRuntimeState: (nextState: Parameters<MockPatchConnection["setRuntimeState"]>[0]) => void;
+            setLaneParamValue: (endpointID: string, value: number) => void;
             setParameterValue: (
                 endpointID: string,
                 value: unknown,
@@ -234,6 +237,7 @@ try {
     window.__COSIMO_DESKTOP_HARNESS__ = {
         patchConnection,
         getSnapshot: () => patchConnection.getDebugSnapshot(),
+        createDefaultLaneState,
         getRenderedState: () => {
             const viewRoot = getDesktopViewRoot();
             return {
@@ -256,6 +260,9 @@ try {
             clearKeyboardDebug();
         },
         setRuntimeState: (nextState) => patchConnection.setRuntimeState(nextState),
+        setLaneParamValue: (endpointID, value) => {
+            patchConnection.setLaneParamValue(endpointID, value);
+        },
         setParameterValue: (endpointID, value, emitEndpoint = false) => {
             patchConnection.setParameterValue(endpointID, value, emitEndpoint);
         },

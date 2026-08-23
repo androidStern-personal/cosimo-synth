@@ -95,15 +95,37 @@ processor RackStructureTest [[ main ]]
         return 0.4f * float32 (std::intrinsics::sin (float32 (frame) * 0.05f));
     }
 
+    void sendFilterParams (float32 cutoffHz)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleGlobalFilter;
+        upload.deliverySerial = 1;
+        upload.values[wt::laneGlobalFilterParamMode] = 1.0f;
+        upload.values[wt::laneGlobalFilterParamCutoffHz] = cutoffHz;
+        upload.values[wt::laneGlobalFilterParamResonance] = 0.707107f;
+        rack.laneSlotParams <- upload;
+    }
+
+    void sendDistortionParams (float32 wet)
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleDistortion;
+        upload.deliverySerial = 2;
+        upload.values[wt::laneDistortionParamDriveDb] = 30.0f;
+        upload.values[wt::laneDistortionParamKnee] = 0.35f;
+        upload.values[wt::laneDistortionParamWet] = wet;
+        upload.values[wt::laneDistortionParamWetHPHz] = 40.0f;
+        upload.values[wt::laneDistortionParamWetLPHz] = 18000.0f;
+        rack.laneSlotParams <- upload;
+    }
+
     void configure()
     {
         // Two non-commutative modules, both driven hard enough that swapping
         // them is unmistakable: a low lowpass followed by heavy saturation is
         // not the same sound as heavy saturation followed by the same lowpass.
-        rack.globalFilterMode <- 1.0f;
-        rack.globalFilterCutoff <- 800.0f;
-        rack.distortionWet <- 1.0f;
-        rack.distortionDriveDb <- 30.0f;
+        sendFilterParams (800.0f);
+        sendDistortionParams (1.0f);
     }
 
     float32<2> render (int32 frame)
@@ -235,8 +257,8 @@ processor RackStructureTest [[ main ]]
         //    frequency parameter forever, so a cache initialised to zero
         //    would silently drag them all to minimum with no error. A 20 kHz
         //    lowpass must pass a 350 Hz sine essentially untouched.
-        rack.globalFilterCutoff <- 20000.0f;
-        rack.distortionWet <- 0.0f;
+        sendFilterParams (20000.0f);
+        sendDistortionParams (0.0f);
         rack.laneTopology <- makeChain (0, 1, 2, 3, 4, 5, 6, 7,
                                         1 << wt::rackModuleGlobalFilter);
 
@@ -315,9 +337,14 @@ processor RackDisabledAdvanceTest [[ main ]]
     {
         // A short, densely repeating, heavily regenerating delay: within the
         // measured window every output sample depends on thousands earlier.
-        rack.delayTime <- 20.0f;
-        rack.delayFeedback <- 0.8f;
-        rack.delayMix <- 1.0f;
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleDelay;
+        upload.deliverySerial = 1;
+        upload.values[wt::laneDelayParamTimeMs] = 20.0f;
+        upload.values[wt::laneDelayParamFeedback] = 0.8f;
+        upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        upload.values[wt::laneDelayParamMix] = 1.0f;
+        rack.laneSlotParams <- upload;
     }
 
     float32<2> render (int32 frame)
@@ -510,10 +537,14 @@ processor RackOrderAdvanceTest [[ main ]]
 
     void configure()
     {
-        rack.flangerRate <- 2.5f;
-        rack.flangerDepth <- 1.0f;
-        rack.flangerFeedback <- 0.9f;
-        rack.flangerMix <- 1.0f;
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleFlanger;
+        upload.deliverySerial = 1;
+        upload.values[wt::laneFlangerParamRate] = 2.5f;
+        upload.values[wt::laneFlangerParamDepth] = 1.0f;
+        upload.values[wt::laneFlangerParamFeedback] = 0.9f;
+        upload.values[wt::laneFlangerParamMix] = 1.0f;
+        rack.laneSlotParams <- upload;
     }
 
     float32<2> render (int32 frame)
@@ -637,13 +668,24 @@ processor RackTransitionTest [[ main ]]
         // A genuinely wet, non-commutative chain. This catches the production failure
         // mode the old all-dry test missed: a reorder used to gate the entire instrument
         // and measured an 11x transient against steady-state audio.
-        rack.flangerRate <- 1.7f;
-        rack.flangerDepth <- 0.8f;
-        rack.flangerFeedback <- 0.45f;
-        rack.flangerMix <- 0.7f;
-        rack.delayTime <- 23.0f;
-        rack.delayFeedback <- 0.5f;
-        rack.delayMix <- 0.55f;
+        wt::LaneSlotParamsUpload flangerParams;
+        flangerParams.slotId = wt::rackModuleFlanger;
+        flangerParams.deliverySerial = 1;
+        flangerParams.values[wt::laneFlangerParamRate] = 1.7f;
+        flangerParams.values[wt::laneFlangerParamDepth] = 0.8f;
+        flangerParams.values[wt::laneFlangerParamFeedback] = 0.45f;
+        flangerParams.values[wt::laneFlangerParamMix] = 0.7f;
+        rack.laneSlotParams <- flangerParams;
+
+        wt::LaneSlotParamsUpload delayParams;
+        delayParams.slotId = wt::rackModuleDelay;
+        delayParams.deliverySerial = 2;
+        delayParams.values[wt::laneDelayParamTimeMs] = 23.0f;
+        delayParams.values[wt::laneDelayParamFeedback] = 0.5f;
+        delayParams.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        delayParams.values[wt::laneDelayParamMix] = 0.55f;
+        rack.laneSlotParams <- delayParams;
+
         rack.laneTopology <- wetChain (0);
 
         for (int32 frame = 0; frame < settleFrames; ++frame)
@@ -752,18 +794,32 @@ processor RackOutputStageTest [[ main ]]
     {
         rack.laneTopology <- regenerationChain();
 
-        rack.flangerMix <- 0.6f;
-        rack.flangerDepth <- 1.0f;
-        rack.flangerFeedback <- 0.95f;
+        wt::LaneSlotParamsUpload flangerParams;
+        flangerParams.slotId = wt::rackModuleFlanger;
+        flangerParams.deliverySerial = 1;
+        flangerParams.values[wt::laneFlangerParamRate] = 0.35f;
+        flangerParams.values[wt::laneFlangerParamDepth] = 1.0f;
+        flangerParams.values[wt::laneFlangerParamFeedback] = 0.95f;
+        flangerParams.values[wt::laneFlangerParamMix] = 0.6f;
+        rack.laneSlotParams <- flangerParams;
 
-        rack.delayMix <- 0.6f;
-        rack.delayFeedback <- 0.95f;
-        rack.delayTime <- 13.0f;
+        wt::LaneSlotParamsUpload delayParams;
+        delayParams.slotId = wt::rackModuleDelay;
+        delayParams.deliverySerial = 2;
+        delayParams.values[wt::laneDelayParamTimeMs] = 13.0f;
+        delayParams.values[wt::laneDelayParamFeedback] = 0.95f;
+        delayParams.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        delayParams.values[wt::laneDelayParamMix] = 0.6f;
+        rack.laneSlotParams <- delayParams;
 
-        rack.reverbMix <- 0.6f;
-        rack.reverbSize <- 1.0f;
-        rack.reverbDecay <- 1.0f;
-        rack.reverbDamping <- 0.0f;
+        wt::LaneSlotParamsUpload reverbParams;
+        reverbParams.slotId = wt::rackModuleReverb;
+        reverbParams.deliverySerial = 3;
+        reverbParams.values[wt::laneReverbParamSize] = 1.0f;
+        reverbParams.values[wt::laneReverbParamDecay] = 1.0f;
+        reverbParams.values[wt::laneReverbParamDamping] = 0.0f;
+        reverbParams.values[wt::laneReverbParamMix] = 0.6f;
+        rack.laneSlotParams <- reverbParams;
     }
 
     float32 measureRackPeak (bool throughStage)

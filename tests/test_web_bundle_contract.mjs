@@ -233,8 +233,8 @@ test("browser patch persistence never blocks a runtime state write when storage 
 
     installBrowserPatchStatePersistence(connection, { storage });
 
-    assert.doesNotThrow(() => connection.sendStoredStateValue("rack.v1", "enabled"));
-    assert.deepEqual(runtimeWrites, [["rack.v1", "enabled"]]);
+    assert.doesNotThrow(() => connection.sendStoredStateValue("lane.v1", "enabled"));
+    assert.deepEqual(runtimeWrites, [["lane.v1", "enabled"]]);
 });
 
 test("browser patch persistence does not store a state write rejected by the runtime", () => {
@@ -256,7 +256,7 @@ test("browser patch persistence does not store a state write rejected by the run
     installBrowserPatchStatePersistence(connection, { storage });
 
     assert.throws(
-        () => connection.sendStoredStateValue("rack.v1", "rejected"),
+        () => connection.sendStoredStateValue("lane.v1", "rejected"),
         /Runtime rejected stored state/,
     );
     assert.deepEqual(storageWrites, []);
@@ -281,7 +281,7 @@ test("browser patch persistence restores once and coalesces echoed storage write
                 version: 2,
                 sound: {
                     parameters: {},
-                    storedState: { "rack.v1": "restored" },
+                    storedState: { "lane.v1": "restored" },
                 },
                 auxiliary: {},
             });
@@ -293,13 +293,13 @@ test("browser patch persistence restores once and coalesces echoed storage write
 
     installBrowserPatchStatePersistence(connection, { storage, storageKey: "test.patch-state" });
 
-    assert.deepEqual(runtimeWrites, [["rack.v1", "restored"]]);
-    connection.sendStoredStateValue("rack.v1", "updated");
-    storedStateListener({ event: { key: "rack.v1", value: "updated" } });
+    assert.deepEqual(runtimeWrites, [["lane.v1", "restored"]]);
+    connection.sendStoredStateValue("lane.v1", "updated");
+    storedStateListener({ event: { key: "lane.v1", value: "updated" } });
 
     assert.deepEqual(runtimeWrites, [
-        ["rack.v1", "restored"],
-        ["rack.v1", "updated"],
+        ["lane.v1", "restored"],
+        ["lane.v1", "updated"],
     ]);
     assert.deepEqual(storageWrites, [[
         "test.patch-state",
@@ -308,7 +308,7 @@ test("browser patch persistence restores once and coalesces echoed storage write
             version: 2,
             sound: {
                 parameters: {},
-                storedState: { "rack.v1": "updated" },
+                storedState: { "lane.v1": "updated" },
             },
             auxiliary: {},
         }),
@@ -339,7 +339,7 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
                 version: 2,
                 sound: {
                     parameters: { oscAPan: -0.25, oscBPan: 0.5, oscCPan: 0.75 },
-                    storedState: { "rack.v1": "restored-rack" },
+                    storedState: { "lane.v1": "restored-rack" },
                 },
                 auxiliary: {},
             });
@@ -355,7 +355,7 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
         ["parameter", "oscAPan", -0.25],
         ["parameter", "oscBPan", 0.5],
         ["parameter", "oscCPan", 0.75],
-        ["stored", "rack.v1", "restored-rack"],
+        ["stored", "lane.v1", "restored-rack"],
     ]);
 
     connection.sendEventOrValue("oscBPan", -0.6);
@@ -364,7 +364,7 @@ test("browser patch persistence restores distinct A/B/C parameters before struct
         version: 2,
         sound: {
             parameters: { oscAPan: -0.25, oscBPan: -0.6, oscCPan: 0.75 },
-            storedState: { "rack.v1": "restored-rack" },
+            storedState: { "lane.v1": "restored-rack" },
         },
         auxiliary: {},
     });

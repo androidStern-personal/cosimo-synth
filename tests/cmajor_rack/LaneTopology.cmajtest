@@ -69,16 +69,25 @@ processor LaneSecondDelayTest [[ main ]]
         return upload;
     }
 
+    wt::LaneSlotParamsUpload makeDelayOneParams()
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleDelay;
+        upload.deliverySerial = 6;
+        upload.values[wt::laneDelayParamTimeMs] = delayOneMs;
+        upload.values[wt::laneDelayParamFeedback] = 0.0f;
+        upload.values[wt::laneDelayParamFilterHz] = 18000.0f;
+        upload.values[wt::laneDelayParamMix] = 0.5f;
+        return upload;
+    }
+
     void configure()
     {
-        // Delay slot #1 (the base delay) via the rack's parameter endpoints.
-        rack.delayTime <- delayOneMs;
-        rack.delayFeedback <- 0.0f;
-        rack.delayFilter <- 18000.0f;
-        rack.delayMix <- 0.5f;
         rack.tempoBpmIn <- 120.0f;
 
-        // Pool slot delay#2, addressed individually.
+        // Both delay slots ride the one record path - ordinal 0 is just
+        // another slot since the parameter cut.
+        rack.laneSlotParams <- makeDelayOneParams();
         rack.laneSlotParams <- makeDelayTwoParams();
         rack.laneTopology <- makeTwoDelayChain();
     }

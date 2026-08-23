@@ -88,6 +88,7 @@ import {
     rectsIntersect,
     rectContains,
     readGlobalModRailGeometry,
+    isLaneParamSend,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 test("Add route appends unique inert mappings and scrolls the new row into view", async () => {
@@ -564,21 +565,14 @@ test("desktop distortion controls send exact parameter updates", async () => {
         const snapshot = await waitForHarnessSnapshot(
             page,
             "distortion parameter updates",
-            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "distortionMode"
-                && Number(value) === 1
-            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "distortionDriveDb"
-                && Math.abs(Number(value) - 18.5) <= 1e-6
-            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "distortionWet"
-                && Math.abs(Number(value) - 0.64) <= 1e-6
-            )),
+            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionMode", 1))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionDriveDb", 18.5))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionWet", 0.64)),
         );
 
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionMode"), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionDriveDb"), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionWet"), true);
+        assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionMode")), true);
+        assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionDriveDb")), true);
+        assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionWet")), true);
     } finally {
         await page.close();
     }
@@ -615,18 +609,17 @@ test("desktop effects rack renders the complete ordered eight-module surface", a
         assert.deepEqual(layout.positions, [0, 1, 2, 3, 4, 5, 6, 7]);
         assert.ok(layout.rackWidth > 0 && layout.rackHeight > 0);
 
+        // Since the parameter cut, effect parameters have no host endpoints:
+        // no surface may hold a parameter listener on them, whatever is open.
         let snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.parameterListenerCounts.distortionDriveDb, 5);
+        assert.equal(snapshot.parameterListenerCounts.distortionDriveDb ?? 0, 0);
         await page.locator('[data-role="distortion-drive-field"]').click({ button: "right" });
         await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterListenerCounts.distortionDriveDb === 6
+            document.querySelector("cosimo-desktop-react-view") !== null
         ));
         await page.keyboard.press("Escape");
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().parameterListenerCounts.distortionDriveDb === 5
-        ));
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(snapshot.parameterListenerCounts.distortionDriveDb, 5);
+        assert.equal(snapshot.parameterListenerCounts.distortionDriveDb ?? 0, 0);
     } finally {
         await page.close();
     }
@@ -797,7 +790,7 @@ test("rack knobs retain a fixed default marker while the live base indicator mov
         const before = await readPositions();
         assert.ok(before);
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.82, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.82);
         });
         await page.waitForFunction(() => document.querySelector('[data-role="rack-parameter-reverbSize"]')?.value === "0.82");
         const after = await readPositions();
@@ -818,7 +811,7 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.5, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.5);
         });
         await clearHarnessDebugLog(page);
 
@@ -866,18 +859,18 @@ test("rack knob base drags capture the pointer, show a stable HUD, and detach cl
             "rack knob pointer gesture",
             (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
                 && nextSnapshot.gestureEnds.includes("reverbSize")
-                && Number(nextSnapshot.parameterValues.reverbSize) > 0.5,
+                && Number(nextSnapshot.laneParams.reverbSize) > 0.5,
         );
         assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
         assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
 
-        const valueAfterRelease = Number(snapshot.parameterValues.reverbSize);
+        const valueAfterRelease = Number(snapshot.laneParams.reverbSize);
         await clearHarnessDebugLog(page);
         await page.mouse.move(centerX, centerY + 20, { steps: 6 });
         await page.mouse.move(centerX, centerY - 20, { steps: 6 });
         await page.waitForTimeout(60);
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(Number(snapshot.parameterValues.reverbSize), valueAfterRelease);
+        assert.equal(Number(snapshot.laneParams.reverbSize), valueAfterRelease);
         assert.deepEqual(snapshot.sentMessages, []);
     } finally {
         await page.close();
@@ -893,7 +886,7 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.5, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.5);
         });
         await clearHarnessDebugLog(page);
 
@@ -939,7 +932,7 @@ test("rack knob touch drag survives unavailable pointer capture outside the knob
             page,
             "capture-free rack knob touch move",
             (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
-                && Number(nextSnapshot.parameterValues.reverbSize) > 0.5,
+                && Number(nextSnapshot.laneParams.reverbSize) > 0.5,
         );
         assert.deepEqual(snapshot.gestureEnds, []);
 
@@ -988,7 +981,7 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
         );
         await collapseGlobalModRail(page);
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.5, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.5);
         });
         await clearHarnessDebugLog(page);
 
@@ -1025,7 +1018,7 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
             && candidate.targetKind === "rack.reverbSize"
         ));
         assert.ok(route);
-        assert.equal(Number(snapshot.parameterValues.reverbSize), 0.5);
+        assert.equal(Number(snapshot.laneParams.reverbSize), 0.5);
         assert.deepEqual(snapshot.gestureStarts, []);
         assert.deepEqual(snapshot.gestureEnds, []);
         await page.waitForFunction(() => (
@@ -1119,7 +1112,7 @@ test("switching armed sources swaps only selected-route outer geometry and prese
         });
         await page.evaluate((state) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWet", 0.6, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("distortionWet", 0.6);
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await page.locator('[data-rack-effect-id="drive"] .rack-power').click();
@@ -1192,7 +1185,7 @@ test("an unmapped rack knob shows a neutral outer track and its modulation axis 
         );
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"), false);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID }) => endpointID === "reverbSize"),
+            snapshot.sentMessages.some((message) => isLaneParamSend(message, "reverbSize")),
             false,
             "An inert modulation drag must not write the base parameter either.",
         );
@@ -1354,7 +1347,7 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.5, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.5);
         });
         await clearHarnessDebugLog(page);
 
@@ -1400,7 +1393,7 @@ test("moving a rack knob touch cancels the hold menu and completes one captured 
             "completed touch knob gesture",
             (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
                 && nextSnapshot.gestureEnds.includes("reverbSize")
-                && Number(nextSnapshot.parameterValues.reverbSize) > 0.5,
+                && Number(nextSnapshot.laneParams.reverbSize) > 0.5,
         );
         assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
         assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
@@ -1431,7 +1424,7 @@ test("rack parameter reset restores the base default without deleting modulation
         );
         await collapseGlobalModRail(page);
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.84, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.84);
         });
         await clearHarnessDebugLog(page);
 
@@ -1441,7 +1434,7 @@ test("rack parameter reset restores the base default without deleting modulation
         const snapshot = await waitForHarnessSnapshot(
             page,
             "rack base default reset",
-            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.reverbSize) - 0.5) < 0.0001,
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.laneParams.reverbSize) - 0.5) < 0.0001,
         );
         assert.equal(
             readStoredModulationState(snapshot).routes.some((route) => (
@@ -1545,7 +1538,7 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
         );
         await collapseGlobalModRail(page);
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.5, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.5);
         });
 
         const knob = page.locator('[data-role="rack-parameter-reverbSize"]');
@@ -1581,12 +1574,12 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
                     && candidate.sourceSlot === 1
                     && candidate.targetKind === "rack.reverbSize"
                 ));
-                return Math.abs(Number(nextSnapshot.parameterValues.reverbSize) - 0.72) < 0.0001
+                return Math.abs(Number(nextSnapshot.laneParams.reverbSize) - 0.72) < 0.0001
                     && route !== undefined
                     && Math.abs(route.amount - 0.35) < 0.0001;
             },
         );
-        assert.equal(Math.abs(Number(snapshot.parameterValues.reverbSize) - 0.72) < 0.0001, true);
+        assert.equal(Math.abs(Number(snapshot.laneParams.reverbSize) - 0.72) < 0.0001, true);
         assert.equal(await sheet.count(), 0);
     } finally {
         await page.close();
@@ -1612,7 +1605,7 @@ test("rack exact entry keeps units visible, rejects incompatible units, and comm
         await waitForHarnessSnapshot(
             page,
             "rack cutoff exact entry applies 12 kHz",
-            (snapshot) => Math.abs(Number(snapshot.parameterValues.globalFilterCutoff) - 12_000) <= 1e-9,
+            (snapshot) => Math.abs(Number(snapshot.laneParams.globalFilterCutoff) - 12_000) <= 1e-9,
         );
 
         await cutoff.click({ button: "right" });
@@ -1623,7 +1616,7 @@ test("rack exact entry keeps units visible, rejects incompatible units, and comm
         await sheet.locator('[data-role="rack-value-sheet-apply"]').click();
         assert.equal(await sheet.count(), 1, "a rejection must keep the rack editor open");
         assert.match(await sheet.getByRole("alert").textContent(), /st.*not compatible.*Hz/i);
-        assert.equal(Number((await getHarnessSnapshot(page)).parameterValues.globalFilterCutoff), 12_000);
+        assert.equal(Number((await getHarnessSnapshot(page)).laneParams.globalFilterCutoff), 12_000);
         await sheet.locator('[data-role="rack-value-sheet-cancel"]').click();
 
         await selectRackEffect(page, "delay");
@@ -1636,8 +1629,8 @@ test("rack exact entry keeps units visible, rejects incompatible units, and comm
         await waitForHarnessSnapshot(
             page,
             "delay exact division commits Sync and the descriptor division",
-            (snapshot) => Number(snapshot.parameterValues.delayTimeMode) === 1
-                && Number(snapshot.parameterValues.delayDivision) === 8,
+            (snapshot) => Number(snapshot.laneParams.delayTimeMode) === 1
+                && Number(snapshot.laneParams.delayDivision) === 8,
         );
         assert.match(await page.locator('[data-role="rack-parameter-delayTimeMode"]').innerText(), /Sync/i);
         assert.match(await page.locator('[data-role="rack-parameter-delayDivision"]').innerText(), /1\/8/i);
@@ -1668,7 +1661,7 @@ test("rack exact-value editing never creates an unrequested modulation route", a
         const snapshot = await waitForHarnessSnapshot(
             page,
             "base-only exact rack edit",
-            (nextSnapshot) => Math.abs(Number(nextSnapshot.parameterValues.reverbSize) - 0.64) < 0.0001,
+            (nextSnapshot) => Math.abs(Number(nextSnapshot.laneParams.reverbSize) - 0.64) < 0.0001,
         );
         assert.equal(
             readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "rack.reverbSize"),
@@ -2427,13 +2420,13 @@ test("T15: a horizontal base drag on a mapping row writes finite values for step
         await page.mouse.up();
 
         const snapshot = await waitForHarnessSnapshot(page, "stepless base drag writes", (nextSnapshot) => (
-            nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "flangerDepth")
+            nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "flangerDepth"))
         ));
-        const driveWrites = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "flangerDepth");
+        const driveWrites = snapshot.sentMessages.filter((message) => isLaneParamSend(message, "flangerDepth"));
         assert.ok(driveWrites.length >= 1);
         for (const write of driveWrites) {
             assert.ok(
-                Number.isFinite(Number(write.value)),
+                Number.isFinite(Number(write.value.value)),
                 `Base drag sent a non-finite value: ${JSON.stringify(write)}`,
             );
         }
@@ -2689,7 +2682,7 @@ test("rack reorder keeps the latest desired enable state across an older effecti
     try {
         await page.click('[data-role="rack-enabled-chorus"]');
         await page.waitForFunction(() => {
-            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["rack.v1"];
+            const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["lane.v1"];
             return rawState !== undefined && JSON.parse(String(rawState)).enabled.chorus === true;
         });
         await clearHarnessDebugLog(page);
@@ -2719,7 +2712,7 @@ test("rack reorder keeps the latest desired enable state across an older effecti
             page,
             "rack reorder after stale effective readback",
             (nextSnapshot) => {
-                const rawState = nextSnapshot.storedState["rack.v1"];
+                const rawState = nextSnapshot.storedState["lane.v1"];
                 if (rawState === undefined) {
                     return false;
                 }
@@ -2727,7 +2720,7 @@ test("rack reorder keeps the latest desired enable state across an older effecti
                 return state.order[0] === "reverb";
             },
         );
-        const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
+        const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
         assert.equal(storedRack.enabled.chorus, true);
         const lastTopology = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").at(-1);
         const chorusPosition = lastTopology?.value?.slotIds?.indexOf(3);
@@ -2746,9 +2739,8 @@ test("rack no-op release adopts authoritative stored order received during the g
         await beginRackReorderWithoutPointerCapture(page, { pointerId: 94 });
         await page.waitForSelector(".rack-unit.is-reordering");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("rack.v1", JSON.stringify({
-                format: "cosimo.rack",
-                version: 1,
+            window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("lane.v1", JSON.stringify({
+                ...window.__COSIMO_DESKTOP_HARNESS__.createDefaultLaneState(),
                 order: ["reverb", "filter", "drive", "ott", "chorus", "flanger", "phaser", "delay"],
                 enabled: {
                     filter: false,
@@ -2779,7 +2771,7 @@ test("rack no-op release adopts authoritative stored order received during the g
 
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
-        const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
+        const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
         assert.equal(storedRack.order[0], "reverb");
         assert.equal(storedRack.enabled.chorus, true);
     } finally {

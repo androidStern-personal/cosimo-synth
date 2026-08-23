@@ -21,7 +21,7 @@ import {
     normalizedCurvePointToPlotPoint,
     plotPointToNormalizedCurvePoint,
 } from "../shared/editor-curve-geometry";
-import { usePatchParameterBinding, type PatchControlBinding } from "../shared/patch-controls";
+import { type PatchControlBinding } from "../shared/patch-controls";
 import {
     RACK_EFFECT_DESCRIPTORS,
     formatRackParameterValue,
@@ -38,14 +38,8 @@ import {
     parseParameterEntry,
     type ParameterEntryCommit,
 } from "../shared/parameter-value-entry";
-import {
-    RACK_STATE_KEY,
-    commitRackState,
-    createDefaultRackState,
-    deserializeRackState,
-    serializeRackState,
-    type RackState,
-} from "../shared/rack-state";
+import { type LaneState } from "../shared/lane-state";
+import { useLaneParameterBinding, useLaneStateDoc } from "../shared/lane-param-bindings";
 import {
     MODULATION_SOURCE_OPTIONS,
     formatModulationAmountReadout,
@@ -426,69 +420,21 @@ function resolveModulationTargetForDrag(
         .sort((left, right) => right.entry - left.entry)[0]?.candidate ?? null;
 }
 
-function readRackStateFromFullStoredState(fullState: Record<string, unknown>) {
-    const values = fullState.values && typeof fullState.values === "object"
-        ? fullState.values as Record<string, unknown>
-        : {};
-    return Object.hasOwn(values, RACK_STATE_KEY) ? values[RACK_STATE_KEY] : fullState[RACK_STATE_KEY];
-}
-
 function useRackState() {
-    const patchConnection = usePatchConnection();
-    const [rackState, setRackState] = useState<RackState>(createDefaultRackState);
-    const rackStateRef = useRef(rackState);
-
-    const acceptRackState = useCallback((nextState: RackState) => {
-        rackStateRef.current = nextState;
-        setRackState(nextState);
-    }, []);
-
-    // rack.v1 is the editor's desired and persisted authority. effectiveRackState is
+    // lane.v1 is the editor's desired and persisted authority. effectiveRackState is
     // diagnostic readback without a correlated intent id, so an older DSP event must
-    // never replace the base of a newer user edit.
-    useEffect(() => {
-        const storedStateListener = (message: unknown) => {
-            if (typeof message !== "object" || message === null || Array.isArray(message)) {
-                return;
-            }
+    // never replace the base of a newer user edit. The document itself lives in the
+    // connection-scoped lane store, shared with every parameter binding.
+    const { laneState, commit } = useLaneStateDoc();
+    const rackStateRef = useRef(laneState);
+    rackStateRef.current = laneState;
 
-            if (Reflect.get(message, "key") === RACK_STATE_KEY) {
-                acceptRackState(deserializeRackState(Reflect.get(message, "value")));
-            }
-        };
-
-        patchConnection.addStoredStateValueListener?.(storedStateListener);
-        patchConnection.requestFullStoredState?.((fullState) => {
-            acceptRackState(deserializeRackState(readRackStateFromFullStoredState(fullState)));
-        });
-
-        return () => {
-            patchConnection.removeStoredStateValueListener?.(storedStateListener);
-        };
-    }, [acceptRackState, patchConnection]);
-
-    const commit = useCallback((nextState: RackState) => {
-        acceptRackState(nextState);
-        commitRackState(patchConnection, nextState);
-        patchConnection.sendStoredStateValue?.(RACK_STATE_KEY, serializeRackState(nextState));
-    }, [acceptRackState, patchConnection]);
-
-    return { rackState, rackStateRef, commit };
+    return { rackState: laneState, rackStateRef, commit };
 }
 
 function useRackParameterBinding(descriptor: RackParameterDescriptor, active = true) {
-    const coerce = useCallback((rawValue: unknown) => {
-        const numericValue = Number(rawValue);
-        const fallback = Number.isFinite(numericValue) ? numericValue : descriptor.initial;
-        return clamp(fallback, descriptor.min, descriptor.max);
-    }, [descriptor.initial, descriptor.max, descriptor.min]);
-
-    return usePatchParameterBinding<number>({
-        endpointID: descriptor.endpointID,
-        initialValue: descriptor.initial,
-        coerce,
-        active,
-    });
+    void active;
+    return useLaneParameterBinding(descriptor);
 }
 
 function normalizedRackParameterValue(descriptor: RackParameterDescriptor, value: number) {

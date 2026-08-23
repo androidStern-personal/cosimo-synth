@@ -1,5 +1,5 @@
 /**
- * Synth-only canonical Init documents and the rack.v1 transaction adapter.
+ * Synth-only canonical Init documents and the lane.v1 transaction adapter.
  * Init derives current defaults here; it never reads a hidden preset record.
  */
 
@@ -16,13 +16,13 @@ import {
     serializeModulationState,
 } from "../modulation";
 import {
-    RACK_STATE_KEY,
-    commitRackState,
-    createDefaultRackState,
-    parseRackState,
-    serializeRackState,
-    type RackState,
-} from "../rack-state";
+    LANE_STATE_KEY,
+    commitLaneState,
+    createDefaultLaneState,
+    parseLaneState,
+    serializeLaneState,
+    type LaneState,
+} from "../lane-state";
 import type { EffectStoredStateAdapter } from "./effect-preset-v2";
 import type { EffectPluginStateContract } from "./effect-state-contract";
 import type {
@@ -48,8 +48,8 @@ function readFullStoredStateValue(storedState: unknown, key: string) {
     return Object.hasOwn(storedState, key) ? storedState[key] : undefined;
 }
 
-function parseStrictRackState(value: unknown): RackState {
-    const outcome = parseRackState(value);
+function parseStrictRackState(value: unknown): LaneState {
+    const outcome = parseLaneState(value);
 
     if (outcome._tag === "err") {
         throw new Error(outcome.message);
@@ -58,29 +58,29 @@ function parseStrictRackState(value: unknown): RackState {
     return outcome.value;
 }
 
-function cloneRackState(value: RackState) {
-    return parseStrictRackState(serializeRackState(value));
+function cloneRackState(value: LaneState) {
+    return parseStrictRackState(serializeLaneState(value));
 }
 
-/** Create the strict rack.v1 mirror used only while rack is absent from presets. */
+/** Create the strict lane.v1 mirror used only while rack is absent from presets. */
 export function createSynthRackInitStateAdapter(
     patchConnection: PatchConnectionLike,
 ): StandaloneEffectInitOnlyStateAdapter {
     const listeners = new Set<() => void>();
     const pendingEchoes: string[] = [];
-    let currentState: RackState | null = null;
+    let currentState: LaneState | null = null;
     let hydrationError: Error | null = null;
     let attached = false;
     let awaitingKeyHydration = false;
 
     const acceptIncoming = (rawValue: unknown, isHydration: boolean) => {
         if (rawValue === undefined && isHydration) {
-            currentState = createDefaultRackState();
+            currentState = createDefaultLaneState();
             hydrationError = null;
             return;
         }
 
-        let nextState: RackState;
+        let nextState: LaneState;
 
         try {
             nextState = parseStrictRackState(rawValue);
@@ -94,7 +94,7 @@ export function createSynthRackInitStateAdapter(
             return;
         }
 
-        const serialized = serializeRackState(nextState);
+        const serialized = serializeLaneState(nextState);
         const echoIndex = pendingEchoes.indexOf(serialized);
 
         if (echoIndex !== -1) {
@@ -115,7 +115,7 @@ export function createSynthRackInitStateAdapter(
     };
 
     const handleStoredStateValue = (message: unknown) => {
-        if (!isRecord(message) || message.key !== RACK_STATE_KEY) {
+        if (!isRecord(message) || message.key !== LANE_STATE_KEY) {
             return;
         }
 
@@ -134,18 +134,18 @@ export function createSynthRackInitStateAdapter(
 
         if (typeof patchConnection.requestFullStoredState === "function") {
             patchConnection.requestFullStoredState((storedState) => {
-                acceptIncoming(readFullStoredStateValue(storedState, RACK_STATE_KEY), true);
+                acceptIncoming(readFullStoredStateValue(storedState, LANE_STATE_KEY), true);
             });
             return;
         }
 
         if (typeof patchConnection.requestStoredStateValue === "function") {
             awaitingKeyHydration = true;
-            patchConnection.requestStoredStateValue(RACK_STATE_KEY);
+            patchConnection.requestStoredStateValue(LANE_STATE_KEY);
             return;
         }
 
-        hydrationError = new Error(`Cannot hydrate ${RACK_STATE_KEY} because stored-state reads are unavailable.`);
+        hydrationError = new Error(`Cannot hydrate ${LANE_STATE_KEY} because stored-state reads are unavailable.`);
     };
 
     const detach = () => {
@@ -159,45 +159,45 @@ export function createSynthRackInitStateAdapter(
     };
 
     return {
-        key: RACK_STATE_KEY,
+        key: LANE_STATE_KEY,
         capture() {
             if (hydrationError) {
                 throw hydrationError;
             }
 
             if (!currentState) {
-                throw new Error(`${RACK_STATE_KEY} has not hydrated yet.`);
+                throw new Error(`${LANE_STATE_KEY} has not hydrated yet.`);
             }
 
             return cloneRackState(currentState);
         },
         createDefaultValue() {
-            return createDefaultRackState();
+            return createDefaultLaneState();
         },
         normalizeForTransaction(value: unknown) {
             return parseStrictRackState(value);
         },
         serializeForTransaction(value: unknown) {
-            return serializeRackState(parseStrictRackState(value));
+            return serializeLaneState(parseStrictRackState(value));
         },
         apply(value: unknown) {
             if (typeof patchConnection.sendEventOrValue !== "function") {
-                throw new Error(`Cannot apply ${RACK_STATE_KEY} because rack runtime writes are unavailable.`);
+                throw new Error(`Cannot apply ${LANE_STATE_KEY} because rack runtime writes are unavailable.`);
             }
 
             if (typeof patchConnection.sendStoredStateValue !== "function") {
-                throw new Error(`Cannot apply ${RACK_STATE_KEY} because stored-state writes are unavailable.`);
+                throw new Error(`Cannot apply ${LANE_STATE_KEY} because stored-state writes are unavailable.`);
             }
 
             const nextState = parseStrictRackState(value);
             const previousState = currentState;
-            const serialized = serializeRackState(nextState);
+            const serialized = serializeLaneState(nextState);
             currentState = nextState;
             pendingEchoes.push(serialized);
 
             try {
-                commitRackState(patchConnection, nextState);
-                patchConnection.sendStoredStateValue(RACK_STATE_KEY, serialized);
+                commitLaneState(patchConnection, nextState);
+                patchConnection.sendStoredStateValue(LANE_STATE_KEY, serialized);
             } catch (error) {
                 const echoIndex = pendingEchoes.lastIndexOf(serialized);
                 if (echoIndex !== -1) {
@@ -229,9 +229,9 @@ function createCanonicalStoredState(currentContract: EffectPluginStateContract) 
             schemaVersion: 4,
             create: () => serializeArticulationsV4(createEmptyArticulationsState()),
         },
-        [RACK_STATE_KEY]: {
+        [LANE_STATE_KEY]: {
             schemaVersion: 1,
-            create: () => serializeRackState(createDefaultRackState()),
+            create: () => serializeLaneState(createDefaultLaneState()),
         },
     };
     const storedState: Record<string, unknown> = {};
@@ -260,7 +260,7 @@ export function createSynthPresetInitOptions(
     patchConnection: PatchConnectionLike,
     storedStateAdapters: ReadonlyArray<Pick<EffectStoredStateAdapter, "key">>,
 ): StandaloneEffectPresetSynthOptions {
-    const rackIsPresetOwned = storedStateAdapters.some((adapter) => adapter.key === RACK_STATE_KEY);
+    const rackIsPresetOwned = storedStateAdapters.some((adapter) => adapter.key === LANE_STATE_KEY);
 
     return {
         createCanonicalStoredState,

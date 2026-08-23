@@ -74,18 +74,33 @@ constexpr std::array effectSettings
     EffectSetting { "filterMode", 1.0f },
     EffectSetting { "filterCutoff", 1200.0f },
     EffectSetting { "env1Sustain", 0.0f },
-    EffectSetting { "globalFilterMode", 1.0f },
-    EffectSetting { "globalFilterCutoff", 1200.0f },
-    EffectSetting { "globalFilterResonance", 0.707107f },
-    EffectSetting { "globalFilterDrive", 1.0f },
-    EffectSetting { "distortionWet", 0.35f },
-    EffectSetting { "ottAmount", 35.0f },
-    EffectSetting { "ottMix", 35.0f },
-    EffectSetting { "chorusMix", 0.3f },
-    EffectSetting { "flangerMix", 0.25f },
-    EffectSetting { "phaserMix", 0.25f },
-    EffectSetting { "delayMix", 0.25f },
-    EffectSetting { "reverbMix", 0.3f },
+};
+
+// Effect parameters have no host endpoints since the B3 parameter cut: they
+// ride the lane field upload, addressed by slot and positional param index
+// (EffectsRack.cmajor's lane<Type>Param* constants).
+struct LaneFieldSetting
+{
+    const char* label;
+    std::int32_t slotId;
+    std::int32_t paramIndex;
+    float value;
+};
+
+constexpr std::array laneFieldSettings
+{
+    LaneFieldSetting { "globalFilterMode", 0, 0, 1.0f },
+    LaneFieldSetting { "globalFilterCutoff", 0, 1, 1200.0f },
+    LaneFieldSetting { "globalFilterResonance", 0, 2, 0.707107f },
+    LaneFieldSetting { "globalFilterDrive", 0, 3, 1.0f },
+    LaneFieldSetting { "distortionWet", 1, 3, 0.35f },
+    LaneFieldSetting { "ottMix", 2, 0, 35.0f },
+    LaneFieldSetting { "ottAmount", 2, 1, 35.0f },
+    LaneFieldSetting { "chorusMix", 3, 0, 0.3f },
+    LaneFieldSetting { "flangerMix", 4, 3, 0.25f },
+    LaneFieldSetting { "phaserMix", 5, 7, 0.25f },
+    LaneFieldSetting { "delayMix", 6, 3, 0.25f },
+    LaneFieldSetting { "reverbMix", 7, 3, 0.3f },
 };
 
 struct Arguments
@@ -347,6 +362,18 @@ std::int32_t initialisePerformer (WavetableSynth& performer)
     loadSineWavetable (performer);
     for (const auto& setting : effectSettings)
         setParameter (performer, setting.endpoint, setting.value);
+
+    for (std::int32_t fieldIndex = 0; fieldIndex < static_cast<std::int32_t> (laneFieldSettings.size()); ++fieldIndex)
+    {
+        const auto& setting = laneFieldSettings[fieldIndex];
+        WavetableSynth::wt_LaneSlotParamValueUpload field {};
+        field.slotId = setting.slotId;
+        field.paramIndex = setting.paramIndex;
+        field.deliverySerial = fieldIndex + 1;
+        field.value = setting.value;
+        performer.addEvent_laneSlotParamValue (field);
+    }
+
     for (std::int32_t macroIndex = 1; macroIndex <= 4; ++macroIndex)
         setParameter (performer, "macro" + std::to_string (macroIndex), benchmark_profiles::macroValue);
 
@@ -793,6 +820,8 @@ int main (int argc, char** argv)
                   << '\n';
         for (const auto& setting : effectSettings)
             std::cout << "EFFECT\t" << setting.endpoint << '\t' << std::setprecision (9) << setting.value << '\n';
+        for (const auto& setting : laneFieldSettings)
+            std::cout << "EFFECT\t" << setting.label << '\t' << std::setprecision (9) << setting.value << '\n';
         writeVoiceFloorResult (runVoiceFloor());
         for (const auto profileIndex : profileOrder (arguments.repeatIndex))
             writeResult (runProfile (profileIndex, arguments));
