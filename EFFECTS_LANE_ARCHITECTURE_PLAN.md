@@ -379,6 +379,45 @@ are M1's permanent acceptance tests, not a throwaway report.
   browser suites (no UI surface changed), WebKit/iOS/native benchmarks.
   NEXT: lane.v2 document (device instances + topology tree) + the
   subway-map layout model, then the subway-map UI (M3).
+- **T3 LANE.V2 DOCUMENT LAYER COMPLETE (2026-08-23):** the TS foundation
+  the subway map renders from — new modules with tests, ZERO behavior
+  change (the app stays on lane.v1 until the M3 UI cutover swaps the
+  workspace wholesale; the deserializer upgrades v1 documents in place so
+  no patch is stranded). lane-state-v2.ts: the document is an INSTANCE
+  TABLE plus a CHAIN TREE — group nodes hold branches of device
+  placements only, exactly as expressive as the wire grammar (no nesting;
+  a marker inside a group would close it). Identity is structural:
+  `delay#2` is the instance id everywhere and #n statically holds slot
+  ordinal n-1, so LaneSlotAssignments is the identity map and a
+  modulation route can never silently retarget; `parallel#n`/`split#n`
+  name marker units the same way, so a split keeps its engine slot (and
+  filter state) across reorders. Parsing validates and never coerces:
+  id/unit grammar and pool caps, complete param vocabularies, the
+  placement bijection (a device exists iff placed exactly once), fan-outs
+  2..4 / 2..3, crossovers inside the engine's 40..18000 clamp, and the
+  flattened wire length (placements + markers ≤ 16). Placement enables
+  live in the tree; the split's crossovers are group fields that compile
+  onto its marker record. compileLaneTopologyUpload flattens the tree to
+  the marker/tag wire; validateCompiledLaneTopology is a TS mirror of the
+  engine's validator so the adapter fails loudly BEFORE sending;
+  buildLaneRuntimeEventsV2 replays records first (every instance + every
+  split marker) then the one topology event, and an upgraded serial
+  document compiles BIT-IDENTICAL to lane.v1's replay (cross-pinned
+  against the v1 builder in test). lane-subway-layout.ts: the
+  geometry-free layout model per the accepted canvas — a document becomes
+  a row script (terminus / stations / fork / merge) with per-lane cells;
+  parallel forks get lettered infra-teal lanes, splits get LO/MID/HI
+  band-tinted lanes with crossover readouts (highHz null at 2 bands),
+  empty branches open with a ghost add-stub then run dashed, bypassed
+  groups carry the flag for the view to dim (stations stay — members
+  still advance). Station pills: FLT/DRV/OTT/CHO/FLG/PHA/DLY/RVB + the
+  instance number. Gates (this container): units:orphans 706/706 (13 new
+  across test_lane_state_v2 + test_lane_subway_layout), tsc clean.
+  Engine untouched — no cmajor run needed; twins unchanged (no runtime
+  consumer until M3). NEXT: the subway-map UI — render the layout model
+  in the rack workspace, cut the adapter over to lane.v2
+  (deserialize/commit/assignments), and swap listLaneDeviceInstances to
+  the v2 listing.
 - **M3 — UI:** the subway-map FX graph in the rack workspace (locked
   direction above), dynamic per-patch target pickers, instance labels
   through the mappings table.
