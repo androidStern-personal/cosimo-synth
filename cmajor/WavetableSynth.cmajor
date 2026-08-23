@@ -71,6 +71,7 @@ namespace wt
     // this exact value after a later device-rate change.
     struct EngineStatus
     {
+        int32 dspSessionId;
         float32 sampleRateHz;
     }
 
@@ -897,8 +898,14 @@ namespace wt
     // performers and realtime patch connections.
     processor EngineStatusMonitor
     {
+        input event int32 syncIn;
         output event EngineStatus engineStatusOut;
         bool hasEmitted;
+
+        event syncIn (int32 unused)
+        {
+            hasEmitted = false;
+        }
 
         void main()
         {
@@ -907,6 +914,7 @@ namespace wt
                 if (! hasEmitted)
                 {
                     EngineStatus status;
+                    status.dspSessionId = int32 (processor.session);
                     status.sampleRateHz = float32 (processor.frequency);
                     engineStatusOut <- status;
                     hasEmitted = true;
@@ -1342,6 +1350,7 @@ graph WavetableSynth [[ main ]]
     // Host transport, not a user parameter: no `name:`, so it never becomes an
     // automation slot. See wt::TempoMonitor.
     input event std::timeline::Tempo tempo;
+    input event int32 engineStatusRequest;
     output event wt::OscillatorWavetableUploadAck wavetableUploadAck;
     output event wt::OscillatorWavetableMipRequest wavetableMipRequest;
     output event int32 wavetablePrewarmNotification;
@@ -1541,6 +1550,7 @@ graph WavetableSynth [[ main ]]
         analyzerDownmix.out -> filterSpectrumAnalyzer.in;
         sharedEngine.trackingPitchHzOut -> rack.trackingPitchHzIn;
         tempo -> tempoMonitor.tempoIn;
+        engineStatusRequest -> engineStatusMonitor.syncIn;
         tempoMonitor.bpmOut -> rack.tempoBpmIn;
         sharedEngine.rackModOut -> rack.rackModIn;
         // wt::DistortionBus now lives inside the rack, so the two analyzers read the
