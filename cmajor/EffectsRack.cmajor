@@ -303,6 +303,18 @@ namespace wt
         float32[laneSlotParamCount] values;
     }
 
+    // One FIELD of one slot's record: the live-edit contract. A knob drag
+    // sends single values, so concurrent surfaces editing different params
+    // of the same device never race at record granularity; whole records
+    // remain the bulk-restore path.
+    struct LaneSlotParamValueUpload
+    {
+        int32 slotId;
+        int32 paramIndex;
+        int32 deliverySerial;
+        float32 value;
+    }
+
     //==============================================================================
     // Structure validation. A malformed upload is a bug at the adapter boundary, not a
     // runtime state the rack may occupy, so both of these fail fast and the caller
@@ -472,6 +484,7 @@ namespace wt
         input event RackEnableUpload rackEnable;
         input event LaneTopologyUpload laneTopology;
         input event LaneSlotParamsUpload laneSlotParams;
+        input event LaneSlotParamValueUpload laneSlotParamValue;
 
         //----------------------------------------------------------------------
         // Host parameters. Distortion, Chorus and OTT keep the exact annotations they
@@ -776,6 +789,20 @@ namespace wt
             if (upload.slotId >= rackModuleCount && upload.slotId < laneSlotCount)
             {
                 poolSlotParams[wrap<lanePoolSlotCount> (upload.slotId - rackModuleCount)] = upload.values;
+                laneParamsSerial = upload.deliverySerial;
+                return;
+            }
+
+            laneRejectedCount += 1;
+        }
+
+        event laneSlotParamValue (LaneSlotParamValueUpload upload)
+        {
+            if (upload.slotId >= rackModuleCount && upload.slotId < laneSlotCount
+                 && upload.paramIndex >= 0 && upload.paramIndex < laneSlotParamCount)
+            {
+                poolSlotParams[wrap<lanePoolSlotCount> (upload.slotId - rackModuleCount),
+                               wrap<laneSlotParamCount> (upload.paramIndex)] = upload.value;
                 laneParamsSerial = upload.deliverySerial;
                 return;
             }
