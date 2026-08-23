@@ -2218,13 +2218,14 @@ test("T15: mapping rows read as LED meters with a live polarity toggle, one labe
     }
 });
 
-test("a stored pool-instance route renders instance-labeled, edits amount-only, and stays out of the fixed-eight picker", async () => {
-    // Effects Lane dynamic domain: `lane.delay#2.delayMix` is a legal stored
-    // kind since the namespace cut, but lane.v1 cannot represent the device
-    // that owns it. The table must render it in the delay's canonical
-    // language under a numbered category, with no base rail to a parameter
-    // this patch cannot address — and the create picker lists only the
-    // resident instance-#1 domain.
+test("a stored pool-instance route renders instance-labeled with its own base, and the picker speaks the per-document domain", async () => {
+    // T6 device instances: `lane.delay#2.delayMix` names a real document
+    // slot, so its row carries the SAME live base rail as instance #1 —
+    // the base contract is the type's; the edited slot is the instance's.
+    // (A route whose instance is absent from the document edits nothing
+    // durable: the store refuses the write and the field send lands on an
+    // idle engine slot.) The create picker offers the DOCUMENT's devices —
+    // no delay#2 lives in this default patch, so its kind is not offered.
     const page = await openHarnessPage({
         beforeGoto: async (nextPage) => {
             await nextPage.setViewportSize({ width: 393, height: 852 });
@@ -2250,7 +2251,7 @@ test("a stored pool-instance route renders instance-labeled, edits amount-only, 
         await page.click('[data-role="mobile-mod-panel-tab-mappings"]');
 
         // The pool row: numbered category, mirror parameter label, and the
-        // amount readout in the delay's canonical language.
+        // same live base rail every instance gets since T6.
         const poolRow = page.locator('[data-role="mod-mappings-row"][data-route-id="pool-route-1"]');
         await poolRow.waitFor();
         assert.equal(
@@ -2258,13 +2259,12 @@ test("a stored pool-instance route renders instance-labeled, edits amount-only, 
             "Delay 2 Mix",
         );
         assert.equal(await poolRow.locator(".mod-mappings-row-target strong").innerText(), "Delay 2");
-        const amountOnly = poolRow.locator('[data-role="mod-mappings-amount-only"]');
-        assert.equal(await amountOnly.count(), 1, "a pool route's base is not addressable in a fixed-eight patch");
         assert.equal(
-            await amountOnly.innerText(),
-            formatModulationAmountReadout("lane.delay#1.delayMix", 0.4, "unipolar"),
+            await poolRow.locator('[data-role="mod-mappings-amount-only"]').count(),
+            0,
+            "an instance route's base is addressable since T6 — no amount-only fallback",
         );
-        assert.equal(await poolRow.locator(".mod-led-rail").count(), 0);
+        assert.equal(await poolRow.locator(".mod-led-rail").count(), 1);
 
         // The resident row keeps today's un-numbered label and its live rail.
         const residentRow = page.locator('[data-role="mod-mappings-row"][data-route-id="resident-route-1"]');
@@ -2282,8 +2282,9 @@ test("a stored pool-instance route renders instance-labeled, edits amount-only, 
             return state.routes.find((route) => route.id === "pool-route-1")?.polarity === "bipolar";
         });
 
-        // The draft picker speaks the per-patch domain: the resident kind is
-        // offered, the pool kind is not (no live delay#2 in a v1 patch).
+        // The draft picker speaks the per-DOCUMENT domain: the resident kind
+        // is offered, and delay#2's is not because this patch has no delay#2
+        // device (add one on the map and it would appear).
         await page.locator('[data-role="mod-mappings-add"]').click();
         const draftTarget = page.locator('[data-role="mod-mappings-draft-target"]');
         assert.equal(await draftTarget.locator('option[value="lane.delay#1.delayMix"]').count(), 1);

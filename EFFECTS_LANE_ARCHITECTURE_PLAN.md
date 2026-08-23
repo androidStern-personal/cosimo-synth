@@ -523,12 +523,72 @@ are M1's permanent acceptance tests, not a throwaway report.
   become add affordances with a type picker, instance numbers beyond #1
   (slot assignments feed the modulation compiler), Remove/Move-to in the
   station menu, and the starter patch.
+- **T6 DEVICE INSTANCES SHIPPED (2026-08-23, commits fe1e9e7 + 412a2a8):**
+  add/remove closes M4's core and the whole surface speaks instances.
+  OPS (T6a, lane-state-v2, pure + unit-tested): addLaneDevice allocates
+  the smallest free instance number (≤5 per type), seeds descriptor
+  defaults in wire order, places enabled at any document path, and
+  refuses over the pool or the 16-unit wire; removeLaneDevice deletes
+  placement and record together (an empty chain is legal);
+  laneDefaultParamsForType. STATIC RESOLUTION (T6a): since `#n` IS slot
+  ordinal n-1, the B5 assignments map was pure indirection —
+  LaneSlotAssignments, buildLaneSlotAssignments, and every runtime
+  laneAssignments thread are DELETED; getLaneModulationTargetIndex
+  resolves document-free as (n-1)*36 + the static mirror index, and a
+  route to an absent device modulates an idle slot bus cell nothing
+  reads (audibly identical to dropping it, no recompile coupling).
+  EDITOR + MAP (T6b): selection is a DEVICE INSTANCE (selectedDeviceId;
+  the effect id derives), stations select/drag/menu by deviceId and
+  carry data-device-id, the editor header names the instance ("DELAY
+  2") and its power/menu bind the instance, and every parameter surface
+  resolves through a SelectedLaneDeviceContext — the selected instance
+  where types match, the type's #1 elsewhere (the workspace body sits
+  above its own provider, so overlay bindings thread the id
+  explicitly). Effect-typed entry points (dwell navigation, parameter
+  taps) resolve to the selection when the type matches, else the
+  document's lowest-numbered instance. ADD/REMOVE UX: every ghost is a
+  tappable add affordance and the trunk keeps a trailing add-ghost at
+  the end-of-chain insertion point (also the missing trunk-end drop
+  target); a type-picker sheet runs addLaneDevice per type to disable
+  capacity-refused entries, commits, and selects the new device
+  (identity diffed from the devices table); the station menu grows
+  Remove, selection heals onto the head of the line after any document
+  swap that strands it, and a truly empty document shows an editor
+  placeholder pointing at the map's add stub. PER-INSTANCE BASES:
+  resolveModulationTargetBase serves EVERY pool instance (the contract
+  is the type's; WHICH slot a binding edits is the deviceId threaded
+  through useLaneOrHostParameterBinding — entry specs and mapping rows
+  parse it from the route's own target kind); the B5 amount-only
+  fallback and its pins flipped to the new contract, and a base write
+  to an absent instance is a refused no-op (idle-slot field send, the
+  document never corrupts). Browser coverage (subway suite 8/8, 3 new):
+  ghost-picker add (topology grows slot 14 on the trunk; exact-value
+  edit on delay#2 rides laneSlotParamValue slot 14 with delay#1's value
+  untouched), mapping creation with #2 selected stores
+  lane.delay#2.delayTime and a nonzero seeded route lands in the
+  compiled runtime program (zero-depth routes deliberately park outside
+  the active count), remove + selection heal + a full delay pool
+  disabling only that type in the picker. Two test-side traps worth
+  remembering: `[data-lane-path]` alone is AMBIGUOUS (stations carry
+  trunk paths too — role-qualify ghost selectors), and lane.v2's
+  every-parameter-once rule silently defaults sparse seeded documents.
+  Final gates (this container): units:orphans 706/706, tsc clean,
+  subway 8/8, sharded desktop 219/221 whose two reds both resolved —
+  the stored-pool-route test was the OLD B5 pin (updated to the T6
+  contract, green solo) and rail-flick momentum stayed the established
+  CPU-contention flake (green solo); browser:orphans 114/117 +1 skip
+  (both reds the pre-existing container-environment failures: Avenir
+  Next font metrics in the seqfx harness, renderer-WASM needing macOS
+  clang); engine untouched (cmajor_rack 73/73 stands from T2); twins
+  rebuilt. Deferred as always: web:poc, WebKit, iOS shell, native
+  benchmarks. NEXT (M4 remainder): the default starter patch, then the
+  physical phone pass on the user's device.
 - **M3 — UI:** the subway-map FX graph in the rack workspace (locked
   direction above — SHIPPED as T4 for serial documents, T5 for groups),
   dynamic per-patch target pickers, instance labels through the mappings
   table.
-- **M4 — Product surface:** device add/remove UX, the default starter patch,
-  and the physical phone pass.
+- **M4 — Product surface:** device add/remove UX (SHIPPED as T6), the
+  default starter patch, and the physical phone pass.
 
 ## 3.1 M1 engine breakdown (reconnaissance 2026-08-22, verified in cmajor/)
 
