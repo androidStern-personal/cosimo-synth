@@ -131,6 +131,7 @@ function buildUpload(roots) {
     const rootNotes = new Int32Array(bankRootCapacity);
     const rootFrameOffsets = new Int32Array(bankRootCapacity);
     const rootFrameCounts = new Int32Array(bankRootCapacity);
+    const rootNoteOffFrameOffsets = new Int32Array(bankRootCapacity);
     let totalFrameCount = 0;
     for (let index = 0; index < roots.length; index += 1) {
         const root = roots[index];
@@ -138,6 +139,7 @@ function buildUpload(roots) {
         rootNotes[index] = root.note;
         rootFrameOffsets[index] = totalFrameCount;
         rootFrameCounts[index] = root.samples.length / 2;
+        rootNoteOffFrameOffsets[index] = root.noteOffFrameOffset ?? 0;
         totalFrameCount += rootFrameCounts[index];
     }
     const packedFrames = new Int32Array(totalFrameCount);
@@ -156,6 +158,7 @@ function buildUpload(roots) {
         rootNotes,
         rootFrameOffsets,
         rootFrameCounts,
+        rootNoteOffFrameOffsets,
         totalFrameCount,
         packedFrames,
     };
@@ -172,6 +175,7 @@ function sendBankBegin(performer, sessionID, generation, serial, upload) {
         rootNotes: upload.rootNotes,
         rootFrameOffsets: upload.rootFrameOffsets,
         rootFrameCounts: upload.rootFrameCounts,
+        rootNoteOffFrameOffsets: upload.rootNoteOffFrameOffsets,
     });
     performer.advance(2);
 }
@@ -454,6 +458,25 @@ test("live velocity scales loudness and early note-off follows Amp Release", asy
     const released = channel(renderFrames(performer, 6_000), 0);
     assert.ok(rms(released.subarray(0, 500)) > 1e-5, "release begins audibly");
     assert.equal(rms(released.subarray(5_000)), 0, "the early release must reach silence");
+});
+
+test("a release at the bank's baked note-off is not applied a second time", async () => {
+    const CmajorClass = await loadGeneratedClass();
+    const sessionID = 42_207;
+    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    installBank(performer, sessionID, 1, buildUpload([{
+        note: 60,
+        noteOffFrameOffset: 3_000,
+        samples: makeConstantStereo(12_000, 0.02, 0.02),
+    }]));
+    performer.setInputValue_ampRelease(0.005, 0);
+    performer.advance(4);
+    noteOn(performer, 60, captureVelocity);
+    renderFrames(performer, 3_000);
+    noteOff(performer, 60);
+    const afterBakedNoteOff = channel(renderFrames(performer, 2_000), 0);
+    assert.ok(rms(afterBakedNoteOff.subarray(1_000)) > 0.015,
+        "already-baked release audio must survive the fresh gate");
 });
 
 test("source swaps and note boundaries stay below the committed click ceiling", async (t) => {

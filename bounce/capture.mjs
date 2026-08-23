@@ -50,7 +50,11 @@ export async function captureBounceBank({
     }
     const bank = buildBounceBank({
         sampleRate: plan.snapshot.sampleRate,
-        roots: ordered.map((result) => ({ note: result.rootNote, samples: result.samples })),
+        roots: ordered.map((result) => ({
+            note: result.rootNote,
+            noteOffFrameOffset: result.noteOffFrameOffset,
+            samples: result.samples,
+        })),
     });
     const bytes = encodeBounceBank(bank);
     const digest = await digestBounceBank(bytes);

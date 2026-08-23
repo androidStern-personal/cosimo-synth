@@ -386,6 +386,7 @@ namespace wt
         int32[bounceBankRootCapacity] rootNotes;
         int32[bounceBankRootCapacity] rootFrameOffsets;
         int32[bounceBankRootCapacity] rootFrameCounts;
+        int32[bounceBankRootCapacity] rootNoteOffFrameOffsets;
     }
 
     struct BounceBankFrameBatch
@@ -1460,6 +1461,7 @@ namespace wt
         int32[voiceCount] voiceBounceRootIndex;
         int32[voiceCount] voiceBounceBankSlot;
         bool[voiceCount] voiceBouncePlaying;
+        bool[voiceCount] voiceBounceReleaseGate;
         float32[voiceCount] voicePitchGlideStep;
         int32[voiceCount] voiceGlideSamplesRemaining;
         int32[voiceCount] voiceActive;
@@ -1653,6 +1655,7 @@ namespace wt
         int32[bounceBankSlotCount * bounceBankRootCapacity] bounceSlotRootNotes;
         int32[bounceBankSlotCount * bounceBankRootCapacity] bounceSlotRootFrameOffsets;
         int32[bounceBankSlotCount * bounceBankRootCapacity] bounceSlotRootFrameCounts;
+        int32[bounceBankSlotCount * bounceBankRootCapacity] bounceSlotRootNoteOffFrameOffsets;
         int32[bounceBankSlotCount] bounceSlotGenerations;
         int32[bounceBankSlotCount] bounceSlotSampleRates;
         int32[bounceBankSlotCount] bounceSlotRootCounts;
@@ -3586,6 +3589,7 @@ namespace wt
         {
             let voice = wrap<voiceCount> (voiceIndex);
             voiceBouncePlaying.at (voice) = false;
+            voiceBounceReleaseGate.at (voice) = false;
             voiceBouncePosition.at (voice) = 0.0;
             voiceBounceRootIndex.at (voice) = 0;
             voiceBounceBankSlot.at (voice) = -1;
@@ -3608,6 +3612,33 @@ namespace wt
             voiceBounceRootIndex.at (voice) = rootIndex;
             voiceBouncePosition.at (voice) = 0.0;
             voiceBouncePlaying.at (voice) = true;
+        }
+
+        void armBounceReleaseGateForVoice (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            if (! voiceBouncePlaying.at (voice))
+                return;
+
+            let slotIndex = voiceBounceBankSlot.at (voice);
+            let rootIndex = voiceBounceRootIndex.at (voice);
+            if (slotIndex < 0 || slotIndex >= bounceBankSlotCount
+                || rootIndex < 0 || rootIndex >= bounceSlotRootCounts.at (slotIndex))
+            {
+                voiceBounceReleaseGate.at (voice) = true;
+                return;
+            }
+
+            let metadataIndex = bounceRootMetadataIndex (slotIndex, rootIndex);
+            let bakedNoteOff = bounceSlotRootNoteOffFrameOffsets.at (metadataIndex);
+            // Offset zero is the backwards-compatible hand-built-bank case:
+            // every release uses the live gate. Captured banks carry their
+            // exact logical note-off; releasing there or later must not apply
+            // the same release twice to already-baked PCM. An earlier release
+            // remains latched for the rest of this one-shot, preventing a
+            // faded voice from reappearing when it crosses the baked offset.
+            voiceBounceReleaseGate.at (voice) = bakedNoteOff <= 0
+                || voiceBouncePosition.at (voice) < float64 (bakedNoteOff);
         }
 
         float32<2> readBounceSampleForVoice (int32 voiceIndex)
@@ -4294,6 +4325,7 @@ namespace wt
         {
             let voice = wrap<voiceCount> (index);
             voiceActive.at (voice) = 0;
+            armBounceReleaseGateForVoice (int32 (index));
             envelopes[voice].eventIn <- note;
             noteOffVoiceModulators (index, note);
         }
@@ -4965,10 +4997,13 @@ namespace wt
                 let rootNote = request.rootNotes.at (rootIndex);
                 let frameOffset = request.rootFrameOffsets.at (rootIndex);
                 let frameCount = request.rootFrameCounts.at (rootIndex);
+                let noteOffFrameOffset = request.rootNoteOffFrameOffsets.at (rootIndex);
                 if (rootNote < 0 || rootNote > 127
                     || rootNote <= previousRootNote
                     || frameOffset != expectedFrameOffset
                     || frameCount <= 0
+                    || noteOffFrameOffset < 0
+                    || noteOffFrameOffset >= frameCount
                     || frameOffset + frameCount > request.totalFrameCount)
                     return false;
 
@@ -5024,6 +5059,8 @@ namespace wt
                     ? request.rootFrameOffsets.at (rootIndex) : 0;
                 bounceSlotRootFrameCounts.at (metadataIndex) = rootIndex < request.rootCount
                     ? request.rootFrameCounts.at (rootIndex) : 0;
+                bounceSlotRootNoteOffFrameOffsets.at (metadataIndex) = rootIndex < request.rootCount
+                    ? request.rootNoteOffFrameOffsets.at (rootIndex) : 0;
             }
 
             bounceRejectedDeliverySerial = 0;
@@ -5644,9 +5681,11 @@ namespace wt
                     }
 
                     let gain = isBounceSource
-                        ? std::intrinsics::min (
-                            envelopes[voice].gainOut,
-                            voiceVelocity.at (voice)) / bounceCaptureVelocityGain
+                        ? (voiceBounceReleaseGate.at (voice)
+                            ? std::intrinsics::min (
+                                envelopes[voice].gainOut,
+                                voiceVelocity.at (voice))
+                            : voiceVelocity.at (voice)) / bounceCaptureVelocityGain
                         : envelopes[voice].gainOut;
                     leftMix += noteLeft * gain;
                     rightMix += noteRight * gain;

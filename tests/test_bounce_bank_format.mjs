@@ -43,7 +43,11 @@ test("bounce bank binary round-trips ordered stereo roots deterministically", ()
     const bank = buildBounceBank({
         sampleRate: 48_000,
         roots: [
-            { note: 48, samples: Int16Array.of(-32_768, 32_767, -1, 1) },
+            {
+                note: 48,
+                noteOffFrameOffset: 1,
+                samples: Int16Array.of(-32_768, 32_767, -1, 1),
+            },
             { note: 52, samples: Int16Array.of(1234, -5678) },
         ],
     });
@@ -54,8 +58,8 @@ test("bounce bank binary round-trips ordered stereo roots deterministically", ()
     const decoded = decodeBounceBank(first);
     assert.equal(decoded.sampleRate, 48_000);
     assert.deepEqual(decoded.roots, [
-        { note: 48, frameOffset: 0, frameCount: 2 },
-        { note: 52, frameOffset: 2, frameCount: 1 },
+        { note: 48, frameOffset: 0, frameCount: 2, noteOffFrameOffset: 1 },
+        { note: 52, frameOffset: 2, frameCount: 1, noteOffFrameOffset: 0 },
     ]);
     assert.deepEqual([...decoded.pcm], [-32_768, 32_767, -1, 1, 1234, -5678]);
     assert.equal(decoded.packedFrames[0] >>> 0, 0x7fff8000);
@@ -72,7 +76,12 @@ test("the WAV converter accepts arbitrary stereo PCM16 and preserves it exactly"
     await convertWaveFileToBounceBank({ inputPath, outputPath, rootNote: 57 });
     const decoded = decodeBounceBank(await fs.readFile(outputPath));
     assert.equal(decoded.sampleRate, 48_000);
-    assert.deepEqual(decoded.roots, [{ note: 57, frameOffset: 0, frameCount: frames.length }]);
+    assert.deepEqual(decoded.roots, [{
+        note: 57,
+        frameOffset: 0,
+        frameCount: frames.length,
+        noteOffFrameOffset: 0,
+    }]);
     assert.deepEqual([...decoded.pcm], frames.flat());
 });
 
@@ -85,4 +94,3 @@ test("malformed banks are rejected before their PCM becomes visible", () => {
     new DataView(corrupted.buffer).setUint32(24, 2, true);
     assert.throws(() => decodeBounceBank(corrupted), /PCM length/);
 });
-
