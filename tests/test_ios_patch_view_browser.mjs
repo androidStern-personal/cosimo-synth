@@ -1928,7 +1928,7 @@ test("mounted iPhone distortion controls send parameter updates through the patc
 
         assert.equal(snapshot.gestureStarts.includes("distortionMode"), true);
         assert.equal(snapshot.gestureEnds.includes("distortionWet"), true);
-        assert.equal(JSON.parse(snapshot.storedState["lane.v1"]).params.drive.distortionWet, 0.58);
+        assert.equal(JSON.parse(snapshot.storedState["lane.v1"]).devices["distortion#1"].params.distortionWet, 0.58);
     } finally {
         await closeIOSHarnessPage(page);
     }

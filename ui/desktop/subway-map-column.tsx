@@ -1,50 +1,47 @@
 import {
     useCallback,
-    useMemo,
     useRef,
     type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
+    type ReactNode,
 } from "react";
 
-import { EFFECT_ID_TO_LANE_TYPE, type LaneState } from "../shared/lane-state";
-import { upgradeLaneStateV1 } from "../shared/lane-state-v2";
+import { LANE_TYPE_TO_EFFECT_ID } from "../shared/lane-state";
+import { encodeLaneDevicePath, type LaneStateV2 } from "../shared/lane-state-v2";
 import {
     buildSubwayLayout,
+    type SubwayCell,
+    type SubwayRow,
     type SubwayStationCell,
+    type SubwayTint,
 } from "../shared/lane-subway-layout";
-import type { LaneDeviceType } from "../shared/lane-modulation-targets";
 import { getRackEffectDescriptor } from "../shared/rack-parameter-descriptors";
 import type { EffectModuleId } from "../shared/target-descriptor";
 
 /**
- * The subway-map rack column (M3, locked direction: canvas "FX Rack Subway
- * Map"). The rack list becomes a line map — the whole topology always in
- * view, devices shrunk to STATION PILLS on an infra-teal line. The v1
- * document is serial, so today's map is a single line of stations; the fork
- * and merge rows of the layout model render when the add/remove UX (M4) can
- * actually create groups.
+ * The subway-map rack column (M3/M4, locked direction: canvas "FX Rack
+ * Subway Map"). The lane.v2 document renders THROUGH the layout model as a
+ * line map — the whole topology always in view: trunk stations on the
+ * infra-teal line, parallel groups forking at a dot junction with lettered
+ * lanes, frequency splits at a diamond with band-tinted lanes and crossover
+ * readouts, empty branches as dashed lanes opened by ghost add-stubs.
  *
- * Gestures, per the accepted mocks: TAP selects the station (opens its
- * editor), DRAGGING a station along the line reorders it (the same physics
- * as the old row reorder — the workspace's preview machinery is reused
- * verbatim through data-rack-effect-id), and LONG-PRESS (or right-click)
- * opens the station menu carrying what the old row offered: bypass and
- * exact value. The per-row quick slider is gone by design — quick edits
- * live in the editor, one tap away.
+ * Gestures per the accepted mocks: TAP selects a station (or a group's
+ * fork), DRAGGING a station moves it anywhere on the graph — along its
+ * lane, across branches and bands, back to the trunk — every station and
+ * ghost is a drop target through its data-lane-path; LONG-PRESS (or
+ * right-click) opens the station or group menu.
  *
- * Each station ROW keeps a >=44px hit area; the pill is the visual inside
- * it. Rows are the list's direct children, so position-based selectors and
- * the reorder preview keep their contract with the old column.
+ * DOM contract: a TRUNK station is a direct list child carrying the
+ * rack-module data-roles (position selectors and the serial-doc tests keep
+ * working untouched). A group renders as one .subway-group section whose
+ * body rows hold per-lane CELLS; branch stations carry the same data-roles
+ * on the cell.
  */
 
 const STATION_DRAG_THRESHOLD_PX = 7;
 const STATION_LONG_PRESS_MS = 550;
-
-const LANE_TYPE_TO_EFFECT_ID: ReadonlyMap<LaneDeviceType, EffectModuleId> = new Map(
-    (Object.entries(EFFECT_ID_TO_LANE_TYPE) as Array<[EffectModuleId, LaneDeviceType]>)
-        .map(([effectId, deviceType]) => [deviceType, effectId]),
-);
 
 export type SubwayStationMenuRequest = {
     readonly effectId: EffectModuleId;
@@ -52,14 +49,22 @@ export type SubwayStationMenuRequest = {
     readonly clientY: number;
 };
 
+export type SubwayGroupMenuRequest = {
+    readonly groupId: string;
+    readonly clientX: number;
+    readonly clientY: number;
+};
+
 type SubwayMapColumnProps = {
-    readonly laneState: LaneState;
-    readonly previewOrder: ReadonlyArray<EffectModuleId>;
+    readonly laneState: LaneStateV2;
     readonly selectedEffectId: EffectModuleId;
+    readonly selectedGroupId: string | null;
     readonly reorderingEffectId: EffectModuleId | null;
     readonly accents: Readonly<Record<EffectModuleId, string>>;
     readonly onSelect: (effectId: EffectModuleId) => void;
+    readonly onSelectGroup: (groupId: string) => void;
     readonly onOpenStationMenu: (request: SubwayStationMenuRequest) => void;
+    readonly onOpenGroupMenu: (request: SubwayGroupMenuRequest) => void;
     /** Called once a station drag crosses the reorder threshold. */
     readonly onArmReorder: (effectId: EffectModuleId, event: ReactPointerEvent<HTMLElement>) => void;
     readonly onKeyboardMove: (effectId: EffectModuleId, offset: -1 | 1) => void;
@@ -67,39 +72,27 @@ type SubwayMapColumnProps = {
 
 type StationPointerState = {
     pointerId: number;
-    effectId: EffectModuleId;
     startX: number;
     startY: number;
     longPressTimer: number;
 };
 
-function SubwayStation({
-    station,
-    effectId,
-    position,
-    accent,
-    selected,
-    reordering,
-    onSelect,
-    onOpenStationMenu,
-    onArmReorder,
-    onKeyboardMove,
+/**
+ * Tap / drag-arm / long-press disambiguation shared by stations and forks.
+ * The pointer is captured at pointerdown (mouse has no implicit capture),
+ * so the threshold-crossing move always reaches this element; the workspace
+ * steals the capture when a reorder arms.
+ */
+function usePressableGestures({
+    onTap,
+    onLongPress,
+    onDragArm = null,
 }: {
-    readonly station: SubwayStationCell;
-    readonly effectId: EffectModuleId;
-    readonly position: number;
-    readonly accent: string;
-    readonly selected: boolean;
-    readonly reordering: boolean;
-    readonly onSelect: (effectId: EffectModuleId) => void;
-    readonly onOpenStationMenu: (request: SubwayStationMenuRequest) => void;
-    readonly onArmReorder: (effectId: EffectModuleId, event: ReactPointerEvent<HTMLElement>) => void;
-    readonly onKeyboardMove: (effectId: EffectModuleId, offset: -1 | 1) => void;
+    onTap: () => void;
+    onLongPress: (clientX: number, clientY: number) => void;
+    onDragArm?: ((event: ReactPointerEvent<HTMLElement>) => void) | null;
 }) {
-    const effect = getRackEffectDescriptor(effectId);
     const pointerStateRef = useRef<StationPointerState | null>(null);
-    // A drag or an opened menu consumes the gesture: the trailing click that
-    // browsers still deliver must not change the selection underneath it.
     const suppressClickRef = useRef(false);
 
     const clearPointerState = useCallback(() => {
@@ -110,41 +103,36 @@ function SubwayStation({
         }
     }, []);
 
-    const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         if (event.pointerType === "mouse" && event.button !== 0) {
             return;
         }
         clearPointerState();
         suppressClickRef.current = false;
-        // Hold the pointer so the move that crosses the lift threshold always
-        // reaches this station, wherever the cursor has strayed by then
-        // (touch captures implicitly; mouse does not). The workspace's
-        // reorder machinery steals the capture at arm time.
         try {
             event.currentTarget.setPointerCapture(event.pointerId);
         } catch {
             // Without capture the fast paths still work: the threshold move
-            // just has to land on the station itself.
+            // just has to land on the element itself.
         }
         const { clientX, clientY, pointerId } = event;
         pointerStateRef.current = {
             pointerId,
-            effectId,
             startX: clientX,
             startY: clientY,
             longPressTimer: window.setTimeout(() => {
                 if (pointerStateRef.current?.pointerId === pointerId) {
                     clearPointerState();
                     suppressClickRef.current = true;
-                    onOpenStationMenu({ effectId, clientX, clientY });
+                    onLongPress(clientX, clientY);
                 }
             }, STATION_LONG_PRESS_MS),
         };
-    }, [clearPointerState, effectId, onOpenStationMenu]);
+    }, [clearPointerState, onLongPress]);
 
-    const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
         const pointerState = pointerStateRef.current;
-        if (pointerState === null || pointerState.pointerId !== event.pointerId) {
+        if (pointerState === null || pointerState.pointerId !== event.pointerId || onDragArm === null) {
             return;
         }
         const distance = Math.hypot(
@@ -154,12 +142,10 @@ function SubwayStation({
         if (distance < STATION_DRAG_THRESHOLD_PX) {
             return;
         }
-        // The station lifts onto the line: the workspace's reorder machinery
-        // takes the pointer from here (list-level capture, live preview).
         clearPointerState();
         suppressClickRef.current = true;
-        onArmReorder(effectId, event);
-    }, [clearPointerState, effectId, onArmReorder]);
+        onDragArm(event);
+    }, [clearPointerState, onDragArm]);
 
     const handlePointerEnd = useCallback(() => {
         clearPointerState();
@@ -170,18 +156,58 @@ function SubwayStation({
             suppressClickRef.current = false;
             return;
         }
-        onSelect(effectId);
-    }, [effectId, onSelect]);
+        onTap();
+    }, [onTap]);
 
-    const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
-        if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-            event.preventDefault();
-            onKeyboardMove(effectId, -1);
-        } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-            event.preventDefault();
-            onKeyboardMove(effectId, 1);
-        }
-    }, [effectId, onKeyboardMove]);
+    const handleContextMenu = useCallback((event: { preventDefault: () => void; clientX: number; clientY: number }) => {
+        event.preventDefault();
+        suppressClickRef.current = true;
+        onLongPress(event.clientX, event.clientY);
+    }, [onLongPress]);
+
+    return { handlePointerDown, handlePointerMove, handlePointerEnd, handleClick, handleContextMenu };
+}
+
+function StationBody({ station }: { readonly station: SubwayStationCell }) {
+    return (
+        <span className="subway-station-pill" aria-hidden="true">
+            <span className="subway-station-code">{station.code}</span>
+            <span className="subway-station-number">{station.instanceNumber}</span>
+        </span>
+    );
+}
+
+function SubwayStation({
+    station,
+    position,
+    asCell,
+    accents,
+    selectedEffectId,
+    reorderingEffectId,
+    onSelect,
+    onOpenStationMenu,
+    onArmReorder,
+    onKeyboardMove,
+}: {
+    readonly station: SubwayStationCell;
+    readonly position: number;
+    /** Trunk stations are list-child ROWS; branch stations are lane CELLS. */
+    readonly asCell: boolean;
+} & Pick<SubwayMapColumnProps,
+    "accents" | "selectedEffectId" | "reorderingEffectId"
+    | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove">) {
+    const effectId = LANE_TYPE_TO_EFFECT_ID.get(station.deviceType);
+    if (effectId === undefined) {
+        throw new Error(`Unknown lane device type on the map: ${station.deviceType}`);
+    }
+    const effect = getRackEffectDescriptor(effectId);
+    const selected = selectedEffectId === effectId;
+    const reordering = reorderingEffectId === effectId;
+    const gestures = usePressableGestures({
+        onTap: () => onSelect(effectId),
+        onLongPress: (clientX, clientY) => onOpenStationMenu({ effectId, clientX, clientY }),
+        onDragArm: (event) => onArmReorder(effectId, event),
+    });
 
     return (
         <div
@@ -191,86 +217,257 @@ function SubwayStation({
             data-effect-id={effectId}
             data-enabled={station.enabled ? "true" : "false"}
             data-drag-dwell={`rack-effect:${effectId}`}
-            className={`subway-station-row${selected ? " is-selected" : ""}${station.enabled ? "" : " is-disabled"}${reordering ? " is-reordering" : ""}`}
-            style={{ "--station-accent": accent } as CSSProperties}
+            data-lane-path={encodeLaneDevicePath(station.path)}
+            data-lane-tint={station.tint}
+            className={`${asCell ? "subway-station-cell" : "subway-station-row"}${selected ? " is-selected" : ""}${station.enabled ? "" : " is-disabled"}${reordering ? " is-reordering" : ""}`}
+            style={{ "--station-accent": accents[effectId] } as CSSProperties}
         >
             <button
                 type="button"
                 data-role={`rack-station-${effectId}`}
                 aria-label={`${effect.label}${station.enabled ? "" : " (bypassed)"}${selected ? ", selected" : ""}`}
                 className="subway-station"
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerEnd}
-                onPointerCancel={handlePointerEnd}
-                // NO pointerleave cancellation: a captured pointer still
-                // fires boundary events as it crosses the pill's edge, and
-                // the very move that should arm the reorder would cancel the
-                // gesture first.
-                onClick={handleClick}
-                onContextMenu={(event) => {
-                    event.preventDefault();
-                    suppressClickRef.current = true;
-                    onOpenStationMenu({ effectId, clientX: event.clientX, clientY: event.clientY });
+                onPointerDown={gestures.handlePointerDown}
+                onPointerMove={gestures.handlePointerMove}
+                onPointerUp={gestures.handlePointerEnd}
+                onPointerCancel={gestures.handlePointerEnd}
+                onClick={gestures.handleClick}
+                onContextMenu={gestures.handleContextMenu}
+                onKeyDown={(event: ReactKeyboardEvent<HTMLButtonElement>) => {
+                    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
+                        event.preventDefault();
+                        onKeyboardMove(effectId, -1);
+                    } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
+                        event.preventDefault();
+                        onKeyboardMove(effectId, 1);
+                    }
                 }}
-                onKeyDown={handleKeyDown}
             >
-                <span className="subway-station-pill" aria-hidden="true">
-                    <span className="subway-station-code">{station.code}</span>
-                    <span className="subway-station-number">{station.instanceNumber}</span>
-                </span>
+                <StationBody station={station} />
             </button>
         </div>
     );
 }
 
+function laneCells(
+    cells: ReadonlyArray<SubwayCell>,
+    positionOf: (cell: SubwayStationCell) => number,
+    stationProps: Pick<SubwayMapColumnProps,
+        "accents" | "selectedEffectId" | "reorderingEffectId"
+        | "onSelect" | "onOpenStationMenu" | "onArmReorder" | "onKeyboardMove">,
+): ReactNode[] {
+    return cells.map((cell, laneIndex) => {
+        if (cell.kind === "station") {
+            return (
+                <SubwayStation
+                    key={cell.deviceId}
+                    station={cell}
+                    position={positionOf(cell)}
+                    asCell
+                    {...stationProps}
+                />
+            );
+        }
+        if (cell.kind === "ghost") {
+            return (
+                <div
+                    key={`ghost-${laneIndex}`}
+                    className="subway-ghost-cell"
+                    data-lane-path={encodeLaneDevicePath(cell.path)}
+                    data-lane-tint={cell.tint}
+                >
+                    <span className="subway-ghost-pill" aria-hidden="true">+</span>
+                </div>
+            );
+        }
+        return (
+            <div
+                key={`line-${laneIndex}`}
+                className={`subway-line-cell${cell.dashed ? " is-dashed" : ""}`}
+                data-lane-tint={cell.tint}
+            />
+        );
+    });
+}
+
 export function SubwayMapColumn({
     laneState,
-    previewOrder,
     selectedEffectId,
+    selectedGroupId,
     reorderingEffectId,
     accents,
     onSelect,
+    onSelectGroup,
     onOpenStationMenu,
+    onOpenGroupMenu,
     onArmReorder,
     onKeyboardMove,
 }: SubwayMapColumnProps) {
-    // The document is projected through the SAME pipeline the tree will use:
-    // v1 upgrades to the lane.v2 form and the layout model scripts the map.
-    // The preview order rides the projection so a live drag reorders the
-    // stations exactly as it reordered the rows.
-    const stations = useMemo(() => {
-        const layout = buildSubwayLayout(upgradeLaneStateV1({ ...laneState, order: previewOrder }));
-        return layout.rows.flatMap((row) => (
-            row.kind === "stations"
-                ? row.cells.filter((cell): cell is SubwayStationCell => cell.kind === "station")
-                : []
-        ));
-    }, [laneState, previewOrder]);
+    const layout = buildSubwayLayout(laneState);
+
+    // Chain-walk positions for the data-rack-position contract: stations
+    // number consecutively in dispatch order whatever their lane.
+    const stationPositions = new Map<string, number>();
+    for (const row of layout.rows) {
+        if (row.kind !== "stations") {
+            continue;
+        }
+        for (const cell of row.cells) {
+            if (cell.kind === "station") {
+                stationPositions.set(cell.deviceId, stationPositions.size);
+            }
+        }
+    }
+
+    const stationProps = {
+        accents,
+        selectedEffectId,
+        reorderingEffectId,
+        onSelect,
+        onOpenStationMenu,
+        onArmReorder,
+        onKeyboardMove,
+    };
+    const positionOf = (cell: SubwayStationCell) => stationPositions.get(cell.deviceId) ?? 0;
+
+    // Rows render in order; a group's fork..merge rows nest inside ONE
+    // section so bypass dimming and lane alignment stay coherent.
+    const rendered: ReactNode[] = [];
+    let groupRows: ReactNode[] = [];
+    let openGroup: { groupId: string; bypassed: boolean; laneCount: number } | null = null;
+
+    const flushGroup = () => {
+        if (openGroup === null) {
+            return;
+        }
+        rendered.push(
+            <div
+                key={openGroup.groupId}
+                className={`subway-group${openGroup.bypassed ? " is-bypassed" : ""}${selectedGroupId === openGroup.groupId ? " is-selected" : ""}`}
+                data-role={`rack-group-${openGroup.groupId}`}
+                data-group-id={openGroup.groupId}
+                style={{ "--subway-lane-count": openGroup.laneCount } as CSSProperties}
+            >
+                {groupRows}
+            </div>,
+        );
+        groupRows = [];
+        openGroup = null;
+    };
+
+    for (const [rowIndex, row] of layout.rows.entries()) {
+        if (row.kind === "terminus") {
+            continue; // The list's own decor draws the termini.
+        }
+        if (row.kind === "fork") {
+            flushGroup();
+            openGroup = { groupId: row.groupId, bypassed: row.bypassed, laneCount: row.lanes.length };
+            groupRows.push(
+                <SubwayFork key={`fork-${row.groupId}`} row={row} onSelectGroup={onSelectGroup} onOpenGroupMenu={onOpenGroupMenu} />,
+            );
+            continue;
+        }
+        if (row.kind === "merge") {
+            groupRows.push(
+                <div key={`merge-${rowIndex}`} className="subway-merge" aria-hidden="true">
+                    {row.lanes.map((lane, laneIndex) => (
+                        <span
+                            key={laneIndex}
+                            className={`subway-merge-lane${lane.dashed ? " is-dashed" : ""}`}
+                            data-lane-tint={lane.tint}
+                        />
+                    ))}
+                    <span className="subway-merge-dot" />
+                </div>,
+            );
+            flushGroup();
+            continue;
+        }
+        // Station rows: trunk rows are single-cell list children; group body
+        // rows hold per-lane cells.
+        if (openGroup !== null) {
+            groupRows.push(
+                <div key={`body-${rowIndex}`} className="subway-lane-row">
+                    {laneCells(row.cells, positionOf, stationProps)}
+                </div>,
+            );
+            continue;
+        }
+        const cell = row.cells[0];
+        if (cell !== undefined && cell.kind === "station") {
+            rendered.push(
+                <SubwayStation
+                    key={cell.deviceId}
+                    station={cell}
+                    position={positionOf(cell)}
+                    asCell={false}
+                    {...stationProps}
+                />,
+            );
+        }
+    }
+    flushGroup();
+
+    return <>{rendered}</>;
+}
+
+function SubwayFork({
+    row,
+    onSelectGroup,
+    onOpenGroupMenu,
+}: {
+    readonly row: Extract<SubwayRow, { kind: "fork" }>;
+    readonly onSelectGroup: (groupId: string) => void;
+    readonly onOpenGroupMenu: (request: SubwayGroupMenuRequest) => void;
+}) {
+    const gestures = usePressableGestures({
+        onTap: () => onSelectGroup(row.groupId),
+        onLongPress: (clientX, clientY) => onOpenGroupMenu({ groupId: row.groupId, clientX, clientY }),
+    });
+    const readout = row.crossovers === null
+        ? null
+        : row.crossovers.highHz === null
+            ? formatCrossoverHz(row.crossovers.lowHz)
+            : `${formatCrossoverHz(row.crossovers.lowHz)} · ${formatCrossoverHz(row.crossovers.highHz)}`;
 
     return (
-        <>
-            {stations.map((station, position) => {
-                const effectId = LANE_TYPE_TO_EFFECT_ID.get(station.deviceType);
-                if (effectId === undefined) {
-                    throw new Error(`Unknown lane device type on the map: ${station.deviceType}`);
-                }
-                return (
-                    <SubwayStation
-                        key={station.deviceId}
-                        station={station}
-                        effectId={effectId}
-                        position={position}
-                        accent={accents[effectId]}
-                        selected={selectedEffectId === effectId}
-                        reordering={reorderingEffectId === effectId}
-                        onSelect={onSelect}
-                        onOpenStationMenu={onOpenStationMenu}
-                        onArmReorder={onArmReorder}
-                        onKeyboardMove={onKeyboardMove}
-                    />
-                );
-            })}
-        </>
+        <div className="subway-fork" data-fork-kind={row.groupKind}>
+            <button
+                type="button"
+                data-role={`rack-fork-${row.groupId}`}
+                aria-label={`${row.groupKind === "split" ? "Frequency split" : "Parallel"} group${row.bypassed ? " (bypassed)" : ""}`}
+                className="subway-fork-glyph"
+                onPointerDown={gestures.handlePointerDown}
+                onPointerMove={gestures.handlePointerMove}
+                onPointerUp={gestures.handlePointerEnd}
+                onPointerCancel={gestures.handlePointerEnd}
+                onClick={gestures.handleClick}
+                onContextMenu={gestures.handleContextMenu}
+            >
+                <span className={row.groupKind === "split" ? "subway-glyph-diamond" : "subway-glyph-dot"} aria-hidden="true" />
+            </button>
+            <div className="subway-fork-lanes" aria-hidden="true">
+                {row.lanes.map((lane) => (
+                    <span
+                        key={lane.label}
+                        className={`subway-fork-lane${lane.empty ? " is-empty" : ""}`}
+                        data-lane-tint={lane.tint}
+                    >
+                        {lane.label}
+                    </span>
+                ))}
+            </div>
+            {readout === null ? null : (
+                <span className="subway-fork-readout" data-role={`rack-fork-readout-${row.groupId}`}>
+                    {readout}
+                </span>
+            )}
+        </div>
     );
+}
+
+export function formatCrossoverHz(hz: number): string {
+    return hz >= 1000
+        ? `${(hz / 1000).toFixed(hz >= 10000 ? 0 : 1)}k`
+        : `${Math.round(hz)}`;
 }

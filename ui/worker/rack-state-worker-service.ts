@@ -1,9 +1,9 @@
 import type { PatchConnectionLike } from "../shared/cmajor-react";
+import { LANE_STATE_KEY } from "../shared/lane-state";
 import {
-    LANE_STATE_KEY,
-    buildLaneRuntimeEvents,
-    deserializeLaneState,
-} from "../shared/lane-state";
+    buildLaneRuntimeEventsV2,
+    deserializeLaneStateV2,
+} from "../shared/lane-state-v2";
 import { RUNTIME_DSP_SESSION_DEPENDENCY } from "../shared/runtime-dsp-session";
 import { createStoredStateRuntimeMirror } from "../shared/stored-state-runtime-mirror";
 
@@ -13,7 +13,7 @@ export function createRackStateWorkerService(connection: PatchConnectionLike) {
         stateKey: LANE_STATE_KEY,
         runtimeEndpointDependencies: [RUNTIME_DSP_SESSION_DEPENDENCY],
         applyDefaultRuntimeStateWhenMissing: true,
-        deserializeStoredState: deserializeLaneState,
-        buildRuntimeEvents: ({ state }) => [...buildLaneRuntimeEvents(state)],
+        deserializeStoredState: deserializeLaneStateV2,
+        buildRuntimeEvents: ({ state }) => [...buildLaneRuntimeEventsV2(state)],
     });
 }

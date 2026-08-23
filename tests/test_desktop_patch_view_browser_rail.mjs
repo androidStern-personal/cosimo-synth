@@ -2766,8 +2766,11 @@ test("every rack editor binds live controls and one drop commits one complete DS
             )),
         );
         const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
-        assert.deepEqual(storedRack.order, ["filter", "drive", "ott", "chorus", "flanger", "phaser", "delay", "reverb"]);
-        assert.equal(Object.values(storedRack.enabled).every(Boolean), true);
+        assert.deepEqual(storedRack.chain.map((node) => node.deviceId), [
+            "globalFilter#1", "distortion#1", "ott#1", "chorus#1",
+            "flanger#1", "phaser#1", "delay#1", "reverb#1",
+        ]);
+        assert.equal(storedRack.chain.every((node) => node.enabled), true);
 
         await clearHarnessDebugLog(page);
         const reorderHandle = page.locator('[data-role="rack-station-reverb"]');

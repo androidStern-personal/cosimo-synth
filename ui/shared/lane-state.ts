@@ -116,6 +116,13 @@ export const EFFECT_ID_TO_LANE_TYPE: Readonly<Record<EffectModuleId, LaneDeviceT
     reverb: "reverb",
 });
 
+/** The inverse map, for surfaces that speak device types (the subway map,
+    the bridge adapter's host lists). */
+export const LANE_TYPE_TO_EFFECT_ID: ReadonlyMap<LaneDeviceType, EffectModuleId> = new Map(
+    (Object.entries(EFFECT_ID_TO_LANE_TYPE) as Array<[EffectModuleId, LaneDeviceType]>)
+        .map(([effectId, deviceType]) => [deviceType, effectId]),
+);
+
 /** One complete lane document: structure AND parameter values. */
 export type LaneState = {
     readonly format: "cosimo.lane";

@@ -1,6 +1,7 @@
 import type { LaneDeviceType } from "./lane-modulation-targets";
 import {
     parseLaneInstanceId,
+    type LaneDevicePathV2,
     type LaneDevicePlacementV2,
     type LaneGroupV2,
     type LaneStateV2,
@@ -33,6 +34,8 @@ export type SubwayStationCell = {
     readonly code: string;
     readonly enabled: boolean;
     readonly tint: SubwayTint;
+    /** The placement's document coordinates — also its drop-target path. */
+    readonly path: LaneDevicePathV2;
 };
 
 export type SubwayLineCell = {
@@ -44,6 +47,8 @@ export type SubwayLineCell = {
 export type SubwayGhostCell = {
     readonly kind: "ghost";
     readonly tint: SubwayTint;
+    /** The empty branch's insertion point for adds and cross-lane drops. */
+    readonly path: LaneDevicePathV2;
 };
 
 export type SubwayCell = SubwayStationCell | SubwayLineCell | SubwayGhostCell;
@@ -99,7 +104,11 @@ const SPLIT_LANE_TINTS: Readonly<Record<number, ReadonlyArray<SubwayTint>>> = Ob
     3: ["lo", "mid", "hi"],
 });
 
-function stationCell(placement: LaneDevicePlacementV2, tint: SubwayTint): SubwayStationCell {
+function stationCell(
+    placement: LaneDevicePlacementV2,
+    tint: SubwayTint,
+    path: LaneDevicePathV2,
+): SubwayStationCell {
     const parsed = parseLaneInstanceId(placement.deviceId);
     if (parsed === null) {
         throw new Error(`Invalid lane instance id in state: ${placement.deviceId}`);
@@ -112,6 +121,7 @@ function stationCell(placement: LaneDevicePlacementV2, tint: SubwayTint): Subway
         code: SUBWAY_STATION_CODES[parsed.deviceType],
         enabled: placement.enabled,
         tint,
+        path,
     };
 }
 
@@ -152,11 +162,14 @@ function groupRows(group: LaneGroupV2): SubwayRow[] {
         rows.push({
             kind: "stations",
             cells: group.branches.map((branch, laneIndex): SubwayCell => {
+                const branchPath = (index: number): LaneDevicePathV2 => (
+                    { kind: "branch", groupId: group.groupId, branchIndex: laneIndex, index }
+                );
                 if (rowIndex < branch.length) {
-                    return stationCell(branch[rowIndex], tints[laneIndex]);
+                    return stationCell(branch[rowIndex], tints[laneIndex], branchPath(rowIndex));
                 }
                 if (branch.length === 0 && rowIndex === 0) {
-                    return { kind: "ghost", tint: tints[laneIndex] };
+                    return { kind: "ghost", tint: tints[laneIndex], path: branchPath(0) };
                 }
                 return { kind: "line", tint: tints[laneIndex], dashed: branch.length === 0 };
             }),
@@ -179,9 +192,12 @@ export function buildSubwayLayout(state: LaneStateV2): SubwayLayout {
     const rows: SubwayRow[] = [{ kind: "terminus", label: "in" }];
     let laneCount = 1;
 
-    for (const node of state.chain) {
+    for (const [nodeIndex, node] of state.chain.entries()) {
         if (node.kind === "device") {
-            rows.push({ kind: "stations", cells: [stationCell(node, "infra")] });
+            rows.push({
+                kind: "stations",
+                cells: [stationCell(node, "infra", { kind: "trunk", index: nodeIndex })],
+            });
             continue;
         }
         laneCount = Math.max(laneCount, node.branches.length);

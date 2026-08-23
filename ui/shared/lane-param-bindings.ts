@@ -7,15 +7,27 @@ import {
     reportUserParameterEdit,
 } from "./user-edit-bus";
 import {
+    EFFECT_ID_TO_LANE_TYPE,
+    LANE_SLOT_PARAM_VALUE_ENDPOINT_ID,
     LANE_STATE_KEY,
-    commitLaneState,
-    createDefaultLaneState,
-    deserializeLaneState,
-    listLaneDeviceInstances,
-    sendLaneParamValue,
-    serializeLaneState,
-    type LaneState,
 } from "./lane-state";
+import {
+    commitLaneStateV2,
+    createDefaultLaneStateV2,
+    deserializeLaneStateV2,
+    laneSplitMarkerSlotId,
+    listLaneDeviceInstancesV2,
+    serializeLaneStateV2,
+    setLaneDeviceParam,
+    setLaneSplitCrossoverHz,
+    type LaneStateV2,
+} from "./lane-state-v2";
+import {
+    LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
+    LANE_SPLIT_PARAM_XOVER_LOW_HZ,
+} from "./lane-state";
+import { getLaneSlotId, getLaneSlotParamIndex } from "./lane-slot-params";
+import type { EffectModuleId } from "./target-descriptor";
 import {
     buildPatchModulationTargetOptions,
     type ModulationTargetOption,
@@ -41,7 +53,7 @@ import {
  * record set on each document write, which the engine treats as redundant.
  */
 type LaneStateStore = {
-    state: LaneState;
+    state: LaneStateV2;
     readonly listeners: Set<() => void>;
     deliverySerial: number;
     /** The serialized form of `state`, for identity-stable dedupe. */
@@ -57,11 +69,11 @@ function readLaneStateFromFullStoredState(fullState: Record<string, unknown>) {
     return Object.hasOwn(values, LANE_STATE_KEY) ? values[LANE_STATE_KEY] : fullState[LANE_STATE_KEY];
 }
 
-function acceptLaneState(store: LaneStateStore, nextState: LaneState) {
+function acceptLaneState(store: LaneStateStore, nextState: LaneStateV2) {
     // Identity-stable: an update that decodes to the document we already hold
     // must not mint a new state object — dozens of bindings subscribe here,
     // and object churn on echoed stored-state traffic re-renders them all.
-    const serialized = serializeLaneState(nextState);
+    const serialized = serializeLaneStateV2(nextState);
     if (serialized === store.serialized) {
         return;
     }
@@ -78,12 +90,12 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
     if (existing !== undefined) {
         return existing;
     }
-    const initialState = createDefaultLaneState();
+    const initialState = createDefaultLaneStateV2();
     const created: LaneStateStore = {
         state: initialState,
         listeners: new Set(),
         deliverySerial: 0,
-        serialized: serializeLaneState(initialState),
+        serialized: serializeLaneStateV2(initialState),
     };
     stores.set(key, created);
 
@@ -95,11 +107,11 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
             return;
         }
         if (Reflect.get(message, "key") === LANE_STATE_KEY) {
-            acceptLaneState(created, deserializeLaneState(Reflect.get(message, "value")));
+            acceptLaneState(created, deserializeLaneStateV2(Reflect.get(message, "value")));
         }
     });
     connection.requestFullStoredState?.((fullState) => {
-        acceptLaneState(created, deserializeLaneState(readLaneStateFromFullStoredState(fullState)));
+        acceptLaneState(created, deserializeLaneStateV2(readLaneStateFromFullStoredState(fullState)));
     });
 
     return created;
@@ -111,9 +123,12 @@ function getLaneStateStore(connection: PatchConnectionLike): LaneStateStore {
  * updates fan out through the one store.
  */
 export function useLaneStateDoc(): {
-    readonly laneState: LaneState;
-    readonly commit: (nextState: LaneState) => void;
-    readonly setParamValue: (effectId: LaneState["order"][number], endpointID: string, value: number) => void;
+    readonly laneState: LaneStateV2;
+    readonly commit: (nextState: LaneStateV2) => void;
+    readonly setParamValue: (effectId: EffectModuleId, endpointID: string, value: number) => void;
+    /** The split editor's hot path: optimistic doc update + the acked
+        marker-record field upload. */
+    readonly setSplitCrossover: (groupId: string, which: "low" | "high", hz: number) => void;
     readonly persist: () => void;
 } {
     const patchConnection = usePatchConnection();
@@ -127,30 +142,51 @@ export function useLaneStateDoc(): {
         () => store.state,
     );
 
-    const commit = useCallback((nextState: LaneState) => {
+    const commit = useCallback((nextState: LaneStateV2) => {
         acceptLaneState(store, nextState);
-        commitLaneState(patchConnection, nextState);
-        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneState(nextState));
+        commitLaneStateV2(patchConnection, nextState);
+        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(nextState));
     }, [patchConnection, store]);
 
-    const setParamValue = useCallback((effectId: LaneState["order"][number], endpointID: string, value: number) => {
-        acceptLaneState(store, {
-            ...store.state,
-            params: {
-                ...store.state.params,
-                [effectId]: { ...store.state.params[effectId], [endpointID]: value },
-            },
-        });
+    const setParamValue = useCallback((effectId: EffectModuleId, endpointID: string, value: number) => {
+        const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+        const deviceId = `${deviceType}#1`;
+        const paramIndex = getLaneSlotParamIndex(deviceType, endpointID);
+        if (paramIndex === null) {
+            throw new Error(`Unknown lane parameter: ${effectId}.${endpointID}`);
+        }
+        acceptLaneState(store, setLaneDeviceParam(store.state, deviceId, endpointID, value) ?? store.state);
         store.deliverySerial += 1;
-        sendLaneParamValue(patchConnection, effectId, endpointID, value, store.deliverySerial);
+        patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
+            slotId: getLaneSlotId(deviceType, 0),
+            paramIndex,
+            deliverySerial: store.deliverySerial,
+            value,
+        });
+    }, [patchConnection, store]);
+
+    const setSplitCrossover = useCallback((groupId: string, which: "low" | "high", hz: number) => {
+        const slotId = laneSplitMarkerSlotId(groupId);
+        const next = setLaneSplitCrossoverHz(store.state, groupId, which, hz);
+        if (slotId === null || next === null) {
+            return;
+        }
+        acceptLaneState(store, next);
+        store.deliverySerial += 1;
+        patchConnection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
+            slotId,
+            paramIndex: which === "low" ? LANE_SPLIT_PARAM_XOVER_LOW_HZ : LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
+            deliverySerial: store.deliverySerial,
+            value: hz,
+        });
     }, [patchConnection, store]);
 
     const persist = useCallback(() => {
-        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneState(store.state));
+        patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneStateV2(store.state));
     }, [patchConnection, store]);
 
-    return useMemo(() => ({ laneState, commit, setParamValue, persist }),
-        [laneState, commit, setParamValue, persist]);
+    return useMemo(() => ({ laneState, commit, setParamValue, setSplitCrossover, persist }),
+        [laneState, commit, setParamValue, setSplitCrossover, persist]);
 }
 
 /**
@@ -161,7 +197,7 @@ export function useLaneStateDoc(): {
  */
 export function usePatchModulationTargetOptions(): ReadonlyArray<ModulationTargetOption> {
     const { laneState } = useLaneStateDoc();
-    const devices = listLaneDeviceInstances(laneState);
+    const devices = listLaneDeviceInstancesV2(laneState);
     const deviceSignature = devices.map((device) => device.instanceId).join("\n");
     // An unchanged signature is an unchanged device list, so the captured
     // `devices` from the first matching render stays correct.
@@ -187,7 +223,9 @@ export function useLaneParameterBinding(descriptor: RackParameterDescriptor): Pa
         return descriptor.choices !== undefined ? Math.round(clamped) : clamped;
     }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
 
-    const value = clampValue(laneState.params[descriptor.effectId][descriptor.endpointID] ?? descriptor.initial);
+    const value = clampValue(
+        laneState.devices[`${EFFECT_ID_TO_LANE_TYPE[descriptor.effectId]}#1`]
+            ?.params[descriptor.endpointID] ?? descriptor.initial);
     const valueRef = { current: value };
     valueRef.current = value;
 

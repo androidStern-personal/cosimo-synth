@@ -464,11 +464,61 @@ are M1's permanent acceptance tests, not a throwaway report.
   suite updated textually (station selectors, menu bypass, station-row
   data-enabled reads) but not runnable here — deferred with WebKit, iOS
   shell, and native benchmarks.
+- **T5 GROUPS ARE LIVE (2026-08-23):** lane.v2 is the stored document and
+  the map RENDERS AND EDITS trees end to end. STORAGE CUT: all four
+  runtime consumers — the lane store (lane-param-bindings), the headless
+  worker restore, the cosimo bridge adapter, and the init-preset adapter
+  — hold LaneStateV2, persist v2 under the SAME stored-state slot
+  ("lane.v1" stays the slot NAME; the value is self-versioned), and read
+  v1 through the compat parse, so every existing patch and preset loads
+  unchanged and upgrades on its next write (pinned by browser test). The
+  bridge's host surface derives its serial effectOrder/effectEnabled
+  from the chain walk; a full-order restore is a serial statement that
+  dissolves groups. TREE OPS (lane-state-v2, all pure,
+  validate-never-coerce, unit-tested): moveLaneDevice splices along and
+  ACROSS lanes through document paths (also the map's drop-target
+  grammar, encoded on every station and ghost as data-lane-path);
+  wrapLaneDeviceInGroup (trunk devices only — the wire cannot nest;
+  splits default 800/2500 Hz); dissolveLaneGroup;
+  setLaneSplitCrossoverHz; setLaneGroupBranchCount (a split grows an
+  EMPTY MID band and shrinks only an empty one; parallels append/remove
+  empty last branches — devices never relocate implicitly); enable
+  setters for devices and groups; smallest-free unit allocation. MAP:
+  fork rows (dot junction / diamond) with lettered or LO/MID/HI
+  band-tinted lanes and live crossover readouts, per-lane body cells,
+  ghost add-stubs on dashed empty lanes, merge rows, bypassed groups
+  dimmed as one section; trunk stations keep the exact serial DOM
+  contract so every existing selector held. GESTURES: tap a fork to
+  select its group — the right pane becomes the GROUP EDITOR (split:
+  log-scaled crossover sliders on the acked laneSlotParamValue marker
+  hot path, live field uploads while dragging and one persist on
+  release; both kinds: power, fan-out, dissolve); long-press/right-click
+  a fork for the group menu; the station menu gains Make parallel / Make
+  frequency split (trunk stations); dragging a station now targets ANY
+  station or ghost path, so devices move between branches, bands, and
+  the trunk with the same physics. One real bug found by the browser
+  suite: the reorder target walk was Y-ONLY — correct for a single
+  column, wrong the moment lanes sit side by side (it kept landing in
+  the neighboring band); the walk now picks by 2D containment with
+  smallest-rect-wins and nearest-center fallback. Browser coverage
+  (test_desktop_patch_view_browser_subway.mjs, in the sharded suite):
+  wrap→tree+wire+map (marker record 800/2500 and the marker-grammar
+  topology asserted on the wire), crossover drag (field edits slotId 44
+  paramIndex 0, doc persisted, ZERO topology traffic), cross-lane drag
+  into the empty band (one topology commit, reverb tagged into band 2),
+  fork-menu bypass+dissolve, and the stored-v1 upgrade path. Gates at
+  this checkpoint (this container): units:orphans 706/706, tsc clean,
+  subway suite 5/5, twins rebuilt; the full sharded desktop re-run and
+  browser:orphans were IN FLIGHT when this checkpoint was cut on
+  request — results and any fixes land as follow-up commits. Deferred
+  as always: web:poc, WebKit, iOS shell, native benchmarks. NEXT (M4 remainder): device add/remove — the ghost stubs
+  become add affordances with a type picker, instance numbers beyond #1
+  (slot assignments feed the modulation compiler), Remove/Move-to in the
+  station menu, and the starter patch.
 - **M3 — UI:** the subway-map FX graph in the rack workspace (locked
-  direction above — SHIPPED as T4 for serial documents), dynamic
-  per-patch target pickers, instance labels through the mappings table.
-  Remaining for M3: group rendering in the map once M4's add/remove UX
-  can create groups.
+  direction above — SHIPPED as T4 for serial documents, T5 for groups),
+  dynamic per-patch target pickers, instance labels through the mappings
+  table.
 - **M4 — Product surface:** device add/remove UX, the default starter patch,
   and the physical phone pass.
 

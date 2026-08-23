@@ -47,6 +47,7 @@ test("a serial document is a single teal line of stations between termini", asyn
         code: "DLY",
         enabled: false,
         tint: "infra",
+        path: { kind: "trunk", index: 6 },
     });
 });
 
@@ -95,7 +96,11 @@ test("a parallel group forks teal lanes, ghosts its empty branch, and merges", a
     const [firstRow, secondRow] = [built.rows[2], built.rows[3]];
     assert.equal(firstRow.cells[0].kind, "station");
     assert.equal(firstRow.cells[0].deviceId, "delay#1");
-    assert.deepEqual(firstRow.cells[1], { kind: "ghost", tint: "infra" });
+    assert.deepEqual(firstRow.cells[1], {
+        kind: "ghost",
+        tint: "infra",
+        path: { kind: "branch", groupId: "parallel#1", branchIndex: 1, index: 0 },
+    });
     assert.equal(secondRow.cells[0].deviceId, "delay#2");
     assert.deepEqual(secondRow.cells[1], { kind: "line", tint: "infra", dashed: true });
 
@@ -151,7 +156,11 @@ test("a split group tints its bands, reads out crossovers, and marks bypass", as
     const body = built.rows[2];
     assert.equal(body.cells[0].deviceId, "ott#1");
     assert.equal(body.cells[0].tint, "lo");
-    assert.deepEqual(body.cells[1], { kind: "ghost", tint: "mid" });
+    assert.deepEqual(body.cells[1], {
+        kind: "ghost",
+        tint: "mid",
+        path: { kind: "branch", groupId: "split#1", branchIndex: 1, index: 0 },
+    });
     assert.equal(body.cells[2].deviceId, "reverb#1");
     assert.equal(body.cells[2].tint, "hi");
 
@@ -189,7 +198,7 @@ test("a two-band split has no high crossover readout, and empty groups still ren
     const body = built.rows[2];
     assert.equal(body.kind, "stations");
     assert.deepEqual(body.cells, [
-        { kind: "ghost", tint: "lo" },
-        { kind: "ghost", tint: "hi" },
+        { kind: "ghost", tint: "lo", path: { kind: "branch", groupId: "split#1", branchIndex: 0, index: 0 } },
+        { kind: "ghost", tint: "hi", path: { kind: "branch", groupId: "split#1", branchIndex: 1, index: 0 } },
     ]);
 });
