@@ -777,6 +777,10 @@ def test_ios_auv3_cmake_declares_the_repo_owned_shell_and_bundle_copy_contract()
     assert "ensure_cmajor_runtime.py" in cmake_text
     assert "CosimoPluginMain.cpp" in cmake_text
     assert "CosimoSharedWavetableLibrary.mm" in cmake_text
+    assert "BounceNativeDriver.cpp" in cmake_text
+    assert "BounceNativePlatform.cpp" in cmake_text
+    assert "BounceNativeBankStore.cpp" in cmake_text
+    assert "CmajorBounceOfflinePerformer.cpp" in cmake_text
     assert "COSIMO_CMAJOR_RUNTIME_DIR" in cmake_text
     assert "COSIMO_REACT_UI_FILES" in cmake_text
     assert "COSIMO_WORKER_UI_FILES" in cmake_text
@@ -1859,6 +1863,10 @@ def test_shared_wavetable_library_source_keeps_the_app_group_and_backup_exclusio
     assert "group.dev.cosimo.wavetable-synth" in helper_header
     assert "containerURLForSecurityApplicationGroupIdentifier" in helper_source
     assert "NSURLIsExcludedFromBackupKey" in helper_source
+    assert "NSFileProtectionCompleteUntilFirstUserAuthentication" in helper_source
+    assert "iosBounceBankStoreRoot" in helper_source
+    assert "createSharedBounceBankStore" in helper_source
+    assert "allowLocalDevelopmentFallback" in helper_header
     assert "com.apple.security.application-groups" in entitlements
     assert "group.dev.cosimo.wavetable-synth" in entitlements
 

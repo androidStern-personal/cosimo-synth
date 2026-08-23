@@ -1,6 +1,11 @@
 #include <Foundation/Foundation.h>
 
 #include "CosimoSharedWavetableLibrary.h"
+#include "BounceNativeBankStore.h"
+#include "BounceNativePlatform.h"
+
+#include <filesystem>
+#include <stdexcept>
 
 namespace cosimo::ios
 {
@@ -88,6 +93,42 @@ juce::Result setExcludedFromBackup (const juce::File& target)
     }
 
     return juce::Result::ok();
+}
+
+juce::Result setProtectionAfterFirstUnlock (const juce::File& target)
+{
+    if (! target.exists())
+        return juce::Result::fail ("Cannot protect a missing Bounce storage item.");
+
+    NSString* path = [NSString stringWithUTF8String: target.getFullPathName().toRawUTF8()];
+    if (path == nil)
+        return juce::Result::fail ("Could not build an iOS path for Bounce data protection.");
+
+    NSError* error = nil;
+    NSDictionary<NSFileAttributeKey, id>* attributes = @{
+        NSFileProtectionKey: NSFileProtectionCompleteUntilFirstUserAuthentication
+    };
+    const BOOL ok = [[NSFileManager defaultManager] setAttributes: attributes
+                                                     ofItemAtPath: path
+                                                            error: &error];
+    if (! ok)
+    {
+        NSString* description = error.localizedDescription ?: @"Unknown data-protection failure";
+        return juce::Result::fail ("Could not apply first-unlock protection to Bounce storage: "
+                                   + juce::String::fromUTF8 (description.UTF8String));
+    }
+
+    return juce::Result::ok();
+}
+
+std::filesystem::path fileSystemPath (const juce::File& file)
+{
+    return std::filesystem::u8path (file.getFullPathName().toStdString());
+}
+
+juce::File juceFile (const std::filesystem::path& path)
+{
+    return juce::File (juce::String::fromUTF8 (path.u8string().c_str()));
 }
 
 juce::Result validateWaveFile (const juce::File& waveFile, int expectedFrameCount)
@@ -521,6 +562,88 @@ SharedWavetableLibraryStatus inspectSharedWavetableLibrary()
                    + (status.usingSharedContainer ? "the App Group container." : "local app storage.");
     status.detail = status.summary;
     return status;
+}
+
+juce::File resolveSharedBounceBankStoreRoot (bool allowLocalDevelopmentFallback,
+                                             bool* usingSharedContainer)
+{
+    if (auto groupRoot = getGroupContainerRoot(); groupRoot.getFullPathName().isNotEmpty())
+    {
+        if (usingSharedContainer != nullptr)
+            *usingSharedContainer = true;
+        return juceFile (bounce::iosBounceBankStoreRoot (fileSystemPath (groupRoot)));
+    }
+
+    if (usingSharedContainer != nullptr)
+        *usingSharedContainer = false;
+    if (! allowLocalDevelopmentFallback)
+        return {};
+
+    const auto localRoot = getLocalApplicationSupportRoot();
+    if (localRoot.getFullPathName().isEmpty())
+        return {};
+    return juceFile (bounce::desktopBounceBankStoreRoot (fileSystemPath (localRoot)));
+}
+
+juce::Result prepareSharedBounceBankStoreRoot (const juce::File& root)
+{
+    if (root.getFullPathName().isEmpty())
+        return juce::Result::fail ("The Bounce App Group container is unavailable.");
+    if (auto created = root.createDirectory(); created.failed())
+        return created;
+    if (auto excluded = setExcludedFromBackup (root); excluded.failed())
+        return excluded;
+    return setProtectionAfterFirstUnlock (root);
+}
+
+juce::Result protectPublishedBounceBankFile (const juce::File& bankFile)
+{
+    if (! bankFile.existsAsFile())
+        return juce::Result::fail ("The published Bounce bank is missing.");
+    if (auto excluded = setExcludedFromBackup (bankFile); excluded.failed())
+        return excluded;
+    return setProtectionAfterFirstUnlock (bankFile);
+}
+
+std::unique_ptr<bounce::BounceBankStore> createSharedBounceBankStore (
+    bool allowLocalDevelopmentFallback,
+    juce::String* errorMessage)
+{
+    const auto fail = [errorMessage] (const juce::String& message)
+        -> std::unique_ptr<bounce::BounceBankStore>
+    {
+        if (errorMessage != nullptr)
+            *errorMessage = message;
+        return {};
+    };
+
+    const auto root = resolveSharedBounceBankStoreRoot (
+        allowLocalDevelopmentFallback);
+    if (root.getFullPathName().isEmpty())
+        return fail ("The Bounce App Group container is unavailable.");
+    if (const auto prepared = prepareSharedBounceBankStoreRoot (root);
+        prepared.failed())
+        return fail (prepared.getErrorMessage());
+
+    try
+    {
+        auto store = std::make_unique<bounce::BounceBankStore> (
+            fileSystemPath (root),
+            [] (const std::filesystem::path& path)
+            {
+                const auto result = protectPublishedBounceBankFile (juceFile (path));
+                if (result.failed())
+                    throw std::runtime_error (result.getErrorMessage().toStdString());
+            });
+        store->initialise();
+        if (errorMessage != nullptr)
+            errorMessage->clear();
+        return store;
+    }
+    catch (const std::exception& error)
+    {
+        return fail (juce::String::fromUTF8 (error.what()));
+    }
 }
 
 std::unique_ptr<juce::Component> createSharedWavetableLibraryComponent (SharedWavetableLibraryComponentMode mode,
