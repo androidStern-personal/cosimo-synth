@@ -4,6 +4,9 @@ const ROOT_RECORD_BYTES = 16;
 
 export const BOUNCE_BANK_VERSION = 1;
 export const BOUNCE_BANK_MAX_ROOTS = 19;
+// Must remain in lockstep with wt::bounceBankFrameCapacity. This is the
+// atomic per-slot residency ceiling, not a recommendation for capture length.
+export const BOUNCE_BANK_FRAME_CAPACITY = 5_472_000;
 
 function invariant(condition, message) {
     if (!condition) throw new Error(message);
@@ -73,6 +76,8 @@ export function buildBounceBank({ sampleRate, roots }) {
             frameCount,
         });
         totalFrameCount += frameCount;
+        invariant(totalFrameCount <= BOUNCE_BANK_FRAME_CAPACITY,
+            `Bounce bank exceeds the ${BOUNCE_BANK_FRAME_CAPACITY}-frame live capacity`);
         return normalized;
     });
 

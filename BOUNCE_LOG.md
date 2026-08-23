@@ -134,3 +134,53 @@ Validation: production `web:build`; 6/6 sampler tests; 3/3 bank-format tests;
 tests; and Linux Chromium web POC at 13 passed, 5 expected environment skips,
 0 failed. The headless worklet's absolute load/deadline telemetry is not used
 as a hard gate because this VM has no realtime audio sink.
+
+## 2026-08-23 — M3: deterministic worker-based offline capture
+
+- Added the append-only `engineStatus` event. It is emitted once from DSP
+  time using `processor.frequency`; a generated performer initialized at
+  44.1 kHz reports exactly 44,100 Hz, so capture does not infer native or web
+  engine rate from a device preference.
+- `web:build` now emits `cmaj_Cosimo_Synth.offline.js`, a class-only canonical-
+  renderer performer with no AudioWorklet import, and a dedicated 9.66 kB
+  (3.42 kB gzip) `bounce-render-worker.js`.
+- Added immutable button-press snapshots and a platform-neutral plan with the
+  locked 24–96/every-4-semitone roots, velocity 100, 3 s hold, 6 s tail cap,
+  live sample rate, frozen tempo, 128-frame offline blocks, and −80 dBFS
+  truncation. Structured runtime events are cloned, ordered, and can be
+  session-scoped for each fresh performer.
+- The primary browser driver runs one short-lived worker per root with one
+  fresh performer/session, bounds concurrency to 1–4, transfers i16 PCM back
+  without a copy, terminates each wasm instance promptly, and cancels every
+  peer if any root fails. The pool preserves root order regardless of worker
+  completion order.
+- Each root renders the complete chain through note-off and the full tail cap,
+  then retains the last audible 50 ms RMS window plus 100 ms padding. Capture
+  is never normalized. The exact stereo-i16 bank bytes are SHA-256 digested;
+  the Cmajor 5,472,000-frame residency ceiling is now shared and checked at
+  both bank creation and install boundaries.
+- Added a committed A/B definition: independently peak-normalized stereo RMS
+  over 50 ms windows, omitting only windows below the same −80 dBFS tail
+  floor; mean absolute difference must be <1 dB and no window may exceed 3 dB.
+- The real generated engine captured pluck, pad with serial delay+reverb, and
+  nonlinear OTT fixtures at roots 48/60/72 in Node worker threads. Each bank
+  was installed into a fresh sampled performer and every root passed. Mean
+  deltas were 0.001–0.003 dB; worst-window deltas were 0.092–0.222 dB. Every
+  pad root retained audible baked output at least one second after note-off.
+- Two independent fresh-worker renders of the same snapshot/root produced
+  identical bank bytes and digest. Example fixture digests were
+  `daa662a6…` (pluck), `e7b42f3c…` (pad), and `80c67e10…` (OTT).
+
+G1 evidence on this small cloud VM: measured per-root offline throughput was
+4.146–4.225× realtime for pluck, 3.428–3.477× for delay+reverb pad, and
+3.152–3.324× for OTT. Using the slowest measured 3.152× value, the locked
+19-root × 9-second worst-case plan projects to about 54.3 seconds serial,
+well below the five-minute pivot trigger; bounded parallelism can reduce wall
+time further. These absolute values are informational rather than a hard
+Mac/iOS verdict. Relative regressions, callback deadlines, architecture, and
+bounded memory are the VM gates; a real sink and Mac/iOS validation remain in
+M8/HUMAN_VALIDATION.
+
+Validation: production `web:build`; 3/3 planner/segmenter tests; the full M3
+worker/engine/determinism/three-patch A/B test; 3/3 bank-format tests; 3/3
+amplitude-release tests; 6/6 sampled-source tests; and 15/15 web bundle tests.
