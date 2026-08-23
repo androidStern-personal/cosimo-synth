@@ -279,6 +279,325 @@
     color: rgb(189 210 212 / 0.72);
 }
 
+/* ---- Groups on the map: fork, lanes, merge (M4). ---- */
+
+/* Band tints are the one semantic color exception on the infra-teal map. */
+[data-lane-tint="infra"] { --lane-tint: #69d5c5; }
+[data-lane-tint="lo"] { --lane-tint: #7fd0a1; }
+[data-lane-tint="mid"] { --lane-tint: #f2ca00; }
+[data-lane-tint="hi"] { --lane-tint: #ff8b4a; }
+
+.subway-group {
+    display: grid;
+    position: relative;
+}
+
+.subway-group.is-bypassed .subway-lane-row,
+.subway-group.is-bypassed .subway-merge {
+    opacity: 0.5;
+    filter: saturate(0.6);
+}
+
+.subway-group.is-selected .subway-fork-glyph > span {
+    box-shadow:
+        0 0 0 2px rgb(237 180 90 / 0.9),
+        0 0 10px rgb(237 180 90 / 0.35);
+}
+
+.subway-fork {
+    position: relative;
+    display: grid;
+    min-height: 40px;
+    place-items: center;
+}
+
+.subway-fork::before {
+    position: absolute;
+    top: 0;
+    bottom: 50%;
+    left: 50%;
+    width: 3px;
+    background: rgb(105 213 197 / 0.72);
+    transform: translateX(-50%);
+    content: "";
+}
+
+/* The fan-out bar the lanes hang from. */
+.subway-fork::after {
+    position: absolute;
+    top: 50%;
+    right: calc(50% / var(--subway-lane-count, 2));
+    left: calc(50% / var(--subway-lane-count, 2));
+    height: 3px;
+    background: rgb(105 213 197 / 0.55);
+    transform: translateY(-50%);
+    content: "";
+}
+
+.subway-fork-glyph {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    min-width: var(--cosimo-hit-min);
+    min-height: 40px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+}
+
+.subway-glyph-dot {
+    width: 11px;
+    height: 11px;
+    border: 3px solid #69d5c5;
+    border-radius: 999px;
+    background: #0b0f11;
+}
+
+.subway-glyph-diamond {
+    width: 11px;
+    height: 11px;
+    border: 3px solid #69d5c5;
+    background: #0b0f11;
+    transform: rotate(45deg);
+}
+
+.subway-fork-lanes {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    z-index: 1;
+    display: grid;
+    grid-template-columns: repeat(var(--subway-lane-count, 2), 1fr);
+    justify-items: center;
+    pointer-events: none;
+}
+
+.subway-fork-lane {
+    color: var(--lane-tint, #69d5c5);
+    font-size: 7px;
+    letter-spacing: 0.1em;
+}
+
+.subway-fork-lane.is-empty {
+    opacity: 0.55;
+}
+
+.subway-fork-readout {
+    position: absolute;
+    top: 4px;
+    right: 6px;
+    color: #8fb6b0;
+    font-size: 8px;
+    letter-spacing: 0.06em;
+}
+
+.subway-lane-row {
+    display: grid;
+    grid-template-columns: repeat(var(--subway-lane-count, 2), 1fr);
+    min-height: var(--cosimo-hit-min);
+}
+
+.subway-station-cell,
+.subway-line-cell,
+.subway-ghost-cell {
+    position: relative;
+    display: grid;
+    min-height: var(--cosimo-hit-min);
+    place-items: center;
+}
+
+.subway-station-cell::before,
+.subway-line-cell::before,
+.subway-ghost-cell::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 3px;
+    background: var(--lane-tint, #69d5c5);
+    opacity: 0.72;
+    transform: translateX(-50%);
+    content: "";
+}
+
+.subway-line-cell.is-dashed::before,
+.subway-ghost-cell::before {
+    background: repeating-linear-gradient(
+        180deg,
+        var(--lane-tint, #69d5c5) 0 5px,
+        transparent 5px 10px);
+    opacity: 0.5;
+}
+
+.subway-station-cell > .subway-station {
+    position: relative;
+    z-index: 2;
+}
+
+.subway-ghost-pill {
+    position: relative;
+    z-index: 2;
+    display: grid;
+    width: 22px;
+    height: 18px;
+    place-items: center;
+    border: 1px dashed color-mix(in srgb, var(--lane-tint, #69d5c5) 75%, transparent);
+    border-radius: 999px;
+    background: rgb(9 13 15 / 0.9);
+    color: color-mix(in srgb, var(--lane-tint, #69d5c5) 85%, #f2f4f5);
+    font-size: 11px;
+    opacity: 0.7;
+}
+
+.subway-merge {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(var(--subway-lane-count, 2), 1fr);
+    min-height: 26px;
+}
+
+.subway-merge::before {
+    position: absolute;
+    top: 50%;
+    right: calc(50% / var(--subway-lane-count, 2));
+    left: calc(50% / var(--subway-lane-count, 2));
+    height: 3px;
+    background: rgb(105 213 197 / 0.55);
+    transform: translateY(-50%);
+    content: "";
+}
+
+.subway-merge::after {
+    position: absolute;
+    top: 50%;
+    bottom: 0;
+    left: 50%;
+    width: 3px;
+    background: rgb(105 213 197 / 0.72);
+    transform: translateX(-50%);
+    content: "";
+}
+
+.subway-merge-lane {
+    position: relative;
+}
+
+.subway-merge-lane::before {
+    position: absolute;
+    top: 0;
+    bottom: 50%;
+    left: 50%;
+    width: 3px;
+    background: var(--lane-tint, #69d5c5);
+    opacity: 0.72;
+    transform: translateX(-50%);
+    content: "";
+}
+
+.subway-merge-lane.is-dashed::before {
+    background: repeating-linear-gradient(
+        180deg,
+        var(--lane-tint, #69d5c5) 0 5px,
+        transparent 5px 10px);
+    opacity: 0.5;
+}
+
+.subway-merge-dot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    z-index: 2;
+    width: 9px;
+    height: 9px;
+    border: 3px solid #69d5c5;
+    border-radius: 999px;
+    background: #0b0f11;
+    transform: translate(-50%, -50%);
+}
+
+/* ---- The group editor pane. ---- */
+
+.subway-group-editor-body {
+    display: grid;
+    align-content: start;
+    gap: 10px;
+    padding: 12px 10px;
+}
+
+.subway-crossover-stack {
+    display: grid;
+    gap: 8px;
+}
+
+.subway-crossover-slider {
+    --crossover-progress: 0.5;
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    min-height: var(--cosimo-hit-min);
+    padding: 0 10px;
+    overflow: hidden;
+    border: 1px solid rgb(105 213 197 / 0.3);
+    border-radius: 9px;
+    background:
+        linear-gradient(90deg,
+            rgb(105 213 197 / 0.26) calc(var(--crossover-progress) * 100%),
+            rgb(16 22 24 / 0.9) calc(var(--crossover-progress) * 100%));
+    color: #d9e0e2;
+    cursor: ew-resize;
+    touch-action: none;
+    user-select: none;
+}
+
+.subway-crossover-slider::after {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: calc(var(--crossover-progress) * 100%);
+    width: 2px;
+    background: #69d5c5;
+    content: "";
+}
+
+.subway-crossover-label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-align: left;
+}
+
+.subway-crossover-readout {
+    font-size: 11px;
+}
+
+.subway-group-editor-actions {
+    display: grid;
+    gap: 6px;
+}
+
+.subway-group-editor-actions > button {
+    min-height: var(--cosimo-hit-min);
+    border: 1px solid rgb(255 255 255 / 0.14);
+    border-radius: 9px;
+    background: rgb(20 26 28 / 0.92);
+    color: #d9e0e2;
+    font-size: 11px;
+    letter-spacing: 0.06em;
+    cursor: pointer;
+}
+
+.subway-group-editor-actions > button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.subway-group-editor .rack-editor-header {
+    background-image: none;
+}
+
 .rack-effect-editor {
     --editor-accent: #ff6a27;
     display: flex;

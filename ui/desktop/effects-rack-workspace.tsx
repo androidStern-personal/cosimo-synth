@@ -39,7 +39,21 @@ import {
     parseParameterEntry,
     type ParameterEntryCommit,
 } from "../shared/parameter-value-entry";
-import { type LaneState } from "../shared/lane-state";
+import { EFFECT_ID_TO_LANE_TYPE, LANE_MAX_BRANCHES_PER_GROUP } from "../shared/lane-state";
+import {
+    dissolveLaneGroup,
+    findLaneDevicePath,
+    getLaneDeviceEnabled,
+    moveLaneDevice,
+    parseLaneDevicePath,
+    serializeLaneStateV2,
+    setLaneDeviceEnabled,
+    setLaneGroupBranchCount,
+    setLaneGroupEnabled,
+    wrapLaneDeviceInGroup,
+    type LaneGroupV2,
+    type LaneStateV2,
+} from "../shared/lane-state-v2";
 import { useLaneParameterBinding, useLaneStateDoc } from "../shared/lane-param-bindings";
 import {
     MODULATION_SOURCE_OPTIONS,
@@ -110,7 +124,7 @@ import { useSliderDrag, type SliderDragPointer } from "../shared/use-slider-drag
 import {
     RackParameterKnob,
 } from "./rack-parameter-knob";
-import { SubwayMapColumn, type SubwayStationMenuRequest } from "./subway-map-column";
+import { SubwayMapColumn, formatCrossoverHz, type SubwayGroupMenuRequest, type SubwayStationMenuRequest } from "./subway-map-column";
 
 type EffectsRackWorkspaceProps = {
     routes: ModulationRoute[];
@@ -181,7 +195,7 @@ type SourceDragPresentation = {
 type ReorderGesture = {
     readonly pointerId: number;
     readonly effectId: EffectModuleId;
-    readonly originalOrder: ReadonlyArray<EffectModuleId>;
+    readonly originalDoc: LaneStateV2;
     readonly captureElement: HTMLDivElement;
 };
 
@@ -430,11 +444,11 @@ function useRackState() {
     // diagnostic readback without a correlated intent id, so an older DSP event must
     // never replace the base of a newer user edit. The document itself lives in the
     // connection-scoped lane store, shared with every parameter binding.
-    const { laneState, commit } = useLaneStateDoc();
+    const { laneState, commit, setSplitCrossover, persist } = useLaneStateDoc();
     const rackStateRef = useRef(laneState);
     rackStateRef.current = laneState;
 
-    return { rackState: laneState, rackStateRef, commit };
+    return { rackState: laneState, rackStateRef, commit, setSplitCrossover, persist };
 }
 
 function useRackParameterBinding(descriptor: RackParameterDescriptor, active = true) {
@@ -461,28 +475,6 @@ function rackParameterValueFromNormalized(descriptor: RackParameterDescriptor, n
 
 function normalizedRackParameterKeyboardStep(descriptor: RackParameterDescriptor) {
     return Math.max(0.01, descriptor.step / (descriptor.max - descriptor.min));
-}
-
-function moveEffect(
-    order: ReadonlyArray<EffectModuleId>,
-    effectId: EffectModuleId,
-    overEffectId: EffectModuleId,
-) {
-    const sourceIndex = order.indexOf(effectId);
-    const targetIndex = order.indexOf(overEffectId);
-
-    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
-        return order;
-    }
-
-    const nextOrder = [...order];
-    nextOrder.splice(sourceIndex, 1);
-    nextOrder.splice(targetIndex, 0, effectId);
-    return nextOrder;
-}
-
-function sameOrder(left: ReadonlyArray<EffectModuleId>, right: ReadonlyArray<EffectModuleId>) {
-    return left.length === right.length && left.every((effectId, index) => effectId === right[index]);
 }
 
 // The station pills carry no power button of their own (the accepted subway
@@ -2752,6 +2744,223 @@ type RackParameterMenuState = {
     readonly clientY: number;
 };
 
+const SPLIT_XOVER_MIN_HZ = 40;
+const SPLIT_XOVER_MAX_HZ = 18000;
+const SPLIT_XOVER_LOG_SPAN = Math.log(SPLIT_XOVER_MAX_HZ / SPLIT_XOVER_MIN_HZ);
+
+function crossoverToNormalized(hz: number) {
+    return clamp(Math.log(hz / SPLIT_XOVER_MIN_HZ) / SPLIT_XOVER_LOG_SPAN, 0, 1);
+}
+
+function normalizedToCrossover(normalized: number) {
+    return SPLIT_XOVER_MIN_HZ * Math.exp(clamp(normalized, 0, 1) * SPLIT_XOVER_LOG_SPAN);
+}
+
+/**
+ * One crossover fader: a log-scaled horizontal drag on the acked marker
+ * hot path (live field uploads while dragging, one document persist on
+ * release — the same discipline as every device knob).
+ */
+function CrossoverSlider({
+    groupId,
+    which,
+    label,
+    hz,
+    onDrag,
+    onGestureEnd,
+}: {
+    groupId: string;
+    which: "low" | "high";
+    label: string;
+    hz: number;
+    onDrag: (which: "low" | "high", hz: number) => void;
+    onGestureEnd: () => void;
+}) {
+    const surfaceRef = useRef<HTMLButtonElement | null>(null);
+    const dragPointerRef = useRef<number | null>(null);
+
+    const applyClientX = useCallback((clientX: number) => {
+        const surface = surfaceRef.current;
+        if (surface === null) {
+            return;
+        }
+        const bounds = surface.getBoundingClientRect();
+        const normalized = (clientX - bounds.left) / Math.max(1, bounds.width);
+        onDrag(which, Math.round(normalizedToCrossover(normalized)));
+    }, [onDrag, which]);
+
+    return (
+        <button
+            ref={surfaceRef}
+            type="button"
+            role="slider"
+            data-role={`rack-split-${which}-${groupId}`}
+            aria-label={label}
+            aria-valuemin={SPLIT_XOVER_MIN_HZ}
+            aria-valuemax={SPLIT_XOVER_MAX_HZ}
+            aria-valuenow={Math.round(hz)}
+            aria-valuetext={`${formatCrossoverHz(hz)} Hz`}
+            className="subway-crossover-slider"
+            style={{ "--crossover-progress": crossoverToNormalized(hz) } as CSSProperties}
+            onPointerDown={(event) => {
+                if (event.pointerType === "mouse" && event.button !== 0) {
+                    return;
+                }
+                try {
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                } catch {
+                    // Window-level release still ends the gesture.
+                }
+                dragPointerRef.current = event.pointerId;
+                applyClientX(event.clientX);
+            }}
+            onPointerMove={(event) => {
+                if (dragPointerRef.current === event.pointerId) {
+                    applyClientX(event.clientX);
+                }
+            }}
+            onPointerUp={(event) => {
+                if (dragPointerRef.current === event.pointerId) {
+                    dragPointerRef.current = null;
+                    onGestureEnd();
+                }
+            }}
+            onPointerCancel={(event) => {
+                if (dragPointerRef.current === event.pointerId) {
+                    dragPointerRef.current = null;
+                    onGestureEnd();
+                }
+            }}
+            onKeyDown={(event) => {
+                if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
+                    return;
+                }
+                event.preventDefault();
+                const direction = event.key === "ArrowRight" ? 1 : -1;
+                const stepped = clamp(
+                    hz * Math.pow(2, direction / 12), SPLIT_XOVER_MIN_HZ, SPLIT_XOVER_MAX_HZ);
+                onDrag(which, Math.round(stepped));
+                onGestureEnd();
+            }}
+        >
+            <span className="subway-crossover-label">{label}</span>
+            <strong className="subway-crossover-readout">{formatCrossoverHz(hz)} Hz</strong>
+        </button>
+    );
+}
+
+/** The right-pane editor for a selected GROUP: crossovers for splits,
+    fan-out and bypass for both kinds, dissolve to leave. */
+function GroupEditorPane({
+    group,
+    onToggleEnabled,
+    onSetBranchCount,
+    onDissolve,
+    onCrossoverDrag,
+    onCrossoverGestureEnd,
+}: {
+    group: LaneGroupV2;
+    onToggleEnabled: () => void;
+    onSetBranchCount: (branchCount: number) => void;
+    onDissolve: () => void;
+    onCrossoverDrag: (which: "low" | "high", hz: number) => void;
+    onCrossoverGestureEnd: () => void;
+}) {
+    const isSplit = group.kind === "split";
+    const unitNumber = group.groupId.slice(group.groupId.indexOf("#") + 1);
+
+    return (
+        <section
+            data-role={`rack-group-editor-${group.groupId}`}
+            data-effect-enabled={group.enabled ? "true" : "false"}
+            className="rack-effect-editor subway-group-editor"
+            style={{ "--editor-accent": "#69d5c5" } as CSSProperties}
+            aria-label="Selected group editor"
+        >
+            <header className="rack-editor-header">
+                <div className="rack-editor-heading">
+                    <span>{group.enabled ? "SELECTED GROUP" : "GROUP BYPASSED"}</span>
+                    <strong className="rack-editor-name">
+                        {isSplit ? "FREQ SPLIT" : "PARALLEL"} {unitNumber}
+                    </strong>
+                    <p>
+                        {isSplit
+                            ? "Linkwitz-Riley bands — drag the crossovers."
+                            : "Every branch reads the fork; the merge sums them."}
+                    </p>
+                </div>
+                <button
+                    type="button"
+                    data-role="rack-group-power"
+                    aria-label={`${group.enabled ? "Bypass" : "Enable"} group`}
+                    aria-pressed={group.enabled}
+                    className="rack-power rack-editor-power"
+                    onClick={onToggleEnabled}
+                >
+                    <PowerGlyph />
+                </button>
+            </header>
+            <div className="subway-group-editor-body">
+                {isSplit ? (
+                    <div className="subway-crossover-stack">
+                        <CrossoverSlider
+                            groupId={group.groupId}
+                            which="low"
+                            label={group.branches.length === 3 ? "LOW CROSSOVER" : "CROSSOVER"}
+                            hz={group.xoverLowHz}
+                            onDrag={onCrossoverDrag}
+                            onGestureEnd={onCrossoverGestureEnd}
+                        />
+                        {group.branches.length === 3 ? (
+                            <CrossoverSlider
+                                groupId={group.groupId}
+                                which="high"
+                                label="HIGH CROSSOVER"
+                                hz={group.xoverHighHz}
+                                onDrag={onCrossoverDrag}
+                                onGestureEnd={onCrossoverGestureEnd}
+                            />
+                        ) : null}
+                    </div>
+                ) : null}
+                <div className="subway-group-editor-actions">
+                    {isSplit ? (
+                        <button
+                            type="button"
+                            data-role={group.branches.length === 2 ? "rack-group-add-band" : "rack-group-remove-band"}
+                            onClick={() => onSetBranchCount(group.branches.length === 2 ? 3 : 2)}
+                        >
+                            {group.branches.length === 2 ? "Add mid band" : "Remove mid band"}
+                        </button>
+                    ) : (
+                        <>
+                            <button
+                                type="button"
+                                data-role="rack-group-add-branch"
+                                disabled={group.branches.length >= LANE_MAX_BRANCHES_PER_GROUP}
+                                onClick={() => onSetBranchCount(group.branches.length + 1)}
+                            >
+                                Add branch
+                            </button>
+                            <button
+                                type="button"
+                                data-role="rack-group-remove-branch"
+                                disabled={group.branches.length <= 2}
+                                onClick={() => onSetBranchCount(group.branches.length - 1)}
+                            >
+                                Remove branch
+                            </button>
+                        </>
+                    )}
+                    <button type="button" data-role="rack-group-dissolve" onClick={onDissolve}>
+                        Dissolve group
+                    </button>
+                </div>
+            </div>
+        </section>
+    );
+}
+
 export function EffectsRackWorkspace({
     routes,
     observedFilterSpectrum,
@@ -2780,13 +2989,15 @@ export function EffectsRackWorkspace({
     if (mobileGlobalModRail && !modRailVoiceSettings) {
         throw new Error("The mobile Mod rail requires modRailVoiceSettings bindings.");
     }
-    const { rackState, rackStateRef, commit } = useRackState();
+    const { rackState, rackStateRef, commit, setSplitCrossover, persist } = useRackState();
+    const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+    const [groupMenu, setGroupMenu] = useState<SubwayGroupMenuRequest | null>(null);
     const [selectedEffectId, setSelectedEffectId] = useState<EffectModuleId>("drive");
     const [quickEndpointByEffect, setQuickEndpointByEffect] = useState<Readonly<Record<EffectModuleId, string>>>(() => (
         Object.fromEntries(RACK_EFFECT_DESCRIPTORS.map((effect) => [effect.id, effect.initialQuickEndpointID])) as Record<EffectModuleId, string>
     ));
-    const [previewOrder, setPreviewOrder] = useState<ReadonlyArray<EffectModuleId>>(rackState.order);
-    const previewOrderRef = useRef<ReadonlyArray<EffectModuleId>>(rackState.order);
+    const [previewDoc, setPreviewDoc] = useState<LaneStateV2>(rackState);
+    const previewDocRef = useRef<LaneStateV2>(rackState);
     const rackListRef = useRef<HTMLDivElement | null>(null);
     const reorderRef = useRef<ReorderGesture | null>(null);
     const [reorderingEffectId, setReorderingEffectId] = useState<EffectModuleId | null>(null);
@@ -2853,28 +3064,37 @@ export function EffectsRackWorkspace({
     const [pendingRouteKey, setPendingRouteKey] = useState<string | null>(null);
 
     useEffect(() => {
-        if (parameterMenu === null && stationMenu === null) {
+        if (parameterMenu === null && stationMenu === null && groupMenu === null) {
             return;
         }
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 setParameterMenu(null);
                 setStationMenu(null);
+                setGroupMenu(null);
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [parameterMenu, stationMenu]);
+    }, [parameterMenu, stationMenu, groupMenu]);
 
     useEffect(() => {
         if (reorderRef.current !== null) {
             return;
         }
-        previewOrderRef.current = rackState.order;
-        setPreviewOrder(rackState.order);
-    }, [rackState.order]);
+        previewDocRef.current = rackState;
+        setPreviewDoc(rackState);
+    }, [rackState]);
 
     const selectedEffect = getRackEffectDescriptor(selectedEffectId);
+    const selectedEffectEnabled = getLaneDeviceEnabled(
+        rackState, `${EFFECT_ID_TO_LANE_TYPE[selectedEffectId]}#1`) ?? false;
+    const selectedGroup = selectedGroupId === null
+        ? null
+        : rackState.chain.find((node) => node.kind !== "device" && node.groupId === selectedGroupId) ?? null;
+    const groupMenuNode = groupMenu === null
+        ? null
+        : rackState.chain.find((node) => node.kind !== "device" && node.groupId === groupMenu.groupId) ?? null;
     const selectedTargetCandidate = getRackParameterDescriptor(selectedTargetEndpointID);
     const selectedTarget = selectedTargetCandidate !== null
         && selectedTargetCandidate.modulationTargetIndex !== null
@@ -2991,17 +3211,19 @@ export function EffectsRackWorkspace({
         return () => window.clearTimeout(timeout);
     }, [pendingRouteKey, routes]);
 
-    const commitOrder = useCallback((order: ReadonlyArray<EffectModuleId>) => {
-        commit({ ...rackStateRef.current, order: [...order] });
-    }, [commit, rackStateRef]);
+    const laneDeviceIdForEffect = useCallback((effectId: EffectModuleId) => (
+        `${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`
+    ), []);
 
     const toggleEffectEnabled = useCallback((effectId: EffectModuleId) => {
         const current = rackStateRef.current;
-        commit({
-            ...current,
-            enabled: { ...current.enabled, [effectId]: !current.enabled[effectId] },
-        });
-    }, [commit, rackStateRef]);
+        const deviceId = laneDeviceIdForEffect(effectId);
+        const next = setLaneDeviceEnabled(
+            current, deviceId, !(getLaneDeviceEnabled(current, deviceId) ?? false));
+        if (next !== null) {
+            commit(next);
+        }
+    }, [commit, laneDeviceIdForEffect, rackStateRef]);
 
     // A station drag that crosses the lift threshold hands the pointer to the
     // list-level reorder machinery — the same physics the grip handle drove.
@@ -3021,27 +3243,29 @@ export function EffectsRackWorkspace({
         reorderRef.current = {
             pointerId: event.pointerId,
             effectId,
-            originalOrder: [...previewOrderRef.current],
+            originalDoc: previewDocRef.current,
             captureElement,
         };
         setReorderingEffectId(effectId);
     }, []);
 
     const moveEffectByOffset = useCallback((effectId: EffectModuleId, offset: -1 | 1) => {
-        const currentOrder = previewOrderRef.current;
-        const position = currentOrder.indexOf(effectId);
-        if (position < 0) {
+        const doc = rackStateRef.current;
+        const deviceId = laneDeviceIdForEffect(effectId);
+        const path = findLaneDevicePath(doc, deviceId);
+        if (path === null) {
             return;
         }
-        const targetPosition = clamp(position + offset, 0, currentOrder.length - 1);
-        if (targetPosition === position) {
-            return;
+        const next = moveLaneDevice(doc, deviceId, {
+            ...path,
+            index: Math.max(0, path.index + offset),
+        });
+        if (next !== null && serializeLaneStateV2(next) !== serializeLaneStateV2(doc)) {
+            previewDocRef.current = next;
+            setPreviewDoc(next);
+            commit(next);
         }
-        const nextOrder = moveEffect(currentOrder, effectId, currentOrder[targetPosition]!);
-        previewOrderRef.current = nextOrder;
-        setPreviewOrder(nextOrder);
-        commitOrder(nextOrder);
-    }, [commitOrder]);
+    }, [commit, laneDeviceIdForEffect, rackStateRef]);
 
     const finishReorder = useCallback((pointerId: number, shouldCommit: boolean) => {
         const gesture = reorderRef.current;
@@ -3059,14 +3283,15 @@ export function EffectsRackWorkspace({
             // Capture may already be gone after a platform cancellation.
         }
 
-        if (shouldCommit && !sameOrder(gesture.originalOrder, previewOrderRef.current)) {
-            commitOrder(previewOrderRef.current);
+        if (shouldCommit
+                && serializeLaneStateV2(gesture.originalDoc) !== serializeLaneStateV2(previewDocRef.current)) {
+            commit(previewDocRef.current);
         } else {
-            const currentOrder = rackStateRef.current.order;
-            previewOrderRef.current = currentOrder;
-            setPreviewOrder(currentOrder);
+            const currentDoc = rackStateRef.current;
+            previewDocRef.current = currentDoc;
+            setPreviewDoc(currentDoc);
         }
-    }, [commitOrder, rackStateRef]);
+    }, [commit, rackStateRef]);
 
     const updateReorderPreview = useCallback((event: ReactPointerEvent<HTMLDivElement>) => {
         const gesture = reorderRef.current;
@@ -3086,38 +3311,41 @@ export function EffectsRackWorkspace({
             return;
         }
 
+        // Pick the drop target in BOTH axes: lanes sit side by side, so a
+        // Y-only walk lands in the wrong band. A containing rect wins over
+        // distance, the SMALLEST containing rect wins over an enclosing row
+        // (the ghost cell inside a lane beats the full-width trunk row), and
+        // with no containment the nearest center takes it.
         const rackUnits = Array.from(
-            renderRoot.querySelectorAll<HTMLElement>("[data-rack-effect-id]"),
+            renderRoot.querySelectorAll<HTMLElement>("[data-lane-path]"),
         );
-        const containingUnit = rackUnits.find((unit) => {
+        let targetUnit: HTMLElement | null = null;
+        let targetScore = Number.POSITIVE_INFINITY;
+        for (const unit of rackUnits) {
             const rect = unit.getBoundingClientRect();
-            return event.clientY >= rect.top && event.clientY <= rect.bottom;
-        });
-        const nearestUnit = containingUnit ?? rackUnits.reduce<HTMLElement | null>(
-            (nearest, unit) => {
-                if (!nearest) {
-                    return unit;
-                }
-                const unitRect = unit.getBoundingClientRect();
-                const nearestRect = nearest.getBoundingClientRect();
-                const unitDistance = Math.abs(event.clientY - (unitRect.top + unitRect.height / 2));
-                const nearestDistance = Math.abs(
-                    event.clientY - (nearestRect.top + nearestRect.height / 2),
-                );
-                return unitDistance < nearestDistance ? unit : nearest;
-            },
-            null,
-        );
-        const candidateEffectId = (containingUnit ?? nearestUnit)?.dataset.rackEffectId;
-        const overEffectId = previewOrderRef.current.find((effectId) => effectId === candidateEffectId);
-        if (!overEffectId) {
+            const contains = event.clientX >= rect.left && event.clientX <= rect.right
+                && event.clientY >= rect.top && event.clientY <= rect.bottom;
+            const centerX = rect.left + (rect.width / 2);
+            const centerY = rect.top + (rect.height / 2);
+            const score = contains
+                ? rect.width * rect.height
+                : 1e12 + ((event.clientX - centerX) ** 2) + ((event.clientY - centerY) ** 2);
+            if (score < targetScore) {
+                targetUnit = unit;
+                targetScore = score;
+            }
+        }
+        const targetPath = parseLaneDevicePath(targetUnit?.dataset.lanePath);
+        if (targetPath === null) {
             return;
         }
 
-        const nextOrder = moveEffect(previewOrderRef.current, gesture.effectId, overEffectId);
-        if (nextOrder !== previewOrderRef.current) {
-            previewOrderRef.current = nextOrder;
-            setPreviewOrder(nextOrder);
+        const draggedDeviceId = `${EFFECT_ID_TO_LANE_TYPE[gesture.effectId]}#1`;
+        const nextDoc = moveLaneDevice(previewDocRef.current, draggedDeviceId, targetPath);
+        if (nextDoc !== null
+                && serializeLaneStateV2(nextDoc) !== serializeLaneStateV2(previewDocRef.current)) {
+            previewDocRef.current = nextDoc;
+            setPreviewDoc(nextDoc);
         }
     }, [finishReorder]);
 
@@ -3200,6 +3428,7 @@ export function EffectsRackWorkspace({
     }, [getPairCreation, onAddRouteWithOverrides]);
 
     const selectEffect = useCallback((effectId: EffectModuleId) => {
+        setSelectedGroupId(null);
         setSelectedEffectId(effectId);
         onSelectedEffectChange?.(effectId);
         const effect = getRackEffectDescriptor(effectId);
@@ -3442,14 +3671,56 @@ export function EffectsRackWorkspace({
                             type="button"
                             role="menuitem"
                             data-role={`rack-enabled-${stationMenu.effectId}`}
-                            aria-pressed={rackState.enabled[stationMenu.effectId]}
+                            aria-pressed={getLaneDeviceEnabled(rackState, `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`) ?? false}
                             onClick={() => {
                                 toggleEffectEnabled(stationMenu.effectId);
                                 setStationMenu(null);
                             }}
                         >
-                            {rackState.enabled[stationMenu.effectId] ? "Bypass" : "Enable"}
+                            {(getLaneDeviceEnabled(rackState, `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`) ?? false) ? "Bypass" : "Enable"}
                         </button>
+                        {findLaneDevicePath(rackState, `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`)?.kind === "trunk" ? (
+                            <>
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    data-role={`rack-station-wrap-parallel-${stationMenu.effectId}`}
+                                    onClick={() => {
+                                        const next = wrapLaneDeviceInGroup(
+                                            rackStateRef.current,
+                                            `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`,
+                                            "parallel");
+                                        if (next === null) {
+                                            showFeedbackToast("NO ROOM TO GROUP");
+                                        } else {
+                                            commit(next);
+                                        }
+                                        setStationMenu(null);
+                                    }}
+                                >
+                                    Make parallel
+                                </button>
+                                <button
+                                    type="button"
+                                    role="menuitem"
+                                    data-role={`rack-station-wrap-split-${stationMenu.effectId}`}
+                                    onClick={() => {
+                                        const next = wrapLaneDeviceInGroup(
+                                            rackStateRef.current,
+                                            `${EFFECT_ID_TO_LANE_TYPE[stationMenu.effectId]}#1`,
+                                            "split");
+                                        if (next === null) {
+                                            showFeedbackToast("NO ROOM TO GROUP");
+                                        } else {
+                                            commit(next);
+                                        }
+                                        setStationMenu(null);
+                                    }}
+                                >
+                                    Make frequency split
+                                </button>
+                            </>
+                        ) : null}
                         <button
                             type="button"
                             role="menuitem"
@@ -3464,6 +3735,84 @@ export function EffectsRackWorkspace({
                             }}
                         >
                             Exact value
+                        </button>
+                    </div>
+                </div>
+            ) : null}
+            {groupMenu && groupMenuNode !== null && groupMenuNode.kind !== "device" ? (
+                <div
+                    className="rack-parameter-menu-layer"
+                    data-role="rack-group-menu-layer"
+                    onPointerDown={() => setGroupMenu(null)}
+                >
+                    <div
+                        role="menu"
+                        aria-label={`${groupMenuNode.kind === "split" ? "Frequency split" : "Parallel"} group actions`}
+                        data-role="rack-group-menu"
+                        data-group-id={groupMenu.groupId}
+                        className="rack-parameter-menu"
+                        style={{
+                            "--rack-menu-x": `${groupMenu.clientX}px`,
+                            "--rack-menu-y": `${groupMenu.clientY}px`,
+                        } as CSSProperties}
+                        onPointerDown={(event) => event.stopPropagation()}
+                    >
+                        <button
+                            type="button"
+                            role="menuitem"
+                            data-role={`rack-group-enabled-${groupMenu.groupId}`}
+                            aria-pressed={groupMenuNode.enabled}
+                            onClick={() => {
+                                const next = setLaneGroupEnabled(
+                                    rackStateRef.current, groupMenu.groupId, !groupMenuNode.enabled);
+                                if (next !== null) {
+                                    commit(next);
+                                }
+                                setGroupMenu(null);
+                            }}
+                        >
+                            {groupMenuNode.enabled ? "Bypass group" : "Enable group"}
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            data-role={`rack-group-menu-resize-${groupMenu.groupId}`}
+                            onClick={() => {
+                                const growing = groupMenuNode.kind === "split"
+                                    ? groupMenuNode.branches.length === 2
+                                    : groupMenuNode.branches.length < LANE_MAX_BRANCHES_PER_GROUP;
+                                const nextCount = groupMenuNode.branches.length + (growing ? 1 : -1);
+                                const next = setLaneGroupBranchCount(
+                                    rackStateRef.current, groupMenu.groupId, nextCount);
+                                if (next === null) {
+                                    showFeedbackToast("EMPTY THE LANE FIRST");
+                                } else {
+                                    commit(next);
+                                }
+                                setGroupMenu(null);
+                            }}
+                        >
+                            {groupMenuNode.kind === "split"
+                                ? (groupMenuNode.branches.length === 2 ? "Add mid band" : "Remove mid band")
+                                : (groupMenuNode.branches.length < LANE_MAX_BRANCHES_PER_GROUP
+                                    ? "Add branch" : "Remove branch")}
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            data-role={`rack-group-dissolve-${groupMenu.groupId}`}
+                            onClick={() => {
+                                const next = dissolveLaneGroup(rackStateRef.current, groupMenu.groupId);
+                                if (next !== null) {
+                                    commit(next);
+                                    setSelectedGroupId((current) => (
+                                        current === groupMenu.groupId ? null : current
+                                    ));
+                                }
+                                setGroupMenu(null);
+                            }}
+                        >
+                            Dissolve group
                         </button>
                     </div>
                 </div>
@@ -3553,23 +3902,55 @@ export function EffectsRackWorkspace({
                         }}
                     >
                         <SubwayMapColumn
-                            laneState={rackState}
-                            previewOrder={previewOrder}
+                            laneState={previewDoc}
                             selectedEffectId={selectedEffectId}
+                            selectedGroupId={selectedGroupId}
                             reorderingEffectId={reorderingEffectId}
                             accents={EFFECT_ACCENTS}
                             onSelect={selectEffect}
+                            onSelectGroup={(groupId) => setSelectedGroupId(groupId)}
                             onOpenStationMenu={setStationMenu}
+                            onOpenGroupMenu={setGroupMenu}
                             onArmReorder={armStationReorder}
                             onKeyboardMove={moveEffectByOffset}
                         />
                     </div>
                 </div>
 
+                {selectedGroup !== null && selectedGroup.kind !== "device" ? (
+                    <GroupEditorPane
+                        group={selectedGroup}
+                        onToggleEnabled={() => {
+                            const next = setLaneGroupEnabled(
+                                rackStateRef.current, selectedGroup.groupId, !selectedGroup.enabled);
+                            if (next !== null) {
+                                commit(next);
+                            }
+                        }}
+                        onSetBranchCount={(count) => {
+                            const next = setLaneGroupBranchCount(
+                                rackStateRef.current, selectedGroup.groupId, count);
+                            if (next === null) {
+                                showFeedbackToast("EMPTY THE LANE FIRST");
+                            } else {
+                                commit(next);
+                            }
+                        }}
+                        onDissolve={() => {
+                            const next = dissolveLaneGroup(rackStateRef.current, selectedGroup.groupId);
+                            if (next !== null) {
+                                commit(next);
+                                setSelectedGroupId(null);
+                            }
+                        }}
+                        onCrossoverDrag={(which, hz) => setSplitCrossover(selectedGroup.groupId, which, hz)}
+                        onCrossoverGestureEnd={persist}
+                    />
+                ) : (
                 <section
                     data-role={`rack-editor-${selectedEffectId}`}
                     data-selected-effect={selectedEffectId}
-                    data-effect-enabled={rackState.enabled[selectedEffectId] ? "true" : "false"}
+                    data-effect-enabled={selectedEffectEnabled ? "true" : "false"}
                     className="rack-effect-editor"
                     style={{ "--editor-accent": EFFECT_ACCENTS[selectedEffectId] } as CSSProperties}
                     aria-label="Selected effect editor"
@@ -3578,15 +3959,15 @@ export function EffectsRackWorkspace({
                         {/* The faceplate art lives here now — the header is
                             the one place with room for it at station scale. */}
                         <div className="rack-editor-heading">
-                            <span>{rackState.enabled[selectedEffectId] ? "SELECTED FX" : "FX BYPASSED"}</span>
+                            <span>{selectedEffectEnabled ? "SELECTED FX" : "FX BYPASSED"}</span>
                             <strong className="rack-editor-name">{selectedEffect.label}</strong>
                             <p>{selectedEffect.summary}</p>
                         </div>
                         <button
                             type="button"
                             data-role="rack-editor-power"
-                            aria-label={`${rackState.enabled[selectedEffectId] ? "Bypass" : "Enable"} ${selectedEffect.label}`}
-                            aria-pressed={rackState.enabled[selectedEffectId]}
+                            aria-label={`${selectedEffectEnabled ? "Bypass" : "Enable"} ${selectedEffect.label}`}
+                            aria-pressed={selectedEffectEnabled}
                             className="rack-power rack-editor-power"
                             onClick={() => toggleEffectEnabled(selectedEffectId)}
                         >
@@ -3611,7 +3992,7 @@ export function EffectsRackWorkspace({
                             hoverTargetEndpointID={hoverTargetEndpointID}
                             activeSource={activeSource}
                             sourceIsSelected={sourceIsArmed}
-                            effectEnabled={rackState.enabled[selectedEffectId]}
+                            effectEnabled={selectedEffectEnabled}
                             pendingRouteKey={pendingRouteKey}
                             confirmedEndpointID={confirmedRoute?.endpointID ?? null}
                             dragSource={dragSource}
@@ -3627,6 +4008,7 @@ export function EffectsRackWorkspace({
                         {mobileGlobalModRail ? modulationRouteControls : modulationControls}
                     </div>
                 </section>
+                )}
             </div>
             {mobileGlobalModRail && mobileModRailPortalTarget && modRailAudition && modRailVoiceSettings ? createPortal(
                 <MobileGlobalModRail

@@ -35,7 +35,7 @@
     "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs",
     "ios:ui:build": "node ui/build.mjs --ios",
     "ios:project": "./scripts/generate_ios_auv3_xcode_project.sh build/ios_device_run",
-    "test:desktop:ui": "node --test --test-concurrency=4 --test-reporter=tap --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=build/t17-latest-sharded-suite.log tests/test_desktop_patch_view_browser.mjs tests/test_desktop_patch_view_browser_articulation_mseg.mjs tests/test_desktop_patch_view_browser_fx_modulation.mjs tests/test_desktop_patch_view_browser_rail.mjs",
+    "test:desktop:ui": "node --test --test-concurrency=4 --test-reporter=tap --test-reporter-destination=stdout --test-reporter=tap --test-reporter-destination=build/t17-latest-sharded-suite.log tests/test_desktop_patch_view_browser.mjs tests/test_desktop_patch_view_browser_articulation_mseg.mjs tests/test_desktop_patch_view_browser_fx_modulation.mjs tests/test_desktop_patch_view_browser_rail.mjs tests/test_desktop_patch_view_browser_subway.mjs",
     "test:shared:hooks": "node --test tests/test_shared_synth_hooks_browser.mjs",
     "test:python:warp-alias": "uv run pytest tests/test_warp_aliasing.py",
     "test:python:filter-stability": "uv run pytest tests/test_filter_modulation_stability.py",

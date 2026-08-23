@@ -362,11 +362,19 @@ export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
     return { _tag: "ok", value: { format: "cosimo.lane", version: 2, devices, chain } };
 }
 
-/** Upgrade a parsed v1 document: eight instance-#1 devices, serial chain. */
+/** Upgrade a parsed v1 document: eight instance-#1 devices, serial chain.
+    Params serialize in WIRE order so upgrade -> serialize -> parse ->
+    serialize is byte-stable (the echo-dedupe paths depend on it). */
 export function upgradeLaneStateV1(state: LaneState): LaneStateV2 {
     const devices: Record<string, LaneDeviceRecordV2> = {};
     for (const effectId of RACK_EFFECT_ORDER) {
-        devices[`${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`] = { params: { ...state.params[effectId] } };
+        const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+        devices[`${deviceType}#1`] = {
+            params: Object.fromEntries(laneDeviceParamEndpoints(deviceType).map((endpointID) => [
+                endpointID,
+                state.params[effectId][endpointID] ?? 0,
+            ])),
+        };
     }
     return {
         format: "cosimo.lane",
@@ -383,6 +391,24 @@ export function upgradeLaneStateV1(state: LaneState): LaneStateV2 {
 /** Create the lane.v2 state matching the deployed default sound. */
 export function createDefaultLaneStateV2(): LaneStateV2 {
     return upgradeLaneStateV1(createDefaultLaneState());
+}
+
+/**
+ * STRICT two-format parse: v2 verbatim, v1 upgraded in place, an error for
+ * anything else (the v2 diagnosis leads — documents are v2 going forward).
+ * The strict consumers (the bridge adapter, init presets) use this where
+ * they used the v1 strict parse; the store uses the defaulting deserializer.
+ */
+export function parseLaneStateV2Compat(input: unknown): LaneStateV2ParseOutcome {
+    const v2 = parseLaneStateV2(input);
+    if (v2._tag === "ok") {
+        return v2;
+    }
+    const v1 = parseLaneState(input);
+    if (v1._tag === "ok") {
+        return { _tag: "ok", value: upgradeLaneStateV1(v1.value) };
+    }
+    return v2;
 }
 
 /**
@@ -465,6 +491,15 @@ function groupMarkerSlotId(group: LaneGroupV2): number {
     }
     const base = parsed.groupKind === "parallel" ? LANE_PARALLEL_SLOT_BASE : LANE_SPLIT_SLOT_BASE;
     return base + (parsed.unitNumber - 1);
+}
+
+/** The engine slot a split group's crossover record addresses, or null for
+    anything that is not a split group id. */
+export function laneSplitMarkerSlotId(groupId: string): number | null {
+    const parsed = parseLaneGroupId(groupId);
+    return parsed === null || parsed.groupKind !== "split"
+        ? null
+        : LANE_SPLIT_SLOT_BASE + (parsed.unitNumber - 1);
 }
 
 export type CompiledLaneTopologyUpload = {
@@ -622,4 +657,353 @@ export function commitLaneStateV2(connection: PatchConnectionLike, state: LaneSt
     for (const event of buildLaneRuntimeEventsV2(state)) {
         connection.sendEventOrValue?.(event.endpointID, event.value);
     }
+}
+
+//==============================================================================
+// Tree editing (M4). Every op is pure: it returns a NEW document, the same
+// document copy for a no-op, or null when the edit is not representable —
+// unknown identity, a full unit pool, a non-empty branch removal, a wire
+// overflow. Callers surface null as a refusal; they never coerce.
+
+export const LANE_SPLIT_DEFAULT_XOVER_LOW_HZ = 800;
+export const LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ = 2500;
+
+/** A placement's document coordinates: a trunk chain index, or a position
+    inside one group's branch. Also the drop-target grammar of the map. */
+export type LaneDevicePathV2 =
+    | { readonly kind: "trunk"; readonly index: number }
+    | {
+        readonly kind: "branch";
+        readonly groupId: string;
+        readonly branchIndex: number;
+        readonly index: number;
+      };
+
+export function encodeLaneDevicePath(devicePath: LaneDevicePathV2): string {
+    return devicePath.kind === "trunk"
+        ? `trunk:${devicePath.index}`
+        : `branch:${devicePath.groupId}:${devicePath.branchIndex}:${devicePath.index}`;
+}
+
+export function parseLaneDevicePath(value: unknown): LaneDevicePathV2 | null {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const parts = value.split(":");
+    if (parts[0] === "trunk" && parts.length === 2) {
+        const index = Number(parts[1]);
+        return Number.isInteger(index) && index >= 0 ? { kind: "trunk", index } : null;
+    }
+    if (parts[0] === "branch" && parts.length === 4) {
+        const branchIndex = Number(parts[2]);
+        const index = Number(parts[3]);
+        if (parseLaneGroupId(parts[1]) === null
+                || !Number.isInteger(branchIndex) || branchIndex < 0
+                || !Number.isInteger(index) || index < 0) {
+            return null;
+        }
+        return { kind: "branch", groupId: parts[1], branchIndex, index };
+    }
+    return null;
+}
+
+/** Locate a device's placement, or null when it is not in the document. */
+export function findLaneDevicePath(state: LaneStateV2, deviceId: string): LaneDevicePathV2 | null {
+    for (const [nodeIndex, node] of state.chain.entries()) {
+        if (node.kind === "device") {
+            if (node.deviceId === deviceId) {
+                return { kind: "trunk", index: nodeIndex };
+            }
+            continue;
+        }
+        for (const [branchIndex, branch] of node.branches.entries()) {
+            const index = branch.findIndex((placement) => placement.deviceId === deviceId);
+            if (index >= 0) {
+                return { kind: "branch", groupId: node.groupId, branchIndex, index };
+            }
+        }
+    }
+    return null;
+}
+
+function cloneChain(state: LaneStateV2): LaneChainNodeV2[] {
+    return state.chain.map((node) => (
+        node.kind === "device"
+            ? { ...node }
+            : { ...node, branches: node.branches.map((branch) => branch.map((placement) => ({ ...placement }))) }
+    ));
+}
+
+function withChain(state: LaneStateV2, chain: LaneChainNodeV2[]): LaneStateV2 {
+    return { ...state, chain };
+}
+
+/**
+ * Move one device to a new position: along its own sequence, across
+ * branches and bands, or between a branch and the trunk. The target indexes
+ * the CURRENT rendered structure (the classic remove-then-insert-at-index
+ * splice the v1 reorder used); trunk and in-branch indexes clamp to the
+ * sequence end so dropping past the last row appends.
+ */
+export function moveLaneDevice(
+    state: LaneStateV2,
+    deviceId: string,
+    target: LaneDevicePathV2,
+): LaneStateV2 | null {
+    const source = findLaneDevicePath(state, deviceId);
+    if (source === null) {
+        return null;
+    }
+    if (target.kind === "branch") {
+        const group = state.chain.find((node) => node.kind !== "device" && node.groupId === target.groupId);
+        if (group === undefined || group.kind === "device" || target.branchIndex >= group.branches.length) {
+            return null;
+        }
+    }
+
+    const chain = cloneChain(state);
+
+    // Lift the placement out.
+    let placement: LaneDevicePlacementV2;
+    if (source.kind === "trunk") {
+        placement = chain[source.index] as LaneDevicePlacementV2;
+        chain.splice(source.index, 1);
+    } else {
+        const group = chain.find((node) => node.kind !== "device" && node.groupId === source.groupId) as LaneGroupV2;
+        const branch = group.branches[source.branchIndex] as LaneDevicePlacementV2[];
+        placement = branch[source.index];
+        branch.splice(source.index, 1);
+    }
+
+    // Set it back down.
+    if (target.kind === "trunk") {
+        chain.splice(Math.min(target.index, chain.length), 0, placement);
+    } else {
+        const group = chain.find((node) => node.kind !== "device" && node.groupId === target.groupId) as LaneGroupV2;
+        const branch = group.branches[target.branchIndex] as LaneDevicePlacementV2[];
+        branch.splice(Math.min(target.index, branch.length), 0, placement);
+    }
+
+    return withChain(state, chain);
+}
+
+export function getLaneDeviceEnabled(state: LaneStateV2, deviceId: string): boolean | null {
+    for (const node of state.chain) {
+        if (node.kind === "device") {
+            if (node.deviceId === deviceId) {
+                return node.enabled;
+            }
+            continue;
+        }
+        for (const branch of node.branches) {
+            const placement = branch.find((candidate) => candidate.deviceId === deviceId);
+            if (placement !== undefined) {
+                return placement.enabled;
+            }
+        }
+    }
+    return null;
+}
+
+export function setLaneDeviceEnabled(
+    state: LaneStateV2,
+    deviceId: string,
+    enabled: boolean,
+): LaneStateV2 | null {
+    if (findLaneDevicePath(state, deviceId) === null) {
+        return null;
+    }
+    return withChain(state, state.chain.map((node): LaneChainNodeV2 => {
+        if (node.kind === "device") {
+            return node.deviceId === deviceId ? { ...node, enabled } : node;
+        }
+        return {
+            ...node,
+            branches: node.branches.map((branch) => branch.map((placement) => (
+                placement.deviceId === deviceId ? { ...placement, enabled } : placement
+            ))),
+        };
+    }));
+}
+
+export function setLaneGroupEnabled(
+    state: LaneStateV2,
+    groupId: string,
+    enabled: boolean,
+): LaneStateV2 | null {
+    if (!state.chain.some((node) => node.kind !== "device" && node.groupId === groupId)) {
+        return null;
+    }
+    return withChain(state, state.chain.map((node) => (
+        node.kind !== "device" && node.groupId === groupId ? { ...node, enabled } : node
+    )) as LaneChainNodeV2[]);
+}
+
+export function setLaneDeviceParam(
+    state: LaneStateV2,
+    deviceId: string,
+    endpointID: string,
+    value: number,
+): LaneStateV2 | null {
+    const record = state.devices[deviceId];
+    const parsedId = parseLaneInstanceId(deviceId);
+    if (record === undefined || parsedId === null
+            || !laneDeviceParamEndpoints(parsedId.deviceType).includes(endpointID)
+            || !Number.isFinite(value)) {
+        return null;
+    }
+    return {
+        ...state,
+        devices: {
+            ...state.devices,
+            [deviceId]: { params: { ...record.params, [endpointID]: value } },
+        },
+    };
+}
+
+function laneWireEntryCount(state: LaneStateV2): number {
+    return Object.keys(state.devices).length
+        + state.chain.filter((node) => node.kind !== "device").length;
+}
+
+function allocateLaneGroupId(state: LaneStateV2, groupKind: "parallel" | "split"): string | null {
+    const unitCount = groupKind === "parallel" ? LANE_PARALLEL_UNIT_COUNT : LANE_SPLIT_UNIT_COUNT;
+    const used = new Set(state.chain.flatMap((node) => (
+        node.kind === groupKind ? [node.groupId] : []
+    )));
+    for (let unit = 1; unit <= unitCount; unit += 1) {
+        if (!used.has(`${groupKind}#${unit}`)) {
+            return `${groupKind}#${unit}`;
+        }
+    }
+    return null;
+}
+
+/**
+ * Wrap one TRUNK device in a fresh two-branch group, the device in the first
+ * branch (the LO band for splits) and the other branch empty. Null when the
+ * device sits inside a group already (the wire cannot nest), when the unit
+ * pool for the kind is exhausted, or when the extra marker would overflow
+ * the topology upload.
+ */
+export function wrapLaneDeviceInGroup(
+    state: LaneStateV2,
+    deviceId: string,
+    groupKind: "parallel" | "split",
+): LaneStateV2 | null {
+    const source = findLaneDevicePath(state, deviceId);
+    if (source === null || source.kind !== "trunk") {
+        return null;
+    }
+    const groupId = allocateLaneGroupId(state, groupKind);
+    if (groupId === null || laneWireEntryCount(state) + 1 > LANE_MAX_CHAIN_LENGTH) {
+        return null;
+    }
+
+    const chain = cloneChain(state);
+    const placement = chain[source.index] as LaneDevicePlacementV2;
+    const group: LaneGroupV2 = groupKind === "split"
+        ? {
+            kind: "split",
+            groupId,
+            enabled: true,
+            xoverLowHz: LANE_SPLIT_DEFAULT_XOVER_LOW_HZ,
+            xoverHighHz: LANE_SPLIT_DEFAULT_XOVER_HIGH_HZ,
+            branches: [[placement], []],
+          }
+        : { kind: "parallel", groupId, enabled: true, branches: [[placement], []] };
+    chain.splice(source.index, 1, group);
+    return withChain(state, chain);
+}
+
+/** Splice a group's members serially back into the trunk at its position. */
+export function dissolveLaneGroup(state: LaneStateV2, groupId: string): LaneStateV2 | null {
+    const nodeIndex = state.chain.findIndex((node) => node.kind !== "device" && node.groupId === groupId);
+    if (nodeIndex < 0) {
+        return null;
+    }
+    const chain = cloneChain(state);
+    const group = chain[nodeIndex] as LaneGroupV2;
+    chain.splice(nodeIndex, 1, ...group.branches.flat());
+    return withChain(state, chain);
+}
+
+export function setLaneSplitCrossoverHz(
+    state: LaneStateV2,
+    groupId: string,
+    which: "low" | "high",
+    hz: number,
+): LaneStateV2 | null {
+    if (!Number.isFinite(hz) || hz < LANE_SPLIT_XOVER_MIN_HZ || hz > LANE_SPLIT_XOVER_MAX_HZ) {
+        return null;
+    }
+    const group = state.chain.find((node) => node.kind === "split" && node.groupId === groupId);
+    if (group === undefined) {
+        return null;
+    }
+    return withChain(state, state.chain.map((node) => (
+        node.kind === "split" && node.groupId === groupId
+            ? { ...node, [which === "low" ? "xoverLowHz" : "xoverHighHz"]: hz }
+            : node
+    )) as LaneChainNodeV2[]);
+}
+
+/**
+ * Grow or shrink a group's fan-out. Growth appends empty parallel branches;
+ * a split growing 2 -> 3 inserts an EMPTY middle band, so the LO and HI
+ * device sets stay put and the new band arrives silent. Shrinking removes
+ * only EMPTY branches (the last parallel branch, the middle band) — devices
+ * are never relocated implicitly; drag them out first.
+ */
+export function setLaneGroupBranchCount(
+    state: LaneStateV2,
+    groupId: string,
+    branchCount: number,
+): LaneStateV2 | null {
+    const node = state.chain.find((candidate) => candidate.kind !== "device" && candidate.groupId === groupId);
+    if (node === undefined || node.kind === "device") {
+        return null;
+    }
+    const maxBranches = node.kind === "parallel" ? LANE_MAX_BRANCHES_PER_GROUP : LANE_MAX_BANDS_PER_SPLIT;
+    if (!Number.isInteger(branchCount) || branchCount < 2 || branchCount > maxBranches) {
+        return null;
+    }
+
+    const branches = node.branches.map((branch) => [...branch]);
+    if (node.kind === "split") {
+        if (branchCount === 3 && branches.length === 2) {
+            branches.splice(1, 0, []);
+        } else if (branchCount === 2 && branches.length === 3) {
+            if (branches[1].length !== 0) {
+                return null;
+            }
+            branches.splice(1, 1);
+        }
+    } else {
+        while (branches.length < branchCount) {
+            branches.push([]);
+        }
+        while (branches.length > branchCount) {
+            if (branches[branches.length - 1].length !== 0) {
+                return null;
+            }
+            branches.pop();
+        }
+    }
+
+    return withChain(state, state.chain.map((candidate) => (
+        candidate.kind !== "device" && candidate.groupId === groupId
+            ? { ...candidate, branches }
+            : candidate
+    )) as LaneChainNodeV2[]);
+}
+
+/** Device ids in DISPATCH order — the flattened chain walk host surfaces
+    (the seqfx bridge's ordered effect list) present. */
+export function listLaneChainDeviceIds(state: LaneStateV2): ReadonlyArray<string> {
+    return state.chain.flatMap((node) => (
+        node.kind === "device"
+            ? [node.deviceId]
+            : node.branches.flatMap((branch) => branch.map((placement) => placement.deviceId))
+    ));
 }

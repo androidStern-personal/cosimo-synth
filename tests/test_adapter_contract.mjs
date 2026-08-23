@@ -604,9 +604,11 @@ test("bridge rack commands preserve desired state across an older effective read
     });
     adapter.commands.reorderEffect("reverb", "filter");
 
+    // The stored document is lane.v2 now: structure lives in the chain tree.
     const storedRack = JSON.parse(String(connection.getDebugSnapshot().storedState["lane.v1"]));
-    assert.equal(storedRack.order[0], "reverb");
-    assert.equal(storedRack.enabled.chorus, true);
+    assert.equal(storedRack.version, 2);
+    assert.equal(storedRack.chain[0].deviceId, "reverb#1");
+    assert.equal(storedRack.chain.find((node) => node.deviceId === "chorus#1").enabled, true);
     assert.equal(adapter.getSnapshot().patch.effectEnabled.chorus, true);
     adapter.dispose();
 });

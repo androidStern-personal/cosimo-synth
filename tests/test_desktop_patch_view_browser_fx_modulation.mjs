@@ -2759,7 +2759,11 @@ test("rack reorder keeps the latest desired enable state across an older effecti
         await toggleRackEffectEnabled(page, "chorus");
         await page.waitForFunction(() => {
             const rawState = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["lane.v1"];
-            return rawState !== undefined && JSON.parse(String(rawState)).enabled.chorus === true;
+            if (rawState === undefined) {
+                return false;
+            }
+            const doc = JSON.parse(String(rawState));
+            return doc.chain.find((node) => node.deviceId === "chorus#1")?.enabled === true;
         });
         await clearHarnessDebugLog(page);
 
@@ -2793,11 +2797,11 @@ test("rack reorder keeps the latest desired enable state across an older effecti
                     return false;
                 }
                 const state = JSON.parse(String(rawState));
-                return state.order[0] === "reverb";
+                return state.chain?.[0]?.deviceId === "reverb#1";
             },
         );
         const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
-        assert.equal(storedRack.enabled.chorus, true);
+        assert.equal(storedRack.chain.find((node) => node.deviceId === "chorus#1").enabled, true);
         const lastTopology = snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").at(-1);
         const chorusPosition = lastTopology?.value?.slotIds?.indexOf(3);
         assert.ok(chorusPosition >= 0);
@@ -2848,8 +2852,8 @@ test("rack no-op release adopts authoritative stored order received during the g
         const snapshot = await getHarnessSnapshot(page);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
         const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
-        assert.equal(storedRack.order[0], "reverb");
-        assert.equal(storedRack.enabled.chorus, true);
+        assert.equal(storedRack.chain[0].deviceId, "reverb#1");
+        assert.equal(storedRack.chain.find((node) => node.deviceId === "chorus#1").enabled, true);
     } finally {
         await page.close();
     }

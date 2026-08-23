@@ -15,14 +15,14 @@ import {
     createDefaultModulationState,
     serializeModulationState,
 } from "../modulation";
+import { LANE_STATE_KEY } from "../lane-state";
 import {
-    LANE_STATE_KEY,
-    commitLaneState,
-    createDefaultLaneState,
-    parseLaneState,
-    serializeLaneState,
-    type LaneState,
-} from "../lane-state";
+    commitLaneStateV2,
+    createDefaultLaneStateV2,
+    parseLaneStateV2Compat,
+    serializeLaneStateV2,
+    type LaneStateV2,
+} from "../lane-state-v2";
 import type { EffectStoredStateAdapter } from "./effect-preset-v2";
 import type { EffectPluginStateContract } from "./effect-state-contract";
 import type {
@@ -48,8 +48,8 @@ function readFullStoredStateValue(storedState: unknown, key: string) {
     return Object.hasOwn(storedState, key) ? storedState[key] : undefined;
 }
 
-function parseStrictRackState(value: unknown): LaneState {
-    const outcome = parseLaneState(value);
+function parseStrictRackState(value: unknown): LaneStateV2 {
+    const outcome = parseLaneStateV2Compat(value);
 
     if (outcome._tag === "err") {
         throw new Error(outcome.message);
@@ -58,8 +58,8 @@ function parseStrictRackState(value: unknown): LaneState {
     return outcome.value;
 }
 
-function cloneRackState(value: LaneState) {
-    return parseStrictRackState(serializeLaneState(value));
+function cloneRackState(value: LaneStateV2) {
+    return parseStrictRackState(serializeLaneStateV2(value));
 }
 
 /** Create the strict lane.v1 mirror used only while rack is absent from presets. */
@@ -68,19 +68,19 @@ export function createSynthRackInitStateAdapter(
 ): StandaloneEffectInitOnlyStateAdapter {
     const listeners = new Set<() => void>();
     const pendingEchoes: string[] = [];
-    let currentState: LaneState | null = null;
+    let currentState: LaneStateV2 | null = null;
     let hydrationError: Error | null = null;
     let attached = false;
     let awaitingKeyHydration = false;
 
     const acceptIncoming = (rawValue: unknown, isHydration: boolean) => {
         if (rawValue === undefined && isHydration) {
-            currentState = createDefaultLaneState();
+            currentState = createDefaultLaneStateV2();
             hydrationError = null;
             return;
         }
 
-        let nextState: LaneState;
+        let nextState: LaneStateV2;
 
         try {
             nextState = parseStrictRackState(rawValue);
@@ -94,7 +94,7 @@ export function createSynthRackInitStateAdapter(
             return;
         }
 
-        const serialized = serializeLaneState(nextState);
+        const serialized = serializeLaneStateV2(nextState);
         const echoIndex = pendingEchoes.indexOf(serialized);
 
         if (echoIndex !== -1) {
@@ -172,13 +172,13 @@ export function createSynthRackInitStateAdapter(
             return cloneRackState(currentState);
         },
         createDefaultValue() {
-            return createDefaultLaneState();
+            return createDefaultLaneStateV2();
         },
         normalizeForTransaction(value: unknown) {
             return parseStrictRackState(value);
         },
         serializeForTransaction(value: unknown) {
-            return serializeLaneState(parseStrictRackState(value));
+            return serializeLaneStateV2(parseStrictRackState(value));
         },
         apply(value: unknown) {
             if (typeof patchConnection.sendEventOrValue !== "function") {
@@ -191,12 +191,12 @@ export function createSynthRackInitStateAdapter(
 
             const nextState = parseStrictRackState(value);
             const previousState = currentState;
-            const serialized = serializeLaneState(nextState);
+            const serialized = serializeLaneStateV2(nextState);
             currentState = nextState;
             pendingEchoes.push(serialized);
 
             try {
-                commitLaneState(patchConnection, nextState);
+                commitLaneStateV2(patchConnection, nextState);
                 patchConnection.sendStoredStateValue(LANE_STATE_KEY, serialized);
             } catch (error) {
                 const echoIndex = pendingEchoes.lastIndexOf(serialized);
@@ -230,8 +230,10 @@ function createCanonicalStoredState(currentContract: EffectPluginStateContract) 
             create: () => serializeArticulationsV4(createEmptyArticulationsState()),
         },
         [LANE_STATE_KEY]: {
-            schemaVersion: 1,
-            create: () => serializeLaneState(createDefaultLaneState()),
+            // The slot name predates the tree document; the value inside is
+            // self-versioned lane.v2 (the compat parse still reads v1).
+            schemaVersion: 2,
+            create: () => serializeLaneStateV2(createDefaultLaneStateV2()),
         },
     };
     const storedState: Record<string, unknown> = {};

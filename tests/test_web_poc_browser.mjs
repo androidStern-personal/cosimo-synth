@@ -2656,7 +2656,8 @@ test("generated product UI restores oscillator parameters and rack state through
         await waitForAsyncPageCondition(page, async () => {
             const state = await globalThis.__COSIMO_WEB_POC__.storedState();
             const rack = JSON.parse(String(state.values?.["lane.v1"]));
-            return rack.order[0] === "reverb" && rack.enabled.chorus === true;
+            return rack.chain?.[0]?.deviceId === "reverb#1"
+                && rack.chain?.find((node) => node.deviceId === "chorus#1")?.enabled === true;
         });
         const beforeReload = await page.evaluate(async () => ({
             connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["lane.v1"] ?? null,
@@ -2718,7 +2719,7 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
             const stored = await globalThis.__COSIMO_WEB_POC__.storedState();
             const rack = JSON.parse(String(stored.values?.["lane.v1"]));
             return list?.firstElementChild?.getAttribute("data-role") === "rack-module-reverb"
-                && rack.order[0] === "reverb";
+                && rack.chain?.[0]?.deviceId === "reverb#1";
         }, null, { timeout: 3_000 });
         const reorderResult = await page.evaluate(() => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;

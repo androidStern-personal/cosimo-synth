@@ -96,6 +96,10 @@ export const EFFECT_ID_TO_LANE_TYPE = Object.freeze({
     delay: "delay",
     reverb: "reverb",
 });
+/** The inverse map, for surfaces that speak device types (the subway map,
+    the bridge adapter's host lists). */
+export const LANE_TYPE_TO_EFFECT_ID = new Map(Object.entries(EFFECT_ID_TO_LANE_TYPE)
+    .map(([effectId, deviceType]) => [deviceType, effectId]));
 const EFFECT_ID_TO_WIRE_ID = Object.freeze({
     filter: 0,
     drive: 1,

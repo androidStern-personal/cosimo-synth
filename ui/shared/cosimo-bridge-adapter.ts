@@ -64,15 +64,26 @@ import { getModulationArticulationCellIndex } from "./modulation-runtime-program
 import { createDefaultMsegPlayback, createDefaultMsegShape } from "./mseg";
 import { err, ok } from "./result";
 import {
+    EFFECT_ID_TO_LANE_TYPE,
     LANE_STATE_KEY,
+    LANE_TYPE_TO_EFFECT_ID,
     RACK_EFFECT_ORDER,
-    commitLaneState,
-    createDefaultLaneState,
-    parseLaneState as parseCanonicalLaneState,
     sendLaneParamValue,
-    serializeLaneState,
-    type LaneState,
 } from "./lane-state";
+import {
+    commitLaneStateV2,
+    createDefaultLaneStateV2,
+    findLaneDevicePath,
+    getLaneDeviceEnabled,
+    listLaneChainDeviceIds,
+    moveLaneDevice,
+    parseLaneInstanceId,
+    parseLaneStateV2Compat,
+    serializeLaneStateV2,
+    setLaneDeviceEnabled,
+    setLaneDeviceParam,
+    type LaneStateV2,
+} from "./lane-state-v2";
 import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
 import {
     allTargetDescriptors,
@@ -294,8 +305,14 @@ function buildParameterOwnedEnvelope(
     };
 }
 
-function createInitialLaneState(): LaneState {
-    return createDefaultLaneState();
+function createInitialLaneState(): LaneStateV2 {
+    return createDefaultLaneStateV2();
+}
+
+/** The host surface speaks effect ids; the document speaks instance ids.
+    Until the add/remove UX, every host-visible device is instance #1. */
+function laneDeviceIdForEffect(effectId: EffectModuleId): string {
+    return `${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`;
 }
 
 function requireEffectId(input: string): EffectModuleId {
@@ -380,7 +397,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private articulations = createEmptyArticulationsState();
     // lane.v1 is desired state. effectiveRackState has no intent correlation and
     // therefore cannot safely become the base for a later editor command.
-    private rackState = createInitialLaneState();
+    private rackState: LaneStateV2 = createInitialLaneState();
     private compoundSettings: Readonly<Record<TargetId, CompoundSetting>> = {};
     private connectionState: PatchSnapshot["connection"] = { _tag: "connecting" };
     private audition: AuditionState = {
@@ -456,14 +473,14 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
         this.runCommand(() => {
             if (message.key === LANE_STATE_KEY) {
-                const parsed = parseCanonicalLaneState(message.value);
+                const parsed = parseLaneStateV2Compat(message.value);
                 if (parsed._tag === "err") {
                     this.detach(parsed.message);
                     return;
                 }
                 this.rackState = parsed.value;
                 this.refreshLaneParameterValues();
-                commitLaneState(this.connection, this.rackState);
+                commitLaneStateV2(this.connection, this.rackState);
                 this.markSnapshotDirty();
                 return;
             }
@@ -570,11 +587,13 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         ),
         setEffectEnabled: (effectId, enabled) => this.runCommand(() => {
             const knownEffectId = requireEffectId(effectId);
-            this.rackState = {
-                ...this.rackState,
-                enabled: { ...this.rackState.enabled, [knownEffectId]: enabled },
-            };
-            commitLaneState(this.connection, this.rackState);
+            const next = setLaneDeviceEnabled(
+                this.rackState, laneDeviceIdForEffect(knownEffectId), enabled);
+            if (next === null) {
+                throw new Error(`Rack is missing effect ${knownEffectId}`);
+            }
+            this.rackState = next;
+            commitLaneStateV2(this.connection, this.rackState);
             this.persistLaneState();
             this.markSnapshotDirty();
         }),
@@ -631,6 +650,23 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         this.listeners.clear();
     }
 
+    /** The host's ordered effect list: the document's dispatch-order walk.
+        Groups flatten branch by branch — the serial case is unchanged. */
+    private projectEffectOrder(): EffectModuleId[] {
+        return listLaneChainDeviceIds(this.rackState).flatMap((deviceId) => {
+            const parsed = parseLaneInstanceId(deviceId);
+            const effectId = parsed === null ? undefined : LANE_TYPE_TO_EFFECT_ID.get(parsed.deviceType);
+            return effectId === undefined || parsed?.instanceNumber !== 1 ? [] : [effectId];
+        });
+    }
+
+    private projectEffectEnabled(): Record<EffectModuleId, boolean> {
+        return Object.fromEntries(RACK_EFFECT_ORDER.map((effectId) => [
+            effectId,
+            getLaneDeviceEnabled(this.rackState, laneDeviceIdForEffect(effectId)) ?? false,
+        ])) as Record<EffectModuleId, boolean>;
+    }
+
     /** Mirror the lane document's parameter values into target-id space. */
     private refreshLaneParameterValues(): void {
         let nextValues = this.parameterValues;
@@ -642,7 +678,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             if (laneParameter === null) {
                 continue;
             }
-            const engineValue = this.rackState.params[laneParameter.effectId][laneParameter.endpointID];
+            const engineValue = this.rackState
+                .devices[laneDeviceIdForEffect(laneParameter.effectId)]?.params[laneParameter.endpointID];
             if (typeof engineValue !== "number") {
                 continue;
             }
@@ -740,7 +777,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
 
         const parsedRackState = rawRackState === undefined
             ? { _tag: "ok", value: createInitialLaneState() } as const
-            : parseCanonicalLaneState(rawRackState);
+            : parseLaneStateV2Compat(rawRackState);
         if (parsedRackState._tag === "err") {
             this.detach(parsedRackState.message);
             return;
@@ -761,7 +798,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
             if (rawModulationState === undefined) {
                 this.modulationBridge.replaceRoutes([]);
             }
-            commitLaneState(this.connection, this.rackState);
+            commitLaneStateV2(this.connection, this.rackState);
             this.markSnapshotDirty();
         });
     }
@@ -848,8 +885,8 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                 parameterValues: { ...this.parameterValues },
                 mappings,
                 sources: this.projectSources(),
-                effectOrder: [...this.rackState.order],
-                effectEnabled: { ...this.rackState.enabled },
+                effectOrder: this.projectEffectOrder(),
+                effectEnabled: this.projectEffectEnabled(),
                 compoundSettings: { ...this.compoundSettings },
                 articulations: this.articulations.slots.map((slot) => ({
                     id: articulationIdFromSlot(slot),
@@ -1049,16 +1086,16 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
                     // parameter cut: the lane document owns the value and the
                     // field upload is the audible path.
                     const engineValue = descriptor.binding.toEngine(input.value);
-                    this.rackState = {
-                        ...this.rackState,
-                        params: {
-                            ...this.rackState.params,
-                            [laneParameter.effectId]: {
-                                ...this.rackState.params[laneParameter.effectId],
-                                [laneParameter.endpointID]: engineValue,
-                            },
-                        },
-                    };
+                    const next = setLaneDeviceParam(
+                        this.rackState,
+                        laneDeviceIdForEffect(laneParameter.effectId),
+                        laneParameter.endpointID,
+                        engineValue,
+                    );
+                    if (next === null) {
+                        throw new Error(`Rack is missing effect ${laneParameter.effectId}`);
+                    }
+                    this.rackState = next;
                     this.laneParamDeliverySerial += 1;
                     sendLaneParamValue(
                         this.connection,
@@ -1665,15 +1702,18 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     private reorderEffect(effectId: EffectModuleId, overEffectId: EffectModuleId): void {
         const knownEffectId = requireEffectId(effectId);
         const knownOverEffectId = requireEffectId(overEffectId);
-        const withoutMoved = this.rackState.order.filter((candidate) => candidate !== knownEffectId);
-        const overIndex = withoutMoved.indexOf(knownOverEffectId);
-        if (overIndex < 0) {
+        const overPath = findLaneDevicePath(
+            this.rackState, laneDeviceIdForEffect(knownOverEffectId));
+        if (overPath === null) {
             throw new Error(`Rack is missing effect ${knownOverEffectId}`);
         }
-        const order = [...withoutMoved];
-        order.splice(overIndex, 0, knownEffectId);
-        this.rackState = { ...this.rackState, order };
-        commitLaneState(this.connection, this.rackState);
+        const next = moveLaneDevice(
+            this.rackState, laneDeviceIdForEffect(knownEffectId), overPath);
+        if (next === null) {
+            throw new Error(`Rack is missing effect ${knownEffectId}`);
+        }
+        this.rackState = next;
+        commitLaneStateV2(this.connection, this.rackState);
         this.persistLaneState();
         this.markSnapshotDirty();
     }
@@ -1686,8 +1726,18 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         if (new Set(order).size !== RACK_EFFECT_ORDER.length) {
             throw new Error("Effect order contains duplicate effects");
         }
-        this.rackState = { ...this.rackState, order };
-        commitLaneState(this.connection, this.rackState);
+        // A full-order restore is a SERIAL statement: any groups dissolve
+        // into the stated order, enables and params riding along.
+        this.rackState = {
+            ...this.rackState,
+            chain: order.map((restoredEffectId) => ({
+                kind: "device",
+                deviceId: laneDeviceIdForEffect(restoredEffectId),
+                enabled: getLaneDeviceEnabled(
+                    this.rackState, laneDeviceIdForEffect(restoredEffectId)) ?? false,
+            })),
+        };
+        commitLaneStateV2(this.connection, this.rackState);
         this.persistLaneState();
         this.markSnapshotDirty();
     }
@@ -1817,7 +1867,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
         const modulationState = createDefaultModulationState();
         this.modulationBridge.setState({ ...modulationState, routes: [] });
         this.persistLaneState();
-        commitLaneState(this.connection, this.rackState);
+        commitLaneStateV2(this.connection, this.rackState);
         this.persistArticulations();
         this.uploadAllBoundBaseValues();
         this.markSnapshotDirty();
@@ -1924,7 +1974,7 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private persistLaneState(): void {
-        this.sendStoredStateValue(LANE_STATE_KEY, serializeLaneState(this.rackState));
+        this.sendStoredStateValue(LANE_STATE_KEY, serializeLaneStateV2(this.rackState));
     }
 
     private sendStoredStateValue(key: string, value: unknown): void {
