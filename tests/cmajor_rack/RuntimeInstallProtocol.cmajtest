@@ -32,24 +32,28 @@ processor RuntimeInstallProtocolSource
     output event wt::ArticulationSnapshotUpload articulationSnapshotOut;
     output event int32 syncOut;
 
-    wt::ModulationProgramUpload modulationProgram (int32 deliverySerial)
+    // A processor MEMBER, not function locals: at the four-set mirrored rack
+    // domain the upload struct is large enough that chained return-by-value
+    // locals overflow the interpreter stack (SIGBUS).
+    wt::ModulationProgramUpload scratch;
+
+    void buildModulationProgram (int32 deliverySerial)
     {
         wt::ModulationProgramUpload upload;
         upload.dspSessionId = int32 (processor.session);
         upload.deliverySerial = deliverySerial;
-        return upload;
+        scratch = upload;
     }
 
-    wt::ModulationProgramUpload voiceModulationProgram (int32 deliverySerial)
+    void buildVoiceModulationProgram (int32 deliverySerial)
     {
-        wt::ModulationProgramUpload upload = modulationProgram (deliverySerial);
-        upload.voiceRouteCount = 1;
-        upload.voiceRouteCells.at (0) = 0;
-        upload.voiceRouteSources.at (0) = 0;
-        upload.voiceRouteTargets.at (0) = 0;
-        upload.voiceRoutePolarities.at (0) = wt::modulationPolarityUnipolar;
-        upload.voiceRouteAmounts.at (0) = 0.5f;
-        return upload;
+        buildModulationProgram (deliverySerial);
+        scratch.voiceRouteCount = 1;
+        scratch.voiceRouteCells.at (0) = 0;
+        scratch.voiceRouteSources.at (0) = 0;
+        scratch.voiceRouteTargets.at (0) = 0;
+        scratch.voiceRoutePolarities.at (0) = wt::modulationPolarityUnipolar;
+        scratch.voiceRouteAmounts.at (0) = 0.5f;
     }
 
     wt::ArticulationSnapshotUpload articulationSnapshot (int32 deliverySerial)
@@ -82,36 +86,42 @@ processor RuntimeInstallProtocolSource
         advance();
 
         // Runtime mutation is never accepted outside the addressed protocol.
-        modulationProgramOut <- modulationProgram (0);
+        buildModulationProgram (0);
+        modulationProgramOut <- scratch;
         advance();
         articulationSnapshotOut <- articulationSnapshot (0);
         advance();
 
         // Exact next, duplicate, then a gap.
-        modulationProgramOut <- modulationProgram (1);
+        buildModulationProgram (1);
+        modulationProgramOut <- scratch;
         advance();
-        modulationProgramOut <- modulationProgram (1);
+        buildModulationProgram (1);
+        modulationProgramOut <- scratch;
         advance();
-        modulationProgramOut <- modulationProgram (3);
+        buildModulationProgram (3);
+        modulationProgramOut <- scratch;
         advance();
 
         // Invalid exact-next does not advance the frontier; the corrected
         // payload with the same serial is then accepted.
-        wt::ModulationProgramUpload invalid = modulationProgram (2);
-        invalid.voiceRouteCount = -1;
-        modulationProgramOut <- invalid;
+        buildModulationProgram (2);
+        scratch.voiceRouteCount = -1;
+        modulationProgramOut <- scratch;
         advance();
-        modulationProgramOut <- modulationProgram (2);
+        buildModulationProgram (2);
+        modulationProgramOut <- scratch;
         advance();
 
         // Non-finite amounts are rejected even when hidden in an inactive tail.
-        wt::ModulationProgramUpload nonFiniteProgram = modulationProgram (3);
-        nonFiniteProgram.voiceRouteAmounts.at (0) = float32 (nan);
-        modulationProgramOut <- nonFiniteProgram;
+        buildModulationProgram (3);
+        scratch.voiceRouteAmounts.at (0) = float32 (nan);
+        modulationProgramOut <- scratch;
         advance();
 
         // The corrected same-serial program publishes one active cell.
-        modulationProgramOut <- voiceModulationProgram (3);
+        buildVoiceModulationProgram (3);
+        modulationProgramOut <- scratch;
         advance();
 
         // A non-finite tiny edit cannot poison an active destination.
@@ -123,7 +133,8 @@ processor RuntimeInstallProtocolSource
         // A tiny amount edit may only address a cell in the active program.
         modulationAmountOut <- modulationAmount (5, 1, 0.5f);
         advance();
-        modulationProgramOut <- modulationProgram (5);
+        buildModulationProgram (5);
+        modulationProgramOut <- scratch;
         advance();
 
         // Articulation owns its independent descending frontier. Invalid
@@ -151,9 +162,9 @@ processor RuntimeInstallProtocolSource
 
         // A payload addressed to another DSP session is rejected without
         // changing either accepted frontier.
-        wt::ModulationProgramUpload wrongSession = modulationProgram (6);
-        wrongSession.dspSessionId += 1;
-        modulationProgramOut <- wrongSession;
+        buildModulationProgram (6);
+        scratch.dspSessionId += 1;
+        modulationProgramOut <- scratch;
         advance();
 
         loop advance();

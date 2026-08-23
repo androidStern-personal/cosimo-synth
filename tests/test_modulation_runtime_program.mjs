@@ -437,7 +437,10 @@ test("the DSP hot path consumes published active prefixes instead of transport c
     assert.doesNotMatch(hotPath, /int32 \(routeIndex\) >= (?:voiceRouteCount|macroVoiceRouteCount)/);
     assert.match(hotPath, /int32 \(routeIndex\) >= voiceRackRouteCount/);
     assert.match(hotPath, /macroRackRouteSourceUsed\[sourceIndex\]/);
-    assert.match(hotPath, /macroRackRouteScaleVectors\[sourceIndex\] \* macroSourceValues\[sourceIndex\]/);
+    // The macro-rack application stays a fused VECTOR op, blocked at the
+    // proven 36-wide SIMD width (one block per pool mirror set) — a single
+    // wide vector scalarises in the pinned browser backend.
+    assert.match(hotPath, /macroRackRouteScaleVectors\[sourceIndex, block\] \* macroSourceValues\[sourceIndex\]/);
     assert.doesNotMatch(
         hotPath,
         /routeIndex < (?:modulationVoiceRouteCellCount|modulationMacroVoiceRouteCellCount|modulationVoiceRackRouteCellCount|modulationMacroRackRouteCellCount)/,

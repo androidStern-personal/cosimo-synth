@@ -39,6 +39,21 @@ test("assigned lane targets resolve to the MIRROR pool indices; unassigned resol
         targets.MODULATION_RACK_TARGET_COUNT + targets.getRackModulationTargetIndex("rack.delayMix"));
     assert.equal(lanes.getLaneModulationTargetIndex(
         lanes.parseLaneModulationTargetKind("lane.delay#7.delayMix"), assignments), null);
+
+    // A second pool SET: ordinal 1 lands one full mirror block higher, and
+    // ordinals beyond the pool resolve to nothing.
+    const secondSet = new Map([["delay#9", 1], ["delay#10", lanes.MODULATION_LANE_POOL_SET_COUNT]]);
+    assert.equal(
+        lanes.getLaneModulationTargetIndex(
+            lanes.parseLaneModulationTargetKind("lane.delay#9.delayMix"), secondSet),
+        targets.MODULATION_RACK_TARGET_COUNT * 2
+            + targets.getRackModulationTargetIndex("rack.delayMix"),
+    );
+    assert.equal(
+        lanes.getLaneModulationTargetIndex(
+            lanes.parseLaneModulationTargetKind("lane.delay#10.delayMix"), secondSet),
+        null,
+    );
 });
 
 test("every device type's every pool endpoint parses, mirrors a real rack target, and resolves", async () => {
@@ -72,7 +87,10 @@ test("every device type's every pool endpoint parses, mirrors a real rack target
             seenIndices.add(index);
         }
     }
-    assert.equal(lanes.MODULATION_LANE_POOL_TARGET_COUNT, targets.MODULATION_RACK_TARGET_COUNT);
+    assert.equal(
+        lanes.MODULATION_LANE_POOL_TARGET_COUNT,
+        lanes.MODULATION_LANE_POOL_SET_COUNT * targets.MODULATION_RACK_TARGET_COUNT,
+    );
 });
 
 test("lane params speak their device type's canonical modulation language", async () => {
@@ -140,7 +158,7 @@ test("the compiler places assigned lane routes in the pool block and drops unass
 
     // The wire shape: cell tables are sources x TOTAL (matching the engine's
     // rackModTargetCount = 72: static vocabulary + its full pool mirror).
-    assert.equal(program.MODULATION_RACK_TARGET_TOTAL, 72);
+    assert.equal(program.MODULATION_RACK_TARGET_TOTAL, 180);
     assert.equal(
         program.MODULATION_VOICE_RACK_ROUTE_CELL_COUNT,
         program.MODULATION_VOICE_SOURCE_COUNT * program.MODULATION_RACK_TARGET_TOTAL,

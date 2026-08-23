@@ -15436,7 +15436,8 @@ function getVoiceModulationParameterKind(targetKind) {
   const separatorIndex = targetKind.indexOf(".");
   return separatorIndex >= 0 ? targetKind.slice(separatorIndex + 1) : targetKind;
 }
-const MODULATION_LANE_POOL_TARGET_COUNT = MODULATION_RACK_TARGET_COUNT$1;
+const MODULATION_LANE_POOL_SET_COUNT = 4;
+const MODULATION_LANE_POOL_TARGET_COUNT = MODULATION_LANE_POOL_SET_COUNT * MODULATION_RACK_TARGET_COUNT$1;
 const LANE_DEVICE_ENDPOINTS = /* @__PURE__ */ new Map([
   ["globalFilter", ["globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"]],
   ["distortion", ["distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"]],
@@ -15479,10 +15480,10 @@ function getLaneModulationTargetIndex(parsed, assignments) {
     return null;
   }
   const ordinal = assignments.get(parsed.instanceId);
-  if (ordinal !== 0) {
+  if (ordinal === void 0 || !Number.isInteger(ordinal) || ordinal < 0 || ordinal >= MODULATION_LANE_POOL_SET_COUNT) {
     return null;
   }
-  return MODULATION_RACK_TARGET_COUNT$1 + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
+  return MODULATION_RACK_TARGET_COUNT$1 + ordinal * MODULATION_RACK_TARGET_COUNT$1 + getRackModulationTargetIndex(laneMirrorRackKind(parsed));
 }
 const MODULATION_VOICE_SOURCE_COUNT = MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === "voice").length;
 MODULATION_SOURCE_IDENTITIES.filter((identity) => identity.group === "macro").length;
