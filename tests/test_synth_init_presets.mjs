@@ -289,11 +289,11 @@ async function createSynthFixture({ includeFactoryPreset = false, synthEnabled =
         loadUIModule(repoRoot, "ui/shared/effects/effect-state-contract.ts"),
         loadUIModule(repoRoot, "ui/shared/modulation.ts"),
         loadUIModule(repoRoot, "ui/shared/articulation-image.ts"),
-        loadUIModule(repoRoot, "ui/shared/rack-state.ts"),
+        loadUIModule(repoRoot, "ui/shared/lane-state.ts"),
     ]);
     const defaultModulation = modulation.createDefaultModulationState();
     const defaultArticulations = articulations.createEmptyArticulationsState();
-    const defaultRack = rack.createDefaultRackState();
+    const defaultRack = rack.createDefaultLaneState();
     const modulationHarness = createStoredDocumentAdapter("modulation.v6", 6, {
         ...defaultModulation,
         routes: [{ id: "route-before-init" }],
@@ -303,7 +303,7 @@ async function createSynthFixture({ includeFactoryPreset = false, synthEnabled =
         selectedSlotId: "art-before-init",
         slots: [{ id: "art-before-init" }],
     });
-    const rackHarness = createInitOnlyDocumentAdapter("rack.v1", {
+    const rackHarness = createInitOnlyDocumentAdapter("lane.v1", {
         ...defaultRack,
         order: [...defaultRack.order].reverse(),
         enabled: { ...defaultRack.enabled, delay: true, reverb: true },
@@ -492,6 +492,14 @@ test("Init writes the default for every current production public parameter, inc
         "oscAWavetableSelect",
         "oscBWavetableSelect",
         "oscCWavetableSelect",
+        "filterMix",
+    ]) {
+        assert.equal(publicEndpointIDs.includes(requiredEndpointID), true, requiredEndpointID);
+    }
+
+    // Effect parameters left the host surface with the B3 parameter cut:
+    // every device value rides the lane.v1 document and its record uploads.
+    for (const removedEndpointID of [
         "distortionWet",
         "chorusMix",
         "ottMix",
@@ -500,9 +508,8 @@ test("Init writes the default for every current production public parameter, inc
         "phaserMix",
         "delayMix",
         "reverbMix",
-        "filterMix",
     ]) {
-        assert.equal(publicEndpointIDs.includes(requiredEndpointID), true, requiredEndpointID);
+        assert.equal(publicEndpointIDs.includes(removedEndpointID), false, removedEndpointID);
     }
 
     const initResult = synthMutations(fixture.controller).initSound();
@@ -793,7 +800,7 @@ test("a late rack-domain Init failure rolls back the complete dirty sound and ne
     unsubscribe();
 
     assert.equal(failedInit.ok, false);
-    assert.match(failedInit.message, /rack\.v1 apply failed/i);
+    assert.match(failedInit.message, /lane\.v1 apply failed/i);
     assert.equal(JSON.stringify({
         parameters: fixture.patchConnection.parameterValues,
         modulation: fixture.modulationHarness.value,

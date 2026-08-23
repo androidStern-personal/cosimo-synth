@@ -195,6 +195,31 @@ are M1's permanent acceptance tests, not a throwaway report.
   the pre-batching wavetable mip fields. Harness note: every testProcessor
   section in a file whose globals include the rack modules must instantiate
   them, or their latency static_asserts fail to constant-fold.
+- **B3 PARAMETER CUT COMPLETE (2026-08-23):** the 45 per-effect host
+  endpoints are DELETED engine- and synth-side; ordinal 0 is just another
+  slot. One uniform forwarding loop drives all five ordinals (records +
+  that ordinal's rackMod block + one glide-scaler bank per ordinal); the
+  record/smoothing arrays span all 40 slots; commit-entry snaps every
+  entering device onto its record. lane.v1 replaces rack.v1 as the ONE
+  stored document, now owning every device parameter alongside order and
+  enables (`ui/shared/lane-state.ts`, wire layout in
+  `ui/shared/lane-slot-params.ts`). All binding surfaces ride a shared
+  per-connection lane store (`ui/shared/lane-param-bindings.ts`):
+  optimistic store update + laneSlotParamValue field event per move,
+  document persist on gesture end, gestures on the connection's gesture
+  channel under the logical parameter id, user-edit bus fed as before
+  (auto-preview intact). The bridge adapter routes rack-target
+  setParameter through the document, mirrors document values into
+  target-id space on hydration, and skips lane params in endpoint
+  listeners/base-value uploads. Mock models the ENGINE's truth: lane.v1
+  doc overlaid with the field uploads it has seen. Store hydration is
+  once-per-connection with serialized-identity dedupe (a hundred mounted
+  bindings must not fan out hydration or re-render on echoed writes —
+  found as a React update-depth loop under the 100-route profile). DAW
+  automation slots for effect params are GONE (sanctioned hard cut);
+  the host surface is oscillators + voice + macros + MSEG/env + filterMix.
+  Native benchmark seeds effects via lane fields; every browser/iOS test
+  speaks the field-upload wire.
 - **M2 — The hard cut:** delete the `rack.*` namespace and the 45
   per-parameter endpoints; rewrite target descriptors, the resolver, the
   legal-pair domain, and every fixture to `lane.*`; lane state v1 replaces

@@ -15292,6 +15292,13 @@ const RACK_PARAMETER_DESCRIPTORS = Object.freeze(
 const RACK_PARAMETER_BY_ENDPOINT_ID = new Map(
   RACK_PARAMETER_DESCRIPTORS.map((descriptor) => [descriptor.endpointID, descriptor])
 );
+function getRackEffectDescriptor(effectId) {
+  const descriptor = RACK_EFFECT_DESCRIPTORS.find((candidate) => candidate.id === effectId);
+  if (descriptor === void 0) {
+    throw new Error(`Unknown rack effect: ${effectId}`);
+  }
+  return descriptor;
+}
 function allRackParameterDescriptors() {
   return RACK_PARAMETER_DESCRIPTORS;
 }
@@ -19508,6 +19515,278 @@ function parseParameterEntry(spec, text) {
   if (spec._tag === "choice") return parseChoice(spec, normalizedText);
   return parseAmount(spec, normalizedText);
 }
+const LANE_SLOT_PARAM_COUNT = 8;
+const LANE_SLOT_ORDINAL_COUNT = 5;
+const LANE_SLOT_TYPE_COUNT = 8;
+const LANE_TYPE_WIRE_IDS = Object.freeze({
+  globalFilter: 0,
+  distortion: 1,
+  ott: 2,
+  chorus: 3,
+  flanger: 4,
+  phaser: 5,
+  delay: 6,
+  reverb: 7
+});
+const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
+  globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
+  distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
+  ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
+  chorus: ["chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones"],
+  flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"],
+  phaser: ["phaserRate", "phaserRateMode", "phaserRateDivision", "phaserDepth", "phaserFrequency", "phaserFeedback", "phaserPhase", "phaserMix"],
+  delay: ["delayTime", "delayFeedback", "delayFilter", "delayMix", "delayTimeMode", "delayDivision"],
+  reverb: ["reverbSize", "reverbDecay", "reverbDamping", "reverbMix"]
+});
+function getLaneSlotParamIndex(deviceType, endpointID) {
+  const index = LANE_DEVICE_PARAM_LAYOUT[deviceType].indexOf(endpointID);
+  return index >= 0 ? index : null;
+}
+function getLaneSlotId(deviceType, ordinal) {
+  if (!Number.isInteger(ordinal) || ordinal < 0 || ordinal >= LANE_SLOT_ORDINAL_COUNT) {
+    throw new Error(`Lane ordinal out of range: ${ordinal}`);
+  }
+  return ordinal * LANE_SLOT_TYPE_COUNT + LANE_TYPE_WIRE_IDS[deviceType];
+}
+function buildLaneSlotParamValues(deviceType, params) {
+  const values = new Array(LANE_SLOT_PARAM_COUNT).fill(0);
+  LANE_DEVICE_PARAM_LAYOUT[deviceType].forEach((endpointID, index) => {
+    const value = params[endpointID];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      throw new Error(`Missing lane parameter value: ${deviceType}.${endpointID}`);
+    }
+    values[index] = value;
+  });
+  return values;
+}
+const LANE_STATE_KEY = "lane.v1";
+const LANE_TOPOLOGY_ENDPOINT_ID = "laneTopology";
+const LANE_SLOT_PARAMS_ENDPOINT_ID = "laneSlotParams";
+const LANE_SLOT_PARAM_VALUE_ENDPOINT_ID = "laneSlotParamValue";
+const LANE_MAX_CHAIN_LENGTH = 16;
+const RACK_EFFECT_ORDER = Object.freeze([
+  "filter",
+  "drive",
+  "ott",
+  "chorus",
+  "flanger",
+  "phaser",
+  "delay",
+  "reverb"
+]);
+const EFFECT_ID_TO_LANE_TYPE = Object.freeze({
+  filter: "globalFilter",
+  drive: "distortion",
+  ott: "ott",
+  chorus: "chorus",
+  flanger: "flanger",
+  phaser: "phaser",
+  delay: "delay",
+  reverb: "reverb"
+});
+const EFFECT_ID_TO_WIRE_ID = Object.freeze({
+  filter: 0,
+  drive: 1,
+  ott: 2,
+  chorus: 3,
+  flanger: 4,
+  phaser: 5,
+  delay: 6,
+  reverb: 7
+});
+new Map(
+  RACK_EFFECT_ORDER.map((effectId) => [EFFECT_ID_TO_WIRE_ID[effectId], effectId])
+);
+function defaultEnabled() {
+  return {
+    filter: false,
+    drive: false,
+    ott: false,
+    chorus: false,
+    flanger: false,
+    phaser: false,
+    delay: false,
+    reverb: false
+  };
+}
+function defaultParams(effectId) {
+  return Object.fromEntries(
+    getRackEffectDescriptor(effectId).parameters.map((descriptor) => [descriptor.endpointID, descriptor.initial])
+  );
+}
+function createDefaultLaneState() {
+  return {
+    format: "cosimo.lane",
+    version: 1,
+    order: [...RACK_EFFECT_ORDER],
+    enabled: defaultEnabled(),
+    params: Object.fromEntries(
+      RACK_EFFECT_ORDER.map((effectId) => [effectId, defaultParams(effectId)])
+    )
+  };
+}
+function parseJsonDocument(input) {
+  if (typeof input !== "string") {
+    return { _tag: "json", value: input };
+  }
+  if (input.trim().length === 0) {
+    return { _tag: "err", message: `${LANE_STATE_KEY} must not be empty` };
+  }
+  try {
+    const value = JSON.parse(input);
+    return { _tag: "json", value };
+  } catch (cause) {
+    const detail = cause instanceof Error ? cause.message : String(cause);
+    return { _tag: "err", message: `${LANE_STATE_KEY} is not valid JSON: ${detail}` };
+  }
+}
+function isRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function parseEffectId(input) {
+  if (typeof input !== "string") {
+    return null;
+  }
+  return RACK_EFFECT_ORDER.find((candidate) => candidate === input) ?? null;
+}
+function parseLaneState(input) {
+  const document2 = parseJsonDocument(input);
+  if (document2._tag === "err") {
+    return document2;
+  }
+  if (!isRecord(document2.value)) {
+    return { _tag: "err", message: `${LANE_STATE_KEY} must be an object` };
+  }
+  const allowedKeys = /* @__PURE__ */ new Set(["format", "version", "order", "enabled", "params"]);
+  for (const key of Reflect.ownKeys(document2.value)) {
+    if (typeof key !== "string" || !allowedKeys.has(key)) {
+      return { _tag: "err", message: `${LANE_STATE_KEY} has unexpected field ${String(key)}` };
+    }
+  }
+  if (document2.value.format !== "cosimo.lane" || document2.value.version !== 1) {
+    return { _tag: "err", message: `${LANE_STATE_KEY} must be cosimo.lane version 1` };
+  }
+  if (!Array.isArray(document2.value.order) || document2.value.order.length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.order must contain every effect once` };
+  }
+  const order = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const rawEffectId of document2.value.order) {
+    const effectId = parseEffectId(rawEffectId);
+    if (effectId === null || seen.has(effectId)) {
+      return { _tag: "err", message: `${LANE_STATE_KEY}.order is not a complete permutation` };
+    }
+    seen.add(effectId);
+    order.push(effectId);
+  }
+  if (!isRecord(document2.value.enabled)) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must be an object` };
+  }
+  if (Reflect.ownKeys(document2.value.enabled).length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.enabled must contain every effect once` };
+  }
+  const enabled = defaultEnabled();
+  for (const effectId of RACK_EFFECT_ORDER) {
+    const rawEnabled = document2.value.enabled[effectId];
+    if (typeof rawEnabled !== "boolean") {
+      return { _tag: "err", message: `${LANE_STATE_KEY}.enabled.${effectId} must be boolean` };
+    }
+    enabled[effectId] = rawEnabled;
+  }
+  if (!isRecord(document2.value.params)) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.params must be an object` };
+  }
+  if (Reflect.ownKeys(document2.value.params).length !== RACK_EFFECT_ORDER.length) {
+    return { _tag: "err", message: `${LANE_STATE_KEY}.params must contain every effect once` };
+  }
+  const params = {};
+  for (const effectId of RACK_EFFECT_ORDER) {
+    const rawDeviceParams = document2.value.params[effectId];
+    if (!isRecord(rawDeviceParams)) {
+      return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must be an object` };
+    }
+    const descriptors = getRackEffectDescriptor(effectId).parameters;
+    if (Reflect.ownKeys(rawDeviceParams).length !== descriptors.length) {
+      return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId} must contain every parameter once` };
+    }
+    const deviceParams = {};
+    for (const descriptor of descriptors) {
+      const rawValue = rawDeviceParams[descriptor.endpointID];
+      if (typeof rawValue !== "number" || !Number.isFinite(rawValue)) {
+        return { _tag: "err", message: `${LANE_STATE_KEY}.params.${effectId}.${descriptor.endpointID} must be a finite number` };
+      }
+      deviceParams[descriptor.endpointID] = rawValue;
+    }
+    params[effectId] = deviceParams;
+  }
+  return {
+    _tag: "ok",
+    value: { format: "cosimo.lane", version: 1, order, enabled, params }
+  };
+}
+function deserializeLaneState(input) {
+  if (input === void 0) {
+    return createDefaultLaneState();
+  }
+  const parsed = parseLaneState(input);
+  return parsed._tag === "ok" ? parsed.value : createDefaultLaneState();
+}
+function serializeLaneState(state) {
+  return JSON.stringify({
+    format: "cosimo.lane",
+    version: 1,
+    order: state.order,
+    enabled: state.enabled,
+    params: state.params
+  });
+}
+function buildLaneRuntimeEvents(state) {
+  const events = [];
+  let deliverySerial = 0;
+  for (const effectId of RACK_EFFECT_ORDER) {
+    deliverySerial += 1;
+    const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+    events.push({
+      endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
+      value: {
+        slotId: getLaneSlotId(deviceType, 0),
+        deliverySerial,
+        values: buildLaneSlotParamValues(deviceType, state.params[effectId])
+      }
+    });
+  }
+  const slotIds = new Array(LANE_MAX_CHAIN_LENGTH).fill(0);
+  let enabledMask = 0;
+  state.order.forEach((effectId, position) => {
+    slotIds[position] = EFFECT_ID_TO_WIRE_ID[effectId];
+    if (state.enabled[effectId]) {
+      enabledMask |= 1 << position;
+    }
+  });
+  events.push({
+    endpointID: LANE_TOPOLOGY_ENDPOINT_ID,
+    value: { chainLength: state.order.length, slotIds, enabledMask }
+  });
+  return events;
+}
+function commitLaneState(connection, state) {
+  for (const event of buildLaneRuntimeEvents(state)) {
+    connection.sendEventOrValue?.(event.endpointID, event.value);
+  }
+}
+function sendLaneParamValue(connection, effectId, endpointID, value, deliverySerial) {
+  const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
+  const paramIndex = getLaneSlotParamIndex(deviceType, endpointID);
+  if (paramIndex === null) {
+    throw new Error(`Unknown lane parameter: ${effectId}.${endpointID}`);
+  }
+  connection.sendEventOrValue?.(LANE_SLOT_PARAM_VALUE_ENDPOINT_ID, {
+    slotId: getLaneSlotId(deviceType, 0),
+    paramIndex,
+    deliverySerial,
+    value
+  });
+}
 function serializeIdentity(value) {
   return value;
 }
@@ -19545,6 +19824,125 @@ function usePatchEventTrigger(endpointID) {
     patchConnection.sendEventOrValue?.(endpointID, value);
   }, [endpointID, patchConnection]);
 }
+const stores = /* @__PURE__ */ new WeakMap();
+function readLaneStateFromFullStoredState(fullState) {
+  const values = fullState.values && typeof fullState.values === "object" ? fullState.values : {};
+  return Object.hasOwn(values, LANE_STATE_KEY) ? values[LANE_STATE_KEY] : fullState[LANE_STATE_KEY];
+}
+function acceptLaneState(store, nextState) {
+  const serialized = serializeLaneState(nextState);
+  if (serialized === store.serialized) {
+    return;
+  }
+  store.state = nextState;
+  store.serialized = serialized;
+  for (const listener of [...store.listeners]) {
+    listener();
+  }
+}
+function getLaneStateStore(connection) {
+  const key = connection;
+  const existing = stores.get(key);
+  if (existing !== void 0) {
+    return existing;
+  }
+  const initialState = createDefaultLaneState();
+  const created = {
+    state: initialState,
+    listeners: /* @__PURE__ */ new Set(),
+    deliverySerial: 0,
+    serialized: serializeLaneState(initialState)
+  };
+  stores.set(key, created);
+  connection.addStoredStateValueListener?.((message) => {
+    if (typeof message !== "object" || message === null || Array.isArray(message)) {
+      return;
+    }
+    if (Reflect.get(message, "key") === LANE_STATE_KEY) {
+      acceptLaneState(created, deserializeLaneState(Reflect.get(message, "value")));
+    }
+  });
+  connection.requestFullStoredState?.((fullState) => {
+    acceptLaneState(created, deserializeLaneState(readLaneStateFromFullStoredState(fullState)));
+  });
+  return created;
+}
+function useLaneStateDoc() {
+  const patchConnection = usePatchConnection();
+  const store = getLaneStateStore(patchConnection);
+  const laneState = reactExports.useSyncExternalStore(
+    reactExports.useCallback((onChange) => {
+      store.listeners.add(onChange);
+      return () => store.listeners.delete(onChange);
+    }, [store]),
+    () => store.state
+  );
+  const commit = reactExports.useCallback((nextState) => {
+    acceptLaneState(store, nextState);
+    commitLaneState(patchConnection, nextState);
+    patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneState(nextState));
+  }, [patchConnection, store]);
+  const setParamValue = reactExports.useCallback((effectId, endpointID, value) => {
+    acceptLaneState(store, {
+      ...store.state,
+      params: {
+        ...store.state.params,
+        [effectId]: { ...store.state.params[effectId], [endpointID]: value }
+      }
+    });
+    store.deliverySerial += 1;
+    sendLaneParamValue(patchConnection, effectId, endpointID, value, store.deliverySerial);
+  }, [patchConnection, store]);
+  const persist = reactExports.useCallback(() => {
+    patchConnection.sendStoredStateValue?.(LANE_STATE_KEY, serializeLaneState(store.state));
+  }, [patchConnection, store]);
+  return reactExports.useMemo(
+    () => ({ laneState, commit, setParamValue, persist }),
+    [laneState, commit, setParamValue, persist]
+  );
+}
+function useLaneParameterBinding(descriptor) {
+  const patchConnection = usePatchConnection();
+  const { laneState, setParamValue, persist } = useLaneStateDoc();
+  const clampValue = reactExports.useCallback((value2) => {
+    const numeric = Number.isFinite(value2) ? value2 : descriptor.initial;
+    const clamped = Math.min(descriptor.max, Math.max(descriptor.min, numeric));
+    return descriptor.choices !== void 0 ? Math.round(clamped) : clamped;
+  }, [descriptor.choices, descriptor.initial, descriptor.max, descriptor.min]);
+  const value = clampValue(laneState.params[descriptor.effectId][descriptor.endpointID] ?? descriptor.initial);
+  const valueRef = { current: value };
+  valueRef.current = value;
+  const setValue = reactExports.useCallback((nextValue) => {
+    const coerced = clampValue(nextValue);
+    const changed = !Object.is(coerced, valueRef.current);
+    setParamValue(descriptor.effectId, descriptor.endpointID, coerced);
+    reportUserParameterEdit({ endpointID: descriptor.endpointID, changed });
+  }, [clampValue, descriptor.effectId, descriptor.endpointID, setParamValue]);
+  const beginGesture = reactExports.useCallback(() => {
+    patchConnection.sendParameterGestureStart?.(descriptor.endpointID);
+    reportUserGestureStart();
+  }, [descriptor.endpointID, patchConnection]);
+  const endGesture = reactExports.useCallback(() => {
+    patchConnection.sendParameterGestureEnd?.(descriptor.endpointID);
+    reportUserGestureEnd();
+    persist();
+  }, [descriptor.endpointID, patchConnection, persist]);
+  const commitValue = reactExports.useCallback((nextValue) => {
+    beginGesture();
+    setValue(nextValue);
+    endGesture();
+  }, [beginGesture, endGesture, setValue]);
+  return reactExports.useMemo(() => ({
+    endpointID: descriptor.endpointID,
+    value,
+    initialValue: descriptor.initial,
+    setValue,
+    commitValue,
+    beginGesture,
+    endGesture
+  }), [descriptor.endpointID, descriptor.initial, value, setValue, commitValue, beginGesture, endGesture]);
+}
+getRackParameterDescriptor("delayMix");
 function useModulationRouteAmountBinding(route) {
   const patchConnection = usePatchConnection();
   const bridgeRef = reactExports.useRef(null);
@@ -24045,6 +24443,13 @@ async function loadFactoryBankFrames(resourceClientInput, {
     frames: sourceFrames.frames
   };
 }
+function requireLaneParameterDescriptor(endpointID) {
+  const descriptor = getRackParameterDescriptor(endpointID);
+  if (descriptor === null) {
+    throw new Error(`Unknown lane parameter descriptor: ${endpointID}`);
+  }
+  return descriptor;
+}
 const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
 const EFFECTIVE_UNISON_STATE_ENDPOINT_ID = "effectiveUnisonState";
@@ -24076,20 +24481,6 @@ const ENV_3_ATTACK_ENDPOINT_ID = "env3Attack";
 const ENV_3_DECAY_ENDPOINT_ID = "env3Decay";
 const ENV_3_SUSTAIN_ENDPOINT_ID = "env3Sustain";
 const ENV_3_RELEASE_ENDPOINT_ID = "env3Release";
-const DISTORTION_MODE_ENDPOINT_ID = "distortionMode";
-const DISTORTION_DRIVE_DB_ENDPOINT_ID = "distortionDriveDb";
-const DISTORTION_KNEE_ENDPOINT_ID = "distortionKnee";
-const DISTORTION_WET_ENDPOINT_ID = "distortionWet";
-const DISTORTION_WET_HP_HZ_ENDPOINT_ID = "distortionWetHPHz";
-const DISTORTION_WET_LP_HZ_ENDPOINT_ID = "distortionWetLPHz";
-const CHORUS_MIX_ENDPOINT_ID = "chorusMix";
-const CHORUS_MOTION_MODE_ENDPOINT_ID = "chorusMotionMode";
-const CHORUS_BLOOM_MODE_ENDPOINT_ID = "chorusBloomMode";
-const CHORUS_TONE_ENDPOINT_ID = "chorusTone";
-const CHORUS_FEEDBACK_ENDPOINT_ID = "chorusFeedback";
-const CHORUS_RING_AMOUNT_ENDPOINT_ID = "chorusRingAmount";
-const CHORUS_RING_OFFSET_MODE_ENDPOINT_ID = "chorusRingOffsetMode";
-const CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID = "chorusRingFineSemitones";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -25955,76 +26346,20 @@ function useSynthPatchViewModel({
     initialValue: 0.2,
     coerce: (value) => clamp$1(Number(value) || 1e-3, 1e-3, 10)
   });
-  const distortionMode = usePatchParameterBinding({
-    endpointID: DISTORTION_MODE_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 1)
-  });
-  const distortionDriveDb = usePatchParameterBinding({
-    endpointID: DISTORTION_DRIVE_DB_ENDPOINT_ID,
-    initialValue: 12,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 36)
-  });
-  const distortionKnee = usePatchParameterBinding({
-    endpointID: DISTORTION_KNEE_ENDPOINT_ID,
-    initialValue: 0.35,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
-  });
-  const distortionWet = usePatchParameterBinding({
-    endpointID: DISTORTION_WET_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
-  });
-  const distortionWetHPHz = usePatchParameterBinding({
-    endpointID: DISTORTION_WET_HP_HZ_ENDPOINT_ID,
-    initialValue: 40,
-    coerce: (value) => clamp$1(Number(value) || 0, 20, 4e3)
-  });
-  const distortionWetLPHz = usePatchParameterBinding({
-    endpointID: DISTORTION_WET_LP_HZ_ENDPOINT_ID,
-    initialValue: 18e3,
-    coerce: (value) => clamp$1(Number(value) || 0, 20, 2e4)
-  });
-  const chorusMix = usePatchParameterBinding({
-    endpointID: CHORUS_MIX_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
-  });
-  const chorusMotionMode = usePatchParameterBinding({
-    endpointID: CHORUS_MOTION_MODE_ENDPOINT_ID,
-    initialValue: 1,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 3)
-  });
-  const chorusBloomMode = usePatchParameterBinding({
-    endpointID: CHORUS_BLOOM_MODE_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 4)
-  });
-  const chorusTone = usePatchParameterBinding({
-    endpointID: CHORUS_TONE_ENDPOINT_ID,
-    initialValue: 0.5,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
-  });
-  const chorusFeedback = usePatchParameterBinding({
-    endpointID: CHORUS_FEEDBACK_ENDPOINT_ID,
-    initialValue: 0.42,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 0.95)
-  });
-  const chorusRingAmount = usePatchParameterBinding({
-    endpointID: CHORUS_RING_AMOUNT_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, 0, 1)
-  });
-  const chorusRingOffsetMode = usePatchParameterBinding({
-    endpointID: CHORUS_RING_OFFSET_MODE_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Math.round(Number(value) || 0), 0, 3)
-  });
-  const chorusRingFineSemitones = usePatchParameterBinding({
-    endpointID: CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID,
-    initialValue: 0,
-    coerce: (value) => clamp$1(Number(value) || 0, -2, 2)
-  });
+  const distortionMode = useLaneParameterBinding(requireLaneParameterDescriptor("distortionMode"));
+  const distortionDriveDb = useLaneParameterBinding(requireLaneParameterDescriptor("distortionDriveDb"));
+  const distortionKnee = useLaneParameterBinding(requireLaneParameterDescriptor("distortionKnee"));
+  const distortionWet = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWet"));
+  const distortionWetHPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetHPHz"));
+  const distortionWetLPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetLPHz"));
+  const chorusMix = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMix"));
+  const chorusMotionMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMotionMode"));
+  const chorusBloomMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusBloomMode"));
+  const chorusTone = useLaneParameterBinding(requireLaneParameterDescriptor("chorusTone"));
+  const chorusFeedback = useLaneParameterBinding(requireLaneParameterDescriptor("chorusFeedback"));
+  const chorusRingAmount = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingAmount"));
+  const chorusRingOffsetMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingOffsetMode"));
+  const chorusRingFineSemitones = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingFineSemitones"));
   const requestRuntimeSync = usePatchEventTrigger(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
   const retryDesiredTableLoad = usePatchEventTrigger(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
   const prewarmWavetable = usePatchEventTrigger(WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID);

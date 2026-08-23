@@ -1909,24 +1909,26 @@ test("mounted iPhone distortion controls send parameter updates through the patc
         await dispatchShadowInputValueChange(page, "[data-role='distortion-drive-slider']", "16.500");
         await dispatchShadowInputValueChange(page, "[data-role='distortion-mix-slider']", "0.580");
 
+        // Distortion params ride the lane field upload since the parameter
+        // cut: slot 1 (distortion, ordinal 0), positional param indexes from
+        // the engine's laneDistortionParam* constants.
+        const laneParamSend = (message, paramIndex, expectedValue) => (
+            message.endpointID === "laneSlotParamValue"
+            && Number(message.value?.slotId) === 1
+            && Number(message.value?.paramIndex) === paramIndex
+            && Math.abs(Number(message.value?.value) - expectedValue) <= 1e-6
+        );
         const snapshot = await waitForSnapshot(
             page,
             "iPhone distortion parameter updates",
-            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "distortionMode"
-                && Number(value) === 1
-            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "distortionDriveDb"
-                && Math.abs(Number(value) - 16.5) <= 1e-6
-            )) && nextSnapshot.sentMessages.some(({ endpointID, value }) => (
-                endpointID === "distortionWet"
-                && Math.abs(Number(value) - 0.58) <= 1e-6
-            )),
+            (nextSnapshot) => nextSnapshot.sentMessages.some((message) => laneParamSend(message, 0, 1))
+                && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 1, 16.5))
+                && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 3, 0.58)),
         );
 
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionMode"), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionDriveDb"), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "distortionWet"), true);
+        assert.equal(snapshot.gestureStarts.includes("distortionMode"), true);
+        assert.equal(snapshot.gestureEnds.includes("distortionWet"), true);
+        assert.equal(JSON.parse(snapshot.storedState["lane.v1"]).params.drive.distortionWet, 0.58);
     } finally {
         await closeIOSHarnessPage(page);
     }

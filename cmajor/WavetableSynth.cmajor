@@ -1265,65 +1265,10 @@ graph WavetableSynth [[ main ]]
     input value float32 mseg1Morph [[ name: "MSEG 1 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 mseg2Morph [[ name: "MSEG 2 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
     input value float32 mseg3Morph [[ name: "MSEG 3 Morph", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 0 ]];
-    // THE EFFECTS RACK OWNS EVERY EFFECT PARAMETER FROM HERE DOWN, and each one is
-    // hoisted from wt::EffectsRack rather than declared here, so a parameter's
-    // annotation lives in exactly one place - beside the DSP that reads it.
-    //
-    // THIS BLOCK IS THE HOST PARAMETER CONTRACT. Endpoints are emitted in DECLARATION
-    // ORDER, so a parameter's position in this list IS its host automation slot: every
-    // saved DAW automation lane and every stored preset index depends on nothing above
-    // it moving. Hence three rules. Hoist endpoints ONE BY ONE, never with a
-    // `input rack.distortion*;` wildcard - a wildcard silently re-numbers every slot
-    // below it the day someone adds an endpoint to the rack. Never reorder. Only append.
-    input rack.distortionMode;
-    input rack.distortionDriveDb;
-    input rack.distortionKnee;
-    input rack.distortionWet;
-    input rack.distortionWetHPHz;
-    input rack.distortionWetLPHz;
-    input rack.chorusMix;
-    input rack.chorusMotionMode;
-    input rack.chorusBloomMode;
-    input rack.chorusTone;
-    input rack.chorusFeedback;
-    input rack.chorusRingAmount;
-    input rack.chorusRingOffsetMode;
-    input rack.chorusRingFineSemitones;
-    input rack.ottMix;
-    input rack.ottAmount;
-    input rack.ottTimePercent;
-    input rack.ottBandDrive;
-    input rack.ottEnvelopeMatch;
-    // Appended below this line: the five rack modules that had no host surface before,
-    // in rack module id order. Everything above keeps the slot it has always had.
-    input rack.globalFilterMode;
-    input rack.globalFilterCutoff;
-    input rack.globalFilterResonance;
-    input rack.globalFilterDrive;
-    input rack.flangerRate;
-    input rack.flangerDepth;
-    input rack.flangerFeedback;
-    input rack.flangerMix;
-    input rack.phaserRate;
-    input rack.phaserRateMode;
-    input rack.phaserRateDivision;
-    input rack.phaserDepth;
-    input rack.phaserFrequency;
-    input rack.phaserFeedback;
-    input rack.phaserPhase;
-    input rack.phaserMix;
-    input rack.delayTime;
-    input rack.delayTimeMode;
-    input rack.delayDivision;
-    input rack.delayFeedback;
-    input rack.delayFilter;
-    input rack.delayMix;
-    input rack.reverbSize;
-    input rack.reverbDecay;
-    input rack.reverbDamping;
-    input rack.reverbMix;
-    // Generator controls are appended so every existing host automation slot
-    // remains stable. These parameters are the single live/durable owner of the
+    // EFFECT PARAMETERS ARE NOT HOST PARAMETERS. Every device parameter rides
+    // the Effects Lane record/field uploads below (patch state, ADR-007); the
+    // former per-effect host endpoints are gone with the rack.* surface.
+    // Generator controls remain host parameters. These parameters are the single live/durable owner of the
     // continuous MSEG and envelope values; structured modulation state owns
     // only shapes and discrete playback policy.
     input value float32 mseg1Rate [[ name: "MSEG 1 Time", min: 0.0f, max: 2.0f, init: 1.0f, unit: "s", rampFrames: 0 ]];

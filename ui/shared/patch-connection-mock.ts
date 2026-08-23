@@ -1,4 +1,12 @@
 import type { PatchConnectionLike } from "./cmajor-react";
+import {
+    EFFECT_ID_TO_LANE_TYPE,
+    LANE_STATE_KEY,
+    deserializeLaneState,
+    serializeLaneState,
+} from "./lane-state";
+import { getLaneSlotId, getLaneSlotParamIndex } from "./lane-slot-params";
+import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
 import { createModulationArticulationWorkerService } from "../worker/modulation-articulation-worker-service";
 import { allTargetDescriptors } from "./target-descriptor";
 import {
@@ -32,21 +40,6 @@ const unisonWarpSpreadEndpointID = "oscAUnisonWarpSpread";
 const mseg1MorphEndpointID = "mseg1Morph";
 const mseg2MorphEndpointID = "mseg2Morph";
 const mseg3MorphEndpointID = "mseg3Morph";
-const distortionModeEndpointID = "distortionMode";
-const distortionDriveDbEndpointID = "distortionDriveDb";
-const distortionKneeEndpointID = "distortionKnee";
-const distortionWetEndpointID = "distortionWet";
-const distortionWetHPHzEndpointID = "distortionWetHPHz";
-const distortionWetLPHzEndpointID = "distortionWetLPHz";
-const chorusMixEndpointID = "chorusMix";
-const chorusMotionModeEndpointID = "chorusMotionMode";
-const chorusBloomModeEndpointID = "chorusBloomMode";
-const chorusToneEndpointID = "chorusTone";
-const chorusFeedbackEndpointID = "chorusFeedback";
-const chorusRingAmountEndpointID = "chorusRingAmount";
-const chorusRingOffsetModeEndpointID = "chorusRingOffsetMode";
-const chorusRingFineSemitonesEndpointID = "chorusRingFineSemitones";
-const globalFilterModeEndpointID = "globalFilterMode";
 const hiddenSynthPresetGuardEndpointID = "hiddenSynthPresetGuard";
 const runtimeSyncRequestEndpointID = "runtimeSyncRequest";
 const runtimeInstallAckEndpointID = "runtimeInstallAck";
@@ -343,28 +336,15 @@ function createInitialParameterValues(): Map<string, unknown> {
         [mseg1MorphEndpointID, 0],
         [mseg2MorphEndpointID, 0],
         [mseg3MorphEndpointID, 0],
-        [distortionModeEndpointID, 0],
-        [distortionDriveDbEndpointID, 12],
-        [distortionKneeEndpointID, 0.35],
-        [distortionWetEndpointID, 0],
-        [distortionWetHPHzEndpointID, 40],
-        [distortionWetLPHzEndpointID, 18_000],
-        [chorusMixEndpointID, 0],
-        [chorusMotionModeEndpointID, 1],
-        [chorusBloomModeEndpointID, 0],
-        [chorusToneEndpointID, 0.5],
-        [chorusFeedbackEndpointID, 0.42],
-        [chorusRingAmountEndpointID, 0],
-        [chorusRingOffsetModeEndpointID, 0],
-        [chorusRingFineSemitonesEndpointID, 0],
-        [globalFilterModeEndpointID, 1],
         [hiddenSynthPresetGuardEndpointID, 0.42],
     ]);
 
     // The mock models Cmajor's parameter state. Keep every product-bound
     // endpoint at the same engine-unit initial value as the binding catalog.
     for (const descriptor of allTargetDescriptors()) {
-        if (descriptor.binding._tag === "endpoint") {
+        // Lane parameters have no host endpoints since the parameter cut.
+        if (descriptor.binding._tag === "endpoint"
+                && getRackParameterDescriptor(descriptor.binding.endpointId) === null) {
             values.set(
                 descriptor.binding.endpointId,
                 descriptor.binding.toEngine(descriptor.initialValue),
@@ -587,146 +567,6 @@ function buildHarnessStatus(manifest: unknown) {
                     },
                 },
                 {
-                    endpointID: distortionModeEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Distortion Mode",
-                        min: 0,
-                        max: 1,
-                        init: 0,
-                    },
-                },
-                {
-                    endpointID: distortionDriveDbEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Distortion Drive",
-                        min: 0,
-                        max: 36,
-                        init: 12,
-                    },
-                },
-                {
-                    endpointID: distortionKneeEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Distortion Knee",
-                        min: 0,
-                        max: 1,
-                        init: 0.35,
-                    },
-                },
-                {
-                    endpointID: distortionWetEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Distortion Mix",
-                        min: 0,
-                        max: 1,
-                        init: 0,
-                    },
-                },
-                {
-                    endpointID: distortionWetHPHzEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Distortion Band HP",
-                        min: 20,
-                        max: 4000,
-                        init: 40,
-                    },
-                },
-                {
-                    endpointID: distortionWetLPHzEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Distortion Band LP",
-                        min: 20,
-                        max: 20000,
-                        init: 18000,
-                    },
-                },
-                {
-                    endpointID: chorusMixEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus Mix",
-                        min: 0,
-                        max: 1,
-                        init: 0,
-                    },
-                },
-                {
-                    endpointID: chorusMotionModeEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus Motion",
-                        min: 0,
-                        max: 3,
-                        init: 1,
-                    },
-                },
-                {
-                    endpointID: chorusBloomModeEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus Bloom",
-                        min: 0,
-                        max: 4,
-                        init: 0,
-                    },
-                },
-                {
-                    endpointID: chorusToneEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus Tone",
-                        min: 0,
-                        max: 1,
-                        init: 0.5,
-                    },
-                },
-                {
-                    endpointID: chorusFeedbackEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus Feedback",
-                        min: 0,
-                        max: 0.95,
-                        init: 0.42,
-                    },
-                },
-                {
-                    endpointID: chorusRingAmountEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus Ring",
-                        min: 0,
-                        max: 1,
-                        init: 0,
-                    },
-                },
-                {
-                    endpointID: chorusRingOffsetModeEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus Ring Pitch",
-                        min: 0,
-                        max: 3,
-                        init: 0,
-                    },
-                },
-                {
-                    endpointID: chorusRingFineSemitonesEndpointID,
-                    purpose: "parameter",
-                    annotation: {
-                        name: "Chorus Ring Fine",
-                        min: -2,
-                        max: 2,
-                        init: 0,
-                    },
-                },
-                {
                     endpointID: hiddenSynthPresetGuardEndpointID,
                     purpose: "parameter",
                     annotation: {
@@ -763,6 +603,10 @@ export class MockPatchConnection implements PatchConnectionLike {
     private endpointListeners = new Map<string, Set<EndpointListener>>();
     private statusListeners = new Set<StatusListener>();
     private storedStateListeners = new Set<StoredStateListener>();
+    // The engine-model overlay for lane field uploads: the DSP's current
+    // parameter truth is the last full record or field write per slot/param,
+    // which mid-gesture runs AHEAD of the persisted lane.v1 document.
+    private laneFieldOverlay = new Map<string, number>();
     private storedState = new Map<string, unknown>();
     private runtimeState = createDefaultRuntimeState();
     private wavetableActivationTimerID: number | null = null;
@@ -837,6 +681,23 @@ export class MockPatchConnection implements PatchConnectionLike {
 
     sendEventOrValue(endpointID: string, value: unknown) {
         this.sentMessages.push({ endpointID, value });
+
+        if (endpointID === "laneSlotParamValue" && value && typeof value === "object") {
+            const upload = value as { slotId?: unknown; paramIndex?: unknown; value?: unknown };
+            this.laneFieldOverlay.set(
+                `${Math.trunc(Number(upload.slotId))}:${Math.trunc(Number(upload.paramIndex))}`,
+                Number(upload.value),
+            );
+        }
+        if (endpointID === "laneSlotParams" && value && typeof value === "object") {
+            const upload = value as { slotId?: unknown; values?: unknown };
+            const slotId = Math.trunc(Number(upload.slotId));
+            if (Array.isArray(upload.values)) {
+                upload.values.forEach((fieldValue, paramIndex) => {
+                    this.laneFieldOverlay.set(`${slotId}:${paramIndex}`, Number(fieldValue));
+                });
+            }
+        }
 
         if (endpointID === runtimeSyncRequestEndpointID) {
             this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
@@ -1019,8 +880,18 @@ export class MockPatchConnection implements PatchConnectionLike {
     }
 
     getDebugSnapshot() {
+        const laneDocument = deserializeLaneState(this.storedState.get(LANE_STATE_KEY));
+        const laneParams: Record<string, number> = {};
+        for (const [effectId, deviceParams] of Object.entries(laneDocument.params)) {
+            const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId as keyof typeof EFFECT_ID_TO_LANE_TYPE];
+            for (const [endpointID, documentValue] of Object.entries(deviceParams)) {
+                const overlayKey = `${getLaneSlotId(deviceType, 0)}:${getLaneSlotParamIndex(deviceType, endpointID)}`;
+                laneParams[endpointID] = this.laneFieldOverlay.get(overlayKey) ?? documentValue;
+            }
+        }
         return {
             parameterValues: Object.fromEntries(this.parameterValues.entries()),
+            laneParams,
             runtimeState: { ...this.runtimeState },
             storedState: Object.fromEntries(this.storedState.entries()),
             sentMessages: this.sentMessages.map((message) => ({
@@ -1070,6 +941,35 @@ export class MockPatchConnection implements PatchConnectionLike {
             this.acceptedArticulationSerial = 0;
         }
         this.emitEndpoint(runtimeStateEndpointID, this.runtimeState);
+    }
+
+    /**
+     * Seed one lane parameter the way the product changes it durably: through
+     * the lane.v1 document. Since the parameter cut, effect parameters have
+     * no host endpoints, so tests simulating external edits write the
+     * document and let the stored-state listener fan out.
+     */
+    setLaneParamValue(endpointID: string, value: number) {
+        const descriptor = getRackParameterDescriptor(endpointID);
+        if (descriptor === null) {
+            throw new Error(`Not a lane parameter endpoint: ${endpointID}`);
+        }
+        const current = deserializeLaneState(this.storedState.get(LANE_STATE_KEY));
+        const next = {
+            ...current,
+            params: {
+                ...current.params,
+                [descriptor.effectId]: {
+                    ...current.params[descriptor.effectId],
+                    [endpointID]: value,
+                },
+            },
+        };
+        const deviceType = EFFECT_ID_TO_LANE_TYPE[descriptor.effectId];
+        this.laneFieldOverlay.delete(
+            `${getLaneSlotId(deviceType, 0)}:${getLaneSlotParamIndex(deviceType, endpointID)}`,
+        );
+        this.setStoredStateValue(LANE_STATE_KEY, serializeLaneState(next));
     }
 
     setParameterValue(endpointID: string, value: unknown, emitEndpoint = false) {

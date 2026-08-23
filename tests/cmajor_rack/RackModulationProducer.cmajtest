@@ -71,16 +71,23 @@ processor RackModulationReachesRealDsp [[ main ]]
         return 0.4f * float32 (std::intrinsics::sin (float32 (frame) * 0.05f));
     }
 
+    wt::LaneSlotParamsUpload filterParams()
+    {
+        wt::LaneSlotParamsUpload upload;
+        upload.slotId = wt::rackModuleGlobalFilter;
+        upload.deliverySerial = 1;
+        upload.values[wt::laneGlobalFilterParamMode] = 1.0f;
+        upload.values[wt::laneGlobalFilterParamCutoffHz] = 4000.0f;
+        upload.values[wt::laneGlobalFilterParamResonance] = 4.0f;
+        return upload;
+    }
+
     void configure()
     {
-        rackDry.globalFilterMode <- 1.0f;
-        rackDry.globalFilterCutoff <- 4000.0f;
-        rackDry.globalFilterResonance <- 4.0f;
+        rackDry.laneSlotParams <- filterParams();
         rackDry.laneTopology <- filterOnly();
 
-        rackModulated.globalFilterMode <- 1.0f;
-        rackModulated.globalFilterCutoff <- 4000.0f;
-        rackModulated.globalFilterResonance <- 4.0f;
+        rackModulated.laneSlotParams <- filterParams();
         rackModulated.laneTopology <- filterOnly();
     }
 

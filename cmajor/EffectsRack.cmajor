@@ -182,7 +182,7 @@ namespace wt
     // modes/divisions, and the delay's time, which the module glides itself.
     // Rows follow the pool-slot order (delay, globalFilter, distortion, ott,
     // chorus, flanger, phaser, reverb); columns are the type's param indices.
-    int32[rackModuleCount, laneSlotParamCount] lanePoolParamRampFrames()
+    int32[rackModuleCount, laneSlotParamCount] laneSlotParamRampFrames()
     {
         int32[rackModuleCount, laneSlotParamCount] table;
 
@@ -242,14 +242,8 @@ namespace wt
     // frequency, so recomputing pow() below that buys nothing.
     let rackOctaveEpsilon = 0.001f;
 
-    let rackOctaveScalerGlobalFilterCutoff = 0;
-    let rackOctaveScalerDistortionWetHP    = 1;
-    let rackOctaveScalerDistortionWetLP    = 2;
-    let rackOctaveScalerPhaserFrequency    = 3;
-    let rackOctaveScalerDelayTime          = 4;
-    let rackOctaveScalerDelayFilter        = 5;
     // Pool sets each carry a bank of the six frequency-like scalers after
-    // the base bank: index = 6 + set*6 + laneOctaveScaler<X>.
+    // One glide-scaler bank per ORDINAL: index = ordinal*6 + laneOctaveScaler<X>.
     let laneOctaveScalerGlobalFilterCutoff = 0;
     let laneOctaveScalerDistortionWetHP    = 1;
     let laneOctaveScalerDistortionWetLP    = 2;
@@ -257,7 +251,7 @@ namespace wt
     let laneOctaveScalerDelayTime          = 4;
     let laneOctaveScalerDelayFilter        = 5;
     let laneOctaveScalerBankSize           = 6;
-    let rackOctaveScalerCount = 6 + (lanePoolSetCount * laneOctaveScalerBankSize);
+    let rackOctaveScalerCount = lanePoolInstanceCount * laneOctaveScalerBankSize;
 
     //==============================================================================
     // The adapter's wire format. Order and enabled state are stored SEPARATELY
@@ -419,65 +413,6 @@ namespace wt
         input event LaneSlotParamsUpload laneSlotParams;
         input event LaneSlotParamValueUpload laneSlotParamValue;
 
-        //----------------------------------------------------------------------
-        // Host parameters. Distortion, Chorus and OTT keep the exact annotations they
-        // have today so that host parameter identity, ranges and automation lanes are
-        // unchanged by the move into the rack.
-
-        input value float32 globalFilterMode [[ name: "Global Filter Mode", min: 0.0f, max: 5.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Off|Lowpass|Highpass|Bandpass|Notch|Peak", rampFrames: 0 ]];
-        input value float32 globalFilterCutoff [[ name: "Global Filter Cutoff", min: filterCutoffMinHz, max: filterCutoffMaxHz, init: filterCutoffMaxHz, unit: "Hz", rampFrames: 64 ]];
-        input value float32 globalFilterResonance [[ name: "Global Filter Resonance", min: filterQMin, max: filterQMax, init: 0.707107f, rampFrames: 64 ]];
-        input value float32 globalFilterDrive [[ name: "Global Filter Drive", min: globalFilterDriveMin, max: globalFilterDriveMax, init: 0.0f, rampFrames: 64 ]];
-
-        input value float32 distortionMode [[ name: "Distortion Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Classic|Harmonics", rampFrames: 0 ]];
-        input value float32 distortionDriveDb [[ name: "Distortion Drive", min: 0.0f, max: 36.0f, init: 12.0f, unit: "dB", rampFrames: 64 ]];
-        input value float32 distortionKnee [[ name: "Distortion Knee", min: 0.0f, max: 1.0f, init: 0.35f, rampFrames: 64 ]];
-        input value float32 distortionWet [[ name: "Distortion Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 64 ]];
-        input value float32 distortionWetHPHz [[ name: "Distortion Band HP", min: 20.0f, max: 4000.0f, init: 40.0f, unit: "Hz", rampFrames: 64 ]];
-        input value float32 distortionWetLPHz [[ name: "Distortion Band LP", min: 20.0f, max: 20000.0f, init: 18000.0f, unit: "Hz", rampFrames: 64 ]];
-
-        input value float32 ottMix [[ name: "OTT Mix", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
-        input value float32 ottAmount [[ name: "OTT Amount", min: 0.0f, max: 100.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
-        input value float32 ottTimePercent [[ name: "OTT Time", min: 10.0f, max: 1000.0f, init: 100.0f, unit: "%", rampFrames: 128 ]];
-        input value float32 ottBandDrive [[ name: "OTT Band Drive", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 128 ]];
-        input value float32 ottEnvelopeMatch [[ name: "OTT Envelope Match", min: 0.0f, max: 100.0f, init: 0.0f, unit: "%", rampFrames: 128 ]];
-
-        input value float32 chorusMix [[ name: "Chorus Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
-        input value float32 chorusMotionMode [[ name: "Chorus Motion", min: 0.0f, max: 3.0f, init: 1.0f, discrete: true, step: 1.0f, text: "Subtle|Wide Slow|Classic|Fast Light", rampFrames: 0 ]];
-        input value float32 chorusBloomMode [[ name: "Chorus Bloom", min: 0.0f, max: 4.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Clean|Small|Large|Small+Shimmer|Large+Shimmer", rampFrames: 0 ]];
-        input value float32 chorusTone [[ name: "Chorus Tone", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
-        input value float32 chorusFeedback [[ name: "Chorus Feedback", min: 0.0f, max: 0.95f, init: 0.42f, rampFrames: 128 ]];
-        input value float32 chorusRingAmount [[ name: "Chorus Ring", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
-        input value float32 chorusRingOffsetMode [[ name: "Chorus Ring Pitch", min: 0.0f, max: 3.0f, init: 0.0f, discrete: true, step: 1.0f, text: "+5th|Low 5th|+Oct|-Oct", rampFrames: 0 ]];
-        input value float32 chorusRingFineSemitones [[ name: "Chorus Ring Fine", min: -2.0f, max: 2.0f, init: 0.0f, unit: "st", rampFrames: 128 ]];
-
-        input value float32 flangerRate [[ name: "Flanger Rate", min: flangerRateMinHz, max: flangerRateMaxHz, init: 0.35f, unit: "Hz", rampFrames: 64 ]];
-        input value float32 flangerDepth [[ name: "Flanger Depth", min: flangerDepthMin, max: flangerDepthMax, init: 0.6f, rampFrames: 64 ]];
-        input value float32 flangerFeedback [[ name: "Flanger Feedback", min: flangerFeedbackMin, max: flangerFeedbackMax, init: 0.0f, rampFrames: 64 ]];
-        input value float32 flangerMix [[ name: "Flanger Mix", min: flangerMixMin, max: flangerMixMax, init: 0.0f, rampFrames: 128 ]];
-
-        input value float32 phaserRate [[ name: "Phaser Rate", min: phaserRateMinHz, max: phaserRateMaxHz, init: 0.3f, unit: "Hz", rampFrames: 64 ]];
-        input value float32 phaserRateMode [[ name: "Phaser Rate Mode", min: 0.0f, max: float32 (phaserRateModeMax), init: float32 (phaserRateModeFree), discrete: true, step: 1.0f, text: "Free|Sync", rampFrames: 0 ]];
-        input value float32 phaserRateDivision [[ name: "Phaser Division", min: 0.0f, max: float32 (phaserDivisionMax), init: 2.0f, discrete: true, step: 1.0f, text: "4/1|2/1|1/1|1/2.|1/2|1/4.|1/2T|1/4|1/4T|1/8.|1/8|1/8T|1/16", rampFrames: 0 ]];
-        input value float32 phaserDepth [[ name: "Phaser Depth", min: phaserDepthMin, max: phaserDepthMax, init: 0.7f, rampFrames: 64 ]];
-        input value float32 phaserFrequency [[ name: "Phaser Frequency", min: phaserFrequencyMinHz, max: phaserFrequencyMaxHz, init: 600.0f, unit: "Hz", rampFrames: 64 ]];
-        input value float32 phaserFeedback [[ name: "Phaser Feedback", min: phaserFeedbackMin, max: phaserFeedbackMax, init: 0.0f, rampFrames: 64 ]];
-        input value float32 phaserPhase [[ name: "Phaser Phase", min: phaserPhaseMinDeg, max: phaserPhaseMaxDeg, init: 90.0f, unit: "deg", rampFrames: 64 ]];
-        input value float32 phaserMix [[ name: "Phaser Mix", min: phaserMixMin, max: phaserMixMax, init: 0.0f, rampFrames: 128 ]];
-
-        input value float32 delayTime [[ name: "Delay Time", min: delayMinMs, max: delayMaxMs, init: delayTimeInitMs, unit: "ms", rampFrames: 0 ]];
-        input value float32 delayTimeMode [[ name: "Delay Timing", min: 0.0f, max: float32 (delayTimeModeMax), init: float32 (delayTimeModeFree), discrete: true, step: 1.0f, text: "Free|Sync", rampFrames: 0 ]];
-        input value float32 delayDivision [[ name: "Delay Division", min: 0.0f, max: float32 (delayDivisionMax), init: float32 (delayDivisionInit), discrete: true, step: 1.0f, text: "1/1|1/2.|1/2|1/4.|1/2T|1/4|1/8.|1/4T|1/8|1/16.|1/8T|1/16|1/16T", rampFrames: 0 ]];
-        input value float32 delayFeedback [[ name: "Delay Feedback", min: delayFeedbackMin, max: delayFeedbackMax, init: delayFeedbackInit, rampFrames: 64 ]];
-        input value float32 delayFilter [[ name: "Delay Filter", min: delayFilterMinHz, max: delayFilterMaxHz, init: delayFilterInitHz, unit: "Hz", rampFrames: 64 ]];
-        input value float32 delayMix [[ name: "Delay Mix", min: delayMixMin, max: delayMixMax, init: delayMixInit, rampFrames: 128 ]];
-
-        // wt::ReverbBus exports no range constants; its own annotations use the same
-        // literals, and the module re-clamps every one of these internally.
-        input value float32 reverbSize [[ name: "Reverb Size", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
-        input value float32 reverbDecay [[ name: "Reverb Decay", min: 0.0f, max: 1.0f, init: 0.4f, rampFrames: 128 ]];
-        input value float32 reverbDamping [[ name: "Reverb Damping", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
-        input value float32 reverbMix [[ name: "Reverb Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
 
         //----------------------------------------------------------------------
 
@@ -548,14 +483,14 @@ namespace wt
         int32 laneGeneration;
         int32 laneRejectedCount;
         int32 laneParamsSerial;
-        float32[lanePoolSlotCount, laneSlotParamCount] poolSlotParams;
+        float32[laneSlotCount, laneSlotParamCount] slotParams;
         // Host-style linear ramps toward the records (see the table above):
         // the CURRENT values the forwarding blocks actually read, plus each
         // cell's per-frame step and the target it was computed against.
-        float32[lanePoolSlotCount, laneSlotParamCount] poolParamCurrent;
-        float32[lanePoolSlotCount, laneSlotParamCount] poolParamStep;
-        float32[lanePoolSlotCount, laneSlotParamCount] poolParamKnownTarget;
-        int32[rackModuleCount, laneSlotParamCount] poolParamRampTable;
+        float32[laneSlotCount, laneSlotParamCount] slotParamCurrent;
+        float32[laneSlotCount, laneSlotParamCount] slotParamStep;
+        float32[laneSlotCount, laneSlotParamCount] slotParamKnownTarget;
+        int32[rackModuleCount, laneSlotParamCount] slotParamRampTable;
         bool[laneSlotCount] slotInCurrentChain;
 
         RackOctaveScaler[rackOctaveScalerCount] octaveScalers;
@@ -567,56 +502,56 @@ namespace wt
             for (wrap<rackOctaveScalerCount> scaler)
                 octaveScalers[scaler].scale = 1.0f;
 
-            poolParamRampTable = lanePoolParamRampFrames();
+            slotParamRampTable = laneSlotParamRampFrames();
         }
 
         // One frame of host-style linear ramping for every pool record cell.
         // A changed target recomputes the step; rampFrames 0 snaps; arrival
         // clamps exactly to the target so ramps terminate.
-        void advancePoolParamSmoothing()
+        void advanceSlotParamSmoothing()
         {
-            for (wrap<lanePoolSlotCount> slot)
+            for (wrap<laneSlotCount> slot)
             {
                 // A slot outside the committed chain does no work: its ramps
                 // snap to the record at commit-entry.
-                if (! slotInCurrentChain[wrap<laneSlotCount> (int32 (slot) + rackModuleCount)])
+                if (! slotInCurrentChain[slot])
                     continue;
 
                 for (wrap<laneSlotParamCount> param)
                 {
-                    let target = poolSlotParams[slot, param];
+                    let target = slotParams[slot, param];
 
-                    if (target != poolParamKnownTarget[slot, param])
+                    if (target != slotParamKnownTarget[slot, param])
                     {
-                        poolParamKnownTarget[slot, param] = target;
+                        slotParamKnownTarget[slot, param] = target;
                         let slotType = wrap<rackModuleCount> (int32 (slot) % rackModuleCount);
-                        let rampFrames = poolParamRampTable[slotType, param];
+                        let rampFrames = slotParamRampTable[slotType, param];
 
                         if (rampFrames <= 0)
                         {
-                            poolParamCurrent[slot, param] = target;
-                            poolParamStep[slot, param] = 0.0f;
+                            slotParamCurrent[slot, param] = target;
+                            slotParamStep[slot, param] = 0.0f;
                         }
                         else
                         {
-                            poolParamStep[slot, param] =
-                                (target - poolParamCurrent[slot, param]) / float32 (rampFrames);
+                            slotParamStep[slot, param] =
+                                (target - slotParamCurrent[slot, param]) / float32 (rampFrames);
                         }
                     }
 
-                    let step = poolParamStep[slot, param];
+                    let step = slotParamStep[slot, param];
 
                     if (step != 0.0f)
                     {
-                        var next = poolParamCurrent[slot, param] + step;
+                        var next = slotParamCurrent[slot, param] + step;
 
                         if ((step > 0.0f && next >= target) || (step < 0.0f && next <= target))
                         {
                             next = target;
-                            poolParamStep[slot, param] = 0.0f;
+                            slotParamStep[slot, param] = 0.0f;
                         }
 
-                        poolParamCurrent[slot, param] = next;
+                        slotParamCurrent[slot, param] = next;
                     }
                 }
             }
@@ -683,12 +618,12 @@ namespace wt
 
         event laneSlotParams (LaneSlotParamsUpload upload)
         {
-            // Parameter records apply immediately, like host parameter writes;
-            // only STRUCTURE rides the transition ramp. Applying acknowledges
-            // the record's serial the same frame.
-            if (upload.slotId >= rackModuleCount && upload.slotId < laneSlotCount)
+            // Parameter records apply immediately, like host parameter writes
+            // once did; only STRUCTURE rides the transition ramp. Applying
+            // acknowledges the record's serial the same frame.
+            if (upload.slotId >= 0 && upload.slotId < laneSlotCount)
             {
-                poolSlotParams[wrap<lanePoolSlotCount> (upload.slotId - rackModuleCount)] = upload.values;
+                slotParams[wrap<laneSlotCount> (upload.slotId)] = upload.values;
                 laneParamsSerial = upload.deliverySerial;
                 return;
             }
@@ -698,10 +633,10 @@ namespace wt
 
         event laneSlotParamValue (LaneSlotParamValueUpload upload)
         {
-            if (upload.slotId >= rackModuleCount && upload.slotId < laneSlotCount
+            if (upload.slotId >= 0 && upload.slotId < laneSlotCount
                  && upload.paramIndex >= 0 && upload.paramIndex < laneSlotParamCount)
             {
-                poolSlotParams[wrap<lanePoolSlotCount> (upload.slotId - rackModuleCount),
+                slotParams[wrap<laneSlotCount> (upload.slotId),
                                wrap<laneSlotParamCount> (upload.paramIndex)] = upload.value;
                 laneParamsSerial = upload.deliverySerial;
                 return;
@@ -734,18 +669,13 @@ namespace wt
 
                     if (slotInPendingChain[slot] && ! slotInCurrentChain[slot])
                     {
-                        // Records (and their ramps) exist for pool slots; the
-                        // ordinal-0 devices keep host endpoints until the
-                        // parameter cut.
-                        if (selector >= rackModuleCount)
+                        // Ramps snap: a device entering the chain starts ON
+                        // its record, never mid-glide toward it.
+                        for (wrap<laneSlotParamCount> param)
                         {
-                            for (wrap<laneSlotParamCount> param)
-                            {
-                                let poolOffset = wrap<lanePoolSlotCount> (selector - rackModuleCount);
-                                poolParamCurrent[poolOffset, param] = poolSlotParams[poolOffset, param];
-                                poolParamKnownTarget[poolOffset, param] = poolSlotParams[poolOffset, param];
-                                poolParamStep[poolOffset, param] = 0.0f;
-                            }
+                            slotParamCurrent[slot, param] = slotParams[slot, param];
+                            slotParamKnownTarget[slot, param] = slotParams[slot, param];
+                            slotParamStep[slot, param] = 0.0f;
                         }
 
                         let ordinal = wrap<lanePoolInstanceCount> (selector / rackModuleCount);
@@ -847,285 +777,178 @@ namespace wt
         {
             let sampleRate = float32 (processor.frequency);
 
-            // --- Global Filter ---------------------------------------------
-            globalFilterPool[wrap<lanePoolInstanceCount> (0)].modeIn <- globalFilterMode;
-            globalFilterPool[wrap<lanePoolInstanceCount> (0)].cutoffHzIn <- clampFilterCutoffHz (
-                globalFilterCutoff * rackOctaveScale (octaveScalers[rackOctaveScalerGlobalFilterCutoff],
-                                                      rackModIn[rackModTargetGlobalFilterCutoffOctaves]),
-                sampleRate);
-            globalFilterPool[wrap<lanePoolInstanceCount> (0)].resonanceIn <- clampFilterQ (
-                rackModulateLinear (globalFilterResonance, rackModIn[rackModTargetGlobalFilterResonance]));
-            globalFilterPool[wrap<lanePoolInstanceCount> (0)].driveIn <- clampGlobalFilterDrive (
-                rackModulateLinear (globalFilterDrive, rackModIn[rackModTargetGlobalFilterDrive]));
+            advanceSlotParamSmoothing();
 
-            // --- Distortion ------------------------------------------------
-            let wetHPHz = clampDistortionWetHPHz (
-                distortionWetHPHz * rackOctaveScale (octaveScalers[rackOctaveScalerDistortionWetHP],
-                                                     rackModIn[rackModTargetDistortionWetHPOctaves]));
+            // ONE forwarding path for every ordinal. A slot's smoothed record
+            // is composed with its ordinal's block of the one rackMod bus,
+            // through the module's own clamps, octave conventions, and helper
+            // functions. `pp` is the slot's smoothed record; slots outside the
+            // committed chain cost nothing.
 
-            distortionPool[wrap<lanePoolInstanceCount> (0)].modeIn <- distortionMode;
-            distortionPool[wrap<lanePoolInstanceCount> (0)].driveDbIn <- clampDistortionDriveDb (
-                rackModulateLinear (distortionDriveDb, rackModIn[rackModTargetDistortionDriveDb]));
-            distortionPool[wrap<lanePoolInstanceCount> (0)].kneeIn <- clampDistortionKnee (
-                rackModulateLinear (distortionKnee, rackModIn[rackModTargetDistortionKnee]));
-            distortionPool[wrap<lanePoolInstanceCount> (0)].wetIn <- clampDistortionWet (
-                rackModulateLinear (distortionWet, rackModIn[rackModTargetDistortionWet]));
-            distortionPool[wrap<lanePoolInstanceCount> (0)].wetHPHzIn <- wetHPHz;
-            distortionPool[wrap<lanePoolInstanceCount> (0)].wetLPHzIn <- clampDistortionWetLPHz (
-                distortionWetLPHz * rackOctaveScale (octaveScalers[rackOctaveScalerDistortionWetLP],
-                                                     rackModIn[rackModTargetDistortionWetLPOctaves]),
-                wetHPHz);
-
-            // --- OTT -------------------------------------------------------
-            // Percent destinations take percent offsets: a modulation amount is always
-            // in its destination's own units, as the existing voice targets already are
-            // (dB for amp gain, semitones for pitch).
-            ottPool[wrap<lanePoolInstanceCount> (0)].mixIn <- ottClampMixPercent (
-                rackModulateLinear (ottMix, rackModIn[rackModTargetOttMix]));
-            ottPool[wrap<lanePoolInstanceCount> (0)].amountIn <- ottClampAmountPercent (
-                rackModulateLinear (ottAmount, rackModIn[rackModTargetOttAmount]));
-            ottPool[wrap<lanePoolInstanceCount> (0)].timePercentIn <- ottClampTimePercent (
-                rackModulateLinear (ottTimePercent, rackModIn[rackModTargetOttTimePercent]));
-            ottPool[wrap<lanePoolInstanceCount> (0)].bandDriveIn <- ottClampBandDrivePercent (
-                rackModulateLinear (ottBandDrive, rackModIn[rackModTargetOttBandDrive]));
-            ottPool[wrap<lanePoolInstanceCount> (0)].envelopeMatchIn <- ottClampEnvelopeMatchPercent (
-                rackModulateLinear (ottEnvelopeMatch, rackModIn[rackModTargetOttEnvelopeMatch]));
-
-            // --- Chorus / Bloom --------------------------------------------
-            // Pinned on internally: device participation is governed solely by laneTopology.
-            chorusPool[wrap<lanePoolInstanceCount> (0)].enabledIn <- 1.0f;
-            chorusPool[wrap<lanePoolInstanceCount> (0)].mixIn <- rackModulateLinear (chorusMix, rackModIn[rackModTargetChorusMix]);
-            chorusPool[wrap<lanePoolInstanceCount> (0)].motionModeIn <- chorusMotionMode;
-            chorusPool[wrap<lanePoolInstanceCount> (0)].bloomModeIn <- chorusBloomMode;
-            chorusPool[wrap<lanePoolInstanceCount> (0)].toneIn <- rackModulateLinear (chorusTone, rackModIn[rackModTargetChorusTone]);
-            chorusPool[wrap<lanePoolInstanceCount> (0)].feedbackIn <- rackModulateLinear (chorusFeedback, rackModIn[rackModTargetChorusFeedback]);
-            chorusPool[wrap<lanePoolInstanceCount> (0)].ringAmountIn <- rackModulateLinear (chorusRingAmount, rackModIn[rackModTargetChorusRingAmount]);
-            chorusPool[wrap<lanePoolInstanceCount> (0)].ringOffsetModeIn <- chorusRingOffsetMode;
-            chorusPool[wrap<lanePoolInstanceCount> (0)].ringFineSemitonesIn <- rackModulateLinear (chorusRingFineSemitones,
-                                                              rackModIn[rackModTargetChorusRingFineSemitones]);
-            chorusPool[wrap<lanePoolInstanceCount> (0)].trackingPitchHzIn <- trackingPitchHzIn;
-
-            // --- Flanger ---------------------------------------------------
-            flangerPool[wrap<lanePoolInstanceCount> (0)].rateIn <- clampFlangerRateHz (
-                rackModulateLinear (flangerRate, rackModIn[rackModTargetFlangerRate]));
-            flangerPool[wrap<lanePoolInstanceCount> (0)].depthIn <- clampFlangerDepth (
-                rackModulateLinear (flangerDepth, rackModIn[rackModTargetFlangerDepth]));
-            flangerPool[wrap<lanePoolInstanceCount> (0)].feedbackIn <- clampFlangerFeedback (
-                rackModulateLinear (flangerFeedback, rackModIn[rackModTargetFlangerFeedback]));
-            flangerPool[wrap<lanePoolInstanceCount> (0)].mixIn <- clampFlangerMix (
-                rackModulateLinear (flangerMix, rackModIn[rackModTargetFlangerMix]));
-
-            // --- Phaser ----------------------------------------------------
-            phaserPool[wrap<lanePoolInstanceCount> (0)].rateIn <- clampPhaserRateHz (
-                rackModulateLinear (phaserRate, rackModIn[rackModTargetPhaserRate]));
-            phaserPool[wrap<lanePoolInstanceCount> (0)].rateModeIn <- phaserRateMode;
-            phaserPool[wrap<lanePoolInstanceCount> (0)].rateDivisionIn <- phaserRateDivision;
-            phaserPool[wrap<lanePoolInstanceCount> (0)].depthIn <- clampPhaserDepth (
-                rackModulateLinear (phaserDepth, rackModIn[rackModTargetPhaserDepth]));
-            phaserPool[wrap<lanePoolInstanceCount> (0)].frequencyIn <- clampPhaserFrequencyHz (
-                phaserFrequency * rackOctaveScale (octaveScalers[rackOctaveScalerPhaserFrequency],
-                                                   rackModIn[rackModTargetPhaserFrequencyOctaves]));
-            phaserPool[wrap<lanePoolInstanceCount> (0)].feedbackIn <- clampPhaserFeedback (
-                rackModulateLinear (phaserFeedback, rackModIn[rackModTargetPhaserFeedback]));
-            phaserPool[wrap<lanePoolInstanceCount> (0)].phaseIn <- clampPhaserPhaseDeg (
-                rackModulateLinear (phaserPhase, rackModIn[rackModTargetPhaserPhase]));
-            phaserPool[wrap<lanePoolInstanceCount> (0)].mixIn <- clampPhaserMix (
-                rackModulateLinear (phaserMix, rackModIn[rackModTargetPhaserMix]));
-            phaserPool[wrap<lanePoolInstanceCount> (0)].tempoBpmIn <- clampPhaserTempoBpm (tempoBpmIn);
-
-            // --- Delay -----------------------------------------------------
-            delayPool[wrap<lanePoolInstanceCount> (0)].timeMsIn <- clampDelayTimeMs (
-                delayTime * rackOctaveScale (octaveScalers[rackOctaveScalerDelayTime],
-                                             rackModIn[rackModTargetDelayTimeOctaves]));
-            delayPool[wrap<lanePoolInstanceCount> (0)].timeModeIn <- delayTimeMode;
-            delayPool[wrap<lanePoolInstanceCount> (0)].divisionIn <- delayDivision;
-            delayPool[wrap<lanePoolInstanceCount> (0)].feedbackIn <- clampDelayFeedback (
-                rackModulateLinear (delayFeedback, rackModIn[rackModTargetDelayFeedback]));
-            delayPool[wrap<lanePoolInstanceCount> (0)].filterHzIn <- clampDelayFilterHz (
-                delayFilter * rackOctaveScale (octaveScalers[rackOctaveScalerDelayFilter],
-                                               rackModIn[rackModTargetDelayFilterOctaves]));
-            delayPool[wrap<lanePoolInstanceCount> (0)].mixIn <- clampDelayMix (
-                rackModulateLinear (delayMix, rackModIn[rackModTargetDelayMix]));
-            delayPool[wrap<lanePoolInstanceCount> (0)].tempoBpmIn <- clampDelayTempoBpm (tempoBpmIn);
-
-            // --- Reverb ----------------------------------------------------
-            reverbPool[wrap<lanePoolInstanceCount> (0)].sizeIn <- rackModulateLinear (reverbSize, rackModIn[rackModTargetReverbSize]);
-            reverbPool[wrap<lanePoolInstanceCount> (0)].decayIn <- rackModulateLinear (reverbDecay, rackModIn[rackModTargetReverbDecay]);
-            reverbPool[wrap<lanePoolInstanceCount> (0)].dampingIn <- rackModulateLinear (reverbDamping, rackModIn[rackModTargetReverbDamping]);
-            reverbPool[wrap<lanePoolInstanceCount> (0)].mixIn <- rackModulateLinear (reverbMix, rackModIn[rackModTargetReverbMix]);
-
-            // --- Lane pool -------------------------------------------------
-            advancePoolParamSmoothing();
-            // Every pool SET mirrors the base modules' forwarding exactly:
-            // per-slot smoothed records composed with that set's mirror block
-            // of the one rackMod bus, through the same clamps, octave
-            // conventions, and helper functions. `pp` is the slot's smoothed
-            // record; laneMod() is the set's bus lane for a static target.
-
-            for (wrap<lanePoolSetCount> poolSet)
+            for (wrap<lanePoolInstanceCount> ordinal)
             {
-                let setBase = int32 (poolSet) * rackModuleCount;
-                let laneBase = rackModStaticTargetCount + (int32 (poolSet) * rackModStaticTargetCount);
-                let scalerBase = 6 + (int32 (poolSet) * laneOctaveScalerBankSize);
+                let slotBase = int32 (ordinal) * rackModuleCount;
+                let laneBase = int32 (ordinal) * rackModStaticTargetCount;
+                let scalerBase = int32 (ordinal) * laneOctaveScalerBankSize;
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (rackModuleCount + setBase + rackModuleGlobalFilter)])
+                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleGlobalFilter)])
                 {
-                    let pp = poolParamCurrent[wrap<lanePoolSlotCount> (setBase + rackModuleGlobalFilter)];
-                    globalFilterPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].modeIn <- pp[laneGlobalFilterParamMode];
-                    globalFilterPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].cutoffHzIn <- clampFilterCutoffHz (
+                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleGlobalFilter)];
+                    globalFilterPool[ordinal].modeIn <- pp[laneGlobalFilterParamMode];
+                    globalFilterPool[ordinal].cutoffHzIn <- clampFilterCutoffHz (
                         pp[laneGlobalFilterParamCutoffHz]
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerGlobalFilterCutoff)],
                                                rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetGlobalFilterCutoffOctaves)]),
                         sampleRate);
-                    globalFilterPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].resonanceIn <- clampFilterQ (
+                    globalFilterPool[ordinal].resonanceIn <- clampFilterQ (
                         rackModulateLinear (pp[laneGlobalFilterParamResonance],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetGlobalFilterResonance)]));
-                    globalFilterPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].driveIn <- clampGlobalFilterDrive (
+                    globalFilterPool[ordinal].driveIn <- clampGlobalFilterDrive (
                         rackModulateLinear (pp[laneGlobalFilterParamDrive],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetGlobalFilterDrive)]));
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (rackModuleCount + setBase + rackModuleDistortion)])
+                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleDistortion)])
                 {
-                    let pp = poolParamCurrent[wrap<lanePoolSlotCount> (setBase + rackModuleDistortion)];
+                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleDistortion)];
                     let laneWetHPHz = clampDistortionWetHPHz (
                         pp[laneDistortionParamWetHPHz]
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDistortionWetHP)],
                                                rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionWetHPOctaves)]));
-                    distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].modeIn <- pp[laneDistortionParamMode];
-                    distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].driveDbIn <- clampDistortionDriveDb (
+                    distortionPool[ordinal].modeIn <- pp[laneDistortionParamMode];
+                    distortionPool[ordinal].driveDbIn <- clampDistortionDriveDb (
                         rackModulateLinear (pp[laneDistortionParamDriveDb],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionDriveDb)]));
-                    distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].kneeIn <- clampDistortionKnee (
+                    distortionPool[ordinal].kneeIn <- clampDistortionKnee (
                         rackModulateLinear (pp[laneDistortionParamKnee],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionKnee)]));
-                    distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].wetIn <- clampDistortionWet (
+                    distortionPool[ordinal].wetIn <- clampDistortionWet (
                         rackModulateLinear (pp[laneDistortionParamWet],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionWet)]));
-                    distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].wetHPHzIn <- laneWetHPHz;
-                    distortionPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].wetLPHzIn <- clampDistortionWetLPHz (
+                    distortionPool[ordinal].wetHPHzIn <- laneWetHPHz;
+                    distortionPool[ordinal].wetLPHzIn <- clampDistortionWetLPHz (
                         pp[laneDistortionParamWetLPHz]
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDistortionWetLP)],
                                                rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionWetLPOctaves)]),
                         laneWetHPHz);
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (rackModuleCount + setBase + rackModuleOtt)])
+                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleOtt)])
                 {
-                    let pp = poolParamCurrent[wrap<lanePoolSlotCount> (setBase + rackModuleOtt)];
-                    ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].mixIn <- ottClampMixPercent (
+                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleOtt)];
+                    ottPool[ordinal].mixIn <- ottClampMixPercent (
                         rackModulateLinear (pp[laneOttParamMix],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetOttMix)]));
-                    ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].amountIn <- ottClampAmountPercent (
+                    ottPool[ordinal].amountIn <- ottClampAmountPercent (
                         rackModulateLinear (pp[laneOttParamAmount],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetOttAmount)]));
-                    ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].timePercentIn <- ottClampTimePercent (
+                    ottPool[ordinal].timePercentIn <- ottClampTimePercent (
                         rackModulateLinear (pp[laneOttParamTimePercent],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetOttTimePercent)]));
-                    ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].bandDriveIn <- ottClampBandDrivePercent (
+                    ottPool[ordinal].bandDriveIn <- ottClampBandDrivePercent (
                         rackModulateLinear (pp[laneOttParamBandDrive],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetOttBandDrive)]));
-                    ottPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].envelopeMatchIn <- ottClampEnvelopeMatchPercent (
+                    ottPool[ordinal].envelopeMatchIn <- ottClampEnvelopeMatchPercent (
                         rackModulateLinear (pp[laneOttParamEnvelopeMatch],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetOttEnvelopeMatch)]));
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (rackModuleCount + setBase + rackModuleChorus)])
+                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleChorus)])
                 {
-                    let pp = poolParamCurrent[wrap<lanePoolSlotCount> (setBase + rackModuleChorus)];
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].enabledIn <- 1.0f;
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].mixIn <- rackModulateLinear (pp[laneChorusParamMix],
+                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleChorus)];
+                    chorusPool[ordinal].enabledIn <- 1.0f;
+                    chorusPool[ordinal].mixIn <- rackModulateLinear (pp[laneChorusParamMix],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusMix)]);
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].motionModeIn <- pp[laneChorusParamMotionMode];
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].bloomModeIn <- pp[laneChorusParamBloomMode];
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].toneIn <- rackModulateLinear (pp[laneChorusParamTone],
+                    chorusPool[ordinal].motionModeIn <- pp[laneChorusParamMotionMode];
+                    chorusPool[ordinal].bloomModeIn <- pp[laneChorusParamBloomMode];
+                    chorusPool[ordinal].toneIn <- rackModulateLinear (pp[laneChorusParamTone],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusTone)]);
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].feedbackIn <- rackModulateLinear (pp[laneChorusParamFeedback],
+                    chorusPool[ordinal].feedbackIn <- rackModulateLinear (pp[laneChorusParamFeedback],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusFeedback)]);
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].ringAmountIn <- rackModulateLinear (pp[laneChorusParamRingAmount],
+                    chorusPool[ordinal].ringAmountIn <- rackModulateLinear (pp[laneChorusParamRingAmount],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusRingAmount)]);
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].ringOffsetModeIn <- pp[laneChorusParamRingOffsetMode];
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].ringFineSemitonesIn <- rackModulateLinear (pp[laneChorusParamRingFineSemitones],
+                    chorusPool[ordinal].ringOffsetModeIn <- pp[laneChorusParamRingOffsetMode];
+                    chorusPool[ordinal].ringFineSemitonesIn <- rackModulateLinear (pp[laneChorusParamRingFineSemitones],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetChorusRingFineSemitones)]);
-                    chorusPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].trackingPitchHzIn <- trackingPitchHzIn;
+                    chorusPool[ordinal].trackingPitchHzIn <- trackingPitchHzIn;
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (rackModuleCount + setBase + rackModuleFlanger)])
+                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleFlanger)])
                 {
-                    let pp = poolParamCurrent[wrap<lanePoolSlotCount> (setBase + rackModuleFlanger)];
-                    flangerPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].rateIn <- clampFlangerRateHz (
+                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleFlanger)];
+                    flangerPool[ordinal].rateIn <- clampFlangerRateHz (
                         rackModulateLinear (pp[laneFlangerParamRate],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetFlangerRate)]));
-                    flangerPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].depthIn <- clampFlangerDepth (
+                    flangerPool[ordinal].depthIn <- clampFlangerDepth (
                         rackModulateLinear (pp[laneFlangerParamDepth],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetFlangerDepth)]));
-                    flangerPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].feedbackIn <- clampFlangerFeedback (
+                    flangerPool[ordinal].feedbackIn <- clampFlangerFeedback (
                         rackModulateLinear (pp[laneFlangerParamFeedback],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetFlangerFeedback)]));
-                    flangerPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].mixIn <- clampFlangerMix (
+                    flangerPool[ordinal].mixIn <- clampFlangerMix (
                         rackModulateLinear (pp[laneFlangerParamMix],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetFlangerMix)]));
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (rackModuleCount + setBase + rackModulePhaser)])
+                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModulePhaser)])
                 {
-                    let pp = poolParamCurrent[wrap<lanePoolSlotCount> (setBase + rackModulePhaser)];
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].rateIn <- clampPhaserRateHz (
+                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModulePhaser)];
+                    phaserPool[ordinal].rateIn <- clampPhaserRateHz (
                         rackModulateLinear (pp[lanePhaserParamRate],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserRate)]));
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].rateModeIn <- pp[lanePhaserParamRateMode];
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].rateDivisionIn <- pp[lanePhaserParamRateDivision];
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].depthIn <- clampPhaserDepth (
+                    phaserPool[ordinal].rateModeIn <- pp[lanePhaserParamRateMode];
+                    phaserPool[ordinal].rateDivisionIn <- pp[lanePhaserParamRateDivision];
+                    phaserPool[ordinal].depthIn <- clampPhaserDepth (
                         rackModulateLinear (pp[lanePhaserParamDepth],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserDepth)]));
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].frequencyIn <- clampPhaserFrequencyHz (
+                    phaserPool[ordinal].frequencyIn <- clampPhaserFrequencyHz (
                         pp[lanePhaserParamFrequency]
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerPhaserFrequency)],
                                                rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserFrequencyOctaves)]));
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].feedbackIn <- clampPhaserFeedback (
+                    phaserPool[ordinal].feedbackIn <- clampPhaserFeedback (
                         rackModulateLinear (pp[lanePhaserParamFeedback],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserFeedback)]));
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].phaseIn <- clampPhaserPhaseDeg (
+                    phaserPool[ordinal].phaseIn <- clampPhaserPhaseDeg (
                         rackModulateLinear (pp[lanePhaserParamPhase],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserPhase)]));
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].mixIn <- clampPhaserMix (
+                    phaserPool[ordinal].mixIn <- clampPhaserMix (
                         rackModulateLinear (pp[lanePhaserParamMix],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetPhaserMix)]));
-                    phaserPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].tempoBpmIn <- clampPhaserTempoBpm (tempoBpmIn);
+                    phaserPool[ordinal].tempoBpmIn <- clampPhaserTempoBpm (tempoBpmIn);
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (rackModuleCount + setBase + rackModuleDelay)])
+                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleDelay)])
                 {
-                    let pp = poolParamCurrent[wrap<lanePoolSlotCount> (setBase + rackModuleDelay)];
-                    delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].timeMsIn <- clampDelayTimeMs (
+                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleDelay)];
+                    delayPool[ordinal].timeMsIn <- clampDelayTimeMs (
                         pp[laneDelayParamTimeMs]
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDelayTime)],
                                                rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDelayTimeOctaves)]));
-                    delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].timeModeIn <- pp[laneDelayParamTimeMode];
-                    delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].divisionIn <- pp[laneDelayParamDivision];
-                    delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].feedbackIn <- clampDelayFeedback (
+                    delayPool[ordinal].timeModeIn <- pp[laneDelayParamTimeMode];
+                    delayPool[ordinal].divisionIn <- pp[laneDelayParamDivision];
+                    delayPool[ordinal].feedbackIn <- clampDelayFeedback (
                         rackModulateLinear (pp[laneDelayParamFeedback],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDelayFeedback)]));
-                    delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].filterHzIn <- clampDelayFilterHz (
+                    delayPool[ordinal].filterHzIn <- clampDelayFilterHz (
                         pp[laneDelayParamFilterHz]
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDelayFilter)],
                                                rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDelayFilterOctaves)]));
-                    delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].mixIn <- clampDelayMix (
+                    delayPool[ordinal].mixIn <- clampDelayMix (
                         rackModulateLinear (pp[laneDelayParamMix],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDelayMix)]));
-                    delayPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].tempoBpmIn <- clampDelayTempoBpm (tempoBpmIn);
+                    delayPool[ordinal].tempoBpmIn <- clampDelayTempoBpm (tempoBpmIn);
                 }
 
-                if (slotInCurrentChain[wrap<laneSlotCount> (rackModuleCount + setBase + rackModuleReverb)])
+                if (slotInCurrentChain[wrap<laneSlotCount> (slotBase + rackModuleReverb)])
                 {
-                    let pp = poolParamCurrent[wrap<lanePoolSlotCount> (setBase + rackModuleReverb)];
-                    reverbPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].sizeIn <- rackModulateLinear (pp[laneReverbParamSize],
+                    let pp = slotParamCurrent[wrap<laneSlotCount> (slotBase + rackModuleReverb)];
+                    reverbPool[ordinal].sizeIn <- rackModulateLinear (pp[laneReverbParamSize],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetReverbSize)]);
-                    reverbPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].decayIn <- rackModulateLinear (pp[laneReverbParamDecay],
+                    reverbPool[ordinal].decayIn <- rackModulateLinear (pp[laneReverbParamDecay],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetReverbDecay)]);
-                    reverbPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].dampingIn <- rackModulateLinear (pp[laneReverbParamDamping],
+                    reverbPool[ordinal].dampingIn <- rackModulateLinear (pp[laneReverbParamDamping],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetReverbDamping)]);
-                    reverbPool[wrap<lanePoolInstanceCount> (int32 (poolSet) + 1)].mixIn <- rackModulateLinear (pp[laneReverbParamMix],
+                    reverbPool[ordinal].mixIn <- rackModulateLinear (pp[laneReverbParamMix],
                         rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetReverbMix)]);
                 }
             }

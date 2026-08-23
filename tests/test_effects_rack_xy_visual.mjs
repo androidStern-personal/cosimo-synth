@@ -137,15 +137,15 @@ test("pointer and keyboard X/Y gestures reach each tabled pair through the host 
             assert.deepEqual(snapshot.gestureEnds, [expected.xEndpointID, expected.yEndpointID]);
             assert.deepEqual(
                 snapshot.sentMessages.map(({ endpointID }) => endpointID),
-                [expected.xEndpointID, expected.yEndpointID],
+                ["laneSlotParamValue", "laneSlotParamValue"],
             );
             assertApproximatelyEqual(
-                snapshot.parameterValues[expected.xEndpointID],
+                snapshot.laneParams[expected.xEndpointID],
                 expectedValueFromNormalized(xDescriptor, 0.75),
                 `${expected.effectId} pointer X`,
             );
             assertApproximatelyEqual(
-                snapshot.parameterValues[expected.yEndpointID],
+                snapshot.laneParams[expected.yEndpointID],
                 expectedValueFromNormalized(yDescriptor, 0.75),
                 `${expected.effectId} pointer Y`,
             );
@@ -169,7 +169,7 @@ test("pointer and keyboard X/Y gestures reach each tabled pair through the host 
             assert.deepEqual(snapshot.gestureEnds, [expected.xEndpointID, expected.yEndpointID]);
             assert.deepEqual(
                 snapshot.sentMessages.map(({ endpointID }) => endpointID),
-                [expected.xEndpointID, expected.yEndpointID],
+                ["laneSlotParamValue", "laneSlotParamValue"],
             );
         }
     } finally {

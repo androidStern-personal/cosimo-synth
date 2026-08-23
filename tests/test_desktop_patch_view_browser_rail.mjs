@@ -84,6 +84,7 @@ import {
     rectsIntersect,
     rectContains,
     readGlobalModRailGeometry,
+    isLaneParamSend,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
 test("mobile Mod Bar is a curved global edge rail that survives accordion navigation", async () => {
@@ -896,7 +897,7 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         let snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.midiInputEvents, [], "Auto-preview off must stay silent for value edits.");
         assert.notEqual(
-            snapshot.sentMessages.filter(({ endpointID }) => endpointID === "reverbSize").length,
+            snapshot.sentMessages.filter((message) => isLaneParamSend(message, "reverbSize")).length,
             0,
             "The drag itself must have edited the parameter.",
         );
@@ -2511,7 +2512,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         });
         await page.evaluate((state) => {
             window.__COSIMO_DESKTOP_HARNESS__.setStoredStateValue("modulation.v6", JSON.stringify(state));
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("globalFilterMode", 0, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("globalFilterMode", 0);
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
@@ -2598,7 +2599,7 @@ test("rack Filter defaults to Lowpass while its effect remains bypassed", async 
 
         const snapshot = await getHarnessSnapshot(page);
         const mode = page.locator('[data-role="rack-parameter-globalFilterMode"]');
-        assert.equal(Number(snapshot.parameterValues.globalFilterMode), 1);
+        assert.equal(Number(snapshot.laneParams.globalFilterMode), 1);
         assert.match(await mode.innerText(), /Lowpass/i);
         assert.match(await page.locator('[data-role="rack-editor-filter"] .rack-editor-header').innerText(), /FX BYPASSED/);
         assert.equal(await page.locator('[data-role="rack-editor-filter"]').getAttribute("data-effect-enabled"), "false");
@@ -2687,16 +2688,16 @@ test("rack quick controls never reorder or stick after release and reorder is gr
             (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
                 && nextSnapshot.gestureEnds.includes("reverbSize"),
         );
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "reverbSize"), true);
+        assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "reverbSize")), true);
         assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
 
-        const valueAfterRelease = Number(snapshot.parameterValues.reverbSize);
+        const valueAfterRelease = Number(snapshot.laneParams.reverbSize);
         await clearHarnessDebugLog(page);
         await page.mouse.move(quickBox.x + 2, quickBox.y + (quickBox.height * 0.72), { steps: 10 });
         await page.mouse.move(quickBox.x + quickBox.width - 2, quickBox.y + (quickBox.height * 0.72), { steps: 10 });
         await page.waitForTimeout(80);
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(Number(snapshot.parameterValues.reverbSize), valueAfterRelease);
+        assert.equal(Number(snapshot.laneParams.reverbSize), valueAfterRelease);
         assert.deepEqual(snapshot.sentMessages, [], "Released quick control remained attached to the pointer.");
         assert.deepEqual(snapshot.gestureStarts, []);
         assert.deepEqual(snapshot.gestureEnds, []);
@@ -2718,7 +2719,7 @@ test("rack quick controls keep tracking Safari touch moves that report zero butt
         const quick = page.locator('[data-role="rack-quick-reverb"]');
         await quick.scrollIntoViewIfNeeded();
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.3, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.3);
         });
         await clearHarnessDebugLog(page);
 
@@ -2753,7 +2754,7 @@ test("rack quick controls keep tracking Safari touch moves that report zero butt
         let snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
         assert.deepEqual(snapshot.gestureEnds, [], "A live Safari touch move must not end the gesture.");
-        assert.ok(Number(snapshot.parameterValues.reverbSize) > 0.3);
+        assert.ok(Number(snapshot.laneParams.reverbSize) > 0.3);
 
         await quick.dispatchEvent("pointerup", {
             pointerId: 91,
@@ -2784,7 +2785,7 @@ test("rack quick controls keep tracking touch outside the card when pointer capt
         const quick = page.locator('[data-role="rack-quick-reverb"]');
         await quick.scrollIntoViewIfNeeded();
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("reverbSize", 0.3, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.3);
         });
         await clearHarnessDebugLog(page);
 
@@ -2826,7 +2827,7 @@ test("rack quick controls keep tracking touch outside the card when pointer capt
 
         let snapshot = await getHarnessSnapshot(page);
         assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
-        assert.ok(Number(snapshot.parameterValues.reverbSize) > 0.3);
+        assert.ok(Number(snapshot.laneParams.reverbSize) > 0.3);
 
         await page.evaluate(({ pointerId, clientX, clientY }) => {
             window.dispatchEvent(new PointerEvent("pointerup", {
@@ -2891,7 +2892,7 @@ test("every rack editor binds live controls and one drop commits one complete DS
                 && Number(value?.enabledMask) === 255
             )),
         );
-        const storedRack = JSON.parse(String(snapshot.storedState["rack.v1"]));
+        const storedRack = JSON.parse(String(snapshot.storedState["lane.v1"]));
         assert.deepEqual(storedRack.order, ["filter", "drive", "ott", "chorus", "flanger", "phaser", "delay", "reverb"]);
         assert.equal(Object.values(storedRack.enabled).every(Boolean), true);
 
@@ -2940,7 +2941,7 @@ test("Phaser and Delay keep the selected Free control visibly ineffective when S
             assert.equal(await editor.locator(`[data-role="rack-parameter-${effect.sync}"]`).count(), 0);
 
             await page.evaluate(({ endpointID }) => {
-                window.__COSIMO_DESKTOP_HARNESS__.setParameterValue(endpointID, 1, true);
+                window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue(endpointID, 1);
             }, { endpointID: effect.mode });
             await page.waitForFunction(({ effectId, freeEndpointID, syncEndpointID }) => {
                 const editorElement = document.querySelector(`[data-role="rack-editor-${effectId}"]`);
@@ -2970,9 +2971,9 @@ test("desktop chorus mode buttons do not visually collide in the selected rack e
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 2, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 2, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 1, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMotionMode", 2);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusBloomMode", 2);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingOffsetMode", 1);
         });
 
         await page.waitForFunction(() => (
@@ -3040,9 +3041,9 @@ test("desktop chorus controls send exact parameter updates", async () => {
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 0, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 0, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 0, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMotionMode", 0);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusBloomMode", 0);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingOffsetMode", 0);
         });
         await clearHarnessDebugLog(page);
 
@@ -3065,18 +3066,18 @@ test("desktop chorus controls send exact parameter updates", async () => {
                     && Array.isArray(value?.slotIds)
                     && ((Number(value.enabledMask) >> value.slotIds.indexOf(3)) & 1) === 1
                 ))
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusMix" && Math.abs(Number(value) - 0.66) <= 1e-6)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusMotionMode" && Number(value) === 1)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusBloomMode" && Number(value) === 1)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusRingOffsetMode" && Number(value) === 1)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusTone" && Math.abs(Number(value) - 0.8) <= 1e-6)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusFeedback" && Math.abs(Number(value) - 0.7) <= 1e-6)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusRingAmount" && Math.abs(Number(value) - 0.5) <= 1e-6)
-                && nextSnapshot.sentMessages.some(({ endpointID, value }) => endpointID === "chorusRingFineSemitones" && Math.abs(Number(value) + 0.75) <= 1e-6)
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMix", 0.66))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMotionMode", 1))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusBloomMode", 1))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusRingOffsetMode", 1))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusTone", 0.8))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusFeedback", 0.7))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusRingAmount", 0.5))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusRingFineSemitones", -0.75))
             ),
         );
 
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "chorusMix"), true);
+        assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMix")), true);
     } finally {
         await page.close();
     }
@@ -3089,14 +3090,14 @@ test("desktop chorus controls render host values before edits", async () => {
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMix", 0.375, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 3, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 4, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 2, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusTone", 0.825, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusFeedback", 0.615, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingAmount", 0.285, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingFineSemitones", 1.25, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMix", 0.375);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMotionMode", 3);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusBloomMode", 4);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingOffsetMode", 2);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusTone", 0.825);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusFeedback", 0.615);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingAmount", 0.285);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingFineSemitones", 1.25);
         });
 
         await page.waitForFunction(() => {
@@ -3195,14 +3196,14 @@ test("desktop chorus knob survives pointer-capture loss and closes its host gest
             (nextSnapshot) => (
                 nextSnapshot.gestureStarts.includes("chorusMix")
                 && nextSnapshot.gestureEnds.includes("chorusMix")
-                && nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "chorusMix")
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMix"))
             ),
         );
 
         assert.deepEqual(snapshot.gestureStarts, ["chorusMix"]);
         assert.deepEqual(snapshot.gestureEnds, ["chorusMix"]);
         assert.equal(
-            snapshot.sentMessages.some(({ endpointID }) => endpointID === "chorusMix"),
+            snapshot.sentMessages.some((message) => isLaneParamSend(message, "chorusMix")),
             true,
             "The move after capture loss must still edit the base value.",
         );
@@ -3250,7 +3251,7 @@ test("desktop chorus knob ignores mouse movement after a completed drag release"
         await selectRackEffect(page, "chorus");
         await page.waitForSelector('[data-role="chorus-mix-control"]');
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMix", 0.2, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMix", 0.2);
         });
         await clearHarnessDebugLog(page);
 
@@ -3280,7 +3281,7 @@ test("desktop chorus knob ignores mouse movement after a completed drag release"
         const snapshot = await getHarnessSnapshot(page);
 
         assert.equal(valueAfterHover, valueAfterRelease);
-        assert.deepEqual(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "chorusMix"), []);
+        assert.deepEqual(snapshot.sentMessages.filter((message) => isLaneParamSend(message, "chorusMix")), []);
         assert.deepEqual(snapshot.gestureStarts, []);
         assert.deepEqual(snapshot.gestureEnds, []);
     } finally {
@@ -3295,9 +3296,9 @@ test("desktop chorus cycle buttons wrap through all modes", async () => {
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await selectRackEffect(page, "chorus");
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusMotionMode", 0, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusBloomMode", 0, true);
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("chorusRingOffsetMode", 0, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusMotionMode", 0);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusBloomMode", 0);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("chorusRingOffsetMode", 0);
         });
         await clearHarnessDebugLog(page);
 
@@ -3317,28 +3318,28 @@ test("desktop chorus cycle buttons wrap through all modes", async () => {
             page,
             "chorus cycle button updates",
             (nextSnapshot) => (
-                nextSnapshot.sentMessages.filter(({ endpointID }) => endpointID === "chorusMotionMode").length >= 5
-                && nextSnapshot.sentMessages.filter(({ endpointID }) => endpointID === "chorusBloomMode").length >= 6
-                && nextSnapshot.sentMessages.filter(({ endpointID }) => endpointID === "chorusRingOffsetMode").length >= 5
+                nextSnapshot.sentMessages.filter((message) => isLaneParamSend(message, "chorusMotionMode")).length >= 5
+                && nextSnapshot.sentMessages.filter((message) => isLaneParamSend(message, "chorusBloomMode")).length >= 6
+                && nextSnapshot.sentMessages.filter((message) => isLaneParamSend(message, "chorusRingOffsetMode")).length >= 5
             ),
         );
 
         assert.deepEqual(
             snapshot.sentMessages
-                .filter(({ endpointID }) => endpointID === "chorusMotionMode")
-                .map(({ value }) => Number(value)),
+                .filter((message) => isLaneParamSend(message, "chorusMotionMode"))
+                .map(({ value }) => Number(value.value)),
             [1, 2, 3, 0, 1],
         );
         assert.deepEqual(
             snapshot.sentMessages
-                .filter(({ endpointID }) => endpointID === "chorusBloomMode")
-                .map(({ value }) => Number(value)),
+                .filter((message) => isLaneParamSend(message, "chorusBloomMode"))
+                .map(({ value }) => Number(value.value)),
             [1, 2, 3, 4, 0, 1],
         );
         assert.deepEqual(
             snapshot.sentMessages
-                .filter(({ endpointID }) => endpointID === "chorusRingOffsetMode")
-                .map(({ value }) => Number(value)),
+                .filter((message) => isLaneParamSend(message, "chorusRingOffsetMode"))
+                .map(({ value }) => Number(value.value)),
             [1, 2, 3, 0, 1],
         );
     } finally {
@@ -3354,7 +3355,7 @@ test("desktop distortion wet low-pass knob renders the full 20 Hz floor", async 
         await page.waitForSelector('[data-role="rack-editor-drive"]');
 
         await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setParameterValue("distortionWetLPHz", 20, true);
+            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("distortionWetLPHz", 20);
         });
 
         const knobState = await waitForPageValue(

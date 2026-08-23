@@ -23,6 +23,15 @@ import {
     getModulationRuntimeCell,
 } from "../../patch_gui/modulation-runtime-program.js";
 import {
+    EFFECT_ID_TO_LANE_TYPE,
+    RACK_EFFECT_ORDER,
+} from "../../patch_gui/lane-state.js";
+import {
+    getLaneSlotId,
+    getLaneSlotParamIndex,
+} from "../../patch_gui/lane-slot-params.js";
+import { getRackParameterDescriptor } from "../../patch_gui/rack-parameter-descriptors.js";
+import {
     clearHarnessDebugLog,
     getHarnessRenderedState,
     getHarnessSnapshot,
@@ -1388,3 +1397,36 @@ export {
     startDesktopHarnessServer,
     waitForHarnessReady,
 };
+
+/**
+ * The wire location of one effect parameter since the B3 parameter cut:
+ * knob edits ride laneSlotParamValue {slotId, paramIndex, ...} instead of a
+ * per-parameter host endpoint.
+ */
+export function laneParamWireLocation(endpointID) {
+    const descriptor = getRackParameterDescriptor(endpointID);
+    if (descriptor === null) {
+        throw new Error(`Not a lane parameter endpoint: ${endpointID}`);
+    }
+    const deviceType = EFFECT_ID_TO_LANE_TYPE[descriptor.effectId];
+    return {
+        slotId: getLaneSlotId(deviceType, 0),
+        paramIndex: getLaneSlotParamIndex(deviceType, endpointID),
+    };
+}
+
+/** Predicate for one sent lane field upload, optionally matching its value. */
+export function isLaneParamSend(message, endpointID, expectedValue, tolerance = 1e-6) {
+    if (message.endpointID !== "laneSlotParamValue") {
+        return false;
+    }
+    const location = laneParamWireLocation(endpointID);
+    if (Number(message.value?.slotId) !== location.slotId
+            || Number(message.value?.paramIndex) !== location.paramIndex) {
+        return false;
+    }
+    return expectedValue === undefined
+        || Math.abs(Number(message.value?.value) - expectedValue) <= tolerance;
+}
+
+void RACK_EFFECT_ORDER;

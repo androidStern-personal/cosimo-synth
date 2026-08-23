@@ -7,6 +7,8 @@ import {
     type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from "react";
+import { useLaneParameterBinding } from "./lane-param-bindings";
+import { getRackParameterDescriptor } from "./rack-parameter-descriptors";
 
 import {
     usePatchConnection,
@@ -169,6 +171,15 @@ import {
     type OscillatorRuntimeIndex,
     type OscillatorSelectionViewModel,
 } from "./oscillator-binding";
+
+function requireLaneParameterDescriptor(endpointID: string) {
+    const descriptor = getRackParameterDescriptor(endpointID);
+    if (descriptor === null) {
+        throw new Error(`Unknown lane parameter descriptor: ${endpointID}`);
+    }
+    return descriptor;
+}
+
 
 export const EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID = "effectiveWavetablePosition";
 export const EFFECTIVE_WARP_STATE_ENDPOINT_ID = "effectiveWarpState";
@@ -2721,76 +2732,20 @@ export function useSynthPatchViewModel({
         initialValue: 0.2,
         coerce: (value) => clamp(Number(value) || 0.001, 0.001, 10),
     });
-    const distortionMode = usePatchParameterBinding<number>({
-        endpointID: DISTORTION_MODE_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 1),
-    });
-    const distortionDriveDb = usePatchParameterBinding<number>({
-        endpointID: DISTORTION_DRIVE_DB_ENDPOINT_ID,
-        initialValue: 12,
-        coerce: (value) => clamp(Number(value) || 0, 0, 36),
-    });
-    const distortionKnee = usePatchParameterBinding<number>({
-        endpointID: DISTORTION_KNEE_ENDPOINT_ID,
-        initialValue: 0.35,
-        coerce: (value) => clamp(Number(value) || 0, 0, 1),
-    });
-    const distortionWet = usePatchParameterBinding<number>({
-        endpointID: DISTORTION_WET_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Number(value) || 0, 0, 1),
-    });
-    const distortionWetHPHz = usePatchParameterBinding<number>({
-        endpointID: DISTORTION_WET_HP_HZ_ENDPOINT_ID,
-        initialValue: 40,
-        coerce: (value) => clamp(Number(value) || 0, 20, 4_000),
-    });
-    const distortionWetLPHz = usePatchParameterBinding<number>({
-        endpointID: DISTORTION_WET_LP_HZ_ENDPOINT_ID,
-        initialValue: 18_000,
-        coerce: (value) => clamp(Number(value) || 0, 20, 20_000),
-    });
-    const chorusMix = usePatchParameterBinding<number>({
-        endpointID: CHORUS_MIX_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Number(value) || 0, 0, 1),
-    });
-    const chorusMotionMode = usePatchParameterBinding<number>({
-        endpointID: CHORUS_MOTION_MODE_ENDPOINT_ID,
-        initialValue: 1,
-        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 3),
-    });
-    const chorusBloomMode = usePatchParameterBinding<number>({
-        endpointID: CHORUS_BLOOM_MODE_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 4),
-    });
-    const chorusTone = usePatchParameterBinding<number>({
-        endpointID: CHORUS_TONE_ENDPOINT_ID,
-        initialValue: 0.5,
-        coerce: (value) => clamp(Number(value) || 0, 0, 1),
-    });
-    const chorusFeedback = usePatchParameterBinding<number>({
-        endpointID: CHORUS_FEEDBACK_ENDPOINT_ID,
-        initialValue: 0.42,
-        coerce: (value) => clamp(Number(value) || 0, 0, 0.95),
-    });
-    const chorusRingAmount = usePatchParameterBinding<number>({
-        endpointID: CHORUS_RING_AMOUNT_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Number(value) || 0, 0, 1),
-    });
-    const chorusRingOffsetMode = usePatchParameterBinding<number>({
-        endpointID: CHORUS_RING_OFFSET_MODE_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Math.round(Number(value) || 0), 0, 3),
-    });
-    const chorusRingFineSemitones = usePatchParameterBinding<number>({
-        endpointID: CHORUS_RING_FINE_SEMITONES_ENDPOINT_ID,
-        initialValue: 0,
-        coerce: (value) => clamp(Number(value) || 0, -2, 2),
-    });
+    const distortionMode = useLaneParameterBinding(requireLaneParameterDescriptor("distortionMode"));
+    const distortionDriveDb = useLaneParameterBinding(requireLaneParameterDescriptor("distortionDriveDb"));
+    const distortionKnee = useLaneParameterBinding(requireLaneParameterDescriptor("distortionKnee"));
+    const distortionWet = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWet"));
+    const distortionWetHPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetHPHz"));
+    const distortionWetLPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetLPHz"));
+    const chorusMix = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMix"));
+    const chorusMotionMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMotionMode"));
+    const chorusBloomMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusBloomMode"));
+    const chorusTone = useLaneParameterBinding(requireLaneParameterDescriptor("chorusTone"));
+    const chorusFeedback = useLaneParameterBinding(requireLaneParameterDescriptor("chorusFeedback"));
+    const chorusRingAmount = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingAmount"));
+    const chorusRingOffsetMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingOffsetMode"));
+    const chorusRingFineSemitones = useLaneParameterBinding(requireLaneParameterDescriptor("chorusRingFineSemitones"));
     const requestRuntimeSync = usePatchEventTrigger<number>(RUNTIME_SYNC_REQUEST_ENDPOINT_ID);
     const retryDesiredTableLoad = usePatchEventTrigger<number>(RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID);
     const prewarmWavetable = usePatchEventTrigger<number>(WAVETABLE_PREWARM_REQUEST_ENDPOINT_ID);

@@ -1,4 +1,5 @@
 import test from "node:test";
+import { laneDeviceParamEndpoints } from "../patch_gui/lane-slot-params.js";
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -119,13 +120,13 @@ test("chorus_descriptor_endpoints_exist_in_standalone_and_embedded_cmajor_surfac
 
     assert.deepEqual(sorted(expectedEndpoints), sorted(expectedChorusPresetEndpoints));
 
-    for (const surfacePath of [
-        "fx/chorus_lab/ChorusLab.cmajor",
-        "cmajor/WavetableSynth.cmajor",
-    ]) {
-        const surfaceEndpoints = await readCmajorEndpointIDs(surfacePath);
-        assert.deepEqual(expectedEndpoints.filter((endpointID) => !surfaceEndpoints.has(endpointID)), [], `${surfacePath} is missing shared chorus endpoints`);
-    }
+    const surfaceEndpoints = await readCmajorEndpointIDs("fx/chorus_lab/ChorusLab.cmajor");
+    assert.deepEqual(expectedEndpoints.filter((endpointID) => !surfaceEndpoints.has(endpointID)), [], "the standalone lab is missing shared chorus endpoints");
+
+    // The embedded synth carries these as lane record fields since the B3
+    // parameter cut, not as host endpoints.
+    const laneEndpoints = new Set(laneDeviceParamEndpoints("chorus"));
+    assert.deepEqual(expectedEndpoints.filter((endpointID) => !laneEndpoints.has(endpointID)), [], "the lane layout is missing shared chorus endpoints");
 });
 
 test("ott_descriptor_endpoints_exist_in_standalone_and_embedded_cmajor_surfaces", async () => {
@@ -136,13 +137,13 @@ test("ott_descriptor_endpoints_exist_in_standalone_and_embedded_cmajor_surfaces"
 
     assert.deepEqual(sorted(expectedEndpoints), sorted(expectedOttPresetEndpoints));
 
-    for (const surfacePath of [
-        "fx/ott_lab/OttLab.cmajor",
-        "cmajor/WavetableSynth.cmajor",
-    ]) {
-        const surfaceEndpoints = await readCmajorEndpointIDs(surfacePath);
-        assert.deepEqual(expectedEndpoints.filter((endpointID) => !surfaceEndpoints.has(endpointID)), [], `${surfacePath} is missing shared OTT endpoints`);
-    }
+    const surfaceEndpoints = await readCmajorEndpointIDs("fx/ott_lab/OttLab.cmajor");
+    assert.deepEqual(expectedEndpoints.filter((endpointID) => !surfaceEndpoints.has(endpointID)), [], "the standalone lab is missing shared OTT endpoints");
+
+    // The embedded synth carries these as lane record fields since the B3
+    // parameter cut, not as host endpoints.
+    const laneEndpoints = new Set(laneDeviceParamEndpoints("ott"));
+    assert.deepEqual(expectedEndpoints.filter((endpointID) => !laneEndpoints.has(endpointID)), [], "the lane layout is missing shared OTT endpoints");
 });
 
 test("descriptor_endpoint_ids_are_globally_unique_across_effects", async () => {

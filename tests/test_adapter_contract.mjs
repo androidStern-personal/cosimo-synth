@@ -604,7 +604,7 @@ test("bridge rack commands preserve desired state across an older effective read
     });
     adapter.commands.reorderEffect("reverb", "filter");
 
-    const storedRack = JSON.parse(String(connection.getDebugSnapshot().storedState["rack.v1"]));
+    const storedRack = JSON.parse(String(connection.getDebugSnapshot().storedState["lane.v1"]));
     assert.equal(storedRack.order[0], "reverb");
     assert.equal(storedRack.enabled.chorus, true);
     assert.equal(adapter.getSnapshot().patch.effectEnabled.chorus, true);
