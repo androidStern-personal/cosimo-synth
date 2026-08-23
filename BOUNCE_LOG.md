@@ -184,3 +184,45 @@ M8/HUMAN_VALIDATION.
 Validation: production `web:build`; 3/3 planner/segmenter tests; the full M3
 worker/engine/determinism/three-patch A/B test; 3/3 bank-format tests; 3/3
 amplitude-release tests; 6/6 sampled-source tests; and 15/15 web bundle tests.
+
+## 2026-08-23 — M4: two-phase flip and exact single-level Revert
+
+- Added strict `cosimo.patch-document` and `bounce.v1` schemas. The Bounce
+  document records the SHA-256 digest, encoded byte length, ordered roots,
+  contiguous segment offsets/counts and note-off offsets, capture sample rate,
+  frozen tempo, velocity/hold/tail policy, monotonic Bounce generation, and a
+  single revert reference containing the complete pre-bounce patch document
+  plus the prior bank digest when recursive.
+- The neutral fresh-layer projection changes only what can color the baked
+  source twice: Source Mode becomes Bounce, the live voice filter becomes
+  Off, modulation routes are cleared, all Effects Lane devices are disabled,
+  articulation route amounts and filter overrides are cleared. Oscillator
+  parameters remain stored but inert. MSEG shapes/playback, ENV parameters and
+  names, macro names/values, play mode, glide, effect parameters, oscillator
+  parameters, and all other host values are preserved. Revert restores the
+  original canonical patch document exactly.
+- Added the transactional coordinator. Capture → digest validation → durable
+  write → inactive-slot live upload → offline sanity verification all finish
+  before publication. A single final callback queues bank commit, the neutral
+  runtime state, `sourceMode`, and `bounce.v1`. The candidate slot is aborted
+  on every earlier failure or cancellation.
+- Added the live bank driver around M2's protocol: authoritative DSP session
+  and sample rate readback; begin-state confirmation; one 6,000-frame batch in
+  flight; exact ack correlation; nonblocking sends; progress; explicit
+  commit/abort; timeout, DSP rejection, and transport errors. `engineStatus`
+  now includes `processor.session` and has an explicit request input so a host
+  attaching after initialization cannot miss the one-shot status event.
+- Added a live patch-document adapter which snapshots every parameter from
+  status/readback plus `modulation.v6`, `articulations.v4`, `lane.v1`, and
+  `bounce.v1`. Writes queue Source Mode last after parameters and structured
+  documents so the selected source has a committed bank and neutral layer.
+- Automated failure gates prove that mid-worker cancel, a mismatched digest,
+  an install-ack timeout, and verification failure perform no patch-document
+  write. Verification failure also aborts the staged inactive bank. The
+  generated Cmajor performer itself passed the status → staged batch → commit
+  path (session 42, 48 kHz, generation 1, four active frames), not only the
+  transport fake.
+
+Validation: production `web:build`; 5/5 transition/atomicity/Revert tests;
+4/4 live-install/document-adapter tests; 6/6 sampler tests; and 15/15 web
+bundle tests. Oscillator audio remains bit-identical to the M1/M2 pinned hash.
