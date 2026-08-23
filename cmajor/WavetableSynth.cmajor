@@ -1167,6 +1167,10 @@ graph WavetableSynth [[ main ]]
     input event wt::OscillatorWavetableLoadBegin wavetableLoadBegin;
     input event wt::OscillatorWavetableMipFrame wavetableMipFrame;
     input event wt::OscillatorServiceLoadAbort serviceLoadAbort;
+    input event wt::BounceBankLoadBegin bounceBankLoadBegin;
+    input event wt::BounceBankFrameBatch bounceBankFrameBatch;
+    input event wt::BounceBankCommit bounceBankCommit;
+    input event wt::BounceBankAbort bounceBankAbort;
     input event wt::WorkerLoadFailure workerLoadFailure;
     input event int32 wavetablePrewarmRequest;
     input event int32 runtimeSyncRequest;
@@ -1290,6 +1294,7 @@ graph WavetableSynth [[ main ]]
     // Host parameters are append-only. Amp Release is deliberately after the
     // pre-Bounce parameter surface so existing host automation slots stay put.
     input value float32 ampRelease [[ name: "Amp Release", min: 0.005f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
+    input value float32 sourceMode [[ name: "Source Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Oscillator|Bounce", rampFrames: 0 ]];
     // Rack structure is patch state, not host automation (ADR-007). These are struct
     // events, which carry no parameter purpose, so they are structurally
     // non-automatable rather than non-automatable by convention.
@@ -1328,6 +1333,8 @@ graph WavetableSynth [[ main ]]
     // Worker-only restore receipt. Signed session-scoped frontiers let the two
     // restore lanes prove delivery without filling the native event FIFO.
     output event wt::RuntimeInstallAck runtimeInstallAck;
+    output event wt::BounceBankUploadAck bounceBankUploadAck;
+    output event wt::BounceBankRuntimeState bounceBankRuntimeState;
 
     let voiceCount = 16;
 
@@ -1366,6 +1373,10 @@ graph WavetableSynth [[ main ]]
         wavetableLoadBegin -> sharedEngine.oscillatorWavetableLoadBeginIn;
         wavetableMipFrame -> sharedEngine.oscillatorWavetableMipFrameIn;
         serviceLoadAbort -> sharedEngine.oscillatorServiceLoadAbortIn;
+        bounceBankLoadBegin -> sharedEngine.bounceBankLoadBeginIn;
+        bounceBankFrameBatch -> sharedEngine.bounceBankFrameBatchIn;
+        bounceBankCommit -> sharedEngine.bounceBankCommitIn;
+        bounceBankAbort -> sharedEngine.bounceBankAbortIn;
         articulationSnapshot -> sharedEngine.articulationSnapshotIn;
         modulationMsegBuffer -> sharedEngine.modulationMsegBufferIn;
         modulationMsegPlayback -> sharedEngine.modulationMsegPlaybackIn;
@@ -1399,6 +1410,7 @@ graph WavetableSynth [[ main ]]
         env3Sustain -> sharedEngine.envelopeSustainIn[2];
         env3Release -> sharedEngine.envelopeReleaseIn[2];
         ampRelease -> sharedEngine.ampReleaseIn;
+        sourceMode -> sharedEngine.sourceModeIn;
         oscAWavetableSelect -> desiredTableMonitorA.tableSelectIn;
         oscBWavetableSelect -> desiredTableMonitorB.tableSelectIn;
         oscCWavetableSelect -> desiredTableMonitorC.tableSelectIn;
@@ -1515,5 +1527,7 @@ graph WavetableSynth [[ main ]]
         rackStateMonitor.effectiveRackStateOut -> effectiveRackState;
         sharedEngine.modulationRejectedRouteCountOut -> modulationRejectedRouteCount;
         sharedEngine.runtimeInstallAckOut -> runtimeInstallAck;
+        sharedEngine.bounceBankUploadAckOut -> bounceBankUploadAck;
+        sharedEngine.bounceBankRuntimeStateOut -> bounceBankRuntimeState;
     }
 }

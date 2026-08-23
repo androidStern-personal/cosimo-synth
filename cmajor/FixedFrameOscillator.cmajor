@@ -280,6 +280,29 @@ namespace wt
     let warpDecimatorTapCount = 257;
     let warpDecimatorCutoffNyquist = 0.125f;
 
+    // BounceBankStore Path B: immutable, packed stereo PCM banks live in two
+    // fixed slots. The inactive slot is the only upload target, so an abort
+    // cannot damage the audible bank and commit is one bounded slot flip.
+    // 19 roots x 6 seconds x 48 kHz = 5,472,000 stereo frames (20.9 MiB).
+    let bounceBankRootCapacity = 19;
+    let bounceBankFrameCapacity = 5472000;
+    let bounceBankSlotCount = 2;
+    let bounceBankChunkCount = 8;
+    let bounceBankChunkFrameCount = (bounceBankFrameCapacity + bounceBankChunkCount - 1)
+                                  / bounceBankChunkCount;
+    // Mirrors the measured reliable wavetable upload payload: one roughly
+    // 24 KiB event in flight, acknowledged before the next event is sent.
+    let bounceBankFrameBatchCapacity = 6000;
+    let sourceModeOscillator = 0;
+    let sourceModeBounce = 1;
+    let bouncePlaybackMakeupGain = 1.0f / 0.18f;
+    let bounceCaptureVelocityGain = 100.0f / 127.0f;
+    let bounceInstallRejectionNone = 0;
+    let bounceInstallRejectionSession = 1;
+    let bounceInstallRejectionGap = 2;
+    let bounceInstallRejectionInvalid = 3;
+    let bounceInstallRejectionBusy = 4;
+
     // One identity-bearing transport owns table loading for all three oscillators.
     struct OscillatorWavetableLoadBegin
     {
@@ -344,6 +367,69 @@ namespace wt
         int32 hasLoading;
         int32 loadingTableIndex;
         int32 loadingGeneration;
+    }
+
+    struct BounceBankLoadBegin
+    {
+        int32 dspSessionId;
+        int32 generation;
+        int32 deliverySerial;
+        int32 sampleRate;
+        int32 rootCount;
+        int32 totalFrameCount;
+        int32[bounceBankRootCapacity] rootNotes;
+        int32[bounceBankRootCapacity] rootFrameOffsets;
+        int32[bounceBankRootCapacity] rootFrameCounts;
+    }
+
+    struct BounceBankFrameBatch
+    {
+        int32 dspSessionId;
+        int32 generation;
+        int32 deliverySerial;
+        int32 frameIndexBase;
+        int32 frameCount;
+        int32[bounceBankFrameBatchCapacity] packedFrames;
+    }
+
+    struct BounceBankCommit
+    {
+        int32 dspSessionId;
+        int32 generation;
+        int32 deliverySerial;
+    }
+
+    struct BounceBankAbort
+    {
+        int32 dspSessionId;
+        int32 generation;
+        int32 deliverySerial;
+        int32 failureReasonCode;
+    }
+
+    struct BounceBankUploadAck
+    {
+        int32 dspSessionId;
+        int32 generation;
+        int32 deliverySerial;
+        int32 frameIndexBase;
+        int32 frameCount;
+        int32 receivedFrameCount;
+    }
+
+    struct BounceBankRuntimeState
+    {
+        int32 dspSessionId;
+        int32 hasActive;
+        int32 activeGeneration;
+        int32 activeRootCount;
+        int32 activeFrameCount;
+        int32 hasStaging;
+        int32 stagingGeneration;
+        int32 stagingReceivedFrameCount;
+        int32 stagingExpectedFrameCount;
+        int32 rejectedDeliverySerial;
+        int32 rejectionReason;
     }
 
     struct WavetableSlotMonitor
@@ -1265,6 +1351,10 @@ namespace wt
         input event OscillatorWavetableLoadBegin oscillatorWavetableLoadBeginIn;
         input event OscillatorWavetableMipFrame oscillatorWavetableMipFrameIn;
         input event OscillatorServiceLoadAbort oscillatorServiceLoadAbortIn;
+        input event BounceBankLoadBegin bounceBankLoadBeginIn;
+        input event BounceBankFrameBatch bounceBankFrameBatchIn;
+        input event BounceBankCommit bounceBankCommitIn;
+        input event BounceBankAbort bounceBankAbortIn;
         input event ArticulationSnapshotUpload articulationSnapshotIn;
         input event ModulationMsegBufferUpload modulationMsegBufferIn;
         input event ModulationMsegPlaybackUpload modulationMsegPlaybackIn;
@@ -1310,6 +1400,7 @@ namespace wt
         input value float32 envelopeSustainIn[modulationEnvSlotCount];
         input value float32 envelopeReleaseIn[modulationEnvSlotCount];
         input value float32 ampReleaseIn [[ name: "Amp Release", min: 0.005f, max: 10.0f, init: 0.2f, unit: "s", rampFrames: 0 ]];
+        input value float32 sourceModeIn [[ name: "Source Mode", min: 0.0f, max: 1.0f, init: 0.0f, discrete: true, step: 1.0f, text: "Oscillator|Bounce", rampFrames: 0 ]];
         output event OscillatorWavetableUploadAck oscillatorWavetableUploadAckOut;
         output event OscillatorWavetableMipRequest oscillatorWavetableMipRequestOut;
         output event OscillatorRuntimeServiceState oscillatorRuntimeServiceStateOut;
@@ -1327,6 +1418,8 @@ namespace wt
         output stream float32 rackModOut[rackModTargetCount];
         output event int32 modulationRejectedRouteCountOut;
         output event RuntimeInstallAck runtimeInstallAckOut;
+        output event BounceBankUploadAck bounceBankUploadAckOut;
+        output event BounceBankRuntimeState bounceBankRuntimeStateOut;
 
         int32[oscillatorCount] makeInactiveOscillatorSlots()
         {
@@ -1357,6 +1450,10 @@ namespace wt
         float32[voiceCount] voicePressure;
         float32[voiceCount] voiceSlide;
         float32[voiceCount] voiceVelocity;
+        float64[voiceCount] voiceBouncePosition;
+        int32[voiceCount] voiceBounceRootIndex;
+        int32[voiceCount] voiceBounceBankSlot;
+        bool[voiceCount] voiceBouncePlaying;
         float32[voiceCount] voicePitchGlideStep;
         int32[voiceCount] voiceGlideSamplesRemaining;
         int32[voiceCount] voiceActive;
@@ -1526,6 +1623,43 @@ namespace wt
         int32 acceptedArticulationSerial;
         float32[rendererPackedFloatCount] rendererFloats;
         int32[rendererPackedIntCount] rendererInts;
+
+        // BounceBankStore residency seam. Callers only address install,
+        // commit and read operations; the chunked arrays are a Path B detail.
+        static_assert (bounceBankFrameCapacity == 5472000);
+        static_assert (bounceBankChunkFrameCount == 684000);
+        int32[bounceBankChunkFrameCount] bounceSlot0Chunk0;
+        int32[bounceBankChunkFrameCount] bounceSlot0Chunk1;
+        int32[bounceBankChunkFrameCount] bounceSlot0Chunk2;
+        int32[bounceBankChunkFrameCount] bounceSlot0Chunk3;
+        int32[bounceBankChunkFrameCount] bounceSlot0Chunk4;
+        int32[bounceBankChunkFrameCount] bounceSlot0Chunk5;
+        int32[bounceBankChunkFrameCount] bounceSlot0Chunk6;
+        int32[bounceBankChunkFrameCount] bounceSlot0Chunk7;
+        int32[bounceBankChunkFrameCount] bounceSlot1Chunk0;
+        int32[bounceBankChunkFrameCount] bounceSlot1Chunk1;
+        int32[bounceBankChunkFrameCount] bounceSlot1Chunk2;
+        int32[bounceBankChunkFrameCount] bounceSlot1Chunk3;
+        int32[bounceBankChunkFrameCount] bounceSlot1Chunk4;
+        int32[bounceBankChunkFrameCount] bounceSlot1Chunk5;
+        int32[bounceBankChunkFrameCount] bounceSlot1Chunk6;
+        int32[bounceBankChunkFrameCount] bounceSlot1Chunk7;
+        int32[bounceBankSlotCount * bounceBankRootCapacity] bounceSlotRootNotes;
+        int32[bounceBankSlotCount * bounceBankRootCapacity] bounceSlotRootFrameOffsets;
+        int32[bounceBankSlotCount * bounceBankRootCapacity] bounceSlotRootFrameCounts;
+        int32[bounceBankSlotCount] bounceSlotGenerations;
+        int32[bounceBankSlotCount] bounceSlotSampleRates;
+        int32[bounceBankSlotCount] bounceSlotRootCounts;
+        int32[bounceBankSlotCount] bounceSlotFrameCounts;
+        int32 bounceActiveSlot = -1;
+        int32 bounceStagingSlot = -1;
+        int32 bounceStagingGeneration = 0;
+        int32 bounceStagingDeliverySerial = 0;
+        int32 bounceStagingReceivedFrameCount = 0;
+        int32 bounceGenerationFrontier = 0;
+        int32 bounceRejectedDeliverySerial = 0;
+        int32 bounceInstallRejectionReason = bounceInstallRejectionNone;
+        int32 sourceModeState = sourceModeOscillator;
 
         // Active slots are immutable while visible. Uploads write into the one
         // spare slot and publish only after every mip/frame has arrived.
@@ -3318,10 +3452,214 @@ namespace wt
             return voiceRackSourceMaxima.at (sourceIndex);
         }
 
+        int32 resolveSourceMode()
+        {
+            return sourceModeState;
+        }
+
+        int32 bounceRootMetadataIndex (int32 slotIndex, int32 rootIndex)
+        {
+            return (slotIndex * bounceBankRootCapacity) + rootIndex;
+        }
+
+        bool bounceSlotIsInUse (int32 slotIndex)
+        {
+            for (wrap<voiceCount> voice)
+                if (voiceBouncePlaying.at (voice)
+                    && voiceBounceBankSlot.at (voice) == slotIndex)
+                    return true;
+
+            return false;
+        }
+
+        void writeBouncePackedFrame (int32 slotIndex, int32 frameIndex, int32 packedFrame)
+        {
+            let chunkIndex = frameIndex / bounceBankChunkFrameCount;
+            let indexWithinChunk = frameIndex % bounceBankChunkFrameCount;
+
+            if (slotIndex == 0)
+            {
+                if (chunkIndex == 0) bounceSlot0Chunk0.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 1) bounceSlot0Chunk1.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 2) bounceSlot0Chunk2.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 3) bounceSlot0Chunk3.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 4) bounceSlot0Chunk4.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 5) bounceSlot0Chunk5.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 6) bounceSlot0Chunk6.at (indexWithinChunk) = packedFrame;
+                else bounceSlot0Chunk7.at (indexWithinChunk) = packedFrame;
+            }
+            else
+            {
+                if (chunkIndex == 0) bounceSlot1Chunk0.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 1) bounceSlot1Chunk1.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 2) bounceSlot1Chunk2.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 3) bounceSlot1Chunk3.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 4) bounceSlot1Chunk4.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 5) bounceSlot1Chunk5.at (indexWithinChunk) = packedFrame;
+                else if (chunkIndex == 6) bounceSlot1Chunk6.at (indexWithinChunk) = packedFrame;
+                else bounceSlot1Chunk7.at (indexWithinChunk) = packedFrame;
+            }
+        }
+
+        int32 readBouncePackedFrame (int32 slotIndex, int32 frameIndex)
+        {
+            let chunkIndex = frameIndex / bounceBankChunkFrameCount;
+            let indexWithinChunk = frameIndex % bounceBankChunkFrameCount;
+
+            if (slotIndex == 0)
+            {
+                if (chunkIndex == 0) return bounceSlot0Chunk0.at (indexWithinChunk);
+                if (chunkIndex == 1) return bounceSlot0Chunk1.at (indexWithinChunk);
+                if (chunkIndex == 2) return bounceSlot0Chunk2.at (indexWithinChunk);
+                if (chunkIndex == 3) return bounceSlot0Chunk3.at (indexWithinChunk);
+                if (chunkIndex == 4) return bounceSlot0Chunk4.at (indexWithinChunk);
+                if (chunkIndex == 5) return bounceSlot0Chunk5.at (indexWithinChunk);
+                if (chunkIndex == 6) return bounceSlot0Chunk6.at (indexWithinChunk);
+                return bounceSlot0Chunk7.at (indexWithinChunk);
+            }
+
+            if (chunkIndex == 0) return bounceSlot1Chunk0.at (indexWithinChunk);
+            if (chunkIndex == 1) return bounceSlot1Chunk1.at (indexWithinChunk);
+            if (chunkIndex == 2) return bounceSlot1Chunk2.at (indexWithinChunk);
+            if (chunkIndex == 3) return bounceSlot1Chunk3.at (indexWithinChunk);
+            if (chunkIndex == 4) return bounceSlot1Chunk4.at (indexWithinChunk);
+            if (chunkIndex == 5) return bounceSlot1Chunk5.at (indexWithinChunk);
+            if (chunkIndex == 6) return bounceSlot1Chunk6.at (indexWithinChunk);
+            return bounceSlot1Chunk7.at (indexWithinChunk);
+        }
+
+        float32<2> unpackBounceStereoFrame (int32 packedFrame)
+        {
+            int32 left = packedFrame & 65535;
+            if (left >= 32768)
+                left -= 65536;
+
+            let right = packedFrame >> 16;
+            return float32<2> (float32 (left) / 32768.0f,
+                               float32 (right) / 32768.0f);
+        }
+
+        float32 interpolateBounceSample (float32 y0, float32 y1,
+                                         float32 y2, float32 y3,
+                                         float32 amount)
+        {
+            return y1 + (0.5f * amount * (
+                y2 - y0 + (amount * (
+                    (2.0f * y0) - (5.0f * y1) + (4.0f * y2) - y3
+                    + (amount * ((3.0f * (y1 - y2)) + y3 - y0))
+                ))
+            ));
+        }
+
+        int32 findNearestBounceRoot (int32 slotIndex, float32 pitch)
+        {
+            let rootCount = bounceSlotRootCounts.at (slotIndex);
+            int32 nearestRoot = 0;
+            float32 nearestDistance = 1000.0f;
+
+            for (int32 rootIndex = 0; rootIndex < rootCount; ++rootIndex)
+            {
+                let note = bounceSlotRootNotes.at (
+                    bounceRootMetadataIndex (slotIndex, rootIndex));
+                let distance = std::intrinsics::abs (pitch - float32 (note));
+                // Strictly-less preserves the lower root on an exact tie.
+                if (distance < nearestDistance)
+                {
+                    nearestRoot = rootIndex;
+                    nearestDistance = distance;
+                }
+            }
+
+            return nearestRoot;
+        }
+
+        void stopBounceSampleForVoice (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            voiceBouncePlaying.at (voice) = false;
+            voiceBouncePosition.at (voice) = 0.0;
+            voiceBounceRootIndex.at (voice) = 0;
+            voiceBounceBankSlot.at (voice) = -1;
+        }
+
+        void startBounceSampleForVoice (int32 voiceIndex, float32 pitch)
+        {
+            stopBounceSampleForVoice (voiceIndex);
+
+            if (resolveSourceMode() != sourceModeBounce || bounceActiveSlot < 0)
+                return;
+
+            let voice = wrap<voiceCount> (voiceIndex);
+            let rootIndex = findNearestBounceRoot (bounceActiveSlot, pitch);
+            let metadataIndex = bounceRootMetadataIndex (bounceActiveSlot, rootIndex);
+            if (bounceSlotRootFrameCounts.at (metadataIndex) <= 0)
+                return;
+
+            voiceBounceBankSlot.at (voice) = bounceActiveSlot;
+            voiceBounceRootIndex.at (voice) = rootIndex;
+            voiceBouncePosition.at (voice) = 0.0;
+            voiceBouncePlaying.at (voice) = true;
+        }
+
+        float32<2> readBounceSampleForVoice (int32 voiceIndex)
+        {
+            let voice = wrap<voiceCount> (voiceIndex);
+            if (! voiceBouncePlaying.at (voice))
+                return float32<2> (0.0f);
+
+            let slotIndex = voiceBounceBankSlot.at (voice);
+            let rootIndex = voiceBounceRootIndex.at (voice);
+            if (slotIndex < 0 || slotIndex >= bounceBankSlotCount
+                || rootIndex < 0 || rootIndex >= bounceSlotRootCounts.at (slotIndex))
+            {
+                stopBounceSampleForVoice (voiceIndex);
+                return float32<2> (0.0f);
+            }
+
+            let metadataIndex = bounceRootMetadataIndex (slotIndex, rootIndex);
+            let frameOffset = bounceSlotRootFrameOffsets.at (metadataIndex);
+            let frameCount = bounceSlotRootFrameCounts.at (metadataIndex);
+            let position = voiceBouncePosition.at (voice);
+            if (frameCount <= 0 || position >= float64 (frameCount))
+            {
+                stopBounceSampleForVoice (voiceIndex);
+                return float32<2> (0.0f);
+            }
+
+            let centerIndex = int32 (std::intrinsics::floor (position));
+            let amount = float32 (position - float64 (centerIndex));
+            let local0 = std::intrinsics::clamp (centerIndex - 1, 0, frameCount - 1);
+            let local1 = std::intrinsics::clamp (centerIndex, 0, frameCount - 1);
+            let local2 = std::intrinsics::clamp (centerIndex + 1, 0, frameCount - 1);
+            let local3 = std::intrinsics::clamp (centerIndex + 2, 0, frameCount - 1);
+            let frame0 = unpackBounceStereoFrame (readBouncePackedFrame (slotIndex, frameOffset + local0));
+            let frame1 = unpackBounceStereoFrame (readBouncePackedFrame (slotIndex, frameOffset + local1));
+            let frame2 = unpackBounceStereoFrame (readBouncePackedFrame (slotIndex, frameOffset + local2));
+            let frame3 = unpackBounceStereoFrame (readBouncePackedFrame (slotIndex, frameOffset + local3));
+            let sample = float32<2> (
+                interpolateBounceSample (frame0[0], frame1[0], frame2[0], frame3[0], amount),
+                interpolateBounceSample (frame0[1], frame1[1], frame2[1], frame3[1], amount)
+            );
+
+            let rootNote = bounceSlotRootNotes.at (metadataIndex);
+            let pitchSemitones = voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice);
+            let pitchRate = std::intrinsics::pow (
+                2.0f, (pitchSemitones - float32 (rootNote)) / 12.0f);
+            let sampleRateRatio = float32 (bounceSlotSampleRates.at (slotIndex))
+                                / float32 (processor.frequency);
+            voiceBouncePosition.at (voice) += float64 (pitchRate * sampleRateRatio);
+            if (voiceBouncePosition.at (voice) >= float64 (frameCount))
+                voiceBouncePlaying.at (voice) = false;
+
+            return sample * bouncePlaybackMakeupGain;
+        }
+
         bool voiceIsSoundingForRackModulation (int32 voiceIndex)
         {
             let voice = wrap<voiceCount> (voiceIndex);
-            return voiceActive.at (voice) != 0 || envelopes[voice].gainOut > 0.0f;
+            return voiceActive.at (voice) != 0
+                || envelopes[voice].gainOut > 0.0f
+                || voiceBouncePlaying.at (voice);
         }
 
         void updateRackModulationOutputs()
@@ -3848,6 +4186,7 @@ namespace wt
             voiceTrackingSerial.at (voice) = nextVoiceTrackingSerial;
             nextVoiceTrackingSerial += 1;
             resetVoiceOscillatorLifecycle (index);
+            startBounceSampleForVoice (index, note.pitch);
             resetFilterState (index);
             resetVoiceGeneratorModulationTargets (index);
 
@@ -3939,6 +4278,7 @@ namespace wt
                 voiceGeneration.at (voice) = nextVoiceGeneration;
                 nextVoiceGeneration += 1;
                 resetVoiceOscillatorLifecycle (index);
+                startBounceSampleForVoice (index, change.pitch);
                 resetFilterState (index);
                 envelopes[voice].eventIn <- note;
                 triggerVoiceModulators (index);
@@ -4493,6 +4833,244 @@ namespace wt
             completeModulationRuntimeInstall (upload.deliverySerial);
         }
 
+        void clearBounceStagingIdentity()
+        {
+            bounceStagingSlot = -1;
+            bounceStagingGeneration = 0;
+            bounceStagingDeliverySerial = 0;
+            bounceStagingReceivedFrameCount = 0;
+        }
+
+        void emitBounceBankRuntimeState()
+        {
+            BounceBankRuntimeState state;
+            state.dspSessionId = currentDspSessionId;
+            state.hasActive = bounceActiveSlot >= 0 ? 1 : 0;
+            state.activeGeneration = bounceActiveSlot >= 0
+                ? bounceSlotGenerations.at (bounceActiveSlot) : 0;
+            state.activeRootCount = bounceActiveSlot >= 0
+                ? bounceSlotRootCounts.at (bounceActiveSlot) : 0;
+            state.activeFrameCount = bounceActiveSlot >= 0
+                ? bounceSlotFrameCounts.at (bounceActiveSlot) : 0;
+            state.hasStaging = bounceStagingSlot >= 0 ? 1 : 0;
+            state.stagingGeneration = bounceStagingGeneration;
+            state.stagingReceivedFrameCount = bounceStagingReceivedFrameCount;
+            state.stagingExpectedFrameCount = bounceStagingSlot >= 0
+                ? bounceSlotFrameCounts.at (bounceStagingSlot) : 0;
+            state.rejectedDeliverySerial = bounceRejectedDeliverySerial;
+            state.rejectionReason = bounceInstallRejectionReason;
+            bounceBankRuntimeStateOut <- state;
+        }
+
+        void rejectBounceBankInstall (int32 deliverySerial,
+                                      int32 rejectionReason,
+                                      bool discardStaging)
+        {
+            bounceRejectedDeliverySerial = deliverySerial;
+            bounceInstallRejectionReason = rejectionReason;
+            if (discardStaging)
+                clearBounceStagingIdentity();
+            emitBounceBankRuntimeState();
+        }
+
+        bool isValidBounceBankBegin (BounceBankLoadBegin& request)
+        {
+            if (request.sampleRate <= 0
+                || request.rootCount <= 0
+                || request.rootCount > bounceBankRootCapacity
+                || request.totalFrameCount <= 0
+                || request.totalFrameCount > bounceBankFrameCapacity)
+                return false;
+
+            int32 expectedFrameOffset = 0;
+            int32 previousRootNote = -1;
+            for (int32 rootIndex = 0; rootIndex < request.rootCount; ++rootIndex)
+            {
+                let rootNote = request.rootNotes.at (rootIndex);
+                let frameOffset = request.rootFrameOffsets.at (rootIndex);
+                let frameCount = request.rootFrameCounts.at (rootIndex);
+                if (rootNote < 0 || rootNote > 127
+                    || rootNote <= previousRootNote
+                    || frameOffset != expectedFrameOffset
+                    || frameCount <= 0
+                    || frameOffset + frameCount > request.totalFrameCount)
+                    return false;
+
+                previousRootNote = rootNote;
+                expectedFrameOffset += frameCount;
+            }
+
+            return expectedFrameOffset == request.totalFrameCount;
+        }
+
+        void beginBounceBankLoad (BounceBankLoadBegin& request)
+        {
+            if (request.dspSessionId != currentDspSessionId)
+            {
+                rejectBounceBankInstall (
+                    request.deliverySerial, bounceInstallRejectionSession, false);
+                return;
+            }
+
+            if (request.generation <= 0
+                || request.generation <= bounceGenerationFrontier
+                || request.deliverySerial <= 0
+                || ! isValidBounceBankBegin (request))
+            {
+                rejectBounceBankInstall (
+                    request.deliverySerial, bounceInstallRejectionInvalid, false);
+                return;
+            }
+
+            let nextSlot = bounceActiveSlot == 0 ? 1 : 0;
+            if (bounceSlotIsInUse (nextSlot))
+            {
+                rejectBounceBankInstall (
+                    request.deliverySerial, bounceInstallRejectionBusy, false);
+                return;
+            }
+
+            bounceGenerationFrontier = request.generation;
+            bounceStagingSlot = nextSlot;
+            bounceStagingGeneration = request.generation;
+            bounceStagingDeliverySerial = request.deliverySerial;
+            bounceStagingReceivedFrameCount = 0;
+            bounceSlotSampleRates.at (nextSlot) = request.sampleRate;
+            bounceSlotRootCounts.at (nextSlot) = request.rootCount;
+            bounceSlotFrameCounts.at (nextSlot) = request.totalFrameCount;
+
+            for (int32 rootIndex = 0; rootIndex < bounceBankRootCapacity; ++rootIndex)
+            {
+                let metadataIndex = bounceRootMetadataIndex (nextSlot, rootIndex);
+                bounceSlotRootNotes.at (metadataIndex) = rootIndex < request.rootCount
+                    ? request.rootNotes.at (rootIndex) : 0;
+                bounceSlotRootFrameOffsets.at (metadataIndex) = rootIndex < request.rootCount
+                    ? request.rootFrameOffsets.at (rootIndex) : 0;
+                bounceSlotRootFrameCounts.at (metadataIndex) = rootIndex < request.rootCount
+                    ? request.rootFrameCounts.at (rootIndex) : 0;
+            }
+
+            bounceRejectedDeliverySerial = 0;
+            bounceInstallRejectionReason = bounceInstallRejectionNone;
+            emitBounceBankRuntimeState();
+        }
+
+        void receiveBounceBankFrameBatch (BounceBankFrameBatch& batch)
+        {
+            if (batch.dspSessionId != currentDspSessionId)
+            {
+                rejectBounceBankInstall (
+                    batch.deliverySerial, bounceInstallRejectionSession, false);
+                return;
+            }
+
+            if (bounceStagingSlot < 0
+                || batch.generation != bounceStagingGeneration)
+            {
+                rejectBounceBankInstall (
+                    batch.deliverySerial, bounceInstallRejectionInvalid, false);
+                return;
+            }
+
+            let expectedFrameCount = bounceSlotFrameCounts.at (bounceStagingSlot);
+            if (batch.deliverySerial != bounceStagingDeliverySerial + 1
+                || batch.frameIndexBase != bounceStagingReceivedFrameCount)
+            {
+                rejectBounceBankInstall (
+                    batch.deliverySerial, bounceInstallRejectionGap, true);
+                return;
+            }
+
+            if (batch.frameCount <= 0
+                || batch.frameCount > bounceBankFrameBatchCapacity
+                || batch.frameIndexBase + batch.frameCount > expectedFrameCount)
+            {
+                rejectBounceBankInstall (
+                    batch.deliverySerial, bounceInstallRejectionInvalid, true);
+                return;
+            }
+
+            for (int32 batchIndex = 0; batchIndex < batch.frameCount; ++batchIndex)
+                writeBouncePackedFrame (
+                    bounceStagingSlot,
+                    batch.frameIndexBase + batchIndex,
+                    batch.packedFrames.at (batchIndex));
+
+            bounceStagingDeliverySerial = batch.deliverySerial;
+            bounceStagingReceivedFrameCount += batch.frameCount;
+            BounceBankUploadAck ack;
+            ack.dspSessionId = currentDspSessionId;
+            ack.generation = bounceStagingGeneration;
+            ack.deliverySerial = batch.deliverySerial;
+            ack.frameIndexBase = batch.frameIndexBase;
+            ack.frameCount = batch.frameCount;
+            ack.receivedFrameCount = bounceStagingReceivedFrameCount;
+            bounceBankUploadAckOut <- ack;
+        }
+
+        void commitBounceBankLoad (BounceBankCommit& request)
+        {
+            if (request.dspSessionId != currentDspSessionId)
+            {
+                rejectBounceBankInstall (
+                    request.deliverySerial, bounceInstallRejectionSession, false);
+                return;
+            }
+
+            if (bounceStagingSlot < 0
+                || request.generation != bounceStagingGeneration
+                || request.deliverySerial != bounceStagingDeliverySerial + 1
+                || bounceStagingReceivedFrameCount
+                    != bounceSlotFrameCounts.at (bounceStagingSlot))
+            {
+                rejectBounceBankInstall (
+                    request.deliverySerial, bounceInstallRejectionInvalid,
+                    request.generation == bounceStagingGeneration);
+                return;
+            }
+
+            let committedSlot = bounceStagingSlot;
+            bounceSlotGenerations.at (committedSlot) = bounceStagingGeneration;
+            bounceActiveSlot = committedSlot;
+            clearBounceStagingIdentity();
+            bounceRejectedDeliverySerial = 0;
+            bounceInstallRejectionReason = bounceInstallRejectionNone;
+            emitBounceBankRuntimeState();
+        }
+
+        void abortBounceBankLoad (BounceBankAbort& request)
+        {
+            if (request.dspSessionId != currentDspSessionId
+                || request.generation != bounceStagingGeneration)
+                return;
+
+            clearBounceStagingIdentity();
+            bounceRejectedDeliverySerial = request.deliverySerial;
+            bounceInstallRejectionReason = request.failureReasonCode > 0
+                ? request.failureReasonCode : bounceInstallRejectionInvalid;
+            emitBounceBankRuntimeState();
+        }
+
+        event bounceBankLoadBeginIn (BounceBankLoadBegin request)
+        {
+            beginBounceBankLoad (request);
+        }
+
+        event bounceBankFrameBatchIn (BounceBankFrameBatch batch)
+        {
+            receiveBounceBankFrameBatch (batch);
+        }
+
+        event bounceBankCommitIn (BounceBankCommit request)
+        {
+            commitBounceBankLoad (request);
+        }
+
+        event bounceBankAbortIn (BounceBankAbort request)
+        {
+            abortBounceBankLoad (request);
+        }
+
         void beginWavetableLoad (int32 dspSessionId,
                                  int32 oscillatorIndex,
                                  int32 requestedGeneration,
@@ -4636,6 +5214,7 @@ namespace wt
         {
             previewFrequencyHzState = previewFrequencyHzState < 0.0f ? 0.0f : previewFrequencyHzState;
             glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
+            sourceModeState = sourceModeIn >= 0.5f ? sourceModeBounce : sourceModeOscillator;
             updateOscillatorInputState();
 
             for (wrap<oscillatorCount> oscillator)
@@ -4688,6 +5267,7 @@ namespace wt
             {
                 clearVoiceArticulation (int32 (voice));
                 resetVoiceGeneratorModulationTargets (int32 (voice));
+                stopBounceSampleForVoice (int32 (voice));
             }
 
             initialiseExternalRendererState();
@@ -4695,13 +5275,16 @@ namespace wt
             loop
             {
                 glideTimeSecondsState = std::intrinsics::max (0.0f, glideTimeIn);
+                sourceModeState = sourceModeIn >= 0.5f ? sourceModeBounce : sourceModeOscillator;
                 updateOscillatorInputState();
+                let isBounceSource = resolveSourceMode() == sourceModeBounce;
 
                 if (! hasEmittedInitialRuntimeState)
                 {
                     for (wrap<oscillatorCount> oscillator)
                         emitRuntimeServiceState (int32 (oscillator));
 
+                    emitBounceBankRuntimeState();
                     hasEmittedInitialRuntimeState = true;
                 }
 
@@ -4710,10 +5293,13 @@ namespace wt
                 float32 trackingPitchHz = 0.0f;
                 int32 trackingSerial = -1;
 
-                for (wrap<voiceCount> voice)
-                    clearExternalRendererVoiceControls (int32 (voice));
+                if (! isBounceSource)
+                {
+                    for (wrap<voiceCount> voice)
+                        clearExternalRendererVoiceControls (int32 (voice));
 
-                clearExternalRendererOutputs();
+                    clearExternalRendererOutputs();
+                }
                 beginModulationFrame();
 
                 for (wrap<voiceCount> voice)
@@ -4851,24 +5437,27 @@ namespace wt
                                 + voiceOscillatorModulationOffset (
                                     voiceIndex, oscillator, modulationTargetUnisonWarpSpread));
 
-                        prepareExternalRendererOscillator (
-                            voiceIndex,
-                            oscillator,
-                            effectivePosition,
-                            voiceOscillatorWarpMode (voiceIndex, oscillator),
-                            effectiveWarpAmount,
-                            effectivePitchSemitones,
-                            effectivePan,
-                            effectiveGain,
-                            effectiveUnisonVoices,
-                            effectiveUnisonDetune,
-                            effectiveUnisonBlend,
-                            effectiveUnisonWidth,
-                            voiceOscillatorUnisonDetuneMode (voiceIndex, oscillator),
-                            voiceOscillatorUnisonStackMode (voiceIndex, oscillator),
-                            effectivePositionSpread,
-                            effectiveWarpSpread
-                        );
+                        if (! isBounceSource)
+                        {
+                            prepareExternalRendererOscillator (
+                                voiceIndex,
+                                oscillator,
+                                effectivePosition,
+                                voiceOscillatorWarpMode (voiceIndex, oscillator),
+                                effectiveWarpAmount,
+                                effectivePitchSemitones,
+                                effectivePan,
+                                effectiveGain,
+                                effectiveUnisonVoices,
+                                effectiveUnisonDetune,
+                                effectiveUnisonBlend,
+                                effectiveUnisonWidth,
+                                voiceOscillatorUnisonDetuneMode (voiceIndex, oscillator),
+                                voiceOscillatorUnisonStackMode (voiceIndex, oscillator),
+                                effectivePositionSpread,
+                                effectiveWarpSpread
+                            );
+                        }
 
                         if (oscillator == oscillatorA)
                         {
@@ -4894,24 +5483,30 @@ namespace wt
                             {
                                 trackingSerial = voiceSerial;
                                 trackingPitchHz = std::notes::noteToFrequency (
-                                    effectivePitchSemitones);
+                                    isBounceSource
+                                        ? voiceCurrentPitch.at (voice) + voiceBendSemitones.at (voice)
+                                        : effectivePitchSemitones);
                             }
                         }
                     }
                 }
 
-                let rendererSucceeded = CosimoThreeOscillatorRenderer::renderAll (
-                    rendererFloats,
-                    rendererInts,
-                    packedSlot0Chunk0, packedSlot0Chunk1,
-                    packedSlot0Chunk2, packedSlot0Chunk3,
-                    packedSlot1Chunk0, packedSlot1Chunk1,
-                    packedSlot1Chunk2, packedSlot1Chunk3,
-                    packedSlot2Chunk0, packedSlot2Chunk1,
-                    packedSlot2Chunk2, packedSlot2Chunk3,
-                    packedSlot3Chunk0, packedSlot3Chunk1,
-                    packedSlot3Chunk2, packedSlot3Chunk3
-                );
+                int32 rendererSucceeded = 0;
+                if (! isBounceSource)
+                {
+                    rendererSucceeded = CosimoThreeOscillatorRenderer::renderAll (
+                        rendererFloats,
+                        rendererInts,
+                        packedSlot0Chunk0, packedSlot0Chunk1,
+                        packedSlot0Chunk2, packedSlot0Chunk3,
+                        packedSlot1Chunk0, packedSlot1Chunk1,
+                        packedSlot1Chunk2, packedSlot1Chunk3,
+                        packedSlot2Chunk0, packedSlot2Chunk1,
+                        packedSlot2Chunk2, packedSlot2Chunk3,
+                        packedSlot3Chunk0, packedSlot3Chunk1,
+                        packedSlot3Chunk2, packedSlot3Chunk3
+                    );
+                }
 
                 for (wrap<voiceCount> voice)
                 {
@@ -4921,7 +5516,13 @@ namespace wt
                     float32 noteLeft = 0.0f;
                     float32 noteRight = 0.0f;
 
-                    if (rendererSucceeded != 0)
+                    if (isBounceSource)
+                    {
+                        let bounceSample = readBounceSampleForVoice (int32 (voice));
+                        noteLeft = bounceSample[0];
+                        noteRight = bounceSample[1];
+                    }
+                    else if (rendererSucceeded != 0)
                     {
                         let outputIndex = rendererNoteOutputOffset + (int32 (voice) * 2);
                         noteLeft = rendererFloats.at (outputIndex);
@@ -4961,7 +5562,11 @@ namespace wt
                         unisonRightFilters.at (voice).reset();
                     }
 
-                    let gain = envelopes[voice].gainOut;
+                    let gain = isBounceSource
+                        ? std::intrinsics::min (
+                            envelopes[voice].gainOut,
+                            voiceVelocity.at (voice)) / bounceCaptureVelocityGain
+                        : envelopes[voice].gainOut;
                     leftMix += noteLeft * gain;
                     rightMix += noteRight * gain;
                 }
