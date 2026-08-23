@@ -1,0 +1,43 @@
+{
+  "format": "cosimo.bounceOfflineSpeed",
+  "version": 1,
+  "measuredAt": "2026-08-23T14:27:00Z",
+  "baselineCommit": "a80bdface7f10406d3e70aa2117086910b8b2017",
+  "host": "GitHub Codespace, Linux x86_64, shared vCPU",
+  "generatedPath": "build/web/cmaj_Cosimo_Synth.js",
+  "sampleRate": 48000,
+  "renderedFramesPerRun": 144000,
+  "initialisationMs": 65.202778,
+  "syntheticInstallMs": 26.798745999999994,
+  "runs": [
+    {
+      "run": 1,
+      "wallMs": 1114.288727,
+      "speedX": 2.6923004130867416,
+      "peak": 0.10092192888259888,
+      "rms": 0.07252571487603654
+    },
+    {
+      "run": 2,
+      "wallMs": 1064.5051810000002,
+      "speedX": 2.818210802113512,
+      "peak": 0.10092859715223312,
+      "rms": 0.07865262485081233
+    },
+    {
+      "run": 3,
+      "wallMs": 1072.118011,
+      "speedX": 2.798199423216294,
+      "peak": 0.10092078894376755,
+      "rms": 0.07080483647968965
+    }
+  ],
+  "medianSpeedX": 2.798199423216294,
+  "projection": {
+    "rootCount": 19,
+    "captureSecondsPerRoot": 9,
+    "singleWorkerSeconds": 62.349579409,
+    "fourWorkerSeconds": 15.58739485225
+  },
+  "command": "node scripts/probe_bounce_offline_speed.mjs build/web/cmaj_Cosimo_Synth.js"
+}

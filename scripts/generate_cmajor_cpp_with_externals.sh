@@ -8,6 +8,7 @@ class_name="${3:-WavetableSynth}"
 metadata_path=""
 max_frames_per_block="512"
 target="cpp"
+build_jobs="${COSIMO_CMAJOR_BUILD_JOBS:-4}"
 if (( $# >= 3 )); then
   shift 3
 else
@@ -67,7 +68,7 @@ host_cmake -S "$repo_root/tools/cmajor_external_codegen" -B "$build_dir" \
   -DCMAKE_BUILD_TYPE=Release \
   -DCMAKE_OSX_SYSROOT=macosx \
   -DCMAJOR_SOURCE_PATH="$cmajor_source_path"
-host_cmake --build "$build_dir" --config Release --target cosimo_cmajor_external_codegen -j 4
+host_cmake --build "$build_dir" --config Release --target cosimo_cmajor_external_codegen -j "$build_jobs"
 
 mkdir -p "$(dirname "$output_path")"
 if [[ -n "$metadata_path" ]]; then
