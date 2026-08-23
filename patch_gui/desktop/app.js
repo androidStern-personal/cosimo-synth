@@ -11854,7 +11854,7 @@ class l5 {
           "OPFS atomic move is unavailable; use the IndexedDB fallback"
         );
       try {
-        await f.move(rv(a));
+        await f.move(l, rv(a));
       } catch (A) {
         const p = await this.get(a).catch(() => null);
         if (p === null) throw A;
