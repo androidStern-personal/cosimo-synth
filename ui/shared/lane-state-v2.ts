@@ -1,0 +1,625 @@
+import type { PatchConnectionLike } from "./cmajor-react";
+import type { LaneDeviceInstance, LaneDeviceType, LaneSlotAssignments } from "./lane-modulation-targets";
+import {
+    LANE_SLOT_ORDINAL_COUNT,
+    LANE_SLOT_PARAM_COUNT,
+    buildLaneSlotParamValues,
+    getLaneSlotId,
+    laneDeviceParamEndpoints,
+} from "./lane-slot-params";
+import {
+    EFFECT_ID_TO_LANE_TYPE,
+    LANE_BRANCH_TAG_BITS,
+    LANE_BRANCH_TAG_SHIFT,
+    LANE_CHAIN_SLOT_COUNT,
+    LANE_MAX_BANDS_PER_SPLIT,
+    LANE_MAX_BRANCHES_PER_GROUP,
+    LANE_MAX_CHAIN_LENGTH,
+    LANE_PARALLEL_SLOT_BASE,
+    LANE_PARALLEL_UNIT_COUNT,
+    LANE_SLOT_PARAMS_ENDPOINT_ID,
+    LANE_SPLIT_PARAM_XOVER_HIGH_HZ,
+    LANE_SPLIT_PARAM_XOVER_LOW_HZ,
+    LANE_SPLIT_SLOT_BASE,
+    LANE_SPLIT_UNIT_COUNT,
+    LANE_TOPOLOGY_ENDPOINT_ID,
+    RACK_EFFECT_ORDER,
+    createDefaultLaneState,
+    decodeLaneBranchTag,
+    decodeLaneSlotId,
+    encodeLaneSlotWithBranchTag,
+    isLaneGroupMarkerSlot,
+    isLaneSplitMarkerSlot,
+    parseLaneState,
+    type LaneState,
+} from "./lane-state";
+
+/**
+ * lane.v2 — the device-instance + topology-tree document (M3).
+ *
+ * v1 pins one device of each type in a serial permutation; v2 is the general
+ * form the subway map renders and the marker-grammar wire carries: an
+ * INSTANCE TABLE (up to the pool's five instances per type) and a CHAIN TREE
+ * whose nodes are device placements or groups. A group's branches hold
+ * device placements only — exactly as expressive as the wire grammar, which
+ * cannot represent nesting (a marker inside a group closes it).
+ *
+ * Identity is structural, not positional:
+ *  - `delay#2` is the instance id everywhere (documents, modulation targets,
+ *    pickers), and instance #n statically holds slot ordinal n-1 — slot
+ *    assignment is the identity map, so a route can never silently retarget.
+ *  - `parallel#n` / `split#n` name marker UNITS the same way (unit n-1), so
+ *    a group keeps its engine slot — and a split keeps its filter state —
+ *    across chain reorders.
+ *
+ * The document stores what the wire validates: crossovers live in the
+ * engine's 40..18000 clamp range, fan-outs in 2..4 (parallel) / 2..3
+ * (split), and the flattened chain — placements plus one marker per group —
+ * fits one topology upload. Parsing validates and never coerces (C11);
+ * deserializing falls back to the clean default, upgrading v1 documents in
+ * place so existing patches load unchanged.
+ */
+
+export const LANE_SPLIT_XOVER_MIN_HZ = 40;
+export const LANE_SPLIT_XOVER_MAX_HZ = 18000;
+
+/** Device types in stable identity order (the RACK_EFFECT_ORDER mirror). */
+export const LANE_DEVICE_TYPE_ORDER: ReadonlyArray<LaneDeviceType> =
+    RACK_EFFECT_ORDER.map((effectId) => EFFECT_ID_TO_LANE_TYPE[effectId]);
+
+export type LaneDeviceRecordV2 = {
+    readonly params: Readonly<Record<string, number>>;
+};
+
+export type LaneDevicePlacementV2 = {
+    readonly kind: "device";
+    readonly deviceId: string;
+    readonly enabled: boolean;
+};
+
+export type LaneParallelGroupV2 = {
+    readonly kind: "parallel";
+    readonly groupId: string;
+    readonly enabled: boolean;
+    readonly branches: ReadonlyArray<ReadonlyArray<LaneDevicePlacementV2>>;
+};
+
+export type LaneSplitGroupV2 = {
+    readonly kind: "split";
+    readonly groupId: string;
+    readonly enabled: boolean;
+    readonly xoverLowHz: number;
+    readonly xoverHighHz: number;
+    readonly branches: ReadonlyArray<ReadonlyArray<LaneDevicePlacementV2>>;
+};
+
+export type LaneGroupV2 = LaneParallelGroupV2 | LaneSplitGroupV2;
+export type LaneChainNodeV2 = LaneDevicePlacementV2 | LaneGroupV2;
+
+export type LaneStateV2 = {
+    readonly format: "cosimo.lane";
+    readonly version: 2;
+    readonly devices: Readonly<Record<string, LaneDeviceRecordV2>>;
+    readonly chain: ReadonlyArray<LaneChainNodeV2>;
+};
+
+export type LaneStateV2ParseOutcome =
+    | { readonly _tag: "ok"; readonly value: LaneStateV2 }
+    | { readonly _tag: "err"; readonly message: string };
+
+export type ParsedLaneInstanceId = {
+    readonly deviceType: LaneDeviceType;
+    readonly instanceNumber: number;
+};
+
+const LANE_INSTANCE_ID_PATTERN = /^([a-zA-Z]+)#([1-9][0-9]*)$/;
+const LANE_GROUP_ID_PATTERN = /^(parallel|split)#([1-9][0-9]*)$/;
+
+/** Parse a `delay#2`-style instance id within the pool's ordinal range. */
+export function parseLaneInstanceId(value: unknown): ParsedLaneInstanceId | null {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const match = LANE_INSTANCE_ID_PATTERN.exec(value);
+    if (match === null) {
+        return null;
+    }
+    const deviceType = LANE_DEVICE_TYPE_ORDER.find((candidate) => candidate === match[1]);
+    if (deviceType === undefined) {
+        return null;
+    }
+    const instanceNumber = Number(match[2]);
+    if (instanceNumber > LANE_SLOT_ORDINAL_COUNT) {
+        return null;
+    }
+    return { deviceType, instanceNumber };
+}
+
+type ParsedLaneGroupId = {
+    readonly groupKind: "parallel" | "split";
+    readonly unitNumber: number;
+};
+
+function parseLaneGroupId(value: unknown): ParsedLaneGroupId | null {
+    if (typeof value !== "string") {
+        return null;
+    }
+    const match = LANE_GROUP_ID_PATTERN.exec(value);
+    if (match === null) {
+        return null;
+    }
+    const groupKind = match[1] as "parallel" | "split";
+    const unitNumber = Number(match[2]);
+    const unitCount = groupKind === "parallel" ? LANE_PARALLEL_UNIT_COUNT : LANE_SPLIT_UNIT_COUNT;
+    if (unitNumber > unitCount) {
+        return null;
+    }
+    return { groupKind, unitNumber };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function hasExactKeys(value: Record<string, unknown>, keys: ReadonlyArray<string>): boolean {
+    const own = Reflect.ownKeys(value);
+    return own.length === keys.length
+        && own.every((key) => typeof key === "string" && keys.includes(key));
+}
+
+function err(message: string): LaneStateV2ParseOutcome {
+    return { _tag: "err", message: `lane.v2 ${message}` };
+}
+
+function parseDeviceRecord(deviceId: string, input: unknown):
+    { record: LaneDeviceRecordV2 } | { failure: LaneStateV2ParseOutcome } {
+    const parsedId = parseLaneInstanceId(deviceId);
+    if (parsedId === null) {
+        return { failure: err(`device id ${deviceId} is not a pool instance`) };
+    }
+    if (!isRecord(input) || !hasExactKeys(input, ["params"]) || !isRecord(input.params)) {
+        return { failure: err(`device ${deviceId} must be { params }`) };
+    }
+    const endpoints = laneDeviceParamEndpoints(parsedId.deviceType);
+    if (Reflect.ownKeys(input.params).length !== endpoints.length) {
+        return { failure: err(`device ${deviceId} must carry every parameter once`) };
+    }
+    const params: Record<string, number> = {};
+    for (const endpointID of endpoints) {
+        const value = input.params[endpointID];
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+            return { failure: err(`device ${deviceId}.${endpointID} must be a finite number`) };
+        }
+        params[endpointID] = value;
+    }
+    return { record: { params } };
+}
+
+function parsePlacement(input: unknown, deviceIds: ReadonlySet<string>):
+    { placement: LaneDevicePlacementV2 } | { failure: LaneStateV2ParseOutcome } {
+    if (!isRecord(input) || input.kind !== "device") {
+        return { failure: err("branches may hold device placements only") };
+    }
+    if (!hasExactKeys(input, ["kind", "deviceId", "enabled"])) {
+        return { failure: err("a device placement is { kind, deviceId, enabled }") };
+    }
+    if (typeof input.deviceId !== "string" || !deviceIds.has(input.deviceId)) {
+        return { failure: err(`placement references unknown device ${String(input.deviceId)}`) };
+    }
+    if (typeof input.enabled !== "boolean") {
+        return { failure: err(`placement of ${input.deviceId} needs a boolean enable`) };
+    }
+    return { placement: { kind: "device", deviceId: input.deviceId, enabled: input.enabled } };
+}
+
+function isValidCrossoverHz(value: unknown): value is number {
+    return typeof value === "number" && Number.isFinite(value)
+        && value >= LANE_SPLIT_XOVER_MIN_HZ && value <= LANE_SPLIT_XOVER_MAX_HZ;
+}
+
+/** Parse unknown persisted data into the complete clean lane.v2 schema. */
+export function parseLaneStateV2(input: unknown): LaneStateV2ParseOutcome {
+    let document: unknown = input;
+    if (typeof input === "string") {
+        try {
+            document = JSON.parse(input);
+        } catch (cause: unknown) {
+            const detail = cause instanceof Error ? cause.message : String(cause);
+            return err(`is not valid JSON: ${detail}`);
+        }
+    }
+    if (!isRecord(document) || !hasExactKeys(document, ["format", "version", "devices", "chain"])) {
+        return err("must be { format, version, devices, chain }");
+    }
+    if (document.format !== "cosimo.lane" || document.version !== 2) {
+        return err("must be cosimo.lane version 2");
+    }
+    if (!isRecord(document.devices)) {
+        return err("devices must be an object");
+    }
+    if (!Array.isArray(document.chain)) {
+        return err("chain must be an array");
+    }
+
+    const devices: Record<string, LaneDeviceRecordV2> = {};
+    for (const deviceId of Reflect.ownKeys(document.devices)) {
+        if (typeof deviceId !== "string") {
+            return err("device ids must be strings");
+        }
+        const parsed = parseDeviceRecord(deviceId, document.devices[deviceId]);
+        if ("failure" in parsed) {
+            return parsed.failure;
+        }
+        devices[deviceId] = parsed.record;
+    }
+
+    const deviceIds = new Set(Object.keys(devices));
+    const placementCounts = new Map<string, number>();
+    const seenGroupIds = new Set<string>();
+    const chain: LaneChainNodeV2[] = [];
+    let wireEntryCount = 0;
+
+    const takePlacement = (input2: unknown):
+        { placement: LaneDevicePlacementV2 } | { failure: LaneStateV2ParseOutcome } => {
+        const parsed = parsePlacement(input2, deviceIds);
+        if ("placement" in parsed) {
+            placementCounts.set(parsed.placement.deviceId,
+                                (placementCounts.get(parsed.placement.deviceId) ?? 0) + 1);
+            wireEntryCount += 1;
+        }
+        return parsed;
+    };
+
+    for (const rawNode of document.chain) {
+        if (!isRecord(rawNode)) {
+            return err("chain nodes must be objects");
+        }
+        if (rawNode.kind === "device") {
+            const parsed = takePlacement(rawNode);
+            if ("failure" in parsed) {
+                return parsed.failure;
+            }
+            chain.push(parsed.placement);
+            continue;
+        }
+        if (rawNode.kind !== "parallel" && rawNode.kind !== "split") {
+            return err(`unknown chain node kind ${String(rawNode.kind)}`);
+        }
+
+        const isSplit = rawNode.kind === "split";
+        const expectedKeys = isSplit
+            ? ["kind", "groupId", "enabled", "xoverLowHz", "xoverHighHz", "branches"]
+            : ["kind", "groupId", "enabled", "branches"];
+        if (!hasExactKeys(rawNode, expectedKeys)) {
+            return err(`a ${rawNode.kind} group is { ${expectedKeys.join(", ")} }`);
+        }
+        const groupId = parseLaneGroupId(rawNode.groupId);
+        if (groupId === null || groupId.groupKind !== rawNode.kind) {
+            return err(`group id ${String(rawNode.groupId)} does not name a ${rawNode.kind} unit`);
+        }
+        if (seenGroupIds.has(String(rawNode.groupId))) {
+            return err(`group ${String(rawNode.groupId)} is used twice`);
+        }
+        seenGroupIds.add(String(rawNode.groupId));
+        if (typeof rawNode.enabled !== "boolean") {
+            return err(`group ${String(rawNode.groupId)} needs a boolean enable`);
+        }
+        const maxBranches = isSplit ? LANE_MAX_BANDS_PER_SPLIT : LANE_MAX_BRANCHES_PER_GROUP;
+        if (!Array.isArray(rawNode.branches)
+                || rawNode.branches.length < 2 || rawNode.branches.length > maxBranches) {
+            return err(`group ${String(rawNode.groupId)} needs 2..${maxBranches} branches`);
+        }
+        if (isSplit && (!isValidCrossoverHz(rawNode.xoverLowHz) || !isValidCrossoverHz(rawNode.xoverHighHz))) {
+            return err(`group ${String(rawNode.groupId)} crossovers must sit in `
+                + `${LANE_SPLIT_XOVER_MIN_HZ}..${LANE_SPLIT_XOVER_MAX_HZ} Hz`);
+        }
+
+        wireEntryCount += 1;
+        const branches: LaneDevicePlacementV2[][] = [];
+        for (const rawBranch of rawNode.branches) {
+            if (!Array.isArray(rawBranch)) {
+                return err(`group ${String(rawNode.groupId)} branches must be arrays`);
+            }
+            const branch: LaneDevicePlacementV2[] = [];
+            for (const rawPlacement of rawBranch) {
+                const parsed = takePlacement(rawPlacement);
+                if ("failure" in parsed) {
+                    return parsed.failure;
+                }
+                branch.push(parsed.placement);
+            }
+            branches.push(branch);
+        }
+
+        chain.push(isSplit
+            ? {
+                kind: "split",
+                groupId: String(rawNode.groupId),
+                enabled: rawNode.enabled,
+                xoverLowHz: rawNode.xoverLowHz as number,
+                xoverHighHz: rawNode.xoverHighHz as number,
+                branches,
+            }
+            : {
+                kind: "parallel",
+                groupId: String(rawNode.groupId),
+                enabled: rawNode.enabled,
+                branches,
+            });
+    }
+
+    // Placement is existence: the table and the tree are one bijection.
+    // (Placements naming ids outside the table were rejected as they parsed.)
+    for (const deviceId of deviceIds) {
+        if ((placementCounts.get(deviceId) ?? 0) !== 1) {
+            return err(`device ${deviceId} must be placed exactly once`);
+        }
+    }
+    if (wireEntryCount > LANE_MAX_CHAIN_LENGTH) {
+        return err(`flattens to ${wireEntryCount} wire entries; the topology upload holds ${LANE_MAX_CHAIN_LENGTH}`);
+    }
+
+    return { _tag: "ok", value: { format: "cosimo.lane", version: 2, devices, chain } };
+}
+
+/** Upgrade a parsed v1 document: eight instance-#1 devices, serial chain. */
+export function upgradeLaneStateV1(state: LaneState): LaneStateV2 {
+    const devices: Record<string, LaneDeviceRecordV2> = {};
+    for (const effectId of RACK_EFFECT_ORDER) {
+        devices[`${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`] = { params: { ...state.params[effectId] } };
+    }
+    return {
+        format: "cosimo.lane",
+        version: 2,
+        devices,
+        chain: state.order.map((effectId) => ({
+            kind: "device",
+            deviceId: `${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`,
+            enabled: state.enabled[effectId],
+        })),
+    };
+}
+
+/** Create the lane.v2 state matching the deployed default sound. */
+export function createDefaultLaneStateV2(): LaneStateV2 {
+    return upgradeLaneStateV1(createDefaultLaneState());
+}
+
+/**
+ * Deserialize persisted state: v2 verbatim, v1 upgraded in place, the clean
+ * default for anything missing or corrupt.
+ */
+export function deserializeLaneStateV2(input: unknown): LaneStateV2 {
+    if (input === undefined) {
+        return createDefaultLaneStateV2();
+    }
+    const v2 = parseLaneStateV2(input);
+    if (v2._tag === "ok") {
+        return v2.value;
+    }
+    const v1 = parseLaneState(input);
+    if (v1._tag === "ok") {
+        return upgradeLaneStateV1(v1.value);
+    }
+    return createDefaultLaneStateV2();
+}
+
+/** Serialize the complete canonical lane.v2 document. */
+export function serializeLaneStateV2(state: LaneStateV2): string {
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices: state.devices,
+        chain: state.chain,
+    });
+}
+
+/**
+ * The patch's live devices in STABLE IDENTITY ORDER (type order, then
+ * instance number) — the order the dynamic target domain lists devices in,
+ * which deliberately never follows the chain: reordering the chain must not
+ * reshuffle pickers.
+ */
+export function listLaneDeviceInstancesV2(state: LaneStateV2): ReadonlyArray<LaneDeviceInstance> {
+    return Object.keys(state.devices)
+        .map((instanceId) => {
+            const parsed = parseLaneInstanceId(instanceId);
+            if (parsed === null) {
+                throw new Error(`Invalid lane instance id in state: ${instanceId}`);
+            }
+            return { instanceId, parsed };
+        })
+        .sort((a, b) =>
+            (LANE_DEVICE_TYPE_ORDER.indexOf(a.parsed.deviceType)
+                - LANE_DEVICE_TYPE_ORDER.indexOf(b.parsed.deviceType))
+            || (a.parsed.instanceNumber - b.parsed.instanceNumber))
+        .map(({ instanceId, parsed }) => ({ instanceId, deviceType: parsed.deviceType }));
+}
+
+/**
+ * The modulation compiler's slot assignments, total over the document:
+ * instance #n statically holds ordinal n-1.
+ */
+export function buildLaneSlotAssignments(state: LaneStateV2): LaneSlotAssignments {
+    return new Map(Object.keys(state.devices).map((instanceId) => {
+        const parsed = parseLaneInstanceId(instanceId);
+        if (parsed === null) {
+            throw new Error(`Invalid lane instance id in state: ${instanceId}`);
+        }
+        return [instanceId, parsed.instanceNumber - 1];
+    }));
+}
+
+function deviceSlotId(deviceId: string): number {
+    const parsed = parseLaneInstanceId(deviceId);
+    if (parsed === null) {
+        throw new Error(`Invalid lane instance id in state: ${deviceId}`);
+    }
+    return getLaneSlotId(parsed.deviceType, parsed.instanceNumber - 1);
+}
+
+function groupMarkerSlotId(group: LaneGroupV2): number {
+    const parsed = parseLaneGroupId(group.groupId);
+    if (parsed === null) {
+        throw new Error(`Invalid lane group id in state: ${group.groupId}`);
+    }
+    const base = parsed.groupKind === "parallel" ? LANE_PARALLEL_SLOT_BASE : LANE_SPLIT_SLOT_BASE;
+    return base + (parsed.unitNumber - 1);
+}
+
+export type CompiledLaneTopologyUpload = {
+    readonly chainLength: number;
+    readonly slotIds: ReadonlyArray<number>;
+    readonly enabledMask: number;
+};
+
+/**
+ * Flatten the tree to the marker-grammar wire: a group emits its marker
+ * (tag = branch/band count, enable bit = group bypass), then each branch's
+ * placements under tags 1..N — empty branches emit nothing, which the
+ * engine reads as a representable skip.
+ */
+export function compileLaneTopologyUpload(state: LaneStateV2): CompiledLaneTopologyUpload {
+    const slotIds = new Array<number>(LANE_MAX_CHAIN_LENGTH).fill(0);
+    let enabledMask = 0;
+    let position = 0;
+
+    const emit = (slotId: number, branchTag: number, enabled: boolean): void => {
+        slotIds[position] = encodeLaneSlotWithBranchTag(slotId, branchTag);
+        if (enabled) {
+            enabledMask |= 1 << position;
+        }
+        position += 1;
+    };
+
+    for (const node of state.chain) {
+        if (node.kind === "device") {
+            emit(deviceSlotId(node.deviceId), 0, node.enabled);
+            continue;
+        }
+        emit(groupMarkerSlotId(node), node.branches.length, node.enabled);
+        node.branches.forEach((branch, branchIndex) => {
+            for (const placement of branch) {
+                emit(deviceSlotId(placement.deviceId), branchIndex + 1, placement.enabled);
+            }
+        });
+    }
+
+    return { chainLength: position, slotIds, enabledMask };
+}
+
+/**
+ * TS mirror of the engine's topology validation (EffectsRack.cmajor's
+ * isValidLaneTopology), so the adapter can fail loudly BEFORE sending a
+ * malformed upload the engine would silently count and drop. The compiler's
+ * output always passes; drift between the mirrors is pinned by test on both
+ * sides of the wire.
+ */
+export function validateCompiledLaneTopology(upload: CompiledLaneTopologyUpload): boolean {
+    if (!Number.isInteger(upload.chainLength)
+            || upload.chainLength < 0 || upload.chainLength > LANE_MAX_CHAIN_LENGTH) {
+        return false;
+    }
+
+    const seen = new Set<number>();
+    let openGroupFanout = 0;
+    let lastMemberTag = 0;
+
+    for (let positionIndex = 0; positionIndex < upload.chainLength; positionIndex += 1) {
+        const encoded = upload.slotIds[positionIndex];
+        if (!Number.isInteger(encoded)
+                || (encoded >> (LANE_BRANCH_TAG_SHIFT + LANE_BRANCH_TAG_BITS)) !== 0) {
+            return false;
+        }
+        const slotId = decodeLaneSlotId(encoded);
+        const tag = decodeLaneBranchTag(encoded);
+        if (slotId >= LANE_CHAIN_SLOT_COUNT) {
+            return false;
+        }
+        if (isLaneGroupMarkerSlot(slotId)) {
+            const maxFanout = isLaneSplitMarkerSlot(slotId)
+                ? LANE_MAX_BANDS_PER_SPLIT
+                : LANE_MAX_BRANCHES_PER_GROUP;
+            if (tag < 2 || tag > maxFanout) {
+                return false;
+            }
+            openGroupFanout = tag;
+            lastMemberTag = 0;
+        } else if (tag === 0) {
+            openGroupFanout = 0;
+            lastMemberTag = 0;
+        } else {
+            if (openGroupFanout === 0 || tag > openGroupFanout || tag < lastMemberTag) {
+                return false;
+            }
+            lastMemberTag = tag;
+        }
+        if (seen.has(slotId)) {
+            return false;
+        }
+        seen.add(slotId);
+    }
+
+    return Number.isInteger(upload.enabledMask)
+        && upload.enabledMask >= 0
+        && upload.enabledMask < (1 << upload.chainLength);
+}
+
+function buildLaneSplitParamValues(group: LaneSplitGroupV2): number[] {
+    const values = new Array<number>(LANE_SLOT_PARAM_COUNT).fill(0);
+    values[LANE_SPLIT_PARAM_XOVER_LOW_HZ] = group.xoverLowHz;
+    values[LANE_SPLIT_PARAM_XOVER_HIGH_HZ] = group.xoverHighHz;
+    return values;
+}
+
+/**
+ * The complete runtime replay for one lane.v2 document: every device
+ * instance's record, every split marker's crossover record, then the one
+ * topology event. Records go FIRST so anything entering the committed chain
+ * snaps onto its record rather than a zeroed default.
+ */
+export function buildLaneRuntimeEventsV2(state: LaneStateV2): ReadonlyArray<{ readonly endpointID: string; readonly value: unknown }> {
+    const events: Array<{ endpointID: string; value: unknown }> = [];
+    let deliverySerial = 0;
+
+    for (const device of listLaneDeviceInstancesV2(state)) {
+        deliverySerial += 1;
+        events.push({
+            endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
+            value: {
+                slotId: deviceSlotId(device.instanceId),
+                deliverySerial,
+                values: buildLaneSlotParamValues(device.deviceType,
+                                                 state.devices[device.instanceId].params),
+            },
+        });
+    }
+
+    for (const node of state.chain) {
+        if (node.kind === "split") {
+            deliverySerial += 1;
+            events.push({
+                endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
+                value: {
+                    slotId: groupMarkerSlotId(node),
+                    deliverySerial,
+                    values: buildLaneSplitParamValues(node),
+                },
+            });
+        }
+    }
+
+    events.push({
+        endpointID: LANE_TOPOLOGY_ENDPOINT_ID,
+        value: compileLaneTopologyUpload(state),
+    });
+
+    return events;
+}
+
+/** Send a complete lane.v2 document as one logical commit. */
+export function commitLaneStateV2(connection: PatchConnectionLike, state: LaneStateV2): void {
+    for (const event of buildLaneRuntimeEventsV2(state)) {
+        connection.sendEventOrValue?.(event.endpointID, event.value);
+    }
+}

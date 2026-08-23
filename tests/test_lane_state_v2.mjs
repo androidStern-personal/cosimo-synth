@@ -1,0 +1,361 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import path from "node:path";
+
+import { loadUIModule } from "./helpers/load_ui_module.mjs";
+
+const repoRoot = path.resolve(import.meta.dirname, "..");
+const laneV1Promise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
+const laneV2Promise = loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
+
+// The document under test throughout: two delays chained in one parallel
+// branch (the other branch EMPTY), then a trunk reverb — every structural
+// concept v2 adds in one small tree.
+async function makeParallelDoc() {
+    const laneV1 = await laneV1Promise;
+    const params = laneV1.createDefaultLaneState().params;
+    return {
+        format: "cosimo.lane",
+        version: 2,
+        devices: {
+            "delay#1": { params: { ...params.delay } },
+            "delay#2": { params: { ...params.delay } },
+            "reverb#1": { params: { ...params.reverb } },
+        },
+        chain: [
+            {
+                kind: "parallel",
+                groupId: "parallel#1",
+                enabled: true,
+                branches: [
+                    [
+                        { kind: "device", deviceId: "delay#1", enabled: true },
+                        { kind: "device", deviceId: "delay#2", enabled: false },
+                    ],
+                    [],
+                ],
+            },
+            { kind: "device", deviceId: "reverb#1", enabled: true },
+        ],
+    };
+}
+
+async function makeSplitDoc() {
+    const laneV1 = await laneV1Promise;
+    const params = laneV1.createDefaultLaneState().params;
+    return {
+        format: "cosimo.lane",
+        version: 2,
+        devices: {
+            "ott#1": { params: { ...params.ott } },
+            "reverb#1": { params: { ...params.reverb } },
+        },
+        chain: [
+            {
+                kind: "split",
+                groupId: "split#2",
+                enabled: true,
+                xoverLowHz: 250,
+                xoverHighHz: 2500,
+                branches: [
+                    [{ kind: "device", deviceId: "ott#1", enabled: true }],
+                    [],
+                    [{ kind: "device", deviceId: "reverb#1", enabled: true }],
+                ],
+            },
+        ],
+    };
+}
+
+test("lane.v2 default document is the upgraded v1 default and round-trips", async () => {
+    const laneV1 = await laneV1Promise;
+    const laneV2 = await laneV2Promise;
+
+    const state = laneV2.createDefaultLaneStateV2();
+    assert.equal(state.version, 2);
+    // Eight instance-#1 devices, serial chain in identity order, all off.
+    assert.equal(Object.keys(state.devices).length, 8);
+    assert.equal(state.chain.length, 8);
+    assert.deepEqual(
+        state.chain.map((node) => node.kind),
+        Array(8).fill("device"),
+    );
+    assert.deepEqual(
+        state.chain.map((node) => node.deviceId),
+        ["globalFilter#1", "distortion#1", "ott#1", "chorus#1",
+         "flanger#1", "phaser#1", "delay#1", "reverb#1"],
+    );
+    assert.deepEqual(state.chain.map((node) => node.enabled), Array(8).fill(false));
+    // Params carry over from the v1 defaults verbatim.
+    assert.equal(state.devices["delay#1"].params.delayTime,
+                 laneV1.createDefaultLaneState().params.delay.delayTime);
+
+    const reparsed = laneV2.parseLaneStateV2(laneV2.serializeLaneStateV2(state));
+    assert.equal(reparsed._tag, "ok");
+    assert.deepEqual(reparsed.value, state);
+});
+
+test("lane.v2 upgrades any v1 document, preserving order, enables, and params", async () => {
+    const laneV1 = await laneV1Promise;
+    const laneV2 = await laneV2Promise;
+
+    const v1 = laneV1.createDefaultLaneState();
+    const edited = {
+        ...v1,
+        order: [...v1.order].reverse(),
+        enabled: { ...v1.enabled, drive: true, delay: true },
+        params: { ...v1.params, delay: { ...v1.params.delay, delayTime: 125 } },
+    };
+
+    const upgraded = laneV2.upgradeLaneStateV1(edited);
+    assert.equal(upgraded.version, 2);
+    assert.deepEqual(
+        upgraded.chain.map((node) => node.deviceId),
+        ["reverb#1", "delay#1", "phaser#1", "flanger#1",
+         "chorus#1", "ott#1", "distortion#1", "globalFilter#1"],
+    );
+    assert.equal(upgraded.chain.find((node) => node.deviceId === "delay#1").enabled, true);
+    assert.equal(upgraded.chain.find((node) => node.deviceId === "reverb#1").enabled, false);
+    assert.equal(upgraded.devices["delay#1"].params.delayTime, 125);
+
+    // The deserializer takes v2, upgrades v1, and defaults for corrupt data.
+    const fromV1Json = laneV2.deserializeLaneStateV2(laneV1.serializeLaneState(edited));
+    assert.deepEqual(fromV1Json, upgraded);
+    const fromV2Json = laneV2.deserializeLaneStateV2(laneV2.serializeLaneStateV2(upgraded));
+    assert.deepEqual(fromV2Json, upgraded);
+    assert.deepEqual(laneV2.deserializeLaneStateV2("{"), laneV2.createDefaultLaneStateV2());
+    assert.deepEqual(laneV2.deserializeLaneStateV2(undefined), laneV2.createDefaultLaneStateV2());
+});
+
+test("lane.v2 validates and never coerces", async () => {
+    const laneV1 = await laneV1Promise;
+    const laneV2 = await laneV2Promise;
+    const doc = await makeParallelDoc();
+    const chorusParams = laneV1.createDefaultLaneState().params.chorus;
+
+    const ok = laneV2.parseLaneStateV2(doc);
+    assert.equal(ok._tag, "ok");
+
+    const rejects = [
+        // Unknown top-level field.
+        { ...doc, extra: 1 },
+        // Wrong version.
+        { ...doc, version: 3 },
+        // Device id grammar: unknown type, zero ordinal, beyond the pool.
+        { ...doc, devices: { ...doc.devices, "wobble#1": { params: {} } } },
+        { ...doc, devices: { ...doc.devices, "delay#0": doc.devices["delay#1"] } },
+        { ...doc, devices: { ...doc.devices, "delay#6": doc.devices["delay#1"] } },
+        // Params must be the type's complete vocabulary of finite numbers.
+        { ...doc, devices: { ...doc.devices, "delay#1": { params: {} } } },
+        { ...doc,
+          devices: { ...doc.devices,
+                     "delay#1": { params: { ...doc.devices["delay#1"].params, delayTime: "fast" } } } },
+        { ...doc,
+          devices: { ...doc.devices,
+                     "delay#1": { params: { ...doc.devices["delay#1"].params, bonus: 1 } } } },
+        // Placement referencing a device the table does not hold.
+        { ...doc, chain: [...doc.chain, { kind: "device", deviceId: "chorus#1", enabled: true }] },
+        // A device placed twice.
+        { ...doc, chain: [...doc.chain, { kind: "device", deviceId: "reverb#1", enabled: true }] },
+        // A device in the table but never placed.
+        { ...doc, devices: { ...doc.devices, "chorus#1": { params: { ...chorusParams } } } },
+        // Group fan-out bounds.
+        { ...doc, chain: [{ ...doc.chain[0], branches: [doc.chain[0].branches[0]] }, doc.chain[1]] },
+        { ...doc, chain: [{ ...doc.chain[0], branches: [[], [], [], [], []] }, doc.chain[1],
+                          { kind: "device", deviceId: "delay#1", enabled: true },
+                          { kind: "device", deviceId: "delay#2", enabled: false }] },
+        // Nested groups are not representable on the wire.
+        { ...doc, chain: [{ ...doc.chain[0],
+                            branches: [[{ kind: "parallel", groupId: "parallel#2", enabled: true,
+                                          branches: [[], []] }], []] },
+                          doc.chain[1],
+                          { kind: "device", deviceId: "delay#1", enabled: true },
+                          { kind: "device", deviceId: "delay#2", enabled: false }] },
+        // Group id grammar: unit range and kind mismatch.
+        { ...doc, chain: [{ ...doc.chain[0], groupId: "parallel#5" }, doc.chain[1]] },
+        { ...doc, chain: [{ ...doc.chain[0], groupId: "split#1" }, doc.chain[1]] },
+    ];
+
+    for (const [index, corrupt] of rejects.entries()) {
+        assert.equal(laneV2.parseLaneStateV2(corrupt)._tag, "err", `reject case ${index}`);
+    }
+});
+
+test("lane.v2 split groups validate band count and crossover range", async () => {
+    const laneV2 = await laneV2Promise;
+    const doc = await makeSplitDoc();
+
+    assert.equal(laneV2.parseLaneStateV2(doc)._tag, "ok");
+
+    const twoBand = {
+        ...doc,
+        devices: { "ott#1": doc.devices["ott#1"] },
+        chain: [{ ...doc.chain[0],
+                  branches: [doc.chain[0].branches[0], []] }],
+    };
+    assert.equal(laneV2.parseLaneStateV2(twoBand)._tag, "ok");
+
+    const rejects = [
+        // Four bands.
+        { ...doc, chain: [{ ...doc.chain[0], branches: [...doc.chain[0].branches, []] }] },
+        // One band.
+        { ...twoBand, chain: [{ ...twoBand.chain[0], branches: [twoBand.chain[0].branches[0]] }] },
+        // Crossovers outside the engine's 40..18000 clamp range, or not finite.
+        { ...doc, chain: [{ ...doc.chain[0], xoverLowHz: 25000 }] },
+        { ...doc, chain: [{ ...doc.chain[0], xoverHighHz: 10 }] },
+        { ...doc, chain: [{ ...doc.chain[0], xoverLowHz: Number.NaN }] },
+        // Split unit range.
+        { ...doc, chain: [{ ...doc.chain[0], groupId: "split#5" }] },
+    ];
+    for (const [index, corrupt] of rejects.entries()) {
+        assert.equal(laneV2.parseLaneStateV2(corrupt)._tag, "err", `split reject case ${index}`);
+    }
+});
+
+test("lane.v2 caps the WIRE length: placements plus markers fit one topology upload", async () => {
+    const laneV1 = await laneV1Promise;
+    const laneV2 = await laneV2Promise;
+    const params = laneV1.createDefaultLaneState().params;
+
+    const devices = {};
+    const trunk = [];
+    const deviceIds = [
+        "delay#1", "delay#2", "delay#3", "delay#4", "delay#5",
+        "reverb#1", "reverb#2", "reverb#3", "reverb#4", "reverb#5",
+        "chorus#1", "chorus#2", "chorus#3",
+    ];
+    for (const deviceId of deviceIds) {
+        // These three types share their name between effect ids and lane types.
+        const type = deviceId.slice(0, deviceId.indexOf("#"));
+        devices[deviceId] = { params: { ...params[type] } };
+        trunk.push({ kind: "device", deviceId, enabled: false });
+    }
+    const groups = [1, 2, 3, 4].map((n) => (
+        { kind: "parallel", groupId: `parallel#${n}`, enabled: true, branches: [[], []] }
+    ));
+
+    // 13 placements + 4 markers = 17 wire entries: one too many.
+    const overflowing = { format: "cosimo.lane", version: 2, devices, chain: [...trunk, ...groups] };
+    assert.equal(laneV2.parseLaneStateV2(overflowing)._tag, "err");
+
+    // Drop one device: 12 + 4 = 16 fits exactly.
+    const fitting = {
+        format: "cosimo.lane",
+        version: 2,
+        devices: Object.fromEntries(Object.entries(devices).filter(([id]) => id !== "chorus#3")),
+        chain: [...trunk.filter((node) => node.deviceId !== "chorus#3"), ...groups],
+    };
+    assert.equal(laneV2.parseLaneStateV2(fitting)._tag, "ok");
+});
+
+test("instances list in identity order and hold their slot ordinals by number", async () => {
+    const laneV2 = await laneV2Promise;
+    const parsed = laneV2.parseLaneStateV2(await makeParallelDoc());
+    assert.equal(parsed._tag, "ok");
+
+    // Identity order is type order then instance number — never chain order.
+    assert.deepEqual(
+        laneV2.listLaneDeviceInstancesV2(parsed.value),
+        [
+            { instanceId: "delay#1", deviceType: "delay" },
+            { instanceId: "delay#2", deviceType: "delay" },
+            { instanceId: "reverb#1", deviceType: "reverb" },
+        ],
+    );
+
+    // instance #n sits at ordinal n-1, statically — the modulation compiler's
+    // LaneSlotAssignments is total over the document.
+    const assignments = laneV2.buildLaneSlotAssignments(parsed.value);
+    assert.equal(assignments.get("delay#1"), 0);
+    assert.equal(assignments.get("delay#2"), 1);
+    assert.equal(assignments.get("reverb#1"), 0);
+});
+
+test("the compiled wire matches lane.v1 exactly for an upgraded serial document", async () => {
+    const laneV1 = await laneV1Promise;
+    const laneV2 = await laneV2Promise;
+
+    const v1 = laneV1.createDefaultLaneState();
+    const edited = { ...v1, order: [...v1.order].reverse(), enabled: { ...v1.enabled, ott: true } };
+
+    const v1Events = laneV1.buildLaneRuntimeEvents(edited);
+    const v2Events = laneV2.buildLaneRuntimeEventsV2(laneV2.upgradeLaneStateV1(edited));
+
+    // Same shape: eight records then one topology; the topology is identical
+    // bit for bit (all-trunk entries, same slots, same mask).
+    assert.equal(v2Events.length, v1Events.length);
+    assert.deepEqual(v2Events[v2Events.length - 1], v1Events[v1Events.length - 1]);
+    for (const event of v2Events.slice(0, -1)) {
+        assert.equal(event.endpointID, "laneSlotParams");
+    }
+    // Records cover the same slots with the same values (order may differ).
+    const recordBySlot = (events) => new Map(
+        events.slice(0, -1).map((event) => [event.value.slotId, event.value.values]));
+    assert.deepEqual(recordBySlot(v2Events), recordBySlot(v1Events));
+});
+
+test("groups compile to marker slots with branch tags, and the mirror validates them", async () => {
+    const laneV2 = await laneV2Promise;
+
+    const parallel = laneV2.parseLaneStateV2(await makeParallelDoc());
+    assert.equal(parallel._tag, "ok");
+    const topology = laneV2.compileLaneTopologyUpload(parallel.value);
+
+    // marker(unit 0, N=2), delay#1@1, delay#2@1, reverb#1@trunk.
+    assert.equal(topology.chainLength, 4);
+    assert.deepEqual(topology.slotIds.slice(0, 4), [
+        40 | (2 << 8),
+        6 | (1 << 8),
+        14 | (1 << 8),
+        7,
+    ]);
+    // Marker enabled, delay#1 on, delay#2 off, reverb on.
+    assert.equal(topology.enabledMask, 0b1011);
+    assert.equal(laneV2.validateCompiledLaneTopology(topology), true);
+
+    const split = laneV2.parseLaneStateV2(await makeSplitDoc());
+    assert.equal(split._tag, "ok");
+    const splitTopology = laneV2.compileLaneTopologyUpload(split.value);
+
+    // split#2 -> unit 1 -> slot 45; ott in LO (tag 1), reverb in HI (tag 3),
+    // the MID band empty — a representable skip.
+    assert.equal(splitTopology.chainLength, 3);
+    assert.deepEqual(splitTopology.slotIds.slice(0, 3), [
+        45 | (3 << 8),
+        2 | (1 << 8),
+        7 | (3 << 8),
+    ]);
+    assert.equal(splitTopology.enabledMask, 0b111);
+    assert.equal(laneV2.validateCompiledLaneTopology(splitTopology), true);
+
+    // The runtime replay carries the split marker's crossover RECORD before
+    // the topology, on the same record machinery as devices.
+    const events = laneV2.buildLaneRuntimeEventsV2(split.value);
+    assert.equal(events[events.length - 1].endpointID, "laneTopology");
+    assert.deepEqual(events[events.length - 1].value, splitTopology);
+    const markerRecord = events.find((event) => event.value.slotId === 45);
+    assert.equal(markerRecord.endpointID, "laneSlotParams");
+    assert.equal(markerRecord.value.values[0], 250);
+    assert.equal(markerRecord.value.values[1], 2500);
+    // Device records exist for pool ordinals beyond the base set.
+    const parallelEvents = laneV2.buildLaneRuntimeEventsV2(parallel.value);
+    assert.ok(parallelEvents.some((event) =>
+        event.endpointID === "laneSlotParams" && event.value.slotId === 14));
+});
+
+test("the wire mirror rejects what the engine rejects", async () => {
+    const laneV2 = await laneV2Promise;
+    const good = laneV2.compileLaneTopologyUpload(
+        laneV2.parseLaneStateV2(await makeParallelDoc()).value);
+
+    const junkBit = { ...good, slotIds: [...good.slotIds] };
+    junkBit.slotIds[1] |= 1 << 12;
+    const memberWithoutGroup = { ...good, slotIds: [6 | (1 << 8), ...good.slotIds.slice(1)] };
+    const oversizedMask = { ...good, enabledMask: good.enabledMask | (1 << good.chainLength) };
+    const duplicateSlot = { ...good, slotIds: [...good.slotIds] };
+    duplicateSlot.slotIds[3] = duplicateSlot.slotIds[2];
+
+    for (const [index, broken] of [junkBit, memberWithoutGroup, oversizedMask, duplicateSlot].entries()) {
+        assert.equal(laneV2.validateCompiledLaneTopology(broken), false, `mirror case ${index}`);
+    }
+});
