@@ -444,8 +444,20 @@ export async function dispatchInputValueChange(locator, nextValue) {
 }
 
 export async function selectRackEffect(page, effectId) {
-    await page.click(`[data-role="rack-quick-${effectId}"]`);
+    await page.click(`[data-role="rack-station-${effectId}"]`);
     await page.waitForSelector(`[data-role="rack-editor-${effectId}"]`);
+}
+
+/**
+ * Toggle one effect's enable through its station's long-press menu — the
+ * subway map's home for bypass (the old per-row power button is gone).
+ * Opens via contextmenu, which shares the long-press code path.
+ */
+export async function toggleRackEffectEnabled(page, effectId) {
+    await page.click(`[data-role="rack-station-${effectId}"]`, { button: "right" });
+    await page.waitForSelector(`[data-role="rack-station-menu"][data-effect-id="${effectId}"]`);
+    await page.click(`[data-role="rack-enabled-${effectId}"]`);
+    await page.waitForSelector('[data-role="rack-station-menu"]', { state: "detached" });
 }
 
 export async function expandGlobalModRail(page) {
@@ -1272,11 +1284,11 @@ export async function beginRackReorderWithoutPointerCapture(page, {
 }) {
     await page.evaluate(({ pointerId: browserPointerId, targetEffectID: browserTargetEffectID }) => {
         const list = document.querySelector('[data-role="rack-module-list"]');
-        const handle = document.querySelector('[data-role="rack-reorder-handle-reverb"]');
+        const station = document.querySelector('[data-role="rack-station-reverb"]');
         const target = browserTargetEffectID === null
             ? null
             : document.querySelector(`[data-role="rack-module-${browserTargetEffectID}"]`);
-        if (!(list instanceof HTMLElement) || !(handle instanceof HTMLElement)) {
+        if (!(list instanceof HTMLElement) || !(station instanceof HTMLElement)) {
             throw new Error("Expected rack reorder elements.");
         }
         if (browserTargetEffectID !== null && !(target instanceof HTMLElement)) {
@@ -1289,15 +1301,28 @@ export async function beginRackReorderWithoutPointerCapture(page, {
                 throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
             },
         });
-        const handleBounds = handle.getBoundingClientRect();
-        handle.dispatchEvent(new PointerEvent("pointerdown", {
+        // The station arms the reorder once a move crosses the lift
+        // threshold; a second move on the list drives the preview.
+        const stationBounds = station.getBoundingClientRect();
+        const stationCenterX = stationBounds.left + (stationBounds.width / 2);
+        const stationCenterY = stationBounds.top + (stationBounds.height / 2);
+        station.dispatchEvent(new PointerEvent("pointerdown", {
             bubbles: true,
             pointerId: browserPointerId,
             pointerType: "mouse",
             button: 0,
             buttons: 1,
-            clientX: handleBounds.left + (handleBounds.width / 2),
-            clientY: handleBounds.top + (handleBounds.height / 2),
+            clientX: stationCenterX,
+            clientY: stationCenterY,
+        }));
+        station.dispatchEvent(new PointerEvent("pointermove", {
+            bubbles: true,
+            pointerId: browserPointerId,
+            pointerType: "mouse",
+            button: 0,
+            buttons: 1,
+            clientX: stationCenterX,
+            clientY: stationCenterY + 12,
         }));
         if (target instanceof HTMLElement) {
             const targetBounds = target.getBoundingClientRect();

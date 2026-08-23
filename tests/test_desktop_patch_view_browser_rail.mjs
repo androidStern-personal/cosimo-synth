@@ -53,6 +53,7 @@ import {
     buildDistortionHistoryFixture,
     dispatchInputValueChange,
     selectRackEffect,
+    toggleRackEffectEnabled,
     expandGlobalModRail,
     collapseGlobalModRail,
     touchPointForModSourcePreviewTarget,
@@ -2287,7 +2288,7 @@ test("source preview and valid hover stay transient while the armed ring and foc
         await selectRackEffect(page, "reverb");
         // ADR-025 row 9: a bypassed effect's controls are honestly grey, so
         // exercise the armed-ring colors on a POWERED effect.
-        await page.locator('[data-rack-effect-id="reverb"] .rack-power').click();
+        await page.click('[data-role="rack-editor-power"]');
         await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-mseg-1"]');
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
@@ -2516,7 +2517,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         }, seededState);
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
-        await page.click('[data-role="rack-enabled-reverb"]');
+        await page.click('[data-role="rack-editor-power"]');
         await expandGlobalModRail(page);
         await page.click('[data-role="rack-mod-source-env-1"]');
         await collapseGlobalModRail(page);
@@ -2527,7 +2528,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         assert.equal((await reverbBadge.textContent()).trim(), "1");
         const routesBeforeBypass = routeSummaries(readStoredModulationState(await getHarnessSnapshot(page)).routes);
 
-        await page.click('[data-role="rack-enabled-reverb"]');
+        await page.click('[data-role="rack-editor-power"]');
         assert.match(await page.locator('[data-role="rack-editor-reverb"] .rack-editor-header').innerText(), /FX BYPASSED/);
         assert.equal(await reverbKnob.getAttribute("data-route-state"), "mapped");
         assert.equal(await reverbKnob.getAttribute("data-route-effectiveness"), "effect-bypassed");
@@ -2538,11 +2539,11 @@ test("effect bypass and mode suspension preserve route geometry without claiming
             "none",
         );
         assert.deepEqual(routeSummaries(readStoredModulationState(await getHarnessSnapshot(page)).routes), routesBeforeBypass);
-        await page.click('[data-role="rack-enabled-reverb"]');
+        await page.click('[data-role="rack-editor-power"]');
         assert.equal(await reverbKnob.getAttribute("data-route-effectiveness"), "active");
         assert.equal(await reverbKnob.locator('.rack-knob-mod-fill').getAttribute("d"), activeGeometry);
 
-        await page.click('[data-role="rack-enabled-reverb"]');
+        await page.click('[data-role="rack-editor-power"]');
         const reverbArtBox = await reverbKnob.locator('.rack-knob-art').boundingBox();
         assert.ok(reverbArtBox);
         await page.mouse.move(reverbArtBox.x + reverbArtBox.width / 2, reverbArtBox.y + reverbArtBox.height / 2);
@@ -2559,7 +2560,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         assert.equal(readStoredModulationState(afterBypassedEdit).routes.find((route) => route.id === "env-reverb")?.enabled, true);
 
         await selectRackEffect(page, "filter");
-        await page.click('[data-role="rack-enabled-filter"]');
+        await page.click('[data-role="rack-editor-power"]');
         const filterMode = page.locator('[data-role="rack-parameter-globalFilterMode"]');
         const resonance = page.locator('[data-role="rack-parameter-globalFilterResonance"]');
         assert.equal(await filterMode.getAttribute("data-rack-mod-target"), null);
@@ -2570,7 +2571,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         assert.equal(await resonance.getAttribute("data-route-effectiveness"), "active");
 
         await selectRackEffect(page, "phaser");
-        await page.click('[data-role="rack-enabled-phaser"]');
+        await page.click('[data-role="rack-editor-power"]');
         const phaserMode = page.locator('[data-role="rack-parameter-phaserRateMode"]');
         await phaserMode.click();
         const phaserRate = page.locator('[data-role="rack-parameter-phaserRate"]');
@@ -2578,7 +2579,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         assert.equal(await phaserRate.getAttribute("data-route-effectiveness"), "target-suspended");
 
         await selectRackEffect(page, "delay");
-        await page.click('[data-role="rack-enabled-delay"]');
+        await page.click('[data-role="rack-editor-power"]');
         await page.locator('[data-role="rack-parameter-delayTimeMode"]').click();
         const delayTime = page.locator('[data-role="rack-parameter-delayTime"]');
         assert.equal(await delayTime.count(), 1, "Configured Free time must stay discoverable in Sync mode.");
@@ -2662,194 +2663,66 @@ test("a two-digit exact route badge stays contained at 320px without changing th
     }
 });
 
-test("rack quick controls never reorder or stick after release and reorder is grip-only", async () => {
+test("subway stations select on tap, reorder on drag, and never touch parameters", async () => {
     const page = await openHarnessPage();
 
     try {
         await page.waitForSelector('[data-role="effects-rack-card"]');
         await clearHarnessDebugLog(page);
-        const quick = page.locator('[data-role="rack-quick-reverb"]');
-        await quick.scrollIntoViewIfNeeded();
-        const quickBox = await quick.boundingBox();
-        assert.ok(quickBox);
+        const station = page.locator('[data-role="rack-station-reverb"]');
+        await station.scrollIntoViewIfNeeded();
+        const stationBox = await station.boundingBox();
+        assert.ok(stationBox);
 
-        await page.mouse.move(quickBox.x + (quickBox.width * 0.2), quickBox.y + (quickBox.height * 0.72));
-        await page.mouse.move(quickBox.x + (quickBox.width * 0.8), quickBox.y + (quickBox.height * 0.72), { steps: 8 });
+        // Hovering the map is inert.
+        await page.mouse.move(stationBox.x + (stationBox.width * 0.2), stationBox.y + (stationBox.height * 0.5));
+        await page.mouse.move(stationBox.x + (stationBox.width * 0.8), stationBox.y + (stationBox.height * 0.5), { steps: 8 });
         let snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.sentMessages, [], "Hovering a quick control must be inert.");
+        assert.deepEqual(snapshot.sentMessages, [], "Hovering a station must be inert.");
         assert.deepEqual(snapshot.gestureStarts, []);
 
+        // A tap selects the station's editor and sends NOTHING to the DSP:
+        // the map is structure, not a parameter surface.
+        await station.click();
+        await page.waitForSelector('[data-role="rack-editor-reverb"]');
+        snapshot = await getHarnessSnapshot(page);
+        assert.deepEqual(snapshot.sentMessages, [], "Selecting a station must not touch the DSP.");
+        assert.deepEqual(snapshot.gestureStarts, []);
+
+        // A drag along the line is a reorder: exactly one topology commit,
+        // no parameter traffic, and the release detaches cleanly.
+        const target = page.locator('[data-role="rack-module-filter"]');
+        const targetBox = await target.boundingBox();
+        assert.ok(targetBox);
+        await page.mouse.move(stationBox.x + (stationBox.width / 2), stationBox.y + (stationBox.height / 2));
         await page.mouse.down();
-        await page.mouse.move(quickBox.x + (quickBox.width * 0.55), quickBox.y + (quickBox.height * 0.72), { steps: 6 });
+        await page.mouse.move(targetBox.x + (targetBox.width / 2), targetBox.y + (targetBox.height / 2), { steps: 12 });
         await page.mouse.up();
         snapshot = await waitForHarnessSnapshot(
             page,
-            "quick-control parameter gesture",
-            (nextSnapshot) => nextSnapshot.gestureStarts.includes("reverbSize")
-                && nextSnapshot.gestureEnds.includes("reverbSize"),
+            "station drag reorder commit",
+            (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID, value }) => (
+                endpointID === "laneTopology"
+                && Array.isArray(value?.slotIds)
+                && Number(value.slotIds[0]) === 7
+            )),
         );
-        assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "reverbSize")), true);
-        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneTopology"), false);
+        assert.equal(snapshot.sentMessages.filter(({ endpointID }) => endpointID === "laneTopology").length, 1);
+        assert.equal(snapshot.sentMessages.some(({ endpointID }) => endpointID === "laneSlotParamValue"), false);
+        assert.deepEqual(snapshot.gestureStarts, []);
 
-        const valueAfterRelease = Number(snapshot.laneParams.reverbSize);
-        await clearHarnessDebugLog(page);
-        await page.mouse.move(quickBox.x + 2, quickBox.y + (quickBox.height * 0.72), { steps: 10 });
-        await page.mouse.move(quickBox.x + quickBox.width - 2, quickBox.y + (quickBox.height * 0.72), { steps: 10 });
+        const valueTraffic = await getHarnessSnapshot(page);
+        await page.mouse.move(stationBox.x + 2, stationBox.y + (stationBox.height * 0.5), { steps: 10 });
         await page.waitForTimeout(80);
         snapshot = await getHarnessSnapshot(page);
-        assert.equal(Number(snapshot.laneParams.reverbSize), valueAfterRelease);
-        assert.deepEqual(snapshot.sentMessages, [], "Released quick control remained attached to the pointer.");
-        assert.deepEqual(snapshot.gestureStarts, []);
-        assert.deepEqual(snapshot.gestureEnds, []);
+        assert.equal(
+            snapshot.sentMessages.length,
+            valueTraffic.sentMessages.length,
+            "Released station remained attached to the pointer.",
+        );
 
         assert.equal(await page.locator('[data-rack-position][draggable="true"]').count(), 0);
-        assert.equal(await page.locator('[data-role^="rack-reorder-handle-"]').count(), 8);
-    } finally {
-        await page.close();
-    }
-});
-
-test("rack quick controls keep tracking Safari touch moves that report zero buttons", async () => {
-    const page = await openHarnessPage({
-        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
-    });
-
-    try {
-        await page.click('[data-role="mobile-workspace-tab-fx"]');
-        const quick = page.locator('[data-role="rack-quick-reverb"]');
-        await quick.scrollIntoViewIfNeeded();
-        await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.3);
-        });
-        await clearHarnessDebugLog(page);
-
-        const bounds = await quick.boundingBox();
-        assert.ok(bounds);
-        const start = {
-            x: bounds.x + (bounds.width * 0.35),
-            y: bounds.y + (bounds.height * 0.5),
-        };
-        const moved = {
-            x: start.x + (bounds.width * 0.3),
-            y: start.y,
-        };
-
-        await quick.dispatchEvent("pointerdown", {
-            pointerId: 91,
-            pointerType: "touch",
-            button: 0,
-            buttons: 1,
-            clientX: start.x,
-            clientY: start.y,
-        });
-        await quick.dispatchEvent("pointermove", {
-            pointerId: 91,
-            pointerType: "touch",
-            button: 0,
-            buttons: 0,
-            clientX: moved.x,
-            clientY: moved.y,
-        });
-
-        let snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
-        assert.deepEqual(snapshot.gestureEnds, [], "A live Safari touch move must not end the gesture.");
-        assert.ok(Number(snapshot.laneParams.reverbSize) > 0.3);
-
-        await quick.dispatchEvent("pointerup", {
-            pointerId: 91,
-            pointerType: "touch",
-            button: 0,
-            buttons: 0,
-            clientX: moved.x,
-            clientY: moved.y,
-        });
-        snapshot = await waitForHarnessSnapshot(
-            page,
-            "Safari quick-control touch release",
-            (nextSnapshot) => nextSnapshot.gestureEnds.includes("reverbSize"),
-        );
-        assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
-    } finally {
-        await page.close();
-    }
-});
-
-test("rack quick controls keep tracking touch outside the card when pointer capture is unavailable", async () => {
-    const page = await openHarnessPage({
-        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
-    });
-
-    try {
-        await page.click('[data-role="mobile-workspace-tab-fx"]');
-        const quick = page.locator('[data-role="rack-quick-reverb"]');
-        await quick.scrollIntoViewIfNeeded();
-        await page.evaluate(() => {
-            window.__COSIMO_DESKTOP_HARNESS__.setLaneParamValue("reverbSize", 0.3);
-        });
-        await clearHarnessDebugLog(page);
-
-        const bounds = await quick.boundingBox();
-        assert.ok(bounds);
-        await quick.evaluate((element) => {
-            element.setPointerCapture = () => {
-                throw new DOMException("Pointer capture is unavailable.", "NotFoundError");
-            };
-        });
-        const pointer = {
-            pointerId: 92,
-            pointerType: "touch",
-            button: 0,
-        };
-        const startX = bounds.x + (bounds.width * 0.35);
-        const clientY = bounds.y + (bounds.height * 0.5);
-        await quick.dispatchEvent("pointerdown", {
-            ...pointer,
-            buttons: 1,
-            clientX: startX,
-            clientY,
-        });
-        await page.evaluate(({ pointerId, clientX, clientY }) => {
-            window.dispatchEvent(new PointerEvent("pointermove", {
-                pointerId,
-                pointerType: "touch",
-                button: 0,
-                buttons: 0,
-                clientX,
-                clientY,
-                bubbles: true,
-            }));
-        }, {
-            pointerId: pointer.pointerId,
-            clientX: startX + (bounds.width * 0.3),
-            clientY,
-        });
-
-        let snapshot = await getHarnessSnapshot(page);
-        assert.deepEqual(snapshot.gestureStarts, ["reverbSize"]);
-        assert.ok(Number(snapshot.laneParams.reverbSize) > 0.3);
-
-        await page.evaluate(({ pointerId, clientX, clientY }) => {
-            window.dispatchEvent(new PointerEvent("pointerup", {
-                pointerId,
-                pointerType: "touch",
-                button: 0,
-                buttons: 0,
-                clientX,
-                clientY,
-                bubbles: true,
-            }));
-        }, {
-            pointerId: pointer.pointerId,
-            clientX: startX + (bounds.width * 0.3),
-            clientY,
-        });
-        snapshot = await waitForHarnessSnapshot(
-            page,
-            "capture-free rack quick-control release",
-            (nextSnapshot) => nextSnapshot.gestureEnds.includes("reverbSize"),
-        );
-        assert.deepEqual(snapshot.gestureEnds, ["reverbSize"]);
+        assert.equal(await page.locator('[data-role^="rack-station-"]').count(), 8);
     } finally {
         await page.close();
     }
@@ -2880,7 +2753,7 @@ test("every rack editor binds live controls and one drop commits one complete DS
 
         await clearHarnessDebugLog(page);
         for (const effectId of Object.keys(editorControlByEffect)) {
-            await page.click(`[data-role="rack-enabled-${effectId}"]`);
+            await toggleRackEffectEnabled(page, effectId);
         }
 
         let snapshot = await waitForHarnessSnapshot(
@@ -2897,7 +2770,7 @@ test("every rack editor binds live controls and one drop commits one complete DS
         assert.equal(Object.values(storedRack.enabled).every(Boolean), true);
 
         await clearHarnessDebugLog(page);
-        const reorderHandle = page.locator('[data-role="rack-reorder-handle-reverb"]');
+        const reorderHandle = page.locator('[data-role="rack-station-reverb"]');
         const reorderTarget = page.locator('[data-role="rack-module-filter"]');
         await reorderHandle.scrollIntoViewIfNeeded();
         const handleBox = await reorderHandle.boundingBox();
@@ -3047,7 +2920,7 @@ test("desktop chorus controls send exact parameter updates", async () => {
         });
         await clearHarnessDebugLog(page);
 
-        await page.click('[data-role="rack-enabled-chorus"]');
+        await page.click('[data-role="rack-editor-power"]');
         await editRackParameterValue(page, "chorus-mix-control", "66");
         await page.click('[data-role="chorus-motion-mode-control"]');
         await page.click('[data-role="chorus-bloom-mode-control"]');

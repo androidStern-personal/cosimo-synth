@@ -110,6 +110,7 @@ import { useSliderDrag, type SliderDragPointer } from "../shared/use-slider-drag
 import {
     RackParameterKnob,
 } from "./rack-parameter-knob";
+import { SubwayMapColumn, type SubwayStationMenuRequest } from "./subway-map-column";
 
 type EffectsRackWorkspaceProps = {
     routes: ModulationRoute[];
@@ -462,22 +463,6 @@ function normalizedRackParameterKeyboardStep(descriptor: RackParameterDescriptor
     return Math.max(0.01, descriptor.step / (descriptor.max - descriptor.min));
 }
 
-function formatRackQuickParameterValue(descriptor: RackParameterDescriptor, value: number) {
-    if (descriptor.choices !== undefined) {
-        return formatRackParameterValue(descriptor, value);
-    }
-    if (descriptor.unit === "dB") {
-        return `${Math.round(value)}dB`;
-    }
-    if (descriptor.unit === "Hz") {
-        return value >= 1_000 ? `${(value / 1_000).toFixed(value >= 10_000 ? 0 : 1)}k` : `${Math.round(value)}Hz`;
-    }
-    if (descriptor.unit === "ms") {
-        return `${Math.round(value)}ms`;
-    }
-    return formatRackParameterValue(descriptor, value);
-}
-
 function moveEffect(
     order: ReadonlyArray<EffectModuleId>,
     effectId: EffectModuleId,
@@ -500,189 +485,14 @@ function sameOrder(left: ReadonlyArray<EffectModuleId>, right: ReadonlyArray<Eff
     return left.length === right.length && left.every((effectId, index) => effectId === right[index]);
 }
 
+// The station pills carry no power button of their own (the accepted subway
+// tradeoff): bypass lives in the station's long-press menu and, for the
+// selected device, in the editor header next to the faceplate.
 function PowerGlyph() {
     return (
         <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M12 2.8v8.1M7.2 5.6a8 8 0 1 0 9.6 0" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="2.1" />
         </svg>
-    );
-}
-
-function GripDots() {
-    return (
-        <span className="rack-grip-dots" aria-hidden="true">
-            {Array.from({ length: 6 }, (_, index) => <span key={index} />)}
-        </span>
-    );
-}
-
-function RackQuickSurface({
-    descriptor,
-    selected,
-    onSelect,
-    onRecentParameter,
-}: {
-    descriptor: RackParameterDescriptor;
-    selected: boolean;
-    onSelect: () => void;
-    onRecentParameter: (endpointID: string) => void;
-}) {
-    const binding = useRackParameterBinding(descriptor);
-    const surfaceRef = useRef<HTMLButtonElement | null>(null);
-    const {
-        handlePointerDown,
-        handlePointerMove,
-        handlePointerUp,
-        handlePointerCancel,
-        handleLostPointerCapture,
-    } = useSliderDrag();
-    const normalized = normalizedRackParameterValue(descriptor, binding.value);
-    const adjustFromNormalized = useCallback((nextNormalized: number) => {
-        binding.setValue(rackParameterValueFromNormalized(descriptor, nextNormalized));
-    }, [binding, descriptor]);
-    const handleKeyDown = useCallback((event: ReactKeyboardEvent<HTMLButtonElement>) => {
-        if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") {
-            return;
-        }
-
-        event.preventDefault();
-        const direction = event.key === "ArrowRight" ? 1 : -1;
-        const normalizedStep = descriptor.choices
-            ? 1 / Math.max(1, descriptor.choices.length - 1)
-            : Math.max(0.01, descriptor.step / (descriptor.max - descriptor.min));
-        binding.commitValue(rackParameterValueFromNormalized(
-            descriptor,
-            clamp(normalized + direction * normalizedStep, 0, 1),
-        ));
-        onRecentParameter(descriptor.endpointID);
-        onSelect();
-    }, [binding, descriptor, normalized, onRecentParameter, onSelect]);
-
-    return (
-        <button
-            ref={surfaceRef}
-            type="button"
-            role="slider"
-            data-role={`rack-quick-${descriptor.effectId}`}
-            data-rack-quick-endpoint={descriptor.endpointID}
-            aria-label={`${getRackEffectDescriptor(descriptor.effectId).label} ${descriptor.label}`}
-            aria-valuemin={descriptor.min}
-            aria-valuemax={descriptor.max}
-            aria-valuenow={binding.value}
-            aria-valuetext={formatRackQuickParameterValue(descriptor, binding.value)}
-            className="rack-quick-surface"
-            style={{ "--rack-progress": normalized } as CSSProperties}
-            onClick={onSelect}
-            onKeyDown={handleKeyDown}
-            onPointerDown={(event) => {
-                onSelect();
-                onRecentParameter(descriptor.endpointID);
-                handlePointerDown(
-                    event,
-                    surfaceRef.current,
-                    binding,
-                    normalized,
-                    descriptor.min,
-                    descriptor.max,
-                    "horizontal-relative",
-                    adjustFromNormalized,
-                );
-            }}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
-            onLostPointerCapture={() => handleLostPointerCapture()}
-        >
-            <span className="rack-wordmark-line" aria-hidden="true">
-                <span className="rack-wordmark">{getRackEffectDescriptor(descriptor.effectId).label}</span>
-            </span>
-            <span className="rack-quick-line">
-                <span>{descriptor.shortLabel}</span>
-                <strong>{formatRackQuickParameterValue(descriptor, binding.value)}</strong>
-            </span>
-            {selected ? <span className="sr-only">Selected effect</span> : null}
-        </button>
-    );
-}
-
-function RackUnit({
-    effectId,
-    position,
-    enabled,
-    selected,
-    reordering,
-    quickEndpointID,
-    onSelect,
-    onToggle,
-    onRecentParameter,
-    onReorderPointerDown,
-    onKeyboardMove,
-}: {
-    effectId: EffectModuleId;
-    position: number;
-    enabled: boolean;
-    selected: boolean;
-    reordering: boolean;
-    quickEndpointID: string;
-    onSelect: () => void;
-    onToggle: () => void;
-    onRecentParameter: (endpointID: string) => void;
-    onReorderPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void;
-    onKeyboardMove: (offset: -1 | 1) => void;
-}) {
-    const effect = getRackEffectDescriptor(effectId);
-    const quickDescriptor = effect.parameters.find((parameter) => parameter.endpointID === quickEndpointID)
-        ?? effect.parameters.find((parameter) => parameter.endpointID === effect.initialQuickEndpointID)
-        ?? effect.parameters[0];
-
-    return (
-        <div
-            data-role={`rack-module-${effectId}`}
-            data-rack-effect-id={effectId}
-            data-rack-position={position}
-            data-effect-id={effectId}
-            data-enabled={enabled ? "true" : "false"}
-            data-drag-dwell={`rack-effect:${effectId}`}
-            className={`rack-unit${selected ? " is-selected" : ""}${enabled ? "" : " is-disabled"}${reordering ? " is-reordering" : ""}`}
-        >
-            <button
-                type="button"
-                data-role={`rack-reorder-handle-${effectId}`}
-                aria-label={`Reorder ${effect.label}`}
-                className="rack-grip"
-                onPointerDown={onReorderPointerDown}
-                onKeyDown={(event) => {
-                    if (event.key === "ArrowUp" || event.key === "ArrowLeft") {
-                        event.preventDefault();
-                        onKeyboardMove(-1);
-                    } else if (event.key === "ArrowDown" || event.key === "ArrowRight") {
-                        event.preventDefault();
-                        onKeyboardMove(1);
-                    }
-                }}
-            >
-                <GripDots />
-            </button>
-            <RackQuickSurface
-                descriptor={quickDescriptor}
-                selected={selected}
-                onSelect={onSelect}
-                onRecentParameter={onRecentParameter}
-            />
-            <button
-                type="button"
-                data-role={`rack-enabled-${effectId}`}
-                aria-label={`${enabled ? "Bypass" : "Enable"} ${effect.label}`}
-                aria-pressed={enabled}
-                className="rack-power"
-                onClick={(event) => {
-                    event.stopPropagation();
-                    onToggle();
-                }}
-            >
-                <PowerGlyph />
-            </button>
-        </div>
     );
 }
 
@@ -3036,23 +2846,25 @@ export function EffectsRackWorkspace({
     const [sourceDrag, setSourceDrag] = useState<SourceDragPresentation | null>(null);
     const [railCollapseSignal, setRailCollapseSignal] = useState(0);
     const [parameterMenu, setParameterMenu] = useState<RackParameterMenuState | null>(null);
+    const [stationMenu, setStationMenu] = useState<SubwayStationMenuRequest | null>(null);
     const [parameterValueSheetEndpointID, setParameterValueSheetEndpointID] = useState<string | null>(null);
     const [removeTargetRoutesEndpointID, setRemoveTargetRoutesEndpointID] = useState<string | null>(null);
     const pendingRouteRef = useRef<{ key: string } | null>(null);
     const [pendingRouteKey, setPendingRouteKey] = useState<string | null>(null);
 
     useEffect(() => {
-        if (parameterMenu === null) {
+        if (parameterMenu === null && stationMenu === null) {
             return;
         }
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
                 setParameterMenu(null);
+                setStationMenu(null);
             }
         };
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [parameterMenu]);
+    }, [parameterMenu, stationMenu]);
 
     useEffect(() => {
         if (reorderRef.current !== null) {
@@ -3182,6 +2994,54 @@ export function EffectsRackWorkspace({
     const commitOrder = useCallback((order: ReadonlyArray<EffectModuleId>) => {
         commit({ ...rackStateRef.current, order: [...order] });
     }, [commit, rackStateRef]);
+
+    const toggleEffectEnabled = useCallback((effectId: EffectModuleId) => {
+        const current = rackStateRef.current;
+        commit({
+            ...current,
+            enabled: { ...current.enabled, [effectId]: !current.enabled[effectId] },
+        });
+    }, [commit, rackStateRef]);
+
+    // A station drag that crosses the lift threshold hands the pointer to the
+    // list-level reorder machinery — the same physics the grip handle drove.
+    const armStationReorder = useCallback((effectId: EffectModuleId, event: ReactPointerEvent<HTMLElement>) => {
+        const captureElement = rackListRef.current;
+        if (!captureElement || reorderRef.current !== null) {
+            return;
+        }
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+            captureElement.setPointerCapture(event.pointerId);
+        } catch {
+            // The list and window handlers remain authoritative when capture
+            // is unavailable or the platform has already lost it.
+        }
+        reorderRef.current = {
+            pointerId: event.pointerId,
+            effectId,
+            originalOrder: [...previewOrderRef.current],
+            captureElement,
+        };
+        setReorderingEffectId(effectId);
+    }, []);
+
+    const moveEffectByOffset = useCallback((effectId: EffectModuleId, offset: -1 | 1) => {
+        const currentOrder = previewOrderRef.current;
+        const position = currentOrder.indexOf(effectId);
+        if (position < 0) {
+            return;
+        }
+        const targetPosition = clamp(position + offset, 0, currentOrder.length - 1);
+        if (targetPosition === position) {
+            return;
+        }
+        const nextOrder = moveEffect(currentOrder, effectId, currentOrder[targetPosition]!);
+        previewOrderRef.current = nextOrder;
+        setPreviewOrder(nextOrder);
+        commitOrder(nextOrder);
+    }, [commitOrder]);
 
     const finishReorder = useCallback((pointerId: number, shouldCommit: boolean) => {
         const gesture = reorderRef.current;
@@ -3557,6 +3417,57 @@ export function EffectsRackWorkspace({
                     onSelectAction={handleParameterMenuAction}
                 />
             ) : null}
+            {stationMenu ? (
+                // The station's long-press menu: everything the old row
+                // offered, none of the bulk. Move and remove join it with the
+                // add/remove UX (M4).
+                <div
+                    className="rack-parameter-menu-layer"
+                    data-role="rack-station-menu-layer"
+                    onPointerDown={() => setStationMenu(null)}
+                >
+                    <div
+                        role="menu"
+                        aria-label={`${getRackEffectDescriptor(stationMenu.effectId).label} station actions`}
+                        data-role="rack-station-menu"
+                        data-effect-id={stationMenu.effectId}
+                        className="rack-parameter-menu"
+                        style={{
+                            "--rack-menu-x": `${stationMenu.clientX}px`,
+                            "--rack-menu-y": `${stationMenu.clientY}px`,
+                        } as CSSProperties}
+                        onPointerDown={(event) => event.stopPropagation()}
+                    >
+                        <button
+                            type="button"
+                            role="menuitem"
+                            data-role={`rack-enabled-${stationMenu.effectId}`}
+                            aria-pressed={rackState.enabled[stationMenu.effectId]}
+                            onClick={() => {
+                                toggleEffectEnabled(stationMenu.effectId);
+                                setStationMenu(null);
+                            }}
+                        >
+                            {rackState.enabled[stationMenu.effectId] ? "Bypass" : "Enable"}
+                        </button>
+                        <button
+                            type="button"
+                            role="menuitem"
+                            data-role={`rack-station-exact-${stationMenu.effectId}`}
+                            onClick={() => {
+                                const effect = getRackEffectDescriptor(stationMenu.effectId);
+                                const quickEndpointID = quickEndpointByEffect[stationMenu.effectId]
+                                    ?? effect.initialQuickEndpointID;
+                                selectEffect(stationMenu.effectId);
+                                setParameterValueSheetEndpointID(quickEndpointID);
+                                setStationMenu(null);
+                            }}
+                        >
+                            Exact value
+                        </button>
+                    </div>
+                </div>
+            ) : null}
             {parameterValueSheetEndpointID ? (
                 <ParameterValueSheet
                     key={`${parameterValueSheetEndpointID}:${selectedSource.sourceKind}:${selectedSource.sourceSlot}`}
@@ -3623,72 +3534,35 @@ export function EffectsRackWorkspace({
                 <div className="rack-stack" aria-label="Ordered effects rack">
                     <div
                         ref={rackListRef}
-                        className="rack-list"
+                        className="rack-list subway-map"
                         data-role="rack-module-list"
                         onPointerMove={updateReorderPreview}
                         onPointerUp={(event) => finishReorder(event.pointerId, true)}
                         onPointerCancel={(event) => finishReorder(event.pointerId, false)}
                         onLostPointerCapture={(event) => {
+                            // The station's capture handoff at the lift
+                            // threshold BUBBLES through here; only the list
+                            // losing its own capture cancels the gesture.
+                            if (event.target !== event.currentTarget) {
+                                return;
+                            }
                             const gesture = reorderRef.current;
                             if (gesture?.captureElement === event.currentTarget) {
                                 finishReorder(gesture.pointerId, false);
                             }
                         }}
                     >
-                        {previewOrder.map((effectId, position) => (
-                            <RackUnit
-                                key={effectId}
-                                effectId={effectId}
-                                position={position}
-                                enabled={rackState.enabled[effectId]}
-                                selected={selectedEffectId === effectId}
-                                reordering={reorderingEffectId === effectId}
-                                quickEndpointID={quickEndpointByEffect[effectId]}
-                                onSelect={() => selectEffect(effectId)}
-                                onToggle={() => commit({
-                                    ...rackState,
-                                    enabled: { ...rackState.enabled, [effectId]: !rackState.enabled[effectId] },
-                                })}
-                                onRecentParameter={(endpointID) => {
-                                    setRecentParameter(effectId, endpointID);
-                                    selectTarget(endpointID);
-                                }}
-                                onReorderPointerDown={(event) => {
-                                    if (event.pointerType === "mouse" && event.button !== 0) {
-                                        return;
-                                    }
-                                    event.preventDefault();
-                                    event.stopPropagation();
-                                    const captureElement = rackListRef.current;
-                                    if (!captureElement) {
-                                        return;
-                                    }
-                                    try {
-                                        captureElement.setPointerCapture(event.pointerId);
-                                    } catch {
-                                        // The list and window handlers remain authoritative when
-                                        // capture is unavailable or the platform has already lost it.
-                                    }
-                                    reorderRef.current = {
-                                        pointerId: event.pointerId,
-                                        effectId,
-                                        originalOrder: [...previewOrderRef.current],
-                                        captureElement,
-                                    };
-                                    setReorderingEffectId(effectId);
-                                }}
-                                onKeyboardMove={(offset) => {
-                                    const targetPosition = clamp(position + offset, 0, previewOrder.length - 1);
-                                    if (targetPosition === position) {
-                                        return;
-                                    }
-                                    const nextOrder = moveEffect(previewOrder, effectId, previewOrder[targetPosition]!);
-                                    previewOrderRef.current = nextOrder;
-                                    setPreviewOrder(nextOrder);
-                                    commitOrder(nextOrder);
-                                }}
-                            />
-                        ))}
+                        <SubwayMapColumn
+                            laneState={rackState}
+                            previewOrder={previewOrder}
+                            selectedEffectId={selectedEffectId}
+                            reorderingEffectId={reorderingEffectId}
+                            accents={EFFECT_ACCENTS}
+                            onSelect={selectEffect}
+                            onOpenStationMenu={setStationMenu}
+                            onArmReorder={armStationReorder}
+                            onKeyboardMove={moveEffectByOffset}
+                        />
                     </div>
                 </div>
 
@@ -3700,10 +3574,24 @@ export function EffectsRackWorkspace({
                     style={{ "--editor-accent": EFFECT_ACCENTS[selectedEffectId] } as CSSProperties}
                     aria-label="Selected effect editor"
                 >
-                    <header className="rack-editor-header">
-                        <span>{rackState.enabled[selectedEffectId] ? "SELECTED FX" : "FX BYPASSED"}</span>
-                        <strong className="rack-editor-name">{selectedEffect.label}</strong>
-                        <p>{selectedEffect.summary}</p>
+                    <header className="rack-editor-header" data-effect-id={selectedEffectId}>
+                        {/* The faceplate art lives here now — the header is
+                            the one place with room for it at station scale. */}
+                        <div className="rack-editor-heading">
+                            <span>{rackState.enabled[selectedEffectId] ? "SELECTED FX" : "FX BYPASSED"}</span>
+                            <strong className="rack-editor-name">{selectedEffect.label}</strong>
+                            <p>{selectedEffect.summary}</p>
+                        </div>
+                        <button
+                            type="button"
+                            data-role="rack-editor-power"
+                            aria-label={`${rackState.enabled[selectedEffectId] ? "Bypass" : "Enable"} ${selectedEffect.label}`}
+                            aria-pressed={rackState.enabled[selectedEffectId]}
+                            className="rack-power rack-editor-power"
+                            onClick={() => toggleEffectEnabled(selectedEffectId)}
+                        >
+                            <PowerGlyph />
+                        </button>
                     </header>
                     <div className="rack-editor-visual">
                         <RackEditorVisual
