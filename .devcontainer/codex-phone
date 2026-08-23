@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo="/workspaces/cosimo-synth"
+if [[ ! -d "$repo" ]]; then
+  repo="$PWD"
+fi
+
+if ! command -v codex >/dev/null 2>&1; then
+  printf 'Codex CLI is not installed. Run: npm install -g @openai/codex\n' >&2
+  exit 1
+fi
+
+cd "$repo"
+
+# Keep Codex alive when iOS suspends Termius or the SSH connection drops.
+if ! command -v tmux >/dev/null 2>&1; then
+  exec codex
+fi
+
+session="${CODEX_TMUX_SESSION:-codex}"
+if tmux has-session -t "$session" 2>/dev/null; then
+  exec tmux attach-session -t "$session"
+fi
+
+exec tmux new-session -s "$session" -c "$repo" codex
