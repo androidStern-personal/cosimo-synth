@@ -216,6 +216,7 @@ test("M3 worker capture is deterministic and composes through sampled playback",
     await statusProbe.initialise(9, 44_100);
     statusProbe.advance(1);
     assert.equal(statusProbe.getOutputEvent_engineStatus(0).event.sampleRateHz, 44_100);
+    assert.equal(statusProbe.getOutputEvent_engineStatus(0).event.tempoBpm, 120);
 
     const deterministicOptions = {
         snapshot: fixtureSnapshot("pluck"),

@@ -104,7 +104,12 @@ async function requestParameterValues(connection, endpointIDs, timeoutMillisecon
     }, timeoutMilliseconds, "Bounce patch parameters");
 }
 
-async function requestStoredState(connection, storedStateKeys, timeoutMilliseconds) {
+async function requestStoredState(
+    connection,
+    storedStateKeys,
+    timeoutMilliseconds,
+    storedStateDefaults,
+) {
     if (typeof connection.requestFullStoredState !== "function") {
         throw new Error("Full patch stored-state reads are unavailable");
     }
@@ -116,7 +121,9 @@ async function requestStoredState(connection, storedStateKeys, timeoutMillisecon
                 for (const key of storedStateKeys) {
                     selected[key] = Object.hasOwn(values, key)
                         ? values[key]
-                        : (key === BOUNCE_STATE_KEY ? null : undefined);
+                        : (Object.hasOwn(storedStateDefaults, key)
+                            ? storedStateDefaults[key]
+                            : (key === BOUNCE_STATE_KEY ? null : undefined));
                     if (selected[key] === undefined) {
                         throw new Error(`Patch stored state is missing ${key}`);
                     }
@@ -133,6 +140,7 @@ async function requestStoredState(connection, storedStateKeys, timeoutMillisecon
 export async function captureLiveBouncePatchDocument(connection, {
     parameterIDs = null,
     storedStateKeys = BOUNCE_PATCH_STORED_STATE_KEYS,
+    storedStateDefaults = {},
     timeoutMilliseconds = BOUNCE_PATCH_IO_TIMEOUT_MS,
 } = {}) {
     const resolvedParameterIDs = parameterIDs
@@ -143,7 +151,12 @@ export async function captureLiveBouncePatchDocument(connection, {
     // answer asynchronously.
     const [parameters, storedState] = await Promise.all([
         requestParameterValues(connection, resolvedParameterIDs, timeoutMilliseconds),
-        requestStoredState(connection, storedStateKeys, timeoutMilliseconds),
+        requestStoredState(
+            connection,
+            storedStateKeys,
+            timeoutMilliseconds,
+            storedStateDefaults,
+        ),
     ]);
     return createBouncePatchDocument({ parameters, storedState });
 }

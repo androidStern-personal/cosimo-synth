@@ -132,6 +132,22 @@ export const VOICE_MODULATION_TARGET_KINDS: ReadonlyArray<VoiceModulationTargetK
     ...SHARED_VOICE_MODULATION_TARGET_KINDS,
 ]);
 
+const OSCILLATOR_MODULATION_TARGET_KIND_SET = new Set<ModulationTargetKind>(
+    OSCILLATOR_IDS.flatMap((oscillatorID) => (
+        OSCILLATOR_MODULATION_PARAMETER_KINDS.map(
+            (parameterKind) => `osc${oscillatorID}.${parameterKind}` as OscillatorModulationTargetKind,
+        )
+    )),
+);
+
+/** Runtime grammar check used when sampled mode makes all 30 oscillator cells inert. */
+export function isOscillatorModulationTargetKind(
+    value: unknown,
+): value is OscillatorModulationTargetKind {
+    return typeof value === "string"
+        && OSCILLATOR_MODULATION_TARGET_KIND_SET.has(value as ModulationTargetKind);
+}
+
 /** Voice destinations paired with their canonical runtime indexes. */
 export const VOICE_MODULATION_TARGET_IDENTITIES: ReadonlyArray<ModulationTargetIdentity> = Object.freeze(
     VOICE_MODULATION_TARGET_KINDS.map((kind, runtimeIndex) => ({ kind, group: "voice" as const, runtimeIndex })),

@@ -67,6 +67,30 @@ function meanAbsolute(samples) {
     return sum / samples.length;
 }
 
+function maxInterSampleStep(...renderedBlocks) {
+    let maximum = 0;
+    let previousLeft = 0;
+    let previousRight = 0;
+    let hasPrevious = false;
+    for (const rendered of renderedBlocks) {
+        for (let offset = 0; offset < rendered.length; offset += 2) {
+            const left = rendered[offset];
+            const right = rendered[offset + 1];
+            if (hasPrevious) {
+                maximum = Math.max(
+                    maximum,
+                    Math.abs(left - previousLeft),
+                    Math.abs(right - previousRight),
+                );
+            }
+            previousLeft = left;
+            previousRight = right;
+            hasPrevious = true;
+        }
+    }
+    return maximum;
+}
+
 function estimateFrequency(samples, firstFrame, lastFrame) {
     const crossings = [];
     for (let frame = firstFrame + 1; frame < lastFrame; frame += 1) {
@@ -430,6 +454,48 @@ test("live velocity scales loudness and early note-off follows Amp Release", asy
     const released = channel(renderFrames(performer, 6_000), 0);
     assert.ok(rms(released.subarray(0, 500)) > 1e-5, "release begins audibly");
     assert.equal(rms(released.subarray(5_000)), 0, "the early release must reach silence");
+});
+
+test("source swaps and note boundaries stay below the committed click ceiling", async (t) => {
+    const CmajorClass = await loadGeneratedClass();
+    const sessionID = 42_208;
+    const performer = await createSamplerPerformer(CmajorClass, sessionID);
+    performer.setInputValue_ampRelease(0.05, 0);
+    performer.advance(4);
+    installBank(performer, sessionID, 1, buildUpload([{
+        note: 60,
+        samples: makeSineStereo(24_000, 440, 0.12),
+    }]));
+
+    const preNote = renderFrames(performer, 32);
+    noteOn(performer, 60, captureVelocity);
+    // End near a sine peak so an unfaded swap would make a ~0.12 FS step.
+    const held = renderFrames(performer, 2_973);
+    performer.setInputValue_sourceMode(0, 0);
+    const toOscillator = renderFrames(performer, 512);
+    performer.setInputValue_sourceMode(1, 0);
+    const toBounce = renderFrames(performer, 512);
+    noteOff(performer, 60);
+    const released = renderFrames(performer, 6_000);
+
+    // 0.01 FS is -40 dBFS: a conservative ceiling for an isolated
+    // one-sample discontinuity. The deliberate 440 Hz / 0.12 FS signal has
+    // legitimate adjacent steps around 0.0069 FS, leaving meaningful margin.
+    const clickCeiling = 0.01;
+    const maximumStep = maxInterSampleStep(
+        preNote,
+        held,
+        toOscillator,
+        toBounce,
+        released,
+    );
+    t.diagnostic(`G4 maximum inter-sample step: ${maximumStep.toFixed(8)} FS (${(
+        20 * Math.log10(Math.max(maximumStep, Number.EPSILON))
+    ).toFixed(2)} dBFS); ceiling ${clickCeiling.toFixed(5)} FS (-40.00 dBFS)`);
+    assert.ok(
+        maximumStep < clickCeiling,
+        `maximum inter-sample step ${maximumStep} exceeded ${clickCeiling}`,
+    );
 });
 
 test("legato glide continuously repitches the in-flight sample", async () => {

@@ -584,6 +584,31 @@ test("Discard and Init replaces a dirty unnamed sound without saving it", async 
     assert.deepEqual(controller.getState().userPresets, []);
 });
 
+test("Bounce uses the synth dirty guard and runs only the confirmed press-time continuation", async () => {
+    const { controller, patchConnection } = await createSynthFixture();
+    assert.equal(synthMutations(controller).initSound().ok, true);
+    patchConnection.emitParameterValue("oscAFramePosition", 0.91);
+    assert.equal(controller.getState().dirty, true);
+
+    const calls = [];
+    const guarded = synthMutations(controller).bounceSound(() => calls.push("first"));
+    assert.equal(guarded.ok, false);
+    assert.equal(guarded.actionRequired, "confirm-sound-replacement");
+    assert.deepEqual(controller.getState().pendingSoundReplacement, { kind: "bounce" });
+    assert.deepEqual(calls, []);
+
+    assert.equal(synthMutations(controller).cancelSoundReplacement().ok, true);
+    assert.deepEqual(calls, []);
+
+    const second = synthMutations(controller).bounceSound(() => calls.push("second"));
+    assert.equal(second.ok, false);
+    assert.deepEqual(controller.getState().pendingSoundReplacement, { kind: "bounce" });
+    const discarded = synthMutations(controller).discardAndContinueSoundReplacement();
+    assert.equal(discarded.ok, true, discarded.message);
+    assert.deepEqual(calls, ["second"]);
+    assert.equal(controller.getState().pendingSoundReplacement, null);
+});
+
 test("Save and Init overwrites a writable user preset before initializing", async () => {
     const { controller, defaults, patchConnection } = await createSynthFixture();
     const saveResult = controller.getMutations().saveCurrentAsNewPreset("Writable Sound");

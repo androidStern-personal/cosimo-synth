@@ -42,7 +42,10 @@ import {
     type ModulationRoute,
     type ModulationRouteUpdate,
 } from "../shared/modulation";
-import type { ModulationTargetKind } from "../shared/modulation-targets";
+import {
+    isOscillatorModulationTargetKind,
+    type ModulationTargetKind,
+} from "../shared/modulation-targets";
 import { parseLaneModulationTargetKind } from "../shared/lane-modulation-targets";
 import { resolveModulationTargetBase } from "../shared/modulation-target-base";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
@@ -87,6 +90,7 @@ function MappingRow({
     onRemoveRoute,
     onGestureActive,
     onBaseSample,
+    oscillatorTargetsInactive,
 }: {
     route: ModulationRoute;
     routeIndex: number;
@@ -98,6 +102,7 @@ function MappingRow({
     onRemoveRoute: (routeIndex: number) => void;
     onGestureActive: (routeId: string, active: boolean) => void;
     onBaseSample: (routeId: string, normalized: number | null) => void;
+    oscillatorTargetsInactive: boolean;
 }) {
     const source = sourceOptionForRoute(route);
     const sourceIdentity = route.sourceSlot === null
@@ -110,6 +115,8 @@ function MappingRow({
             return { shortLabel: rack.shortLabel, accent: rack.accent };
         })();
     const target = targetPresentation(route.targetKind);
+    const isBounceInert = oscillatorTargetsInactive
+        && isOscillatorModulationTargetKind(route.targetKind);
     const base = useMemo(() => resolveModulationTargetBase(route.targetKind), [route.targetKind]);
 
     const baseBinding = useLaneOrHostParameterBinding({
@@ -202,9 +209,12 @@ function MappingRow({
 
     return (
         <article
-            className={`mod-mappings-row${route.enabled ? "" : " is-bypassed"}${isJustCreated ? " is-just-created" : ""}`}
+            className={`mod-mappings-row${route.enabled ? "" : " is-bypassed"}${isJustCreated ? " is-just-created" : ""}${isBounceInert ? " opacity-35 grayscale" : ""}`}
             data-role="mod-mappings-row"
             data-route-id={route.id}
+            data-bounce-inert={isBounceInert ? "true" : undefined}
+            aria-disabled={isBounceInert}
+            inert={isBounceInert}
         >
             <div className="mod-mappings-row-identity">
                 <SourceIdentity sourceKind={route.sourceKind} sourceSlot={route.sourceSlot} />
@@ -355,6 +365,7 @@ export function MobileModMappingsPanel({
     onCreateRoute,
     onRemoveRoute,
     onRouteChange,
+    oscillatorTargetsInactive = false,
 }: {
     routes: ReadonlyArray<ModulationRoute>;
     recentConfirmedRouteId: string | null;
@@ -364,8 +375,11 @@ export function MobileModMappingsPanel({
     onCreateRoute: (route: GeneratedModulationRouteInput) => void;
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
+    oscillatorTargetsInactive?: boolean;
 }) {
-    const targetOptions = usePatchModulationTargetOptions();
+    const targetOptions = usePatchModulationTargetOptions({
+        includeOscillatorTargets: !oscillatorTargetsInactive,
+    });
     const [prefs, setPrefs] = useState<MappingsViewPrefs>(loadStoredViewPrefs);
     const dispatch = useCallback((action: ViewPrefsAction) => {
         setPrefs((current: MappingsViewPrefs) => viewPrefsReducer(current, action));
@@ -716,6 +730,7 @@ export function MobileModMappingsPanel({
                             onRemoveRoute={onRemoveRoute}
                             onGestureActive={handleGestureActive}
                             onBaseSample={handleBaseSample}
+                            oscillatorTargetsInactive={oscillatorTargetsInactive}
                         />
                     );
                 })}

@@ -82,9 +82,11 @@ function normalizeEngineStatus(value) {
     if (!record) return null;
     const dspSessionId = integerField(record, "dspSessionId", { min: 0 });
     const sampleRateHz = record.sampleRateHz;
+    const tempoBpm = record.tempoBpm;
     if (dspSessionId === null || typeof sampleRateHz !== "number"
-        || !Number.isFinite(sampleRateHz) || sampleRateHz <= 0) return null;
-    return { dspSessionId, sampleRateHz };
+        || !Number.isFinite(sampleRateHz) || sampleRateHz <= 0
+        || typeof tempoBpm !== "number" || !Number.isFinite(tempoBpm) || tempoBpm <= 0) return null;
+    return { dspSessionId, sampleRateHz, tempoBpm };
 }
 
 function timeoutError(label) {

@@ -207,7 +207,10 @@ export class BounceTransitionCoordinator {
             }
             externalSignal?.removeEventListener("abort", forwardAbort);
             this.#activeAbortController = null;
-            if (this.#phase !== "complete") this.#setPhase("idle");
+            // Publish the settled busy=false state even after success. The
+            // earlier complete notification occurs while the transaction's
+            // abort controller still owns cleanup.
+            this.#setPhase(this.#phase === "complete" ? "complete" : "idle");
         }
     }
 
@@ -261,7 +264,7 @@ export class BounceTransitionCoordinator {
                 try { await stagedInstall.abort(); } catch { /* inactive candidate only */ }
             }
             this.#activeAbortController = null;
-            if (this.#phase !== "complete") this.#setPhase("idle");
+            this.#setPhase(this.#phase === "complete" ? "complete" : "idle");
         }
     }
 }

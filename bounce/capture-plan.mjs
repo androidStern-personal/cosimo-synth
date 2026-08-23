@@ -25,7 +25,7 @@ function isPlainObject(value) {
     return prototype === Object.prototype || prototype === null;
 }
 
-function cloneWireValue(value, field = "value") {
+function cloneWireValue(value, field = "value", binaryClones = new WeakMap()) {
     if (value === null || typeof value === "boolean" || typeof value === "string") return value;
     if (typeof value === "number") {
         invariant(Number.isFinite(value), `${field} must be finite`);
@@ -33,15 +33,28 @@ function cloneWireValue(value, field = "value") {
     }
     if (ArrayBuffer.isView(value)) {
         invariant(!(value instanceof DataView), `${field} cannot be a DataView`);
-        return value.slice();
+        const cached = binaryClones.get(value);
+        if (cached !== undefined) return cached;
+        const cloned = value.slice();
+        binaryClones.set(value, cloned);
+        return cloned;
     }
-    if (value instanceof ArrayBuffer) return value.slice(0);
+    if (value instanceof ArrayBuffer) {
+        const cached = binaryClones.get(value);
+        if (cached !== undefined) return cached;
+        const cloned = value.slice(0);
+        binaryClones.set(value, cloned);
+        return cloned;
+    }
     if (Array.isArray(value)) {
-        return value.map((entry, index) => cloneWireValue(entry, `${field}[${index}]`));
+        return value.map((entry, index) => cloneWireValue(entry, `${field}[${index}]`, binaryClones));
     }
     invariant(isPlainObject(value), `${field} must be structured-clone data`);
     return Object.fromEntries(
-        Object.keys(value).sort().map((key) => [key, cloneWireValue(value[key], `${field}.${key}`)]),
+        Object.keys(value).sort().map((key) => [
+            key,
+            cloneWireValue(value[key], `${field}.${key}`, binaryClones),
+        ]),
     );
 }
 
@@ -67,21 +80,35 @@ function normalizeParameters(parameters) {
     return normalized;
 }
 
-function normalizeSetupEvents(events) {
-    invariant(Array.isArray(events), "setupEvents must be an array");
+function normalizeSetupEvents(events, {
+    fieldName = "setupEvents",
+    rootScoped = false,
+} = {}) {
+    invariant(Array.isArray(events), `${fieldName} must be an array`);
+    // One factory table is commonly selected by all three oscillators. Keep
+    // shared typed-array payloads shared inside the immutable snapshot so a
+    // normal capture recipe does not retain three identical mip pyramids.
+    const binaryClones = new WeakMap();
     return events.map((entry, index) => {
         const advanceFrames = entry?.advanceFrames ?? 1;
         const sessionScoped = entry?.sessionScoped ?? false;
         invariant(Number.isInteger(advanceFrames) && advanceFrames >= 0,
-            `setupEvents[${index}].advanceFrames must be a non-negative integer`);
+            `${fieldName}[${index}].advanceFrames must be a non-negative integer`);
         invariant(typeof sessionScoped === "boolean",
-            `setupEvents[${index}].sessionScoped must be boolean`);
-        return {
-            endpointID: normalizeEndpointID(entry?.endpointID, `setupEvents[${index}].endpointID`),
-            value: cloneWireValue(entry?.value, `setupEvents[${index}].value`),
+            `${fieldName}[${index}].sessionScoped must be boolean`);
+        const normalized = {
+            endpointID: normalizeEndpointID(entry?.endpointID, `${fieldName}[${index}].endpointID`),
+            value: cloneWireValue(entry?.value, `${fieldName}[${index}].value`, binaryClones),
             advanceFrames,
             sessionScoped,
         };
+        if (!rootScoped) return normalized;
+        invariant(typeof entry?.rootNoteField === "string"
+            && /^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.rootNoteField),
+        `${fieldName}[${index}].rootNoteField must be a field name`);
+        invariant(isPlainObject(normalized.value),
+            `${fieldName}[${index}].value must be an object`);
+        return { ...normalized, rootNoteField: entry.rootNoteField };
     });
 }
 
@@ -95,6 +122,7 @@ export function createBounceCaptureSnapshot({
     tempoBpm = 120,
     parameters = {},
     setupEvents = [],
+    rootSetupEvents = [],
     settleFrames = BOUNCE_OFFLINE_BLOCK_FRAMES,
     sourceGeneration = 0,
     sourceBankDigest = null,
@@ -117,6 +145,12 @@ export function createBounceCaptureSnapshot({
         tempoBpm,
         parameters: Object.freeze(normalizeParameters(parameters).map(Object.freeze)),
         setupEvents: Object.freeze(normalizeSetupEvents(setupEvents).map(Object.freeze)),
+        // Root-scoped events receive the worker job's note immediately before
+        // MIDI note-on. They remain part of the immutable press-time recipe.
+        rootSetupEvents: Object.freeze(normalizeSetupEvents(rootSetupEvents, {
+            fieldName: "rootSetupEvents",
+            rootScoped: true,
+        }).map(Object.freeze)),
         settleFrames,
         sourceGeneration,
         sourceBankDigest,

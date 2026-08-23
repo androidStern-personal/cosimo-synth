@@ -2,32 +2,51 @@ function R(e) {
   const n = Number.isFinite(e) ? e : 0, r = Math.max(-1, Math.min(1, n));
   return Math.max(-32768, Math.min(32767, Math.round(r * 32768)));
 }
-const A = "cosimo.bounce-capture-snapshot", D = 1, y = "cosimo.bounce-capture-plan", M = 1, S = Object.freeze(
+const D = "cosimo.bounce-capture-snapshot", M = 1, S = "cosimo.bounce-capture-plan", v = 1, B = Object.freeze(
   Array.from({ length: 19 }, (e, n) => 24 + n * 4)
-), O = 100, B = 3, C = 6, U = -80, L = 10 ** (U / 20), T = 0.05, $ = 0.1, v = 128;
+), N = 100, U = 3, g = 6, j = -80, z = 10 ** (j / 20), L = 0.05, T = 0.1, $ = 128;
 function i(e, n) {
   if (!e) throw new Error(n);
 }
-function j(e) {
+function w(e) {
   if (typeof e != "object" || e === null || Array.isArray(e)) return !1;
   const n = Object.getPrototypeOf(e);
   return n === Object.prototype || n === null;
 }
-function I(e, n = "value") {
-  return e === null || typeof e == "boolean" || typeof e == "string" ? e : typeof e == "number" ? (i(Number.isFinite(e), `${n} must be finite`), e) : ArrayBuffer.isView(e) ? (i(!(e instanceof DataView), `${n} cannot be a DataView`), e.slice()) : e instanceof ArrayBuffer ? e.slice(0) : Array.isArray(e) ? e.map((r, t) => I(r, `${n}[${t}]`)) : (i(j(e), `${n} must be structured-clone data`), Object.fromEntries(
-    Object.keys(e).sort().map((r) => [r, I(e[r], `${n}.${r}`)])
+function O(e, n = "value", r = /* @__PURE__ */ new WeakMap()) {
+  if (e === null || typeof e == "boolean" || typeof e == "string") return e;
+  if (typeof e == "number")
+    return i(Number.isFinite(e), `${n} must be finite`), e;
+  if (ArrayBuffer.isView(e)) {
+    i(!(e instanceof DataView), `${n} cannot be a DataView`);
+    const t = r.get(e);
+    if (t !== void 0) return t;
+    const o = e.slice();
+    return r.set(e, o), o;
+  }
+  if (e instanceof ArrayBuffer) {
+    const t = r.get(e);
+    if (t !== void 0) return t;
+    const o = e.slice(0);
+    return r.set(e, o), o;
+  }
+  return Array.isArray(e) ? e.map((t, o) => O(t, `${n}[${o}]`, r)) : (i(w(e), `${n} must be structured-clone data`), Object.fromEntries(
+    Object.keys(e).sort().map((t) => [
+      t,
+      O(e[t], `${n}.${t}`, r)
+    ])
   ));
 }
-function w(e, n) {
+function y(e, n) {
   return i(
     typeof e == "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(e),
     `${n} must be a Cmajor endpoint ID`
   ), e;
 }
-function z(e) {
+function P(e) {
   const r = (Array.isArray(e) ? e.map((t) => [t?.endpointID, t?.value]) : Object.entries(e ?? {})).map(([t, o], s) => ({
-    endpointID: w(t, `parameters[${s}].endpointID`),
-    value: I(o, `parameters.${t}`)
+    endpointID: y(t, `parameters[${s}].endpointID`),
+    value: O(o, `parameters.${t}`)
   }));
   r.sort((t, o) => t.endpointID.localeCompare(o.endpointID));
   for (let t = 1; t < r.length; t += 1)
@@ -37,21 +56,34 @@ function z(e) {
     );
   return r;
 }
-function P(e) {
-  return i(Array.isArray(e), "setupEvents must be an array"), e.map((n, r) => {
-    const t = n?.advanceFrames ?? 1, o = n?.sessionScoped ?? !1;
-    return i(
-      Number.isInteger(t) && t >= 0,
-      `setupEvents[${r}].advanceFrames must be a non-negative integer`
+function _(e, {
+  fieldName: n = "setupEvents",
+  rootScoped: r = !1
+} = {}) {
+  i(Array.isArray(e), `${n} must be an array`);
+  const t = /* @__PURE__ */ new WeakMap();
+  return e.map((o, s) => {
+    const a = o?.advanceFrames ?? 1, c = o?.sessionScoped ?? !1;
+    i(
+      Number.isInteger(a) && a >= 0,
+      `${n}[${s}].advanceFrames must be a non-negative integer`
     ), i(
-      typeof o == "boolean",
-      `setupEvents[${r}].sessionScoped must be boolean`
-    ), {
-      endpointID: w(n?.endpointID, `setupEvents[${r}].endpointID`),
-      value: I(n?.value, `setupEvents[${r}].value`),
-      advanceFrames: t,
-      sessionScoped: o
+      typeof c == "boolean",
+      `${n}[${s}].sessionScoped must be boolean`
+    );
+    const u = {
+      endpointID: y(o?.endpointID, `${n}[${s}].endpointID`),
+      value: O(o?.value, `${n}[${s}].value`, t),
+      advanceFrames: a,
+      sessionScoped: c
     };
+    return r ? (i(
+      typeof o?.rootNoteField == "string" && /^[A-Za-z_][A-Za-z0-9_]*$/.test(o.rootNoteField),
+      `${n}[${s}].rootNoteField must be a field name`
+    ), i(
+      w(u.value),
+      `${n}[${s}].value must be an object`
+    ), { ...u, rootNoteField: o.rootNoteField }) : u;
   });
 }
 function x({
@@ -59,9 +91,10 @@ function x({
   tempoBpm: n = 120,
   parameters: r = {},
   setupEvents: t = [],
-  settleFrames: o = v,
-  sourceGeneration: s = 0,
-  sourceBankDigest: a = null
+  rootSetupEvents: o = [],
+  settleFrames: s = $,
+  sourceGeneration: a = 0,
+  sourceBankDigest: c = null
 } = {}) {
   return i(
     Number.isInteger(e) && e >= 8e3 && e <= 384e3,
@@ -70,33 +103,39 @@ function x({
     typeof n == "number" && Number.isFinite(n) && n > 0,
     "Capture tempoBpm must be positive and finite"
   ), i(
-    Number.isInteger(o) && o >= 1,
+    Number.isInteger(s) && s >= 1,
     "Capture settleFrames must be a positive integer"
   ), i(
-    Number.isInteger(s) && s >= 0,
+    Number.isInteger(a) && a >= 0,
     "Capture sourceGeneration must be a non-negative integer"
   ), i(
-    a === null || typeof a == "string",
+    c === null || typeof c == "string",
     "Capture sourceBankDigest must be null or a string"
   ), Object.freeze({
-    format: A,
-    version: D,
+    format: D,
+    version: M,
     sampleRate: e,
     tempoBpm: n,
-    parameters: Object.freeze(z(r).map(Object.freeze)),
-    setupEvents: Object.freeze(P(t).map(Object.freeze)),
-    settleFrames: o,
-    sourceGeneration: s,
-    sourceBankDigest: a
+    parameters: Object.freeze(P(r).map(Object.freeze)),
+    setupEvents: Object.freeze(_(t).map(Object.freeze)),
+    // Root-scoped events receive the worker job's note immediately before
+    // MIDI note-on. They remain part of the immutable press-time recipe.
+    rootSetupEvents: Object.freeze(_(o, {
+      fieldName: "rootSetupEvents",
+      rootScoped: !0
+    }).map(Object.freeze)),
+    settleFrames: s,
+    sourceGeneration: a,
+    sourceBankDigest: c
   });
 }
 function k(e) {
   return i(
-    e?.format === A && e?.version === D,
+    e?.format === D && e?.version === M,
     "Unsupported Bounce capture snapshot"
   ), x(e);
 }
-function V(e) {
+function W(e) {
   i(
     Array.isArray(e) && e.length > 0 && e.length <= 19,
     "Capture roots must contain 1 to 19 MIDI notes"
@@ -107,59 +146,59 @@ function V(e) {
     `Capture root ${t} is not a MIDI note`
   ), i(r > n, "Capture roots must be strictly ascending"), n = r, r));
 }
-function W(e, {
-  roots: n = S,
-  holdSeconds: r = B,
-  tailCapSeconds: t = C,
-  captureVelocity: o = O,
-  blockFrames: s = v
+function V(e, {
+  roots: n = B,
+  holdSeconds: r = U,
+  tailCapSeconds: t = g,
+  captureVelocity: o = N,
+  blockFrames: s = $
 } = {}) {
-  const a = k(e), m = V(n);
+  const a = k(e), c = W(n);
   i(
     typeof r == "number" && Number.isFinite(r) && r > 0,
     "Capture holdSeconds must be positive and finite"
   ), i(
-    typeof t == "number" && Number.isFinite(t) && t > 0 && t <= C,
-    `Capture tailCapSeconds must be in (0, ${C}]`
+    typeof t == "number" && Number.isFinite(t) && t > 0 && t <= g,
+    `Capture tailCapSeconds must be in (0, ${g}]`
   ), i(
-    Number.isInteger(o) && o === O,
-    `Bounce V1 captures at velocity ${O}`
+    Number.isInteger(o) && o === N,
+    `Bounce V1 captures at velocity ${N}`
   ), i(
     Number.isInteger(s) && s >= 1 && s <= 128,
     "Offline blockFrames must be from 1 to 128"
   );
-  const c = Math.max(1, Math.round(r * a.sampleRate)), u = Math.max(1, Math.round(t * a.sampleRate)), p = Math.max(
+  const u = Math.max(1, Math.round(r * a.sampleRate)), m = Math.max(1, Math.round(t * a.sampleRate)), f = Math.max(
     1,
+    Math.round(L * a.sampleRate)
+  ), h = Math.max(
+    f,
     Math.round(T * a.sampleRate)
-  ), d = Math.max(
-    p,
-    Math.round($ * a.sampleRate)
-  ), h = m.map((f, N) => Object.freeze({
-    rootIndex: N,
-    rootNote: f,
+  ), b = c.map((p, E) => Object.freeze({
+    rootIndex: E,
+    rootNote: p,
     // Stable across identical bounces, while remaining distinct per root.
-    sessionID: 4341760 + N
+    sessionID: 4341760 + E
   }));
   return Object.freeze({
-    format: y,
-    version: M,
+    format: S,
+    version: v,
     snapshot: a,
-    roots: Object.freeze(m),
+    roots: Object.freeze(c),
     captureVelocity: o,
-    holdFrames: c,
-    tailCapFrames: u,
-    silenceThresholdLinear: L,
-    silenceWindowFrames: p,
-    tailPaddingFrames: d,
+    holdFrames: u,
+    tailCapFrames: m,
+    silenceThresholdLinear: z,
+    silenceWindowFrames: f,
+    tailPaddingFrames: h,
     blockFrames: s,
-    jobs: Object.freeze(h)
+    jobs: Object.freeze(b)
   });
 }
 function q(e) {
   return i(
-    e?.format === y && e?.version === M,
+    e?.format === S && e?.version === v,
     "Unsupported Bounce capture plan"
-  ), W(e.snapshot, {
+  ), V(e.snapshot, {
     roots: e.roots,
     holdSeconds: e.holdFrames / e.snapshot.sampleRate,
     tailCapSeconds: e.tailCapFrames / e.snapshot.sampleRate,
@@ -167,15 +206,15 @@ function q(e) {
     blockFrames: e.blockFrames
   });
 }
-function l(e, n) {
+function d(e, n) {
   if (!e) throw new Error(n);
 }
-function g(e, n, r) {
+function C(e, n, r) {
   return (e & 255) << 16 | (n & 127) << 8 | r & 127;
 }
-function b(e, n, r) {
+function l(e, n, r) {
   const t = `${n}_${r}`, o = e[t];
-  return l(typeof o == "function", `Offline performer is missing ${t}()`), o.bind(e);
+  return d(typeof o == "function", `Offline performer is missing ${t}()`), o.bind(e);
 }
 function F(e, n, r) {
   let t = n;
@@ -184,17 +223,17 @@ function F(e, n, r) {
     e.advance(o), t -= o;
   }
 }
-function _(e, n, r, t, o) {
+function A(e, n, r, t, o) {
   const s = new Float32Array(o), a = new Float32Array(o);
-  let m = 0;
-  for (; m < t; ) {
-    const c = Math.min(o, t - m);
-    e.advance(c), e.getOutputFrames_audioOut([s, a], c, 0);
-    for (let u = 0; u < c; u += 1) {
-      const p = (r + m + u) * 2;
-      n[p] = s[u], n[p + 1] = a[u];
+  let c = 0;
+  for (; c < t; ) {
+    const u = Math.min(o, t - c);
+    e.advance(u), e.getOutputFrames_audioOut([s, a], u, 0);
+    for (let m = 0; m < u; m += 1) {
+      const f = (r + c + m) * 2;
+      n[f] = s[m], n[f + 1] = a[m];
     }
-    m += c;
+    c += u;
   }
 }
 function H(e, n, r) {
@@ -202,8 +241,8 @@ function H(e, n, r) {
   const o = Math.min(e.length / 2, n + r), s = Math.max(0, o - n);
   if (s === 0) return 0;
   for (let a = n; a < o; a += 1) {
-    const m = a * 2, c = e[m], u = e[m + 1];
-    t += (c * c + u * u) * 0.5;
+    const c = a * 2, u = e[c], m = e[c + 1];
+    t += (u * u + m * m) * 0.5;
   }
   return Math.sqrt(t / s);
 }
@@ -226,60 +265,68 @@ function K(e, n = e.length / 2) {
   return r;
 }
 async function Y(e, n, r) {
-  l(typeof e == "function", "Offline engine module has no performer class");
+  d(typeof e == "function", "Offline engine module has no performer class");
   const t = new e();
-  l(typeof t.initialise == "function", "Offline performer has no initialise() method"), await t.initialise(r.sessionID, n.snapshot.sampleRate);
+  d(typeof t.initialise == "function", "Offline performer has no initialise() method"), await t.initialise(r.sessionID, n.snapshot.sampleRate);
   for (const o of n.snapshot.parameters)
-    l(
+    d(
       typeof o.value == "number",
       `Cmajor value endpoint ${o.endpointID} must receive a number`
-    ), b(t, "setInputValue", o.endpointID)(o.value, 0);
-  b(t, "sendInputEvent", "tempo")({ bpm: n.snapshot.tempoBpm }), F(t, 1, n.blockFrames);
+    ), l(t, "setInputValue", o.endpointID)(o.value, 0);
+  l(t, "sendInputEvent", "tempo")({ bpm: n.snapshot.tempoBpm }), F(t, 1, n.blockFrames);
   for (const o of n.snapshot.setupEvents) {
     const s = o.sessionScoped ? { ...o.value, dspSessionId: r.sessionID } : o.value;
-    b(t, "sendInputEvent", o.endpointID)(s), F(t, o.advanceFrames, n.blockFrames);
+    l(t, "sendInputEvent", o.endpointID)(s), F(t, o.advanceFrames, n.blockFrames);
   }
   return F(t, n.snapshot.settleFrames, n.blockFrames), t;
 }
 async function G(e, n, r) {
-  const t = q(n), o = t.jobs.find((f) => f.rootIndex === r?.rootIndex);
-  l(
+  const t = q(n), o = t.jobs.find((p) => p.rootIndex === r?.rootIndex);
+  d(
     o !== void 0 && o.rootNote === r?.rootNote,
     "Bounce worker received a job outside its plan"
   );
-  const s = globalThis.performance?.now?.() ?? Date.now(), a = await Y(e, t, o), m = t.holdFrames + t.tailCapFrames, c = new Float32Array(m * 2);
-  b(a, "sendInputEvent", "midiIn")({
-    message: g(144, o.rootNote, t.captureVelocity)
-  }), _(a, c, 0, t.holdFrames, t.blockFrames), b(a, "sendInputEvent", "midiIn")({
-    message: g(128, o.rootNote, 0)
-  }), _(
+  const s = globalThis.performance?.now?.() ?? Date.now(), a = await Y(e, t, o), c = t.holdFrames + t.tailCapFrames, u = new Float32Array(c * 2);
+  for (const p of t.snapshot.rootSetupEvents) {
+    const E = {
+      ...p.value,
+      [p.rootNoteField]: o.rootNote,
+      ...p.sessionScoped ? { dspSessionId: o.sessionID } : {}
+    };
+    l(a, "sendInputEvent", p.endpointID)(E), F(a, p.advanceFrames, t.blockFrames);
+  }
+  l(a, "sendInputEvent", "midiIn")({
+    message: C(144, o.rootNote, t.captureVelocity)
+  }), A(a, u, 0, t.holdFrames, t.blockFrames), l(a, "sendInputEvent", "midiIn")({
+    message: C(128, o.rootNote, 0)
+  }), A(
     a,
-    c,
+    u,
     t.holdFrames,
     t.tailCapFrames,
     t.blockFrames
   );
-  const u = Z(c, t.holdFrames, t), p = K(c, u);
-  l(
-    p >= t.silenceThresholdLinear,
+  const m = Z(u, t.holdFrames, t), f = K(u, m);
+  d(
+    f >= t.silenceThresholdLinear,
     `Bounce root ${o.rootNote} captured silence`
   );
-  const d = new Int16Array(u * 2);
-  for (let f = 0; f < d.length; f += 1)
-    d[f] = R(c[f]);
-  const h = (globalThis.performance?.now?.() ?? Date.now()) - s;
+  const h = new Int16Array(m * 2);
+  for (let p = 0; p < h.length; p += 1)
+    h[p] = R(u[p]);
+  const b = (globalThis.performance?.now?.() ?? Date.now()) - s;
   return {
     rootIndex: o.rootIndex,
     rootNote: o.rootNote,
     noteOffFrameOffset: t.holdFrames,
-    frameCount: u,
-    tailFrameCount: u - t.holdFrames,
-    peak: p,
-    samples: d,
+    frameCount: m,
+    tailFrameCount: m - t.holdFrames,
+    peak: f,
+    samples: h,
     metrics: {
-      renderedFrameCount: m,
-      elapsedMilliseconds: h,
-      realtimeMultiplier: h > 0 ? m / (h * t.snapshot.sampleRate / 1e3) : null
+      renderedFrameCount: c,
+      elapsedMilliseconds: b,
+      realtimeMultiplier: b > 0 ? c / (b * t.snapshot.sampleRate / 1e3) : null
     }
   };
 }
@@ -300,13 +347,13 @@ function Q(e) {
     stack: e instanceof Error ? e.stack : void 0
   };
 }
-const E = self;
-E.addEventListener("message", (e) => {
+const I = self;
+I.addEventListener("message", (e) => {
   const n = e.data;
-  J(n, E.location.href).then((r) => {
-    E.postMessage(r, [r.result.samples.buffer]);
+  J(n, I.location.href).then((r) => {
+    I.postMessage(r, [r.result.samples.buffer]);
   }).catch((r) => {
-    E.postMessage({
+    I.postMessage({
       type: "render-root-failed",
       requestID: n?.requestID,
       error: Q(r)

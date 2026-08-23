@@ -89,6 +89,25 @@ export class BounceRuntimeRestorer {
         this.#abortController?.abort();
     }
 
+    /**
+     * A live Bounce transaction has already persisted, staged, verified, and
+     * atomically published this exact bank. Mark it ready before bounce.v1 is
+     * broadcast so this reload/preset observer does not race a second upload.
+     */
+    acceptCommittedDocument(value) {
+        const document = parseBounceDocument(value);
+        this.#abortController?.abort();
+        this.#abortController = null;
+        this.#setState({
+            status: "ready",
+            digest: document.digest,
+            error: null,
+            sampleRate: document.capture.sampleRate,
+            rootCount: document.roots.length,
+        });
+        return this.#state;
+    }
+
     #handleStoredState(message) {
         const payload = message?.event ?? message;
         if (payload?.key !== BOUNCE_STATE_KEY) return;
