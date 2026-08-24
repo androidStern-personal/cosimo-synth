@@ -202,12 +202,35 @@ async function discardBounceGuardIfOpen(page) {
     });
 }
 
+async function waitForBounceAudioAvailable(page, timeout = 30_000) {
+    await page.waitForFunction(() => {
+        const view = document.querySelector("cosimo-desktop-react-view");
+        const presetBar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
+        const action = presetBar?.shadowRoot?.querySelector('.flyout-synth-action[data-action="bounce-audio"]');
+        return action instanceof HTMLButtonElement && !action.disabled;
+    }, null, { timeout });
+}
+
+async function clickBounceAudio(page) {
+    await page.evaluate(() => {
+        const view = document.querySelector("cosimo-desktop-react-view");
+        const presetBar = view?.shadowRoot?.querySelector("cosimo-preset-bar");
+        const shadow = presetBar?.shadowRoot;
+        const action = shadow?.querySelector('.flyout-synth-action[data-action="bounce-audio"]');
+        if (!(action instanceof HTMLButtonElement) || action.disabled) {
+            throw new Error("Bounce Audio is not available in the preset dropdown.");
+        }
+        shadow.querySelector('[data-action="toggle-flyout"]')?.click();
+        action.click();
+    });
+}
+
 async function completeBounce(page, expectedGeneration) {
     const before = await page.evaluate(() => ({
         captures: globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__?.captures.length ?? 0,
         retirements: globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__?.retirements.length ?? 0,
     }));
-    await page.locator('[data-role="bounce-start"]').click();
+    await clickBounceAudio(page);
     await discardBounceGuardIfOpen(page);
     await page.waitForFunction(({ captures, retirements, generation }) => {
         const diagnostics = globalThis.__COSIMO_BOUNCE_TEST_DIAGNOSTICS__;
@@ -220,7 +243,7 @@ async function completeBounce(page, expectedGeneration) {
         retirements: before.retirements,
         generation: expectedGeneration,
     }, { timeout: 120_000 });
-    await page.locator('[data-role="bounce-start"]').waitFor({ state: "visible" });
+    await waitForBounceAudioAvailable(page);
     return storedBounceDocument(page);
 }
 
@@ -233,15 +256,14 @@ async function completeRevert(page, expectedGeneration) {
         return document?.generation === generation
             && globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.sourceMode === 1;
     }, expectedGeneration, { timeout: 30_000 });
-    await page.locator('[data-role="bounce-start"]').waitFor({ state: "visible" });
+    await waitForBounceAudioAvailable(page);
     return storedBounceDocument(page);
 }
 
 test("Bounce UI cancels safely, completes through a real worker, and fits desktop plus 393x852", async () => {
     const { context, failures, page } = await openStartedPage();
     try {
-        const bounce = page.locator('[data-role="bounce-start"]');
-        await bounce.waitFor({ state: "visible" });
+        await waitForBounceAudioAvailable(page);
         // Run two identical DSP passes per callback so the real work rises
         // above Date.now's 1 ms quantization without exceeding the callback
         // budget. This test-only multiplier applies equally to both sides.
@@ -255,7 +277,7 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
 
         // Cancel is reachable from the first preparation paint, and no durable
         // or runtime source transition is allowed to leak from that attempt.
-        await bounce.click();
+        await clickBounceAudio(page);
         const cancel = page.locator('[data-role="bounce-cancel"]');
         await page.waitForTimeout(250);
         const cancellationDiagnostic = await page.evaluate(() => {
@@ -268,7 +290,7 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         });
         assert.equal(cancellationDiagnostic.cancelCount, 1, JSON.stringify(cancellationDiagnostic));
         await cancel.evaluate((button) => button.click());
-        await bounce.waitFor({ state: "visible" });
+        await waitForBounceAudioAvailable(page);
         assert.equal(
             (await page.evaluate(() => globalThis.__COSIMO_WEB_POC__.getSnapshot())).parameterValues.sourceMode,
             0,
@@ -277,7 +299,7 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
             Number(sessionStorage.getItem("cosimo.bounce.worker-count") ?? 0)
         ));
 
-        await bounce.click();
+        await clickBounceAudio(page);
         await page.locator('[data-role="bounce-progress"]').waitFor({ state: "visible" });
         await page.locator('[data-role="bounce-sampled-source-stage"]').waitFor({
             state: "visible",
@@ -347,7 +369,7 @@ test("Bounce UI cancels safely, completes through a real worker, and fits deskto
         await page.setViewportSize({ width: 1280, height: 800 });
 
         await page.locator('[data-role="bounce-revert"]').click();
-        await page.locator('[data-role="bounce-start"]').waitFor({ state: "visible", timeout: 30_000 });
+        await waitForBounceAudioAvailable(page);
         await page.waitForFunction(() => (
             globalThis.__COSIMO_WEB_POC__.getSnapshot().parameterValues.sourceMode === 0
         ));

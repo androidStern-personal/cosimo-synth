@@ -9,6 +9,7 @@ import { BOUNCE_STATE_KEY } from "./bounce/document.mjs";
 import { createBounceRuntimeRestorer } from "./bounce/runtime-restorer.mjs";
 
 globalThis.__COSIMO_DESKTOP_RUNTIME_KIND__ = "standalone";
+globalThis.__COSIMO_VIDEO_BOUNCE_MODULE_URL__ = new URL("./video-bounce/index.js", import.meta.url).href;
 
 const searchParameters = new URLSearchParams(globalThis.location.search);
 const isTestMode = searchParameters.has("test");

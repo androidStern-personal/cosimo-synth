@@ -63,7 +63,7 @@ test("shared-sound envelopes enter through current preset migration and strict d
         preset: {
             kind: "cosimo.effectPreset",
             version: 2,
-            effectID: "wavetable-synth",
+            effectID: context.options.currentContract.effectID,
             presetID: "speedrun.share",
             label: "Shared Split",
             contract: context.options.currentContract,

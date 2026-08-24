@@ -2,7 +2,7 @@
   "format": "cosimo.speedrunRecipe",
   "version": 1,
   "label": "Split Space Lead",
-  "contractHash": "sha256:8d64e95724649f07a4204a4af7174c8fe45680ad7f3b65d6bbf1446093bbfd23",
+  "contractHash": "sha256:bbb42552e29cee8acc9b8449c02277896675e931a027fd84e5878370378f62f1",
   "prelude": [
     {
       "kind": "installLaneBaseline",

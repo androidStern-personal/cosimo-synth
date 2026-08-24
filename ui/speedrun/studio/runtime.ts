@@ -1,4 +1,5 @@
 import { buildCanonicalPluginStateContract } from "../../shared/effects/effect-state-contract";
+import { SYNTH_PRESET_EFFECT_ID } from "../../shared/effects/synth-preset-identity";
 import type { WavetableCatalog } from "../recipe";
 import type { ParameterEndpointMetadata, PatchIntakeOptions } from "../patch-io";
 import { SpeedrunStudioError, studioError } from "./errors";
@@ -71,7 +72,7 @@ export async function loadSpeedrunStudioRuntime(): Promise<SpeedrunStudioRuntime
         return endpoint.purpose === "parameter" && annotation?.hidden !== true;
     });
     const currentContract = buildCanonicalPluginStateContract({
-        effectID: "wavetable-synth",
+        effectID: SYNTH_PRESET_EFFECT_ID,
         parameters: visibleParameters,
         storedState: [
             { key: "modulation.v6", schemaVersion: 6, required: true },

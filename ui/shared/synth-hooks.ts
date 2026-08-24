@@ -247,7 +247,7 @@ const AUTO_PREVIEW_SCHEDULER_CONFIG = {
 const AUTO_PREVIEW_MIN_NOTE_MS = 250;
 const VOICE_ARTICULATION_START_ENDPOINT_ID = "voiceArticulationStart";
 const ARTICULATION_AUDITION_FALLBACK_NOTE = 60;
-export const SYNTH_PRESET_EFFECT_ID = "cosimo-synth";
+export { SYNTH_PRESET_EFFECT_ID } from "./effects/synth-preset-identity";
 export const GLIDE_TIME_MIN_SECONDS = 0;
 export const GLIDE_TIME_MAX_SECONDS = 2;
 export const GLIDE_TIME_STEP_SECONDS = 0.001;

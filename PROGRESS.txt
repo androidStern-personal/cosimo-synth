@@ -1,3 +1,8 @@
+Preset-menu Bounce Audio + integrated current-patch Bounce Video — 2026-08-24
+- On `codex/speedrun-video-share`, the synth preset dropdown owns both `Bounce Audio` and `Bounce Video`; the old ready-state Bounce buttons are removed from Voice and sampled-source surfaces. Audio keeps the existing dirty-sound guard.
+- `Bounce Video` captures the current sound directly (separate from share-link policy), then lazy-loads the browser-only renderer from `/video-bounce/index.js`. The fixed, non-scrolling flow has no patch/file/URL chooser and does not create a share URL.
+- The synth preset contract identity now has one authority, `SYNTH_PRESET_EFFECT_ID = "cosimo-synth"`; this fixed the live-capture/runtime contract-hash mismatch. `tests/test_video_bounce_integration_browser.mjs` proves lazy load plus a real current-patch WAV -> WebM render and download.
+
 Effects Lane browser requalification v3: parked stays parked, but the gap halved (T16) — 2026-08-21
 - Delegation shape that worked: the user ran codex directly from a Fable-written brief (freeze-before-measure, experiments/-only fence, quiet-machine preflights, append-only records, no interpretation); Fable's role was two touchpoints — the brief, and an evidence review that independently re-reduced all 32 raw trial records (exact match), re-ran the verifier, and checked provenance SHAs + the fence diff. No mid-flight polling.
 - Codex followed the discipline well: it STOPPED at a dirty preflight (two Chrome renderers >20% CPU), recorded the blocker as evidence, and resumed only after user-authorized Chrome termination — precisely the fence behavior the brief demanded.

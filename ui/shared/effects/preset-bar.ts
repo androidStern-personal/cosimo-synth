@@ -504,6 +504,40 @@ const PRESET_BAR_CSS = /* css */ `
     background: rgba(143,240,164,0.05);
   }
 
+  .flyout-synth-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    padding: 8px 14px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+  }
+
+  .flyout-synth-actions[hidden] { display: none; }
+
+  .flyout-synth-action {
+    appearance: none;
+    min-height: 34px;
+    border: 1px solid rgba(135,215,245,0.16);
+    border-radius: 7px;
+    background: rgba(135,215,245,0.05);
+    color: rgba(218,242,250,0.78);
+    font: inherit;
+    font-size: 9px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    cursor: pointer;
+  }
+  .flyout-synth-action:hover {
+    border-color: rgba(135,215,245,0.34);
+    background: rgba(135,215,245,0.10);
+    color: #e7f9ff;
+  }
+  .flyout-synth-action[disabled] {
+    cursor: default;
+    opacity: 0.34;
+  }
+
   /* ── Context Menu ───────────────────────────────────── */
   .ctx-menu {
     display: none;
@@ -776,6 +810,7 @@ const PRESET_BAR_CSS = /* css */ `
   :host([compact-synth]) .shell-menu-row:hover { background: rgba(255, 255, 255, 0.06); }
   :host([compact-synth]) .shell-menu-row[disabled] { color: rgba(233, 238, 240, 0.32); cursor: default; }
   :host([compact-synth]) .shell-menu-row[disabled]:hover { background: transparent; }
+  .shell-menu-row[hidden] { display: none !important; }
 `;
 
 // ── HTML ─────────────────────────────────────────────────
@@ -815,6 +850,8 @@ const PRESET_BAR_HTML = /* html */ `
   <div class="shell-menu" data-el="shell-menu" role="menu" aria-label="Preset actions">
     <button class="shell-menu-row" role="menuitem" data-action="prev">Previous preset</button>
     <button class="shell-menu-row" role="menuitem" data-action="next">Next preset</button>
+    <button class="shell-menu-row" role="menuitem" data-action="bounce-audio" data-synth-bounce="audio" hidden disabled>Bounce Audio</button>
+    <button class="shell-menu-row" role="menuitem" data-action="bounce-video" data-synth-bounce="video" hidden disabled>Bounce Video</button>
     <button class="shell-menu-row" role="menuitem" data-action="save" data-el="menu-save" disabled>Save</button>
     <button class="shell-menu-row" role="menuitem" data-action="save-as">Save as new preset</button>
     <button class="shell-menu-row" role="menuitem" data-action="revert" data-el="menu-revert" disabled>Revert</button>
@@ -832,6 +869,10 @@ const PRESET_BAR_HTML = /* html */ `
       <button class="filter-pill" data-filter="user">User</button>
     </div>
     <div class="flyout-list" data-el="flyout-list"></div>
+    <div class="flyout-synth-actions" data-el="flyout-synth-actions" hidden>
+      <button class="flyout-synth-action" data-action="bounce-audio" data-synth-bounce="audio" disabled>Bounce Audio</button>
+      <button class="flyout-synth-action" data-action="bounce-video" data-synth-bounce="video" disabled>Bounce Video</button>
+    </div>
     <div class="flyout-footer">
       <button class="flyout-footer-btn" data-action="footer-save-as">+ Save current as new preset</button>
       <button class="flyout-footer-btn" data-action="footer-paste">Paste JSON</button>
@@ -913,6 +954,8 @@ class PresetBar extends HTMLElement {
     private _sharedLoadConfirmationOpen = false;
     private _sharedSoundReplacementPending = false;
     private _currentShareURL: string | null = null;
+    private _audioBounceAvailable = false;
+    private _videoBounceAvailable = false;
 
     // Cached DOM refs
     private _els!: Record<string, HTMLElement>;
@@ -1001,6 +1044,7 @@ class PresetBar extends HTMLElement {
 
     attributeChangedCallback() {
         this._syncInitMenuRow();
+        this._syncSynthBounceActions();
     }
 
     // ── DOM cache ────────────────────────────────────────
@@ -1141,6 +1185,11 @@ class PresetBar extends HTMLElement {
                 this._doPaste();
                 break;
             case "share": void this._doShareSound(); break;
+            case "bounce-audio":
+                this._closeFlyout();
+                this.dispatchEvent(new CustomEvent("cosimo-bounce-audio", { bubbles: true, composed: true }));
+                break;
+            case "bounce-video": this._doBounceVideo(); break;
             case "share-copy": void this._copyCurrentShareURL(); break;
             case "share-close": this._closeDialog(false); break;
             case "shared-load-cancel": this._cancelSharedSoundLoad(); break;
@@ -1208,6 +1257,28 @@ class PresetBar extends HTMLElement {
         shellMenu.insertBefore(row, nextRow?.nextSibling ?? shellMenu.firstChild);
     }
 
+    private _syncSynthBounceActions() {
+        const isSynth = this._state?.supportsInit === true;
+        this._els["flyout-synth-actions"].hidden = !isSynth;
+        for (const action of this.shadowRoot!.querySelectorAll<HTMLButtonElement>("[data-synth-bounce]")) {
+            action.hidden = !isSynth && action.classList.contains("shell-menu-row");
+            const available = action.dataset.synthBounce === "audio"
+                ? this._audioBounceAvailable
+                : this._videoBounceAvailable;
+            action.disabled = !isSynth || this._state?.ready !== true || !available;
+        }
+    }
+
+    set audioBounceAvailable(available: boolean) {
+        this._audioBounceAvailable = available;
+        this._syncSynthBounceActions();
+    }
+
+    set videoBounceAvailable(available: boolean) {
+        this._videoBounceAvailable = available;
+        this._syncSynthBounceActions();
+    }
+
     /** Whether universal Back has somewhere to go (compact synth shell only). */
     set shellBackAvailable(available: boolean) {
         (this._els["shell-back"] as HTMLButtonElement).disabled = !available;
@@ -1226,6 +1297,25 @@ class PresetBar extends HTMLElement {
             this._handleSoundReplacementResult(result);
         }
         return result;
+    }
+
+    private _doBounceVideo() {
+        const captured = this._synthMutations?.captureCurrentSound();
+        if (!captured) {
+            showToast(this._els["toast-host"], "Video Bounce is available from the browser synth only.", "error");
+            return;
+        }
+        if (!captured.ok) {
+            showToast(this._els["toast-host"], captured.message, "error");
+            return;
+        }
+
+        this._closeFlyout();
+        this.dispatchEvent(new CustomEvent("cosimo-bounce-video", {
+            bubbles: true,
+            composed: true,
+            detail: { patchInput: captured.value },
+        }));
     }
 
     private _handleFilterPill(el: HTMLElement) {
@@ -1729,6 +1819,7 @@ class PresetBar extends HTMLElement {
     private _onState(state: StandaloneEffectPresetState) {
         this._state = state;
         this._syncInitMenuRow();
+        this._syncSynthBounceActions();
         this._updateBar(state);
         if (this._flyoutOpen) this._renderFlyoutList();
 

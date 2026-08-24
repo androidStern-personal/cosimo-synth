@@ -488,6 +488,7 @@ export class StandaloneEffectPresetController {
         return {
             initSound: this.initSound.bind(this),
             bounceSound: this.bounceSound.bind(this),
+            captureCurrentSound: this.captureCurrentSound.bind(this),
             captureSharedSound: this.captureSharedSound.bind(this),
             loadSharedSound: this.loadSharedSound.bind(this),
             cancelSoundReplacement: this.cancelSoundReplacement.bind(this),
@@ -543,13 +544,26 @@ export class StandaloneEffectPresetController {
                 throw new Error("Sound links are available only for synth controllers.");
             }
             const state = this.getState();
-            const preset = this.captureCurrentPreset("cosimo.share.current", state.activeLabel || "Shared Sound");
-            this.assertSoundCanBeShared(preset);
-            const supplementalStoredState = Object.fromEntries(
-                this.captureInitOnlyStateValues(preset).map((entry) => [entry.adapter.key, entry.serialized]),
+            return this.captureCurrentSoundEnvelope(
+                "cosimo.share.current",
+                state.activeLabel || "Shared Sound",
+                { requireShareable: true },
             );
-            return createSoundShareEnvelope({ preset, supplementalStoredState });
         }, "Sound link ready.");
+    }
+
+    captureCurrentSound(): StandaloneEffectPresetMutationResult<SoundShareEnvelopeV1<EffectPresetV2>> {
+        return this.runMutation(() => {
+            if (!this.options.synth) {
+                throw new Error("Current sound capture is available only for synth controllers.");
+            }
+            const state = this.getState();
+            return this.captureCurrentSoundEnvelope(
+                "cosimo.current",
+                state.activeLabel || "Current Sound",
+                { requireShareable: false },
+            );
+        }, "Current sound captured.");
     }
 
     loadSharedSound(envelopeInput: unknown): StandaloneEffectPresetMutationResult<EffectPresetV2> {
@@ -1330,6 +1344,21 @@ export class StandaloneEffectPresetController {
             currentParameterValues: this.getCurrentValuesRecord(),
             storedStateAdapters: this.storedStateAdapters,
         });
+    }
+
+    private captureCurrentSoundEnvelope(
+        presetID: string,
+        label: string,
+        { requireShareable }: { readonly requireShareable: boolean },
+    ) {
+        const preset = this.captureCurrentPreset(presetID, label);
+        if (requireShareable) {
+            this.assertSoundCanBeShared(preset);
+        }
+        const supplementalStoredState = Object.fromEntries(
+            this.captureInitOnlyStateValues(preset).map((entry) => [entry.adapter.key, entry.serialized]),
+        );
+        return createSoundShareEnvelope({ preset, supplementalStoredState });
     }
 
     private resolvePreset(presetKeyOrID: string): ResolvedPreset {
