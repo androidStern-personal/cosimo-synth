@@ -114,9 +114,10 @@ test("the Init-only rack adapter strictly hydrates, applies runtime and stored s
 
     const nextRack = laneV2.createDefaultLaneStateV2();
     adapter.apply(nextRack);
+    // The fresh default is the starter trio: three records, one topology.
     assert.deepEqual(
         connection.events.map((event) => event.endpointID),
-        [...Array(8).fill("laneSlotParams"), "laneTopology"],
+        [...Array(3).fill("laneSlotParams"), "laneTopology"],
     );
     assert.equal(connection.storedWrites.length, 1);
     assert.deepEqual(JSON.parse(connection.storedWrites[0].value), nextRack);

@@ -485,10 +485,13 @@ function contractSuite(adapterName, makeAdapter) {
     });
 
     t("setEffectEnabled toggles bypass state only", (adapter) => {
+        // Commands address the DOCUMENT's devices (a fresh bridge doc is the
+        // starter trio), so the probe effect comes from the projection.
         const order = [...adapter.getSnapshot().patch.effectOrder];
-        adapter.commands.setEffectEnabled("phaser", false);
+        const effectId = order[order.length - 1];
+        adapter.commands.setEffectEnabled(effectId, false);
         const { patch } = adapter.getSnapshot();
-        assert.equal(patch.effectEnabled.phaser, false);
+        assert.equal(patch.effectEnabled[effectId], false);
         assert.deepEqual(patch.effectOrder, order, "disabling never moves rack position (ADR-009)");
     });
 
@@ -511,7 +514,9 @@ function contractSuite(adapterName, makeAdapter) {
     t("captureMotion without a candidate is null, with one it mints a mapped mseg", (adapter) => {
         assert.equal(adapter.commands.captureMotion(), null);
         adapter.commands.beginTrigger();
-        adapter.commands.setParameter({ targetId: "phaser.phaserFrequency", value: 0.8, layer: { _tag: "patchBase" } });
+        // A log-scale target the STARTER TRIO document owns (delay#1); its
+        // full-spec amount is the same ±6 oct every log rack target gets.
+        adapter.commands.setParameter({ targetId: "delay.delayFilter", value: 0.8, layer: { _tag: "patchBase" } });
         adapter.commands.endTrigger();
         const captured = adapter.commands.captureMotion();
         assert.notEqual(captured, null);
@@ -519,7 +524,7 @@ function contractSuite(adapterName, makeAdapter) {
         const source = patch.sources.find((s) => s.id === captured);
         assert.equal(source.type, "mseg");
         const capturedMapping = patch.mappings.find(
-            (m) => m.sourceId === captured && m.targetId === "phaser.phaserFrequency",
+            (m) => m.sourceId === captured && m.targetId === "delay.delayFilter",
         );
         assert.notEqual(capturedMapping, undefined, "capture commits to an MSEG mapped to the moved parameter");
         assert.equal(capturedMapping.amount, 6, "capture commits at FULL spec amount (±6 oct), same on every adapter");
@@ -590,7 +595,7 @@ test("bridge rack commands preserve desired state across an older effective read
     const adapter = createCosimoBridgeAdapter({ connection });
     await waitForReady(adapter);
 
-    adapter.commands.setEffectEnabled("chorus", true);
+    adapter.commands.setEffectEnabled("delay", true);
     connection.emitEndpoint("effectiveRackState", {
         laneCommittedChainLength: 8,
         laneCommittedChainCode: [0, 1, 2, 3, 4, 5, 6, 7].reduce(
@@ -602,14 +607,15 @@ test("bridge rack commands preserve desired state across an older effective read
         laneRejectedUploadCount: 0,
         laneParamsAcknowledgedSerial: 0,
     });
-    adapter.commands.reorderEffect("reverb", "filter");
+    adapter.commands.reorderEffect("reverb", "drive");
 
     // The stored document is lane.v2 now: structure lives in the chain tree.
+    // (A fresh bridge doc is the starter trio: drive → delay → reverb.)
     const storedRack = JSON.parse(String(connection.getDebugSnapshot().storedState["lane.v1"]));
     assert.equal(storedRack.version, 2);
     assert.equal(storedRack.chain[0].deviceId, "reverb#1");
-    assert.equal(storedRack.chain.find((node) => node.deviceId === "chorus#1").enabled, true);
-    assert.equal(adapter.getSnapshot().patch.effectEnabled.chorus, true);
+    assert.equal(storedRack.chain.find((node) => node.deviceId === "delay#1").enabled, true);
+    assert.equal(adapter.getSnapshot().patch.effectEnabled.delay, true);
     adapter.dispose();
 });
 

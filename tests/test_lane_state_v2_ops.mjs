@@ -194,10 +194,13 @@ test("enable and parameter setters address devices and groups by identity", asyn
 });
 
 test("wrap respects the wire-length cap", async () => {
+    const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
-    // The default eight-device doc plus three wraps = 8 + 3 markers = 11;
+    // The legacy eight-device doc plus three wraps = 8 + 3 markers = 11;
     // wire capacity allows one more group of each kind until 16 entries.
-    let doc = laneV2.createDefaultLaneStateV2();
+    // (The fresh default is the starter trio now, so the cap math builds
+    // on the v1 upgrade explicitly.)
+    let doc = laneV2.upgradeLaneStateV1(laneV1.createDefaultLaneState());
     for (const id of ["globalFilter#1", "distortion#1", "ott#1", "chorus#1"]) {
         doc = laneV2.wrapLaneDeviceInGroup(doc, id, "parallel");
         assert.notEqual(doc, null);
@@ -255,7 +258,8 @@ test("addLaneDevice allocates instances, defaults params, and lands on the path"
     assert.equal(laneV2.addLaneDevice(stacked, "flanger", { kind: "trunk", index: 0 }), null);
 
     // And the wire stays inside one topology upload.
-    let full = laneV2.createDefaultLaneStateV2();
+    const laneV1 = await laneV1Promise;
+    let full = laneV2.upgradeLaneStateV1(laneV1.createDefaultLaneState());
     for (const deviceType of ["delay", "delay", "delay", "delay", "reverb", "reverb", "reverb", "reverb"]) {
         full = laneV2.addLaneDevice(full, deviceType, { kind: "trunk", index: 0 });
         assert.notEqual(full, null, deviceType);

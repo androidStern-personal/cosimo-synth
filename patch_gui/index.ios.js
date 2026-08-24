@@ -19032,8 +19032,23 @@ function upgradeLaneStateV1(state) {
     }))
   };
 }
+const STARTER_DEVICE_IDS = ["distortion#1", "delay#1", "reverb#1"];
 function createDefaultLaneStateV2() {
-  return upgradeLaneStateV1(createDefaultLaneState());
+  const legacy = upgradeLaneStateV1(createDefaultLaneState());
+  const devices = {};
+  for (const deviceId of STARTER_DEVICE_IDS) {
+    const record = legacy.devices[deviceId];
+    if (record === void 0) {
+      throw new Error(`The v1 default is missing starter device ${deviceId}`);
+    }
+    devices[deviceId] = record;
+  }
+  return {
+    format: "cosimo.lane",
+    version: 2,
+    devices,
+    chain: legacy.chain.filter((node) => node.kind === "device" && STARTER_DEVICE_IDS.includes(node.deviceId))
+  };
 }
 function deserializeLaneStateV2(input) {
   if (input === void 0) {

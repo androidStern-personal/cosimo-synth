@@ -25,19 +25,24 @@ test("a serial document is a single teal line of stations between termini", asyn
     const laneV2 = await laneV2Promise;
     const layout = await layoutPromise;
 
+    // The fresh default is the starter trio: drive → delay → reverb.
     const rows = layout.buildSubwayLayout(laneV2.createDefaultLaneStateV2());
     assert.equal(rows.laneCount, 1);
-    assert.equal(rows.rows.length, 11); // in + 8 stations + add ghost + out
+    assert.equal(rows.rows.length, 6); // in + 3 stations + add ghost + out
     assert.deepEqual(rows.rows[0], { kind: "terminus", label: "in" });
     assert.deepEqual(rows.rows.at(-1), { kind: "terminus", label: "out" });
     // The line always ends with the trunk's add affordance: a ghost whose
     // path is the end-of-chain insertion point (also a drop target).
     assert.deepEqual(rows.rows.at(-2), {
         kind: "stations",
-        cells: [{ kind: "ghost", tint: "infra", path: { kind: "trunk", index: 8 } }],
+        cells: [{ kind: "ghost", tint: "infra", path: { kind: "trunk", index: 3 } }],
     });
 
     const stationRows = rows.rows.slice(1, -2);
+    assert.deepEqual(
+        stationRows.map((row) => row.cells[0].deviceId),
+        ["distortion#1", "delay#1", "reverb#1"],
+    );
     for (const row of stationRows) {
         assert.equal(row.kind, "stations");
         assert.equal(row.cells.length, 1);
@@ -45,7 +50,7 @@ test("a serial document is a single teal line of stations between termini", asyn
         assert.equal(row.cells[0].tint, "infra");
     }
     // The station is the whole identity: code, number, device, enable.
-    assert.deepEqual(stationRows[6].cells[0], {
+    assert.deepEqual(stationRows[1].cells[0], {
         kind: "station",
         deviceId: "delay#1",
         deviceType: "delay",
@@ -53,7 +58,7 @@ test("a serial document is a single teal line of stations between termini", asyn
         code: "DLY",
         enabled: false,
         tint: "infra",
-        path: { kind: "trunk", index: 6 },
+        path: { kind: "trunk", index: 1 },
     });
 });
 
