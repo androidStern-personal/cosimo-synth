@@ -63,6 +63,7 @@ export default defineConfig({
         host: "0.0.0.0",
         port: 5175,
         strictPort: true,
+        allowedHosts: ["primary-mac.tail5ef964.ts.net"],
         fs: { allow: [repoRoot] },
     },
     build: {
