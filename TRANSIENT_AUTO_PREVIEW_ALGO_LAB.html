@@ -229,9 +229,14 @@
       <input type="range" id="minGapMs" min="100" max="600" step="25" value="250">
       <output id="minGapMsOut">250ms</output>
     </div>
+    <div class="ctl">
+      <label for="syncToggle">Loop sync</label>
+      <input type="checkbox" id="syncToggle" style="width:22px; height:22px; justify-self:start; accent-color:var(--accent);">
+      <output id="syncToggleOut">off</output>
+    </div>
     <div class="row">
       <button id="playOnce">Play once</button>
-      <span class="hint">Drag the dots. The loop modulates pitch of the ping, filter and volume.</span>
+      <span class="hint">Drag the dots — the loop modulates pitch, filter and volume. Loop sync lands Settle/Paced restrikes on the loop's next binary subdivision (≥120ms grid, ≤300ms wait).</span>
     </div>
   </div>
 </div>
@@ -472,6 +477,44 @@ function finishPassThenFade(strikeIfSilent) {
   voice.onWrap = (self) => { releaseVoice(self, 120); };
 }
 
+/*
+ * T12B-style loop sync for Settle/Paced: a due restrike defers to the
+ * sounding loop's next binary subdivision (finest grid >= 120ms; wait
+ * capped at 300ms, else fire now). One deferred strike at most, it takes
+ * its snapshot when it LANDS (always the latest shape), and movement can
+ * cancel it — so nothing ever queues behind the finger.
+ */
+const SYNC_MIN_GRID_MS = 120;
+const SYNC_WAIT_BUDGET_MS = 300;
+let deferredStrike = null; // { atMs }
+
+function quantizeStrikeMs(nowMs) {
+  if (!cfg.sync || !previewVoice) { return nowMs; }
+  const period = previewVoice.periodMs;
+  let interval = period;
+  while (interval / 2 >= SYNC_MIN_GRID_MS) { interval /= 2; }
+  const anchor = previewVoice.startMs;
+  const boundary = anchor + (Math.ceil((nowMs - anchor) / interval) * interval);
+  return boundary - nowMs <= SYNC_WAIT_BUDGET_MS ? boundary : nowMs;
+}
+
+function requestStrike(nowMs) {
+  const atMs = quantizeStrikeMs(nowMs);
+  if (atMs <= nowMs) { strikePreview("snapshot"); return true; }
+  deferredStrike = { atMs };
+  return false;
+}
+
+function runDeferredStrike(nowMs) {
+  if (deferredStrike && nowMs >= deferredStrike.atMs) {
+    deferredStrike = null;
+    strikePreview("snapshot");
+    if (algo.id === "paced") { algo.lastStrikeMs = nowMs; }
+  }
+}
+
+const cancelDeferredStrike = () => { deferredStrike = null; };
+
 const algorithms = [
   {
     id: "morph",
@@ -485,17 +528,19 @@ const algorithms = [
   {
     id: "settle",
     label: "Settle",
-    desc: "<b>Debounce.</b> While you move, the old note keeps looping untouched. Each time the dot rests for the settle time, one clean restrike with the new shape — then it loops at that spot until you move again. Fast drags play only where you land.",
+    desc: "<b>Debounce.</b> While you move, the old note keeps looping untouched. Each time the dot rests for the settle time, one clean restrike with the new shape — then it loops at that spot until you move again. Fast drags play only where you land. Loop sync on: the restrike waits for the loop's next subdivision.",
     dirty: false,
-    onDown() { this.dirty = false; strikePreview("snapshot"); },
-    onEdit() { this.dirty = true; },
+    onDown() { this.dirty = false; cancelDeferredStrike(); strikePreview("snapshot"); },
+    onEdit() { this.dirty = true; cancelDeferredStrike(); },
     onFrame(nowMs, gesture) {
-      if (gesture.down && this.dirty && nowMs - gesture.lastEditMs >= cfg.settleMs) {
+      if (gesture.down && this.dirty && !deferredStrike
+          && nowMs - gesture.lastEditMs >= cfg.settleMs) {
         this.dirty = false;
-        strikePreview("snapshot");
+        requestStrike(nowMs);
       }
     },
     onUp() {
+      if (deferredStrike) { cancelDeferredStrike(); this.dirty = true; }
       if (this.dirty) { this.dirty = false; strikePreview("snapshot"); }
       finishPassThenFade(false);
     },
@@ -522,21 +567,21 @@ const algorithms = [
   {
     id: "paced",
     label: "Paced",
-    desc: "<b>The shipped cadence, repaired.</b> Restrikes while you move, at most one per gap — but each restrike chokes the last (no pile), and when you rest: one final restrike, then it holds and loops under your finger. Nothing stays on deck.",
+    desc: "<b>The shipped cadence, repaired.</b> Restrikes while you move, at most one per gap — but each restrike chokes the last (no pile), and when you rest: one final restrike, then it holds and loops under your finger. Nothing stays on deck. Loop sync on: restrikes land on the loop's subdivisions.",
     dirty: false,
     lastStrikeMs: -1e9,
-    onDown() { this.dirty = false; this.lastStrikeMs = performance.now(); strikePreview("snapshot"); },
+    onDown() { this.dirty = false; cancelDeferredStrike(); this.lastStrikeMs = performance.now(); strikePreview("snapshot"); },
     onEdit() { this.dirty = true; },
     onFrame(nowMs, gesture) {
-      if (!gesture.down || !this.dirty) { return; }
+      if (!gesture.down || !this.dirty || deferredStrike) { return; }
       const settled = nowMs - gesture.lastEditMs >= cfg.settleMs;
       if (settled || nowMs - this.lastStrikeMs >= cfg.minGapMs) {
         this.dirty = false;
-        this.lastStrikeMs = nowMs;
-        strikePreview("snapshot");
+        if (requestStrike(nowMs)) { this.lastStrikeMs = nowMs; }
       }
     },
     onUp() {
+      if (deferredStrike) { cancelDeferredStrike(); this.dirty = true; }
       if (this.dirty) { this.dirty = false; strikePreview("snapshot"); }
       finishPassThenFade(false);
     },
@@ -603,6 +648,7 @@ let algo = algorithms[0];
 function switchAlgo(next) {
   for (const voice of voices) { chokeVoice(voice); }
   previewVoice = null;
+  cancelDeferredStrike();
   algo = next;
   algo.dirty = false;
   if (algo.id === "shipped") {
@@ -619,7 +665,7 @@ function switchAlgo(next) {
 
 /* ------------------------------------------------------------- controls -- */
 
-const cfg = { loopMs: 1000, settleMs: 150, minGapMs: 250 };
+const cfg = { loopMs: 1000, settleMs: 150, minGapMs: 250, sync: false };
 
 function bindSlider(id, key, format) {
   const input = document.getElementById(id);
@@ -634,6 +680,13 @@ function bindSlider(id, key, format) {
 bindSlider("loopMs", "loopMs", (v) => (v / 1000).toFixed(2) + "s");
 bindSlider("settleMs", "settleMs", (v) => v + "ms");
 bindSlider("minGapMs", "minGapMs", (v) => v + "ms");
+
+const syncToggle = document.getElementById("syncToggle");
+syncToggle.addEventListener("change", () => {
+  cfg.sync = syncToggle.checked;
+  if (!cfg.sync) { cancelDeferredStrike(); }
+  document.getElementById("syncToggleOut").textContent = cfg.sync ? "on" : "off";
+});
 
 const algosHost = document.getElementById("algos");
 for (const candidate of algorithms) {
@@ -843,6 +896,7 @@ function drawTimeline(nowMs) {
 
 function frame() {
   const nowMs = performance.now();
+  runDeferredStrike(nowMs);
   algo.onFrame(nowMs, gesture);
   if (ctx) { updateVoices(nowMs); }
   drawPad(nowMs);
