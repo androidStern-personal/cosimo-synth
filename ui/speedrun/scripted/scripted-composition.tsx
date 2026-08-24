@@ -7,7 +7,6 @@ import React, {
 import { flushSync } from "react-dom";
 import {
     AbsoluteFill,
-    interpolate,
     useCurrentFrame,
     useDelayRender,
     useVideoConfig,
@@ -21,11 +20,14 @@ import type { DefaultsSnapshot } from "../patch-io";
 import type { CumulativePatchState } from "../partial-states";
 import type { SpeedrunRecipe } from "../recipe";
 import type { SpeedrunTimeline } from "../timeline";
-import { CaptionPanel } from "../composition/captions";
+import { CaptionPanel } from "../stage-captions";
 import {
+    EndCard,
     SPEEDRUN_AUDIO_TRIM_BEFORE_FRAMES,
     SPEEDRUN_END_CARD_FRAMES,
-} from "../composition/composition";
+    SPEEDRUN_TITLE_CARD_FRAMES,
+    TitleCard,
+} from "../stage";
 import { settleCaptureSubtree } from "./capture-fidelity";
 import { requireScriptedCaptureTimeController } from "./capture-time";
 import { createCapturePianoKeyboardClass } from "./capture-piano-keyboard";
@@ -38,7 +40,7 @@ import {
     type ScriptedInteractionSnapshot,
 } from "./interaction-script";
 
-import "../composition/styles.css";
+import "../stage.css";
 import "../../desktop/styles.css";
 import "./scripted-styles.css";
 
@@ -161,16 +163,29 @@ function FrameDirector({
     useLayoutEffect(() => {
         const handle = delayRender(`Scripted DesktopPatchView frame ${frame}`);
         let cancelled = false;
+        let released = false;
+        // The handle must be released on every exit — success, error, or an
+        // effect re-run mid-flight — or the render stalls to the delayRender
+        // timeout with no diagnostic.
+        const release = () => {
+            if (released) return;
+            released = true;
+            continueRender(handle);
+        };
         void (async () => {
             const root = captureRoot.current;
             if (!root) throw new Error("The scripted DesktopPatchView capture root is missing.");
             revealRemotionScaffold(root);
             captureTime.setMediaTime(frame, fps);
+            // Escape the commit before flushSync — React forbids a synchronous
+            // flush from inside a lifecycle it is still committing.
             await Promise.resolve();
             flushSync(() => {
                 connection.advanceToFrame(frame);
                 interaction.advance(root, fingerOverlay.current, frame, fps);
             });
+            // Let the listeners' microtasks (stored-state fan-out, telemetry
+            // coalescing) drain before animation scrubbing reads the DOM.
             await Promise.resolve();
             await interaction.scrubAnimations(root, frame, fps);
             flushSync(() => captureTime.flushDueTimeouts());
@@ -180,41 +195,22 @@ function FrameDirector({
             });
             if (!cancelled) {
                 onFrameSettled?.(inspectFrame(root, frame, connection, interaction));
-                continueRender(handle);
             }
+            release();
         })().catch((error) => {
             if (!cancelled) {
                 cancelRender(error instanceof Error ? error : new Error(String(error)));
+                return;
             }
+            release();
         });
         return () => {
             cancelled = true;
+            release();
         };
     }, [cancelRender, captureRoot, captureTime, connection, continueRender, delayRender, fingerOverlay, fps, frame, interaction, onFrameSettled]);
 
     return null;
-}
-
-function TitleCard({ label, frame }: { readonly label: string; readonly frame: number }) {
-    const opacity = interpolate(frame, [0, 8, 30, 42], [1, 1, 0.9, 0], {
-        extrapolateLeft: "clamp",
-        extrapolateRight: "clamp",
-    });
-    return (
-        <div className="speedrun-title-card" style={{ opacity }}>
-            <small>SOUND SPEEDRUN</small><strong>{label}</strong><span>FROM INIT TO FINISH</span>
-        </div>
-    );
-}
-
-function EndCard({ label }: { readonly label: string }) {
-    return (
-        <div className="speedrun-end-card">
-            <small>YOU JUST HEARD</small>
-            <strong>{label}</strong>
-            <span>Made with Cosimo</span>
-        </div>
-    );
 }
 
 export function ScriptedSessionComposition(props: ScriptedCompositionProps) {
@@ -231,7 +227,9 @@ export function ScriptedSessionComposition(props: ScriptedCompositionProps) {
         environment.keyboardClass,
         props.resourceBaseURL,
     ));
-    const [interaction] = useState(() => new ScriptedInteractionDirector(props.timeline));
+    const [interaction] = useState(() => (
+        new ScriptedInteractionDirector(props.timeline, props.defaults.annotations)
+    ));
     const boundedFrame = Math.min(
         Math.max(0, Math.floor(frame)),
         Math.max(0, props.timeline.durationInFrames - 1),
@@ -281,7 +279,7 @@ export function ScriptedSessionComposition(props: ScriptedCompositionProps) {
                     </svg>
                 </div>
                 <CaptionPanel section={section} frame={boundedFrame} />
-                {boundedFrame < 43 ? <TitleCard label={props.patchLabel} frame={boundedFrame} /> : null}
+                {boundedFrame < SPEEDRUN_TITLE_CARD_FRAMES ? <TitleCard label={props.patchLabel} frame={boundedFrame} /> : null}
                 {boundedFrame >= endCardStart ? <EndCard label={props.patchLabel} /> : null}
                 <footer>
                     <span>COSIMO / SOUND SPEEDRUN</span>

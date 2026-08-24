@@ -33,3 +33,22 @@
 .speedrun-scripted-phone * {
     content-visibility: visible !important;
 }
+
+/* The product's viewport-anchored overlays are position:fixed ("fixed to the
+   visual viewport" — on a phone the viewport IS the phone). Under the capture
+   stage's transform their geometry stays correct (the transformed stage
+   becomes their containing block), but the web-renderer fallback rasterizer
+   does not paint fixed elements under a transform — verified 2026-08-24 with
+   an isolated probe (the rail layer was dropped entirely). Each overlay below
+   has the shell root or a full-shell inset:0 layer as its nearest positioned
+   ancestor, so absolute positioning reproduces the identical phone-anchored
+   geometry on the rasterizer's supported path. */
+.speedrun-scripted-phone .mobile-global-mod-rail-layer,
+.speedrun-scripted-phone .rack-parameter-menu-layer,
+.speedrun-scripted-phone .rack-value-sheet-layer,
+.speedrun-scripted-phone .synth-feedback-toast,
+.speedrun-scripted-phone .quick-source-sheet,
+.speedrun-scripted-phone .synth-modal-backdrop,
+.speedrun-scripted-phone [data-role="contextual-floating-toolbar"] {
+    position: absolute !important;
+}

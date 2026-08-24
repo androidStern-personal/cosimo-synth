@@ -22,16 +22,16 @@ export type CumulativePatchState = {
     readonly articulations: ArticulationsState;
 };
 
-function cloneLane(lane: LaneStateV2): LaneStateV2 {
+export function cloneLane(lane: LaneStateV2): LaneStateV2 {
     return deserializeLaneStateV2(serializeLaneStateV2(lane));
 }
 
-function cloneModulation(modulation: ModulationState): ModulationState {
+export function cloneModulation(modulation: ModulationState): ModulationState {
     return deserializeModulationState(serializeModulationState(modulation));
 }
 
-function cloneArticulations(articulations: ArticulationsState): ArticulationsState {
-    return JSON.parse(JSON.stringify(articulations)) as ArticulationsState;
+export function cloneArticulations(articulations: ArticulationsState): ArticulationsState {
+    return structuredClone(articulations);
 }
 
 function cloneState(state: CumulativePatchState): CumulativePatchState {

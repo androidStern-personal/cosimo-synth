@@ -22,7 +22,9 @@ export class ScriptedCaptureTimeController implements UiTimeoutDriver, UiMediaCl
     private readonly animationFrames = new Map<number, (timestamp: number) => void>();
     private mediaTimeMilliseconds = 0;
     private nextTimeoutHandle = -1;
-    private nextAnimationFrameHandle = 1;
+    // Negative like driven timeout handles, so a native rAF handle canceled
+    // while this clock is installed can never collide with a driven one.
+    private nextAnimationFrameHandle = -1;
 
     now(): number {
         return this.mediaTimeMilliseconds;
@@ -52,13 +54,15 @@ export class ScriptedCaptureTimeController implements UiTimeoutDriver, UiMediaCl
 
     requestAnimationFrame(callback: (timestamp: number) => void): number {
         const handle = this.nextAnimationFrameHandle;
-        this.nextAnimationFrameHandle += 1;
+        this.nextAnimationFrameHandle -= 1;
         this.animationFrames.set(handle, callback);
         return handle;
     }
 
-    cancelAnimationFrame(handle: number): void {
+    cancelAnimationFrame(handle: number): boolean {
+        if (handle >= 0) return false;
         this.animationFrames.delete(handle);
+        return true;
     }
 
     flushDueTimeouts(): void {
@@ -81,8 +85,9 @@ export class ScriptedCaptureTimeController implements UiTimeoutDriver, UiMediaCl
     }
 
     flushAnimationFrames(): void {
+        // Handles count downward, so scheduling order is descending numeric.
         const callbacks = [...this.animationFrames.entries()]
-            .sort(([left], [right]) => left - right);
+            .sort(([left], [right]) => right - left);
         this.animationFrames.clear();
         for (const [, callback] of callbacks) callback(this.mediaTimeMilliseconds);
     }

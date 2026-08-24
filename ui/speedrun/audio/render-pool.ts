@@ -1,6 +1,6 @@
 import { renderBouncePlanInWorkers } from "../../../bounce/worker-pool.mjs";
 import type { CumulativePatchState } from "../partial-states";
-import type { SpeedrunTimeline } from "../timeline";
+import { SPEEDRUN_SAMPLES_PER_FRAME, type SpeedrunTimeline } from "../timeline";
 import {
     SPEEDRUN_CROSSFADE_SAMPLES,
 } from "./master-track";
@@ -33,6 +33,8 @@ export type SpeedrunRenderPoolOptions = {
     readonly workerFactory?: (url: string | URL, job: SpeedrunCheckpointRenderJob) => Worker;
     readonly maxInstallFrames?: number;
     readonly prefetchResources?: boolean;
+    /** Record per-frame engine telemetry (scripted video renders only). */
+    readonly recordTelemetry?: boolean;
 };
 
 type SpeedrunWorkerPlan = {
@@ -52,7 +54,7 @@ function defaultConcurrency(checkpointCount: number) {
     return Math.max(1, Math.min(4, hardwareConcurrency - 2 || 1, checkpointCount));
 }
 
-export function buildSpeedrunCheckpointPlan(
+function buildSpeedrunCheckpointPlan(
     states: ReadonlyArray<CumulativePatchState>,
     timeline: SpeedrunTimeline,
     performance: NotePerformance,
@@ -60,7 +62,8 @@ export function buildSpeedrunCheckpointPlan(
         resourceBaseURL,
         resourceBundle,
         maxInstallFrames,
-    }: Pick<SpeedrunRenderPoolOptions, "resourceBaseURL" | "maxInstallFrames"> & {
+        recordTelemetry,
+    }: Pick<SpeedrunRenderPoolOptions, "resourceBaseURL" | "maxInstallFrames" | "recordTelemetry"> & {
         readonly resourceBundle?: SpeedrunWavetableResourceBundle;
     } = {},
 ): SpeedrunWorkerPlan {
@@ -85,6 +88,7 @@ export function buildSpeedrunCheckpointPlan(
             resourceBaseURL: String(root),
             ...(resourceBundle === undefined ? {} : { resourceBundle }),
             ...(maxInstallFrames === undefined ? {} : { maxInstallFrames }),
+            ...(recordTelemetry === true ? { recordTelemetry: true } : {}),
         } satisfies SpeedrunCheckpointRenderJob];
     });
     return { jobs };
@@ -114,6 +118,7 @@ export async function renderSpeedrunCheckpoints(
         resourceBaseURL,
         resourceBundle,
         maxInstallFrames: options.maxInstallFrames,
+        recordTelemetry: options.recordTelemetry,
     });
     if (plan.jobs.length === 0) return [];
 
@@ -151,10 +156,20 @@ export async function renderSpeedrunCheckpoints(
             || !(result.samples instanceof Float32Array)) {
             throw new Error(`Speedrun checkpoint ${expected.checkpointIndex} returned invalid audio.`);
         }
+        if (expected.recordTelemetry && !result.telemetry) {
+            // A silently empty track would ship a video with frozen playback
+            // graphics; a missing field means the prebuilt checkpoint worker
+            // bundle is stale relative to this renderer.
+            throw new Error(
+                `Speedrun checkpoint ${expected.checkpointIndex} returned no telemetry — rebuild patch_gui/speedrun-checkpoint-worker.js.`,
+            );
+        }
         return {
             ...result,
             telemetry: result.telemetry
-                ?? emptySpeedrunCheckpointTelemetryTrack(Math.ceil(result.frameCount / 1_600)),
+                ?? emptySpeedrunCheckpointTelemetryTrack(
+                    Math.ceil(result.frameCount / SPEEDRUN_SAMPLES_PER_FRAME),
+                ),
         };
     });
 }

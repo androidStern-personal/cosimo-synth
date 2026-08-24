@@ -623,7 +623,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         queueMicrotask(() => this.emitEndpoint(runtimeStateEndpointID, this.runtimeState));
     }
 
-    private cancelScheduledWavetableActivation() {
+    protected cancelScheduledWavetableActivation() {
         if (this.wavetableActivationTimerID === null) {
             return;
         }
@@ -631,7 +631,7 @@ export class MockPatchConnection implements PatchConnectionLike {
         this.wavetableActivationTimerID = null;
     }
 
-    private scheduleWavetableActivation(tableIndex: number, generation: number) {
+    protected scheduleWavetableActivation(tableIndex: number, generation: number) {
         this.cancelScheduledWavetableActivation();
         const intentSerial = this.runtimeState.desiredIntentSerial;
         this.wavetableActivationTimerID = window.setTimeout(() => {

@@ -19,6 +19,7 @@ import { useOptionalPatchConnection, type PatchConnectionLike } from "./cmajor-r
 import { knobArcPoint } from "./parameter-knob-artwork";
 import type { ModulationSourceKind } from "./modulation-targets";
 import {
+    hasUiMediaClock,
     uiMediaCancelAnimationFrame,
     uiMediaRequestAnimationFrame,
 } from "./ui-media-clock";
@@ -146,15 +147,17 @@ export type ModSourceLiveDriverHooks = {
 };
 
 function defaultRequestFrame(callback: (timestamp: number) => void): number {
-    if (typeof globalThis.requestAnimationFrame === "function") {
-        return globalThis.requestAnimationFrame(callback);
+    // The media-clock facade routes to an installed capture clock, or native
+    // rAF otherwise; environments without rAF keep the timer fallback.
+    if (hasUiMediaClock() || typeof globalThis.requestAnimationFrame === "function") {
+        return uiMediaRequestAnimationFrame(callback);
     }
     return Number(setTimeout(() => callback(Date.now()), FALLBACK_FRAME_MS));
 }
 
 function defaultCancelFrame(handle: number): void {
-    if (typeof globalThis.cancelAnimationFrame === "function") {
-        globalThis.cancelAnimationFrame(handle);
+    if (hasUiMediaClock() || typeof globalThis.cancelAnimationFrame === "function") {
+        uiMediaCancelAnimationFrame(handle);
         return;
     }
     clearTimeout(handle);
@@ -383,18 +386,13 @@ type SharedDriverEntry = {
 
 const sharedDrivers = new WeakMap<PatchConnectionLike, SharedDriverEntry>();
 
-const UI_MEDIA_FRAME_HOOKS: ModSourceLiveDriverHooks = {
-    requestAnimationFrame: uiMediaRequestAnimationFrame,
-    cancelAnimationFrame: uiMediaCancelAnimationFrame,
-};
-
-export function acquireModSourceLiveDriver(
-    connection: PatchConnectionLike,
-    hooks: ModSourceLiveDriverHooks = UI_MEDIA_FRAME_HOOKS,
-): ModSourceLiveDriver {
+export function acquireModSourceLiveDriver(connection: PatchConnectionLike): ModSourceLiveDriver {
+    // Frame scheduling goes through the default hooks, which consult the
+    // ui-media-clock facade per call — a capture clock installed in this realm
+    // takes effect without any per-caller plumbing.
     let entry = sharedDrivers.get(connection);
     if (!entry) {
-        entry = { driver: new ModSourceLiveDriver(connection, hooks), refCount: 0 };
+        entry = { driver: new ModSourceLiveDriver(connection), refCount: 0 };
         sharedDrivers.set(connection, entry);
     }
     entry.refCount += 1;

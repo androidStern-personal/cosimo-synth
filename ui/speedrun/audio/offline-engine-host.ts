@@ -1,4 +1,7 @@
 import type { PatchConnectionLike } from "../../shared/cmajor-react";
+import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
+import { LANE_STATE_KEY } from "../../shared/lane-state";
+import { MODULATION_STATE_KEY } from "../../shared/modulation";
 
 type EndpointDescription = {
     readonly endpointID: string;
@@ -55,9 +58,9 @@ function eventPayload(value: unknown) {
 function cloneStoredState(state: OfflineEngineStoredState) {
     return {
         values: {
-            "modulation.v6": state.modulation,
-            "lane.v1": state.lane,
-            "articulations.v4": state.articulations,
+            [MODULATION_STATE_KEY]: state.modulation,
+            [LANE_STATE_KEY]: state.lane,
+            [ARTICULATIONS_V4_STATE_KEY]: state.articulations,
         },
     };
 }

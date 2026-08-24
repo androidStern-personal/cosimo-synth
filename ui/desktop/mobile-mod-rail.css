@@ -598,8 +598,11 @@
         opacity: 0.38;
     }
 
+    /* Absolute within the rail layer (the layer's box IS the visual viewport
+       on a phone), so the ghost stays correct when the shell is embedded
+       under a transform, e.g. the scripted video capture stage. */
     .mobile-global-mod-source-ghost {
-        position: fixed;
+        position: absolute;
         z-index: 100;
         display: grid;
         width: 42px;

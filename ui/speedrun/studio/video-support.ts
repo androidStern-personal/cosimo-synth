@@ -1,7 +1,7 @@
 import { getEncodableAudioCodecs } from "@remotion/web-renderer";
 import { canEncodeVideo } from "mediabunny";
 
-import { SPEEDRUN_VIDEO_HEIGHT, SPEEDRUN_VIDEO_WIDTH } from "../composition/composition";
+import { SPEEDRUN_VIDEO_HEIGHT, SPEEDRUN_VIDEO_WIDTH } from "../stage";
 
 export type SpeedrunVideoContainer = "mp4" | "webm";
 

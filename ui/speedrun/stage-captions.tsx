@@ -1,4 +1,4 @@
-import type { TimedSection } from "../timeline";
+import type { TimedSection } from "./timeline";
 
 export function CaptionPanel({ section, frame }: { readonly section: TimedSection | null; readonly frame: number }) {
     if (section === null) return null;

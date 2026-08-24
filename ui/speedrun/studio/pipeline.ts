@@ -14,10 +14,9 @@ import {
 } from "../audio/render-pool";
 import type { NotePerformance } from "../audio/checkpoint-renderer";
 import {
-    SpeedrunComposition,
     SPEEDRUN_VIDEO_HEIGHT,
     SPEEDRUN_VIDEO_WIDTH,
-} from "../composition/composition";
+} from "../stage";
 import { buildCumulativeStates, type CumulativePatchState } from "../partial-states";
 import { intakePatch, type DefaultsSnapshot, type PatchDocument } from "../patch-io";
 import { compileRecipe, type SpeedrunRecipe } from "../recipe";
@@ -34,7 +33,6 @@ import {
     type SpeedrunVideoFormat,
 } from "./video-support";
 import { verifySpeedrunVideo, type SpeedrunVideoVerification } from "./verify";
-import type { ScriptedPreencodeDigest } from "../scripted/iframe-renderer";
 
 export type SpeedrunPreparedPipeline = {
     readonly document: PatchDocument;
@@ -53,7 +51,8 @@ export type SpeedrunAudioArtifact = {
     readonly bytes: number;
     readonly durationSeconds: number;
     readonly elapsedMilliseconds: number;
-    readonly telemetry: SpeedrunTelemetryTrack;
+    /** Recorded engine telemetry, or null when the caller did not request it. */
+    readonly telemetry: SpeedrunTelemetryTrack | null;
 };
 
 export type SpeedrunVideoArtifact = {
@@ -63,7 +62,6 @@ export type SpeedrunVideoArtifact = {
     readonly format: SpeedrunVideoFormat;
     readonly verification: SpeedrunVideoVerification;
     readonly elapsedMilliseconds: number;
-    readonly preencodeFrameDigests: ReadonlyArray<ScriptedPreencodeDigest>;
 };
 
 export type SpeedrunVideoProgress = {
@@ -215,6 +213,15 @@ export class SpeedrunStudioSession {
 
     async renderAudio(
         onProgress?: (progress: SpeedrunAudioProgress) => void,
+        options: {
+            /**
+             * Record per-frame engine telemetry for a scripted video render.
+             * Off by default: without it the checkpoint render loop is the
+             * pre-telemetry one, byte for byte, so audio-only consumers keep
+             * their established output.
+             */
+            readonly recordTelemetry?: boolean;
+        } = {},
     ): Promise<SpeedrunAudioArtifact> {
         const prepared = this.preparedValue;
         if (prepared === null) throw new SpeedrunStudioError("audio", "NotAnalyzed", "Analyze a sound before rendering audio.");
@@ -233,11 +240,14 @@ export class SpeedrunStudioSession {
                     resourceBaseURL: this.runtime.webRootURL,
                     signal: controller.signal,
                     onProgress,
+                    recordTelemetry: options.recordTelemetry === true,
                 },
             );
             if (controller.signal.aborted) throw new DOMException("Cancelled", "AbortError");
             const master = assembleSpeedrunMasterTrack(prepared.timeline, checkpoints);
-            const telemetry = assembleSpeedrunTelemetryTrack(prepared.timeline, checkpoints);
+            const telemetry = options.recordTelemetry === true
+                ? assembleSpeedrunTelemetryTrack(prepared.timeline, checkpoints)
+                : null;
             const blob = new Blob([arrayBuffer(master.wav)], { type: "audio/wav" });
             const artifact: SpeedrunAudioArtifact = {
                 url: this.own(blob),
@@ -258,12 +268,16 @@ export class SpeedrunStudioSession {
     }
 
     async renderVideo(options: {
+        /**
+         * Required so the rejected replica can never be selected by omission:
+         * the shipped product path is "scripted"; "replica" remains only for
+         * the parked replica suites and the explicit build-flag fallback.
+         */
+        readonly compositionMode: "replica" | "scripted";
         readonly preferredContainer?: SpeedrunVideoContainer;
         readonly videoBitrate?: "very-low" | "low" | "medium" | "high";
         readonly onProgress?: (progress: SpeedrunVideoProgress) => void;
-        readonly compositionMode?: "replica" | "scripted";
-        readonly digestFrames?: ReadonlyArray<number>;
-    } = {}): Promise<SpeedrunVideoArtifact> {
+    }): Promise<SpeedrunVideoArtifact> {
         const prepared = this.preparedValue;
         const audio = this.audioValue;
         if (prepared === null) throw new SpeedrunStudioError("video", "NotAnalyzed", "Analyze a sound before rendering video.");
@@ -283,8 +297,14 @@ export class SpeedrunStudioSession {
         try {
             await document.fonts.ready;
             let blob: Blob;
-            let preencodeFrameDigests: ReadonlyArray<ScriptedPreencodeDigest> = [];
             if (options.compositionMode === "scripted") {
+                if (audio.telemetry === null) {
+                    throw new SpeedrunStudioError(
+                        "video",
+                        "TelemetryMissing",
+                        "Render audio with recordTelemetry before a scripted video render.",
+                    );
+                }
                 const { renderScriptedVideoInIframe } = await import("../scripted/iframe-renderer");
                 const scripted = await renderScriptedVideoInIframe({
                     defaults: prepared.defaults,
@@ -298,15 +318,14 @@ export class SpeedrunStudioSession {
                     resourceBaseURL: this.runtime.webRootURL.href,
                     format,
                     videoBitrate: options.videoBitrate,
-                    digestFrames: options.digestFrames,
                     signal: controller.signal,
                     onProgress: ({ progress, renderedFrames, encodedFrames }) => {
                         options.onProgress?.({ progress, renderedFrames, encodedFrames });
                     },
                 });
                 blob = scripted.blob;
-                preencodeFrameDigests = scripted.preencodeDigests;
             } else {
+                const { SpeedrunComposition } = await import("../composition/composition");
                 const props = {
                     recipe: prepared.recipe,
                     timeline: prepared.timeline,
@@ -347,7 +366,6 @@ export class SpeedrunStudioSession {
                 format,
                 verification,
                 elapsedMilliseconds: performance.now() - startedAt,
-                preencodeFrameDigests,
             };
             this.revoke(this.videoValue?.url);
             this.videoValue = artifact;

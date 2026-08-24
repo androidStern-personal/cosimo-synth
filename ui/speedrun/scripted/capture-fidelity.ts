@@ -128,6 +128,26 @@ export function flattenCaptureShadowRoots(root: ParentNode) {
     }
 }
 
+const inlinedSvgPresentation = new WeakMap<SVGElement, Map<string, string>>();
+
+/**
+ * Inline style wins the cascade, so a value inlined on frame N would mask
+ * every later stylesheet/attribute-driven change and freeze the SVG at its
+ * first-seen colors. Remove exactly the values THIS pass wrote (a property the
+ * product has since written inline is left alone) so each frame re-reads the
+ * true computed presentation before re-inlining it.
+ */
+function clearOwnInlinedSvgPresentation(element: SVGElement) {
+    const inlined = inlinedSvgPresentation.get(element);
+    if (!inlined) return;
+    for (const [property, value] of inlined) {
+        if (element.style.getPropertyValue(property) === value) {
+            element.style.removeProperty(property);
+        }
+    }
+    inlined.clear();
+}
+
 /** Resolve external CSS/variables before Remotion serializes SVGs in isolation. */
 export function inlineCaptureSvgPresentation(root: ParentNode) {
     for (const svg of root.querySelectorAll<SVGSVGElement>("svg")) {
@@ -170,12 +190,21 @@ export function inlineCaptureSvgPresentation(root: ParentNode) {
             svg.setAttribute("height", String(localHeight));
         }
         for (const element of [svg, ...svg.querySelectorAll<SVGElement>("*")]) {
+            clearOwnInlinedSvgPresentation(element);
             const computed = getComputedStyle(element);
+            const inlined = inlinedSvgPresentation.get(element) ?? new Map<string, string>();
+            inlinedSvgPresentation.set(element, inlined);
 
             for (const property of SVG_PRESENTATION_PROPERTIES) {
+                if (element.style.getPropertyValue(property)) {
+                    // The product (or React) owns this inline value; never
+                    // overwrite or adopt it.
+                    continue;
+                }
                 const value = computed.getPropertyValue(property).trim();
                 if (value && value !== "normal") {
                     element.style.setProperty(property, value);
+                    inlined.set(property, value);
                 }
             }
         }

@@ -14,9 +14,11 @@ import { encodeSpeedrunWav } from "../../../ui/speedrun/audio/master-track";
 import {
     SpeedrunComposition,
     SpeedrunFrame,
+} from "../../../ui/speedrun/composition/composition";
+import {
     SPEEDRUN_VIDEO_HEIGHT,
     SPEEDRUN_VIDEO_WIDTH,
-} from "../../../ui/speedrun/composition/composition";
+} from "../../../ui/speedrun/stage";
 import type { SpeedrunRecipe } from "../../../ui/speedrun/recipe";
 import { assembleTimeline } from "../../../ui/speedrun/timeline";
 import clickTrackRecipeJson from "./click-track.recipe.json";

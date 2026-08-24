@@ -1,3 +1,6 @@
+import { PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE } from "../../shared/parameter-gesture";
+import { getRackParameterDescriptor } from "../../shared/rack-parameter-descriptors";
+import type { DefaultsSnapshot } from "../patch-io";
 import type { NavTarget, UIOp } from "../recipe";
 import type { SpeedrunTimeline, TimedOp } from "../timeline";
 
@@ -15,9 +18,17 @@ type ActivePointer = {
     y: number;
 };
 
+export type ScriptedMissedOp = {
+    readonly kind: UIOp["kind"];
+    readonly surface: string | null;
+    readonly startFrame: number;
+};
+
 export type ScriptedInteractionSnapshot = {
     readonly activeOpKind: UIOp["kind"] | null;
     readonly activeOpSurface: string | null;
+    /** Ops whose span ended without the director ever driving a real control. */
+    readonly missedOps: ReadonlyArray<ScriptedMissedOp>;
     readonly dragging: ReadonlyArray<{ readonly role: string; readonly mode: string }>;
     readonly hud: {
         readonly visible: boolean;
@@ -70,6 +81,51 @@ function clamp01(value: number) {
 
 function spanProgress(span: TimedOp, frame: number) {
     return clamp01((frame - span.startFrame) / Math.max(1, span.endFrame - span.startFrame));
+}
+
+const MIN_HORIZONTAL_DRAG_PIXELS = 18;
+const MAX_HORIZONTAL_DRAG_PIXELS = 150;
+
+function normalizedInRange(value: number, min: number, max: number, scale: "linear" | "log") {
+    if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return null;
+    const clamped = Math.min(max, Math.max(min, value));
+    if (scale === "log" && min > 0) {
+        return Math.log(clamped / min) / Math.log(max / min);
+    }
+    return (clamped - min) / (max - min);
+}
+
+/**
+ * Finger travel calibrated to the value the drag must cover, using the same
+ * pixels-per-full-range constant as the production gesture engine — so the
+ * real writes land the control at the recipe target and the end-of-span snap
+ * correction stays imperceptible instead of a visible pop. Endpoints the
+ * catalog can't size fall back to a mid-size travel.
+ */
+function horizontalDragDistance(
+    op: Extract<UIOp, { kind: "setParam" | "setLaneParam" }>,
+    annotations: DefaultsSnapshot["annotations"],
+): number {
+    const fallback = op.weight === "rapid" ? 42 : 68;
+    let range: { min: number; max: number; scale: "linear" | "log" } | null = null;
+    if (op.kind === "setLaneParam") {
+        const descriptor = getRackParameterDescriptor(op.endpointID);
+        if (descriptor) range = { min: descriptor.min, max: descriptor.max, scale: descriptor.scale };
+    } else {
+        const annotation = annotations[op.endpointID];
+        if (annotation && annotation.min !== null && annotation.max !== null) {
+            // Annotations carry no scale; wide positive ratios (Hz, ms) walk
+            // a log dial in the product, so approximate them the same way.
+            const log = annotation.min > 0 && annotation.max / annotation.min >= 64;
+            range = { min: annotation.min, max: annotation.max, scale: log ? "log" : "linear" };
+        }
+    }
+    if (!range) return fallback;
+    const from = normalizedInRange(op.from, range.min, range.max, range.scale);
+    const to = normalizedInRange(op.to, range.min, range.max, range.scale);
+    if (from === null || to === null) return fallback;
+    const pixels = Math.abs(to - from) * PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE;
+    return Math.min(MAX_HORIZONTAL_DRAG_PIXELS, Math.max(MIN_HORIZONTAL_DRAG_PIXELS, pixels));
 }
 
 function elementRole(element: Element | null) {
@@ -214,7 +270,8 @@ function sameSourceLabel(label: string | null, source: { readonly kind: string; 
     if (!label) return false;
     const normalized = label.toLowerCase();
     return normalized.includes(source.kind === "env" ? "env" : source.kind)
-        && normalized.includes(String(source.slot));
+        // The slot must match as a whole number ("1" must not match "12").
+        && new RegExp(`(?:^|\\D)${source.slot}(?:\\D|$)`, "u").test(normalized);
 }
 
 function findByDataValue(
@@ -253,6 +310,9 @@ export class ScriptedInteractionDirector {
     private readonly spans: ReadonlyArray<IndexedSpan>;
     private readonly animationStarts = new WeakMap<Animation, number>();
     private readonly completed = new Set<string>();
+    private readonly driven = new Set<string>();
+    private readonly missed: ScriptedMissedOp[] = [];
+    private readonly missedKeys = new Set<string>();
     private readonly voicePageAttempts = new Map<string, number>();
     private activePointer: ActivePointer | null = null;
     private lastFrame = -1;
@@ -260,7 +320,10 @@ export class ScriptedInteractionDirector {
     private activeSpan: IndexedSpan | null = null;
     private animationCount = 0;
 
-    constructor(private readonly timeline: SpeedrunTimeline) {
+    constructor(
+        private readonly timeline: SpeedrunTimeline,
+        private readonly annotations: DefaultsSnapshot["annotations"] = {},
+    ) {
         this.spans = timeline.sections.flatMap((section, sectionIndex) => (
             section.opSpans.map((span, opIndex) => ({
                 ...span,
@@ -278,6 +341,7 @@ export class ScriptedInteractionDirector {
         this.lastFrame = frame;
         const mediaTime = (frame * 1_000) / fps;
         this.hideFinger(fingerOverlay);
+        this.recordMissedOps(frame);
 
         const navigation = [...this.spans].reverse().find((span) => (
             span.op.kind === "navigate" && span.startFrame <= frame
@@ -339,6 +403,30 @@ export class ScriptedInteractionDirector {
         }
     }
 
+    private recordMissedOps(frame: number) {
+        for (const span of this.spans) {
+            if (span.endFrame > frame || this.completed.has(span.key) || this.missedKeys.has(span.key)) {
+                continue;
+            }
+            if (
+                span.op.kind === "navigate"
+                || span.op.kind === "installLaneBaseline"
+                || span.op.kind === "installModulationBaseline"
+            ) {
+                continue;
+            }
+            const driven = this.driven.has(span.key)
+                || [...this.driven].some((key) => key.startsWith(`${span.key}:`));
+            if (driven) continue;
+            this.missedKeys.add(span.key);
+            this.missed.push({
+                kind: span.op.kind,
+                surface: opSurface(span.op),
+                startFrame: span.startFrame,
+            });
+        }
+    }
+
     async scrubAnimations(root: Element, frame: number, fps: number) {
         const animations = root.getAnimations({ subtree: true });
         const mediaTimes = new Map<Animation, number>();
@@ -377,6 +465,7 @@ export class ScriptedInteractionDirector {
         return {
             activeOpKind: this.activeSpan?.op.kind ?? null,
             activeOpSurface: this.activeSpan ? opSurface(this.activeSpan.op) : null,
+            missedOps: [...this.missed],
             dragging: [...root.querySelectorAll<HTMLElement>("[data-dragging]")].map((element) => ({
                 role: elementRole(element) ?? "",
                 mode: element.dataset.dragging ?? "",
@@ -523,7 +612,7 @@ export class ScriptedInteractionDirector {
             control,
             progress,
             op.to >= op.from ? 1 : -1,
-            op.weight === "rapid" ? 42 : 68,
+            horizontalDragDistance(op, this.annotations),
             timeStamp,
         );
         if (progress >= 0.84) this.completed.add(span.key);
@@ -548,7 +637,7 @@ export class ScriptedInteractionDirector {
             control,
             progress,
             op.to >= op.from ? 1 : -1,
-            op.weight === "rapid" ? 42 : 68,
+            horizontalDragDistance(op, this.annotations),
             timeStamp,
         );
         if (progress >= 0.84) this.completed.add(span.key);
@@ -827,6 +916,7 @@ export class ScriptedInteractionDirector {
         timeStamp: number,
     ) {
         if (this.activePointer) this.finishPointer(root, fingerOverlay, timeStamp);
+        this.driven.add(key);
         const pointerId = ++this.pointerSerial;
         dispatchPointer(eventWindow(root), target, "pointerdown", { pointerId, x, y, timeStamp });
         this.activePointer = {

@@ -1,3 +1,4 @@
+import { OSCILLATOR_IDS } from "../../shared/modulation-targets";
 import {
     parseWaveFile,
     type ResourceClient,
@@ -17,7 +18,7 @@ export type SpeedrunWavetableResourceBundle = {
 };
 
 function selectedTableIndices(states: ReadonlyArray<CumulativePatchState>) {
-    return new Set(states.flatMap((state) => ["A", "B", "C"].map((oscillator) => (
+    return new Set(states.flatMap((state) => OSCILLATOR_IDS.map((oscillator) => (
         Math.round(Number(state.parameters[`osc${oscillator}WavetableSelect`]) || 0)
     ))));
 }

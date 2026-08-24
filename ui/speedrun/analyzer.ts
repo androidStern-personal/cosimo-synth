@@ -119,7 +119,7 @@ export function parameterValuesDiffer(
         : Math.abs(to - from) > parameterEpsilon(annotation);
 }
 
-export function diffParameters(
+function diffParameters(
     document: PatchDocument,
     defaults: DefaultsSnapshot,
 ): ParamDiff[] {
@@ -389,18 +389,3 @@ export function analyzePatch(document: PatchDocument, defaults: DefaultsSnapshot
     };
 }
 
-export function findLanePlacement(
-    lane: LaneStateV2,
-    deviceId: string,
-): LaneDevicePlacementV2 | null {
-    for (const node of lane.chain) {
-        if (node.kind === "device" && node.deviceId === deviceId) return node;
-        if (node.kind !== "device") {
-            for (const branch of node.branches) {
-                const placement = branch.find((candidate) => candidate.deviceId === deviceId);
-                if (placement) return placement;
-            }
-        }
-    }
-    return null;
-}

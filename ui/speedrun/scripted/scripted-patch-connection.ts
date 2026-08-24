@@ -8,6 +8,7 @@ import {
     MODULATION_STATE_KEY,
     serializeModulationState,
 } from "../../shared/modulation";
+import { OSCILLATOR_IDS } from "../../shared/modulation-targets";
 import { MockPatchConnection } from "../../shared/patch-connection-mock";
 import type { DefaultsSnapshot } from "../patch-io";
 import {
@@ -20,7 +21,11 @@ import {
     type SpeedrunTimeline,
     type TimedOp,
 } from "../timeline";
-import type { NotePerformance } from "../audio/checkpoint-renderer";
+import {
+    buildPerformanceSampleEvents,
+    type NotePerformance,
+} from "../audio/checkpoint-renderer";
+import { clamp01, mix } from "../easing";
 import type {
     SpeedrunTelemetryEndpointID,
     SpeedrunTelemetryTrack,
@@ -42,19 +47,6 @@ function clone<T>(value: T): T {
     return structuredClone(value);
 }
 
-function clamp01(value: number) {
-    return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
-}
-
-function smoothstep(value: number) {
-    const progress = clamp01(value);
-    return progress * progress * (3 - (2 * progress));
-}
-
-function mix(from: number, to: number, progress: number) {
-    return from + ((to - from) * smoothstep(progress));
-}
-
 function initialState(defaults: DefaultsSnapshot, recipe: SpeedrunRecipe): CumulativePatchState {
     return recipe.prelude.reduce(applySpeedrunOp, {
         parameters: { ...defaults.parameters },
@@ -64,7 +56,7 @@ function initialState(defaults: DefaultsSnapshot, recipe: SpeedrunRecipe): Cumul
     });
 }
 
-function partialOp(op: UIOp, progress: number): UIOp | null {
+function partialOp(op: UIOp, progress: number, defaults: DefaultsSnapshot): UIOp | null {
     switch (op.kind) {
         case "installLaneBaseline":
         case "installModulationBaseline":
@@ -91,15 +83,21 @@ function partialOp(op: UIOp, progress: number): UIOp | null {
                 rate: mix(1, op.rate, progress),
                 morph: mix(0, op.morph, progress),
             };
-        case "setEnvelope":
+        case "setEnvelope": {
+            // Ease from the ENGINE's own defaults, not restated literals.
+            const base = (suffix: string, fallback: number) => {
+                const value = defaults.parameters[`env${op.slot}${suffix}`];
+                return Number.isFinite(value) ? value : fallback;
+            };
             return {
                 ...op,
                 name: progress >= 0.45 ? op.name : `ENV ${op.slot}`,
-                attack: mix(0.01, op.attack, progress),
-                decay: mix(0.2, op.decay, progress),
-                sustain: mix(0.8, op.sustain, progress),
-                release: mix(0.4, op.release, progress),
+                attack: mix(base("Attack", 0.01), op.attack, progress),
+                decay: mix(base("Decay", 0.2), op.decay, progress),
+                sustain: mix(base("Sustain", 0.8), op.sustain, progress),
+                release: mix(base("Release", 0.4), op.release, progress),
             };
+        }
         case "setMacro":
             return {
                 ...op,
@@ -109,13 +107,18 @@ function partialOp(op: UIOp, progress: number): UIOp | null {
     }
 }
 
-function applyTimedOp(state: CumulativePatchState, span: TimedOp, frame: number) {
+function applyTimedOp(
+    state: CumulativePatchState,
+    span: TimedOp,
+    frame: number,
+    defaults: DefaultsSnapshot,
+) {
     if (frame < span.startFrame) return state;
     const duration = Math.max(1, span.endFrame - span.startFrame);
     const progress = frame >= span.endFrame
         ? 1
         : clamp01((frame - span.startFrame) / duration);
-    const op = partialOp(span.op, progress);
+    const op = partialOp(span.op, progress, defaults);
     return op === null ? state : applySpeedrunOp(state, op);
 }
 
@@ -134,30 +137,10 @@ export function scriptedPatchStateAtFrame(
     for (const section of timeline.sections) {
         if (frame < section.startFrame) break;
         for (const span of section.opSpans) {
-            state = applyTimedOp(state, span, frame);
+            state = applyTimedOp(state, span, frame, defaults);
         }
     }
     return state;
-}
-
-function performanceEvents(
-    performance: NotePerformance,
-    frameCount: number,
-    sampleRate: number,
-) {
-    const cycleFrames = Math.max(1, Math.round(performance.durationSec * sampleRate));
-    const normalized = performance.events.map((event) => ({
-        sample: Math.max(0, Math.min(cycleFrames - 1, Math.round(event.atSec * sampleRate))),
-        code: Math.trunc(event.code),
-    })).sort((left, right) => left.sample - right.sample || left.code - right.code);
-    const events: Array<{ sample: number; code: number }> = [];
-    for (let cycleStart = 0; cycleStart < frameCount; cycleStart += cycleFrames) {
-        for (const event of normalized) {
-            const sample = cycleStart + event.sample;
-            if (sample < frameCount) events.push({ sample, code: event.code });
-        }
-    }
-    return events;
 }
 
 /** MIDI frame events follow each independently rendered audio checkpoint. */
@@ -168,7 +151,7 @@ export function buildScriptedMidiEvents(
     return timeline.sections.flatMap((section) => {
         if (section.checkpointIndex < 0) return [];
         const sectionSamples = section.endSample - section.startSample;
-        return performanceEvents(performance, sectionSamples, timeline.sampleRate).map((event) => ({
+        return buildPerformanceSampleEvents(performance, sectionSamples, timeline.sampleRate).map((event) => ({
             frame: section.startFrame + Math.floor(event.sample / SPEEDRUN_SAMPLES_PER_FRAME),
             code: event.code,
         }));
@@ -218,8 +201,14 @@ function numberField(value: unknown, key: string, fallback = 0) {
  * Production connection contract driven by recipe frame state and recorded
  * engine telemetry. Product UI writes still go through the normal connection
  * methods; the director never reaches into React component state.
+ *
+ * Extending MockPatchConnection is a deliberate dependency on the maintained
+ * in-memory connection model (endpoint fan-out, worker services, runtime
+ * choreography) rather than a test shortcut; wall-clock behaviors the harness
+ * mock owns are overridden below so capture stays frame-deterministic.
  */
 export class ScriptedPatchConnection extends MockPatchConnection {
+    private readonly resourceBaseURL: URL;
     private readonly telemetryByFrame = new Map<number, Readonly<Record<string, unknown>>>();
     private readonly midiByFrame = new Map<number, number[]>();
     private readonly publishedParameterValues = new Map<string, number>();
@@ -243,7 +232,6 @@ export class ScriptedPatchConnection extends MockPatchConnection {
         resourceBaseURL: string | URL,
     ) {
         super({ name: recipe.label });
-        this.manifest = { name: recipe.label };
         (this.utilities as { PianoKeyboard: CustomElementConstructor }).PianoKeyboard = keyboardClass;
         this.resourceBaseURL = new URL("./", resourceBaseURL);
         for (const frame of telemetry.frames) {
@@ -256,10 +244,18 @@ export class ScriptedPatchConnection extends MockPatchConnection {
         }
     }
 
-    private readonly resourceBaseURL: URL;
-
     override getResourceAddress(path: string) {
         return new URL(path.replace(/^\//u, ""), this.resourceBaseURL).href;
+    }
+
+    /**
+     * The harness mock simulates wavetable activation on a wall-clock timer;
+     * under frame-stepped capture that timer could fire between frames and
+     * emit runtime state the script did not author. The scripted connection
+     * owns the loading→active choreography in advanceToFrame instead.
+     */
+    protected override scheduleWavetableActivation() {
+        this.cancelScheduledWavetableActivation();
     }
 
     advanceToFrame(requestedFrame: number) {
@@ -292,7 +288,7 @@ export class ScriptedPatchConnection extends MockPatchConnection {
                 + Math.ceil((span.endFrame - span.startFrame) * 0.22);
             return frame >= selectionFrame && frame < span.endFrame;
         });
-        ["A", "B", "C"].forEach((oscillator, oscillatorIndex) => {
+        OSCILLATOR_IDS.forEach((oscillator, oscillatorIndex) => {
             const tableIndex = Math.max(
                 0,
                 Math.trunc(Number(state.parameters[`osc${oscillator}WavetableSelect`]) || 0),

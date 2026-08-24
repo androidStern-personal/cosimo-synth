@@ -3,6 +3,7 @@ import type { SpeedrunRecipe, SpeedrunSection, UIOp } from "./recipe";
 export const SPEEDRUN_FPS = 30 as const;
 export const SPEEDRUN_SAMPLE_RATE = 48_000 as const;
 export const SPEEDRUN_SAMPLES_PER_FRAME = 1_600 as const;
+export const SPEEDRUN_MAX_DURATION_IN_FRAMES = 2_700 as const;
 
 export type SpeedrunPacing = {
     readonly leadIn: number;
@@ -233,7 +234,7 @@ export function assembleTimeline(
     config: SpeedrunTimelineConfig = {},
 ): SpeedrunTimeline {
     const base = normalizedPacing(config);
-    const maximum = integer(config.maxDurationInFrames ?? 2_700, 1);
+    const maximum = integer(config.maxDurationInFrames ?? SPEEDRUN_MAX_DURATION_IN_FRAMES, 1);
     const uncompressed = buildTimeline(recipe, base, 0, false);
     if (uncompressed.durationInFrames <= maximum) return uncompressed;
 
@@ -267,4 +268,3 @@ export function assembleTimeline(
     return scaleTimelineToCeiling(levelThree, maximum);
 }
 
-export { DEFAULT_PACING };

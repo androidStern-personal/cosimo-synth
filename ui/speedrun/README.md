@@ -67,8 +67,14 @@ action is unavailable, while sound analysis and video rendering continue.
    report.
 3. Checkpoint audio renders through fresh generated performers in the existing
    short-lived Bounce worker pool. The assembled WAV can be auditioned first.
-4. The frame-pure 1080x1920 composition renders from the recipe, timeline, and
-   one master WAV blob URL.
+4. The 1080x1920 video renders the REAL DesktopPatchView in a scripted
+   session: a phone-width iframe hosts the render, a scripted patch connection
+   replays exact recipe state plus engine telemetry recorded during the audio
+   render, synthetic pointer scripts drive the production gesture code, and
+   CSS animations are scrubbed to media time per frame. (The rejected
+   frame-pure replica composition is retained behind
+   VITE_COSIMO_VIDEO_BOUNCE_REPLICA=1 and the standalone studio page until its
+   disposal is decided.)
 5. The encoded blob is withheld until verification proves its container,
    codecs, one video/one audio track, timeline duration, and decoded non-silent
    audio in every audible section window.
@@ -99,12 +105,19 @@ and composition suites.
 
 ```sh
 npm run test:speedrun:hardening
-npm run test:speedrun:pipeline
-npm run test:speedrun:composition
 npm run test:speedrun:audio
 npm run test:speedrun:core
 npm run test:speedrun:midi
+npm run test:video-bounce:fidelity
+npm run test:video-bounce:scripted-gestures
+npm run test:video-bounce:scripted-hardening
+npm run test:video-bounce:integration
 ```
+
+The replica-only suites (`test:speedrun:replica:pipeline`,
+`test:speedrun:replica:composition`) are parked with the rejected replica and
+run only while it remains in the tree; they are not part of the product gate
+set.
 
 The hardening fixture is generated from the current performer contract. It
 carries all 96 public parameters, stores all 1,131 legal modulation mappings,

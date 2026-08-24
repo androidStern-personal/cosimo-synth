@@ -1,6 +1,7 @@
 import "./styles.css";
 import { createDefaultLaneState } from "../shared/lane-state";
 import { loadHarnessManifest, MockPatchConnection } from "../shared/patch-connection-mock";
+import { WORKSPACE_SHELL_STORAGE_KEY } from "../shared/workspace-shell";
 import { createDesktopPatchView } from "./patch-view-entry";
 
 declare global {
@@ -225,10 +226,13 @@ try {
     const manifest = await loadHarnessManifest();
     document.body.dataset.bootStage = "manifest-loaded";
     const patchConnection = new MockPatchConnection(manifest);
+    // Test/dev-only edge into the video bundle: this import is reachable only
+    // from the harness entry (never the production patch-view entry) and only
+    // behind the fidelity query parameter.
     if (fidelityKeyboardMode === "native" || fidelityKeyboardMode === "capture") {
         const { configureFidelityKeyboard } = await import("../speedrun/scripted/fidelity-probe");
         await configureFidelityKeyboard(patchConnection, fidelityKeyboardMode);
-        sessionStorage.removeItem("cosimo.workspace-shell.v1");
+        sessionStorage.removeItem(WORKSPACE_SHELL_STORAGE_KEY);
     }
     const initialHarnessState = window.__COSIMO_DESKTOP_HARNESS_INITIAL__;
     if (initialHarnessState?.parameterValues && typeof initialHarnessState.parameterValues === "object") {

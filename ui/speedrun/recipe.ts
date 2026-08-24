@@ -42,6 +42,11 @@ import type {
     EndpointAnnotation,
     PatchDocument,
 } from "./patch-io";
+import {
+    cloneArticulations,
+    cloneLane,
+    cloneModulation,
+} from "./partial-states";
 
 export type NavTarget =
     | { readonly tab: "mod"; readonly sourceId: ModulationSourceId }
@@ -167,17 +172,6 @@ const OSCILLATOR_ENDPOINT_ORDER = [
 
 const FILTER_ENDPOINT_ORDER = ["filterMode", "filterCutoff", "filterQ", "filterMix"] as const;
 
-function cloneLane(lane: LaneStateV2): LaneStateV2 {
-    return deserializeLaneStateV2(serializeLaneStateV2(lane));
-}
-
-function cloneModulation(modulation: ModulationState): ModulationState {
-    return deserializeModulationState(serializeModulationState(modulation));
-}
-
-function cloneArticulations(articulations: ArticulationsState): ArticulationsState {
-    return JSON.parse(JSON.stringify(articulations)) as ArticulationsState;
-}
 
 function replaceLanePlacements(
     nodes: ReadonlyArray<LaneChainNodeV2>,
@@ -569,13 +563,3 @@ export function compileRecipe(
     };
 }
 
-export function targetParameterIDsForOp(op: UIOp): ReadonlyArray<string> {
-    switch (op.kind) {
-        case "setParam": return [op.endpointID];
-        case "selectWavetable": return [`osc${op.osc}WavetableSelect`];
-        case "configureMseg": return [`mseg${op.slot}Rate`, `mseg${op.slot}Morph`];
-        case "setEnvelope": return ["Attack", "Decay", "Sustain", "Release"].map((suffix) => `env${op.slot}${suffix}`);
-        case "setMacro": return [`macro${op.slot}`];
-        default: return [];
-    }
-}

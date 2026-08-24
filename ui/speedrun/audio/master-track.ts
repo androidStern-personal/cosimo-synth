@@ -1,9 +1,9 @@
-import type { SpeedrunTimeline } from "../timeline";
+import { SPEEDRUN_SAMPLES_PER_FRAME, type SpeedrunTimeline } from "../timeline";
 import type { SpeedrunCheckpointRenderResult } from "./checkpoint-renderer";
 
-export const SPEEDRUN_CROSSFADE_SECONDS = 0.09 as const;
+/** 90 ms at the 48 kHz timeline rate. */
 export const SPEEDRUN_CROSSFADE_SAMPLES = 4_320 as const;
-export const SPEEDRUN_END_FADE_FRAMES = 15 as const;
+const SPEEDRUN_END_FADE_FRAMES = 15;
 
 export type SpeedrunMasterTrack = {
     readonly sampleRate: 48_000;
@@ -64,7 +64,7 @@ function applyBoundaryCrossfade(
 }
 
 function applyEndFade(samples: Float32Array, frameCount: number) {
-    const fadeFrames = Math.min(frameCount, SPEEDRUN_END_FADE_FRAMES * 1_600);
+    const fadeFrames = Math.min(frameCount, SPEEDRUN_END_FADE_FRAMES * SPEEDRUN_SAMPLES_PER_FRAME);
     const startFrame = frameCount - fadeFrames;
     const denominator = Math.max(1, fadeFrames - 1);
     for (let frame = 0; frame < fadeFrames; frame += 1) {

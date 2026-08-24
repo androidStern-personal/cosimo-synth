@@ -32,9 +32,12 @@ import {
     type SoundShareEnvelopeV1,
 } from "../shared/sound-share-envelope";
 
+// bounce/document.mjs owns this key; restated here because that module is
+// untyped and importing it would add an implicit-any boundary.
+const BOUNCE_STATE_KEY = "bounce.v1";
+
 const BROWSER_PATCH_STATE_FORMAT = "cosimo.browserPatchState";
 const BROWSER_PATCH_STATE_VERSION = 2;
-const BOUNCE_STATE_KEY = "bounce.v1";
 const SPEEDRUN_BOUNCE_REFUSAL = "Speedrun videos for bounced sounds come later";
 
 export type EndpointAnnotation = {
@@ -555,4 +558,3 @@ export async function captureCurrentPatch(
     }
 }
 
-export { SPEEDRUN_BOUNCE_REFUSAL };

@@ -4,7 +4,7 @@ import { WORKSPACE_SHELL_STORAGE_KEY } from "../../shared/workspace-shell";
 import {
     SPEEDRUN_VIDEO_HEIGHT,
     SPEEDRUN_VIDEO_WIDTH,
-} from "../composition/composition";
+} from "../stage";
 import type { SpeedrunVideoFormat } from "../studio/video-support";
 import { ScriptedCaptureTimeController } from "./capture-time";
 import {
@@ -13,6 +13,9 @@ import {
     type ScriptedCompositionProps,
     type ScriptedFrameInspection,
 } from "./scripted-composition";
+
+const VIDEO_BOUNCE_BUNDLE_FILE = "index.js";
+const VIDEO_BOUNCE_STYLE_FILE = "style.css";
 
 export type ScriptedPreencodeDigest = {
     readonly frame: number;
@@ -78,6 +81,9 @@ async function awaitDocumentStyles() {
 export async function renderScriptedVideoInCurrentDocument(
     request: ScriptedRenderRequest,
 ): Promise<ScriptedRenderResult> {
+    // The iframe path shadows web storage entirely (see the srcdoc bootstrap);
+    // this remains for the direct-document path the test fixtures use, so a
+    // stale shell state can never leak into a capture.
     sessionStorage.removeItem(WORKSPACE_SHELL_STORAGE_KEY);
     await awaitDocumentStyles();
     await prepareScriptedCaptureEnvironment(request.states, request.resourceBaseURL);
@@ -157,10 +163,14 @@ declare global {
     }
 }
 
-function waitForIframeRuntime(iframe: HTMLIFrameElement) {
+function waitForIframeRuntime(iframe: HTMLIFrameElement, signal: AbortSignal | undefined) {
     return new Promise<IframeRuntime>((resolve, reject) => {
         const startedAt = performance.now();
         const poll = () => {
+            if (signal?.aborted) {
+                reject(new DOMException("Cancelled", "AbortError"));
+                return;
+            }
             const child = iframe.contentWindow;
             if (child?.__COSIMO_SCRIPTED_IFRAME__) {
                 resolve(child.__COSIMO_SCRIPTED_IFRAME__);
@@ -178,6 +188,26 @@ function waitForIframeRuntime(iframe: HTMLIFrameElement) {
         };
         poll();
     });
+}
+
+/**
+ * Rejections from the srcdoc realm carry that realm's Error/DOMException
+ * constructors, so the parent's instanceof-based classification (cancel
+ * detection, message preservation in studioError) silently fails on them.
+ * Rebuild the error with parent-realm identity — the same treatment the
+ * result Blob gets.
+ */
+function rehomeCrossRealmError(raw: unknown): Error {
+    if (raw instanceof Error) return raw;
+    const record = raw as { message?: unknown; name?: unknown } | null;
+    const message = typeof record?.message === "string" ? record.message : String(raw);
+    const name = typeof record?.name === "string" ? record.name : "Error";
+    if (name === "AbortError") {
+        return new DOMException(message || "Cancelled", "AbortError") as unknown as Error;
+    }
+    const rehomed = new Error(message, { cause: raw });
+    rehomed.name = name;
+    return rehomed;
 }
 
 async function hiddenIframeRafRuns(iframe: HTMLIFrameElement) {
@@ -212,13 +242,35 @@ export async function renderScriptedVideoInIframe(
         visibility: "hidden",
         width: "393px",
     });
-    const bundledStyle = /\/index\.js(?:[?#]|$)/u.test(moduleURL)
-        ? `<link rel="stylesheet" href=${JSON.stringify(new URL("./style.css", moduleURL).href)}>`
+    // These two names are the contract with ui/vite.video-bounce.config.mjs
+    // (lib fileName "index.js", assetFileNames "style.css"): from the built
+    // bundle the extracted stylesheet must be linked here; from a dev-server
+    // module URL vite injects CSS itself and the link would 404.
+    const bundledStyle = new RegExp(`/${VIDEO_BOUNCE_BUNDLE_FILE.replace(".", "\\.")}(?:[?#]|$)`, "u").test(moduleURL)
+        ? `<link rel="stylesheet" href=${JSON.stringify(new URL(`./${VIDEO_BOUNCE_STYLE_FILE}`, moduleURL).href)}>`
         : "";
     iframe.srcdoc = `<!doctype html>
 <html><head><meta charset="utf-8">${bundledStyle}
 <style>html,body{margin:0;width:393px;height:852px;overflow:visible;background:#07080c}</style></head>
 <body><script type="module">
+// A same-origin srcdoc iframe shares the parent's web storage. Shadow both
+// stores with in-memory stubs BEFORE product code loads, so a stale shell or
+// rail-dock state cannot leak into the capture and the scripted navigation
+// cannot pollute the user's real session.
+for (const storageName of ["sessionStorage", "localStorage"]) {
+    const entries = new Map();
+    Object.defineProperty(window, storageName, {
+        configurable: true,
+        value: {
+            get length() { return entries.size; },
+            key: (index) => [...entries.keys()][index] ?? null,
+            getItem: (key) => (entries.has(String(key)) ? entries.get(String(key)) : null),
+            setItem: (key, value) => { entries.set(String(key), String(value)); },
+            removeItem: (key) => { entries.delete(String(key)); },
+            clear: () => { entries.clear(); },
+        },
+    });
+}
 import(${JSON.stringify(moduleURL)}).then(({ renderScriptedVideoInCurrentDocument }) => {
     window.__COSIMO_SCRIPTED_IFRAME__ = { render: renderScriptedVideoInCurrentDocument };
 }).catch((error) => {
@@ -228,8 +280,11 @@ import(${JSON.stringify(moduleURL)}).then(({ renderScriptedVideoInCurrentDocumen
     document.body.append(iframe);
 
     try {
-        const runtime = await waitForIframeRuntime(iframe);
+        const runtime = await waitForIframeRuntime(iframe, request.signal);
         const hiddenRafRuns = await hiddenIframeRafRuns(iframe);
+        if (request.signal?.aborted) {
+            throw new DOMException("Cancelled", "AbortError");
+        }
         if (!hiddenRafRuns) {
             // Documented plan fallback: keep it in layout and transparent if
             // this browser throttles a visibility-hidden child realm.
@@ -238,7 +293,9 @@ import(${JSON.stringify(moduleURL)}).then(({ renderScriptedVideoInCurrentDocumen
             iframe.style.transform = "scale(0.001)";
             iframe.style.transformOrigin = "top left";
         }
-        const result = await runtime.render(request);
+        const result = await runtime.render(request).catch((error: unknown) => {
+            throw rehomeCrossRealmError(error);
+        });
         // Blob identity is realm-specific. Re-home the completed bytes before
         // removing the iframe so parent-realm verifiers (Mediabunny included)
         // accept the result as a native Blob.

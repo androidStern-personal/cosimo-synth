@@ -1,3 +1,4 @@
+import { clamp01, smoothstep } from "../easing";
 import type { UIOp } from "../recipe";
 import type { SpeedrunTimeline } from "../timeline";
 import {
@@ -19,14 +20,6 @@ export type GestureScript = {
     readonly direction: "tap" | "horizontal" | "vertical" | "path";
 };
 
-function clamp01(value: number) {
-    return Math.min(1, Math.max(0, value));
-}
-
-function smoothstep(value: number) {
-    const progress = clamp01(value);
-    return progress * progress * (3 - (2 * progress));
-}
 
 function normalizedEndpointValue(endpointID: string, value: number) {
     const lower = endpointID.toLowerCase();

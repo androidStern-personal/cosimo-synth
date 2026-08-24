@@ -4,11 +4,15 @@ import type {
     VideoBounceContainer,
 } from "./integrated-contract";
 import { SpeedrunStudioSession } from "./studio/pipeline";
+import { SPEEDRUN_MAX_DURATION_IN_FRAMES } from "./timeline";
 import { loadSpeedrunStudioRuntime } from "./studio/runtime";
 
+// Load-bearing re-export: the scripted render iframe imports THIS bundle by
+// URL and destructures renderScriptedVideoInCurrentDocument from it (see the
+// srcdoc bootstrap in scripted/iframe-renderer.ts). Do not remove.
 export { renderScriptedVideoInCurrentDocument } from "./scripted/iframe-renderer";
 
-const MAX_DURATION_IN_FRAMES = 2_700;
+
 const STYLE_LINK_MARKER = "cosimo-video-bounce-runtime";
 /**
  * The real scripted DesktopPatchView is the shipped path. Set
@@ -54,7 +58,7 @@ export async function createVideoBounceSession(
 
     try {
         const prepared = await session.prepare(patchInput, DEFAULT_SPEEDRUN_PERFORMANCE, {
-            maxDurationInFrames: MAX_DURATION_IN_FRAMES,
+            maxDurationInFrames: SPEEDRUN_MAX_DURATION_IN_FRAMES,
             createShareLink: false,
         });
 
@@ -65,11 +69,13 @@ export async function createVideoBounceSession(
                 durationSeconds: prepared.timeline.durationInFrames / prepared.timeline.fps,
             },
             async renderAudio(onProgress) {
+                // The integrated flow's audio stage feeds the scripted video,
+                // so it always records the per-frame engine telemetry track.
                 const artifact = await session.renderAudio((progress) => {
                     onProgress(progress.totalFrames === 0
                         ? 1
                         : progress.completedFrames / progress.totalFrames);
-                });
+                }, { recordTelemetry: true });
                 return {
                     url: artifact.url,
                     bytes: artifact.bytes,

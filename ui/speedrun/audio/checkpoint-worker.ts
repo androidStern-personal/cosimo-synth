@@ -1,4 +1,7 @@
-import { renderSpeedrunCheckpoint } from "./checkpoint-renderer";
+import {
+    renderSpeedrunCheckpoint,
+    type SpeedrunCheckpointRenderJob,
+} from "./checkpoint-renderer";
 
 type WorkerRequest = {
     readonly type?: unknown;
@@ -30,7 +33,10 @@ workerScope.addEventListener("message", (event) => {
         const engineURL = new URL(message.engineModuleURL, workerScope.location.href).href;
         const engineModule = await import(/* @vite-ignore */ engineURL);
         const PerformerClass = engineModule.default ?? engineModule.WavetableSynth;
-        const result = await renderSpeedrunCheckpoint(PerformerClass, message.job as never);
+        const result = await renderSpeedrunCheckpoint(
+            PerformerClass,
+            message.job as SpeedrunCheckpointRenderJob,
+        );
         workerScope.postMessage({
             type: "render-root-complete",
             requestID: message.requestID,

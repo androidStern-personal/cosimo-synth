@@ -2439,6 +2439,23 @@ function MobileGlobalModRail({
         disclosureDirection = drawerPlacement.direction === "up" ? "down" : "up";
     }
 
+    // The ghost is positioned in the LAYER's local space, not raw viewport
+    // coordinates: on a phone the two coincide, but when the shell is embedded
+    // under a transform (the scripted video capture stage) client coordinates
+    // must be mapped back through the layer's rect or the ghost lands off the
+    // screen it is being dragged over.
+    const ghostLayerPoint = (() => {
+        if (!sourceDrag) return null;
+        const layer = layerRef.current;
+        if (!layer) return { left: sourceDrag.clientX, top: sourceDrag.clientY };
+        const bounds = layer.getBoundingClientRect();
+        if (bounds.width <= 0 || bounds.height <= 0) return null;
+        return {
+            left: (sourceDrag.clientX - bounds.left) * (layer.offsetWidth / bounds.width),
+            top: (sourceDrag.clientY - bounds.top) * (layer.offsetHeight / bounds.height),
+        };
+    })();
+
     return (
         <div ref={layerRef} data-role="mobile-global-mod-rail-layer" className="mobile-global-mod-rail-layer">
             <aside
@@ -2761,14 +2778,14 @@ function MobileGlobalModRail({
                     </div>
                 ) : null}
             </aside>
-            {sourceDrag ? (
+            {sourceDrag && ghostLayerPoint ? (
                 <div
                     data-role="mobile-global-mod-source-ghost"
                     data-target-captured={sourceDrag.targetCaptured}
                     className="mobile-global-mod-source-ghost"
                     style={{
-                        left: sourceDrag.clientX,
-                        top: sourceDrag.clientY,
+                        left: ghostLayerPoint.left,
+                        top: ghostLayerPoint.top,
                         "--source-color": findRackModulationSource(
                             sourceDrag.source.sourceKind,
                             sourceDrag.source.sourceSlot,

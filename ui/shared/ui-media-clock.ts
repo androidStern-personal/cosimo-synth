@@ -2,8 +2,10 @@
 
 export type UiMediaClock = {
     now(): number;
+    /** Driver handles are negative so they can never collide with native rAF handles. */
     requestAnimationFrame(callback: (timestamp: number) => void): number;
-    cancelAnimationFrame(handle: number): void;
+    /** Return true when the handle belongs to this clock. */
+    cancelAnimationFrame(handle: number): boolean;
 };
 
 let activeClock: UiMediaClock | null = null;
@@ -19,6 +21,10 @@ export function installUiMediaClock(clock: UiMediaClock): () => void {
     };
 }
 
+export function hasUiMediaClock(): boolean {
+    return activeClock !== null;
+}
+
 export function uiMediaTimeNow(): number {
     return activeClock?.now() ?? performance.now();
 }
@@ -31,9 +37,6 @@ export function uiMediaRequestAnimationFrame(
 }
 
 export function uiMediaCancelAnimationFrame(handle: number): void {
-    if (activeClock !== null) {
-        activeClock.cancelAnimationFrame(handle);
-        return;
-    }
+    if (activeClock?.cancelAnimationFrame(handle)) return;
     window.cancelAnimationFrame(handle);
 }

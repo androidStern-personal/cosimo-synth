@@ -1,6 +1,7 @@
 import type { LaneChainNodeV2, LaneStateV2 } from "../../shared/lane-state-v2";
 import type { ModulationMsegSlot, ModulationRoute } from "../../shared/modulation";
 import type { OscillatorID } from "../../shared/modulation-targets";
+import { clamp01, mix, smoothstep } from "../easing";
 import type { NavTarget, SpeedrunRecipe, UIOp } from "../recipe";
 import type { SpeedrunTimeline, TimedSection } from "../timeline";
 
@@ -67,18 +68,6 @@ const DEFAULT_ENVELOPE: SpeedrunEnvelopeState = {
     release: 0.4,
 };
 
-function clamp01(value: number) {
-    return Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
-}
-
-function smoothstep(value: number) {
-    const progress = clamp01(value);
-    return progress * progress * (3 - (2 * progress));
-}
-
-function mix(from: number, to: number, progress: number) {
-    return from + ((to - from) * smoothstep(progress));
-}
 
 function cloneMsegSlot(slot: ModulationMsegSlot): ModulationMsegSlot {
     return JSON.parse(JSON.stringify(slot)) as ModulationMsegSlot;

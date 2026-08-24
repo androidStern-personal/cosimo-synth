@@ -11,6 +11,7 @@ import { startPatchWorkerServices } from "../../shared/patch-worker-services";
 import { createModulationArticulationWorkerService } from "../../worker/modulation-articulation-worker-service";
 import { createRackStateWorkerService } from "../../worker/rack-state-worker-service";
 import { createWavetableWorkerController } from "../../worker/wavetable-worker";
+import { OSCILLATOR_IDS } from "../../shared/modulation-targets";
 import type { CumulativePatchState } from "../partial-states";
 import { SPEEDRUN_SAMPLES_PER_FRAME } from "../timeline";
 import {
@@ -49,6 +50,13 @@ export type SpeedrunCheckpointRenderJob = {
     readonly resourceBaseURL: string;
     readonly resourceBundle?: SpeedrunWavetableResourceBundle;
     readonly maxInstallFrames?: number;
+    /**
+     * Record per-video-frame engine telemetry for a scripted render. Off, the
+     * render loop is the pre-telemetry one, byte for byte — recording also
+     * splits engine advances at 1,600-sample video-frame boundaries so each
+     * event bins to its exact frame.
+     */
+    readonly recordTelemetry?: boolean;
 };
 
 export type SpeedrunCheckpointRenderResult = {
@@ -94,7 +102,7 @@ function installExpectations(state: CumulativePatchState): InstallExpectations {
     }));
     const laneEvents = buildLaneRuntimeEventsV2(state.lane);
     return {
-        tableIndices: ["A", "B", "C"].map((oscillator) => (
+        tableIndices: OSCILLATOR_IDS.map((oscillator) => (
             Math.round(Number(state.parameters[`osc${oscillator}WavetableSelect`]) || 0)
         )),
         modulationFrontier: buildModulationRuntimeEvents(state.modulation, null).length,
@@ -203,20 +211,29 @@ function velocity(code: number) {
     return code & 0x7f;
 }
 
-function performanceEvents(performance: NotePerformance, frameCount: number, sampleRate: number) {
+/**
+ * The one authority for where performance MIDI lands, in samples. The video's
+ * scripted keyboard events derive from this same function, so what lights up
+ * on screen is what the audio render heard.
+ */
+export function buildPerformanceSampleEvents(
+    performance: NotePerformance,
+    sampleCount: number,
+    sampleRate: number,
+): ReadonlyArray<{ readonly sample: number; readonly code: number }> {
     if (!Number.isFinite(performance.durationSec) || performance.durationSec <= 0) {
         throw new Error("Speedrun performance duration must be positive and finite.");
     }
-    const cycleFrames = Math.max(1, Math.round(performance.durationSec * sampleRate));
+    const cycleSamples = Math.max(1, Math.round(performance.durationSec * sampleRate));
     const normalized = performance.events.map((event) => ({
-        frame: Math.max(0, Math.min(cycleFrames - 1, Math.round(event.atSec * sampleRate))),
+        sample: Math.max(0, Math.min(cycleSamples - 1, Math.round(event.atSec * sampleRate))),
         code: Math.trunc(event.code),
-    })).sort((left, right) => left.frame - right.frame || left.code - right.code);
-    const events: Array<{ frame: number; code: number }> = [];
-    for (let cycleStart = 0; cycleStart < frameCount; cycleStart += cycleFrames) {
+    })).sort((left, right) => left.sample - right.sample || left.code - right.code);
+    const events: Array<{ sample: number; code: number }> = [];
+    for (let cycleStart = 0; cycleStart < sampleCount; cycleStart += cycleSamples) {
         for (const event of normalized) {
-            const frame = cycleStart + event.frame;
-            if (frame < frameCount) events.push({ frame, code: event.code });
+            const sample = cycleStart + event.sample;
+            if (sample < sampleCount) events.push({ sample, code: event.code });
         }
     }
     return events;
@@ -321,8 +338,9 @@ export async function renderSpeedrunCheckpoint(
     }
 
     const samples = new Float32Array(job.frameCount * 2);
-    const events = performanceEvents(job.performance, job.frameCount, job.sampleRate);
+    const events = buildPerformanceSampleEvents(job.performance, job.frameCount, job.sampleRate);
     const articulationConfig = host.getInstallationState().articulationTriggerConfig;
+    const recordTelemetry = job.recordTelemetry === true;
     const telemetryByFrame = new Map<
         number,
         Partial<Record<SpeedrunTelemetryEndpointID, unknown>>
@@ -330,35 +348,43 @@ export async function renderSpeedrunCheckpoint(
     let eventIndex = 0;
     let renderedFrames = 0;
     let noteOnIndex = 0;
-    const telemetryListeners = SPEEDRUN_TELEMETRY_ENDPOINT_IDS.map((endpointID) => {
-        const listener = (value: unknown) => {
-            const videoFrame = Math.floor(renderedFrames / SPEEDRUN_SAMPLES_PER_FRAME);
-            const eventsAtFrame = telemetryByFrame.get(videoFrame) ?? {};
-            eventsAtFrame[endpointID] = structuredClone(value);
-            telemetryByFrame.set(videoFrame, eventsAtFrame);
-        };
-        host.addEndpointListener(endpointID, listener);
-        return { endpointID, listener };
-    });
+    // Recording is opt-in so audio-only renders keep the pre-telemetry
+    // advance pattern (and output) byte for byte.
+    const telemetryListeners = recordTelemetry
+        ? SPEEDRUN_TELEMETRY_ENDPOINT_IDS.map((endpointID) => {
+            const listener = (value: unknown) => {
+                const videoFrame = Math.floor(renderedFrames / SPEEDRUN_SAMPLES_PER_FRAME);
+                const eventsAtFrame = telemetryByFrame.get(videoFrame) ?? {};
+                eventsAtFrame[endpointID] = structuredClone(value);
+                telemetryByFrame.set(videoFrame, eventsAtFrame);
+            };
+            host.addEndpointListener(endpointID, listener);
+            return { endpointID, listener };
+        })
+        : [];
     try {
         while (renderedFrames < job.frameCount) {
-            while (eventIndex < events.length && events[eventIndex].frame === renderedFrames) {
+            while (eventIndex < events.length && events[eventIndex].sample === renderedFrames) {
                 const event = events[eventIndex];
                 sendPerformanceEvent(host, event.code, articulationConfig, noteOnIndex);
                 if ((status(event.code) & 0xf0) === 0x90 && velocity(event.code) > 0) noteOnIndex += 1;
                 eventIndex += 1;
             }
-            const nextEventFrame = events[eventIndex]?.frame ?? job.frameCount;
+            const nextEventSample = events[eventIndex]?.sample ?? job.frameCount;
             const nextVideoFrame = (
                 Math.floor(renderedFrames / SPEEDRUN_SAMPLES_PER_FRAME) + 1
             ) * SPEEDRUN_SAMPLES_PER_FRAME;
             const count = Math.min(
                 128,
                 job.frameCount - renderedFrames,
-                nextEventFrame - renderedFrames,
-                nextVideoFrame - renderedFrames,
+                nextEventSample - renderedFrames,
+                ...(recordTelemetry ? [nextVideoFrame - renderedFrames] : []),
             );
-            if (count < 1) continue;
+            if (count < 1) {
+                // By construction every bound above is >= 1; a zero here would
+                // spin this loop forever, so fail loudly instead.
+                throw new Error("Speedrun checkpoint render computed an empty advance.");
+            }
             host.render(count, samples, renderedFrames);
             renderedFrames += count;
         }

@@ -1,4 +1,7 @@
 import { buildCanonicalPluginStateContract } from "../../shared/effects/effect-state-contract";
+import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
+import { LANE_STATE_KEY } from "../../shared/lane-state";
+import { MODULATION_STATE_KEY } from "../../shared/modulation";
 import { SYNTH_PRESET_EFFECT_ID } from "../../shared/effects/synth-preset-identity";
 import type { WavetableCatalog } from "../recipe";
 import type { ParameterEndpointMetadata, PatchIntakeOptions } from "../patch-io";
@@ -75,8 +78,8 @@ export async function loadSpeedrunStudioRuntime(): Promise<SpeedrunStudioRuntime
         effectID: SYNTH_PRESET_EFFECT_ID,
         parameters: visibleParameters,
         storedState: [
-            { key: "modulation.v6", schemaVersion: 6, required: true },
-            { key: "articulations.v4", schemaVersion: 4, required: true },
+            { key: MODULATION_STATE_KEY, schemaVersion: 6, required: true },
+            { key: ARTICULATIONS_V4_STATE_KEY, schemaVersion: 4, required: true },
             { key: "bounce.v1", schemaVersion: 1, required: true },
         ],
     });

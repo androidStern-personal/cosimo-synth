@@ -1,4 +1,6 @@
 import { serializeArticulationsV4 } from "../../shared/articulation-image";
+import { ARTICULATIONS_V4_STATE_KEY } from "../../shared/articulation-image";
+import { MODULATION_STATE_KEY } from "../../shared/modulation";
 import type { EffectPresetV2 } from "../../shared/effects/effect-preset-v2";
 import { LANE_STATE_KEY } from "../../shared/lane-state";
 import { serializeLaneStateV2 } from "../../shared/lane-state-v2";
@@ -57,8 +59,8 @@ function presetForDocument(document: PatchDocument, runtime: SpeedrunStudioRunti
         contract: runtime.intakeOptions.currentContract,
         parameters: { ...document.parameters },
         storedState: {
-            "modulation.v6": serializeModulationState(document.modulation),
-            "articulations.v4": serializeArticulationsV4(document.articulations),
+            [MODULATION_STATE_KEY]: serializeModulationState(document.modulation),
+            [ARTICULATIONS_V4_STATE_KEY]: serializeArticulationsV4(document.articulations),
             "bounce.v1": null,
         },
     };

@@ -11,6 +11,7 @@ import {
     type SpeedrunVideoArtifact,
 } from "./pipeline";
 import { readStudioPatchSelection, type StudioPatchSelection } from "./patch-input";
+import { SPEEDRUN_FPS } from "../timeline";
 import {
     detectSpeedrunVideoFormat,
     type SpeedrunVideoContainer,
@@ -147,12 +148,17 @@ export function SpeedrunStudioApp({ session }: Props) {
             detectSpeedrunVideoFormat("webm"),
         ]).then(([mp4, webm]) => {
             if (live) setSupport({ mp4: mp4 !== null, webm: webm !== null });
+        }).catch(() => {
+            // A capability probe that throws means neither encoder is usable;
+            // leaving support unset would show "Checking browser encoders…"
+            // forever.
+            if (live) setSupport({ mp4: false, webm: false });
         });
         return () => { live = false; };
     }, []);
 
     const canRenderVideo = support !== null && (support.mp4 || support.webm);
-    const durationFrames = Math.max(1, Math.round(durationCeiling * 30));
+    const durationFrames = Math.max(1, Math.round(durationCeiling * SPEEDRUN_FPS));
     const shareWarning = prepared?.shareLink?._tag === "available"
         && prepared.shareLink.link.lengthClass === "warning";
     const activeLabel = useMemo(() => prepared?.document.label ?? "No sound analyzed", [prepared]);
@@ -216,6 +222,10 @@ export function SpeedrunStudioApp({ session }: Props) {
         setVideoProgress(0);
         try {
             const artifact = await session.renderVideo({
+                // The standalone studio page deliberately stays on the replica
+                // composition; the shipped product path (integrated-entry)
+                // renders the scripted real UI.
+                compositionMode: "replica",
                 preferredContainer: containerChoice === "auto" ? undefined : containerChoice,
                 videoBitrate: videoQuality,
                 onProgress: (progress) => setVideoProgress(progress.progress),
