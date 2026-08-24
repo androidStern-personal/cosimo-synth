@@ -147,3 +147,26 @@ URL-sharing implementation begins from Effects Lane tip `412a2a87`.
   Bounce threshold. Under the handoff's stuck protocol, continue the
   non-dependent renderer spike while this boundary incompatibility remains
   explicit.
+
+## 2026-08-24 — M2 browser renderer spike
+
+- Pinned `remotion`, `@remotion/media`, and `@remotion/web-renderer` to exact
+  version 4.0.491 and Mediabunny to the renderer-matched 1.50.8.
+- Added the committed throwaway experiment at
+  `experiments/remotion-web-renderer-spike/`: 10 seconds / 300 frames / 30 fps /
+  640x360, with a moving SVG knob, frame-driven canvas wavetable, changing text,
+  and one deterministic stereo PCM16 WAV passed as a blob URL to one `<Audio>`.
+- The gate calls `renderMediaOnWeb` inside headless Chromium, then independently
+  demuxes the returned Blob. A qualifying run produced a 372,884-byte MP4 in
+  2,142 ms with duration 10.0693 seconds, exactly one AVC/H.264 video track and
+  one AAC audio track. The decoded five-second pulse had RMS 0.18532 across
+  15,360 frames; decoded video had minimum luma variance 487.95 and mean frame
+  difference 5.00.
+- The first run successfully reached MP4 verification but the verifier omitted
+  Mediabunny's required `fit` option when requesting both decoded-frame
+  dimensions. `fit: "fill"` repaired the verifier; neither blob-URL audio nor
+  MP4 encoding needed a fallback.
+- Decision: F2 stays one pre-spliced blob-URL WAV and F3 stays
+  MP4/H.264/AAC on Chromium. Encoded byte identity is logged, not gated.
+- Added `docs/SPEEDRUN_VIDEO_BROWSER_RENDERING.md`: a human must resolve
+  Remotion licensing and production telemetry/key posture before public ship.
