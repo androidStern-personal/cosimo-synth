@@ -14,6 +14,7 @@ import {
 } from "react";
 
 import { SegmentedEditorTabs } from "../shared/segmented-editor-tabs";
+import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 
 export type ArticulationTriggerMode = "chain" | "key" | "vel";
 
@@ -742,7 +743,7 @@ function ArticulationCard({
 
     const clearLongPressTimer = useCallback(() => {
         if (longPressTimerRef.current !== null) {
-            window.clearTimeout(longPressTimerRef.current);
+            clearUiTimeout(longPressTimerRef.current);
             longPressTimerRef.current = null;
         }
     }, []);
@@ -824,7 +825,7 @@ function ArticulationCard({
 
         const { clientX, clientY } = event;
         clearLongPressTimer();
-        longPressTimerRef.current = window.setTimeout(() => {
+        longPressTimerRef.current = uiTimeout(() => {
             onOpenMenu(card.id, clientX, clientY);
         }, 520);
     }, [card.id, clearLongPressTimer, onOpenMenu]);
@@ -1492,7 +1493,7 @@ function ArticulationRangeLane({
 
     const showToast = useCallback((message: string) => {
         setToast(message);
-        window.setTimeout(() => {
+        uiTimeout(() => {
             setToast((currentMessage) => (currentMessage === message ? null : currentMessage));
         }, 1800);
     }, []);

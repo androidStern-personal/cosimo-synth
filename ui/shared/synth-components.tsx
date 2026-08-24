@@ -57,6 +57,7 @@ import {
     type FilterSpectrumDisplayState,
     type FilterSpectrumFrame,
 } from "./filter-spectrum";
+import { uiMediaTimeNow } from "./ui-media-clock";
 import {
     composeModulationAmount,
     formatModulationAmountReadout,
@@ -1499,7 +1500,7 @@ export function FilterResponseGraph({
         }
 
         setSpectrumDisplay((previousState) => (
-            advanceFilterSpectrumDisplayState(previousState, nextFrame, performance.now())
+            advanceFilterSpectrumDisplayState(previousState, nextFrame, uiMediaTimeNow())
         ));
     }, [spectrumBands, spectrumFrame, spectrumGraphPoints]);
 

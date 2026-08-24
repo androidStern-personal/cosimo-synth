@@ -27,6 +27,8 @@ import {
     type ReactNode,
 } from "react";
 
+import { clearUiTimeout, uiTimeout } from "./ui-timers";
+
 /** Duration of the optional directional panel transition. */
 export const SEGMENTED_PANEL_SLIDE_MS = 170;
 
@@ -290,11 +292,11 @@ export function useDirectionalPanelTransition({
             });
         });
 
-        const timer = window.setTimeout(() => {
+        const timer = uiTimeout(() => {
             cleanupRef.current?.();
         }, SEGMENTED_PANEL_SLIDE_MS + 80);
         cleanupRef.current = () => {
-            window.clearTimeout(timer);
+            clearUiTimeout(timer);
             ghost.remove();
             panel.style.transition = "";
             panel.style.transform = "";

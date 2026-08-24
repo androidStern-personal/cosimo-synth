@@ -18,6 +18,10 @@ import { useCallback, useEffect, useRef } from "react";
 import { useOptionalPatchConnection, type PatchConnectionLike } from "./cmajor-react";
 import { knobArcPoint } from "./parameter-knob-artwork";
 import type { ModulationSourceKind } from "./modulation-targets";
+import {
+    uiMediaCancelAnimationFrame,
+    uiMediaRequestAnimationFrame,
+} from "./ui-media-clock";
 
 export const EFFECTIVE_MOD_SOURCE_STATE_ENDPOINT_ID = "effectiveModSourceState";
 
@@ -379,10 +383,18 @@ type SharedDriverEntry = {
 
 const sharedDrivers = new WeakMap<PatchConnectionLike, SharedDriverEntry>();
 
-export function acquireModSourceLiveDriver(connection: PatchConnectionLike): ModSourceLiveDriver {
+const UI_MEDIA_FRAME_HOOKS: ModSourceLiveDriverHooks = {
+    requestAnimationFrame: uiMediaRequestAnimationFrame,
+    cancelAnimationFrame: uiMediaCancelAnimationFrame,
+};
+
+export function acquireModSourceLiveDriver(
+    connection: PatchConnectionLike,
+    hooks: ModSourceLiveDriverHooks = UI_MEDIA_FRAME_HOOKS,
+): ModSourceLiveDriver {
     let entry = sharedDrivers.get(connection);
     if (!entry) {
-        entry = { driver: new ModSourceLiveDriver(connection), refCount: 0 };
+        entry = { driver: new ModSourceLiveDriver(connection, hooks), refCount: 0 };
         sharedDrivers.set(connection, entry);
     }
     entry.refCount += 1;

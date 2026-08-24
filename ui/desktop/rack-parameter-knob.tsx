@@ -46,6 +46,7 @@ import {
     type RackRouteEffectiveness,
 } from "../shared/rack-route-presentation";
 import { useModSourceLight, type ModSourceLightPlacement } from "../shared/mod-source-live";
+import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 
 const KNOB_CENTER = 50;
 const KNOB_SWEEP_START_DEGREES = 225;
@@ -356,7 +357,7 @@ function ParameterKnobSurface({
 
     const clearHudLinger = useCallback(() => {
         if (hudLingerTimerRef.current !== null) {
-            window.clearTimeout(hudLingerTimerRef.current);
+            clearUiTimeout(hudLingerTimerRef.current);
             hudLingerTimerRef.current = null;
         }
     }, []);
@@ -370,7 +371,7 @@ function ParameterKnobSurface({
         setHudPresentation((current) => (
             current === null ? current : { ...current, phase: "lingering" }
         ));
-        hudLingerTimerRef.current = window.setTimeout(() => {
+        hudLingerTimerRef.current = uiTimeout(() => {
             hudLingerTimerRef.current = null;
             setHudPresentation(null);
         }, PARAMETER_HUD_LINGER_MS);

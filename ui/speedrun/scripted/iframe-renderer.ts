@@ -6,6 +6,7 @@ import {
     SPEEDRUN_VIDEO_WIDTH,
 } from "../composition/composition";
 import type { SpeedrunVideoFormat } from "../studio/video-support";
+import { ScriptedCaptureTimeController } from "./capture-time";
 import {
     prepareScriptedCaptureEnvironment,
     ScriptedSessionComposition,
@@ -97,46 +98,52 @@ export async function renderScriptedVideoInCurrentDocument(
         resourceBaseURL: request.resourceBaseURL,
         onFrameSettled: (inspection) => inspections.push(inspection),
     };
-    const result = await renderMediaOnWeb({
-        composition: {
-            id: "cosimo-scripted-sound-speedrun",
-            component: ScriptedSessionComposition,
-            durationInFrames: request.timeline.durationInFrames,
-            fps: request.timeline.fps,
-            width: SPEEDRUN_VIDEO_WIDTH,
-            height: SPEEDRUN_VIDEO_HEIGHT,
-            defaultProps: props,
-        },
-        inputProps: props,
-        container: request.format.container,
-        videoCodec: request.format.videoCodec,
-        audioCodec: request.masterAudioUrl ? request.format.audioCodec : null,
-        sampleRate: request.timeline.sampleRate,
-        videoBitrate: request.videoBitrate ?? "high",
-        audioBitrate: "medium",
-        frameRange: request.frameRange,
-        muted: request.masterAudioUrl === null,
-        delayRenderTimeoutInMilliseconds: 90_000,
-        logLevel: "warn",
-        signal: request.signal,
-        onFrame: async (videoFrame) => {
-            const frame = rangeStart + renderedFrameOffset;
-            renderedFrameOffset += 1;
-            if (digestFrames.has(frame)) {
-                preencodeDigests.push({ frame, ...(await digestVideoFrame(videoFrame)) });
-            }
-            return videoFrame;
-        },
-        onProgress: ({ progress, renderedFrames, encodedFrames }) => {
-            request.onProgress?.({ progress, renderedFrames, encodedFrames });
-        },
-    });
-    return {
-        blob: await result.getBlob(),
-        preencodeDigests,
-        inspections,
-        iframeRafMode: "current-document",
-    };
+    const captureTime = new ScriptedCaptureTimeController();
+    const restoreCaptureTime = captureTime.install();
+    try {
+        const result = await renderMediaOnWeb({
+            composition: {
+                id: "cosimo-scripted-sound-speedrun",
+                component: ScriptedSessionComposition,
+                durationInFrames: request.timeline.durationInFrames,
+                fps: request.timeline.fps,
+                width: SPEEDRUN_VIDEO_WIDTH,
+                height: SPEEDRUN_VIDEO_HEIGHT,
+                defaultProps: props,
+            },
+            inputProps: props,
+            container: request.format.container,
+            videoCodec: request.format.videoCodec,
+            audioCodec: request.masterAudioUrl ? request.format.audioCodec : null,
+            sampleRate: request.timeline.sampleRate,
+            videoBitrate: request.videoBitrate ?? "high",
+            audioBitrate: "medium",
+            frameRange: request.frameRange,
+            muted: request.masterAudioUrl === null,
+            delayRenderTimeoutInMilliseconds: 90_000,
+            logLevel: "warn",
+            signal: request.signal,
+            onFrame: async (videoFrame) => {
+                const frame = rangeStart + renderedFrameOffset;
+                renderedFrameOffset += 1;
+                if (digestFrames.has(frame)) {
+                    preencodeDigests.push({ frame, ...(await digestVideoFrame(videoFrame)) });
+                }
+                return videoFrame;
+            },
+            onProgress: ({ progress, renderedFrames, encodedFrames }) => {
+                request.onProgress?.({ progress, renderedFrames, encodedFrames });
+            },
+        });
+        return {
+            blob: await result.getBlob(),
+            preencodeDigests,
+            inspections,
+            iframeRafMode: "current-document",
+        };
+    } finally {
+        restoreCaptureTime();
+    }
 }
 
 type IframeRuntime = {

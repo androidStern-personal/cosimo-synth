@@ -44,6 +44,7 @@ import {
     type MobileVoiceRailState,
 } from "./mobile-voice-rail-projection";
 import { useModSourceLight, type ModSourceLightPlacement } from "./mod-source-live";
+import { clearUiTimeout, uiTimeout } from "./ui-timers";
 import {
     formatModulationAmountReadout,
     getModulationAmountBounds,
@@ -255,7 +256,7 @@ export function useReadoutCells({
 
     const clearHudLinger = useCallback(() => {
         if (hudLingerTimerRef.current !== null) {
-            window.clearTimeout(hudLingerTimerRef.current);
+            clearUiTimeout(hudLingerTimerRef.current);
             hudLingerTimerRef.current = null;
         }
     }, []);
@@ -269,7 +270,7 @@ export function useReadoutCells({
         setHudState((current) => (
             current.phase === "hidden" ? current : { ...current, phase: "lingering" }
         ));
-        hudLingerTimerRef.current = window.setTimeout(() => {
+        hudLingerTimerRef.current = uiTimeout(() => {
             hudLingerTimerRef.current = null;
             setHudState(HIDDEN_HUD);
         }, HUD_LINGER_MS);

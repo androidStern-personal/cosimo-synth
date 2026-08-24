@@ -27,6 +27,7 @@ import {
     SPEEDRUN_END_CARD_FRAMES,
 } from "../composition/composition";
 import { settleCaptureSubtree } from "./capture-fidelity";
+import { requireScriptedCaptureTimeController } from "./capture-time";
 import { createCapturePianoKeyboardClass } from "./capture-piano-keyboard";
 import {
     ScriptedPatchConnection,
@@ -155,6 +156,7 @@ function FrameDirector({
     const frame = useCurrentFrame();
     const { fps } = useVideoConfig();
     const { delayRender, continueRender, cancelRender } = useDelayRender();
+    const captureTime = requireScriptedCaptureTimeController();
 
     useLayoutEffect(() => {
         const handle = delayRender(`Scripted DesktopPatchView frame ${frame}`);
@@ -163,12 +165,16 @@ function FrameDirector({
             const root = captureRoot.current;
             if (!root) throw new Error("The scripted DesktopPatchView capture root is missing.");
             revealRemotionScaffold(root);
+            captureTime.setMediaTime(frame, fps);
             await Promise.resolve();
             flushSync(() => {
                 connection.advanceToFrame(frame);
                 interaction.advance(root, fingerOverlay.current, frame, fps);
             });
             await Promise.resolve();
+            await interaction.scrubAnimations(root, frame, fps);
+            flushSync(() => captureTime.flushDueTimeouts());
+            captureTime.flushAnimationFrames();
             await settleCaptureSubtree(root, {
                 scrubAnimations: () => interaction.scrubAnimations(root, frame, fps),
             });
@@ -184,7 +190,7 @@ function FrameDirector({
         return () => {
             cancelled = true;
         };
-    }, [cancelRender, captureRoot, connection, continueRender, delayRender, fingerOverlay, fps, frame, interaction, onFrameSettled]);
+    }, [cancelRender, captureRoot, captureTime, connection, continueRender, delayRender, fingerOverlay, fps, frame, interaction, onFrameSettled]);
 
     return null;
 }

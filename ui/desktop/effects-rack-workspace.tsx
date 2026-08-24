@@ -128,6 +128,7 @@ import {
     type SynthPatchViewModel,
 } from "../shared/synth-hooks";
 import { useSliderDrag, type SliderDragPointer } from "../shared/use-slider-drag";
+import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import {
     RackParameterKnob,
 } from "./rack-parameter-knob";
@@ -1280,7 +1281,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
     const clearDwellTracker = useCallback(() => {
         const drag = dragRef.current;
         if (drag?.dwell) {
-            window.clearTimeout(drag.dwell.timer);
+            clearUiTimeout(drag.dwell.timer);
             drag.dwell = null;
         }
     }, []);
@@ -1300,7 +1301,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         if (dwellKey === null) {
             return;
         }
-        const timer = window.setTimeout(() => {
+        const timer = uiTimeout(() => {
             const activeDrag = dragRef.current;
             if (activeDrag?.dwell?.key !== dwellKey) {
                 return;
@@ -1319,7 +1320,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         drag.hoveredTarget?.style.removeProperty("--drag-source-color");
         drag.hoveredTarget = nextTarget;
         if (drag.duplicate) {
-            window.clearTimeout(drag.duplicate.timer);
+            clearUiTimeout(drag.duplicate.timer);
             drag.duplicate = null;
         }
         if (!nextTarget) {
@@ -1333,7 +1334,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
             // ADR-025 row 16: never droppable; only a deliberate uninterrupted
             // hover warns, exactly once per target per drag.
             if (targetKind !== null && !drag.duplicateWarned.has(targetKind)) {
-                const timer = window.setTimeout(() => {
+                const timer = uiTimeout(() => {
                     const activeDrag = dragRef.current;
                     if (activeDrag?.duplicate?.targetKind !== targetKind) {
                         return;
@@ -1445,7 +1446,7 @@ function useModSourceDrag(callbacks: ModSourceDragCallbacks) {
         updateHoveredTarget(null, drag.source);
         clearDwellTracker();
         if (drag.duplicate) {
-            window.clearTimeout(drag.duplicate.timer);
+            clearUiTimeout(drag.duplicate.timer);
             drag.duplicate = null;
         }
         dragRef.current = null;
@@ -1928,8 +1929,8 @@ function MobileGlobalModRail({
             return;
         }
         setCountPulsing(true);
-        const timeout = window.setTimeout(() => setCountPulsing(false), 700);
-        return () => window.clearTimeout(timeout);
+        const timeout = uiTimeout(() => setCountPulsing(false), 700);
+        return () => clearUiTimeout(timeout);
     }, [countPulseSerial]);
     const drawerMetricsRef = useRef<RailDrawerMetrics>({
         safeTop: 12,
@@ -2277,9 +2278,9 @@ function MobileGlobalModRail({
                 setSettlingX(true);
                 applyDragX(0);
                 if (settleXTimeoutRef.current !== null) {
-                    window.clearTimeout(settleXTimeoutRef.current);
+                    clearUiTimeout(settleXTimeoutRef.current);
                 }
-                settleXTimeoutRef.current = window.setTimeout(() => {
+                settleXTimeoutRef.current = uiTimeout(() => {
                     settleXTimeoutRef.current = null;
                     setSettlingX(false);
                 }, MOBILE_MOD_RAIL_SETTLE_X_MS);
@@ -2401,7 +2402,7 @@ function MobileGlobalModRail({
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             cancelActiveInteraction();
             if (settleXTimeoutRef.current !== null) {
-                window.clearTimeout(settleXTimeoutRef.current);
+                clearUiTimeout(settleXTimeoutRef.current);
                 settleXTimeoutRef.current = null;
             }
         };
@@ -2535,7 +2536,7 @@ function MobileGlobalModRail({
                                 };
                                 setSettlingX(false);
                                 if (settleXTimeoutRef.current !== null) {
-                                    window.clearTimeout(settleXTimeoutRef.current);
+                                    clearUiTimeout(settleXTimeoutRef.current);
                                     settleXTimeoutRef.current = null;
                                 }
                                 try {
@@ -3109,10 +3110,10 @@ export function EffectsRackWorkspace({
         if (feedbackToast === null) {
             return;
         }
-        const timeout = window.setTimeout(() => {
+        const timeout = uiTimeout(() => {
             setFeedbackToast((current) => (current?.id === feedbackToast.id ? null : current));
         }, 2000);
-        return () => window.clearTimeout(timeout);
+        return () => clearUiTimeout(timeout);
     }, [feedbackToast]);
     const handleDuplicateHover = useCallback(() => {
         showFeedbackToast("DUPLICATE");
@@ -3130,10 +3131,10 @@ export function EffectsRackWorkspace({
         if (confirmedRoute === null) {
             return;
         }
-        const timeout = window.setTimeout(() => {
+        const timeout = uiTimeout(() => {
             setConfirmedRoute((current) => (current?.serial === confirmedRoute.serial ? null : current));
         }, 900);
-        return () => window.clearTimeout(timeout);
+        return () => clearUiTimeout(timeout);
     }, [confirmedRoute]);
     const [sourceDrag, setSourceDrag] = useState<SourceDragPresentation | null>(null);
     const [railCollapseSignal, setRailCollapseSignal] = useState(0);
@@ -3325,7 +3326,7 @@ export function EffectsRackWorkspace({
             onRouteCreationConfirmed?.(confirmed.id);
             return;
         }
-        const timeout = window.setTimeout(() => {
+        const timeout = uiTimeout(() => {
             if (pendingRouteRef.current?.key === pendingRouteKey) {
                 pendingRouteRef.current = null;
             }
@@ -3334,7 +3335,7 @@ export function EffectsRackWorkspace({
             showFeedbackToast("MAPPING NOT CREATED");
             triggerWarningHaptic("rigid");
         }, 750);
-        return () => window.clearTimeout(timeout);
+        return () => clearUiTimeout(timeout);
     }, [pendingRouteKey, routes]);
 
     const toggleDeviceEnabled = useCallback((deviceId: string) => {

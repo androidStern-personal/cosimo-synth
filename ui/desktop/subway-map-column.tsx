@@ -19,6 +19,7 @@ import {
 } from "../shared/lane-subway-layout";
 import { getRackEffectDescriptor } from "../shared/rack-parameter-descriptors";
 import type { EffectModuleId } from "../shared/target-descriptor";
+import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 
 /**
  * The subway-map rack column (M3/M4, locked direction: canvas "FX Rack
@@ -101,7 +102,7 @@ function usePressableGestures({
     const clearPointerState = useCallback(() => {
         const pointerState = pointerStateRef.current;
         if (pointerState !== null) {
-            window.clearTimeout(pointerState.longPressTimer);
+            clearUiTimeout(pointerState.longPressTimer);
             pointerStateRef.current = null;
         }
     }, []);
@@ -123,7 +124,7 @@ function usePressableGestures({
             pointerId,
             startX: clientX,
             startY: clientY,
-            longPressTimer: window.setTimeout(() => {
+            longPressTimer: uiTimeout(() => {
                 if (pointerStateRef.current?.pointerId === pointerId) {
                     clearPointerState();
                     suppressClickRef.current = true;

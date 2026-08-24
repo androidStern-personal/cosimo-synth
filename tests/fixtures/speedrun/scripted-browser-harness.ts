@@ -132,6 +132,48 @@ async function renderTwice() {
     };
 }
 
+const hardeningDigestFrames = Array.from(
+    { length: Math.ceil(timeline.durationInFrames / 30) },
+    (_, index) => index * 30,
+).filter((frame) => frame < timeline.durationInFrames);
+
+async function renderHardeningOnce() {
+    const startedAt = globalThis.performance.now();
+    const result = await renderScriptedVideoInIframe({
+        defaults,
+        recipe,
+        timeline,
+        states,
+        performance,
+        telemetry,
+        masterAudioUrl: null,
+        patchLabel: recipe.label,
+        resourceBaseURL: new URL("/", location.href).href,
+        format: SPEEDRUN_WEBM_FORMAT,
+        videoBitrate: "very-low",
+        digestFrames: hardeningDigestFrames,
+    }, {
+        moduleURL: new URL("/video-bounce/index.js", location.href).href,
+    });
+    return {
+        blobBytes: result.blob.size,
+        blobType: result.blob.type,
+        digests: result.preencodeDigests,
+        iframeRafMode: result.iframeRafMode,
+        inspectedFrames: result.inspections.length,
+        elapsedMilliseconds: Math.round(globalThis.performance.now() - startedAt),
+    };
+}
+
+async function renderHardeningTwice() {
+    return {
+        durationInFrames: timeline.durationInFrames,
+        digestFrames: hardeningDigestFrames,
+        first: await renderHardeningOnce(),
+        second: await renderHardeningOnce(),
+    };
+}
+
 const gestureModulation = createDefaultModulationState();
 const gestureMseg = structuredClone(gestureModulation.msegSlots[0]);
 gestureMseg.shapeA = {
@@ -260,11 +302,17 @@ declare global {
         __COSIMO_SCRIPTED_SESSION_HARNESS__?: {
             readonly firstFrame: number;
             renderTwice(): ReturnType<typeof renderTwice>;
+            renderHardeningTwice(): ReturnType<typeof renderHardeningTwice>;
             renderGestures(): ReturnType<typeof renderGestures>;
         };
     }
 }
 
-window.__COSIMO_SCRIPTED_SESSION_HARNESS__ = { firstFrame, renderTwice, renderGestures };
+window.__COSIMO_SCRIPTED_SESSION_HARNESS__ = {
+    firstFrame,
+    renderTwice,
+    renderHardeningTwice,
+    renderGestures,
+};
 const status = document.querySelector("#status");
 if (status) status.textContent = "Scripted real-UI harness ready";

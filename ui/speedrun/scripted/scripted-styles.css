@@ -26,3 +26,10 @@
 .speedrun-scripted-finger {
     filter: drop-shadow(0 2px 3px rgb(0 0 0 / 0.55));
 }
+
+/* Product lists use content-visibility for interactive scrolling. The capture
+   rasterizer needs every scripted row painted even when it began below fold. */
+.speedrun-scripted-phone,
+.speedrun-scripted-phone * {
+    content-visibility: visible !important;
+}

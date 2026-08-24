@@ -109,6 +109,7 @@ import {
     useParameterMenu,
 } from "../shared/parameter-context-menu";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
+import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
 import type { RackParameterDescriptor } from "../shared/rack-parameter-descriptors";
 import { findRackModulationSource } from "../shared/rack-modulation-sources";
 import { VOICE_FILTER_KNOB_DESCRIPTORS } from "../shared/voice-filter-descriptors";
@@ -3279,15 +3280,15 @@ function ModulationMatrixSection({
             if (isEditingMsegRate) return;
             event.preventDefault();
             el.style.cursor = "none";
-            clearTimeout(timerRef.current);
-            timerRef.current = window.setTimeout(() => { el.style.cursor = ""; }, 400);
+            clearUiTimeout(timerRef.current);
+            timerRef.current = uiTimeout(() => { el.style.cursor = ""; }, 400);
             const step = ((MSEG_RATE_MAX_SECONDS - MSEG_RATE_MIN_SECONDS) / 400) * (event.deltaY > 0 ? 1 : -1);
             onMsegRateChange(clamp(currentMsegRate + step, MSEG_RATE_MIN_SECONDS, MSEG_RATE_MAX_SECONDS));
         };
         el.addEventListener("wheel", handler, { passive: false });
         return () => {
             el.removeEventListener("wheel", handler);
-            clearTimeout(timerRef.current);
+            clearUiTimeout(timerRef.current);
             el.style.cursor = "";
         };
     }, [isEditingMsegRate, currentMsegRate, onMsegRateChange]);
@@ -4287,8 +4288,8 @@ function DesktopPatchViewBody({
         if (recentConfirmedRouteId === null) {
             return;
         }
-        const timeout = window.setTimeout(() => setRecentConfirmedRouteId(null), 1100);
-        return () => window.clearTimeout(timeout);
+        const timeout = uiTimeout(() => setRecentConfirmedRouteId(null), 1100);
+        return () => clearUiTimeout(timeout);
     }, [recentConfirmedRouteId]);
     const selectedArticulationId = synthView.selectedArticulationSlot?.id ?? null;
     const selectedArticulationName = synthView.selectedArticulationSlot?.name ?? null;

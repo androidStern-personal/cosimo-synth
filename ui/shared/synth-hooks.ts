@@ -28,6 +28,7 @@ import { createAutoPreviewScheduler } from "./auto-preview-scheduler";
 import { createPreviewStrategyEngine } from "./auto-preview-strategies";
 import { PERF_TUNING_AVAILABLE, getPerfTuningState, subscribePerfTuning } from "./perf-tuning";
 import { createPreviewNoteMemory } from "./preview-note-memory";
+import { clearUiTimeout, uiTimeout } from "./ui-timers";
 import {
     AUTO_PREVIEW_SYNC_CONFIG,
     quantizeStrikeTime,
@@ -1928,7 +1929,7 @@ export function useMsegEditorInteractions({
 
     const clearPendingSegmentTimer = useCallback((pointerState: ActiveMsegPointerState | null) => {
         if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
-            window.clearTimeout(pointerState.holdTimeoutId);
+            clearUiTimeout(pointerState.holdTimeoutId);
             pointerState.holdTimeoutId = null;
         }
     }, []);
@@ -2132,7 +2133,7 @@ export function useMsegEditorInteractions({
                     segmentIndex: pointerLocation.segmentIndex,
                 };
             } else {
-                const holdTimeoutId = window.setTimeout(() => {
+                const holdTimeoutId = uiTimeout(() => {
                     const activePointer = activePointerRef.current;
                     if (
                         !activePointer
