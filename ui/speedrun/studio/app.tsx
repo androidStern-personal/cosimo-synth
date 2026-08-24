@@ -98,6 +98,11 @@ function RecipeReport({ prepared }: { readonly prepared: SpeedrunPreparedPipelin
             {prepared.timeline.compressionLevel > 0 ? (
                 <div className="compression-note">Long patch: pacing compression level {prepared.timeline.compressionLevel} applied.</div>
             ) : null}
+            {prepared.shareLink._tag === "unavailable" ? (
+                <div className="share-unavailable" data-testid="share-link-unavailable">
+                    Share link unavailable; video rendering is unaffected: {prepared.shareLink.message}
+                </div>
+            ) : null}
             <ol className="recipe-list">
                 {prepared.recipe.sections.map((section, index) => (
                     <li key={section.id} data-section-id={section.id}>
@@ -148,7 +153,8 @@ export function SpeedrunStudioApp({ session }: Props) {
 
     const canRenderVideo = support !== null && (support.mp4 || support.webm);
     const durationFrames = Math.max(1, Math.round(durationCeiling * 30));
-    const shareWarning = prepared?.shareLink.lengthClass === "warning";
+    const shareWarning = prepared?.shareLink._tag === "available"
+        && prepared.shareLink.link.lengthClass === "warning";
     const activeLabel = useMemo(() => prepared?.document.label ?? "No sound analyzed", [prepared]);
 
     const selection = (): StudioPatchSelection => {
@@ -224,10 +230,10 @@ export function SpeedrunStudioApp({ session }: Props) {
     };
 
     const copyShare = async () => {
-        if (prepared === null) return;
+        if (prepared === null || prepared.shareLink._tag !== "available") return;
         setCopyStatus("");
         try {
-            await copyText(prepared.shareLink.url);
+            await copyText(prepared.shareLink.link.url);
             setCopyStatus(shareWarning ? "Copied — this long link may not work in every app." : "Share link copied.");
         } catch (cause) {
             setError(stageError("input", cause, "The share link could not be copied."));
@@ -337,9 +343,17 @@ export function SpeedrunStudioApp({ session }: Props) {
                                 <span>{megabytes(video.blob.size)} · {seconds(video.verification.durationSeconds)} · minimum audio RMS {video.verification.minimumWindowRms.toFixed(5)}</span></div>
                             <div className="delivery-actions">
                                 <a data-testid="download-video" className="download-action" href={video.url} download={video.fileName}>Download {video.format.extension.toUpperCase()}</a>
-                                <button data-testid="copy-share-link" type="button" onClick={() => void copyShare()}>Copy share link</button>
+                                {prepared.shareLink._tag === "available" ? (
+                                    <button data-testid="copy-share-link" type="button" onClick={() => void copyShare()}>Copy share link</button>
+                                ) : null}
                             </div>
-                            <input className={shareWarning ? "share-url is-warning" : "share-url"} readOnly value={prepared.shareLink.url} aria-label="Rendered sound share link" />
+                            {prepared.shareLink._tag === "available" ? (
+                                <input className={shareWarning ? "share-url is-warning" : "share-url"} readOnly value={prepared.shareLink.link.url} aria-label="Rendered sound share link" />
+                            ) : (
+                                <p className="share-unavailable delivery-share-unavailable">
+                                    Share link unavailable: {prepared.shareLink.message}
+                                </p>
+                            )}
                             {copyStatus ? <p className="copy-status" role="status">{copyStatus}</p> : null}
                         </div>
                     ) : null}
