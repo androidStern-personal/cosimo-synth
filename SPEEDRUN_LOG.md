@@ -81,3 +81,69 @@
 
 Next: re-check the Effects Lane tip at the M1 boundary, then ship URL patch
 sharing before beginning the video renderer spike.
+
+## 2026-08-24 — M1 boundary Effects Lane sync
+
+- Fetched the owner branch and merged `fe1e9e7d..412a2a87` without rebasing.
+  The incoming T6b slice makes selection, parameter bindings, map actions,
+  and modulation base controls address lane device instances.
+- Generated conflicts: `patch_gui/desktop/app.js` and map,
+  `patch_gui/index.ios.js.map`, and `patch_gui/wavetable-worker.js`. They were
+  replaced by fresh desktop, iPhone, production-worker, Bounce-worker, and
+  test-worker generation from the resolved sources.
+- Source conflict: `ui/desktop/mobile-mod-mappings-panel.tsx`. The resolution
+  preserves Bounce's oscillator-route inertness while threading T6b's parsed
+  lane `deviceId` into each instance binding. No Effects Lane behavior was
+  added beyond retaining both owners' already-implemented paths.
+- Merge residue: an older browser assertion still required pool instances to
+  be amount-only. It now observes T6b's current contract (each parsed instance
+  exposes the type's base rail) and uses DOM text rather than layout-dependent
+  `innerText` so content-visibility cannot erase the label under sharding.
+- Green sync gates: focused lane/init units 40/40; subway + Bounce browser
+  gates 11/11; full desktop browser suite 221/221; modulation runtime 34/34;
+  generated Chromium and WebKit suites each 16 pass with two expected skips.
+
+URL-sharing implementation begins from Effects Lane tip `412a2a87`.
+
+## 2026-08-24 — M1 URL sharing and boundary status
+
+- Shipped strict `cosimo.soundShare` v1 envelopes at
+  `#p=1.<deflate-base64url>`, using native browser compression with bounded
+  decode, corruption/version rejection, 2,000-character warning, and
+  8,000-character refusal.
+- Share capture uses the current preset-v2 contract plus the canonical lane
+  document, refuses sampled/Bounced sounds, and loads through the existing
+  sound transaction. A successful shared load becomes an unnamed clean
+  baseline whose Revert target is the shared sound; the fragment is removed
+  only after acceptance.
+- Desktop and compact layouts expose Share. Opening a link requires the
+  explicit `Load shared sound?` confirmation and then uses the existing
+  Save/Discard/Cancel dirty guard when necessary.
+- Fast-check round trips, strict-boundary tests, controller tests, and the real
+  fresh-browser-context link flow pass 28/28. The full desktop suite passes
+  222/222; browser orphans pass 117 with one expected native probe skip;
+  iPhone UI passes 20/20; shared hooks pass 34/34; effect presets pass 113/113;
+  and orphan units pass 708/708.
+- The broad browser run exposed one dialog regression: pending Init state was
+  temporarily rendered with generic Load copy. Commit `3ee6de12` preserves the
+  Init-specific guard while still naming confirmed preset/share operations.
+
+### Effects Lane boundary synchronization and blocker
+
+- Merged `412a2a87..5733b556` in `116e4c42`, regenerated every generated
+  desktop/iPhone/worker conflict, and preserved the incoming T6/T7 instance
+  contract without adding owner-branch behavior. One source-test conflict kept
+  both the incoming instance behavior and the existing layout-independent text
+  assertion.
+- Re-fetched at the boundary and merged the T7 close-out
+  `5733b556..0a0eba9c` in `190bc903`; it changed only the owner plan document.
+- The existing Bounce G2 relative-load gate is now reproducibly red after the
+  T7 three-device starter became the fresh default: three isolated measurements
+  put a resident bank about 22–31% above the fresh oscillator baseline versus
+  the frozen 10% limit, with zero misses. Bounce/Revert behavior and the ten-
+  cycle retirement gate remain green. `BLOCKED.md` contains exact reproduction
+  and measurements.
+- Decision: do not alter the Effects Lane default and do not weaken/mask the
+  Bounce threshold. Under the handoff's stuck protocol, continue the
+  non-dependent renderer spike while this boundary incompatibility remains
+  explicit.
