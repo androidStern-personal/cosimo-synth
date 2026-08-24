@@ -583,12 +583,47 @@ are M1's permanent acceptance tests, not a throwaway report.
   rebuilt. Deferred as always: web:poc, WebKit, iOS shell, native
   benchmarks. NEXT (M4 remainder): the default starter patch, then the
   physical phone pass on the user's device.
+- **T7 STARTER PATCH SHIPPED (2026-08-24, commits ab71597 + close-out):**
+  the user picked the COMPACT BYPASSED TRIO from the offered starter
+  shapes: createDefaultLaneStateV2 is now drive → delay → reverb, serial,
+  all bypassed — the out-of-box sound stays the deployed dry voice (every
+  pre-T7 device shipped bypassed too), the map opens with a short line
+  plus the trunk add-ghost instead of eight resident pills, and the other
+  five types arrive through the T6 picker. The trio is SLICED from the v1
+  upgrade so records keep wire-order params and v1 default values
+  (serialize∘parse byte-stability inherited), and stored v1 documents
+  still upgrade to their own full eight — nothing existing changes shape.
+  Ripples closed with it: the bridge adapter's restoreEffectOrder now
+  restates the DOCUMENT'S own devices (any order) instead of demanding a
+  fixed eight; the adapter contract battery probes trio members and its
+  captureMotion pin moved to delay.delayFilter (same ±6 oct full-spec
+  amount every log rack target gets); the web POC persistence flow probes
+  trio members so it keeps meaning without seeding. TEST SUBSTRATE: the
+  browser suites were written against the resident eight, so
+  openHarnessPage seeds a LEGACY eight-device stored document by default
+  (laneDoc: "fresh" opts into the true fresh-instrument state; a
+  serialized doc seeds arbitrary states) via
+  __COSIMO_DESKTOP_HARNESS_INITIAL__.storedState — hydration is
+  microtask-synchronous in the mock, so no first-paint race — and the XY
+  sweep seeds inline; lane-state-v2 joined the generated patch_gui twins
+  for the helpers. New browser test: a FRESH instrument opens on the trio
+  (three bypassed stations, distortion#1 selected, trunk:3 add ghost) and
+  its first edit persists a trio-shaped lane.v2 document. Gates (this
+  container): units:orphans 706/706, tsc clean, sharded desktop 219/222
+  — all three reds dispositioned as known non-regressions (React Grab
+  dev-mode container red; rail-flick momentum and the filter-controls
+  dblclick both the CPU-contention flake class, each green solo — a
+  stretched dblclick's first press becomes a 550ms long-press whose menu
+  then intercepts Playwright's retries); browser:orphans recorded in the
+  close-out below; engine untouched; twins rebuilt. NEXT (M4 remainder):
+  the physical phone pass on the user's device.
 - **M3 — UI:** the subway-map FX graph in the rack workspace (locked
   direction above — SHIPPED as T4 for serial documents, T5 for groups),
   dynamic per-patch target pickers, instance labels through the mappings
   table.
 - **M4 — Product surface:** device add/remove UX (SHIPPED as T6), the
-  default starter patch, and the physical phone pass.
+  default starter patch (SHIPPED as T7 — the compact bypassed trio), and
+  the physical phone pass.
 
 ## 3.1 M1 engine breakdown (reconnaissance 2026-08-22, verified in cmajor/)
 
