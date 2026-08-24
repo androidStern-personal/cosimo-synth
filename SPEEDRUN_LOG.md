@@ -170,3 +170,44 @@ URL-sharing implementation begins from Effects Lane tip `412a2a87`.
   MP4/H.264/AAC on Chromium. Encoded byte identity is logged, not gated.
 - Added `docs/SPEEDRUN_VIDEO_BROWSER_RENDERING.md`: a human must resolve
   Remotion licensing and production telemetry/key posture before public ship.
+
+## 2026-08-24 — M3 pure pipeline core
+
+- Built strict patch intake against the generated current synth contract: 96
+  visible parameters plus modulation v6, articulations v4, and the current
+  instance-based lane v2 tree. Sound-share, preset-v2, browser-patch-v2, bare
+  document, and live-capture inputs normalize to one complete patch model;
+  corrupt structured state and sampled/Bounced sounds fail with typed errors.
+- The analyzer reports only audible facts. It respects oscillator mute/solo and
+  level, keeps articulation-only modulation routes, walks Effects Lane display
+  and effective order through groups, and addresses repeated devices by dynamic
+  targets such as `lane.delay#2.delayMix`. Omitted-state reasons remain
+  inspectable even though they do not become video acts.
+- The deterministic recipe compiler orders source, oscillator, filter, and
+  effects acts; caps visible captions at eight while retaining every operation;
+  and emits a neutral prelude for structured state that must exist before its
+  audible edits are demonstrated. That prelude preserves inactive devices and
+  inert route metadata rather than rewriting Effects Lane behavior.
+- Cumulative states implement the plan's sole checkpoint neutralization rule:
+  not-yet-demonstrated and never-demonstrated oscillators are muted until their
+  sections complete. Timeline assembly uses exact 30 fps / 48 kHz authority
+  (1,600 samples per frame), the specified pacing table, a 90-second ceiling,
+  and deterministic three-level compression.
+- The checked-in current-contract fixture contains disabled `distortion#1` plus
+  active `delay#2` and `reverb#1` inside enabled `split#1`, including an
+  instance-aware modulation target. Its golden recipe, complete replay, and
+  partial-state checkpoints pass without modifying Effects Lane code.
+- `npm run test:speedrun:core` passes 14/14, including 75 fast-check randomized
+  audible-patch round trips. Direct module bundles pass. The repository-wide
+  TypeScript probe still reports pre-existing declaration gaps outside this
+  milestone; filtering the probe to `ui/speedrun` reports no owned errors.
+
+### M3 boundary decision and synchronization
+
+- Fetched `origin/claude/effects-lane-m1` after the M3 gate. Its tip remains
+  `0a0eba9c`; no merge was required. The pipeline continues to consume that
+  topology as input and does not fix, complete, or extend Effects Lane.
+- Decision: preserve complete normalized state in the recipe prelude while
+  demonstrating only audible facts in sections. This makes exact reconstruction
+  and checkpoint rendering compatible without presenting hidden state as a
+  user-visible speedrun action.
