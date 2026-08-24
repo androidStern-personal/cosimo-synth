@@ -1,4 +1,5 @@
-import { canEncodeAudio, canEncodeVideo } from "mediabunny";
+import { getEncodableAudioCodecs } from "@remotion/web-renderer";
+import { canEncodeVideo } from "mediabunny";
 
 import { SPEEDRUN_VIDEO_HEIGHT, SPEEDRUN_VIDEO_WIDTH } from "../composition/composition";
 
@@ -36,18 +37,18 @@ async function supports(format: SpeedrunVideoFormat) {
         return false;
     }
     const videoCodec = format.videoCodec === "h264" ? "avc" : "vp9";
-    return (await Promise.all([
+    const [videoSupported, audioCodecs] = await Promise.all([
         canEncodeVideo(videoCodec, {
             width: SPEEDRUN_VIDEO_WIDTH,
             height: SPEEDRUN_VIDEO_HEIGHT,
             bitrate: 4_000_000,
         }),
-        canEncodeAudio(format.audioCodec, {
-            numberOfChannels: 2,
-            sampleRate: 48_000,
-            bitrate: 128_000,
-        }),
-    ])).every(Boolean);
+        // Use the renderer's public capability path rather than querying
+        // Mediabunny directly. Remotion registers its software AAC encoder
+        // here when the host browser has no native AAC WebCodecs encoder.
+        getEncodableAudioCodecs(format.container, { audioBitrate: 128_000 }),
+    ]);
+    return videoSupported && audioCodecs.includes(format.audioCodec);
 }
 
 export async function detectSpeedrunVideoFormat(
