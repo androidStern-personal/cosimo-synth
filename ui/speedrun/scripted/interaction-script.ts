@@ -29,6 +29,10 @@ export type ScriptedInteractionSnapshot = {
     readonly activeOpSurface: string | null;
     /** Ops whose span ended without the director ever driving a real control. */
     readonly missedOps: ReadonlyArray<ScriptedMissedOp>;
+    /** Setup ops with no phone-shell control (surface "voice-setup-*"): the
+        state applies and the caption ticks, but no gesture exists to drive.
+        Reported separately so real misses stay hard failures. */
+    readonly stateOnlyOps: ReadonlyArray<ScriptedMissedOp>;
     readonly dragging: ReadonlyArray<{ readonly role: string; readonly mode: string }>;
     readonly hud: {
         readonly visible: boolean;
@@ -312,8 +316,10 @@ export class ScriptedInteractionDirector {
     private readonly completed = new Set<string>();
     private readonly driven = new Set<string>();
     private readonly missed: ScriptedMissedOp[] = [];
+    private readonly stateOnly: ScriptedMissedOp[] = [];
     private readonly missedKeys = new Set<string>();
     private readonly voicePageAttempts = new Map<string, number>();
+    private readonly buttonTaps = new Map<string, number>();
     private activePointer: ActivePointer | null = null;
     private lastFrame = -1;
     private pointerSerial = 40;
@@ -419,11 +425,13 @@ export class ScriptedInteractionDirector {
                 || [...this.driven].some((key) => key.startsWith(`${span.key}:`));
             if (driven) continue;
             this.missedKeys.add(span.key);
-            this.missed.push({
-                kind: span.op.kind,
-                surface: opSurface(span.op),
-                startFrame: span.startFrame,
-            });
+            const surface = opSurface(span.op);
+            const record = { kind: span.op.kind, surface, startFrame: span.startFrame };
+            if (surface?.startsWith("voice-setup-")) {
+                this.stateOnly.push(record);
+            } else {
+                this.missed.push(record);
+            }
         }
     }
 
@@ -466,6 +474,7 @@ export class ScriptedInteractionDirector {
             activeOpKind: this.activeSpan?.op.kind ?? null,
             activeOpSurface: this.activeSpan ? opSurface(this.activeSpan.op) : null,
             missedOps: [...this.missed],
+            stateOnlyOps: [...this.stateOnly],
             dragging: [...root.querySelectorAll<HTMLElement>("[data-dragging]")].map((element) => ({
                 role: elementRole(element) ?? "",
                 mode: element.dataset.dragging ?? "",
@@ -567,6 +576,11 @@ export class ScriptedInteractionDirector {
         if (oscillator) {
             const controlID = OSCILLATOR_CONTROL_IDS[oscillator[1]];
             if (!controlID) return null;
+            // Warp mode is the cycle chip on the wavetable display, not a
+            // readout cell.
+            if (controlID === "warpMode") {
+                return root.querySelector<HTMLElement>('[data-role="mobile-voice-warp-mode"]');
+            }
             const control = root.querySelector<HTMLElement>(
                 `[data-role="mobile-voice-cell-${controlID}"], [data-role="mobile-voice-chip-${controlID}"]`,
             );
@@ -599,10 +613,27 @@ export class ScriptedInteractionDirector {
         if (!control) return;
         scrollTargetIntoPanel(root, control);
         if (control instanceof HTMLButtonElement) {
-            if (progress >= 0.45 && !this.completed.has(span.key)) {
-                this.tap(root, fingerOverlay, control, timeStamp);
-                this.completed.add(span.key);
+            // A cycle chip advances one choice per tap with wraparound; tap
+            // as many times as the value delta needs, spread over the span.
+            const annotation = this.annotations[op.endpointID];
+            const choiceCount = annotation && annotation.min !== null && annotation.max !== null
+                ? Math.max(2, Math.round(annotation.max - annotation.min) + 1)
+                : null;
+            const delta = Math.round(op.to) - Math.round(op.from);
+            const tapsNeeded = Math.max(1, choiceCount === null
+                ? Math.abs(delta)
+                : ((delta % choiceCount) + choiceCount) % choiceCount);
+            const tapsDone = this.buttonTaps.get(span.key) ?? 0;
+            const dueTaps = Math.min(
+                tapsNeeded,
+                Math.floor(clamp01((progress - 0.25) / 0.55) * tapsNeeded) + (progress >= 0.25 ? 1 : 0),
+            );
+            for (let tap = tapsDone; tap < dueTaps; tap += 1) {
+                this.tap(root, fingerOverlay, control, timeStamp + tap * 0.5);
+                this.driven.add(span.key);
             }
+            if (dueTaps > tapsDone) this.buttonTaps.set(span.key, dueTaps);
+            if (dueTaps >= tapsNeeded) this.completed.add(span.key);
             return;
         }
         this.driveHorizontalGesture(

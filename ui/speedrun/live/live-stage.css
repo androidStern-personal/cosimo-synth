@@ -1,0 +1,159 @@
+/* The live 9:16 stage at true 1x: 594x1056 CSS with the phone iframe at its
+   native 393x852 and NO transform anywhere above the product tree (transforms
+   poison every getBoundingClientRect measurement inside it). Output pixels
+   come from capture device-pixel density, not CSS scaling. Chrome values are
+   stage.css's 1080x1920 design times 0.55, same look at capture resolution. */
+
+.speedrun-live-backdrop {
+    align-items: center;
+    background: rgb(4 5 8 / 0.92);
+    display: flex;
+    inset: 0;
+    justify-content: center;
+    position: fixed;
+    z-index: 2147483000;
+}
+
+.speedrun-live-stage {
+    background:
+        radial-gradient(circle at 18% 20%, rgb(72 22 92 / 0.42), transparent 34%),
+        radial-gradient(circle at 82% 43%, rgb(8 91 100 / 0.3), transparent 38%),
+        linear-gradient(155deg, #07080d 0%, #11101a 48%, #071316 100%);
+    color: #eef1f2;
+    font-family: "IBM Plex Sans Condensed", "Avenir Next Condensed", sans-serif;
+    height: 1056px;
+    overflow: hidden;
+    position: relative;
+    width: 594px;
+}
+
+.speedrun-live-stage::before {
+    background-image: radial-gradient(rgb(255 255 255 / 0.13) 0.5px, transparent 0.5px);
+    background-size: 4px 4px;
+    content: "";
+    inset: 0;
+    opacity: 0.18;
+    pointer-events: none;
+    position: absolute;
+}
+
+.speedrun-live-stage .speedrun-ambient {
+    border: 1px solid rgb(125 247 255 / 0.14);
+    border-radius: 999px;
+    filter: blur(1px);
+    position: absolute;
+}
+
+.speedrun-live-stage .speedrun-ambient-one {
+    box-shadow: 0 0 66px rgb(196 102 255 / 0.22);
+    height: 325px;
+    left: -171px;
+    top: 231px;
+    width: 325px;
+}
+
+.speedrun-live-stage .speedrun-ambient-two {
+    bottom: -127px;
+    box-shadow: 0 0 72px rgb(73 236 223 / 0.18);
+    height: 374px;
+    right: -176px;
+    width: 374px;
+}
+
+/* The phone bezel around the untransformed product iframe. */
+.speedrun-live-phone {
+    background: #0d0e10;
+    border: 2px solid #3b3e44;
+    border-radius: 37px;
+    box-shadow:
+        inset 0 0 0 2px #09090a,
+        0 0 0 6px rgb(7 8 11 / 0.74),
+        0 25px 39px rgb(0 0 0 / 0.62);
+    height: 856px;
+    left: 50%;
+    overflow: hidden;
+    position: absolute;
+    top: 24px;
+    translate: -50% 0;
+    width: 397px;
+}
+
+.speedrun-live-phone iframe {
+    border: 0;
+    display: block;
+    height: 852px;
+    /* Real user input must never disturb the performance; the director's
+       synthetic events dispatch inside the document and are unaffected. */
+    pointer-events: none;
+    width: 393px;
+}
+
+.speedrun-live-stage .speedrun-caption-panel {
+    background: linear-gradient(100deg, rgb(13 14 20 / 0.96), rgb(22 15 29 / 0.94));
+    border: 1px solid rgb(195 157 242 / 0.32);
+    border-radius: 13px;
+    bottom: 43px;
+    box-shadow: 0 13px 33px rgb(0 0 0 / 0.48), inset 0 1px rgb(255 255 255 / 0.06);
+    left: 44px;
+    min-height: 132px;
+    padding: 17px 20px 15px;
+    position: absolute;
+    width: 506px;
+}
+
+.speedrun-live-stage .speedrun-caption-panel header { align-items: baseline; display: flex; gap: 12px; height: 26px; }
+.speedrun-live-stage .speedrun-caption-panel header span { color: #7ce1d8; font-family: "Departure Mono", monospace; font-size: 9px; }
+.speedrun-live-stage .speedrun-caption-panel header strong { color: #f1e9f7; font-size: 19px; letter-spacing: 0.08em; text-transform: uppercase; }
+.speedrun-live-stage .speedrun-caption-panel ol { display: grid; grid-template-columns: 1fr 1fr; list-style: none; margin: 2px 0 0; padding: 0; }
+.speedrun-live-stage .speedrun-caption-panel li { align-items: center; color: rgb(233 236 239 / 0.18); display: flex; font-family: "Departure Mono", monospace; font-size: 9px; gap: 7px; line-height: 1.35; min-height: 24px; opacity: 0.34; transform: translateY(5px); transition: opacity 240ms ease, transform 240ms ease, color 240ms ease; }
+.speedrun-live-stage .speedrun-caption-panel li.is-visible { color: #e9edef; opacity: 1; transform: none; }
+.speedrun-live-stage .speedrun-caption-panel li i { color: #7ce1d8; font-style: normal; width: 10px; }
+
+.speedrun-live-stage .speedrun-title-card {
+    align-items: flex-start;
+    background: linear-gradient(90deg, rgb(7 8 13 / 0.96), rgb(7 8 13 / 0.18));
+    border-left: 3px solid #7ce1d8;
+    display: flex;
+    flex-direction: column;
+    left: 36px;
+    padding: 14px 17px;
+    position: absolute;
+    top: 51px;
+    transition: opacity 300ms ease;
+    width: 314px;
+    z-index: 35;
+}
+
+.speedrun-live-stage .speedrun-title-card small { color: #7ce1d8; font-family: "Departure Mono", monospace; font-size: 8px; letter-spacing: 0.17em; }
+.speedrun-live-stage .speedrun-title-card strong { color: #fbf5ff; font-size: 24px; letter-spacing: 0.04em; line-height: 1.05; margin-top: 4px; text-transform: uppercase; }
+.speedrun-live-stage .speedrun-title-card span { color: #928d9c; font-family: "Departure Mono", monospace; font-size: 8px; letter-spacing: 0.13em; margin-top: 7px; }
+
+.speedrun-live-stage .speedrun-end-card {
+    align-items: center;
+    background:
+        radial-gradient(circle at 50% 39%, rgb(111 72 132 / 0.42), transparent 34%),
+        linear-gradient(155deg, rgb(7 8 13 / 0.985), rgb(8 18 21 / 0.985));
+    display: flex;
+    flex-direction: column;
+    inset: 0;
+    justify-content: center;
+    position: absolute;
+    z-index: 30;
+}
+
+.speedrun-live-stage .speedrun-end-card::before { border: 1px solid rgb(125 247 255 / 0.25); border-radius: 50%; content: ""; height: 336px; position: absolute; width: 336px; }
+.speedrun-live-stage .speedrun-end-card small { color: #7ce1d8; font-family: "Departure Mono", monospace; font-size: 10px; letter-spacing: 0.2em; }
+.speedrun-live-stage .speedrun-end-card strong { color: #fff5ff; font-size: 40px; letter-spacing: 0.06em; margin: 13px 44px; text-align: center; text-transform: uppercase; }
+.speedrun-live-stage .speedrun-end-card span { color: #d2c5d9; font-family: "Departure Mono", monospace; font-size: 14px; letter-spacing: 0.12em; }
+
+.speedrun-live-stage > footer {
+    bottom: 13px;
+    color: rgb(220 226 229 / 0.42);
+    font-family: "Departure Mono", monospace;
+    font-size: 8px;
+    left: 44px;
+    letter-spacing: 0.16em;
+    position: absolute;
+    right: 44px;
+    z-index: 40;
+}

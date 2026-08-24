@@ -1,3 +1,9 @@
+/**
+ * DEPRECATED (frame-stepped rasterizer render): superseded by the live-performance render path in
+ * ui/speedrun/live/ (see VIDEO_BOUNCE_LIVE_RENDER_PLAN.md). Kept only as the
+ * VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1 escape hatch until the live render is
+ * accepted; scheduled for deletion with its suites afterwards.
+ */
 import { renderMediaOnWeb } from "@remotion/web-renderer";
 
 import { WORKSPACE_SHELL_STORAGE_KEY } from "../../shared/workspace-shell";

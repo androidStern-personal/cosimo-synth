@@ -42,6 +42,13 @@ export async function verifySpeedrunVideo(
     blob: Blob,
     timeline: SpeedrunTimeline,
     format: SpeedrunVideoFormat,
+    {
+        durationToleranceSeconds,
+    }: {
+        /** Live recordings carry real start latency and a settle tail, so
+            they verify with a wider duration window than exact renders. */
+        readonly durationToleranceSeconds?: number;
+    } = {},
 ): Promise<SpeedrunVideoVerification> {
     const input = new Input({ source: new BlobSource(blob), formats: ALL_FORMATS });
     try {
@@ -70,7 +77,7 @@ export async function verifySpeedrunVideo(
             `Expected ${format.audioCodec} audio, received ${String(audioCodec)}.`);
 
         const expectedDurationSeconds = timeline.durationInFrames / timeline.fps;
-        const durationTolerance = Math.max(0.15, 2 / timeline.fps);
+        const durationTolerance = durationToleranceSeconds ?? Math.max(0.15, 2 / timeline.fps);
         requireVerification(Math.abs(durationSeconds - expectedDurationSeconds) <= durationTolerance,
             `Expected ${expectedDurationSeconds.toFixed(3)} seconds, received ${durationSeconds.toFixed(3)}.`);
 

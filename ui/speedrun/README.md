@@ -101,10 +101,32 @@ WebM/VP9/Opus output in Chromium. Safari remains a secondary capability-gated
 path; do not infer a physical-iPhone video-export claim from the WebKit audio
 and composition suites.
 
+## Live render path (shipped)
+
+The integrated Bounce Video flow records a REAL-TIME PERFORMANCE of the real
+DesktopPatchView: the master audio plays, the interaction director performs
+the recipe against the live UI on the audio clock, and the browser's own
+compositor output is captured via Region Capture into a MediaRecorder file.
+No frame-stepping, no DOM rasterizer — what you watch during the render is
+the video. Requirements: a Chromium browser with Region Capture; the render
+takes the video's real duration and shows one own-tab capture prompt.
+`VIDEO_BOUNCE_LIVE_RENDER_PLAN.md` is the architecture record; the
+frame-stepped scripted path is deprecated behind
+`VITE_COSIMO_VIDEO_BOUNCE_SCRIPTED=1` pending deletion.
+
+Review-grade renders (no engine, no capture permission — used by agents/CI to
+WATCH output before shipping):
+
+```sh
+npm run ui:video-bounce:build && npm run speedrun:live:harness:build
+npm run speedrun:live:review            # writes build/live-review/review.mp4
+```
+
 ## Verification commands
 
 ```sh
 npm run test:speedrun:unit
+npm run test:video-bounce:live
 npm run test:speedrun:hardening
 npm run test:speedrun:audio
 npm run test:speedrun:core

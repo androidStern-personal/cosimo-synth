@@ -29,6 +29,8 @@ import {
 import type { SpeedrunStudioRuntime } from "./runtime";
 import {
     detectSpeedrunVideoFormat,
+    SPEEDRUN_MP4_FORMAT,
+    SPEEDRUN_WEBM_FORMAT,
     type SpeedrunVideoContainer,
     type SpeedrunVideoFormat,
 } from "./video-support";
@@ -269,19 +271,29 @@ export class SpeedrunStudioSession {
 
     async renderVideo(options: {
         /**
-         * Required so the rejected replica can never be selected by omission:
-         * the shipped product path is "scripted"; "replica" remains only for
-         * the parked replica suites and the explicit build-flag fallback.
+         * Required so a mode can never be selected by omission. The shipped
+         * product path is "live" — a real-time performance of the real UI
+         * recorded from the compositor. "scripted" is the deprecated
+         * frame-stepped rasterizer path; "replica" remains only for the
+         * parked replica suites and the explicit build-flag fallback.
          */
-        readonly compositionMode: "replica" | "scripted";
+        readonly compositionMode: "replica" | "scripted" | "live";
         readonly preferredContainer?: SpeedrunVideoContainer;
         readonly videoBitrate?: "very-low" | "low" | "medium" | "high";
+        /** Live mode: the ES-module URL whose exports include
+            runLivePerformanceInCurrentDocument (the shipping bundle). */
+        readonly liveModuleURL?: string;
         readonly onProgress?: (progress: SpeedrunVideoProgress) => void;
     }): Promise<SpeedrunVideoArtifact> {
         const prepared = this.preparedValue;
         const audio = this.audioValue;
         if (prepared === null) throw new SpeedrunStudioError("video", "NotAnalyzed", "Analyze a sound before rendering video.");
         if (audio === null) throw new SpeedrunStudioError("video", "AudioMissing", "Render and audition checkpoint audio before rendering video.");
+
+        if (options.compositionMode === "live") {
+            return this.renderLiveVideo(prepared, audio, options);
+        }
+
         const format = await detectSpeedrunVideoFormat(options.preferredContainer);
         if (format === null) {
             throw new SpeedrunStudioError(
@@ -372,6 +384,87 @@ export class SpeedrunStudioSession {
             return artifact;
         } catch (error) {
             throw studioError("video", "VideoRenderFailed", error, "The speedrun video could not be rendered.");
+        } finally {
+            this.endStage(controller);
+        }
+    }
+
+    /**
+     * The live path: a real-time performance of the real UI recorded from the
+     * compositor (see live/live-session.ts). No WebCodecs requirement — the
+     * user agent's MediaRecorder encodes what it composited.
+     */
+    private async renderLiveVideo(
+        prepared: SpeedrunPreparedPipeline,
+        audio: SpeedrunAudioArtifact,
+        options: {
+            readonly preferredContainer?: SpeedrunVideoContainer;
+            readonly liveModuleURL?: string;
+            readonly onProgress?: (progress: SpeedrunVideoProgress) => void;
+        },
+    ): Promise<SpeedrunVideoArtifact> {
+        if (audio.telemetry === null) {
+            throw new SpeedrunStudioError(
+                "video",
+                "TelemetryMissing",
+                "Render audio with recordTelemetry before a live video render.",
+            );
+        }
+        const controller = this.beginStage("video");
+        const startedAt = performance.now();
+        try {
+            await document.fonts.ready;
+            const { runLiveVideoSession } = await import("../live/live-session");
+            const live = await runLiveVideoSession({
+                defaults: prepared.defaults,
+                recipe: prepared.recipe,
+                timeline: prepared.timeline,
+                states: prepared.states,
+                performance: prepared.performance,
+                telemetry: audio.telemetry,
+                patchLabel: prepared.document.label,
+                resourceBaseURL: this.runtime.webRootURL.href,
+                masterAudioUrl: audio.url,
+                record: true,
+                preferredContainer: options.preferredContainer,
+                signal: controller.signal,
+                onProgress: ({ frame, durationInFrames }) => {
+                    options.onProgress?.({
+                        progress: durationInFrames === 0 ? 1 : frame / durationInFrames,
+                        renderedFrames: frame,
+                        encodedFrames: frame,
+                    });
+                },
+            }, {
+                moduleURL: options.liveModuleURL ?? import.meta.url,
+            });
+            if (controller.signal.aborted) throw new DOMException("Cancelled", "AbortError");
+            if (live.report.missedOps.length > 0) {
+                const missed = live.report.missedOps
+                    .map((op) => `${op.kind}${op.surface ? `(${op.surface})` : ""}@${op.startFrame}`)
+                    .join(", ");
+                throw new Error(`The performance missed scripted ops — the video would lie about the build: ${missed}`);
+            }
+            if (live.blob === null || live.mimeType === null) {
+                throw new Error("The live performance produced no recording.");
+            }
+            const format = live.mimeType === "video/mp4" ? SPEEDRUN_MP4_FORMAT : SPEEDRUN_WEBM_FORMAT;
+            const verification = await verifySpeedrunVideo(live.blob, prepared.timeline, format, {
+                durationToleranceSeconds: 2.5,
+            });
+            const artifact: SpeedrunVideoArtifact = {
+                url: this.own(live.blob),
+                blob: live.blob,
+                fileName: `${slug(prepared.document.label)}-speedrun.${format.extension}`,
+                format,
+                verification,
+                elapsedMilliseconds: performance.now() - startedAt,
+            };
+            this.revoke(this.videoValue?.url);
+            this.videoValue = artifact;
+            return artifact;
+        } catch (error) {
+            throw studioError("video", "VideoRenderFailed", error, "The live speedrun video could not be recorded.");
         } finally {
             this.endStage(controller);
         }
