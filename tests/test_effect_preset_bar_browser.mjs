@@ -44,7 +44,7 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
                 throw new Error("Preset bar shadow root is missing.");
             }
 
-            return ["save", "save-as", "revert", "copy", "paste"].map((action) => {
+            return ["save", "save-as", "revert", "copy", "paste", "share"].map((action) => {
                 const button = shadow.querySelector(`button[data-action="${action}"]`);
 
                 if (!(button instanceof HTMLButtonElement)) {
@@ -108,6 +108,15 @@ test("preset bar action buttons are compact icon buttons with accessible labels"
                 title: "Paste preset JSON",
                 visibleText: "",
                 svgClass: "lucide lucide-clipboard-paste",
+                svgHidden: "true",
+                width: "32px",
+            },
+            {
+                action: "share",
+                ariaLabel: "Share sound link",
+                title: "Share sound link",
+                visibleText: "",
+                svgClass: "lucide lucide-link-2",
                 svgHidden: "true",
                 width: "32px",
             },

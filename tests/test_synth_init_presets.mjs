@@ -944,3 +944,154 @@ test("a stored-document edit with no active preset never raises an error (fresh 
     assert.equal(state.lastError, null, `Post-Init structured edit raised: ${state.lastError}`);
     assert.equal(state.dirty, true, "A structured edit after Init must dirty the unnamed INIT sound.");
 });
+
+test("a shared sound captures and restores parameters, modulation, articulation, and lane state exactly", async () => {
+    const source = await createSynthFixture();
+    source.patchConnection.emitParameterValue("oscAFramePosition", 0.37);
+    source.patchConnection.emitParameterValue("filterMix", 0.28);
+    source.modulationHarness.adapter.apply({
+        ...source.defaultModulation,
+        routes: [{ id: "shared-route", sourceId: "macro-2", targetId: "voice-filter.cutoff", amount: 0.62 }],
+    });
+    source.articulationHarness.adapter.apply({
+        ...source.defaultArticulations,
+        selectedSlotId: "shared-articulation",
+        slots: [{ id: "shared-articulation", title: "Shared Sweep" }],
+    });
+    source.rackHarness.adapter.apply({
+        ...source.defaultRack,
+        order: [...source.defaultRack.order].reverse(),
+        enabled: { ...source.defaultRack.enabled, chorus: true, delay: true },
+    });
+    const saved = source.controller.getMutations().saveCurrentAsNewPreset("Shared Lead");
+    assert.equal(saved.ok, true, saved.message);
+
+    const captured = synthMutations(source.controller).captureSharedSound();
+    assert.equal(captured.ok, true, captured.message);
+    assert.deepEqual(captured.value.preset.parameters, source.patchConnection.parameterValues);
+    assert.deepEqual(captured.value.preset.storedState["modulation.v6"], source.modulationHarness.value);
+    assert.deepEqual(captured.value.preset.storedState["articulations.v4"], source.articulationHarness.value);
+    assert.deepEqual(captured.value.supplementalStoredState["lane.v1"], source.rackHarness.value);
+
+    const target = await createSynthFixture();
+    const initialized = synthMutations(target.controller).initSound();
+    assert.equal(initialized.ok, true, initialized.message);
+    const loaded = synthMutations(target.controller).loadSharedSound(captured.value);
+    assert.equal(loaded.ok, true, loaded.message);
+    assert.deepEqual(target.patchConnection.parameterValues, source.patchConnection.parameterValues);
+    assert.deepEqual(target.modulationHarness.value, source.modulationHarness.value);
+    assert.deepEqual(target.articulationHarness.value, source.articulationHarness.value);
+    assert.deepEqual(target.rackHarness.value, source.rackHarness.value);
+    assert.equal(target.controller.getState().activePreset, null);
+    assert.equal(target.controller.getState().activeLabel, "Shared Lead");
+    assert.equal(target.controller.getState().dirty, false);
+
+    target.patchConnection.emitParameterValue("oscAFramePosition", 0.99);
+    target.rackHarness.adapter.apply({ ...target.rackHarness.value, order: target.defaultRack.order });
+    assert.equal(target.controller.getState().dirty, true);
+    const reverted = target.controller.getMutations().reapplyActivePreset();
+    assert.equal(reverted.ok, true, reverted.message);
+    assert.deepEqual(target.patchConnection.parameterValues, source.patchConnection.parameterValues);
+    assert.deepEqual(target.rackHarness.value, source.rackHarness.value);
+    assert.equal(target.controller.getState().activeLabel, "Shared Lead");
+    assert.equal(target.controller.getState().dirty, false);
+});
+
+test("a dirty sound is never replaced by a shared link until discard or save is confirmed", async () => {
+    const source = await createSynthFixture();
+    source.patchConnection.emitParameterValue("oscAFramePosition", 0.41);
+    const saved = source.controller.getMutations().saveCurrentAsNewPreset("Guarded Share");
+    assert.equal(saved.ok, true, saved.message);
+    const captured = synthMutations(source.controller).captureSharedSound();
+    assert.equal(captured.ok, true, captured.message);
+
+    const target = await createSynthFixture();
+    assert.equal(synthMutations(target.controller).initSound().ok, true);
+    target.patchConnection.emitParameterValue("oscAFramePosition", 0.91);
+    const before = clone({
+        parameters: target.patchConnection.parameterValues,
+        modulation: target.modulationHarness.value,
+        articulations: target.articulationHarness.value,
+        lane: target.rackHarness.value,
+    });
+
+    const guarded = synthMutations(target.controller).loadSharedSound(captured.value);
+    assert.equal(guarded.ok, false);
+    assert.equal(guarded.actionRequired, "confirm-sound-replacement");
+    assert.deepEqual(target.controller.getState().pendingSoundReplacement, {
+        kind: "share",
+        label: "Guarded Share",
+    });
+    assert.deepEqual({
+        parameters: target.patchConnection.parameterValues,
+        modulation: target.modulationHarness.value,
+        articulations: target.articulationHarness.value,
+        lane: target.rackHarness.value,
+    }, before);
+
+    assert.equal(synthMutations(target.controller).cancelSoundReplacement().ok, true);
+    assert.deepEqual(target.patchConnection.parameterValues, before.parameters);
+    assert.equal(synthMutations(target.controller).loadSharedSound(captured.value).ok, false);
+    const discarded = synthMutations(target.controller).discardAndContinueSoundReplacement();
+    assert.equal(discarded.ok, true, discarded.message);
+    assert.deepEqual(target.patchConnection.parameterValues, source.patchConnection.parameterValues);
+    assert.equal(target.controller.getState().activeLabel, "Guarded Share");
+    assert.equal(target.controller.getState().dirty, false);
+});
+
+test("shared sound supplemental documents are exact and invalid links perform no writes", async () => {
+    const source = await createSynthFixture();
+    const captured = synthMutations(source.controller).captureSharedSound();
+    assert.equal(captured.ok, true, captured.message);
+    const target = await createSynthFixture();
+    assert.equal(synthMutations(target.controller).initSound().ok, true);
+    const baseline = clone({
+        eventCount: target.patchConnection.events.length,
+        parameters: target.patchConnection.parameterValues,
+        modulation: target.modulationHarness.value,
+        articulations: target.articulationHarness.value,
+        lane: target.rackHarness.value,
+    });
+
+    for (const supplementalStoredState of [
+        {},
+        { ...captured.value.supplementalStoredState, "unknown.sound-state": {} },
+    ]) {
+        const result = synthMutations(target.controller).loadSharedSound({
+            ...captured.value,
+            supplementalStoredState,
+        });
+        assert.equal(result.ok, false);
+        assert.match(result.message, /sound state/i);
+        assert.equal(target.patchConnection.events.length, baseline.eventCount);
+        assert.deepEqual(target.patchConnection.parameterValues, baseline.parameters);
+        assert.deepEqual(target.modulationHarness.value, baseline.modulation);
+        assert.deepEqual(target.articulationHarness.value, baseline.articulations);
+        assert.deepEqual(target.rackHarness.value, baseline.lane);
+    }
+});
+
+test("sampled-mode sounds are refused with the locked share-link message", async () => {
+    const status = clone(synthStatus);
+    status.details.inputs.push(parameter("sourceMode", { init: 0, min: 0, max: 1, integer: true }));
+    const fixture = await createSynthFixture({ status });
+    const shareable = synthMutations(fixture.controller).captureSharedSound();
+    assert.equal(shareable.ok, true, shareable.message);
+    const writesBefore = fixture.patchConnection.events.length;
+
+    const refusedLoad = synthMutations(fixture.controller).loadSharedSound({
+        ...shareable.value,
+        preset: {
+            ...shareable.value.preset,
+            parameters: { ...shareable.value.preset.parameters, sourceMode: 1 },
+        },
+    });
+    assert.equal(refusedLoad.ok, false);
+    assert.equal(refusedLoad.message, "Bounced sounds can't be shared by link yet");
+    assert.equal(fixture.patchConnection.events.length, writesBefore);
+
+    fixture.patchConnection.emitParameterValue("sourceMode", 1);
+    const refusedCapture = synthMutations(fixture.controller).captureSharedSound();
+    assert.equal(refusedCapture.ok, false);
+    assert.equal(refusedCapture.message, "Bounced sounds can't be shared by link yet");
+});

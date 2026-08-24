@@ -5,6 +5,12 @@ import type {
     StandaloneEffectPresetSourceFilter,
     StandaloneEffectPresetState,
 } from "./standalone-effect-presets";
+import {
+    createSoundShareURL,
+    decodeSoundShareFragment,
+    stripSoundShareFragment,
+} from "../sound-share-link";
+import type { SoundShareEnvelopeV1 } from "../sound-share-envelope";
 
 // ── Types ────────────────────────────────────────────────
 
@@ -110,6 +116,26 @@ const ICON_PASTE = /* html */ `
   <path d="m17 18 4-4-4-4" />
   <path d="M8 4H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 1.793-1.113" />
   <rect x="8" y="2" width="8" height="4" rx="1" />
+</svg>`;
+
+const ICON_LINK = /* html */ `
+<svg
+  class="lucide lucide-link-2"
+  xmlns="http://www.w3.org/2000/svg"
+  width="24"
+  height="24"
+  viewBox="0 0 24 24"
+  fill="none"
+  stroke="currentColor"
+  stroke-width="2"
+  stroke-linecap="round"
+  stroke-linejoin="round"
+  aria-hidden="true"
+  focusable="false"
+>
+  <path d="M9 17H7A5 5 0 0 1 7 7h2" />
+  <path d="M15 7h2a5 5 0 1 1 0 10h-2" />
+  <line x1="8" x2="16" y1="12" y2="12" />
 </svg>`;
 
 // ── Helpers ──────────────────────────────────────────────
@@ -556,6 +582,15 @@ const PRESET_BAR_CSS = /* css */ `
     margin-bottom: 16px;
   }
 
+  .dialog p {
+    margin: 0 0 16px;
+    color: rgba(239,247,238,0.62);
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .dialog p.warn { color: #ffe884; }
+
   .dialog label {
     display: block;
     font-size: 10px;
@@ -580,6 +615,11 @@ const PRESET_BAR_CSS = /* css */ `
   .dialog input[type="text"]:focus {
     border-color: rgba(143,240,164,0.5);
     outline: none;
+  }
+
+  .dialog input[readonly] {
+    cursor: text;
+    color: rgba(239,247,238,0.78);
   }
 
   .dialog-actions {
@@ -767,6 +807,8 @@ const PRESET_BAR_HTML = /* html */ `
       <button class="action-btn" data-action="copy" title="Copy preset JSON" aria-label="Copy preset JSON">${ICON_COPY}</button>
       <span class="action-sep"></span>
       <button class="action-btn" data-action="paste" title="Paste preset JSON" aria-label="Paste preset JSON">${ICON_PASTE}</button>
+      <span class="action-sep"></span>
+      <button class="action-btn" data-action="share" data-el="btn-share" title="Share sound link" aria-label="Share sound link" disabled>${ICON_LINK}</button>
     </div>
   </div>
 
@@ -778,6 +820,7 @@ const PRESET_BAR_HTML = /* html */ `
     <button class="shell-menu-row" role="menuitem" data-action="revert" data-el="menu-revert" disabled>Revert</button>
     <button class="shell-menu-row" role="menuitem" data-action="copy">Copy preset JSON</button>
     <button class="shell-menu-row" role="menuitem" data-action="paste">Paste preset JSON</button>
+    <button class="shell-menu-row" role="menuitem" data-action="share" data-el="menu-share" disabled>Share sound link</button>
   </div>
 
   <div class="flyout" data-el="flyout">
@@ -824,6 +867,23 @@ const PRESET_BAR_HTML = /* html */ `
         <button class="primary" data-action="sound-replacement-save" data-el="sound-replacement-save">Save and Init</button>
       </div>
     </div>
+    <div class="dialog" data-el="shared-load-dialog" hidden>
+      <h3>Load shared sound?</h3>
+      <p data-el="shared-load-message">This link contains a sound that can replace the current sound.</p>
+      <div class="dialog-actions">
+        <button data-action="shared-load-cancel">Cancel</button>
+        <button class="primary" data-action="shared-load-confirm">Load</button>
+      </div>
+    </div>
+    <div class="dialog" data-el="share-dialog" hidden>
+      <h3>Share Sound</h3>
+      <p data-el="share-message">Copy this link to share the current sound.</p>
+      <input type="text" data-el="share-link" aria-label="Shared sound link" value="" readonly>
+      <div class="dialog-actions">
+        <button data-action="share-close">Close</button>
+        <button class="primary" data-action="share-copy">Copy Link</button>
+      </div>
+    </div>
   </div>
 
   <div class="cpb-toast-host" data-el="toast-host"></div>
@@ -847,6 +907,11 @@ class PresetBar extends HTMLElement {
     private _saveDialogMode: SaveDialogMode = "new";
     private _saveDialogPresetKey: string | null = null;
     private _dialogContinuesSoundReplacement = false;
+    private _shareFragmentChecked = false;
+    private _pendingSharedEnvelope: SoundShareEnvelopeV1 | null = null;
+    private _sharedLoadConfirmationOpen = false;
+    private _sharedSoundReplacementPending = false;
+    private _currentShareURL: string | null = null;
 
     // Cached DOM refs
     private _els!: Record<string, HTMLElement>;
@@ -905,6 +970,11 @@ class PresetBar extends HTMLElement {
         this._mutations = null;
         this._synthMutations = null;
         this._state = null;
+        this._shareFragmentChecked = false;
+        this._pendingSharedEnvelope = null;
+        this._sharedLoadConfirmationOpen = false;
+        this._sharedSoundReplacementPending = false;
+        this._currentShareURL = null;
 
         if (next) {
             this._mutations = next.getMutations();
@@ -1069,6 +1139,11 @@ class PresetBar extends HTMLElement {
                 this._closeFlyout();
                 this._doPaste();
                 break;
+            case "share": void this._doShareSound(); break;
+            case "share-copy": void this._copyCurrentShareURL(); break;
+            case "share-close": this._closeDialog(false); break;
+            case "shared-load-cancel": this._cancelSharedSoundLoad(); break;
+            case "shared-load-confirm": this._confirmSharedSoundLoad(); break;
             case "init": this._doInit(); break;
             case "dialog-cancel": this._closeDialog(); break;
             case "dialog-confirm": this._confirmDialog(); break;
@@ -1258,11 +1333,149 @@ class PresetBar extends HTMLElement {
         });
     }
 
+    private async _doShareSound() {
+        const captured = this._synthMutations?.captureSharedSound();
+        if (!captured) {
+            showToast(this._els["toast-host"], "Sound links are available from the browser synth only.", "error");
+            return;
+        }
+        if (!captured.ok) {
+            showToast(this._els["toast-host"], captured.message, "error");
+            return;
+        }
+
+        const created = await createSoundShareURL(captured.value, globalThis.location.href);
+        if (!created.ok) {
+            showToast(this._els["toast-host"], created.error.message, "error");
+            return;
+        }
+
+        this._currentShareURL = created.value.url;
+        const message = created.value.lengthClass === "warning"
+            ? `This link is ${created.value.length.toLocaleString()} characters. Some apps may shorten it; copy the complete link below.`
+            : "Anyone with this link can choose to load this sound. The sound data stays in the URL fragment.";
+        this._openShareDialog(message, created.value.lengthClass === "warning");
+
+        const copied = await this._writeShareURLToClipboard(created.value.url);
+        if (copied) {
+            const prefix = created.value.lengthClass === "warning" ? `${message} ` : "";
+            this._setShareDialogMessage(`${prefix}Link copied.`, created.value.lengthClass === "warning");
+        }
+    }
+
+    private async _copyCurrentShareURL() {
+        if (!this._currentShareURL) {
+            return;
+        }
+        const copied = await this._writeShareURLToClipboard(this._currentShareURL);
+        if (copied) {
+            showToast(this._els["toast-host"], "Sound link copied.", "success");
+            return;
+        }
+        showToast(this._els["toast-host"], "Copy failed. Select the link and copy it manually.", "error");
+    }
+
+    private async _writeShareURLToClipboard(url: string) {
+        try {
+            if (typeof globalThis.navigator.clipboard?.writeText !== "function") {
+                return false;
+            }
+            await globalThis.navigator.clipboard.writeText(url);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private _openShareDialog(message: string, warning: boolean) {
+        (this._els["share-link"] as HTMLInputElement).value = this._currentShareURL ?? "";
+        this._setShareDialogMessage(message, warning);
+        this._els["save-dialog"].hidden = true;
+        this._els["sound-replacement-dialog"].hidden = true;
+        this._els["shared-load-dialog"].hidden = true;
+        this._els["share-dialog"].hidden = false;
+        this._els["dialog-overlay"].classList.add("open");
+    }
+
+    private _setShareDialogMessage(message: string, warning: boolean) {
+        const element = this._els["share-message"];
+        element.textContent = message;
+        element.classList.toggle("warn", warning);
+    }
+
+    private async _detectSharedSoundFragment() {
+        const controllerAtStart = this._controller;
+        const result = await decodeSoundShareFragment(globalThis.location.hash);
+        if (controllerAtStart !== this._controller) {
+            return;
+        }
+        if (!result.ok) {
+            showToast(this._els["toast-host"], result.error.message, "error");
+            return;
+        }
+        if (result.value === null) {
+            return;
+        }
+        this._pendingSharedEnvelope = result.value;
+        this._openSharedLoadDialog(result.value);
+    }
+
+    private _openSharedLoadDialog(envelope: SoundShareEnvelopeV1) {
+        const preset = envelope.preset as Record<string, unknown>;
+        const label = typeof preset.label === "string" && preset.label.trim().length > 0
+            ? ` “${preset.label.trim()}”`
+            : "";
+        this._els["shared-load-message"].textContent = `Load${label} from this link? Your current sound will not change until you confirm.`;
+        this._sharedLoadConfirmationOpen = true;
+        this._els["save-dialog"].hidden = true;
+        this._els["sound-replacement-dialog"].hidden = true;
+        this._els["share-dialog"].hidden = true;
+        this._els["shared-load-dialog"].hidden = false;
+        this._els["dialog-overlay"].classList.add("open");
+    }
+
+    private _cancelSharedSoundLoad() {
+        this._pendingSharedEnvelope = null;
+        this._sharedLoadConfirmationOpen = false;
+        this._sharedSoundReplacementPending = false;
+        this._closeDialog(false);
+    }
+
+    private _confirmSharedSoundLoad() {
+        const envelope = this._pendingSharedEnvelope;
+        if (!envelope || !this._synthMutations) {
+            this._cancelSharedSoundLoad();
+            return;
+        }
+
+        this._sharedLoadConfirmationOpen = false;
+        this._sharedSoundReplacementPending = true;
+        this._closeDialog(false);
+        const result = this._synthMutations.loadSharedSound(envelope);
+        this._handleSoundReplacementResult(result, true);
+    }
+
+    private _completeSharedSoundLoad() {
+        this._pendingSharedEnvelope = null;
+        this._sharedLoadConfirmationOpen = false;
+        this._sharedSoundReplacementPending = false;
+        const stripped = stripSoundShareFragment();
+        if (!stripped.ok) {
+            showToast(this._els["toast-host"], stripped.error.message, "warn");
+            return;
+        }
+        showToast(this._els["toast-host"], "Shared sound loaded.", "success");
+    }
+
     private _handleSoundReplacementResult(
         result: StandaloneEffectPresetMutationResult<unknown>,
         showSuccess = false,
     ) {
         if (result.ok) {
+            if (this._sharedSoundReplacementPending) {
+                this._completeSharedSoundLoad();
+                return;
+            }
             if (showSuccess) {
                 showToast(this._els["toast-host"], result.message, "success");
             }
@@ -1280,16 +1493,28 @@ class PresetBar extends HTMLElement {
         }
 
         showToast(this._els["toast-host"], result.message, "error");
+        if (
+            this._sharedSoundReplacementPending
+            && this._state?.pendingSoundReplacement?.kind !== "share"
+        ) {
+            this._pendingSharedEnvelope = null;
+            this._sharedSoundReplacementPending = false;
+        }
     }
 
     private _openSoundReplacementDialog() {
-        const actionLabel = this._state?.pendingSoundReplacement?.kind === "bounce"
+        const pendingKind = this._state?.pendingSoundReplacement?.kind;
+        const actionLabel = pendingKind === "bounce"
             ? "Bounce"
-            : "Init";
+            : pendingKind === "init"
+                ? "Init"
+                : "Load";
         this._els["sound-replacement-discard"].textContent = `Discard and ${actionLabel}`;
         this._els["sound-replacement-save"].textContent = `Save and ${actionLabel}`;
         this._dialogContinuesSoundReplacement = true;
         this._els["save-dialog"].hidden = true;
+        this._els["shared-load-dialog"].hidden = true;
+        this._els["share-dialog"].hidden = true;
         this._els["sound-replacement-dialog"].hidden = false;
         this._els["dialog-overlay"].classList.add("open");
     }
@@ -1298,6 +1523,10 @@ class PresetBar extends HTMLElement {
         const result = this._synthMutations?.cancelSoundReplacement();
         if (result && !result.ok && !("actionRequired" in result)) {
             showToast(this._els["toast-host"], result.message, "error");
+        }
+        if (this._sharedSoundReplacementPending) {
+            this._pendingSharedEnvelope = null;
+            this._sharedSoundReplacementPending = false;
         }
         this._closeDialog(false);
     }
@@ -1422,14 +1651,24 @@ class PresetBar extends HTMLElement {
         }
 
         this._els["sound-replacement-dialog"].hidden = true;
+        this._els["shared-load-dialog"].hidden = true;
+        this._els["share-dialog"].hidden = true;
         this._els["save-dialog"].hidden = false;
         this._els["dialog-overlay"].classList.add("open");
         setTimeout(() => { inputEl.focus(); inputEl.select(); }, 30);
     }
 
     private _closeDialog(cancelPendingSoundReplacement = true) {
+        if (cancelPendingSoundReplacement && this._sharedLoadConfirmationOpen) {
+            this._pendingSharedEnvelope = null;
+            this._sharedLoadConfirmationOpen = false;
+        }
         if (cancelPendingSoundReplacement && this._dialogContinuesSoundReplacement) {
             this._synthMutations?.cancelSoundReplacement();
+            if (this._sharedSoundReplacementPending) {
+                this._pendingSharedEnvelope = null;
+                this._sharedSoundReplacementPending = false;
+            }
         }
 
         this._dialogContinuesSoundReplacement = false;
@@ -1484,6 +1723,11 @@ class PresetBar extends HTMLElement {
         this._updateBar(state);
         if (this._flyoutOpen) this._renderFlyoutList();
 
+        if (state.ready && !this._shareFragmentChecked) {
+            this._shareFragmentChecked = true;
+            void this._detectSharedSoundFragment();
+        }
+
         // Show error toast if lastError transitions to non-null
         if (state.lastError) {
             showToast(this._els["toast-host"], state.lastError, "error");
@@ -1508,10 +1752,22 @@ class PresetBar extends HTMLElement {
         (this._els["btn-revert"] as HTMLButtonElement).disabled = !state.dirty;
         (this._els["menu-save"] as HTMLButtonElement).disabled = !canSave;
         (this._els["menu-revert"] as HTMLButtonElement).disabled = !state.dirty;
+        const canShare = state.ready && state.supportsInit && this._canUseSoundLinks();
+        (this._els["btn-share"] as HTMLButtonElement).disabled = !canShare;
+        (this._els["menu-share"] as HTMLButtonElement).disabled = !canShare;
 
         // Sync filter pill active state
         for (const pill of this.shadowRoot!.querySelectorAll<HTMLElement>(".filter-pill")) {
             pill.classList.toggle("active", pill.dataset.filter === state.filter.source);
+        }
+    }
+
+    private _canUseSoundLinks() {
+        try {
+            const protocol = new URL(globalThis.location.href).protocol;
+            return protocol === "http:" || protocol === "https:";
+        } catch {
+            return false;
         }
     }
 

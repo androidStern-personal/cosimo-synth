@@ -1,4 +1,10 @@
 import type { PatchConnectionLike } from "../cmajor-react";
+import { BOUNCE_STATE_KEY } from "../../../bounce/document.mjs";
+import {
+    createSoundShareEnvelope,
+    parseSoundShareEnvelope,
+    type SoundShareEnvelopeV1,
+} from "../sound-share-envelope";
 import {
     buildPluginStateContract,
     canonicalJSONStringify,
@@ -97,6 +103,7 @@ export type StandaloneEffectPendingSoundReplacement =
     | { readonly kind: "init" }
     | { readonly kind: "preset"; readonly presetKey: string }
     | { readonly kind: "import"; readonly presetID: string }
+    | { readonly kind: "share"; readonly label: string }
     | { readonly kind: "bounce" };
 
 export type StandaloneEffectFactoryPreset = EffectPresetV2 | EffectPreset;
@@ -360,6 +367,7 @@ export class StandaloneEffectPresetController {
     private loadGeneration = 0;
     private synthInitBaseline: EffectPresetV2 | null = null;
     private synthCleanInitOnlyState = new Map<string, unknown>();
+    private unnamedSynthLabel = "INIT";
     private unnamedSynthDirty = false;
     private pendingSoundReplacement: PreparedSoundReplacement<unknown> | null = null;
     private lastError: string | null = null;
@@ -438,7 +446,7 @@ export class StandaloneEffectPresetController {
             userPresets,
             activePreset: activePreset ? { ...activePreset } : null,
             activePresetID: activePreset?.presetID ?? null,
-            activeLabel: activePreset?.label ?? (this.options.synth ? "INIT" : ""),
+            activeLabel: activePreset?.label ?? (this.options.synth ? this.unnamedSynthLabel : ""),
             dirty: activePreset?.dirty ?? (this.options.synth ? this.unnamedSynthDirty : false),
             currentValues: this.getCurrentValuesRecord(),
             missingCurrentValueEndpointIDs: this.getMissingCurrentValueEndpointIDs(),
@@ -480,6 +488,8 @@ export class StandaloneEffectPresetController {
         return {
             initSound: this.initSound.bind(this),
             bounceSound: this.bounceSound.bind(this),
+            captureSharedSound: this.captureSharedSound.bind(this),
+            loadSharedSound: this.loadSharedSound.bind(this),
             cancelSoundReplacement: this.cancelSoundReplacement.bind(this),
             discardAndContinueSoundReplacement: this.discardAndContinueSoundReplacement.bind(this),
             saveAndContinueSoundReplacement: this.saveAndContinueSoundReplacement.bind(this),
@@ -525,6 +535,65 @@ export class StandaloneEffectPresetController {
             successMessage: "Bounce started.",
             apply,
         });
+    }
+
+    captureSharedSound(): StandaloneEffectPresetMutationResult<SoundShareEnvelopeV1<EffectPresetV2>> {
+        return this.runMutation(() => {
+            if (!this.options.synth) {
+                throw new Error("Sound links are available only for synth controllers.");
+            }
+            const state = this.getState();
+            const preset = this.captureCurrentPreset("cosimo.share.current", state.activeLabel || "Shared Sound");
+            this.assertSoundCanBeShared(preset);
+            const supplementalStoredState = Object.fromEntries(
+                this.captureInitOnlyStateValues(preset).map((entry) => [entry.adapter.key, entry.serialized]),
+            );
+            return createSoundShareEnvelope({ preset, supplementalStoredState });
+        }, "Sound link ready.");
+    }
+
+    loadSharedSound(envelopeInput: unknown): StandaloneEffectPresetMutationResult<EffectPresetV2> {
+        try {
+            if (!this.options.synth) {
+                throw new Error("Sound links are available only for synth controllers.");
+            }
+            ensureStoredStateWriter(this.options.patchConnection, "load a shared sound");
+            ensureParameterWriter(this.options.patchConnection, "load a shared sound");
+            const envelope = parseSoundShareEnvelope(envelopeInput);
+            if (!envelope.ok) {
+                throw envelope.error;
+            }
+            const preset = this.normalizePresetForCurrentContract(envelope.value.preset);
+            this.assertSoundCanBeShared(preset);
+            const initOnlyValues = this.normalizeInitOnlyStateValues(
+                preset,
+                envelope.value.supplementalStoredState,
+                "shared sound",
+            );
+
+            return this.requestSoundReplacement({
+                pending: { kind: "share", label: preset.label },
+                successMessage: "Shared sound loaded.",
+                apply: () => {
+                    this.applySoundTransaction({
+                        preset,
+                        initOnlyValues,
+                        commit: () => {
+                            this.synthInitBaseline = cloneEffectPresetV2(preset);
+                            this.synthCleanInitOnlyState = new Map(
+                                initOnlyValues.map((entry) => [entry.adapter.key, entry.serialized]),
+                            );
+                            this.unnamedSynthLabel = preset.label;
+                            this.unnamedSynthDirty = false;
+                            this.bridge.setActivePresetMetadata(this.options.effectID, null);
+                        },
+                    });
+                    return cloneEffectPresetV2(preset);
+                },
+            });
+        } catch (error) {
+            return this.fail(errorFromUnknown(error));
+        }
     }
 
     cancelSoundReplacement(): StandaloneEffectPresetMutationResult<undefined> {
@@ -612,6 +681,25 @@ export class StandaloneEffectPresetController {
     reapplyActivePreset(): StandaloneEffectPresetMutationResult<EffectPresetV2> {
         if (!this.bridgeState.activePresetByEffect[this.options.effectID] && this.options.synth) {
             try {
+                if (this.synthInitBaseline) {
+                    const preset = cloneEffectPresetV2(this.synthInitBaseline);
+                    const initOnlyValues = this.normalizeInitOnlyStateValues(
+                        preset,
+                        Object.fromEntries(this.synthCleanInitOnlyState),
+                        "unnamed sound baseline",
+                    );
+                    return this.runMutation(() => {
+                        this.applySoundTransaction({
+                            preset,
+                            initOnlyValues,
+                            commit: () => {
+                                this.unnamedSynthDirty = false;
+                                this.bridge.setActivePresetMetadata(this.options.effectID, null);
+                            },
+                        });
+                        return cloneEffectPresetV2(preset);
+                    }, "Preset reapplied.");
+                }
                 const replacement = this.prepareInitSoundReplacement();
                 return this.runMutation(replacement.apply, "Preset reapplied.");
             } catch (error) {
@@ -1451,6 +1539,7 @@ export class StandaloneEffectPresetController {
             ? cloneEffectPresetV2(this.synthInitBaseline)
             : null;
         const previousCleanInitOnlyState = new Map(this.synthCleanInitOnlyState);
+        const previousUnnamedLabel = this.unnamedSynthLabel;
         const previousUnnamedDirty = this.unnamedSynthDirty;
         const operations: SoundRollbackOperation[] = [];
         const generation = this.nextLoadGeneration();
@@ -1498,6 +1587,7 @@ export class StandaloneEffectPresetController {
 
             this.synthInitBaseline = previousInitBaseline;
             this.synthCleanInitOnlyState = previousCleanInitOnlyState;
+            this.unnamedSynthLabel = previousUnnamedLabel;
             this.unnamedSynthDirty = previousUnnamedDirty;
 
             const original = errorFromUnknown(error);
@@ -1536,6 +1626,47 @@ export class StandaloneEffectPresetController {
         return new Map(
             this.captureInitOnlyStateValues(preset).map((entry) => [entry.adapter.key, entry.serialized]),
         );
+    }
+
+    private normalizeInitOnlyStateValues(
+        preset: EffectPresetV2,
+        rawValues: Readonly<Record<string, unknown>>,
+        sourceLabel: string,
+    ): PreparedInitOnlyStateValue[] {
+        const adapters = this.options.synth?.initOnlyStateAdapters ?? [];
+        const expectedKeys = adapters.map((adapter) => adapter.key).sort();
+        const providedKeys = Object.keys(rawValues).sort();
+        const missingKeys = expectedKeys.filter((key) => !providedKeys.includes(key));
+        const unknownKeys = providedKeys.filter((key) => !expectedKeys.includes(key));
+        if (missingKeys.length > 0) {
+            throw new Error(`${sourceLabel} is missing sound state: ${missingKeys.join(", ")}.`);
+        }
+        if (unknownKeys.length > 0) {
+            throw new Error(`${sourceLabel} has unknown sound state: ${unknownKeys.join(", ")}.`);
+        }
+        const context: EffectStoredStateContext = {
+            parameters: preset.parameters,
+            storedState: preset.storedState,
+        };
+        return adapters.map((adapter): PreparedInitOnlyStateValue => {
+            const normalized = adapter.normalizeForTransaction(rawValues[adapter.key], context);
+            const serialized = adapter.serializeForTransaction(normalized, context);
+            return {
+                adapter,
+                serialized,
+                value: adapter.normalizeForTransaction(serialized, context),
+            };
+        });
+    }
+
+    private assertSoundCanBeShared(preset: EffectPresetV2) {
+        const bounceState = preset.storedState[BOUNCE_STATE_KEY];
+        if (
+            preset.parameters.sourceMode === 1
+            || (bounceState !== null && bounceState !== undefined)
+        ) {
+            throw new Error("Bounced sounds can't be shared by link yet");
+        }
     }
 
     private rollbackSoundOperations(
@@ -1820,6 +1951,7 @@ export class StandaloneEffectPresetController {
                         this.synthCleanInitOnlyState = new Map(
                             initOnlyValues.map((entry) => [entry.adapter.key, entry.serialized]),
                         );
+                        this.unnamedSynthLabel = "INIT";
                         this.unnamedSynthDirty = false;
                         this.bridge.setActivePresetMetadata(this.options.effectID, null);
                     },
