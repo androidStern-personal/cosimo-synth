@@ -128,6 +128,7 @@ async function buildWebProof() {
     run("npm", ["run", "ui:desktop:build"]);
     run("npm", ["run", "ui:worker:build"]);
     run("npm", ["run", "ui:bounce-worker:build"]);
+    run("npm", ["run", "ui:speedrun-worker:build"]);
     run("npm", ["run", "ui:worker:test:build"]);
     await fs.mkdir(path.join(outputDirectory, "patch_gui", "desktop"), { recursive: true });
     await Promise.all([
@@ -142,6 +143,10 @@ async function buildWebProof() {
         fs.copyFile(
             path.join(repoRoot, "patch_gui", "bounce-render-worker.js"),
             path.join(outputDirectory, "patch_gui", "bounce-render-worker.js"),
+        ),
+        fs.copyFile(
+            path.join(repoRoot, "patch_gui", "speedrun-checkpoint-worker.js"),
+            path.join(outputDirectory, "patch_gui", "speedrun-checkpoint-worker.js"),
         ),
         copyCmajorWebRuntime(),
         buildRendererAwarePatchModule(),

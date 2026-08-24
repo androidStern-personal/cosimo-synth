@@ -102,6 +102,15 @@ test("Bounce ships a class-only performer and a background render worker", async
     assert.match(worker, /render-root-complete/);
 });
 
+test("speedrun audio ships its typed checkpoint worker beside the Bounce worker", async () => {
+    const worker = await fs.readFile(
+        path.join(repoRoot, "build", "web", "patch_gui", "speedrun-checkpoint-worker.js"),
+        "utf8",
+    );
+    assert.match(worker, /SpeedrunInstallError/);
+    assert.match(worker, /render-root-complete/);
+});
+
 test("Bounce ships the OPFS persistence and safe runtime-restore modules", async () => {
     await Promise.all([
         fs.access(path.join(repoRoot, "build", "web", "bounce", "browser-bank-store.mjs")),
