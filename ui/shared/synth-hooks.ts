@@ -4,6 +4,7 @@ import {
     useMemo,
     useRef,
     useState,
+    useSyncExternalStore,
     type PointerEvent as ReactPointerEvent,
     type RefObject,
 } from "react";
@@ -22,6 +23,8 @@ import {
 import { runProgrammaticWrites, subscribeToUserEdits } from "./user-edit-bus";
 import { createAutoPreviewEngine, type AutoPreviewEngine } from "./auto-preview-engine";
 import { createAutoPreviewScheduler } from "./auto-preview-scheduler";
+import { createPreviewStrategyEngine } from "./auto-preview-strategies";
+import { PERF_TUNING_AVAILABLE, getPerfTuningState, subscribePerfTuning } from "./perf-tuning";
 import { createPreviewNoteMemory } from "./preview-note-memory";
 import {
     AUTO_PREVIEW_SYNC_CONFIG,
@@ -3853,6 +3856,14 @@ export function useSynthPatchViewModel({
     const msegRatesRef = useRef<[number, number, number]>([1, 1, 1]);
     msegRatesRef.current = [mseg1Rate.value, mseg2Rate.value, mseg3Rate.value];
 
+    // Dev builds may swap the preview algorithm live from the tuning page;
+    // release builds always run the shipped engine.
+    const perfTuningAlgorithm = useSyncExternalStore(
+        subscribePerfTuning,
+        () => getPerfTuningState().algorithm,
+    );
+    const activePreviewAlgorithm = PERF_TUNING_AVAILABLE ? perfTuningAlgorithm : "shipped";
+
     useEffect(() => {
         const sendRawMidi = (status: number, note: number, velocity: number) => {
             patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID, buildShortMidi(status, note, velocity));
@@ -3924,29 +3935,29 @@ export function useSynthPatchViewModel({
             }
             return slowestPeriodMs > 0 ? { periodMs: slowestPeriodMs, anchorMs } : null;
         };
-        const engine = createAutoPreviewEngine({
+        const strikePreviewNow = (strikeCapMs: number | null) => {
+            const strikeAtMs = performance.now();
+            const pitches = previewNoteMemory.rememberedGroup();
+            releaseOwnedGroup();
+            autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
+            for (const pitch of pitches) {
+                sendRawMidi(0x90, pitch, 100);
+            }
+            lastNoteOnAtRef.current = strikeAtMs;
+            if (strikeCapMs !== null) {
+                scheduleOwnedRelease(strikeCapMs);
+            }
+        };
+        const scheduleAtViaTimeout = (atMs: number, callback: () => void) => {
+            const handle = window.setTimeout(callback, Math.max(0, atMs - performance.now()));
+            return () => window.clearTimeout(handle);
+        };
+        const createShippedEngine = () => createAutoPreviewEngine({
             scheduler: createAutoPreviewScheduler(AUTO_PREVIEW_SCHEDULER_CONFIG),
             movementStoppedMs: AUTO_PREVIEW_SCHEDULER_CONFIG.movementStoppedMs,
             now: () => performance.now(),
-            scheduleAt: (atMs, callback) => {
-                const handle = window.setTimeout(callback, Math.max(0, atMs - performance.now()));
-                return () => window.clearTimeout(handle);
-            },
+            scheduleAt: scheduleAtViaTimeout,
             playPreview: (capMs) => {
-                const strikePreview = (strikeCapMs: number | null) => {
-                    const strikeAtMs = performance.now();
-                    const pitches = previewNoteMemory.rememberedGroup();
-                    releaseOwnedGroup();
-                    autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
-                    for (const pitch of pitches) {
-                        sendRawMidi(0x90, pitch, 100);
-                    }
-                    lastNoteOnAtRef.current = strikeAtMs;
-                    if (strikeCapMs !== null) {
-                        scheduleOwnedRelease(strikeCapMs);
-                    }
-                };
-
                 clearPendingStrike();
                 const now = performance.now();
                 const sounding = autoPreviewOwnedGroupRef.current !== null
@@ -3961,7 +3972,7 @@ export function useSynthPatchViewModel({
                     config: AUTO_PREVIEW_SYNC_CONFIG,
                 });
                 if (strikeAt <= now) {
-                    strikePreview(capMs);
+                    strikePreviewNow(capMs);
                     return;
                 }
                 const pending: { timer: number; capMs: number | null } = { timer: 0, capMs };
@@ -3970,7 +3981,7 @@ export function useSynthPatchViewModel({
                         return;
                     }
                     autoPreviewPendingStrikeRef.current = null;
-                    strikePreview(pending.capMs);
+                    strikePreviewNow(pending.capMs);
                 }, Math.max(0, strikeAt - now));
                 autoPreviewPendingStrikeRef.current = pending;
             },
@@ -3999,6 +4010,48 @@ export function useSynthPatchViewModel({
                 releaseOwnedGroup();
             },
         });
+        // The dev tuning page's alternative feels (T12 follow-up): same engine
+        // surface, different retrigger policy. Strategy strikes are held notes
+        // choked by the next strike; release comes from the strategy itself.
+        const createStrategyEngine = () => createPreviewStrategyEngine({
+            algorithm: activePreviewAlgorithm as Exclude<typeof activePreviewAlgorithm, "shipped">,
+            params: () => {
+                const tuning = getPerfTuningState();
+                return {
+                    settleMs: tuning.settleMs,
+                    minGapMs: tuning.minGapMs,
+                    holdMs: tuning.holdMs,
+                    loopSync: tuning.loopSync,
+                };
+            },
+            now: () => performance.now(),
+            scheduleAt: scheduleAtViaTimeout,
+            strike: () => {
+                clearPendingStrike();
+                strikePreviewNow(null);
+            },
+            release: () => {
+                clearPendingStrike();
+                releaseOwnedGroup();
+            },
+            quantizeStrike: (nowMs, kind) => quantizeStrikeTime({
+                now: nowMs,
+                kind,
+                source: resolveLoopSyncSource(),
+                config: AUTO_PREVIEW_SYNC_CONFIG,
+            }),
+            nextLoopBoundary: (nowMs) => {
+                const source = resolveLoopSyncSource();
+                if (!source || !(source.periodMs > 0)) {
+                    return null;
+                }
+                const cycles = Math.max(1, Math.ceil((nowMs - source.anchorMs) / source.periodMs));
+                return source.anchorMs + (cycles * source.periodMs);
+            },
+        });
+        const engine = activePreviewAlgorithm === "shipped"
+            ? createShippedEngine()
+            : createStrategyEngine();
         autoPreviewEngineRef.current = engine;
         if (heldMidiNotesRef.current.size > 0) {
             engine.manualHoldStarted();
@@ -4039,7 +4092,7 @@ export function useSynthPatchViewModel({
             autoPreviewReleaseOwnedRef.current = null;
             autoPreviewEngineRef.current = null;
         };
-    }, [patchConnection]);
+    }, [activePreviewAlgorithm, patchConnection]);
 
     useEffect(() => {
         if (!autoPreviewEnabled) {

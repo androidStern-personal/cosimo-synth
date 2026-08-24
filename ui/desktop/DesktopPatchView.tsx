@@ -1,4 +1,6 @@
 import {
+    Suspense,
+    lazy,
     useCallback,
     useEffect,
     useLayoutEffect,
@@ -127,6 +129,12 @@ import {
     parseStoredAutoPreviewEnabled,
     serializeAutoPreviewEnabled,
 } from "../shared/audition-preferences";
+import { PERF_TUNING_AVAILABLE } from "../shared/perf-tuning";
+
+// Code-split so release builds (flag false) never fetch the tuning page chunk.
+const PerfTuningPage = PERF_TUNING_AVAILABLE
+    ? lazy(() => import("./perf-tuning-page"))
+    : null;
 import {
     GLIDE_TIME_MAX_SECONDS,
     GLIDE_TIME_MIN_SECONDS,
@@ -1771,6 +1779,8 @@ function SynthPresetBarHost({
     compactSynth = false,
     backAvailable = false,
     onShellBack,
+    perfTuningAvailable = false,
+    onOpenPerfTuning,
 }: {
     isHidden: boolean;
     storedStateAdapters: EffectStoredStateAdapter[];
@@ -1778,12 +1788,17 @@ function SynthPresetBarHost({
     compactSynth?: boolean;
     backAvailable?: boolean;
     onShellBack?: () => void;
+    /** Dev builds only: reveals the shell menu's Performance tuning row. */
+    perfTuningAvailable?: boolean;
+    onOpenPerfTuning?: () => void;
 }) {
     const patchConnection = usePatchConnection();
     const hostRef = useRef<HTMLDivElement | null>(null);
     const presetBarRef = useRef<ReturnType<typeof createPresetBar> | null>(null);
     const onShellBackRef = useRef(onShellBack);
     onShellBackRef.current = onShellBack;
+    const onOpenPerfTuningRef = useRef(onOpenPerfTuning);
+    onOpenPerfTuningRef.current = onOpenPerfTuning;
     const presetController = useMemo(() => createStandaloneEffectPresetController({
         effectID: SYNTH_PRESET_EFFECT_ID,
         patchConnection,
@@ -1803,6 +1818,8 @@ function SynthPresetBarHost({
         presetBar.controller = presetController;
         const handleShellBack = () => onShellBackRef.current?.();
         presetBar.addEventListener("cosimo-shell-back", handleShellBack);
+        const handleOpenPerfTuning = () => onOpenPerfTuningRef.current?.();
+        presetBar.addEventListener("cosimo-open-perf-tuning", handleOpenPerfTuning);
         presetBarRef.current = presetBar;
         host.replaceChildren(presetBar);
         presetController.attach();
@@ -1810,6 +1827,7 @@ function SynthPresetBarHost({
         return () => {
             presetController.detach();
             presetBar.removeEventListener("cosimo-shell-back", handleShellBack);
+            presetBar.removeEventListener("cosimo-open-perf-tuning", handleOpenPerfTuning);
             presetBar.controller = null;
             presetBarRef.current = null;
             presetBar.remove();
@@ -1823,7 +1841,8 @@ function SynthPresetBarHost({
         }
         presetBar.toggleAttribute("compact-synth", compactSynth);
         presetBar.shellBackAvailable = compactSynth && backAvailable;
-    }, [backAvailable, compactSynth, presetController]);
+        presetBar.perfTuningAvailable = perfTuningAvailable;
+    }, [backAvailable, compactSynth, perfTuningAvailable, presetController]);
 
     return (
         <div
@@ -4094,6 +4113,11 @@ function DesktopPatchViewBody({
             // A private-browsing storage failure must not break the toggle.
         }
     }, [autoPreviewEnabled]);
+    // Dev builds only (perf-tuning.ts): the shell menu's Performance tuning
+    // page; release builds never reveal the row nor load the chunk.
+    const [perfTuningOpen, setPerfTuningOpen] = useState(false);
+    const openPerfTuning = useCallback(() => setPerfTuningOpen(true), []);
+    const closePerfTuning = useCallback(() => setPerfTuningOpen(false), []);
     const curveLab = useDesktopCurveLab();
     const oscillatorSelection = useOscillatorSelectionViewModel();
     const synthView = useSynthPatchViewModel({
@@ -4923,7 +4947,14 @@ function DesktopPatchViewBody({
                 compactSynth={isCompactViewport}
                 backAvailable={mobileReturnTarget !== null}
                 onShellBack={handleUniversalBack}
+                perfTuningAvailable={PERF_TUNING_AVAILABLE}
+                onOpenPerfTuning={openPerfTuning}
             />
+            {PerfTuningPage !== null && perfTuningOpen ? (
+                <Suspense fallback={null}>
+                    <PerfTuningPage onClose={closePerfTuning} />
+                </Suspense>
+            ) : null}
 
             {isCompactViewport ? (
                 <main

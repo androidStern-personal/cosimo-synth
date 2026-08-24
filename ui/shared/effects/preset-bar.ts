@@ -778,6 +778,7 @@ const PRESET_BAR_HTML = /* html */ `
     <button class="shell-menu-row" role="menuitem" data-action="revert" data-el="menu-revert" disabled>Revert</button>
     <button class="shell-menu-row" role="menuitem" data-action="copy">Copy preset JSON</button>
     <button class="shell-menu-row" role="menuitem" data-action="paste">Paste preset JSON</button>
+    <button class="shell-menu-row" role="menuitem" data-action="perf-tuning" data-el="menu-perf-tuning" hidden>Performance tuning</button>
   </div>
 
   <div class="flyout" data-el="flyout">
@@ -1078,6 +1079,9 @@ class PresetBar extends HTMLElement {
             case "shell-back":
                 this.dispatchEvent(new CustomEvent("cosimo-shell-back", { bubbles: true, composed: true }));
                 break;
+            case "perf-tuning":
+                this.dispatchEvent(new CustomEvent("cosimo-open-perf-tuning", { bubbles: true, composed: true }));
+                break;
             case "toggle-shell-menu": this._toggleShellMenu(); break;
         }
     }
@@ -1132,6 +1136,11 @@ class PresetBar extends HTMLElement {
     /** Whether universal Back has somewhere to go (compact synth shell only). */
     set shellBackAvailable(available: boolean) {
         (this._els["shell-back"] as HTMLButtonElement).disabled = !available;
+    }
+
+    /** Dev builds only: reveals the shell menu's Performance tuning row. */
+    set perfTuningAvailable(available: boolean) {
+        this._els["menu-perf-tuning"].toggleAttribute("hidden", !available);
     }
 
     private _handleFilterPill(el: HTMLElement) {

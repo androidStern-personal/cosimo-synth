@@ -1,8 +1,44 @@
-const MOD_SOURCE_DRAG_ACTIVATION_PX = 7;
-const MOD_SOURCE_TOUCH_GAIN_REFERENCE_TRAVEL_PX = 168;
-const MOD_SOURCE_TOUCH_GAIN_MIN = 2.1;
-const MOD_SOURCE_TOUCH_GAIN_MAX = 2.5;
-const MOD_SOURCE_TOUCH_GAIN_RAMP_PX = 64;
+/** The tunable inputs to the touch drag's control-display gain. */
+export type ModSourceTouchTuning = {
+    /** Pointer travel (px) before a drag activates and gain starts ramping. */
+    readonly activationPx: number;
+    /** Viewport width divisor that sets the viewport-responsive maximum gain. */
+    readonly referenceTravelPx: number;
+    /** Lower clamp on the maximum gain. */
+    readonly gainMin: number;
+    /** Upper clamp on the maximum gain. */
+    readonly gainMax: number;
+    /** Travel (px) over which gain smoothsteps from 1x to the maximum. */
+    readonly rampPx: number;
+};
+
+/** The shipped values; the dev tuning page may override them at runtime. */
+export const MOD_SOURCE_TOUCH_TUNING_DEFAULTS: ModSourceTouchTuning = {
+    activationPx: 7,
+    referenceTravelPx: 168,
+    gainMin: 2.1,
+    gainMax: 2.5,
+    rampPx: 64,
+};
+
+let tuning: ModSourceTouchTuning = MOD_SOURCE_TOUCH_TUNING_DEFAULTS;
+
+export function getModSourceTouchTuning(): ModSourceTouchTuning {
+    return tuning;
+}
+
+/** Override the drag-feel numbers (dev tuning page); partial values merge. */
+export function setModSourceTouchTuning(next: Partial<ModSourceTouchTuning>): void {
+    const merged = { ...tuning, ...next };
+    const finite = (value: number, fallback: number) => (Number.isFinite(value) ? value : fallback);
+    tuning = {
+        activationPx: Math.max(0, finite(merged.activationPx, MOD_SOURCE_TOUCH_TUNING_DEFAULTS.activationPx)),
+        referenceTravelPx: Math.max(1, finite(merged.referenceTravelPx, MOD_SOURCE_TOUCH_TUNING_DEFAULTS.referenceTravelPx)),
+        gainMin: Math.max(1, finite(merged.gainMin, MOD_SOURCE_TOUCH_TUNING_DEFAULTS.gainMin)),
+        gainMax: Math.max(1, finite(merged.gainMax, MOD_SOURCE_TOUCH_TUNING_DEFAULTS.gainMax)),
+        rampPx: Math.max(1, finite(merged.rampPx, MOD_SOURCE_TOUCH_TUNING_DEFAULTS.rampPx)),
+    };
+}
 
 /** A point in browser client coordinates. */
 export type ModSourceDragPoint = {
@@ -45,7 +81,7 @@ function amplifiedDisplacement(
 ): ModSourceDragPoint {
     const delta = { x: pointer.x - start.x, y: pointer.y - start.y };
     const distance = Math.hypot(delta.x, delta.y);
-    const rampProgress = (distance - MOD_SOURCE_DRAG_ACTIVATION_PX) / MOD_SOURCE_TOUCH_GAIN_RAMP_PX;
+    const rampProgress = (distance - tuning.activationPx) / tuning.rampPx;
     const gain = 1 + ((maximumGain - 1) * smoothStep(rampProgress));
     return {
         x: delta.x * gain,
@@ -55,7 +91,7 @@ function amplifiedDisplacement(
 
 /** Returns whether pointer travel has crossed the shared source-drag activation distance. */
 export function modSourceDragHasActivated(start: ModSourceDragPoint, pointer: ModSourceDragPoint) {
-    return Math.hypot(pointer.x - start.x, pointer.y - start.y) > MOD_SOURCE_DRAG_ACTIVATION_PX;
+    return Math.hypot(pointer.x - start.x, pointer.y - start.y) > tuning.activationPx;
 }
 
 /**
@@ -77,9 +113,9 @@ export function resolveModSourceTouchPoint({
     }
 
     const maximumGain = clamp(
-        viewport.width / MOD_SOURCE_TOUCH_GAIN_REFERENCE_TRAVEL_PX,
-        MOD_SOURCE_TOUCH_GAIN_MIN,
-        MOD_SOURCE_TOUCH_GAIN_MAX,
+        viewport.width / tuning.referenceTravelPx,
+        tuning.gainMin,
+        tuning.gainMax,
     );
     const previousDisplacement = amplifiedDisplacement(start, previousPointer, maximumGain);
     const nextDisplacement = amplifiedDisplacement(start, pointer, maximumGain);
