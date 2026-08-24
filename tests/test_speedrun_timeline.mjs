@@ -54,12 +54,20 @@ test("timeline is the exact 30fps / 48kHz frame-to-sample authority", async () =
     assert.equal(assembled.sampleRate, 48_000);
     assert.equal(assembled.samplesPerFrame, 1_600);
     assert.equal(assembled.compressionLevel, 0);
-    assert.ok(assembled.sections.every((section) => section.endFrame - section.startFrame >= 48));
+    assert.ok(assembled.sections.every((section) => section.endFrame - section.startFrame >= 105));
     assert.ok(assembled.sections.every((section) => section.startSample === section.startFrame * 1_600));
     assert.ok(assembled.sections.every((section) => section.endSample === section.endFrame * 1_600));
     assert.ok(assembled.sections.every((section) => section.opSpans.every((span) => (
         Number.isInteger(span.startFrame) && Number.isInteger(span.endFrame) && span.endFrame >= span.startFrame
     ))));
+    // Perception floor: at natural pacing every visible op is on screen for at
+    // least 0.4s (rapid) and non-rapid gestures for at least 0.8s.
+    assert.ok(assembled.sections.every((section) => section.opSpans.every((span) => {
+        if (span.op.kind === "installLaneBaseline" || span.op.kind === "installModulationBaseline") return true;
+        const rapid = (span.op.kind === "setParam" || span.op.kind === "setLaneParam")
+            && span.op.weight === "rapid";
+        return span.endFrame - span.startFrame >= (rapid ? 12 : 24);
+    })));
 
     const source = assembled.sections.find((section) => section.section.kind === "source");
     const oscillator = assembled.sections.find((section) => section.section.kind === "oscillator");
@@ -67,7 +75,7 @@ test("timeline is the exact 30fps / 48kHz frame-to-sample authority", async () =
     assert.equal(oscillator.checkpointIndex, assembled.sections.indexOf(oscillator));
     assert.deepEqual(
         source.captionEvents.map((event) => event.atFrame - source.startFrame),
-        source.captionEvents.map((_, index) => 10 + index * 4),
+        source.captionEvents.map((_, index) => 24 + index * 12),
     );
     assert.equal(JSON.stringify(timeline.assembleTimeline(recipe)), JSON.stringify(assembled));
 });

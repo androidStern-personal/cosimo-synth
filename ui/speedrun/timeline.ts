@@ -51,34 +51,27 @@ export type SpeedrunTimeline = {
     readonly sections: ReadonlyArray<TimedSection>;
 };
 
+/**
+ * Perception-scale pacing (30 fps frames). Each value is the smallest span in
+ * which a viewer can actually see the action happen: approach, motion, and a
+ * beat to register the result. Duration is an OUTPUT of the recipe under this
+ * table — the video is as long as the build needs. There is deliberately no
+ * "compression ladder" shrinking these below perception; an explicit caller
+ * ceiling is honored only by uniform time-scaling as a last-resort backstop.
+ */
 const DEFAULT_PACING: SpeedrunPacing = {
-    leadIn: 10,
-    captionStagger: 4,
-    navigate: 10,
-    setParam: 13,
-    selectWavetable: 18,
-    toggleEffect: 9,
-    mapRoute: 25,
-    configureMseg: 26,
-    setSource: 12,
-    rapid: 5,
-    tail: 12,
-    sectionMinimum: 48,
-};
-
-const FLOOR_PACING: SpeedrunPacing = {
-    leadIn: 8,
-    captionStagger: 3,
-    navigate: 6,
-    setParam: 8,
-    selectWavetable: 11,
-    toggleEffect: 6,
-    mapRoute: 16,
-    configureMseg: 17,
-    setSource: 8,
-    rapid: 5,
-    tail: 8,
-    sectionMinimum: 40,
+    leadIn: 24,
+    captionStagger: 12,
+    navigate: 30,
+    setParam: 42,
+    selectWavetable: 54,
+    toggleEffect: 24,
+    mapRoute: 66,
+    configureMseg: 72,
+    setSource: 48,
+    rapid: 12,
+    tail: 24,
+    sectionMinimum: 105,
 };
 
 function integer(value: number, minimum = 0): number {
@@ -91,13 +84,6 @@ function normalizedPacing(config: SpeedrunTimelineConfig): SpeedrunPacing {
         key,
         integer(overrides[key as keyof SpeedrunPacing] ?? value, 1),
     ])) as SpeedrunPacing;
-}
-
-function mixPacing(base: SpeedrunPacing, floor: SpeedrunPacing, factor: number): SpeedrunPacing {
-    return Object.fromEntries(Object.entries(base).map(([key, value]) => {
-        const floorValue = floor[key as keyof SpeedrunPacing];
-        return [key, integer(floorValue + (value - floorValue) * factor, 1)];
-    })) as SpeedrunPacing;
 }
 
 function opDuration(op: UIOp, pacing: SpeedrunPacing): number {
@@ -121,7 +107,6 @@ function buildTimeline(
     recipe: SpeedrunRecipe,
     pacing: SpeedrunPacing,
     compressionLevel: 0 | 1 | 2 | 3,
-    overlapRapid: boolean,
 ): SpeedrunTimeline {
     let cursor = 0;
     let heardOscillator = false;
@@ -140,8 +125,7 @@ function buildTimeline(
             const opStart = Math.max(opCursor, captionStart);
             const duration = opDuration(op, pacing);
             const opEnd = opStart + duration;
-            const rapid = (op.kind === "setParam" || op.kind === "setLaneParam") && op.weight === "rapid";
-            opCursor = overlapRapid && rapid ? opStart + Math.min(2, duration) : opEnd;
+            opCursor = opEnd;
             return { op, startFrame: opStart, endFrame: opEnd };
         });
         const latestOpEnd = opSpans.reduce((latest, span) => Math.max(latest, span.endFrame), startFrame);
@@ -173,29 +157,6 @@ function buildTimeline(
         compressionLevel,
         sections,
     };
-}
-
-function fitLevelOne(
-    recipe: SpeedrunRecipe,
-    base: SpeedrunPacing,
-    maximum: number,
-): SpeedrunTimeline | null {
-    const fastest = buildTimeline(recipe, mixPacing(base, FLOOR_PACING, 0), 1, false);
-    if (fastest.durationInFrames > maximum) return null;
-    let low = 0;
-    let high = 1;
-    let best = fastest;
-    for (let iteration = 0; iteration < 18; iteration += 1) {
-        const factor = (low + high) / 2;
-        const candidate = buildTimeline(recipe, mixPacing(base, FLOOR_PACING, factor), 1, false);
-        if (candidate.durationInFrames <= maximum) {
-            best = candidate;
-            low = factor;
-        } else {
-            high = factor;
-        }
-    }
-    return best;
 }
 
 function scaleTimelineToCeiling(timeline: SpeedrunTimeline, maximum: number): SpeedrunTimeline {
@@ -235,36 +196,8 @@ export function assembleTimeline(
 ): SpeedrunTimeline {
     const base = normalizedPacing(config);
     const maximum = integer(config.maxDurationInFrames ?? SPEEDRUN_MAX_DURATION_IN_FRAMES, 1);
-    const uncompressed = buildTimeline(recipe, base, 0, false);
-    if (uncompressed.durationInFrames <= maximum) return uncompressed;
-
-    const levelOne = fitLevelOne(recipe, base, maximum);
-    if (levelOne !== null) return levelOne;
-
-    const levelTwoPacing: SpeedrunPacing = {
-        ...FLOOR_PACING,
-        leadIn: 6,
-        captionStagger: 2,
-        rapid: 4,
-        tail: 6,
-        sectionMinimum: 32,
-    };
-    const levelTwo = buildTimeline(recipe, levelTwoPacing, 2, true);
-    if (levelTwo.durationInFrames <= maximum) return levelTwo;
-
-    const levelThree = buildTimeline(recipe, {
-        ...levelTwoPacing,
-        navigate: 4,
-        setParam: 5,
-        selectWavetable: 7,
-        toggleEffect: 4,
-        mapRoute: 10,
-        configureMseg: 10,
-        setSource: 6,
-        rapid: 3,
-        tail: 4,
-        sectionMinimum: 24,
-    }, 3, true);
-    return scaleTimelineToCeiling(levelThree, maximum);
+    const natural = buildTimeline(recipe, base, 0);
+    if (natural.durationInFrames <= maximum) return natural;
+    return scaleTimelineToCeiling(natural, maximum);
 }
 
