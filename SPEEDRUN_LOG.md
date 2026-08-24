@@ -211,3 +211,53 @@ URL-sharing implementation begins from Effects Lane tip `412a2a87`.
   demonstrating only audible facts in sections. This makes exact reconstruction
   and checkpoint rendering compatible without presenting hidden state as a
   user-visible speedrun action.
+
+## 2026-08-24 — M4 checkpoint audio
+
+- Added `OfflineEngineHost`, a production `PatchConnectionLike` adapter over
+  the existing class-only Cmajor performer. It writes all cumulative parameters,
+  serves modulation v6 / articulations v4 / lane v2 stored state, drains output
+  events after every <=128-frame advance, and runs the real wavetable,
+  modulation-articulation, and rack worker services before a note is captured.
+- Checkpoints use the existing Bounce worker pool unchanged: one short-lived
+  worker and fresh performer per cumulative state, bounded to four workers and
+  explicitly using `hardwareConcurrency - 2` for speedrun concurrency. The
+  speedrun worker speaks Bounce's existing render-root protocol and transfers
+  its Float32 PCM buffer back to the pool owner.
+- Selected factory sources are fetched and decoded once before virtual-time
+  installation, then structured-cloned as an immutable resource bundle to each
+  checkpoint worker. This keeps asset I/O outside the four-second virtual
+  install bound while every worker still independently builds and installs the
+  production mip image.
+- The first real Chromium pass exposed a generated-performer re-entrancy rule:
+  dispatching an output acknowledgement before resetting its output FIFO let
+  the listener's next mip input disappear. The adapter now copies and resets
+  each output FIFO before invoking listeners. A pure regression test pins that
+  order; the real service matrix then completes all three tables in 26,880
+  virtual install frames.
+- Performance MIDI is scheduled at exact sample offsets, cycles at its declared
+  duration, and carries current articulation selectors when configured. Every
+  section captures its exact duration plus a 90 ms tail. The master assembler
+  places sections at timeline sample offsets, applies 90 ms equal-power
+  crossfades, fades the final 15 video frames, emits deterministic stereo PCM16
+  WAV, and hashes the Float32 master with SHA-256.
+- Chromium and WebKit both pass exact repeat PCM/master digests, non-silence,
+  oscillator-A to oscillator-A+B RMS growth, current `delay#2` split-lane tail
+  growth, and low-pass spectral-centroid reduction. A poisoned source fails as
+  typed `SpeedrunInstallError: wavetable install failed` instead of hanging.
+- Measured Chromium fixture: four 2.09-second checkpoints = 8.36 seconds of
+  rendered audio in 1,217.2 ms wall time with two workers, or 6.87x aggregate.
+  Individual fresh-worker throughput was 3.57x, 3.58x, 3.62x, and 3.64x
+  realtime, above the handoff's conservative 2.7x budget figure.
+- Green gates: M4 audio 6/6; M3 core 14/14; Bounce capture 8/8; Web bundle
+  contract 18/18; owned TypeScript probe clean. The existing Bounce G2 boundary
+  red remains separately documented and was not changed.
+
+### M4 boundary decision and synchronization
+
+- Fetched `origin/claude/effects-lane-m1` after the M4 gates. Its tip remains
+  `0a0eba9c`; no merge was required and no Effects Lane implementation changed.
+- Decision: use the current worker-service stack rather than replaying a second,
+  speedrun-specific approximation of lane/modulation installs. This makes
+  repeated-device and group behavior an observed pipeline input while Bounce's
+  proven pool remains the sole worker lifecycle owner.

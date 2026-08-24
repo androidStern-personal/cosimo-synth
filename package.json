@@ -46,6 +46,7 @@
     "test:sound-share": "npm run web:build && node --test tests/test_sound_share_link.mjs tests/test_synth_init_presets.mjs tests/test_effect_preset_bar_browser.mjs tests/test_sound_share_browser.mjs",
     "ui:worker:build": "vite build --config ui/vite.worker.config.mjs",
     "ui:bounce-worker:build": "vite build --config ui/vite.bounce-worker.config.mjs",
+    "ui:speedrun-worker:build": "vite build --config ui/vite.speedrun-worker.config.mjs",
     "ui:worker:test:build": "vite build --config ui/vite.worker-test.config.mjs",
     "ui:build": "node ui/build.mjs",
     "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs",
@@ -66,7 +67,9 @@
     "test:cmajor:rack": "cmaj test --singleThread --sessionID=1 tests/cmajor_rack",
     "spike:remotion:web:build": "vite build --config experiments/remotion-web-renderer-spike/vite.config.mjs",
     "test:spike:remotion:web": "npm run spike:remotion:web:build && node --test tests/test_remotion_web_renderer_spike.mjs",
-    "test:speedrun:core": "npm run web:build && node --test tests/test_speedrun_patch_io.mjs tests/test_speedrun_analyzer_recipe.mjs tests/test_speedrun_recipe_roundtrip.mjs tests/test_speedrun_timeline.mjs"
+    "test:speedrun:core": "npm run web:build && node --test tests/test_speedrun_patch_io.mjs tests/test_speedrun_analyzer_recipe.mjs tests/test_speedrun_recipe_roundtrip.mjs tests/test_speedrun_timeline.mjs",
+    "speedrun:audio:harness:build": "vite build --config tests/vite.speedrun-audio-harness.config.mjs",
+    "test:speedrun:audio": "npm run web:build && npm run speedrun:audio:harness:build && node --test tests/test_speedrun_master_track.mjs tests/test_speedrun_offline_engine_host.mjs tests/test_speedrun_offline_render_browser.mjs"
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",
