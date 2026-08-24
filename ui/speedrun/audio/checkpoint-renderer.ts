@@ -12,6 +12,7 @@ import { createModulationArticulationWorkerService } from "../../worker/modulati
 import { createRackStateWorkerService } from "../../worker/rack-state-worker-service";
 import { createWavetableWorkerController } from "../../worker/wavetable-worker";
 import type { CumulativePatchState } from "../partial-states";
+import { SPEEDRUN_SAMPLES_PER_FRAME } from "../timeline";
 import {
     OfflineEngineHost,
     type OfflinePerformerClass,
@@ -20,6 +21,11 @@ import {
     createSpeedrunResourceClient,
     type SpeedrunWavetableResourceBundle,
 } from "./resources";
+import {
+    SPEEDRUN_TELEMETRY_ENDPOINT_IDS,
+    type SpeedrunCheckpointTelemetryTrack,
+    type SpeedrunTelemetryEndpointID,
+} from "./telemetry";
 
 export type NotePerformanceEvent = {
     readonly atSec: number;
@@ -51,6 +57,7 @@ export type SpeedrunCheckpointRenderResult = {
     readonly checkpointIndex: number;
     readonly frameCount: number;
     readonly samples: Float32Array;
+    readonly telemetry: SpeedrunCheckpointTelemetryTrack;
     readonly metrics: {
         readonly renderedFrameCount: number;
         readonly installFrameCount: number;
@@ -316,21 +323,49 @@ export async function renderSpeedrunCheckpoint(
     const samples = new Float32Array(job.frameCount * 2);
     const events = performanceEvents(job.performance, job.frameCount, job.sampleRate);
     const articulationConfig = host.getInstallationState().articulationTriggerConfig;
+    const telemetryByFrame = new Map<
+        number,
+        Partial<Record<SpeedrunTelemetryEndpointID, unknown>>
+    >();
     let eventIndex = 0;
     let renderedFrames = 0;
     let noteOnIndex = 0;
-    while (renderedFrames < job.frameCount) {
-        while (eventIndex < events.length && events[eventIndex].frame === renderedFrames) {
-            const event = events[eventIndex];
-            sendPerformanceEvent(host, event.code, articulationConfig, noteOnIndex);
-            if ((status(event.code) & 0xf0) === 0x90 && velocity(event.code) > 0) noteOnIndex += 1;
-            eventIndex += 1;
+    const telemetryListeners = SPEEDRUN_TELEMETRY_ENDPOINT_IDS.map((endpointID) => {
+        const listener = (value: unknown) => {
+            const videoFrame = Math.floor(renderedFrames / SPEEDRUN_SAMPLES_PER_FRAME);
+            const eventsAtFrame = telemetryByFrame.get(videoFrame) ?? {};
+            eventsAtFrame[endpointID] = structuredClone(value);
+            telemetryByFrame.set(videoFrame, eventsAtFrame);
+        };
+        host.addEndpointListener(endpointID, listener);
+        return { endpointID, listener };
+    });
+    try {
+        while (renderedFrames < job.frameCount) {
+            while (eventIndex < events.length && events[eventIndex].frame === renderedFrames) {
+                const event = events[eventIndex];
+                sendPerformanceEvent(host, event.code, articulationConfig, noteOnIndex);
+                if ((status(event.code) & 0xf0) === 0x90 && velocity(event.code) > 0) noteOnIndex += 1;
+                eventIndex += 1;
+            }
+            const nextEventFrame = events[eventIndex]?.frame ?? job.frameCount;
+            const nextVideoFrame = (
+                Math.floor(renderedFrames / SPEEDRUN_SAMPLES_PER_FRAME) + 1
+            ) * SPEEDRUN_SAMPLES_PER_FRAME;
+            const count = Math.min(
+                128,
+                job.frameCount - renderedFrames,
+                nextEventFrame - renderedFrames,
+                nextVideoFrame - renderedFrames,
+            );
+            if (count < 1) continue;
+            host.render(count, samples, renderedFrames);
+            renderedFrames += count;
         }
-        const nextEventFrame = events[eventIndex]?.frame ?? job.frameCount;
-        const count = Math.min(128, job.frameCount - renderedFrames, nextEventFrame - renderedFrames);
-        if (count < 1) continue;
-        host.render(count, samples, renderedFrames);
-        renderedFrames += count;
+    } finally {
+        for (const { endpointID, listener } of telemetryListeners) {
+            host.removeEndpointListener(endpointID, listener);
+        }
     }
 
     const elapsedMilliseconds = (globalThis.performance?.now?.() ?? startedAt) - startedAt;
@@ -340,6 +375,12 @@ export async function renderSpeedrunCheckpoint(
         checkpointIndex: job.checkpointIndex,
         frameCount: job.frameCount,
         samples,
+        telemetry: {
+            frameCount: Math.ceil(job.frameCount / SPEEDRUN_SAMPLES_PER_FRAME),
+            frames: [...telemetryByFrame.entries()]
+                .sort(([left], [right]) => left - right)
+                .map(([frame, frameEvents]) => ({ frame, events: frameEvents })),
+        },
         metrics: {
             renderedFrameCount: job.frameCount,
             installFrameCount,

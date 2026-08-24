@@ -5,6 +5,10 @@ import {
     assembleSpeedrunMasterTrack,
 } from "../audio/master-track";
 import {
+    assembleSpeedrunTelemetryTrack,
+    type SpeedrunTelemetryTrack,
+} from "../audio/telemetry";
+import {
     renderSpeedrunCheckpoints,
     type SpeedrunAudioProgress,
 } from "../audio/render-pool";
@@ -30,6 +34,7 @@ import {
     type SpeedrunVideoFormat,
 } from "./video-support";
 import { verifySpeedrunVideo, type SpeedrunVideoVerification } from "./verify";
+import type { ScriptedPreencodeDigest } from "../scripted/iframe-renderer";
 
 export type SpeedrunPreparedPipeline = {
     readonly document: PatchDocument;
@@ -48,6 +53,7 @@ export type SpeedrunAudioArtifact = {
     readonly bytes: number;
     readonly durationSeconds: number;
     readonly elapsedMilliseconds: number;
+    readonly telemetry: SpeedrunTelemetryTrack;
 };
 
 export type SpeedrunVideoArtifact = {
@@ -57,6 +63,7 @@ export type SpeedrunVideoArtifact = {
     readonly format: SpeedrunVideoFormat;
     readonly verification: SpeedrunVideoVerification;
     readonly elapsedMilliseconds: number;
+    readonly preencodeFrameDigests: ReadonlyArray<ScriptedPreencodeDigest>;
 };
 
 export type SpeedrunVideoProgress = {
@@ -230,6 +237,7 @@ export class SpeedrunStudioSession {
             );
             if (controller.signal.aborted) throw new DOMException("Cancelled", "AbortError");
             const master = assembleSpeedrunMasterTrack(prepared.timeline, checkpoints);
+            const telemetry = assembleSpeedrunTelemetryTrack(prepared.timeline, checkpoints);
             const blob = new Blob([arrayBuffer(master.wav)], { type: "audio/wav" });
             const artifact: SpeedrunAudioArtifact = {
                 url: this.own(blob),
@@ -237,6 +245,7 @@ export class SpeedrunStudioSession {
                 bytes: blob.size,
                 durationSeconds: prepared.timeline.durationInFrames / prepared.timeline.fps,
                 elapsedMilliseconds: performance.now() - startedAt,
+                telemetry,
             };
             this.revoke(this.audioValue?.url);
             this.audioValue = artifact;
@@ -252,6 +261,8 @@ export class SpeedrunStudioSession {
         readonly preferredContainer?: SpeedrunVideoContainer;
         readonly videoBitrate?: "very-low" | "low" | "medium" | "high";
         readonly onProgress?: (progress: SpeedrunVideoProgress) => void;
+        readonly compositionMode?: "replica" | "scripted";
+        readonly digestFrames?: ReadonlyArray<number>;
     } = {}): Promise<SpeedrunVideoArtifact> {
         const prepared = this.preparedValue;
         const audio = this.audioValue;
@@ -271,36 +282,62 @@ export class SpeedrunStudioSession {
         const startedAt = performance.now();
         try {
             await document.fonts.ready;
-            const props = {
-                recipe: prepared.recipe,
-                timeline: prepared.timeline,
-                masterAudioUrl: audio.url,
-                patchLabel: prepared.document.label,
-            };
-            const { getBlob } = await renderMediaOnWeb({
-                composition: {
-                    id: "cosimo-sound-speedrun",
-                    component: SpeedrunComposition,
-                    durationInFrames: prepared.timeline.durationInFrames,
-                    fps: prepared.timeline.fps,
-                    width: SPEEDRUN_VIDEO_WIDTH,
-                    height: SPEEDRUN_VIDEO_HEIGHT,
-                    defaultProps: props,
-                },
-                inputProps: props,
-                container: format.container,
-                videoCodec: format.videoCodec,
-                audioCodec: format.audioCodec,
-                sampleRate: prepared.timeline.sampleRate,
-                videoBitrate: options.videoBitrate ?? "high",
-                audioBitrate: "medium",
-                logLevel: "warn",
-                signal: controller.signal,
-                onProgress: ({ progress, renderedFrames, encodedFrames }) => {
-                    options.onProgress?.({ progress, renderedFrames, encodedFrames });
-                },
-            });
-            const blob = await getBlob();
+            let blob: Blob;
+            let preencodeFrameDigests: ReadonlyArray<ScriptedPreencodeDigest> = [];
+            if (options.compositionMode === "scripted") {
+                const { renderScriptedVideoInIframe } = await import("../scripted/iframe-renderer");
+                const scripted = await renderScriptedVideoInIframe({
+                    defaults: prepared.defaults,
+                    recipe: prepared.recipe,
+                    timeline: prepared.timeline,
+                    states: prepared.states,
+                    performance: prepared.performance,
+                    telemetry: audio.telemetry,
+                    masterAudioUrl: audio.url,
+                    patchLabel: prepared.document.label,
+                    resourceBaseURL: this.runtime.webRootURL.href,
+                    format,
+                    videoBitrate: options.videoBitrate,
+                    digestFrames: options.digestFrames,
+                    signal: controller.signal,
+                    onProgress: ({ progress, renderedFrames, encodedFrames }) => {
+                        options.onProgress?.({ progress, renderedFrames, encodedFrames });
+                    },
+                });
+                blob = scripted.blob;
+                preencodeFrameDigests = scripted.preencodeDigests;
+            } else {
+                const props = {
+                    recipe: prepared.recipe,
+                    timeline: prepared.timeline,
+                    masterAudioUrl: audio.url,
+                    patchLabel: prepared.document.label,
+                };
+                const result = await renderMediaOnWeb({
+                    composition: {
+                        id: "cosimo-sound-speedrun",
+                        component: SpeedrunComposition,
+                        durationInFrames: prepared.timeline.durationInFrames,
+                        fps: prepared.timeline.fps,
+                        width: SPEEDRUN_VIDEO_WIDTH,
+                        height: SPEEDRUN_VIDEO_HEIGHT,
+                        defaultProps: props,
+                    },
+                    inputProps: props,
+                    container: format.container,
+                    videoCodec: format.videoCodec,
+                    audioCodec: format.audioCodec,
+                    sampleRate: prepared.timeline.sampleRate,
+                    videoBitrate: options.videoBitrate ?? "high",
+                    audioBitrate: "medium",
+                    logLevel: "warn",
+                    signal: controller.signal,
+                    onProgress: ({ progress, renderedFrames, encodedFrames }) => {
+                        options.onProgress?.({ progress, renderedFrames, encodedFrames });
+                    },
+                });
+                blob = await result.getBlob();
+            }
             if (controller.signal.aborted) throw new DOMException("Cancelled", "AbortError");
             const verification = await verifySpeedrunVideo(blob, prepared.timeline, format);
             const artifact: SpeedrunVideoArtifact = {
@@ -310,6 +347,7 @@ export class SpeedrunStudioSession {
                 format,
                 verification,
                 elapsedMilliseconds: performance.now() - startedAt,
+                preencodeFrameDigests,
             };
             this.revoke(this.videoValue?.url);
             this.videoValue = artifact;

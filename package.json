@@ -72,6 +72,7 @@
     "speedrun:audio:harness:build": "vite build --config tests/vite.speedrun-audio-harness.config.mjs",
     "test:speedrun:audio": "npm run web:build && npm run speedrun:audio:harness:build && node --test tests/test_speedrun_master_track.mjs tests/test_speedrun_offline_engine_host.mjs tests/test_speedrun_offline_render_browser.mjs",
     "speedrun:composition:harness:build": "vite build --config tests/vite.speedrun-composition-harness.config.mjs",
+    "speedrun:scripted:harness:build": "vite build --config tests/vite.speedrun-scripted-harness.config.mjs",
     "test:speedrun:composition": "npm run speedrun:composition:harness:build && node --test tests/test_speedrun_composition_browser.mjs",
     "test:speedrun:midi": "node --test tests/test_speedrun_smf.mjs",
     "speedrun:build": "npm run web:build && vite build --config ui/vite.speedrun-studio.config.mjs",
@@ -79,6 +80,7 @@
     "test:speedrun:pipeline": "npm run speedrun:build && node --test tests/test_speedrun_pipeline_browser.mjs",
     "test:video-bounce:integration": "npm run web:build && node --test tests/test_video_bounce_integration_browser.mjs",
     "test:video-bounce:fidelity": "node --test tests/test_video_bounce_fidelity_browser.mjs",
+    "test:video-bounce:scripted-state": "npm run web:build && npm run speedrun:scripted:harness:build && node --test tests/test_video_bounce_scripted_state_browser.mjs",
     "test:speedrun:hardening": "npm run web:build && node --test tests/test_speedrun_hardening.mjs"
   },
   "devDependencies": {

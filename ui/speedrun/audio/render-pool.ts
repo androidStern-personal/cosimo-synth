@@ -13,6 +13,7 @@ import {
     prefetchSpeedrunWavetableResources,
     type SpeedrunWavetableResourceBundle,
 } from "./resources";
+import { emptySpeedrunCheckpointTelemetryTrack } from "./telemetry";
 
 export type SpeedrunAudioProgress = {
     readonly completedCheckpoints: number;
@@ -150,6 +151,10 @@ export async function renderSpeedrunCheckpoints(
             || !(result.samples instanceof Float32Array)) {
             throw new Error(`Speedrun checkpoint ${expected.checkpointIndex} returned invalid audio.`);
         }
-        return result;
+        return {
+            ...result,
+            telemetry: result.telemetry
+                ?? emptySpeedrunCheckpointTelemetryTrack(Math.ceil(result.frameCount / 1_600)),
+        };
     });
 }

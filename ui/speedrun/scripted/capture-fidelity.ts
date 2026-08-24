@@ -41,6 +41,11 @@ function lightDomShadowStyle(css: string, hostSelector: string) {
     return `@scope (${hostSelector}) { ${scopedCss} }`;
 }
 
+const CAPTURE_SHADOW_CLONE = "data-capture-shadow-clone";
+const CAPTURE_SHADOW_ORIGINAL = "data-capture-shadow-original";
+const CAPTURE_SHADOW_HIDE = "data-capture-shadow-hide";
+const CAPTURE_SHADOW_SLOT = "data-capture-shadow-slot";
+
 /**
  * Capture-only fallback for open shadow roots such as the preset-name bar.
  * Clone the rendered leaf into its light DOM and project it through a slot;
@@ -59,35 +64,53 @@ export function flattenCaptureShadowRoots(root: ParentNode) {
             continue;
         }
 
-        host.querySelector(":scope > [data-capture-shadow-clone]")?.remove();
-        shadow.querySelectorAll('slot[data-capture-shadow-slot="true"]').forEach((slot) => slot.remove());
+        host.querySelector(`:scope > [${CAPTURE_SHADOW_CLONE}]`)?.remove();
+        shadow.querySelectorAll(`slot[${CAPTURE_SHADOW_SLOT}], style[${CAPTURE_SHADOW_HIDE}]`)
+            .forEach((element) => element.remove());
+        const originals = [...shadow.childNodes];
         const cloneContainer = document.createElement("div");
-        cloneContainer.dataset.captureShadowClone = "true";
+        cloneContainer.setAttribute(CAPTURE_SHADOW_CLONE, "true");
         cloneContainer.style.display = "contents";
-        const clones = [...shadow.childNodes].map((node) => {
+        const clones = originals.map((node) => {
             const clone = node.cloneNode(true);
             if (clone instanceof HTMLStyleElement) {
                 clone.textContent = lightDomShadowStyle(clone.textContent ?? "", host.localName);
+            }
+            if (clone instanceof Element) {
+                clone.removeAttribute(CAPTURE_SHADOW_ORIGINAL);
+                clone.querySelectorAll(`[${CAPTURE_SHADOW_ORIGINAL}]`)
+                    .forEach((element) => element.removeAttribute(CAPTURE_SHADOW_ORIGINAL));
             }
             return clone;
         });
         cloneContainer.append(...clones);
         host.append(cloneContainer);
 
-        for (const element of shadow.children) {
-            if (element instanceof HTMLElement && !(element instanceof HTMLStyleElement)) {
-                element.style.setProperty("display", "none", "important");
+        for (const element of originals) {
+            if (element instanceof Element && !(element instanceof HTMLStyleElement)) {
+                element.setAttribute(CAPTURE_SHADOW_ORIGINAL, "true");
             }
         }
+        const hideOriginals = document.createElement("style");
+        hideOriginals.setAttribute(CAPTURE_SHADOW_HIDE, "true");
+        hideOriginals.textContent = `[${CAPTURE_SHADOW_ORIGINAL}] { display: none !important; }`;
         const slot = document.createElement("slot");
-        slot.dataset.captureShadowSlot = "true";
-        shadow.append(slot);
+        slot.setAttribute(CAPTURE_SHADOW_SLOT, "true");
+        shadow.append(hideOriginals, slot);
     }
 }
 
 /** Resolve external CSS/variables before Remotion serializes SVGs in isolation. */
 export function inlineCaptureSvgPresentation(root: ParentNode) {
     for (const svg of root.querySelectorAll<SVGSVGElement>("svg")) {
+        const bounds = svg.getBoundingClientRect();
+        // The fallback serializes each SVG to a standalone data URL. A
+        // percentage-only width/height has no containing block there and
+        // decodes as a 0px intrinsic bitmap, so pin its already-computed box.
+        if (bounds.width > 0 && bounds.height > 0) {
+            svg.setAttribute("width", String(bounds.width));
+            svg.setAttribute("height", String(bounds.height));
+        }
         for (const element of [svg, ...svg.querySelectorAll<SVGElement>("*")]) {
             const computed = getComputedStyle(element);
 
@@ -101,15 +124,24 @@ export function inlineCaptureSvgPresentation(root: ParentNode) {
     }
 }
 
-export function pauseCaptureAnimations(root: Element) {
+export function pauseCaptureAnimations(root: Element, currentTimeMilliseconds?: number) {
     for (const animation of root.getAnimations({ subtree: true })) {
         animation.pause();
+        if (currentTimeMilliseconds !== undefined) {
+            animation.currentTime = currentTimeMilliseconds;
+        }
     }
 }
 
 export async function settleCaptureSubtree(
     root: Element,
-    { flattenShadowRoots = true }: { readonly flattenShadowRoots?: boolean } = {},
+    {
+        flattenShadowRoots = true,
+        animationTimeMilliseconds,
+    }: {
+        readonly flattenShadowRoots?: boolean;
+        readonly animationTimeMilliseconds?: number;
+    } = {},
 ) {
     await document.fonts.ready;
     if (flattenShadowRoots) {
@@ -120,6 +152,8 @@ export async function settleCaptureSubtree(
     await nextAnimationFrame();
     await nextAnimationFrame();
     inlineCaptureSvgPresentation(root);
-    pauseCaptureAnimations(root);
+    pauseCaptureAnimations(root, animationTimeMilliseconds);
+    await nextAnimationFrame();
+    await nextAnimationFrame();
     await nextAnimationFrame();
 }

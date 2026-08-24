@@ -93,6 +93,13 @@ async function render(request: HarnessRequest) {
             tailRms: stereoRms(checkpoint.samples, Math.round(0.42 * 48_000), Math.round(0.48 * 48_000)),
             spectralCentroid: spectralCentroid(checkpoint.samples, Math.round(0.12 * 48_000), 48_000),
             metrics: checkpoint.metrics,
+            telemetry: {
+                frameCount: checkpoint.telemetry.frameCount,
+                populatedFrameCount: checkpoint.telemetry.frames.length,
+                endpointIDs: [...new Set(checkpoint.telemetry.frames.flatMap((frame) => (
+                    Object.keys(frame.events)
+                )))].sort(),
+            },
         }))),
         master: {
             digest: await digestSpeedrunPCM(master.samples),

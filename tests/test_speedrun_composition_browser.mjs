@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs/promises";
 import { createServer } from "node:http";
 import path from "node:path";
@@ -13,6 +14,15 @@ const updateGoldens = process.env.COSIMO_UPDATE_SPEEDRUN_GOLDENS === "1";
 let browser;
 let server;
 let baseUrl;
+
+function sha256(bytes) {
+    return createHash("sha256").update(bytes).digest("hex");
+}
+
+function assertSamePng(actual, expected, message) {
+    assert.equal(actual.byteLength, expected.byteLength, `${message} (PNG byte length)`);
+    assert.equal(sha256(actual), sha256(expected), `${message} (PNG SHA-256)`);
+}
 
 function contentType(filePath) {
     const extension = path.extname(filePath);
@@ -90,7 +100,7 @@ test("the phone replica is frame-pure and composes real product leaf artwork", a
     const second = await page.locator("#root").screenshot({ type: "png", animations: "disabled" });
     const secondInspection = await page.evaluate(() => window.__COSIMO_SPEEDRUN_COMPOSITION__.inspect());
 
-    assert.deepEqual(second, first, "seeking away and back to one frame changed its pixels");
+    assertSamePng(second, first, "seeking away and back to one frame changed its pixels");
     assert.deepEqual(secondInspection, firstInspection);
     assert.equal(firstInspection.renderedFrame, frame);
     assert.ok(firstInspection.canvasCount >= 1, JSON.stringify(firstInspection));
@@ -115,14 +125,14 @@ test("every current-contract section boundary matches its checked-in screenshot 
             await fs.writeFile(goldenPath, screenshot);
         } else {
             const golden = await fs.readFile(goldenPath);
-            assert.deepEqual(screenshot, golden, `${boundary.sectionId} frame ${boundary.frame} drifted from its golden`);
+            assertSamePng(screenshot, golden, `${boundary.sectionId} frame ${boundary.frame} drifted from its golden`);
         }
     }
     await setFrame(page, metadata.endCardFrame);
     const endCardScreenshot = await page.locator("#root").screenshot({ type: "png", animations: "disabled" });
     const endCardGolden = path.join(goldenRoot, "end-card.png");
     if (updateGoldens) await fs.writeFile(endCardGolden, endCardScreenshot);
-    else assert.deepEqual(endCardScreenshot, await fs.readFile(endCardGolden), "the end card drifted from its golden");
+    else assertSamePng(endCardScreenshot, await fs.readFile(endCardGolden), "the end card drifted from its golden");
     const endCard = await page.evaluate(() => ({
         inspection: window.__COSIMO_SPEEDRUN_COMPOSITION__.inspect(),
         text: document.querySelector(".speedrun-end-card")?.textContent ?? "",

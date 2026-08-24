@@ -200,6 +200,25 @@ for (const [browserName, browserType] of [["Chromium", chromium], ["WebKit", web
             assert.ok(first.master.rms > 1e-5);
             assert.equal(first.master.wavByteLength, 44 + first.master.frameCount * 4);
             assert.ok(first.checkpoints.every((checkpoint) => checkpoint.metrics.installFrameCount <= 192_000));
+            assert.ok(first.checkpoints.every((checkpoint) => checkpoint.telemetry.populatedFrameCount > 0));
+            for (const checkpoint of first.checkpoints) {
+                assert.ok(
+                    checkpoint.telemetry.endpointIDs.includes("effectiveWavetablePosition"),
+                    `${browserName} checkpoint telemetry omitted wavetable position: ${JSON.stringify(checkpoint.telemetry)}`,
+                );
+                assert.ok(
+                    checkpoint.telemetry.endpointIDs.includes("effectiveFilterState"),
+                    `${browserName} checkpoint telemetry omitted filter state: ${JSON.stringify(checkpoint.telemetry)}`,
+                );
+                assert.ok(
+                    checkpoint.telemetry.endpointIDs.includes("effectiveMsegState"),
+                    `${browserName} checkpoint telemetry omitted MSEG state: ${JSON.stringify(checkpoint.telemetry)}`,
+                );
+                assert.ok(
+                    checkpoint.telemetry.endpointIDs.includes("effectiveModSourceState"),
+                    `${browserName} checkpoint telemetry omitted mod-source state: ${JSON.stringify(checkpoint.telemetry)}`,
+                );
+            }
             assert.ok(first.wallElapsedMilliseconds > 0);
             assert.ok(first.wallRealtimeMultiplier > 0);
             if (process.env.COSIMO_SPEEDRUN_REPORT === "1") {

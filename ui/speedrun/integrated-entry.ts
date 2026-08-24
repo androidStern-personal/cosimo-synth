@@ -6,6 +6,8 @@ import type {
 import { SpeedrunStudioSession } from "./studio/pipeline";
 import { loadSpeedrunStudioRuntime } from "./studio/runtime";
 
+export { renderScriptedVideoInCurrentDocument } from "./scripted/iframe-renderer";
+
 const MAX_DURATION_IN_FRAMES = 2_700;
 const STYLE_LINK_MARKER = "cosimo-video-bounce-runtime";
 
