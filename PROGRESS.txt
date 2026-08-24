@@ -1,3 +1,8 @@
+PAUSED — Bounce Video must use the real Cosimo synth UI — 2026-08-24
+- The current `SpeedrunPhoneUI` replica is explicitly rejected even though the original handoff mandated a replica-first architecture. Do not polish or extend it. The user's newer direction requires the actual Cosimo synth UI and no architecture changes until the work is explicitly resumed.
+- A real whole-view seam already exists at `createDesktopPatchView(patchConnection, options)` / `PatchConnectionLike`; `MockPatchConnection` and the desktop harness already drive the same responsive production component tree. The unresolved problem is deterministic frame control/capture, not access to the real UI.
+- Full state, provenance, current implementation, and resumption rules: `VIDEO_BOUNCE_REAL_SYNTH_UI_HANDOFF.md`.
+
 Preset-menu Bounce Audio + integrated current-patch Bounce Video — 2026-08-24
 - On `codex/speedrun-video-share`, the synth preset dropdown owns both `Bounce Audio` and `Bounce Video`; the old ready-state Bounce buttons are removed from Voice and sampled-source surfaces. Audio keeps the existing dirty-sound guard.
 - `Bounce Video` captures the current sound directly (separate from share-link policy), then lazy-loads the browser-only renderer from `/video-bounce/index.js`. The fixed, non-scrolling flow has no patch/file/URL chooser and does not create a share URL.
