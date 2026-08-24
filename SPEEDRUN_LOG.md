@@ -300,3 +300,45 @@ URL-sharing implementation begins from Effects Lane tip `412a2a87`.
 - Fetched `origin/claude/effects-lane-m1` after all M5 gates. Its tip remains
   `0a0eba9c`; it is already an ancestor, so no merge or Effects Lane change was
   required.
+
+## 2026-08-24 — M6 browser studio
+
+- Added a standalone `/speedrun/` studio rather than coupling the pipeline to
+  either shipped synth surface. It accepts the current browser sound, a preset
+  file, or an M1 share link; accepts Standard MIDI Files (format 0/1) or the
+  built-in performance; and keeps download plus copy-share actions adjacent.
+- The studio owns one disposable pipeline session. Preparation normalizes the
+  current sound contract and compiles its recipe/timeline; audio rendering uses
+  the M4 short-lived worker pool; video rendering sends the single assembled
+  WAV blob URL to the M5 composition. Both long stages report progress and
+  support cancellation without leaving a live render or worker behind.
+- MP4/H.264/AAC is the preferred Chromium path. WebM/VP9/Opus is offered only
+  when its complete encode/decode contract is available. A result is withheld
+  until Mediabunny proves the requested container, exactly one video and one
+  audio track, the expected codecs and duration, and non-silent decoded audio
+  inside every audible section window.
+- The production-built end-to-end gate uploaded `demo/one_note.mid`, rendered a
+  3.3667-second current patch into a 288,759-byte, 3.4347-second AVC/AAC MP4,
+  and measured minimum per-section decoded RMS 0.01149. A second current
+  lane.v2 fixture retained active `delay#2` and `reverb#1` inside `split#1` and
+  produced a 347,597-byte, 3.9467-second AVC/AAC MP4 with minimum section RMS
+  0.005759. The gate also proves blob signatures, download/share actions,
+  clipboard text, and cancellation.
+- Green gates: end-to-end pipeline 2/2; MIDI intake 5/5; composition 3/3;
+  checkpoint audio 6/6 across Chromium and WebKit; pure core 14/14; URL sharing
+  28/28; effect presets 113/113; shared hooks 34/34; iPhone 20/20; Bounce
+  capture 8/8; Web bundle 18/18; orphan units 712/712; desktop browser 222/222;
+  browser orphans 117 passes plus one intentional skip.
+- A direct repository-wide TypeScript probe remains red only at pre-existing
+  Bounce `.mjs` declaration gaps and a sound-share TypeScript 6 DOM mismatch;
+  no M6-owned diagnostic appears. The repository's owned build and test gates
+  above are authoritative for this milestone.
+
+### M6 boundary decision and synchronization
+
+- Fetched `origin/claude/effects-lane-m1` after all M6 gates. Its tip remains
+  `0a0eba9c`; it is already an ancestor, so no merge or Effects Lane change was
+  required.
+- Decision: keep the speedrun studio as a disposable browser-only orchestrator
+  over existing product contracts. It does not add video concerns to the live
+  synth, duplicate DSP/runtime services, or expose an unverified encoded blob.
