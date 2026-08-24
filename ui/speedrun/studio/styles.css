@@ -86,6 +86,7 @@ textarea:focus, select:focus, .duration-setting input:focus { border-color: var(
 .recipe-list ul { list-style: none; margin: 11px 0 0; padding: 0; color: #a6abb2; font-size: 9px; line-height: 1.75; }
 .recipe-list ul li::before { content: "· "; color: var(--cyan); }
 .compression-note { padding: 12px 22px; color: var(--amber); background: rgba(233, 186, 102, 0.07); border-bottom: 1px solid rgba(233, 186, 102, 0.16); font-size: 10px; }
+.share-unavailable { padding: 12px 22px; color: var(--pink); background: rgba(238, 168, 185, 0.055); border-bottom: 1px solid rgba(238, 168, 185, 0.16); font-size: 10px; }
 .omitted-report { margin: 18px 22px 22px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; color: var(--muted); font-size: 9px; }
 .omitted-report summary { color: #bec2c7; cursor: pointer; }
 .omitted-report p { display: grid; grid-template-columns: 180px 1fr; gap: 12px; line-height: 1.55; }
@@ -113,6 +114,7 @@ textarea:focus, select:focus, .duration-setting input:focus { border-color: var(
 .delivery-actions button { background: #27212d; color: #dbc4ed; border: 1px solid rgba(194,131,255,0.25); }
 .share-url { grid-column: 1 / -1; width: 100%; padding: 10px; color: #7f858c; font-size: 8px; }
 .share-url.is-warning { border-color: var(--amber); }
+.delivery-share-unavailable { grid-column: 1 / -1; margin: 0; border: 1px solid rgba(238, 168, 185, 0.2); border-radius: 8px; }
 .copy-status { grid-column: 1 / -1; margin: -6px 0 0; color: var(--cyan); font-size: 9px; }
 
 .studio-error { position: sticky; z-index: 2; top: 12px; margin-top: 20px; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 16px 18px; border: 1px solid rgba(238, 168, 185, 0.44); border-radius: 11px; background: rgba(38, 17, 24, 0.96); box-shadow: 0 14px 44px rgba(0,0,0,0.36); }

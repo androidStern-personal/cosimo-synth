@@ -18,9 +18,11 @@ import { buildCumulativeStates, type CumulativePatchState } from "../partial-sta
 import { intakePatch, type DefaultsSnapshot, type PatchDocument } from "../patch-io";
 import { compileRecipe, type SpeedrunRecipe } from "../recipe";
 import { assembleTimeline, type SpeedrunTimeline } from "../timeline";
-import type { CreatedSoundShareURL } from "../../shared/sound-share-link";
 import { SpeedrunStudioError, studioError } from "./errors";
-import { createStudioShareLink } from "./patch-input";
+import {
+    createStudioShareLink,
+    type StudioShareLinkAvailability,
+} from "./patch-input";
 import type { SpeedrunStudioRuntime } from "./runtime";
 import {
     detectSpeedrunVideoFormat,
@@ -37,7 +39,7 @@ export type SpeedrunPreparedPipeline = {
     readonly timeline: SpeedrunTimeline;
     readonly states: ReadonlyArray<CumulativePatchState>;
     readonly performance: NotePerformance;
-    readonly shareLink: CreatedSoundShareURL;
+    readonly shareLink: StudioShareLinkAvailability;
 };
 
 export type SpeedrunAudioArtifact = {
@@ -70,7 +72,11 @@ export type SpeedrunStudioSnapshot = {
         readonly durationInFrames: number;
         readonly durationSeconds: number;
         readonly compressionLevel: number;
-        readonly shareURL: string;
+        readonly shareURL: string | null;
+        readonly shareError: null | {
+            readonly code: string;
+            readonly message: string;
+        };
     };
     readonly audio: null | {
         readonly bytes: number;
@@ -177,9 +183,7 @@ export class SpeedrunStudioSession {
             if (timeline.durationInFrames < 1 || timeline.sections.length < 1) {
                 throw new Error("This sound has no reconstructable speedrun sections.");
             }
-            const [shareLink] = await Promise.all([
-                createStudioShareLink(intake.value.document, this.runtime),
-            ]);
+            const shareLink = await createStudioShareLink(intake.value.document, this.runtime);
             const prepared = {
                 document: intake.value.document,
                 defaults: intake.value.defaults,
@@ -325,7 +329,12 @@ export class SpeedrunStudioSession {
                 durationInFrames: prepared.timeline.durationInFrames,
                 durationSeconds: prepared.timeline.durationInFrames / prepared.timeline.fps,
                 compressionLevel: prepared.timeline.compressionLevel,
-                shareURL: prepared.shareLink.url,
+                shareURL: prepared.shareLink._tag === "available"
+                    ? prepared.shareLink.link.url
+                    : null,
+                shareError: prepared.shareLink._tag === "unavailable"
+                    ? { code: prepared.shareLink.code, message: prepared.shareLink.message }
+                    : null,
             },
             audio: this.audioValue === null ? null : {
                 bytes: this.audioValue.bytes,

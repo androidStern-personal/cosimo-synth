@@ -75,7 +75,8 @@
     "test:speedrun:midi": "node --test tests/test_speedrun_smf.mjs",
     "speedrun:build": "npm run web:build && vite build --config ui/vite.speedrun-studio.config.mjs",
     "speedrun:dev": "npm run web:build && vite --config ui/vite.speedrun-studio.config.mjs",
-    "test:speedrun:pipeline": "npm run speedrun:build && node --test tests/test_speedrun_pipeline_browser.mjs"
+    "test:speedrun:pipeline": "npm run speedrun:build && node --test tests/test_speedrun_pipeline_browser.mjs",
+    "test:speedrun:hardening": "npm run web:build && node --test tests/test_speedrun_hardening.mjs"
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",

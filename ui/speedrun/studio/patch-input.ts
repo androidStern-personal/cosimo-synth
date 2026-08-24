@@ -3,17 +3,30 @@ import type { EffectPresetV2 } from "../../shared/effects/effect-preset-v2";
 import { LANE_STATE_KEY } from "../../shared/lane-state";
 import { serializeLaneStateV2 } from "../../shared/lane-state-v2";
 import { serializeModulationState } from "../../shared/modulation";
-import { createSoundShareEnvelope } from "../../shared/sound-share-envelope";
+import {
+    SoundShareError,
+    createSoundShareEnvelope,
+    type SoundShareErrorTag,
+} from "../../shared/sound-share-envelope";
 import { createSoundShareURL, decodeSoundShareFragment } from "../../shared/sound-share-link";
+import type { CreatedSoundShareURL } from "../../shared/sound-share-link";
 import { readBrowserPatchState } from "../../../web/browser-patch-state.mjs";
 import type { PatchDocument } from "../patch-io";
 import type { SpeedrunStudioRuntime } from "./runtime";
-import { SpeedrunStudioError, studioError } from "./errors";
+import { studioError } from "./errors";
 
 export type StudioPatchSelection =
     | { readonly kind: "current" }
     | { readonly kind: "file"; readonly file: File }
     | { readonly kind: "share"; readonly value: string };
+
+export type StudioShareLinkAvailability =
+    | { readonly _tag: "available"; readonly link: CreatedSoundShareURL }
+    | {
+        readonly _tag: "unavailable";
+        readonly code: SoundShareErrorTag | "ShareLinkFailed";
+        readonly message: string;
+    };
 
 export async function readStudioPatchSelection(selection: StudioPatchSelection): Promise<unknown> {
     try {
@@ -51,25 +64,44 @@ function presetForDocument(document: PatchDocument, runtime: SpeedrunStudioRunti
     };
 }
 
-export async function createStudioShareLink(
+/** Build the exact M1 carrier used by the studio's adjacent share action. */
+export function createStudioShareEnvelope(
     document: PatchDocument,
     runtime: SpeedrunStudioRuntime,
 ) {
+    return createSoundShareEnvelope({
+        preset: presetForDocument(document, runtime),
+        supplementalStoredState: {
+            [LANE_STATE_KEY]: serializeLaneStateV2(document.lane),
+        },
+    });
+}
+
+export async function createStudioShareLink(
+    document: PatchDocument,
+    runtime: SpeedrunStudioRuntime,
+): Promise<StudioShareLinkAvailability> {
     try {
-        const envelope = createSoundShareEnvelope({
-            preset: presetForDocument(document, runtime),
-            supplementalStoredState: {
-                [LANE_STATE_KEY]: serializeLaneStateV2(document.lane),
-            },
-        });
+        const envelope = createStudioShareEnvelope(document, runtime);
         const baseURL = new URL(runtime.webRootURL);
         baseURL.search = "";
         baseURL.hash = "";
         const result = await createSoundShareURL(envelope, baseURL.href);
-        if (!result.ok) throw result.error;
-        return result.value;
+        if (!result.ok) {
+            return {
+                _tag: "unavailable",
+                code: result.error._tag,
+                message: result.error.message,
+            };
+        }
+        return { _tag: "available", link: result.value };
     } catch (error) {
-        if (error instanceof SpeedrunStudioError) throw error;
-        throw studioError("intake", "ShareLinkFailed", error, "A share link could not be created for this sound.");
+        return {
+            _tag: "unavailable",
+            code: error instanceof SoundShareError ? error._tag : "ShareLinkFailed",
+            message: error instanceof Error && error.message.length > 0
+                ? error.message
+                : "A share link could not be created for this sound.",
+        };
     }
 }
