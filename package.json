@@ -43,6 +43,7 @@
     "cmajplugin:install": "./scripts/install_cmajplugin_vst3.sh",
     "test:ott:view": "npm run fx:build -- ott && node --test tests/test_ott_lab_view_browser.mjs",
     "test:effect-presets": "node --test tests/test_effect_preset_schema.mjs tests/test_effect_preset_state.mjs tests/test_effect_preset_contract.mjs tests/test_effect_state_contract.mjs tests/test_effect_preset_v2_schema.mjs tests/test_effect_preset_migrations.mjs tests/test_effect_snapshots.mjs tests/test_effect_snapshot_bank.mjs tests/test_seqfx_preset_adapter.mjs tests/test_standalone_effect_presets.mjs tests/test_standalone_effect_preset_hook_browser.mjs tests/test_effect_preset_bar_browser.mjs",
+    "test:sound-share": "npm run web:build && node --test tests/test_sound_share_link.mjs tests/test_synth_init_presets.mjs tests/test_effect_preset_bar_browser.mjs tests/test_sound_share_browser.mjs",
     "ui:worker:build": "vite build --config ui/vite.worker.config.mjs",
     "ui:bounce-worker:build": "vite build --config ui/vite.bounce-worker.config.mjs",
     "ui:worker:test:build": "vite build --config ui/vite.worker-test.config.mjs",
