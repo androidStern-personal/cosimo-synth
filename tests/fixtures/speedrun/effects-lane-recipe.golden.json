@@ -1,0 +1,745 @@
+{
+  "format": "cosimo.speedrunRecipe",
+  "version": 1,
+  "label": "Split Space Lead",
+  "contractHash": "sha256:8d64e95724649f07a4204a4af7174c8fe45680ad7f3b65d6bbf1446093bbfd23",
+  "prelude": [
+    {
+      "kind": "installLaneBaseline",
+      "lane": {
+        "format": "cosimo.lane",
+        "version": 2,
+        "devices": {
+          "distortion#1": {
+            "params": {
+              "distortionMode": 0,
+              "distortionDriveDb": 12,
+              "distortionKnee": 0.35,
+              "distortionWet": 0,
+              "distortionWetHPHz": 40,
+              "distortionWetLPHz": 18000
+            }
+          },
+          "delay#2": {
+            "params": {
+              "delayTime": 375,
+              "delayFeedback": 0.35,
+              "delayFilter": 6000,
+              "delayMix": 0,
+              "delayTimeMode": 0,
+              "delayDivision": 8
+            }
+          },
+          "reverb#1": {
+            "params": {
+              "reverbSize": 0.5,
+              "reverbDecay": 0.4,
+              "reverbDamping": 0.5,
+              "reverbMix": 0
+            }
+          }
+        },
+        "chain": [
+          {
+            "kind": "device",
+            "deviceId": "distortion#1",
+            "enabled": false
+          },
+          {
+            "kind": "split",
+            "groupId": "split#1",
+            "enabled": true,
+            "xoverLowHz": 800,
+            "xoverHighHz": 2500,
+            "branches": [
+              [
+                {
+                  "kind": "device",
+                  "deviceId": "delay#2",
+                  "enabled": false
+                }
+              ],
+              [
+                {
+                  "kind": "device",
+                  "deviceId": "reverb#1",
+                  "enabled": false
+                }
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "kind": "installModulationBaseline",
+      "modulation": {
+        "format": "cosimo.modulation",
+        "version": 6,
+        "msegSlots": [
+          {
+            "shapeA": {
+              "format": "cosimo.mseg.shape",
+              "version": 1,
+              "name": "MSEG 1",
+              "globalSmooth": false,
+              "points": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "curvePower": 0
+                },
+                {
+                  "x": 1,
+                  "y": 1,
+                  "curvePower": 0
+                }
+              ]
+            },
+            "shapeB": {
+              "format": "cosimo.mseg.shape",
+              "version": 1,
+              "name": "MSEG 1",
+              "globalSmooth": false,
+              "points": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "curvePower": 0
+                },
+                {
+                  "x": 1,
+                  "y": 1,
+                  "curvePower": 0
+                }
+              ]
+            },
+            "playback": {
+              "format": "cosimo.mseg.playback",
+              "version": 1,
+              "loop": {
+                "startX": 0,
+                "endX": 1
+              },
+              "noteOffPolicy": "finish_loop",
+              "legatoRestarts": false,
+              "holdFinalValue": true
+            }
+          },
+          {
+            "shapeA": {
+              "format": "cosimo.mseg.shape",
+              "version": 1,
+              "name": "MSEG 2",
+              "globalSmooth": false,
+              "points": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "curvePower": 0
+                },
+                {
+                  "x": 1,
+                  "y": 1,
+                  "curvePower": 0
+                }
+              ]
+            },
+            "shapeB": {
+              "format": "cosimo.mseg.shape",
+              "version": 1,
+              "name": "MSEG 2",
+              "globalSmooth": false,
+              "points": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "curvePower": 0
+                },
+                {
+                  "x": 1,
+                  "y": 1,
+                  "curvePower": 0
+                }
+              ]
+            },
+            "playback": {
+              "format": "cosimo.mseg.playback",
+              "version": 1,
+              "loop": {
+                "startX": 0,
+                "endX": 1
+              },
+              "noteOffPolicy": "finish_loop",
+              "legatoRestarts": false,
+              "holdFinalValue": true
+            }
+          },
+          {
+            "shapeA": {
+              "format": "cosimo.mseg.shape",
+              "version": 1,
+              "name": "MSEG 3",
+              "globalSmooth": false,
+              "points": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "curvePower": 0
+                },
+                {
+                  "x": 1,
+                  "y": 1,
+                  "curvePower": 0
+                }
+              ]
+            },
+            "shapeB": {
+              "format": "cosimo.mseg.shape",
+              "version": 1,
+              "name": "MSEG 3",
+              "globalSmooth": false,
+              "points": [
+                {
+                  "x": 0,
+                  "y": 0,
+                  "curvePower": 0
+                },
+                {
+                  "x": 1,
+                  "y": 1,
+                  "curvePower": 0
+                }
+              ]
+            },
+            "playback": {
+              "format": "cosimo.mseg.playback",
+              "version": 1,
+              "loop": {
+                "startX": 0,
+                "endX": 1
+              },
+              "noteOffPolicy": "finish_loop",
+              "legatoRestarts": false,
+              "holdFinalValue": true
+            }
+          }
+        ],
+        "envelopeSlots": [
+          {
+            "name": "Env 1"
+          },
+          {
+            "name": "Env 2"
+          },
+          {
+            "name": "Env 3"
+          }
+        ],
+        "routes": [
+          {
+            "id": "route-inert-muted-b",
+            "enabled": false,
+            "sourceKind": "mseg",
+            "sourceSlot": 3,
+            "polarity": "unipolar",
+            "targetKind": "oscB.warpAmount",
+            "amount": 0.5,
+            "reducer": "max"
+          }
+        ],
+        "macroNames": [
+          "Macro 1",
+          "Macro 2",
+          "Macro 3",
+          "Macro 4"
+        ]
+      }
+    },
+    {
+      "kind": "setParam",
+      "endpointID": "oscBMute",
+      "from": 0,
+      "to": 1,
+      "surface": "speedrun-prelude-oscBMute",
+      "weight": "normal"
+    },
+    {
+      "kind": "setParam",
+      "endpointID": "oscCMute",
+      "from": 0,
+      "to": 1,
+      "surface": "speedrun-prelude-oscCMute",
+      "weight": "normal"
+    }
+  ],
+  "sections": [
+    {
+      "id": "source-env-1",
+      "kind": "source",
+      "title": "ENV 1",
+      "ops": [
+        {
+          "kind": "navigate",
+          "to": {
+            "tab": "mod",
+            "sourceId": "env-1"
+          }
+        },
+        {
+          "kind": "setEnvelope",
+          "slot": 1,
+          "name": "Pluck",
+          "attack": 0.035,
+          "decay": 0.18,
+          "sustain": 0.5,
+          "release": 0.20000000298023224
+        }
+      ],
+      "captions": [
+        "ENV 1 Pluck"
+      ],
+      "allCaptions": [
+        "ENV 1 Pluck"
+      ],
+      "opCaptionLines": [
+        null,
+        0
+      ]
+    },
+    {
+      "id": "source-macro-2",
+      "kind": "source",
+      "title": "MACRO 2",
+      "ops": [
+        {
+          "kind": "navigate",
+          "to": {
+            "tab": "mod",
+            "sourceId": "macro-2"
+          }
+        },
+        {
+          "kind": "setMacro",
+          "slot": 2,
+          "value": 0.72,
+          "name": "Space"
+        }
+      ],
+      "captions": [
+        "MACRO 2 Space 0.72"
+      ],
+      "allCaptions": [
+        "MACRO 2 Space 0.72"
+      ],
+      "opCaptionLines": [
+        null,
+        0
+      ]
+    },
+    {
+      "id": "oscillator-A",
+      "kind": "oscillator",
+      "title": "OSC A",
+      "ops": [
+        {
+          "kind": "navigate",
+          "to": {
+            "tab": "voice",
+            "oscillatorId": "A"
+          }
+        },
+        {
+          "kind": "setParam",
+          "endpointID": "ampRelease",
+          "from": 0.20000000298023224,
+          "to": 0.44,
+          "surface": "voice-setup-ampRelease",
+          "weight": "normal"
+        },
+        {
+          "kind": "selectWavetable",
+          "osc": "A",
+          "tableIndex": 12,
+          "tableName": "Basic_Cjw"
+        },
+        {
+          "kind": "setParam",
+          "endpointID": "oscAWavetablePosition",
+          "from": 0,
+          "to": 0.43,
+          "surface": "mobile-voice-cell-A-WavetablePosition",
+          "weight": "normal"
+        },
+        {
+          "kind": "setParam",
+          "endpointID": "oscAWarpMode",
+          "from": 0,
+          "to": 2,
+          "surface": "mobile-voice-cell-A-WarpMode",
+          "weight": "normal"
+        },
+        {
+          "kind": "setParam",
+          "endpointID": "oscAWarpAmount",
+          "from": 0,
+          "to": 0.38,
+          "surface": "mobile-voice-cell-A-WarpAmount",
+          "weight": "normal"
+        }
+      ],
+      "captions": [
+        "Amp Release 440ms",
+        "Wavetable “Basic_Cjw”",
+        "Oscillator A Wavetable Position 0.43",
+        "Oscillator A Warp Mode 2",
+        "Oscillator A Warp Amount 0.38"
+      ],
+      "allCaptions": [
+        "Amp Release 440ms",
+        "Wavetable “Basic_Cjw”",
+        "Oscillator A Wavetable Position 0.43",
+        "Oscillator A Warp Mode 2",
+        "Oscillator A Warp Amount 0.38"
+      ],
+      "opCaptionLines": [
+        null,
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "id": "voice-filter",
+      "kind": "filter",
+      "title": "FILTER",
+      "ops": [
+        {
+          "kind": "navigate",
+          "to": {
+            "tab": "voice",
+            "focus": "filter"
+          }
+        },
+        {
+          "kind": "setParam",
+          "endpointID": "filterCutoff",
+          "from": 1000,
+          "to": 720,
+          "surface": "voice-filter-filterCutoff",
+          "weight": "normal"
+        },
+        {
+          "kind": "mapRoute",
+          "route": {
+            "id": "route-env-filter",
+            "enabled": true,
+            "sourceKind": "env",
+            "sourceSlot": 1,
+            "polarity": "unipolar",
+            "targetKind": "filterCutoffOctaves",
+            "amount": 2.25,
+            "reducer": "max"
+          },
+          "surface": "filter-graph-drop-surface"
+        }
+      ],
+      "captions": [
+        "Filter Cutoff 720Hz",
+        "ENV 1 → CUTOFF +2.25"
+      ],
+      "allCaptions": [
+        "Filter Cutoff 720Hz",
+        "ENV 1 → CUTOFF +2.25"
+      ],
+      "opCaptionLines": [
+        null,
+        0,
+        1
+      ]
+    },
+    {
+      "id": "effect-delay#2",
+      "kind": "effect",
+      "title": "DELAY 2",
+      "ops": [
+        {
+          "kind": "navigate",
+          "to": {
+            "tab": "fx",
+            "deviceId": "delay#2"
+          }
+        },
+        {
+          "kind": "toggleEffect",
+          "deviceId": "delay#2",
+          "effectId": "delay",
+          "enabled": true
+        },
+        {
+          "kind": "setLaneParam",
+          "deviceId": "delay#2",
+          "endpointID": "delayTime",
+          "from": 375,
+          "to": 250,
+          "surface": "rack-parameter-surface-delay#2-delayTime",
+          "weight": "normal"
+        },
+        {
+          "kind": "setLaneParam",
+          "deviceId": "delay#2",
+          "endpointID": "delayMix",
+          "from": 0,
+          "to": 0.42,
+          "surface": "rack-parameter-surface-delay#2-delayMix",
+          "weight": "normal"
+        },
+        {
+          "kind": "setLaneParam",
+          "deviceId": "delay#2",
+          "endpointID": "delayFeedback",
+          "from": 0.35,
+          "to": 0.58,
+          "surface": "rack-parameter-surface-delay#2-delayFeedback",
+          "weight": "normal"
+        },
+        {
+          "kind": "setLaneParam",
+          "deviceId": "delay#2",
+          "endpointID": "delayFilter",
+          "from": 6000,
+          "to": 5000,
+          "surface": "rack-parameter-surface-delay#2-delayFilter",
+          "weight": "normal"
+        },
+        {
+          "kind": "mapRoute",
+          "route": {
+            "id": "route-macro-delay-2",
+            "enabled": true,
+            "sourceKind": "macro",
+            "sourceSlot": 2,
+            "polarity": "bipolar",
+            "targetKind": "lane.delay#2.delayMix",
+            "amount": 0.24,
+            "reducer": "mean"
+          },
+          "surface": "rack-parameter-surface-delay#2-delayMix"
+        }
+      ],
+      "captions": [
+        "On",
+        "Time 250ms",
+        "Mix 42%",
+        "Feedback 58%",
+        "Filter 5.00kHz",
+        "MACRO 2 → DELAY 2 MIX +0.24"
+      ],
+      "allCaptions": [
+        "On",
+        "Time 250ms",
+        "Mix 42%",
+        "Feedback 58%",
+        "Filter 5.00kHz",
+        "MACRO 2 → DELAY 2 MIX +0.24"
+      ],
+      "opCaptionLines": [
+        null,
+        0,
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "id": "effect-reverb#1",
+      "kind": "effect",
+      "title": "REVERB",
+      "ops": [
+        {
+          "kind": "navigate",
+          "to": {
+            "tab": "fx",
+            "deviceId": "reverb#1"
+          }
+        },
+        {
+          "kind": "toggleEffect",
+          "deviceId": "reverb#1",
+          "effectId": "reverb",
+          "enabled": true
+        },
+        {
+          "kind": "setLaneParam",
+          "deviceId": "reverb#1",
+          "endpointID": "reverbSize",
+          "from": 0.5,
+          "to": 0.7,
+          "surface": "rack-parameter-surface-reverb#1-reverbSize",
+          "weight": "normal"
+        },
+        {
+          "kind": "setLaneParam",
+          "deviceId": "reverb#1",
+          "endpointID": "reverbDecay",
+          "from": 0.4,
+          "to": 0.65,
+          "surface": "rack-parameter-surface-reverb#1-reverbDecay",
+          "weight": "normal"
+        },
+        {
+          "kind": "setLaneParam",
+          "deviceId": "reverb#1",
+          "endpointID": "reverbDamping",
+          "from": 0.5,
+          "to": 0.3,
+          "surface": "rack-parameter-surface-reverb#1-reverbDamping",
+          "weight": "normal"
+        },
+        {
+          "kind": "setLaneParam",
+          "deviceId": "reverb#1",
+          "endpointID": "reverbMix",
+          "from": 0,
+          "to": 0.31,
+          "surface": "rack-parameter-surface-reverb#1-reverbMix",
+          "weight": "normal"
+        }
+      ],
+      "captions": [
+        "On",
+        "Size 70%",
+        "Decay 65%",
+        "Damping 30%",
+        "Mix 31%"
+      ],
+      "allCaptions": [
+        "On",
+        "Size 70%",
+        "Decay 65%",
+        "Damping 30%",
+        "Mix 31%"
+      ],
+      "opCaptionLines": [
+        null,
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  ],
+  "articulations": {
+    "format": "cosimo.articulations",
+    "version": 4,
+    "selectedSlotId": null,
+    "activeTriggerMode": "chain",
+    "slots": []
+  },
+  "omitted": {
+    "inaudibleOscillators": [
+      "B",
+      "C"
+    ],
+    "disabledDeviceIds": [
+      "distortion#1"
+    ],
+    "inertRouteIds": [
+      "route-inert-muted-b"
+    ],
+    "articulationOnlyRouteIds": [],
+    "routesOnOmittedTargets": [],
+    "defaultParameterIDs": [
+      "env1Release",
+      "env1Sustain",
+      "env2Attack",
+      "env2Decay",
+      "env2Release",
+      "env2Sustain",
+      "env3Attack",
+      "env3Decay",
+      "env3Release",
+      "env3Sustain",
+      "filterMix",
+      "filterMode",
+      "filterQ",
+      "glideTime",
+      "macro1",
+      "macro3",
+      "macro4",
+      "mseg1Morph",
+      "mseg1Rate",
+      "mseg2Morph",
+      "mseg2Rate",
+      "mseg3Morph",
+      "mseg3Rate",
+      "oscAFineCents",
+      "oscAMute",
+      "oscAOctave",
+      "oscAPan",
+      "oscAPhase",
+      "oscAPhaseRandom",
+      "oscARetrigger",
+      "oscASemitone",
+      "oscASolo",
+      "oscAUnisonBlend",
+      "oscAUnisonDetune",
+      "oscAUnisonDetuneMode",
+      "oscAUnisonPositionSpread",
+      "oscAUnisonStackMode",
+      "oscAUnisonVoices",
+      "oscAUnisonWarpSpread",
+      "oscAUnisonWidth",
+      "oscAVolumeDb",
+      "oscBFineCents",
+      "oscBOctave",
+      "oscBPan",
+      "oscBPhase",
+      "oscBPhaseRandom",
+      "oscBRetrigger",
+      "oscBSemitone",
+      "oscBSolo",
+      "oscBUnisonBlend",
+      "oscBUnisonDetune",
+      "oscBUnisonDetuneMode",
+      "oscBUnisonPositionSpread",
+      "oscBUnisonStackMode",
+      "oscBUnisonVoices",
+      "oscBUnisonWarpSpread",
+      "oscBUnisonWidth",
+      "oscBVolumeDb",
+      "oscBWarpAmount",
+      "oscBWarpMode",
+      "oscBWavetablePosition",
+      "oscBWavetableSelect",
+      "oscCFineCents",
+      "oscCOctave",
+      "oscCPan",
+      "oscCPhase",
+      "oscCPhaseRandom",
+      "oscCRetrigger",
+      "oscCSemitone",
+      "oscCSolo",
+      "oscCUnisonBlend",
+      "oscCUnisonDetune",
+      "oscCUnisonDetuneMode",
+      "oscCUnisonPositionSpread",
+      "oscCUnisonStackMode",
+      "oscCUnisonVoices",
+      "oscCUnisonWarpSpread",
+      "oscCUnisonWidth",
+      "oscCVolumeDb",
+      "oscCWarpAmount",
+      "oscCWarpMode",
+      "oscCWavetablePosition",
+      "oscCWavetableSelect",
+      "playMode",
+      "sourceMode"
+    ]
+  }
+}

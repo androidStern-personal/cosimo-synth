@@ -1,0 +1,64 @@
+{
+  "format": "cosimo.lane",
+  "version": 2,
+  "devices": {
+    "distortion#1": {
+      "params": {
+        "distortionMode": 0,
+        "distortionDriveDb": 12,
+        "distortionKnee": 0.35,
+        "distortionWet": 0,
+        "distortionWetHPHz": 40,
+        "distortionWetLPHz": 18000
+      }
+    },
+    "delay#2": {
+      "params": {
+        "delayTime": 250,
+        "delayFeedback": 0.58,
+        "delayFilter": 5000,
+        "delayMix": 0.42,
+        "delayTimeMode": 0,
+        "delayDivision": 8
+      }
+    },
+    "reverb#1": {
+      "params": {
+        "reverbSize": 0.7,
+        "reverbDecay": 0.65,
+        "reverbDamping": 0.3,
+        "reverbMix": 0.31
+      }
+    }
+  },
+  "chain": [
+    {
+      "kind": "device",
+      "deviceId": "distortion#1",
+      "enabled": false
+    },
+    {
+      "kind": "split",
+      "groupId": "split#1",
+      "enabled": true,
+      "xoverLowHz": 800,
+      "xoverHighHz": 2500,
+      "branches": [
+        [
+          {
+            "kind": "device",
+            "deviceId": "delay#2",
+            "enabled": true
+          }
+        ],
+        [
+          {
+            "kind": "device",
+            "deviceId": "reverb#1",
+            "enabled": true
+          }
+        ]
+      ]
+    }
+  ]
+}
