@@ -1506,9 +1506,9 @@ class PresetBar extends HTMLElement {
         const pendingKind = this._state?.pendingSoundReplacement?.kind;
         const actionLabel = pendingKind === "bounce"
             ? "Bounce"
-            : pendingKind === "init"
-                ? "Init"
-                : "Load";
+            : pendingKind === "preset" || pendingKind === "import" || pendingKind === "share"
+                ? "Load"
+                : "Init";
         this._els["sound-replacement-discard"].textContent = `Discard and ${actionLabel}`;
         this._els["sound-replacement-save"].textContent = `Save and ${actionLabel}`;
         this._dialogContinuesSoundReplacement = true;
