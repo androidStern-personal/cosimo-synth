@@ -41246,7 +41246,7 @@ class fC extends HTMLElement {
     Yr(this._els["toast-host"], t.message, "error"), this._sharedSoundReplacementPending && this._state?.pendingSoundReplacement?.kind !== "share" && (this._pendingSharedEnvelope = null, this._sharedSoundReplacementPending = !1);
   }
   _openSoundReplacementDialog() {
-    const t = this._state?.pendingSoundReplacement?.kind, r = t === "bounce" ? "Bounce" : t === "init" ? "Init" : "Load";
+    const t = this._state?.pendingSoundReplacement?.kind, r = t === "bounce" ? "Bounce" : t === "preset" || t === "import" || t === "share" ? "Load" : "Init";
     this._els["sound-replacement-discard"].textContent = `Discard and ${r}`, this._els["sound-replacement-save"].textContent = `Save and ${r}`, this._dialogContinuesSoundReplacement = !0, this._els["save-dialog"].hidden = !0, this._els["shared-load-dialog"].hidden = !0, this._els["share-dialog"].hidden = !0, this._els["sound-replacement-dialog"].hidden = !1, this._els["dialog-overlay"].classList.add("open");
   }
   _cancelSoundReplacement() {
