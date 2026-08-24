@@ -1,0 +1,68 @@
+{
+  "format": "cosimo.speedrunRecipe",
+  "version": 1,
+  "label": "Alignment Click",
+  "contractHash": "sha256:alignment-click-fixture",
+  "prelude": [],
+  "sections": [
+    {
+      "id": "alignment-oscillator-a",
+      "kind": "oscillator",
+      "title": "OSC A",
+      "ops": [
+        {
+          "kind": "navigate",
+          "to": { "tab": "voice", "oscillatorId": "A" }
+        },
+        {
+          "kind": "selectWavetable",
+          "osc": "A",
+          "tableIndex": 3,
+          "tableName": "Click"
+        },
+        {
+          "kind": "setParam",
+          "endpointID": "oscAWavetablePosition",
+          "from": 0,
+          "to": 0.5,
+          "surface": "mobile-voice-cell-A-WavetablePosition",
+          "weight": "normal"
+        },
+        {
+          "kind": "setParam",
+          "endpointID": "filterCutoff",
+          "from": 1000,
+          "to": 700,
+          "surface": "voice-filter-filterCutoff",
+          "weight": "normal"
+        }
+      ],
+      "captions": [
+        "Wavetable Click",
+        "Oscillator A Position 50%",
+        "Filter Cutoff 700Hz"
+      ],
+      "allCaptions": [
+        "Wavetable Click",
+        "Oscillator A Position 50%",
+        "Filter Cutoff 700Hz"
+      ],
+      "opCaptionLines": [null, 0, 1, 2]
+    }
+  ],
+  "articulations": {
+    "format": "cosimo.articulations",
+    "version": 4,
+    "selectedSlotId": null,
+    "activeTriggerMode": "chain",
+    "slots": []
+  },
+  "omitted": {
+    "inaudibleOscillators": [],
+    "disabledDeviceIds": [],
+    "inertRouteIds": [],
+    "articulationOnlyRouteIds": [],
+    "routesOnOmittedTargets": [],
+    "defaultParameterIDs": []
+  }
+}

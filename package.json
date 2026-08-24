@@ -69,7 +69,9 @@
     "test:spike:remotion:web": "npm run spike:remotion:web:build && node --test tests/test_remotion_web_renderer_spike.mjs",
     "test:speedrun:core": "npm run web:build && node --test tests/test_speedrun_patch_io.mjs tests/test_speedrun_analyzer_recipe.mjs tests/test_speedrun_recipe_roundtrip.mjs tests/test_speedrun_timeline.mjs",
     "speedrun:audio:harness:build": "vite build --config tests/vite.speedrun-audio-harness.config.mjs",
-    "test:speedrun:audio": "npm run web:build && npm run speedrun:audio:harness:build && node --test tests/test_speedrun_master_track.mjs tests/test_speedrun_offline_engine_host.mjs tests/test_speedrun_offline_render_browser.mjs"
+    "test:speedrun:audio": "npm run web:build && npm run speedrun:audio:harness:build && node --test tests/test_speedrun_master_track.mjs tests/test_speedrun_offline_engine_host.mjs tests/test_speedrun_offline_render_browser.mjs",
+    "speedrun:composition:harness:build": "vite build --config tests/vite.speedrun-composition-harness.config.mjs",
+    "test:speedrun:composition": "npm run speedrun:composition:harness:build && node --test tests/test_speedrun_composition_browser.mjs"
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",
