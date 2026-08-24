@@ -1,27 +1,61 @@
 # Handoff: Bounce Video must use the real Cosimo synth UI
 
-Status: **PAUSED by the user. Do not resume implementation or alter the UI architecture until the user explicitly resumes this work and approves the direction.**
+Status: **APPROVED SCRIPTED-SESSION PLAN IMPLEMENTED THROUGH M4'S TECHNICAL GATE. The real-UI MP4 is ready for user acceptance; keep the replica fallback until that acceptance decision.**
 
 Date: 2026-08-24
 
+## Approved scripted-session result
+
+`VIDEO_BOUNCE_SCRIPTED_SESSION_PLAN.md` is the newer approved authority and
+supersedes this handoff's old replica mandate and pause. Milestones M0 through
+M3 passed in order. M4 now routes the unchanged preset-menu/current-patch flow
+to a scripted production `DesktopPatchView` behind the existing lazy boundary.
+
+- The renderer uses `createDesktopPatchView`/`PatchConnectionLike`, recorded
+  engine telemetry, synthetic pointer input, and frame-driven WAAPI scrubbing.
+  It does not reproduce the UI or force transient state through new props.
+- The default integrated video composition is `scripted`. The untouched
+  replica remains available only when the video bundle is built with
+  `VITE_COSIMO_VIDEO_BOUNCE_REPLICA=1`, pending the user's post-acceptance
+  disposal decision.
+- The integrated gate observes the real synth at frames 0, 30, and 60 at a
+  393×852 viewport inside the 1080×1920 stage, with real canvases, SVGs, and
+  all 18 keyboard keys; the replica surface is absent.
+- The acceptance artifact is
+  `build/video-bounce/cosimo-real-ui-bounce.mp4`: 803,439 bytes, 1080×1920,
+  4.821333 seconds, H.264 video plus stereo 48 kHz AAC, SHA-256
+  `4cb84e0c236af278d7e0b59ca9beb02782c49589d0e0a027f38977daa0cc8991`.
+  The product verifier decoded non-silent audio before exposing the download;
+  independent `ffprobe`/`ffmpeg` inspection confirms both tracks and audible
+  samples.
+- Full M4 evidence is in `docs/VIDEO_BOUNCE_M4_INTEGRATION.md`. User acceptance
+  of that artifact remains the final plan gate. A human Remotion licensing
+  decision remains required before public shipment.
+
 ## Repository state
 
-- Branch: `codex/speedrun-video-share`
-- Worktree: `/Users/winterfell/.codex/worktrees/bounce-in-place`
-- Last implementation commit before this note: `e5143a93` (`Integrate audio and video bounce into preset menu`)
-- Remote: `origin/codex/speedrun-video-share`
-- Current browser review URL: `https://primary-mac.tail5ef964.ts.net/`
-- At handoff time that URL was served from this worktree's `build/web` on local port 8123. Recheck the process and URL rather than assuming they survived.
+- Branch: `claude/video-bounce-ui-animation-7trtmw`
+- Worktree: `/home/exedev/cosimo-synth`
+- Milestone commits: M0 `4bf0ee1`, M1 `a7d3053`, Linux AAC/MP4 capability
+  fix `c76c240`, M2 `fde4462`, M3 `40ce32a`, and M4 in the commit that updates
+  this handoff.
+- Remote: `origin/claude/video-bounce-ui-animation-7trtmw`
+- The old Tailnet review URL belonged to a different machine/worktree and is
+  not current evidence.
 
-## The user's current direction
+## Product direction carried into the approved plan
 
-The current generated video is **not accepted**. It shows a purpose-built synth replica that does not look like Cosimo. The user requires the video to show the **actual Cosimo synth UI**, not an invented or approximate second interface.
+The pre-plan generated video was **not accepted**. It showed a purpose-built
+synth replica that did not look like Cosimo. The approved replacement shows
+the **actual Cosimo synth UI**, not an invented or approximate second
+interface.
 
-Highest-priority constraints for the resumed run:
+The constraints that remain in force are:
 
 1. Do not polish, reskin, or incrementally improve the current replica as the answer.
-2. Do not make another architecture decision before discussing the exact direction with the user.
-3. Do not describe a vague new "state adapter" without grounding it in the existing repository interfaces.
+2. Keep the scripted architecture grounded in the existing whole-synth seam:
+   `createDesktopPatchView` plus `PatchConnectionLike`.
+3. Do not introduce another state adapter or capture-only product UI.
 4. Do not use encoding success, DOM assertions, or screenshot tests as evidence that an invented UI is the right product.
 5. Preserve the user's previously requested launcher behavior unless they revise it:
    - `Bounce Audio` and `Bounce Video` live in the preset-bar dropdown on desktop and phone.
@@ -45,7 +79,7 @@ That inherited direction explains the separate composition architecture. It does
 
 The prior agent initially told the user that the replica architecture had not been specified. That was incorrect and was corrected after rereading both instruction documents. Do not repeat that error.
 
-## What is currently implemented
+## What was implemented before the scripted-session plan
 
 Commit `e5143a93` contains the integrated launcher and current-patch path:
 
@@ -131,7 +165,7 @@ This is a real, already-exercised seam:
 
 Therefore the real UI is already reachable and driveable without recreating its visual hierarchy. The precise limitation is narrower: the existing connection is event-driven and asynchronous. It does not expose a direct command equivalent to "render arbitrary video frame N," and arbitrary out-of-order frame seeking has not been established. Do not conflate that missing frame-control behavior with an inability to use the real UI.
 
-## Technical verification already completed
+## Historical verification before the scripted-session plan
 
 At `e5143a93`:
 
@@ -142,19 +176,24 @@ At `e5143a93`:
 
 This evidence establishes pipeline execution, state intake, lazy loading, and encoding. It does **not** establish visual or product acceptance; the user has explicitly rejected the visual result.
 
-## Open questions for the resumed conversation
+## Resolved questions and remaining acceptance decision
 
-Do not answer these by editing code before the user resumes:
+1. The real `createDesktopPatchView` captures reliably at 393×852 through
+   `@remotion/web-renderer`; M0 and the integrated M4 samples prove it.
+2. `ScriptedPatchConnection`, `FrameDirector`, the media clock, `uiTimeout`,
+   synthetic pointers, and WAAPI scrubbing provide deterministic frame
+   selection without changing product-state ownership.
+3. Playback graphics and authored product animations remain active. Capture
+   does not use reduced motion to flatten them.
+4. The preset-menu launcher and fixed current-patch flow shell are unchanged,
+   as locked by the approved plan.
+5. The remaining decision is user acceptance of the real-UI artifact. After
+   acceptance, the user decides whether the retained replica is deleted,
+   historical/experimental, or reverted separately.
 
-1. Whether the real `createDesktopPatchView` can be captured reliably by `@remotion/web-renderer` at the actual 393x852 phone layout.
-2. How deterministic frame selection, reset, and out-of-order seeking should work across the existing event-driven patch-connection seam.
-3. Which runtime-only behaviors should remain active during video capture and which should be held still, without changing the visible UI.
-4. Whether the current integrated Bounce Video shell remains accepted once the real synth is inside it.
-5. Once a replacement is accepted, whether the replica should be deleted, retained only as historical/experimental code, or reverted separately.
+## Historical resumption discipline (satisfied)
 
-## Required resumption discipline
-
-When the user resumes:
+The approved plan and M0–M4 execution satisfied the earlier resumption rules:
 
 1. Start from this note and the exact current git state.
 2. State plainly that the current replica is rejected.

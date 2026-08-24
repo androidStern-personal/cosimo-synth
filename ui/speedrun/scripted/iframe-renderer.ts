@@ -239,8 +239,16 @@ import(${JSON.stringify(moduleURL)}).then(({ renderScriptedVideoInCurrentDocumen
             iframe.style.transformOrigin = "top left";
         }
         const result = await runtime.render(request);
+        // Blob identity is realm-specific. Re-home the completed bytes before
+        // removing the iframe so parent-realm verifiers (Mediabunny included)
+        // accept the result as a native Blob.
+        const blob = new Blob(
+            [new Uint8Array(await result.blob.arrayBuffer())],
+            { type: result.blob.type },
+        );
         return {
             ...result,
+            blob,
             iframeRafMode: hiddenRafRuns ? "visibility-hidden" : "opacity-fallback",
         };
     } finally {

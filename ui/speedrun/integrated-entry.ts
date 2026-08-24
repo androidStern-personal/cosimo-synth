@@ -10,6 +10,14 @@ export { renderScriptedVideoInCurrentDocument } from "./scripted/iframe-renderer
 
 const MAX_DURATION_IN_FRAMES = 2_700;
 const STYLE_LINK_MARKER = "cosimo-video-bounce-runtime";
+/**
+ * The real scripted DesktopPatchView is the shipped path. Set
+ * VITE_COSIMO_VIDEO_BOUNCE_REPLICA=1 at video-bundle build time to retain the
+ * old frame-pure composition as an explicit fallback until user acceptance.
+ */
+const VIDEO_COMPOSITION_MODE = import.meta.env.VITE_COSIMO_VIDEO_BOUNCE_REPLICA === "1"
+    ? "replica"
+    : "scripted";
 
 function loadCompositionStyles() {
     const existing = document.querySelector<HTMLLinkElement>(`link[data-runtime="${STYLE_LINK_MARKER}"]`);
@@ -72,6 +80,7 @@ export async function createVideoBounceSession(
                 const artifact = await session.renderVideo({
                     preferredContainer: preferredContainer(options.container),
                     videoBitrate: options.quality,
+                    compositionMode: VIDEO_COMPOSITION_MODE,
                     onProgress: (progress) => options.onProgress(progress.progress),
                 });
                 return {
