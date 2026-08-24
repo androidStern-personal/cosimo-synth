@@ -2,6 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
+import { BOUNCE_STATE_KEY } from "../bounce/document.mjs";
+
 import {
     normalizeArticulationEditorState,
     normalizeArticulationSnapshot,
@@ -1313,9 +1315,10 @@ test("synth preset bar saves current synth state through shared effect presets",
         );
         assert.deepEqual(
             Object.keys(savedPreset.storedState).sort((left, right) => left.localeCompare(right)),
-            [ARTICULATION_STATE_KEY, "modulation.v6"],
+            [ARTICULATION_STATE_KEY, BOUNCE_STATE_KEY, "modulation.v6"],
             "saved synth presets must capture only the required stored-state adapters",
         );
+        assert.equal(savedPreset.storedState[BOUNCE_STATE_KEY], null);
         assert.deepEqual(
             savedPreset.storedState[ARTICULATION_STATE_KEY],
             editorBankToStoredArticulations(seededBank),

@@ -2255,10 +2255,10 @@ test("a stored pool-instance route renders instance-labeled with its own base, a
         const poolRow = page.locator('[data-role="mod-mappings-row"][data-route-id="pool-route-1"]');
         await poolRow.waitFor();
         assert.equal(
-            (await poolRow.locator(".mod-mappings-row-target").innerText()).replace(/\s+/g, " ").trim(),
+            (await poolRow.locator(".mod-mappings-row-target").textContent()).replace(/\s+/g, " ").trim(),
             "Delay 2 Mix",
         );
-        assert.equal(await poolRow.locator(".mod-mappings-row-target strong").innerText(), "Delay 2");
+        assert.equal(await poolRow.locator(".mod-mappings-row-target strong").textContent(), "Delay 2");
         assert.equal(
             await poolRow.locator('[data-role="mod-mappings-amount-only"]').count(),
             0,
@@ -2269,13 +2269,13 @@ test("a stored pool-instance route renders instance-labeled with its own base, a
         // The resident row keeps today's un-numbered label and its live rail.
         const residentRow = page.locator('[data-role="mod-mappings-row"][data-route-id="resident-route-1"]');
         assert.equal(
-            (await residentRow.locator(".mod-mappings-row-target").innerText()).replace(/\s+/g, " ").trim(),
+            (await residentRow.locator(".mod-mappings-row-target").textContent()).replace(/\s+/g, " ").trim(),
             "Delay Mix",
         );
         assert.equal(await residentRow.locator(".mod-led-rail").count(), 1);
 
-        // Route mutations work without a base: the polarity toggle writes the
-        // stored route.
+        // Route mutations remain independent of the base binding: the
+        // polarity toggle writes the stored route.
         await poolRow.locator("button[data-role^='mod-mappings-polarity-']").click();
         await page.waitForFunction(() => {
             const state = JSON.parse(String(window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().storedState["modulation.v6"]));

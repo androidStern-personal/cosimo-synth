@@ -36,8 +36,12 @@ const desktopBundleBudgetBytes = 3_200_000;
 // (be5309e..367922d): 149,732 raw and 36,209 gzipped with Node's level-9
 // encoder. The added descriptor/instance vocabulary is the intended product
 // contract; these ceilings retain less than 1.5% headroom.
-const wavetableWorkerBudgetBytes = 151_000;
-const wavetableWorkerGzipBudgetBytes = 36_600;
+// Re-measured 2026-08-24 after merging the lane.v2 topology compiler at
+// 90e9a28: 157,762 raw and 38,295 gzipped. The worker must deserialize and
+// replay that current lane contract while no editor is open; keep the renewed
+// ceilings at roughly 1.5% headroom so future accidental growth still fails.
+const wavetableWorkerBudgetBytes = 160_000;
+const wavetableWorkerGzipBudgetBytes = 38_800;
 
 test("compiled desktop production entry stays within its browser parse budget", async () => {
     const bundlePath = path.join(repoRoot, "patch_gui", "desktop", "app.js");
