@@ -2640,10 +2640,10 @@ test("generated product UI restores oscillator parameters and rack state through
             const saved = JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}");
             return Math.abs(Number(saved?.sound?.parameters?.oscBPan) - 0.25) < 0.0001;
         });
-        await page.locator('[data-role="rack-station-chorus"]').click({ button: "right" });
-        await page.locator('[data-role="rack-enabled-chorus"]').click();
+        await page.locator('[data-role="rack-station-delay"]').click({ button: "right" });
+        await page.locator('[data-role="rack-enabled-delay"]').click();
         const reorderHandle = page.locator('[data-role="rack-station-reverb"]');
-        const reorderTarget = page.locator('[data-role="rack-module-filter"]');
+        const reorderTarget = page.locator('[data-role="rack-module-drive"]');
         await reorderHandle.scrollIntoViewIfNeeded();
         const handleBox = await reorderHandle.boundingBox();
         const targetBox = await reorderTarget.boundingBox();
@@ -2657,7 +2657,7 @@ test("generated product UI restores oscillator parameters and rack state through
             const state = await globalThis.__COSIMO_WEB_POC__.storedState();
             const rack = JSON.parse(String(state.values?.["lane.v1"]));
             return rack.chain?.[0]?.deviceId === "reverb#1"
-                && rack.chain?.find((node) => node.deviceId === "chorus#1")?.enabled === true;
+                && rack.chain?.find((node) => node.deviceId === "delay#1")?.enabled === true;
         });
         const beforeReload = await page.evaluate(async () => ({
             connection: (await globalThis.__COSIMO_WEB_POC__.storedState()).values?.["lane.v1"] ?? null,
@@ -2679,12 +2679,12 @@ test("generated product UI restores oscillator parameters and rack state through
                 local: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.storedState?.["lane.v1"] ?? null,
                 localOscBPan: JSON.parse(localStorage.getItem("cosimo.web.patch-state.v2") ?? "{}")?.sound?.parameters?.oscBPan ?? null,
                 firstRole: root?.querySelector('[data-role="rack-module-list"]')?.firstElementChild?.getAttribute("data-role") ?? null,
-                chorusPressed: root?.querySelector('[data-role="rack-module-chorus"]')?.getAttribute("data-enabled") ?? null,
+                delayPressed: root?.querySelector('[data-role="rack-module-delay"]')?.getAttribute("data-enabled") ?? null,
             };
         });
         t.diagnostic(`After reload: ${JSON.stringify(afterReload)}`);
         assert.equal(afterReload.firstRole, "rack-module-reverb");
-        assert.equal(afterReload.chorusPressed, "true");
+        assert.equal(afterReload.delayPressed, "true");
         assert.equal(afterReload.localOscBPan, 0.25);
         await page.getByRole("tab", { name: "Oscillator B" }).click();
         await page.waitForTimeout(100);
@@ -2711,7 +2711,7 @@ test("generated mobile rack reorder survives WebKit zero-button touch moves with
             };
         });
         const reorderStart = await centerOf(page.locator('[data-role="rack-station-reverb"]'));
-        const reorderEnd = await centerOf(page.locator('[data-role="rack-module-filter"]'));
+        const reorderEnd = await centerOf(page.locator('[data-role="rack-module-drive"]'));
         await dispatchTouchDrag(page, reorderStart, reorderEnd);
         await waitForAsyncPageCondition(page, async () => {
             const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;

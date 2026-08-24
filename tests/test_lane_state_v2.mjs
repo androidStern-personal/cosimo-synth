@@ -67,28 +67,35 @@ async function makeSplitDoc() {
     };
 }
 
-test("lane.v2 default document is the upgraded v1 default and round-trips", async () => {
+test("lane.v2 default document is the compact starter trio and round-trips", async () => {
     const laneV1 = await laneV1Promise;
     const laneV2 = await laneV2Promise;
 
     const state = laneV2.createDefaultLaneStateV2();
     assert.equal(state.version, 2);
-    // Eight instance-#1 devices, serial chain in identity order, all off.
-    assert.equal(Object.keys(state.devices).length, 8);
-    assert.equal(state.chain.length, 8);
+    // The starter set (M4): drive → delay → reverb, serial, ALL BYPASSED —
+    // the out-of-box sound stays the deployed dry voice; the other five
+    // types arrive through the map's add affordances. Stored v1 documents
+    // still upgrade to their own full eight.
     assert.deepEqual(
-        state.chain.map((node) => node.kind),
-        Array(8).fill("device"),
+        state.chain.map((node) => ({ kind: node.kind, deviceId: node.deviceId, enabled: node.enabled })),
+        [
+            { kind: "device", deviceId: "distortion#1", enabled: false },
+            { kind: "device", deviceId: "delay#1", enabled: false },
+            { kind: "device", deviceId: "reverb#1", enabled: false },
+        ],
     );
     assert.deepEqual(
-        state.chain.map((node) => node.deviceId),
-        ["globalFilter#1", "distortion#1", "ott#1", "chorus#1",
-         "flanger#1", "phaser#1", "delay#1", "reverb#1"],
+        Object.keys(state.devices).sort(),
+        ["delay#1", "distortion#1", "reverb#1"],
     );
-    assert.deepEqual(state.chain.map((node) => node.enabled), Array(8).fill(false));
-    // Params carry over from the v1 defaults verbatim.
+    // Params carry over from the v1 defaults verbatim, in wire order (the
+    // byte-stability rule: the records match the legacy upgrade's exactly).
     assert.equal(state.devices["delay#1"].params.delayTime,
                  laneV1.createDefaultLaneState().params.delay.delayTime);
+    const legacy = laneV2.upgradeLaneStateV1(laneV1.createDefaultLaneState());
+    assert.deepEqual(state.devices["distortion#1"], legacy.devices["distortion#1"]);
+    assert.deepEqual(state.devices["reverb#1"], legacy.devices["reverb#1"]);
 
     const reparsed = laneV2.parseLaneStateV2(laneV2.serializeLaneStateV2(state));
     assert.equal(reparsed._tag, "ok");

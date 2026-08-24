@@ -25,7 +25,12 @@ import {
 import {
     EFFECT_ID_TO_LANE_TYPE,
     RACK_EFFECT_ORDER,
+    createDefaultLaneState,
 } from "../../patch_gui/lane-state.js";
+import {
+    serializeLaneStateV2,
+    upgradeLaneStateV1,
+} from "../../patch_gui/lane-state-v2.js";
 import {
     getLaneSlotId,
     getLaneSlotParamIndex,
@@ -808,8 +813,14 @@ export async function readDesktopRangeViewport(page) {
     }));
 }
 
+/** The pre-T7 resident-eight document, serialized as stored lane.v2. */
+export function legacyEightLaneDocJson() {
+    return serializeLaneStateV2(upgradeLaneStateV1(createDefaultLaneState()));
+}
+
 export async function openHarnessPage({
     beforeGoto = null,
+    laneDoc = "legacy",
 } = {}) {
     const page = await browser.newPage({
         // The segmented-panel slide honors prefers-reduced-motion; tests run
@@ -824,6 +835,21 @@ export async function openHarnessPage({
     page.on("console", (message) => {
         if (message.type() === "error") diagnostics.push(`console: ${message.text()}`);
     });
+
+    // The fresh default became the STARTER TRIO (T7), while these suites were
+    // written against the resident eight: the harness opens on a seeded
+    // legacy stored document by default. Pass laneDoc: "fresh" to exercise
+    // the true fresh-instrument default, or a serialized doc to seed it.
+    if (laneDoc !== "fresh") {
+        const serialized = laneDoc === "legacy" ? legacyEightLaneDocJson() : laneDoc;
+        await page.addInitScript((value) => {
+            const initial = window.__COSIMO_DESKTOP_HARNESS_INITIAL__ ?? {};
+            window.__COSIMO_DESKTOP_HARNESS_INITIAL__ = {
+                ...initial,
+                storedState: { ...initial.storedState, "lane.v1": value },
+            };
+        }, serialized);
+    }
 
     if (typeof beforeGoto === "function") {
         await beforeGoto(page);

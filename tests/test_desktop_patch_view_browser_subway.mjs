@@ -272,6 +272,58 @@ test("a stored v1 document upgrades in place and persists as lane.v2", async () 
     }
 });
 
+test("a fresh instrument opens on the starter trio", async () => {
+    // T7: no stored document at all — the true out-of-box state. The lane
+    // is the compact starter (drive → delay → reverb, all bypassed) with
+    // the trunk's add ghost inviting the rest of the pool.
+    const page = await openHarnessPage({ laneDoc: "fresh" });
+
+    try {
+        await page.waitForSelector('[data-role="effects-rack-card"]');
+        await page.waitForSelector('[data-role="rack-ghost-add"][data-lane-path="trunk:3"]');
+        const stations = await page.locator('[data-role="rack-module-list"] .subway-station-row').evaluateAll(
+            (elements) => elements.map((element) => ({
+                deviceId: element.getAttribute("data-device-id"),
+                enabled: element.getAttribute("data-enabled"),
+            })),
+        );
+        assert.deepEqual(stations, [
+            { deviceId: "distortion#1", enabled: "false" },
+            { deviceId: "delay#1", enabled: "false" },
+            { deviceId: "reverb#1", enabled: "false" },
+        ]);
+        assert.equal(
+            await page.locator('[data-role="rack-editor-drive"][data-device-id="distortion#1"]').count(),
+            1,
+        );
+
+        // The first edit persists a trio-shaped lane.v2 document.
+        await page.click('[data-role="rack-station-drive"]', { button: "right" });
+        await page.waitForSelector('[data-role="rack-enabled-drive"]');
+        await page.click('[data-role="rack-enabled-drive"]');
+        const snapshot = await waitForHarnessSnapshot(
+            page,
+            "fresh trio persisted",
+            (nextSnapshot) => {
+                const rawState = nextSnapshot.storedState["lane.v1"];
+                if (rawState === undefined) {
+                    return false;
+                }
+                const doc = JSON.parse(String(rawState));
+                return doc.version === 2
+                    && doc.chain?.find((node) => node.deviceId === "distortion#1")?.enabled === true;
+            },
+        );
+        const storedDoc = readStoredLaneDoc(snapshot);
+        assert.deepEqual(storedDoc.chain.map((node) => node.deviceId),
+                         ["distortion#1", "delay#1", "reverb#1"]);
+        assert.deepEqual(Object.keys(storedDoc.devices).sort(),
+                         ["delay#1", "distortion#1", "reverb#1"]);
+    } finally {
+        await page.close();
+    }
+});
+
 /** Tap the trunk's trailing ghost and pick a type; resolves on the commit. */
 async function addTrunkDevice(page, effectId, trunkIndex, expectedDeviceId) {
     // Stations carry trunk paths too — the role pins the ghost itself.

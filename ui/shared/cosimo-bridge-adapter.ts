@@ -1719,12 +1719,16 @@ class CosimoBridgeAdapter implements CosimoAdapterPort {
     }
 
     private restoreEffectOrder(effectOrder: ReadonlyArray<EffectModuleId>): void {
-        if (effectOrder.length !== RACK_EFFECT_ORDER.length) {
-            throw new Error("Effect order must contain every rack effect");
-        }
         const order = effectOrder.map((effectId) => requireEffectId(effectId));
-        if (new Set(order).size !== RACK_EFFECT_ORDER.length) {
-            throw new Error("Effect order contains duplicate effects");
+        // A full-order restore is a serial statement over the DOCUMENT'S own
+        // devices (the starter default is a trio, so eight is no longer the
+        // universal count): the restored list must restate exactly the
+        // devices this document places, in any order.
+        const current = this.projectEffectOrder();
+        if (order.length !== current.length
+                || new Set(order).size !== order.length
+                || [...order].sort().join(",") !== [...current].sort().join(",")) {
+            throw new Error("Effect order must restate exactly the rack's devices");
         }
         // A full-order restore is a SERIAL statement: any groups dissolve
         // into the stated order, enables and params riding along.
