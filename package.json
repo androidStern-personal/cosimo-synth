@@ -47,6 +47,7 @@
     "ui:worker:build": "vite build --config ui/vite.worker.config.mjs",
     "ui:bounce-worker:build": "vite build --config ui/vite.bounce-worker.config.mjs",
     "ui:speedrun-worker:build": "vite build --config ui/vite.speedrun-worker.config.mjs",
+    "ui:video-bounce:build": "vite build --config ui/vite.video-bounce.config.mjs",
     "ui:worker:test:build": "vite build --config ui/vite.worker-test.config.mjs",
     "ui:build": "node ui/build.mjs",
     "ios:ui:dev": "vite --config ios_auv3/vite.config.mjs",
@@ -76,6 +77,7 @@
     "speedrun:build": "npm run web:build && vite build --config ui/vite.speedrun-studio.config.mjs",
     "speedrun:dev": "npm run web:build && vite --config ui/vite.speedrun-studio.config.mjs",
     "test:speedrun:pipeline": "npm run speedrun:build && node --test tests/test_speedrun_pipeline_browser.mjs",
+    "test:video-bounce:integration": "npm run web:build && node --test tests/test_video_bounce_integration_browser.mjs",
     "test:speedrun:hardening": "npm run web:build && node --test tests/test_speedrun_hardening.mjs"
   },
   "devDependencies": {

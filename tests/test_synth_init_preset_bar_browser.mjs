@@ -99,6 +99,97 @@ test("compact synth preset bars expose one Init command without adding an Init p
     }
 });
 
+test("synth preset dropdowns own Bounce Audio and current-patch Bounce Video", async () => {
+    const page = await openModulePage();
+
+    try {
+        const result = await page.evaluate(async () => {
+            const { createPresetBar } = await import("/ui/shared/effects/preset-bar.ts");
+            const mountPoint = document.getElementById("mount");
+            if (!(mountPoint instanceof HTMLElement)) throw new Error("Module test mount point is missing.");
+
+            const state = {
+                effectID: "cosimo-synth",
+                ready: true,
+                filter: { query: "", source: "all" },
+                presets: [], visiblePresets: [], factoryPresets: [], userPresets: [],
+                activePreset: null, activePresetID: null, activeLabel: "INIT", dirty: false,
+                currentValues: {}, missingCurrentValueEndpointIDs: [], currentContract: null,
+                lastError: null, supportsInit: true, pendingSoundReplacement: null,
+            };
+            const capturedPatch = { kind: "cosimo.soundShare", version: 1, preset: { label: "Current Patch" } };
+            let captureCount = 0;
+            const controller = {
+                getState: () => state,
+                subscribe: () => () => {},
+                getMutations: () => ({ clearLastError() {}, setFilter() {} }),
+                getSynthMutations: () => ({
+                    captureCurrentSound() {
+                        captureCount += 1;
+                        return { ok: true, value: capturedPatch, message: "Captured." };
+                    },
+                }),
+            };
+
+            const inspect = (compact) => {
+                const presetBar = createPresetBar();
+                if (compact) presetBar.setAttribute("compact-synth", "");
+                presetBar.controller = controller;
+                presetBar.audioBounceAvailable = true;
+                presetBar.videoBounceAvailable = true;
+                mountPoint.append(presetBar);
+                const shadow = presetBar.shadowRoot;
+                if (!shadow) throw new Error("Preset bar shadow root is missing.");
+                return { presetBar, shadow };
+            };
+
+            const compact = inspect(true);
+            const events = [];
+            compact.presetBar.addEventListener("cosimo-bounce-audio", () => events.push("audio"));
+            compact.presetBar.addEventListener("cosimo-bounce-video", (event) => {
+                events.push(event.detail.patchInput === capturedPatch ? "video-current" : "video-other");
+            });
+            compact.shadow.querySelector('.shell-menu-row[data-action="bounce-audio"]').click();
+            compact.shadow.querySelector('.shell-menu-row[data-action="bounce-video"]').click();
+
+            const desktop = inspect(false);
+            const standaloneState = { ...state, effectID: "chorus", supportsInit: false };
+            const standalone = createPresetBar();
+            standalone.controller = {
+                getState: () => standaloneState,
+                subscribe: () => () => {},
+                getMutations: () => ({ clearLastError() {}, setFilter() {} }),
+            };
+            standalone.audioBounceAvailable = true;
+            standalone.videoBounceAvailable = true;
+            mountPoint.append(standalone);
+
+            return {
+                compactLabels: Array.from(compact.shadow.querySelectorAll(".shell-menu-row[data-synth-bounce]"))
+                    .map((button) => button.textContent.trim()),
+                compactEnabled: Array.from(compact.shadow.querySelectorAll(".shell-menu-row[data-synth-bounce]"))
+                    .every((button) => !button.hidden && !button.disabled),
+                desktopLabels: Array.from(desktop.shadow.querySelectorAll(".flyout-synth-action"))
+                    .map((button) => button.textContent.trim()),
+                desktopActionsVisible: !desktop.shadow.querySelector('[data-el="flyout-synth-actions"]').hidden,
+                standaloneActionsHidden: standalone.shadowRoot.querySelector('[data-el="flyout-synth-actions"]').hidden,
+                events,
+                captureCount,
+            };
+        });
+
+        assert.deepEqual(result.compactLabels, ["Bounce Audio", "Bounce Video"]);
+        assert.equal(result.compactEnabled, true);
+        assert.deepEqual(result.desktopLabels, ["Bounce Audio", "Bounce Video"]);
+        assert.equal(result.desktopActionsVisible, true);
+        assert.equal(result.standaloneActionsHidden, true);
+        assert.deepEqual(result.events, ["audio", "video-current"]);
+        assert.equal(result.captureCount, 1);
+    } finally {
+        await page.close();
+    }
+});
+
 test("the Init guard dialog exposes exactly three actions and reuses Save As", async () => {
     const page = await openModulePage();
 

@@ -35,6 +35,10 @@ import {
     BounceActionControl,
     BounceSampledSourceStage,
 } from "../shared/bounce-source-stage";
+import {
+    isVideoBounceAvailable,
+    VideoBounceFlow,
+} from "./video-bounce-flow";
 import type { ResourceClient } from "../shared/resource-client";
 import {
     usePatchParameterBinding,
@@ -1777,6 +1781,9 @@ function SynthPresetBarHost({
     backAvailable = false,
     onShellBack,
     onBounceGuardReady,
+    bounceAudioAvailable,
+    onBounceAudio,
+    onBounceVideo,
 }: {
     isHidden: boolean;
     storedStateAdapters: EffectStoredStateAdapter[];
@@ -1787,6 +1794,9 @@ function SynthPresetBarHost({
     onBounceGuardReady?: (
         guard: ((continuation: () => void) => void) | null,
     ) => void;
+    bounceAudioAvailable: boolean;
+    onBounceAudio: () => void;
+    onBounceVideo: (patchInput: unknown) => void;
 }) {
     const patchConnection = usePatchConnection();
     const hostRef = useRef<HTMLDivElement | null>(null);
@@ -1795,6 +1805,10 @@ function SynthPresetBarHost({
     onShellBackRef.current = onShellBack;
     const onBounceGuardReadyRef = useRef(onBounceGuardReady);
     onBounceGuardReadyRef.current = onBounceGuardReady;
+    const onBounceAudioRef = useRef(onBounceAudio);
+    onBounceAudioRef.current = onBounceAudio;
+    const onBounceVideoRef = useRef(onBounceVideo);
+    onBounceVideoRef.current = onBounceVideo;
     const presetController = useMemo(() => createStandaloneEffectPresetController({
         effectID: SYNTH_PRESET_EFFECT_ID,
         patchConnection,
@@ -1813,7 +1827,16 @@ function SynthPresetBarHost({
         const presetBar = createPresetBar();
         presetBar.controller = presetController;
         const handleShellBack = () => onShellBackRef.current?.();
+        const handleBounceAudio = () => {
+            presetBar.requestBounceSoundReplacement(() => onBounceAudioRef.current());
+        };
+        const handleBounceVideo = (event: Event) => {
+            const detail = (event as CustomEvent<{ readonly patchInput: unknown }>).detail;
+            onBounceVideoRef.current(detail.patchInput);
+        };
         presetBar.addEventListener("cosimo-shell-back", handleShellBack);
+        presetBar.addEventListener("cosimo-bounce-audio", handleBounceAudio);
+        presetBar.addEventListener("cosimo-bounce-video", handleBounceVideo);
         presetBarRef.current = presetBar;
         host.replaceChildren(presetBar);
         presetController.attach();
@@ -1825,6 +1848,8 @@ function SynthPresetBarHost({
             onBounceGuardReadyRef.current?.(null);
             presetController.detach();
             presetBar.removeEventListener("cosimo-shell-back", handleShellBack);
+            presetBar.removeEventListener("cosimo-bounce-audio", handleBounceAudio);
+            presetBar.removeEventListener("cosimo-bounce-video", handleBounceVideo);
             presetBar.controller = null;
             presetBarRef.current = null;
             presetBar.remove();
@@ -1838,7 +1863,9 @@ function SynthPresetBarHost({
         }
         presetBar.toggleAttribute("compact-synth", compactSynth);
         presetBar.shellBackAvailable = compactSynth && backAvailable;
-    }, [backAvailable, compactSynth, presetController]);
+        presetBar.audioBounceAvailable = bounceAudioAvailable;
+        presetBar.videoBounceAvailable = isVideoBounceAvailable();
+    }, [backAvailable, bounceAudioAvailable, compactSynth, presetController]);
 
     return (
         <div
@@ -4129,6 +4156,12 @@ function DesktopPatchViewBody({
     const curveLab = useDesktopCurveLab();
     const oscillatorSelection = useOscillatorSelectionViewModel();
     const bounceController = useBounceInPlace();
+    const [videoBounceRequest, setVideoBounceRequest] = useState<{
+        readonly patchInput: unknown;
+    } | null>(null);
+    const handleBounceVideo = useCallback((patchInput: unknown) => {
+        setVideoBounceRequest({ patchInput });
+    }, []);
     const synthView = useSynthPatchViewModel({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
@@ -4777,6 +4810,7 @@ function DesktopPatchViewBody({
                                 onCancel={bounceController.cancel}
                                 requestBounceGuard={requestBounceGuard}
                                 compact
+                                showReadyAction={false}
                             />
                         </MobileVoiceFocusedEditor>
                         )
@@ -4835,6 +4869,7 @@ function DesktopPatchViewBody({
                             onBounce={() => void bounceController.bounce()}
                             onCancel={bounceController.cancel}
                             requestBounceGuard={requestBounceGuard}
+                            showReadyAction={false}
                         />
                     </div>
                     </div>
@@ -5033,6 +5068,11 @@ function DesktopPatchViewBody({
                 backAvailable={mobileReturnTarget !== null}
                 onShellBack={handleUniversalBack}
                 onBounceGuardReady={handleBounceGuardReady}
+                bounceAudioAvailable={bounceController.state.hydrated
+                    && bounceController.state.captureReady
+                    && !bounceController.state.busy}
+                onBounceAudio={() => void bounceController.bounce()}
+                onBounceVideo={handleBounceVideo}
             />
 
             {isCompactViewport ? (
@@ -5197,6 +5237,13 @@ function DesktopPatchViewBody({
             ) : null}
 
             {parameterMenuOverlays}
+
+            {videoBounceRequest ? (
+                <VideoBounceFlow
+                    patchInput={videoBounceRequest.patchInput}
+                    onClose={() => setVideoBounceRequest(null)}
+                />
+            ) : null}
 
             <MsegEditorModal
                 isOpen={synthView.msegEditor.isOpen}

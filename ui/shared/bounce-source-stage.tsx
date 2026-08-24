@@ -82,7 +82,8 @@ export function BounceActionControl({
     onCancel,
     requestBounceGuard,
     compact = false,
-}: Omit<BounceActions, "onRevert"> & { compact?: boolean }) {
+    showReadyAction = true,
+}: Omit<BounceActions, "onRevert"> & { compact?: boolean; showReadyAction?: boolean }) {
     if (state.busy) {
         return (
             <div
@@ -102,6 +103,18 @@ export function BounceActionControl({
                 ) : null}
             </div>
         );
+    }
+
+    if (!showReadyAction) {
+        return state.error ? (
+            <span
+                data-role="bounce-error-inline"
+                className="max-w-[220px] truncate text-[9px] font-medium text-rose-200/85"
+                title={state.error}
+            >
+                {state.error}
+            </span>
+        ) : null;
     }
 
     return (
@@ -196,6 +209,7 @@ export function BounceSampledSourceStage({
                         onBounce={onBounce}
                         onCancel={onCancel}
                         requestBounceGuard={requestBounceGuard}
+                        showReadyAction={false}
                     />
                     {!state.busy ? (
                     <button

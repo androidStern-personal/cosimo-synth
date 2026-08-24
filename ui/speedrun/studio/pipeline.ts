@@ -39,7 +39,7 @@ export type SpeedrunPreparedPipeline = {
     readonly timeline: SpeedrunTimeline;
     readonly states: ReadonlyArray<CumulativePatchState>;
     readonly performance: NotePerformance;
-    readonly shareLink: StudioShareLinkAvailability;
+    readonly shareLink: StudioShareLinkAvailability | null;
 };
 
 export type SpeedrunAudioArtifact = {
@@ -158,7 +158,10 @@ export class SpeedrunStudioSession {
     async prepare(
         patchInput: unknown,
         performance: NotePerformance,
-        options: { readonly maxDurationInFrames?: number } = {},
+        options: {
+            readonly maxDurationInFrames?: number;
+            readonly createShareLink?: boolean;
+        } = {},
     ): Promise<SpeedrunPreparedPipeline> {
         if (this.activeController !== null) {
             throw new SpeedrunStudioError("analysis", "RenderInProgress", "Cancel the active render before analyzing another sound.");
@@ -183,7 +186,9 @@ export class SpeedrunStudioSession {
             if (timeline.durationInFrames < 1 || timeline.sections.length < 1) {
                 throw new Error("This sound has no reconstructable speedrun sections.");
             }
-            const shareLink = await createStudioShareLink(intake.value.document, this.runtime);
+            const shareLink = options.createShareLink === false
+                ? null
+                : await createStudioShareLink(intake.value.document, this.runtime);
             const prepared = {
                 document: intake.value.document,
                 defaults: intake.value.defaults,
@@ -329,10 +334,10 @@ export class SpeedrunStudioSession {
                 durationInFrames: prepared.timeline.durationInFrames,
                 durationSeconds: prepared.timeline.durationInFrames / prepared.timeline.fps,
                 compressionLevel: prepared.timeline.compressionLevel,
-                shareURL: prepared.shareLink._tag === "available"
+                shareURL: prepared.shareLink?._tag === "available"
                     ? prepared.shareLink.link.url
                     : null,
-                shareError: prepared.shareLink._tag === "unavailable"
+                shareError: prepared.shareLink?._tag === "unavailable"
                     ? { code: prepared.shareLink.code, message: prepared.shareLink.message }
                     : null,
             },

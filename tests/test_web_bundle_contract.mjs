@@ -115,6 +115,20 @@ test("speedrun audio ships its typed checkpoint worker beside the Bounce worker"
     assert.match(worker, /render-root-complete/);
 });
 
+test("Bounce Video ships as a browser-only lazy renderer outside the synth startup bundle", async () => {
+    const [desktopApp, renderer, rendererStyles, webHost] = await Promise.all([
+        fs.readFile(path.join(repoRoot, "build", "web", "patch_gui", "desktop", "app.js"), "utf8"),
+        fs.readFile(path.join(repoRoot, "build", "web", "video-bounce", "index.js"), "utf8"),
+        fs.readFile(path.join(repoRoot, "build", "web", "video-bounce", "style.css"), "utf8"),
+        fs.readFile(path.join(repoRoot, "build", "web", "cosimo-web-host.js"), "utf8"),
+    ]);
+
+    assert.doesNotMatch(desktopApp, /cosimo-sound-speedrun/);
+    assert.match(renderer, /cosimo-sound-speedrun/);
+    assert.match(rendererStyles, /speedrun-video-frame/);
+    assert.match(webHost, /__COSIMO_VIDEO_BOUNCE_MODULE_URL__/);
+});
+
 test("Bounce ships the OPFS persistence and safe runtime-restore modules", async () => {
     await Promise.all([
         fs.access(path.join(repoRoot, "build", "web", "bounce", "browser-bank-store.mjs")),

@@ -1091,6 +1091,10 @@ test("sampled-mode sounds are refused with the locked share-link message", async
     assert.equal(fixture.patchConnection.events.length, writesBefore);
 
     fixture.patchConnection.emitParameterValue("sourceMode", 1);
+    const currentCapture = synthMutations(fixture.controller).captureCurrentSound();
+    assert.equal(currentCapture.ok, true, currentCapture.message);
+    assert.equal(currentCapture.value.preset.parameters.sourceMode, 1);
+
     const refusedCapture = synthMutations(fixture.controller).captureSharedSound();
     assert.equal(refusedCapture.ok, false);
     assert.equal(refusedCapture.message, "Bounced sounds can't be shared by link yet");
