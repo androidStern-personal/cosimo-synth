@@ -261,3 +261,42 @@ URL-sharing implementation begins from Effects Lane tip `412a2a87`.
   speedrun-specific approximation of lane/modulation installs. This makes
   repeated-device and group behavior an observed pipeline input while Bounce's
   proven pool remains the sole worker lifecycle owner.
+
+## 2026-08-24 — M5 frame-pure composition
+
+- Added the purpose-built `SpeedrunPhoneUI` Track 1 composition at
+  1080x1920/30 fps. It recomputes navigation, parameter interpolation,
+  current lane devices, modulation routes, captions, and gesture geometry
+  solely from `(recipe, timeline, frame)`; it never drives the live patch
+  view or retains presentation state across seeks.
+- The replica reuses production leaf visuals rather than copying their
+  drawing laws: `ParameterKnobArtwork`, `SegmentedEditorTabs`, the shared
+  wavetable renderer, MSEG buffer rendering, current rack descriptors, shared
+  fonts, and design tokens. Repeated identities such as `delay#2` remain the
+  UI and route keys from the merged lane.v2 recipe.
+- Added deterministic navigation/tap/horizontal-edit/map-route gesture scripts
+  over a static 393x852 surface map. The finger, route ghost, target capture,
+  knob state, and caption waterfall are all direct integer-frame projections.
+- The composition uses the pre-spliced master WAV as one blob-URL `<Audio>`.
+  The real MP4 alignment fixture exposed 1.36–1.50 frames of decoded AAC
+  priming when left uncompensated. Trimming one silent lead-in frame at the
+  composition boundary reduced all three measured onset errors to
+  0.36–0.37 frames, inside the frozen +/-1-frame gate without moving visual
+  events or changing the master PCM.
+- Checked in exact Chromium PNG goldens for all six current-contract section
+  boundaries plus the end card. Seeking away and back to the same active
+  frame produces byte-identical pixels; the harness also verifies production
+  canvas/knob leaves are present.
+- The rendered 3.413-second alignment MP4 has one AVC track and one AAC track.
+  Caption lines become visible on frames 10/14/18; decoded click onsets land at
+  frames 10.374/14.374/18.363. The end card contains only the patch name and
+  "Made with Cosimo"; no share URL is baked into pixels.
+
+### M5 decision
+
+- Kept the handoff's primary frame-pure replica path. The real patch-view
+  fallback was not attempted because the selected path passed frame purity,
+  current-lane fidelity, screenshot, and real MP4 A/V gates.
+- Fetched `origin/claude/effects-lane-m1` after all M5 gates. Its tip remains
+  `0a0eba9c`; it is already an ancestor, so no merge or Effects Lane change was
+  required.
