@@ -342,3 +342,62 @@ URL-sharing implementation begins from Effects Lane tip `412a2a87`.
 - Decision: keep the speedrun studio as a disposable browser-only orchestrator
   over existing product contracts. It does not add video concerns to the live
   synth, duplicate DSP/runtime services, or expose an unverified encoded blob.
+
+## 2026-08-24 — M7 duration, fallback, lifetime, and delivery seal
+
+- Added a maximal fixture generated from the current performer contract: all
+  96 public parameters, all 1,131 legal modulation mappings, all 8 current
+  effect types, all 3 audible oscillators, and 13 modulation sources. Its 22
+  sections retain all 1,282 reconstruction operations.
+- The fixture's uncompressed presentation is 30,181 frames. Deterministic
+  pacing level 3 brings the default result to exactly 2,700 frames / 90
+  seconds; the 30-second policy reaches exactly 900 frames without removing a
+  section or reconstruction operation.
+- Video pacing and sound-share URL compression are independent contracts. The
+  maximal fixture's 226,952-byte raw share carrier deflates to a 15,011-character
+  candidate URL, so Copy Share reports typed `URLTooLong` under the 8,000-
+  character limit while analysis, checkpoint audio, and video rendering remain
+  available. Oversized-link refusal cannot block the video pipeline.
+- Added a real fallback render gate. Chromium produced an 84,409-byte,
+  1.76-second WebM with exactly one VP9 video track and one Opus audio track;
+  decoded audio is non-silent (minimum fixture RMS 0.01199) and the EBML
+  signature, duration, tracks, and codecs verify before download exposure.
+- Five consecutive full audio-plus-video cycles leave zero checkpoint workers
+  alive after each job, exactly two live product object URLs after each settled
+  render, and zero URLs after session disposal. The run created five workers
+  total with peak concurrency one. Settled post-GC heaps spanned 1,475,356
+  bytes; the permanent 128 MiB ceiling stays deliberately conservative across
+  browser and encoder variation while still rejecting unbounded retention.
+- Added `ui/speedrun/README.md` with the standalone development and production
+  paths, inputs, cancellation/lifetime rules, format behavior, verification
+  commands, and the public-shipping license hold. Updated the renderer note with
+  the production MP4/WebM and five-render evidence.
+
+### Final gate seal
+
+- Speedrun hardening 2/2; browser pipeline 5/5; pure core 14/14; composition
+  3/3; MIDI intake 5/5; checkpoint audio 6/6 across Chromium and WebKit; URL
+  sharing 28/28; Bounce capture 8/8; Web bundle 18/18; effect presets 113/113;
+  shared hooks 34/34; iPhone UI 20/20; orphan units 712/712; desktop browser
+  222/222; browser orphans 117 passes plus one intentional native-keyboard
+  skip. Desktop and iPhone generated bundles were rebuilt deterministically.
+- The separate Bounce G2 boundary gate remains explicitly red at about 22–31%
+  resident-bank overhead versus the frozen 10% limit, with zero misses. It is
+  unchanged, is not hidden by the green speedrun seal, and remains documented
+  in `BLOCKED.md` for its owning lane/Bounce work.
+- Final boundary fetch found `origin/claude/effects-lane-m1` unchanged at
+  `0a0eba9c`; it is already an ancestor. No merge and no Effects Lane product
+  change were required.
+
+### M7 decisions and remaining human action
+
+- Keep video rendering independent from optional link copying. A sound that is
+  too large for a safe URL remains fully eligible for local video export.
+- Keep verified MP4/H.264/AAC primary and expose verified WebM/VP9/Opus only as
+  a labeled fallback; never silently substitute containers.
+- Keep the studio isolated from shipped synth surfaces, keep encoded blobs
+  hidden until media verification passes, and retain the conservative 128 MiB
+  lifecycle bound rather than tightening it to the single-machine observation.
+- Technical delivery is complete. Before public ship, a human must confirm the
+  applicable Remotion license and production telemetry/key configuration. The
+  Effects Lane/Bounce G2 boundary blocker remains separate owner work.

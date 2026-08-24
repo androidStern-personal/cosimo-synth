@@ -16,6 +16,30 @@ The production composition must remain a pure function of the current frame
 and use the capture-safe phone replica from the architecture plan. This spike
 does not authorize mounting the live synth UI inside Remotion.
 
+## Production studio status
+
+The production browser-only pipeline now lives under `ui/speedrun/`. It keeps
+the same single-WAV/frame-pure design and verifies the exact output blob before
+exposing a download. The Chromium end-to-end gates cover:
+
+- MP4/H.264/AAC as the preferred output;
+- the labeled WebM/VP9/Opus fallback;
+- exact container and one-video/one-audio track structure;
+- duration within two frames/150 ms of the authoritative timeline;
+- decoded non-silent audio within every audible section window;
+- cancellation and five consecutive render/dispose cycles.
+
+The five-render hardening run kept exactly two live product object URLs after
+each settled render and zero after session disposal. Every checkpoint worker
+was terminated after its job. The observed settled post-GC heap spread was
+1.48 MB; the permanent test enforces a conservative 128 MiB bound to allow for
+browser/encoder variation while catching unbounded retention.
+
+Use `npm run speedrun:dev` for the standalone development surface, or
+`npm run speedrun:build` followed by `npm run web:serve` and open
+`http://127.0.0.1:8123/speedrun/`. The complete operating and verification
+guide is in [`ui/speedrun/README.md`](../ui/speedrun/README.md).
+
 ## Human licensing decision required
 
 Remotion's licensing and telemetry terms apply to client-side rendering. A
