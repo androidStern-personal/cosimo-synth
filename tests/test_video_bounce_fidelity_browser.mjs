@@ -6,20 +6,23 @@ import test, { after, before } from "node:test";
 import { chromium } from "playwright";
 
 import { startDesktopHarnessServer } from "./helpers/desktop_harness_browser.mjs";
+import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
 
 const artifactRoot = path.resolve("build", "video-bounce-m0-fidelity");
 const scenarios = [
     {
         id: "voice-hud",
         workspace: "mobile-workspace-tab-voice",
-        landmarks: ["title", "keyboard", "knob", "filter", "hud"],
+        landmarks: ["title", "keyboard", "rail", "knob", "filter", "hud"],
     },
     {
         id: "fx-filter",
         workspace: "mobile-workspace-tab-fx",
-        landmarks: ["title", "keyboard", "filter"],
+        landmarks: ["title", "keyboard", "rail", "filter"],
     },
     {
+        // The rail dodges off-canvas during the source drag, so it has no
+        // rail landmark; the ghost is this scenario's overlay evidence.
         id: "mod-route-ghost",
         workspace: "mobile-workspace-tab-mod",
         landmarks: ["title", "keyboard", "image", "ghost"],
@@ -29,6 +32,7 @@ const scenarios = [
 const minimumRegionStandardDeviation = {
     title: 20,
     keyboard: 60,
+    rail: 12,
     knob: 20,
     filter: 3,
     image: 10,
@@ -36,16 +40,34 @@ const minimumRegionStandardDeviation = {
     ghost: 10,
 };
 
+// Bounds sit ~1.5x above the measured fallback-rasterizer difference (it
+// re-paints text/gradients/shadows rather than copying compositor pixels), so
+// they admit that enumerated class while a missing or displaced element fails.
 const maximumRegionMeanDifference = {
-    title: 25,
+    title: 30,
     keyboard: 20,
+    rail: 18,
     knob: 18,
     filter: 18,
     image: 12,
     hud: 18,
-    // The live screenshot advances the ghost's running CSS entrance after
-    // inspection, while the captured tree pauses at the inspected frame.
-    ghost: 60,
+    // The ghost's crisp ring shadow re-paints as a soft halo (the shadow
+    // class); presence is guarded by its stddev, range, and geometry checks.
+    ghost: 45,
+};
+
+// A strong per-pixel difference is a shape/position change, not anti-alias
+// noise. This catches a re-painted-but-wrong element (e.g. a flat filter
+// curve) that a mean over a mostly-static region would absorb.
+const maximumRegionStrongRatio = {
+    title: 0.1,
+    keyboard: 0.15,
+    rail: 0.12,
+    knob: 0.12,
+    filter: 0.12,
+    image: 0.1,
+    hud: 0.12,
+    ghost: 0.4,
 };
 
 let browser;
@@ -65,6 +87,7 @@ async function openProbe(mode) {
         sessionStorage.clear();
         localStorage.removeItem("cosimo.mobile-global-mod-rail.position.v1");
     });
+    await routeHermeticPage(page, server.baseUrl);
     await page.goto(`${server.baseUrl}?fidelityKeyboard=${mode}`, { waitUntil: "networkidle" });
     await page.waitForFunction(() => (
         document.body.dataset.bootStage === "render-called"
@@ -214,6 +237,14 @@ test("M0 real DesktopPatchView stills retain every representative live element",
         assert.deepEqual(captureProbe.diagnostics, [], `${scenario.id} capture diagnostics`);
         await captureProbe.page.close();
 
+        // Written before any pixel assertion, so a failed run leaves the
+        // live/captured/diff evidence a human needs to judge it.
+        await Promise.all([
+            fs.writeFile(path.join(artifactRoot, `${scenario.id}-live.png`), livePng),
+            fs.writeFile(path.join(artifactRoot, `${scenario.id}-captured.png`), pngBytes(captured.dataUrl)),
+            fs.writeFile(path.join(artifactRoot, `${scenario.id}-diff.png`), pngBytes(comparison.diffDataUrl)),
+        ]);
+
         assert.equal(liveInspection.workspace, scenario.workspace);
         assert.equal(captured.inspection.workspace, scenario.workspace);
         assert.equal(liveInspection.keyboardNoteCount, 18);
@@ -253,20 +284,15 @@ test("M0 real DesktopPatchView stills retain every representative live element",
                 pixels.meanDifference <= maximumRegionMeanDifference[landmark],
                 `${scenario.id} captured ${landmark} differs materially from live: ${JSON.stringify(pixels)}`,
             );
+            assert.ok(
+                pixels.strongDifferenceRatio <= maximumRegionStrongRatio[landmark],
+                `${scenario.id} captured ${landmark} shape drifted from live: ${JSON.stringify(pixels)}`,
+            );
         }
 
-        // The fallback renderer re-paints text, gradients, and shadows rather
-        // than copying compositor pixels. These bounds admit that enumerated
-        // anti-alias/shadow class while rejecting missing panels or leaves.
         assert.ok(comparison.global.meanDifference <= 15, JSON.stringify(comparison.global));
         assert.ok(comparison.global.strongDifferenceRatio <= 0.12, JSON.stringify(comparison.global));
 
-        const capturedPng = pngBytes(captured.dataUrl);
-        await Promise.all([
-            fs.writeFile(path.join(artifactRoot, `${scenario.id}-live.png`), livePng),
-            fs.writeFile(path.join(artifactRoot, `${scenario.id}-captured.png`), capturedPng),
-            fs.writeFile(path.join(artifactRoot, `${scenario.id}-diff.png`), pngBytes(comparison.diffDataUrl)),
-        ]);
         report.push({
             scenario: scenario.id,
             liveInspection,

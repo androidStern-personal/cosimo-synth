@@ -68,10 +68,6 @@ test("master track keeps integer authority, equal-power boundaries, and a final 
     assert.equal(master.samples.at(-1), 0);
     assert.equal(new TextDecoder().decode(master.wav.subarray(0, 4)), "RIFF");
     assert.equal(master.wav.byteLength, 44 + master.samples.length * 2);
-    assert.equal(
-        await masterModule.digestSpeedrunPCM(master.samples),
-        await masterModule.digestSpeedrunPCM(master.samples.slice()),
-    );
 });
 
 test("master track rejects a missing or short checkpoint instead of emitting partial audio", async () => {

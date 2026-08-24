@@ -1639,6 +1639,7 @@ function DesktopEnvelopeEditor({
                     preserveAspectRatio={compact ? "none" : undefined}
                     className="relative z-10 block h-full w-full touch-none"
                     data-role="adsr-editor-surface"
+                    data-active-handle={activeHandle ?? undefined}
                     aria-label="Envelope editor"
                 >
                     {Array.from({ length: 9 }, (_, step) => {

@@ -503,6 +503,11 @@ may stay on `window.setTimeout` until a script exercises them.
 
 ## 9. Verification commands (existing)
 
+(Script names revised 2026-08-24 after the cleanup: the replica suites are
+parked as `test:speedrun:replica:*`, the state browser gate is replaced by
+`test:speedrun:unit` plus paint-level probes in the hardening/gestures
+suites — see PROGRESS.txt for the revision of record.)
+
 ```
 npm run test:speedrun:hardening
 npm run test:speedrun:pipeline

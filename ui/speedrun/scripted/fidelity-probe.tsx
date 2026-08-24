@@ -21,8 +21,13 @@ import {
 import { WORKSPACE_SHELL_STORAGE_KEY } from "../../shared/workspace-shell";
 import { settleCaptureSubtree } from "./capture-fidelity";
 import { createCapturePianoKeyboardClass } from "./capture-piano-keyboard";
+import "./scripted-styles.css";
 
 export type FidelityScenario = "voice-hud" | "fx-filter" | "mod-route-ghost";
+
+/** Both sides pause every animation at this same media time, so the compare
+    sees identical animation state instead of two arbitrary in-flight frames. */
+const FIDELITY_ANIMATION_TIME_MILLISECONDS = 400;
 
 type ProbeInspection = {
     readonly scenario: FidelityScenario;
@@ -171,6 +176,7 @@ function inspect(root: HTMLElement, scenario: FidelityScenario): ProbeInspection
         ?? null;
     const selectors = {
         keyboard: ".keyboard",
+        rail: '[data-role="mobile-global-mod-rail"]',
         knob: '[data-role="parameter-knob-artwork"]',
         filter: scenario === "fx-filter"
             ? '[data-role="rack-editor-filter"] [data-role="filter-response-graph"]'
@@ -195,6 +201,13 @@ function inspect(root: HTMLElement, scenario: FidelityScenario): ProbeInspection
             }),
         ]),
     };
+}
+
+/** The rail's source lights chase seeded values on a 45ms time constant and
+    snap once settled (~340ms). Waiting past that means both trees freeze on
+    the identical converged light state instead of two mid-chase frames. */
+function settleModSourceLights() {
+    return new Promise<void>((resolve) => window.setTimeout(resolve, 450));
 }
 
 function seedTelemetry(patchConnection: MockPatchConnection) {
@@ -230,7 +243,10 @@ function ProbeReady({
             seedTelemetry(patchConnection);
             await waitForFrames(3);
             await applyScenario(root, scenario);
-            await settleCaptureSubtree(root);
+            await settleModSourceLights();
+            await settleCaptureSubtree(root, {
+                animationTimeMilliseconds: FIDELITY_ANIMATION_TIME_MILLISECONDS,
+            });
             latestCaptureInspection = inspect(root, scenario);
             if (!cancelled) {
                 continueRender(handle);
@@ -248,12 +264,20 @@ function ProbeReady({
     return (
         <div
             data-fidelity-capture={scenario}
+            // The shipped capture class, so its rasterizer overrides (overlay
+            // re-basing, forced content-visibility) are what this gate
+            // validates. Its phone chrome is inline-neutralized because the
+            // live reference has no bezel and the compare is edge to edge.
+            className="speedrun-scripted-phone"
             style={{
                 width: 393,
                 height: 852,
                 position: "relative",
                 overflow: "hidden",
                 background: "#02040b",
+                border: 0,
+                borderRadius: 0,
+                boxShadow: "none",
                 colorScheme: "dark",
             }}
         >
@@ -301,14 +325,18 @@ export function installFidelityProbe(
     patchConnection: MockPatchConnection,
     liveRoot: HTMLElement,
 ) {
-    const devOverlayStyle = document.createElement("style");
-    devOverlayStyle.textContent = "body > [data-react-grab] { display: none !important; }";
-    document.head.appendChild(devOverlayStyle);
     window.__COSIMO_VIDEO_BOUNCE_FIDELITY__ = {
         async prepareLiveScenario(scenario) {
             seedTelemetry(patchConnection);
             await applyScenario(liveRoot, scenario);
-            await settleCaptureSubtree(liveRoot, { flattenShadowRoots: false });
+            await settleModSourceLights();
+            // The live tree is the reference: settle fonts, images, and
+            // animation time, but never apply capture-only SVG workarounds.
+            await settleCaptureSubtree(liveRoot, {
+                flattenShadowRoots: false,
+                rasterizerWorkarounds: false,
+                animationTimeMilliseconds: FIDELITY_ANIMATION_TIME_MILLISECONDS,
+            });
             return inspect(liveRoot, scenario);
         },
         async renderStill(scenario) {

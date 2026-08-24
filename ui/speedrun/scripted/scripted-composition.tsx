@@ -44,6 +44,13 @@ import "../stage.css";
 import "../../desktop/styles.css";
 import "./scripted-styles.css";
 
+export type ScriptedInspectionRect = {
+    readonly left: number;
+    readonly top: number;
+    readonly width: number;
+    readonly height: number;
+};
+
 export type ScriptedFrameInspection = {
     readonly frame: number;
     readonly workspace: string | null;
@@ -53,6 +60,16 @@ export type ScriptedFrameInspection = {
     readonly keyboardActiveNoteCount: number;
     readonly viewport: { readonly width: number; readonly height: number };
     readonly scaffoldHitTestable: boolean;
+    /**
+     * Client rects of paint-critical elements, in composition pixel space
+     * (the scaffold sits at the viewport origin). The renderer's pixel probes
+     * sample the captured frame inside these rects, so "the DOM node exists"
+     * can never again stand in for "the pixels are on screen".
+     */
+    readonly rects: Readonly<Record<string, ScriptedInspectionRect | null>>;
+    readonly adsrActiveHandle: string | null;
+    readonly macroValues: Readonly<Record<string, number>>;
+    readonly framePositionText: string | null;
     readonly connection: ScriptedConnectionFrameSnapshot;
     readonly interaction: ScriptedInteractionSnapshot;
 };
@@ -121,12 +138,23 @@ function revealRemotionScaffold(root: HTMLElement) {
     }
 }
 
+function inspectionRect(element: Element | null): ScriptedInspectionRect | null {
+    if (!element) return null;
+    const rect = element.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return null;
+    return { left: rect.left, top: rect.top, width: rect.width, height: rect.height };
+}
+
 function inspectFrame(
     root: HTMLElement,
     frame: number,
     connection: ScriptedPatchConnection,
     interaction: ScriptedInteractionDirector,
 ): ScriptedFrameInspection {
+    const macroValues: Record<string, number> = {};
+    for (const input of root.querySelectorAll<HTMLInputElement>('input[data-role^="macro-source-value-"]')) {
+        macroValues[input.dataset.role ?? ""] = Number(input.value);
+    }
     return {
         frame,
         workspace: root.querySelector('[data-role^="mobile-workspace-tab-"][aria-selected="true"]')
@@ -137,6 +165,19 @@ function inspectFrame(
         keyboardActiveNoteCount: root.querySelectorAll(".keyboard .note.active").length,
         viewport: { width: window.innerWidth, height: window.innerHeight },
         scaffoldHitTestable: root.closest('[data-scripted-capture-scaffold="true"]') !== null,
+        rects: {
+            phone: inspectionRect(root),
+            rail: inspectionRect(root.querySelector('[data-role="mobile-global-mod-rail"]')),
+            ghost: inspectionRect(root.querySelector('[data-role="mobile-global-mod-source-ghost"]')),
+            hud: inspectionRect(root.querySelector('[data-role="mobile-voice-hud"].is-visible')),
+            filterCurve: inspectionRect(root.querySelector('[data-role="filter-response-graph"] path')),
+            keyboard: inspectionRect(root.querySelector(".keyboard")),
+        },
+        adsrActiveHandle: root.querySelector('[data-role="adsr-editor-surface"]')
+            ?.getAttribute("data-active-handle") ?? null,
+        macroValues,
+        framePositionText: root.querySelector('[data-role="mobile-voice-cell-framePosition"]')
+            ?.textContent?.replace(/\s+/gu, " ").trim() ?? null,
         connection: connection.getFrameSnapshot(),
         interaction: interaction.inspect(root),
     };

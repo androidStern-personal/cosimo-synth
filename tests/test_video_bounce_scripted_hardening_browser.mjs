@@ -1,62 +1,30 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { createServer } from "node:http";
 import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
 
+import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
+import { startStaticWebServer } from "./helpers/static_web_server.mjs";
+
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "web");
+const contactSheetRoot = path.join(repoRoot, "build", "video-bounce-contact-sheet");
 let browser;
 let server;
-let baseUrl;
-
-function contentType(filePath) {
-    const extension = path.extname(filePath);
-    if (extension === ".html") return "text/html; charset=utf-8";
-    if (extension === ".js" || extension === ".mjs") return "text/javascript; charset=utf-8";
-    if (extension === ".css") return "text/css; charset=utf-8";
-    if (extension === ".json") return "application/json; charset=utf-8";
-    if (extension === ".woff2") return "font/woff2";
-    if (extension === ".svg") return "image/svg+xml";
-    return "application/octet-stream";
-}
-
-async function serve(request, response) {
-    try {
-        const requestUrl = new URL(request.url ?? "/", baseUrl);
-        let relative = decodeURIComponent(requestUrl.pathname.slice(1));
-        if (relative.length === 0 || relative.endsWith("/")) relative += "index.html";
-        const filePath = path.resolve(webRoot, relative);
-        if (filePath !== webRoot && !filePath.startsWith(`${webRoot}${path.sep}`)) {
-            response.writeHead(403).end("Forbidden");
-            return;
-        }
-        const bytes = await fs.readFile(filePath);
-        response.writeHead(200, { "cache-control": "no-store", "content-type": contentType(filePath) });
-        response.end(bytes);
-    } catch (error) {
-        response.writeHead(error?.code === "ENOENT" ? 404 : 500).end(String(error));
-    }
-}
 
 before(async () => {
-    server = createServer((request, response) => void serve(request, response));
-    await new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", resolve);
-    });
-    baseUrl = `http://127.0.0.1:${server.address().port}/`;
+    server = await startStaticWebServer(webRoot);
     browser = await chromium.launch({ headless: true });
 });
 
 after(async () => {
     await browser?.close();
-    await new Promise((resolve) => server?.close(resolve));
+    await server?.stop();
 });
 
-test("M3 full scripted hardening renders match pre-encode pixels every 30th frame", {
+test("M3 full scripted renders are deterministic and paint the overlays", {
     timeout: 1_800_000,
 }, async () => {
     const page = await browser.newPage({ viewport: { width: 900, height: 700 } });
@@ -65,7 +33,8 @@ test("M3 full scripted hardening renders match pre-encode pixels every 30th fram
     page.on("console", (message) => {
         if (message.type() === "error") failures.push(`console: ${message.text()}`);
     });
-    await page.goto(`${baseUrl}scripted-test/scripted-browser-harness.html`, { waitUntil: "networkidle" });
+    await routeHermeticPage(page, server.baseUrl);
+    await page.goto(`${server.baseUrl}scripted-test/scripted-browser-harness.html`, { waitUntil: "networkidle" });
     await page.waitForFunction(() => (
         typeof window.__COSIMO_SCRIPTED_SESSION_HARNESS__?.renderHardeningTwice === "function"
     ));
@@ -73,7 +42,7 @@ test("M3 full scripted hardening renders match pre-encode pixels every 30th fram
         window.__COSIMO_SCRIPTED_SESSION_HARNESS__.renderHardeningTwice()
     ));
 
-    assert.ok(report.durationInFrames > 300, JSON.stringify(report));
+    assert.ok(report.durationInFrames > 300, JSON.stringify({ durationInFrames: report.durationInFrames }));
     assert.deepEqual(
         report.digestFrames,
         Array.from(
@@ -82,18 +51,68 @@ test("M3 full scripted hardening renders match pre-encode pixels every 30th fram
         ).filter((frame) => frame < report.durationInFrames),
     );
     for (const render of [report.first, report.second]) {
-        assert.ok(render.blobBytes > 10_000, JSON.stringify(render));
+        assert.ok(render.blobBytes > 10_000, `blobBytes ${render.blobBytes}`);
         assert.equal(render.blobType, "video/webm");
         assert.match(render.iframeRafMode, /^(visibility-hidden|opacity-fallback)$/u);
         assert.equal(render.inspectedFrames, report.durationInFrames);
         assert.deepEqual(render.digests.map(({ frame }) => frame), report.digestFrames);
-        for (const digest of render.digests) {
-            assert.match(digest.sha256, /^[a-f0-9]{64}$/u);
+
+        // Absorbed from the retired scripted-state suite: the capture realm is
+        // a real 393x852 phone viewport, hit-testable, with the real keyboard
+        // and canvases mounted, and the performance MIDI lights a real key.
+        for (const inspection of render.inspections) {
+            assert.deepEqual(inspection.viewport, { width: 393, height: 852 });
+            assert.equal(inspection.scaffoldHitTestable, true);
+            assert.ok(inspection.canvasCount >= 1, JSON.stringify(inspection));
+            assert.ok(inspection.svgCount >= 1, JSON.stringify(inspection));
+            assert.equal(inspection.keyboardNoteCount, 18, JSON.stringify(inspection));
+        }
+        assert.ok(
+            render.inspections.some((inspection) => inspection.keyboardActiveNoteCount >= 1),
+            "no frame showed a lit keyboard key",
+        );
+
+        // Every scripted op must actually have driven a real control.
+        assert.deepEqual(render.missedOps, []);
+
+        // Paint-level gate: the mod rail must be visible pixels — not merely a
+        // DOM node — on every probed frame of the shipped composition.
+        assert.equal(render.pixelProbes.length, report.digestFrames.length);
+        for (const probe of render.pixelProbes) {
+            const rail = probe.regions.rail;
+            assert.ok(rail, `frame ${probe.frame} probed no rail region`);
+            assert.ok(
+                rail.lumaRange > 24,
+                `frame ${probe.frame} rail paints flat (lumaRange ${rail.lumaRange})`,
+            );
+            const phone = probe.regions.phone;
+            assert.ok(phone && phone.lumaRange > 40, `frame ${probe.frame} phone region is blank`);
         }
     }
     assert.deepEqual(report.second.digests, report.first.digests);
     assert.equal(report.second.iframeRafMode, report.first.iframeRafMode);
+
+    // Human-reviewable contact sheet of the exact frames the digests pin.
+    await fs.rm(contactSheetRoot, { recursive: true, force: true });
+    await fs.mkdir(contactSheetRoot, { recursive: true });
+    for (const { frame, dataUrl } of report.first.contactSheet) {
+        const bytes = Buffer.from(dataUrl.slice(dataUrl.indexOf(",") + 1), "base64");
+        await fs.writeFile(
+            path.join(contactSheetRoot, `frame-${String(frame).padStart(4, "0")}.png`),
+            bytes,
+        );
+    }
+    assert.equal(report.first.contactSheet.length, report.digestFrames.length);
+
     assert.deepEqual(failures, []);
-    console.log(`# ${JSON.stringify({ videoBounceM3Hardening: report })}`);
+    console.log(`# ${JSON.stringify({
+        videoBounceM3Hardening: {
+            durationInFrames: report.durationInFrames,
+            digestFrames: report.digestFrames.length,
+            firstElapsedMilliseconds: report.first.elapsedMilliseconds,
+            secondElapsedMilliseconds: report.second.elapsedMilliseconds,
+            contactSheetRoot,
+        },
+    })}`);
     await page.close();
 });

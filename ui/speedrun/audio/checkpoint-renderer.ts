@@ -12,6 +12,10 @@ import { createModulationArticulationWorkerService } from "../../worker/modulati
 import { createRackStateWorkerService } from "../../worker/rack-state-worker-service";
 import { createWavetableWorkerController } from "../../worker/wavetable-worker";
 import { OSCILLATOR_IDS } from "../../shared/modulation-targets";
+import {
+    buildPerformanceSampleEvents,
+    type NotePerformance,
+} from "../midi/performance-events";
 import type { CumulativePatchState } from "../partial-states";
 import { SPEEDRUN_SAMPLES_PER_FRAME } from "../timeline";
 import {
@@ -28,15 +32,10 @@ import {
     type SpeedrunTelemetryEndpointID,
 } from "./telemetry";
 
-export type NotePerformanceEvent = {
-    readonly atSec: number;
-    readonly code: number;
-};
-
-export type NotePerformance = {
-    readonly events: ReadonlyArray<NotePerformanceEvent>;
-    readonly durationSec: number;
-};
+export type {
+    NotePerformance,
+    NotePerformanceEvent,
+} from "../midi/performance-events";
 
 export type SpeedrunCheckpointRenderJob = {
     readonly rootIndex: number;
@@ -211,33 +210,6 @@ function velocity(code: number) {
     return code & 0x7f;
 }
 
-/**
- * The one authority for where performance MIDI lands, in samples. The video's
- * scripted keyboard events derive from this same function, so what lights up
- * on screen is what the audio render heard.
- */
-export function buildPerformanceSampleEvents(
-    performance: NotePerformance,
-    sampleCount: number,
-    sampleRate: number,
-): ReadonlyArray<{ readonly sample: number; readonly code: number }> {
-    if (!Number.isFinite(performance.durationSec) || performance.durationSec <= 0) {
-        throw new Error("Speedrun performance duration must be positive and finite.");
-    }
-    const cycleSamples = Math.max(1, Math.round(performance.durationSec * sampleRate));
-    const normalized = performance.events.map((event) => ({
-        sample: Math.max(0, Math.min(cycleSamples - 1, Math.round(event.atSec * sampleRate))),
-        code: Math.trunc(event.code),
-    })).sort((left, right) => left.sample - right.sample || left.code - right.code);
-    const events: Array<{ sample: number; code: number }> = [];
-    for (let cycleStart = 0; cycleStart < sampleCount; cycleStart += cycleSamples) {
-        for (const event of normalized) {
-            const sample = cycleStart + event.sample;
-            if (sample < sampleCount) events.push({ sample, code: event.code });
-        }
-    }
-    return events;
-}
 
 function articulationSelector(serializedConfig: string | null, code: number, chainIndex: number) {
     if (serializedConfig === null) return null;

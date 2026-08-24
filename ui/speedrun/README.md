@@ -104,6 +104,7 @@ and composition suites.
 ## Verification commands
 
 ```sh
+npm run test:speedrun:unit
 npm run test:speedrun:hardening
 npm run test:speedrun:audio
 npm run test:speedrun:core

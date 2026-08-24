@@ -43,6 +43,12 @@
    has the shell root or a full-shell inset:0 layer as its nearest positioned
    ancestor, so absolute positioning reproduces the identical phone-anchored
    geometry on the rasterizer's supported path. */
+/* The capture rasterizer has no backdrop-filter; use the product's own
+   no-backdrop design (see the @supports fallback in mobile-mod-rail.css). */
+.speedrun-scripted-phone .mobile-global-mod-rail-glass {
+    display: none;
+}
+
 .speedrun-scripted-phone .mobile-global-mod-rail-layer,
 .speedrun-scripted-phone .rack-parameter-menu-layer,
 .speedrun-scripted-phone .rack-value-sheet-layer,

@@ -22,6 +22,23 @@ export type ScriptedPreencodeDigest = {
     readonly sha256: string;
 };
 
+export type ScriptedRegionPixelStats = {
+    readonly pixels: number;
+    readonly meanLuma: number;
+    readonly lumaRange: number;
+    readonly maxSaturation: number;
+};
+
+export type ScriptedPixelProbe = {
+    readonly frame: number;
+    readonly regions: Readonly<Record<string, ScriptedRegionPixelStats>>;
+};
+
+export type ScriptedContactSheetFrame = {
+    readonly frame: number;
+    readonly dataUrl: string;
+};
+
 export type ScriptedRenderRequest = Omit<
     ScriptedCompositionProps,
     "onFrameSettled"
@@ -30,6 +47,14 @@ export type ScriptedRenderRequest = Omit<
     readonly videoBitrate?: "very-low" | "low" | "medium" | "high";
     readonly frameRange?: number | [number, number];
     readonly digestFrames?: ReadonlyArray<number>;
+    /**
+     * Frames whose captured pixels are sampled inside the inspection rects —
+     * the paint-level gate that keeps "the DOM node exists" from standing in
+     * for "the pixels are on screen".
+     */
+    readonly pixelProbeFrames?: ReadonlyArray<number>;
+    /** Frames exported as PNG data URLs for a human-reviewable contact sheet. */
+    readonly contactSheetFrames?: ReadonlyArray<number>;
     readonly signal?: AbortSignal;
     readonly onProgress?: (progress: {
         readonly progress: number;
@@ -42,6 +67,8 @@ export type ScriptedRenderResult = {
     readonly blob: Blob;
     readonly preencodeDigests: ReadonlyArray<ScriptedPreencodeDigest>;
     readonly inspections: ReadonlyArray<ScriptedFrameInspection>;
+    readonly pixelProbes: ReadonlyArray<ScriptedPixelProbe>;
+    readonly contactSheet: ReadonlyArray<ScriptedContactSheetFrame>;
     readonly iframeRafMode: "current-document" | "visibility-hidden" | "opacity-fallback";
 };
 
@@ -49,14 +76,54 @@ function hex(bytes: Uint8Array) {
     return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-async function digestVideoFrame(frame: VideoFrame) {
+function drawVideoFrame(frame: VideoFrame) {
     const canvas = new OffscreenCanvas(frame.displayWidth, frame.displayHeight);
     const context = canvas.getContext("2d", { willReadFrequently: true });
     if (!context) throw new Error("A 2D canvas is required for pre-encode frame verification.");
     context.drawImage(frame, 0, 0);
-    const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    return { canvas, context };
+}
+
+async function digestCanvas(context: OffscreenCanvasRenderingContext2D, width: number, height: number) {
+    const pixels = context.getImageData(0, 0, width, height).data;
     return {
         sha256: hex(new Uint8Array(await crypto.subtle.digest("SHA-256", pixels))),
+    };
+}
+
+function sampleRegion(
+    context: OffscreenCanvasRenderingContext2D,
+    canvasWidth: number,
+    canvasHeight: number,
+    rect: { readonly left: number; readonly top: number; readonly width: number; readonly height: number },
+): ScriptedRegionPixelStats | null {
+    const left = Math.max(0, Math.floor(rect.left));
+    const top = Math.max(0, Math.floor(rect.top));
+    const right = Math.min(canvasWidth, Math.ceil(rect.left + rect.width));
+    const bottom = Math.min(canvasHeight, Math.ceil(rect.top + rect.height));
+    if (right - left < 1 || bottom - top < 1) return null;
+    const pixels = context.getImageData(left, top, right - left, bottom - top).data;
+    let lumaTotal = 0;
+    let lumaMin = 255;
+    let lumaMax = 0;
+    let maxSaturation = 0;
+    const pixelCount = pixels.length / 4;
+    for (let offset = 0; offset < pixels.length; offset += 4) {
+        const red = pixels[offset];
+        const green = pixels[offset + 1];
+        const blue = pixels[offset + 2];
+        const luma = (0.2126 * red) + (0.7152 * green) + (0.0722 * blue);
+        lumaTotal += luma;
+        if (luma < lumaMin) lumaMin = luma;
+        if (luma > lumaMax) lumaMax = luma;
+        const saturation = Math.max(red, green, blue) - Math.min(red, green, blue);
+        if (saturation > maxSaturation) maxSaturation = saturation;
+    }
+    return {
+        pixels: pixelCount,
+        meanLuma: lumaTotal / pixelCount,
+        lumaRange: lumaMax - lumaMin,
+        maxSaturation,
     };
 }
 
@@ -89,7 +156,11 @@ export async function renderScriptedVideoInCurrentDocument(
     await prepareScriptedCaptureEnvironment(request.states, request.resourceBaseURL);
     const inspections: ScriptedFrameInspection[] = [];
     const preencodeDigests: ScriptedPreencodeDigest[] = [];
+    const pixelProbes: ScriptedPixelProbe[] = [];
+    const contactSheet: ScriptedContactSheetFrame[] = [];
     const digestFrames = new Set(request.digestFrames ?? []);
+    const pixelProbeFrames = new Set(request.pixelProbeFrames ?? []);
+    const contactSheetFrames = new Set(request.contactSheetFrames ?? []);
     const rangeStart = frameRangeStart(request.frameRange);
     let renderedFrameOffset = 0;
     const props: ScriptedCompositionProps = {
@@ -132,8 +203,39 @@ export async function renderScriptedVideoInCurrentDocument(
             onFrame: async (videoFrame) => {
                 const frame = rangeStart + renderedFrameOffset;
                 renderedFrameOffset += 1;
-                if (digestFrames.has(frame)) {
-                    preencodeDigests.push({ frame, ...(await digestVideoFrame(videoFrame)) });
+                const wantsDigest = digestFrames.has(frame);
+                const wantsProbe = pixelProbeFrames.has(frame);
+                const wantsContact = contactSheetFrames.has(frame);
+                if (wantsDigest || wantsProbe || wantsContact) {
+                    const { canvas, context } = drawVideoFrame(videoFrame);
+                    if (wantsDigest) {
+                        preencodeDigests.push({
+                            frame,
+                            ...(await digestCanvas(context, canvas.width, canvas.height)),
+                        });
+                    }
+                    if (wantsProbe) {
+                        // The settled inspection for this frame was pushed just
+                        // before capture, so it is always the latest entry.
+                        const inspection = inspections.at(-1);
+                        const regions: Record<string, ScriptedRegionPixelStats> = {};
+                        for (const [name, rect] of Object.entries(inspection?.rects ?? {})) {
+                            if (!rect) continue;
+                            const stats = sampleRegion(context, canvas.width, canvas.height, rect);
+                            if (stats) regions[name] = stats;
+                        }
+                        pixelProbes.push({ frame, regions });
+                    }
+                    if (wantsContact) {
+                        const blob = await canvas.convertToBlob({ type: "image/png" });
+                        const dataUrl = await new Promise<string>((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = () => resolve(String(reader.result));
+                            reader.onerror = () => reject(new Error("Contact-sheet PNG encoding failed."));
+                            reader.readAsDataURL(blob);
+                        });
+                        contactSheet.push({ frame, dataUrl });
+                    }
                 }
                 return videoFrame;
             },
@@ -145,6 +247,8 @@ export async function renderScriptedVideoInCurrentDocument(
             blob: await result.getBlob(),
             preencodeDigests,
             inspections,
+            pixelProbes,
+            contactSheet,
             iframeRafMode: "current-document",
         };
     } finally {

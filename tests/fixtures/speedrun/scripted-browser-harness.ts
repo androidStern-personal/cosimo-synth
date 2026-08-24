@@ -90,52 +90,30 @@ const telemetry = {
     ],
 };
 
-async function renderOnce() {
-    return renderScriptedVideoInIframe({
-        defaults,
-        recipe,
-        timeline,
-        states,
-        performance,
-        telemetry,
-        masterAudioUrl: null,
-        patchLabel: recipe.label,
-        resourceBaseURL: new URL("/", location.href).href,
-        format: SPEEDRUN_WEBM_FORMAT,
-        videoBitrate: "very-low",
-        frameRange: [firstFrame, firstFrame + 2],
-        digestFrames: [firstFrame, firstFrame + 1, firstFrame + 2],
-    }, {
-        moduleURL: new URL("/video-bounce/index.js", location.href).href,
-    });
-}
-
-async function renderTwice() {
-    const first = await renderOnce();
-    const second = await renderOnce();
-    return {
-        firstFrame,
-        first: {
-            blobBytes: first.blob.size,
-            blobType: first.blob.type,
-            iframeRafMode: first.iframeRafMode,
-            digests: first.preencodeDigests,
-            inspections: first.inspections,
-        },
-        second: {
-            blobBytes: second.blob.size,
-            blobType: second.blob.type,
-            iframeRafMode: second.iframeRafMode,
-            digests: second.preencodeDigests,
-            inspections: second.inspections,
-        },
-    };
-}
-
 const hardeningDigestFrames = Array.from(
     { length: Math.ceil(timeline.durationInFrames / 30) },
     (_, index) => index * 30,
 ).filter((frame) => frame < timeline.durationInFrames);
+
+function slimInspection(inspection: {
+    readonly frame: number;
+    readonly viewport: { readonly width: number; readonly height: number };
+    readonly scaffoldHitTestable: boolean;
+    readonly canvasCount: number;
+    readonly svgCount: number;
+    readonly keyboardNoteCount: number;
+    readonly keyboardActiveNoteCount: number;
+}) {
+    return {
+        frame: inspection.frame,
+        viewport: inspection.viewport,
+        scaffoldHitTestable: inspection.scaffoldHitTestable,
+        canvasCount: inspection.canvasCount,
+        svgCount: inspection.svgCount,
+        keyboardNoteCount: inspection.keyboardNoteCount,
+        keyboardActiveNoteCount: inspection.keyboardActiveNoteCount,
+    };
+}
 
 async function renderHardeningOnce() {
     const startedAt = globalThis.performance.now();
@@ -152,21 +130,29 @@ async function renderHardeningOnce() {
         format: SPEEDRUN_WEBM_FORMAT,
         videoBitrate: "very-low",
         digestFrames: hardeningDigestFrames,
+        pixelProbeFrames: hardeningDigestFrames,
+        contactSheetFrames: hardeningDigestFrames,
     }, {
         moduleURL: new URL("/video-bounce/index.js", location.href).href,
     });
+    const finalInspection = result.inspections.at(-1) ?? null;
     return {
         blobBytes: result.blob.size,
         blobType: result.blob.type,
         digests: result.preencodeDigests,
+        pixelProbes: result.pixelProbes,
+        contactSheet: result.contactSheet,
         iframeRafMode: result.iframeRafMode,
         inspectedFrames: result.inspections.length,
+        inspections: result.inspections.map(slimInspection),
+        missedOps: finalInspection?.interaction.missedOps ?? null,
         elapsedMilliseconds: Math.round(globalThis.performance.now() - startedAt),
     };
 }
 
 async function renderHardeningTwice() {
     return {
+        firstFrame,
         durationInFrames: timeline.durationInFrames,
         digestFrames: hardeningDigestFrames,
         first: await renderHardeningOnce(),
@@ -234,40 +220,49 @@ function gestureSection(id: string) {
     return section;
 }
 
-function lastOpEnd(sectionId: string, predicate: (op: UIOp) => boolean) {
+function lastOp(sectionId: string, predicate: (op: UIOp) => boolean) {
     const span = [...gestureSection(sectionId).opSpans].reverse().find(({ op }) => predicate(op));
     if (!span) throw new Error(`Missing scripted gesture span in ${sectionId}.`);
-    return span.endFrame - 1;
+    return span;
 }
+
+const voiceParamSpan = lastOp("oscillator-A", (op) => (
+    op.kind === "setParam" && op.endpointID === "oscAWavetablePosition"
+));
+const macroSpan = lastOp("source-macro-2", (op) => op.kind === "setMacro");
 
 const gestureRanges = [
     {
         name: "sources",
         startFrame: gestureSection("source-mseg-1").startFrame,
-        endFrame: lastOpEnd("source-macro-2", (op) => op.kind === "setMacro"),
+        endFrame: lastOp("source-macro-2", (op) => op.kind === "setMacro").endFrame - 1,
     },
     {
         name: "voice",
         startFrame: gestureSection("oscillator-A").startFrame,
-        endFrame: lastOpEnd("oscillator-A", (op) => (
-            op.kind === "setParam" && op.endpointID === "oscAWavetablePosition"
-        )),
+        // One frame past the span end so the post-gesture snap frame is
+        // rendered and the exact recipe target is assertable on screen.
+        endFrame: voiceParamSpan.endFrame + 1,
     },
     {
         name: "filter-map",
         startFrame: gestureSection("voice-filter").startFrame,
-        endFrame: lastOpEnd("voice-filter", (op) => op.kind === "mapRoute"),
+        endFrame: lastOp("voice-filter", (op) => op.kind === "mapRoute").endFrame - 1,
     },
     {
         name: "fx-map",
         startFrame: gestureSection("effect-delay#2").startFrame,
-        endFrame: lastOpEnd("effect-delay#2", (op) => op.kind === "mapRoute"),
+        endFrame: lastOp("effect-delay#2", (op) => op.kind === "mapRoute").endFrame - 1,
     },
 ] as const;
 
 async function renderGestures() {
     const probes = [];
     for (const range of gestureRanges) {
+        const probeFrames = Array.from(
+            { length: (range.endFrame - range.startFrame) + 1 },
+            (_, index) => range.startFrame + index,
+        );
         const result = await renderScriptedVideoInIframe({
             defaults: gestureDefaults,
             recipe: gestureRecipe,
@@ -281,6 +276,7 @@ async function renderGestures() {
             format: SPEEDRUN_WEBM_FORMAT,
             videoBitrate: "very-low",
             frameRange: [range.startFrame, range.endFrame],
+            pixelProbeFrames: probeFrames,
         }, {
             moduleURL: new URL("/video-bounce/index.js", location.href).href,
         });
@@ -289,10 +285,22 @@ async function renderGestures() {
             blobBytes: result.blob.size,
             iframeRafMode: result.iframeRafMode,
             inspections: result.inspections,
+            pixelProbes: result.pixelProbes,
         });
     }
     return {
         durationInFrames: gestureTimeline.durationInFrames,
+        expectations: {
+            voiceParam: {
+                endpointID: "oscAWavetablePosition",
+                to: voiceParamSpan.op.kind === "setParam" ? voiceParamSpan.op.to : 0,
+                snapFrame: voiceParamSpan.endFrame,
+            },
+            macro: {
+                slot: macroSpan.op.kind === "setMacro" ? macroSpan.op.slot : 0,
+                value: macroSpan.op.kind === "setMacro" ? macroSpan.op.value : 0,
+            },
+        },
         probes,
     };
 }
@@ -301,7 +309,6 @@ declare global {
     interface Window {
         __COSIMO_SCRIPTED_SESSION_HARNESS__?: {
             readonly firstFrame: number;
-            renderTwice(): ReturnType<typeof renderTwice>;
             renderHardeningTwice(): ReturnType<typeof renderHardeningTwice>;
             renderGestures(): ReturnType<typeof renderGestures>;
         };
@@ -310,7 +317,6 @@ declare global {
 
 window.__COSIMO_SCRIPTED_SESSION_HARNESS__ = {
     firstFrame,
-    renderTwice,
     renderHardeningTwice,
     renderGestures,
 };

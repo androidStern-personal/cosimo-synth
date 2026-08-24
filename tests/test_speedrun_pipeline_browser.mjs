@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
-import { createServer } from "node:http";
 import path from "node:path";
 import test, { after, before } from "node:test";
 
 import { chromium } from "playwright";
 
+import { routeHermeticPage } from "./helpers/hermetic_page.mjs";
 import { buildMaximalCurrentSpeedrunPatch } from "./helpers/speedrun_test_context.mjs";
+import { startStaticWebServer } from "./helpers/static_web_server.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const webRoot = path.join(repoRoot, "build", "web");
@@ -14,38 +15,9 @@ let browser;
 let server;
 let baseUrl;
 
-function contentType(filePath) {
-    const extension = path.extname(filePath);
-    if (extension === ".html") return "text/html; charset=utf-8";
-    if (extension === ".js" || extension === ".mjs") return "text/javascript; charset=utf-8";
-    if (extension === ".css") return "text/css; charset=utf-8";
-    if (extension === ".json") return "application/json; charset=utf-8";
-    if (extension === ".wasm") return "application/wasm";
-    if (extension === ".woff2") return "font/woff2";
-    if (extension === ".svg") return "image/svg+xml";
-    return "application/octet-stream";
-}
-
-async function serve(request, response) {
-    try {
-        const requestUrl = new URL(request.url ?? "/", baseUrl);
-        let relative = decodeURIComponent(requestUrl.pathname.slice(1));
-        if (relative.length === 0 || relative.endsWith("/")) relative += "index.html";
-        const filePath = path.resolve(webRoot, relative);
-        if (filePath !== webRoot && !filePath.startsWith(`${webRoot}${path.sep}`)) {
-            response.writeHead(403).end("Forbidden");
-            return;
-        }
-        const bytes = await fs.readFile(filePath);
-        response.writeHead(200, { "cache-control": "no-store", "content-type": contentType(filePath) });
-        response.end(bytes);
-    } catch (error) {
-        response.writeHead(error?.code === "ENOENT" ? 404 : 500).end(String(error));
-    }
-}
-
 async function newStudioPage({ trackResources = false } = {}) {
     const context = await browser.newContext({ viewport: { width: 1180, height: 900 } });
+    await routeHermeticPage(context, baseUrl);
     await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: new URL(baseUrl).origin });
     if (trackResources) {
         await context.addInitScript(() => {
@@ -193,12 +165,8 @@ function assertVerifiedWebM(snapshot) {
 }
 
 before(async () => {
-    server = createServer(serve);
-    await new Promise((resolve, reject) => {
-        server.once("error", reject);
-        server.listen(0, "127.0.0.1", resolve);
-    });
-    baseUrl = `http://127.0.0.1:${server.address().port}/`;
+    server = await startStaticWebServer(webRoot);
+    baseUrl = server.baseUrl;
     browser = await chromium.launch({
         headless: true,
         args: ["--enable-precise-memory-info"],
@@ -207,7 +175,7 @@ before(async () => {
 
 after(async () => {
     await browser?.close();
-    await new Promise((resolve) => server?.close(resolve));
+    await server?.stop();
 });
 
 test("fixture patch plus uploaded MIDI produces a downloadable verified MP4 and adjacent share link", {

@@ -71,6 +71,7 @@ async function render(request: HarnessRequest) {
             concurrency: request.concurrency ?? 2,
             prefetchResources: !request.poisonResources,
             maxInstallFrames: request.maxInstallFrames,
+            recordTelemetry: true,
         },
     );
     const master = assembleSpeedrunMasterTrack(request.timeline, checkpoints);
