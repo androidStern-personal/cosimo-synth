@@ -176,6 +176,10 @@ export async function startDesktopHarnessServer() {
             cwd: repoRoot,
             stdio: ["ignore", "pipe", "pipe"],
             shell: spawnSpec.shell,
+            // npm inserts a shell between the test and Vite. Give that tree
+            // its own Unix process group so teardown can close inherited
+            // stdout/stderr pipes instead of deadlocking on an orphaned Vite.
+            detached: process.platform !== "win32",
             env: {
                 ...process.env,
                 BROWSER: "none",
@@ -198,7 +202,21 @@ export async function startDesktopHarnessServer() {
                 return;
             }
 
-            child.kill("SIGTERM");
+            const signalTree = (signal) => {
+                if (process.platform === "win32") {
+                    child.kill(signal);
+                    return;
+                }
+                try {
+                    process.kill(-child.pid, signal);
+                } catch (error) {
+                    if (!error || typeof error !== "object" || error.code !== "ESRCH") {
+                        throw error;
+                    }
+                }
+            };
+
+            signalTree("SIGTERM");
 
             for (let attempt = 0; attempt < 20; attempt += 1) {
                 if (child.exitCode !== null) {
@@ -208,7 +226,7 @@ export async function startDesktopHarnessServer() {
                 await delay(100);
             }
 
-            child.kill("SIGKILL");
+            signalTree("SIGKILL");
         },
     };
 }

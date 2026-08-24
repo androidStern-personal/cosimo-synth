@@ -54,6 +54,8 @@ declare global {
     }
 }
 
+const fidelityKeyboardMode = new URLSearchParams(window.location.search).get("fidelityKeyboard");
+
 const rootElement = document.getElementById("root");
 
 if (!rootElement) {
@@ -223,6 +225,11 @@ try {
     const manifest = await loadHarnessManifest();
     document.body.dataset.bootStage = "manifest-loaded";
     const patchConnection = new MockPatchConnection(manifest);
+    if (fidelityKeyboardMode === "native" || fidelityKeyboardMode === "capture") {
+        const { configureFidelityKeyboard } = await import("../speedrun/scripted/fidelity-probe");
+        await configureFidelityKeyboard(patchConnection, fidelityKeyboardMode);
+        sessionStorage.removeItem("cosimo.workspace-shell.v1");
+    }
     const initialHarnessState = window.__COSIMO_DESKTOP_HARNESS_INITIAL__;
     if (initialHarnessState?.parameterValues && typeof initialHarnessState.parameterValues === "object") {
         for (const [endpointID, value] of Object.entries(initialHarnessState.parameterValues)) {
@@ -298,6 +305,10 @@ try {
     patchView.style.height = "100%";
     harnessRoot.replaceChildren(patchView);
     document.body.dataset.bootStage = "render-called";
+    if (fidelityKeyboardMode === "native" || fidelityKeyboardMode === "capture") {
+        const { installFidelityProbe } = await import("../speedrun/scripted/fidelity-probe");
+        installFidelityProbe(patchConnection, patchView);
+    }
 } catch (error) {
     renderFatalError(error);
 }
