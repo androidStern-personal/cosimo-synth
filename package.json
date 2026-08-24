@@ -72,7 +72,10 @@
     "test:speedrun:audio": "npm run web:build && npm run speedrun:audio:harness:build && node --test tests/test_speedrun_master_track.mjs tests/test_speedrun_offline_engine_host.mjs tests/test_speedrun_offline_render_browser.mjs",
     "speedrun:composition:harness:build": "vite build --config tests/vite.speedrun-composition-harness.config.mjs",
     "test:speedrun:composition": "npm run speedrun:composition:harness:build && node --test tests/test_speedrun_composition_browser.mjs",
-    "test:speedrun:midi": "node --test tests/test_speedrun_smf.mjs"
+    "test:speedrun:midi": "node --test tests/test_speedrun_smf.mjs",
+    "speedrun:build": "npm run web:build && vite build --config ui/vite.speedrun-studio.config.mjs",
+    "speedrun:dev": "npm run web:build && vite --config ui/vite.speedrun-studio.config.mjs",
+    "test:speedrun:pipeline": "npm run speedrun:build && node --test tests/test_speedrun_pipeline_browser.mjs"
   },
   "devDependencies": {
     "@react-grab/mcp": "0.1.29",
