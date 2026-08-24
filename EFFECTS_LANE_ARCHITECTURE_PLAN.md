@@ -614,9 +614,12 @@ are M1's permanent acceptance tests, not a throwaway report.
   dev-mode container red; rail-flick momentum and the filter-controls
   dblclick both the CPU-contention flake class, each green solo — a
   stretched dblclick's first press becomes a 550ms long-press whose menu
-  then intercepts Playwright's retries); browser:orphans recorded in the
-  close-out below; engine untouched; twins rebuilt. NEXT (M4 remainder):
-  the physical phone pass on the user's device.
+  then intercepts Playwright's retries); browser:orphans 114/117 +1 skip
+  (the same two pre-existing container-environment reds as every slice:
+  Avenir Next font metrics in the seqfx harness, renderer-WASM needing
+  macOS clang — the seeded XY sweep green); engine untouched; twins
+  rebuilt. NEXT (M4 remainder): the physical phone pass on the user's
+  device.
 - **M3 — UI:** the subway-map FX graph in the rack workspace (locked
   direction above — SHIPPED as T4 for serial documents, T5 for groups),
   dynamic per-patch target pickers, instance labels through the mappings
