@@ -81,6 +81,7 @@
     "test:video-bounce:integration": "npm run web:build && node --test tests/test_video_bounce_integration_browser.mjs",
     "test:video-bounce:fidelity": "node --test tests/test_video_bounce_fidelity_browser.mjs",
     "test:video-bounce:scripted-state": "npm run web:build && npm run speedrun:scripted:harness:build && node --test tests/test_video_bounce_scripted_state_browser.mjs",
+    "test:video-bounce:scripted-gestures": "npm run web:build && npm run speedrun:scripted:harness:build && node --test tests/test_video_bounce_scripted_gestures_browser.mjs",
     "test:speedrun:hardening": "npm run web:build && node --test tests/test_speedrun_hardening.mjs"
   },
   "devDependencies": {

@@ -32,6 +32,10 @@ import {
     ScriptedPatchConnection,
     type ScriptedConnectionFrameSnapshot,
 } from "./scripted-patch-connection";
+import {
+    ScriptedInteractionDirector,
+    type ScriptedInteractionSnapshot,
+} from "./interaction-script";
 
 import "../composition/styles.css";
 import "../../desktop/styles.css";
@@ -47,6 +51,7 @@ export type ScriptedFrameInspection = {
     readonly viewport: { readonly width: number; readonly height: number };
     readonly scaffoldHitTestable: boolean;
     readonly connection: ScriptedConnectionFrameSnapshot;
+    readonly interaction: ScriptedInteractionSnapshot;
 };
 
 export type ScriptedCompositionProps = {
@@ -117,6 +122,7 @@ function inspectFrame(
     root: HTMLElement,
     frame: number,
     connection: ScriptedPatchConnection,
+    interaction: ScriptedInteractionDirector,
 ): ScriptedFrameInspection {
     return {
         frame,
@@ -129,16 +135,21 @@ function inspectFrame(
         viewport: { width: window.innerWidth, height: window.innerHeight },
         scaffoldHitTestable: root.closest('[data-scripted-capture-scaffold="true"]') !== null,
         connection: connection.getFrameSnapshot(),
+        interaction: interaction.inspect(root),
     };
 }
 
 function FrameDirector({
     connection,
+    interaction,
     captureRoot,
+    fingerOverlay,
     onFrameSettled,
 }: {
     readonly connection: ScriptedPatchConnection;
+    readonly interaction: ScriptedInteractionDirector;
     readonly captureRoot: React.RefObject<HTMLDivElement | null>;
+    readonly fingerOverlay: React.RefObject<SVGSVGElement | null>;
     readonly onFrameSettled?: (inspection: ScriptedFrameInspection) => void;
 }) {
     const frame = useCurrentFrame();
@@ -153,13 +164,16 @@ function FrameDirector({
             if (!root) throw new Error("The scripted DesktopPatchView capture root is missing.");
             revealRemotionScaffold(root);
             await Promise.resolve();
-            flushSync(() => connection.advanceToFrame(frame));
+            flushSync(() => {
+                connection.advanceToFrame(frame);
+                interaction.advance(root, fingerOverlay.current, frame, fps);
+            });
             await Promise.resolve();
             await settleCaptureSubtree(root, {
-                animationTimeMilliseconds: (frame * 1_000) / fps,
+                scrubAnimations: () => interaction.scrubAnimations(root, frame, fps),
             });
             if (!cancelled) {
-                onFrameSettled?.(inspectFrame(root, frame, connection));
+                onFrameSettled?.(inspectFrame(root, frame, connection, interaction));
                 continueRender(handle);
             }
         })().catch((error) => {
@@ -170,7 +184,7 @@ function FrameDirector({
         return () => {
             cancelled = true;
         };
-    }, [cancelRender, captureRoot, connection, continueRender, delayRender, fps, frame, onFrameSettled]);
+    }, [cancelRender, captureRoot, connection, continueRender, delayRender, fingerOverlay, fps, frame, interaction, onFrameSettled]);
 
     return null;
 }
@@ -200,6 +214,7 @@ function EndCard({ label }: { readonly label: string }) {
 export function ScriptedSessionComposition(props: ScriptedCompositionProps) {
     const frame = useCurrentFrame();
     const captureRoot = useRef<HTMLDivElement>(null);
+    const fingerOverlay = useRef<SVGSVGElement>(null);
     const environment = requireCaptureEnvironment();
     const [connection] = useState(() => new ScriptedPatchConnection(
         props.defaults,
@@ -210,6 +225,7 @@ export function ScriptedSessionComposition(props: ScriptedCompositionProps) {
         environment.keyboardClass,
         props.resourceBaseURL,
     ));
+    const [interaction] = useState(() => new ScriptedInteractionDirector(props.timeline));
     const boundedFrame = Math.min(
         Math.max(0, Math.floor(frame)),
         Math.max(0, props.timeline.durationInFrames - 1),
@@ -239,6 +255,24 @@ export function ScriptedSessionComposition(props: ScriptedCompositionProps) {
                             keyboardInputMode="standalone-preview"
                         />
                     </div>
+                    <svg
+                        ref={fingerOverlay}
+                        className="speedrun-finger-layer speedrun-scripted-finger"
+                        data-role="scripted-finger-overlay"
+                        viewBox="0 0 393 852"
+                        aria-hidden="true"
+                        style={{ display: "none" }}
+                    >
+                        <circle
+                            data-role="scripted-finger-ring"
+                            r="22"
+                            fill="none"
+                            stroke="rgba(255,255,255,0.9)"
+                            strokeWidth="2"
+                        />
+                        <circle r="13" fill="rgba(0,0,0,0.48)" transform="translate(2 4)" />
+                        <circle r="12" fill="#f3d4bd" stroke="#fff4ec" strokeWidth="2" />
+                    </svg>
                 </div>
                 <CaptionPanel section={section} frame={boundedFrame} />
                 {boundedFrame < 43 ? <TitleCard label={props.patchLabel} frame={boundedFrame} /> : null}
@@ -249,7 +283,9 @@ export function ScriptedSessionComposition(props: ScriptedCompositionProps) {
                 </footer>
                 <FrameDirector
                     connection={connection}
+                    interaction={interaction}
                     captureRoot={captureRoot}
+                    fingerOverlay={fingerOverlay}
                     onFrameSettled={props.onFrameSettled}
                 />
             </div>

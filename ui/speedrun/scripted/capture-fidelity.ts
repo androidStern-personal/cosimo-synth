@@ -45,6 +45,34 @@ const CAPTURE_SHADOW_CLONE = "data-capture-shadow-clone";
 const CAPTURE_SHADOW_ORIGINAL = "data-capture-shadow-original";
 const CAPTURE_SHADOW_HIDE = "data-capture-shadow-hide";
 const CAPTURE_SHADOW_SLOT = "data-capture-shadow-slot";
+const CAPTURE_SVG_SIZE_PINNED = "data-capture-svg-size-pinned";
+const CAPTURE_SVG_ORIGINAL_WIDTH = "data-capture-svg-original-width";
+const CAPTURE_SVG_ORIGINAL_HEIGHT = "data-capture-svg-original-height";
+const CAPTURE_SVG_ORIGINAL_STYLE_WIDTH = "data-capture-svg-original-style-width";
+const CAPTURE_SVG_ORIGINAL_STYLE_HEIGHT = "data-capture-svg-original-style-height";
+const CAPTURE_SVG_MISSING_SIZE = "__missing__";
+
+function restoreCaptureSvgSizes(root: ParentNode) {
+    for (const svg of root.querySelectorAll<SVGSVGElement>(`svg[${CAPTURE_SVG_SIZE_PINNED}]`)) {
+        const width = svg.getAttribute(CAPTURE_SVG_ORIGINAL_WIDTH);
+        const height = svg.getAttribute(CAPTURE_SVG_ORIGINAL_HEIGHT);
+        if (width === CAPTURE_SVG_MISSING_SIZE) svg.removeAttribute("width");
+        else if (width !== null) svg.setAttribute("width", width);
+        if (height === CAPTURE_SVG_MISSING_SIZE) svg.removeAttribute("height");
+        else if (height !== null) svg.setAttribute("height", height);
+        const styleWidth = svg.getAttribute(CAPTURE_SVG_ORIGINAL_STYLE_WIDTH);
+        const styleHeight = svg.getAttribute(CAPTURE_SVG_ORIGINAL_STYLE_HEIGHT);
+        if (styleWidth === CAPTURE_SVG_MISSING_SIZE) svg.style.removeProperty("width");
+        else if (styleWidth !== null) svg.style.width = styleWidth;
+        if (styleHeight === CAPTURE_SVG_MISSING_SIZE) svg.style.removeProperty("height");
+        else if (styleHeight !== null) svg.style.height = styleHeight;
+        svg.removeAttribute(CAPTURE_SVG_SIZE_PINNED);
+        svg.removeAttribute(CAPTURE_SVG_ORIGINAL_WIDTH);
+        svg.removeAttribute(CAPTURE_SVG_ORIGINAL_HEIGHT);
+        svg.removeAttribute(CAPTURE_SVG_ORIGINAL_STYLE_WIDTH);
+        svg.removeAttribute(CAPTURE_SVG_ORIGINAL_STYLE_HEIGHT);
+    }
+}
 
 /**
  * Capture-only fallback for open shadow roots such as the preset-name bar.
@@ -106,10 +134,40 @@ export function inlineCaptureSvgPresentation(root: ParentNode) {
         const bounds = svg.getBoundingClientRect();
         // The fallback serializes each SVG to a standalone data URL. A
         // percentage-only width/height has no containing block there and
-        // decodes as a 0px intrinsic bitmap, so pin its already-computed box.
-        if (bounds.width > 0 && bounds.height > 0) {
-            svg.setAttribute("width", String(bounds.width));
-            svg.setAttribute("height", String(bounds.height));
+        // decodes as a 0px intrinsic bitmap, so pin its already-computed
+        // LOCAL box. getBoundingClientRect includes the phone-stage scale;
+        // feeding that transformed size back into layout on every frame
+        // recursively enlarges responsive SVGs and the surrounding flexbox.
+        const localWidth = svg.clientWidth;
+        const localHeight = svg.clientHeight;
+        if (
+            !svg.hasAttribute(CAPTURE_SVG_SIZE_PINNED)
+            && bounds.width > 0
+            && bounds.height > 0
+            && localWidth > 0
+            && localHeight > 0
+        ) {
+            svg.setAttribute(
+                CAPTURE_SVG_ORIGINAL_WIDTH,
+                svg.getAttribute("width") ?? CAPTURE_SVG_MISSING_SIZE,
+            );
+            svg.setAttribute(
+                CAPTURE_SVG_ORIGINAL_HEIGHT,
+                svg.getAttribute("height") ?? CAPTURE_SVG_MISSING_SIZE,
+            );
+            svg.setAttribute(
+                CAPTURE_SVG_ORIGINAL_STYLE_WIDTH,
+                svg.style.width || CAPTURE_SVG_MISSING_SIZE,
+            );
+            svg.setAttribute(
+                CAPTURE_SVG_ORIGINAL_STYLE_HEIGHT,
+                svg.style.height || CAPTURE_SVG_MISSING_SIZE,
+            );
+            svg.setAttribute(CAPTURE_SVG_SIZE_PINNED, "true");
+            svg.style.width = `${localWidth}px`;
+            svg.style.height = `${localHeight}px`;
+            svg.setAttribute("width", String(localWidth));
+            svg.setAttribute("height", String(localHeight));
         }
         for (const element of [svg, ...svg.querySelectorAll<SVGElement>("*")]) {
             const computed = getComputedStyle(element);
@@ -138,11 +196,14 @@ export async function settleCaptureSubtree(
     {
         flattenShadowRoots = true,
         animationTimeMilliseconds,
+        scrubAnimations,
     }: {
         readonly flattenShadowRoots?: boolean;
         readonly animationTimeMilliseconds?: number;
+        readonly scrubAnimations?: () => void | Promise<void>;
     } = {},
 ) {
+    restoreCaptureSvgSizes(root);
     await document.fonts.ready;
     if (flattenShadowRoots) {
         flattenCaptureShadowRoots(root);
@@ -152,8 +213,20 @@ export async function settleCaptureSubtree(
     await nextAnimationFrame();
     await nextAnimationFrame();
     inlineCaptureSvgPresentation(root);
-    pauseCaptureAnimations(root, animationTimeMilliseconds);
+    if (scrubAnimations) {
+        await scrubAnimations();
+    } else {
+        pauseCaptureAnimations(root, animationTimeMilliseconds);
+    }
     await nextAnimationFrame();
     await nextAnimationFrame();
     await nextAnimationFrame();
+    // A visual-endpoint rAF or React transition may have created an
+    // animation during the settle turns. Adopt it at this same media frame.
+    if (scrubAnimations) {
+        await scrubAnimations();
+        // Setting Animation.currentTime invalidates style/paint. Give the
+        // browser one paint turn before Remotion reads the frame bitmap.
+        await nextAnimationFrame();
+    }
 }

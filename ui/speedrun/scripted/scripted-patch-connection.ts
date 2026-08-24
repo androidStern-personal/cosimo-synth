@@ -75,17 +75,16 @@ function partialOp(op: UIOp, progress: number): UIOp | null {
         case "setLaneParam":
             return { ...op, to: mix(op.from, op.to, progress) };
         case "selectWavetable":
-            return progress >= 0.58 ? op : null;
+            // The real picker owns the visible selection during the span.
+            // Snap the connection authority to the exact recipe value only
+            // after the gesture completes.
+            return progress >= 1 ? op : null;
         case "toggleEffect":
-            return progress >= 0.62 ? op : null;
-        case "mapRoute": {
-            if (progress < 0.55) return null;
-            const routeProgress = clamp01((progress - 0.55) / 0.45);
-            return {
-                ...op,
-                route: { ...op.route, amount: mix(0, op.route.amount, routeProgress) },
-            };
-        }
+            return progress >= 1 ? op : null;
+        case "mapRoute":
+            // Avoid pre-creating the pair before the production drop handler
+            // runs; the exact route is the end-of-gesture snap correction.
+            return progress >= 1 ? op : null;
         case "configureMseg":
             return {
                 ...op,
@@ -198,6 +197,17 @@ function runtimeState(oscillatorIndex: number, tableIndex: number) {
     };
 }
 
+function loadingRuntimeState(oscillatorIndex: number, activeTableIndex: number, loadingTableIndex: number) {
+    return {
+        ...runtimeState(oscillatorIndex, activeTableIndex),
+        desiredTableIndex: loadingTableIndex,
+        desiredIntentSerial: loadingTableIndex + 1,
+        hasLoading: true,
+        loadingTableIndex,
+        loadingGeneration: loadingTableIndex + 1,
+    };
+}
+
 function numberField(value: unknown, key: string, fallback = 0) {
     if (!value || typeof value !== "object") return fallback;
     const next = Number(Reflect.get(value, key));
@@ -276,11 +286,31 @@ export class ScriptedPatchConnection extends MockPatchConnection {
             serializeArticulationsV4(state.articulations),
         );
 
+        const loadingSpan = this.timeline.sections.flatMap((section) => section.opSpans).find((span) => {
+            if (span.op.kind !== "selectWavetable") return false;
+            const selectionFrame = span.startFrame
+                + Math.ceil((span.endFrame - span.startFrame) * 0.22);
+            return frame >= selectionFrame && frame < span.endFrame;
+        });
         ["A", "B", "C"].forEach((oscillator, oscillatorIndex) => {
             const tableIndex = Math.max(
                 0,
                 Math.trunc(Number(state.parameters[`osc${oscillator}WavetableSelect`]) || 0),
             );
+            if (
+                loadingSpan?.op.kind === "selectWavetable"
+                && loadingSpan.op.osc === oscillator
+            ) {
+                const activeTableIndex = Math.max(0, this.tableIndices[oscillatorIndex] < 0
+                    ? tableIndex
+                    : this.tableIndices[oscillatorIndex]);
+                this.setRuntimeState(loadingRuntimeState(
+                    oscillatorIndex,
+                    activeTableIndex,
+                    loadingSpan.op.tableIndex,
+                ));
+                return;
+            }
             if (this.tableIndices[oscillatorIndex] === tableIndex) return;
             this.tableIndices[oscillatorIndex] = tableIndex;
             this.setRuntimeState(runtimeState(oscillatorIndex, tableIndex));

@@ -2,6 +2,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
 const thisDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -11,7 +12,7 @@ const entry = path.join(repoRoot, "ui", "speedrun", "integrated-entry.ts");
 export default defineConfig(({ command }) => ({
     root: repoRoot,
     clearScreen: false,
-    plugins: [react()],
+    plugins: [react(), tailwindcss()],
     define: {
         "process.env.NODE_ENV": JSON.stringify(command === "build" ? "production" : "development"),
     },

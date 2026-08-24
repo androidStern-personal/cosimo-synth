@@ -31,26 +31,30 @@ function opParameterDefaults(op: UIOp): ReadonlyArray<readonly [string, number]>
     }
 }
 
-const defaults: DefaultsSnapshot = {
-    contractHash: recipe.contractHash,
-    parameters: {
-        oscAMute: 1,
-        oscBMute: 1,
-        oscCMute: 1,
-        filterMode: 1,
-        filterCutoff: 1_000,
-        filterQ: 0.707107,
-        filterMix: 1,
-        ...Object.fromEntries(
-            [...recipe.prelude, ...recipe.sections.flatMap((section) => section.ops)]
-                .flatMap(opParameterDefaults),
-        ),
-    },
-    annotations: {},
-    modulation: createDefaultModulationState(),
-    lane: createDefaultLaneStateV2(),
-    articulations: createEmptyArticulationsState(),
-};
+function defaultsFor(targetRecipe: SpeedrunRecipe): DefaultsSnapshot {
+    return {
+        contractHash: targetRecipe.contractHash,
+        parameters: {
+            oscAMute: 1,
+            oscBMute: 1,
+            oscCMute: 1,
+            filterMode: 1,
+            filterCutoff: 1_000,
+            filterQ: 0.707107,
+            filterMix: 1,
+            ...Object.fromEntries(
+                [...targetRecipe.prelude, ...targetRecipe.sections.flatMap((section) => section.ops)]
+                    .flatMap(opParameterDefaults),
+            ),
+        },
+        annotations: {},
+        modulation: createDefaultModulationState(),
+        lane: createDefaultLaneStateV2(),
+        articulations: createEmptyArticulationsState(),
+    };
+}
+
+const defaults = defaultsFor(recipe);
 const states = buildCumulativeStates(defaults, recipe);
 const firstAudible = timeline.sections.find((section) => section.checkpointIndex >= 0);
 if (!firstAudible) throw new Error("The scripted fixture has no audible section.");
@@ -128,15 +132,139 @@ async function renderTwice() {
     };
 }
 
+const gestureModulation = createDefaultModulationState();
+const gestureMseg = structuredClone(gestureModulation.msegSlots[0]);
+gestureMseg.shapeA = {
+    ...gestureMseg.shapeA,
+    name: "M2 Motion",
+    points: [
+        { x: 0, y: 0, curvePower: 0 },
+        { x: 0.42, y: 0.86, curvePower: 2.4 },
+        { x: 1, y: 0.24, curvePower: -1.8 },
+    ],
+};
+gestureMseg.shapeB = {
+    ...gestureMseg.shapeB,
+    name: "M2 Motion B",
+    points: [
+        { x: 0, y: 0.18, curvePower: 0 },
+        { x: 0.68, y: 0.36, curvePower: -2.2 },
+        { x: 1, y: 1, curvePower: 0 },
+    ],
+};
+const gestureRecipe: SpeedrunRecipe = {
+    ...recipe,
+    label: "M2 scripted gesture gate",
+    sections: [
+        {
+            id: "source-mseg-1",
+            kind: "source",
+            title: "MSEG 1",
+            ops: [
+                { kind: "navigate", to: { tab: "mod", sourceId: "mseg-1" } },
+                {
+                    kind: "configureMseg",
+                    slot: 1,
+                    state: gestureMseg,
+                    rate: 0.64,
+                    morph: 0.58,
+                },
+            ],
+            captions: ["MSEG 1 shape and playback"],
+            allCaptions: ["MSEG 1 shape and playback"],
+            opCaptionLines: [null, 0],
+        },
+        ...recipe.sections,
+    ],
+};
+const gestureTimeline = assembleTimeline(gestureRecipe);
+const gestureDefaults = defaultsFor(gestureRecipe);
+const gestureStates = buildCumulativeStates(gestureDefaults, gestureRecipe);
+const gestureTelemetry = {
+    fps: gestureTimeline.fps,
+    durationInFrames: gestureTimeline.durationInFrames,
+    frames: [],
+};
+
+function gestureSection(id: string) {
+    const section = gestureTimeline.sections.find((candidate) => candidate.section.id === id);
+    if (!section) throw new Error(`Missing scripted gesture section ${id}.`);
+    return section;
+}
+
+function lastOpEnd(sectionId: string, predicate: (op: UIOp) => boolean) {
+    const span = [...gestureSection(sectionId).opSpans].reverse().find(({ op }) => predicate(op));
+    if (!span) throw new Error(`Missing scripted gesture span in ${sectionId}.`);
+    return span.endFrame - 1;
+}
+
+const gestureRanges = [
+    {
+        name: "sources",
+        startFrame: gestureSection("source-mseg-1").startFrame,
+        endFrame: lastOpEnd("source-macro-2", (op) => op.kind === "setMacro"),
+    },
+    {
+        name: "voice",
+        startFrame: gestureSection("oscillator-A").startFrame,
+        endFrame: lastOpEnd("oscillator-A", (op) => (
+            op.kind === "setParam" && op.endpointID === "oscAWavetablePosition"
+        )),
+    },
+    {
+        name: "filter-map",
+        startFrame: gestureSection("voice-filter").startFrame,
+        endFrame: lastOpEnd("voice-filter", (op) => op.kind === "mapRoute"),
+    },
+    {
+        name: "fx-map",
+        startFrame: gestureSection("effect-delay#2").startFrame,
+        endFrame: lastOpEnd("effect-delay#2", (op) => op.kind === "mapRoute"),
+    },
+] as const;
+
+async function renderGestures() {
+    const probes = [];
+    for (const range of gestureRanges) {
+        const result = await renderScriptedVideoInIframe({
+            defaults: gestureDefaults,
+            recipe: gestureRecipe,
+            timeline: gestureTimeline,
+            states: gestureStates,
+            performance,
+            telemetry: gestureTelemetry,
+            masterAudioUrl: null,
+            patchLabel: gestureRecipe.label,
+            resourceBaseURL: new URL("/", location.href).href,
+            format: SPEEDRUN_WEBM_FORMAT,
+            videoBitrate: "very-low",
+            frameRange: [range.startFrame, range.endFrame],
+        }, {
+            moduleURL: new URL("/video-bounce/index.js", location.href).href,
+        });
+        probes.push({
+            ...range,
+            blobBytes: result.blob.size,
+            iframeRafMode: result.iframeRafMode,
+            inspections: result.inspections,
+        });
+    }
+    return {
+        durationInFrames: gestureTimeline.durationInFrames,
+        probes,
+    };
+}
+
 declare global {
     interface Window {
         __COSIMO_SCRIPTED_SESSION_HARNESS__?: {
             readonly firstFrame: number;
             renderTwice(): ReturnType<typeof renderTwice>;
+            renderGestures(): ReturnType<typeof renderGestures>;
         };
     }
 }
 
-window.__COSIMO_SCRIPTED_SESSION_HARNESS__ = { firstFrame, renderTwice };
+window.__COSIMO_SCRIPTED_SESSION_HARNESS__ = { firstFrame, renderTwice, renderGestures };
 const status = document.querySelector("#status");
 if (status) status.textContent = "Scripted real-UI harness ready";
