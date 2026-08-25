@@ -185,8 +185,22 @@ voice is one signal), and replace oversampling with first-order ADAA. Costed:
 - Precedent that per-voice tracked-filter-into-shaper is a shipped pattern, not an
   experiment: Vital routes a keytrackable filter around its per-voice distortion.
 
-Status: feasibility locked — it fits any reasonable budget. Whether to build it, and
-the harmonic-ratio control's range, are product decisions for later.
+**Harmonic ratio control (locked, Andrew 2026-08-25): continuous, no detents, wide.**
+Pinned as: ratio 0.5× to 32× the note frequency — i.e. a continuous tracking offset
+of −12 to +60 semitones, default 0 (ratio 1, bell on the fundamental) — stored and
+modulated in the rack's existing octave/semitone space (`rackOctaveScale`
+convention). The bell center is clamped to 0.45 × sample rate; beyond the clamp the
+residue shrinks naturally as the bell runs out of content, so the top of the range
+is safe on high notes while a 30 Hz sub note keeps the full 32× ≈ 960 Hz reach.
+Consequences embraced: with a continuous ratio and a narrow bell, sweeping the knob
+rides across the note's harmonic grid — strong on harmonics, dipping between them —
+which at high Q is a partial-picking, almost additive sound and at the default
+Q ≈ 0.7 smooths into a continuous tilt of where the energy lands. Voicing keeps the
+default Q on the low side for smooth sweeps; high Q remains available for the
+surgical sound.
+
+Status: feasibility locked; ratio control locked as above. Whether to build the
+per-voice variant at all remains a product decision for later.
 
 ## 8. Ship criteria
 
