@@ -88,6 +88,21 @@ import {
     isLaneParamSend,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
+/**
+ * Tests that continue into routing controls need the product tap's selection
+ * but not its T43 quick sheet. Dismiss it and restore the formerly-expanded
+ * rail so those tests retain their explicit setup without bypassing the tap.
+ */
+async function armModSourceForRoutingTest(page, selector) {
+    await page.click(selector);
+    const quickSheet = page.locator('[data-role="quick-source-sheet"]');
+    if ((await quickSheet.count()) > 0) {
+        await quickSheet.locator('[data-role="quick-source-sheet-close"]').click();
+        await quickSheet.waitFor({ state: "detached" });
+        await expandGlobalModRail(page);
+    }
+}
+
 test("mobile Mod Bar is a curved global edge rail that survives accordion navigation", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
@@ -1440,7 +1455,7 @@ test("the parameter gesture HUD avoids the active control, the global rail, the 
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         const createMapping = page.locator('[data-role="rack-create-mapping"]');
         if (await createMapping.count() > 0) {
             await createMapping.click();
@@ -1886,7 +1901,7 @@ test("rack mod bar vertically pages one colored MSEG Envelope and Macro identity
         assert.deepEqual(visualContract.previous, { width: 40, height: 20 });
         assert.deepEqual(visualContract.next, { width: 40, height: 20 });
 
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         const selectedVisual = await page.locator('[data-role="rack-mod-source-mseg-1"]').evaluate((button) => {
             const art = button.querySelector(".rack-mod-art");
             const viewport = button.closest(".rack-mod-viewport");
@@ -1974,7 +1989,7 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
         await sourceFirstPage.click('[data-role="mobile-workspace-tab-fx"]');
         await expandGlobalModRail(sourceFirstPage);
         await clearHarnessDebugLog(sourceFirstPage);
-        await sourceFirstPage.click('[data-role="rack-mod-source-mseg-1"]');
+        await armModSourceForRoutingTest(sourceFirstPage, '[data-role="rack-mod-source-mseg-1"]');
 
         let snapshot = await getHarnessSnapshot(sourceFirstPage);
         assert.equal(
@@ -2081,7 +2096,7 @@ test("rack mod bar keeps source and target selection unassigned until explicit r
             (nextSnapshot) => nextSnapshot.sentMessages.some(({ endpointID }) => endpointID === "modulationProgram"),
         );
         await clearHarnessDebugLog(targetFirstPage);
-        await targetFirstPage.click('[data-role="rack-mod-source-macro-2"]');
+        await armModSourceForRoutingTest(targetFirstPage, '[data-role="rack-mod-source-macro-2"]');
 
         let snapshot = await getHarnessSnapshot(targetFirstPage);
         assert.equal(
@@ -2185,7 +2200,7 @@ test("the FX workspace has no separate route AMOUNT control: the target knob edi
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         await collapseGlobalModRail(page);
 
         // T09 settled cleanup: the separate AMOUNT slider is gone everywhere;
@@ -2290,7 +2305,7 @@ test("source preview and valid hover stay transient while the armed ring and foc
         // exercise the armed-ring colors on a POWERED effect.
         await page.click('[data-role="rack-editor-power"]');
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         const surface = page.locator('[data-role="rack-parameter-surface-reverbSize"]');
         const knob = surface.locator('[data-role="rack-parameter-reverbSize"]');
         await knob.focus();
@@ -2519,7 +2534,7 @@ test("effect bypass and mode suspension preserve route geometry without claiming
         await selectRackEffect(page, "reverb");
         await page.click('[data-role="rack-editor-power"]');
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-env-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-env-1"]');
         await collapseGlobalModRail(page);
         const reverbKnob = page.locator('[data-role="rack-parameter-reverbSize"]');
         const reverbBadge = page.locator('[data-role="rack-route-count-reverbSize"]');
@@ -3424,11 +3439,11 @@ test("T02C: the wavetable graphic shades only the armed source's live Index rout
         await installShadingProbe();
 
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-env-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-env-1"]');
         await waitForReactFrames(page, 4);
         await captureBaseline();
 
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         await waitForShading("diff > 500");
         const mappedDiff = await shadingDiff();
 
@@ -3447,9 +3462,9 @@ test("T02C: the wavetable graphic shades only the armed source's live Index rout
         await waitForShading("diff > 500");
 
         // An armed source with no Index route draws nothing.
-        await page.click('[data-role="rack-mod-source-env-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-env-1"]');
         await waitForShading("diff === 0");
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         await waitForShading("diff > 500");
 
         // The range belongs to the FOCUSED oscillator: B has no Index route.
@@ -3468,10 +3483,10 @@ test("T02C: the wavetable graphic shades only the armed source's live Index rout
         await page.click('[data-role="mobile-voice-tab-a"]');
         await waitForFocusedOscillatorArtwork("A");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-env-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-env-1"]');
         await waitForReactFrames(page, 4);
         await captureBaseline();
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armModSourceForRoutingTest(page, '[data-role="rack-mod-source-mseg-1"]');
         await waitForShading("diff > 500");
     } finally {
         await page.close();
@@ -3513,10 +3528,9 @@ test("the instrument is never text-selectable; only real text entry opts back in
             "Double-tapping the collapsed bar must select no text.",
         );
 
-        // The taps legitimately open the quick sheet (T13), and the drawer
-        // covers the screen bottom by design — dismiss it before navigating.
-        await page.locator('[data-role="quick-source-sheet-close"]').click();
-        await page.locator('[data-role="quick-source-sheet"]').waitFor({ state: "detached" });
+        // T43 gives the double-tap a deterministic open-then-close outcome;
+        // no sheet may remain to cover subsequent navigation.
+        assert.equal(await page.locator('[data-role="quick-source-sheet"]').count(), 0);
 
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         const rackList = page.locator('[data-role="rack-module-list"]');
@@ -3634,15 +3648,13 @@ test("T13: the quick sheet opens from the bar over Voice/FX, resizes, dismisses,
     }
 });
 
-test("T13: the drawer's selected-source tap opens the sheet; the Mod page keeps full-editor navigation", async () => {
+test("T43: source taps toggle and switch the Voice/FX quick sheet without stealing drags or Mod behavior", async () => {
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
     });
+    const cdp = await page.context().newCDPSession(page);
     const sheet = page.locator('[data-role="quick-source-sheet"]');
     const tapChip = async (selector) => {
-        // A plain second tap on the just-armed chip: dispatched directly so
-        // Playwright's actionability retries cannot race the drawer collapse
-        // that the tap itself triggers.
         await page.locator(selector).first().evaluate((element) => {
             const fire = (type, buttons) => element.dispatchEvent(new PointerEvent(type, {
                 bubbles: true,
@@ -3658,38 +3670,169 @@ test("T13: the drawer's selected-source tap opens the sheet; the Mod page keeps 
             fire("pointerup", 0);
         });
     };
+    const dragChipToTarget = async (sourceSelector, targetSelector) => {
+        const sourceBox = await page.locator(sourceSelector).first().boundingBox();
+        const targetBox = await page.locator(targetSelector).first().boundingBox();
+        assert.ok(sourceBox && targetBox);
+        const sourceStart = {
+            x: sourceBox.x + (sourceBox.width / 2),
+            y: sourceBox.y + (sourceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...sourceStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ x: sourceStart.x - 18, y: sourceStart.y, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        const targetFinger = touchPointForModSourcePreviewTarget(
+            sourceStart,
+            { x: targetBox.x + (targetBox.width / 2), y: targetBox.y + (targetBox.height / 2) },
+            393,
+        );
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchMove",
+            touchPoints: [{ ...targetFinger, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    };
+    const waitForSheetSource = async (sourceKind, sourceSlot = 1) => {
+        await page.waitForFunction(({ kind, slot }) => {
+            const element = document.querySelector('[data-role="quick-source-sheet"]');
+            return element?.getAttribute("data-source-kind") === kind
+                && element.getAttribute("data-source-slot") === String(slot);
+        }, { kind: sourceKind, slot: sourceSlot });
+    };
+    const waitForSheetClosed = async () => page.waitForFunction(() => (
+        document.querySelector('[data-role="quick-source-sheet"]') === null
+    ));
 
     try {
         await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
         await page.waitForTimeout(240);
 
-        // Expanded drawer: tapping the already-selected source opens the sheet
-        // for it (an env source shows the four envelope cells).
+        // Voice, right dock: a single inactive-source tap opens; the same
+        // active source on the collapsed rail closes and reopens it.
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-env-1"]');
-        await waitForReactFrames(page, 3);
         await tapChip('[data-role="rack-mod-source-env-1"]');
-        await sheet.waitFor();
+        await waitForSheetSource("env");
         assert.equal(await sheet.getAttribute("data-source-kind"), "env");
         assert.equal(await page.locator('[data-role="quick-source-sheet-cell-attack"]').count(), 1);
         assert.equal(await page.locator('[data-role="quick-source-sheet-cell-release"]').count(), 1);
-        await page.locator('[data-role="quick-source-sheet-close"]').click();
-        await page.waitForFunction(() => (
-            document.querySelector('[data-role="quick-source-sheet"]') === null
-        ));
+        assert.equal(await page.locator('[data-role="mobile-global-mod-rail"]').getAttribute("data-edge"), "right");
+        await tapChip('[data-role="mobile-global-mod-rail-selected"]');
+        await waitForSheetClosed();
+        await tapChip('[data-role="mobile-global-mod-rail-selected"]');
+        await waitForSheetSource("env");
 
-        // On the Mod page the same tap keeps the existing full-editor
-        // navigation; the sheet never covers the Source panel.
+        // Switching A -> B keeps the SAME mounted sheet and replaces both its
+        // identity and parameter cells in one render — no close/reopen flash
+        // and no stale Envelope contents under an MSEG heading.
+        await expandGlobalModRail(page);
+        await sheet.evaluate((element) => { window.__T43_QUICK_SHEET__ = element; });
+        await tapChip('[data-role="rack-mod-source-mseg-1"]');
+        await waitForSheetSource("mseg");
+        assert.equal(await sheet.count(), 1, "A-to-B switching must leave exactly one quick sheet.");
+        assert.equal(
+            await sheet.evaluate((element) => window.__T43_QUICK_SHEET__ === element),
+            true,
+            "A-to-B switching must update the mounted sheet directly.",
+        );
+        assert.equal(await page.locator('[data-role="quick-source-sheet-cell-rate"]').count(), 1);
+        assert.equal(await page.locator('[data-role="quick-source-sheet-cell-attack"]').count(), 0);
+
+        // A real Envelope-to-filter drop creates routes without changing or
+        // remounting the already-open MSEG sheet.
+        await expandGlobalModRail(page);
+        const routesBeforeDrag = readStoredModulationState(await getHarnessSnapshot(page)).routes;
+        const existingRouteIds = new Set(routesBeforeDrag.map((route) => route.id));
+        await dragChipToTarget(
+            '[data-role="rack-mod-source-env-1"]',
+            '[data-role="filter-graph-drop-surface"]',
+        );
+        const dragSnapshot = await waitForHarnessSnapshot(
+            page,
+            "T43 Envelope drag",
+            (nextSnapshot) => readStoredModulationState(nextSnapshot).routes.length === routesBeforeDrag.length + 2,
+        );
+        const createdRoutes = readStoredModulationState(dragSnapshot).routes.filter((route) => !existingRouteIds.has(route.id));
+        assert.deepEqual(
+            createdRoutes.map((route) => [route.sourceKind, route.sourceSlot, route.targetKind]),
+            [
+                ["env", 1, "filterCutoffOctaves"],
+                ["env", 1, "filterQ"],
+            ],
+            "The moved gesture must remain an Envelope drag and complete the filter mapping.",
+        );
+        assert.equal(await sheet.getAttribute("data-source-kind"), "mseg");
+        assert.equal(
+            await sheet.evaluate((element) => window.__T43_QUICK_SHEET__ === element),
+            true,
+        );
+        await tapChip('[data-role="rack-mod-source-mseg-1"]');
+        await waitForSheetClosed();
+
+        // Move the shared rail to the left edge, then prove the same one-tap
+        // open/close contract over FX rather than Voice.
+        await collapseGlobalModRail(page);
+        const handle = page.locator('[data-role="mobile-global-mod-rail"] .mobile-global-mod-rail-handle');
+        const handleBox = await handle.boundingBox();
+        assert.ok(handleBox);
+        const dockStart = {
+            x: handleBox.x + (handleBox.width / 2),
+            y: handleBox.y + (handleBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...dockStart, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (const x of [dockStart.x - 80, dockStart.x - 200, 60]) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x, y: dockStart.y + 12, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.waitForFunction(() => {
+            const element = document.querySelector('[data-role="mobile-global-mod-rail"]');
+            return element?.getAttribute("data-edge") === "left"
+                && element.getAttribute("data-settling-x") === "false"
+                && element.getAttribute("data-decelerating") === "false";
+        });
+
+        await page.click('[data-role="mobile-workspace-tab-fx"]');
+        await expandGlobalModRail(page);
+        await tapChip('[data-role="rack-mod-source-env-1"]');
+        await waitForSheetSource("env");
+        assert.equal(await page.locator('[data-role="mobile-global-mod-rail"]').getAttribute("data-edge"), "left");
+        assert.equal(await page.locator('[data-role="mobile-workspace-tab-fx"]').getAttribute("aria-selected"), "true");
+        await tapChip('[data-role="mobile-global-mod-rail-selected"]');
+        await waitForSheetClosed();
+
+        // Mod keeps its existing two-step source-panel behavior: an inactive
+        // source tap selects it without collapsing the drawer or creating a
+        // quick sheet; a second active tap opens the deep-linked editor.
         await page.click('[data-role="mobile-workspace-tab-mod"]');
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-env-1"]');
-        await waitForReactFrames(page, 3);
-        await tapChip('[data-role="rack-mod-source-env-1"]');
+        await tapChip('[data-role="rack-mod-source-mseg-1"]');
         await page.waitForFunction(() => (
-            document.querySelector('[data-role="mod-source-editor"]')?.getAttribute("data-source-kind") === "env"
+            document.querySelector('[data-role="mod-source-editor"]')?.getAttribute("data-source-kind") === "mseg"
+                && document.querySelector('[data-role="rack-mod-source-mseg-1"]')?.getAttribute("aria-pressed") === "true"
         ));
+        assert.equal(await page.locator('[data-role="mobile-global-mod-rail"]').getAttribute("data-expanded"), "true");
+        assert.equal(await page.locator('[data-action="shell-back"]').isDisabled(), true);
         assert.equal(await sheet.count(), 0, "The quick sheet belongs to Voice/FX only.");
+        await tapChip('[data-role="rack-mod-source-mseg-1"]');
+        await page.waitForFunction(() => (
+            document.querySelector("cosimo-preset-bar")
+                ?.shadowRoot
+                ?.querySelector('[data-action="shell-back"]')
+                ?.hasAttribute("disabled") === false
+        ));
+        assert.equal(await sheet.count(), 0, "The Mod source panel must never be replaced by a quick sheet.");
     } finally {
+        await cdp.detach();
         await page.close();
     }
 });
@@ -3903,8 +4046,6 @@ test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, 
         // Envelope sheet: the graphic is the REAL draggable ADSR editor.
         await expandGlobalModRail(page);
         await page.locator('[data-role="rack-mod-source-env-1"]').click();
-        await collapseGlobalModRail(page);
-        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
         await page.locator('[data-role="quick-source-sheet"] [data-role="adsr-editor-surface"]').waitFor();
         await page.locator('[data-role="quick-source-sheet-close"]').click();
 
@@ -3912,8 +4053,6 @@ test("T13v2: the quick sheet's graphic is the REAL editor — MSEG points drag, 
         // macro's base value.
         await expandGlobalModRail(page);
         await page.locator('[data-role="rack-mod-source-macro-1"]').click();
-        await collapseGlobalModRail(page);
-        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
         const bar = page.locator('[data-role="quick-source-sheet-macro"]');
         await bar.waitFor();
         const barBox = await bar.boundingBox();

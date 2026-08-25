@@ -143,7 +143,12 @@ type EffectsRackWorkspaceProps = {
     onRemoveRoute: (routeIndex: number) => void;
     onRouteChange: (routeIndex: number, update: ModulationRouteUpdate) => void;
     onBackToVoice: () => void;
-    onOpenModSource?: (source: SelectedSource) => void;
+    onModSourceTap?: (source: SelectedSource) => void;
+    /**
+     * Voice/FX use one tap to toggle their quick source sheet. Mod and the
+     * horizontal desktop rail retain select-first, open-on-second-tap.
+     */
+    modSourceTapMode?: "select-then-open" | "toggle-quick-source";
     onGlobalModRailStateChange?: (state: GlobalModRailState) => void;
     /** T14 one-selection: the Mod page's selectors arm the bar through this. */
     selectModSourceSignal?: { source: SelectedSource; serial: number } | null;
@@ -1603,11 +1608,12 @@ function ModSourceCarousel({
     selectedSource,
     sourceIsArmed,
     orientation = "horizontal",
+    tapMode = "select-then-open",
     onPageChange,
     onDragSourceChange,
     onSourceSelect,
     onSourceDrop,
-    onOpenSelectedSource,
+    onSourceTap,
     onHoverTarget,
     onSourceDragChange,
     onDwellNavigate,
@@ -1618,6 +1624,7 @@ function ModSourceCarousel({
     selectedSource: SelectedSource;
     sourceIsArmed: boolean;
     orientation?: "horizontal" | "vertical";
+    tapMode?: "select-then-open" | "toggle-quick-source";
     onPageChange: (pageIndex: number) => void;
     onDragSourceChange: (source: SelectedSource | null) => void;
     onSourceSelect: (source: SelectedSource) => void;
@@ -1626,7 +1633,7 @@ function ModSourceCarousel({
         targetKind: ModulationTargetKind,
         companionKinds?: ReadonlyArray<ModulationTargetKind>,
     ) => void;
-    onOpenSelectedSource: (source: SelectedSource) => void;
+    onSourceTap: (source: SelectedSource) => void;
     onHoverTarget: (source: SelectedSource, targetKind: ModulationTargetKind | null) => void;
     getPairCreation?: (source: SelectedSource, targetKind: string) => RackRouteCreation;
     onDuplicateHover?: (source: SelectedSource, targetKind: string) => void;
@@ -1645,8 +1652,16 @@ function ModSourceCarousel({
         getPairCreation,
         onDuplicateHover,
         onTap: (source, wasActiveSelection) => {
+            if (tapMode === "toggle-quick-source") {
+                // T43: the quick sheet owner receives the exact tapped source
+                // in the same gesture that arms it. It can atomically open,
+                // close, or replace the mounted sheet without a stale frame.
+                onSourceSelect(source);
+                onSourceTap(source);
+                return;
+            }
             if (wasActiveSelection) {
-                onOpenSelectedSource(source);
+                onSourceTap(source);
             } else {
                 onSourceSelect(source);
             }
@@ -1876,7 +1891,7 @@ function MobileGlobalModRail({
     voiceSettings,
     onDwellNavigate,
     countPulseSerial = 0,
-    onOpenSelectedSource,
+    onSelectedSourceTap,
     children,
 }: {
     selectedSource: RackModulationSource;
@@ -1899,8 +1914,8 @@ function MobileGlobalModRail({
     onDuplicateHover?: (source: SelectedSource, targetKind: string) => void;
     /** ADR-025 row 15: bumps once per confirmed creation to pulse the count. */
     countPulseSerial?: number;
-    /** T13: tapping the collapsed active-source icon opens its quick editor. */
-    onOpenSelectedSource?: (source: SelectedSource) => void;
+    /** The collapsed source icon follows the current screen's source-tap behavior. */
+    onSelectedSourceTap?: (source: SelectedSource) => void;
     onSourceDragChange: (drag: SourceDragPresentation | null) => void;
     onNoteKeyDown: () => void;
     onNoteKeyUp: () => void;
@@ -1976,7 +1991,7 @@ function MobileGlobalModRail({
         onDwellNavigate,
         getPairCreation,
         onDuplicateHover,
-        onTap: (source) => onOpenSelectedSource?.(source),
+        onTap: (source) => onSelectedSourceTap?.(source),
     });
 
     const applyDragX = useCallback((nextDragX: number) => {
@@ -3067,7 +3082,8 @@ export function EffectsRackWorkspace({
     onRemoveRoute,
     onRouteChange,
     onBackToVoice,
-    onOpenModSource,
+    onModSourceTap,
+    modSourceTapMode = "select-then-open",
     onGlobalModRailStateChange,
     selectModSourceSignal = null,
     onRouteCreationConfirmed,
@@ -3732,15 +3748,16 @@ export function EffectsRackWorkspace({
             selectedSource={selectedSource}
             sourceIsArmed={sourceIsArmed}
             orientation={mobileGlobalModRail ? "vertical" : "horizontal"}
+            tapMode={modSourceTapMode}
             onPageChange={changeSourcePage}
             onDragSourceChange={setDragSource}
             onSourceSelect={selectSource}
             onSourceDrop={dropSource}
             getPairCreation={getPairCreation}
             onDuplicateHover={handleDuplicateHover}
-            onOpenSelectedSource={(source) => {
+            onSourceTap={(source) => {
                 setRailCollapseSignal((current) => current + 1);
-                onOpenModSource?.(source);
+                onModSourceTap?.(source);
             }}
             onHoverTarget={hoverSourceTarget}
             onSourceDragChange={setSourceDrag}
@@ -4268,9 +4285,9 @@ export function EffectsRackWorkspace({
                     getPairCreation={getPairCreation}
                     onDuplicateHover={handleDuplicateHover}
                     countPulseSerial={confirmedRoute?.serial ?? 0}
-                    onOpenSelectedSource={(source) => {
+                    onSelectedSourceTap={(source) => {
                         setRailCollapseSignal((current) => current + 1);
-                        onOpenModSource?.(source);
+                        onModSourceTap?.(source);
                     }}
                     onHoverTarget={hoverSourceTarget}
                     onSourceDragChange={setSourceDrag}

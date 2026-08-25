@@ -986,7 +986,7 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     Done when:
     - Measured before/after overlays show a coherent roughly 10% increase with unchanged spacing ratios, no clipping or overlap, and no regression in drag targets or source selection; Andrew approves the visual result on the real composed interface.
 
-[ ] T43 — Let a second tap on the active Mod source close its drawer
+[x] T43 — Let a second tap on the active Mod source close its drawer
     Required behavior on the Voice and Effects screens:
     - Tapping a source while its quick drawer is closed selects it and opens that source's drawer.
     - Tapping the same source while its drawer is open closes the drawer.

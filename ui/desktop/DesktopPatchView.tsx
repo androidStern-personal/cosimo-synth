@@ -4675,10 +4675,10 @@ function DesktopPatchViewBody({
         }));
     }, []);
 
-    // T13: on Voice/FX the selected source opens the quick-editor sheet over
-    // the CURRENT workspace; on the Mod page the existing full-editor
-    // navigation remains the tap's meaning.
-    const [quickEditorOpen, setQuickEditorOpen] = useState(false);
+    // T43: the source and open state are one value. Replacing this value keeps
+    // the mounted sheet alive while changing A -> B, so its heading and cells
+    // can never observe different source snapshots.
+    const [quickEditorSource, setQuickEditorSource] = useState<MobileModSource | null>(null);
 
     /* T20 — the ADR-017 long-press parameter menu: one shared shell state
        machine (also used by the iOS shell). */
@@ -4689,34 +4689,53 @@ function DesktopPatchViewBody({
         onRouteChange: synthView.handleRouteChange,
         onRemoveRoute: synthView.handleRemoveRoute,
     });
-    const openMobileModSource = useCallback((source: MobileModSource) => {
-        setWorkspaceShell((current) => {
-            if (current.activeTab === "mod") {
-                return openDeepLink(current, {
+    const handleMobileModSourceTap = useCallback((source: MobileModSource) => {
+        if (mobileWorkspaceSection === "mod") {
+            setWorkspaceShell((current) => (
+                openDeepLink(current, {
                     tab: "mod",
                     detail: `${source.sourceKind}:${source.sourceSlot}`,
                     from: current.activeTab,
-                });
-            }
-            setQuickEditorOpen(true);
-            return current;
-        });
-    }, []);
-    const closeQuickEditor = useCallback(() => setQuickEditorOpen(false), []);
+                })
+            ));
+            return;
+        }
+        // Keep the selected editor binding in the same React batch as the
+        // sheet source. Env 2 must never render one frame of Env 1 values,
+        // and an MSEG switch must immediately use that slot's rate/shape.
+        if (source.sourceKind === "mseg") {
+            synthView.handleSelectMsegSlot(source.sourceSlot - 1);
+        } else if (source.sourceKind === "env") {
+            synthView.handleSelectEnvelopeSlot(source.sourceSlot - 1);
+        }
+        setQuickEditorSource((current) => (
+            current?.sourceKind === source.sourceKind && current.sourceSlot === source.sourceSlot
+                ? null
+                : source
+        ));
+    }, [
+        mobileWorkspaceSection,
+        synthView.handleSelectEnvelopeSlot,
+        synthView.handleSelectMsegSlot,
+    ]);
+    const closeQuickEditor = useCallback(() => setQuickEditorSource(null), []);
     const openQuickEditorFullEditor = useCallback(() => {
-        setQuickEditorOpen(false);
-        const source = globalModRailState.selectedSource;
+        const source = quickEditorSource;
+        if (source === null) {
+            return;
+        }
+        setQuickEditorSource(null);
         if (source.sourceKind === "mseg") {
             synthView.msegEditor.openEditor();
             return;
         }
         openMobileModSourceDetail(source);
-    }, [globalModRailState.selectedSource, openMobileModSourceDetail, synthView.msegEditor]);
+    }, [openMobileModSourceDetail, quickEditorSource, synthView.msegEditor]);
     useEffect(() => {
         // The quick sheet belongs to Voice/FX; the Mod workspace shows the
         // full source panel instead.
         if (mobileWorkspaceSection === "mod") {
-            setQuickEditorOpen(false);
+            setQuickEditorSource(null);
         }
     }, [mobileWorkspaceSection]);
     const quickMacroCoerce = useCallback((rawValue: unknown) => clamp(Number(rawValue) || 0, 0, 1), []);
@@ -5061,7 +5080,10 @@ function DesktopPatchViewBody({
             onAddRouteWithOverrides={synthView.handleAddRouteWithOverrides}
             onRemoveRoute={synthView.handleRemoveRoute}
             onRouteChange={synthView.handleRouteChange}
-            onOpenModSource={openMobileModSource}
+            onModSourceTap={handleMobileModSourceTap}
+            modSourceTapMode={isCompactViewport && mobileWorkspaceSection !== "mod"
+                ? "toggle-quick-source"
+                : "select-then-open"}
             onGlobalModRailStateChange={setGlobalModRailState}
             selectModSourceSignal={armModSourceSignal}
             onRouteCreationConfirmed={handleRouteCreationConfirmed}
@@ -5223,9 +5245,9 @@ function DesktopPatchViewBody({
                 />
             </div>
 
-            {isCompactViewport && quickEditorOpen && mobileWorkspaceSection !== "mod" ? (
+            {isCompactViewport && quickEditorSource !== null && mobileWorkspaceSection !== "mod" ? (
                 <MobileQuickSourceSheet
-                    source={globalModRailState.selectedSource}
+                    source={quickEditorSource}
                     routes={synthView.routes}
                     hudContainer={mobileVoiceHudLayer}
                     resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
@@ -5262,7 +5284,9 @@ function DesktopPatchViewBody({
                     msegMorphBinding={synthView.selectedMsegMorph}
                     envelope={synthView.selectedEnvelope}
                     onEnvelopeChange={synthView.handleEnvelopeChange}
-                    macroBinding={quickMacroBindings[globalModRailState.selectedSource.sourceSlot - 1] ?? null}
+                    macroBinding={quickEditorSource.sourceKind === "macro"
+                        ? quickMacroBindings[quickEditorSource.sourceSlot - 1] ?? null
+                        : null}
                     onRequestParameterMenu={openShellParameterMenu}
                     onClose={closeQuickEditor}
                     onOpenFullEditor={openQuickEditorFullEditor}

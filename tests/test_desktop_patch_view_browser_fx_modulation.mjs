@@ -92,6 +92,21 @@ import {
     isLaneParamSend,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
+/**
+ * Routing tests need the source armed with the expanded rail still available.
+ * T43 makes the product tap open its quick sheet and collapse the drawer, so
+ * these tests explicitly dismiss that sheet and restore their routing setup.
+ */
+async function armRackModSourceForRouting(page, selector) {
+    await page.click(selector);
+    const quickSheet = page.locator('[data-role="quick-source-sheet"]');
+    if ((await quickSheet.count()) > 0) {
+        await quickSheet.locator('[data-role="quick-source-sheet-close"]').click();
+        await quickSheet.waitFor({ state: "detached" });
+        await expandGlobalModRail(page);
+    }
+}
+
 test("Add route appends unique inert mappings and scrolls the new row into view", async () => {
     const page = await openHarnessPage();
 
@@ -626,27 +641,9 @@ test("desktop effects rack renders the complete ordered eight-module surface", a
     }
 });
 
-async function tapArmedSourceChip(page, selector) {
-    await page.locator(selector).first().evaluate((element) => {
-        const fire = (type, buttons) => element.dispatchEvent(new PointerEvent(type, {
-            bubbles: true,
-            pointerId: 93,
-            pointerType: "touch",
-            isPrimary: true,
-            button: 0,
-            buttons,
-            clientX: element.getBoundingClientRect().left + 10,
-            clientY: element.getBoundingClientRect().top + 10,
-        }));
-        fire("pointerdown", 1);
-        fire("pointerup", 0);
-    });
-}
-
-test("a second tap on the selected rack source opens the quick sheet over FX; the full editor round-trips the context", async () => {
-    // T13 changed the second-tap contract: it opens the quick-editor sheet in
-    // place instead of navigating to Mod. The FX context must stay live
-    // beneath, and the sheet's Full editor is the route to the real editor.
+test("a rack-source tap opens the quick sheet over FX; the full editor round-trips the context", async () => {
+    // T43 opens the quick-editor sheet in place on the selection tap. The FX
+    // context must stay live beneath, and Full editor routes to the real one.
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -657,7 +654,6 @@ test("a second tap on the selected rack source opens the quick sheet over FX; th
         await expandGlobalModRail(page);
         const source = page.locator('[data-role="rack-mod-source-mseg-1"]');
         await source.click();
-        await tapArmedSourceChip(page, '[data-role="rack-mod-source-mseg-1"]');
 
         const sheet = page.locator('[data-role="quick-source-sheet"]');
         await sheet.waitFor();
@@ -666,7 +662,7 @@ test("a second tap on the selected rack source opens the quick sheet over FX; th
         assert.equal(
             await page.locator('[data-role="mobile-workspace-tab-fx"]').getAttribute("aria-selected"),
             "true",
-            "The sheet floats over FX — the second tap is not a navigation.",
+            "The sheet floats over FX — the source tap is not a navigation.",
         );
         assert.equal(
             await page.locator('[data-role="mobile-workspace-tab-mod"]').getAttribute("aria-selected"),
@@ -694,9 +690,8 @@ test("a second tap on the selected rack source opens the quick sheet over FX; th
 });
 
 test("the quick sheet's Full editor opens the exact Envelope and Macro slots without introducing LFOs", async () => {
-    // T13: tap-tap opens the quick sheet for the exact source; its Full
-    // editor button is the deep link into the detail editor. The exact-slot
-    // and no-LFO claims survive unchanged.
+    // T43: one source tap opens the exact quick sheet; its Full editor button
+    // deep-links to the detail editor. Exact-slot and no-LFO stay unchanged.
     const page = await openHarnessPage({
         beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 375, height: 667 }),
     });
@@ -707,7 +702,6 @@ test("the quick sheet's Full editor opens the exact Envelope and Macro slots wit
 
         const envelope = page.locator('[data-role="rack-mod-source-env-1"]');
         await envelope.click();
-        await tapArmedSourceChip(page, '[data-role="rack-mod-source-env-1"]');
         const sheet = page.locator('[data-role="quick-source-sheet"]');
         await sheet.waitFor();
         assert.equal(await sheet.getAttribute("data-source-kind"), "env");
@@ -725,7 +719,6 @@ test("the quick sheet's Full editor opens the exact Envelope and Macro slots wit
         await page.waitForTimeout(300);
         const macro = page.locator('[data-role="rack-mod-source-macro-2"]');
         await macro.click();
-        await tapArmedSourceChip(page, '[data-role="rack-mod-source-macro-2"]');
         await sheet.waitFor();
         assert.equal(await sheet.getAttribute("data-source-kind"), "macro");
         assert.equal(await sheet.getAttribute("data-source-slot"), "2");
@@ -969,7 +962,7 @@ test("rack knob outer-ring drags edit only the selected source-target modulation
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
@@ -1049,7 +1042,7 @@ test("rack parameter frames stay neutral while badges and armed rings tell route
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await page.click('[data-role="rack-editor-power"]');
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-env-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-env-1"]');
         await collapseGlobalModRail(page);
 
         const mixSurface = page.locator('[data-role="rack-parameter-surface-distortionWet"]');
@@ -1127,9 +1120,9 @@ test("switching armed sources swaps only selected-route outer geometry and prese
                 : null;
         });
 
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         const msegRing = await readRing();
-        await page.click('[data-role="rack-mod-source-env-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-env-1"]');
         const envRing = await readRing();
         assert.ok(msegRing && envRing);
         assert.equal(msegRing.color, "#cc59d2");
@@ -1155,7 +1148,7 @@ test("an unmapped rack knob shows a neutral outer track and its modulation axis 
         assert.equal(await knob.locator(".rack-knob-mod-track.is-hidden").count(), 1);
 
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await collapseGlobalModRail(page);
         knob = page.locator('[data-role="rack-parameter-reverbSize"]');
         assert.equal(await knob.getAttribute("data-route-state"), "unmapped");
@@ -1204,7 +1197,7 @@ test("editing a bypassed rack route preserves bypass and renders the outer ring 
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(page, "route before bypass-preserving edit", (snapshot) => (
             readStoredModulationState(snapshot).routes.some((route) => route.targetKind === "lane.reverb#1.reverbSize")
@@ -1266,7 +1259,7 @@ test("a stationary touch hold on a rack knob opens its routing menu with one hap
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
@@ -1412,7 +1405,7 @@ test("rack parameter reset restores the base default without deleting modulation
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
@@ -1460,7 +1453,7 @@ test("rack parameter menu edits the active route enablement polarity and voice r
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
@@ -1526,7 +1519,7 @@ test("rack exact-value sheet applies real-unit base and selected-route amounts",
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
@@ -1744,9 +1737,9 @@ test("rack parameter route removal targets one source or confirms removal of eve
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "reverb");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await page.click('[data-role="rack-create-mapping"]');
-        await page.click('[data-role="rack-mod-source-env-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-env-1"]');
         await page.click('[data-role="rack-create-mapping"]');
         await waitForHarnessSnapshot(
             page,
@@ -1789,7 +1782,7 @@ test("rack parameter route removal targets one source or confirms removal of eve
         );
 
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await collapseGlobalModRail(page);
         await knob.click({ button: "right" });
         const removeAllRoutes = page.locator('[data-role="rack-parameter-menu-item"][data-action="remove-all-target-routes"]');
@@ -1880,13 +1873,12 @@ test("mobile Mod selector drives the attached editor and stays contained at iPho
     });
 
     try {
-        // T13 made tap-tap open the quick sheet; the detail editor is now
-        // reached through the sheet's Full editor button (env/macro kinds).
+        // T43 makes one source tap open the quick sheet; env/macro detail is
+        // reached through the sheet's Full editor button.
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await expandGlobalModRail(page);
         const source = page.locator('[data-role="rack-mod-source-env-1"]');
         await source.click();
-        await tapArmedSourceChip(page, '[data-role="rack-mod-source-env-1"]');
         await page.locator('[data-role="quick-source-sheet"]').waitFor();
         await page.click('[data-role="quick-source-sheet-full-editor"]');
 
@@ -3009,7 +3001,7 @@ test("the rack Resonance knob walks the modulated value along its dial instead o
         await page.click('[data-role="mobile-workspace-tab-fx"]');
         await selectRackEffect(page, "filter");
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await collapseGlobalModRail(page);
 
         // Dial-walk: a short downward drag covers a small dial fraction and
@@ -3087,7 +3079,7 @@ test("ADR-025 identity colors: owner color inside, source color outside, grey on
 
         // Row 4: armed-but-unmapped shows a DOTTED ring in the SOURCE color.
         await expandGlobalModRail(page);
-        await page.click('[data-role="rack-mod-source-mseg-1"]');
+        await armRackModSourceForRouting(page, '[data-role="rack-mod-source-mseg-1"]');
         await collapseGlobalModRail(page);
         assert.equal(
             (await knobStyle('[data-role="rack-parameter-reverbSize"]', ".rack-knob-mod-track.is-unmapped")).stroke,
