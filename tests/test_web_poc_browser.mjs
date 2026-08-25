@@ -364,6 +364,190 @@ function observePageFailures(page) {
     };
 }
 
+async function installBrowserLifecycleInterruptionProbe(page) {
+    await page.addInitScript(() => {
+        let audioContext = null;
+        let audioContextStateOverride = null;
+        let audioSessionState = "active";
+        let automaticResumeDenied = false;
+        let deniedResumeCount = 0;
+        let gestureResumeAllowed = false;
+        let gestureResumeCount = 0;
+        let hidden = false;
+        let resumeCallCount = 0;
+        let workletConnectCount = 0;
+        let workletDisconnectCount = 0;
+        let workletNodeCount = 0;
+        const lifecycleEvents = [];
+        const workletNodes = new WeakSet();
+
+        const audioSession = new EventTarget();
+        Object.defineProperties(audioSession, {
+            state: {
+                configurable: true,
+                get: () => audioSessionState,
+            },
+            type: {
+                configurable: true,
+                get() {
+                    return this._type ?? "ambient";
+                },
+                set(nextType) {
+                    this._type = String(nextType);
+                },
+            },
+        });
+        Object.defineProperty(navigator, "audioSession", {
+            configurable: true,
+            value: audioSession,
+        });
+
+        Object.defineProperties(document, {
+            hidden: {
+                configurable: true,
+                get: () => hidden,
+            },
+            visibilityState: {
+                configurable: true,
+                get: () => hidden ? "hidden" : "visible",
+            },
+        });
+
+        const recordLifecycleEvent = (type) => {
+            lifecycleEvents.push({
+                audioContextState: audioContext?.state ?? null,
+                audioSessionState,
+                hidden,
+                type,
+            });
+        };
+        for (const type of ["blur", "focus", "pagehide", "pageshow"]) {
+            globalThis.addEventListener(type, () => recordLifecycleEvent(type));
+        }
+        document.addEventListener("visibilitychange", () => recordLifecycleEvent("visibilitychange"));
+        audioSession.addEventListener("statechange", () => recordLifecycleEvent("audio-session-statechange"));
+        const markGestureResumeAllowed = () => {
+            gestureResumeAllowed = true;
+            setTimeout(() => {
+                gestureResumeAllowed = false;
+            }, 0);
+        };
+        document.addEventListener("pointerdown", markGestureResumeAllowed, { capture: true });
+        document.addEventListener("touchstart", markGestureResumeAllowed, { capture: true });
+
+        const nativeAudioContextStateGetter = Object.getOwnPropertyDescriptor(
+            BaseAudioContext.prototype,
+            "state",
+        )?.get;
+        const nativeAudioContextResume = AudioContext.prototype.resume;
+        if (!nativeAudioContextStateGetter) {
+            throw new Error("The lifecycle probe could not find BaseAudioContext.state.");
+        }
+
+        const NativeAudioWorkletNode = globalThis.AudioWorkletNode;
+        globalThis.AudioWorkletNode = new Proxy(NativeAudioWorkletNode, {
+            construct(target, argumentsList, newTarget) {
+                audioContext ??= argumentsList[0];
+                if (!Object.hasOwn(audioContext, "state")) {
+                    Object.defineProperty(audioContext, "state", {
+                        configurable: true,
+                        get() {
+                            return audioContextStateOverride
+                                ?? Reflect.apply(nativeAudioContextStateGetter, audioContext, []);
+                        },
+                    });
+                    audioContext.addEventListener("statechange", () => {
+                        recordLifecycleEvent("audio-context-statechange");
+                    });
+                    Object.defineProperty(audioContext, "resume", {
+                        configurable: true,
+                        value() {
+                            resumeCallCount += 1;
+                            if (automaticResumeDenied && !gestureResumeAllowed) {
+                                deniedResumeCount += 1;
+                                return Promise.reject(new DOMException(
+                                    "A fresh user gesture is required.",
+                                    "NotAllowedError",
+                                ));
+                            }
+                            if (gestureResumeAllowed) gestureResumeCount += 1;
+                            return Reflect.apply(nativeAudioContextResume, audioContext, []);
+                        },
+                    });
+                }
+                const node = Reflect.construct(target, argumentsList, newTarget);
+                workletNodes.add(node);
+                workletNodeCount += 1;
+                return node;
+            },
+        });
+
+        const nativeConnect = AudioNode.prototype.connect;
+        AudioNode.prototype.connect = function connect(...argumentsList) {
+            if (workletNodes.has(this)) workletConnectCount += 1;
+            return Reflect.apply(nativeConnect, this, argumentsList);
+        };
+        const nativeDisconnect = AudioNode.prototype.disconnect;
+        AudioNode.prototype.disconnect = function disconnect(...argumentsList) {
+            if (workletNodes.has(this)) workletDisconnectCount += 1;
+            return Reflect.apply(nativeDisconnect, this, argumentsList);
+        };
+
+        const nativeAudioContextState = () => audioContext
+            ? Reflect.apply(nativeAudioContextStateGetter, audioContext, [])
+            : null;
+        const snapshot = () => ({
+            audioContextCurrentTime: audioContext?.currentTime ?? null,
+            audioContextState: audioContext?.state ?? null,
+            audioSessionState,
+            automaticResumeDenied,
+            deniedResumeCount,
+            gestureResumeCount,
+            hidden,
+            lifecycleEvents: lifecycleEvents.map((event) => ({ ...event })),
+            nativeAudioContextState: nativeAudioContextState(),
+            resumeCallCount,
+            workletConnectCount,
+            workletDisconnectCount,
+            workletNodeCount,
+        });
+
+        globalThis.__COSIMO_T45_LIFECYCLE_PROBE__ = {
+            clearReportedAudioContextState() {
+                audioContextStateOverride = null;
+            },
+            denyAutomaticResume(denied = true) {
+                automaticResumeDenied = Boolean(denied);
+            },
+            async interruptWhileAway() {
+                hidden = true;
+                globalThis.dispatchEvent(new Event("blur"));
+                globalThis.dispatchEvent(new PageTransitionEvent("pagehide", { persisted: true }));
+                document.dispatchEvent(new Event("visibilitychange"));
+                audioContextStateOverride = null;
+                await audioContext.suspend();
+                // Safari can report `running` while its render clock and output
+                // remain stalled. Keep that externally observable failure shape
+                // until the host has recovered the native context.
+                audioContextStateOverride = "running";
+                audioSessionState = "interrupted";
+                audioSession.dispatchEvent(new Event("statechange"));
+                return snapshot();
+            },
+            returnToPage() {
+                hidden = false;
+                audioSessionState = "active";
+                audioSession.dispatchEvent(new Event("statechange"));
+                document.dispatchEvent(new Event("visibilitychange"));
+                globalThis.dispatchEvent(new PageTransitionEvent("pageshow", { persisted: true }));
+                globalThis.dispatchEvent(new Event("focus"));
+                return snapshot();
+            },
+            snapshot,
+        };
+    });
+}
+
 function installEndpointListenerProbe() {
     const activeReplies = new Set();
     const removedReplies = new Set();
@@ -1049,7 +1233,7 @@ async function holdTouchKeyboardNote(page, {
 
         const touch = { identifier, target: noteElement };
         const dispatchTouch = (type) => {
-            const event = new Event(type, { bubbles: true, cancelable: true });
+            const event = new Event(type, { bubbles: true, cancelable: true, composed: true });
             Object.defineProperty(event, "changedTouches", { value: [touch] });
             noteElement.dispatchEvent(event);
         };
@@ -2427,6 +2611,354 @@ test("generated browser starts audio when the optional playback-session hint is 
         assert.equal(snapshot.audioSessionType, "ambient");
     } finally {
         await page.close();
+    }
+});
+
+test("generated browser recovers audible audio across repeated top-level leave and return cycles", async () => {
+    const context = await browser.newContext({ ...devices["iPhone 13"] });
+    const page = await context.newPage();
+    const pageFailures = observePageFailures(page);
+    await installBrowserLifecycleInterruptionProbe(page);
+    let awayPage;
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => {
+            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
+            return snapshot?.phase === "running" && snapshot.hasActiveTable;
+        }, null, { timeout: 30_000 });
+        await page.waitForFunction(() => (
+            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletBlockCount >= 256
+        ), null, { timeout: 5_000 });
+
+        const baseline = await page.evaluate(async () => ({
+            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            runtimeSessionIds: globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeStates
+                .map((runtimeState) => runtimeState?.dspSessionId ?? null),
+            storedState: JSON.stringify(await globalThis.__COSIMO_WEB_POC__.storedState()),
+        }));
+        assert.equal(baseline.lifecycle.workletNodeCount, 1, JSON.stringify(baseline.lifecycle));
+        assert.equal(baseline.lifecycle.nativeAudioContextState, "running", JSON.stringify(baseline.lifecycle));
+
+        awayPage = await context.newPage();
+        await awayPage.setContent("<title>Lifecycle away page</title><main>Lifecycle away page</main>");
+
+        for (let cycle = 1; cycle <= 3; cycle += 1) {
+            if (cycle === 2) {
+                const heldBeforeLeave = await page.evaluate(() => {
+                    const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+                    const keyboard = root?.querySelector("cosimo-react-desktop-keyboard");
+                    const note = keyboard?.shadowRoot?.querySelector("#note48");
+                    if (!note || !keyboard) return null;
+                    const counts = { noteDown: 0, noteUp: 0 };
+                    keyboard.addEventListener("note-down", () => { counts.noteDown += 1; });
+                    keyboard.addEventListener("note-up", () => { counts.noteUp += 1; });
+                    const touch = { identifier: 12, target: note };
+                    const event = new Event("touchstart", {
+                        bubbles: true,
+                        cancelable: true,
+                        composed: true,
+                    });
+                    Object.defineProperty(event, "changedTouches", { value: [touch] });
+                    note.dispatchEvent(event);
+                    globalThis.__COSIMO_T45_HELD_NOTE__ = { counts, note };
+                    return {
+                        heldNoteCount: keyboard.currentKeyboardNotes?.size ?? null,
+                        ...counts,
+                    };
+                });
+                assert.deepEqual(heldBeforeLeave, { heldNoteCount: 1, noteDown: 1, noteUp: 0 });
+            }
+            await resetMeasuredAudioMetrics(page);
+            await awayPage.bringToFront();
+            const interrupted = await page.evaluate(() => (
+                globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.interruptWhileAway()
+            ));
+            assert.equal(interrupted.audioContextState, "running", JSON.stringify({ cycle, interrupted }));
+            assert.equal(interrupted.nativeAudioContextState, "suspended", JSON.stringify({ cycle, interrupted }));
+            assert.equal(interrupted.audioSessionState, "interrupted", JSON.stringify({ cycle, interrupted }));
+            if (cycle === 2) {
+                const releasedOnLeave = await page.evaluate(() => {
+                    const held = globalThis.__COSIMO_T45_HELD_NOTE__;
+                    return held ? {
+                        heldNoteCount: held.note.getRootNode().host.currentKeyboardNotes?.size ?? null,
+                        ...held.counts,
+                    } : null;
+                });
+                assert.deepEqual(releasedOnLeave, { heldNoteCount: 0, noteDown: 1, noteUp: 1 });
+            }
+
+            await page.waitForTimeout(850);
+            const stalled = await page.evaluate(() => ({
+                host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
+                lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            }));
+            assert.equal(stalled.host.audioWorkletBlockCount, 0, JSON.stringify({ cycle, stalled }));
+            assert.equal(stalled.lifecycle.nativeAudioContextState, "suspended", JSON.stringify({ cycle, stalled }));
+            assert.ok(
+                Math.abs(stalled.lifecycle.audioContextCurrentTime - interrupted.audioContextCurrentTime) < 0.01,
+                JSON.stringify({ cycle, interrupted, stalled }),
+            );
+
+            await page.bringToFront();
+            const returnSignals = await page.evaluate(() => (
+                globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnToPage()
+            ));
+            assert.equal(returnSignals.hidden, false, JSON.stringify({ cycle, returnSignals }));
+            try {
+                await page.waitForFunction(() => {
+                    const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+                    const lifecycle = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot();
+                    return lifecycle.nativeAudioContextState === "running"
+                        && host.audioWorkletBlockCount >= 256;
+                }, null, { timeout: 5_000 });
+            } catch (error) {
+                const failedReturn = await page.evaluate(() => ({
+                    host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
+                    lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+                }));
+                throw new Error(`Audio remained stalled after lifecycle return: ${JSON.stringify({
+                    cycle,
+                    failedReturn,
+                    interrupted,
+                    returnSignals,
+                })}`, { cause: error });
+            }
+            await page.evaluate(() => (
+                globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.clearReportedAudioContextState()
+            ));
+
+            await resetMeasuredAudioMetrics(page);
+            const recoveredTouch = await holdTouchKeyboardNote(page, {
+                holdMs: 350,
+                touchIdentifier: 20 + cycle,
+            });
+            assert.equal(recoveredTouch?.active, true, JSON.stringify({ cycle, recoveredTouch }));
+            assert.equal(recoveredTouch?.audioContextState, "running", JSON.stringify({ cycle, recoveredTouch }));
+            assert.ok(recoveredTouch?.audioPeak > 0.00001, JSON.stringify({ cycle, recoveredTouch }));
+            await page.waitForFunction(() => {
+                const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+                const keyboard = root?.querySelector("cosimo-react-desktop-keyboard");
+                const note = keyboard?.shadowRoot?.querySelector("#note48");
+                return note?.classList.contains("active") === false;
+            }, null, { timeout: 2_000 });
+
+            const recovered = await page.evaluate(async () => {
+                const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+                const keyboard = root?.querySelector("cosimo-react-desktop-keyboard");
+                const note = keyboard?.shadowRoot?.querySelector("#note48");
+                return {
+                    host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
+                    lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+                    noteActive: note?.classList.contains("active") ?? null,
+                    runtimeSessionIds: globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeStates
+                        .map((runtimeState) => runtimeState?.dspSessionId ?? null),
+                    storedState: JSON.stringify(await globalThis.__COSIMO_WEB_POC__.storedState()),
+                };
+            });
+            assert.equal(recovered.noteActive, false, JSON.stringify({ cycle, recovered }));
+            assert.equal(recovered.host.heldNoteCount, 0, JSON.stringify({ cycle, recovered }));
+            assert.equal(recovered.host.audioSessionType, "playback", JSON.stringify({ cycle, recovered }));
+            assert.deepEqual(recovered.runtimeSessionIds, baseline.runtimeSessionIds, JSON.stringify({ cycle, recovered }));
+            assert.equal(recovered.storedState, baseline.storedState, JSON.stringify({ cycle, recovered }));
+            assert.equal(recovered.lifecycle.workletNodeCount, baseline.lifecycle.workletNodeCount, JSON.stringify({ cycle, recovered }));
+            assert.equal(recovered.lifecycle.workletConnectCount, baseline.lifecycle.workletConnectCount, JSON.stringify({ cycle, recovered }));
+            assert.equal(recovered.lifecycle.workletDisconnectCount, baseline.lifecycle.workletDisconnectCount, JSON.stringify({ cycle, recovered }));
+        }
+
+        const lifecycleEvents = await page.evaluate(() => (
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot().lifecycleEvents
+        ));
+        for (const requiredEvent of [
+            "audio-context-statechange",
+            "audio-session-statechange",
+            "blur",
+            "focus",
+            "pagehide",
+            "pageshow",
+            "visibilitychange",
+        ]) {
+            assert.ok(
+                lifecycleEvents.filter((event) => event.type === requiredEvent).length >= 3,
+                JSON.stringify({ lifecycleEvents, requiredEvent }),
+            );
+        }
+        pageFailures.assertClean();
+    } finally {
+        await awayPage?.close();
+        await context.close();
+    }
+});
+
+test("generated browser uses the first post-return musical or control touch to recover and act", async () => {
+    const context = await browser.newContext({ ...devices["iPhone 13"] });
+    const page = await context.newPage();
+    const pageFailures = observePageFailures(page);
+    await installBrowserLifecycleInterruptionProbe(page);
+    let awayPage;
+
+    try {
+        await page.goto(`${baseUrl}?test=1`, { waitUntil: "domcontentloaded" });
+        await page.waitForFunction(() => globalThis.__COSIMO_WEB_POC__?.getSnapshot().phase === "ready", null, {
+            timeout: 30_000,
+        });
+        await page.locator("#cosimo-start-overlay").click();
+        await page.waitForFunction(() => {
+            const snapshot = globalThis.__COSIMO_WEB_POC__?.getSnapshot();
+            return snapshot?.phase === "running" && snapshot.hasActiveTable;
+        }, null, { timeout: 30_000 });
+        await page.waitForFunction(() => (
+            globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletBlockCount >= 256
+        ), null, { timeout: 5_000 });
+
+        const baseline = await page.evaluate(async () => ({
+            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            runtimeSessionIds: globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeStates
+                .map((runtimeState) => runtimeState?.dspSessionId ?? null),
+            storedState: JSON.stringify(await globalThis.__COSIMO_WEB_POC__.storedState()),
+        }));
+        await resetMeasuredAudioMetrics(page);
+        await page.evaluate(() => (
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.denyAutomaticResume()
+        ));
+
+        awayPage = await context.newPage();
+        await awayPage.setContent("<title>Gesture recovery away page</title><main>Away</main>");
+        await awayPage.bringToFront();
+        await page.evaluate(() => (
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.interruptWhileAway()
+        ));
+        await page.bringToFront();
+        await page.evaluate(() => (
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnToPage()
+        ));
+        await page.waitForFunction(() => {
+            const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+            const lifecycle = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot();
+            return lifecycle.deniedResumeCount >= 1
+                && lifecycle.nativeAudioContextState === "suspended"
+                && host.audioRecoveryAttemptCount >= 1
+                && host.audioRecoveryNeeded;
+        }, null, { timeout: 5_000 });
+        await page.evaluate(() => (
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.clearReportedAudioContextState()
+        ));
+
+        const beforeGesture = await page.evaluate(() => ({
+            host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
+            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+        }));
+        assert.equal(beforeGesture.host.audioContextState, "suspended", JSON.stringify(beforeGesture));
+        assert.equal(beforeGesture.host.audioRecoveryNeeded, true, JSON.stringify(beforeGesture));
+        assert.equal(beforeGesture.host.error, null, JSON.stringify(beforeGesture));
+        assert.equal(beforeGesture.lifecycle.workletNodeCount, 1, JSON.stringify(beforeGesture));
+
+        const firstTouch = await holdTouchKeyboardNote(page, {
+            holdMs: 700,
+            touchIdentifier: 41,
+        });
+        assert.equal(firstTouch?.active, true, JSON.stringify({ beforeGesture, firstTouch }));
+        assert.equal(firstTouch?.audioContextState, "running", JSON.stringify({ beforeGesture, firstTouch }));
+        assert.ok(firstTouch?.audioPeak > 0.00001, JSON.stringify({ beforeGesture, firstTouch }));
+        await page.waitForFunction(() => {
+            const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+            const keyboard = root?.querySelector("cosimo-react-desktop-keyboard");
+            const note = keyboard?.shadowRoot?.querySelector("#note48");
+            return note?.classList.contains("active") === false
+                && globalThis.__COSIMO_WEB_POC__.getSnapshot().audioWorkletBlockCount >= 256;
+        }, null, { timeout: 5_000 });
+
+        const recovered = await page.evaluate(async () => ({
+            host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
+            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            runtimeSessionIds: globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeStates
+                .map((runtimeState) => runtimeState?.dspSessionId ?? null),
+            storedState: JSON.stringify(await globalThis.__COSIMO_WEB_POC__.storedState()),
+        }));
+        assert.equal(recovered.host.audioRecoveryNeeded, false, JSON.stringify(recovered));
+        assert.equal(recovered.host.error, null, JSON.stringify(recovered));
+        assert.equal(recovered.host.heldNoteCount, 0, JSON.stringify(recovered));
+        assert.ok(recovered.lifecycle.deniedResumeCount >= 1, JSON.stringify(recovered));
+        assert.ok(recovered.lifecycle.gestureResumeCount >= 1, JSON.stringify(recovered));
+        assert.equal(recovered.lifecycle.workletNodeCount, baseline.lifecycle.workletNodeCount, JSON.stringify(recovered));
+        assert.equal(recovered.lifecycle.workletConnectCount, baseline.lifecycle.workletConnectCount, JSON.stringify(recovered));
+        assert.equal(recovered.lifecycle.workletDisconnectCount, baseline.lifecycle.workletDisconnectCount, JSON.stringify(recovered));
+        assert.deepEqual(recovered.runtimeSessionIds, baseline.runtimeSessionIds, JSON.stringify(recovered));
+        assert.equal(recovered.storedState, baseline.storedState, JSON.stringify(recovered));
+
+        await resetMeasuredAudioMetrics(page);
+        const deniedResumeCountBeforeControl = recovered.lifecycle.deniedResumeCount;
+        await awayPage.bringToFront();
+        await page.evaluate(() => (
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.interruptWhileAway()
+        ));
+        await page.bringToFront();
+        await page.evaluate(() => (
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.returnToPage()
+        ));
+        await page.waitForFunction((previousDeniedCount) => {
+            const host = globalThis.__COSIMO_WEB_POC__.getSnapshot();
+            const lifecycle = globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot();
+            return lifecycle.deniedResumeCount > previousDeniedCount
+                && lifecycle.nativeAudioContextState === "suspended"
+                && host.audioRecoveryNeeded;
+        }, deniedResumeCountBeforeControl, { timeout: 5_000 });
+        await page.evaluate(() => (
+            globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.clearReportedAudioContextState()
+        ));
+
+        const fxTabCenter = await centerOf(page.locator('[data-role="mobile-workspace-tab-fx"]'));
+        await page.touchscreen.tap(fxTabCenter.x, fxTabCenter.y);
+        try {
+            await page.waitForFunction(() => {
+                const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+                const fxTab = root?.querySelector('[data-role="mobile-workspace-tab-fx"]');
+                return fxTab?.getAttribute("aria-selected") === "true"
+                    && globalThis.__COSIMO_WEB_POC__.getSnapshot().audioContextState === "running";
+            }, null, { timeout: 5_000 });
+        } catch (error) {
+            const failedControlTouch = await page.evaluate(({ x, y }) => {
+                const root = document.querySelector("cosimo-desktop-react-view")?.shadowRoot;
+                const fxTab = root?.querySelector('[data-role="mobile-workspace-tab-fx"]');
+                const hit = document.elementFromPoint(x, y);
+                return {
+                    fxSelected: fxTab?.getAttribute("aria-selected") ?? null,
+                    hitRole: hit?.getAttribute?.("data-role") ?? hit?.tagName ?? null,
+                    host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
+                    lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+                };
+            }, fxTabCenter);
+            throw new Error(`The first control touch was swallowed during recovery: ${JSON.stringify({
+                failedControlTouch,
+                fxTabCenter,
+            })}`, { cause: error });
+        }
+        const controlRecoveredAudioRms = await measureHeldNote(page);
+        assert.ok(controlRecoveredAudioRms > 0.00001, String(controlRecoveredAudioRms));
+
+        const controlRecovered = await page.evaluate(async () => ({
+            host: globalThis.__COSIMO_WEB_POC__.getSnapshot(),
+            lifecycle: globalThis.__COSIMO_T45_LIFECYCLE_PROBE__.snapshot(),
+            runtimeSessionIds: globalThis.__COSIMO_WEB_POC__.getSnapshot().latestRuntimeStates
+                .map((runtimeState) => runtimeState?.dspSessionId ?? null),
+            storedState: JSON.stringify(await globalThis.__COSIMO_WEB_POC__.storedState()),
+        }));
+        assert.equal(controlRecovered.host.audioRecoveryNeeded, false, JSON.stringify(controlRecovered));
+        assert.equal(controlRecovered.host.error, null, JSON.stringify(controlRecovered));
+        assert.ok(controlRecovered.lifecycle.gestureResumeCount > recovered.lifecycle.gestureResumeCount, JSON.stringify(controlRecovered));
+        assert.equal(controlRecovered.lifecycle.workletNodeCount, baseline.lifecycle.workletNodeCount, JSON.stringify(controlRecovered));
+        assert.equal(controlRecovered.lifecycle.workletConnectCount, baseline.lifecycle.workletConnectCount, JSON.stringify(controlRecovered));
+        assert.equal(controlRecovered.lifecycle.workletDisconnectCount, baseline.lifecycle.workletDisconnectCount, JSON.stringify(controlRecovered));
+        assert.deepEqual(controlRecovered.runtimeSessionIds, baseline.runtimeSessionIds, JSON.stringify(controlRecovered));
+        assert.equal(controlRecovered.storedState, baseline.storedState, JSON.stringify(controlRecovered));
+        pageFailures.assertClean();
+    } finally {
+        await awayPage?.close();
+        await context.close();
     }
 });
 
