@@ -1721,7 +1721,7 @@ test("articulation card audition survives a platform pointer-capture rejection",
     }
 });
 
-test("articulation card audition releases its note when the window blurs", async () => {
+test("articulation card audition releases exactly once across browser leave signals", async () => {
     const page = await openHarnessPage();
 
     try {
@@ -1748,17 +1748,26 @@ test("articulation card audition releases its note when the window blurs", async
         await playButton.scrollIntoViewIfNeeded();
         const box = await playButton.boundingBox();
         assert.ok(box, "Expected the articulation audition button to be visible.");
-        await clearHarnessDebugLog(page);
         await page.mouse.move(box.x + (box.width * 0.5), box.y + (box.height * 0.5));
-        await page.mouse.down();
-        await page.waitForFunction(() => window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1);
-        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
-        await page.waitForTimeout(100);
+        const assertRelease = async (events) => {
+            await clearHarnessDebugLog(page);
+            await page.mouse.down();
+            await page.waitForFunction(() => (
+                window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1
+            ));
+            await page.evaluate((eventNames) => {
+                for (const eventName of eventNames) window.dispatchEvent(new Event(eventName));
+            }, events);
+            await page.waitForTimeout(100);
+            assert.deepEqual((await getHarnessSnapshot(page)).midiInputEvents, [
+                { endpointID: "midiIn", value: buildShortMidi(0x90, 60, 100) },
+                { endpointID: "midiIn", value: buildShortMidi(0x80, 60) },
+            ]);
+            await page.mouse.up();
+        };
 
-        assert.deepEqual((await getHarnessSnapshot(page)).midiInputEvents, [
-            { endpointID: "midiIn", value: buildShortMidi(0x90, 60, 100) },
-            { endpointID: "midiIn", value: buildShortMidi(0x80, 60) },
-        ]);
+        await assertRelease(["blur"]);
+        await assertRelease(["cosimo-browser-audio-leave", "blur"]);
     } finally {
         await page.mouse.up().catch(() => {});
         await page.close();

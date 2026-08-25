@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, type FocusEventHandler, type PointerEventHandler, type RefObject } from "react";
 
+import { BROWSER_AUDIO_LEAVE_EVENT } from "./browser-audio-events";
+
 export type ArrowStepDirection = -1 | 1;
 export type SynthKeyboardInputMode = "hosted" | "standalone-preview";
 
@@ -419,12 +421,14 @@ export function useSynthInputRouter(
         window.addEventListener("keyup", handleKeyUp, true);
         window.addEventListener("message", handleRelayedKeyboardMessage);
         window.addEventListener("blur", handleWindowBlur);
+        window.addEventListener(BROWSER_AUDIO_LEAVE_EVENT, handleWindowBlur);
 
         return () => {
             window.removeEventListener("keydown", handleKeyDown, true);
             window.removeEventListener("keyup", handleKeyUp, true);
             window.removeEventListener("message", handleRelayedKeyboardMessage);
             window.removeEventListener("blur", handleWindowBlur);
+            window.removeEventListener(BROWSER_AUDIO_LEAVE_EVENT, handleWindowBlur);
         };
     }, [keyboardRef, releaseStandalonePreviewNotes, sendStandalonePreviewMIDI]);
 

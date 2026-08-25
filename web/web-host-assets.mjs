@@ -8,6 +8,7 @@ export const WEB_HOST_ASSET_ENTRIES = Object.freeze([
     { source: "index.html", target: "index.html" },
     { source: "favicon.svg", target: "favicon.svg" },
     { source: "cosimo-web-host.js", target: "cosimo-web-host.js" },
+    { source: "browser-audio-lifecycle.mjs", target: "browser-audio-lifecycle.mjs" },
     { source: "browser-patch-state.mjs", target: "browser-patch-state.mjs" },
     { source: "desktop-production-loader.js", target: "patch_gui/desktop/index.js" },
 ]);

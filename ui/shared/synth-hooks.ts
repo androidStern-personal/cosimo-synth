@@ -161,6 +161,10 @@ import {
     type SynthKeyboardLike,
 } from "./synth-input-router";
 import {
+    BROWSER_AUDIO_LEAVE_EVENT,
+    BROWSER_AUDIO_RETURN_EVENT,
+} from "./browser-audio-events";
+import {
     DEFAULT_FACTORY_TABLE_INDEX,
     loadFactoryBankCatalog,
     loadFactoryBankFrames,
@@ -3830,6 +3834,7 @@ export function useSynthPatchViewModel({
     const autoPreviewPendingStrikeRef = useRef<{ timer: number; capMs: number | null } | null>(null);
     const autoPreviewClearPendingRef = useRef<(() => void) | null>(null);
     const autoPreviewReleaseOwnedRef = useRef<(() => void) | null>(null);
+    const browserAudioAwayRef = useRef(false);
     const msegRatesRef = useRef<[number, number, number]>([1, 1, 1]);
     msegRatesRef.current = [mseg1Rate.value, mseg2Rate.value, mseg3Rate.value];
 
@@ -4033,33 +4038,38 @@ export function useSynthPatchViewModel({
         if (heldMidiNotesRef.current.size > 0) {
             engine.manualHoldStarted();
         }
-        engine.setEnabled(autoPreviewEnabledRef.current && document.visibilityState === "visible");
+        engine.setEnabled(
+            autoPreviewEnabledRef.current
+            && document.visibilityState === "visible"
+            && !browserAudioAwayRef.current,
+        );
         const unsubscribe = subscribeToUserEdits({
             onParameterEdit: (edit) => engine.parameterEdited(edit.changed),
             onGestureStart: () => engine.gestureStarted(),
             onGestureEnd: () => engine.gestureEnded(),
         });
-        // Suspension stops preview notes immediately and schedules no trailing
-        // note; returning restores the user's preference.
-        const handleSuspend = () => {
-            clearPendingStrike();
-            engine.setEnabled(false);
-            releaseOwnedGroup();
+        // Returning restores the user's preference. Every leave signal is
+        // handled by the shared sounding-owner panic below.
+        const handleResume = () => {
+            if (!browserAudioAwayRef.current) {
+                engine.setEnabled(autoPreviewEnabledRef.current);
+            }
         };
-        const handleResume = () => engine.setEnabled(autoPreviewEnabledRef.current);
+        const handleBrowserAudioReturn = () => {
+            browserAudioAwayRef.current = false;
+            handleResume();
+        };
         const handleVisibility = () => {
             if (document.visibilityState === "visible") {
                 handleResume();
-            } else {
-                handleSuspend();
             }
         };
-        window.addEventListener("blur", handleSuspend);
         window.addEventListener("focus", handleResume);
+        window.addEventListener(BROWSER_AUDIO_RETURN_EVENT, handleBrowserAudioReturn);
         document.addEventListener("visibilitychange", handleVisibility);
         return () => {
-            window.removeEventListener("blur", handleSuspend);
             window.removeEventListener("focus", handleResume);
+            window.removeEventListener(BROWSER_AUDIO_RETURN_EVENT, handleBrowserAudioReturn);
             document.removeEventListener("visibilitychange", handleVisibility);
             unsubscribe();
             engine.dispose();
@@ -4078,7 +4088,9 @@ export function useSynthPatchViewModel({
             autoPreviewClearPendingRef.current?.();
         }
         autoPreviewEngineRef.current?.setEnabled(
-            autoPreviewEnabled && document.visibilityState === "visible",
+            autoPreviewEnabled
+            && document.visibilityState === "visible"
+            && !browserAudioAwayRef.current,
         );
     }, [autoPreviewEnabled]);
 
@@ -4098,9 +4110,16 @@ export function useSynthPatchViewModel({
     }, [publishHeldMidiNote, voiceArticulationStartMessage]);
 
     useEffect(() => {
-        const handleWindowBlur = () => {
+        const releaseSoundingOwners = () => {
             handleStopArticulationAudition();
             handleStopNoteKeyAudition();
+            autoPreviewClearPendingRef.current?.();
+            autoPreviewEngineRef.current?.setEnabled(false);
+            autoPreviewReleaseOwnedRef.current?.();
+        };
+        const handleBrowserAudioLeave = () => {
+            browserAudioAwayRef.current = true;
+            releaseSoundingOwners();
         };
         const handleKeyDown = (event: KeyboardEvent) => {
             if (event.key === "Escape") {
@@ -4110,17 +4129,19 @@ export function useSynthPatchViewModel({
         };
         const handleVisibilityChange = () => {
             // Mobile backgrounding fires visibilitychange without a reliable
-            // blur; suspension must never leave the Note key's note held.
+            // blur; suspension must never leave an owned note held.
             if (document.visibilityState !== "visible") {
-                handleStopNoteKeyAudition();
+                releaseSoundingOwners();
             }
         };
 
-        window.addEventListener("blur", handleWindowBlur);
+        window.addEventListener("blur", releaseSoundingOwners);
+        window.addEventListener(BROWSER_AUDIO_LEAVE_EVENT, handleBrowserAudioLeave);
         window.addEventListener("keydown", handleKeyDown);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
-            window.removeEventListener("blur", handleWindowBlur);
+            window.removeEventListener("blur", releaseSoundingOwners);
+            window.removeEventListener(BROWSER_AUDIO_LEAVE_EVENT, handleBrowserAudioLeave);
             window.removeEventListener("keydown", handleKeyDown);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
         };

@@ -631,7 +631,7 @@ test("the Note key plays the remembered pitch, follows intentional notes, and ne
             window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1
         ));
 
-        // Suspension while held must end the note exactly once.
+        // The platform blur path must end the note exactly once.
         await page.evaluate(() => window.dispatchEvent(new Event("blur")));
         await page.waitForFunction(() => (
             window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length >= 2
@@ -644,6 +644,201 @@ test("the Note key plays the remembered pitch, follows intentional notes, and ne
         ]);
         assert.equal(await noteKey.getAttribute("data-note-held"), "false");
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        // The host's shared leave edge covers pagehide and audio-session-only
+        // interruptions. A following blur is duplicate delivery, not a second
+        // note-off.
+        await clearHarnessDebugLog(page);
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...noteCenter, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 1
+        ));
+        await page.evaluate(() => window.dispatchEvent(new Event("cosimo-browser-audio-leave")));
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.length === 2
+        ));
+        assert.equal(await noteKey.getAttribute("data-note-held"), "false");
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.waitForTimeout(160);
+        assert.deepEqual((await getHarnessSnapshot(page)).midiInputEvents, [
+            { endpointID: "midiIn", value: buildShortMidi(0x90, 52, 100) },
+            { endpointID: "midiIn", value: buildShortMidi(0x80, 52, 0) },
+        ]);
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    } finally {
+        await page.close();
+    }
+});
+
+test("recovery touch notes transfer ownership and release exactly once", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="sticky-keyboard"] .keyboard').waitFor();
+        await page.evaluate(() => {
+            const keyboard = document.querySelector('[data-role="sticky-keyboard"] .keyboard');
+            if (!keyboard?.touchStart || !keyboard?.touchEnd) {
+                throw new Error("The harness keyboard is missing its touch contract.");
+            }
+            const sounding = new Set();
+            const events = [];
+            keyboard.addEventListener("note-down", (event) => {
+                const note = Number(event.detail.note);
+                events.push({ kind: "on", note });
+                sounding.add(note);
+            });
+            keyboard.addEventListener("note-up", (event) => {
+                const note = Number(event.detail.note);
+                events.push({ kind: "off", note });
+                sounding.delete(note);
+            });
+            window.__COSIMO_T45_KEYBOARD_PROBE__ = {
+                snapshot: () => ({ events: [...events], sounding: [...sounding].sort((a, b) => a - b) }),
+                touch(type, contacts) {
+                    const changedTouches = contacts.map(({ identifier, note }) => {
+                        const target = document.createElement("div");
+                        target.id = `note${note}`;
+                        return { identifier, target };
+                    });
+                    const event = { changedTouches, preventDefault() {}, type };
+                    if (type === "touchstart") keyboard.touchStart(event);
+                    else keyboard.touchEnd(event);
+                },
+            };
+        });
+        const touch = (type, contacts) => page.evaluate(({ nextType, nextContacts }) => {
+            window.__COSIMO_T45_KEYBOARD_PROBE__.touch(nextType, nextContacts);
+        }, { nextType: type, nextContacts: contacts });
+        const snapshot = () => page.evaluate(() => window.__COSIMO_T45_KEYBOARD_PROBE__.snapshot());
+        const leave = () => page.evaluate(() => window.dispatchEvent(new Event("cosimo-browser-audio-leave")));
+        const recover = () => page.evaluate(() => window.dispatchEvent(new Event("cosimo-browser-audio-return")));
+
+        await leave();
+        await touch("touchstart", [{ identifier: 0, note: 48 }]);
+        await touch("touchend", [{ identifier: 0, note: 48 }]);
+        assert.deepEqual(await snapshot(), {
+            events: [{ kind: "on", note: 48 }],
+            sounding: [48],
+        });
+
+        // A new note flushes the ended tap before it becomes the recovery
+        // gesture. A stale failed tap must not resurrect as a chord.
+        await touch("touchstart", [{ identifier: 0, note: 52 }]);
+        assert.deepEqual(await snapshot(), {
+            events: [
+                { kind: "on", note: 48 },
+                { kind: "off", note: 48 },
+                { kind: "on", note: 52 },
+            ],
+            sounding: [52],
+        });
+        await recover();
+        await touch("touchend", [{ identifier: 0, note: 52 }]);
+        assert.deepEqual((await snapshot()).sounding, [52], "return-before-touchend must still hold the recovering note");
+        await page.waitForTimeout(90);
+        assert.deepEqual(await snapshot(), {
+            events: [
+                { kind: "on", note: 48 },
+                { kind: "off", note: 48 },
+                { kind: "on", note: 52 },
+                { kind: "off", note: 52 },
+            ],
+            sounding: [],
+        });
+
+        // A same-key re-touch flushes the old deferred off before the new on,
+        // so the old timer cannot silence the new owner.
+        await leave();
+        await touch("touchstart", [{ identifier: 1, note: 55 }]);
+        await touch("touchend", [{ identifier: 1, note: 55 }]);
+        await recover();
+        await touch("touchstart", [{ identifier: 2, note: 55 }]);
+        await page.waitForTimeout(90);
+        assert.deepEqual((await snapshot()).events.slice(-3), [
+            { kind: "on", note: 55 },
+            { kind: "off", note: 55 },
+            { kind: "on", note: 55 },
+        ]);
+        assert.deepEqual((await snapshot()).sounding, [55]);
+        await touch("touchend", [{ identifier: 2, note: 55 }]);
+        assert.deepEqual((await snapshot()).sounding, []);
+
+        await leave();
+        await touch("touchstart", [
+            { identifier: 3, note: 57 },
+            { identifier: 4, note: 60 },
+        ]);
+        await touch("touchend", [
+            { identifier: 3, note: 57 },
+            { identifier: 4, note: 60 },
+        ]);
+        assert.deepEqual((await snapshot()).sounding, [57, 60]);
+        await recover();
+        await page.waitForTimeout(90);
+        assert.deepEqual((await snapshot()).sounding, [], "multi-touch recovery must release every pitch");
+
+        await leave();
+        await touch("touchstart", [{ identifier: 5, note: 62 }]);
+        await touch("touchend", [{ identifier: 5, note: 62 }]);
+        await page.waitForTimeout(1_100);
+        assert.deepEqual((await snapshot()).sounding, [], "a denied recovery must use the bounded fail-safe");
+        const afterFailSafe = await snapshot();
+        await recover();
+        await page.waitForTimeout(90);
+        assert.deepEqual(await snapshot(), afterFailSafe, "recovery after the fail-safe must not duplicate note-up");
+
+        await leave();
+        await touch("touchstart", [{ identifier: 6, note: 64 }]);
+        await touch("touchcancel", [{ identifier: 6, note: 64 }]);
+        const afterCancel = await snapshot();
+        assert.deepEqual(afterCancel.sounding, []);
+        await page.waitForTimeout(1_100);
+        assert.deepEqual(await snapshot(), afterCancel, "touchcancel must not leave a deferred duplicate");
+
+        await touch("touchstart", [
+            { identifier: 7, note: 65 },
+            { identifier: 8, note: 67 },
+        ]);
+        await touch("touchend", [{ identifier: 7, note: 65 }]);
+        assert.deepEqual((await snapshot()).sounding, [65, 67]);
+        await expandGlobalModRail(page);
+        await page.locator('[data-role="mobile-global-mod-rail-keyboard-toggle"]').click();
+        assert.deepEqual(
+            (await snapshot()).sounding,
+            [],
+            "keyboard hide must flush both deferred and physically held notes",
+        );
+        const afterUnmount = await snapshot();
+        assert.deepEqual(afterUnmount.events.slice(-4), [
+            { kind: "on", note: 65 },
+            { kind: "on", note: 67 },
+            { kind: "off", note: 65 },
+            { kind: "off", note: 67 },
+        ]);
+        await page.locator('[data-role="mobile-global-mod-rail-keyboard-toggle"]').click();
+
+        await touch("touchstart", [
+            { identifier: 9, note: 69 },
+            { identifier: 10, note: 71 },
+        ]);
+        await touch("touchend", [{ identifier: 9, note: 69 }]);
+        assert.deepEqual((await snapshot()).sounding, [69, 71]);
+        await page.evaluate(() => document.querySelector("cosimo-desktop-react-view")?.remove());
+        assert.deepEqual((await snapshot()).sounding, [], "React unmount must release every keyboard owner");
+        const afterReactUnmount = await snapshot();
+        assert.deepEqual(afterReactUnmount.events.slice(-4), [
+            { kind: "on", note: 69 },
+            { kind: "on", note: 71 },
+            { kind: "off", note: 69 },
+            { kind: "off", note: 71 },
+        ]);
+        await page.waitForTimeout(1_100);
+        assert.deepEqual(await snapshot(), afterReactUnmount, "unmount must cancel the old fail-safe");
     } finally {
         await page.close();
     }
@@ -899,6 +1094,36 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
         }
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
     };
+    const startHeldKnobPreview = async () => {
+        await clearHarnessDebugLog(page);
+        const surfaceBox = await page.locator('[data-role="rack-parameter-surface-reverbSize"]').boundingBox();
+        assert.ok(surfaceBox);
+        const start = {
+            x: surfaceBox.x + (surfaceBox.width / 2),
+            y: surfaceBox.y + (surfaceBox.height / 2),
+        };
+        await cdp.send("Input.dispatchTouchEvent", {
+            type: "touchStart",
+            touchPoints: [{ ...start, radiusX: 5, radiusY: 5, force: 1 }],
+        });
+        for (const step of [15, 30]) {
+            await cdp.send("Input.dispatchTouchEvent", {
+                type: "touchMove",
+                touchPoints: [{ x: start.x + step, y: start.y, radiusX: 5, radiusY: 5, force: 1 }],
+            });
+        }
+        await page.waitForFunction(() => (
+            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.some(
+                ({ value }) => (value >>> 16) === 0x90,
+            )
+        ));
+    };
+    const waitForBalancedPreviewNotes = () => page.waitForFunction(() => {
+        const events = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents;
+        const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
+        const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
+        return noteOns >= 1 && noteOns === noteOffs;
+    }, undefined, { timeout: 4000 });
 
     try {
         await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
@@ -939,35 +1164,51 @@ test("Auto-preview retriggers on real parameter drags, stays silent when off, an
             "With nothing held, Auto-preview must strike the remembered pitch (middle C).",
         );
 
-        // Toggling off mid-hold can never leave a note sounding.
-        await clearHarnessDebugLog(page);
-        const surfaceBox = await page.locator('[data-role="rack-parameter-surface-reverbSize"]').boundingBox();
-        assert.ok(surfaceBox);
-        const holdStart = {
-            x: surfaceBox.x + (surfaceBox.width / 2),
-            y: surfaceBox.y + (surfaceBox.height / 2),
-        };
-        await cdp.send("Input.dispatchTouchEvent", {
-            type: "touchStart",
-            touchPoints: [{ ...holdStart, radiusX: 5, radiusY: 5, force: 1 }],
-        });
-        for (const step of [15, 30]) {
-            await cdp.send("Input.dispatchTouchEvent", {
-                type: "touchMove",
-                touchPoints: [{ x: holdStart.x + step, y: holdStart.y, radiusX: 5, radiusY: 5, force: 1 }],
-            });
-        }
-        await page.waitForFunction(() => (
-            window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents.some(({ value }) => (value >>> 16) === 0x90)
-        ));
+        // The original platform blur path still stops a held preview.
+        await startHeldKnobPreview();
         await page.evaluate(() => window.dispatchEvent(new Event("blur")));
-        await page.waitForFunction(() => {
-            const events = window.__COSIMO_DESKTOP_HARNESS__.getSnapshot().midiInputEvents;
-            const noteOns = events.filter(({ value }) => (value >>> 16) === 0x90).length;
-            const noteOffs = events.filter(({ value }) => (value >>> 16) === 0x80).length;
-            return noteOns === noteOffs;
-        }, undefined, { timeout: 2000 });
+        await waitForBalancedPreviewNotes();
         await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+
+        // Host leave covers pagehide and audio-session-only interruption.
+        // A later blur is duplicate delivery and must not add another note-off.
+        await startHeldKnobPreview();
+        await page.evaluate(() => window.dispatchEvent(new Event("cosimo-browser-audio-leave")));
+        await waitForBalancedPreviewNotes();
+        const eventsAfterBrowserLeave = (await getHarnessSnapshot(page)).midiInputEvents;
+        await page.evaluate(() => window.dispatchEvent(new Event("blur")));
+        await page.waitForTimeout(100);
+        assert.deepEqual(
+            (await getHarnessSnapshot(page)).midiInputEvents,
+            eventsAfterBrowserLeave,
+            "Duplicate platform leave delivery must not emit another note-off.",
+        );
+        await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+
+        // Focus arrives before blocked browser audio is actually recovered.
+        // It must not re-enable preview behind the lifecycle gate.
+        await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+        await expandGlobalModRail(page);
+        const autoToggle = page.locator('[data-role="mobile-global-mod-rail-auto-toggle"]');
+        await autoToggle.click();
+        await autoToggle.click();
+        await collapseGlobalModRail(page);
+        await clearHarnessDebugLog(page);
+        await dragKnobBase();
+        await page.waitForTimeout(700);
+        assert.deepEqual(
+            (await getHarnessSnapshot(page)).midiInputEvents,
+            [],
+            "Focus must not bypass a pending browser-audio recovery.",
+        );
+
+        // The recovery edge re-enables the saved preference; it does not
+        // require the user to toggle Auto-preview off and on again.
+        await page.evaluate(() => window.dispatchEvent(new Event("cosimo-browser-audio-return")));
+        await clearHarnessDebugLog(page);
+        await dragKnobBase();
+        await waitForBalancedPreviewNotes();
     } finally {
         await page.close();
     }

@@ -1,5 +1,6 @@
 import * as patch from "./cmaj_Cosimo_Synth.js";
 import { createPatchViewHolder } from "./cmaj_api/cmaj-patch-view.js";
+import { createBrowserAudioLifecycle } from "./browser-audio-lifecycle.mjs";
 import {
     installBrowserPatchStatePersistence,
     readBrowserPatchState,
@@ -14,6 +15,8 @@ globalThis.__COSIMO_VIDEO_BOUNCE_MODULE_URL__ = new URL("./video-bounce/index.js
 const searchParameters = new URLSearchParams(globalThis.location.search);
 const isTestMode = searchParameters.has("test");
 const hostOwnsRuntimeLanes = isTestMode && searchParameters.get("runtime-owner") === "host";
+const browserAudioLeaveEvent = "cosimo-browser-audio-leave";
+const browserAudioReturnEvent = "cosimo-browser-audio-return";
 
 if (hostOwnsRuntimeLanes) {
     patch.manifest.worker = "patch_gui/wavetable-test-worker.js";
@@ -29,12 +32,7 @@ const elements = {
 
 const state = {
     audioContext: null,
-    audioRecoveryAttemptCount: 0,
-    audioRecoveryCycleActive: false,
-    audioRecoveryCycleCount: 0,
-    audioRecoveryLastReason: null,
-    audioRecoveryNeeded: false,
-    audioRecoveryPromise: null,
+    audioLifecycle: null,
     audioProbe: null,
     audioProbeBuffer: null,
     audioConnected: false,
@@ -298,138 +296,52 @@ function currentAudioSessionState() {
     }
 }
 
-function markAudioRecoveryNeeded(reason) {
-    if (!state.started || !state.audioConnected || !state.audioContext) {
-        return;
-    }
-
-    state.audioRecoveryNeeded = true;
-    state.audioRecoveryLastReason = reason;
+function canRecoverBrowserAudio() {
+    return !document.hidden && currentAudioSessionState() !== "interrupted";
 }
 
-function beginAudioRecovery(reason, {
-    forceRestart = false,
-    resumePromise = null,
-} = {}) {
-    if (state.audioRecoveryPromise) {
-        return state.audioRecoveryPromise;
-    }
-
-    const audioContext = state.audioContext;
-    if (!state.started || !state.audioConnected || !audioContext) {
-        return Promise.resolve(false);
-    }
-    if (audioContext.state === "closed") {
-        showError(new Error("Cosimo's browser audio context was closed and cannot be recovered."));
-        return Promise.resolve(false);
-    }
-
+function requestAudioResumeFromGesture(event) {
+    if (!event.isTrusted) return;
+    if (event.type === "pointerup" && event.pointerType === "mouse") return;
+    if (!state.audioLifecycle || state.audioLifecycle.getSnapshot().phase === "active") return;
     usePlaybackAudioSession();
-    state.audioRecoveryAttemptCount += 1;
-    state.audioRecoveryLastReason = reason;
-    const restartRunningContext = forceRestart && audioContext.state === "running";
-
-    const recovery = (async () => {
-        state.audioRecoveryCycleActive = true;
-        if (restartRunningContext) {
-            // Safari can return from an interruption reporting `running` while
-            // its render clock and output remain stalled. A lifecycle-marked
-            // return therefore needs a real stop/start edge, not a state check.
-            state.audioRecoveryCycleCount += 1;
-            await audioContext.suspend();
-        }
-
-        await (resumePromise ?? audioContext.resume());
-        const recovered = markAudioRunning();
-        state.audioRecoveryNeeded = !recovered;
-        return recovered;
-    })().catch((error) => {
-        state.audioRecoveryNeeded = true;
-        // Autoplay policy may require the next trusted gesture. Keep the live
-        // instrument exposed so that gesture can both recover and play/edit;
-        // only a permanently closed context is an unrecoverable host failure.
-        if (audioContext.state === "closed") {
-            showError(error);
-        }
-        return false;
-    }).finally(() => {
-        state.audioRecoveryCycleActive = false;
-        if (state.audioRecoveryPromise === recovery) {
-            state.audioRecoveryPromise = null;
-        }
-    });
-    state.audioRecoveryPromise = recovery;
-    return recovery;
-}
-
-function requestAutomaticAudioRecovery(reason) {
-    const audioContext = state.audioContext;
-    if (!state.started || !state.audioConnected || !audioContext) {
-        return;
-    }
-    if (document.hidden || currentAudioSessionState() === "interrupted") {
-        return;
-    }
-    if (!state.audioRecoveryNeeded && audioContext.state === "running") {
-        return;
-    }
-
-    void beginAudioRecovery(reason, {
-        forceRestart: state.audioRecoveryNeeded && audioContext.state === "running",
-    });
-}
-
-function requestAudioResumeFromGesture() {
-    const audioContext = state.audioContext;
-    if (!state.audioConnected || !audioContext) {
-        return;
-    }
-    if (!state.audioRecoveryNeeded && audioContext.state === "running") {
-        return;
-    }
-
-    usePlaybackAudioSession();
-    if (audioContext.state !== "running") {
-        // Keep resume() inside the trusted event task. The keyboard/control's
-        // own handler still receives this same event and is never replaced by
-        // a separate recovery overlay tap.
-        const resumePromise = audioContext.resume();
-        void beginAudioRecovery("gesture", { resumePromise });
-        return;
-    }
-
-    // A running-but-stalled context needs the same edge-triggered recovery as
-    // an automatic page return. The action event continues while the held note
-    // or control write waits for the render clock to restart.
-    void audioContext.resume().catch(() => {});
-    void beginAudioRecovery("gesture-running-context", { forceRestart: true });
+    state.audioLifecycle.retryFromGesture("gesture");
 }
 
 function handleAudioContextStateChange() {
-    if (!state.started || !state.audioConnected || state.audioRecoveryCycleActive) {
+    if (!state.audioLifecycle || state.audioContext?.state === "running") return;
+    if (state.audioContext?.state === "closed") {
+        showError(new Error("Cosimo's browser audio context was closed and cannot be recovered."));
         return;
     }
+    if (state.audioLifecycle.getSnapshot().phase !== "active") return;
 
-    if (state.audioContext?.state !== "running") {
-        markAudioRecoveryNeeded("audio-context-statechange");
+    state.audioLifecycle.leave("audio-context-statechange");
+    if (canRecoverBrowserAudio()) {
+        usePlaybackAudioSession();
+        state.audioLifecycle.returnToPage("audio-context-statechange");
     }
-    requestAutomaticAudioRecovery("audio-context-statechange");
 }
 
 function handleAudioSessionStateChange() {
-    if (currentAudioSessionState() === "interrupted") {
-        markAudioRecoveryNeeded("audio-session-interrupted");
+    const sessionState = currentAudioSessionState();
+    if (sessionState === "interrupted") {
+        handlePageLeave("audio-session-interrupted");
         return;
     }
-    requestAutomaticAudioRecovery("audio-session-statechange");
+    if (sessionState === "active") {
+        handlePageReturn("audio-session-statechange");
+    }
 }
 
 function handlePageLeave(reason) {
-    markAudioRecoveryNeeded(reason);
+    state.audioLifecycle?.leave(reason);
 }
 
 function handlePageReturn(reason) {
-    requestAutomaticAudioRecovery(reason);
+    if (!state.audioLifecycle) return;
+    usePlaybackAudioSession();
+    state.audioLifecycle.returnToPage(reason);
 }
 
 async function startAudio() {
@@ -480,19 +392,28 @@ async function startAudio() {
         elements.startOverlay.style.display = "";
         elements.startOverlay.disabled = false;
         elements.startStatus.textContent = "Tap to resume audio";
+        return;
     }
+
+    state.audioLifecycle ??= createBrowserAudioLifecycle({
+        context: state.audioContext,
+        canRecover: canRecoverBrowserAudio,
+        onLeave: () => globalThis.dispatchEvent(new Event(browserAudioLeaveEvent)),
+        onRecovered: () => globalThis.dispatchEvent(new Event(browserAudioReturnEvent)),
+    });
 }
 
 function getSnapshot() {
     updateAudioPeak();
+    const audioLifecycle = state.audioLifecycle?.getSnapshot() ?? null;
 
     return {
         audioConnected: state.audioConnected,
         audioContextState: state.audioContext?.state ?? null,
-        audioRecoveryAttemptCount: state.audioRecoveryAttemptCount,
-        audioRecoveryCycleCount: state.audioRecoveryCycleCount,
-        audioRecoveryLastReason: state.audioRecoveryLastReason,
-        audioRecoveryNeeded: state.audioRecoveryNeeded,
+        audioRecoveryAttemptCount: audioLifecycle?.attemptCount ?? 0,
+        audioRecoveryFailure: audioLifecycle?.lastFailure ?? null,
+        audioRecoveryLastReason: audioLifecycle?.lastReason ?? null,
+        audioRecoveryPhase: audioLifecycle?.phase ?? "inactive",
         audioSessionState: currentAudioSessionState(),
         audioSessionType: navigator.audioSession?.type ?? null,
         audioBaseLatency: state.audioContext?.baseLatency ?? null,
@@ -832,8 +753,12 @@ elements.startOverlay.addEventListener("click", () => {
     void startAudio().catch(showError);
 });
 
-document.addEventListener("pointerdown", requestAudioResumeFromGesture, { capture: true, passive: true });
-document.addEventListener("touchstart", requestAudioResumeFromGesture, { capture: true, passive: true });
+const audioRecoveryGestureEvents = "PointerEvent" in globalThis
+    ? ["pointerdown", "pointerup"]
+    : ["mousedown", "touchstart", "touchend"];
+for (const eventName of audioRecoveryGestureEvents) {
+    document.addEventListener(eventName, requestAudioResumeFromGesture, { capture: true, passive: true });
+}
 document.addEventListener("visibilitychange", () => {
     if (document.hidden) handlePageLeave("visibility-hidden");
     else handlePageReturn("visibility-visible");

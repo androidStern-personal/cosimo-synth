@@ -119,6 +119,7 @@ import {
 } from "../shared/rack-route-presentation";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import { FilterResponseGraph, VOICE_MODE_OPTIONS } from "../shared/synth-components";
+import { BROWSER_AUDIO_LEAVE_EVENT } from "../shared/browser-audio-events";
 import { PrecisionNumberField } from "./desktop-precision-number-field";
 import { DistortionVisualizer } from "../shared/distortion-visualizer";
 import {
@@ -2414,11 +2415,13 @@ function MobileGlobalModRail({
         window.addEventListener("pointerup", handlePointerUp, true);
         window.addEventListener("pointercancel", handlePointerCancel, true);
         window.addEventListener("blur", cancelActiveInteraction);
+        window.addEventListener(BROWSER_AUDIO_LEAVE_EVENT, cancelActiveInteraction);
         document.addEventListener("visibilitychange", handleVisibilityChange);
         return () => {
             window.removeEventListener("pointerup", handlePointerUp, true);
             window.removeEventListener("pointercancel", handlePointerCancel, true);
             window.removeEventListener("blur", cancelActiveInteraction);
+            window.removeEventListener(BROWSER_AUDIO_LEAVE_EVENT, cancelActiveInteraction);
             document.removeEventListener("visibilitychange", handleVisibilityChange);
             cancelActiveInteraction();
             if (settleXTimeoutRef.current !== null) {

@@ -477,6 +477,7 @@ test("web host packaging includes every runtime-owned module", async (context) =
         "index.html",
         "favicon.svg",
         "cosimo-web-host.js",
+        "browser-audio-lifecycle.mjs",
         "browser-patch-state.mjs",
         "desktop-production-loader.js",
     ];
@@ -502,6 +503,7 @@ test("web host packaging includes every runtime-owned module", async (context) =
         fs.access(path.join(outputDirectory, "index.html")),
         fs.access(path.join(outputDirectory, "favicon.svg")),
         fs.access(path.join(outputDirectory, "cosimo-web-host.js")),
+        fs.access(path.join(outputDirectory, "browser-audio-lifecycle.mjs")),
         fs.access(path.join(outputDirectory, "browser-patch-state.mjs")),
         fs.access(path.join(outputDirectory, "patch_gui", "desktop", "index.js")),
     ]);
