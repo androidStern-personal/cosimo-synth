@@ -7,6 +7,7 @@
     "prototype:parameter-colors": "vite --config ui/desktop/parameter-color-prototype/vite.config.mjs",
     "prototype:mobile-voice": "vite --config ui/desktop/voice-mobile-prototype/vite.config.mjs",
     "prototype:mobile-fx-graph": "vite --configLoader runner --config ui/desktop/fx-graph-mobile-prototype/vite.config.mjs",
+    "test:prototype:mobile-fx-graph": "node --test tests/test_fx_graph_mobile_prototype_browser.mjs",
     "ui:desktop:dev": "vite --config ui/vite.desktop.config.mjs",
     "ui:desktop:build": "node ui/build.mjs --desktop",
     "web:build": "node web/build.mjs",

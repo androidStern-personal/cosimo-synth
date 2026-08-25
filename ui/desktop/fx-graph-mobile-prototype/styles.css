@@ -176,6 +176,36 @@ button {
     opacity: 0.38;
 }
 
+.selected-hierarchy-route {
+    stroke-width: 3.4;
+    opacity: 1;
+    filter: url(#route-glow);
+    pointer-events: none;
+}
+
+.branch-zone,
+.nested-zone {
+    fill: rgb(255 255 255 / 0.012);
+    stroke: rgb(255 255 255 / 0.035);
+    stroke-width: 0.8;
+    vector-effect: non-scaling-stroke;
+}
+
+.branch-zone.is-focus {
+    fill: rgb(105 213 197 / 0.055);
+    stroke: rgb(105 213 197 / 0.18);
+}
+
+.nested-zone {
+    fill: rgb(228 202 0 / 0.012);
+    stroke: rgb(228 202 0 / 0.035);
+}
+
+.nested-zone.is-focus {
+    fill: rgb(228 202 0 / 0.045);
+    stroke: rgb(228 202 0 / 0.16);
+}
+
 .split-diamond,
 .parallel-fork,
 .merge-dot {
@@ -183,6 +213,11 @@ button {
     stroke: #69d5c5;
     stroke-width: 3;
     vector-effect: non-scaling-stroke;
+}
+
+[data-junction="nested-split"],
+[data-junction="nested-merge"] {
+    stroke: #e4ca00;
 }
 
 .band-labels text,
@@ -222,22 +257,40 @@ button {
     pointer-events: none;
 }
 
-.station.is-selected rect,
-.station.is-selected .station-stop-core {
+.station.is-selected > rect:not(.station-icon-hit):not(.station-detail-hit) {
     filter: drop-shadow(0 0 5px var(--accent));
     stroke: #f8f1d8;
     stroke-width: 2;
 }
 
-.station-stop-hit {
-    fill: transparent;
+.station-detail-frame,
+.station-icon-frame {
+    fill: color-mix(in srgb, var(--accent) 27%, #081011);
+    stroke: color-mix(in srgb, var(--accent) 86%, white 4%);
 }
 
-.station-stop-core {
-    fill: var(--accent);
-    stroke: #071011;
-    stroke-width: 2;
-    vector-effect: non-scaling-stroke;
+.station-detail text {
+    font-size: 7.2px;
+    letter-spacing: 0.045em;
+}
+
+.station-icon-hit,
+.station-detail-hit {
+    fill: transparent !important;
+    stroke: none !important;
+}
+
+.station-image {
+    pointer-events: none;
+}
+
+.station-icon .station-image {
+    filter: drop-shadow(0 0 2px color-mix(in srgb, var(--accent) 45%, transparent));
+}
+
+.station-icon.is-selected .station-icon-frame,
+.station-detail.is-selected .station-detail-frame {
+    fill: color-mix(in srgb, var(--accent) 39%, #081011);
 }
 
 .station-glyph-hit {
@@ -312,6 +365,43 @@ button {
     fill: #eaf7f4;
 }
 
+.branch-badge circle {
+    fill: #081011;
+    stroke: rgb(170 220 211 / 0.46);
+    stroke-width: 1.2;
+    vector-effect: non-scaling-stroke;
+}
+
+.branch-badge text {
+    fill: rgb(218 235 231 / 0.72);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 5.8px;
+    font-weight: 900;
+    letter-spacing: 0.035em;
+}
+
+.branch-badge.is-parent-node circle {
+    stroke: rgb(228 202 0 / 0.72);
+}
+
+.branch-badge-child-port {
+    fill: none;
+    stroke: #e4ca00;
+    stroke-linecap: round;
+    stroke-width: 2.4;
+    vector-effect: non-scaling-stroke;
+}
+
+.branch-badge.is-focus circle {
+    fill: rgb(105 213 197 / 0.18);
+    stroke: #9aeadf;
+    filter: drop-shadow(0 0 4px rgb(105 213 197 / 0.5));
+}
+
+.branch-badge.is-focus text {
+    fill: #f4fbf9;
+}
+
 .effect-panel {
     position: relative;
     display: grid;
@@ -379,6 +469,25 @@ button {
     justify-content: space-between;
     padding: 17px 14px 14px;
     border-bottom: 1px solid rgb(255 255 255 / 0.055);
+}
+
+.effect-heading-copy {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 9px;
+}
+
+.effect-heading-icon {
+    width: 34px;
+    height: 34px;
+    flex: 0 0 auto;
+    padding: 5px;
+    border: 1px solid color-mix(in srgb, var(--effect-accent) 48%, transparent);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--effect-accent) 14%, #090c0d);
+    filter: drop-shadow(0 0 7px color-mix(in srgb, var(--effect-accent) 22%, transparent));
+    object-fit: contain;
 }
 
 .effect-panel-horizontal .effect-heading {
