@@ -1,7 +1,9 @@
 # Enhancer Design (Spectre-style, two-band)
 
 Status: **locked design, 2026-08-25** (Andrew + assistant session), companion to
-`DISTORTION_QUALITY_DESIGN.md`. Same ground rules: this specifies what to build and
+`DISTORTION_QUALITY_DESIGN.md`. Integration resolved same day: this module is a
+member of the fixed, non-modulatable end-of-chain polish section — see
+`POLISH_CHAIN_DESIGN.md`. Same ground rules: this specifies what to build and
 why; implementation is a separate effort. This module is **separate from and
 orthogonal to** the saturator redesign — that module makes a sound *driven*; this one
 adds presence/weight/air at constant level, at the end of the chain.
@@ -56,7 +58,7 @@ approximates shelf-like reach when wanted. The parallel topology keeps the resid
 subtraction phase-clean by construction — the reason Spectre's EQ is boost-only and
 parallel rather than serial biquads.
 
-## 2. Parameters (10, all modulation-targetable)
+## 2. Parameters (10, static — dialed in, not modulatable, per the polish-chain rule)
 
 | Param | Range | Default | Meaning |
 |---|---|---|---|
@@ -135,11 +137,13 @@ requirements:
 
 ## 6. Placement and rack integration
 
-Position: **last in the chain** — after all other rack modules, before the
-`RackOutputStage` safety stage. Zero declared latency (SVFs + memoryless curves +
-the §4 oversampling stance), no allocation, pool-resettable: the module's only state
-is four SVFs, four DC blockers, and the OS cores — all covered by the existing
-`poolResetIn` pattern (coefficients preserved, state cleared).
+Position: **inside the fixed polish chain** (`POLISH_CHAIN_DESIGN.md`) — after all
+rack modules and the global filter, between the chain's glue stage and width stage,
+before `RackOutputStage`. A single always-resident instance: no pool membership, no
+`poolResetIn` lifecycle, no modulation-table rows, no lane-state schema growth. Zero
+declared latency (SVFs + memoryless curves + the §4 oversampling stance), no
+allocation. State is four SVFs, four DC blockers, and the OS cores; reset semantics
+follow the polish chain's single-instance rules.
 
 ## 7. Per-voice variant (feasibility)
 
@@ -216,10 +220,9 @@ per-voice variant at all remains a product decision for later.
 1. **De-emphasis always-on, no toggle.** Default: yes (rationale in §1). Overriding
    means adding a "boost mode" that duplicates parallel EQ — argue for it before
    spending a param on it.
-2. **Rack integration form.** Default: a regular pool module type that the chain
-   places last by default (keeps lane/pool machinery uniform). Alternative: a fixed
-   pre-output stage baked next to `RackOutputStage` (cheaper wiring, but a second
-   integration pattern to maintain).
+2. **Rack integration form.** ~~Open~~ **Resolved 2026-08-25**: a fixed member of
+   the static polish chain (`POLISH_CHAIN_DESIGN.md`) — not a pool module, not
+   modulatable.
 3. **Module name.** Working name "Enhancer" (`wt::EnhancerBus`).
 
 ## 10. Source notes
