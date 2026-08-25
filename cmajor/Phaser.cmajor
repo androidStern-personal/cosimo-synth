@@ -204,7 +204,7 @@ namespace wt
         input value float32 frequencyIn    [[ name: "Phaser Frequency", min: 60.0f, max: 8000.0f, init: 600.0f, unit: "Hz", rampFrames: 64 ]];
         input value float32 feedbackIn     [[ name: "Phaser Feedback", min: -0.95f, max: 0.95f, init: 0.0f, rampFrames: 64 ]];
         input value float32 phaseIn        [[ name: "Phaser Phase", min: -180.0f, max: 180.0f, init: 90.0f, unit: "deg", rampFrames: 64 ]];
-        input value float32 mixIn          [[ name: "Phaser Mix", min: 0.0f, max: 1.0f, init: 0.0f, rampFrames: 128 ]];
+        input value float32 mixIn          [[ name: "Phaser Mix", min: 0.0f, max: 1.0f, init: 0.5f, rampFrames: 128 ]];
 
         // Internal plumbing, not a host parameter - see the note at the top of the file.
         input value float32 tempoBpmIn [[ init: 120.0f, rampFrames: 0 ]];

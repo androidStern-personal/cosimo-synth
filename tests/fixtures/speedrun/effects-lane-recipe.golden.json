@@ -15,7 +15,7 @@
               "distortionMode": 0,
               "distortionDriveDb": 12,
               "distortionKnee": 0.35,
-              "distortionWet": 0,
+              "distortionWet": 0.5,
               "distortionWetHPHz": 40,
               "distortionWetLPHz": 18000
             }
@@ -25,7 +25,7 @@
               "delayTime": 375,
               "delayFeedback": 0.35,
               "delayFilter": 6000,
-              "delayMix": 0,
+              "delayMix": 0.5,
               "delayTimeMode": 0,
               "delayDivision": 8
             }
@@ -35,7 +35,7 @@
               "reverbSize": 0.5,
               "reverbDecay": 0.4,
               "reverbDamping": 0.5,
-              "reverbMix": 0
+              "reverbMix": 0.5
             }
           }
         },
@@ -491,7 +491,7 @@
           "kind": "setLaneParam",
           "deviceId": "delay#2",
           "endpointID": "delayMix",
-          "from": 0,
+          "from": 0.5,
           "to": 0.42,
           "surface": "rack-parameter-surface-delay#2-delayMix",
           "weight": "normal"
@@ -604,7 +604,7 @@
           "kind": "setLaneParam",
           "deviceId": "reverb#1",
           "endpointID": "reverbMix",
-          "from": 0,
+          "from": 0.5,
           "to": 0.31,
           "surface": "rack-parameter-surface-reverb#1-reverbMix",
           "weight": "normal"

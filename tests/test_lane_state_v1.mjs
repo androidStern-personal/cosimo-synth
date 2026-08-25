@@ -54,7 +54,7 @@ test("a lane document replays as complete records first, then one topology event
     }
     const delayRecord = records.find((record) => record.value.slotId === 6);
     assert.equal(delayRecord.value.values[0], 90);      // laneDelayParamTimeMs
-    assert.equal(delayRecord.value.values[3], 0);       // laneDelayParamMix
+    assert.equal(delayRecord.value.values[3], 0.5);     // laneDelayParamMix
     assert.equal(delayRecord.value.values[5], 8);       // laneDelayParamDivision
 
     // Then the structure: reversed order, POSITION-indexed enable bits

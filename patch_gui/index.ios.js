@@ -3981,8 +3981,8 @@ function requireReactDomClient_production() {
   function findFirstSuspended(row) {
     for (var node = row; null !== node; ) {
       if (13 === node.tag) {
-        var state = node.memoizedState;
-        if (null !== state && (state = state.dehydrated, null === state || isSuspenseInstancePending(state) || isSuspenseInstanceFallback(state)))
+        var state2 = node.memoizedState;
+        if (null !== state2 && (state2 = state2.dehydrated, null === state2 || isSuspenseInstancePending(state2) || isSuspenseInstanceFallback(state2)))
           return node;
       } else if (19 === node.tag && ("forwards" === node.memoizedProps.revealOrder || "backwards" === node.memoizedProps.revealOrder || "unstable_legacy-backwards" === node.memoizedProps.revealOrder || "together" === node.memoizedProps.revealOrder)) {
         if (0 !== (node.flags & 128)) return node;
@@ -4173,8 +4173,8 @@ function requireReactDomClient_production() {
     memoCache.index++;
     return updateQueue;
   }
-  function basicStateReducer(state, action) {
-    return "function" === typeof action ? action(state) : action;
+  function basicStateReducer(state2, action) {
+    return "function" === typeof action ? action(state2) : action;
   }
   function updateReducer(reducer) {
     var hook = updateWorkInProgressHook();
@@ -4543,12 +4543,12 @@ function requireReactDomClient_production() {
     stateHook = updateReducer(basicStateReducer)[0];
     if ("object" === typeof currentStateHook && null !== currentStateHook && "function" === typeof currentStateHook.then)
       try {
-        var state = useThenable(currentStateHook);
+        var state2 = useThenable(currentStateHook);
       } catch (x) {
         if (x === SuspenseException) throw SuspenseActionException;
         throw x;
       }
-    else state = currentStateHook;
+    else state2 = currentStateHook;
     currentStateHook = updateWorkInProgressHook();
     var actionQueue = currentStateHook.queue, dispatch = actionQueue.dispatch;
     action !== currentStateHook.memoizedState && (currentlyRenderingFiber.flags |= 2048, pushSimpleEffect(
@@ -4557,7 +4557,7 @@ function requireReactDomClient_production() {
       actionStateActionEffect.bind(null, actionQueue, action),
       null
     ));
-    return [state, dispatch, stateHook];
+    return [state2, dispatch, stateHook];
   }
   function actionStateActionEffect(actionQueue, action) {
     actionQueue.action = action;
@@ -11362,11 +11362,11 @@ function requireReactDomClient_production() {
       precedence = precedence || "default";
       var resource = styles.get(key);
       if (!resource) {
-        var state = { loading: 0, preload: null };
+        var state2 = { loading: 0, preload: null };
         if (resource = ownerDocument.querySelector(
           getStylesheetSelectorFromKey(key)
         ))
-          state.loading = 5;
+          state2.loading = 5;
         else {
           href = assign(
             { rel: "stylesheet", href, "data-precedence": precedence },
@@ -11381,19 +11381,19 @@ function requireReactDomClient_production() {
             link.onerror = reject;
           });
           link.addEventListener("load", function() {
-            state.loading |= 1;
+            state2.loading |= 1;
           });
           link.addEventListener("error", function() {
-            state.loading |= 2;
+            state2.loading |= 2;
           });
-          state.loading |= 4;
+          state2.loading |= 4;
           insertStylesheet(resource, precedence, ownerDocument);
         }
         resource = {
           type: "stylesheet",
           instance: resource,
           count: 1,
-          state
+          state: state2
         };
         styles.set(key, resource);
       }
@@ -11501,11 +11501,11 @@ function requireReactDomClient_production() {
       precedence: null
     });
   }
-  function preloadStylesheet(ownerDocument, key, preloadProps, state) {
-    ownerDocument.querySelector('link[rel="preload"][as="style"][' + key + "]") ? state.loading = 1 : (key = ownerDocument.createElement("link"), state.preload = key, key.addEventListener("load", function() {
-      return state.loading |= 1;
+  function preloadStylesheet(ownerDocument, key, preloadProps, state2) {
+    ownerDocument.querySelector('link[rel="preload"][as="style"][' + key + "]") ? state2.loading = 1 : (key = ownerDocument.createElement("link"), state2.preload = key, key.addEventListener("load", function() {
+      return state2.loading |= 1;
     }), key.addEventListener("error", function() {
-      return state.loading |= 2;
+      return state2.loading |= 2;
     }), setInitialProperties(key, "link", preloadProps), markNodeAsHoistable(key), ownerDocument.head.appendChild(key));
   }
   function getScriptKey(src) {
@@ -11658,7 +11658,7 @@ function requireReactDomClient_production() {
   function preloadResource(resource) {
     return "stylesheet" === resource.type && 0 === (resource.state.loading & 3) ? false : true;
   }
-  function suspendResource(state, hoistableRoot, resource, props) {
+  function suspendResource(state2, hoistableRoot, resource, props) {
     if ("stylesheet" === resource.type && ("string" !== typeof props.media || false !== matchMedia(props.media).matches) && 0 === (resource.state.loading & 4)) {
       if (null === resource.instance) {
         var key = getStyleKey(props.href), instance = hoistableRoot.querySelector(
@@ -11666,7 +11666,7 @@ function requireReactDomClient_production() {
         );
         if (instance) {
           hoistableRoot = instance._p;
-          null !== hoistableRoot && "object" === typeof hoistableRoot && "function" === typeof hoistableRoot.then && (state.count++, state = onUnsuspend.bind(state), hoistableRoot.then(state, state));
+          null !== hoistableRoot && "object" === typeof hoistableRoot && "function" === typeof hoistableRoot.then && (state2.count++, state2 = onUnsuspend.bind(state2), hoistableRoot.then(state2, state2));
           resource.state.loading |= 4;
           resource.instance = instance;
           markNodeAsHoistable(instance);
@@ -11685,38 +11685,38 @@ function requireReactDomClient_production() {
         setInitialProperties(instance, "link", props);
         resource.instance = instance;
       }
-      null === state.stylesheets && (state.stylesheets = /* @__PURE__ */ new Map());
-      state.stylesheets.set(resource, hoistableRoot);
-      (hoistableRoot = resource.state.preload) && 0 === (resource.state.loading & 3) && (state.count++, resource = onUnsuspend.bind(state), hoistableRoot.addEventListener("load", resource), hoistableRoot.addEventListener("error", resource));
+      null === state2.stylesheets && (state2.stylesheets = /* @__PURE__ */ new Map());
+      state2.stylesheets.set(resource, hoistableRoot);
+      (hoistableRoot = resource.state.preload) && 0 === (resource.state.loading & 3) && (state2.count++, resource = onUnsuspend.bind(state2), hoistableRoot.addEventListener("load", resource), hoistableRoot.addEventListener("error", resource));
     }
   }
   var estimatedBytesWithinLimit = 0;
-  function waitForCommitToBeReady(state, timeoutOffset) {
-    state.stylesheets && 0 === state.count && insertSuspendedStylesheets(state, state.stylesheets);
-    return 0 < state.count || 0 < state.imgCount ? function(commit) {
+  function waitForCommitToBeReady(state2, timeoutOffset) {
+    state2.stylesheets && 0 === state2.count && insertSuspendedStylesheets(state2, state2.stylesheets);
+    return 0 < state2.count || 0 < state2.imgCount ? function(commit) {
       var stylesheetTimer = setTimeout(function() {
-        state.stylesheets && insertSuspendedStylesheets(state, state.stylesheets);
-        if (state.unsuspend) {
-          var unsuspend = state.unsuspend;
-          state.unsuspend = null;
+        state2.stylesheets && insertSuspendedStylesheets(state2, state2.stylesheets);
+        if (state2.unsuspend) {
+          var unsuspend = state2.unsuspend;
+          state2.unsuspend = null;
           unsuspend();
         }
       }, 6e4 + timeoutOffset);
-      0 < state.imgBytes && 0 === estimatedBytesWithinLimit && (estimatedBytesWithinLimit = 62500 * estimateBandwidth());
+      0 < state2.imgBytes && 0 === estimatedBytesWithinLimit && (estimatedBytesWithinLimit = 62500 * estimateBandwidth());
       var imgTimer = setTimeout(
         function() {
-          state.waitingForImages = false;
-          if (0 === state.count && (state.stylesheets && insertSuspendedStylesheets(state, state.stylesheets), state.unsuspend)) {
-            var unsuspend = state.unsuspend;
-            state.unsuspend = null;
+          state2.waitingForImages = false;
+          if (0 === state2.count && (state2.stylesheets && insertSuspendedStylesheets(state2, state2.stylesheets), state2.unsuspend)) {
+            var unsuspend = state2.unsuspend;
+            state2.unsuspend = null;
             unsuspend();
           }
         },
-        (state.imgBytes > estimatedBytesWithinLimit ? 50 : 800) + timeoutOffset
+        (state2.imgBytes > estimatedBytesWithinLimit ? 50 : 800) + timeoutOffset
       );
-      state.unsuspend = commit;
+      state2.unsuspend = commit;
       return function() {
-        state.unsuspend = null;
+        state2.unsuspend = null;
         clearTimeout(stylesheetTimer);
         clearTimeout(imgTimer);
       };
@@ -11734,9 +11734,9 @@ function requireReactDomClient_production() {
     }
   }
   var precedencesByRoot = null;
-  function insertSuspendedStylesheets(state, resources) {
-    state.stylesheets = null;
-    null !== state.unsuspend && (state.count++, precedencesByRoot = /* @__PURE__ */ new Map(), resources.forEach(insertStylesheetIntoRoot, state), precedencesByRoot = null, onUnsuspend.call(state));
+  function insertSuspendedStylesheets(state2, resources) {
+    state2.stylesheets = null;
+    null !== state2.unsuspend && (state2.count++, precedencesByRoot = /* @__PURE__ */ new Map(), resources.forEach(insertStylesheetIntoRoot, state2), precedencesByRoot = null, onUnsuspend.call(state2));
   }
   function insertStylesheetIntoRoot(root2, resource) {
     if (!(resource.state.loading & 4)) {
@@ -12856,19 +12856,19 @@ function asResourceClient(value) {
   }
   return createPatchConnectionResourceClient(value);
 }
-const listeners = /* @__PURE__ */ new Set();
+const listeners$1 = /* @__PURE__ */ new Set();
 let programmaticWriteDepth = 0;
 function subscribeToUserEdits(listener) {
-  listeners.add(listener);
+  listeners$1.add(listener);
   return () => {
-    listeners.delete(listener);
+    listeners$1.delete(listener);
   };
 }
 function reportUserParameterEdit(edit) {
   if (programmaticWriteDepth > 0) {
     return;
   }
-  for (const listener of listeners) {
+  for (const listener of listeners$1) {
     listener.onParameterEdit?.(edit);
   }
 }
@@ -12876,7 +12876,7 @@ function reportUserGestureStart() {
   if (programmaticWriteDepth > 0) {
     return;
   }
-  for (const listener of listeners) {
+  for (const listener of listeners$1) {
     listener.onGestureStart?.();
   }
 }
@@ -12884,7 +12884,7 @@ function reportUserGestureEnd() {
   if (programmaticWriteDepth > 0) {
     return;
   }
-  for (const listener of listeners) {
+  for (const listener of listeners$1) {
     listener.onGestureEnd?.();
   }
 }
@@ -15088,6 +15088,12 @@ function normalizeFilterSpectrumMessage(message) {
     magnitudes: magnitudes.map((value) => Math.max(0, Number(value) || 0))
   };
 }
+function uiMediaRequestAnimationFrame(callback) {
+  return window.requestAnimationFrame(callback);
+}
+function uiMediaCancelAnimationFrame(handle) {
+  window.cancelAnimationFrame(handle);
+}
 const choice = (label, value) => ({ label, value });
 function vendoredIconUrl(resolveUrl, fallback) {
   try {
@@ -15178,7 +15184,7 @@ const definitions = [
       p("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Classic", 0), choice("Harmonics", 1)] }),
       p("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: true, modulationTargetIndex: 3 }),
       p("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
-      p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 5 }),
+      p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 5 }),
       p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
       p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" })
     ]
@@ -15192,7 +15198,7 @@ const definitions = [
     xEndpointID: "ottAmount",
     yEndpointID: "ottTimePercent",
     parameters: [
-      p("ott", "ottMix", "Mix", "Mix", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 8 }),
+      p("ott", "ottMix", "Mix", "Mix", 0, 100, 50, { unit: "%", quick: true, modulationTargetIndex: 8 }),
       p("ott", "ottAmount", "Amount", "Amt", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 9 }),
       p("ott", "ottTimePercent", "Time", "Time", 10, 1e3, 100, { unit: "%", scale: "log", modulationTargetIndex: 10 }),
       p("ott", "ottBandDrive", "Band Drive", "Drv", 0, 100, 0, { unit: "%", modulationTargetIndex: 11 }),
@@ -15210,7 +15216,7 @@ const definitions = [
     parameters: [
       p("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide", "Classic", "Fast"].map(choice) }),
       p("chorus", "chorusBloomMode", "Bloom", "Blm", 0, 4, 0, { step: 1, choices: ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"].map(choice) }),
-      p("chorus", "chorusMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 13 }),
+      p("chorus", "chorusMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 13 }),
       p("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
       p("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
       p("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
@@ -15230,7 +15236,7 @@ const definitions = [
       p("flanger", "flangerRate", "Rate", "Rate", 0.02, 8, 0.35, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 18 }),
       p("flanger", "flangerDepth", "Depth", "Dpt", 0, 1, 0.6, { quick: true, modulationTargetIndex: 19 }),
       p("flanger", "flangerFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 20 }),
-      p("flanger", "flangerMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 21 })
+      p("flanger", "flangerMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 21 })
     ]
   },
   {
@@ -15249,7 +15255,7 @@ const definitions = [
       p("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24, modulationApplication: "octaves" }),
       p("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
       p("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
-      p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 27 })
+      p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 27 })
     ]
   },
   {
@@ -15266,7 +15272,7 @@ const definitions = [
       p("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: DELAY_DIVISIONS.map(choice) }),
       p("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
       p("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30, modulationApplication: "octaves" }),
-      p("delay", "delayMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 31 })
+      p("delay", "delayMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 31 })
     ]
   },
   {
@@ -15281,7 +15287,7 @@ const definitions = [
       p("reverb", "reverbSize", "Size", "Size", 0, 1, 0.5, { quick: true, modulationTargetIndex: 32 }),
       p("reverb", "reverbDecay", "Decay", "Dcy", 0, 1, 0.4, { quick: true, modulationTargetIndex: 33 }),
       p("reverb", "reverbDamping", "Damping", "Dmp", 0, 1, 0.5, { modulationTargetIndex: 34 }),
-      p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 35 })
+      p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 35 })
     ]
   }
 ];
@@ -16565,8 +16571,8 @@ function normalizeModulationState(value = createDefaultModulationState()) {
     )
   };
 }
-function serializeModulationState(state) {
-  const parsedState = parseModulationState(state);
+function serializeModulationState(state2) {
+  const parsedState = parseModulationState(state2);
   if (parsedState._tag === "err") {
     throw parsedState.error;
   }
@@ -19018,14 +19024,14 @@ function parseLaneStateV2(input) {
   }
   return { _tag: "ok", value: { format: "cosimo.lane", version: 2, devices, chain } };
 }
-function upgradeLaneStateV1(state) {
+function upgradeLaneStateV1(state2) {
   const devices = {};
   for (const effectId of RACK_EFFECT_ORDER) {
     const deviceType = EFFECT_ID_TO_LANE_TYPE[effectId];
     devices[`${deviceType}#1`] = {
       params: Object.fromEntries(laneDeviceParamEndpoints(deviceType).map((endpointID) => [
         endpointID,
-        state.params[effectId][endpointID] ?? 0
+        state2.params[effectId][endpointID] ?? 0
       ]))
     };
   }
@@ -19033,10 +19039,10 @@ function upgradeLaneStateV1(state) {
     format: "cosimo.lane",
     version: 2,
     devices,
-    chain: state.order.map((effectId) => ({
+    chain: state2.order.map((effectId) => ({
       kind: "device",
       deviceId: `${EFFECT_ID_TO_LANE_TYPE[effectId]}#1`,
-      enabled: state.enabled[effectId]
+      enabled: state2.enabled[effectId]
     }))
   };
 }
@@ -19072,16 +19078,16 @@ function deserializeLaneStateV2(input) {
   }
   return createDefaultLaneStateV2();
 }
-function serializeLaneStateV2(state) {
+function serializeLaneStateV2(state2) {
   return JSON.stringify({
     format: "cosimo.lane",
     version: 2,
-    devices: state.devices,
-    chain: state.chain
+    devices: state2.devices,
+    chain: state2.chain
   });
 }
-function listLaneDeviceInstancesV2(state) {
-  return Object.keys(state.devices).map((instanceId) => {
+function listLaneDeviceInstancesV2(state2) {
+  return Object.keys(state2.devices).map((instanceId) => {
     const parsed = parseLaneInstanceId(instanceId);
     if (parsed === null) {
       throw new Error(`Invalid lane instance id in state: ${instanceId}`);
@@ -19108,7 +19114,7 @@ function laneSplitMarkerSlotId(groupId) {
   const parsed = parseLaneGroupId(groupId);
   return parsed === null || parsed.groupKind !== "split" ? null : LANE_SPLIT_SLOT_BASE + (parsed.unitNumber - 1);
 }
-function compileLaneTopologyUpload(state) {
+function compileLaneTopologyUpload(state2) {
   const slotIds = new Array(LANE_MAX_CHAIN_LENGTH).fill(0);
   let enabledMask = 0;
   let position = 0;
@@ -19119,7 +19125,7 @@ function compileLaneTopologyUpload(state) {
     }
     position += 1;
   };
-  for (const node of state.chain) {
+  for (const node of state2.chain) {
     if (node.kind === "device") {
       emit(deviceSlotId(node.deviceId), 0, node.enabled);
       continue;
@@ -19139,10 +19145,10 @@ function buildLaneSplitParamValues(group) {
   values[LANE_SPLIT_PARAM_XOVER_HIGH_HZ] = group.xoverHighHz;
   return values;
 }
-function buildLaneRuntimeEventsV2(state) {
+function buildLaneRuntimeEventsV2(state2) {
   const events = [];
   let deliverySerial = 0;
-  for (const device of listLaneDeviceInstancesV2(state)) {
+  for (const device of listLaneDeviceInstancesV2(state2)) {
     deliverySerial += 1;
     events.push({
       endpointID: LANE_SLOT_PARAMS_ENDPOINT_ID,
@@ -19151,12 +19157,12 @@ function buildLaneRuntimeEventsV2(state) {
         deliverySerial,
         values: buildLaneSlotParamValues(
           device.deviceType,
-          state.devices[device.instanceId].params
+          state2.devices[device.instanceId].params
         )
       }
     });
   }
-  for (const node of state.chain) {
+  for (const node of state2.chain) {
     if (node.kind === "split") {
       deliverySerial += 1;
       events.push({
@@ -19171,41 +19177,41 @@ function buildLaneRuntimeEventsV2(state) {
   }
   events.push({
     endpointID: LANE_TOPOLOGY_ENDPOINT_ID,
-    value: compileLaneTopologyUpload(state)
+    value: compileLaneTopologyUpload(state2)
   });
   return events;
 }
-function commitLaneStateV2(connection, state) {
-  for (const event of buildLaneRuntimeEventsV2(state)) {
+function commitLaneStateV2(connection, state2) {
+  for (const event of buildLaneRuntimeEventsV2(state2)) {
     connection.sendEventOrValue?.(event.endpointID, event.value);
   }
 }
-function withChain(state, chain) {
-  return { ...state, chain };
+function withChain(state2, chain) {
+  return { ...state2, chain };
 }
-function setLaneDeviceParam(state, deviceId, endpointID, value) {
-  const record = state.devices[deviceId];
+function setLaneDeviceParam(state2, deviceId, endpointID, value) {
+  const record = state2.devices[deviceId];
   const parsedId = parseLaneInstanceId(deviceId);
   if (record === void 0 || parsedId === null || !laneDeviceParamEndpoints(parsedId.deviceType).includes(endpointID) || !Number.isFinite(value)) {
     return null;
   }
   return {
-    ...state,
+    ...state2,
     devices: {
-      ...state.devices,
+      ...state2.devices,
       [deviceId]: { params: { ...record.params, [endpointID]: value } }
     }
   };
 }
-function setLaneSplitCrossoverHz(state, groupId, which, hz) {
+function setLaneSplitCrossoverHz(state2, groupId, which, hz) {
   if (!Number.isFinite(hz) || hz < LANE_SPLIT_XOVER_MIN_HZ || hz > LANE_SPLIT_XOVER_MAX_HZ) {
     return null;
   }
-  const group = state.chain.find((node) => node.kind === "split" && node.groupId === groupId);
+  const group = state2.chain.find((node) => node.kind === "split" && node.groupId === groupId);
   if (group === void 0) {
     return null;
   }
-  return withChain(state, state.chain.map((node) => node.kind === "split" && node.groupId === groupId ? { ...node, [which === "low" ? "xoverLowHz" : "xoverHighHz"]: hz } : node));
+  return withChain(state2, state2.chain.map((node) => node.kind === "split" && node.groupId === groupId ? { ...node, [which === "low" ? "xoverLowHz" : "xoverHighHz"]: hz } : node));
 }
 function serializeIdentity(value) {
   return value;
@@ -20543,23 +20549,23 @@ function resolveInitialAxis(totalDx, totalDy, config) {
   }
   return null;
 }
-function applyRollingAxisSample(state, sample, config = DEFAULT_ROLLING_AXIS_CONFIG) {
-  const dx = sample.x - state.lastX;
-  const dyUp = state.lastY - sample.y;
+function applyRollingAxisSample(state2, sample, config = DEFAULT_ROLLING_AXIS_CONFIG) {
+  const dx = sample.x - state2.lastX;
+  const dyUp = state2.lastY - sample.y;
   if (Math.abs(dx) < 1e-3 && Math.abs(dyUp) < 1e-3) {
-    return { state, transition: "none", application: null };
+    return { state: state2, transition: "none", application: null };
   }
   const direction = Object.freeze({ dx, dy: dyUp, time: sample.time });
-  const history = prunedHistory(state.history, direction, config.directionWindowMs);
+  const history = prunedHistory(state2.history, direction, config.directionWindowMs);
   const moved = Object.freeze({
-    ...state,
+    ...state2,
     lastX: sample.x,
     lastY: sample.y,
     history
   });
-  if (state.mode === "pending") {
-    const totalDx = sample.x - state.startX;
-    const totalDyUp = state.startY - sample.y;
+  if (state2.mode === "pending") {
+    const totalDx = sample.x - state2.startX;
+    const totalDyUp = state2.startY - sample.y;
     if (Math.hypot(totalDx, totalDyUp) < activationRadius(sample.pointerType, config)) {
       return { state: moved, transition: "none", application: null };
     }
@@ -20574,15 +20580,15 @@ function applyRollingAxisSample(state, sample, config = DEFAULT_ROLLING_AXIS_CON
     };
   }
   const vector = historyVector(history);
-  if (shouldSwitchAxis(state.mode, vector, config)) {
-    const nextAxis = state.mode === "horizontal" ? "vertical" : "horizontal";
+  if (shouldSwitchAxis(state2.mode, vector, config)) {
+    const nextAxis = state2.mode === "horizontal" ? "vertical" : "horizontal";
     return {
       state: Object.freeze({ ...moved, mode: nextAxis, history: Object.freeze([]) }),
       transition: "switch",
       application: null
     };
   }
-  const application = state.mode === "horizontal" ? Object.freeze({ axis: "horizontal", dx, dy: 0 }) : Object.freeze({ axis: "vertical", dx: 0, dy: dyUp });
+  const application = state2.mode === "horizontal" ? Object.freeze({ axis: "horizontal", dx, dy: 0 }) : Object.freeze({ axis: "vertical", dx: 0, dy: dyUp });
   return { state: moved, transition: "none", application };
 }
 const PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE = 220;
@@ -21103,13 +21109,13 @@ function voiceModSourceValueIndex(source) {
 }
 function defaultRequestFrame(callback) {
   if (typeof globalThis.requestAnimationFrame === "function") {
-    return globalThis.requestAnimationFrame(callback);
+    return uiMediaRequestAnimationFrame(callback);
   }
   return Number(setTimeout(() => callback(Date.now()), FALLBACK_FRAME_MS));
 }
 function defaultCancelFrame(handle) {
   if (typeof globalThis.cancelAnimationFrame === "function") {
-    globalThis.cancelAnimationFrame(handle);
+    uiMediaCancelAnimationFrame(handle);
     return;
   }
   clearTimeout(handle);
@@ -21582,6 +21588,12 @@ function projectTuneComponentBand(component, componentBaseNormalized, route) {
     fullyClipped: magnitude > AMOUNT_EPSILON && Math.abs(highNormalized - lowNormalized) <= AMOUNT_EPSILON
   });
 }
+function uiTimeout(callback, delayMilliseconds) {
+  return window.setTimeout(callback, delayMilliseconds);
+}
+function clearUiTimeout(handle) {
+  window.clearTimeout(handle);
+}
 const HUD_LINGER_MS = 420;
 const STICKY_AMOUNT_CAPTURE = 0.2;
 function clamp$4(value, min, max) {
@@ -21648,7 +21660,7 @@ function useReadoutCells({
   const hudLingerTimerRef = reactExports.useRef(null);
   const clearHudLinger = reactExports.useCallback(() => {
     if (hudLingerTimerRef.current !== null) {
-      window.clearTimeout(hudLingerTimerRef.current);
+      clearUiTimeout(hudLingerTimerRef.current);
       hudLingerTimerRef.current = null;
     }
   }, []);
@@ -21659,7 +21671,7 @@ function useReadoutCells({
       return;
     }
     setHudState((current) => current.phase === "hidden" ? current : { ...current, phase: "lingering" });
-    hudLingerTimerRef.current = window.setTimeout(() => {
+    hudLingerTimerRef.current = uiTimeout(() => {
       hudLingerTimerRef.current = null;
       setHudState(HIDDEN_HUD);
     }, HUD_LINGER_MS);
@@ -22223,11 +22235,11 @@ function useDirectionalPanelTransition({
         panel.style.transform = "translateX(0)";
       });
     });
-    const timer = window.setTimeout(() => {
+    const timer = uiTimeout(() => {
       cleanupRef.current?.();
     }, SEGMENTED_PANEL_SLIDE_MS + 80);
     cleanupRef.current = () => {
-      window.clearTimeout(timer);
+      clearUiTimeout(timer);
       ghost.remove();
       panel.style.transition = "";
       panel.style.transform = "";
@@ -23383,6 +23395,32 @@ function createAutoPreviewScheduler(config) {
     }
   };
 }
+const MOD_SOURCE_TOUCH_TUNING_DEFAULTS = {
+  activationPx: 7,
+  referenceTravelPx: 168,
+  gainMin: 2.1,
+  gainMax: 2.5,
+  rampPx: 64
+};
+const PERF_TUNING_DEFAULTS = {
+  algorithm: "shipped",
+  settleMs: 150,
+  minGapMs: 250,
+  holdMs: 4e3,
+  loopSync: true,
+  drag: MOD_SOURCE_TOUCH_TUNING_DEFAULTS
+};
+const listeners = /* @__PURE__ */ new Set();
+let state = PERF_TUNING_DEFAULTS;
+function getPerfTuningState() {
+  return state;
+}
+function subscribePerfTuning(listener) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
 function createPreviewNoteMemory(fallbackPitch) {
   const heldPitches = /* @__PURE__ */ new Set();
   const buildingGroup = /* @__PURE__ */ new Set();
@@ -24042,13 +24080,13 @@ function parseArticulationsV4(input, acceptedRouteIds) {
     slots
   });
 }
-function serializeArticulationsV4(state) {
+function serializeArticulationsV4(state2) {
   return {
-    format: state.format,
-    version: state.version,
-    selectedSlotId: state.selectedSlotId,
-    activeTriggerMode: state.activeTriggerMode,
-    slots: state.slots.map((slot) => ({
+    format: state2.format,
+    version: state2.version,
+    selectedSlotId: state2.selectedSlotId,
+    activeTriggerMode: state2.activeTriggerMode,
+    slots: state2.slots.map((slot) => ({
       id: slot.id,
       runtimeSlot: slot.runtimeSlot,
       name: slot.name,
@@ -24070,8 +24108,8 @@ function createEmptyArticulationsState() {
     slots: []
   };
 }
-function lowestFreeRuntimeSlot(state) {
-  const owned = new Set(state.slots.map((slot) => slot.runtimeSlot));
+function lowestFreeRuntimeSlot(state2) {
+  const owned = new Set(state2.slots.map((slot) => slot.runtimeSlot));
   for (let candidate = 0; candidate < ARTICULATION_MAX_SLOTS; candidate += 1) {
     if (!owned.has(candidate)) {
       return candidate;
@@ -24377,8 +24415,8 @@ function diffCapturedArticulationLayerV4(current, base) {
   }
   return { overrides, routeAmounts };
 }
-function replaceVisibleArticulationLayerV4(state, slotId, layer, visibleParameterIds, visibleRouteIds) {
-  return updateSlot(state, slotId, (slot) => {
+function replaceVisibleArticulationLayerV4(state2, slotId, layer, visibleParameterIds, visibleRouteIds) {
+  return updateSlot(state2, slotId, (slot) => {
     const overrides = {};
     for (const parameterId of ARTICULATION_VOICE_PARAMETER_IDS) {
       const value = slot.overrides[parameterId];
@@ -24428,31 +24466,31 @@ function withSlotRange(slot, mode, range) {
   if (mode === "key") return { ...slot, key: range.min };
   return mode === "vel" ? { ...slot, velRange: range } : { ...slot, chainRange: range };
 }
-function updateSlot(state, slotId, update) {
-  if (!state.slots.some((slot) => slot.id === slotId)) return state;
+function updateSlot(state2, slotId, update) {
+  if (!state2.slots.some((slot) => slot.id === slotId)) return state2;
   return {
-    ...state,
-    slots: state.slots.map((slot) => slot.id === slotId ? update(slot) : slot)
+    ...state2,
+    slots: state2.slots.map((slot) => slot.id === slotId ? update(slot) : slot)
   };
 }
-function usedPoints(state, mode) {
+function usedPoints(state2, mode) {
   const used = /* @__PURE__ */ new Set();
-  for (const slot of state.slots) {
+  for (const slot of state2.slots) {
     const range = slotRange(slot, mode);
     for (let value = range.min; value <= range.max; value += 1) used.add(value);
   }
   return used;
 }
-function firstFreePoint(state, mode) {
+function firstFreePoint(state2, mode) {
   const bounds = laneBounds(mode);
-  const used = usedPoints(state, mode);
+  const used = usedPoints(state2, mode);
   for (let value = bounds.min; value <= bounds.max; value += 1) {
     if (!used.has(value)) return value;
   }
   return bounds.min;
 }
-function uniqueId(state, runtimeSlot) {
-  const used = new Set(state.slots.map((slot) => slot.id));
+function uniqueId(state2, runtimeSlot) {
+  const used = new Set(state2.slots.map((slot) => slot.id));
   const base = `articulation-${runtimeSlot}`;
   if (!used.has(base)) return base;
   for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
@@ -24461,8 +24499,8 @@ function uniqueId(state, runtimeSlot) {
   }
   throw new Error("Articulation id space is exhausted.");
 }
-function uniqueCopyName(state, sourceName) {
-  const names = new Set(state.slots.map((slot) => slot.name));
+function uniqueCopyName(state2, sourceName) {
+  const names = new Set(state2.slots.map((slot) => slot.name));
   const base = `${sourceName} Copy`;
   if (!names.has(base)) return base;
   for (let suffix = 2; suffix <= ARTICULATION_MAX_SLOTS; suffix += 1) {
@@ -24471,14 +24509,14 @@ function uniqueCopyName(state, sourceName) {
   }
   return base;
 }
-function addCapturedArticulationV4(state, layer) {
-  const runtimeSlot = lowestFreeRuntimeSlot(state);
-  if (runtimeSlot === null) return state;
-  const key = firstFreePoint(state, "key");
-  const velocity = firstFreePoint(state, "vel");
-  const chain = firstFreePoint(state, "chain");
+function addCapturedArticulationV4(state2, layer) {
+  const runtimeSlot = lowestFreeRuntimeSlot(state2);
+  if (runtimeSlot === null) return state2;
+  const key = firstFreePoint(state2, "key");
+  const velocity = firstFreePoint(state2, "vel");
+  const chain = firstFreePoint(state2, "chain");
   const slot = {
-    id: uniqueId(state, runtimeSlot),
+    id: uniqueId(state2, runtimeSlot),
     runtimeSlot,
     name: ARTICULATION_DEFAULT_NAMES[runtimeSlot % ARTICULATION_DEFAULT_NAMES.length] ?? `Articulation ${runtimeSlot + 1}`,
     color: ARTICULATION_COLORS[runtimeSlot % ARTICULATION_COLORS.length] ?? ARTICULATION_COLORS[0],
@@ -24488,56 +24526,56 @@ function addCapturedArticulationV4(state, layer) {
     overrides: { ...layer.overrides },
     routeAmounts: { ...layer.routeAmounts }
   };
-  return { ...state, selectedSlotId: slot.id, slots: [...state.slots, slot] };
+  return { ...state2, selectedSlotId: slot.id, slots: [...state2.slots, slot] };
 }
-function selectArticulationV4(state, slotId) {
-  return state.slots.some((slot) => slot.id === slotId) ? { ...state, selectedSlotId: slotId } : state;
+function selectArticulationV4(state2, slotId) {
+  return state2.slots.some((slot) => slot.id === slotId) ? { ...state2, selectedSlotId: slotId } : state2;
 }
-function setArticulationTriggerModeV4(state, mode) {
-  return state.activeTriggerMode === mode ? state : { ...state, activeTriggerMode: mode };
+function setArticulationTriggerModeV4(state2, mode) {
+  return state2.activeTriggerMode === mode ? state2 : { ...state2, activeTriggerMode: mode };
 }
-function renameArticulationV4(state, slotId, name) {
+function renameArticulationV4(state2, slotId, name) {
   const trimmed = name.trim();
-  return trimmed ? updateSlot(state, slotId, (slot) => ({ ...slot, name: trimmed })) : state;
+  return trimmed ? updateSlot(state2, slotId, (slot) => ({ ...slot, name: trimmed })) : state2;
 }
-function duplicateArticulationV4(state, slotId) {
-  const source = state.slots.find((slot2) => slot2.id === slotId);
-  const runtimeSlot = lowestFreeRuntimeSlot(state);
-  if (!source || runtimeSlot === null) return state;
+function duplicateArticulationV4(state2, slotId) {
+  const source = state2.slots.find((slot2) => slot2.id === slotId);
+  const runtimeSlot = lowestFreeRuntimeSlot(state2);
+  if (!source || runtimeSlot === null) return state2;
   const slot = {
     ...source,
-    id: uniqueId(state, runtimeSlot),
+    id: uniqueId(state2, runtimeSlot),
     runtimeSlot,
-    name: uniqueCopyName(state, source.name),
-    key: firstFreePoint(state, "key"),
+    name: uniqueCopyName(state2, source.name),
+    key: firstFreePoint(state2, "key"),
     velRange: (() => {
-      const value = firstFreePoint(state, "vel");
+      const value = firstFreePoint(state2, "vel");
       return { min: value, max: value };
     })(),
     chainRange: (() => {
-      const value = firstFreePoint(state, "chain");
+      const value = firstFreePoint(state2, "chain");
       return { min: value, max: value };
     })(),
     overrides: { ...source.overrides },
     routeAmounts: { ...source.routeAmounts }
   };
-  return { ...state, selectedSlotId: slot.id, slots: [...state.slots, slot] };
+  return { ...state2, selectedSlotId: slot.id, slots: [...state2.slots, slot] };
 }
-function deleteArticulationV4(state, slotId) {
-  if (state.slots.length <= 1 || !state.slots.some((slot) => slot.id === slotId)) return state;
-  const slots = state.slots.filter((slot) => slot.id !== slotId);
+function deleteArticulationV4(state2, slotId) {
+  if (state2.slots.length <= 1 || !state2.slots.some((slot) => slot.id === slotId)) return state2;
+  const slots = state2.slots.filter((slot) => slot.id !== slotId);
   return {
-    ...state,
-    selectedSlotId: state.selectedSlotId === slotId ? slots[0]?.id ?? null : state.selectedSlotId,
+    ...state2,
+    selectedSlotId: state2.selectedSlotId === slotId ? slots[0]?.id ?? null : state2.selectedSlotId,
     slots
   };
 }
-function findSlotForSegment(state, segment) {
-  return state.slots.find((slot) => slot.id === segment.articulationId);
+function findSlotForSegment(state2, segment) {
+  return state2.slots.find((slot) => slot.id === segment.articulationId);
 }
-function gapContaining(state, mode, position, excludingSlotId) {
+function gapContaining(state2, mode, position, excludingSlotId) {
   const bounds = laneBounds(mode);
-  const occupied = state.slots.filter((slot) => slot.id !== excludingSlotId).map((slot) => slotRange(slot, mode)).sort((left, right) => left.min - right.min);
+  const occupied = state2.slots.filter((slot) => slot.id !== excludingSlotId).map((slot) => slotRange(slot, mode)).sort((left, right) => left.min - right.min);
   const blocking = occupied.find((range) => position >= range.min && position <= range.max);
   if (blocking) return null;
   const below = occupied.filter((range) => range.max < position).at(-1);
@@ -24547,12 +24585,12 @@ function gapContaining(state, mode, position, excludingSlotId) {
     max: Math.min(bounds.max, (above?.min ?? bounds.max + 1) - 1)
   };
 }
-function assignArticulationPositionV4(state, mode, positionValue, slotId) {
-  const target = state.slots.find((slot) => slot.id === slotId);
-  if (!target) return state;
+function assignArticulationPositionV4(state2, mode, positionValue, slotId) {
+  const target = state2.slots.find((slot) => slot.id === slotId);
+  if (!target) return state2;
   const bounds = laneBounds(mode);
   const position = clampInteger(positionValue, bounds.min, bounds.max);
-  const occupant = state.slots.find((slot) => {
+  const occupant = state2.slots.find((slot) => {
     if (slot.id === slotId) return false;
     const range = slotRange(slot, mode);
     return position >= range.min && position <= range.max;
@@ -24561,8 +24599,8 @@ function assignArticulationPositionV4(state, mode, positionValue, slotId) {
     const targetRange = slotRange(target, mode);
     const occupantRange = slotRange(occupant, mode);
     return {
-      ...state,
-      slots: state.slots.map((slot) => {
+      ...state2,
+      slots: state2.slots.map((slot) => {
         if (slot.id === target.id) return withSlotRange(slot, mode, occupantRange);
         if (slot.id === occupant.id) return withSlotRange(slot, mode, targetRange);
         return slot;
@@ -24570,47 +24608,47 @@ function assignArticulationPositionV4(state, mode, positionValue, slotId) {
     };
   }
   if (mode === "key") {
-    return updateSlot(state, slotId, (slot) => withSlotRange(
+    return updateSlot(state2, slotId, (slot) => withSlotRange(
       slot,
       mode,
       { min: position, max: position }
     ));
   }
-  const gap = gapContaining(state, mode, position, slotId);
-  return gap ? updateSlot(state, slotId, (slot) => withSlotRange(slot, mode, gap)) : state;
+  const gap = gapContaining(state2, mode, position, slotId);
+  return gap ? updateSlot(state2, slotId, (slot) => withSlotRange(slot, mode, gap)) : state2;
 }
-function insertArticulationPositionV4(state, mode, positionValue, slotId, preserveSide) {
-  if (mode === "key") return assignArticulationPositionV4(state, mode, positionValue, slotId);
-  const target = state.slots.find((slot) => slot.id === slotId);
-  if (!target) return state;
+function insertArticulationPositionV4(state2, mode, positionValue, slotId, preserveSide) {
+  if (mode === "key") return assignArticulationPositionV4(state2, mode, positionValue, slotId);
+  const target = state2.slots.find((slot) => slot.id === slotId);
+  if (!target) return state2;
   const bounds = laneBounds(mode);
   const position = clampInteger(positionValue, bounds.min, bounds.max);
-  const occupant = state.slots.find((slot) => {
+  const occupant = state2.slots.find((slot) => {
     if (slot.id === slotId) return false;
     const range = slotRange(slot, mode);
     return position >= range.min && position <= range.max;
   });
   if (!occupant) {
-    return updateSlot(state, slotId, (slot) => withSlotRange(slot, mode, { min: position, max: position }));
+    return updateSlot(state2, slotId, (slot) => withSlotRange(slot, mode, { min: position, max: position }));
   }
   const occupiedRange = slotRange(occupant, mode);
-  if (occupiedRange.min === occupiedRange.max) return state;
+  if (occupiedRange.min === occupiedRange.max) return state2;
   const canKeepLower = position > occupiedRange.min;
   const canKeepUpper = position < occupiedRange.max;
   const keepUpper = !canKeepLower || canKeepUpper && (preserveSide === "upper" || preserveSide !== "lower" && position - occupiedRange.min <= occupiedRange.max - position);
   const trimmed = keepUpper ? { min: position + 1, max: occupiedRange.max } : { min: occupiedRange.min, max: position - 1 };
   return {
-    ...state,
-    slots: state.slots.map((slot) => {
+    ...state2,
+    slots: state2.slots.map((slot) => {
       if (slot.id === slotId) return withSlotRange(slot, mode, { min: position, max: position });
       if (slot.id === occupant.id) return withSlotRange(slot, mode, trimmed);
       return slot;
     })
   };
 }
-function freeIntervals(state, mode, excludingSlotId) {
+function freeIntervals(state2, mode, excludingSlotId) {
   const bounds = laneBounds(mode);
-  const occupied = state.slots.filter((slot) => slot.id !== excludingSlotId).map((slot) => slotRange(slot, mode)).sort((left, right) => left.min - right.min);
+  const occupied = state2.slots.filter((slot) => slot.id !== excludingSlotId).map((slot) => slotRange(slot, mode)).sort((left, right) => left.min - right.min);
   const intervals = [];
   let start = bounds.min;
   for (const range of occupied) {
@@ -24620,59 +24658,59 @@ function freeIntervals(state, mode, excludingSlotId) {
   if (start <= bounds.max) intervals.push({ min: start, max: bounds.max });
   return intervals;
 }
-function moveArticulationSegmentV4(state, mode, segment, targetPosition) {
-  const slot = findSlotForSegment(state, segment);
-  if (!slot) return state;
-  if (mode === "key") return assignArticulationPositionV4(state, mode, targetPosition, slot.id);
+function moveArticulationSegmentV4(state2, mode, segment, targetPosition) {
+  const slot = findSlotForSegment(state2, segment);
+  if (!slot) return state2;
+  if (mode === "key") return assignArticulationPositionV4(state2, mode, targetPosition, slot.id);
   const current = slotRange(slot, mode);
   const width = current.max - current.min + 1;
-  const candidates = freeIntervals(state, mode, slot.id).filter((range) => range.max - range.min + 1 >= width);
-  if (candidates.length === 0) return state;
+  const candidates = freeIntervals(state2, mode, slot.id).filter((range) => range.max - range.min + 1 >= width);
+  if (candidates.length === 0) return state2;
   const desiredMin = Math.round(targetPosition) - Math.floor(width / 2);
   const placements = candidates.map((range) => {
     const min = Math.min(range.max - width + 1, Math.max(range.min, desiredMin));
     return { min, max: min + width - 1 };
   }).sort((left, right) => Math.abs(left.min - desiredMin) - Math.abs(right.min - desiredMin));
   const placement = placements[0];
-  return placement === void 0 ? state : updateSlot(state, slot.id, (candidate) => withSlotRange(candidate, mode, placement));
+  return placement === void 0 ? state2 : updateSlot(state2, slot.id, (candidate) => withSlotRange(candidate, mode, placement));
 }
-function resizeArticulationSegmentV4(state, mode, segment, edge, positionValue) {
-  const slot = findSlotForSegment(state, segment);
-  if (!slot || mode === "key") return state;
+function resizeArticulationSegmentV4(state2, mode, segment, edge, positionValue) {
+  const slot = findSlotForSegment(state2, segment);
+  if (!slot || mode === "key") return state2;
   const current = slotRange(slot, mode);
   const bounds = laneBounds(mode);
-  const others = state.slots.filter((candidate) => candidate.id !== slot.id).map((candidate) => slotRange(candidate, mode));
+  const others = state2.slots.filter((candidate) => candidate.id !== slot.id).map((candidate) => slotRange(candidate, mode));
   if (edge === "min") {
     const floor = Math.max(bounds.min, ...others.filter((range) => range.max < current.max).map((range) => range.max + 1));
     const min = clampInteger(positionValue, floor, current.max);
-    return updateSlot(state, slot.id, (candidate) => withSlotRange(candidate, mode, { min, max: current.max }));
+    return updateSlot(state2, slot.id, (candidate) => withSlotRange(candidate, mode, { min, max: current.max }));
   }
   const ceilings = others.filter((range) => range.min > current.min).map((range) => range.min - 1);
   const ceiling = Math.min(bounds.max, ...ceilings.length > 0 ? ceilings : [bounds.max]);
   const max = clampInteger(positionValue, current.min, ceiling);
-  return updateSlot(state, slot.id, (candidate) => withSlotRange(candidate, mode, { min: current.min, max }));
+  return updateSlot(state2, slot.id, (candidate) => withSlotRange(candidate, mode, { min: current.min, max }));
 }
-function collapseArticulationSegmentV4(state, mode, segment) {
-  const slot = findSlotForSegment(state, segment);
-  if (!slot) return state;
+function collapseArticulationSegmentV4(state2, mode, segment) {
+  const slot = findSlotForSegment(state2, segment);
+  if (!slot) return state2;
   const range = slotRange(slot, mode);
-  return updateSlot(state, slot.id, (candidate) => withSlotRange(candidate, mode, { min: range.min, max: range.min }));
+  return updateSlot(state2, slot.id, (candidate) => withSlotRange(candidate, mode, { min: range.min, max: range.min }));
 }
-function collapseAllArticulationSegmentsV4(state, mode) {
+function collapseAllArticulationSegmentsV4(state2, mode) {
   const bounds = laneBounds(mode);
   return {
-    ...state,
-    slots: state.slots.map((slot, index) => {
+    ...state2,
+    slots: state2.slots.map((slot, index) => {
       const value = Math.min(bounds.max, bounds.min + index);
       return withSlotRange(slot, mode, { min: value, max: value });
     })
   };
 }
-function distributeArticulationSegmentsV4(state, mode) {
-  if (state.slots.length === 0) return state;
-  if (mode === "key") return collapseAllArticulationSegmentsV4(state, mode);
+function distributeArticulationSegmentsV4(state2, mode) {
+  if (state2.slots.length === 0) return state2;
+  if (mode === "key") return collapseAllArticulationSegmentsV4(state2, mode);
   const bounds = laneBounds(mode);
-  const sorted = [...state.slots].sort((left, right) => {
+  const sorted = [...state2.slots].sort((left, right) => {
     const leftRange = slotRange(left, mode);
     const rightRange = slotRange(right, mode);
     return leftRange.min - rightRange.min || left.runtimeSlot - right.runtimeSlot;
@@ -24684,8 +24722,8 @@ function distributeArticulationSegmentsV4(state, mode) {
     return [slot.id, { min, max }];
   }));
   return {
-    ...state,
-    slots: state.slots.map((slot) => {
+    ...state2,
+    slots: state2.slots.map((slot) => {
       const range = ranges.get(slot.id);
       return range === void 0 ? slot : withSlotRange(slot, mode, range);
     })
@@ -25288,7 +25326,7 @@ function clamp$1(value, min, max) {
 }
 function useFactoryBankCatalog() {
   const resourceClient = useResourceClient();
-  const [state, setState] = reactExports.useState({
+  const [state2, setState] = reactExports.useState({
     catalog: null,
     error: null
   });
@@ -25313,11 +25351,11 @@ function useFactoryBankCatalog() {
       cancelled = true;
     };
   }, [resourceClient]);
-  return state;
+  return state2;
 }
 function useFactoryTableFrames(tableIndex) {
   const resourceClient = useResourceClient();
-  const [state, setState] = reactExports.useState({
+  const [state2, setState] = reactExports.useState({
     frames: null,
     error: null
   });
@@ -25342,7 +25380,7 @@ function useFactoryTableFrames(tableIndex) {
       cancelled = true;
     };
   }, [resourceClient, tableIndex]);
-  return state;
+  return state2;
 }
 function useObservedDisplayPosition(parameterPosition) {
   const message = usePatchVisualEndpoint(EFFECTIVE_WAVETABLE_POSITION_ENDPOINT_ID, null);
@@ -25562,7 +25600,7 @@ function useObservedUnisonState({
 const modulationAmountRenderIdleMilliseconds = 50;
 function useModulationState() {
   const patchConnection = usePatchConnection();
-  const [state, setState] = reactExports.useState(null);
+  const [state2, setState] = reactExports.useState(null);
   const bridgeRef = reactExports.useRef(null);
   reactExports.useEffect(() => {
     const bridge = acquireModulationRuntimeBridge(patchConnection);
@@ -25605,7 +25643,7 @@ function useModulationState() {
     };
   }, [patchConnection]);
   return {
-    state,
+    state: state2,
     bridge: bridgeRef
   };
 }
@@ -25740,23 +25778,23 @@ function resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscill
     modRouteAmounts: routeAmounts
   });
 }
-function projectCurrentArticulationsToEditorBank(state, baseSnapshot, routes, oscillatorID) {
+function projectCurrentArticulationsToEditorBank(state2, baseSnapshot, routes, oscillatorID) {
   return normalizeArticulationEditorState({
-    selectedSlotId: state.selectedSlotId,
-    activeTriggerMode: state.activeTriggerMode,
-    slots: state.slots.map((slot) => ({
+    selectedSlotId: state2.selectedSlotId,
+    activeTriggerMode: state2.activeTriggerMode,
+    slots: state2.slots.map((slot) => ({
       id: slot.id,
       runtimeSlot: slot.runtimeSlot,
       name: slot.name,
       snapshot: resolveVisibleArticulationSnapshotV4(slot, baseSnapshot, routes, oscillatorID)
     })),
-    keyAssignments: state.slots.map((slot) => ({ articulationId: slot.id, note: slot.key })),
-    velocityAssignments: state.slots.map((slot) => ({
+    keyAssignments: state2.slots.map((slot) => ({ articulationId: slot.id, note: slot.key })),
+    velocityAssignments: state2.slots.map((slot) => ({
       id: `velocity-${slot.id}`,
       articulationId: slot.id,
       ...slot.velRange
     })),
-    chainAssignments: state.slots.map((slot) => ({
+    chainAssignments: state2.slots.map((slot) => ({
       id: `chain-${slot.id}`,
       articulationId: slot.id,
       ...slot.chainRange
@@ -25842,13 +25880,13 @@ function projectArticulationSnapshotToVisibleV4Layer(snapshotValue, oscillatorID
     )
   };
 }
-function replaceVisibleArticulationSnapshotV4(state, slotId, currentSnapshot, baseSnapshot, routes, oscillatorID) {
+function replaceVisibleArticulationSnapshotV4(state2, slotId, currentSnapshot, baseSnapshot, routes, oscillatorID) {
   const layer = diffCapturedArticulationLayerV4(
     projectArticulationSnapshotToVisibleV4Layer(currentSnapshot, oscillatorID),
     projectArticulationSnapshotToVisibleV4Layer(baseSnapshot, oscillatorID)
   );
   return replaceVisibleArticulationLayerV4(
-    state,
+    state2,
     slotId,
     layer,
     visibleArticulationParameterIDs(oscillatorID),
@@ -25861,10 +25899,10 @@ function articulationStatesEqual(left, right) {
 function useStoredArticulationEditorState(modulationBridge, modulationState, getBaseSnapshot, oscillatorID) {
   const patchConnection = usePatchConnection();
   const emptyState = createEmptyArticulationsState();
-  const [state, setState] = reactExports.useState(emptyState);
+  const [state2, setState] = reactExports.useState(emptyState);
   const [bank, setBank] = reactExports.useState(() => createDefaultArticulationEditorState());
   const [hasHydrated, setHasHydrated] = reactExports.useState(false);
-  const stateRef = reactExports.useRef(state);
+  const stateRef = reactExports.useRef(state2);
   const bankRef = reactExports.useRef(bank);
   const modulationStateRef = reactExports.useRef(modulationState);
   const acceptedRouteIdsRef = reactExports.useRef(/* @__PURE__ */ new Set());
@@ -25982,13 +26020,13 @@ function useStoredArticulationEditorState(modulationBridge, modulationState, get
     }
   }, [applyCurrentState, patchConnection, rememberPendingEcho]);
   return reactExports.useMemo(() => ({
-    state,
+    state: state2,
     stateRef,
     bank,
     bankRef,
     hasHydrated,
     setAndPersistState
-  }), [bank, hasHydrated, setAndPersistState, state]);
+  }), [bank, hasHydrated, setAndPersistState, state2]);
 }
 function parsePresetStoredStateValue(rawValue, label) {
   if (typeof rawValue !== "string") {
@@ -26376,7 +26414,7 @@ function useMsegEditorInteractions({
   }, [msegController, msegState?.shape]);
   const clearPendingSegmentTimer = reactExports.useCallback((pointerState) => {
     if (pointerState?.kind === "pending-segment" && pointerState.holdTimeoutId !== null) {
-      window.clearTimeout(pointerState.holdTimeoutId);
+      clearUiTimeout(pointerState.holdTimeoutId);
       pointerState.holdTimeoutId = null;
     }
   }, []);
@@ -26553,7 +26591,7 @@ function useMsegEditorInteractions({
           segmentIndex: pointerLocation.segmentIndex
         };
       } else {
-        const holdTimeoutId = window.setTimeout(() => {
+        const holdTimeoutId = uiTimeout(() => {
           const activePointer = activePointerRef.current;
           if (!activePointer || activePointer.kind !== "pending-segment" || activePointer.pointerId !== event.pointerId) {
             return;
@@ -27242,11 +27280,11 @@ function useSynthPatchViewModel({
     if (!modulationState || !modulationBridge.current) {
       return null;
     }
-    const state = buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
+    const state2 = buildDisplayedMsegState(modulationBridge.current, selectedMsegSlot);
     return {
-      ...state,
+      ...state2,
       playback: {
-        ...state.playback,
+        ...state2.playback,
         rate: { kind: "seconds", seconds: selectedMsegRate.value }
       }
     };
@@ -27586,8 +27624,8 @@ function useSynthPatchViewModel({
     handleCaptureArticulationSlot({ autoAssign: true });
   }, [handleCaptureArticulationSlot]);
   const selectArticulationSlot = reactExports.useCallback((slotId, options = {}) => {
-    const state = articulationBankState.stateRef.current;
-    const slot = state.slots.find((candidate) => candidate.id === slotId);
+    const state2 = articulationBankState.stateRef.current;
+    const slot = state2.slots.find((candidate) => candidate.id === slotId);
     if (!slot) {
       return;
     }
@@ -27625,8 +27663,8 @@ function useSynthPatchViewModel({
     selectArticulationSlot(slotId);
   }, [selectArticulationSlot]);
   const handleUpdateSelectedArticulationSlot = reactExports.useCallback(() => {
-    const state = articulationBankState.stateRef.current;
-    const slotId = state.selectedSlotId;
+    const state2 = articulationBankState.stateRef.current;
+    const slotId = state2.selectedSlotId;
     if (!slotId) {
       return;
     }
@@ -27652,8 +27690,8 @@ function useSynthPatchViewModel({
     oscillatorID
   ]);
   const handleRevertSelectedArticulationSlot = reactExports.useCallback(() => {
-    const state = articulationBankState.stateRef.current;
-    const slot = state.slots.find((candidate) => candidate.id === state.selectedSlotId);
+    const state2 = articulationBankState.stateRef.current;
+    const slot = state2.slots.find((candidate) => candidate.id === state2.selectedSlotId);
     if (!slot) {
       return;
     }
@@ -27943,6 +27981,11 @@ function useSynthPatchViewModel({
   const autoPreviewReleaseOwnedRef = reactExports.useRef(null);
   const msegRatesRef = reactExports.useRef([1, 1, 1]);
   msegRatesRef.current = [mseg1Rate.value, mseg2Rate.value, mseg3Rate.value];
+  reactExports.useSyncExternalStore(
+    subscribePerfTuning,
+    () => getPerfTuningState().algorithm
+  );
+  const activePreviewAlgorithm = "shipped";
   reactExports.useEffect(() => {
     const sendRawMidi = (status, note, velocity) => {
       patchConnection.sendMIDIInputEvent?.(MIDI_INPUT_ENDPOINT_ID$1, buildShortMidi(status, note, velocity));
@@ -28008,28 +28051,29 @@ function useSynthPatchViewModel({
       }
       return slowestPeriodMs > 0 ? { periodMs: slowestPeriodMs, anchorMs } : null;
     };
-    const engine = createAutoPreviewEngine({
+    const strikePreviewNow = (strikeCapMs) => {
+      const strikeAtMs = performance.now();
+      const pitches = previewNoteMemory.rememberedGroup();
+      releaseOwnedGroup();
+      autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
+      for (const pitch of pitches) {
+        sendRawMidi(144, pitch, 100);
+      }
+      lastNoteOnAtRef.current = strikeAtMs;
+      if (strikeCapMs !== null) {
+        scheduleOwnedRelease(strikeCapMs);
+      }
+    };
+    const scheduleAtViaTimeout = (atMs, callback) => {
+      const handle = window.setTimeout(callback, Math.max(0, atMs - performance.now()));
+      return () => window.clearTimeout(handle);
+    };
+    const createShippedEngine = () => createAutoPreviewEngine({
       scheduler: createAutoPreviewScheduler(AUTO_PREVIEW_SCHEDULER_CONFIG),
       movementStoppedMs: AUTO_PREVIEW_SCHEDULER_CONFIG.movementStoppedMs,
       now: () => performance.now(),
-      scheduleAt: (atMs, callback) => {
-        const handle = window.setTimeout(callback, Math.max(0, atMs - performance.now()));
-        return () => window.clearTimeout(handle);
-      },
+      scheduleAt: scheduleAtViaTimeout,
       playPreview: (capMs) => {
-        const strikePreview = (strikeCapMs) => {
-          const strikeAtMs = performance.now();
-          const pitches = previewNoteMemory.rememberedGroup();
-          releaseOwnedGroup();
-          autoPreviewOwnedGroupRef.current = { pitches, startedAt: strikeAtMs };
-          for (const pitch of pitches) {
-            sendRawMidi(144, pitch, 100);
-          }
-          lastNoteOnAtRef.current = strikeAtMs;
-          if (strikeCapMs !== null) {
-            scheduleOwnedRelease(strikeCapMs);
-          }
-        };
         clearPendingStrike();
         const now = performance.now();
         const sounding = autoPreviewOwnedGroupRef.current !== null || heldMidiNotesRef.current.size > 0;
@@ -28041,7 +28085,7 @@ function useSynthPatchViewModel({
           config: AUTO_PREVIEW_SYNC_CONFIG
         });
         if (strikeAt <= now) {
-          strikePreview(capMs);
+          strikePreviewNow(capMs);
           return;
         }
         const pending = { timer: 0, capMs };
@@ -28050,7 +28094,7 @@ function useSynthPatchViewModel({
             return;
           }
           autoPreviewPendingStrikeRef.current = null;
-          strikePreview(pending.capMs);
+          strikePreviewNow(pending.capMs);
         }, Math.max(0, strikeAt - now));
         autoPreviewPendingStrikeRef.current = pending;
       },
@@ -28071,6 +28115,7 @@ function useSynthPatchViewModel({
         releaseOwnedGroup();
       }
     });
+    const engine = createShippedEngine();
     autoPreviewEngineRef.current = engine;
     if (heldMidiNotesRef.current.size > 0) {
       engine.manualHoldStarted();
@@ -28109,7 +28154,7 @@ function useSynthPatchViewModel({
       autoPreviewReleaseOwnedRef.current = null;
       autoPreviewEngineRef.current = null;
     };
-  }, [patchConnection]);
+  }, [activePreviewAlgorithm, patchConnection]);
   reactExports.useEffect(() => {
     if (!autoPreviewEnabled) {
       autoPreviewClearPendingRef.current?.();

@@ -480,7 +480,7 @@ namespace wt
         // live on wt::EffectsRack, which writes these every frame with the base
         // value plus its modulation offset already summed; a second rampFrames here
         // would lag that write by smoothing an already smoothed value.
-        input value float32 mixIn [[ init: 100.0f ]];
+        input value float32 mixIn [[ init: 50.0f ]];
         input value float32 amountIn [[ init: 100.0f ]];
         input value float32 timePercentIn [[ init: 100.0f ]];
         input value float32 bandDriveIn [[ init: 0.0f ]];

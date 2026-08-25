@@ -73,7 +73,7 @@ namespace wt
     let delayTimeInitMs = 375.0f;
     let delayFeedbackInit = 0.35f;
     let delayFilterInitHz = 6000.0f;
-    let delayMixInit = 0.0f;
+    let delayMixInit = 0.5f;
     let delayTempoInitBpm = 120.0f;
 
     // The glide is the delay time's only smoothing, which is why delayTime declares

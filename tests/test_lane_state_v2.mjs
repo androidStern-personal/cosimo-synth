@@ -7,6 +7,18 @@ import { loadUIModule } from "./helpers/load_ui_module.mjs";
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const laneV1Promise = loadUIModule(repoRoot, "ui/shared/lane-state.ts");
 const laneV2Promise = loadUIModule(repoRoot, "ui/shared/lane-state-v2.ts");
+const laneSlotParamsPromise = loadUIModule(repoRoot, "ui/shared/lane-slot-params.ts");
+const rackDescriptorsPromise = loadUIModule(repoRoot, "ui/shared/rack-parameter-descriptors.ts");
+
+const MIX_DEFAULT_CASES = [
+    { effectId: "drive", deviceType: "distortion", endpointID: "distortionWet", expected: 0.5 },
+    { effectId: "ott", deviceType: "ott", endpointID: "ottMix", expected: 50 },
+    { effectId: "chorus", deviceType: "chorus", endpointID: "chorusMix", expected: 0.5 },
+    { effectId: "flanger", deviceType: "flanger", endpointID: "flangerMix", expected: 0.5 },
+    { effectId: "phaser", deviceType: "phaser", endpointID: "phaserMix", expected: 0.5 },
+    { effectId: "delay", deviceType: "delay", endpointID: "delayMix", expected: 0.5 },
+    { effectId: "reverb", deviceType: "reverb", endpointID: "reverbMix", expected: 0.5 },
+];
 
 // The document under test throughout: two delays chained in one parallel
 // branch (the other branch EMPTY), then a trunk reverb — every structural
@@ -66,6 +78,100 @@ async function makeSplitDoc() {
         ],
     };
 }
+
+test("every Effects Lane mix creates and resets at 50% in state and audio-engine messages", async () => {
+    const laneV2 = await laneV2Promise;
+    const laneSlotParams = await laneSlotParamsPromise;
+    const rackDescriptors = await rackDescriptorsPromise;
+
+    const testedMixEndpoints = MIX_DEFAULT_CASES.map(({ endpointID }) => endpointID).sort();
+    const actualMixEndpoints = rackDescriptors.allRackParameterDescriptors()
+        .filter(({ label }) => label === "Mix")
+        .map(({ endpointID }) => endpointID)
+        .sort();
+    assert.deepEqual(
+        actualMixEndpoints,
+        testedMixEndpoints,
+        "Every main-synth Mix control must be included in this create/reset/audio test.",
+    );
+
+    let created = { format: "cosimo.lane", version: 2, devices: {}, chain: [] };
+    for (const testCase of MIX_DEFAULT_CASES) {
+        created = laneV2.addLaneDevice(
+            created,
+            testCase.deviceType,
+            { kind: "trunk", index: created.chain.length },
+        );
+        assert.notEqual(created, null, `${testCase.effectId} should fit in the lane`);
+
+        const descriptor = rackDescriptors.getRackParameterDescriptor(testCase.endpointID);
+        const deviceId = `${testCase.deviceType}#1`;
+        assert.equal(descriptor.initial, testCase.expected);
+        assert.equal(created.devices[deviceId].params[testCase.endpointID], testCase.expected);
+        assert.equal(rackDescriptors.formatRackParameterValue(descriptor, testCase.expected), "50%");
+    }
+
+    const assertAudioEngineMixValues = (state, phase) => {
+        const records = laneV2.buildLaneRuntimeEventsV2(state)
+            .filter(({ endpointID }) => endpointID === "laneSlotParams");
+        for (const testCase of MIX_DEFAULT_CASES) {
+            const record = records.find(({ value }) => (
+                value.slotId === laneSlotParams.getLaneSlotId(testCase.deviceType, 0)
+            ));
+            const paramIndex = laneSlotParams.getLaneSlotParamIndex(
+                testCase.deviceType,
+                testCase.endpointID,
+            );
+            assert.notEqual(record, undefined, `${phase}: ${testCase.effectId} record`);
+            assert.notEqual(paramIndex, null, `${phase}: ${testCase.endpointID} wire index`);
+            assert.equal(record.value.values[paramIndex], testCase.expected, `${phase}: ${testCase.endpointID}`);
+        }
+    };
+    assertAudioEngineMixValues(created, "create");
+
+    let reset = created;
+    for (const testCase of MIX_DEFAULT_CASES) {
+        const descriptor = rackDescriptors.getRackParameterDescriptor(testCase.endpointID);
+        const deviceId = `${testCase.deviceType}#1`;
+        reset = laneV2.setLaneDeviceParam(reset, deviceId, testCase.endpointID, descriptor.max);
+        reset = laneV2.setLaneDeviceParam(reset, deviceId, testCase.endpointID, descriptor.initial);
+        assert.equal(reset.devices[deviceId].params[testCase.endpointID], testCase.expected);
+        assert.equal(
+            rackDescriptors.formatRackParameterValue(
+                descriptor,
+                reset.devices[deviceId].params[testCase.endpointID],
+            ),
+            "50%",
+        );
+    }
+    assertAudioEngineMixValues(reset, "reset");
+
+    const explicitValues = Object.fromEntries(MIX_DEFAULT_CASES.map((testCase, index) => [
+        testCase.endpointID,
+        testCase.expected + ((index + 1) / 100),
+    ]));
+    const stored = {
+        ...created,
+        devices: Object.fromEntries(Object.entries(created.devices).map(([deviceId, record]) => {
+            const testCase = MIX_DEFAULT_CASES.find(({ deviceType }) => deviceId === `${deviceType}#1`);
+            assert.notEqual(testCase, undefined);
+            return [deviceId, {
+                params: {
+                    ...record.params,
+                    [testCase.endpointID]: explicitValues[testCase.endpointID],
+                },
+            }];
+        })),
+    };
+    const restored = laneV2.deserializeLaneStateV2(JSON.stringify(stored));
+    for (const testCase of MIX_DEFAULT_CASES) {
+        assert.equal(
+            restored.devices[`${testCase.deviceType}#1`].params[testCase.endpointID],
+            explicitValues[testCase.endpointID],
+            `stored ${testCase.endpointID} must not be replaced by its new default`,
+        );
+    }
+});
 
 test("lane.v2 default document is the compact starter trio and round-trips", async () => {
     const laneV1 = await laneV1Promise;

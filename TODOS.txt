@@ -970,7 +970,7 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     Done when:
     - Browser tests select each named parameter and prove the correct graphic and current value appear, direct filter-graph dragging produces no duplicate display, and an unrelated parameter still gets the generic knob.
 
-[ ] T41 — Make every effect Mix or Wet control start at 50%
+[x] T41 — Make every effect Mix or Wet control start at 50%
     Required result:
     - A newly added or reset effect that exposes a Mix/Wet control starts at 50%, never zero or fully wet. The current known set is Distortion Wet, OTT Mix, Chorus Mix, Flanger Mix, Phaser Mix, Delay Mix, and Reverb Mix.
     - Update every source of the default together: effect descriptions, newly created lane state, DSP parameter annotations/constants, initial/reset state, factory defaults, mocks, and test fixtures. Preserve the different numeric units where 50% is represented as `0.5` versus `50`.

@@ -68,7 +68,7 @@ const definitions = [
             p("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [choice("Classic", 0), choice("Harmonics", 1)] }),
             p("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: true, modulationTargetIndex: 3 }),
             p("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
-            p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 5 }),
+            p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 5 }),
             p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4_000, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
             p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 20_000, 18_000, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" }),
         ],
@@ -82,7 +82,7 @@ const definitions = [
         xEndpointID: "ottAmount",
         yEndpointID: "ottTimePercent",
         parameters: [
-            p("ott", "ottMix", "Mix", "Mix", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 8 }),
+            p("ott", "ottMix", "Mix", "Mix", 0, 100, 50, { unit: "%", quick: true, modulationTargetIndex: 8 }),
             p("ott", "ottAmount", "Amount", "Amt", 0, 100, 100, { unit: "%", quick: true, modulationTargetIndex: 9 }),
             p("ott", "ottTimePercent", "Time", "Time", 10, 1_000, 100, { unit: "%", scale: "log", modulationTargetIndex: 10 }),
             p("ott", "ottBandDrive", "Band Drive", "Drv", 0, 100, 0, { unit: "%", modulationTargetIndex: 11 }),
@@ -100,7 +100,7 @@ const definitions = [
         parameters: [
             p("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide", "Classic", "Fast"].map(choice) }),
             p("chorus", "chorusBloomMode", "Bloom", "Blm", 0, 4, 0, { step: 1, choices: ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"].map(choice) }),
-            p("chorus", "chorusMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 13 }),
+            p("chorus", "chorusMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 13 }),
             p("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
             p("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
             p("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
@@ -120,7 +120,7 @@ const definitions = [
             p("flanger", "flangerRate", "Rate", "Rate", 0.02, 8, 0.35, { unit: "Hz", scale: "log", quick: true, modulationTargetIndex: 18 }),
             p("flanger", "flangerDepth", "Depth", "Dpt", 0, 1, 0.6, { quick: true, modulationTargetIndex: 19 }),
             p("flanger", "flangerFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 20 }),
-            p("flanger", "flangerMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 21 }),
+            p("flanger", "flangerMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 21 }),
         ],
     },
     {
@@ -139,7 +139,7 @@ const definitions = [
             p("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8_000, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24, modulationApplication: "octaves" }),
             p("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
             p("phaser", "phaserPhase", "Stereo Phase", "Phase", -180, 180, 90, { unit: "deg", modulationTargetIndex: 26 }),
-            p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 27 }),
+            p("phaser", "phaserMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 27 }),
         ],
     },
     {
@@ -156,7 +156,7 @@ const definitions = [
             p("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: DELAY_DIVISIONS.map(choice) }),
             p("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
             p("delay", "delayFilter", "Filter", "Filt", 200, 18_000, 6_000, { unit: "Hz", scale: "log", modulationTargetIndex: 30, modulationApplication: "octaves" }),
-            p("delay", "delayMix", "Mix", "Mix", 0, 1, 0, { quick: true, modulationTargetIndex: 31 }),
+            p("delay", "delayMix", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 31 }),
         ],
     },
     {
@@ -171,7 +171,7 @@ const definitions = [
             p("reverb", "reverbSize", "Size", "Size", 0, 1, 0.5, { quick: true, modulationTargetIndex: 32 }),
             p("reverb", "reverbDecay", "Decay", "Dcy", 0, 1, 0.4, { quick: true, modulationTargetIndex: 33 }),
             p("reverb", "reverbDamping", "Damping", "Dmp", 0, 1, 0.5, { modulationTargetIndex: 34 }),
-            p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0, { modulationTargetIndex: 35 }),
+            p("reverb", "reverbMix", "Mix", "Mix", 0, 1, 0.5, { modulationTargetIndex: 35 }),
         ],
     },
 ];

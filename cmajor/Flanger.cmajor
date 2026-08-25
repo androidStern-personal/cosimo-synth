@@ -97,7 +97,7 @@ namespace wt
         input value float32 rateIn     [[ name: "Flanger Rate",     min: 0.02f,  max: 8.0f,  init: 0.35f, unit: "Hz", rampFrames: 64 ]];
         input value float32 depthIn    [[ name: "Flanger Depth",    min: 0.0f,   max: 1.0f,  init: 0.6f,  rampFrames: 64 ]];
         input value float32 feedbackIn [[ name: "Flanger Feedback", min: -0.95f, max: 0.95f, init: 0.0f,  rampFrames: 64 ]];
-        input value float32 mixIn      [[ name: "Flanger Mix",      min: 0.0f,   max: 1.0f,  init: 0.0f,  rampFrames: 128 ]];
+        input value float32 mixIn      [[ name: "Flanger Mix",      min: 0.0f,   max: 1.0f,  init: 0.5f,  rampFrames: 128 ]];
 
         // Effects Lane pool lifecycle only: a pool slot entering a committed
         // chain is a newly created device and must sound like one — empty

@@ -14,6 +14,7 @@ import {
     openHarnessPage,
     readStoredModulationState,
     readRuntimeProgramRoute,
+    selectRackEffect,
     waitForHarnessSnapshot,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
 
@@ -341,6 +342,71 @@ async function addTrunkDevice(page, effectId, trunkIndex, expectedDeviceId) {
         },
     );
 }
+
+test("every mix-bearing effect creates and resets at a visible and DSP-delivered 50%", async () => {
+    const page = await openHarnessPage({ laneDoc: "fresh" });
+    const mixCases = [
+        { effectId: "drive", deviceId: "distortion#1", endpointID: "distortionWet", expected: 0.5 },
+        { effectId: "ott", deviceId: "ott#1", endpointID: "ottMix", expected: 50 },
+        { effectId: "chorus", deviceId: "chorus#1", endpointID: "chorusMix", expected: 0.5 },
+        { effectId: "flanger", deviceId: "flanger#1", endpointID: "flangerMix", expected: 0.5 },
+        { effectId: "phaser", deviceId: "phaser#1", endpointID: "phaserMix", expected: 0.5 },
+        { effectId: "delay", deviceId: "delay#1", endpointID: "delayMix", expected: 0.5 },
+        { effectId: "reverb", deviceId: "reverb#1", endpointID: "reverbMix", expected: 0.5 },
+    ];
+
+    try {
+        await page.waitForSelector('[data-role="rack-ghost-add"][data-lane-path="trunk:3"]');
+        await addTrunkDevice(page, "ott", 3, "ott#1");
+        await addTrunkDevice(page, "chorus", 4, "chorus#1");
+        await addTrunkDevice(page, "flanger", 5, "flanger#1");
+        await addTrunkDevice(page, "phaser", 6, "phaser#1");
+
+        for (const testCase of mixCases) {
+            await selectRackEffect(page, testCase.effectId);
+            const control = page.locator(
+                `[data-role="rack-parameter-surface-${testCase.endpointID}"] button[aria-valuenow]`,
+            );
+            await control.waitFor();
+            assert.equal(Number(await control.getAttribute("aria-valuenow")), testCase.expected);
+            assert.equal((await control.locator(".rack-knob-readout").textContent()).trim(), "50%");
+
+            await control.click({ button: "right" });
+            await page.locator('[data-role="rack-parameter-menu-item"][data-action="edit-values"]').click();
+            const valueSheet = page.locator('[data-role="rack-parameter-value-sheet"]');
+            await valueSheet.locator('[data-role="rack-base-value-input"]').fill("0");
+            await valueSheet.locator('[data-role="rack-value-sheet-apply"]').click();
+            await valueSheet.waitFor({ state: "detached" });
+            await waitForHarnessSnapshot(
+                page,
+                `${testCase.endpointID} moved away from its default`,
+                (snapshot) => JSON.parse(String(snapshot.storedState["lane.v1"]))
+                    .devices[testCase.deviceId].params[testCase.endpointID] === 0,
+            );
+            await clearHarnessDebugLog(page);
+
+            await control.click({ button: "right" });
+            await page.locator('[data-role="rack-parameter-menu-item"][data-action="reset-base"]').click();
+            const resetSnapshot = await waitForHarnessSnapshot(
+                page,
+                `${testCase.endpointID} reset to 50%`,
+                (snapshot) => JSON.parse(String(snapshot.storedState["lane.v1"]))
+                    .devices[testCase.deviceId].params[testCase.endpointID] === testCase.expected,
+            );
+            const wire = laneParamWireLocation(testCase.endpointID);
+            assert.equal(resetSnapshot.sentMessages.some((message) => (
+                message.endpointID === "laneSlotParamValue"
+                && message.value?.slotId === wire.slotId
+                && message.value?.paramIndex === wire.paramIndex
+                && message.value?.value === testCase.expected
+            )), true, `${testCase.endpointID} reset must reach the DSP field wire`);
+            assert.equal(Number(await control.getAttribute("aria-valuenow")), testCase.expected);
+            assert.equal((await control.locator(".rack-knob-readout").textContent()).trim(), "50%");
+        }
+    } finally {
+        await page.close();
+    }
+});
 
 test("the trunk ghost's type picker adds a second delay and the editor speaks it", async () => {
     const page = await openHarnessPage();

@@ -24,8 +24,8 @@ const synthStatus = {
             parameter("oscCWavetableSelect", { init: 2, min: 0, max: 237, integer: true }),
             parameter("oscAFramePosition", { init: 0.25, min: 0, max: 1 }),
             parameter("filterMix", { init: 1, min: 0, max: 1 }),
-            parameter("delayMix", { init: 0, min: 0, max: 1 }),
-            parameter("reverbMix", { init: 0, min: 0, max: 1 }),
+            parameter("delayMix", { init: 0.5, min: 0, max: 1 }),
+            parameter("reverbMix", { init: 0.5, min: 0, max: 1 }),
         ],
     },
 };

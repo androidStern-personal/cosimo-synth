@@ -7,7 +7,7 @@
         "distortionMode": 0,
         "distortionDriveDb": 12,
         "distortionKnee": 0.35,
-        "distortionWet": 0,
+        "distortionWet": 0.5,
         "distortionWetHPHz": 40,
         "distortionWetLPHz": 18000
       }

@@ -26,10 +26,10 @@ export function createIOSHarnessInitScript(baseUrl) {
             ["oscAPan", 0],
             ["distortionDriveDb", 12],
             ["distortionKnee", 0.35],
-            ["distortionWet", 0],
+            ["distortionWet", 0.5],
             ["distortionWetHPHz", 40],
             ["distortionWetLPHz", 18000],
-            ["chorusMix", 0],
+            ["chorusMix", 0.5],
             ["chorusMotionMode", 1],
             ["chorusBloomMode", 0],
             ["chorusTone", 0.5],
@@ -152,7 +152,7 @@ export function createIOSHarnessInitScript(baseUrl) {
                     {
                         endpointID: "distortionWet",
                         purpose: "parameter",
-                        annotation: { name: "Distortion Mix", min: 0, max: 1, init: 0 },
+                        annotation: { name: "Distortion Mix", min: 0, max: 1, init: 0.5 },
                     },
                     {
                         endpointID: "distortionWetHPHz",
@@ -167,7 +167,7 @@ export function createIOSHarnessInitScript(baseUrl) {
                     {
                         endpointID: "chorusMix",
                         purpose: "parameter",
-                        annotation: { name: "Chorus Mix", min: 0, max: 1, init: 0 },
+                        annotation: { name: "Chorus Mix", min: 0, max: 1, init: 0.5 },
                     },
                     {
                         endpointID: "chorusMotionMode",
