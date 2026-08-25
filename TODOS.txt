@@ -1,6 +1,7 @@
 COSIMO SYNTH — PRODUCT WORKSTREAM TODO
-Updated: 2026-08-19
-Source: 2026-08-18 spoken workstream inventory, accepted ADR-024/feature spec, and current repository evidence.
+Updated: 2026-08-25
+Source: 2026-08-18 spoken workstream inventory, accepted ADR-024/feature spec, 2026-08-25 follow-up inventory, and current repository evidence.
+Roadmap: `OPEN_WORK_ROADMAP.md`
 
 HOW WE WILL USE THIS FILE
 
@@ -827,6 +828,275 @@ PHASE 5 — PARKED UNTIL ITS QUALIFICATION CHANGES
     - Remaining C2 gap to the ceiling: ~0.10 absolute on Chromium, ~0.17-0.22 on WebKit.
     - The physical iPhone/AUv3 campaign (authoritative) remains unexecuted behind the xctrace-offline device blocker — needs the user's hands on the phone.
     Direction change (2026-08-22, Andrew): the frozen performance gates are VOID as requirements — they were arbitrary. No governor, no capacity ceiling; overload glitches. HARD CUT: every effect becomes an addressable lane device (lane.<instanceId>.<endpointID>); the rack.* namespace, the permanent eight, the 45 per-parameter host endpoints, and rack state v1 are DELETED, not shimmed — one application, no backwards compatibility (never shipped). Architecture: EFFECTS_LANE_ARCHITECTURE_PLAN.md. No spike (every mechanism proven or arithmetic — Andrew rejected the spike as busywork and was right: no design fork existed for it to decide). Build order: M1 engine (pool slots + extended target matrix + laneState upload; the five former spike criteria become M1's permanent acceptance tests), M2 the namespace hard cut, M3 lane UI, M4 product surface + phone pass. Sound quality: never claim parity from the existing differential harnesses (Andrew distrusts their coverage); DSP-touching changes get their own scoped verification conversation first.
+    Current master status (2026-08-25):
+    - M1-M4's production foundation is present on master: the engine pool and lane addressing, lane.v2 state, Parallel/Frequency Split groups, the subway graph, dynamic modulation targets, device add/remove, and the compact starter trio.
+    - The original task remains open only for its physical iPhone/AUv3 acceptance pass. T24, T30, T31, and T32 below own the separate drawing, compact-layout, insertion, and live-drag improvements.
+
+EFFECTS LANE FOLLOW-UP
+
+[ ] T24 — Draw continuous rounded splits and joins in the FX graph
+    Confirmed problem (2026-08-25):
+    - In Parallel and Frequency Split groups, the incoming line stops at the split symbol. The branch lines begin lower down as disconnected rails instead of emerging from one point and visibly diverging.
+    - This is a drawing bug introduced with the original map, not a rack-state or audio-routing error. The full diagnosis and browser measurements are in `FX_GRAPH_DRAWING_FINDINGS.md`.
+    Build:
+    - Keep the existing rack tree, row layout, labels, symbols, controls, and interaction elements.
+    - Replace the fork and merge connector rectangles with continuous scalable paths. One incoming path must reach one junction; every branch must leave that exact junction on a smooth rounded curve. The merge must use the same geometry in reverse.
+    - Cover Parallel and Frequency Split at every branch count the product permits and at responsive narrow and wide widths.
+    - Preserve branch colors, empty-branch dashes, bypass dimming, selection state, and all current click and drag targets.
+    Do not:
+    - Change DSP routing, rack storage, drag-and-drop behavior, menus, or parameter handling as part of this repair.
+    - Call the repair complete merely because extra square vertical bars hide the current gap; the required result is a legible rounded flow diagram.
+    Done when:
+    - A browser regression inspects the rendered pixels and proves that the incoming rail is visibly connected to every outgoing branch and that every branch reconnects to the outgoing rail.
+    - The proof covers both group types, every supported branch count, and representative narrow and wide layouts; existing graph interaction tests remain green.
+
+[ ] T30 — Fit a three-band Frequency Split inside the graph without overlapping effects
+    Required result:
+    - A LO/MID/HI split must remain completely inside the graph container. Its branch lines, labels, effect pills, and crossover readout must neither overflow nor be clipped.
+    - Effects on neighboring bands must never overlap or hide one another, while the order within each band remains obvious from top to bottom.
+    Starting layout:
+    - Keep the three branch lines closer together horizontally, then stagger effect pills vertically whenever neighboring bands would otherwise place pills at the same height. Use only the vertical offset needed to avoid collisions; do not spread the whole graph wider again.
+    - Treat the no-overflow/no-overlap result as fixed. The exact staggering rule may change if a simpler compact layout proves clearer in the real container.
+    Coordinate with T24:
+    - The rounded split and merge paths must follow the final compact branch positions and remain visibly connected through every staggered row.
+    Done when:
+    - Browser geometry checks prove that every rendered part stays within the graph at representative phone, desktop, and plugin widths and that no pair of effect pills intersects.
+    - Screenshots with populated LO, MID, and HI bands show which effect belongs to which band without relying on clipping, horizontal scrolling, or shrinking the effect labels until they are unreadable.
+
+[ ] T31 — Show the proposed result while an effect is dragged and animate every move
+    Current gap:
+    - The code already builds a proposed rack order as the pointer crosses drop targets, but it redraws that order instantly. The dragged effect stays in the grid, other effects jump, and the destination is not shown as an opening in the chain.
+    Required drag behavior:
+    - Lift the real effect pill out of the layout so it follows the mouse or finger throughout the drag.
+    - As the pointer approaches a valid position, open a correctly sized gap there and show a ghost copy of the dragged effect in that gap.
+    - Animate the other effects and the graph paths into their proposed positions instead of snapping them. When the target changes, the old gap closes and the new one opens smoothly.
+    - Support reordering within the trunk or one branch, moving earlier or later in the chain, and moving between the trunk and any branch.
+    - On release, settle the dragged pill into the visible ghost position and commit exactly that arrangement. On cancellation, restore the original arrangement.
+    State boundary:
+    - The preview is visual only. Keep the stored rack and audio routing unchanged during the drag, then publish one change on a successful release; cancellation publishes nothing.
+    Done when:
+    - A held-pointer browser test captures the start, middle, and settled frames and proves that the lifted pill tracks the pointer, the destination gap and ghost exist before release, and displaced effects travel between measured positions rather than changing position in one frame.
+    - Cross-branch, same-branch, and trunk moves commit the arrangement that was previewed; cancellation restores the starting picture and state. Reduced-motion mode may shorten movement but must retain the clear lifted pill, gap, and ghost.
+
+[ ] T32 — Put a small add button at the tail of every FX path
+    Current gap:
+    - The trunk already ends with an add button, and an empty branch has one. A populated branch currently continues directly from its last effect to the merge with no way to append another effect there.
+    Required behavior:
+    - Show a small `+` immediately after the last effect in every Parallel and Frequency Split branch, before that branch merges back into the trunk.
+    - Keep the trunk's existing trailing `+` at the end of the main chain. An empty trunk or branch must still have its `+` at its first insertion position.
+    - Tapping a branch-tail `+` opens the existing effect picker and inserts the chosen effect at that exact branch tail. Keep the same point available as the exact tail destination for T31 dragging.
+    Done when:
+    - Browser coverage proves the `+` exists at the correct insertion path for empty and populated branches of unequal lengths, for both Parallel and Frequency Split groups, and at the trunk tail.
+    - Adding from each button inserts one effect at the pictured location without changing the order or membership of any other path.
+
+MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
+
+[ ] T33 — Make the full-screen MSEG editor look like the drawer editor, expanded
+    Current gap:
+    - The editable graph is already shared, but the full-screen shell has its own heavy frame, border, spacing, and controls, so the two versions look like unrelated products.
+    Required result:
+    - Use the drawer editor's surfaces, typography, control styling, spacing rhythm, and graph treatment in full screen. Full screen may expose its additional editing actions, but it must read as the same editor with more room.
+    - Remove the pink/accent-colored top border from the drawer. Use a quiet neutral separator; source color may remain where it communicates source identity, but not as a decorative strip across the top.
+    - Share the relevant components and style tokens so later visual changes cannot silently make the two editors diverge again.
+    Done when:
+    - Reviewed screenshots of the same MSEG in the drawer and full screen show one visual system; the drawer has no pink top edge and the full-screen editor has no heavy enclosing frame or unrelated decoration.
+    - Existing MSEG editing, undo, A/B, looping, dismissal, and drawer resizing behavior remain intact.
+
+[ ] T34 — Replace the edge-bound MSEG timing controls with compact knobs without making the tab taller
+    Required result:
+    - Replace the drawer and full-screen Time/Rate/Speed slider-style controls with compact knobs that fit inside the existing control strip. If a neighboring control uses the same compact row, keep its treatment visually consistent.
+    - Move the timing knob far enough in from the screen edge that a person can drag left to slow down and right to speed up without immediately running out of screen.
+    - Do not increase the height of the drawer tab, its top control strip, or the corresponding full-screen control row. The knobs must be sized for the space that already exists, not become large showcase knobs.
+    - Preserve exact numeric entry, keyboard operation, accessibility naming, and the current parameter range.
+    Done when:
+    - Before/after geometry checks prove the control row is no taller, representative phone screenshots show clear margins on both sides of the knob, and touch tests can traverse the full timing range in both directions without hitting the screen edge.
+
+[ ] T35 — Give MSEG time dragging a tunable non-linear response with extra precision below 500 ms
+    Current gap:
+    - The compact editor currently converts horizontal pixels directly into a linear share of the entire time range, which makes short times difficult to set precisely.
+    Required result:
+    - Use a smooth, monotonic response curve that devotes more drag travel to values below 500 ms while still making the full supported range reachable. Do not change exact text entry or stored parameter values.
+    - Add the small set of curve controls needed to tune that feel to the existing developer-only `Performance tuning` page reached from the preset-bar menu. Changes must take effect without rebuilding or relaunching.
+    - Keep the exact curve and final coefficients open for an Andrew-led live tuning pass; bake the accepted values as the normal defaults after that pass.
+    Done when:
+    - Automated checks prove the mapping is monotonic, continuous, clamped, and gives materially more pixel travel below 500 ms than the old linear mapping.
+    - A live tuning pass can adjust every exposed coefficient, reset them, and feel the result in both drawer and full-screen MSEG timing knobs.
+
+[ ] T36 — Put MSEG time on whichever editor axis is longest
+    Current gap:
+    - The shared MSEG drawing code already supports horizontal and vertical time, but the drawer and full-screen mounts leave it fixed horizontally.
+    Required result:
+    - Measure the actual editable graph area. When it is wider than tall, time runs left to right; when it is taller than wide, time runs top to bottom.
+    - Re-evaluate while the drawer is being resized, including when dragging it upward crosses from a wide layout to a tall one. Use a stable rule near a square shape so the graph does not flicker between orientations.
+    - Reorient the presentation and pointer math only. Do not rewrite, swap, or otherwise mutate the stored MSEG points when the available shape changes.
+    Done when:
+    - Browser coverage exercises both aspect ratios and a live resize across the boundary, proving that drawing, adding, selecting, and dragging points all use the visible time axis and preserve the same underlying envelope.
+
+[ ] T37 — Add one button that copies every Performance tuning setting
+    Required result:
+    - Add a `Copy settings` button to the developer `Performance tuning` page. It copies the complete current tuning state—not only the MSEG controls—as one deterministic, readable text block suitable for pasting into a message or source change.
+    - Include every nested value after live edits, and keep the export tied to the tuning-state definition so new settings cannot be silently omitted.
+    - Show clear success or failure feedback; never say the copy succeeded if the clipboard write was rejected.
+    Done when:
+    - A clipboard test changes values in every settings section, presses the button, and proves the copied text contains the complete current state in a stable order.
+
+[?] T38 — Design the synthesizer's overall amplitude envelope and decide where it belongs
+    Code-backed starting point:
+    - The voice loudness path currently has a fixed 10 ms attack and an adjustable release, not a complete user-facing amplitude envelope. The recently added real decay stage belongs to the modulation envelopes, not to overall loudness.
+    Decisions required before implementation:
+    - Decide whether "overall" means a per-voice amplitude envelope, a post-mix master envelope, or a deliberate combination, and settle the stages and controls it exposes.
+    - Define note-on, note-off, retrigger, legato, velocity, voice-stealing, and release-tail behavior, including how it interacts with the existing modulation envelopes and Bounce source.
+    - Choose and review its location in the Voice interface before adding controls. Do not hide a new full envelope behind the existing Release value or place it by guesswork.
+    Done when:
+    - A short design record and reviewed UI proposal settle the signal location, behavior, control set, and screen location strongly enough to create an implementation task with no remaining product guesswork.
+
+[?] T39 — Design and add a modulatable Global Tune offset
+    Code-backed starting point:
+    - There is no synth-wide tune parameter today. Tuning and pitch modulation are oscillator-specific, and the pitch-tracking signal sent to effects is derived later from that oscillator pitch.
+    Locked behavior:
+    - Global Tune is an offset applied to the whole synthesizer before each oscillator's own octave, semitone, fine, and pitch modulation. A zero value changes nothing.
+    - It is a modulation destination for MSEGs and envelopes. Every consumer that follows pitch—including the pitch value sent to effects—must follow the globally shifted pitch as well.
+    Decisions required before implementation:
+    - Settle its range, units, modulation-depth limits, host/preset representation, and visible UI location. Confirm how Bounce playback participates.
+    Done when:
+    - The product decisions are recorded and the implementation proves that +12 semitones doubles every included sound source's frequency, Bounce follows the recorded decision, oscillator-local offsets remain relative, MSEG/envelope modulation reaches Global Tune, zero is neutral, and every pitch-tracked effect receives the same shift.
+
+[ ] T40 — Make the drag heads-up display match the parameter being changed
+    Required result:
+    - Keep the existing generic knob display for ordinary parameters, but allow the shared heads-up display to choose a purpose-built presentation for named controls.
+    - Wavetable Index shows the real wavetable graphic moving through its index plus a large numeric value; it must reuse the production wavetable data and renderer rather than a decorative stand-in.
+    - The main synth Filter Cutoff and the Effects Filter Cutoff show the correct live frequency-response graph plus a large Hz/kHz value, reusing the same response math as their editors.
+    - Suppress the heads-up display only when the person is directly dragging the filter graphic, because the edited graph is already visible beneath the finger. Dragging the cutoff knob still shows the specialized display.
+    Done when:
+    - Browser tests select each named parameter and prove the correct graphic and current value appear, direct filter-graph dragging produces no duplicate display, and an unrelated parameter still gets the generic knob.
+
+[ ] T41 — Make every effect Mix or Wet control start at 50%
+    Required result:
+    - A newly added or reset effect that exposes a Mix/Wet control starts at 50%, never zero or fully wet. The current known set is Distortion Wet, OTT Mix, Chorus Mix, Flanger Mix, Phaser Mix, Delay Mix, and Reverb Mix.
+    - Update every source of the default together: effect descriptions, newly created lane state, DSP parameter annotations/constants, initial/reset state, factory defaults, mocks, and test fixtures. Preserve the different numeric units where 50% is represented as `0.5` versus `50`.
+    - Do not overwrite an explicit Mix/Wet value recalled from an existing saved preset; this changes defaults, not user-authored values.
+    Done when:
+    - A test creates and resets every mix-bearing effect, verifies the visible value and the value delivered to DSP are both 50%, and guards future effects from silently choosing a different Mix/Wet default.
+
+[ ] T42 — Scale the floating Mod bar up by about 10% without disturbing its geometry
+    Required result:
+    - Increase the icons, modules, gaps, labels, badges, activity marks, arrows, outline, and real tap areas as one proportional system, using roughly a 1.10 scale as the starting point.
+    - Preserve the current even spacing, visual centering, alignment, and left/right symmetry. Do not independently enlarge a few icons and leave the surrounding geometry behind.
+    - Keep collapsed, expanded, paging, modulation dragging, and both left- and right-docked layouts inside the safe screen area at representative narrow and tall phone sizes.
+    Done when:
+    - Measured before/after overlays show a coherent roughly 10% increase with unchanged spacing ratios, no clipping or overlap, and no regression in drag targets or source selection; Andrew approves the visual result on the real composed interface.
+
+[ ] T43 — Let a second tap on the active Mod source close its drawer
+    Required behavior on the Voice and Effects screens:
+    - Tapping a source while its quick drawer is closed selects it and opens that source's drawer.
+    - Tapping the same source while its drawer is open closes the drawer.
+    - Tapping a different source while a drawer is open keeps the drawer open and switches its contents directly to the new source, without a close/reopen flash.
+    Interaction boundary:
+    - Preserve modulation dragging and distinguish a completed tap from a drag before toggling anything. Preserve the Mod screen's existing source-panel behavior rather than introducing a second drawer there.
+    Done when:
+    - Browser interaction tests cover closed → open, open → closed, open source A → open source B, left/right docking, and tap-versus-drag without duplicate state changes or stale editor contents.
+
+BROWSER SHARING AND ENVELOPE FOLLOW-UP
+
+[ ] T44 — Show the actual MSEG morph instead of a generic knob
+    Current gap:
+    - The shared MSEG graph can already draw the interpolated curve between Shape A and Shape B, but the quick drawer explicitly disables it. The general parameter heads-up display can only draw a knob.
+    Required result:
+    - While Morph is adjusted anywhere, show the actual envelope produced between A and B at the current Morph amount, together with a large percentage. Never substitute the generic knob picture for this control.
+    - In the drawer, keep the currently realized/interpolated envelope visible even when the finger is not down, and keep an explicit Morph percentage visible and updating live.
+    - Reuse the production A/B interpolation and curve renderer so the preview is the shape the synth actually uses, including exact A, midpoint, and B positions.
+    Coordinate with T40:
+    - Add this as another purpose-built presentation in the same shared heads-up display system as Wavetable Index and Filter Cutoff; do not create a second floating display framework.
+    Done when:
+    - Browser tests adjust Morph from the drawer and full editor and prove that the curve and percentage update before release, the drawer retains the realized curve afterward, 0% equals A, 100% equals B, and no generic knob is shown.
+
+[ ] T45 — Keep browser audio playable after leaving the page and returning
+    Reported failure:
+    - After the browser synth has loaded and made sound, switching to another tab or window and then returning can leave it permanently silent in Safari and other browsers.
+    Current baseline to investigate, not trust blindly:
+    - The web host already requests Web Audio resume from a later touch and has synthetic interruption tests, but the real window/tab lifecycle still fails. Reproduce the actual sequence and record the audio-context state, playback-session state, worklet progress, graph connection, held notes, and output before choosing a fix.
+    Required result:
+    - On page return, resume automatically where the browser permits it. Where a browser requires a fresh gesture, the person's first intentional key or control touch must resume audio and perform that same action; it must not be swallowed as a separate recovery tap.
+    - Handle the real focus, visibility, page-show, and audio-context interruption signals without connecting the audio graph twice, leaking a worklet, leaving held notes stuck, or resetting the patch.
+    Done when:
+    - A regression reproduces the failure before the repair and proves non-silent output after repeated leave/return cycles in Chromium and WebKit.
+    - A physical Safari pass switches apps/windows, returns, and plays immediately under the browser's permitted recovery path. A test that only changes `document.hidden` in place is not sufficient evidence.
+
+[ ] T46 — Requalify and finish the existing first version of patch sharing by URL
+    Existing implementation:
+    - Master already captures the current sound into a versioned `#p=1.<compressed-data>` URL fragment, exposes Share in the preset menu, asks before replacing the current sound, removes the fragment after loading, warns above 2,000 characters, and refuses above 8,000. Do not rebuild this machinery from scratch.
+    Required first-version contract:
+    - A link made from a patch using only wavetables shipped with Cosimo must restore the complete sound in a fresh browser session: every public parameter, both shapes and playback settings for every MSEG, every envelope value, modulation routes, articulations, oscillator and filter state, and the complete Effects Lane graph and effect settings.
+    - Audit the current sound contract for fields added since the sharing work landed. Compare the captured document with a normal preset capture so no state is omitted merely because it lives outside the ordinary parameter list.
+    - V1 carries shipped wavetable identity, not wavetable audio. Detect custom or otherwise unavailable wavetable data and refuse clearly rather than making a link that restores the wrong or silent table. Keep bounced/sample-backed sounds refused as they are today.
+    - Measure representative and deliberately maximal current patches in Safari and Chromium. Retain or revise the existing 2,000-character warning and 8,000-character refusal only from those measurements and real copy/open behavior.
+    Done when:
+    - Two clean browser sessions round-trip the same maximal supported patch and compare the entire normalized sound document exactly, then produce the same audible/rendered state after load.
+    - Desktop and phone browser surfaces can copy and open the link; malformed, truncated, unsupported, oversized, custom-wavetable, and cancelled-load cases fail visibly without changing the current sound.
+
+[?] T47 — Add server-backed sharing for custom wavetables after URL-only sharing is proven
+    Deferred second version:
+    - When a shared patch uses a custom wavetable, store that wavetable on a Cosimo-controlled service and put a stable content reference in the shared patch. Loading the link downloads and verifies the exact table before applying the sound.
+    Decisions required before implementation:
+    - Choose the storage service, content-addressing scheme, upload limits, retention/deletion policy, ownership and privacy rules, abuse controls, and behavior for missing or expired assets.
+    - Decide whether sharing is anonymous or account-bound and how a recipient can preserve the asset. Do not expand this task to bounced audio unless that is approved separately.
+    Preserve:
+    - The URL continues to carry the complete ordinary patch state. The server is only for binary wavetable data that cannot safely fit in the link, and a failed download must never silently substitute another table.
+    Done when:
+    - An approved design settles the open service rules, then a sender with a custom wavetable can create a link and a clean recipient session restores a byte-verified table and the exact patch; unavailable assets produce a clear non-destructive error.
+
+[ ] T48 — Redraw ADSR envelopes responsively without stretching their handles, and settle the envelope color
+    Confirmed drawing bug:
+    - The compact ADSR editor sets the SVG to stretch freely to its container. That non-uniform transform stretches the entire diagram, including circular breakpoints, into long ovals.
+    Required result:
+    - Lay out the ADSR path, regions, labels, visible handles, and hit targets from the actual available width and height, or use another responsive method that never non-uniformly scales the finished drawing.
+    - Visible breakpoint handles stay circular with consistent stroke weight and size in the short drawer, tall drawer, full editor, and during live resizing. The envelope remains legible rather than merely preserving circles inside a skewed curve.
+    - Choose one reviewed envelope color treatment for both ADSRs and MSEGs and apply it through their shared design tokens. The exact replacement color remains open until it is viewed in the real interface; do not let the implementer pick it in isolation.
+    Done when:
+    - Geometry tests prove every visible handle's rendered width equals its height across representative aspect ratios and no path or hit target escapes the graph.
+    - In-context screenshots cover the compact drawer, expanded drawer, and full editor, and Andrew accepts both the responsive shape and the shared color.
+
+[ ] T49 — Make ADSR graph editing precise without covering the graph
+    Current gap:
+    - Dragging the decay/sustain breakpoint changes both decay time and sustain level on every move. There is no dominant-axis lock, no value next to the finger, and the sustain segment itself cannot be dragged.
+    Required interaction:
+    - Reuse the existing rolling axis-lock behavior. Once horizontal or vertical intent wins, keep that axis for the gesture: horizontal movement of the decay/sustain point changes Decay only; vertical movement changes Sustain only. One-dimensional Attack and Release handles remain constrained to their time value.
+    - While any ADSR handle is dragged, show a small value label just above the finger that follows it without covering the breakpoint or curve. Show only the value actually being changed—Attack, Decay, or Release in time units; Sustain as a percentage. Do not open the large global heads-up display, and do not rely on the bottom toolbar.
+    - Make the entire horizontal sustain segment a vertical drag target. Dragging it moves Sustain only and leaves Decay, Attack, and Release unchanged.
+    - Preserve large invisible touch targets, pointer cancellation, exact value entry, and current parameter limits.
+    Done when:
+    - Touch tests prove diagonal gestures settle on one axis without cross-changing the other value, the sustain line can be acquired away from its breakpoint, and the floating value remains above the finger and inside the viewport at both screen edges.
+    - Cancellation restores normal interaction state with no stuck label or extra parameter write, and mouse/pen editing remains usable.
+
+[ ] T50 — Add one musical Keytrack system to every time- and frequency-based control
+    User contract:
+    - Every control whose real sonic meaning is a frequency, rate, delay, duration, or other time value gets the same compact `Keytrack` button. Keytrack is off by default and its state is saved and recalled with the complete sound.
+    - Changing the neighboring knob while Keytrack is on changes a musical offset or reference value that continues to follow subsequent notes; it must never become a fixed Hertz or millisecond addition.
+    One shared set of rules:
+    - Represent pitch-relative offsets as a frequency ratio, displayed as semitones and cents. For a played frequency `noteHz`, a pitch-relative frequency is `noteHz * 2^(offsetSemitones / 12)`.
+    - A tuned delay or comb period uses the reciprocal of that frequency. At A4 and zero offset it is about 2.27 ms; at A5 it is about 1.14 ms. Raising the offset by 12 semitones halves the delay time.
+    - Controls that should scale with keyboard position rather than become an audio-rate period use MIDI note 60 as their reference: one octave higher doubles a rate or halves a duration; one octave lower halves a rate or doubles a duration.
+    - Enabling Keytrack converts the current audible setting into the equivalent musical offset/reference so the sound does not jump. With no played note, MIDI note 60 is the conversion reference.
+    - Apply knob offset and modulation in the same logarithmic ratio domain, then convert to Hertz or time, clamp, and smooth once. Do not add independent Hertz/millisecond corrections in individual effects.
+    Complete inventory before implementation:
+    - Derive the inventory from both the control descriptions and the DSP, including normalized controls that secretly map to time. Classify every candidate as pitch-relative frequency, tuned delay/period, key-scaled rate, or key-scaled duration. Any exclusion with time/frequency meaning must be written down and approved rather than silently skipped.
+    - Cover Voice filter frequency, MSEG time, envelope Attack/Decay/Release, Glide, every effect cutoff/frequency/rate/time control, and time-derived controls such as reverb and dynamics timing where their DSP meaning qualifies.
+    - For controls already offering tempo Sync, make Keytrack a third mutually exclusive timing mode: Free, Sync, or Keytrack. Do not multiply a tempo division and keyboard tracking together accidentally.
+    Flanger correction:
+    - Flanger Feedback is a dimensionless regeneration amount and does not get Keytrack. The comb pitch comes from the short delay inside the feedback loop, but Cosimo currently fixes that base delay and exposes no tuning control.
+    - Add a Base Delay/Tune control and put Keytrack on that control. In Keytrack mode the base comb follows the played note plus the semitone/cent offset; express the LFO Depth around it as a musical interval so a fixed millisecond sweep cannot destroy the tuning at different keys. Feedback continues to control only resonance strength.
+    Pitch authority and chords:
+    - Use one canonical keyboard pitch containing MIDI note, pitch bend, and the T39 Global Tune offset. Do not inherit Oscillator A's private octave, semitone, fine, unison, or pitch-modulation settings as the keyboard reference.
+    - Per-voice controls track each voice's own note. The post-mix Effects Lane can only follow one pitch: the newest held note wins, releasing it falls back to the newest remaining held note, and with no held notes the last pitch stays latched so effect tails do not retune abruptly.
+    - Truly tracking every note of a chord through a post-mix effect would require a separate per-voice effect architecture and is not part of this task.
+    Interface and state:
+    - Use one Keytrack button style, state model, pitch feed, conversion module, readout rule, and test surface across Voice, Mod, and Effects. Do not implement a separate formula in each control or effect.
+    - While editing a keytracked control, show both the musical offset/reference and the resulting live Hertz or time value. Preserve exact entry, modulation, host automation, preset/URL recall, Init behavior, and undo ownership for the new state.
+    Done when:
+    - An inventory test proves every qualifying current control is classified and wired. With Keytrack off, every existing parameter remains behaviorally identical.
+    - Exact DSP tests prove adjacent octaves produce 2x frequency/rate and 0.5x tuned delay/duration, a fixed +7-semitone offset remains a fifth on multiple notes, Global Tune participates, knob changes preserve their new offset, and limits clamp safely without discontinuities.
+    - Flanger tests prove Feedback alone never changes comb tuning, Base Delay does, and the keytracked comb remains at the requested interval across multiple notes and Depth settings.
+    - Browser tests cover the shared button/readout, Free/Sync/Keytrack exclusivity, preset and URL round trips, modulation while tracking, and newest-held-note behavior for single notes and chords.
 
 INFRASTRUCTURE AND TOOLING
 
@@ -958,6 +1228,75 @@ FUTURE DSP EXPLORATIONS — VALIDATE BEFORE PRODUCT INTEGRATION
     Done when:
     - The reel evidence, signal-flow hypotheses, frozen corpus/protocol, renders, metrics, and source commit are retained together.
     - The result ends with one explicit recommendation: build a narrowly named product feature, run one identified follow-up experiment that would choose between real alternatives, defer, or do not build.
+
+DESIGN-BACKED DISTORTION AND OUTPUT POLISH
+
+Source note (2026-08-25):
+- The five documents for T25–T29 were imported at their original paths from branch `claude/cosimo-distortion-quality-x0rx9c` at commit `63dd431b15f7ebfd27e9f54406892391a42fd6d7`.
+- The checked-in root documents are the implementation authority on master. The branch and pinned commit remain their provenance; no unrelated branch code was imported.
+
+[ ] T25 — Rebuild the rack Distortion as the designed grade-2 saturator
+    Design authority: `DISTORTION_QUALITY_DESIGN.md`.
+    User-visible bug to close:
+    - The dry signal and driven wet signal reaching the current Classic Mix control are not level matched. Moving Mix therefore causes a large, erratic loudness change instead of revealing a controlled blend between the two sounds.
+    Locked work:
+    - Keep the existing six parameter identities and ranges, but make Drive control the designed chain: input high-pass, drive-scaled pre-emphasis, stereo-linked moving bias, asymmetric first stage, the existing knee shaper capped at exponent 12, inverse emphasis, post-shaper low-pass, DC removal, and static automatic level compensation.
+    - Keep gain compensation and correct it. Apply the compensated wet level before the Classic dry/wet blend so changing Drive does not leave the wet endpoint at a radically different loudness from dry. Do not treat removing compensation or merely changing the crossfade curve as a fix for mismatched inputs.
+    - Make the whole Mix travel usable: 0% remains exact dry, 100% is the compensated driven sound, and intermediate positions move continuously between them without a loudness hump, hole, jump, or zipper noise. Preserve the intended added harmonics and dynamics rather than normalizing the effect back into dry sound.
+    - Align the oversampled unprocessed path with the shaped path before subtraction so Harmonics mode produces the true added residue instead of including a timing mismatch.
+    - Clear every new filter, detector, bias, and oversampling state on pool reset. Preview output must reflect the final compensated sound.
+    - Start without ADAA. Add first-order ADAA only if the frozen aliasing tests and listening comparison show that it audibly improves the result; do not add second-order ADAA or a physical circuit model.
+    Preserve:
+    - Wet at zero remains the existing dry Classic path exactly. No new controls, latency, or grade-3 physical modelling enter this task.
+    Done when:
+    - With the default wet filters, pink noise at -18 dBFS stays within 1 dB of dry loudness across the Drive range at 100% Wet, and measured sweeps through 0%, 25%, 50%, 75%, and 100% Wet stay within 1 dB of dry at every tested Drive setting. The test must fail against the current mismatched path before the repair.
+    - The same Mix sweep is free of discontinuities on drums, bass, and a bright poly patch; Harmonics at full Wet and zero Drive is effectively silent; Wet zero is bit-identical to the current Classic path; reported latency remains zero; safety and reset tests pass.
+    - Level-matched renders cover drums, bass, a bright poly patch, and adversarial near-Nyquist material, and Andrew accepts the sound against the retained references.
+
+[ ] T26 — Build the fixed two-band Enhancer and decide separately whether to build its voice-tracked form
+    Design authority: `ENHANCER_DESIGN.md`.
+    Locked bus effect:
+    - Build two parametric bell bands, each with frequency, Q, separate mid and side amounts, and Tube/Solid character. Generate only the shaped-minus-unprocessed residue, remove DC, and add that residue back to the original signal.
+    - Keep the de-emphasis permanently active, use the documented 4x oversampling, and keep the ten controls static, smoothed, preset-persisted, and unavailable to the modulation and Effects Lane systems.
+    - Put the bus effect after Safe Bass and before the compressor/clipper in T28. With every amount at zero it must be bit-identical to dry.
+    Separate product decision:
+    - Do not silently add the per-voice MIDI-tracked variant. First decide whether it earns a product place. If approved, prototype it independently with one band per voice, no mid/side controls, the documented first-order anti-aliasing treatment, and one continuous harmonic-ratio control from 0.5x to 32x.
+    Done when:
+    - Zero amount is bit-identical to dry; mono stays mono; a side-only test remains side-only; safety and reset checks pass; and level-matched listening shows added harmonics without an unintended loudness jump.
+    - The voice-tracked variant ends with an explicit build/defer/reject decision backed by retained renders and measured cost, rather than becoming implied scope for the bus effect.
+
+[ ] T27 — Reproduce the Sausage Fattener reference before using it to voice Cosimo's compressor and clipper
+    Reference authority: `SAUSAGE_FATTENER_ANALYSIS.md`.
+    Work:
+    - Preserve the provenance distinction between the closed-source original, Polarity's reported null-tested recreation, the decoded Bitwig preset values, and our own inferences.
+    - Build an isolated reference lab for the decoded compressor settings, clipper transfer curve, input/output gains, and Fatness macro wiring. Retain the parser or extraction evidence, numeric fixtures, audio corpus, renders, and measurements.
+    - Use this as one comparison target for T28, not as permission to copy a product, interface, name, or closed implementation.
+    Done when:
+    - Automated fixtures pin the decoded values and transfer-curve points, the reference lab reproduces them deterministically, and a level-matched comparison bundle is available before T28's compressor/clipper is voiced.
+
+[?] T28 — Settle the open choices, then build the fixed end-of-chain Polish section
+    Design authority: `POLISH_CHAIN_DESIGN.md`.
+    Locked direction:
+    - This is one fixed, non-reorderable, non-modulatable end-of-chain section: Safe Bass into the T26 Enhancer, then medium compression into a soft clipper, followed by output trim and safety.
+    - Up to 4 ms of constant lookahead is permitted if the host is told the exact delay. No audible gain change may complete faster than one 60 Hz cycle (about 16.7 ms). FAT, Width, Tilt, and Punch are not part of this version.
+    Decisions required before implementation:
+    - Choose one macro versus separate compressor/clip controls and settle the medium-compression values.
+    - Choose whether Safe Bass is fixed or adjustable and whether its side-only high-pass uses a 6 or 12 dB/octave slope.
+    - Decide how this section replaces or contains the current `RackOutputStage`, including output trim, safety ceiling, and neutral-state behavior. Record these choices in the design document or an ADR.
+    Architecture proof before sound work:
+    - Prove that the desktop plugin, AUv3, standalone app, and browser path can report and compensate the chosen constant lookahead. The neutral path must be delayed identity, not a timing-mismatched bypass.
+    Done when:
+    - The open choices have explicit decisions; the implemented order is Safe Bass → Enhancer → medium compressor → soft clipper; the 60 Hz bass rule and constant reported delay are regression-tested; safety, preset recall, smoothing, and neutral-state behavior pass; and Andrew approves level-matched listening against the T27 reference bundle.
+
+[?] T29 — Use the distortion field notes to choose one genuinely new sound experiment
+    Knowledge source: `DISTORTION_FIELD_NOTES.md`.
+    Work:
+    - Treat Height, Speed, Time, Change, and Memory as ways to distinguish distortion behavior, not as five promised products.
+    - Map the notes against T23, T25, T26, and T28 so the next experiment does not merely duplicate the saturator, enhancer, clipper, or output chain already planned.
+    - Select at most one next experiment whose audible claim can be tested with a frozen corpus, a named baseline, a level-matched comparison, measurable safety and CPU checks, and a result that would change a build/defer/reject decision.
+    - Keep physical tape, hysteresis, and other grade-3 models out of production scope unless Andrew explicitly chooses one after the experiment.
+    Done when:
+    - The notes have produced one prioritized, testable experiment or a recorded decision that none is currently worth building. Any successful experiment still requires a separate product-placement and control-design decision.
 
 IMPLEMENTED BASELINES TO CONFIRM, NOT REBUILD BLINDLY
 
