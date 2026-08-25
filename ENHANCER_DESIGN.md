@@ -26,8 +26,8 @@ signal chain.**
 in (stereo) ──┬────────────────────────────────────────────────┐ (dry, bit-exact)
               │ M/S encode:  M = (L+R)/2,  S = (L−R)/2         │
               │                                                │
-              │  band LOW:  b = SVF-LP(freqLow)  of M and S    │
-              │  band AIR:  b = SVF-HP(freqAir)  of M and S    │
+              │  band 1:  b = SVF-BP(freq1, Q1)  of M and S    │
+              │  band 2:  b = SVF-BP(freq2, Q2)  of M and S    │
               │                                                │
               │  per band, per channel (M, S):                 │
               │     d   = amount(band, channel) · b            │
@@ -47,31 +47,36 @@ existing EQ/filter modules already cover. Consequence: each amount knob is pure
 *drive*, and the knob-to-drive mapping is voiced so the onset of audible harmonics is
 progressive (see §5).
 
-This is the two-band reduction of Spectre's parallel shelving EQ: a low-shelf boost's
-difference signal is LP-filtered content scaled by gain; a high-shelf's is HP-filtered
-content. Extracting LP/HP directly (TPT/Zavalishin SVF outputs, Q = 0.71,
-12 dB/oct) is the same thing with fewer moving parts, and the parallel topology makes
-the residue subtraction phase-clean by construction — the reason Spectre's EQ is
-boost-only and parallel rather than serial biquads.
+The bands are **two full parametric bells, Spectre-style** (Andrew, 2026-08-25:
+bands, not LP/HP halves): each freely steerable across the audible range with its own
+Q. In a parallel EQ, the difference signal of a bell boost *is* bandpass-shaped
+content, so extraction is the constant-peak-gain bandpass output of a TPT/Zavalishin
+SVF per band, scaled by amount. A wide low-Q bell parked at either extreme
+approximates shelf-like reach when wanted. The parallel topology keeps the residue
+subtraction phase-clean by construction — the reason Spectre's EQ is boost-only and
+parallel rather than serial biquads.
 
-## 2. Parameters (8, all modulation-targetable)
+## 2. Parameters (10, all modulation-targetable)
 
 | Param | Range | Default | Meaning |
 |---|---|---|---|
-| `lowFreqHz` | 40..400 | 130 | LOW band extraction cutoff (LP) |
-| `lowMidAmount` | 0..1 | 0 | LOW band drive into the curve, mid channel |
-| `lowSideAmount` | 0..1 | 0 | LOW band drive, side channel |
-| `lowCurve` | Tube / Solid | Solid | LOW band curve |
-| `airFreqHz` | 2k..16k | 9k | AIR band extraction cutoff (HP) |
-| `airMidAmount` | 0..1 | 0 | AIR band drive, mid |
-| `airSideAmount` | 0..1 | 0 | AIR band drive, side |
-| `airCurve` | Tube / Solid | Tube | AIR band curve |
+| `b1FreqHz` | 30..16k | 130 | band 1 bell center |
+| `b1Q` | 0.3..8 | 0.71 | band 1 bell width |
+| `b1MidAmount` | 0..1 | 0 | band 1 drive into the curve, mid channel |
+| `b1SideAmount` | 0..1 | 0 | band 1 drive, side channel |
+| `b1Curve` | Tube / Solid | Solid | band 1 curve |
+| `b2FreqHz` | 30..16k | 9k | band 2 bell center |
+| `b2Q` | 0.3..8 | 0.71 | band 2 bell width |
+| `b2MidAmount` | 0..1 | 0 | band 2 drive, mid |
+| `b2SideAmount` | 0..1 | 0 | band 2 drive, side |
+| `b2Curve` | Tube / Solid | Tube | band 2 curve |
 
 Independent mid and side amounts per band subsume Spectre's per-band channel routing
 selector (mid-only = side amount 0, and so on) without an enum, and directly support
-the two marquee uses: low band driven into the mid for weight that stays mono-solid,
-air band driven into the side as a natural widener (Spectre's own manual headlines
-this use case). Mono input ⇒ S = 0 ⇒ side amounts do nothing, correctly.
+the two marquee uses at the default band positions: a low bell driven into the mid
+for weight that stays mono-solid, a high bell driven into the side as a natural
+widener (Spectre's own manual headlines this use case). Mono input ⇒ S = 0 ⇒ side
+amounts do nothing, correctly.
 
 All amounts default 0 ⇒ the module is born silent-by-contribution: `curve(0) = 0`,
 residue = 0, `out = dry` **bit-exact**. The rack's hard-bypass invariant (ADR-005)
@@ -87,9 +92,9 @@ Per the Spectre manual's own characterizations, mapped to our vocabulary:
 
 - **Tube** — symmetric soft clip (the clipped rational tanh approximation already
   cited in `DISTORTION_QUALITY_DESIGN.md` §9): odd harmonics, "presence." Default for
-  AIR.
+  band 2 (the 9 kHz default position).
 - **Solid** — *asymmetric* soft clip (bias-offset tanh variant): even + odd
-  harmonics, "thickness." Default for LOW. Asymmetry ⇒ DC in the residue ⇒ the
+  harmonics, "thickness." Default for band 1. Asymmetry ⇒ DC in the residue ⇒ the
   per-path DC blocker in §1 is mandatory, reusing the existing
   `std::filters::dcblocker` idiom.
 
@@ -109,7 +114,7 @@ requirements:
 - Same resampler requirement: no declared latency, ≤ ~1 sample smear (ADR-008), same
   verification note about Cmajor node-oversampling interpolation, same fallback
   (in-processor polynomial up + cascaded IIR halfband down).
-- The AIR band is the honest aliasing risk: harmonics of 8–16 kHz content land near
+- A high-parked bell is the honest aliasing risk: harmonics of 8–16 kHz content land near
   or above Nyquist and fold. ×4 oversampling plus gentle curves plus residue levels
   (this is a subtle effect by design) keeps fold-back below audibility; the ADAA
   escape hatch from the saturator doc applies here unchanged if listening says
@@ -121,8 +126,8 @@ requirements:
   across the knob (compensating the de-emphasis dead zone at low drive), with the
   residue level roughly loudness-linear in the knob. Starting shape:
   `drive = 24 dB · amount²`, residue post-gain trimmed by ear.
-- LOW voiced against: kick/bass weight on small speakers (2nd/3rd harmonic of
-  40–130 Hz content landing 80–400 Hz). AIR voiced against: acoustic guitar / vocal
+- Low-position voicing target: kick/bass weight on small speakers (2nd/3rd harmonic
+  of 40–130 Hz content landing 80–400 Hz). High-position: acoustic guitar / vocal
   sheen and the side-widener use.
 - Voicing target is Spectre itself at Subtle/Medium on matching material (same
   render-and-compare method as the saturator doc §5; the harmonic-profile scripts in
@@ -136,7 +141,54 @@ the §4 oversampling stance), no allocation, pool-resettable: the module's only 
 is four SVFs, four DC blockers, and the OS cores — all covered by the existing
 `poolResetIn` pattern (coefficients preserved, state cleared).
 
-## 7. Ship criteria
+## 7. Per-voice variant (feasibility)
+
+Question on the table (Andrew, 2026-08-25): a single-band instance per synth voice,
+band frequency tracking MIDI pitch (center = note frequency × harmonic ratio). How
+cheap can it get? **Verdict: cheap enough to run on every voice** — but only by
+changing two implementation choices relative to the bus module: drop mid/side (a
+voice is one signal), and replace oversampling with first-order ADAA. Costed:
+
+- **Filter**: one TPT SVF bandpass per voice ≈ a dozen flops/sample. MIDI tracking
+  is control-rate work, not audio-rate: recompute the `tan()` coefficient only on
+  note/bend/glide events (or per block) and smooth the *coefficient*, never call
+  `tan` per sample. Cheaper filter structures (cascaded one-poles) save almost
+  nothing and lose the clean bell — the SVF is already the floor.
+- **Shaper**: ADAA the residue function directly. `r(x) = f(x) − x` is itself a
+  waveshaper with antiderivative `R(x) = F(x) − x²/2`, so ONE guarded-divide ADAA
+  evaluation of `r` yields the aligned residue with no oversampling, no resampler,
+  no thru-path — the §4 alignment problem *disappears* instead of being solved.
+  Choose algebraic kernels so antiderivatives are closed-form and sqrt-cheap:
+  tube = `x/√(1+x²)` (R = `√(1+x²) − x²/2` + const), solid = the same curve
+  bias-shifted, with its static DC removed exactly by subtracting the constant
+  `r(0)` instead of running a per-voice DC blocker. (`x/√(1+x²)` is the k = 2 case
+  of the saturator's existing knee curve — shared kernel.)
+- **Post-sum, once, not per voice**: a single DC blocker on the summed voice
+  residues (the DC blocker is linear, so it commutes with the sum) catches the
+  signal-dependent DC of the solid curve.
+- **Budget**: ≈ 40–50 flops and 4 state floats per voice per sample. Sixteen voices
+  at 48 kHz ≈ 30–40 MFLOP/s — well under a percent of one mobile core, on the order
+  of one extra filter per voice, far less than an extra oscillator. The bus module's
+  four ×4-oversampled paths cost roughly as much as ten of these voices.
+- **SIMD**: two levels. Inside Cmajor: keep the kernel branch-free (the ADAA
+  ill-conditioning guard as a select, not a branch) and let the JIT vectorize. On
+  the native renderer path: batch voices across SIMD lanes exactly as the surveyed
+  code does — sst-waveshapers' `Quad*` functions process four voices per 128-bit
+  register with ADAA state in per-lane registers (that is what "Quad" means), and
+  Vital packs voices into `poly_float`. The xsimd dependency already vendored under
+  `native/three_oscillator_renderer/` is the right tool; lane-batching cuts the
+  effective per-voice cost to roughly a quarter.
+- **Aliasing**: the tracked narrow band makes this *safer* than the bus case — the
+  shaper sees a near-sinusoid at a known f₀, harmonics land at exact multiples with
+  fast soft-curve rolloff, and first-order ADAA mops up the fold-back. Voicing can
+  taper drive above ~2 kHz fundamentals rather than paying for more anti-aliasing.
+- Precedent that per-voice tracked-filter-into-shaper is a shipped pattern, not an
+  experiment: Vital routes a keytrackable filter around its per-voice distortion.
+
+Status: feasibility locked — it fits any reasonable budget. Whether to build it, and
+the harmonic-ratio control's range, are product decisions for later.
+
+## 8. Ship criteria
 
 1. All amounts 0 ⇒ output bit-exact dry (ADR-005 proof unchanged).
 2. Harmonics-only guarantee: enabling any band at default voicing changes pink-noise
@@ -145,7 +197,7 @@ is four SVFs, four DC blockers, and the OS cores — all covered by the existing
 3. Mono input with only side amounts raised ⇒ output identical to input.
 4. Andrew's ears against Spectre at Subtle/Medium on the same stems.
 
-## 8. Open decisions (defaults apply unless overridden)
+## 9. Open decisions (defaults apply unless overridden)
 
 1. **De-emphasis always-on, no toggle.** Default: yes (rationale in §1). Overriding
    means adding a "boost mode" that duplicates parallel EQ — argue for it before
@@ -156,7 +208,7 @@ is four SVFs, four DC blockers, and the OS cores — all covered by the existing
    integration pattern to maintain).
 3. **Module name.** Working name "Enhancer" (`wt::EnhancerBus`).
 
-## 9. Source notes
+## 10. Source notes
 
 Architecture facts from: Wavesfactory Spectre product page and v1.5.6 user manual
 (signal chain §"How does it work", saturation algorithm list, de-emphasis description,
