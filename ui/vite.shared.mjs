@@ -41,6 +41,8 @@ function contentTypeFor(filePath) {
             return "text/javascript";
         case ".json":
             return "application/json";
+        case ".css":
+            return "text/css";
         case ".svg":
             return "image/svg+xml";
         case ".html":
