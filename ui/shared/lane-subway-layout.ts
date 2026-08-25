@@ -19,9 +19,10 @@ import {
  * Vocabulary from the accepted mocks: lines are INFRA TEAL; frequency bands
  * are the one semantic color exception (lo/mid/hi tints). A parallel fork is
  * a dot junction with lettered lanes; a split is a diamond with band-labeled
- * lanes and crossover readouts. An empty branch is a dashed lane opened by a
- * GHOST add-stub station; a bypassed group keeps its stations (members still
- * advance in the engine) and the view dims the whole section.
+ * lanes and crossover readouts. Every path ends in a GHOST add-stub station;
+ * an empty branch begins there and stays dashed. A bypassed group keeps its
+ * stations (members still advance in the engine) and the view dims the whole
+ * section.
  */
 
 export type SubwayTint = "infra" | "lo" | "mid" | "hi";
@@ -47,7 +48,8 @@ export type SubwayLineCell = {
 export type SubwayGhostCell = {
     readonly kind: "ghost";
     readonly tint: SubwayTint;
-    /** The empty branch's insertion point for adds and cross-lane drops. */
+    readonly dashed: boolean;
+    /** The exact end-of-path anchor shared by adds and cross-lane drops. */
     readonly path: LaneDevicePathV2;
 };
 
@@ -153,11 +155,10 @@ function groupRows(group: LaneGroupV2): SubwayRow[] {
             : null,
     }];
 
-    // The body is as tall as the longest branch — and never shorter than one
-    // row, so an all-empty group still shows its ghost add-stubs. A lane past
-    // its branch's last station carries the line onward; an empty lane opens
-    // with a ghost and continues dashed.
-    const bodyRowCount = Math.max(1, ...group.branches.map((branch) => branch.length));
+    // Every branch owns one insertion row immediately after its last station.
+    // Shorter branches carry their rail onward after that anchor until the
+    // longest branch reaches its own tail and the group can merge.
+    const bodyRowCount = Math.max(...group.branches.map((branch) => branch.length + 1));
     for (let rowIndex = 0; rowIndex < bodyRowCount; rowIndex += 1) {
         rows.push({
             kind: "stations",
@@ -168,8 +169,13 @@ function groupRows(group: LaneGroupV2): SubwayRow[] {
                 if (rowIndex < branch.length) {
                     return stationCell(branch[rowIndex], tints[laneIndex], branchPath(rowIndex));
                 }
-                if (branch.length === 0 && rowIndex === 0) {
-                    return { kind: "ghost", tint: tints[laneIndex], path: branchPath(0) };
+                if (rowIndex === branch.length) {
+                    return {
+                        kind: "ghost",
+                        tint: tints[laneIndex],
+                        dashed: branch.length === 0,
+                        path: branchPath(branch.length),
+                    };
                 }
                 return { kind: "line", tint: tints[laneIndex], dashed: branch.length === 0 };
             }),
@@ -209,7 +215,12 @@ export function buildSubwayLayout(state: LaneStateV2): SubwayLayout {
     // a device and the drop target for moving one to the end.
     rows.push({
         kind: "stations",
-        cells: [{ kind: "ghost", tint: "infra", path: { kind: "trunk", index: state.chain.length } }],
+        cells: [{
+            kind: "ghost",
+            tint: "infra",
+            dashed: false,
+            path: { kind: "trunk", index: state.chain.length },
+        }],
     });
 
     rows.push({ kind: "terminus", label: "out" });

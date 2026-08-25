@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs/promises";
+import path from "node:path";
 
 import {
     createDefaultLaneState,
@@ -17,8 +19,239 @@ import {
     selectRackEffect,
     waitForHarnessSnapshot,
 } from "./helpers/desktop_patch_view_browser_suite.mjs";
+import { decodePng, pngPixelAt, rgbDistance } from "./helpers/png_pixels.mjs";
 
 const readStoredLaneDoc = (snapshot) => JSON.parse(String(snapshot.storedState["lane.v1"]));
+const evidenceDirectory = path.resolve(import.meta.dirname, "..", "build", "fx-graph-foundation");
+
+function populatedThreeBandLaneDocJson() {
+    const params = createDefaultLaneState().params;
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices: {
+            "distortion#1": { params: { ...params.drive } },
+            "chorus#1": { params: { ...params.chorus } },
+            "ott#1": { params: { ...params.ott } },
+            "flanger#1": { params: { ...params.flanger } },
+            "phaser#1": { params: { ...params.phaser } },
+            "delay#1": { params: { ...params.delay } },
+            "reverb#1": { params: { ...params.reverb } },
+        },
+        chain: [{
+            kind: "split",
+            groupId: "split#1",
+            enabled: true,
+            xoverLowHz: 320,
+            xoverHighHz: 3200,
+            branches: [
+                [
+                    { kind: "device", deviceId: "distortion#1", enabled: true },
+                    { kind: "device", deviceId: "chorus#1", enabled: true },
+                ],
+                [
+                    { kind: "device", deviceId: "ott#1", enabled: true },
+                    { kind: "device", deviceId: "flanger#1", enabled: true },
+                    { kind: "device", deviceId: "phaser#1", enabled: true },
+                ],
+                [
+                    { kind: "device", deviceId: "delay#1", enabled: true },
+                    { kind: "device", deviceId: "reverb#1", enabled: true },
+                ],
+            ],
+        }],
+    });
+}
+
+function branchTailLaneDocJson(groupKind) {
+    const params = createDefaultLaneState().params;
+    const group = groupKind === "parallel"
+        ? {
+            kind: "parallel",
+            groupId: "parallel#1",
+            enabled: true,
+            branches: [
+                [
+                    { kind: "device", deviceId: "distortion#1", enabled: true },
+                    { kind: "device", deviceId: "chorus#1", enabled: true },
+                ],
+                [],
+            ],
+        }
+        : {
+            kind: "split",
+            groupId: "split#1",
+            enabled: true,
+            xoverLowHz: 320,
+            xoverHighHz: 3200,
+            branches: [
+                [{ kind: "device", deviceId: "ott#1", enabled: true }],
+                [],
+                [
+                    { kind: "device", deviceId: "delay#1", enabled: true },
+                    { kind: "device", deviceId: "reverb#1", enabled: true },
+                ],
+            ],
+        };
+    const devices = groupKind === "parallel"
+        ? {
+            "distortion#1": { params: { ...params.drive } },
+            "chorus#1": { params: { ...params.chorus } },
+            "phaser#1": { params: { ...params.phaser } },
+        }
+        : {
+            "ott#1": { params: { ...params.ott } },
+            "delay#1": { params: { ...params.delay } },
+            "reverb#1": { params: { ...params.reverb } },
+            "phaser#1": { params: { ...params.phaser } },
+        };
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices,
+        chain: [
+            group,
+            { kind: "device", deviceId: "phaser#1", enabled: true },
+        ],
+    });
+}
+
+function insertExpectedPlacement(document, path, deviceId) {
+    const placement = { kind: "device", deviceId, enabled: true };
+    if (path.kind === "trunk") {
+        document.chain.splice(path.index, 0, placement);
+        return;
+    }
+    const group = document.chain.find((node) => node.groupId === path.groupId);
+    assert.ok(group, `Expected group ${path.groupId}`);
+    group.branches[path.branchIndex].splice(path.index, 0, placement);
+}
+
+function populatedConnectorLaneDocJson(groupKind, branchCount) {
+    const params = createDefaultLaneState().params;
+    const fixtures = [
+        { deviceId: "distortion#1", params: params.drive },
+        { deviceId: "ott#1", params: params.ott },
+        { deviceId: "chorus#1", params: params.chorus },
+        { deviceId: "delay#1", params: params.delay },
+    ].slice(0, branchCount);
+    const group = {
+        kind: groupKind,
+        groupId: `${groupKind}#1`,
+        enabled: true,
+        ...(groupKind === "split" ? { xoverLowHz: 320, xoverHighHz: 3200 } : {}),
+        branches: fixtures.map(({ deviceId }) => ([{
+            kind: "device",
+            deviceId,
+            enabled: true,
+        }])),
+    };
+    return JSON.stringify({
+        format: "cosimo.lane",
+        version: 2,
+        devices: Object.fromEntries(fixtures.map((fixture) => ([
+            fixture.deviceId,
+            { params: { ...fixture.params } },
+        ]))),
+        chain: [group],
+    });
+}
+
+function pointDistance(left, right) {
+    return Math.hypot(left.x - right.x, left.y - right.y);
+}
+
+function minimumExpectedStrokeDistance(png, cssSize, point, expectedRgb, radius = 3) {
+    const scaleX = png.width / cssSize.width;
+    const scaleY = png.height / cssSize.height;
+    const centerX = point.x * scaleX;
+    const centerY = point.y * scaleY;
+    let minimum = Number.POSITIVE_INFINITY;
+    for (let offsetY = -radius; offsetY <= radius; offsetY += 1) {
+        for (let offsetX = -radius; offsetX <= radius; offsetX += 1) {
+            minimum = Math.min(
+                minimum,
+                rgbDistance(pngPixelAt(png, centerX + offsetX, centerY + offsetY), expectedRgb),
+            );
+        }
+    }
+    return minimum;
+}
+
+async function readRenderedConnector(page, role) {
+    const connector = page.locator(`[data-role="${role}"]`);
+    const geometry = await connector.evaluate((svg) => {
+        const root = svg.parentElement;
+        if (!(svg instanceof SVGSVGElement) || !(root instanceof HTMLElement)) {
+            return null;
+        }
+        const rootRect = root.getBoundingClientRect();
+        const group = root.closest(".subway-group");
+        const laneRows = group === null ? [] : Array.from(group.querySelectorAll(".subway-lane-row"));
+        const laneRow = root.classList.contains("subway-fork") ? laneRows[0] : laneRows.at(-1);
+        const laneCenters = laneRow instanceof HTMLElement
+            ? Array.from(laneRow.children, (cell) => {
+                const rect = cell.getBoundingClientRect();
+                return rect.left + (rect.width / 2) - rootRect.left;
+            })
+            : [];
+        const colorCanvas = document.createElement("canvas");
+        colorCanvas.width = 1;
+        colorCanvas.height = 1;
+        const colorContext = colorCanvas.getContext("2d", { willReadFrequently: true });
+        if (colorContext === null) {
+            return null;
+        }
+        const resolveRgb = (value) => {
+            colorContext.clearRect(0, 0, 1, 1);
+            colorContext.fillStyle = value;
+            colorContext.fillRect(0, 0, 1, 1);
+            return Array.from(colorContext.getImageData(0, 0, 1, 1).data.slice(0, 3));
+        };
+        const pointOnPath = (path, fraction) => {
+            const sourcePoint = path.getPointAtLength(path.getTotalLength() * fraction);
+            const svgPoint = svg.createSVGPoint();
+            svgPoint.x = sourcePoint.x;
+            svgPoint.y = sourcePoint.y;
+            const matrix = path.getScreenCTM();
+            if (matrix === null) {
+                return null;
+            }
+            const screenPoint = svgPoint.matrixTransform(matrix);
+            return { x: screenPoint.x - rootRect.left, y: screenPoint.y - rootRect.top };
+        };
+        const fork = root.classList.contains("subway-fork");
+        const paths = Array.from(svg.querySelectorAll("path"), (path) => {
+            const segment = path.getAttribute("data-connector-segment") ?? "";
+            const fractions = segment === "trunk"
+                ? (fork ? [0.1, 0.25, 0.4] : [0.72, 0.84, 0.96])
+                : (fork ? [0.68, 0.82, 0.96] : [0.04, 0.16, 0.3]);
+            return {
+                segment,
+                laneIndex: Number(path.getAttribute("data-lane-index")),
+                expectedRgb: resolveRgb(getComputedStyle(path).stroke),
+                start: pointOnPath(path, 0),
+                end: pointOnPath(path, 1),
+                samples: fractions.map((fraction) => pointOnPath(path, fraction)),
+            };
+        });
+        return {
+            size: { width: rootRect.width, height: rootRect.height },
+            laneCenters,
+            paths,
+        };
+    });
+    assert.ok(geometry, `${role}: rendered connector geometry`);
+    const png = decodePng(await connector.locator("xpath=..").screenshot({ animations: "disabled" }));
+    return { geometry, png };
+}
+
+function rectanglesIntersect(left, right) {
+    return left.left < right.right
+        && left.right > right.left
+        && left.top < right.bottom
+        && left.bottom > right.top;
+}
 
 async function wrapStationInGroup(page, effectId, groupKind) {
     await page.click(`[data-role="rack-station-${effectId}"]`, { button: "right" });
@@ -26,6 +259,382 @@ async function wrapStationInGroup(page, effectId, groupKind) {
     await page.click(`[data-role="rack-station-wrap-${groupKind}-${effectId}"]`);
     await page.waitForSelector('[data-role="rack-station-menu"]', { state: "detached" });
 }
+
+test("a populated three-band split stays inside the graph without intersecting effect pills", async () => {
+    const laneDoc = populatedThreeBandLaneDocJson();
+    await fs.mkdir(evidenceDirectory, { recursive: true });
+    const surfaces = [
+        { name: "phone", width: 320, height: 700 },
+        { name: "plugin", width: 640, height: 700 },
+        { name: "desktop", width: 1024, height: 768 },
+    ];
+
+    for (const surface of surfaces) {
+        const page = await openHarnessPage({
+            laneDoc,
+            beforeGoto: (nextPage) => nextPage.setViewportSize({
+                width: surface.width,
+                height: surface.height,
+            }),
+        });
+
+        try {
+            if (surface.width < 640) {
+                await page.click('[data-role="mobile-workspace-tab-fx"]');
+            }
+            await page.waitForSelector('[data-role="rack-group-split#1"]');
+            const geometry = await page.locator('[data-role="rack-group-split#1"]').evaluate((group) => {
+                const list = group.closest('[data-role="rack-module-list"]');
+                if (!(list instanceof HTMLElement)) {
+                    return null;
+                }
+                const bounds = list.getBoundingClientRect();
+                const parts = Array.from(group.querySelectorAll([
+                    ".subway-glyph-diamond",
+                    ".subway-fork-lane",
+                    ".subway-fork-readout",
+                    ".subway-station-pill",
+                    ".subway-ghost-pill",
+                    ".subway-merge-dot",
+                ].join(","))).map((element) => {
+                    const rect = element.getBoundingClientRect();
+                    return {
+                        className: element.className,
+                        text: element.textContent?.trim() ?? "",
+                        left: rect.left,
+                        right: rect.right,
+                        top: rect.top,
+                        bottom: rect.bottom,
+                    };
+                });
+                const pills = parts.filter((part) => part.className === "subway-station-pill");
+                return {
+                    bounds: {
+                        left: bounds.left,
+                        right: bounds.right,
+                        top: bounds.top,
+                        bottom: bounds.bottom,
+                    },
+                    parts,
+                    pills,
+                    labels: Array.from(group.querySelectorAll(".subway-fork-lane"), (label) => (
+                        label.textContent?.trim() ?? ""
+                    )),
+                    documentScrollWidth: document.documentElement.scrollWidth,
+                };
+            });
+            assert.ok(geometry, `${surface.name}: split geometry must render`);
+            assert.deepEqual(geometry.labels, ["LO", "MID", "HI"]);
+            assert.equal(
+                geometry.documentScrollWidth <= surface.width,
+                true,
+                `${surface.name}: the graph must not widen the document`,
+            );
+            for (const part of geometry.parts) {
+                assert.equal(
+                    part.left >= geometry.bounds.left - 0.5
+                        && part.right <= geometry.bounds.right + 0.5
+                        && part.top >= geometry.bounds.top - 0.5
+                        && part.bottom <= geometry.bounds.bottom + 0.5,
+                    true,
+                    `${surface.name}: ${part.className} ${part.text} must stay inside the graph: `
+                        + `${JSON.stringify(part)} vs ${JSON.stringify(geometry.bounds)}`,
+                );
+            }
+            for (let leftIndex = 0; leftIndex < geometry.pills.length; leftIndex += 1) {
+                for (let rightIndex = leftIndex + 1; rightIndex < geometry.pills.length; rightIndex += 1) {
+                    assert.equal(
+                        rectanglesIntersect(geometry.pills[leftIndex], geometry.pills[rightIndex]),
+                        false,
+                        `${surface.name}: effect pills ${geometry.pills[leftIndex].text} and `
+                            + `${geometry.pills[rightIndex].text} must not overlap`,
+                    );
+                }
+            }
+            await page.locator('[data-role="effects-rack-card"]').screenshot({
+                path: path.join(evidenceDirectory, `frequency-split-${surface.name}-${surface.width}px.png`),
+                animations: "disabled",
+            });
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("parallel and split paths expose one exact add anchor at every empty or populated tail", async () => {
+    const cases = [
+        {
+            groupKind: "parallel",
+            paths: [
+                "branch:parallel#1:0:2",
+                "branch:parallel#1:1:0",
+                "trunk:2",
+            ],
+        },
+        {
+            groupKind: "split",
+            paths: [
+                "branch:split#1:0:1",
+                "branch:split#1:1:0",
+                "branch:split#1:2:2",
+                "trunk:2",
+            ],
+        },
+    ];
+
+    for (const fixture of cases) {
+        const page = await openHarnessPage({ laneDoc: branchTailLaneDocJson(fixture.groupKind) });
+        try {
+            await page.waitForSelector(`[data-role="rack-group-${fixture.groupKind}#1"]`);
+            for (const path of fixture.paths) {
+                const anchor = page.locator(
+                    `[data-role="rack-ghost-add"][data-insertion-anchor="path-tail"][data-lane-path="${path}"]`,
+                );
+                assert.equal(await anchor.count(), 1, `${fixture.groupKind}: one add anchor at ${path}`);
+            }
+            assert.equal(
+                await page.locator('[data-role="rack-ghost-add"][data-insertion-anchor="path-tail"]').count(),
+                fixture.paths.length,
+            );
+            for (const connector of ["fork", "merge"]) {
+                const connectorRole = `[data-role="rack-${connector}-connections-${fixture.groupKind}#1"]`;
+                const paths = page.locator(`${connectorRole} [data-connector-segment="branch"]`);
+                const dashedPaths = page.locator(`${connectorRole} [data-connector-segment="branch"].is-dashed`);
+                assert.equal(await paths.count(), fixture.groupKind === "split" ? 3 : 2);
+                assert.equal(await dashedPaths.count(), 1);
+                assert.equal(
+                    await page.locator(
+                        `[data-role="rack-${connector}-connections-${fixture.groupKind}#1"] `
+                            + '[data-connector-segment="branch"][data-lane-index="1"].is-dashed',
+                    ).count(),
+                    1,
+                    `${fixture.groupKind}: the empty branch remains dashed through its ${connector}`,
+                );
+            }
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("every pictured path-tail add anchor inserts at that exact path and preserves every other path", async () => {
+    const cases = [
+        {
+            groupKind: "parallel",
+            path: { kind: "branch", groupId: "parallel#1", branchIndex: 0, index: 2 },
+        },
+        {
+            groupKind: "parallel",
+            path: { kind: "branch", groupId: "parallel#1", branchIndex: 1, index: 0 },
+        },
+        {
+            groupKind: "parallel",
+            path: { kind: "trunk", index: 2 },
+        },
+        {
+            groupKind: "split",
+            path: { kind: "branch", groupId: "split#1", branchIndex: 0, index: 1 },
+        },
+        {
+            groupKind: "split",
+            path: { kind: "branch", groupId: "split#1", branchIndex: 1, index: 0 },
+        },
+        {
+            groupKind: "split",
+            path: { kind: "branch", groupId: "split#1", branchIndex: 2, index: 2 },
+        },
+        {
+            groupKind: "split",
+            path: { kind: "trunk", index: 2 },
+        },
+    ];
+
+    for (const fixture of cases) {
+        const laneDoc = branchTailLaneDocJson(fixture.groupKind);
+        const encodedPath = fixture.path.kind === "trunk"
+            ? `trunk:${fixture.path.index}`
+            : `branch:${fixture.path.groupId}:${fixture.path.branchIndex}:${fixture.path.index}`;
+        const page = await openHarnessPage({ laneDoc });
+        try {
+            await clearHarnessDebugLog(page);
+            await page.click(`[data-role="rack-ghost-add"][data-lane-path="${encodedPath}"]`);
+            await page.waitForSelector('[data-role="rack-add-sheet"]');
+            await page.click('[data-role="rack-add-flanger"]');
+            const snapshot = await waitForHarnessSnapshot(
+                page,
+                `flanger added at ${encodedPath}`,
+                (nextSnapshot) => {
+                    const rawState = nextSnapshot.storedState["lane.v1"];
+                    return rawState !== undefined
+                        && JSON.parse(String(rawState)).devices?.["flanger#1"] !== undefined;
+                },
+            );
+            const storedDoc = readStoredLaneDoc(snapshot);
+            const expected = JSON.parse(laneDoc);
+            insertExpectedPlacement(expected, fixture.path, "flanger#1");
+            assert.deepEqual(storedDoc.chain, expected.chain, encodedPath);
+            for (const [deviceId, record] of Object.entries(expected.devices)) {
+                assert.deepEqual(storedDoc.devices[deviceId], record, `${encodedPath}: preserved ${deviceId}`);
+            }
+            assert.deepEqual(
+                Object.keys(storedDoc.devices).sort(),
+                [...Object.keys(expected.devices), "flanger#1"].sort(),
+            );
+        } finally {
+            await page.close();
+        }
+    }
+});
+
+test("rendered pixels connect every supported split and merge at narrow and wide widths", async () => {
+    await fs.mkdir(evidenceDirectory, { recursive: true });
+    const groups = [
+        { groupKind: "parallel", branchCount: 2 },
+        { groupKind: "parallel", branchCount: 3 },
+        { groupKind: "parallel", branchCount: 4 },
+        { groupKind: "split", branchCount: 2 },
+        { groupKind: "split", branchCount: 3 },
+    ];
+    const surfaces = [
+        { name: "narrow", width: 320, height: 700 },
+        { name: "wide", width: 1024, height: 768 },
+    ];
+
+    for (const group of groups) {
+        for (const surface of surfaces) {
+            const laneDoc = populatedConnectorLaneDocJson(group.groupKind, group.branchCount);
+            const page = await openHarnessPage({
+                laneDoc,
+                beforeGoto: (nextPage) => nextPage.setViewportSize({
+                    width: surface.width,
+                    height: surface.height,
+                }),
+            });
+            const label = `${surface.name} ${group.groupKind}-${group.branchCount}`;
+            try {
+                if (surface.width < 640) {
+                    await page.click('[data-role="mobile-workspace-tab-fx"]');
+                }
+                const groupId = `${group.groupKind}#1`;
+                await page.waitForSelector(`[data-role="rack-group-${groupId}"]`);
+                const groupLayout = await page.locator(`[data-role="rack-group-${groupId}"]`).evaluate((element) => {
+                    const graph = element.closest('[data-role="rack-module-list"]');
+                    if (!(graph instanceof HTMLElement)) {
+                        return null;
+                    }
+                    const graphRect = graph.getBoundingClientRect();
+                    return {
+                        graph: {
+                            left: graphRect.left,
+                            right: graphRect.right,
+                            top: graphRect.top,
+                            bottom: graphRect.bottom,
+                        },
+                        pills: Array.from(element.querySelectorAll(".subway-station-pill"), (pill) => {
+                            const rect = pill.getBoundingClientRect();
+                            return {
+                                text: pill.textContent?.trim() ?? "",
+                                left: rect.left,
+                                right: rect.right,
+                                top: rect.top,
+                                bottom: rect.bottom,
+                            };
+                        }),
+                    };
+                });
+                assert.ok(groupLayout, `${label}: group layout`);
+                for (const pill of groupLayout.pills) {
+                    assert.equal(
+                        pill.left >= groupLayout.graph.left - 0.5
+                            && pill.right <= groupLayout.graph.right + 0.5
+                            && pill.top >= groupLayout.graph.top - 0.5
+                            && pill.bottom <= groupLayout.graph.bottom + 0.5,
+                        true,
+                        `${label}: ${pill.text} stays inside the graph: `
+                            + `${JSON.stringify(pill)} vs ${JSON.stringify(groupLayout.graph)}`,
+                    );
+                }
+                for (let leftIndex = 0; leftIndex < groupLayout.pills.length; leftIndex += 1) {
+                    for (let rightIndex = leftIndex + 1; rightIndex < groupLayout.pills.length; rightIndex += 1) {
+                        assert.equal(
+                            rectanglesIntersect(groupLayout.pills[leftIndex], groupLayout.pills[rightIndex]),
+                            false,
+                            `${label}: ${groupLayout.pills[leftIndex].text} and `
+                                + `${groupLayout.pills[rightIndex].text} must not overlap`,
+                        );
+                    }
+                }
+                const fork = await readRenderedConnector(page, `rack-fork-connections-${groupId}`);
+                const merge = await readRenderedConnector(page, `rack-merge-connections-${groupId}`);
+
+                for (const [connectorKind, proof] of [["fork", fork], ["merge", merge]]) {
+                    const trunk = proof.geometry.paths.find((path) => path.segment === "trunk");
+                    const branches = proof.geometry.paths.filter((path) => path.segment === "branch");
+                    assert.ok(trunk?.start && trunk.end, `${label} ${connectorKind}: trunk geometry`);
+                    assert.equal(branches.length, group.branchCount, `${label} ${connectorKind}: branch count`);
+                    assert.equal(proof.geometry.laneCenters.length, group.branchCount);
+
+                    for (const branch of branches) {
+                        assert.ok(branch.start && branch.end, `${label} ${connectorKind}: lane ${branch.laneIndex}`);
+                        const laneCenter = proof.geometry.laneCenters[branch.laneIndex];
+                        assert.equal(Number.isFinite(laneCenter), true);
+                        if (connectorKind === "fork") {
+                            assert.equal(
+                                pointDistance(trunk.end, branch.start) <= 0.25,
+                                true,
+                                `${label}: every branch leaves the fork's one junction`,
+                            );
+                            assert.equal(Math.abs(branch.end.x - laneCenter) <= 0.5, true, `${label}: fork rail x`);
+                            assert.equal(
+                                Math.abs(branch.end.y - proof.geometry.size.height) <= 0.5,
+                                true,
+                                `${label}: fork reaches the body rail`,
+                            );
+                        } else {
+                            assert.equal(
+                                pointDistance(branch.end, trunk.start) <= 0.25,
+                                true,
+                                `${label}: every branch reaches the merge's one junction`,
+                            );
+                            assert.equal(Math.abs(branch.start.x - laneCenter) <= 0.5, true, `${label}: merge rail x`);
+                            assert.equal(Math.abs(branch.start.y) <= 0.5, true, `${label}: merge starts on body rail`);
+                        }
+                    }
+
+                    for (const path of proof.geometry.paths) {
+                        for (const sample of path.samples) {
+                            assert.ok(sample, `${label} ${connectorKind}: sample geometry`);
+                            const distance = minimumExpectedStrokeDistance(
+                                proof.png,
+                                proof.geometry.size,
+                                sample,
+                                path.expectedRgb,
+                            );
+                            assert.equal(
+                                distance < 260,
+                                true,
+                                `${label} ${connectorKind} ${path.segment} lane ${path.laneIndex} `
+                                    + `must paint through its curve (RGB distance ${distance})`,
+                            );
+                        }
+                    }
+                }
+                if ((group.groupKind === "parallel" && group.branchCount === 4 && surface.name === "narrow")
+                        || (group.groupKind === "split" && group.branchCount === 3 && surface.name === "wide")) {
+                    await page.locator('[data-role="effects-rack-card"]').screenshot({
+                        path: path.join(
+                            evidenceDirectory,
+                            `connected-${group.groupKind}-${group.branchCount}-${surface.name}.png`,
+                        ),
+                        animations: "disabled",
+                    });
+                }
+            } finally {
+                await page.close();
+            }
+        }
+    }
+});
 
 test("wrapping a station in a split builds the tree, the wire, and the map", async () => {
     const page = await openHarnessPage();

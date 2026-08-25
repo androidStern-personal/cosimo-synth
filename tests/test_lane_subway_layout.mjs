@@ -25,6 +25,17 @@ test("a serial document is a single teal line of stations between termini", asyn
     const laneV2 = await laneV2Promise;
     const layout = await layoutPromise;
 
+    const emptyDocument = await parseDoc({ devices: {}, chain: [] });
+    assert.deepEqual(layout.buildSubwayLayout(emptyDocument).rows[1], {
+        kind: "stations",
+        cells: [{
+            kind: "ghost",
+            tint: "infra",
+            dashed: false,
+            path: { kind: "trunk", index: 0 },
+        }],
+    });
+
     // The fresh default is the starter trio: drive → delay → reverb.
     const rows = layout.buildSubwayLayout(laneV2.createDefaultLaneStateV2());
     assert.equal(rows.laneCount, 1);
@@ -35,7 +46,12 @@ test("a serial document is a single teal line of stations between termini", asyn
     // path is the end-of-chain insertion point (also a drop target).
     assert.deepEqual(rows.rows.at(-2), {
         kind: "stations",
-        cells: [{ kind: "ghost", tint: "infra", path: { kind: "trunk", index: 3 } }],
+        cells: [{
+            kind: "ghost",
+            tint: "infra",
+            dashed: false,
+            path: { kind: "trunk", index: 3 },
+        }],
     });
 
     const stationRows = rows.rows.slice(1, -2);
@@ -90,10 +106,10 @@ test("a parallel group forks teal lanes, ghosts its empty branch, and merges", a
     const built = layout.buildSubwayLayout(doc);
     assert.equal(built.laneCount, 2);
     assert.deepEqual(built.rows.map((row) => row.kind), [
-        "terminus", "fork", "stations", "stations", "merge", "stations", "stations", "terminus",
+        "terminus", "fork", "stations", "stations", "stations", "merge", "stations", "stations", "terminus",
     ]);
-    assert.deepEqual(built.rows[6].cells, [
-        { kind: "ghost", tint: "infra", path: { kind: "trunk", index: 2 } },
+    assert.deepEqual(built.rows[7].cells, [
+        { kind: "ghost", tint: "infra", dashed: false, path: { kind: "trunk", index: 2 } },
     ]);
 
     const fork = built.rows[1];
@@ -113,19 +129,32 @@ test("a parallel group forks teal lanes, ghosts its empty branch, and merges", a
     assert.deepEqual(firstRow.cells[1], {
         kind: "ghost",
         tint: "infra",
+        dashed: true,
         path: { kind: "branch", groupId: "parallel#1", branchIndex: 1, index: 0 },
     });
     assert.equal(secondRow.cells[0].deviceId, "delay#2");
     assert.deepEqual(secondRow.cells[1], { kind: "line", tint: "infra", dashed: true });
 
-    assert.deepEqual(built.rows[4].lanes, [
+    // Every populated branch gets the exact append anchor immediately after
+    // its last station; the empty branch keeps its first insertion anchor.
+    assert.deepEqual(built.rows[4].cells, [
+        {
+            kind: "ghost",
+            tint: "infra",
+            dashed: false,
+            path: { kind: "branch", groupId: "parallel#1", branchIndex: 0, index: 2 },
+        },
+        { kind: "line", tint: "infra", dashed: true },
+    ]);
+
+    assert.deepEqual(built.rows[5].lanes, [
         { tint: "infra", dashed: false },
         { tint: "infra", dashed: true },
     ]);
 
     // The trunk resumes as a single lane after the merge.
-    assert.equal(built.rows[5].cells.length, 1);
-    assert.equal(built.rows[5].cells[0].deviceId, "reverb#1");
+    assert.equal(built.rows[6].cells.length, 1);
+    assert.equal(built.rows[6].cells[0].deviceId, "reverb#1");
 });
 
 test("a split group tints its bands, reads out crossovers, and marks bypass", async () => {
@@ -154,10 +183,10 @@ test("a split group tints its bands, reads out crossovers, and marks bypass", as
     const built = layout.buildSubwayLayout(doc);
     assert.equal(built.laneCount, 3);
     assert.deepEqual(built.rows.map((row) => row.kind), [
-        "terminus", "fork", "stations", "merge", "stations", "terminus",
+        "terminus", "fork", "stations", "stations", "merge", "stations", "terminus",
     ]);
-    assert.deepEqual(built.rows[4].cells, [
-        { kind: "ghost", tint: "infra", path: { kind: "trunk", index: 1 } },
+    assert.deepEqual(built.rows[5].cells, [
+        { kind: "ghost", tint: "infra", dashed: false, path: { kind: "trunk", index: 1 } },
     ]);
 
     const fork = built.rows[1];
@@ -176,12 +205,29 @@ test("a split group tints its bands, reads out crossovers, and marks bypass", as
     assert.deepEqual(body.cells[1], {
         kind: "ghost",
         tint: "mid",
+        dashed: true,
         path: { kind: "branch", groupId: "split#1", branchIndex: 1, index: 0 },
     });
     assert.equal(body.cells[2].deviceId, "reverb#1");
     assert.equal(body.cells[2].tint, "hi");
 
-    assert.deepEqual(built.rows[3].lanes, [
+    assert.deepEqual(built.rows[3].cells, [
+        {
+            kind: "ghost",
+            tint: "lo",
+            dashed: false,
+            path: { kind: "branch", groupId: "split#1", branchIndex: 0, index: 1 },
+        },
+        { kind: "line", tint: "mid", dashed: true },
+        {
+            kind: "ghost",
+            tint: "hi",
+            dashed: false,
+            path: { kind: "branch", groupId: "split#1", branchIndex: 2, index: 1 },
+        },
+    ]);
+
+    assert.deepEqual(built.rows[4].lanes, [
         { tint: "lo", dashed: false },
         { tint: "mid", dashed: true },
         { tint: "hi", dashed: false },
@@ -215,7 +261,17 @@ test("a two-band split has no high crossover readout, and empty groups still ren
     const body = built.rows[2];
     assert.equal(body.kind, "stations");
     assert.deepEqual(body.cells, [
-        { kind: "ghost", tint: "lo", path: { kind: "branch", groupId: "split#1", branchIndex: 0, index: 0 } },
-        { kind: "ghost", tint: "hi", path: { kind: "branch", groupId: "split#1", branchIndex: 1, index: 0 } },
+        {
+            kind: "ghost",
+            tint: "lo",
+            dashed: true,
+            path: { kind: "branch", groupId: "split#1", branchIndex: 0, index: 0 },
+        },
+        {
+            kind: "ghost",
+            tint: "hi",
+            dashed: true,
+            path: { kind: "branch", groupId: "split#1", branchIndex: 1, index: 0 },
+        },
     ]);
 });

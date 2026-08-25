@@ -206,11 +206,14 @@
 .subway-station:active { cursor: grabbing; }
 
 .subway-station-pill {
+    box-sizing: border-box;
     display: inline-flex;
+    width: 37px;
     height: 20px;
     align-items: center;
-    gap: 4px;
-    padding: 0 8px;
+    justify-content: center;
+    gap: 3px;
+    padding: 0 4px;
     border: 1px solid color-mix(in srgb, var(--station-accent, #69d5c5) 85%, transparent);
     border-radius: 999px;
     background: color-mix(in srgb, var(--station-accent, #69d5c5) 26%, rgb(9 13 15 / 0.95));
@@ -290,10 +293,14 @@
 .subway-group {
     display: grid;
     position: relative;
+    width: 100%;
+    min-width: 0;
+    container-type: inline-size;
 }
 
 .subway-group.is-bypassed .subway-lane-row,
-.subway-group.is-bypassed .subway-merge {
+.subway-group.is-bypassed .subway-merge,
+.subway-group.is-bypassed .subway-fork-connectors {
     opacity: 0.5;
     filter: saturate(0.6);
 }
@@ -309,29 +316,6 @@
     display: grid;
     min-height: 40px;
     place-items: center;
-}
-
-.subway-fork::before {
-    position: absolute;
-    top: 0;
-    bottom: 50%;
-    left: 50%;
-    width: 3px;
-    background: rgb(105 213 197 / 0.72);
-    transform: translateX(-50%);
-    content: "";
-}
-
-/* The fan-out bar the lanes hang from. */
-.subway-fork::after {
-    position: absolute;
-    top: 50%;
-    right: calc(50% / var(--subway-lane-count, 2));
-    left: calc(50% / var(--subway-lane-count, 2));
-    height: 3px;
-    background: rgb(105 213 197 / 0.55);
-    transform: translateY(-50%);
-    content: "";
 }
 
 .subway-fork-glyph {
@@ -365,12 +349,12 @@
 
 .subway-fork-lanes {
     position: absolute;
-    right: 0;
+    right: var(--subway-lane-gutter, 14%);
     bottom: -1px;
-    left: 0;
+    left: var(--subway-lane-gutter, 14%);
     z-index: 1;
     display: grid;
-    grid-template-columns: repeat(var(--subway-lane-count, 2), 1fr);
+    grid-template-columns: repeat(var(--subway-lane-count, 2), minmax(0, 1fr));
     justify-items: center;
     pointer-events: none;
 }
@@ -396,8 +380,10 @@
 
 .subway-lane-row {
     display: grid;
-    grid-template-columns: repeat(var(--subway-lane-count, 2), 1fr);
+    width: var(--subway-lane-span, 72%);
+    grid-template-columns: repeat(var(--subway-lane-count, 2), minmax(0, 1fr));
     min-height: var(--cosimo-hit-min);
+    margin-inline: auto;
 }
 
 .subway-station-cell,
@@ -405,6 +391,7 @@
 .subway-ghost-cell {
     position: relative;
     display: grid;
+    min-width: 0;
     min-height: var(--cosimo-hit-min);
     place-items: center;
 }
@@ -424,7 +411,7 @@
 }
 
 .subway-line-cell.is-dashed::before,
-.subway-ghost-cell::before {
+.subway-ghost-cell.is-dashed::before {
     background: repeating-linear-gradient(
         180deg,
         var(--lane-tint, #69d5c5) 0 5px,
@@ -433,8 +420,21 @@
 }
 
 .subway-station-cell > .subway-station {
-    position: relative;
+    position: absolute;
     z-index: 2;
+    /* The 44px touch target intentionally exceeds a narrow lane column.
+       Grid's safe alignment would pin it to the column's start and clip HI;
+       position the control explicitly around the owned branch rail. */
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) translateY(var(--subway-cell-offset-y, 0));
+}
+
+.subway-ghost-cell > .subway-ghost-pill {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%) translateY(var(--subway-cell-offset-y, 0));
 }
 
 .subway-ghost-pill {
@@ -491,53 +491,98 @@
 .subway-merge {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(var(--subway-lane-count, 2), 1fr);
+    box-sizing: border-box;
+    width: 100%;
+    grid-template-columns: repeat(var(--subway-lane-count, 2), minmax(0, 1fr));
     min-height: 26px;
+    padding-inline: var(--subway-lane-gutter, 14%);
 }
 
-.subway-merge::before {
-    position: absolute;
-    top: 50%;
-    right: calc(50% / var(--subway-lane-count, 2));
-    left: calc(50% / var(--subway-lane-count, 2));
-    height: 3px;
-    background: rgb(105 213 197 / 0.55);
-    transform: translateY(-50%);
-    content: "";
+/* In the narrow graph column, neighboring pills cannot always share a row.
+   Move them only far enough to clear one another while their branch rails
+   and insertion paths remain fixed. */
+@container (max-width: 106px) {
+    .subway-group[data-lane-count="2"] .subway-lane-row > :nth-child(1) {
+        --subway-cell-offset-y: -11px;
+    }
+
+    .subway-group[data-lane-count="2"] .subway-lane-row > :nth-child(2) {
+        --subway-cell-offset-y: 11px;
+    }
 }
 
-.subway-merge::after {
-    position: absolute;
-    top: 50%;
-    bottom: 0;
-    left: 50%;
-    width: 3px;
-    background: rgb(105 213 197 / 0.72);
-    transform: translateX(-50%);
-    content: "";
+@container (max-width: 159px) {
+    .subway-group[data-lane-count="3"] .subway-lane-row {
+        min-height: 48px;
+    }
+
+    .subway-group[data-lane-count="3"] .subway-lane-row > :nth-child(odd) {
+        --subway-cell-offset-y: -10px;
+    }
+
+    .subway-group[data-lane-count="3"] .subway-lane-row > :nth-child(2) {
+        --subway-cell-offset-y: 10px;
+    }
+}
+
+@container (max-width: 212px) {
+    /* Four parallel rails are closer together than one pill width. Give
+       each lane its own compact vertical step while keeping every effect
+       and its tail add anchored to the same rail. */
+    .subway-group[data-lane-count="4"] .subway-lane-row {
+        min-height: 88px;
+    }
+
+    .subway-group[data-lane-count="4"] .subway-lane-row > :nth-child(1) {
+        --subway-cell-offset-y: -33px;
+    }
+
+    .subway-group[data-lane-count="4"] .subway-lane-row > :nth-child(2) {
+        --subway-cell-offset-y: -11px;
+    }
+
+    .subway-group[data-lane-count="4"] .subway-lane-row > :nth-child(3) {
+        --subway-cell-offset-y: 11px;
+    }
+
+    .subway-group[data-lane-count="4"] .subway-lane-row > :nth-child(4) {
+        --subway-cell-offset-y: 33px;
+    }
 }
 
 .subway-merge-lane {
     position: relative;
 }
 
-.subway-merge-lane::before {
+.subway-connector-svg {
     position: absolute;
-    top: 0;
-    bottom: 50%;
-    left: 50%;
-    width: 3px;
-    background: var(--lane-tint, #69d5c5);
-    opacity: 0.72;
-    transform: translateX(-50%);
-    content: "";
+    z-index: 0;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+    pointer-events: none;
 }
 
-.subway-merge-lane.is-dashed::before {
-    background: repeating-linear-gradient(
-        180deg,
-        var(--lane-tint, #69d5c5) 0 5px,
-        transparent 5px 10px);
+.subway-connector-svg path {
+    fill: none;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 3px;
+    vector-effect: non-scaling-stroke;
+}
+
+.subway-connector-trunk {
+    stroke: rgb(105 213 197 / 0.72);
+}
+
+.subway-connector-branch {
+    stroke: var(--lane-tint, #69d5c5);
+    opacity: 0.72;
+}
+
+.subway-connector-branch.is-dashed {
+    stroke-dasharray: 5 5;
     opacity: 0.5;
 }
 

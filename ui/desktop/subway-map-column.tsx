@@ -20,6 +20,16 @@ import {
 import { getRackEffectDescriptor } from "../shared/rack-parameter-descriptors";
 import type { EffectModuleId } from "../shared/target-descriptor";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
+import {
+    SUBWAY_CONNECTOR_VIEWBOX_HEIGHT,
+    SUBWAY_CONNECTOR_VIEWBOX_WIDTH,
+    SUBWAY_FORK_TRUNK_PATH,
+    SUBWAY_LANE_GUTTER_PERCENT,
+    SUBWAY_LANE_SPAN_PERCENT,
+    SUBWAY_MERGE_TRUNK_PATH,
+    subwayForkBranchPath,
+    subwayMergeBranchPath,
+} from "../shared/subway-connector-geometry";
 
 /**
  * The subway-map rack column (M3/M4, locked direction: canvas "FX Rack
@@ -271,8 +281,11 @@ function SubwayGhost({
         <button
             type="button"
             data-role="rack-ghost-add"
+            data-insertion-anchor="path-tail"
             aria-label="Add a device here"
-            className={asCell ? "subway-ghost-cell" : "subway-ghost-row"}
+            className={asCell
+                ? `subway-ghost-cell${cell.dashed ? " is-dashed" : ""}`
+                : "subway-ghost-row"}
             data-lane-path={encodeLaneDevicePath(cell.path)}
             data-lane-tint={cell.tint}
             onClick={(event) => onRequestAdd(cell.path, event.clientX, event.clientY)}
@@ -374,7 +387,12 @@ export function SubwayMapColumn({
                 className={`subway-group${openGroup.bypassed ? " is-bypassed" : ""}${selectedGroupId === openGroup.groupId ? " is-selected" : ""}`}
                 data-role={`rack-group-${openGroup.groupId}`}
                 data-group-id={openGroup.groupId}
-                style={{ "--subway-lane-count": openGroup.laneCount } as CSSProperties}
+                data-lane-count={openGroup.laneCount}
+                style={{
+                    "--subway-lane-count": openGroup.laneCount,
+                    "--subway-lane-gutter": `${SUBWAY_LANE_GUTTER_PERCENT}%`,
+                    "--subway-lane-span": `${SUBWAY_LANE_SPAN_PERCENT}%`,
+                } as CSSProperties}
             >
                 {groupRows}
             </div>,
@@ -396,17 +414,11 @@ export function SubwayMapColumn({
             continue;
         }
         if (row.kind === "merge") {
+            if (openGroup === null) {
+                throw new Error("Subway merge row has no open group");
+            }
             groupRows.push(
-                <div key={`merge-${rowIndex}`} className="subway-merge" aria-hidden="true">
-                    {row.lanes.map((lane, laneIndex) => (
-                        <span
-                            key={laneIndex}
-                            className={`subway-merge-lane${lane.dashed ? " is-dashed" : ""}`}
-                            data-lane-tint={lane.tint}
-                        />
-                    ))}
-                    <span className="subway-merge-dot" />
-                </div>,
+                <SubwayMerge key={`merge-${rowIndex}`} groupId={openGroup.groupId} row={row} />,
             );
             flushGroup();
             continue;
@@ -465,6 +477,7 @@ function SubwayFork({
 
     return (
         <div className="subway-fork" data-fork-kind={row.groupKind}>
+            <SubwayForkConnections row={row} />
             <button
                 type="button"
                 data-role={`rack-fork-${row.groupId}`}
@@ -495,6 +508,73 @@ function SubwayFork({
                     {readout}
                 </span>
             )}
+        </div>
+    );
+}
+
+function SubwayForkConnections({ row }: {
+    readonly row: Extract<SubwayRow, { kind: "fork" }>;
+}) {
+    const laneCount = row.lanes.length;
+    return (
+        <svg
+            className="subway-connector-svg subway-fork-connectors"
+            data-role={`rack-fork-connections-${row.groupId}`}
+            viewBox={`0 0 ${SUBWAY_CONNECTOR_VIEWBOX_WIDTH} ${SUBWAY_CONNECTOR_VIEWBOX_HEIGHT}`}
+            preserveAspectRatio="none"
+            aria-hidden="true"
+        >
+            <path className="subway-connector-trunk" data-connector-segment="trunk" d={SUBWAY_FORK_TRUNK_PATH} />
+            {row.lanes.map((lane, laneIndex) => (
+                <path
+                    key={laneIndex}
+                    className={`subway-connector-branch${lane.empty ? " is-dashed" : ""}`}
+                    data-connector-segment="branch"
+                    data-lane-index={laneIndex}
+                    data-lane-tint={lane.tint}
+                    d={subwayForkBranchPath(laneIndex, laneCount)}
+                />
+            ))}
+        </svg>
+    );
+}
+
+function SubwayMerge({
+    groupId,
+    row,
+}: {
+    readonly groupId: string;
+    readonly row: Extract<SubwayRow, { kind: "merge" }>;
+}) {
+    const laneCount = row.lanes.length;
+    return (
+        <div className="subway-merge" aria-hidden="true">
+            <svg
+                className="subway-connector-svg subway-merge-connectors"
+                data-role={`rack-merge-connections-${groupId}`}
+                viewBox={`0 0 ${SUBWAY_CONNECTOR_VIEWBOX_WIDTH} ${SUBWAY_CONNECTOR_VIEWBOX_HEIGHT}`}
+                preserveAspectRatio="none"
+            >
+                {row.lanes.map((lane, laneIndex) => (
+                    <path
+                        key={laneIndex}
+                        className={`subway-connector-branch${lane.dashed ? " is-dashed" : ""}`}
+                        data-connector-segment="branch"
+                        data-lane-index={laneIndex}
+                        data-lane-tint={lane.tint}
+                        d={subwayMergeBranchPath(laneIndex, laneCount)}
+                    />
+                ))}
+                <path className="subway-connector-trunk" data-connector-segment="trunk" d={SUBWAY_MERGE_TRUNK_PATH} />
+            </svg>
+            {row.lanes.map((lane, laneIndex) => (
+                <span
+                    key={laneIndex}
+                    className="subway-merge-lane"
+                    data-lane-tint={lane.tint}
+                />
+            ))}
+            <span className="subway-merge-dot" />
         </div>
     );
 }
