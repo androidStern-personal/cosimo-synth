@@ -33,30 +33,35 @@ lineup; per-stage membership beyond the enhancer is open for veto (§6).
 
 ```
 [ rack lanes → global filter ] →
-  1. TILT      one-knob tone           (±3 dB, pivot ~700 Hz, 1-pole shelf pair)
-  2. GLUE      one-knob bus compressor (2:1, slow, program-dependent, auto-makeup)
-  3. ENHANCER  the two-band module     (per ENHANCER_DESIGN.md, unchanged)
-  4. WIDTH     one-knob M/S balance    (side gain 0..1.5, neutral 1.0)
+  1. FAT       one-knob fattener       (slow-attack comp + auto-makeup + soft clip)
+  2. ENHANCER  the two-band module     (per ENHANCER_DESIGN.md, unchanged)
+  3. WIDTH     one-knob M/S balance    (side gain 0..1.5, neutral 1.0)
 → [ RackOutputStage: existing soft clip + output trim ]
 ```
 
-Rationale for the order: tone correction first so the compressor and enhancer react
-to the corrected balance; enhancer **after** the glue so its added harmonics aren't
-compressed back down (standard exciter placement); width after harmonics so side
-enhancement and width read as one image decision; clipper last, always.
+Rationale for the order: density first — the enhancer sits **after** the fat stage
+so its added harmonics aren't compressed back down (standard exciter placement) and
+so it reacts to the fattened balance; width after harmonics so side enhancement and
+width read as one image decision; clipper last, always. Tilt was in an earlier draft
+and is out (Andrew veto, 2026-08-25): linear tone re-balancing is `GlobalFilter`'s
+job, and the enhancer adds content rather than re-balancing.
 
 ### Stage specs and starting constants
 
-- **TILT** — single knob −1..+1 → ∓3 dB low shelf / ±3 dB high shelf around a
-  ~700 Hz pivot, 1-pole pair, exact inverse curves so knob = perceptual tilt.
-  Neutral at 0. The "make it darker/brighter without opening an EQ" knob.
-- **GLUE** — single knob 0..1. Fixed character: ratio 2:1, soft knee 6 dB, attack
-  ~20 ms, program-dependent release 100–400 ms, stereo-linked RMS detector (~10 ms
-  window), **no lookahead**. The knob maps threshold from "above signal" (0 = true
-  unity) down to ~−18 dBFS, with static auto-makeup voiced at −18 dBFS pink so
-  loudness holds while density increases — same fairness philosophy as
-  `DISTORTION_QUALITY_DESIGN.md` §3.3. Single-band on purpose; aggressive multiband
-  lives in the rack's existing OTT module, not here.
+- **FAT** — single knob 0..1, Sausage-Fattener school (Andrew's reference,
+  2026-08-25): not transparent SSL-style glue but a colored one-knob fattener —
+  slow-attack compressor + static auto-makeup driving an **integrated soft
+  clipper**. Fixed character: stereo-linked RMS detector (~10 ms window), attack
+  ~20 ms — deliberately slow so transients pass the compressor untouched —
+  program-dependent release 100–400 ms, soft knee, **no lookahead**. The knob macro
+  moves threshold ("above signal" at 0 = true identity, down to ~−18 dBFS), ratio
+  (2:1 toward 4:1), makeup (static, voiced at −18 dBFS pink), and clipper drive
+  together. The fat mechanism: compression + makeup lift the body into density
+  while the let-through transients are shaved a couple of dB by the clipper —
+  peaks controlled by saturation (fat) rather than by gain-riding (dull). Subtle
+  at low knob, deliberately crushed at high. Single-band on purpose; aggressive
+  multiband lives in the rack's existing OTT module, not here. Color knob
+  deliberately omitted — the enhancer next in line is the color section.
 - **ENHANCER** — exactly as `ENHANCER_DESIGN.md` (two parametric bells, Tube/Solid,
   independent mid/side amounts, always-on de-emphasis). Its 10 params become static
   dial-ins like the rest of the chain.
@@ -65,8 +70,8 @@ enhancement and width read as one image decision; clipper last, always.
   consequences, and the enhancer's mid-targeted low bell already covers "keep the
   low end solid").
 
-Total new controls beyond the enhancer's 10: **three knobs.** Every stage neutral by
-default; a fresh patch's polish chain is an identity.
+Total new controls beyond the enhancer's 10: **two knobs** (FAT, WIDTH). Every stage
+neutral by default; a fresh patch's polish chain is an identity.
 
 ## 3. What the polish chain is not
 
@@ -77,6 +82,8 @@ default; a fresh patch's polish chain is an identity.
   the "synth, not mastering suite" line both forbid it. `RackOutputStage`'s clipper
   is the ceiling.
 - No metering DSP in v1 (UI may tap existing preview streams later).
+- Not transparent: the FAT stage is colored on purpose (Sausage-Fattener school,
+  not SSL-bus school).
 
 ## 4. Engineering notes
 
@@ -92,16 +99,17 @@ snapshot format. The latency witness proof extends over the chain unchanged
 1. All controls neutral ⇒ output bit-exact with the chain absent (the identity
    contract, per stage and end-to-end).
 2. Rack latency witness still proves 0 with the chain in the graph.
-3. Glue at any knob position: pink-noise loudness within ±1 dB of bypass
-   (auto-makeup contract).
+3. FAT at any knob position: pink-noise loudness within ±1 dB of bypass (the
+   auto-makeup contract — denser and dirtier at matched loudness, never just
+   louder).
 4. Enhancer ship criteria inherited from `ENHANCER_DESIGN.md` §8.
 5. Andrew dials a patch's polish by ear without touching documentation — three
    knobs plus the enhancer must be self-explanatory.
 
 ## 6. Open decisions (defaults apply unless overridden)
 
-1. **Lineup membership.** Enhancer is locked in. Tilt, Glue, Width are my proposal —
-   default: all three ship. Veto any stage and the order of the rest stands.
+1. **Lineup membership.** Enhancer and FAT are locked in; tilt is vetoed out
+   (2026-08-25). Width remains my proposal — default: it ships.
 2. **RackOutputStage UI folding.** Default: the output stage keeps its identity in
    code but its drive/trim controls appear in the polish panel, so the user sees one
    "finish" section. Alternative: leave its UI where it is.
