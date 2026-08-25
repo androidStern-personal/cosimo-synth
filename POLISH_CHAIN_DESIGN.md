@@ -49,19 +49,31 @@ job, and the enhancer adds content rather than re-balancing.
 ### Stage specs and starting constants
 
 - **FAT** — single knob 0..1, Sausage-Fattener school (Andrew's reference,
-  2026-08-25): not transparent SSL-style glue but a colored one-knob fattener —
-  slow-attack compressor + static auto-makeup driving an **integrated soft
-  clipper**. Fixed character: stereo-linked RMS detector (~10 ms window), attack
-  ~20 ms — deliberately slow so transients pass the compressor untouched —
-  program-dependent release 100–400 ms, soft knee, **no lookahead**. The knob macro
-  moves threshold ("above signal" at 0 = true identity, down to ~−18 dBFS), ratio
-  (2:1 toward 4:1), makeup (static, voiced at −18 dBFS pink), and clipper drive
-  together. The fat mechanism: compression + makeup lift the body into density
-  while the let-through transients are shaved a couple of dB by the clipper —
-  peaks controlled by saturation (fat) rather than by gain-riding (dull). Subtle
-  at low knob, deliberately crushed at high. Single-band on purpose; aggressive
-  multiband lives in the rack's existing OTT module, not here. Color knob
-  deliberately omitted — the enhancer next in line is the color section.
+  2026-08-25), **voiced loudness-first** (Andrew's call, same day: "we're going for
+  loudness"): a compressor + static makeup driving an **integrated soft clipper**,
+  stereo-linked RMS detector (~10 ms window), soft knee, **no lookahead**. Division
+  of labor, which is the whole loudness mechanism: the compressor buys *density*
+  (body up), the clipper eats *peaks* (crest down) — peak-eating lives in the
+  clipper rather than the compressor's attack because attack-based peak control
+  ducks the entire signal on every hit (losing the RMS it just bought) and, with
+  no lookahead permitted (ADR-008; `RackOutputStage`'s own rationale), overshoots
+  besides. Clipper-led is how loud actually gets made.
+  The knob is a macro over everything, **attack included**: threshold unity →
+  ~−24 dBFS, ratio 2:1 → ~8:1, attack 20 ms → ~2 ms, program-dependent release
+  100–400 ms → 50–150 ms, clipper drive up to ~6 dB of peak shave. Low travel =
+  glue-ish density (attack barely matters at 1–2 dB of reduction, transients ride
+  through naturally); top travel = fast-everything maximizer smash. Both are loud;
+  the knob moves monotonically louder.
+  **Makeup is peak-referenced, not loudness-matched** — a deliberate departure
+  from the equal-loudness contract used everywhere else in these docs: output true
+  peak is held ~constant while crest factor falls, so LUFS genuinely rises with
+  the knob. This stage's honest frame is "trade crest for loudness," and hiding
+  that behind loudness-matching would defeat its purpose. Neutral at 0 = true
+  identity. Single-band on purpose; aggressive multiband lives in the rack's
+  existing OTT module. Color knob deliberately omitted — the enhancer next in
+  line is the color section. (Sausage Fattener's internals are closed-source and
+  undocumented; the target is its observable behavior — one knob, instantly
+  louder and fatter, saturation woven into the compression — not its constants.)
 - **ENHANCER** — exactly as `ENHANCER_DESIGN.md` (two parametric bells, Tube/Solid,
   independent mid/side amounts, always-on de-emphasis). Its 10 params become static
   dial-ins like the rest of the chain.
@@ -78,9 +90,9 @@ neutral by default; a fresh patch's polish chain is an identity.
 - Not modulatable (locked). No LFOs, no envelopes, no macros reaching it.
 - Not the sound-design saturator — `DISTORTION_QUALITY_DESIGN.md`'s module stays a
   rack lane citizen with full modulation. The two never merge.
-- No lookahead limiter, no linear-phase anything, no upward maximizer — ADR-008 and
-  the "synth, not mastering suite" line both forbid it. `RackOutputStage`'s clipper
-  is the ceiling.
+- No lookahead limiter, no linear-phase anything — ADR-008 forbids both. The loud
+  endgame is clipper-led (FAT's integrated clipper feeding `RackOutputStage`'s
+  ceiling), per the output stage's own no-lookahead rationale.
 - No metering DSP in v1 (UI may tap existing preview streams later).
 - Not transparent: the FAT stage is colored on purpose (Sausage-Fattener school,
   not SSL-bus school).
@@ -99,9 +111,9 @@ snapshot format. The latency witness proof extends over the chain unchanged
 1. All controls neutral ⇒ output bit-exact with the chain absent (the identity
    contract, per stage and end-to-end).
 2. Rack latency witness still proves 0 with the chain in the graph.
-3. FAT at any knob position: pink-noise loudness within ±1 dB of bypass (the
-   auto-makeup contract — denser and dirtier at matched loudness, never just
-   louder).
+3. FAT contract: output true peak constant within ±0.5 dB across the whole knob
+   travel, LUFS monotonically increasing with the knob (crest-for-loudness trade,
+   realized honestly), and no audible pumping on a drum loop at mid travel.
 4. Enhancer ship criteria inherited from `ENHANCER_DESIGN.md` §8.
 5. Andrew dials a patch's polish by ear without touching documentation — three
    knobs plus the enhancer must be self-explanatory.
@@ -110,6 +122,12 @@ snapshot format. The latency witness proof extends over the chain unchanged
 
 1. **Lineup membership.** Enhancer and FAT are locked in; tilt is vetoed out
    (2026-08-25). Width remains my proposal — default: it ships.
+1b. **PUNCH / transient mode.** Floated by Andrew 2026-08-25. Default: **not in
+   v1** — the knob's lower travel already is the punchy setting (slow attack,
+   light reduction), so a separate mode only earns its place if voicing shows the
+   loud top half destroys material worth keeping. If needed later: a toggle that
+   pins the slow-attack profile across the whole travel (or a small transient
+   re-injection stage, Drum-Buss style), rather than a second continuous control.
 2. **RackOutputStage UI folding.** Default: the output stage keeps its identity in
    code but its drive/trim controls appear in the polish panel, so the user sees one
    "finish" section. Alternative: leave its UI where it is.
