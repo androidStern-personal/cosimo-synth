@@ -1900,11 +1900,11 @@ test("mounted iPhone distortion controls send parameter updates through the patc
 
         await page.evaluate(() => {
             const shadowRoot = document.querySelector("cosimo-synth-view")?.shadowRoot;
-            const button = shadowRoot?.querySelector("[data-role='distortion-mode-option-1']");
+            const modeButton = shadowRoot?.querySelector("[data-role='distortion-mode-option-1']");
+            const typeButton = shadowRoot?.querySelector("[data-role='distortion-type-option-2']");
 
-            if (button instanceof HTMLButtonElement) {
-                button.click();
-            }
+            if (modeButton instanceof HTMLButtonElement) modeButton.click();
+            if (typeButton instanceof HTMLButtonElement) typeButton.click();
         });
         await dispatchShadowInputValueChange(page, "[data-role='distortion-drive-slider']", "16.500");
         await dispatchShadowInputValueChange(page, "[data-role='distortion-mix-slider']", "0.580");
@@ -1923,12 +1923,16 @@ test("mounted iPhone distortion controls send parameter updates through the patc
             "iPhone distortion parameter updates",
             (nextSnapshot) => nextSnapshot.sentMessages.some((message) => laneParamSend(message, 0, 1))
                 && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 1, 16.5))
-                && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 3, 0.58)),
+                && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 3, 0.58))
+                && nextSnapshot.sentMessages.some((message) => laneParamSend(message, 6, 2)),
         );
 
         assert.equal(snapshot.gestureStarts.includes("distortionMode"), true);
+        assert.equal(snapshot.gestureStarts.includes("distortionType"), true);
         assert.equal(snapshot.gestureEnds.includes("distortionWet"), true);
-        assert.equal(JSON.parse(snapshot.storedState["lane.v1"]).devices["distortion#1"].params.distortionWet, 0.58);
+        const distortionParams = JSON.parse(snapshot.storedState["lane.v1"]).devices["distortion#1"].params;
+        assert.equal(distortionParams.distortionWet, 0.58);
+        assert.equal(distortionParams.distortionType, 2);
     } finally {
         await closeIOSHarnessPage(page);
     }

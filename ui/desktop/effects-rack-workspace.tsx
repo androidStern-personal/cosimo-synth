@@ -803,11 +803,16 @@ function DistortionRackVisual({
         (parameter) => parameter.endpointID === "distortionKnee",
     )!;
     const knee = useRackParameterBinding(kneeDescriptor);
+    const typeDescriptor = getRackEffectDescriptor("drive").parameters.find(
+        (parameter) => parameter.endpointID === "distortionType",
+    )!;
+    const type = useRackParameterBinding(typeDescriptor);
 
     return (
         <DistortionVisualizer
             compact
             knee={knee.value}
+            type={type.value}
             transferFrame={scope}
             historyFrame={history}
             className="h-full w-full"

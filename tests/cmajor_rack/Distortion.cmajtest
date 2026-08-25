@@ -1,0 +1,557 @@
+// Behavioural contract for wt::DistortionBus. This file drives the real production
+// processor exactly as wt::EffectsRack does; it does not mirror the transfer or Mix
+// law in test code.
+
+function requireNoDeclaredLatency (relativePath)
+{
+    const section = getCurrentTestSection();
+    const source = new File (section.getAbsolutePath (relativePath)).read();
+    const code = source.replace (/\/\*[\s\S]*?\*\//g, "").replace (/\/\/[^\n]*/g, "");
+
+    if (code.indexOf ("processor.latency") >= 0)
+        throw new Error ("Distortion must remain zero declared latency: " + relativePath);
+
+    return undefined;
+}
+
+## global ("../../cmajor/Distortion.cmajor")
+
+//==============================================================================
+// The original T25 regression: the completed wet signal must reach Classic Mix at
+// approximately the same RMS level as dry. The pre-T25 processor fails this by a
+// wide margin because +36 dB of Drive is never compensated.
+
+## testProcessor()
+
+processor DistortionWetLevelRegression [[ main ]]
+{
+    output stream int32 out;
+
+    node distortion = wt::DistortionBus;
+
+    let settleFrames = 4096;
+    let measureFrames = 32768;
+    let totalFrames = settleFrames + measureFrames;
+    let targetRms = 0.12589254f; // -18 dBFS
+
+    std::random::RNG noise;
+    float32 pinkB0, pinkB1, pinkB2, pinkB3, pinkB4, pinkB5, pinkB6;
+    float32[totalFrames] pink;
+
+    void init()
+    {
+        noise.seed (250825L);
+    }
+
+    // Paul Kellet's compact fixed-rate pinking filter. It is local to this one
+    // production-seam regression; it is not an audio-analysis abstraction.
+    float32 nextPink()
+    {
+        let white = noise.getBipolar();
+        pinkB0 = 0.99886f * pinkB0 + white * 0.0555179f;
+        pinkB1 = 0.99332f * pinkB1 + white * 0.0750759f;
+        pinkB2 = 0.96900f * pinkB2 + white * 0.1538520f;
+        pinkB3 = 0.86650f * pinkB3 + white * 0.3104856f;
+        pinkB4 = 0.55000f * pinkB4 + white * 0.5329522f;
+        pinkB5 = -0.7616f * pinkB5 - white * 0.0168980f;
+        let result = pinkB0 + pinkB1 + pinkB2 + pinkB3 + pinkB4 + pinkB5
+                     + pinkB6 + white * 0.5362f;
+        pinkB6 = white * 0.115926f;
+        return result;
+    }
+
+    float32 render (float32 sample)
+    {
+        distortion.in <- float32<2> (sample, sample);
+        distortion.modeIn <- 0.0f;
+        distortion.driveDbIn <- 36.0f;
+        distortion.kneeIn <- 0.35f;
+        distortion.wetIn <- 1.0f;
+        distortion.wetHPHzIn <- 40.0f;
+        distortion.wetLPHzIn <- 18000.0f;
+        distortion.advance();
+        return distortion.out[0];
+    }
+
+    void main()
+    {
+        // Start after the pinking filter itself has reached its stationary region.
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            nextPink();
+
+        float64 rawMeasurePower;
+
+        for (int32 frame = 0; frame < totalFrames; ++frame)
+        {
+            let sample = nextPink();
+            pink.at (frame) = sample;
+
+            if (frame >= settleFrames)
+                rawMeasurePower += float64 (sample) * float64 (sample);
+        }
+
+        let rawRms = float32 (std::intrinsics::sqrt (
+            rawMeasurePower / float64 (measureFrames)
+        ));
+        let levelScale = targetRms / std::intrinsics::max (rawRms, 1.0e-12f);
+
+        float64 dryPower;
+        float64 wetPower;
+
+        for (int32 frame = 0; frame < totalFrames; ++frame)
+        {
+            let sample = pink.at (frame) * levelScale;
+            let rendered = render (sample);
+
+            if (frame >= settleFrames)
+            {
+                dryPower += float64 (sample) * float64 (sample);
+                wetPower += float64 (rendered) * float64 (rendered);
+            }
+        }
+
+        let wetToDryDb = std::levels::gainTodB (float32 (std::intrinsics::sqrt (
+            wetPower / std::intrinsics::max (dryPower, 1.0e-30)
+        )));
+
+        out <- (std::intrinsics::abs (wetToDryDb) <= 1.0f) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Hard product invariants: Classic zero Wet is the untouched input for every Type,
+// and Harmonics at zero Drive is dry because its aligned residue is exactly zero.
+
+## testProcessor (requireNoDeclaredLatency ("../../cmajor/Distortion.cmajor"))
+
+processor DistortionDryAndResidueContract [[ main ]]
+{
+    output stream int32 out;
+    node distortion = wt::DistortionBus;
+
+    let measureFrames = 8192;
+
+    float32 leftSignal (int32 frame)
+    {
+        return 0.37f * float32 (std::intrinsics::sin (float32 (frame) * 0.071f));
+    }
+
+    float32 rightSignal (int32 frame)
+    {
+        return 0.29f * float32 (std::intrinsics::sin (float32 (frame) * 0.043f + 0.8f));
+    }
+
+    float32<2> render (int32 frame, int32 type, float32 driveDb, float32 wet, float32 mode)
+    {
+        distortion.in <- float32<2> (leftSignal (frame), rightSignal (frame));
+        distortion.typeIn <- float32 (type);
+        distortion.driveDbIn <- driveDb;
+        distortion.kneeIn <- 0.65f;
+        distortion.wetIn <- wet;
+        distortion.modeIn <- mode;
+        distortion.wetHPHzIn <- 40.0f;
+        distortion.wetLPHzIn <- 18000.0f;
+        distortion.advance();
+        return distortion.out;
+    }
+
+    void main()
+    {
+        bool zeroWetIsExact = true;
+        bool zeroDriveResidueIsExact = true;
+
+        for (int32 type = 0; type < 3; ++type)
+        {
+            distortion.poolResetIn <- 1;
+
+            for (int32 frame = 0; frame < measureFrames; ++frame)
+            {
+                let rendered = render (frame, type, 36.0f, 0.0f, 0.0f);
+                if (rendered[0] != leftSignal (frame) || rendered[1] != rightSignal (frame))
+                    zeroWetIsExact = false;
+            }
+
+            // Reset after an aggressive shaped run: stale filter, DC, type-transition,
+            // or oversampling history must not leak into the aligned zero-Drive residue.
+            distortion.poolResetIn <- 1;
+
+            for (int32 frame = 0; frame < measureFrames; ++frame)
+            {
+                let rendered = render (frame, type, 0.0f, 1.0f, 1.0f);
+                if (rendered[0] != leftSignal (frame) || rendered[1] != rightSignal (frame))
+                    zeroDriveResidueIsExact = false;
+            }
+        }
+
+        out <- zeroWetIsExact ? 1 : 0;
+        advance();
+        out <- zeroDriveResidueIsExact ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// One-transfer semantics. These checks drive the production core directly so the
+// transfer itself, rather than the prefilters, is what discriminates the Types.
+
+## testProcessor()
+
+processor DistortionTransferContract [[ main ]]
+{
+    output stream int32 out;
+    node core = wt::DistortionCoreChannel;
+
+    float32 render (float32 sample, int32 type, float32 knee)
+    {
+        core.in <- sample;
+        core.typeIn <- float32 (type);
+        core.driveDbIn <- 18.0f;
+        core.kneeIn <- knee;
+        core.advance();
+        return core.out;
+    }
+
+    void settleType (int32 type, float32 knee)
+    {
+        for (int32 frame = 0; frame < 512; ++frame)
+            render (0.0f, type, knee);
+    }
+
+    void main()
+    {
+        settleType (wt::distortionTypeSymmetric, 0.5f);
+        let symmetricPositive = render (1.2f, wt::distortionTypeSymmetric, 0.5f);
+        let symmetricNegative = render (-1.2f, wt::distortionTypeSymmetric, 0.5f);
+        let symmetricIsOdd = std::intrinsics::abs (symmetricPositive + symmetricNegative) < 1.0e-6f;
+
+        let symmetricSoft = render (1.2f, wt::distortionTypeSymmetric, 0.0f);
+        let symmetricSharp = render (1.2f, wt::distortionTypeSymmetric, 1.0f);
+        let saturationKneeWorks = symmetricSharp > symmetricSoft + 0.02f;
+
+        settleType (wt::distortionTypeAsymmetric, 0.5f);
+        let asymmetricPositive = render (1.2f, wt::distortionTypeAsymmetric, 0.5f);
+        let asymmetricNegative = render (-1.2f, wt::distortionTypeAsymmetric, 0.5f);
+        let asymmetricHasEvenComponent = std::intrinsics::abs (
+            asymmetricPositive + asymmetricNegative
+        ) > 0.005f;
+
+        settleType (wt::distortionTypeWavefold, 0.0f);
+        let foldStart = render (1.1f, wt::distortionTypeWavefold, 0.0f);
+        let foldMiddleSoft = render (1.5f, wt::distortionTypeWavefold, 0.0f);
+        let foldEnd = render (2.9f, wt::distortionTypeWavefold, 0.0f);
+        let wavefoldIsNonMonotonic = foldStart > foldMiddleSoft && foldMiddleSoft > foldEnd;
+
+        let foldMiddleSharp = render (1.5f, wt::distortionTypeWavefold, 1.0f);
+        let wavefoldKneeChangesReflection = std::intrinsics::abs (
+            foldMiddleSoft - foldMiddleSharp
+        ) > 0.1f;
+
+        bool bounded = true;
+        for (int32 index = -128; index <= 128; ++index)
+        {
+            let sample = float32 (index) * 0.25f;
+            let folded = render (sample, wt::distortionTypeWavefold, 1.0f);
+            if (folded != folded || std::intrinsics::abs (folded) > 1.0001f)
+                bounded = false;
+        }
+
+        // A discrete Type edit must traverse the core's crossfade rather than
+        // replace one transfer with another on a single sample.
+        settleType (wt::distortionTypeAsymmetric, 0.65f);
+        float32 previous = render (1.5f, wt::distortionTypeAsymmetric, 0.65f);
+        float32 transitionMaxDelta;
+        bool transitionIsFinite = true;
+        for (int32 frame = 0; frame < 512; ++frame)
+        {
+            let current = render (1.5f, wt::distortionTypeWavefold, 0.65f);
+            transitionMaxDelta = std::intrinsics::max (
+                transitionMaxDelta,
+                std::intrinsics::abs (current - previous)
+            );
+            if (current != current)
+                transitionIsFinite = false;
+            previous = current;
+        }
+
+        out <- symmetricIsOdd ? 1 : 0;
+        advance();
+        out <- saturationKneeWorks ? 1 : 0;
+        advance();
+        out <- asymmetricHasEvenComponent ? 1 : 0;
+        advance();
+        out <- wavefoldIsNonMonotonic ? 1 : 0;
+        advance();
+        out <- wavefoldKneeChangesReflection ? 1 : 0;
+        advance();
+        out <- bounded ? 1 : 0;
+        advance();
+        out <- (transitionIsFinite && transitionMaxDelta < 0.05f) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Independent 44.1 kHz verification of the full Type x Drive x Knee x Mix grid at
+// quiet and nominal levels. The JavaScript proof uses 48 kHz and different fixtures,
+// so this is a separate production-DSP robustness test.
+
+## testProcessor()
+
+processor DistortionPinkMixGrid [[ main ]]
+{
+    output stream int32 out;
+    node distortion = wt::DistortionBus;
+
+    let settleFrames = 2048;
+    let measureFrames = 8192;
+    let totalFrames = settleFrames + measureFrames;
+
+    std::random::RNG noise;
+    float32 pinkB0, pinkB1, pinkB2, pinkB3, pinkB4, pinkB5, pinkB6;
+    float32[totalFrames] pink;
+
+    void init()
+    {
+        noise.seed (250825L);
+    }
+
+    float32 nextPink()
+    {
+        let white = noise.getBipolar();
+        pinkB0 = 0.99886f * pinkB0 + white * 0.0555179f;
+        pinkB1 = 0.99332f * pinkB1 + white * 0.0750759f;
+        pinkB2 = 0.96900f * pinkB2 + white * 0.1538520f;
+        pinkB3 = 0.86650f * pinkB3 + white * 0.3104856f;
+        pinkB4 = 0.55000f * pinkB4 + white * 0.5329522f;
+        pinkB5 = -0.7616f * pinkB5 - white * 0.0168980f;
+        let result = pinkB0 + pinkB1 + pinkB2 + pinkB3 + pinkB4 + pinkB5
+                     + pinkB6 + white * 0.5362f;
+        pinkB6 = white * 0.115926f;
+        return result;
+    }
+
+    float32 render (float32 sample, int32 type, float32 driveDb, float32 knee, float32 wet)
+    {
+        distortion.in <- float32<2> (sample, sample);
+        distortion.typeIn <- float32 (type);
+        distortion.driveDbIn <- driveDb;
+        distortion.kneeIn <- knee;
+        distortion.wetIn <- wet;
+        distortion.modeIn <- 0.0f;
+        distortion.wetHPHzIn <- 40.0f;
+        distortion.wetLPHzIn <- 18000.0f;
+        distortion.advance();
+        return distortion.out[0];
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; frame < settleFrames; ++frame)
+            nextPink();
+
+        float64 rawPower;
+        for (int32 frame = 0; frame < totalFrames; ++frame)
+        {
+            let sample = nextPink();
+            pink.at (frame) = sample;
+            if (frame >= settleFrames)
+                rawPower += float64 (sample) * float64 (sample);
+        }
+        let rawRms = float32 (std::intrinsics::sqrt (
+            rawPower / float64 (measureFrames)
+        ));
+
+        bool gridIsWithinOneDb = true;
+        bool gridIsFinite = true;
+
+        for (int32 levelIndex = 0; levelIndex < 2; ++levelIndex)
+        {
+            let targetRms = levelIndex == 0 ? 0.015848932f : 0.12589254f;
+            let scale = targetRms / rawRms;
+
+            for (int32 type = 0; type < 3; ++type)
+                for (int32 driveIndex = 0; driveIndex < 7; ++driveIndex)
+                    for (int32 kneeIndex = 0; kneeIndex < 5; ++kneeIndex)
+                        for (int32 wetIndex = 0; wetIndex < 5; ++wetIndex)
+                        {
+                        let driveDb = float32 (driveIndex) * 6.0f;
+                        let knee = float32 (kneeIndex) * 0.25f;
+                        let wet = float32 (wetIndex) * 0.25f;
+                        distortion.poolResetIn <- 1;
+
+                        for (int32 frame = 0; frame < settleFrames; ++frame)
+                            render (pink.at (frame) * scale, type, driveDb, knee, wet);
+
+                        float64 dryPower;
+                        float64 outputPower;
+
+                        for (int32 frame = 0; frame < measureFrames; ++frame)
+                        {
+                            let sample = pink.at (settleFrames + frame) * scale;
+                            let rendered = render (sample, type, driveDb, knee, wet);
+                            dryPower += float64 (sample) * float64 (sample);
+                            outputPower += float64 (rendered) * float64 (rendered);
+
+                            if (rendered != rendered)
+                                gridIsFinite = false;
+                        }
+
+                        let differenceDb = std::levels::gainTodB (float32 (
+                            std::intrinsics::sqrt (outputPower / std::intrinsics::max (dryPower, 1.0e-30))
+                        ));
+
+                        if (std::intrinsics::abs (differenceDb) > 1.0f)
+                            gridIsWithinOneDb = false;
+                        }
+        }
+
+        out <- gridIsWithinOneDb ? 1 : 0;
+        advance();
+        out <- gridIsFinite ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Bright adversarial material cannot produce NaN/Inf or escape the safety budget.
+
+## testProcessor()
+
+processor DistortionNearNyquistSafety [[ main ]]
+{
+    output stream int32 out;
+    node distortion = wt::DistortionBus;
+
+    void main()
+    {
+        float64 phase;
+        float32 peak;
+        float64 power;
+        bool finite = true;
+
+        for (int32 frame = 0; frame < 32768; ++frame)
+        {
+            let sample = 0.5f * float32 (std::intrinsics::sin (phase));
+            phase += 2.0 * pi * 0.39;
+            distortion.in <- float32<2> (sample, -sample);
+            distortion.typeIn <- float32 (wt::distortionTypeWavefold);
+            distortion.driveDbIn <- 36.0f;
+            distortion.kneeIn <- 1.0f;
+            distortion.wetIn <- 1.0f;
+            distortion.modeIn <- 0.0f;
+            distortion.wetHPHzIn <- 40.0f;
+            distortion.wetLPHzIn <- 18000.0f;
+            distortion.advance();
+
+            let value = distortion.out[0];
+            if (value != value)
+                finite = false;
+            peak = std::intrinsics::max (peak, std::intrinsics::abs (value));
+            if (frame >= 4096)
+                power += float64 (value) * float64 (value);
+        }
+
+        out <- finite ? 1 : 0;
+        advance();
+        out <- (peak <= 2.0f) ? 1 : 0;
+        advance();
+        out <- (power > 1.0e-8) ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}
+
+//==============================================================================
+// Reviewer-proof gaps: Harmonics must actually contain a non-zero aligned residue
+// when driven, the DC blocker must remove Asymmetric's offset, a reset must clear
+// every tail, and moving Mix to 100% must expose the completed wet endpoint directly.
+
+## testProcessor()
+
+processor DistortionHarmonicsDcResetContract [[ main ]]
+{
+    output stream int32 out;
+    node distortion = wt::DistortionBus;
+
+    float64 phase;
+
+    float32 render (float32 sample, float32 wet, float32 mode)
+    {
+        distortion.in <- float32<2> (sample, sample * -0.73f);
+        distortion.typeIn <- float32 (wt::distortionTypeAsymmetric);
+        distortion.driveDbIn <- 36.0f;
+        distortion.kneeIn <- 0.65f;
+        distortion.wetIn <- wet;
+        distortion.modeIn <- mode;
+        distortion.wetHPHzIn <- 40.0f;
+        distortion.wetLPHzIn <- 18000.0f;
+        distortion.advance();
+        return distortion.out[0];
+    }
+
+    float32 nextSine()
+    {
+        let sample = 0.22f * float32 (std::intrinsics::sin (phase));
+        phase += 2.0 * pi * 997.0 / processor.frequency;
+        return sample;
+    }
+
+    void main()
+    {
+        for (int32 frame = 0; frame < 8192; ++frame)
+            render (nextSine(), 1.0f, 1.0f);
+
+        float64 residuePower;
+        float64 classicSum;
+        for (int32 frame = 0; frame < 16384; ++frame)
+        {
+            let sample = nextSine();
+            let harmonics = render (sample, 1.0f, 1.0f);
+            let difference = harmonics - sample;
+            residuePower += float64 (difference) * float64 (difference);
+        }
+
+        distortion.poolResetIn <- 1;
+        phase = 0.0;
+        for (int32 frame = 0; frame < 8192; ++frame)
+            render (nextSine(), 1.0f, 0.0f);
+
+        for (int32 frame = 0; frame < 16384; ++frame)
+            classicSum += float64 (render (nextSine(), 1.0f, 0.0f));
+
+        // Exercise an interior normalized Mix first. The very next 100%-Wet sample
+        // must equal the processor's post-match preview, not a stale Mix multiplier.
+        for (int32 frame = 0; frame < 512; ++frame)
+            render (nextSine(), 0.5f, 0.0f);
+        let endpointSample = render (nextSine(), 1.0f, 0.0f);
+        let fullWetIsDirect = endpointSample == distortion.previewOutputLeft;
+
+        distortion.poolResetIn <- 1;
+        bool resetIsSilent = true;
+        for (int32 frame = 0; frame < 2048; ++frame)
+            if (render (0.0f, 1.0f, 0.0f) != 0.0f)
+                resetIsSilent = false;
+
+        let mean = float32 (classicSum / 16384.0);
+        out <- residuePower > 1.0e-5 ? 1 : 0;
+        advance();
+        out <- std::intrinsics::abs (mean) < 1.0e-3f ? 1 : 0;
+        advance();
+        out <- fullWetIsDirect ? 1 : 0;
+        advance();
+        out <- resetIsSilent ? 1 : 0;
+        advance();
+        out <- -1;
+        advance();
+    }
+}

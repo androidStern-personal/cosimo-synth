@@ -575,6 +575,7 @@ test("desktop distortion controls send exact parameter updates", async () => {
         await clearHarnessDebugLog(page);
 
         await page.click('[data-role="distortion-mode-option-1"]');
+        await page.click('[data-role="rack-parameter-distortionType"]');
         await editRackParameterValue(page, "distortion-drive-field", "18.5");
         await editRackParameterValue(page, "distortion-mix-field", "64");
 
@@ -582,11 +583,13 @@ test("desktop distortion controls send exact parameter updates", async () => {
             page,
             "distortion parameter updates",
             (nextSnapshot) => nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionMode", 1))
+                && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionType", 2))
                 && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionDriveDb", 18.5))
                 && nextSnapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionWet", 0.64)),
         );
 
         assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionMode")), true);
+        assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionType", 2)), true);
         assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionDriveDb")), true);
         assert.equal(snapshot.sentMessages.some((message) => isLaneParamSend(message, "distortionWet")), true);
     } finally {

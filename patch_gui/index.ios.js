@@ -15186,7 +15186,8 @@ const definitions = [
       p("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
       p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 5 }),
       p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
-      p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" })
+      p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" }),
+      p("drive", "distortionType", "Type", "Type", 0, 2, 1, { step: 1, choices: [choice("Symmetric", 0), choice("Asymmetric", 1), choice("Wavefold", 2)] })
     ]
   },
   {
@@ -17756,12 +17757,33 @@ function normalizeDistortionHistoryMessage(message) {
     outputMaxs: outputMaxs.slice(0, binCount)
   };
 }
-function shapeDistortionSample(inputSample, knee) {
+function shapeSymmetricDistortionSample(inputSample, knee) {
   const clampedKnee = clamp$8(Number(knee) || 0, 0, 1);
-  const exponent = 2 + 14 * clampedKnee * clampedKnee;
+  const exponent = 2 + 10 * clampedKnee * clampedKnee;
   const magnitude = Math.abs(Number(inputSample) || 0);
   const denominator = Math.pow(1 + Math.pow(magnitude, exponent), 1 / exponent);
   return inputSample / denominator;
+}
+function shapeDistortionSample(inputSample, knee, type = 0) {
+  const input = Number(inputSample) || 0;
+  const selectedType = clamp$8(Math.round(Number(type) || 0), 0, 2);
+  if (selectedType === 1) {
+    const bias = 0.08;
+    return shapeSymmetricDistortionSample(input + bias, knee) - shapeSymmetricDistortionSample(bias, knee);
+  }
+  if (selectedType === 2) {
+    const magnitude = Math.abs(input);
+    if (magnitude <= 1) return input;
+    const segment = Math.floor((magnitude - 1) * 0.5);
+    const phase = clamp$8((magnitude - (1 + 2 * segment)) * 0.5, 0, 1);
+    const segmentSign = segment % 2 === 0 ? 1 : -1;
+    const roundedReflection = segmentSign * Math.cos(Math.PI * phase);
+    const mirrorReflection = segmentSign * (1 - 2 * phase);
+    const reflectionStrength = clamp$8(Number(knee) || 0, 0, 1);
+    const folded = roundedReflection + (mirrorReflection - roundedReflection) * reflectionStrength;
+    return input < 0 ? -folded : folded;
+  }
+  return shapeSymmetricDistortionSample(input, knee);
 }
 function buildDistortionSamplePoints(frame) {
   const sampleCount = Math.min(frame.inputSamples.length, frame.outputSamples.length);
@@ -17877,6 +17899,7 @@ function normalizeSeries(values) {
 function buildDistortionTransferOccupancy({
   samplePoints,
   knee,
+  type = 0,
   inputRange,
   binCount = DISTORTION_TRANSFER_OCCUPANCY_BIN_COUNT
 }) {
@@ -17885,6 +17908,7 @@ function buildDistortionTransferOccupancy({
   const densityBins = new Array(safeBinCount).fill(0);
   const removedBins = new Array(safeBinCount).fill(0);
   const clippedBins = new Array(safeBinCount).fill(0);
+  const outputSumBins = new Array(safeBinCount).fill(0);
   let leftOverflowCount = 0;
   let rightOverflowCount = 0;
   for (const point of samplePoints) {
@@ -17905,6 +17929,7 @@ function buildDistortionTransferOccupancy({
     densityBins[binIndex] += 1;
     removedBins[binIndex] += Math.abs(point.removed);
     clippedBins[binIndex] += point.clipped ? 1 : 0;
+    outputSumBins[binIndex] += point.output;
   }
   const smoothedDensity = normalizeSeries(smoothSeries(densityBins));
   const smoothedRemoved = normalizeSeries(smoothSeries(removedBins));
@@ -17912,12 +17937,30 @@ function buildDistortionTransferOccupancy({
     const density = densityBins[index] ?? 0;
     return density > 0 ? clamp$8(value / density, 0, 1) : 0;
   });
+  const measuredOutputBins = outputSumBins.map((sum, index) => (densityBins[index] ?? 0) > 0 ? sum / (densityBins[index] ?? 1) : null);
+  const outputAtBin = (index, input) => {
+    const measured = measuredOutputBins[index];
+    if (measured !== null && measured !== void 0) return measured;
+    let left = index - 1;
+    while (left >= 0 && measuredOutputBins[left] === null) left -= 1;
+    let right = index + 1;
+    while (right < safeBinCount && measuredOutputBins[right] === null) right += 1;
+    const leftOutput = left >= 0 ? measuredOutputBins[left] : null;
+    const rightOutput = right < safeBinCount ? measuredOutputBins[right] : null;
+    if (leftOutput !== null && leftOutput !== void 0 && rightOutput !== null && rightOutput !== void 0) {
+      const amount = (index - left) / Math.max(1, right - left);
+      return leftOutput + (rightOutput - leftOutput) * amount;
+    }
+    if (leftOutput !== null && leftOutput !== void 0) return leftOutput;
+    if (rightOutput !== null && rightOutput !== void 0) return rightOutput;
+    return shapeDistortionSample(input, knee, type);
+  };
   const rawPoints = Array.from({ length: safeBinCount }, (_, index) => {
     const normalized2 = safeBinCount <= 1 ? 0 : index / (safeBinCount - 1);
     const input = normalized2 * safeInputRange * 2 - safeInputRange;
     return {
       input,
-      output: shapeDistortionSample(input, knee),
+      output: outputAtBin(index, input),
       density: smoothedDensity[index] ?? 0,
       removed: smoothedRemoved[index] ?? 0,
       clipped: clamp$8(smoothedClipped[index] ?? 0, 0, 1)
@@ -17948,6 +17991,7 @@ function buildDistortionTransferOccupancy({
 }
 function sampleDistortionCurve({
   knee,
+  type = 0,
   inputRange,
   pointCount = DISTORTION_CURVE_POINT_COUNT
 }) {
@@ -17958,7 +18002,7 @@ function sampleDistortionCurve({
     const input = normalized2 * safeInputRange * 2 - safeInputRange;
     return {
       input,
-      output: shapeDistortionSample(input, knee)
+      output: shapeDistortionSample(input, knee, type)
     };
   });
 }
@@ -18074,6 +18118,7 @@ function buildAxisLabelY(sampleValue, plot, range) {
 function DistortionVisualizer({
   compact,
   knee,
+  type,
   transferFrame,
   historyFrame,
   className
@@ -18100,22 +18145,21 @@ function DistortionVisualizer({
     [historyFrame]
   );
   const transferCurve = reactExports.useMemo(
-    () => sampleDistortionCurve({ knee, inputRange: displayRange }),
-    [displayRange, knee]
+    () => sampleDistortionCurve({ knee, type, inputRange: displayRange }),
+    [displayRange, knee, type]
   );
   const transferOccupancy = reactExports.useMemo(() => buildDistortionTransferOccupancy({
     samplePoints,
     knee,
+    type,
     inputRange: displayRange
-  }), [displayRange, knee, samplePoints]);
+  }), [displayRange, knee, samplePoints, type]);
   const transferPlotRect = compact ? COMPACT_PLOT : TRANSFER_PLOT;
   const historyPlotRect = compact ? COMPACT_PLOT : HISTORY_PLOT;
-  const transferCurvePath = reactExports.useMemo(() => buildPolylinePath(
-    transferCurve.map((point) => ({
-      x: mapPlotX(point.input, transferPlotRect, displayRange),
-      y: mapPlotY(point.output, transferPlotRect, displayRange)
-    }))
-  ), [displayRange, transferCurve, transferPlotRect]);
+  const transferCurvePath = reactExports.useMemo(() => samplePoints.length > 0 ? "" : buildPolylinePath(transferCurve.map((point) => ({
+    x: mapPlotX(point.input, transferPlotRect, displayRange),
+    y: mapPlotY(point.output, transferPlotRect, displayRange)
+  }))), [displayRange, samplePoints.length, transferCurve, transferPlotRect]);
   const transferOccupancyPaths = reactExports.useMemo(() => transferOccupancy.segments.map((segment) => {
     const mappedPoints = segment.map((point) => ({
       x: mapPlotX(point.input, transferPlotRect, displayRange),
@@ -18592,7 +18636,7 @@ const LANE_TYPE_WIRE_IDS = Object.freeze({
 });
 const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
   globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
-  distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
+  distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionType"],
   ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
   chorus: ["chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones"],
   flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"],
@@ -25261,6 +25305,7 @@ const ENV_3_ATTACK_ENDPOINT_ID = "env3Attack";
 const ENV_3_DECAY_ENDPOINT_ID = "env3Decay";
 const ENV_3_SUSTAIN_ENDPOINT_ID = "env3Sustain";
 const ENV_3_RELEASE_ENDPOINT_ID = "env3Release";
+const DISTORTION_TYPE_ENDPOINT_ID = "distortionType";
 const RUNTIME_SYNC_REQUEST_ENDPOINT_ID = "runtimeSyncRequest";
 const RUNTIME_STATE_ENDPOINT_ID = "runtimeState";
 const RETRY_DESIRED_TABLE_REQUEST_ENDPOINT_ID = "retryDesiredTableRequest";
@@ -27134,6 +27179,7 @@ function useSynthPatchViewModel({
   const distortionWet = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWet"));
   const distortionWetHPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetHPHz"));
   const distortionWetLPHz = useLaneParameterBinding(requireLaneParameterDescriptor("distortionWetLPHz"));
+  const distortionType = useLaneParameterBinding(requireLaneParameterDescriptor(DISTORTION_TYPE_ENDPOINT_ID));
   const chorusMix = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMix"));
   const chorusMotionMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusMotionMode"));
   const chorusBloomMode = useLaneParameterBinding(requireLaneParameterDescriptor("chorusBloomMode"));
@@ -28311,6 +28357,7 @@ function useSynthPatchViewModel({
     distortionWet,
     distortionWetHPHz,
     distortionWetLPHz,
+    distortionType,
     chorusMix,
     chorusMotionMode,
     chorusBloomMode,
@@ -28597,6 +28644,11 @@ const IOS_FREQUENCY_ENTRY_SPEC = parameterEntrySpecForFrequency({
 const DISTORTION_MODE_OPTIONS = [
   { value: 0, label: "Classic", summary: "Dry/wet crossfade" },
   { value: 1, label: "Harmonics", summary: "Dry plus residue" }
+];
+const DISTORTION_TYPE_OPTIONS = [
+  { value: 0, label: "Symmetric" },
+  { value: 1, label: "Asymmetric" },
+  { value: 2, label: "Wavefold" }
 ];
 function triggerIOSHaptic(style = "light") {
   const hapticTrigger = globalThis.cmaj_triggerHaptic;
@@ -29061,6 +29113,7 @@ const IOSModulationMatrixPanel = reactExports.memo(function IOSModulationMatrixP
 });
 const IOSDistortionPanel = reactExports.memo(function IOSDistortionPanel2({
   modeValue,
+  typeValue,
   driveValue,
   kneeValue,
   wetValue,
@@ -29069,6 +29122,7 @@ const IOSDistortionPanel = reactExports.memo(function IOSDistortionPanel2({
   historyFrame,
   scopeFrame,
   onModeChange,
+  onTypeChange,
   onDriveChange,
   onKneeChange,
   onWetChange,
@@ -29115,6 +29169,33 @@ const IOSDistortionPanel = reactExports.memo(function IOSDistortionPanel2({
           )
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gap: "0.45rem" }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mseg-depth-label", children: "Type" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }, children: DISTORTION_TYPE_OPTIONS.map((option) => {
+            const active = typeValue === option.value;
+            return /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                type: "button",
+                "data-role": `distortion-type-option-${option.value}`,
+                "aria-pressed": active ? "true" : "false",
+                onClick: () => onTypeChange(option.value),
+                style: {
+                  borderRadius: "16px",
+                  border: active ? "1px solid rgba(251,113,133,0.42)" : "1px solid rgba(255,255,255,0.08)",
+                  background: active ? "rgba(251,113,133,0.13)" : "rgba(255,255,255,0.04)",
+                  color: active ? "rgba(255,241,242,0.98)" : "rgba(226,232,240,0.88)",
+                  padding: "0.7rem 0.45rem",
+                  fontSize: "0.69rem",
+                  letterSpacing: "0.06em",
+                  textTransform: "uppercase"
+                },
+                children: option.label
+              },
+              option.value
+            );
+          }) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gap: "0.45rem" }, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "mseg-depth-label", children: "Mode" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }, children: DISTORTION_MODE_OPTIONS.map((option) => {
             const active = modeValue === option.value;
@@ -29148,6 +29229,7 @@ const IOSDistortionPanel = reactExports.memo(function IOSDistortionPanel2({
           DistortionVisualizer,
           {
             knee: kneeValue,
+            type: typeValue,
             transferFrame: scopeFrame,
             historyFrame
           }
@@ -29668,6 +29750,7 @@ function IOSPatchViewBody() {
               IOSDistortionPanel,
               {
                 modeValue: synthView.distortionMode.value,
+                typeValue: synthView.distortionType.value,
                 driveValue: synthView.distortionDriveDb.value,
                 kneeValue: synthView.distortionKnee.value,
                 wetValue: synthView.distortionWet.value,
@@ -29676,6 +29759,7 @@ function IOSPatchViewBody() {
                 historyFrame: synthView.observedDistortionHistory,
                 scopeFrame: synthView.observedDistortionScope,
                 onModeChange: synthView.distortionMode.commitValue,
+                onTypeChange: synthView.distortionType.commitValue,
                 onDriveChange: synthView.distortionDriveDb.commitValue,
                 onKneeChange: synthView.distortionKnee.commitValue,
                 onWetChange: synthView.distortionWet.commitValue,

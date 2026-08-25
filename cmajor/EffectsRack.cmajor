@@ -221,6 +221,7 @@ namespace wt
     let laneDistortionParamWet     = 3;
     let laneDistortionParamWetHPHz = 4;
     let laneDistortionParamWetLPHz = 5;
+    let laneDistortionParamType    = 6;
 
     // OTT-type pool slots.
     let laneOttParamMix           = 0;
@@ -276,7 +277,7 @@ namespace wt
         table[wrap<rackModuleCount> (rackModuleGlobalFilter), 1] = 64;
         table[wrap<rackModuleCount> (rackModuleGlobalFilter), 2] = 64;
         table[wrap<rackModuleCount> (rackModuleGlobalFilter), 3] = 64;
-        // distortion: mode 0, driveDb 64, knee 64, wet 64, wetHP 64, wetLP 64
+        // distortion: mode/type 0, driveDb 64, knee 64, wet 64, wetHP 64, wetLP 64
         table[wrap<rackModuleCount> (rackModuleDistortion), 1] = 64;
         table[wrap<rackModuleCount> (rackModuleDistortion), 2] = 64;
         table[wrap<rackModuleCount> (rackModuleDistortion), 3] = 64;
@@ -1077,6 +1078,7 @@ namespace wt
                             * rackOctaveScale (octaveScalers[wrap<rackOctaveScalerCount> (scalerBase + laneOctaveScalerDistortionWetHP)],
                                                rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionWetHPOctaves)]));
                     distortionPool[ordinal].modeIn <- pp[laneDistortionParamMode];
+                    distortionPool[ordinal].typeIn <- pp[laneDistortionParamType];
                     distortionPool[ordinal].driveDbIn <- clampDistortionDriveDb (
                         rackModulateLinear (pp[laneDistortionParamDriveDb],
                                             rackModIn[wrap<rackModTargetCount> (laneBase + rackModTargetDistortionDriveDb)]));

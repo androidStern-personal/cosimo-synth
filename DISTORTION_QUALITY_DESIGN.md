@@ -1,275 +1,267 @@
 # Distortion Quality Design
 
-Status: **locked design, 2026-08-25** (Andrew + assistant session). This document is the
-output of the design conversation — it specifies *what to build and why*, not a build log.
-Implementation happens under a separate effort against this spec.
+Status: implementation authority, superseded in full by Andrew's decisions on
+2026-08-25 and his low-level Mix correction on 2026-08-26.
 
-Reference sound targets named by Andrew: Soundtoys Decapitator, Ableton Drum Buss,
-Auxy's built-in distortion. All three are "analog school" saturators: warm, alive,
-usable at every knob position. None of them are the digital fold/crush school (Vital),
-and none of them require circuit simulation.
+This document replaces the earlier grade-2 proposal imported from
+`claude/cosimo-distortion-quality-x0rx9c` at
+`63dd431b15f7ebfd27e9f54406892391a42fd6d7`. The source survey and taxonomy in
+`DISTORTION_FIELD_NOTES.md` remain useful context, but they do not override this
+design.
 
----
+## 1. Product outcome
 
-## 1. The diagnosis (why the current module sounds bad)
+Rebuild the rack Distortion around three deliberately different, selectable
+nonlinearities:
 
-The current `wt::DistortionBus` (`cmajor/Distortion.cmajor`) is a **static, symmetric,
-memoryless soft-clip with uncompensated gain**. Four specific defects, none of them
-taste questions:
+1. **Symmetric** saturation: the positive and negative halves bend identically.
+2. **Asymmetric** saturation: one half bends earlier through a fixed static bias.
+3. **Wavefold**: peaks reflect back after crossing fold thresholds instead of
+   flattening.
 
-1. **No makeup gain anywhere.** Drive is 0..+36 dB into the shaper
-   (`Distortion.cmajor:188`) and the output is never trimmed back. Wet is crushed
-   against ±1.0 with massively raised RMS while dry stays at input level. This is the
-   dry/wet "different volumes" complaint, and it also means the algorithm has never
-   been auditioned fairly — louder always wins.
-2. **Perfectly symmetric curve ⇒ odd harmonics only.** `shapeSample` is
-   `x / (1+|x|^k)^(1/k)` (`Distortion.cmajor:86-97`). Symmetric clipping produces the
-   cold/buzzy character. Every reference target generates even harmonics via
-   asymmetry (bias), and modulates that asymmetry with the program material.
-3. **No tone shaping around the nonlinearity.** Both wet filters currently sit
-   *before* the shaper, so fizz the shaper generates above `wetLP` is never tamed.
-   The references all filter on both sides of the clipper.
-4. **The "harmonics" residue is misaligned by construction.**
-   `residue = shaped − driven` (`Distortion.cmajor:202`) subtracts a pre-oversampling
-   signal from a post-round-trip signal. Any resampler smear pollutes the residue with
-   dry leakage.
+The target remains a warm, alive, useful distortion whose complete Drive and Mix
+travel is controllable. Soundtoys Decapitator, Ableton Drum Buss, and Auxy's built-in
+distortion remain references for the saturation school; Wavefold is intentionally a
+third, more overtly harmonic option. Physical circuit simulation is not required.
 
-## 2. The chosen grade of realism
+The user-visible defect this task must close is objective: the dry and driven wet
+signals currently reach Mix at radically different levels. Wet must be corrected
+before the dry/wet blend, and the intermediate Mix positions must then be normalized
+so sweeping Mix does not create a large hump or hole.
 
-Survey of shipping open-source implementations (evidence in §9) shows "memory" in a
-distortion comes in three distinct grades:
+## 2. Superseding decisions
 
-- **Grade 1 — bookkeeping**: ADAA registers, DC blockers. Mandatory hygiene, no
-  audible "character".
-- **Grade 2 — structural**: asymmetric bias driven by an envelope follower, filters
-  around (and inside) the nonlinear cluster, cascaded gentle stages, static makeup
-  laws. Cheap, and this is where the Decapitator/Drum Buss "alive" quality lives.
-- **Grade 3 — physical**: circuit ODEs, WDF diode clippers, tape hysteresis solved
-  per-sample with Newton–Raphson. Expensive; needed for amp-sim products, not for a
-  synth's rack module.
+The following decisions are explicit and final for T25:
 
-**Locked: this module is a grade-2 design.** Grade 3 is explicitly out of scope (§7).
+- The earlier no-new-controls restriction is lifted.
+- Add one discrete `distortionType` control with `Symmetric`, `Asymmetric`, and
+  `Wavefold` choices. Keep all six existing parameter identities and ranges.
+- Each selected Type is **one nonlinear distortion algorithm**. There is no
+  cascaded/two-clip design, no character clipper followed by a Knee clipper, and no
+  pre- or post-fold saturator.
+- Asymmetric bias is fixed and static. There is no envelope follower and no dynamic
+  or program-dependent bias.
+- Drive controls the level entering the selected nonlinearity. It is not a hidden
+  macro over EQ, bias, and other voicing changes.
+- Both user wet filters stay before Drive and before the selected distortion. There
+  is no post-shaper Tone/fizz filter, drive-scaled pre-emphasis, or inverse EQ.
+- Preserve the existing post-distortion DC removal; do not add a duplicate blocker.
+- Preserve 4x oversampling, zero declared latency, allocation-free/pool-safe
+  processing, exact Classic dry at zero Wet, and aligned Harmonics residue.
+- Gain correction is calculated algorithmically from the actual running dry and wet
+  signals. Andrew is not a manual calibration or loudness-approval step, and a
+  single fixed correction calibrated at one input level is explicitly rejected.
+- Start without ADAA, feedback, hysteresis, WDF/circuit models, neural models, or any
+  other grade-3 detour.
 
-## 3. Locked signal flow
+These choices supersede every contrary statement in the earlier version of this
+document, T25, and `OPEN_WORK_ROADMAP.md`, especially the prior moving-bias,
+pre/de-emphasis, post-low-pass, Drive-macro, and two-stage-shaper instructions.
 
-All of this lives inside `wt::DistortionBus`, stereo, zero declared latency (ADR-008),
-no allocation, pool-resettable.
+## 3. Parameter surface
 
+The existing six endpoints remain:
+
+| Endpoint | Meaning |
+| --- | --- |
+| `distortionMode` | Classic output or Harmonics-residue output |
+| `distortionDriveDb` | 0..36 dB input gain into the selected algorithm |
+| `distortionKnee` | softer to sharper curvature inside that one algorithm |
+| `distortionWet` | dry/wet amount; new/reset default is 50% under T41 |
+| `distortionWetHPHz` | pre-distortion wet high-pass |
+| `distortionWetLPHz` | pre-distortion wet low-pass |
+
+Add:
+
+| Endpoint | Meaning |
+| --- | --- |
+| `distortionType` | `0 = Symmetric`, `1 = Asymmetric`, `2 = Wavefold` |
+
+`distortionType` is a saved, UI-editable discrete Effects Lane slot parameter. The B3
+parameter cut means Effects Lane fields are not separate DAW host parameters. Type is
+not a modulation destination. The five existing continuous
+Distortion modulation targets remain unchanged. The default Type is Asymmetric because
+the default product target is warm saturation; Symmetric retains the familiar balanced
+curve, and Wavefold is an explicit choice.
+
+Adding Type appends one new parameter contract; it does not rename or repurpose any
+existing endpoint. Do not add a preset/state compatibility layer unless separately
+authorized.
+
+## 4. One selected nonlinear algorithm
+
+All three algorithms run inside the existing 4x oversampled core. Drive is applied
+before the core. The output of every algorithm must be finite and bounded for every
+finite input and parameter value.
+
+### 4.1 Symmetric
+
+Use one normalized monotonic soft-saturation curve whose positive and negative halves
+are exact sign mirrors. Knee moves continuously from a broad/soft bend to a
+narrower/sharper bend. The existing generalized-knee family is the starting curve;
+the maximum exponent is 12 to avoid spending the top of the control on near-hard
+clipping under only 4x oversampling.
+
+This mode should predominantly produce odd harmonics from a centered sine input.
+
+### 4.2 Asymmetric
+
+Use one biased version of the saturation curve. Apply one fixed internal bias near
+`0.08` normalized units, evaluate the one asymmetric transfer, and remove its static
+zero-input offset. Knee retains the same soft-to-sharp meaning as Symmetric.
+
+There is no Bias knob and no envelope-controlled motion. The static asymmetry must
+produce measurable even harmonics without stereo-dependent movement; left and right
+use the same constants.
+
+### 4.3 Wavefold
+
+Use one symmetric, bounded, repeated-fold transfer function. The region before the
+first fold is unity; increasing Drive crosses more fold thresholds. Knee controls the
+**reflection law** inside the same transfer function:
+
+- soft Knee gives shallow, rounded reflected portions that retain more fundamental;
+- sharp Knee approaches a full mirror reflection and produces stronger upper
+  harmonics.
+
+Knee changes the complete reflected portion, not only a cosmetic corner radius. It
+does not invoke a second clipper before or after the fold. Drive owns fold traversal;
+do not add a redundant Fold Amount control in T25.
+
+## 5. Signal flow
+
+```text
+input ─────────────────────────────────────────────────────────── dry (bit-exact)
+  │
+  └─ wet HP → wet LP → Drive → 4x selected nonlinear core ─┬─ shaped round trip
+                                                            └─ unity round trip
+
+shaped round trip → existing DC removal → live bounded level match → Classic wet
+shaped round trip − unity round trip → DC removal → same live scale → residue
+
+Classic:   normalized dry/wet blend of dry and compensated Classic wet
+Harmonics: dry + residue × Wet
 ```
-in ──┬───────────────────────────────────────────────────────────────┐ (dry, bit-exact)
-     │                                                               │
-     ├─ wetHP (pre, 4th-order Butterworth HP — "what gets driven")   │
-     ├─ pre-emphasis tilt (style constant, scales with drive)        │
-     ├─ × driveGain (0..+36 dB)                                      │
-     ├─ [ ×4 oversampled core ]                                      │
-     │    ├─ + bias  (static + envelope-driven, stereo-linked)       │
-     │    ├─ stage 1: asymmetric soft saturator (character)          │
-     │    ├─ stage 2: existing knee curve (hardness, exponent cap)   │
-     │    └─ thru-path: bias-free unity pass (for residue alignment) │
-     ├─ de-emphasis (inverse of pre-emphasis tilt)                   │
-     ├─ wetLP (MOVED post-shaper — this is now the Tone / fizz-tamer)│
-     ├─ DC blocker (existing)                                        │
-     ├─ × makeup (static auto-gain law from drive+knee)              │
-     │                                                               │
-     └─ mix: classic = equal-power dry/wet   harmonics = dry + residue·wet
-```
 
-### 3.1 Stage specifications and starting constants
+Both shaped and unity outputs must pass through the same oversampling round trip. The
+unity reference begins from the same driven, prefiltered sample and differs only by
+bypassing the selected nonlinear transfer. Never subtract the pre-oversampling signal
+from the post-round-trip shaped signal.
 
-Constants below are **starting points**; final values land during voicing (§5).
-"Norm" means relative to the curve's knee level ≈ 1.0.
+At zero Drive the selected nonlinear path is exact unity. The selected transfer is
+engaged continuously over the first 6 dB of Drive, avoiding a discontinuous switch
+between unity and a nonlinear curve. The aligned residue is therefore numerically
+negligible at zero.
+The existing Harmonics product behavior remains additive (`dry + residue * Wet`); the
+residue itself, not the complete additive output, is effectively silent at zero Drive.
 
-| Stage | Spec | Starting constants |
-|---|---|---|
-| Pre-emphasis | 1-pole tilt into the clipper, exact inverse after. Makes highs saturate silkier, keeps lows from eating headroom. | +2.5 dB high tilt at full drive, pivot ~900 Hz, amount scales linearly with driveDb |
-| Static bias | Constant offset before stage 1 → 2nd-harmonic warmth at low drive | 0.08 norm |
-| Dynamic bias | Envelope follower on the driven signal moves the operating point — program-dependent asymmetry, the "it breathes" quality (analog coupling-cap drift) | depth up to +0.10 norm at full drive; attack 10 ms, release 180 ms; stereo-linked (max of L/R) so the image doesn't wobble |
-| Stage 1 | Asymmetric soft saturator, e.g. tanh-family evaluated at `x + bias`; asymmetry grows with drive (2nd-dominant at low drive, odd takes over cranked — tube behavior) | tanh rational approx (see Surge `TANH`, §9) |
-| Stage 2 | The **existing** knee curve `x/(1+|x|^k)^(1/k)`, kept as the hardness control. Cascading two gentle stages beats one steep stage at equal THD. | exponent remap `k = 2 + 10·knee²` (cap 12, was 16 — see §3.5) |
-| DC blockers | Existing `classicDcBlocker`/`residueDcBlocker` stay. Bias + DC-block re-centering is a desirable analog artifact, not a bug. | unchanged |
-| Makeup | Static law, never dynamic (dynamic loudness matching pumps) | see §3.3 |
+Preview input remains the driven pre-core signal. Preview output becomes the final
+post-DC, post-makeup Classic wet signal so the visualization reports what Mix receives.
 
-### 3.2 Parameter surface: **unchanged count, two new semantics**
+## 6. Deterministic live gain compensation
 
-The six existing params keep their ids, ranges, and modulation targets
-(`EffectsRack.cmajor` tables untouched):
+Dry remains at unity. Applying the same gain to dry and wet would preserve the bug and
+is forbidden. Only the completed wet signal is brought to the dry reference level
+before mixing.
 
-| Param | Before | After |
-|---|---|---|
-| `modeIn` | classic / harmonics mix | unchanged |
-| `driveDbIn` 0..36 | raw input gain | **macro**: drive + pre-emphasis amount + bias depth + makeup, moving together on voiced curves (the Auxy/Decapitator lesson: the knob is the product) |
-| `kneeIn` 0..1 | curve exponent 2..16 | curve exponent 2..12 on stage 2 |
-| `wetIn` 0..1 | equal-power mix | unchanged law, now honest (makeup makes wet ≈ dry loudness) |
-| `wetHPHzIn` 20..4000 | pre-shaper HP | unchanged position — "what gets driven" (the Drum Buss *Crunch* idea: protect the lows from the clipper) |
-| `wetLPHzIn` 20..20k | pre-shaper LP | **moved post-shaper** — becomes Tone / fizz high-cut (Decapitator's high cut). Default stays 18 kHz for preset compatibility |
+### 6.1 Why the fixed table is superseded
 
-No new user parameters. Makeup is always-on, not a toggle; there is no output trim —
-downstream rack gain staging covers that. Fewer knobs, no bad settings.
+Andrew's phone test exposed that the -18 dBFS pink-noise table only matched the level
+at which it was calibrated. With Asymmetric, Drive 36 dB, and Knee 0.35, the same table
+made 50% Mix 12.47 dB louder than 1% Mix for a -36 dBFS filtered saw, but only 1.34 dB
+louder at -18 dBFS. Pink noise behaved the same way at matching levels. The filtered
+saw's ideal correction differed from pink by at most 0.85 dB; input level, not fixture
+choice, was the dominant variable.
 
-### 3.3 Auto-makeup law
+This is inherent to the nonlinear transfer: quiet input retains much more of Drive's
+gain, while louder input is compressed or folded. One Type x Drive x Knee scalar
+cannot match both. Retuning the table at another level merely moves the failure.
 
-Mechanism (locked): a **static, hand-voiced function of drive and knee** applied to the
-wet path before mixing — the same approach as Decapitator's Auto output; commercial
-saturators do not use dynamic loudness matching for this because it pumps.
+### 6.2 Runtime level matcher
 
-Form: `makeupDb = −α · driveDb + trim(knee)`, starting at α = 0.85, `trim` within
-±2 dB. Final constants are voiced so that, for pink noise at −18 dBFS, wet loudness
-tracks dry within ±1 dB across the full drive range (§5). Result: the mix knob and
-bypass comparisons become fair by construction.
+The production processor keeps three stereo-linked, exponentially weighted values
+over a 10 ms window:
 
-### 3.4 Residue alignment fix (harmonics mode)
+1. dry mean-square energy;
+2. completed raw-wet mean-square energy;
+3. dry/wet cross-energy.
 
-Locked mechanism: the oversampled core gains a second output — a **unity thru path**
-that carries the driven signal through the *same* up/down resampling round trip as the
-shaped signal. `residue = shaped_rt − thru_rt`, both post-round-trip, aligned by
-construction regardless of what the resampler does. This removes dry leakage from
-harmonics mode without measuring or compensating anything.
+The wet-only correction is calculated every sample:
 
-Classic-mode dry stays the bit-exact input (ADR-005 hard bypass at wet = 0 is
-non-negotiable), so classic mix tolerates only sub-sample wet-path smear — see §3.5.
+`makeupGain = sqrt (runningDryPower / runningWetPower)`
 
-### 3.5 Anti-aliasing stance
+Detector floors prevent division by silence. Makeup is bounded from -36 dB to +6 dB
+and carries a fixed -0.3 dB transient margin,
+so pathological cancellation or extreme non-default filters cannot create unbounded
+gain. Left and right share one correction, preserving stereo balance. A fresh or
+pool-reset instance fades from dry to the level-matched wet over 5 ms; this removed the
+measured startup burst without adding declared latency.
 
-- Keep the existing ×4 oversampled cores.
-- **Requirement on the resampler**: the wet round trip must introduce no declared
-  latency and at most ~1 sample of smear, or classic-mode mixing combs. At
-  implementation time, verify what interpolation Cmajor's `* 4` node oversampling
-  uses and pin it via annotation if supported; if it cannot meet the requirement,
-  replace node oversampling with an in-processor ×4 stage in the Surge Distortion
-  style (polynomial up, two cascaded polyphase IIR halfband decimators — see §9),
-  which stays within ADR-008.
-- Cap the stage-2 exponent at 12 (was 16). Near-hard clipping at +36 dB through ×4
-  oversampling is the one configuration that audibly folds back; softening the top of
-  the knee range costs little character and buys most of the headroom.
-- **Escalation path, not v1**: first-order ADAA on stage 2 (sst-waveshapers style:
-  one previous-input + one previous-antiderivative register, ill-conditioning guard,
-  no declared latency). The general-k curve has no closed-form antiderivative, so this
-  would use tabulated antiderivatives over a quantized knee grid (chowdsp-style LUT).
-  Only build this if the shipped module audibly aliases on bright material at high
-  drive. Second-order ADAA is ruled out: it costs a declared sample of latency
-  (chowdsp documents this), which ADR-008 forbids.
-- Some aliasing at maximum drive is acceptable. Decapitator itself audibly aliases
-  cranked; well-controlled is the bar, perfect is not.
+This is automatic level matching, not a compressor threshold or feedback loudness
+controller: the two energies are measured through identical windows and their ratio is
+applied only to the wet path. The fixed verification entry point remains narrow and
+can bypass the matcher to report the raw correction being applied.
 
-### 3.6 Cmajor structure changes
+### 6.3 Mix normalization
 
-- `DistortionCoreChannel` gains inputs `biasIn` (value stream, computed once in
-  `DistortionBus` at base rate and sent to both cores — this is what stereo-links the
-  envelope) and a second output stream `thru` (§3.4). Cores stay mono ×4 nodes.
-- `DistortionBus` gains: envelope follower state, tilt shelf pair (pre/de-emphasis),
-  and the makeup computation. The wet LP filter moves after the cores.
-- `poolResetIn` additionally clears: envelope follower state, tilt filter state.
-  (Existing filter/DC resets stay; coefficients preserved, state cleared — same rule
-  as today, `Distortion.cmajor:148-158`.)
-- Preview taps: `previewInput*` stays the driven pre-shaper signal; `previewOutput*`
-  becomes the post-makeup wet, so the scope shows what the module actually
-  contributes at matched loudness.
-- Zero declared latency throughout; the module remains part of the rack latency
-  witness proof (`EffectsRack.cmajor` C10).
-- **The envelope follower adds no latency.** It is a causal side-chain control, not
-  an element of the audio path: sample `n` leaves the module on tick `n`, biased by an
-  envelope computed from samples `≤ n`. Its attack/release constants are *response
-  lag in the control value* (the desired bias-drift character), not delay of the
-  audio. Latency would only enter via lookahead (reading ahead to react before a
-  transient) — banned here for the same reason `RackOutputStage` refuses a lookahead
-  limiter and `Ott` dropped its standalone 3 ms lookahead path under ADR-008. Same
-  category as the module's existing IIR filters and DC blockers: state and phase
-  shift, never delay.
+First match the 100% wet endpoint as above. Then use the running dry/wet cross-energy
+to calculate the current correlation:
 
-## 4. What stays exactly as-is
+`baseMix = (1 - wet) * dry + wet * compensatedWet`
 
-- The six-parameter modulation surface, rack tables, lane state, preset schema.
-- Equal-power classic mix law and the two-mode (classic/harmonics) architecture —
-  harmonics mode is a legitimate exciter topology (Aphex school); it stays, fixed.
-- The wet HP as a *pre*-shaper band selector (Drum Buss *Crunch* validated it).
-- The existing knee curve — demoted from "the whole algorithm" to stage 2 of a chain,
-  which is the correct altitude for it.
-- Scope/history analyzers, ADR-005 bypass, ADR-008.
+`mixGain = 1 / sqrt ((1 - wet)^2 + wet^2 + 2 * rho * wet * (1 - wet))`
 
-## 5. Voicing (how constants get final values)
+The runtime Classic output is `baseMix * mixGain`, with hard exact endpoints at 0%
+and 100%. This adapts to the actual signal instead of assuming pink noise's
+correlation. At exactly 0% Wet, the output takes a hard dry branch before any
+multiplication and remains bit-identical. Type changes crossfade inside the one
+selected-transfer seam.
 
-The §3.1 constants and the drive-macro curves (§3.2, §3.3) get their final values by
-ear against the reference plugins, at −18 dBFS program level, using the same
-render-and-compare approach already proven in `scripts/drum_buss_*` (sine-sweep
-harmonic profiles were used there to fit Ableton's Drive stage — the method extends
-directly to matching a Decapitator-style harmonic profile). Reference renders of a
-Cosimo stem through Decapitator at 2–3 loved settings, if provided, become the
-voicing target; absent those, the target is the §3.1 description (2nd-dominant at low
-drive, odd-dominant cranked, no fizz above the Tone cut).
+No listening judgment is required to derive the correction; production-seam
+regressions own it numerically.
+## 7. Minimal implementation boundary
 
-This is voicing, not research: constants change, the architecture above does not.
+The implementation is deliberately limited to:
 
-## 6. Ship criteria
+1. One failing production-seam regression for the present wet/mix mismatch and residue
+   leak.
+2. The Type parameter/state/UI plumbing required by the existing lane and parameter
+   contracts.
+3. The three single algorithms inside `wt::DistortionBus`.
+4. The aligned oversampled unity output and existing DC/reset handling.
+5. One narrow verification entry point for raw-versus-matched production output.
+6. Focused behavioral proof, followed by the repository-required desktop delivery.
 
-1. Pink noise at −18 dBFS: wet loudness within ±1 dB of dry across the full drive
-   range (the fair-A/B guarantee).
-2. Harmonics mode at wet=1, drive=0: output ≈ dry (residue ≈ silence) — proves the
-   alignment fix.
-3. Bypass invariants hold: wet=0 classic is bit-exact dry; rack latency witness still
-   proves 0.
-4. Andrew's ears on real patches, A/B'd at matched loudness against the references.
+Do not build a generic audio-analysis framework, add a dependency, refactor unrelated
+rack code, or create a second planning document. If the existing seams cannot support
+this bounded implementation, stop before expanding scope.
 
-## 7. Explicitly out of scope (v2 shelf)
+## 8. Acceptance contract
 
-- **Styles/characters menu** (Decapitator A/E/N/T/P): v1 ships one voiced character.
-  The skeleton is the work; styles are constant-set swaps (tilt amount/pivot, bias
-  sign/depth, stage-1 curve, transformer-style low-shelf pre-boost). If v1's
-  character lands, adding a style table is a small follow-up.
-- **Feedback around the nonlinearity** (Surge Distortion's `L = in + fb·L`): audible
-  and cheap but interacts with modulation and needs stability care; revisit in v2.
-- **Grade-3 physics**: WDF circuits, tape hysteresis, neural stages. Wrong
-  cost/benefit for a rack module.
-- **Multiband saturation**: the rack's lane architecture is the right home for
-  multiband, not this module's internals.
-- **Transient re-injection** (Drum Buss *Transients*): valuable for drums; belongs in
-  a separate rack module if wanted, not inside the saturator.
+The change is complete only when all of the following are automated and green:
 
-## 8. Open decisions (defaults apply unless overridden)
+1. The retained level regression fails against the original mismatched implementation.
+2. With default filters, 100% Classic wet remains within 1 dB of dry across the tested
+   Type x Drive x Knee grid and quiet-to-nominal input levels.
+3. Classic Mix at 0/25/50/75/100% remains within 1 dB of dry across that grid, including
+   Andrew's 110 Hz saw through a 350 Hz, 12 dB/octave low-pass at -36, -30, -24, and
+   -18 dBFS, without discontinuity or non-finite output.
+4. Fixed drums, bass, and bright-poly holdouts remain level-controlled; adversarial
+   near-Nyquist material remains finite and bounded. Verification includes 44.1, 48,
+   96, and 192 kHz where applicable.
+5. Symmetric produces the centered/odd-harmonic behavior, Asymmetric produces
+   measurable even harmonics, and Wavefold is measurably non-monotonic and distinct.
+6. Harmonics residue uses the aligned round trip and is effectively silent at zero
+   Drive; the additive Harmonics output therefore remains dry there.
+7. Classic Wet at exactly zero is bit-identical dry for every Type. Reported latency
+   remains zero. Pool reset clears all filter, DC, interpolation, and oversampling
+   histories without changing parameter values.
+8. Type is saved/restored and exposed on desktop and iPhone; existing parameter IDs,
+   ranges, and modulation targets remain intact. New/reset Wet remains 50% as owned by
+   T41.
+9. Focused Cmajor/UI/state tests pass, then the current desktop UI is built, a fresh
+   HMR standalone is launched, and the compiled VST3 is installed at
+   `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3`.
 
-1. **wetLP semantic move** (pre → post shaper) changes how existing presets sound.
-   Default: accept — the old placement was the defect. Alternative: keep pre-LP *and*
-   add a fixed post fizz-cut, at the cost of a hidden filter presets can't reach.
-2. **One character vs. mode-linked flavors in v1.** Default: one character (tube-ish,
-   per §3.1). Alternative: make `modeIn` a 3-way (classic/harmonics/alt-voicing) —
-   rejected by default because it overloads an existing param's meaning.
-3. **Exponent cap 12.** Default: accept the slightly softer maximum hardness.
-   Alternative: keep 16 and accept committing to the ADAA escalation path in v1.
-
-## 9. Evidence appendix (what shipping code actually does)
-
-Surveyed 2026-08-25 from source: `surge-synthesizer/sst-waveshapers`,
-`surge-synthesizer/surge`, `mtytel/vital`, `Chowdhury-DSP/chowdsp_utils`,
-`Chowdhury-DSP/BYOD`.
-
-- **Two-layer separation is universal**: curve primitives hold only
-  antialiasing/DC state; filters, bias, feedback, makeup, and mix always live in the
-  wrapper one level up. Surge XT's WaveShaper FX wrapper is literally
-  pre-LC/HC → **bias** → drive → curve(×2 OS) → post-LC/HC → boost → mix
-  (`WaveShaperEffect.h`).
-- **Surge Distortion FX** (`DistortionEffect.cpp`): pre parametric EQ → ×4 OS loop
-  with feedback around the shaper and lowpasses *inside* the loop → 2-stage halfband
-  decimation → output gain → post EQ. Also: probes the shaper at zero input at runtime
-  and subtracts the measured DC. Manual output gain; no auto-makeup — none of the
-  open-source projects ship auto-makeup, it's commercial polish (Decapitator Auto).
-- **sst-waveshapers**: 43 types, 4 SIMD state registers each — ADAA priors, DC
-  blocker state, or seeded-deterministic fuzz tables. First-order ADAA with an
-  ill-conditioning guard; applied only to sharp-cornered curves (rectifiers, folds);
-  the classic saturators run bare inside the 2×-oversampled voice engine. Shipped
-  asymmetry exists (`wst_asym`, OJD's offset knees).
-- **Vital** (`distortion.cpp`): six raw memoryless curves, no oversampling, no
-  compensation, linear dry/wet, one routable SVF. The deliberate opposite school —
-  works for digital/EDM aesthetics, and reproduces exactly the symmetric-buzz problem
-  this design removes. Cosimo is not choosing this school.
-- **chowdsp_utils**: reusable ADAA clippers; generic 2nd-order ADAA via three LUTs
-  (f, AD1, AD2), documented +1 sample latency even bypassed — the receipt for why v1
-  limits itself to first-order ADAA under ADR-008.
-- **BYOD**: grade 3 in the wild — Tube Screamer as a WDF tree of schematic components
-  (drive knob = virtual pot resistance), tape hysteresis as per-sample Newton–Raphson
-  on magnetization state, LSTM amp captures resampled around training rate, tone
-  stacks as separate modules.
-- Papers/background: Parker et al., "Reducing the Aliasing of Nonlinear Waveshaping
-  Using Continuous-Time Convolution" (DAFx-16, ADAA); Chowdhury, "Real-Time Physical
-  Modelling for Analog Tape Machines" (DAFx-19); Pakarinen & Yeh, "A Review of
-  Digital Techniques for Modeling Vacuum-Tube Guitar Amplifiers" (CMJ 2009).
-- In-repo prior art: `scripts/drum_buss_fit_drive.py` and siblings (sine-sweep
-  harmonic fitting of Ableton's Drum Buss Drive) — the voicing method of §5.
+Sound-reference renders may be retained as useful evidence, but Andrew's listening is
+not a completion gate for algorithmic level compensation.

@@ -17,7 +17,8 @@
               "distortionKnee": 0.35,
               "distortionWet": 0.5,
               "distortionWetHPHz": 40,
-              "distortionWetLPHz": 18000
+              "distortionWetLPHz": 18000,
+              "distortionType": 1
             }
           },
           "delay#2": {

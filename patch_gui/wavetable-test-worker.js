@@ -59,7 +59,7 @@ const Fe = 8, ae = 5, Ne = 8, ut = Object.freeze({
   reverb: 7
 }), Pe = Object.freeze({
   globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
-  distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
+  distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionType"],
   ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
   chorus: ["chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones"],
   flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"],
@@ -84,7 +84,7 @@ function ht(t, e) {
     n[a] = r;
   }), n;
 }
-const S = (t, e) => ({ label: t, value: e });
+const b = (t, e) => ({ label: t, value: e });
 function R(t, e) {
   try {
     return t();
@@ -152,7 +152,7 @@ const E = Object.freeze({
     xEndpointID: null,
     yEndpointID: null,
     parameters: [
-      c("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 1, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(S), quick: !0 }),
+      c("filter", "globalFilterMode", "Mode", "Mode", 0, 5, 1, { step: 1, choices: ["Off", "Lowpass", "Highpass", "Bandpass", "Notch", "Peak"].map(b), quick: !0 }),
       c("filter", "globalFilterCutoff", "Cutoff", "Cut", 20, 2e4, 2e4, { unit: "Hz", scale: "log", quick: !0, modulationTargetIndex: 0, modulationApplication: "octaves" }),
       c("filter", "globalFilterResonance", "Resonance", "Res", 0.1, 20, 0.707107, { scale: "log", modulationTargetIndex: 1, modulationDragStyle: "effective-value" }),
       c("filter", "globalFilterDrive", "Drive", "Drv", 0, 1, 0, { modulationTargetIndex: 2 })
@@ -167,12 +167,13 @@ const E = Object.freeze({
     xEndpointID: null,
     yEndpointID: null,
     parameters: [
-      c("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [S("Classic", 0), S("Harmonics", 1)] }),
+      c("drive", "distortionMode", "Mode", "Mode", 0, 1, 0, { step: 1, choices: [b("Classic", 0), b("Harmonics", 1)] }),
       c("drive", "distortionDriveDb", "Drive", "Drv", 0, 36, 12, { unit: "dB", quick: !0, modulationTargetIndex: 3 }),
       c("drive", "distortionKnee", "Knee", "Kne", 0, 1, 0.35, { modulationTargetIndex: 4 }),
       c("drive", "distortionWet", "Mix", "Mix", 0, 1, 0.5, { quick: !0, modulationTargetIndex: 5 }),
       c("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4e3, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
-      c("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" })
+      c("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 2e4, 18e3, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" }),
+      c("drive", "distortionType", "Type", "Type", 0, 2, 1, { step: 1, choices: [b("Symmetric", 0), b("Asymmetric", 1), b("Wavefold", 2)] })
     ]
   },
   {
@@ -200,13 +201,13 @@ const E = Object.freeze({
     xEndpointID: "chorusTone",
     yEndpointID: "chorusFeedback",
     parameters: [
-      c("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide", "Classic", "Fast"].map(S) }),
-      c("chorus", "chorusBloomMode", "Bloom", "Blm", 0, 4, 0, { step: 1, choices: ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"].map(S) }),
+      c("chorus", "chorusMotionMode", "Motion", "Mot", 0, 3, 1, { step: 1, choices: ["Subtle", "Wide", "Classic", "Fast"].map(b) }),
+      c("chorus", "chorusBloomMode", "Bloom", "Blm", 0, 4, 0, { step: 1, choices: ["Clean", "Small", "Large", "Sm+Sh", "Lg+Sh"].map(b) }),
       c("chorus", "chorusMix", "Mix", "Mix", 0, 1, 0.5, { quick: !0, modulationTargetIndex: 13 }),
       c("chorus", "chorusTone", "Tone", "Tone", 0, 1, 0.5, { modulationTargetIndex: 14 }),
       c("chorus", "chorusFeedback", "Feedback", "Fdbk", 0, 0.95, 0.42, { modulationTargetIndex: 15 }),
       c("chorus", "chorusRingAmount", "Ring", "Ring", 0, 1, 0, { modulationTargetIndex: 16 }),
-      c("chorus", "chorusRingOffsetMode", "Ring Pitch", "Pitch", 0, 3, 0, { step: 1, choices: ["+5th", "Low 5th", "+Oct", "-Oct"].map(S) }),
+      c("chorus", "chorusRingOffsetMode", "Ring Pitch", "Pitch", 0, 3, 0, { step: 1, choices: ["+5th", "Low 5th", "+Oct", "-Oct"].map(b) }),
       c("chorus", "chorusRingFineSemitones", "Ring Fine", "Fine", -2, 2, 0, { unit: "st", modulationTargetIndex: 17 })
     ]
   },
@@ -234,9 +235,9 @@ const E = Object.freeze({
     xEndpointID: "phaserFrequency",
     yEndpointID: "phaserDepth",
     parameters: [
-      c("phaser", "phaserRateMode", "Rate Mode", "Mode", 0, 1, 0, { step: 1, choices: [S("Free", 0), S("Sync", 1)] }),
+      c("phaser", "phaserRateMode", "Rate Mode", "Mode", 0, 1, 0, { step: 1, choices: [b("Free", 0), b("Sync", 1)] }),
       c("phaser", "phaserRate", "Rate", "Rate", 0.02, 8, 0.3, { unit: "Hz", scale: "log", quick: !0, modulationTargetIndex: 22 }),
-      c("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: mt.map(S) }),
+      c("phaser", "phaserRateDivision", "Division", "Div", 0, 12, 2, { step: 1, choices: mt.map(b) }),
       c("phaser", "phaserDepth", "Depth", "Dpt", 0, 1, 0.7, { modulationTargetIndex: 23 }),
       c("phaser", "phaserFrequency", "Frequency", "Freq", 60, 8e3, 600, { unit: "Hz", scale: "log", modulationTargetIndex: 24, modulationApplication: "octaves" }),
       c("phaser", "phaserFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0, { modulationTargetIndex: 25 }),
@@ -253,9 +254,9 @@ const E = Object.freeze({
     xEndpointID: "delayTime",
     yEndpointID: "delayFeedback",
     parameters: [
-      c("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [S("Free", 0), S("Sync", 1)] }),
+      c("delay", "delayTimeMode", "Timing", "Mode", 0, 1, 0, { step: 1, choices: [b("Free", 0), b("Sync", 1)] }),
       c("delay", "delayTime", "Time", "Time", 1, 2e3, 375, { unit: "ms", scale: "log", quick: !0, modulationTargetIndex: 28, modulationApplication: "octaves" }),
-      c("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: pt.map(S) }),
+      c("delay", "delayDivision", "Division", "Div", 0, 12, 8, { step: 1, choices: pt.map(b) }),
       c("delay", "delayFeedback", "Feedback", "Fdbk", -0.95, 0.95, 0.35, { modulationTargetIndex: 29 }),
       c("delay", "delayFilter", "Filter", "Filt", 200, 18e3, 6e3, { unit: "Hz", scale: "log", modulationTargetIndex: 30, modulationApplication: "octaves" }),
       c("delay", "delayMix", "Mix", "Mix", 0, 1, 0.5, { quick: !0, modulationTargetIndex: 31 })
@@ -531,10 +532,10 @@ function Pt(t) {
     if (!L(s))
       return m("chain nodes must be objects");
     if (s.kind === "device") {
-      const b = o(s);
-      if ("failure" in b)
-        return b.failure;
-      l.push(b.placement);
+      const v = o(s);
+      if ("failure" in v)
+        return v.failure;
+      l.push(v.placement);
       continue;
     }
     if (s.kind !== "parallel" && s.kind !== "split")
@@ -555,18 +556,18 @@ function Pt(t) {
     if (u && (!pe(s.xoverLowHz) || !pe(s.xoverHighHz)))
       return m(`group ${String(s.groupId)} crossovers must sit in ${He}..${qe} Hz`);
     d += 1;
-    const v = [];
-    for (const b of s.branches) {
-      if (!Array.isArray(b))
+    const S = [];
+    for (const v of s.branches) {
+      if (!Array.isArray(v))
         return m(`group ${String(s.groupId)} branches must be arrays`);
       const C = [];
-      for (const F of b) {
+      for (const F of v) {
         const M = o(F);
         if ("failure" in M)
           return M.failure;
         C.push(M.placement);
       }
-      v.push(C);
+      S.push(C);
     }
     l.push(u ? {
       kind: "split",
@@ -574,12 +575,12 @@ function Pt(t) {
       enabled: s.enabled,
       xoverLowHz: s.xoverLowHz,
       xoverHighHz: s.xoverHighHz,
-      branches: v
+      branches: S
     } : {
       kind: "parallel",
       groupId: String(s.groupId),
       enabled: s.enabled,
-      branches: v
+      branches: S
     });
   }
   for (const s of i)
@@ -1212,8 +1213,8 @@ function et(t, e, n = !1) {
     for (let u = 0; u < i; u += r) {
       let f = 1, h = 0;
       for (let p = 0; p < l; p += 1) {
-        const v = u + p, b = v + l, C = t[b], F = e[b], M = f * C - h * F, ue = f * F + h * C, fe = t[v], he = e[v];
-        t[v] = fe + M, e[v] = he + ue, t[b] = fe - M, e[b] = he - ue;
+        const S = u + p, v = S + l, C = t[v], F = e[v], M = f * C - h * F, ue = f * F + h * C, fe = t[S], he = e[S];
+        t[S] = fe + M, e[S] = he + ue, t[v] = fe - M, e[v] = he - ue;
         const st = f * o - h * s;
         h = f * s + h * o, f = st;
       }
@@ -2479,9 +2480,9 @@ class Bi {
     );
     if (!(!f || f.completed || !f.inFlightBatchBases.has(o) || s <= 0 || s !== p)) {
       f.inFlightBatchBases.delete(o);
-      for (let v = 0; v < s; v += 1) {
-        const b = o + v;
-        f.ackedFrames[b] || (f.ackedFrames[b] = 1, f.ackedFrameCount += 1);
+      for (let S = 0; S < s; S += 1) {
+        const v = o + S;
+        f.ackedFrames[v] || (f.ackedFrames[v] = 1, f.ackedFrameCount += 1);
       }
       f.ackedFrameCount === h && f.nextFrameIndex >= h && f.inFlightBatchBases.size === 0 && (f.completed = !0, this.activeUploadKey === f.key && (this.activeUploadKey = null)), Me(o, s, h) && g("info", "Acknowledged wavetable mip batch", {
         dspSessionId: i,

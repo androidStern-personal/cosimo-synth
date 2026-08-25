@@ -15,6 +15,8 @@ test("lane.v1 is one complete clean schema owning structure AND parameters", asy
     assert.deepEqual(Object.values(state.enabled), Array(8).fill(false));
     assert.equal(state.params.delay.delayTime, 375);
     assert.equal(state.params.drive.distortionDriveDb, 12);
+    assert.equal(state.params.drive.distortionWet, 0.5);
+    assert.equal(state.params.drive.distortionType, 1);
     assert.deepEqual(
         Object.keys(JSON.parse(lane.serializeLaneState(state))).sort(),
         ["enabled", "format", "order", "params", "version"],
@@ -28,6 +30,26 @@ test("lane.v1 is one complete clean schema owning structure AND parameters", asy
     ]) {
         assert.equal(lane.parseLaneState(corrupt)._tag, "err");
     }
+});
+
+test("Distortion Type survives the canonical lane save and restore boundary", async () => {
+    const lane = await laneStatePromise;
+    const initial = lane.createDefaultLaneState();
+    const wavefold = {
+        ...initial,
+        params: {
+            ...initial.params,
+            drive: { ...initial.params.drive, distortionType: 2 },
+        },
+    };
+
+    const restored = lane.parseLaneState(lane.serializeLaneState(wavefold));
+    assert.equal(restored._tag, "ok");
+    assert.equal(restored.value.params.drive.distortionType, 2);
+
+    const distortionRecord = lane.buildLaneRuntimeEvents(restored.value)
+        .find((event) => event.endpointID === "laneSlotParams" && event.value.slotId === 1);
+    assert.equal(distortionRecord.value.values[6], 2);
 });
 
 test("a lane document replays as complete records first, then one topology event", async () => {
@@ -56,6 +78,9 @@ test("a lane document replays as complete records first, then one topology event
     assert.equal(delayRecord.value.values[0], 90);      // laneDelayParamTimeMs
     assert.equal(delayRecord.value.values[3], 0.5);     // laneDelayParamMix
     assert.equal(delayRecord.value.values[5], 8);       // laneDelayParamDivision
+    const distortionRecord = records.find((record) => record.value.slotId === 1);
+    assert.equal(distortionRecord.value.values[3], 0.5); // laneDistortionParamWet
+    assert.equal(distortionRecord.value.values[6], 1);   // laneDistortionParamType
 
     // Then the structure: reversed order, POSITION-indexed enable bits
     // (drive at position 6, reverb at position 0).
@@ -87,6 +112,7 @@ test("the slot param layout mirrors the engine's positional constants", async ()
     assert.equal(params.getLaneSlotParamIndex("delay", "delayDivision"), 5);
     assert.equal(params.getLaneSlotParamIndex("chorus", "chorusRingFineSemitones"), 7);
     assert.equal(params.getLaneSlotParamIndex("phaser", "phaserMix"), 7);
+    assert.equal(params.getLaneSlotParamIndex("distortion", "distortionType"), 6);
     assert.equal(params.getLaneSlotParamIndex("globalFilter", "delayTime"), null);
     assert.equal(params.getLaneSlotId("globalFilter", 0), 0);
     assert.equal(params.getLaneSlotId("delay", 0), 6);

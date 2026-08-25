@@ -1,0 +1,51 @@
+// The one narrow offline entry point authorised by T25. It exposes the production
+// wt::DistortionBus both with and without its live level matcher so the focused
+// verification script can measure the actual correction instead of mirroring DSP.
+
+processor DistortionCalibrationLeft
+{
+    input stream float32<2> in;
+    output stream float32 out;
+
+    void main()
+    {
+        loop
+        {
+            out <- in[0];
+            advance();
+        }
+    }
+}
+
+graph DistortionCalibration [[ main ]]
+{
+    input stream float32<2> audioIn;
+    input value float32 type [[ init: 1.0f ]];
+    input value float32 driveDb [[ init: 12.0f ]];
+    input value float32 knee [[ init: 0.35f ]];
+    input value float32 wet [[ init: 1.0f ]];
+    input value float32 mode [[ init: 0.0f ]];
+    input value float32 wetHPHz [[ init: 40.0f ]];
+    input value float32 wetLPHz [[ init: 18000.0f ]];
+    input value float32 calibrationBypass [[ init: 1.0f ]];
+
+    output stream float32 wetOut;
+
+    node distortion = wt::DistortionBus;
+    node left = DistortionCalibrationLeft;
+
+    connection
+    {
+        audioIn -> distortion.in;
+        type -> distortion.typeIn;
+        driveDb -> distortion.driveDbIn;
+        knee -> distortion.kneeIn;
+        wet -> distortion.wetIn;
+        mode -> distortion.modeIn;
+        wetHPHz -> distortion.wetHPHzIn;
+        wetLPHz -> distortion.wetLPHzIn;
+        calibrationBypass -> distortion.calibrationBypassIn;
+        distortion.out -> left.in;
+        left.out -> wetOut;
+    }
+}

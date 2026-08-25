@@ -15,12 +15,24 @@ namespace wt
     let distortionModeHarmonics = 1;
     let distortionModeMin = 0.0f;
     let distortionModeMax = 1.0f;
+    let distortionTypeSymmetric = 0;
+    let distortionTypeAsymmetric = 1;
+    let distortionTypeWavefold = 2;
+    let distortionTypeMin = 0.0f;
+    let distortionTypeMax = 2.0f;
     let distortionWetHPMinHz = 20.0f;
     let distortionWetHPMaxHz = 4000.0f;
     let distortionWetLPMinHz = 20.0f;
     let distortionWetLPMaxHz = 20000.0f;
     let distortionLowPassMode = 0;
     let distortionHighPassMode = 1;
+    let distortionLevelMatchWindowMs = 10.0f;
+    let distortionLevelMatchWarmupMs = 5.0f;
+    let distortionLevelMatchDetectorFloor = 1.0e-12f;
+    let distortionLevelMatchMinGain = 0.015848932f; // -36 dB
+    let distortionLevelMatchMaxGain = 1.995262315f; // +6 dB
+    let distortionLevelMatchTrimGain = 0.966050879f; // -0.3 dB transient margin
+    let distortionDriveEngagementDb = 6.0f;
 
     struct DistortionScopeFrame
     {
@@ -66,6 +78,11 @@ namespace wt
         return int32 (std::intrinsics::clamp (value, distortionModeMin, distortionModeMax) + 0.5f);
     }
 
+    int32 clampDistortionType (float32 value)
+    {
+        return int32 (std::intrinsics::clamp (value, distortionTypeMin, distortionTypeMax) + 0.5f);
+    }
+
     float32 clampDistortionWetHPHz (float32 value)
     {
         return std::intrinsics::clamp (value, distortionWetHPMinHz, distortionWetHPMaxHz);
@@ -81,12 +98,37 @@ namespace wt
     {
         input stream float32 in;
         input value float32 kneeIn [[ init: 0.35f ]];
+        input value float32 driveDbIn [[ init: 12.0f ]];
+        input value float32 typeIn [[ init: 1.0f ]];
         output stream float32 out;
+        output stream float32 thru;
+        input event int32 resetIn;
 
-        float32 shapeSample (float32 x, float32 knee)
+        int32 selectedType = distortionTypeAsymmetric;
+        int32 transitionFramesRemaining;
+        float32 symmetricWeight;
+        float32 asymmetricWeight = 1.0f;
+        float32 wavefoldWeight;
+        float32 symmetricStep;
+        float32 asymmetricStep;
+        float32 wavefoldStep;
+
+        event resetIn (int32 ignored)
+        {
+            selectedType = distortionTypeAsymmetric;
+            transitionFramesRemaining = 0;
+            symmetricWeight = 0.0f;
+            asymmetricWeight = 1.0f;
+            wavefoldWeight = 0.0f;
+            symmetricStep = 0.0f;
+            asymmetricStep = 0.0f;
+            wavefoldStep = 0.0f;
+        }
+
+        float32 symmetricShape (float32 x, float32 knee)
         {
             let clampedKnee = clampDistortionKnee (knee);
-            let exponent = 2.0f + (14.0f * clampedKnee * clampedKnee);
+            let exponent = 2.0f + (10.0f * clampedKnee * clampedKnee);
             let magnitude = std::intrinsics::abs (x);
             let denominator = std::intrinsics::pow (
                 1.0f + std::intrinsics::pow (magnitude, exponent),
@@ -96,11 +138,104 @@ namespace wt
             return x / denominator;
         }
 
+        float32 asymmetricShape (float32 x, float32 knee)
+        {
+            let bias = 0.08f;
+            return symmetricShape (x + bias, knee) - symmetricShape (bias, knee);
+        }
+
+        float32 wavefoldShape (float32 x, float32 knee)
+        {
+            let magnitude = std::intrinsics::abs (x);
+
+            if (magnitude <= 1.0f)
+                return x;
+
+            let segment = int32 (std::intrinsics::floor ((magnitude - 1.0f) * 0.5f));
+            let segmentStart = 1.0f + 2.0f * float32 (segment);
+            let phase = std::intrinsics::clamp ((magnitude - segmentStart) * 0.5f, 0.0f, 1.0f);
+            let segmentSign = (segment & 1) == 0 ? 1.0f : -1.0f;
+            let roundedReflection = segmentSign * float32 (std::intrinsics::cos (pi * phase));
+            let mirrorReflection = segmentSign * (1.0f - 2.0f * phase);
+            let reflectionStrength = clampDistortionKnee (knee);
+            let folded = roundedReflection
+                         + (mirrorReflection - roundedReflection) * reflectionStrength;
+
+            return x < 0.0f ? -folded : folded;
+        }
+
+        float32 shapeForType (float32 x, float32 knee, int32 type)
+        {
+            if (type == distortionTypeSymmetric)
+                return symmetricShape (x, knee);
+
+            if (type == distortionTypeWavefold)
+                return wavefoldShape (x, knee);
+
+            return asymmetricShape (x, knee);
+        }
+
+        void beginTypeTransition (int32 nextType)
+        {
+            selectedType = nextType;
+            transitionFramesRemaining = int32 (std::intrinsics::max (
+                1.0f,
+                float32 (processor.frequency) * 0.002f
+            ));
+            let inverseFrames = 1.0f / float32 (transitionFramesRemaining);
+            symmetricStep = (((nextType == distortionTypeSymmetric) ? 1.0f : 0.0f)
+                             - symmetricWeight) * inverseFrames;
+            asymmetricStep = (((nextType == distortionTypeAsymmetric) ? 1.0f : 0.0f)
+                              - asymmetricWeight) * inverseFrames;
+            wavefoldStep = (((nextType == distortionTypeWavefold) ? 1.0f : 0.0f)
+                            - wavefoldWeight) * inverseFrames;
+        }
+
+        float32 shapeSample (float32 x, float32 knee, int32 type)
+        {
+            if (type != selectedType)
+                beginTypeTransition (type);
+
+            if (transitionFramesRemaining <= 0)
+                return shapeForType (x, knee, selectedType);
+
+            let result = symmetricWeight * symmetricShape (x, knee)
+                         + asymmetricWeight * asymmetricShape (x, knee)
+                         + wavefoldWeight * wavefoldShape (x, knee);
+
+            symmetricWeight += symmetricStep;
+            asymmetricWeight += asymmetricStep;
+            wavefoldWeight += wavefoldStep;
+            transitionFramesRemaining -= 1;
+
+            if (transitionFramesRemaining == 0)
+            {
+                symmetricWeight = selectedType == distortionTypeSymmetric ? 1.0f : 0.0f;
+                asymmetricWeight = selectedType == distortionTypeAsymmetric ? 1.0f : 0.0f;
+                wavefoldWeight = selectedType == distortionTypeWavefold ? 1.0f : 0.0f;
+            }
+
+            return result;
+        }
+
         void main()
         {
             loop
             {
-                out <- shapeSample (in, kneeIn);
+                let inputSample = in;
+                let driveDb = clampDistortionDriveDb (driveDbIn);
+                let engagement = std::intrinsics::clamp (
+                    driveDb / distortionDriveEngagementDb,
+                    0.0f,
+                    1.0f
+                );
+                let shapedSample = shapeSample (
+                    inputSample,
+                    kneeIn,
+                    clampDistortionType (typeIn)
+                );
+                thru <- inputSample;
+                out <- inputSample + ((shapedSample - inputSample) * engagement);
                 advance();
             }
         }
@@ -113,8 +248,13 @@ namespace wt
         input value float32 kneeIn [[ init: 0.35f ]];
         input value float32 wetIn [[ init: 0.5f ]];
         input value float32 modeIn [[ init: 0.0f ]];
+        input value float32 typeIn [[ init: 1.0f ]];
         input value float32 wetHPHzIn [[ init: 40.0f ]];
         input value float32 wetLPHzIn [[ init: 18000.0f ]];
+
+        // The one verification seam authorised by T25. EffectsRack never forwards it;
+        // only the deterministic offline production-path probe bypasses matching.
+        input value float32 calibrationBypassIn [[ init: 0.0f ]];
 
         // Effects Lane pool lifecycle only: a pool slot entering a committed
         // chain is a newly created device and must sound like one — empty
@@ -144,17 +284,55 @@ namespace wt
         var classicDcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
         var residueDcBlocker = std::filters (float32<2>, float64, 32)::dcblocker::create();
 
+        float32 dryPowerState;
+        float32 wetPowerState;
+        float32 dryWetCrossPowerState;
+        float32 wetActivation;
+        // Dry and wet use the same window, so their ratio follows signal level
+        // without a threshold, lookahead, channel-dependent gain, or allocation.
+        var levelMatchCoefficient = std::intrinsics::exp (
+            -1.0f / (distortionLevelMatchWindowMs * 0.001f * float32 (processor.frequency))
+        );
+        var wetActivationStep = 1.0f
+                                / (distortionLevelMatchWarmupMs * 0.001f
+                                   * float32 (processor.frequency));
+
 
         event poolResetIn (int32 ignored)
         {
-            // The oversampled cores are memoryless; the band filters and DC
-            // blockers are the module's only audio memory. Coefficients are
-            // preserved — reset() clears state only. The preview-scope
-            // history is diagnostic, not audio, and is left alone.
+            // Reset every audio-history owner, including the sinc resamplers
+            // inside each oversampled core. Coefficients are preserved; the
+            // preview-scope history is diagnostic, not audio, and is left alone.
             wetHighPass.reset();
             wetLowPass.reset();
             classicDcBlocker.reset();
             residueDcBlocker.reset();
+            leftCore.reset();
+            rightCore.reset();
+            leftCore.resetIn <- 1;
+            rightCore.resetIn <- 1;
+            dryPowerState = 0.0f;
+            wetPowerState = 0.0f;
+            dryWetCrossPowerState = 0.0f;
+            wetActivation = 0.0f;
+        }
+
+        float32 targetMixGain (float32 wetAmount, float32 correlation)
+        {
+            if (wetAmount <= 0.0f || wetAmount >= 1.0f)
+                return 1.0f;
+
+            let dryAmount = 1.0f - wetAmount;
+            let safeCorrelation = std::intrinsics::clamp (correlation, -0.98f, 0.98f);
+            let calibratedPower = dryAmount * dryAmount + wetAmount * wetAmount
+                                  + 2.0f * safeCorrelation * dryAmount * wetAmount;
+
+            return std::intrinsics::min (
+                2.0f,
+                1.0f / float32 (std::intrinsics::sqrt (
+                    std::intrinsics::max (calibratedPower, 0.25f)
+                ))
+            );
         }
 
         float32 currentWetHPHz = 40.0f;
@@ -185,33 +363,87 @@ namespace wt
                 updatePrefilterFrequencies();
 
                 let dry = in;
-                let driveGain = std::levels::dBtoGain (clampDistortionDriveDb (driveDbIn));
+                let driveDb = clampDistortionDriveDb (driveDbIn);
+                let driveGain = std::levels::dBtoGain (driveDb);
                 let filtered = wetLowPass.process (wetHighPass.process (dry));
                 let driven = filtered * driveGain;
 
                 leftCore.in <- driven[0];
                 leftCore.kneeIn <- clampDistortionKnee (kneeIn);
+                leftCore.driveDbIn <- driveDb;
+                leftCore.typeIn <- float32 (clampDistortionType (typeIn));
                 leftCore.advance();
 
                 rightCore.in <- driven[1];
                 rightCore.kneeIn <- clampDistortionKnee (kneeIn);
+                rightCore.driveDbIn <- driveDb;
+                rightCore.typeIn <- float32 (clampDistortionType (typeIn));
                 rightCore.advance();
 
                 let shaped = float32<2> (leftCore.out, rightCore.out);
-                let classicWet = classicDcBlocker.process (shaped);
-                let residue = residueDcBlocker.process (shaped - driven);
+                let alignedThru = float32<2> (leftCore.thru, rightCore.thru);
+                let rawClassicWet = classicDcBlocker.process (shaped);
+                let rawResidue = residueDcBlocker.process (shaped - alignedThru);
                 let wetAmount = clampDistortionWet (wetIn);
                 let distortionMode = clampDistortionMode (modeIn);
-                let dryGain = float32 (std::intrinsics::cos (0.5f * pi * wetAmount));
-                let wetGain = float32 (std::intrinsics::sin (0.5f * pi * wetAmount));
-                let classicOut = (dry * dryGain) + (classicWet * wetGain);
-                let harmonicsOut = dry + (residue * wetAmount);
+                let detectorAmount = 1.0f - levelMatchCoefficient;
+                let dryPower = 0.5f * ((dry[0] * dry[0]) + (dry[1] * dry[1]));
+                let wetPower = 0.5f * ((rawClassicWet[0] * rawClassicWet[0])
+                                       + (rawClassicWet[1] * rawClassicWet[1]));
+                let crossPower = 0.5f * ((dry[0] * rawClassicWet[0])
+                                         + (dry[1] * rawClassicWet[1]));
+                dryPowerState += (dryPower - dryPowerState) * detectorAmount;
+                wetPowerState += (wetPower - wetPowerState) * detectorAmount;
+                dryWetCrossPowerState += (crossPower - dryWetCrossPowerState) * detectorAmount;
+
+                let makeupGain = calibrationBypassIn >= 0.5f
+                                   ? 1.0f
+                                   : distortionLevelMatchTrimGain * std::intrinsics::clamp (
+                                       float32 (std::intrinsics::sqrt (
+                                           std::intrinsics::max (
+                                               dryPowerState,
+                                               distortionLevelMatchDetectorFloor
+                                           ) / std::intrinsics::max (
+                                               wetPowerState,
+                                               distortionLevelMatchDetectorFloor
+                                           )
+                                       )),
+                                       distortionLevelMatchMinGain,
+                                       distortionLevelMatchMaxGain
+                                   );
+                let correlationDenominator = float32 (std::intrinsics::sqrt (
+                    std::intrinsics::max (
+                        dryPowerState * wetPowerState,
+                        distortionLevelMatchDetectorFloor * distortionLevelMatchDetectorFloor
+                    )
+                ));
+                let correlation = dryWetCrossPowerState
+                                  / std::intrinsics::max (
+                                      correlationDenominator,
+                                      distortionLevelMatchDetectorFloor
+                                  );
+                wetActivation = calibrationBypassIn >= 0.5f
+                                  ? 1.0f
+                                  : std::intrinsics::min (
+                                      1.0f,
+                                      wetActivation + wetActivationStep
+                                  );
+                let levelMatchedWet = rawClassicWet * makeupGain;
+                let classicWet = dry + ((levelMatchedWet - dry) * wetActivation);
+                let residue = rawResidue * makeupGain * wetActivation;
+                let baseClassicMix = dry * (1.0f - wetAmount) + classicWet * wetAmount;
+                let classicOut = wetAmount <= 0.0f
+                                   ? dry
+                                   : (wetAmount >= 1.0f
+                                        ? classicWet
+                                        : baseClassicMix * targetMixGain (wetAmount, correlation));
+                let harmonicsOut = dry + residue * wetAmount;
 
                 out <- distortionMode == distortionModeHarmonics ? harmonicsOut : classicOut;
                 previewInputLeft <- driven[0];
                 previewInputRight <- driven[1];
-                previewOutputLeft <- shaped[0];
-                previewOutputRight <- shaped[1];
+                previewOutputLeft <- classicWet[0];
+                previewOutputRight <- classicWet[1];
 
                 advance();
             }

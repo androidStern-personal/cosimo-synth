@@ -1235,23 +1235,36 @@ Source note (2026-08-25):
 - The five documents for T25–T29 were imported at their original paths from branch `claude/cosimo-distortion-quality-x0rx9c` at commit `63dd431b15f7ebfd27e9f54406892391a42fd6d7`.
 - The checked-in root documents are the implementation authority on master. The branch and pinned commit remain their provenance; no unrelated branch code was imported.
 
-[ ] T25 — Rebuild the rack Distortion as the designed grade-2 saturator
+[x] T25 — Rebuild the rack Distortion as one selectable, level-matched nonlinear algorithm
     Design authority: `DISTORTION_QUALITY_DESIGN.md`.
+    Superseding product decisions (Andrew, 2026-08-25 and 2026-08-26):
+    - The design authority was replaced after direct product discussion. Its new single-algorithm/type-selector design supersedes the imported moving-bias, pre/de-emphasis, post-filter, Drive-macro, cascaded-shaper, no-new-controls, and listening-approval instructions below their original provenance.
     User-visible bug to close:
     - The dry signal and driven wet signal reaching the current Classic Mix control are not level matched. Moving Mix therefore causes a large, erratic loudness change instead of revealing a controlled blend between the two sounds.
     Locked work:
-    - Keep the existing six parameter identities and ranges, but make Drive control the designed chain: input high-pass, drive-scaled pre-emphasis, stereo-linked moving bias, asymmetric first stage, the existing knee shaper capped at exponent 12, inverse emphasis, post-shaper low-pass, DC removal, and static automatic level compensation.
-    - Keep gain compensation and correct it. Apply the compensated wet level before the Classic dry/wet blend so changing Drive does not leave the wet endpoint at a radically different loudness from dry. Do not treat removing compensation or merely changing the crossfade curve as a fix for mismatched inputs.
-    - Make the whole Mix travel usable: 0% remains exact dry, 100% is the compensated driven sound, and intermediate positions move continuously between them without a loudness hump, hole, jump, or zipper noise. Preserve the intended added harmonics and dynamics rather than normalizing the effect back into dry sound.
-    - Align the oversampled unprocessed path with the shaped path before subtraction so Harmonics mode produces the true added residue instead of including a timing mismatch.
-    - Clear every new filter, detector, bias, and oversampling state on pool reset. Preview output must reflect the final compensated sound.
-    - Start without ADAA. Add first-order ADAA only if the frozen aliasing tests and listening comparison show that it audibly improves the result; do not add second-order ADAA or a physical circuit model.
+    - Keep all six existing parameter identities/ranges and add one saved, discrete, non-modulatable `distortionType`: Symmetric, fixed-static-bias Asymmetric, or Wavefold. T41 owns the new/reset Distortion Wet default of 50%.
+    - Run exactly one selected nonlinear algorithm. Do not cascade clippers or add pre/post-fold saturation. Knee stays softer-to-sharper curvature inside the selected algorithm; in Wavefold it controls reflection strength across the folded portion.
+    - Keep both wet filters before Drive/distortion. Keep the existing DC removal. Do not add dynamic bias, pre/de-emphasis, post-shaper filtering, or a hidden voiced-Drive macro.
+    - Andrew's physical-phone low-level test supersedes the fixed-table instruction: at -36 dBFS the old table made 50% Mix 12.47 dB louder than 1%. A matched-level filtered saw and pink noise required correction within 0.85 dB of each other, proving input level—not fixture choice—was the dominant missing variable.
+    - Match the actual completed wet signal to dry with one bounded, stereo-linked running dry/wet energy ratio. Apply correction only to wet; never raise dry to hide the mismatch. Use the same running cross-energy for intermediate Classic Mix normalization, with exact 0% and 100% endpoints.
+    - Give the oversampled core a unity output and subtract shaped-round-trip minus unity-round-trip so Harmonics residue is aligned by construction. Apply makeup after subtraction, never to only one subtraction operand.
+    - Clear filter, DC, interpolation, and oversampling state on pool reset. Preview output must reflect the final compensated Classic wet.
+    - Keep 4x oversampling, zero declared latency, allocation-free/pool-safe processing, and no ADAA, feedback, physical circuit, hysteresis, or neural detour in T25.
     Preserve:
-    - Wet at zero remains the existing dry Classic path exactly. No new controls, latency, or grade-3 physical modelling enter this task.
+    - Wet at zero remains the existing dry Classic path exactly. Existing Mode/Drive/Knee/Wet/HP/LP IDs, ranges, and continuous modulation targets remain intact; only Type is appended.
+    Minimal execution fence:
+    - Use one existing production test seam plus at most one narrow calibration entry point. Do not build a generic audio-analysis framework, add dependencies, broadly refactor the rack, or create another plan.
     Done when:
-    - With the default wet filters, pink noise at -18 dBFS stays within 1 dB of dry loudness across the Drive range at 100% Wet, and measured sweeps through 0%, 25%, 50%, 75%, and 100% Wet stay within 1 dB of dry at every tested Drive setting. The test must fail against the current mismatched path before the repair.
-    - The same Mix sweep is free of discontinuities on drums, bass, and a bright poly patch; Harmonics at full Wet and zero Drive is effectively silent; Wet zero is bit-identical to the current Classic path; reported latency remains zero; safety and reset tests pass.
-    - Level-matched renders cover drums, bass, a bright poly patch, and adversarial near-Nyquist material, and Andrew accepts the sound against the retained references.
+    - The retained regression fails against the old path, then proves default-filter pink noise and Andrew's 110 Hz saw through a 350 Hz 12 dB/octave low-pass remain within 1 dB from -36 through -18 dBFS at 100% Wet and across the Mix sweep.
+    - The automated sweep remains within 1 dB on fixed drums, bass, and bright-poly holdouts and across the tested Type x Drive x Knee grid. Adversarial near-Nyquist material remains finite/bounded; Symmetric, Asymmetric, and Wavefold have the specified distinct harmonic/transfer behavior.
+    - Harmonics residue is effectively silent at zero Drive; Classic Wet zero is bit-identical dry for every Type; latency stays zero; Type state/UI, safety, smoothing, and pool reset pass.
+    - The current desktop UI is built, a fresh HMR standalone is launched, and the compiled VST3 is installed for Ableton. Andrew is not a manual gain-calibration or completion gate.
+    Prior completion claim superseded 2026-08-26:
+    - The -18 dBFS static table passed its narrow test but failed Andrew's quiet physical-phone signal by 12.47 dB. T25 is reopened until the live level matcher, reviewer repairs, rebuilt phone surface, standalone, and VST3 are all requalified.
+    Completion evidence (2026-08-26):
+    - Replaced the invalid static compensation table with the bounded stereo-linked live dry/wet energy and correlation matcher. Andrew's filtered-saw fixture now measures Mix 50%-vs-1% at -0.121..-0.093 dB from -36 through -18 dBFS; representative grid worst is 0.324 dB and musical-holdout worst is 0.873 dB.
+    - Independently reproduced and repaired the reviewers' real defects: Drive-zero discontinuity, reset burst, off-grid/sample-rate drift, endpoint lag, missing Harmonics/DC/reset/Type-transition proof, misleading visualizer geometry, and strict current-contract fixtures. Intentional ADR-021 old-state rejection and the lack of an alias-energy claim are documented rather than misrepresented as fixes.
+    - Distortion 6/6 and full rack 79/79 Cmajor tests, 723/723 shared/unit tests, focused UI/state/browser gates, Chromium/WebKit offline rendering, and the five-case current-contract Speedrun pipeline pass. Final web/iPhone/desktop bundles were rebuilt; this worktree's HMR standalone is running on 127.0.0.1:5176; the compiled VST3 is installed at `~/Library/Audio/Plug-Ins/VST3/CosimoDesktopNative.vst3` and passes strict codesign verification.
 
 [ ] T26 — Build the fixed two-band Enhancer and decide separately whether to build its voice-tracked form
     Design authority: `ENHANCER_DESIGN.md`.

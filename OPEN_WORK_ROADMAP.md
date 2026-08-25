@@ -149,14 +149,19 @@ drag targets, and the same browser surface:
 ### Rack Distortion
 
 - Start immediately from `DISTORTION_QUALITY_DESIGN.md`.
-- Preserve the six existing controls while implementing the grade-2 chain: pre-filter,
-  drive-scaled emphasis, linked moving bias, asymmetric first stage, capped knee stage,
-  inverse emphasis, post-shaper low-pass, DC removal, static wet makeup, and aligned
-  residue subtraction.
-- Keep zero declared latency and exact dry at zero Wet. Start without ADAA; add only
-  first-order ADAA if the frozen comparison proves an audible benefit.
-- Voice the fixed architecture against level-matched references and obtain sound
-  approval.
+- Preserve the six existing controls and add Type: Symmetric, fixed-static-bias
+  Asymmetric, or Wavefold. Exactly one selected nonlinear algorithm runs; there are no
+  cascaded clippers, moving bias, Drive-macro EQ, or post-distortion tone filters.
+- Keep both wet filters before Drive/distortion, the existing DC removal, 4x
+  oversampling, zero declared latency, and exact dry at zero Wet. Align the shaped and
+  unity oversampled round trips before Harmonics subtraction.
+- Andrew's quiet-input phone test supersedes the fixed Type x Drive x Knee table: it
+  failed by 12.47 dB at -36 dBFS even though its -18 dBFS pink test passed. Match the
+  actual completed wet to dry with one bounded stereo-linked running energy ratio,
+  then normalize intermediate Mix from the same running dry/wet correlation.
+- Use only the existing production test seam plus one narrow verification entry point;
+  do not build a general harness or detour into ADAA, circuit modelling, or unrelated
+  rack architecture.
 
 ### Enhancer, Sausage reference, and latency proof
 

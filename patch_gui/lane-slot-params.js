@@ -34,7 +34,7 @@ const LANE_TYPE_WIRE_IDS = Object.freeze({
 /** Positional record layout per device type (index IS the wire paramIndex). */
 const LANE_DEVICE_PARAM_LAYOUT = Object.freeze({
     globalFilter: ["globalFilterMode", "globalFilterCutoff", "globalFilterResonance", "globalFilterDrive"],
-    distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz"],
+    distortion: ["distortionMode", "distortionDriveDb", "distortionKnee", "distortionWet", "distortionWetHPHz", "distortionWetLPHz", "distortionType"],
     ott: ["ottMix", "ottAmount", "ottTimePercent", "ottBandDrive", "ottEnvelopeMatch"],
     chorus: ["chorusMix", "chorusMotionMode", "chorusBloomMode", "chorusTone", "chorusFeedback", "chorusRingAmount", "chorusRingOffsetMode", "chorusRingFineSemitones"],
     flanger: ["flangerRate", "flangerDepth", "flangerFeedback", "flangerMix"],

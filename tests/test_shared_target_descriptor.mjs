@@ -95,6 +95,21 @@ test("the authoritative rack parameter index is stable and allocation-free", asy
     assert.equal(rackCatalog.getRackParameterDescriptor("missingRackParameter"), null);
 });
 
+test("Distortion Type is a saved discrete control, not a modulation destination", async () => {
+    const rackCatalog = await rackCatalogPromise;
+    const type = rackCatalog.getRackParameterDescriptor("distortionType");
+
+    assert.notEqual(type, null);
+    assert.equal(type.initial, 1);
+    assert.equal(type.step, 1);
+    assert.equal(type.modulationTargetIndex, null);
+    assert.deepEqual(type.choices, [
+        { label: "Symmetric", value: 0 },
+        { label: "Asymmetric", value: 1 },
+        { label: "Wavefold", value: 2 },
+    ]);
+});
+
 test("every rack target is bound to its real Cmajor endpoint", async () => {
     const catalog = await catalogPromise;
     const rackCatalog = await rackCatalogPromise;

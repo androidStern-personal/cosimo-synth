@@ -1109,6 +1109,9 @@ test("distortion curve family stays symmetric and sample classification marks re
     assert.equal(curve[curve.length - 1].input, 2);
     assert.equal(Math.abs(curve[0].output + curve[curve.length - 1].output) <= 1e-9, true);
     assert.equal(Math.abs(shapeDistortionSample(-0.9, 0.65) + shapeDistortionSample(0.9, 0.65)) <= 1e-9, true);
+    assert.equal(Math.abs(shapeDistortionSample(-1.2, 0.65, 1) + shapeDistortionSample(1.2, 0.65, 1)) > 0.005, true);
+    assert.equal(shapeDistortionSample(1.1, 0, 2) > shapeDistortionSample(1.5, 0, 2), true);
+    assert.equal(shapeDistortionSample(1.5, 0, 2) > shapeDistortionSample(2.9, 0, 2), true);
 
     const points = buildDistortionSamplePoints({
         sampleRateHz: 44_100,
@@ -1140,6 +1143,7 @@ test("distortion curve family stays symmetric and sample classification marks re
         peakRemoved: Number(occupancy.peakRemoved.toFixed(4)),
         segments: occupancy.segments.map((segment) => segment.map((point) => ({
             input: Number(point.input.toFixed(3)),
+            output: Number(point.output.toFixed(4)),
             density: Number(point.density.toFixed(4)),
             removed: Number(point.removed.toFixed(4)),
             clipped: Number(point.clipped.toFixed(4)),
@@ -1148,6 +1152,12 @@ test("distortion curve family stays symmetric and sample classification marks re
 
     assert.equal(forwardOccupancy.segments.length > 0, true);
     assert.equal(forwardOccupancy.peakRemoved > 0, true);
+    const measuredPositivePoint = forwardOccupancy.segments
+        .flat()
+        .reduce((closest, point) => (
+            Math.abs(point.input - 1) < Math.abs(closest.input - 1) ? point : closest
+        ));
+    assert.equal(Math.abs(measuredPositivePoint.output - 0.96) < 1e-9, true);
     assert.deepEqual(
         summarizeOccupancy(forwardOccupancy),
         summarizeOccupancy(reversedOccupancy),

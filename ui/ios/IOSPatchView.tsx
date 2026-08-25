@@ -92,6 +92,11 @@ const DISTORTION_MODE_OPTIONS = [
     { value: 0, label: "Classic", summary: "Dry/wet crossfade" },
     { value: 1, label: "Harmonics", summary: "Dry plus residue" },
 ] as const;
+const DISTORTION_TYPE_OPTIONS = [
+    { value: 0, label: "Symmetric" },
+    { value: 1, label: "Asymmetric" },
+    { value: 2, label: "Wavefold" },
+] as const;
 function triggerIOSHaptic(style = "light") {
     const hapticTrigger = (globalThis as typeof globalThis & {
         cmaj_triggerHaptic?: (nextStyle?: string) => unknown;
@@ -666,6 +671,7 @@ const IOSModulationMatrixPanel = memo(function IOSModulationMatrixPanel({
 
 const IOSDistortionPanel = memo(function IOSDistortionPanel({
     modeValue,
+    typeValue,
     driveValue,
     kneeValue,
     wetValue,
@@ -674,6 +680,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     historyFrame,
     scopeFrame,
     onModeChange,
+    onTypeChange,
     onDriveChange,
     onKneeChange,
     onWetChange,
@@ -681,6 +688,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     onWetLPHzChange,
 }: {
     modeValue: number;
+    typeValue: number;
     driveValue: number;
     kneeValue: number;
     wetValue: number;
@@ -689,6 +697,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
     historyFrame: ReturnType<typeof useSynthPatchViewModel>["observedDistortionHistory"];
     scopeFrame: ReturnType<typeof useSynthPatchViewModel>["observedDistortionScope"];
     onModeChange: (nextValue: number) => void;
+    onTypeChange: (nextValue: number) => void;
     onDriveChange: (nextValue: number) => void;
     onKneeChange: (nextValue: number) => void;
     onWetChange: (nextValue: number) => void;
@@ -731,6 +740,37 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
             </div>
 
             <div style={{ display: "grid", gap: "0.45rem" }}>
+                <div className="mseg-depth-label">Type</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
+                    {DISTORTION_TYPE_OPTIONS.map((option) => {
+                        const active = typeValue === option.value;
+
+                        return (
+                            <button
+                                key={option.value}
+                                type="button"
+                                data-role={`distortion-type-option-${option.value}`}
+                                aria-pressed={active ? "true" : "false"}
+                                onClick={() => onTypeChange(option.value)}
+                                style={{
+                                    borderRadius: "16px",
+                                    border: active ? "1px solid rgba(251,113,133,0.42)" : "1px solid rgba(255,255,255,0.08)",
+                                    background: active ? "rgba(251,113,133,0.13)" : "rgba(255,255,255,0.04)",
+                                    color: active ? "rgba(255,241,242,0.98)" : "rgba(226,232,240,0.88)",
+                                    padding: "0.7rem 0.45rem",
+                                    fontSize: "0.69rem",
+                                    letterSpacing: "0.06em",
+                                    textTransform: "uppercase",
+                                }}
+                            >
+                                {option.label}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+
+            <div style={{ display: "grid", gap: "0.45rem" }}>
                 <div className="mseg-depth-label">Mode</div>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
                     {DISTORTION_MODE_OPTIONS.map((option) => {
@@ -764,6 +804,7 @@ const IOSDistortionPanel = memo(function IOSDistortionPanel({
 
             <DistortionVisualizer
                 knee={kneeValue}
+                type={typeValue}
                 transferFrame={scopeFrame}
                 historyFrame={historyFrame}
             />
@@ -1296,6 +1337,7 @@ function IOSPatchViewBody() {
 
                             <IOSDistortionPanel
                                 modeValue={synthView.distortionMode.value}
+                                typeValue={synthView.distortionType.value}
                                 driveValue={synthView.distortionDriveDb.value}
                                 kneeValue={synthView.distortionKnee.value}
                                 wetValue={synthView.distortionWet.value}
@@ -1304,6 +1346,7 @@ function IOSPatchViewBody() {
                                 historyFrame={synthView.observedDistortionHistory}
                                 scopeFrame={synthView.observedDistortionScope}
                                 onModeChange={synthView.distortionMode.commitValue}
+                                onTypeChange={synthView.distortionType.commitValue}
                                 onDriveChange={synthView.distortionDriveDb.commitValue}
                                 onKneeChange={synthView.distortionKnee.commitValue}
                                 onWetChange={synthView.distortionWet.commitValue}

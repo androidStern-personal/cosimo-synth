@@ -42,6 +42,7 @@ const COMPACT_PLOT = {
 export type DistortionVisualizerProps = {
     compact?: boolean;
     knee: number;
+    type: number;
     transferFrame: DistortionScopeFrame | null;
     historyFrame: DistortionHistoryFrame | null;
     className?: string;
@@ -165,6 +166,7 @@ function buildAxisLabelY(sampleValue: number, plot: PlotRect, range: number) {
 export function DistortionVisualizer({
     compact,
     knee,
+    type,
     transferFrame,
     historyFrame,
     className,
@@ -196,24 +198,27 @@ export function DistortionVisualizer({
         [historyFrame],
     );
     const transferCurve = useMemo(
-        () => sampleDistortionCurve({ knee, inputRange: displayRange }),
-        [displayRange, knee],
+        () => sampleDistortionCurve({ knee, type, inputRange: displayRange }),
+        [displayRange, knee, type],
     );
     const transferOccupancy = useMemo(() => buildDistortionTransferOccupancy({
         samplePoints,
         knee,
+        type,
         inputRange: displayRange,
-    }), [displayRange, knee, samplePoints]);
+    }), [displayRange, knee, samplePoints, type]);
 
     const transferPlotRect = compact ? COMPACT_PLOT : TRANSFER_PLOT;
     const historyPlotRect = compact ? COMPACT_PLOT : HISTORY_PLOT;
 
-    const transferCurvePath = useMemo(() => buildPolylinePath(
-        transferCurve.map((point) => ({
-            x: mapPlotX(point.input, transferPlotRect, displayRange),
-            y: mapPlotY(point.output, transferPlotRect, displayRange),
-        })),
-    ), [displayRange, transferCurve, transferPlotRect]);
+    const transferCurvePath = useMemo(() => (
+        samplePoints.length > 0
+            ? ""
+            : buildPolylinePath(transferCurve.map((point) => ({
+                x: mapPlotX(point.input, transferPlotRect, displayRange),
+                y: mapPlotY(point.output, transferPlotRect, displayRange),
+            })))
+    ), [displayRange, samplePoints.length, transferCurve, transferPlotRect]);
 
     const transferOccupancyPaths = useMemo(() => transferOccupancy.segments
         .map((segment) => {

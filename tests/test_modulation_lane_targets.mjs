@@ -26,6 +26,7 @@ test("lane kind grammar accepts real device params and rejects everything else",
     assert.equal(lanes.parseLaneModulationTargetKind("lane.delay#0.delayTime"), null);
     assert.equal(lanes.parseLaneModulationTargetKind("lane.delay.delayTime"), null);
     assert.equal(lanes.parseLaneModulationTargetKind("rack.delayTime"), null);
+    assert.equal(lanes.parseLaneModulationTargetKind("lane.distortion#1.distortionType"), null);
 });
 
 test("lane targets resolve STATICALLY: instance #n is slot ordinal n-1", async () => {

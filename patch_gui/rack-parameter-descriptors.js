@@ -71,6 +71,7 @@ const definitions = [
             p("drive", "distortionWet", "Mix", "Mix", 0, 1, 0.5, { quick: true, modulationTargetIndex: 5 }),
             p("drive", "distortionWetHPHz", "Wet High-pass", "HP", 20, 4_000, 40, { unit: "Hz", scale: "log", modulationTargetIndex: 6, modulationApplication: "octaves" }),
             p("drive", "distortionWetLPHz", "Wet Low-pass", "LP", 20, 20_000, 18_000, { unit: "Hz", scale: "log", modulationTargetIndex: 7, modulationApplication: "octaves" }),
+            p("drive", "distortionType", "Type", "Type", 0, 2, 1, { step: 1, choices: [choice("Symmetric", 0), choice("Asymmetric", 1), choice("Wavefold", 2)] }),
         ],
     },
     {
