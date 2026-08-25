@@ -166,6 +166,15 @@ non-negotiable), so classic mix tolerates only sub-sample wet-path smear — see
   contributes at matched loudness.
 - Zero declared latency throughout; the module remains part of the rack latency
   witness proof (`EffectsRack.cmajor` C10).
+- **The envelope follower adds no latency.** It is a causal side-chain control, not
+  an element of the audio path: sample `n` leaves the module on tick `n`, biased by an
+  envelope computed from samples `≤ n`. Its attack/release constants are *response
+  lag in the control value* (the desired bias-drift character), not delay of the
+  audio. Latency would only enter via lookahead (reading ahead to react before a
+  transient) — banned here for the same reason `RackOutputStage` refuses a lookahead
+  limiter and `Ott` dropped its standalone 3 ms lookahead path under ADR-008. Same
+  category as the module's existing IIR filters and DC blockers: state and phase
+  shift, never delay.
 
 ## 4. What stays exactly as-is
 
