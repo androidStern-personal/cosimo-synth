@@ -138,8 +138,8 @@ requirements:
 ## 6. Placement and rack integration
 
 Position: **inside the fixed polish chain** (`POLISH_CHAIN_DESIGN.md`) — after all
-rack modules and the global filter, between the chain's glue stage and width stage,
-before `RackOutputStage`. A single always-resident instance: no pool membership, no
+rack modules and the global filter, between the SAFE BASS stage and the final
+comp/clipper. A single always-resident instance: no pool membership, no
 `poolResetIn` lifecycle, no modulation-table rows, no lane-state schema growth. Zero
 declared latency (SVFs + memoryless curves + the §4 oversampling stance), no
 allocation. State is four SVFs, four DC blockers, and the OS cores; reset semantics

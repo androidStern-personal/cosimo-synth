@@ -1,135 +1,118 @@
 # Polish Chain Design
 
-Status: **concept locked, lineup proposed, 2026-08-25** (Andrew + assistant session).
-Companion to `ENHANCER_DESIGN.md` and `DISTORTION_QUALITY_DESIGN.md`.
+Status: **concept locked; lineup and stage specs are the current brainstorm state,
+2026-08-25** (Andrew + assistant session). Companion to `ENHANCER_DESIGN.md`,
+`DISTORTION_QUALITY_DESIGN.md`, and `SAUSAGE_FATTENER_ANALYSIS.md`. Decided items
+are marked **locked**; everything else is direction, not commitment.
 
-Andrew's call (2026-08-25): a **fixed mastering/polish chain at the very end of the
-signal path. Not modulatable. A static chain you dial in.** The two-band enhancer is
-a confirmed member. This document locks the chain's properties and proposes its
-lineup; per-stage membership beyond the enhancer is open for veto (§6).
+## 1. Properties
 
-## 1. Properties (locked)
+- **Locked — fixed and static**: one chain, fixed order, always present, at the very
+  end of the signal path. Not a lane module, not pooled, not reorderable, **not
+  modulatable** — parameters are dialed in and preset-persisted only (control-rate
+  smoothed against zipper noise). The polish chain is the frame, not the painting.
+- **Locked — lookahead is permitted here, up to 4 ms** (Andrew, 2026-08-25),
+  deliberately unlike the rack. Engineering consequences:
+  - The chain is a top-level fixed stage, not a rack module, so ADR-008 still binds
+    every rack module and does not bind this stage. A composing GRAPH's latency does
+    sum its children (per the `EffectsRack.cmajor` C10 notes), so the chain's
+    latency is representable and reportable at the top level; the AUv3/web host
+    delay-compensation path must be verified to carry it.
+  - Latency is **constant** regardless of settings (192 samples @ 48 kHz for 4 ms),
+    reported once — never settings-dependent.
+  - "Neutral = identity" becomes *delayed* identity: with all controls neutral the
+    output is bit-exact modulo the constant reported delay, enforced per stage by
+    routing around, not by trusting ≈1.0 multiplies through M/S round trips.
+- **The gain-change rule (Andrew): as fast as possible without distortion — no gain
+  trajectory shorter than one cycle of a 60 Hz bass note (~16.7 ms).** In practice:
+  attack may be effectively instant *because* lookahead lets the gain ramp ahead of
+  the peak (smoothed across the lookahead window — zero overshoot, no click);
+  release/recovery respects the ~17 ms floor, and/or the detector is high-passed
+  (~100 Hz) so bass never drives gain at cycle rate.
 
-- **Fixed**: one chain, fixed order, always present. Not a lane module, not pooled,
-  not reorderable. Single resident instance.
-- **Static**: parameters are dialed in and preset-persisted only — **no rack
-  modulation targets**. Params are still control-rate smoothed against zipper noise,
-  but nothing in the modulation system can reach them. This deliberately breaks from
-  every other effect in Cosimo, and it is the point: the polish chain is the frame,
-  not the painting.
-- **Position**: after everything — all lanes/modules and the global filter — and
-  immediately before `RackOutputStage`, whose existing no-lookahead soft-clip safety
-  stage serves as the chain's final element without moving any code.
-- **Zero latency** (ADR-008): every member is minimum-phase IIR + memoryless or
-  ADAA-grade nonlinearity. No lookahead anywhere (the `RackOutputStage.cmajor:32`
-  rationale applies to the whole chain), no linear-phase EQ, ever.
-- **Neutral = bit-exact**: every stage short-circuits to identity when its controls
-  sit at neutral (checked per stage, routed around — not "multiply by ≈1"). A fresh
-  patch with an untouched polish section passes audio unmodified, same contract as
-  ADR-005 module bypass. This matters because M/S encode/decode and smoothed gains
-  are not bit-exact by arithmetic; they must be bypassed, not trusted.
-
-## 2. Proposed lineup (in order)
+## 2. Lineup (current direction, per Andrew 2026-08-25)
 
 ```
 [ rack lanes → global filter ] →
-  1. FAT       one-knob fattener       (slow-attack comp + auto-makeup + soft clip)
-  2. ENHANCER  the two-band module     (per ENHANCER_DESIGN.md, unchanged)
-  3. WIDTH     one-knob M/S balance    (side gain 0..1.5, neutral 1.0)
-→ [ RackOutputStage: existing soft clip + output trim ]
+  1. SAFE BASS   side-channel low cut (bass to mono)
+  2. ENHANCER    the two-band module (per ENHANCER_DESIGN.md)
+  3. COMP/CLIP   medium compression evening out into a soft clipper
+→ output trim / safety (RackOutputStage relationship: open, §5)
 ```
 
-Rationale for the order: density first — the enhancer sits **after** the fat stage
-so its added harmonics aren't compressed back down (standard exciter placement) and
-so it reacts to the fattened balance; width after harmonics so side enhancement and
-width read as one image decision; clipper last, always. Tilt was in an earlier draft
-and is out (Andrew veto, 2026-08-25): linear tone re-balancing is `GlobalFilter`'s
-job, and the enhancer adds content rather than re-balancing.
+Supersessions from earlier drafts, recorded: TILT (vetoed — linear tone is
+`GlobalFilter`'s job); the FAT maximizer-macro stage (superseded by the comp/clip
+spec below); WIDTH (no longer in Andrew's stated lineup — side-image concerns are
+covered by SAFE BASS plus the enhancer's side amounts; revive only by explicit ask).
 
-### Stage specs and starting constants
+### 2.1 SAFE BASS
 
-- **FAT** — single knob 0..1, Sausage-Fattener school (Andrew's reference,
-  2026-08-25), **voiced loudness-first** (Andrew's call, same day: "we're going for
-  loudness"): a compressor + static makeup driving an **integrated soft clipper**,
-  stereo-linked RMS detector (~10 ms window), soft knee, **no lookahead**. Division
-  of labor, which is the whole loudness mechanism: the compressor buys *density*
-  (body up), the clipper eats *peaks* (crest down) — peak-eating lives in the
-  clipper rather than the compressor's attack because attack-based peak control
-  ducks the entire signal on every hit (losing the RMS it just bought) and, with
-  no lookahead permitted (ADR-008; `RackOutputStage`'s own rationale), overshoots
-  besides. Clipper-led is how loud actually gets made.
-  The knob is a macro over everything, **attack included**: threshold unity →
-  ~−24 dBFS, ratio 2:1 → ~8:1, attack 20 ms → ~2 ms, program-dependent release
-  100–400 ms → 50–150 ms, clipper drive up to ~6 dB of peak shave. Low travel =
-  glue-ish density (attack barely matters at 1–2 dB of reduction, transients ride
-  through naturally); top travel = fast-everything maximizer smash. Both are loud;
-  the knob moves monotonically louder.
-  **Makeup is peak-referenced, not loudness-matched** — a deliberate departure
-  from the equal-loudness contract used everywhere else in these docs: output true
-  peak is held ~constant while crest factor falls, so LUFS genuinely rises with
-  the knob. This stage's honest frame is "trade crest for loudness," and hiding
-  that behind loudness-matching would defeat its purpose. Neutral at 0 = true
-  identity. Single-band on purpose; aggressive multiband lives in the rack's
-  existing OTT module. Color knob deliberately omitted — the enhancer next in
-  line is the color section. (Sausage Fattener's internals are closed-source and
-  undocumented; the target is its observable behavior — one knob, instantly
-  louder and fatter, saturation woven into the compression — not its constants.)
-- **ENHANCER** — exactly as `ENHANCER_DESIGN.md` (two parametric bells, Tube/Solid,
-  independent mid/side amounts, always-on de-emphasis). Its 10 params become static
-  dial-ins like the rest of the chain.
-- **WIDTH** — side gain 0 (mono) .. 1.0 (neutral) .. 1.5 (wide). Broadband in v1;
-  bass-mono crossover deliberately deferred (it's a taste feature with phase
-  consequences, and the enhancer's mid-targeted low bell already covers "keep the
-  low end solid").
+High-pass on the side channel only; mid untouched. This is classic **elliptical
+EQ** from vinyl mastering (bass summed to mono so the cutter head survived), still
+standard practice: phasey stereo bass wastes clipper headroom and muddies small
+speakers. Starting spec: 6–12 dB/oct on S below ~120 Hz. Mono input ⇒ S = 0 ⇒
+no-op. Open: fixed frequency vs one knob.
 
-Total new controls beyond the enhancer's 10: **two knobs** (FAT, WIDTH). Every stage
-neutral by default; a fresh patch's polish chain is an identity.
+### 2.2 ENHANCER
 
-## 3. What the polish chain is not
+As `ENHANCER_DESIGN.md` (two parametric bells, Tube/Solid, independent mid/side
+amounts, always-on de-emphasis), params static per §1.
 
-- Not modulatable (locked). No LFOs, no envelopes, no macros reaching it.
-- Not the sound-design saturator — `DISTORTION_QUALITY_DESIGN.md`'s module stays a
-  rack lane citizen with full modulation. The two never merge.
-- No lookahead limiter, no linear-phase anything — ADR-008 forbids both. The loud
-  endgame is clipper-led (FAT's integrated clipper feeding `RackOutputStage`'s
-  ceiling), per the output stage's own no-lookahead rationale.
-- No metering DSP in v1 (UI may tap existing preview streams later).
-- Not transparent: the FAT stage is colored on purpose (Sausage-Fattener school,
-  not SSL-bus school).
+### 2.3 COMP/CLIP (the finisher)
 
-## 4. Engineering notes
+Direction (Andrew): **a medium amount of compression driven into a soft clipper —
+the compressor's job is only to even out the signal before clipping.** Reference
+numbers extracted from the Sausage Fattener recreation
+(`SAUSAGE_FATTENER_ANALYSIS.md`): threshold parked at the ceiling, hard knee,
+~11:1, attack 0.21 ms, release 26.8 ms, rounded-knee-into-hard-clip transfer
+reaching the ceiling at 0.94 of full scale. Cosimo's version adapts that recipe
+with the two rules above: up to 4 ms lookahead (same speed as SF's 0.2 ms attack
+without its overshoot-or-distort tradeoff), release ≥ the 60 Hz floor (SF's
+26.8 ms already is), detector HP as the cleaner alternative for bass-heavy
+material. "Medium" compression (Andrew) rather than SF's near-limiting ratio —
+exact threshold/ratio and the knob surface (one knob vs comp-amount + clip-amount)
+are open.
 
-Being static erases the expensive parts of module-hood: no modulation-table rows, no
-lane-state schema growth, no pool instances or `poolResetIn` lifecycle, no
-per-ordinal parameter fan-out. One resident processor group at the tail of the rack
-graph with value-input params. Preset persistence rides the existing patch/effect
-snapshot format. The latency witness proof extends over the chain unchanged
-(everything is 0), and the all-neutral bit-exact contract gets its own test.
+## 3. Not in this chain
 
-## 5. Ship criteria
+- Modulation of any kind (locked out).
+- The sound-design saturator (`DISTORTION_QUALITY_DESIGN.md`) — rack citizen,
+  fully modulatable, never merged with this.
+- Linear-phase anything; multiband dynamics (the rack's OTT covers it); upward
+  maximization; metering DSP in v1.
 
-1. All controls neutral ⇒ output bit-exact with the chain absent (the identity
-   contract, per stage and end-to-end).
-2. Rack latency witness still proves 0 with the chain in the graph.
-3. FAT contract: output true peak constant within ±0.5 dB across the whole knob
-   travel, LUFS monotonically increasing with the knob (crest-for-loudness trade,
-   realized honestly), and no audible pumping on a drum loop at mid travel.
-4. Enhancer ship criteria inherited from `ENHANCER_DESIGN.md` §8.
-5. Andrew dials a patch's polish by ear without touching documentation — three
-   knobs plus the enhancer must be self-explanatory.
+## 4. Reference knowledge (from the session's research)
 
-## 6. Open decisions (defaults apply unless overridden)
+- **Lookahead limiter mechanics**: gain computed ahead of the audio; attack
+  realized as a smoothing window across the lookahead buffer so gain reaches
+  minimum exactly as the peak arrives — no overshoot, no click. 1–5 ms is the
+  industry-typical window; Waves L1 (1994) is the ancestor of all of it.
+- **The canonical loudness chain** (TDR Limiter 6 GE / VladG Limiter No6, free and
+  documented): RMS comp → lookahead peak limiter → HF limiter → clipper →
+  true-peak safety. "Even out slowly, shave fast, clip the rest." The polish
+  chain's comp/clip is the two-stage reduction.
+- **Family survey**: Ableton Glue Compressor = SSL bus comp + soft-clip toggle
+  (comp+clipper in one box); OTT = upward+downward multiband (the other loudness
+  school); Devil-Loc = Level-Loc auto-leveler + saturation (the crush school);
+  KClip/StandardCLIP "clip-to-zero" = oversampled clipper as the primary tool.
+- **Sausage Fattener measured**: see `SAUSAGE_FATTENER_ANALYSIS.md` — low-cut →
+  peak-catcher comp at 0 dB → EQ → rounded hard clip; Fatness = input drive over
+  36 dB into fixed thresholds.
+- **Why attack-led peak control loses**: a fast-attack compressor ducks the whole
+  signal for the duration of each hit (giving back the RMS it bought) and, without
+  lookahead, overshoots; a clipper removes exactly the crest. With lookahead
+  permitted, the comp can be fast *and* clean — the clipper still takes what the
+  comp shouldn't chase.
 
-1. **Lineup membership.** Enhancer and FAT are locked in; tilt is vetoed out
-   (2026-08-25). Width remains my proposal — default: it ships.
-1b. **PUNCH / transient mode.** Floated by Andrew 2026-08-25. Default: **not in
-   v1** — the knob's lower travel already is the punchy setting (slow attack,
-   light reduction), so a separate mode only earns its place if voicing shows the
-   loud top half destroys material worth keeping. If needed later: a toggle that
-   pins the slow-attack profile across the whole travel (or a small transient
-   re-injection stage, Drum-Buss style), rather than a second continuous control.
-2. **RackOutputStage UI folding.** Default: the output stage keeps its identity in
-   code but its drive/trim controls appear in the polish panel, so the user sees one
-   "finish" section. Alternative: leave its UI where it is.
-3. **Name.** Working name "Polish" (`wt::PolishChain`). Alternatives: Finish,
-   Master, Out.
+## 5. Open items
+
+1. COMP/CLIP control surface: one fattener-style knob vs separate comp-amount and
+   clip-amount; exact "medium" threshold/ratio values (voiced by ear against the
+   SF reference numbers).
+2. SAFE BASS: fixed ~120 Hz vs a knob; slope 6 vs 12 dB/oct.
+3. RackOutputStage relationship: absorbed into the chain's final stage vs kept as
+   a separate safety clipper after it; where the output trim UI lives.
+4. Transient/PUNCH mode (floated earlier): parked; revisit only if voicing shows
+   the finisher kills material worth keeping.
+5. Name (working: "Polish").
+6. WIDTH stage: out of the lineup unless Andrew re-adds it.
