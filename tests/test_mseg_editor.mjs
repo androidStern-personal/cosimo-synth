@@ -5,7 +5,10 @@ import {
     MSEG_PADDED_SAMPLES,
     createDefaultMsegPlayback,
     createDefaultMsegShape,
+    msegEditorCoordinatesToPoint,
+    pointToMsegEditorCoordinates,
     renderMsegShape,
+    resolveMsegSurfaceOrientation,
     serializeMsegShape,
 } from "../patch_gui/mseg.js";
 import {
@@ -64,6 +67,29 @@ function lastEvent(connection, endpointID) {
 function endpointEvents(connection, endpointID) {
     return connection.events.filter((entry) => entry.endpointID === endpointID);
 }
+
+test("MSEG orientation holds a stable near-square boundary before following the longer axis", () => {
+    assert.equal(resolveMsegSurfaceOrientation(100, 107, "horizontal"), "horizontal");
+    assert.equal(resolveMsegSurfaceOrientation(100, 109, "horizontal"), "vertical");
+    assert.equal(resolveMsegSurfaceOrientation(107, 100, "vertical"), "vertical");
+    assert.equal(resolveMsegSurfaceOrientation(109, 100, "vertical"), "horizontal");
+});
+
+test("MSEG point geometry round-trips without changing its stored coordinate system", () => {
+    const storedPoint = { x: 0.23, y: 0.76 };
+
+    for (const orientation of ["horizontal", "vertical"]) {
+        const editorPoint = pointToMsegEditorCoordinates(storedPoint, 640, 360, { orientation });
+        const roundTrip = msegEditorCoordinatesToPoint(editorPoint.x, editorPoint.y, 640, 360, { orientation });
+        assert.equal(Math.abs(roundTrip.x - storedPoint.x) <= 1e-12, true);
+        assert.equal(Math.abs(roundTrip.y - storedPoint.y) <= 1e-12, true);
+    }
+
+    const verticalStart = pointToMsegEditorCoordinates({ x: 0.1, y: 0.2 }, 320, 640, { orientation: "vertical" });
+    const verticalEnd = pointToMsegEditorCoordinates({ x: 0.9, y: 0.8 }, 320, 640, { orientation: "vertical" });
+    assert.equal(verticalStart.y < verticalEnd.y, true, "Time must advance down the longer vertical axis.");
+    assert.equal(verticalStart.x < verticalEnd.x, true, "Value must advance across the remaining axis.");
+});
 
 test("boot_without_saved_mseg_state_uses_default_shape_playback_and_depth", () => {
     const patchConnection = new FakePatchConnection();

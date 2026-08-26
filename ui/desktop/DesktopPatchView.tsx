@@ -8,6 +8,7 @@ import {
     useRef,
     useState,
     type ReactNode,
+    type CSSProperties,
     type KeyboardEvent as ReactKeyboardEvent,
     type PointerEvent as ReactPointerEvent,
     type RefObject,
@@ -68,6 +69,7 @@ import {
     MSEG_RATE_MIN_SECONDS,
     clampMsegRateSeconds,
     type MsegState,
+    type MsegSurfaceOrientation,
 } from "../shared/mseg";
 import {
     EditableMsegSurface,
@@ -115,8 +117,8 @@ import {
 } from "../shared/parameter-value-entry";
 import {
     ParameterMenuContext,
-    useLongPressParameterMenu,
     useParameterMenu,
+    type ParameterMenuRequest,
 } from "../shared/parameter-context-menu";
 import { useParameterMenuShell } from "../shared/parameter-menu-shell";
 import { clearUiTimeout, uiTimeout } from "../shared/ui-timers";
@@ -130,6 +132,7 @@ import {
     type MobileVoiceEditorBindings,
 } from "../shared/mobile-voice-editor";
 import { MobileQuickSourceSheet } from "./mobile-quick-source-sheet";
+import { MsegEditorControlStrip } from "./mseg-editor-controls";
 import { useDesktopCurveLab } from "./desktop-curve-lab";
 import {
     DesktopOscillatorConnectionBoundary,
@@ -453,7 +456,6 @@ type MsegEditorModalProps = {
     onClose: () => void;
     onUndo: () => void;
     onSelectShape: (shapeIndex: number) => void;
-    onMorphChange: (nextValue: number) => void;
     onRateChange: (nextValue: number) => void;
     onToggleLoop: () => void;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
@@ -461,6 +463,12 @@ type MsegEditorModalProps = {
     onPointerLeave: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerUp: (event: ReactPointerEvent<SVGSVGElement>) => void;
     rateFocusBindings: SynthFocusBindings;
+    orientation: MsegSurfaceOrientation;
+    onOrientationChange: (orientation: MsegSurfaceOrientation) => void;
+    routes: ReadonlyArray<ModulationRoute>;
+    hudContainer: Element | null;
+    resolveScrollLockTargets: () => ReadonlyArray<HTMLElement>;
+    onRequestParameterMenu: (request: ParameterMenuRequest) => void;
 };
 
 type ModulationMatrixSectionProps = {
@@ -2872,7 +2880,6 @@ function MsegEditorModal({
     onClose,
     onUndo,
     onSelectShape,
-    onMorphChange,
     onRateChange,
     onToggleLoop,
     onPointerDown,
@@ -2880,6 +2887,12 @@ function MsegEditorModal({
     onPointerLeave,
     onPointerUp,
     rateFocusBindings,
+    orientation,
+    onOrientationChange,
+    routes,
+    hudContainer,
+    resolveScrollLockTargets,
+    onRequestParameterMenu,
 }: MsegEditorModalProps) {
     const [isMorphAdjusting, setIsMorphAdjusting] = useState(false);
     const backdropRef = useRef<HTMLDivElement | null>(null);
@@ -2940,31 +2953,6 @@ function MsegEditorModal({
         };
     }, [isOpen]);
 
-    // T20: the modal's two sliders long-press into the ADR-017 menu.
-    const morphLongPress = useLongPressParameterMenu(useCallback(() => ({
-        controlKey: `mseg${slotIndex + 1}Morph`,
-        label: "MSEG morph",
-        targetKind: `mseg${slotIndex + 1}Morph`,
-        baseSpec: parameterEntrySpecForScalar({ min: 0, max: 1, step: 0.001, unit: "%", canonicalPerDisplayedUnit: 0.01, digits: 0 }),
-        baseValue: morphBinding.value,
-        defaultValue: morphBinding.initialValue ?? null,
-        commitBase: (value: number) => onMorphChange(value),
-    }), [morphBinding.initialValue, morphBinding.value, onMorphChange, slotIndex]));
-    const rateLongPress = useLongPressParameterMenu(useCallback(() => ({
-        controlKey: `mseg${slotIndex + 1}Rate`,
-        label: "MSEG rate",
-        targetKind: `mseg${slotIndex + 1}Rate`,
-        baseSpec: parameterEntrySpecForSeconds({
-            minSeconds: MSEG_RATE_MIN_SECONDS,
-            maxSeconds: MSEG_RATE_MAX_SECONDS,
-            stepSeconds: 0.001,
-            currentSeconds: clampMsegRateSeconds(msegState?.playback.rate.seconds ?? 1),
-        }),
-        baseValue: clampMsegRateSeconds(msegState?.playback.rate.seconds ?? 1),
-        defaultValue: null,
-        commitBase: (value: number) => onRateChange(value),
-    }), [msegState?.playback.rate.seconds, onRateChange, slotIndex]));
-
     if (!isOpen || !msegState) {
         return null;
     }
@@ -2977,11 +2965,13 @@ function MsegEditorModal({
                 aria-label={`${slotLabel} editor`}
                 data-role="mseg-editor-dialog"
                 data-section-accent="mint"
-                data-liquid-detail="routing-node"
-                className="synth-modal-frame mseg-editor-frame"
+                className="mseg-editor-shell mseg-editor-frame"
+                style={{
+                    "--quick-sheet-accent": findRackModulationSource("mseg", slotIndex + 1).accent,
+                } as CSSProperties}
             >
-                <header className="mseg-editor-header">
-                    <div className="cosimo-section-title mseg-editor-title">{slotLabel}</div>
+                <header className="mseg-editor-shell-top mseg-editor-header">
+                    <strong className="mseg-editor-title">{slotLabel}</strong>
                     <div className="mseg-editor-shapes" role="group" aria-label="MSEG shape">
                         {[0, 1].map((shapeIndex) => (
                             <button
@@ -3021,7 +3011,7 @@ function MsegEditorModal({
                     </button>
                 </header>
 
-                <div className="mseg-editor-graph" data-role="mseg-editor-graph">
+                <div className="mseg-editor-shell-graphic mseg-editor-graph" data-role="mseg-editor-graph">
                     <EditableMsegSurface
                         surfaceRef={surfaceRef}
                         points={msegState.shape.points}
@@ -3033,6 +3023,8 @@ function MsegEditorModal({
                         selectedPointIndex={selectedPointIndex}
                         hoveredSegmentIndex={hoveredSegmentIndex}
                         activeSegmentIndex={activeSegmentIndex}
+                        orientation={orientation}
+                        onOrientationChange={onOrientationChange}
                         onPointerDown={onPointerDown}
                         onPointerMove={onPointerMove}
                         onPointerLeave={onPointerLeave}
@@ -3047,70 +3039,25 @@ function MsegEditorModal({
                     </output>
                 </div>
 
-                <div className="mseg-editor-controls" data-role="mseg-editor-controls">
-                    <label
-                        className="mseg-editor-range"
-                        data-host-state={morphBinding.isReady ? "ready" : "loading"}
-                        aria-busy={!morphBinding.isReady}
-                        {...(morphBinding.isReady ? morphLongPress : {})}
-                    >
-                        <span>Morph</span>
-                        <input
-                            className="cosimo-range disabled:cursor-wait disabled:opacity-45"
-                            type="range"
-                            min={0}
-                            max={1}
-                            step={0.001}
-                            value={morphBinding.value.toFixed(3)}
-                            disabled={!morphBinding.isReady}
-                            data-host-state={morphBinding.isReady ? "ready" : "loading"}
-                            aria-label="MSEG morph"
-                            data-role="mseg-morph-slider"
-                            data-modulation-target-kind={`mseg${slotIndex + 1}Morph`}
-                            onChange={(event) => onMorphChange(Number(event.currentTarget.value))}
-                            onPointerDown={() => {
-                                if (morphBinding.isReady) setIsMorphAdjusting(true);
-                            }}
-                            onPointerUp={() => setIsMorphAdjusting(false)}
-                            onPointerCancel={() => setIsMorphAdjusting(false)}
-                        />
-                        <output className="cosimo-readout is-caps">{formatPercent(morphBinding.value)}</output>
-                    </label>
-                    <label
-                        className="mseg-editor-range mseg-editor-time"
-                        data-host-state={rateReady ? "ready" : "loading"}
-                        aria-busy={!rateReady}
-                        {...(rateReady ? rateLongPress : {})}
-                    >
-                        <span>Time</span>
-                        <input
-                            className="cosimo-range disabled:cursor-wait disabled:opacity-45"
-                            type="range"
-                            min={MSEG_RATE_MIN_SECONDS}
-                            max={MSEG_RATE_MAX_SECONDS}
-                            step={0.001}
-                            value={clampMsegRateSeconds(msegState.playback.rate.seconds).toFixed(3)}
-                            disabled={!rateReady}
-                            data-host-state={rateReady ? "ready" : "loading"}
-                            aria-label="MSEG rate"
-                            data-modulation-target-kind={`mseg${slotIndex + 1}Rate`}
-                            onChange={(event) => onRateChange(Number(event.currentTarget.value))}
-                            {...rateFocusBindings}
-                        />
-                        <output className="cosimo-readout is-caps" data-role="mseg-rate-readout">
-                            {formatSeconds(clampMsegRateSeconds(msegState.playback.rate.seconds))}
-                        </output>
-                    </label>
-                    <button
-                        type="button"
-                        data-role="mseg-loop-toggle"
-                        className="cosimo-button mseg-loop-toggle"
-                        aria-pressed={msegState.playback.loop !== null}
-                        onClick={onToggleLoop}
-                    >
-                        {msegState.playback.loop ? "Loop" : "1 Shot"}
-                    </button>
-                </div>
+                <MsegEditorControlStrip
+                    slotIndex={slotIndex}
+                    rateSeconds={msegState.playback.rate.seconds}
+                    rateReady={rateReady}
+                    morphBinding={morphBinding}
+                    routes={routes}
+                    armedSource={null}
+                    hudContainer={hudContainer}
+                    rolePrefix="mseg-editor"
+                    dataRole="mseg-editor-controls"
+                    variant="full"
+                    onRateChange={onRateChange}
+                    resolveScrollLockTargets={resolveScrollLockTargets}
+                    onRequestParameterMenu={onRequestParameterMenu}
+                    rateFocusBindings={rateFocusBindings}
+                    onMorphAdjustingChange={setIsMorphAdjusting}
+                    loopEnabled={msegState.playback.loop !== null}
+                    onToggleLoop={onToggleLoop}
+                />
             </div>
         </div>
     );
@@ -4310,6 +4257,7 @@ function DesktopPatchViewBody({
     const stageRef = useRef<HTMLDivElement | null>(null);
     const scrollRegionRef = useRef<HTMLElement | null>(null);
     const msegEditorSurfaceRef = useRef<SVGSVGElement | null>(null);
+    const [msegSurfaceOrientation, setMsegSurfaceOrientation] = useState<MsegSurfaceOrientation>("horizontal");
     const keyboardElementRef = useRef<PianoKeyboardElement | null>(null);
     const [isCompactViewport, setIsCompactViewport] = useState(() => (
         typeof window.matchMedia === "function" && window.matchMedia("(max-width: 639px)").matches
@@ -4427,6 +4375,7 @@ function DesktopPatchViewBody({
         oscillatorID: oscillatorSelection.selectedOscillatorID,
         stageRef,
         msegEditorSurfaceRef,
+        msegSurfaceOrientation,
         keyboardRef: keyboardElementRef,
         voiceModeCount: VOICE_MODE_OPTIONS.length,
         keyboardInputMode,
@@ -5524,6 +5473,8 @@ function DesktopPatchViewBody({
                             selectedPointIndex={synthView.msegEditor.selectedPointIndex}
                             hoveredSegmentIndex={synthView.msegEditor.hoveredSegmentIndex}
                             activeSegmentIndex={synthView.msegEditor.activeSegmentIndex}
+                            orientation={msegSurfaceOrientation}
+                            onOrientationChange={setMsegSurfaceOrientation}
                             onPointerDown={synthView.msegEditor.handlePointerDown}
                             onPointerMove={synthView.msegEditor.handlePointerMove}
                             onPointerLeave={synthView.msegEditor.handlePointerLeave}
@@ -5580,7 +5531,6 @@ function DesktopPatchViewBody({
                 onClose={synthView.msegEditor.closeEditor}
                 onUndo={synthView.msegEditor.undoLastEdit}
                 onSelectShape={synthView.handleSelectMsegShape}
-                onMorphChange={synthView.handleMsegMorphChange}
                 onRateChange={synthView.handleMsegRateChange}
                 onToggleLoop={synthView.handleToggleMsegLoop}
                 onPointerDown={synthView.msegEditor.handlePointerDown}
@@ -5588,6 +5538,12 @@ function DesktopPatchViewBody({
                 onPointerLeave={synthView.msegEditor.handlePointerLeave}
                 onPointerUp={synthView.msegEditor.handlePointerUp}
                 rateFocusBindings={synthView.keyboardRouting.msegRateFocusBindings}
+                orientation={msegSurfaceOrientation}
+                onOrientationChange={setMsegSurfaceOrientation}
+                routes={synthView.routes}
+                hudContainer={mobileVoiceHudLayer}
+                resolveScrollLockTargets={resolveMobileVoiceScrollLocks}
+                onRequestParameterMenu={openShellParameterMenu}
             />
 
             <ContextualArticulationToolbar

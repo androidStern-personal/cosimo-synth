@@ -897,7 +897,12 @@ EFFECTS LANE FOLLOW-UP
 
 MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
 
-[ ] T33 — Make the full-screen MSEG editor look like the drawer editor, expanded
+[x] T33 — Make the full-screen MSEG editor look like the drawer editor, expanded
+    Active owner (2026-08-26):
+    - Codex task `Implement T33/T34/T36 MSEG editor`, thread `01a03bb7-4af7-78f2-bed4-e58c4bfa0b10`, branch `codex/t33-t34-t36-mseg-editor`, worktree `/Users/winterfell/.codex/worktrees/d8948efb-c318-481b-a7d8-f013e757e192/cosimo-synth`, model SOL, reasoning max.
+    Implementation evidence (2026-08-26):
+    - Drawer and full screen now share the real editable graph, `MsegEditorControlStrip`, and `mseg-editor-shell*` visual seams. Full screen fills the viewport without `synth-modal-frame`, border, floating shadow, backdrop blur, or graph wrapper decoration; A/B, undo, loop, dismissal, and the existing coordinate readout remain intact.
+    - Production-view captures and measured geometry are in `docs/evidence/t33-t34-t36-mseg/`. The drawer's original `border-top: 1px solid color-mix(in srgb, var(--quick-sheet-accent) 45%, var(--cosimo-line));` declaration is unchanged and regression-pinned.
     Current gap:
     - The editable graph is already shared, but the full-screen shell has its own heavy frame, border, spacing, and controls, so the two versions look like unrelated products.
     Required result:
@@ -908,7 +913,12 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Reviewed screenshots of the same MSEG in the drawer and full screen show one visual system; the drawer's existing top border is unchanged and the full-screen editor has no heavy enclosing frame or unrelated decoration.
     - Existing MSEG editing, undo, A/B, looping, dismissal, and drawer resizing behavior remain intact.
 
-[ ] T34 — Replace the edge-bound MSEG timing controls with compact knobs without making the tab taller
+[x] T34 — Replace the edge-bound MSEG timing controls with compact knobs without making the tab taller
+    Active owner (2026-08-26):
+    - Codex task `Implement T33/T34/T36 MSEG editor`, thread `01a03bb7-4af7-78f2-bed4-e58c4bfa0b10`, branch `codex/t33-t34-t36-mseg-editor`, worktree `/Users/winterfell/.codex/worktrees/d8948efb-c318-481b-a7d8-f013e757e192/cosimo-synth`, model SOL, reasoning max.
+    Implementation evidence (2026-08-26):
+    - Drawer and full screen use the same compact Rate/Morph knob cells built from the existing stippled knob artwork and shared parameter gesture/menu/HUD contract. Rate keeps the exact 0–2 s domain, exact entry, arrow/Home/End keyboard operation, and slider accessibility semantics.
+    - At 320 px, the complete bordered drawer row is exactly 40 px tall, the Rate knob has at least 100 px of physical travel on either side, and touch tests traverse minimum-to-maximum and back without leaving the viewport. The mapping is deliberately linear; T35's non-linear response, T37's copy action, color changes, and new HUD designs are not included.
     Required result:
     - Replace the drawer and full-screen Time/Rate/Speed slider-style controls with compact knobs that fit inside the existing control strip. If a neighboring control uses the same compact row, keep its treatment visually consistent.
     - Move the timing knob far enough in from the screen edge that a person can drag left to slow down and right to speed up without immediately running out of screen.
@@ -928,7 +938,12 @@ MSEG, MOD BAR, AND SYNTH CONTROL FOLLOW-UP
     - Automated checks prove the mapping is monotonic, continuous, clamped, and gives materially more pixel travel below 500 ms than the old linear mapping.
     - A live tuning pass can adjust every exposed coefficient, reset them, and feel the result in both drawer and full-screen MSEG timing knobs.
 
-[ ] T36 — Put MSEG time on whichever editor axis is longest
+[x] T36 — Put MSEG time on whichever editor axis is longest
+    Active owner (2026-08-26):
+    - Codex task `Implement T33/T34/T36 MSEG editor`, thread `01a03bb7-4af7-78f2-bed4-e58c4bfa0b10`, branch `codex/t33-t34-t36-mseg-editor`, worktree `/Users/winterfell/.codex/worktrees/d8948efb-c318-481b-a7d8-f013e757e192/cosimo-synth`, model SOL, reasoning max.
+    Implementation evidence (2026-08-26):
+    - `EditableMsegSurface` resolves from its measured SVG area and re-evaluates through `ResizeObserver`; an 8% near-square hysteresis band prevents flicker. Only the presentation/pointer orientation state changes—the MSEG document and stored points are never rewritten.
+    - Geometry tests cover both orientations and round trips. The live drawer-resize browser proof crosses both hysteresis boundaries, preserves the stored shape exactly, then adds, selects, and drags a point with vertical time while proving the uploaded buffer matches the edited document.
     Current gap:
     - The shared MSEG drawing code already supports horizontal and vertical time, but the drawer and full-screen mounts leave it fixed horizontally.
     Required result:

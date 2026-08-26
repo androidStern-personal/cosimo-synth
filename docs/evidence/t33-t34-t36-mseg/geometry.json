@@ -1,0 +1,137 @@
+{
+  "phone-393x852-drawer.png": {
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "root": {
+      "x": 0,
+      "y": 596,
+      "width": 393,
+      "height": 256
+    },
+    "surface": {
+      "x": 8,
+      "y": 675,
+      "width": 377,
+      "height": 171
+    },
+    "controls": {
+      "x": 0,
+      "y": 631,
+      "width": 393,
+      "height": 40
+    },
+    "timeAxis": "horizontal",
+    "rootBorderTop": "1px solid color(srgb 0.817495 0.405964 0.838966 / 0.493137)",
+    "rootBoxShadow": "rgba(0, 0, 0, 0.55) 0px -14px 42px 0px"
+  },
+  "phone-393x852-full.png": {
+    "viewport": {
+      "width": 393,
+      "height": 852
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 393,
+      "height": 852
+    },
+    "surface": {
+      "x": 8,
+      "y": 48,
+      "width": 377,
+      "height": 746
+    },
+    "controls": {
+      "x": 0,
+      "y": 800,
+      "width": 393,
+      "height": 52
+    },
+    "timeAxis": "vertical",
+    "rootBorderTop": "0px none rgb(232, 236, 239)",
+    "rootBoxShadow": "none"
+  },
+  "plugin-compact-600x520-drawer.png": {
+    "viewport": {
+      "width": 600,
+      "height": 520
+    },
+    "root": {
+      "x": 0,
+      "y": 364,
+      "width": 600,
+      "height": 156
+    },
+    "surface": {
+      "x": 8,
+      "y": 443,
+      "width": 584,
+      "height": 71
+    },
+    "controls": {
+      "x": 0,
+      "y": 399,
+      "width": 600,
+      "height": 40
+    },
+    "timeAxis": "horizontal",
+    "rootBorderTop": "1px solid color(srgb 0.817495 0.405964 0.838966 / 0.493137)",
+    "rootBoxShadow": "rgba(0, 0, 0, 0.55) 0px -14px 42px 0px"
+  },
+  "plugin-900x600-full.png": {
+    "viewport": {
+      "width": 900,
+      "height": 600
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 900,
+      "height": 600
+    },
+    "surface": {
+      "x": 8,
+      "y": 48,
+      "width": 884,
+      "height": 490
+    },
+    "controls": {
+      "x": 0,
+      "y": 544,
+      "width": 900,
+      "height": 56
+    },
+    "timeAxis": "horizontal",
+    "rootBorderTop": "0px none rgb(232, 236, 239)",
+    "rootBoxShadow": "none"
+  },
+  "desktop-1280x900-full.png": {
+    "viewport": {
+      "width": 1280,
+      "height": 900
+    },
+    "root": {
+      "x": 0,
+      "y": 0,
+      "width": 1280,
+      "height": 900
+    },
+    "surface": {
+      "x": 8,
+      "y": 48,
+      "width": 1264,
+      "height": 790
+    },
+    "controls": {
+      "x": 0,
+      "y": 844,
+      "width": 1280,
+      "height": 56
+    },
+    "timeAxis": "horizontal",
+    "rootBorderTop": "0px none rgb(232, 236, 239)",
+    "rootBoxShadow": "none"
+  }
+}

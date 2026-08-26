@@ -1,0 +1,232 @@
+import { useCallback, useMemo, type CSSProperties } from "react";
+
+import { hexToRgbTriplet } from "../shared/parameter-hud";
+import { useParameterGesture } from "../shared/parameter-gesture";
+import {
+    ParameterReadoutStrip,
+    type ReadoutCellSpec,
+    type ReadoutStripSource,
+} from "../shared/parameter-readout-strip";
+import type { PatchControlBinding } from "../shared/patch-controls";
+import type { ModulationRoute } from "../shared/modulation";
+import type { ModulationTargetKind } from "../shared/modulation-targets";
+import type { ParameterMenuRequest } from "../shared/parameter-context-menu";
+import {
+    parameterEntrySpecForScalar,
+    parameterEntrySpecForSeconds,
+} from "../shared/parameter-value-entry";
+import type { SynthFocusBindings } from "../shared/synth-input-router";
+import {
+    MSEG_RATE_MAX_SECONDS,
+    MSEG_RATE_MIN_SECONDS,
+    clampMsegRateSeconds,
+} from "../shared/mseg";
+import { findRackModulationSource } from "../shared/rack-modulation-sources";
+
+/** Leaves 12px for the shared >8px touch activation so total travel fits in 100px. */
+const MSEG_COMPACT_KNOB_ACTIVE_TRAVEL_PX = 88;
+
+function formatSecondsValue(value: number): string {
+    return `${value.toFixed(3)} s`;
+}
+
+function formatCompactSecondsValue(value: number): string {
+    return `${value.toFixed(1)}s`;
+}
+
+function formatPercentValue(value: number): string {
+    return `${Math.round(value * 100)}%`;
+}
+
+function documentRateBinding(
+    endpointID: string,
+    value: number,
+    isReady: boolean,
+    write: (next: number) => void,
+): PatchControlBinding<number> {
+    const guardedWrite = (next: number) => {
+        if (isReady) write(next);
+    };
+    return {
+        endpointID,
+        value,
+        isReady,
+        setValue: guardedWrite,
+        commitValue: guardedWrite,
+        beginGesture: () => undefined,
+        endGesture: () => undefined,
+    };
+}
+
+/** Shared compact MSEG Rate/Morph row used by the quick drawer and full editor. */
+export type MsegEditorControlStripProps = {
+    readonly slotIndex: number;
+    readonly rateSeconds: number;
+    readonly rateReady: boolean;
+    readonly morphBinding: PatchControlBinding<number>;
+    readonly routes: ReadonlyArray<ModulationRoute>;
+    readonly armedSource: ReadoutStripSource | null;
+    readonly hudContainer: Element | null;
+    readonly rolePrefix: string;
+    readonly dataRole: string;
+    readonly variant: "drawer" | "full";
+    readonly className?: string;
+    readonly onRateChange: (next: number) => void;
+    readonly resolveScrollLockTargets?: () => ReadonlyArray<HTMLElement>;
+    readonly onRequestHaptic?: () => void;
+    readonly onRequestParameterMenu?: (request: ParameterMenuRequest) => void;
+    readonly rateFocusBindings?: SynthFocusBindings;
+    readonly onMorphAdjustingChange?: (isAdjusting: boolean) => void;
+    readonly loopEnabled?: boolean;
+    readonly onToggleLoop?: () => void;
+};
+
+/** Render one shared compact control row without owning MSEG document state. */
+export function MsegEditorControlStrip({
+    slotIndex,
+    rateSeconds,
+    rateReady,
+    morphBinding,
+    routes,
+    armedSource,
+    hudContainer,
+    rolePrefix,
+    dataRole,
+    variant,
+    className,
+    onRateChange,
+    resolveScrollLockTargets,
+    onRequestHaptic,
+    onRequestParameterMenu,
+    rateFocusBindings,
+    onMorphAdjustingChange,
+    loopEnabled,
+    onToggleLoop,
+}: MsegEditorControlStripProps) {
+    const slot = slotIndex + 1;
+    const identity = findRackModulationSource("mseg", slot);
+    const gestureController = useParameterGesture();
+    const rateBinding = useMemo(() => documentRateBinding(
+        `mseg${slot}Rate`,
+        clampMsegRateSeconds(rateSeconds),
+        rateReady,
+        onRateChange,
+    ), [onRateChange, rateReady, rateSeconds, slot]);
+    const cells = useMemo<ReadonlyArray<ReadoutCellSpec>>(() => [
+        {
+            id: "rate",
+            kind: "readout",
+            shortLabel: "Rate",
+            fullLabel: variant === "full" ? "MSEG rate" : `MSEG ${slot} rate`,
+            display: { min: MSEG_RATE_MIN_SECONDS, max: MSEG_RATE_MAX_SECONDS, step: 0.001 },
+            formatValue: formatSecondsValue,
+            formatCellValue: formatCompactSecondsValue,
+            targetKind: `mseg${slot}Rate` as ModulationTargetKind,
+            presentation: "compact-knob",
+            basePixelsPerFullRange: MSEG_COMPACT_KNOB_ACTIVE_TRAVEL_PX,
+            ...(variant === "full" ? { readoutDataRole: "mseg-rate-readout" } : {}),
+        },
+        {
+            id: "morph",
+            kind: "readout",
+            shortLabel: "Morph",
+            fullLabel: "MSEG morph",
+            display: { min: 0, max: 1, step: 0.001 },
+            formatValue: formatPercentValue,
+            targetKind: `mseg${slot}Morph` as ModulationTargetKind,
+            presentation: "compact-knob",
+        },
+    ], [slot, variant]);
+    const bindings = useMemo<Readonly<Record<string, PatchControlBinding<number>>>>(() => ({
+        morph: morphBinding,
+        rate: rateBinding,
+    }), [morphBinding, rateBinding]);
+    const requestParameterMenu = useCallback((cellId: string, clientX: number, clientY: number) => {
+        if (onRequestParameterMenu === undefined) {
+            return;
+        }
+        const binding = bindings[cellId];
+        if (binding === undefined) {
+            throw new Error(`MSEG control ${cellId} has no binding.`);
+        }
+        const isRate = cellId === "rate";
+        onRequestParameterMenu({
+            controlKey: isRate ? `mseg${slot}Rate` : `mseg${slot}Morph`,
+            label: isRate ? "MSEG rate" : "MSEG morph",
+            targetKind: isRate
+                ? `mseg${slot}Rate` as ModulationTargetKind
+                : `mseg${slot}Morph` as ModulationTargetKind,
+            baseSpec: isRate
+                ? parameterEntrySpecForSeconds({
+                    minSeconds: MSEG_RATE_MIN_SECONDS,
+                    maxSeconds: MSEG_RATE_MAX_SECONDS,
+                    stepSeconds: 0.001,
+                    currentSeconds: binding.value,
+                })
+                : parameterEntrySpecForScalar({
+                    min: 0,
+                    max: 1,
+                    step: 0.001,
+                    unit: "%",
+                    canonicalPerDisplayedUnit: 0.01,
+                    digits: 0,
+                }),
+            baseValue: binding.value,
+            defaultValue: isRate ? null : morphBinding.initialValue ?? null,
+            commitBase: binding.commitValue,
+            clientX,
+            clientY,
+        });
+    }, [bindings, morphBinding.initialValue, onRequestParameterMenu, slot]);
+    const focusBindingsByCell = useMemo(() => (
+        rateFocusBindings === undefined ? undefined : { rate: rateFocusBindings }
+    ), [rateFocusBindings]);
+    const handleDraggingCellChange = useCallback((draggingCell: {
+        readonly cellId: string;
+        readonly mode: "pending" | "base" | "modulation";
+    } | null) => {
+        onMorphAdjustingChange?.(
+            draggingCell?.cellId === "morph" && draggingCell.mode === "base",
+        );
+    }, [onMorphAdjustingChange]);
+
+    return (
+        <div
+            data-role={dataRole}
+            data-variant={variant}
+            className={`mseg-control-strip${className === undefined ? "" : ` ${className}`}`}
+            style={{
+                "--mobile-voice-owner-accent": identity.accent,
+                "--mobile-voice-owner-accent-rgb": hexToRgbTriplet(identity.accent),
+            } as CSSProperties}
+        >
+            <ParameterReadoutStrip
+                cells={cells}
+                bindings={bindings}
+                routes={routes}
+                armedSource={armedSource}
+                hudContainer={hudContainer}
+                gestureController={gestureController}
+                ownerAccent={identity.accent}
+                ownerAccentRgb={hexToRgbTriplet(identity.accent)}
+                rolePrefix={rolePrefix}
+                focusBindingsByCell={focusBindingsByCell}
+                onDraggingCellChange={handleDraggingCellChange}
+                {...(resolveScrollLockTargets === undefined ? {} : { resolveScrollLockTargets })}
+                {...(onRequestHaptic === undefined ? {} : { onRequestHaptic })}
+                {...(onRequestParameterMenu === undefined ? {} : { onRequestParameterMenu: requestParameterMenu })}
+            />
+            {onToggleLoop === undefined ? null : (
+                <button
+                    type="button"
+                    data-role="mseg-loop-toggle"
+                    className="cosimo-button mseg-control-strip-loop"
+                    aria-pressed={loopEnabled === true}
+                    onClick={onToggleLoop}
+                >
+                    {loopEnabled === true ? "Loop" : "1 Shot"}
+                </button>
+            )}
+        </div>
+    );
+}

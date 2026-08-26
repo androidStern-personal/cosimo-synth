@@ -19,6 +19,24 @@ export const MSEG_EDITOR_HORIZONTAL_PADDING_PX = 14;
 export const MSEG_EDITOR_VERTICAL_PADDING_PX = 14;
 export const MSEG_EDITOR_CURVE_TOLERANCE_PX = 0.5;
 const MSEG_EDITOR_MAX_SUBDIVISION_DEPTH = 12;
+const MSEG_ORIENTATION_HYSTERESIS_RATIO = 1.08;
+/**
+ * Chooses the visible MSEG time axis from the editable graph's measured shape.
+ * The current orientation owns a narrow near-square band so resize jitter cannot
+ * repeatedly flip the drawing and pointer mapping.
+ */
+export function resolveMsegSurfaceOrientation(width, height, current) {
+    const safeWidth = Math.max(1, Number(width) || 0);
+    const safeHeight = Math.max(1, Number(height) || 0);
+    if (current === "horizontal") {
+        return safeHeight > safeWidth * MSEG_ORIENTATION_HYSTERESIS_RATIO
+            ? "vertical"
+            : "horizontal";
+    }
+    return safeWidth > safeHeight * MSEG_ORIENTATION_HYSTERESIS_RATIO
+        ? "horizontal"
+        : "vertical";
+}
 const MSEG_NOTE_OFF_POLICY_VALUES = new Set([
     "finish_loop",
     "immediate",

@@ -34,8 +34,13 @@ import {
     type useParameterGesture,
 } from "./parameter-gesture";
 import { ParameterPrecisionHud, type ParameterHudModel } from "./parameter-hud";
-import type { ParameterKnobModRing } from "./parameter-knob-artwork";
+import {
+    MOD_LIGHT_RADIUS,
+    ParameterKnobArtwork,
+    type ParameterKnobModRing,
+} from "./parameter-knob-artwork";
 import type { PatchControlBinding } from "./patch-controls";
+import type { SynthFocusBindings } from "./synth-input-router";
 import {
     projectMobileVoiceRailBand,
     projectRailLiveNormalized,
@@ -90,7 +95,12 @@ export type ReadoutCellSpec = {
     readonly formatValue: (value: number) => string;
     /** Compact in-cell text; defaults to formatValue. */
     readonly formatCellValue?: (value: number) => ReactNode;
+    readonly readoutDataRole?: string;
     readonly targetKind: ModulationTargetKind | null;
+    /** Compact knob artwork keeps the same cell gesture and accessibility contract. */
+    readonly presentation?: "readout" | "compact-knob";
+    /** Linear base-value travel override for controls that must fit a compact viewport. */
+    readonly basePixelsPerFullRange?: number;
     /** Base drags snap with one haptic per newly reached step. */
     readonly detented?: boolean;
     /** Amount drags lock to whole integers inside a capture window. */
@@ -165,6 +175,11 @@ export type ParameterReadoutStripProps = {
     readonly onRequestParameterMenu?: (cellId: string, clientX: number, clientY: number) => void;
     /** Mirrors the gesture's canonical active route out (graph shading liveness). */
     readonly onActiveRouteChange?: (route: ModulationRoute | null) => void;
+    readonly focusBindingsByCell?: Readonly<Record<string, SynthFocusBindings>>;
+    readonly onDraggingCellChange?: (draggingCell: {
+        readonly cellId: string;
+        readonly mode: "pending" | "base" | "modulation";
+    } | null) => void;
 };
 
 /** The strip's per-cell presentation, shared with hosts that render adjacent visuals. */
@@ -223,6 +238,7 @@ export function useReadoutCells({
     onRequestHaptic,
     onRequestParameterMenu,
     onActiveRouteChange,
+    onDraggingCellChange,
 }: Omit<ParameterReadoutStripProps, "rolePrefix">) {
     const [hudState, setHudState] = useState<HudState>(HIDDEN_HUD);
     const [draggingCell, setDraggingCell] = useState<{
@@ -231,6 +247,10 @@ export function useReadoutCells({
     } | null>(null);
 
     const [activeRoute, setActiveRoute] = useState<ModulationRoute | null>(null);
+
+    useEffect(() => {
+        onDraggingCellChange?.(draggingCell);
+    }, [draggingCell, onDraggingCellChange]);
     const activeAmountBinding = useModulationRouteAmountBinding(activeRoute);
     const activeAmountBindingRef = useRef(activeAmountBinding);
     activeAmountBindingRef.current = activeAmountBinding;
@@ -350,7 +370,8 @@ export function useReadoutCells({
             startNormalized: clamp01(cell.normalizeValue !== undefined
                 ? cell.normalizeValue(startValue)
                 : (startValue - display.min) / (display.max - display.min)),
-            pixelsPerFullSpan: PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
+            pixelsPerFullSpan: cell.basePixelsPerFullRange
+                ?? PARAMETER_GESTURE_BASE_PIXELS_PER_FULL_RANGE,
             write: (normalized) => {
                 const raw = cell.denormalizeValue !== undefined
                     ? cell.denormalizeValue(normalized)
@@ -501,11 +522,21 @@ export function useReadoutCells({
 
     const handleReadoutKeyDown = useCallback((event: ReactKeyboardEvent<HTMLElement>, cellId: string) => {
         if (event.key !== "ArrowLeft" && event.key !== "ArrowRight"
-            && event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+            && event.key !== "ArrowUp" && event.key !== "ArrowDown"
+            && event.key !== "Home" && event.key !== "End") {
             return;
         }
         if (!bindingsRef.current[cellId].isReady) return;
         event.preventDefault();
+        if (event.key === "Home" || event.key === "End") {
+            const cell = cellByIdRef.current.get(cellId);
+            if (cell === undefined) {
+                throw new Error(`Unknown readout cell ${cellId}`);
+            }
+            const binding = bindingsRef.current[cellId];
+            binding.commitValue(event.key === "Home" ? cell.display.min : cell.display.max);
+            return;
+        }
         const direction = event.key === "ArrowRight" || event.key === "ArrowUp" ? 1 : -1;
         adjustBaseByStep(cellId, direction, event.shiftKey);
     }, [adjustBaseByStep]);
@@ -626,6 +657,7 @@ export function useReadoutCells({
         adjustBaseByStep,
         presentCell,
         draggingCell,
+        ownerAccent,
         sourceAccent,
         hud,
     };
@@ -634,6 +666,7 @@ export function useReadoutCells({
 export type ReadoutCellsApi = ReturnType<typeof useReadoutCells>;
 
 const RAIL_LIGHT_PLACEMENT: ModSourceLightPlacement = { kind: "rail" };
+const KNOB_LIGHT_PLACEMENT: ModSourceLightPlacement = { kind: "knob-arc", radius: MOD_LIGHT_RADIUS };
 
 /** The traveling live-modulation light on a mapped rail's band. */
 function readoutCellLiveLightProjection(presentation: ReadoutCellPresentation) {
@@ -703,17 +736,72 @@ export function ReadoutCellRail({ presentation }: { presentation: ReadoutCellPre
     );
 }
 
+function CompactReadoutKnobArtwork({
+    presentation,
+    ownerAccent,
+    sourceAccent,
+    emphasis,
+}: {
+    presentation: ReadoutCellPresentation;
+    ownerAccent: string;
+    sourceAccent: string;
+    emphasis: "base" | "modulation" | "none";
+}) {
+    const { cell, railState, route, baseNormalized } = presentation;
+    const lightProjection = railState === "mapped"
+        ? readoutCellLiveLightProjection(presentation)
+        : null;
+    const attachLight = useModSourceLight({
+        source: lightProjection !== null && route !== null
+            ? { sourceKind: route.sourceKind, sourceSlot: route.sourceSlot }
+            : null,
+        project: lightProjection ?? ((sourceValue01) => sourceValue01),
+        placement: KNOB_LIGHT_PLACEMENT,
+    });
+    const symmetricBipolar = cell.display.min < 0
+        && cell.display.max > 0
+        && Math.abs(cell.display.min) === cell.display.max;
+    const baseOriginNormalized = symmetricBipolar
+        ? (0 - cell.display.min) / (cell.display.max - cell.display.min)
+        : 0;
+    const modRing: ParameterKnobModRing = railState === "not-modulatable"
+        ? { kind: "hidden" }
+        : route === null
+            ? { kind: "unmapped" }
+            : {
+                kind: "mapped",
+                lowNormalized: presentation.band?.lowNormalized ?? baseNormalized,
+                highNormalized: presentation.band?.highNormalized ?? baseNormalized,
+                bypassed: railState === "bypassed",
+            };
+
+    return (
+        <ParameterKnobArtwork
+            baseNormalized={baseNormalized}
+            baseOriginNormalized={baseOriginNormalized}
+            ownerAccent={ownerAccent}
+            sourceAccent={sourceAccent}
+            modRing={modRing}
+            emphasis={emphasis}
+            liveLightRef={lightProjection === null ? undefined : attachLight}
+            className="compact-readout-knob-art"
+        />
+    );
+}
+
 /** The standard row-cell shell (the Voice strip's exact markup and classes). */
 export function ReadoutCell({
     cell,
     api,
     bindings,
     rolePrefix,
+    focusBindings,
 }: {
     cell: ReadoutCellSpec;
     api: ReadoutCellsApi;
     bindings: Readonly<Record<string, PatchControlBinding<number>>>;
     rolePrefix: string;
+    focusBindings?: SynthFocusBindings;
 }) {
     if (cell.kind === "choice") {
         const display = cell.display;
@@ -744,6 +832,7 @@ export function ReadoutCell({
     const dragging = api.draggingCell !== null && api.draggingCell.cellId === cell.id
         ? api.draggingCell.mode
         : undefined;
+    const compactKnob = cell.presentation === "compact-knob";
     return (
         <div
             role="slider"
@@ -759,16 +848,30 @@ export function ReadoutCell({
             data-host-state={binding.isReady ? "ready" : "loading"}
             data-modulation-target-kind={cell.targetKind ?? undefined}
             data-dragging={dragging}
-            className={`mobile-voice-cell is-readout${binding.isReady ? "" : " is-loading"}`}
+            data-control-presentation={compactKnob ? "compact-knob" : "readout"}
+            className={`mobile-voice-cell is-readout${compactKnob ? " is-compact-knob" : ""}${binding.isReady ? "" : " is-loading"}`}
             style={{ "--mobile-voice-source-accent": api.sourceAccent } as CSSProperties}
             onPointerDown={(event) => api.cellPointerDown(event, cell.id)}
             onKeyDown={(event) => api.handleReadoutKeyDown(event, cell.id)}
+            {...focusBindings}
         >
             <span className="cosimo-label">{cell.shortLabel}</span>
-            <strong className="cosimo-readout is-end">
+            {compactKnob ? (
+                <CompactReadoutKnobArtwork
+                    presentation={presentation}
+                    ownerAccent={api.ownerAccent}
+                    sourceAccent={api.sourceAccent}
+                    emphasis={dragging === "base"
+                        ? "base"
+                        : dragging === "modulation"
+                            ? "modulation"
+                            : "none"}
+                />
+            ) : null}
+            <strong className="cosimo-readout is-end" data-role={cell.readoutDataRole}>
                 {(cell.formatCellValue ?? cell.formatValue)(value)}
             </strong>
-            <ReadoutCellRail presentation={presentation} />
+            {compactKnob ? null : <ReadoutCellRail presentation={presentation} />}
         </div>
     );
 }
@@ -786,6 +889,7 @@ export function ParameterReadoutStrip(props: ParameterReadoutStripProps) {
                     api={api}
                     bindings={props.bindings}
                     rolePrefix={rolePrefix}
+                    focusBindings={props.focusBindingsByCell?.[cell.id]}
                 />
             ))}
             {api.hud}

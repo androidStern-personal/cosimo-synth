@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { chromium } from "playwright";
 
 import { BOUNCE_STATE_KEY } from "../bounce/document.mjs";
@@ -3023,6 +3024,398 @@ test("mobile MSEG editor is a contained synth surface with a dominant graph and 
             (snapshot) => readStoredMsegShape(snapshot).points.length === 2,
         );
     } finally {
+        await page.close();
+    }
+});
+
+test("drawer and full-screen MSEG editors share one lightweight expanded-shell language", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const drawer = page.locator('[data-role="quick-source-sheet"]');
+        const drawerHeader = drawer.locator('[data-role="quick-source-sheet-grip"]');
+        const drawerGraphic = drawer.locator('[data-role="quick-source-sheet-graphic"]');
+        await drawer.waitFor();
+        const drawerPresentation = await drawer.evaluate((element) => {
+            const style = getComputedStyle(element);
+            const bounds = element.getBoundingClientRect();
+            return {
+                className: element.className,
+                height: bounds.height,
+                backgroundColor: style.backgroundColor,
+                backgroundImage: style.backgroundImage,
+                borderTopColor: style.borderTopColor,
+                borderTopStyle: style.borderTopStyle,
+                borderTopWidth: style.borderTopWidth,
+            };
+        });
+        assert.match(await drawerHeader.getAttribute("class") ?? "", /mseg-editor-shell-top/);
+        assert.match(await drawerGraphic.getAttribute("class") ?? "", /mseg-editor-shell-graphic/);
+
+        await drawer.locator('[data-role="quick-source-sheet-full-editor"]').click();
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        await dialog.waitFor();
+        const fullPresentation = await dialog.evaluate((element) => {
+            const style = getComputedStyle(element);
+            const bounds = element.getBoundingClientRect();
+            return {
+                className: element.className,
+                height: bounds.height,
+                backgroundColor: style.backgroundColor,
+                backgroundImage: style.backgroundImage,
+                borderTopWidth: style.borderTopWidth,
+                boxShadow: style.boxShadow,
+                liquidDetail: element.getAttribute("data-liquid-detail"),
+            };
+        });
+        const fullGraphStyle = await dialog.locator('[data-role="mseg-editor-graph"]').evaluate((element) => {
+            const style = getComputedStyle(element);
+            return {
+                borderTopWidth: style.borderTopWidth,
+                backgroundColor: style.backgroundColor,
+            };
+        });
+
+        assert.match(drawerPresentation.className, /mseg-editor-shell/);
+        assert.match(fullPresentation.className, /mseg-editor-shell/);
+        assert.doesNotMatch(fullPresentation.className, /synth-modal-frame/);
+        assert.match(await dialog.locator("header").getAttribute("class") ?? "", /mseg-editor-shell-top/);
+        assert.match(await dialog.locator('[data-role="mseg-editor-graph"]').getAttribute("class") ?? "", /mseg-editor-shell-graphic/);
+        assert.equal(fullPresentation.backgroundColor, drawerPresentation.backgroundColor);
+        assert.equal(fullPresentation.backgroundImage, drawerPresentation.backgroundImage);
+        assert.equal(fullPresentation.borderTopWidth, "0px");
+        assert.equal(fullPresentation.boxShadow, "none");
+        assert.equal(fullPresentation.liquidDetail, null);
+        assert.equal(fullGraphStyle.borderTopWidth, "0px");
+        assert.equal(fullGraphStyle.backgroundColor, "rgba(0, 0, 0, 0)");
+        assert.equal(fullPresentation.height > drawerPresentation.height * 2, true);
+        assert.equal(drawerPresentation.borderTopWidth, "1px");
+        assert.equal(drawerPresentation.borderTopStyle, "solid");
+        assert.notEqual(drawerPresentation.borderTopColor, "rgba(0, 0, 0, 0)");
+    } finally {
+        await page.close();
+    }
+});
+
+test("the MSEG drawer keeps its established accent top-border declaration", async () => {
+    const source = await readFile(new URL("../ui/desktop/mobile-quick-source-sheet.css", import.meta.url), "utf8");
+    assert.match(
+        source,
+        /border-top: 1px solid color-mix\(in srgb, var\(--quick-sheet-accent\) 45%, var\(--cosimo-line\)\);/,
+    );
+});
+
+test("the drawer MSEG timing knob fits its existing row and reaches both range ends inside a phone viewport", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 852 }),
+    });
+    const dragTimingKnobBy = async (knob, deltaX, pointerId) => {
+        const box = await knob.boundingBox();
+        assert.ok(box);
+        const start = {
+            x: box.x + (box.width / 2),
+            y: box.y + (box.height / 2),
+        };
+        await knob.dispatchEvent("pointerdown", {
+            pointerId,
+            pointerType: "touch",
+            isPrimary: true,
+            button: 0,
+            buttons: 1,
+            clientX: start.x,
+            clientY: start.y,
+        });
+        for (const progress of [0.12, 0.5, 1]) {
+            await page.evaluate(({ x, y, dx, id, progressValue }) => {
+                window.dispatchEvent(new PointerEvent("pointermove", {
+                    bubbles: true,
+                    cancelable: true,
+                    pointerId: id,
+                    pointerType: "touch",
+                    isPrimary: true,
+                    button: 0,
+                    buttons: 0,
+                    clientX: x + (dx * progressValue),
+                    clientY: y,
+                }));
+            }, { ...start, dx: deltaX, id: pointerId, progressValue: progress });
+        }
+        await page.evaluate(({ x, y, dx, id }) => {
+            window.dispatchEvent(new PointerEvent("pointerup", {
+                bubbles: true,
+                pointerId: id,
+                pointerType: "touch",
+                isPrimary: true,
+                button: 0,
+                buttons: 0,
+                clientX: x + dx,
+                clientY: y,
+            }));
+        }, { ...start, dx: deltaX, id: pointerId });
+    };
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.waitForTimeout(240);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const sheet = page.locator('[data-role="quick-source-sheet"]');
+        const drawerRateKnob = sheet.locator('[data-role="quick-source-sheet-cell-rate"]');
+        const drawerKnobArt = drawerRateKnob.locator('[data-role="parameter-knob-artwork"]');
+        await drawerKnobArt.waitFor();
+        const drawerGeometry = await page.evaluate(() => {
+            const stripElement = document.querySelector('[data-role="quick-source-sheet-strip"]');
+            const art = document.querySelector('[data-role="quick-source-sheet-cell-rate"] [data-role="parameter-knob-artwork"]');
+            const readout = document.querySelector('[data-role="quick-source-sheet-cell-rate"] .cosimo-readout');
+            if (!(stripElement instanceof HTMLElement) || !(art instanceof SVGElement) || !(readout instanceof HTMLElement)) {
+                return null;
+            }
+            const stripBounds = stripElement.getBoundingClientRect();
+            const artBounds = art.getBoundingClientRect();
+            const centerX = artBounds.left + (artBounds.width / 2);
+            return {
+                stripHeight: stripBounds.height,
+                leftTravel: centerX,
+                rightTravel: window.innerWidth - centerX,
+                readoutClipped: readout.scrollWidth > readout.clientWidth,
+                readoutText: readout.textContent,
+                readoutClientWidth: readout.clientWidth,
+                readoutScrollWidth: readout.scrollWidth,
+            };
+        });
+        assert.ok(drawerGeometry);
+        assert.equal(drawerGeometry.stripHeight <= 40, true, "The drawer control strip must not grow beyond its existing 40px row.");
+        assert.equal(drawerGeometry.leftTravel >= 100, true, "The timing knob needs its full 100px linear drag range to the left.");
+        assert.equal(drawerGeometry.rightTravel >= 100, true, "The timing knob needs its full 100px linear drag range to the right.");
+        assert.equal(
+            drawerGeometry.readoutClipped,
+            false,
+            `The compact timing value must fit without an ellipsis: ${JSON.stringify(drawerGeometry)}.`,
+        );
+        assert.equal(await drawerRateKnob.getAttribute("role"), "slider");
+        assert.equal(await drawerRateKnob.getAttribute("aria-label"), "MSEG 1 rate");
+
+        await drawerRateKnob.focus();
+        await page.keyboard.press("Home");
+        await waitForHarnessSnapshot(
+            page,
+            "keyboard minimum MSEG rate",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate)) <= 1e-9,
+        );
+        await dragTimingKnobBy(drawerRateKnob, 100, 131);
+        await waitForHarnessSnapshot(
+            page,
+            "right-dragged maximum MSEG rate",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate) - 2) <= 0.001,
+        );
+        await dragTimingKnobBy(drawerRateKnob, -100, 132);
+        await waitForHarnessSnapshot(
+            page,
+            "left-dragged minimum MSEG rate",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate)) <= 0.001,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("the full-screen MSEG timing and morph knobs share the compact row without making it taller", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 393, height: 852 }),
+    });
+
+    try {
+        await page.locator('[data-role="mobile-global-mod-rail"]').waitFor();
+        await page.click('[data-role="mobile-workspace-tab-mod"]');
+        await page.click('button[aria-label="Open MSEG editor"]');
+
+        const dialog = page.locator('[data-role="mseg-editor-dialog"]');
+        const controls = dialog.locator('[data-role="mseg-editor-controls"]');
+        const rateKnob = dialog.locator('[data-role="mseg-editor-cell-rate"]');
+        const morphKnob = dialog.locator('[data-role="mseg-editor-cell-morph"]');
+        await rateKnob.locator('[data-role="parameter-knob-artwork"]').waitFor();
+        await morphKnob.locator('[data-role="parameter-knob-artwork"]').waitFor();
+
+        const geometry = await page.evaluate(() => {
+            const footer = document.querySelector('[data-role="mseg-editor-controls"]');
+            const art = document.querySelector('[data-role="mseg-editor-cell-rate"] [data-role="parameter-knob-artwork"]');
+            if (!(footer instanceof HTMLElement) || !(art instanceof SVGElement)) {
+                return null;
+            }
+            const footerBounds = footer.getBoundingClientRect();
+            const artBounds = art.getBoundingClientRect();
+            const centerX = artBounds.left + (artBounds.width / 2);
+            return {
+                footerHeight: footerBounds.height,
+                leftTravel: centerX,
+                rightTravel: window.innerWidth - centerX,
+            };
+        });
+        assert.ok(geometry);
+        assert.equal(geometry.footerHeight <= 100, true, "The compact row must not exceed the old two-row footer.");
+        assert.equal(geometry.leftTravel >= 100, true);
+        assert.equal(geometry.rightTravel >= 100, true);
+        assert.equal(await controls.locator('input[type="range"]').count(), 0);
+        assert.equal(await rateKnob.getAttribute("role"), "slider");
+        assert.equal(await rateKnob.getAttribute("aria-label"), "MSEG rate");
+        assert.equal(await rateKnob.getAttribute("aria-valuemin"), "0");
+        assert.equal(await rateKnob.getAttribute("aria-valuemax"), "2");
+
+        await rateKnob.focus();
+        await page.keyboard.press("End");
+        await waitForHarnessSnapshot(
+            page,
+            "full editor keyboard maximum MSEG rate",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate) - 2) <= 0.001,
+        );
+        await page.keyboard.press("Home");
+        await waitForHarnessSnapshot(
+            page,
+            "full editor keyboard minimum MSEG rate",
+            (snapshot) => Math.abs(Number(snapshot.parameterValues.mseg1Rate)) <= 0.001,
+        );
+    } finally {
+        await page.close();
+    }
+});
+
+test("MSEG drawer follows its longest graph axis during live resizing without rewriting the envelope", async () => {
+    const page = await openHarnessPage({
+        beforeGoto: (nextPage) => nextPage.setViewportSize({ width: 320, height: 900 }),
+    });
+
+    try {
+        const rail = page.locator('[data-role="mobile-global-mod-rail"]');
+        await rail.waitFor();
+        await page.waitForTimeout(240);
+        await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
+
+        const sheet = page.locator('[data-role="quick-source-sheet"]');
+        const surface = sheet.locator('svg[data-role="quick-sheet-mseg-surface"]');
+        await surface.waitFor();
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-sheet-mseg-surface"]')?.getAttribute("data-time-axis") === "horizontal"
+        ));
+
+        const shapeBeforeResize = readStoredMsegShape(await getHarnessSnapshot(page));
+        const horizontalPointCenters = await surface.locator('[data-role="mseg-point"]').evaluateAll((points) => (
+            points.map((point) => ({
+                x: Number(point.getAttribute("cx")),
+                y: Number(point.getAttribute("cy")),
+            }))
+        ));
+        assert.equal(horizontalPointCenters[0].y > horizontalPointCenters.at(-1).y, true);
+
+        const grip = sheet.locator('[data-role="quick-source-sheet-grip"]');
+        const gripBox = await grip.boundingBox();
+        assert.ok(gripBox);
+        const initialSurfaceBox = await surface.boundingBox();
+        assert.ok(initialSurfaceBox);
+        const start = {
+            x: gripBox.x + (gripBox.width / 2),
+            y: gripBox.y + (gripBox.height / 2),
+        };
+        const moveToSurfaceRatio = async (heightPerWidth) => {
+            const targetSurfaceHeight = initialSurfaceBox.width * heightPerWidth;
+            const pointerY = start.y - (targetSurfaceHeight - initialSurfaceBox.height);
+            await page.mouse.move(start.x, pointerY, { steps: 6 });
+        };
+        await page.mouse.move(start.x, start.y);
+        await page.mouse.down();
+
+        await moveToSurfaceRatio(1.02);
+        assert.equal(await surface.getAttribute("data-time-axis"), "horizontal");
+        await moveToSurfaceRatio(1.07);
+        assert.equal(await surface.getAttribute("data-time-axis"), "horizontal");
+        await moveToSurfaceRatio(1.10);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-sheet-mseg-surface"]')?.getAttribute("data-time-axis") === "vertical"
+        ));
+        await moveToSurfaceRatio(0.98);
+        assert.equal(
+            await surface.getAttribute("data-time-axis"),
+            "vertical",
+            "Near-square resize jitter must remain on the current axis.",
+        );
+        await moveToSurfaceRatio(0.90);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-sheet-mseg-surface"]')?.getAttribute("data-time-axis") === "horizontal"
+        ));
+        await moveToSurfaceRatio(1.20);
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-sheet-mseg-surface"]')?.getAttribute("data-time-axis") === "vertical"
+        ));
+        await page.mouse.up();
+
+        await page.waitForFunction(() => (
+            document.querySelector('[data-role="quick-source-sheet"]')?.getAttribute("data-detent") === "half"
+        ));
+        const verticalPointCenters = await surface.locator('[data-role="mseg-point"]').evaluateAll((points) => (
+            points.map((point) => ({
+                x: Number(point.getAttribute("cx")),
+                y: Number(point.getAttribute("cy")),
+            }))
+        ));
+        assert.equal(verticalPointCenters[0].y < verticalPointCenters.at(-1).y, true);
+        assert.deepEqual(
+            readStoredMsegShape(await getHarnessSnapshot(page)),
+            shapeBeforeResize,
+            "Changing the visible time axis must not rewrite stored MSEG points.",
+        );
+
+        const verticalSurfaceBox = await surface.boundingBox();
+        assert.ok(verticalSurfaceBox);
+        await page.mouse.click(
+            verticalSurfaceBox.x + (verticalSurfaceBox.width * 0.78),
+            verticalSurfaceBox.y + (verticalSurfaceBox.height * 0.24),
+        );
+        let snapshot = await waitForHarnessSnapshot(
+            page,
+            "vertical-axis MSEG point added",
+            (candidate) => readStoredMsegShape(candidate).points.length === 3,
+        );
+        let points = readStoredMsegShape(snapshot).points;
+        const addedPoint = { ...points[1] };
+        assert.equal(addedPoint.x < 0.4, true, "Vertical screen position must map to stored MSEG time.");
+        assert.equal(addedPoint.y > 0.6, true, "Horizontal screen position must map to stored MSEG value.");
+        assert.equal(
+            await surface.locator('[data-role="mseg-point"][data-point-state="selected"]').getAttribute("data-point-index"),
+            "1",
+        );
+
+        const selectedPoint = surface.locator('[data-role="mseg-point"][data-point-index="1"]');
+        const selectedPointBox = await selectedPoint.boundingBox();
+        assert.ok(selectedPointBox);
+        const selectedCenter = {
+            x: selectedPointBox.x + (selectedPointBox.width / 2),
+            y: selectedPointBox.y + (selectedPointBox.height / 2),
+        };
+        await page.mouse.move(selectedCenter.x, selectedCenter.y);
+        await page.mouse.down();
+        await page.mouse.move(selectedCenter.x - 50, selectedCenter.y + 70, { steps: 8 });
+        await page.mouse.up();
+        snapshot = await waitForHarnessSnapshot(
+            page,
+            "vertical-axis MSEG point dragged",
+            (candidate) => {
+                const moved = readStoredMsegShape(candidate).points[1];
+                return moved !== undefined
+                    && moved.x > addedPoint.x + 0.05
+                    && moved.y < addedPoint.y - 0.05;
+            },
+        );
+        points = readStoredMsegShape(snapshot).points;
+        assert.equal(points[1].x > addedPoint.x, true, "Dragging down must advance vertical time.");
+        assert.equal(points[1].y < addedPoint.y, true, "Dragging left must lower the vertical editor value.");
+        assertLatestMsegBufferMatchesStoredShape(snapshot);
+    } finally {
+        await page.mouse.up().catch(() => {});
         await page.close();
     }
 });

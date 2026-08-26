@@ -4991,31 +4991,31 @@ test("T20: long-press opens the ADR-017 parameter menu on Voice cells and quick-
         await page.locator('[data-role="rack-parameter-menu-layer"]').click({ position: { x: 4, y: 4 } });
         await menu.waitFor({ state: "detached" });
 
-        // The MSEG editor modal's Time slider long-presses into the menu too.
+        // The MSEG editor's compact Time knob long-presses into the menu too.
         await page.locator('[data-role="mobile-global-mod-rail-selected"]').click();
         await page.locator('[data-role="quick-source-sheet"]').waitFor();
         await page.click('[data-role="quick-source-sheet-full-editor"]');
         await page.locator('[data-role="mseg-editor-dialog"]').waitFor();
         // The floating Mod rail deliberately stays live ABOVE the editor
         // (T11) and its persisted dock can cover parts of the controls row:
-        // press a point of the Time label the rail does not intercept.
+        // press a point of the Time knob the rail does not intercept.
         const timePress = await page.evaluate(() => {
-            const label = document.querySelector(".mseg-editor-time");
-            if (!label) {
-                throw new Error("Time slider missing.");
+            const knob = document.querySelector('[data-role="mseg-editor-cell-rate"]');
+            if (!knob) {
+                throw new Error("Time knob missing.");
             }
-            const rect = label.getBoundingClientRect();
+            const rect = knob.getBoundingClientRect();
             for (const fx of [0.5, 0.3, 0.7, 0.15, 0.85]) {
                 for (const fy of [0.5, 0.3, 0.75]) {
                     const x = rect.left + (rect.width * fx);
                     const y = rect.top + (rect.height * fy);
                     const hit = document.elementFromPoint(x, y);
-                    if (hit && label.contains(hit)) {
+                    if (hit && knob.contains(hit)) {
                         return { x, y };
                     }
                 }
             }
-            throw new Error("The Time slider is fully covered by the rail.");
+            throw new Error("The Time knob is fully covered by the rail.");
         });
         await page.mouse.move(timePress.x, timePress.y);
         await page.mouse.down();

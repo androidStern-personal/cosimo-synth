@@ -161,37 +161,62 @@
     box-shadow: 0 0 12px rgb(var(--section-accent-rgb) / 0.32);
 }
 
+.mseg-editor-shell {
+    background:
+        linear-gradient(180deg, color-mix(in srgb, var(--quick-sheet-accent) 7%, transparent), transparent 30%),
+        rgb(var(--cosimo-ground-rgb) / 0.97);
+}
+
+.mseg-editor-shell-graphic {
+    position: relative;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    touch-action: none;
+}
+
 .mseg-editor-backdrop {
-    padding: clamp(6px, 2vw, 24px);
+    padding: 0;
+    background: rgb(var(--cosimo-ground-rgb) / 0.97);
+    backdrop-filter: none;
     overscroll-behavior: contain;
 }
 
 .mseg-editor-frame {
     position: relative;
     display: grid;
-    width: min(1080px, 100%);
-    height: min(760px, 100%);
+    width: 100%;
+    height: 100%;
     min-width: 0;
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr) auto;
-    gap: clamp(6px, 1.2vw, 14px);
+    gap: 0;
     overflow: hidden;
-    padding: clamp(8px, 2vw, 20px);
-    border-radius: clamp(14px, 3vw, 24px);
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
 }
 
 .mseg-editor-header {
     display: flex;
+    height: 44px;
     min-width: 0;
     align-items: center;
-    gap: 5px;
+    gap: 8px;
+    padding: 0 10px;
 }
 
 .mseg-editor-title {
     min-width: 0;
     margin-right: auto;
     overflow: hidden;
+    color: var(--quick-sheet-accent);
+    font-family: "Departure Mono", "SFMono-Regular", ui-monospace, monospace;
+    font-size: var(--cosimo-type-label);
+    letter-spacing: var(--cosimo-track);
     text-overflow: ellipsis;
+    text-transform: uppercase;
     white-space: nowrap;
 }
 
@@ -224,14 +249,10 @@
 }
 
 .mseg-editor-graph {
-    position: relative;
-    min-width: 0;
-    min-height: 0;
-    overflow: hidden;
-    border: 1px solid rgb(255 255 255 / 0.07);
-    border-radius: 16px;
-    background: rgb(var(--cosimo-ground-rgb) / 0.72);
-    touch-action: none;
+    padding: 4px 8px 6px;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
 }
 
 .mseg-coordinate-hud {
@@ -249,11 +270,12 @@
     pointer-events: none;
 }
 
-.mseg-editor-controls {
+.mseg-control-strip {
     display: grid;
     min-width: 0;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 2px 8px;
+    grid-template-columns: repeat(2, 92px) 62px;
+    justify-content: center;
+    gap: 8px;
     align-items: center;
     padding: 5px 7px;
     border: 1px solid rgb(255 255 255 / 0.08);
@@ -261,36 +283,41 @@
     background: rgb(255 255 255 / 0.025);
 }
 
-.mseg-editor-range {
-    display: grid;
-    min-width: 0;
-    min-height: var(--cosimo-hit-min);
-    grid-template-columns: 43px minmax(0, 1fr) 58px;
-    align-items: center;
-    gap: 6px;
+.mseg-control-strip > .mobile-voice-cell {
+    height: 40px;
 }
 
-.mseg-editor-range > span {
-    color: rgb(203 213 225 / 0.58);
-    font-size: 9px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
+.mseg-control-strip[data-variant="drawer"] {
+    height: 40px;
+    grid-template-columns: repeat(2, 92px);
+    gap: 16px;
+    padding: 0;
+    border-top: 1px solid var(--cosimo-line);
+    border-right: 0;
+    border-bottom: 1px solid var(--cosimo-line);
+    border-left: 0;
+    border-radius: 0;
+    background: transparent;
 }
 
-.mseg-editor-range > output {
-    overflow: hidden;
-    font-size: 11px;
-    text-align: right;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+.mseg-control-strip[data-variant="drawer"] > .mobile-voice-cell {
+    height: 38px;
 }
 
-.mseg-loop-toggle {
+.mseg-control-strip[data-variant="full"] {
+    min-height: 50px;
+    border-top: 1px solid var(--cosimo-line);
+    border-right: 0;
+    border-bottom: 1px solid var(--cosimo-line);
+    border-left: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.mseg-control-strip-loop {
     width: 62px;
     min-width: 62px;
     height: 44px;
-    grid-row: 1 / span 2;
-    grid-column: 2;
     padding: 0 5px;
     border-radius: 10px;
     font-size: 9px;
@@ -300,11 +327,9 @@
 
 @media (max-width: 430px) {
     .mseg-editor-frame {
-        width: 100%;
-        height: 100%;
-        gap: 6px;
-        padding: 7px;
-        border-radius: 16px;
+        gap: 0;
+        padding: 0;
+        border-radius: 0;
     }
 
     .mseg-editor-title {
@@ -317,19 +342,9 @@
         font-size: 8px;
     }
 
-    .mseg-editor-controls {
+    .mseg-control-strip {
         gap: 0 5px;
         padding: 3px 5px;
-    }
-
-    .mseg-editor-range {
-        grid-template-columns: 36px minmax(0, 1fr) 52px;
-        gap: 4px;
-    }
-
-    .mseg-loop-toggle {
-        width: 56px;
-        min-width: 56px;
     }
 }
 

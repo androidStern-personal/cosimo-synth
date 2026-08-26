@@ -25,6 +25,7 @@ import {
     createMsegEditorMetrics,
     pointToMsegEditorCoordinates,
     renderMsegShape,
+    resolveMsegSurfaceOrientation,
     sampleRenderedMsegBuffer,
     sampleMsegEditorPolyline,
     sampleMsegSegmentEditorPolyline,
@@ -863,6 +864,7 @@ export function EditableMsegSurface({
     hoveredSegmentIndex = -1,
     activeSegmentIndex = -1,
     orientation = "horizontal",
+    onOrientationChange,
     onPointerDown,
     onPointerMove,
     onPointerLeave,
@@ -881,6 +883,7 @@ export function EditableMsegSurface({
     hoveredSegmentIndex?: number;
     activeSegmentIndex?: number;
     orientation?: MsegSurfaceOrientation;
+    onOrientationChange?: (orientation: MsegSurfaceOrientation) => void;
     onPointerDown: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerMove: (event: ReactPointerEvent<SVGSVGElement>) => void;
     onPointerLeave?: (event: ReactPointerEvent<SVGSVGElement>) => void;
@@ -891,6 +894,13 @@ export function EditableMsegSurface({
     const size = useResizeObserver(surfaceRef);
     const emphasizedSegmentIndex = activeSegmentIndex >= 0 ? activeSegmentIndex : hoveredSegmentIndex;
     const hasEmphasizedSegment = emphasizedSegmentIndex >= 0;
+
+    useLayoutEffect(() => {
+        const nextOrientation = resolveMsegSurfaceOrientation(size.width, size.height, orientation);
+        if (nextOrientation !== orientation) {
+            onOrientationChange?.(nextOrientation);
+        }
+    }, [onOrientationChange, orientation, size.height, size.width]);
 
     const { curvePath, fillPath, referenceCurvePath, referenceFillPath, morphCurvePath, highlightedSegmentPath, metrics } = useMemo(() => {
         const basePaths = buildMsegSurfacePaths(points, size.width, size.height, {
@@ -919,6 +929,7 @@ export function EditableMsegSurface({
         <svg
             ref={surfaceRef}
             data-role={dataRole}
+            data-time-axis={orientation}
             className={joinClasses(
                 "h-full w-full touch-none overflow-hidden rounded-[20px] bg-white/[0.03]",
                 className,

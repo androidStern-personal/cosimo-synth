@@ -281,6 +281,27 @@
     -webkit-touch-callout: none;
 }
 
+.mobile-voice-cell.is-compact-knob {
+    min-height: 38px;
+    grid-template-columns: auto 28px minmax(0, 1fr);
+    gap: 1px;
+    padding: 0 2px;
+    overflow: visible;
+}
+
+.mobile-voice-cell.is-compact-knob > :is(.cosimo-label, .cosimo-readout) {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.compact-readout-knob-art {
+    display: block;
+    width: 28px;
+    height: 28px;
+}
+
 .mobile-voice-cell.is-choice {
     cursor: pointer;
     padding-bottom: 0;

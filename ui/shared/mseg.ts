@@ -21,6 +21,32 @@ const MSEG_EDITOR_MAX_SUBDIVISION_DEPTH = 12;
 
 export type MsegSurfaceOrientation = "horizontal" | "vertical";
 
+const MSEG_ORIENTATION_HYSTERESIS_RATIO = 1.08;
+
+/**
+ * Chooses the visible MSEG time axis from the editable graph's measured shape.
+ * The current orientation owns a narrow near-square band so resize jitter cannot
+ * repeatedly flip the drawing and pointer mapping.
+ */
+export function resolveMsegSurfaceOrientation(
+    width: number,
+    height: number,
+    current: MsegSurfaceOrientation,
+): MsegSurfaceOrientation {
+    const safeWidth = Math.max(1, Number(width) || 0);
+    const safeHeight = Math.max(1, Number(height) || 0);
+
+    if (current === "horizontal") {
+        return safeHeight > safeWidth * MSEG_ORIENTATION_HYSTERESIS_RATIO
+            ? "vertical"
+            : "horizontal";
+    }
+
+    return safeWidth > safeHeight * MSEG_ORIENTATION_HYSTERESIS_RATIO
+        ? "horizontal"
+        : "vertical";
+}
+
 type MsegEditorCoordinateOptions = {
     orientation?: MsegSurfaceOrientation;
     pointRadius?: number;
